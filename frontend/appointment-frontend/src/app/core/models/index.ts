@@ -5,3 +5,4 @@ export * from './doctor.model';
 export * from './treatment-type.model';
 export * from './clinic.model';
 export * from './reschedule-candidate.model';
+export * from './equipment-unavailability.model';

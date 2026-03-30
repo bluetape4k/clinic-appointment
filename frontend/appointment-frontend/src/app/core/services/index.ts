@@ -4,3 +4,5 @@ export * from './slot.service';
 export * from './doctor.service';
 export * from './treatment-type.service';
 export * from './calendar-state.service';
+export * from './reschedule.service';
+export * from './equipment-unavailability.service';
