@@ -8,6 +8,8 @@ import io.bluetape4k.clinic.appointment.model.dto.ClinicRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorAbsenceRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorScheduleRecord
+import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityExceptionRecord
+import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityRecord
 import io.bluetape4k.clinic.appointment.model.dto.HolidayRecord
 import io.bluetape4k.clinic.appointment.model.dto.OperatingHoursRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
@@ -15,6 +17,8 @@ import io.bluetape4k.clinic.appointment.model.dto.RescheduleCandidateRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentEquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
+import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
+import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.BreakTimes
@@ -164,4 +168,29 @@ fun ResultRow.toRescheduleCandidateRecord() = RescheduleCandidateRecord(
     priority = this[RescheduleCandidates.priority],
     selected = this[RescheduleCandidates.selected],
     createdAt = this[RescheduleCandidates.createdAt],
+)
+
+fun ResultRow.toEquipmentUnavailabilityRecord() = EquipmentUnavailabilityRecord(
+    id = this[EquipmentUnavailabilities.id].value,
+    equipmentId = this[EquipmentUnavailabilities.equipmentId].value,
+    clinicId = this[EquipmentUnavailabilities.clinicId].value,
+    unavailableDate = this[EquipmentUnavailabilities.unavailableDate],
+    isRecurring = this[EquipmentUnavailabilities.isRecurring],
+    recurringDayOfWeek = this[EquipmentUnavailabilities.recurringDayOfWeek],
+    effectiveFrom = this[EquipmentUnavailabilities.effectiveFrom],
+    effectiveUntil = this[EquipmentUnavailabilities.effectiveUntil],
+    startTime = this[EquipmentUnavailabilities.startTime],
+    endTime = this[EquipmentUnavailabilities.endTime],
+    reason = this[EquipmentUnavailabilities.reason],
+)
+
+fun ResultRow.toEquipmentUnavailabilityExceptionRecord() = EquipmentUnavailabilityExceptionRecord(
+    id = this[EquipmentUnavailabilityExceptions.id].value,
+    unavailabilityId = this[EquipmentUnavailabilityExceptions.unavailabilityId].value,
+    originalDate = this[EquipmentUnavailabilityExceptions.originalDate],
+    exceptionType = this[EquipmentUnavailabilityExceptions.exceptionType],
+    rescheduledDate = this[EquipmentUnavailabilityExceptions.rescheduledDate],
+    rescheduledStartTime = this[EquipmentUnavailabilityExceptions.rescheduledStartTime],
+    rescheduledEndTime = this[EquipmentUnavailabilityExceptions.rescheduledEndTime],
+    reason = this[EquipmentUnavailabilityExceptions.reason],
 )
