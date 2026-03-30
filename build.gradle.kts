@@ -1,7 +1,6 @@
 import io.gitlab.arturbosch.detekt.Detekt
 import io.gitlab.arturbosch.detekt.report.ReportMergeTask
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
-import java.util.concurrent.TimeUnit
 
 plugins {
     base
@@ -170,13 +169,10 @@ subprojects {
         imports {
             mavenBom(Libs.bluetape4k_bom)
             mavenBom(Libs.spring_boot4_dependencies)
-
             mavenBom(Libs.testcontainers_bom)
             mavenBom(Libs.junit_bom)
-
             mavenBom(Libs.kotlinx_coroutines_bom)
             mavenBom(Libs.kotlin_bom)
-
             mavenBom(Libs.timefold_solver_bom)
         }
 

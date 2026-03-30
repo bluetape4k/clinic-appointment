@@ -24,3 +24,18 @@ dist/
 
 # Logs
 *.log
+
+# AI - 임시 상태/로그 제외, 계획/설정은 추적
+.claude/settings.local.json
+.cluade/worktrees/
+
+.omc/sessions/
+.omc/state/
+.omc/logs/
+.omc/project-memory.json
+
+.omx/logs/
+.omx/metrics.json
+.omx/state/
+.omx/context/
+.omx/tmux-hook.json
