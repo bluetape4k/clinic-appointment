@@ -24,7 +24,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build (excluding frontend)
-        run: ./gradlew build -x :appointment-frontend:build --no-daemon
+        run: ./gradlew build -x :frontend:appointment-frontend:build --no-daemon
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
