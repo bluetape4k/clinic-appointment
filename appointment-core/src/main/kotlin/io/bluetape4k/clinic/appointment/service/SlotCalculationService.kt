@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.service
 
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
+import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
@@ -24,6 +25,7 @@ class SlotCalculationService(
     private val treatmentTypeRepository: TreatmentTypeRepository = TreatmentTypeRepository(),
     private val appointmentRepository: AppointmentRepository = AppointmentRepository(),
     private val holidayRepository: HolidayRepository = HolidayRepository(),
+    private val equipmentUnavailabilityService: EquipmentUnavailabilityService = EquipmentUnavailabilityService(),
 ) {
     companion object: KLogging()
 
@@ -147,6 +149,14 @@ class SlotCalculationService(
 
             val equipmentQuantities = treatmentTypeRepository.findEquipmentQuantities(requiredEquipment)
 
+            // 장비 사용불가 기간 조회 (진료 유형이 장비를 필요로 하는 경우)
+            val equipmentUnavailablePeriods: List<UnavailablePeriod> =
+                if (treatment.requiresEquipment && requiredEquipment.isNotEmpty()) {
+                    equipmentUnavailabilityService.findUnavailableOnDate(query.clinicId, query.date)
+                        .filterKeys { it in requiredEquipment }
+                        .values.flatten()
+                } else emptyList()
+
             // Process each candidate slot
             val availableSlots = mutableListOf<AvailableSlot>()
             for (candidate in slotCandidates) {
@@ -157,6 +167,12 @@ class SlotCalculationService(
 
                 // 13. Filter slots where existing count < maxConcurrent
                 if (overlappingCount >= maxConcurrent) continue
+
+                // 장비 사용불가 시간과 겹치는 슬롯 제외
+                val blockedByEquipment = equipmentUnavailablePeriods.any { unavail ->
+                    candidate.start < unavail.endTime && unavail.startTime < candidate.end
+                }
+                if (blockedByEquipment) continue
 
                 // 14-15. Check equipment availability
                 val availableEquipmentIds = if (treatment.requiresEquipment && requiredEquipment.isNotEmpty()) {
