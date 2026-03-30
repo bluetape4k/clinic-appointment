@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.ExceptionType
 import org.amshove.kluent.shouldBeEqualTo
+import org.amshove.kluent.shouldBeGreaterThan
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldHaveSize
 import org.amshove.kluent.shouldNotBeNull
@@ -49,6 +50,9 @@ class EquipmentUnavailabilityRepositoryTest {
 
     @BeforeEach
     fun cleanUp() {
+        transaction {
+            SchemaUtils.createMissingTablesAndColumns(*allTables)
+        }
         transaction {
             EquipmentUnavailabilityExceptions.deleteAll()
             EquipmentUnavailabilities.deleteAll()
@@ -94,7 +98,13 @@ class EquipmentUnavailabilityRepositoryTest {
             )
         }
 
-        record.id shouldBeEqualTo record.id
+        record.id shouldBeGreaterThan 0L
+
+        val found = transaction {
+            repo.findById(record.id)
+        }
+        found.shouldNotBeNull()
+        found.reason shouldBeEqualTo "정기점검"
         record.equipmentId shouldBeEqualTo equipmentId
         record.isRecurring shouldBeEqualTo false
 
