@@ -8,6 +8,8 @@ import io.bluetape4k.clinic.appointment.model.tables.ClinicClosures
 import io.bluetape4k.clinic.appointment.model.tables.ClinicDefaultBreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.ConsultationMethod
+import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
+import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
 import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.DoctorAbsences
 import io.bluetape4k.clinic.appointment.model.tables.DoctorSchedules
@@ -67,7 +69,9 @@ class SlotCalculationServiceTest {
                     TreatmentEquipments,
                     ConsultationTopics,
                     Appointments,
-                    AppointmentNotes
+                    AppointmentNotes,
+                    EquipmentUnavailabilities,
+                    EquipmentUnavailabilityExceptions
                 )
             }
         }
@@ -76,6 +80,8 @@ class SlotCalculationServiceTest {
     @BeforeEach
     fun cleanUp() {
         transaction {
+            EquipmentUnavailabilityExceptions.deleteAll()
+            EquipmentUnavailabilities.deleteAll()
             AppointmentNotes.deleteAll()
             Appointments.deleteAll()
             TreatmentEquipments.deleteAll()
@@ -729,5 +735,91 @@ class SlotCalculationServiceTest {
         slots.none { it.startTime == LocalTime.of(12, 0) }.shouldBeTrue()
         slots.none { it.startTime == LocalTime.of(12, 30) }.shouldBeTrue()
         slots.none { it.startTime == LocalTime.of(15, 0) }.shouldBeTrue()
+    }
+
+    @Test
+    fun `22 - 장비 사용불가 시간과 겹치는 슬롯 제외`() {
+        val (clinicId, doctorId, treatmentTypeId) =
+            insertBaseData(requiresEquipment = true)
+
+        // 장비 추가 (quantity=1)
+        val equipmentId =
+            transaction {
+                val eqId =
+                    Equipments
+                        .insert {
+                            it[Equipments.clinicId] = clinicId
+                            it[name] = "MRI Machine"
+                            it[usageDurationMinutes] = 30
+                            it[quantity] = 1
+                        }[Equipments.id]
+                        .value
+
+                TreatmentEquipments.insert {
+                    it[TreatmentEquipments.treatmentTypeId] = treatmentTypeId
+                    it[TreatmentEquipments.equipmentId] = eqId
+                }
+
+                eqId
+            }
+
+        // 09:00~10:00 장비 사용불가 등록 (비반복, 당일)
+        transaction {
+            EquipmentUnavailabilities.insert {
+                it[EquipmentUnavailabilities.equipmentId] = equipmentId
+                it[EquipmentUnavailabilities.clinicId] = clinicId
+                it[unavailableDate] = MONDAY
+                it[isRecurring] = false
+                it[recurringDayOfWeek] = null
+                it[effectiveFrom] = MONDAY
+                it[effectiveUntil] = MONDAY
+                it[startTime] = LocalTime.of(9, 0)
+                it[endTime] = LocalTime.of(10, 0)
+                it[reason] = "점검"
+            }
+        }
+
+        val slots =
+            service.findAvailableSlots(
+                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+            )
+
+        // 09:00, 09:30 슬롯은 09:00~10:00 사용불가와 겹쳐서 제외 → 16개
+        slots shouldHaveSize 16
+        slots.none { it.startTime == LocalTime.of(9, 0) }.shouldBeTrue()
+        slots.none { it.startTime == LocalTime.of(9, 30) }.shouldBeTrue()
+        slots.any { it.startTime == LocalTime.of(10, 0) }.shouldBeTrue()
+    }
+
+    @Test
+    fun `23 - 장비 사용불가 없으면 모든 슬롯 정상 반환`() {
+        val (clinicId, doctorId, treatmentTypeId) =
+            insertBaseData(requiresEquipment = true)
+
+        // 장비 추가 (quantity=1), 사용불가 없음
+        transaction {
+            val eqId =
+                Equipments
+                    .insert {
+                        it[Equipments.clinicId] = clinicId
+                        it[name] = "Ultrasound Machine"
+                        it[usageDurationMinutes] = 30
+                        it[quantity] = 1
+                    }[Equipments.id]
+                    .value
+
+            TreatmentEquipments.insert {
+                it[TreatmentEquipments.treatmentTypeId] = treatmentTypeId
+                it[TreatmentEquipments.equipmentId] = eqId
+            }
+        }
+
+        val slots =
+            service.findAvailableSlots(
+                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+            )
+
+        // 사용불가 없으므로 18개 전부 반환
+        slots shouldHaveSize 18
     }
 }

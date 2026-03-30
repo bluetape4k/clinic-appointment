@@ -15,6 +15,7 @@ import io.bluetape4k.clinic.appointment.solver.domain.AppointmentPlanning
 import io.bluetape4k.clinic.appointment.solver.domain.ClinicFact
 import io.bluetape4k.clinic.appointment.solver.domain.DoctorFact
 import io.bluetape4k.clinic.appointment.solver.domain.EquipmentFact
+import io.bluetape4k.clinic.appointment.solver.domain.EquipmentUnavailabilityFact
 import io.bluetape4k.clinic.appointment.solver.domain.TreatmentFact
 
 /**
@@ -320,6 +321,25 @@ object HardConstraints {
             }
             .penalize(HardSoftScore.ONE_HARD)
             .asConstraint("H10: doctorBelongsToClinic")
+
+    // ----------------------------------------------------------------
+    // H11: 장비 사용불가 기간 중 예약 배정 금지
+    // ----------------------------------------------------------------
+    fun equipmentUnavailabilityConflict(factory: ConstraintFactory): Constraint =
+        factory.forEach(AppointmentPlanning::class.java)
+            .filter { appt ->
+                appt.requiresEquipment && appt.equipmentId != null && appt.appointmentDate != null && appt.startTime != null
+            }
+            .join(
+                EquipmentUnavailabilityFact::class.java,
+                Joiners.equal({ appt -> appt.equipmentId!! }, { fact -> fact.equipmentId }),
+                Joiners.equal({ appt -> appt.appointmentDate }, { fact -> fact.date }),
+            )
+            .filter { appt, fact ->
+                appt.startTime!! < fact.endTime && fact.startTime < appt.endTime!!
+            }
+            .penalize(HardSoftScore.ONE_HARD)
+            .asConstraint("H11: equipmentUnavailabilityConflict")
 
     /**
      * 3-level cascade로 maxConcurrent 값을 결정합니다.

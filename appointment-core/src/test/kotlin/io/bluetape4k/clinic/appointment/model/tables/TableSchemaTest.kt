@@ -18,6 +18,8 @@ class TableSchemaTest {
             DoctorSchedules,
             DoctorAbsences,
             Equipments,
+            EquipmentUnavailabilities,
+            EquipmentUnavailabilityExceptions,
             TreatmentTypes,
             TreatmentEquipments,
             ConsultationTopics,

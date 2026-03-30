@@ -19,6 +19,7 @@ import io.bluetape4k.clinic.appointment.solver.domain.AppointmentPlanning
 import io.bluetape4k.clinic.appointment.solver.domain.ClinicFact
 import io.bluetape4k.clinic.appointment.solver.domain.DoctorFact
 import io.bluetape4k.clinic.appointment.solver.domain.EquipmentFact
+import io.bluetape4k.clinic.appointment.solver.domain.EquipmentUnavailabilityFact
 import io.bluetape4k.clinic.appointment.solver.domain.ScheduleSolution
 import io.bluetape4k.clinic.appointment.solver.domain.TreatmentFact
 import io.bluetape4k.clinic.appointment.solver.domain.generateTimeSlots
@@ -49,6 +50,7 @@ object SolutionConverter: KLogging() {
         closures: List<ClinicClosureRecord>,
         holidays: List<HolidayRecord>,
         treatmentEquipments: List<TreatmentEquipmentRecord>,
+        equipmentUnavailabilities: List<EquipmentUnavailabilityFact> = emptyList(),
         dateRange: ClosedRange<LocalDate>,
     ): ScheduleSolution {
         val clinicFact = clinic.toClinicFact()
@@ -99,6 +101,7 @@ object SolutionConverter: KLogging() {
             closures = closures,
             holidays = holidays,
             treatmentEquipments = treatmentEquipments,
+            equipmentUnavailabilities = equipmentUnavailabilities,
             doctorIds = doctorFacts.map { it.id },
             dateRange = dates,
             timeSlots = timeSlots,
