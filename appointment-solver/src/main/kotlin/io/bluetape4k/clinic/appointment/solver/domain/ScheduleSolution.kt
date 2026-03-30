@@ -15,6 +15,7 @@ import io.bluetape4k.clinic.appointment.model.dto.DoctorScheduleRecord
 import io.bluetape4k.clinic.appointment.model.dto.HolidayRecord
 import io.bluetape4k.clinic.appointment.model.dto.OperatingHoursRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentEquipmentRecord
+import io.bluetape4k.clinic.appointment.solver.domain.EquipmentUnavailabilityFact
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -62,6 +63,9 @@ class ScheduleSolution(
 
     @field:ProblemFactCollectionProperty
     val treatmentEquipments: List<TreatmentEquipmentRecord> = emptyList(),
+
+    @field:ProblemFactCollectionProperty
+    val equipmentUnavailabilities: List<EquipmentUnavailabilityFact> = emptyList(),
 
     // --- Value Range Providers ---
 
