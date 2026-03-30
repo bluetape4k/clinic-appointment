@@ -3,9 +3,11 @@ package io.bluetape4k.clinic.appointment.repository
 import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
+import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.support.requireNotNull
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -15,6 +17,7 @@ import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.neq
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -188,6 +191,35 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         Appointments.update(where = { Appointments.id eq appointmentId }) {
             it[status] = newStatus
         }
+
+    /**
+     * 특정 장비의 사용불가 기간과 겹치는 예약을 조회합니다.
+     *
+     * 취소 상태 예약은 제외합니다.
+     *
+     * @param equipmentId 장비 ID
+     * @param periods 사용불가 기간 목록
+     * @return 겹치는 예약 목록
+     */
+    fun findOverlappingByEquipment(
+        equipmentId: Long,
+        periods: List<UnavailablePeriod>,
+    ): List<AppointmentRecord> {
+        if (periods.isEmpty()) return emptyList()
+
+        val periodConditions = periods.map { period ->
+            (Appointments.appointmentDate eq period.date) and
+                (Appointments.startTime less period.endTime) and
+                (Appointments.endTime greater period.startTime)
+        }.reduce { acc, op -> acc or op }
+
+        return Appointments
+            .selectAll()
+            .where { Appointments.equipmentId eq equipmentId }
+            .andWhere { Appointments.status neq AppointmentState.CANCELLED }
+            .andWhere { periodConditions }
+            .map { it.toAppointmentRecord() }
+    }
 
     /**
      * 병원의 기간별 예약을 조회합니다.

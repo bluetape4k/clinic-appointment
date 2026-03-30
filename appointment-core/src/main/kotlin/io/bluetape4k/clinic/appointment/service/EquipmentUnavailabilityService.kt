@@ -1,9 +1,11 @@
 package io.bluetape4k.clinic.appointment.service
 
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityExceptionRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityRecord
 import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
 import io.bluetape4k.clinic.appointment.model.tables.ExceptionType
+import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.EquipmentUnavailabilityRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
@@ -20,6 +22,7 @@ import java.time.LocalTime
  */
 class EquipmentUnavailabilityService(
     private val repo: EquipmentUnavailabilityRepository = EquipmentUnavailabilityRepository(),
+    private val appointmentRepository: AppointmentRepository = AppointmentRepository(),
 ) {
     companion object : KLogging()
 
@@ -138,6 +141,70 @@ class EquipmentUnavailabilityService(
                         UnavailabilityExpander.expand(rule, exceptions, date..date)
                     }
                 }
+        }
+    }
+
+    /**
+     * 등록된 사용불가 스케줄과 충돌하는 기존 예약을 감지합니다.
+     *
+     * @param unavailabilityId 장비 사용불가 스케줄 ID
+     * @return 충돌하는 예약 목록
+     */
+    fun detectConflicts(unavailabilityId: Long): List<AppointmentRecord> {
+        unavailabilityId.requirePositiveNumber("unavailabilityId")
+        return transaction {
+            val record = repo.findById(unavailabilityId)
+                ?: return@transaction emptyList()
+            val exceptions = repo.findExceptions(unavailabilityId)
+            val rangeEnd = record.effectiveUntil ?: record.effectiveFrom.plusYears(1)
+            val periods = UnavailabilityExpander.expand(record, exceptions, record.effectiveFrom..rangeEnd)
+            log.debug { "Detecting conflicts for unavailabilityId=$unavailabilityId, periods=${periods.size}" }
+            appointmentRepository.findOverlappingByEquipment(record.equipmentId, periods)
+        }
+    }
+
+    /**
+     * 새로운 사용불가 스케줄 등록 전 충돌 미리보기.
+     *
+     * @param equipmentId 장비 ID
+     * @param unavailableDate 사용불가 날짜 (isRecurring=false 시 필수)
+     * @param isRecurring 반복 여부
+     * @param recurringDayOfWeek 반복 요일 (isRecurring=true 시 필수)
+     * @param effectiveFrom 유효 시작일
+     * @param effectiveUntil 유효 종료일
+     * @param startTime 사용불가 시작 시간
+     * @param endTime 사용불가 종료 시간
+     * @return 충돌하는 예약 목록
+     */
+    fun previewConflicts(
+        equipmentId: Long,
+        unavailableDate: LocalDate?,
+        isRecurring: Boolean,
+        recurringDayOfWeek: DayOfWeek?,
+        effectiveFrom: LocalDate,
+        effectiveUntil: LocalDate?,
+        startTime: LocalTime,
+        endTime: LocalTime,
+    ): List<AppointmentRecord> {
+        equipmentId.requirePositiveNumber("equipmentId")
+        val tempRecord = EquipmentUnavailabilityRecord(
+            id = 0L,
+            equipmentId = equipmentId,
+            clinicId = 0L,
+            unavailableDate = unavailableDate,
+            isRecurring = isRecurring,
+            recurringDayOfWeek = recurringDayOfWeek,
+            effectiveFrom = effectiveFrom,
+            effectiveUntil = effectiveUntil,
+            startTime = startTime,
+            endTime = endTime,
+            reason = null,
+        )
+        val rangeEnd = effectiveUntil ?: effectiveFrom.plusYears(1)
+        val periods = UnavailabilityExpander.expand(tempRecord, emptyList(), effectiveFrom..rangeEnd)
+        log.debug { "Previewing conflicts for equipmentId=$equipmentId, periods=${periods.size}" }
+        return transaction {
+            appointmentRepository.findOverlappingByEquipment(equipmentId, periods)
         }
     }
 }

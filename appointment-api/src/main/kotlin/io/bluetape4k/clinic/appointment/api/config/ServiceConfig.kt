@@ -4,10 +4,12 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
+import io.bluetape4k.clinic.appointment.repository.EquipmentUnavailabilityRepository
 import io.bluetape4k.clinic.appointment.repository.HolidayRepository
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
+import io.bluetape4k.clinic.appointment.service.EquipmentUnavailabilityService
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentStateMachine
 import org.springframework.context.annotation.Bean
@@ -67,4 +69,16 @@ class ServiceConfig {
 
     @Bean
     fun appointmentStateMachine(): AppointmentStateMachine = AppointmentStateMachine()
+
+    @Bean
+    fun equipmentUnavailabilityRepository(): EquipmentUnavailabilityRepository = EquipmentUnavailabilityRepository()
+
+    @Bean
+    fun equipmentUnavailabilityService(
+        equipmentUnavailabilityRepository: EquipmentUnavailabilityRepository,
+        appointmentRepository: AppointmentRepository,
+    ): EquipmentUnavailabilityService = EquipmentUnavailabilityService(
+        repo = equipmentUnavailabilityRepository,
+        appointmentRepository = appointmentRepository,
+    )
 }
