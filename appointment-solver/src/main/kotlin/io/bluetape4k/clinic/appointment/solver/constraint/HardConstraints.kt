@@ -332,14 +332,14 @@ object HardConstraints {
             }
             .join(
                 EquipmentUnavailabilityFact::class.java,
-                Joiners.equal({ appt -> appt.equipmentId }, { fact -> fact.equipmentId }),
+                Joiners.equal({ appt -> appt.equipmentId!! }, { fact -> fact.equipmentId }),
                 Joiners.equal({ appt -> appt.appointmentDate }, { fact -> fact.date }),
             )
             .filter { appt, fact ->
                 appt.startTime!! < fact.endTime && fact.startTime < appt.endTime!!
             }
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H11: equipment-unavailability-conflict")
+            .asConstraint("H11: equipmentUnavailabilityConflict")
 
     /**
      * 3-level cascade로 maxConcurrent 값을 결정합니다.
