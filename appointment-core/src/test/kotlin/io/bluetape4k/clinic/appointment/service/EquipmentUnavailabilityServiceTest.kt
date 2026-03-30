@@ -212,4 +212,49 @@ class EquipmentUnavailabilityServiceTest {
         periods shouldHaveSize 4
         periods.none { it.date == LocalDate.of(2026, 4, 8) } shouldBeEqualTo true
     }
+
+    @Test
+    fun `addException RESCHEDULE 후 findUnavailablePeriodsInRange에서 재스케줄됨`() {
+        // 매주 수요일 반복 (2026-04: 4/1, 4/8, 4/15, 4/22, 4/29 = 5회, 단 4/1은 수요일이 아님)
+        // 2026-04 수요일: 4/1, 4/8, 4/15, 4/22, 4/29
+        // 실제 수요일 확인 필요
+        val record = transaction {
+            service.create(
+                equipmentId = equipmentId,
+                clinicId = clinicId,
+                unavailableDate = null,
+                isRecurring = true,
+                recurringDayOfWeek = DayOfWeek.WEDNESDAY,
+                effectiveFrom = LocalDate.of(2026, 1, 1),
+                effectiveUntil = null,
+                startTime = LocalTime.of(14, 0),
+                endTime = LocalTime.of(15, 0),
+                reason = "정기 점검",
+            )
+        }
+
+        transaction {
+            service.addException(
+                unavailabilityId = record.id,
+                originalDate = LocalDate.of(2026, 4, 8),
+                exceptionType = ExceptionType.RESCHEDULE,
+                rescheduledDate = LocalDate.of(2026, 4, 9),
+                rescheduledStartTime = LocalTime.of(16, 0),
+                rescheduledEndTime = LocalTime.of(17, 0),
+                reason = "목요일로 이동",
+            )
+        }
+
+        val periods = transaction {
+            service.findUnavailablePeriodsInRange(
+                equipmentId = equipmentId,
+                from = LocalDate.of(2026, 4, 1),
+                to = LocalDate.of(2026, 4, 30),
+            )
+        }
+
+        // 4/8 없음, 4/9 16:00-17:00 포함
+        periods.none { it.date == LocalDate.of(2026, 4, 8) } shouldBeEqualTo true
+        periods.any { it.date == LocalDate.of(2026, 4, 9) && it.startTime == LocalTime.of(16, 0) } shouldBeEqualTo true
+    }
 }

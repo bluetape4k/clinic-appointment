@@ -35,6 +35,17 @@ class EquipmentUnavailabilityService(
         endTime: LocalTime,
         reason: String?,
     ): EquipmentUnavailabilityRecord = transaction {
+        equipmentId.requirePositiveNumber("equipmentId")
+        clinicId.requirePositiveNumber("clinicId")
+        check(startTime < endTime) { "startTime must be before endTime: $startTime >= $endTime" }
+        if (!isRecurring) {
+            checkNotNull(unavailableDate) { "unavailableDate is required for non-recurring rules" }
+        } else {
+            checkNotNull(recurringDayOfWeek) { "recurringDayOfWeek is required for recurring rules" }
+        }
+        effectiveUntil?.let { until ->
+            check(effectiveFrom <= until) { "effectiveFrom must be <= effectiveUntil: $effectiveFrom > $until" }
+        }
         log.debug { "Creating EquipmentUnavailability for equipmentId=$equipmentId, clinicId=$clinicId" }
         repo.create(
             equipmentId = equipmentId,
@@ -103,10 +114,12 @@ class EquipmentUnavailabilityService(
         to: LocalDate,
     ): List<UnavailablePeriod> {
         equipmentId.requirePositiveNumber("equipmentId")
-        val rules = transaction { repo.findByEquipment(equipmentId, from, to) }
-        return rules.flatMap { rule ->
-            val exceptions = transaction { repo.findExceptions(rule.id) }
-            UnavailabilityExpander.expand(rule, exceptions, from..to)
+        return transaction {
+            val rules = repo.findByEquipment(equipmentId, from, to)
+            rules.flatMap { rule ->
+                val exceptions = repo.findExceptions(rule.id)
+                UnavailabilityExpander.expand(rule, exceptions, from..to)
+            }
         }
     }
 
@@ -115,14 +128,16 @@ class EquipmentUnavailabilityService(
         date: LocalDate,
     ): Map<Long, List<UnavailablePeriod>> {
         clinicId.requirePositiveNumber("clinicId")
-        val rules = transaction { repo.findByClinicOnDate(clinicId, date) }
-        return rules
-            .groupBy { it.equipmentId }
-            .mapValues { (_, ruleList) ->
-                ruleList.flatMap { rule ->
-                    val exceptions = transaction { repo.findExceptions(rule.id) }
-                    UnavailabilityExpander.expand(rule, exceptions, date..date)
+        return transaction {
+            val rules = repo.findByClinicOnDate(clinicId, date)
+            rules
+                .groupBy { it.equipmentId }
+                .mapValues { (_, ruleList) ->
+                    ruleList.flatMap { rule ->
+                        val exceptions = repo.findExceptions(rule.id)
+                        UnavailabilityExpander.expand(rule, exceptions, date..date)
+                    }
                 }
-            }
+        }
     }
 }
