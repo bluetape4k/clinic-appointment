@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.EquipmentUnavailabilityRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
+import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.DayOfWeek
@@ -42,9 +43,9 @@ class EquipmentUnavailabilityService(
         clinicId.requirePositiveNumber("clinicId")
         check(startTime < endTime) { "startTime must be before endTime: $startTime >= $endTime" }
         if (!isRecurring) {
-            checkNotNull(unavailableDate) { "unavailableDate is required for non-recurring rules" }
+            unavailableDate.requireNotNull("unavailableDate")
         } else {
-            checkNotNull(recurringDayOfWeek) { "recurringDayOfWeek is required for recurring rules" }
+            recurringDayOfWeek.requireNotNull("recurringDayOfWeek")
         }
         effectiveUntil?.let { until ->
             check(effectiveFrom <= until) { "effectiveFrom must be <= effectiveUntil: $effectiveFrom > $until" }
