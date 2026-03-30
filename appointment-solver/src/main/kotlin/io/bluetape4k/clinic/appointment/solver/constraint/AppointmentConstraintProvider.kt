@@ -7,7 +7,7 @@ import ai.timefold.solver.core.api.score.stream.ConstraintProvider
 /**
  * 예약 스케줄링의 모든 제약 조건을 조합하는 ConstraintProvider.
  *
- * Hard Constraints (H1~H10): 위반 시 해가 무효
+ * Hard Constraints (H1~H11): 위반 시 해가 무효
  * Soft Constraints (S1~S6): 최적화 목표
  */
 class AppointmentConstraintProvider : ConstraintProvider {
@@ -25,6 +25,7 @@ class AppointmentConstraintProvider : ConstraintProvider {
         HardConstraints.equipmentAvailability(factory),
         HardConstraints.providerTypeMatch(factory),
         HardConstraints.doctorBelongsToClinic(factory),
+        HardConstraints.equipmentUnavailabilityConflict(factory),
 
         // Soft Constraints
         SoftConstraints.doctorLoadBalance(factory),
