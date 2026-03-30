@@ -1,0 +1,87 @@
+# 아키텍처 설계
+
+## 모듈 의존성 그래프
+
+```mermaid
+graph TD
+    core[appointment-core\n도메인·리포지토리·상태머신·서비스]
+    event[appointment-event\n도메인 이벤트 발행/구독]
+    solver[appointment-solver\nTimefold AI 스케줄러]
+    notification[appointment-notification\nHA 알림 스케줄러]
+    api[appointment-api\nSpring Boot REST API]
+    frontend[appointment-frontend\nAngular 18]
+
+    core --> event
+    core --> solver
+    core --> notification
+    event --> notification
+    core --> api
+    event --> api
+    solver --> api
+```
+
+> `appointment-api`는 `appointment-notification`에 **의존하지 않는다**.
+> 알림은 도메인 이벤트를 구독하여 독립적으로 동작한다.
+
+## 주요 설계 결정 (ADR)
+
+### ADR-1: 디렉토리 구조 — 하이브리드 플랫 구조
+
+**결정**: 백엔드 모듈은 루트 직하 플랫 배치, Angular는 `frontend/` 서브디렉토리.
+
+**이유**: 백엔드 6개 모듈은 플랫으로 충분히 관리 가능. Angular는 Node.js 기반으로 Kotlin 빌드 체계와 다르므로 분리가 자연스럽다.
+
+**결과**: `settings.gradle.kts`에서 백엔드는 `includeModules()`, 프론트엔드는 `includeFrontendModules()`로 자동 스캔.
+
+---
+
+### ADR-2: bluetape4k-projects 의존성 — 조건부 Composite Build
+
+**결정**: 로컬에 `../bluetape4k-projects`가 있으면 `includeBuild`로 소스 직접 참조, 없으면 Maven Central 좌표 사용.
+
+**이유**: 로컬 개발 시 bluetape4k 라이브러리 수정 즉시 반영. CI 환경에서는 Maven Central 자동 폴백.
+
+```kotlin
+// settings.gradle.kts
+val bluetape4kProjectsDir = file("../bluetape4k-projects")
+if (bluetape4kProjectsDir.exists()) {
+    includeBuild(bluetape4kProjectsDir) { ... }
+}
+```
+
+---
+
+### ADR-3: 패키지명 — io.bluetape4k.clinic.appointment
+
+**결정**: `io.bluetape4k.scheduling.appointment` → `io.bluetape4k.clinic.appointment`
+
+**이유**: 독립 저장소이므로 `clinic` 도메인을 명시. `scheduling`은 bluetape4k-experimental 내부 컨텍스트이므로 독립 저장소에 부적합.
+
+---
+
+### ADR-4: SlotCalculationService vs SolverService 역할 분리
+
+**결정**: 두 서비스를 공존시키되 용도를 명확히 분리.
+
+| 서비스 | 용도 | 특성 |
+|--------|------|------|
+| `SlotCalculationService` | 환자 대면 실시간 슬롯 조회 (단건) | Greedy, 빠름 |
+| `SolverService` | 관리자 배치 최적화 (대량 예약 재배치) | Timefold, 전역 최적 |
+
+---
+
+### ADR-5: 알림 모듈 독립성
+
+**결정**: `appointment-api`는 `appointment-notification`에 의존하지 않음.
+
+**이유**: 알림은 `AppointmentDomainEvent`를 구독하는 독립 컴포넌트. API가 알림 모듈 없이도 동작해야 한다.
+
+**결과**: API 서버와 알림 스케줄러는 별도 프로세스로 배포 가능.
+
+---
+
+### ADR-6: git 히스토리 — 단순 소스 복사
+
+**결정**: `bluetape4k-experimental/scheduling/`에서 파일만 복사, 초기 커밋으로 시작.
+
+**이유**: 커밋 히스토리가 짧았고, 독립 저장소의 깨끗한 시작이 더 가치 있다. 원본은 `bluetape4k-experimental`에서 참조 가능.
