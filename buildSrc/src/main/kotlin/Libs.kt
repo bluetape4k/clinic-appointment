@@ -151,6 +151,7 @@ object Libs {
     val bluetape4k_exposed_jdbc_lettuce = bluetape4k("exposed-jdbc-lettuce")
     val bluetape4k_exposed_jdbc_redisson = bluetape4k("exposed-jdbc-redisson")
     val bluetape4k_exposed_jdbc_tests = bluetape4k("exposed-jdbc-tests")
+    val bluetape4k_exposed_r2dbc = bluetape4k("exposed-r2dbc")
     val bluetape4k_exposed_r2dbc_tests = bluetape4k("exposed-r2dbc-tests")
     val bluetape4k_exposed_measured = bluetape4k("exposed-measured")
     val bluetape4k_exposed_mysql8 = bluetape4k("exposed-mysql8")

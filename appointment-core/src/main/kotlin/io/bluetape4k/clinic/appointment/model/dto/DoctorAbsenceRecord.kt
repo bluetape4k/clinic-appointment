@@ -1,0 +1,18 @@
+package io.bluetape4k.clinic.appointment.model.dto
+
+import java.io.Serializable
+import java.time.LocalDate
+import java.time.LocalTime
+
+data class DoctorAbsenceRecord(
+    val id: Long? = null,
+    val doctorId: Long,
+    val absenceDate: LocalDate,
+    val startTime: LocalTime? = null,
+    val endTime: LocalTime? = null,
+    val reason: String? = null,
+) : Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
