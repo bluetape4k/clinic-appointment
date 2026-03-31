@@ -11,6 +11,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.0] - 2026-03-31
+
+### Added
+- `appointment-core`: `EquipmentUnavailabilityRepository` — 장비 사용불가 구간 CRUD + 예외일 관리
+- `appointment-core`: `UnavailabilityExpander` — 반복 규칙(SKIP/RESCHEDULE 예외) 기반 사용불가 기간 전개
+- `appointment-core`: `EquipmentUnavailabilityService` — CRUD + 기간 전개, 단일 트랜잭션 검증 적용
+- `appointment-core`: `SlotCalculationService` — 장비 사용불가 체크 단계 추가 (슬롯 검증 파이프라인)
+- `appointment-solver`: `EquipmentUnavailabilityFact` — ProblemFact 추가 및 `ScheduleSolution` 등록
+- `appointment-solver`: H11 제약 — 장비 사용불가 기간 중 예약 배정 금지 (Hard Constraint)
+- `appointment-api`: `EquipmentUnavailabilityController` — 사용불가 스케줄 CRUD + 충돌 감지 API
+- `appointment-api`: 장비 사용불가 Request/Response DTO 추가
+- `appointment-api`: `@Profile` 기반 환경 분리 (`local` / `dev` / `prod`) + `ClinicTimezoneService` API 연결
+- `frontend/appointment-frontend`: `RescheduleService`, `EquipmentUnavailabilityService` Angular 서비스 추가
+
+### Fixed
+- `appointment-api`: `RescheduleService.getClosureCandidates` — GET → POST (백엔드 계약 수정)
+- `appointment-core`: `EquipmentUnavailabilityService` — `checkNotNull` → bluetape4k `requireNotNull` 수정
+
+### Changed
+- `buildSrc/Libs.kt`: bluetape4k 버전 `1.5.0-Beta3` 업데이트, 신규 모듈 11개 추가
+- `appointment-solver`: H11 제약 이름 camelCase 통일, `Joiner` nullable 명시
+
+---
+
 ## [0.1.0] - 2026-03-30
 
 ### Added
@@ -24,5 +48,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - GitHub Actions CI workflow (PR 빌드 + 테스트)
 - `settings.gradle.kts`: bluetape4k-projects 조건부 Composite Build (`includeBuild`) 연결
 
-[Unreleased]: https://github.com/bluetape4k/clinic-appointment/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/bluetape4k/clinic-appointment/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/bluetape4k/clinic-appointment/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bluetape4k/clinic-appointment/releases/tag/v0.1.0
