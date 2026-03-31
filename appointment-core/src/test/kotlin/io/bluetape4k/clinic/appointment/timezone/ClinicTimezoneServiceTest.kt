@@ -130,4 +130,41 @@ class ClinicTimezoneServiceTest {
 
         now.zone.shouldBeEqualTo(ZoneId.of("Asia/Seoul"))
     }
+
+    @Test
+    fun `getTimezoneAndLocale - timezone과 locale을 한 번의 DB 조회로 반환`() {
+        val (timezone, locale) = service.getTimezoneAndLocale(seoulClinicId)
+
+        timezone.shouldBeEqualTo("Asia/Seoul")
+        locale.shouldBeEqualTo("ko-KR")
+    }
+
+    @Test
+    fun `getTimezoneAndLocale - 클리닉별 각각 올바른 값 반환`() {
+        val (nyTimezone, nyLocale) = service.getTimezoneAndLocale(nyClinicId)
+        nyTimezone.shouldBeEqualTo("America/New_York")
+        nyLocale.shouldBeEqualTo("en-US")
+
+        val (tokyoTimezone, tokyoLocale) = service.getTimezoneAndLocale(tokyoClinicId)
+        tokyoTimezone.shouldBeEqualTo("Asia/Tokyo")
+        tokyoLocale.shouldBeEqualTo("ja-JP")
+    }
+
+    @Test
+    fun `getTimezoneAndLocale - 교민 병원 - locale과 timezone이 독립적`() {
+        // locale="ko-KR" 이지만 LA 소재 교민 병원
+        val expatClinicId = transaction {
+            Clinics.insert {
+                it[name] = "LA 교민 클리닉"
+                it[slotDurationMinutes] = 30
+                it[timezone] = "America/Los_Angeles"
+                it[locale] = "ko-KR"
+            }[Clinics.id].value
+        }
+
+        val (timezone, locale) = service.getTimezoneAndLocale(expatClinicId)
+
+        timezone.shouldBeEqualTo("America/Los_Angeles")
+        locale.shouldBeEqualTo("ko-KR")  // timezone과 무관하게 locale 유지
+    }
 }

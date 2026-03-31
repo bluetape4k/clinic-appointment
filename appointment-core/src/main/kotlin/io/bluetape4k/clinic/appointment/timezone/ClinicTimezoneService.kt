@@ -16,8 +16,29 @@ import java.util.Locale
 /**
  * 클리닉별 타임존 변환 서비스.
  *
- * 내부 저장은 UTC 기준 LocalDate/LocalTime이며,
- * 외부 표시 시 클리닉의 timezone으로 변환합니다.
+ * ## 타임존 설계 원칙
+ *
+ * `appointment_date` / `start_time` / `end_time` 은 **클리닉 현지 시간** 그대로 DB에 저장됩니다.
+ * UTC로 변환하지 않는 이유:
+ * - 예약 시간은 본질적으로 "현지 이벤트" — "서울 클리닉 오전 9시" 는 항상 서울 시간
+ * - UTC 변환 시 날짜 경계(예: 23:00 KST → 14:00 UTC 다음 날)로 인해 날짜 기반 쿼리가 깨짐
+ * - 슬롯 계산/영업시간 비교가 동일 timezone 내에서 단순하게 유지됨
+ *
+ * `created_at` / `updated_at` 은 UTC [java.time.Instant] 로 저장됩니다 (시스템 감사 목적).
+ *
+ * ## 다국가 SaaS 지원
+ *
+ * [Clinics.timezone] 컬럼이 각 클리닉의 ZoneId를 보유합니다.
+ * API 응답에 `timezone` 필드를 포함시켜 프론트엔드가 `LocalDate + LocalTime + timezone` 으로
+ * `ZonedDateTime` 을 복원할 수 있게 합니다.
+ *
+ * ```
+ * Frontend (LocalDate + LocalTime)
+ *     ↓  변환 없이 저장
+ * DB  (LocalDate + LocalTime — 클리닉 현지 기준)
+ *     ↓  응답 시 Clinics.timezone 포함
+ * Frontend (ZonedDateTime 복원 가능)
+ * ```
  */
 class ClinicTimezoneService(
     private val clinicRepository: ClinicRepository,
@@ -79,6 +100,18 @@ class ClinicTimezoneService(
     fun nowAtClinic(clinicId: Long): ZonedDateTime {
         val clinic = getClinic(clinicId)
         return ZonedDateTime.now(ZoneId.of(clinic.timezone))
+    }
+
+    /**
+     * 클리닉의 `timezone` 과 `locale` 을 한 번의 DB 조회로 반환합니다.
+     *
+     * API 응답에 두 값을 모두 포함할 때 N+1 조회를 방지합니다.
+     *
+     * @return `timezone` (예: "Asia/Seoul") to `locale` (예: "ko-KR") Pair
+     */
+    fun getTimezoneAndLocale(clinicId: Long): Pair<String, String> {
+        val clinic = getClinic(clinicId)
+        return clinic.timezone to clinic.locale
     }
 
     /**

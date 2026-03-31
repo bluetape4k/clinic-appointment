@@ -12,6 +12,7 @@ import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.bluetape4k.clinic.appointment.service.EquipmentUnavailabilityService
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentStateMachine
+import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -69,6 +70,10 @@ class ServiceConfig {
 
     @Bean
     fun appointmentStateMachine(): AppointmentStateMachine = AppointmentStateMachine()
+
+    @Bean
+    fun clinicTimezoneService(clinicRepository: ClinicRepository): ClinicTimezoneService =
+        ClinicTimezoneService(clinicRepository)
 
     @Bean
     fun equipmentUnavailabilityRepository(): EquipmentUnavailabilityRepository = EquipmentUnavailabilityRepository()
