@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.boot.ApplicationRunner
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Profile
 import org.springframework.core.annotation.Order
 import java.time.DayOfWeek
 import java.time.LocalTime
@@ -22,8 +23,11 @@ import java.time.LocalTime
  *
  * 클리닉, 의사, 영업시간, 의사 스케줄, 진료 유형을 생성합니다.
  * 이미 데이터가 존재하면 건너뜁니다.
+ *
+ * dev/test 프로파일에서만 활성화됩니다.
  */
 @Configuration(proxyBeanMethods = false)
+@Profile("dev", "test")
 class TestDataSeederConfig {
     companion object : KLogging() {
         private val WEEKDAYS =

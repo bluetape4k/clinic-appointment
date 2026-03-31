@@ -62,6 +62,27 @@ Flyway — `src/main/resources/db/migration/V*.sql`
 ./gradlew :appointment-api:gatlingRun
 ```
 
+## 타임존
+
+API 응답(`AppointmentResponse`)에는 항상 `timezone` 과 `locale` 필드가 포함됩니다.
+
+```json
+{
+  "appointmentDate": "2026-04-01",
+  "startTime": "09:00:00",
+  "endTime": "09:30:00",
+  "timezone": "Asia/Seoul",
+  "locale": "ko-KR"
+}
+```
+
+- `appointmentDate` / `startTime` / `endTime` 은 **클리닉 현지 시간** 기준입니다.
+- 프론트엔드는 `timezone` 필드를 이용해 `ZonedDateTime` 으로 복원할 수 있습니다.
+- UTC 변환은 서버에서 수행하지 않습니다 — 날짜 경계 문제 방지.
+- `locale` 은 날짜/시간 표시 형식 전용으로, timezone과 독립적입니다.
+
+상세 설계: [appointment-core 타임존 설계](../appointment-core/README.md#타임존-설계)
+
 ## 테스트 실행
 
 ```bash

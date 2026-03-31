@@ -96,6 +96,7 @@ class AppointmentControllerTest {
                 it[name] = "Test Clinic"
                 it[slotDurationMinutes] = 30
                 it[timezone] = "Asia/Seoul"
+                it[locale] = "ko-KR"
                 it[maxConcurrentPatients] = 3
                 it[openOnHolidays] = false
             }.value
@@ -160,6 +161,8 @@ class AppointmentControllerTest {
             .andExpect(jsonPath("$.data.patientName").value("John Doe"))
             .andExpect(jsonPath("$.data.status").value("REQUESTED"))
             .andExpect(jsonPath("$.data.id").isNotEmpty())
+            .andExpect(jsonPath("$.data.timezone").value("Asia/Seoul"))
+            .andExpect(jsonPath("$.data.locale").value("ko-KR"))
     }
 
     @Test
@@ -171,6 +174,8 @@ class AppointmentControllerTest {
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data.id").value(appointmentId))
             .andExpect(jsonPath("$.data.patientName").value("Jane Doe"))
+            .andExpect(jsonPath("$.data.timezone").value("Asia/Seoul"))
+            .andExpect(jsonPath("$.data.locale").value("ko-KR"))
     }
 
     @Test
@@ -232,6 +237,61 @@ class AppointmentControllerTest {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data.status").value("CANCELLED"))
+    }
+
+    @Test
+    fun `POST - 응답에 timezone과 locale이 클리닉 설정과 일치`() {
+        // 교민 병원: locale=ko-KR 이지만 timezone은 미국 (LA 교민 병원 시나리오)
+        val expatClinicId = transaction {
+            Clinics.insertAndGetId {
+                it[name] = "LA 교민 클리닉"
+                it[slotDurationMinutes] = 30
+                it[timezone] = "America/Los_Angeles"
+                it[locale] = "ko-KR"
+                it[maxConcurrentPatients] = 1
+            }.value
+        }
+        val expatDoctorId = transaction {
+            Doctors.insertAndGetId {
+                it[Doctors.clinicId] = expatClinicId
+                it[name] = "Dr. Kim"
+                it[specialty] = "General"
+                it[providerType] = "DOCTOR"
+                it[maxConcurrentPatients] = 1
+            }.value
+        }
+        val expatTreatmentId = transaction {
+            TreatmentTypes.insertAndGetId {
+                it[TreatmentTypes.clinicId] = expatClinicId
+                it[name] = "General Checkup"
+                it[category] = "GENERAL"
+                it[defaultDurationMinutes] = 30
+                it[requiredProviderType] = "DOCTOR"
+                it[requiresEquipment] = false
+                it[maxConcurrentPatients] = 1
+            }.value
+        }
+
+        val body = """
+            {
+                "clinicId": $expatClinicId,
+                "doctorId": $expatDoctorId,
+                "treatmentTypeId": $expatTreatmentId,
+                "patientName": "김철수",
+                "appointmentDate": "2026-04-06",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+
+        mockMvc.perform(
+            post("/api/appointments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+        )
+            .andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.timezone").value("America/Los_Angeles"))
+            .andExpect(jsonPath("$.data.locale").value("ko-KR"))  // timezone과 독립적
     }
 
     private fun createTestAppointment(): Long =

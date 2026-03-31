@@ -15,6 +15,7 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryReposi
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentEvent
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentStateMachine
+import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
@@ -45,6 +46,7 @@ class AppointmentController(
     private val stateMachine: AppointmentStateMachine,
     private val eventPublisher: ApplicationEventPublisher,
     private val stateHistoryRepository: AppointmentStateHistoryRepository,
+    private val timezoneService: ClinicTimezoneService,
 ) {
     companion object : KLogging()
 
@@ -64,7 +66,8 @@ class AppointmentController(
     ): ResponseEntity<ApiResponse<List<AppointmentResponse>>> {
         log.debug { "GET /api/appointments?clinicId=$clinicId&startDate=$startDate&endDate=$endDate" }
         val records = transaction { appointmentRepository.findByClinicAndDateRange(clinicId, startDate..endDate) }
-        return ResponseEntity.ok(ApiResponse.ok(records.map { it.toResponse() }))
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(clinicId)
+        return ResponseEntity.ok(ApiResponse.ok(records.map { it.toResponse(timezone, locale) }))
     }
 
     /**
@@ -79,7 +82,8 @@ class AppointmentController(
         log.debug { "GET /api/appointments/$id" }
         val record = transaction { appointmentRepository.findByIdOrNull(id) }
             ?: throw NoSuchElementException("Appointment not found: $id")
-        return ResponseEntity.ok(ApiResponse.ok(record.toResponse()))
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(record.clinicId)
+        return ResponseEntity.ok(ApiResponse.ok(record.toResponse(timezone, locale)))
     }
 
     /**
@@ -113,8 +117,9 @@ class AppointmentController(
                 clinicId = saved.clinicId,
             )
         )
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(saved.clinicId)
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(ApiResponse.ok(saved.toResponse()))
+            .body(ApiResponse.ok(saved.toResponse(timezone, locale)))
     }
 
     /**
@@ -167,7 +172,8 @@ class AppointmentController(
         )
 
         val updated = transaction { appointmentRepository.findByIdOrNull(id) }!!
-        return ResponseEntity.ok(ApiResponse.ok(updated.toResponse()))
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(updated.clinicId)
+        return ResponseEntity.ok(ApiResponse.ok(updated.toResponse(timezone, locale)))
     }
 
     /**
@@ -213,7 +219,8 @@ class AppointmentController(
         )
 
         val updated = transaction { appointmentRepository.findByIdOrNull(id) }!!
-        return ResponseEntity.ok(ApiResponse.ok(updated.toResponse()))
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(updated.clinicId)
+        return ResponseEntity.ok(ApiResponse.ok(updated.toResponse(timezone, locale)))
     }
 }
 

@@ -77,6 +77,51 @@ val newState = machine.transition(
 > 테스트에서 DB 초기화: `@BeforeEach` — `SchemaUtils.createMissingTablesAndColumns(Table)` + `Table.deleteAll()`
 > Testcontainers: `@Testcontainers` 어노테이션 없이 bluetape4k singleton 패턴 사용
 
+## 타임존 설계
+
+### 저장 원칙
+
+| 컬럼 | 타입 | 기준 |
+|------|------|------|
+| `appointment_date` | `LocalDate` | 클리닉 현지 날짜 |
+| `start_time` / `end_time` | `LocalTime` | 클리닉 현지 시간 |
+| `created_at` / `updated_at` | `Instant` (UTC) | 시스템 감사 타임스탬프 |
+
+**예약 시간은 UTC 변환 없이 클리닉 현지 시간으로 저장합니다.**
+
+UTC로 변환하지 않는 이유:
+- 예약은 본질적으로 현지 이벤트 — "서울 클리닉 23:00" 를 UTC로 변환하면 날짜가 바뀜
+- `WHERE appointment_date = '2026-04-01'` 같은 날짜 기반 쿼리가 timezone에 무관하게 정확
+- 슬롯 계산, 영업시간 비교가 동일 timezone 안에서 단순하게 유지됨
+
+### 다국가 SaaS 지원
+
+각 클리닉은 `Clinics.timezone` 컬럼으로 ZoneId를 보유합니다 (예: `"Asia/Seoul"`, `"America/New_York"`).
+`Clinics.locale` 은 날짜/시간 **표시 형식**과 언어 용도로만 사용합니다 — 타임존과는 별개입니다
+(교민 병원처럼 `locale="ko-KR"` 이지만 timezone이 `"America/Los_Angeles"` 일 수 있음).
+
+### API 흐름
+
+```
+Frontend  →  LocalDate + LocalTime (클리닉 현지)
+               ↓  변환 없이 저장
+DB        →  LocalDate + LocalTime (클리닉 현지)
+               ↓  응답 시 Clinics.timezone / locale 포함
+Frontend  →  ZonedDateTime 복원 가능 (appointmentDate + startTime + timezone)
+```
+
+### ClinicTimezoneService
+
+`ClinicTimezoneService` 는 API 경계에서 timezone 정보를 조합할 때 사용합니다:
+
+```kotlin
+// 응답에 timezone/locale 포함 (단일 DB 조회)
+val (timezone, locale) = timezoneService.getTimezoneAndLocale(clinicId)
+
+// 크로스-클리닉 비교 시 ZonedDateTime 변환
+val zoned: ZonedDateTime = timezoneService.toClinicTime(clinicId, date, time)
+```
+
 ## 설계 문서
 
 - [도메인 모델 전체](../docs/requirements/domain-model.md)

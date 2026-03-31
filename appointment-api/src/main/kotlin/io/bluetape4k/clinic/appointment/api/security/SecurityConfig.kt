@@ -2,10 +2,10 @@ package io.bluetape4k.clinic.appointment.api.security
 
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Profile
 import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
@@ -14,16 +14,11 @@ import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
 /**
- * JWT 보안 설정 (scheduling.security.jwt.enabled=true).
+ * JWT 보안 설정. dev/test 외 모든 환경(prod, staging 등)에서 활성화됩니다.
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
-@ConditionalOnProperty(
-    prefix = "scheduling.security.jwt",
-    name = ["enabled"],
-    havingValue = "true",
-    matchIfMissing = false,
-)
+@Profile("!dev & !test")
 @EnableConfigurationProperties(JwtSecurityProperties::class)
 class SecurityConfig {
 
@@ -64,16 +59,11 @@ class SecurityConfig {
 }
 
 /**
- * JWT 비활성화 시 모든 요청 허용 (test/dev 프로파일).
+ * dev/test 프로파일 전용 — 모든 요청 허용 (JWT 인증 없음).
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
-@ConditionalOnProperty(
-    prefix = "scheduling.security.jwt",
-    name = ["enabled"],
-    havingValue = "false",
-    matchIfMissing = true,
-)
+@Profile("dev", "test")
 class NoOpSecurityConfig {
 
     companion object : KLogging()
