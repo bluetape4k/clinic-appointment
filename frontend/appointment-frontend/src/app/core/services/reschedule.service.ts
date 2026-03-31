@@ -22,8 +22,9 @@ export class RescheduleService {
       .set('closureDate', closureDate)
       .set('searchDays', searchDays);
     const res = await firstValueFrom(
-      this.http.get<ApiResponse<Record<number, RescheduleCandidate[]>>>(
+      this.http.post<ApiResponse<Record<number, RescheduleCandidate[]>>>(
         `${this.baseUrl}/${appointmentId}/reschedule/closure`,
+        null,
         { params },
       )
     );
