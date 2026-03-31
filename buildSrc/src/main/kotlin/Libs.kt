@@ -14,8 +14,8 @@ object Plugins {
         const val testLogger = "4.0.0"
         const val shadow = "9.2.2"      // https://plugins.gradle.org/plugin/com.gradleup.shadow
 
-        const val spring_boot3 = "3.5.11"  // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-dependencies
-        const val spring_boot4 = "4.0.3"  // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-dependencies
+        const val spring_boot3 = "3.5.13"  // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-dependencies
+        const val spring_boot4 = "4.0.5"  // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-dependencies
 
         // 참고: https://docs.gatling.io/reference/integrations/build-tools/gradle-plugin/
         const val gatling = "3.15.0"  // https://plugins.gradle.org/plugin/io.gatling.gradle
@@ -47,26 +47,25 @@ object Versions {
     const val spring_boot3 = Plugins.Versions.spring_boot3
     const val spring_boot4 = Plugins.Versions.spring_boot4
 
-    const val springdoc_openapi = "3.0.0"    // https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-starter-webmvc-ui
+    const val springdoc_openapi = "3.0.2"    // https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-starter-webmvc-ui
 
-    const val resilience4j = "2.3.0"   // https://mvnrepository.com/artifact/io.github.resilience4j/resilience4j-bom
+    const val resilience4j = "2.4.0"   // https://mvnrepository.com/artifact/io.github.resilience4j/resilience4j-bom
 
     const val jjwt = "0.13.0"    // https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api
 
     const val lettuce = "6.8.2.RELEASE" // https://mvnrepository.com/artifact/io.lettuce/lettuce-core
-
     const val exposed = "1.1.1"         // https://mvnrepository.com/artifact/org.jetbrains.exposed/exposed-core
 
     const val slf4j = "2.0.17"       // https://mvnrepository.com/artifact/org.slf4j/slf4j-api
     const val logback = "1.5.32"     // https://mvnrepository.com/artifact/ch.qos.logback/logback-classic
 
-    const val timefold_solver = "1.31.0" // https://mvnrepository.com/artifact/ai.timefold.solver/timefold-solver-core
+    const val timefold_solver = "1.32.0" // https://mvnrepository.com/artifact/ai.timefold.solver/timefold-solver-core
 
     const val junit_jupiter = "6.0.3"      // https://mvnrepository.com/artifact/org.junit.jupiter/junit-jupiter-api
     const val junit_platform = "6.0.3"     // https://mvnrepository.com/artifact/org.junit.platform/junit-platform-launcher
     const val kluent = "1.73"               // https://mvnrepository.com/artifact/org.amshove.kluent/kluent
     const val mockk = "1.14.9"              // https://mvnrepository.com/artifact/io.mockk/mockk
-    const val testcontainers = "2.0.3"      // https://mvnrepository.com/artifact/org.testcontainers/testcontainers
+    const val testcontainers = "2.0.4"      // https://mvnrepository.com/artifact/org.testcontainers/testcontainers
     const val jna = "5.18.1"                // https://mvnrepository.com/artifact/net.java.dev.jna/jna
 
     // Gatling
@@ -97,7 +96,7 @@ object Libs {
         }
     }
 
-    const val jetbrains_annotations = "org.jetbrains:annotations:26.0.2" // https://mvnrepository.com/artifact/org.jetbrains/annotations
+    const val jetbrains_annotations = "org.jetbrains:annotations:26.1.0" // https://mvnrepository.com/artifact/org.jetbrains/annotations
 
 
     // bluetape4k
