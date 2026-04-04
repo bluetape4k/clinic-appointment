@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.event
 
+import io.bluetape4k.logging.KLogging
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeFalse
 import org.amshove.kluent.shouldBeTrue
@@ -13,6 +14,9 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class EventLogTest {
+
+    companion object: KLogging()
+
     private lateinit var logger: AppointmentEventLogger
 
     @BeforeEach
@@ -46,14 +50,13 @@ class EventLogTest {
 
     @Test
     fun `StatusChanged 이벤트가 DB에 저장된다`() {
-        val event =
-            AppointmentDomainEvent.StatusChanged(
-                appointmentId = 2L,
-                clinicId = 20L,
-                fromState = "REQUESTED",
-                toState = "CONFIRMED",
-                reason = "의사 승인"
-            )
+        val event = AppointmentDomainEvent.StatusChanged(
+            appointmentId = 2L,
+            clinicId = 20L,
+            fromState = "REQUESTED",
+            toState = "CONFIRMED",
+            reason = "의사 승인"
+        )
 
         logger.onStatusChanged(event)
 
@@ -73,8 +76,7 @@ class EventLogTest {
 
     @Test
     fun `StatusChanged 이벤트 reason이 null이면 payload에 포함되지 않는다`() {
-        val event =
-            AppointmentDomainEvent.StatusChanged(
+        val event = AppointmentDomainEvent.StatusChanged(
                 appointmentId = 3L,
                 clinicId = 30L,
                 fromState = "CONFIRMED",
@@ -94,8 +96,7 @@ class EventLogTest {
 
     @Test
     fun `Cancelled 이벤트가 DB에 저장된다`() {
-        val event =
-            AppointmentDomainEvent.Cancelled(
+        val event = AppointmentDomainEvent.Cancelled(
                 appointmentId = 4L,
                 clinicId = 40L,
                 reason = "환자 요청 취소"
@@ -116,8 +117,7 @@ class EventLogTest {
 
     @Test
     fun `이벤트 reason 문자열은 JSON 이스케이프된다`() {
-        val event =
-            AppointmentDomainEvent.Cancelled(
+        val event = AppointmentDomainEvent.Cancelled(
                 appointmentId = 5L,
                 clinicId = 50L,
                 reason = """환자 "직접" 요청

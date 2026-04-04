@@ -1,10 +1,9 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
-import io.bluetape4k.logging.KLogging
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
-import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.model.tables.BreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.ClinicClosures
 import io.bluetape4k.clinic.appointment.model.tables.ClinicDefaultBreakTimes
@@ -19,10 +18,8 @@ import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
-import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeTrue
-import org.amshove.kluent.shouldNotBeNull
+import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.logging.KLogging
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -30,16 +27,16 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.request
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -50,7 +47,7 @@ import java.time.DayOfWeek
 @ActiveProfiles("test")
 class AppointmentControllerTest {
 
-    companion object : KLogging()
+    companion object: KLogging()
 
     @Autowired
     private lateinit var mockMvc: MockMvc
@@ -62,7 +59,7 @@ class AppointmentControllerTest {
     @BeforeEach
     fun setup() {
         transaction {
-            SchemaUtils.createMissingTablesAndColumns(
+            SchemaUtils.create(
                 Clinics, OperatingHoursTable, ClinicDefaultBreakTimes, BreakTimes, ClinicClosures,
                 Doctors, DoctorSchedules, DoctorAbsences,
                 TreatmentTypes, Equipments, TreatmentEquipments,
@@ -191,11 +188,12 @@ class AppointmentControllerTest {
 
         val body = """{"status": "CONFIRMED"}"""
 
-        val result = mockMvc.perform(
-            patch("/api/appointments/$appointmentId/status")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)
-        )
+        val result = mockMvc
+            .perform(
+                patch("/api/appointments/$appointmentId/status")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)
+            )
             .andExpect(request().asyncStarted())
             .andReturn()
 
@@ -212,11 +210,12 @@ class AppointmentControllerTest {
         // REQUESTED -> COMPLETED is not a valid transition
         val body = """{"status": "COMPLETED"}"""
 
-        val result = mockMvc.perform(
-            patch("/api/appointments/$appointmentId/status")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)
-        )
+        val result = mockMvc
+            .perform(
+                patch("/api/appointments/$appointmentId/status")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)
+            )
             .andExpect(request().asyncStarted())
             .andReturn()
 
@@ -284,11 +283,12 @@ class AppointmentControllerTest {
             }
         """.trimIndent()
 
-        mockMvc.perform(
-            post("/api/appointments")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)
-        )
+        mockMvc
+            .perform(
+                post("/api/appointments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)
+            )
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.data.timezone").value("America/Los_Angeles"))
             .andExpect(jsonPath("$.data.locale").value("ko-KR"))  // timezone과 독립적

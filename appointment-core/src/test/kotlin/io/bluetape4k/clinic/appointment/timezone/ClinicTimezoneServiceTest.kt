@@ -1,14 +1,13 @@
 package io.bluetape4k.clinic.appointment.timezone
 
-import io.bluetape4k.clinic.appointment.model.dto.ClinicRecord
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
-import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
@@ -16,7 +15,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
-import java.util.Locale
+import java.util.*
 
 /**
  * [ClinicTimezoneService] 테스트.
@@ -37,26 +36,26 @@ class ClinicTimezoneServiceTest {
         transaction {
             MigrationUtils.statementsRequiredForDatabaseMigration(Clinics).forEach { exec(it) }
 
-            seoulClinicId = Clinics.insert {
+            seoulClinicId = Clinics.insertAndGetId {
                 it[name] = "서울 클리닉"
                 it[slotDurationMinutes] = 30
                 it[timezone] = "Asia/Seoul"
                 it[locale] = "ko-KR"
-            }[Clinics.id].value
+            }.value
 
-            nyClinicId = Clinics.insert {
+            nyClinicId = Clinics.insertAndGetId {
                 it[name] = "NY Clinic"
                 it[slotDurationMinutes] = 30
                 it[timezone] = "America/New_York"
                 it[locale] = "en-US"
-            }[Clinics.id].value
+            }.value
 
-            tokyoClinicId = Clinics.insert {
+            tokyoClinicId = Clinics.insertAndGetId {
                 it[name] = "東京クリニック"
                 it[slotDurationMinutes] = 30
                 it[timezone] = "Asia/Tokyo"
                 it[locale] = "ja-JP"
-            }[Clinics.id].value
+            }.value
         }
     }
 
@@ -154,12 +153,12 @@ class ClinicTimezoneServiceTest {
     fun `getTimezoneAndLocale - 교민 병원 - locale과 timezone이 독립적`() {
         // locale="ko-KR" 이지만 LA 소재 교민 병원
         val expatClinicId = transaction {
-            Clinics.insert {
+            Clinics.insertAndGetId {
                 it[name] = "LA 교민 클리닉"
                 it[slotDurationMinutes] = 30
                 it[timezone] = "America/Los_Angeles"
                 it[locale] = "ko-KR"
-            }[Clinics.id].value
+            }.value
         }
 
         val (timezone, locale) = service.getTimezoneAndLocale(expatClinicId)

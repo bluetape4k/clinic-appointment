@@ -2,7 +2,6 @@ package io.bluetape4k.clinic.appointment.service
 
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
-import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.BreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.ClinicClosures
@@ -18,6 +17,7 @@ import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.support.requireNotNull
 import org.amshove.kluent.shouldBeEmpty
 import org.amshove.kluent.shouldBeEqualTo
@@ -30,6 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
@@ -47,6 +48,7 @@ class ClosureRescheduleServiceTest {
 
         // 월요일
         private val MONDAY = LocalDate.of(2026, 3, 23)
+
         // 화요일
         private val TUESDAY = LocalDate.of(2026, 3, 24)
 
@@ -107,12 +109,11 @@ class ClosureRescheduleServiceTest {
      */
     private fun insertDataWithAppointment(): Triple<Long, Long, Long> =
         transaction {
-            val clinicId =
-                Clinics.insert {
-                    it[name] = "Test Clinic"
-                    it[slotDurationMinutes] = 30
-                    it[maxConcurrentPatients] = 1
-                }[Clinics.id].value
+            val clinicId = Clinics.insertAndGetId {
+                it[name] = "Test Clinic"
+                it[slotDurationMinutes] = 30
+                it[maxConcurrentPatients] = 1
+            }
 
             // 월요일, 화요일 영업시간
             for (day in listOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY)) {
@@ -125,11 +126,10 @@ class ClosureRescheduleServiceTest {
                 }
             }
 
-            val doctorId =
-                Doctors.insert {
-                    it[Doctors.clinicId] = clinicId
-                    it[name] = "Dr. Kim"
-                }[Doctors.id].value
+            val doctorId = Doctors.insertAndGetId {
+                it[Doctors.clinicId] = clinicId
+                it[name] = "Dr. Kim"
+            }
 
             // 월요일, 화요일 의사 스케줄
             for (day in listOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY)) {
@@ -141,12 +141,11 @@ class ClosureRescheduleServiceTest {
                 }
             }
 
-            val treatmentTypeId =
-                TreatmentTypes.insert {
-                    it[TreatmentTypes.clinicId] = clinicId
-                    it[name] = "General Checkup"
-                    it[defaultDurationMinutes] = 30
-                }[TreatmentTypes.id].value
+            val treatmentTypeId = TreatmentTypes.insertAndGetId {
+                it[TreatmentTypes.clinicId] = clinicId
+                it[name] = "General Checkup"
+                it[defaultDurationMinutes] = 30
+            }
 
             // 월요일 09:00 예약
             Appointments.insert {
@@ -161,7 +160,7 @@ class ClosureRescheduleServiceTest {
                 it[status] = AppointmentState.CONFIRMED
             }
 
-            Triple(clinicId, doctorId, treatmentTypeId)
+            Triple(clinicId.value, doctorId.value, treatmentTypeId.value)
         }
 
     @Test
@@ -171,10 +170,9 @@ class ClosureRescheduleServiceTest {
         rescheduleService.processClosureReschedule(clinicId, MONDAY)
 
         transaction {
-            val appointments =
-                Appointments.selectAll()
-                    .where { Appointments.clinicId eq clinicId }
-                    .toList()
+            val appointments = Appointments.selectAll()
+                .where { Appointments.clinicId eq clinicId }
+                .toList()
 
             appointments shouldHaveSize 1
             appointments[0][Appointments.status] shouldBeEqualTo AppointmentState.PENDING_RESCHEDULE
@@ -205,10 +203,9 @@ class ClosureRescheduleServiceTest {
 
         transaction {
             // 원래 예약이 RESCHEDULED
-            val originalAppointment =
-                Appointments.selectAll()
-                    .where { Appointments.status eq AppointmentState.RESCHEDULED }
-                    .firstOrNull()
+            val originalAppointment = Appointments.selectAll()
+                .where { Appointments.status eq AppointmentState.RESCHEDULED }
+                .firstOrNull()
             originalAppointment.shouldNotBeNull()
 
             // 새 예약이 CONFIRMED
@@ -235,10 +232,9 @@ class ClosureRescheduleServiceTest {
         newAppointmentId.shouldNotBeNull()
 
         transaction {
-            val newAppointment =
-                Appointments.selectAll()
-                    .where { Appointments.id eq newAppointmentId.requireNotNull("newAppointmentId") }
-                    .first()
+            val newAppointment = Appointments.selectAll()
+                .where { Appointments.id eq newAppointmentId.requireNotNull("newAppointmentId") }
+                .first()
             // 가장 이른 슬롯 (화요일 09:00)이 선택되어야 함
             newAppointment[Appointments.appointmentDate] shouldBeEqualTo TUESDAY
             newAppointment[Appointments.startTime] shouldBeEqualTo LocalTime.of(9, 0)
@@ -258,12 +254,11 @@ class ClosureRescheduleServiceTest {
     @Test
     fun `6 - 후보가 없으면 autoReschedule은 null 반환`() {
         transaction {
-            val clinicId =
-                Clinics.insert {
-                    it[name] = "Empty Clinic"
-                    it[slotDurationMinutes] = 30
-                    it[maxConcurrentPatients] = 1
-                }[Clinics.id].value
+            val clinicId = Clinics.insertAndGetId {
+                it[name] = "Empty Clinic"
+                it[slotDurationMinutes] = 30
+                it[maxConcurrentPatients] = 1
+            }
 
             OperatingHoursTable.insert {
                 it[OperatingHoursTable.clinicId] = clinicId
@@ -273,11 +268,10 @@ class ClosureRescheduleServiceTest {
                 it[isActive] = true
             }
 
-            val doctorId =
-                Doctors.insert {
-                    it[Doctors.clinicId] = clinicId
-                    it[name] = "Dr. Park"
-                }[Doctors.id].value
+            val doctorId = Doctors.insertAndGetId {
+                it[Doctors.clinicId] = clinicId
+                it[name] = "Dr. Park"
+            }
 
             DoctorSchedules.insert {
                 it[DoctorSchedules.doctorId] = doctorId
@@ -286,27 +280,25 @@ class ClosureRescheduleServiceTest {
                 it[endTime] = LocalTime.of(18, 0)
             }
 
-            val treatmentTypeId =
-                TreatmentTypes.insert {
-                    it[TreatmentTypes.clinicId] = clinicId
-                    it[name] = "Checkup"
-                    it[defaultDurationMinutes] = 30
-                }[TreatmentTypes.id].value
+            val treatmentTypeId = TreatmentTypes.insertAndGetId {
+                it[TreatmentTypes.clinicId] = clinicId
+                it[name] = "Checkup"
+                it[defaultDurationMinutes] = 30
+            }
 
-            val appointmentId =
-                Appointments.insert {
-                    it[Appointments.clinicId] = clinicId
-                    it[Appointments.doctorId] = doctorId
-                    it[Appointments.treatmentTypeId] = treatmentTypeId
-                    it[patientName] = "김환자"
-                    it[appointmentDate] = MONDAY
-                    it[startTime] = LocalTime.of(9, 0)
-                    it[endTime] = LocalTime.of(9, 30)
-                    it[status] = AppointmentState.PENDING_RESCHEDULE
-                }[Appointments.id].value
+            val appointmentId = Appointments.insertAndGetId {
+                it[Appointments.clinicId] = clinicId
+                it[Appointments.doctorId] = doctorId
+                it[Appointments.treatmentTypeId] = treatmentTypeId
+                it[patientName] = "김환자"
+                it[appointmentDate] = MONDAY
+                it[startTime] = LocalTime.of(9, 0)
+                it[endTime] = LocalTime.of(9, 30)
+                it[status] = AppointmentState.PENDING_RESCHEDULE
+            }
 
             // 후보 없이 autoReschedule 호출
-            val result = rescheduleService.autoReschedule(appointmentId)
+            val result = rescheduleService.autoReschedule(appointmentId.value)
             (result == null).shouldBeTrue()
         }
     }

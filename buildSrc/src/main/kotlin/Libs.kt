@@ -39,7 +39,7 @@ object Plugins {
 object Versions {
 
     // Java 21, Kotlin 2.3 이상에서 사용하세요
-    const val bluetape4k = "1.5.0-Beta3"    // https://mvnrepository.com/artifact/io.github.bluetape4k/bluetape4k-bom
+    const val bluetape4k = "1.5.0-RC1"    // https://mvnrepository.com/artifact/io.github.bluetape4k/bluetape4k-bom
 
     const val kotlin = "2.3.20"                 // https://mvnrepository.com/artifact/org.jetbrains.kotlin/kotlin-stdlib
     const val kotlinx_coroutines = "1.10.2"     // https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
@@ -54,7 +54,7 @@ object Versions {
     const val jjwt = "0.13.0"    // https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api
 
     const val lettuce = "6.8.2.RELEASE" // https://mvnrepository.com/artifact/io.lettuce/lettuce-core
-    const val exposed = "1.1.1"         // https://mvnrepository.com/artifact/org.jetbrains.exposed/exposed-core
+    const val exposed = "1.2.0"         // https://mvnrepository.com/artifact/org.jetbrains.exposed/exposed-core
 
     const val slf4j = "2.0.17"       // https://mvnrepository.com/artifact/org.slf4j/slf4j-api
     const val logback = "1.5.32"     // https://mvnrepository.com/artifact/ch.qos.logback/logback-classic

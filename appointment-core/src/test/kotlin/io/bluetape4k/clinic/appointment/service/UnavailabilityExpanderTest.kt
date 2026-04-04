@@ -3,8 +3,8 @@ package io.bluetape4k.clinic.appointment.service
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityExceptionRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityRecord
 import io.bluetape4k.clinic.appointment.model.tables.ExceptionType
-import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeEmpty
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeTrue
 import org.amshove.kluent.shouldHaveSize
 import org.junit.jupiter.api.Test
@@ -135,7 +135,7 @@ class UnavailabilityExpanderTest {
     fun `4 - 일회성 규칙 — 해당 날짜만 반환`() {
         val date = LocalDate.of(2026, 4, 15)
         val rule = oneTimeRule(date)
-        val result = UnavailabilityExpander.expand(rule, emptyList<EquipmentUnavailabilityExceptionRecord>(), april)
+        val result = UnavailabilityExpander.expand(rule, emptyList(), april)
 
         result shouldHaveSize 1
         result[0].date shouldBeEqualTo date
@@ -147,7 +147,7 @@ class UnavailabilityExpanderTest {
     fun `5 - 일회성 규칙 — 날짜가 range 밖이면 emptyList 반환`() {
         val date = LocalDate.of(2026, 5, 5)
         val rule = oneTimeRule(date)
-        val result = UnavailabilityExpander.expand(rule, emptyList<EquipmentUnavailabilityExceptionRecord>(), april)
+        val result = UnavailabilityExpander.expand(rule, emptyList(), april)
 
         result.shouldBeEmpty()
     }
@@ -155,7 +155,7 @@ class UnavailabilityExpanderTest {
     @Test
     fun `6 - effectiveUntil로 반복 종료 — effectiveUntil 2026-04-14이면 2회`() {
         val rule = recurringRule(effectiveUntil = LocalDate.of(2026, 4, 14))
-        val result = UnavailabilityExpander.expand(rule, emptyList<EquipmentUnavailabilityExceptionRecord>(), april)
+        val result = UnavailabilityExpander.expand(rule, emptyList(), april)
 
         result shouldHaveSize 2
         result.map { period -> period.date } shouldBeEqualTo listOf(

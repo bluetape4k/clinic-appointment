@@ -1,8 +1,6 @@
 package io.bluetape4k.clinic.appointment.solver.service
 
-import io.bluetape4k.logging.KLogging
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
-import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.BreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.ClinicClosures
@@ -19,13 +17,17 @@ import io.bluetape4k.clinic.appointment.model.tables.ProviderType
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.logging.KLogging
 import org.amshove.kluent.shouldBeEmpty
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldBeTrue
 import org.amshove.kluent.shouldHaveSize
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -46,34 +48,33 @@ class SolverServiceTest {
 
         private val MONDAY = LocalDate.of(2026, 3, 23)
         private val FRIDAY = LocalDate.of(2026, 3, 27)
+    }
 
-        @JvmStatic
-        @BeforeAll
-        fun setup() {
-            db = Database.connect(
-                "jdbc:h2:mem:solver_test;DB_CLOSE_DELAY=-1",
-                driver = "org.h2.Driver"
+    @BeforeAll
+    fun setup() {
+        db = Database.connect(
+            "jdbc:h2:mem:solver_test;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver"
+        )
+        transaction {
+            SchemaUtils.create(
+                Holidays,
+                Clinics,
+                ClinicDefaultBreakTimes,
+                OperatingHoursTable,
+                BreakTimes,
+                ClinicClosures,
+                Doctors,
+                DoctorSchedules,
+                DoctorAbsences,
+                Equipments,
+                TreatmentTypes,
+                TreatmentEquipments,
+                ConsultationTopics,
+                Appointments,
+                AppointmentNotes,
+                RescheduleCandidates,
             )
-            transaction {
-                SchemaUtils.create(
-                    Holidays,
-                    Clinics,
-                    ClinicDefaultBreakTimes,
-                    OperatingHoursTable,
-                    BreakTimes,
-                    ClinicClosures,
-                    Doctors,
-                    DoctorSchedules,
-                    DoctorAbsences,
-                    Equipments,
-                    TreatmentTypes,
-                    TreatmentEquipments,
-                    ConsultationTopics,
-                    Appointments,
-                    AppointmentNotes,
-                    RescheduleCandidates,
-                )
-            }
         }
     }
 
@@ -111,11 +112,11 @@ class SolverServiceTest {
     )
 
     private fun insertBaseData(maxConcurrentPatients: Int = 1): BaseData = transaction {
-        val clinicId = Clinics.insert {
+        val clinicId = Clinics.insertAndGetId {
             it[name] = "Test Clinic"
             it[slotDurationMinutes] = 30
             it[Clinics.maxConcurrentPatients] = maxConcurrentPatients
-        }[Clinics.id].value
+        }.value
 
         val weekdays = listOf(
             DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
@@ -131,17 +132,17 @@ class SolverServiceTest {
             }
         }
 
-        val doctorId1 = Doctors.insert {
+        val doctorId1 = Doctors.insertAndGetId {
             it[Doctors.clinicId] = clinicId
             it[name] = "Dr. Kim"
             it[providerType] = ProviderType.DOCTOR
-        }[Doctors.id].value
+        }.value
 
-        val doctorId2 = Doctors.insert {
+        val doctorId2 = Doctors.insertAndGetId {
             it[Doctors.clinicId] = clinicId
             it[name] = "Dr. Park"
             it[providerType] = ProviderType.DOCTOR
-        }[Doctors.id].value
+        }.value
 
         for (day in weekdays) {
             DoctorSchedules.insert {
@@ -158,12 +159,12 @@ class SolverServiceTest {
             }
         }
 
-        val treatmentTypeId = TreatmentTypes.insert {
+        val treatmentTypeId = TreatmentTypes.insertAndGetId {
             it[TreatmentTypes.clinicId] = clinicId
             it[name] = "General Checkup"
             it[defaultDurationMinutes] = 30
             it[requiredProviderType] = ProviderType.DOCTOR
-        }[TreatmentTypes.id].value
+        }.value
 
         BaseData(clinicId, doctorId1, doctorId2, treatmentTypeId)
     }
@@ -224,7 +225,7 @@ class SolverServiceTest {
 
         result.isFeasible.shouldBeTrue()
         val startTimes = result.appointments.map { it.startTime }.toSet()
-        (startTimes.size == result.appointments.size).shouldBeTrue()
+        startTimes.size shouldBeEqualTo result.appointments.size
     }
 
     @Test

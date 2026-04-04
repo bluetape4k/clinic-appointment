@@ -1,8 +1,8 @@
 package io.bluetape4k.clinic.appointment.repository
 
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
-import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
 import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
+import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.ExceptionType
 import org.amshove.kluent.shouldBeEqualTo
@@ -51,7 +51,8 @@ class EquipmentUnavailabilityRepositoryTest {
     @BeforeEach
     fun cleanUp() {
         transaction {
-            SchemaUtils.createMissingTablesAndColumns(*allTables)
+            // SchemaUtils.createMissingTablesAndColumns(*allTables)
+            SchemaUtils.create(*allTables)
         }
         transaction {
             EquipmentUnavailabilityExceptions.deleteAll()

@@ -39,3 +39,5 @@ dist/
 .omx/state/
 .omx/context/
 .omx/tmux-hook.json
+
+.profileconfig.json

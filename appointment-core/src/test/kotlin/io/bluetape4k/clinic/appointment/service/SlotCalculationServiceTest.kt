@@ -1,30 +1,29 @@
 package io.bluetape4k.clinic.appointment.service
 
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
-import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.BreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.ClinicClosures
 import io.bluetape4k.clinic.appointment.model.tables.ClinicDefaultBreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.ConsultationMethod
-import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
-import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
-import io.bluetape4k.clinic.appointment.model.tables.Holidays
+import io.bluetape4k.clinic.appointment.model.tables.ConsultationTopics
 import io.bluetape4k.clinic.appointment.model.tables.DoctorAbsences
 import io.bluetape4k.clinic.appointment.model.tables.DoctorSchedules
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
+import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
+import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
+import io.bluetape4k.clinic.appointment.model.tables.Equipments
+import io.bluetape4k.clinic.appointment.model.tables.Holidays
+import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.ProviderType
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentCategory
-import io.bluetape4k.clinic.appointment.model.tables.Equipments
-import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
-import io.bluetape4k.clinic.appointment.model.tables.ConsultationTopics
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.service.model.SlotQuery
+import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import org.amshove.kluent.shouldBeEmpty
 import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeFalse
 import org.amshove.kluent.shouldBeTrue
 import org.amshove.kluent.shouldContain
 import org.amshove.kluent.shouldHaveSize
@@ -33,6 +32,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -121,15 +121,12 @@ class SlotCalculationServiceTest {
         consultationMethod: String? = null,
     ): Triple<Long, Long, Long> =
         transaction {
-            val clinicId =
-                Clinics
-                    .insert {
-                        it[name] = "Test Clinic"
-                        it[Clinics.slotDurationMinutes] = slotDurationMinutes
-                        it[Clinics.maxConcurrentPatients] = maxConcurrentPatients
-                        it[Clinics.openOnHolidays] = openOnHolidays
-                    }[Clinics.id]
-                    .value
+            val clinicId = Clinics.insertAndGetId {
+                it[name] = "Test Clinic"
+                it[Clinics.slotDurationMinutes] = slotDurationMinutes
+                it[Clinics.maxConcurrentPatients] = maxConcurrentPatients
+                it[Clinics.openOnHolidays] = openOnHolidays
+            }.value
 
             OperatingHoursTable.insert {
                 it[OperatingHoursTable.clinicId] = clinicId
@@ -139,15 +136,12 @@ class SlotCalculationServiceTest {
                 it[isActive] = true
             }
 
-            val doctorId =
-                Doctors
-                    .insert {
-                        it[Doctors.clinicId] = clinicId
-                        it[name] = "Dr. Kim"
-                        it[Doctors.providerType] = providerType
-                        it[Doctors.maxConcurrentPatients] = doctorMaxConcurrent
-                    }[Doctors.id]
-                    .value
+            val doctorId = Doctors.insertAndGetId {
+                it[Doctors.clinicId] = clinicId
+                it[name] = "Dr. Kim"
+                it[Doctors.providerType] = providerType
+                it[Doctors.maxConcurrentPatients] = doctorMaxConcurrent
+            }.value
 
             DoctorSchedules.insert {
                 it[DoctorSchedules.doctorId] = doctorId
@@ -156,19 +150,16 @@ class SlotCalculationServiceTest {
                 it[endTime] = doctorEnd
             }
 
-            val treatmentTypeId =
-                TreatmentTypes
-                    .insert {
-                        it[TreatmentTypes.clinicId] = clinicId
-                        it[name] = "General Checkup"
-                        it[category] = treatmentCategory
-                        it[defaultDurationMinutes] = treatmentDurationMinutes
-                        it[TreatmentTypes.requiredProviderType] = requiredProviderType
-                        it[TreatmentTypes.consultationMethod] = consultationMethod
-                        it[TreatmentTypes.requiresEquipment] = requiresEquipment
-                        it[TreatmentTypes.maxConcurrentPatients] = treatmentMaxConcurrent
-                    }[TreatmentTypes.id]
-                    .value
+            val treatmentTypeId = TreatmentTypes.insertAndGetId {
+                it[TreatmentTypes.clinicId] = clinicId
+                it[name] = "General Checkup"
+                it[category] = treatmentCategory
+                it[defaultDurationMinutes] = treatmentDurationMinutes
+                it[TreatmentTypes.requiredProviderType] = requiredProviderType
+                it[TreatmentTypes.consultationMethod] = consultationMethod
+                it[TreatmentTypes.requiresEquipment] = requiresEquipment
+                it[TreatmentTypes.maxConcurrentPatients] = treatmentMaxConcurrent
+            }.value
 
             Triple(clinicId, doctorId, treatmentTypeId)
         }
@@ -177,10 +168,9 @@ class SlotCalculationServiceTest {
     fun `1 - 기본 슬롯 생성 - 09_00-18_00, 30분 슬롯, 제외 없음 - 18개`() {
         val (clinicId, doctorId, treatmentTypeId) = insertBaseData()
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00~18:00, 30분 간격, 30분 duration → 18 slots (09:00, 09:30, ..., 17:30)
         slots shouldHaveSize 18
@@ -201,10 +191,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00~12:00 → 6 slots, 13:00~18:00 → 10 slots = 16
         slots shouldHaveSize 16
@@ -226,10 +215,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         slots.shouldBeEmpty()
     }
@@ -249,28 +237,27 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00~13:00 → 8 slots, 15:00~18:00 → 6 slots = 14
         slots shouldHaveSize 14
-        slots.none { it.startTime >= LocalTime.of(13, 0) && it.startTime < LocalTime.of(15, 0) }.shouldBeTrue()
+        slots.none {
+            it.startTime >= LocalTime.of(13, 0) && it.startTime < LocalTime.of(15, 0)
+        }.shouldBeTrue()
     }
 
     @Test
     fun `5 - 의사 스케줄이 운영시간보다 짧음 10_00-16_00 - 교차 결과`() {
-        val (clinicId, doctorId, treatmentTypeId) =
-            insertBaseData(
-                doctorStart = LocalTime.of(10, 0),
-                doctorEnd = LocalTime.of(16, 0)
-            )
+        val (clinicId, doctorId, treatmentTypeId) = insertBaseData(
+            doctorStart = LocalTime.of(10, 0),
+            doctorEnd = LocalTime.of(16, 0)
+        )
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 교차: 10:00~16:00 → 12 slots
         slots shouldHaveSize 12
@@ -292,10 +279,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         slots.shouldBeEmpty()
     }
@@ -314,22 +300,20 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00~14:00 → 10 slots, 16:00~18:00 → 4 slots = 14
         slots shouldHaveSize 14
-        slots.none { it.startTime >= LocalTime.of(14, 0) && it.startTime < LocalTime.of(16, 0) }.shouldBeTrue()
+        slots.none {
+            it.startTime >= LocalTime.of(14, 0) && it.startTime < LocalTime.of(16, 0)
+        }.shouldBeTrue()
     }
 
     @Test
     fun `8 - 동시 수용 3, 기존 예약 2명 - remainingCapacity 1`() {
-        val (clinicId, doctorId, treatmentTypeId) =
-            insertBaseData(
-                maxConcurrentPatients = 3
-            )
+        val (clinicId, doctorId, treatmentTypeId) = insertBaseData(maxConcurrentPatients = 3)
 
         // 09:00~09:30에 2개 예약 추가
         transaction {
@@ -347,10 +331,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         val slot0900 = slots.first { it.startTime == LocalTime.of(9, 0) }
         slot0900.remainingCapacity shouldBeEqualTo 1
@@ -362,10 +345,7 @@ class SlotCalculationServiceTest {
 
     @Test
     fun `9 - 동시 수용 가득 - 해당 슬롯 제외`() {
-        val (clinicId, doctorId, treatmentTypeId) =
-            insertBaseData(
-                maxConcurrentPatients = 1
-            )
+        val (clinicId, doctorId, treatmentTypeId) = insertBaseData(maxConcurrentPatients = 1)
 
         // 09:00~09:30에 1개 예약 (capacity=1이므로 가득)
         transaction {
@@ -381,10 +361,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00 슬롯은 제외되어야 함 → 17개
         slots shouldHaveSize 17
@@ -393,23 +372,17 @@ class SlotCalculationServiceTest {
 
     @Test
     fun `10 - 장비 필요하고 전부 사용 중 - 해당 슬롯 제외`() {
-        val (clinicId, doctorId, treatmentTypeId) =
-            insertBaseData(
-                requiresEquipment = true
-            )
+        val (clinicId, doctorId, treatmentTypeId) = insertBaseData(requiresEquipment = true)
 
         // 장비 추가 (quantity=1)
         val equipmentId =
             transaction {
-                val eqId =
-                    Equipments
-                        .insert {
-                            it[Equipments.clinicId] = clinicId
-                            it[name] = "X-Ray Machine"
-                            it[usageDurationMinutes] = 30
-                            it[quantity] = 1
-                        }[Equipments.id]
-                        .value
+                val eqId = Equipments.insertAndGetId {
+                    it[Equipments.clinicId] = clinicId
+                    it[name] = "X-Ray Machine"
+                    it[usageDurationMinutes] = 30
+                    it[quantity] = 1
+                }.value
 
                 TreatmentEquipments.insert {
                     it[TreatmentEquipments.treatmentTypeId] = treatmentTypeId
@@ -434,10 +407,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00 슬롯은 장비 부족으로 제외
         slots.none { it.startTime == LocalTime.of(9, 0) }.shouldBeTrue()
@@ -446,24 +418,20 @@ class SlotCalculationServiceTest {
 
     @Test
     fun `11 - 장비 수량 2, 1개 사용 중 - 슬롯 가용`() {
-        val (clinicId, doctorId, treatmentTypeId) =
-            insertBaseData(
-                maxConcurrentPatients = 2,
-                requiresEquipment = true
-            )
+        val (clinicId, doctorId, treatmentTypeId) = insertBaseData(
+            maxConcurrentPatients = 2,
+            requiresEquipment = true
+        )
 
         // 장비 추가 (quantity=2)
         val equipmentId =
             transaction {
-                val eqId =
-                    Equipments
-                        .insert {
-                            it[Equipments.clinicId] = clinicId
-                            it[name] = "X-Ray Machine"
-                            it[usageDurationMinutes] = 30
-                            it[quantity] = 2
-                        }[Equipments.id]
-                        .value
+                val eqId = Equipments.insertAndGetId {
+                    it[Equipments.clinicId] = clinicId
+                    it[name] = "X-Ray Machine"
+                    it[usageDurationMinutes] = 30
+                    it[quantity] = 2
+                }.value
 
                 TreatmentEquipments.insert {
                     it[TreatmentEquipments.treatmentTypeId] = treatmentTypeId
@@ -488,10 +456,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00 슬롯 여전히 가용 (quantity 2, used 1)
         val slot0900 = slots.firstOrNull { it.startTime == LocalTime.of(9, 0) }
@@ -506,10 +473,9 @@ class SlotCalculationServiceTest {
                 treatmentDurationMinutes = 60
             )
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00~18:00, 30분 간격으로 시작, 60분 duration
         // 시작 가능: 09:00, 09:30, ..., 17:00 (17:00+60=18:00 OK, 17:30+60=18:30 > 18:00 NG)
@@ -534,10 +500,9 @@ class SlotCalculationServiceTest {
                 consultationMethod = ConsultationMethod.IN_PERSON
             )
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         slots.isEmpty().shouldBeTrue()
     }
@@ -553,10 +518,9 @@ class SlotCalculationServiceTest {
                 consultationMethod = ConsultationMethod.IN_PERSON
             )
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, consultantId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, consultantId, treatmentTypeId, MONDAY)
+        )
 
         slots shouldHaveSize 18
     }
@@ -571,10 +535,9 @@ class SlotCalculationServiceTest {
                 requiredProviderType = ProviderType.DOCTOR
             )
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, consultantId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, consultantId, treatmentTypeId, MONDAY)
+        )
 
         slots.isEmpty().shouldBeTrue()
     }
@@ -591,10 +554,9 @@ class SlotCalculationServiceTest {
                 requiresEquipment = false
             )
 
-        val phoneSlots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId1, consultantId1, phoneConsultationId, MONDAY)
-            )
+        val phoneSlots = service.findAvailableSlots(
+            SlotQuery(clinicId1, consultantId1, phoneConsultationId, MONDAY)
+        )
 
         phoneSlots shouldHaveSize 18
         phoneSlots.forEach { slot ->
@@ -614,10 +576,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         slots.shouldBeEmpty()
     }
@@ -635,10 +596,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         slots shouldHaveSize 18
     }
@@ -657,10 +617,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00~18:00 중 12:00~13:00 제외 → 16 슬롯
         slots shouldHaveSize 16
@@ -694,10 +653,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00~18:00 중 12:00~13:00, 15:00~15:30 제외 → 15 슬롯
         slots shouldHaveSize 15
@@ -725,10 +683,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00~18:00 중 12:00~13:00, 15:00~15:30 제외 → 15 슬롯
         slots shouldHaveSize 15
@@ -745,15 +702,12 @@ class SlotCalculationServiceTest {
         // 장비 추가 (quantity=1)
         val equipmentId =
             transaction {
-                val eqId =
-                    Equipments
-                        .insert {
-                            it[Equipments.clinicId] = clinicId
-                            it[name] = "MRI Machine"
-                            it[usageDurationMinutes] = 30
-                            it[quantity] = 1
-                        }[Equipments.id]
-                        .value
+                val eqId = Equipments.insertAndGetId {
+                    it[Equipments.clinicId] = clinicId
+                    it[name] = "MRI Machine"
+                    it[usageDurationMinutes] = 30
+                    it[quantity] = 1
+                }.value
 
                 TreatmentEquipments.insert {
                     it[TreatmentEquipments.treatmentTypeId] = treatmentTypeId
@@ -779,10 +733,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 09:00, 09:30 슬롯은 09:00~10:00 사용불가와 겹쳐서 제외 → 16개
         slots shouldHaveSize 16
@@ -798,15 +751,12 @@ class SlotCalculationServiceTest {
 
         // 장비 추가 (quantity=1), 사용불가 없음
         transaction {
-            val eqId =
-                Equipments
-                    .insert {
-                        it[Equipments.clinicId] = clinicId
-                        it[name] = "Ultrasound Machine"
-                        it[usageDurationMinutes] = 30
-                        it[quantity] = 1
-                    }[Equipments.id]
-                    .value
+            val eqId = Equipments.insertAndGetId {
+                it[Equipments.clinicId] = clinicId
+                it[name] = "Ultrasound Machine"
+                it[usageDurationMinutes] = 30
+                it[quantity] = 1
+            }.value
 
             TreatmentEquipments.insert {
                 it[TreatmentEquipments.treatmentTypeId] = treatmentTypeId
@@ -814,10 +764,9 @@ class SlotCalculationServiceTest {
             }
         }
 
-        val slots =
-            service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
-            )
+        val slots = service.findAvailableSlots(
+            SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+        )
 
         // 사용불가 없으므로 18개 전부 반환
         slots shouldHaveSize 18

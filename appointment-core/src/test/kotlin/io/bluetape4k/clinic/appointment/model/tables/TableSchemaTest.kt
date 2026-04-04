@@ -1,11 +1,15 @@
 package io.bluetape4k.clinic.appointment.model.tables
 
+import io.bluetape4k.logging.KLogging
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 
 class TableSchemaTest {
+
+    companion object: KLogging()
+
     private val allTables =
         arrayOf(
             Holidays,

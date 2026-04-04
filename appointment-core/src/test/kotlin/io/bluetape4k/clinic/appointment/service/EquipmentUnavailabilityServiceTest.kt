@@ -1,8 +1,8 @@
 package io.bluetape4k.clinic.appointment.service
 
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
-import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
 import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
+import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.ExceptionType
 import org.amshove.kluent.shouldBeEqualTo
@@ -12,7 +12,7 @@ import org.amshove.kluent.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
-import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -53,7 +53,8 @@ class EquipmentUnavailabilityServiceTest {
     @BeforeEach
     fun cleanUp() {
         transaction {
-            SchemaUtils.createMissingTablesAndColumns(*allTables)
+            // SchemaUtils.createMissingTablesAndColumns(*allTables)
+            SchemaUtils.create(*allTables)
         }
         transaction {
             EquipmentUnavailabilityExceptions.deleteAll()
@@ -62,21 +63,21 @@ class EquipmentUnavailabilityServiceTest {
             Clinics.deleteAll()
         }
         transaction {
-            val newClinicId = Clinics.insert {
+            val newClinicId = Clinics.insertAndGetId {
                 it[name] = "Test Clinic"
                 it[slotDurationMinutes] = 30
                 it[maxConcurrentPatients] = 1
-            }[Clinics.id].value
+            }
 
-            val newEquipmentId = Equipments.insert {
+            val newEquipmentId = Equipments.insertAndGetId {
                 it[Equipments.clinicId] = newClinicId
                 it[name] = "MRI Machine"
                 it[usageDurationMinutes] = 60
                 it[quantity] = 1
-            }[Equipments.id].value
+            }
 
-            clinicId = newClinicId
-            equipmentId = newEquipmentId
+            clinicId = newClinicId.value
+            equipmentId = newEquipmentId.value
         }
     }
 

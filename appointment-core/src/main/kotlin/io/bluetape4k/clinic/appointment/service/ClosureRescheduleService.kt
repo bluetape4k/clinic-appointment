@@ -1,14 +1,14 @@
 package io.bluetape4k.clinic.appointment.service
 
-import io.bluetape4k.logging.KLogging
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.RescheduleCandidateRecord
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistoryRecord
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
-import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
 import io.bluetape4k.clinic.appointment.service.model.SlotQuery
+import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.logging.KLogging
 import io.bluetape4k.support.requireNotNull
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.LocalDate
@@ -134,7 +134,7 @@ class ClosureRescheduleService(
             appointmentRepository.updateStatus(original.id!!, AppointmentState.RESCHEDULED)
             stateHistoryRepository.save(
                 AppointmentStateHistoryRecord(
-                    appointmentId = original.id!!,
+                    appointmentId = original.id,
                     fromState = original.status,
                     toState = AppointmentState.RESCHEDULED,
                     reason = "재배정 확정",
