@@ -7,8 +7,8 @@ import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.LocalDate
 import java.time.LocalTime
@@ -45,7 +45,7 @@ object NotificationTestSupport {
         status: AppointmentState = AppointmentState.CONFIRMED,
     ): AppointmentRecord {
         val id = transaction {
-            Appointments.insert {
+            Appointments.insertAndGetId {
                 it[Appointments.clinicId] = clinicId
                 it[Appointments.doctorId] = doctorId
                 it[Appointments.treatmentTypeId] = treatmentTypeId
@@ -55,10 +55,10 @@ object NotificationTestSupport {
                 it[Appointments.startTime] = LocalTime.of(9, 0)
                 it[Appointments.endTime] = LocalTime.of(9, 30)
                 it[Appointments.status] = status
-            }[Appointments.id].value
+            }
         }
         return AppointmentRecord(
-            id = id,
+            id = id.value,
             clinicId = clinicId,
             doctorId = doctorId,
             treatmentTypeId = treatmentTypeId,
@@ -72,25 +72,25 @@ object NotificationTestSupport {
     }
 
     private fun insertSampleClinic(): Long = transaction {
-        Clinics.insert {
+        Clinics.insertAndGetId {
             it[Clinics.name] = "테스트 클리닉"
             it[Clinics.slotDurationMinutes] = 30
-        }[Clinics.id].value
+        }.value
     }
 
     private fun insertSampleDoctor(): Long = transaction {
-        Doctors.insert {
+        Doctors.insertAndGetId {
             it[Doctors.clinicId] = insertSampleClinic()
             it[Doctors.name] = "김의사"
             it[Doctors.specialty] = "일반내과"
-        }[Doctors.id].value
+        }.value
     }
 
     private fun insertSampleTreatmentType(): Long = transaction {
-        TreatmentTypes.insert {
+        TreatmentTypes.insertAndGetId {
             it[TreatmentTypes.clinicId] = insertSampleClinic()
             it[TreatmentTypes.name] = "일반진료"
             it[TreatmentTypes.defaultDurationMinutes] = 30
-        }[TreatmentTypes.id].value
+        }.value
     }
 }

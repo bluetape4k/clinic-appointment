@@ -13,7 +13,7 @@ import org.amshove.kluent.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
-import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
@@ -61,21 +61,21 @@ class EquipmentUnavailabilityRepositoryTest {
             Clinics.deleteAll()
         }
         transaction {
-            val newClinicId = Clinics.insert {
+            val newClinicId = Clinics.insertAndGetId {
                 it[name] = "Test Clinic"
                 it[slotDurationMinutes] = 30
                 it[maxConcurrentPatients] = 1
-            }[Clinics.id].value
+            }
 
-            val newEquipmentId = Equipments.insert {
-                it[Equipments.clinicId] = newClinicId
+            val newEquipmentId = Equipments.insertAndGetId {
+                it[Equipments.clinicId] = newClinicId.value
                 it[name] = "MRI Machine"
                 it[usageDurationMinutes] = 60
                 it[quantity] = 1
-            }[Equipments.id].value
+            }
 
-            clinicId = newClinicId
-            equipmentId = newEquipmentId
+            clinicId = newClinicId.value
+            equipmentId = newEquipmentId.value
         }
     }
 

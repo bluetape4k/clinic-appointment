@@ -16,6 +16,11 @@ dependencies {
     implementation(Libs.exposed_spring_boot4_starter)
     implementation(Libs.bluetape4k_exposed_jdbc)
 
+    // Jackson 3
+    implementation(Libs.bluetape4k_jackson3)
+    implementation(Libs.jackson3_module_kotlin)
+    implementation(Libs.jackson3_module_blackbird)
+
     // JWT
     implementation(Libs.jjwt_api)
     runtimeOnly(Libs.jjwt_impl)

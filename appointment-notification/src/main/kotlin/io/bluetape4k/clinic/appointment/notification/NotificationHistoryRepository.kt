@@ -2,19 +2,19 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.logging.KLogging
 import org.jetbrains.exposed.v1.core.ResultRow
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.andWhere
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /**
  * 알림 발송 이력 Repository.
  */
 class NotificationHistoryRepository {
-    companion object : KLogging()
+    companion object: KLogging()
 
     fun save(record: NotificationHistoryRecord): NotificationHistoryRecord {
-        val id = NotificationHistoryTable.insert {
+        val id = NotificationHistoryTable.insertAndGetId {
             it[appointmentId] = record.appointmentId
             it[channelType] = record.channelType
             it[eventType] = record.eventType
@@ -22,18 +22,17 @@ class NotificationHistoryRepository {
             it[payloadJson] = record.payloadJson
             it[status] = record.status
             it[errorMessage] = record.errorMessage
-        }[NotificationHistoryTable.id].value
+        }.value
         return record.copy(id = id)
     }
 
     fun existsByAppointmentAndEventType(appointmentId: Long, eventType: String): Boolean =
         NotificationHistoryTable
             .selectAll()
-            .where {
-                (NotificationHistoryTable.appointmentId eq appointmentId) and
-                    (NotificationHistoryTable.eventType eq eventType) and
-                    (NotificationHistoryTable.status eq NotificationStatus.SUCCESS)
-            }.count() > 0
+            .where { NotificationHistoryTable.appointmentId eq appointmentId }
+            .andWhere { NotificationHistoryTable.eventType eq eventType }
+            .andWhere { NotificationHistoryTable.status eq NotificationStatus.SUCCESS }
+            .count() > 0
 
     fun findByAppointmentId(appointmentId: Long): List<NotificationHistoryRecord> =
         NotificationHistoryTable

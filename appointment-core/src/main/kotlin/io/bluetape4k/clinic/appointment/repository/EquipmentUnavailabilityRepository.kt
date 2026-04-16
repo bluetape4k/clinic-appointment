@@ -15,7 +15,7 @@ import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
-import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -39,7 +39,7 @@ class EquipmentUnavailabilityRepository {
         equipmentId.requirePositiveNumber("equipmentId")
         clinicId.requirePositiveNumber("clinicId")
 
-        val id = EquipmentUnavailabilities.insert {
+        val id = EquipmentUnavailabilities.insertAndGetId {
             it[EquipmentUnavailabilities.equipmentId] = equipmentId
             it[EquipmentUnavailabilities.clinicId] = clinicId
             it[EquipmentUnavailabilities.unavailableDate] = unavailableDate
@@ -50,7 +50,7 @@ class EquipmentUnavailabilityRepository {
             it[EquipmentUnavailabilities.startTime] = startTime
             it[EquipmentUnavailabilities.endTime] = endTime
             it[EquipmentUnavailabilities.reason] = reason
-        }[EquipmentUnavailabilities.id].value
+        }.value
 
         log.debug { "Created EquipmentUnavailability id=$id for equipmentId=$equipmentId" }
 
@@ -128,7 +128,7 @@ class EquipmentUnavailabilityRepository {
     ): EquipmentUnavailabilityExceptionRecord {
         unavailabilityId.requirePositiveNumber("unavailabilityId")
 
-        val id = EquipmentUnavailabilityExceptions.insert {
+        val id = EquipmentUnavailabilityExceptions.insertAndGetId {
             it[EquipmentUnavailabilityExceptions.unavailabilityId] = unavailabilityId
             it[EquipmentUnavailabilityExceptions.originalDate] = originalDate
             it[EquipmentUnavailabilityExceptions.exceptionType] = exceptionType
@@ -136,7 +136,7 @@ class EquipmentUnavailabilityRepository {
             it[EquipmentUnavailabilityExceptions.rescheduledStartTime] = rescheduledStartTime
             it[EquipmentUnavailabilityExceptions.rescheduledEndTime] = rescheduledEndTime
             it[EquipmentUnavailabilityExceptions.reason] = reason
-        }[EquipmentUnavailabilityExceptions.id].value
+        }.value
 
         log.debug { "Added EquipmentUnavailabilityException id=$id for unavailabilityId=$unavailabilityId" }
 

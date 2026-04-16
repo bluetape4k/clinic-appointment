@@ -1,13 +1,14 @@
 package io.bluetape4k.clinic.appointment.api.config
 
-import io.bluetape4k.logging.KLogging
-import io.bluetape4k.logging.info
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.DoctorSchedules
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.logging.KLogging
+import io.bluetape4k.logging.info
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.boot.ApplicationRunner
@@ -76,13 +77,11 @@ class TestDataSeederConfig {
 
                 for (i in 1..DOCTOR_COUNT) {
                     val doctorId =
-                        Doctors
-                            .insert {
+                        Doctors.insertAndGetId {
                                 it[Doctors.clinicId] = clinicId
                                 it[name] = "Doctor $i"
                                 it[providerType] = "DOCTOR"
-                            }[Doctors.id]
-                            .value
+                        }.value
 
                     for (day in WEEKDAYS) {
                         DoctorSchedules.insert {
