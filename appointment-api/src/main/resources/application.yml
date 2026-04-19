@@ -6,6 +6,7 @@ spring:
         driver-class-name: org.h2.Driver
     flyway:
         enabled: false
+        locations: classpath:db/migration/{vendor}
 
 server:
     port: 8080

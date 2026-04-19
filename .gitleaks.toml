@@ -12,6 +12,7 @@ paths = [
     '''.gradle/''',
     '''gradle/wrapper/''',
     '''src/test/resources/''',
+    '''src/test/.*/security/TestJwtProvider\.kt''',
     '''src/gatling/''',
     '''docs/''',
     '''README\.md''',

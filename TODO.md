@@ -154,9 +154,10 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 - ~~`docker-compose.yml`~~ — 불필요. `bluetape4k-testcontainers` (`PostgreSQLServer`, `MySQL8Server`, `RedisServer`) + `@Profile` 전략으로 대체. 프로파일별 원하는 서버 기동 및 커넥션 설정.
 - [x] GitHub Actions CI — 모듈별 병렬 테스트 + gitleaks + Detekt + JaCoCo 커버리지
-- [ ] Flyway 마이그레이션 검증 자동화 — H2, PostgreSQL, MySQL8 각각 empty DB → migrate 테스트 (`@Profile` + Testcontainers)
-- [ ] CI 멀티 DB 테스트 매트릭스 — H2, PostgreSQL, MySQL8 별 빌드+테스트 (`@Profile` + Testcontainers)
-- [ ] CI 프론트엔드 빌드 추가 — `npm ci && npm run build` (Angular 21 프로덕션 빌드 검증)
+- [x] Flyway 마이그레이션 검증 자동화 — 벤더별(H2/PostgreSQL/MySQL) 마이그레이션 SQL 분리 + `FlywayMigrationTest`로 H2 검증 (CI 포함)
+- [x] CI 프론트엔드 빌드 추가 — `npm ci && npm run build` (Angular 21 프로덕션 빌드 검증, Node.js 22)
+- [x] gitleaks allowlist 수정 — `TestJwtProvider.kt` 테스트 시크릿 제외
+- [ ] CI 멀티 DB 테스트 매트릭스 — PostgreSQL, MySQL8 Testcontainers 통합 테스트 (`@Profile` + Testcontainers)
 
 ---
 

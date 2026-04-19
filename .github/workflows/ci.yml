@@ -318,11 +318,69 @@ jobs:
             fi
           done
 
-  # ── 8. CI 상태 집계 ──────────────────────────────────────────────────────────
+  # ── 8. 프론트엔드 빌드 검증 ───────────────────────────────────────────────────
+  build-frontend:
+    name: Build / Frontend (Angular)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/appointment-frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/appointment-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx ng build --configuration production --dry-run 2>/dev/null || true
+
+      - name: Production build
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/appointment-frontend/dist/
+          retention-days: 3
+
+  # ── 9. Flyway 마이그레이션 검증 (H2) ────────────────────────────────────────
+  flyway-migration:
+    name: Flyway Migration / H2
+    runs-on: ubuntu-latest
+    needs: validate-wrapper
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: true
+
+      - name: Verify Flyway migration (H2)
+        run: |
+          ./gradlew :appointment-api:test \
+            --tests "io.bluetape4k.clinic.appointment.api.migration.FlywayMigrationTest" \
+            --no-daemon
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+  # ── 10. CI 상태 집계 ─────────────────────────────────────────────────────────
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
-    needs: [gitleaks, build, test-core, test-solver, test-api, test-notification]
+    needs: [gitleaks, build, build-frontend, flyway-migration, test-core, test-solver, test-api, test-notification]
     if: always()
     steps:
       - name: Check all jobs

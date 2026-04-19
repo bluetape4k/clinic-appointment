@@ -6,5 +6,5 @@ spring:
         password: appointment
     flyway:
         enabled: true
-        locations: classpath:db/migration
+        locations: classpath:db/migration/{vendor}
         baseline-on-migrate: true
