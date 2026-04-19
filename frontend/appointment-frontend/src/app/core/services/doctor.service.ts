@@ -1,20 +1,59 @@
-import { Injectable, signal } from '@angular/core';
-import { Doctor } from '../models';
-
-// Backend does not expose a doctor API yet — mock data is returned.
-const MOCK_DOCTORS: Doctor[] = [
-  { id: 1, clinicId: 1, name: '김민준', specialty: '일반의' },
-  { id: 2, clinicId: 1, name: '이서연', specialty: '치과' },
-  { id: 3, clinicId: 2, name: '박지호', specialty: '소아과' },
-];
+import { Injectable, inject, signal } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { ApiResponse, Doctor, DoctorAbsence, DoctorSchedule } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class DoctorService {
+  private readonly http = inject(HttpClient);
+
   private readonly _doctors = signal<Doctor[]>([]);
   readonly doctors = this._doctors.asReadonly();
 
-  loadByClinic(clinicId: number): void {
-    const filtered = MOCK_DOCTORS.filter(d => d.clinicId === clinicId);
-    this._doctors.set(filtered);
+  readonly loading = signal(false);
+
+  async loadByClinic(clinicId: number): Promise<Doctor[]> {
+    this.loading.set(true);
+    try {
+      const res = await firstValueFrom(
+        this.http.get<ApiResponse<Doctor[]>>(
+          `/api/clinics/${clinicId}/doctors`
+        )
+      );
+      const data = res.data ?? [];
+      this._doctors.set(data);
+      return data;
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  async getById(doctorId: number): Promise<Doctor> {
+    const res = await firstValueFrom(
+      this.http.get<ApiResponse<Doctor>>(`/api/doctors/${doctorId}`)
+    );
+    return res.data!;
+  }
+
+  async getSchedules(doctorId: number): Promise<DoctorSchedule[]> {
+    const res = await firstValueFrom(
+      this.http.get<ApiResponse<DoctorSchedule[]>>(
+        `/api/doctors/${doctorId}/schedules`
+      )
+    );
+    return res.data ?? [];
+  }
+
+  async getAbsences(doctorId: number, from: string, to: string): Promise<DoctorAbsence[]> {
+    const params = new HttpParams()
+      .set('from', from)
+      .set('to', to);
+    const res = await firstValueFrom(
+      this.http.get<ApiResponse<DoctorAbsence[]>>(
+        `/api/doctors/${doctorId}/absences`,
+        { params }
+      )
+    );
+    return res.data ?? [];
   }
 }

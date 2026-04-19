@@ -1,33 +1,23 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { provideLocationMocks } from '@angular/common/testing';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import { signal } from '@angular/core';
+import { WritableSignal, signal } from '@angular/core';
 
 import { AppointmentListComponent } from './appointment-list.component';
 import { AuthService } from '../../../core/services/auth.service';
 
 describe('AppointmentListComponent', () => {
   let httpMock: HttpTestingController;
-
-  // Mutable signals to control per-test
-  const isAdmin = signal(false);
-  const isStaff = signal(false);
-
-  const mockAuthService = {
-    isAdmin,
-    isStaff,
-    isDoctor: signal(false),
-    isPatient: signal(false),
-    getToken: vi.fn().mockReturnValue(null),
-  };
+  let isAdmin: WritableSignal<boolean>;
+  let isStaff: WritableSignal<boolean>;
 
   beforeEach(() => {
-    isAdmin.set(false);
-    isStaff.set(false);
+    isAdmin = signal(false);
+    isStaff = signal(false);
 
     TestBed.configureTestingModule({
       imports: [AppointmentListComponent],
@@ -37,7 +27,16 @@ describe('AppointmentListComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideAnimationsAsync(),
-        { provide: AuthService, useValue: mockAuthService },
+        {
+          provide: AuthService,
+          useValue: {
+            isAdmin,
+            isStaff,
+            isDoctor: signal(false),
+            isPatient: signal(false),
+            getToken: vi.fn().mockReturnValue(null),
+          },
+        },
       ],
     });
 
@@ -48,14 +47,23 @@ describe('AppointmentListComponent', () => {
     httpMock.verify();
   });
 
-  /** Helper: create component, trigger ngOnInit via detectChanges, flush HTTP. */
   async function createAndFlush() {
     const fixture = TestBed.createComponent(AppointmentListComponent);
-    fixture.detectChanges(); // triggers ngOnInit → loadAppointments → HTTP GET
+    fixture.detectChanges();
     await fixture.whenStable();
-    // Flush the pending HTTP request that ngOnInit fired
-    const req = httpMock.expectOne(r => r.url === '/api/appointments');
-    req.flush({ data: [] });
+
+    // Flush all pending HTTP requests triggered by ngOnInit
+    const reqs = httpMock.match(() => true);
+    reqs.forEach(req => {
+      if (req.request.url.includes('/api/appointments')) {
+        req.flush({ data: [] });
+      } else if (req.request.url.includes('/api/clinics/')) {
+        req.flush({ success: true, data: [] });
+      } else {
+        req.flush({ success: true, data: [] });
+      }
+    });
+
     fixture.detectChanges();
     await fixture.whenStable();
     return fixture;

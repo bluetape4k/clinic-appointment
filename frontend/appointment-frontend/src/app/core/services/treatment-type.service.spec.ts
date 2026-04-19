@@ -1,14 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { TreatmentTypeService } from './treatment-type.service';
 
 describe('TreatmentTypeService', () => {
   let service: TreatmentTypeService;
+  let httpTesting: HttpTestingController;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
     service = TestBed.inject(TreatmentTypeService);
+    httpTesting = TestBed.inject(HttpTestingController);
   });
 
   it('서비스가 생성된다', () => {
@@ -20,42 +26,54 @@ describe('TreatmentTypeService', () => {
   });
 
   describe('loadByClinic()', () => {
-    it('clinicId=1 로드 시 해당 클리닉 치료 유형만 설정된다', () => {
-      service.loadByClinic(1);
-      const types = service.treatmentTypes();
-      expect(types.length).toBeGreaterThan(0);
-      expect(types.every(t => t.clinicId === 1)).toBe(true);
+    it('clinicId=1 로드 시 HTTP 호출하고 signal에 설정된다', async () => {
+      const mockTypes = [
+        {
+          id: 1, clinicId: 1, name: '기본 진료', category: 'TREATMENT',
+          defaultDurationMinutes: 30, requiredProviderType: 'DOCTOR', requiresEquipment: false,
+        },
+        {
+          id: 2, clinicId: 1, name: '스케일링', category: 'TREATMENT',
+          defaultDurationMinutes: 60, requiredProviderType: 'DOCTOR', requiresEquipment: true,
+        },
+      ];
+
+      const promise = service.loadByClinic(1);
+
+      const req = httpTesting.expectOne('/api/clinics/1/treatment-types');
+      expect(req.request.method).toBe('GET');
+      req.flush({ success: true, data: mockTypes });
+
+      await promise;
+      expect(service.treatmentTypes()).toEqual(mockTypes);
     });
 
-    it('clinicId=2 로드 시 해당 클리닉 치료 유형만 반환된다', () => {
-      service.loadByClinic(2);
-      const types = service.treatmentTypes();
-      expect(types.length).toBeGreaterThan(0);
-      expect(types.every(t => t.clinicId === 2)).toBe(true);
-    });
+    it('빈 응답 시 빈 배열이 설정된다', async () => {
+      const promise = service.loadByClinic(999);
 
-    it('존재하지 않는 clinicId면 빈 배열이 된다', () => {
-      service.loadByClinic(999);
+      const req = httpTesting.expectOne('/api/clinics/999/treatment-types');
+      req.flush({ success: true, data: [] });
+
+      await promise;
       expect(service.treatmentTypes()).toEqual([]);
     });
+  });
 
-    it('treatmentTypes signal에 id, name, durationMinutes 필드가 있다', () => {
-      service.loadByClinic(1);
-      const type = service.treatmentTypes()[0];
-      expect(type).toHaveProperty('id');
-      expect(type).toHaveProperty('name');
-      expect(type).toHaveProperty('durationMinutes');
-    });
+  describe('getById()', () => {
+    it('특정 진료 유형 정보를 반환한다', async () => {
+      const mockType = {
+        id: 1, clinicId: 1, name: '기본 진료', category: 'TREATMENT',
+        defaultDurationMinutes: 30, requiredProviderType: 'DOCTOR', requiresEquipment: false,
+      };
 
-    it('clinicId=1과 clinicId=2는 서로 다른 치료 유형 목록을 반환한다', () => {
-      service.loadByClinic(1);
-      const clinic1Ids = service.treatmentTypes().map(t => t.id);
+      const promise = service.getById(1);
 
-      service.loadByClinic(2);
-      const clinic2Ids = service.treatmentTypes().map(t => t.id);
+      const req = httpTesting.expectOne('/api/treatment-types/1');
+      expect(req.request.method).toBe('GET');
+      req.flush({ success: true, data: mockType });
 
-      const intersection = clinic1Ids.filter(id => clinic2Ids.includes(id));
-      expect(intersection).toHaveLength(0);
+      const result = await promise;
+      expect(result).toEqual(mockType);
     });
   });
 });

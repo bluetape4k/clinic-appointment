@@ -93,7 +93,7 @@ export class AppointmentFormComponent implements OnInit {
 
     const dateStr = this.formatDate(dateValue);
     const tt = this.treatmentTypes().find(t => t.id === treatmentTypeId);
-    const duration = tt?.durationMinutes;
+    const duration = tt?.defaultDurationMinutes;
 
     this.loadingSlots.set(true);
     try {

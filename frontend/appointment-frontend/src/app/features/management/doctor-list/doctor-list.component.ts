@@ -1,21 +1,10 @@
-import { Component, inject, OnInit, computed } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { MatTableModule } from '@angular/material/table';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { DoctorService } from '../../../core/services';
-import { Doctor } from '../../../core/models';
 
-// All mock doctors across all clinics for display
-const ALL_DOCTORS: Doctor[] = [
-  { id: 1, clinicId: 1, name: '김민준', specialty: '일반의' },
-  { id: 2, clinicId: 1, name: '이서연', specialty: '치과' },
-  { id: 3, clinicId: 2, name: '박지호', specialty: '소아과' },
-];
-
-const CLINIC_NAMES: Record<number, string> = {
-  1: '서울 메인 클리닉',
-  2: '부산 해운대 클리닉',
-};
+const CLINIC_ID = 1;
 
 @Component({
   selector: 'app-doctor-list',
@@ -27,7 +16,7 @@ const CLINIC_NAMES: Record<number, string> = {
 
       <mat-card>
         <mat-card-content>
-          <table mat-table [dataSource]="doctors" class="full-width">
+          <table mat-table [dataSource]="doctors()" class="full-width">
             <ng-container matColumnDef="name">
               <th mat-header-cell *matHeaderCellDef>이름</th>
               <td mat-cell *matCellDef="let doctor">{{ doctor.name }}</td>
@@ -38,9 +27,9 @@ const CLINIC_NAMES: Record<number, string> = {
               <td mat-cell *matCellDef="let doctor">{{ doctor.specialty ?? '—' }}</td>
             </ng-container>
 
-            <ng-container matColumnDef="clinic">
-              <th mat-header-cell *matHeaderCellDef>클리닉</th>
-              <td mat-cell *matCellDef="let doctor">{{ clinicName(doctor.clinicId) }}</td>
+            <ng-container matColumnDef="providerType">
+              <th mat-header-cell *matHeaderCellDef>유형</th>
+              <td mat-cell *matCellDef="let doctor">{{ doctor.providerType }}</td>
             </ng-container>
 
             <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
@@ -86,11 +75,13 @@ const CLINIC_NAMES: Record<number, string> = {
     }
   `],
 })
-export class DoctorListComponent {
-  readonly displayedColumns = ['name', 'specialty', 'clinic'];
-  readonly doctors: Doctor[] = ALL_DOCTORS;
+export class DoctorListComponent implements OnInit {
+  private readonly doctorService = inject(DoctorService);
 
-  clinicName(clinicId: number): string {
-    return CLINIC_NAMES[clinicId] ?? `클리닉 #${clinicId}`;
+  readonly displayedColumns = ['name', 'specialty', 'providerType'];
+  readonly doctors = this.doctorService.doctors;
+
+  ngOnInit(): void {
+    this.doctorService.loadByClinic(CLINIC_ID);
   }
 }

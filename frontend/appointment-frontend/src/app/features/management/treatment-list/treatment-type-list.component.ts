@@ -1,20 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { MatTableModule } from '@angular/material/table';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { TreatmentType } from '../../../core/models';
+import { TreatmentTypeService } from '../../../core/services';
 
-// All mock treatment types across all clinics for display
-const ALL_TREATMENTS: TreatmentType[] = [
-  { id: 1, clinicId: 1, name: '기본 진료', durationMinutes: 30 },
-  { id: 2, clinicId: 1, name: '스케일링', durationMinutes: 60 },
-  { id: 3, clinicId: 2, name: '예방 접종', durationMinutes: 15 },
-];
-
-const CLINIC_NAMES: Record<number, string> = {
-  1: '서울 메인 클리닉',
-  2: '부산 해운대 클리닉',
-};
+const CLINIC_ID = 1;
 
 @Component({
   selector: 'app-treatment-type-list',
@@ -26,20 +17,25 @@ const CLINIC_NAMES: Record<number, string> = {
 
       <mat-card>
         <mat-card-content>
-          <table mat-table [dataSource]="treatments" class="full-width">
+          <table mat-table [dataSource]="treatmentTypes()" class="full-width">
             <ng-container matColumnDef="name">
               <th mat-header-cell *matHeaderCellDef>진료명</th>
               <td mat-cell *matCellDef="let t">{{ t.name }}</td>
             </ng-container>
 
-            <ng-container matColumnDef="duration">
-              <th mat-header-cell *matHeaderCellDef>기본 소요 시간</th>
-              <td mat-cell *matCellDef="let t">{{ t.durationMinutes }}분</td>
+            <ng-container matColumnDef="category">
+              <th mat-header-cell *matHeaderCellDef>카테고리</th>
+              <td mat-cell *matCellDef="let t">{{ t.category }}</td>
             </ng-container>
 
-            <ng-container matColumnDef="clinic">
-              <th mat-header-cell *matHeaderCellDef>클리닉</th>
-              <td mat-cell *matCellDef="let t">{{ clinicName(t.clinicId) }}</td>
+            <ng-container matColumnDef="duration">
+              <th mat-header-cell *matHeaderCellDef>기본 소요 시간</th>
+              <td mat-cell *matCellDef="let t">{{ t.defaultDurationMinutes }}분</td>
+            </ng-container>
+
+            <ng-container matColumnDef="requiresEquipment">
+              <th mat-header-cell *matHeaderCellDef>장비 필요</th>
+              <td mat-cell *matCellDef="let t">{{ t.requiresEquipment ? '예' : '아니오' }}</td>
             </ng-container>
 
             <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
@@ -85,11 +81,13 @@ const CLINIC_NAMES: Record<number, string> = {
     }
   `],
 })
-export class TreatmentTypeListComponent {
-  readonly displayedColumns = ['name', 'duration', 'clinic'];
-  readonly treatments: TreatmentType[] = ALL_TREATMENTS;
+export class TreatmentTypeListComponent implements OnInit {
+  private readonly treatmentTypeService = inject(TreatmentTypeService);
 
-  clinicName(clinicId: number): string {
-    return CLINIC_NAMES[clinicId] ?? `클리닉 #${clinicId}`;
+  readonly displayedColumns = ['name', 'category', 'duration', 'requiresEquipment'];
+  readonly treatmentTypes = this.treatmentTypeService.treatmentTypes;
+
+  ngOnInit(): void {
+    this.treatmentTypeService.loadByClinic(CLINIC_ID);
   }
 }

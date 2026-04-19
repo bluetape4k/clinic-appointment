@@ -31,7 +31,7 @@
             <mat-select formControlName="treatmentTypeId" (selectionChange)="onSlotSelectionInputChange()">
               @for (tt of treatmentTypes(); track tt.id) {
                 <mat-option [value]="tt.id">
-                  {{ tt.name }} ({{ tt.durationMinutes }}분)
+                  {{ tt.name }} ({{ tt.defaultDurationMinutes }}분)
                 </mat-option>
               }
             </mat-select>
