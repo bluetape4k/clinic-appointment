@@ -39,7 +39,6 @@ dependencies {
     runtimeOnly(Libs.postgresql_driver)
 
     testImplementation(Libs.springBootStarter("test"))
-    testImplementation(Libs.springBoot("webmvc-test"))
     testImplementation(Libs.bluetape4k_junit5)
     testImplementation(Libs.kluent)
     testImplementation(Libs.exposed_migration_jdbc)
@@ -53,6 +52,14 @@ dependencies {
 tasks.withType<JavaCompile>().configureEach {
     if (name.startsWith("compileGatling")) {
         options.release.set(21)
+    }
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    if (name.startsWith("compileGatling")) {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+        }
     }
 }
 

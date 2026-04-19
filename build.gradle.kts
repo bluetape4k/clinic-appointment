@@ -46,6 +46,11 @@ subprojects {
         plugin(Plugins.dependency_management)
         plugin(Plugins.dokka)
         plugin(Plugins.testLogger)
+        plugin("jacoco")
+    }
+
+    configure<JacocoPluginExtension> {
+        toolVersion = Plugins.Versions.jacoco
     }
 
     java {
@@ -128,6 +133,15 @@ subprojects {
         testlogger {
             theme = com.adarshr.gradle.testlogger.theme.ThemeType.MOCHA_PARALLEL
             showFullStackTraces = true
+        }
+
+        withType<JacocoReport>().configureEach {
+            dependsOn(test)
+            reports {
+                xml.required = true
+                csv.required = true
+                html.required = true
+            }
         }
 
         val reportMerge by registering(ReportMergeTask::class) {

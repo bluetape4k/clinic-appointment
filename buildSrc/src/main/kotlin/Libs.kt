@@ -9,7 +9,7 @@ object Plugins {
         const val detekt = "1.23.8"     // https://mvnrepository.com/artifact/io.gitlab.arturbosch.detekt/detekt-gradle-plugin
         const val dependency_management = "1.1.7"  // https://mvnrepository.com/artifact/io.spring.gradle/dependency-management-plugin
 
-        const val jacoco = "0.8.11"
+        const val jacoco = "0.8.13"
         const val jarTest = "1.0.1"
         const val testLogger = "4.0.0"
         const val shadow = "9.2.2"      // https://plugins.gradle.org/plugin/com.gradleup.shadow
