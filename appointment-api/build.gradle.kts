@@ -37,11 +37,18 @@ dependencies {
     // Database drivers
     runtimeOnly(Libs.h2_v2)
     runtimeOnly(Libs.postgresql_driver)
+    runtimeOnly(Libs.mysql_connector_j)
 
     testImplementation(Libs.springBootStarter("test"))
     testImplementation(Libs.bluetape4k_junit5)
     testImplementation(Libs.kluent)
     testImplementation(Libs.exposed_migration_jdbc)
+
+    // Testcontainers
+    testImplementation(Libs.testcontainers)
+    testImplementation(Libs.testcontainers_junit_jupiter)
+    testImplementation(Libs.testcontainers_postgresql)
+    testImplementation(Libs.testcontainers_mysql)
 
     // Gatling
     gatling(Libs.gatling_charts_highcharts)

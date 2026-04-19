@@ -350,11 +350,21 @@ jobs:
           path: frontend/appointment-frontend/dist/
           retention-days: 3
 
-  # ── 9. Flyway 마이그레이션 검증 (H2) ────────────────────────────────────────
+  # ── 9. Flyway 마이그레이션 검증 (H2 / PostgreSQL / MySQL) ─────────────────────
   flyway-migration:
-    name: Flyway Migration / H2
+    name: Flyway Migration / ${{ matrix.db }}
     runs-on: ubuntu-latest
-    needs: validate-wrapper
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: H2
+            test-class: "io.bluetape4k.clinic.appointment.api.migration.FlywayMigrationTest"
+          - db: PostgreSQL
+            test-class: "io.bluetape4k.clinic.appointment.api.migration.FlywayPostgreSQLMigrationTest"
+          - db: MySQL
+            test-class: "io.bluetape4k.clinic.appointment.api.migration.FlywayMySQLMigrationTest"
     steps:
       - uses: actions/checkout@v4
 
@@ -368,13 +378,14 @@ jobs:
           gradle-version: wrapper
           cache-read-only: true
 
-      - name: Verify Flyway migration (H2)
+      - name: Verify Flyway migration (${{ matrix.db }})
         run: |
           ./gradlew :appointment-api:test \
-            --tests "io.bluetape4k.clinic.appointment.api.migration.FlywayMigrationTest" \
+            --tests "${{ matrix.test-class }}" \
             --no-daemon
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+          TESTCONTAINERS_RYUK_DISABLED: "true"
 
   # ── 10. CI 상태 집계 ─────────────────────────────────────────────────────────
   ci-status:

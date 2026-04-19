@@ -370,6 +370,7 @@ object Libs {
 
     // Database drivers
     const val postgresql_driver = "org.postgresql:postgresql:42.7.8"  // https://mvnrepository.com/artifact/org.postgresql/postgresql
+    const val mysql_connector_j = "com.mysql:mysql-connector-j:9.3.0"  // https://mvnrepository.com/artifact/com.mysql/mysql-connector-j
     const val h2_v2 = "com.h2database:h2:2.4.240"    // https://mvnrepository.com/artifact/com.h2database/h2
 
     // R2DBC (테스트용)

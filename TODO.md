@@ -157,7 +157,7 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 - [x] Flyway 마이그레이션 검증 자동화 — 벤더별(H2/PostgreSQL/MySQL) 마이그레이션 SQL 분리 + `FlywayMigrationTest`로 H2 검증 (CI 포함)
 - [x] CI 프론트엔드 빌드 추가 — `npm ci && npm run build` (Angular 21 프로덕션 빌드 검증, Node.js 22)
 - [x] gitleaks allowlist 수정 — `TestJwtProvider.kt` 테스트 시크릿 제외
-- [ ] CI 멀티 DB 테스트 매트릭스 — PostgreSQL, MySQL8 Testcontainers 통합 테스트 (`@Profile` + Testcontainers)
+- [x] CI 멀티 DB 테스트 매트릭스 — H2/PostgreSQL/MySQL Flyway 마이그레이션 검증 (Testcontainers, matrix strategy)
 
 ---
 
