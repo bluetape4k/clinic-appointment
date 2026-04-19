@@ -158,7 +158,25 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 - [ ] `management.routes.ts`에 상위 레벨 `canActivate` 추가
 
-### 3.5 환경 설정 파일 (LOW)
+### 3.5 SSE 기반 일괄 재배정 진행 상황 표시 (HIGH)
+
+건당 예약 취소/변경은 단순 spinner로 충분하지만, 휴진 일괄 재배정은 N건을 순차 처리하므로 실시간 진행 피드백이 필요.
+
+**백엔드:**
+- [ ] `GET /api/reschedule/batch/stream` — `text/event-stream` SSE 엔드포인트
+- [ ] 예약별 처리 결과를 이벤트로 스트리밍: `data: {"appointmentId": N, "status": "SUCCESS|FAILED", "newAppointmentId": M, "progress": "3/15"}`
+- [ ] 완료 시 `event: complete` + 요약 데이터 전송
+
+**프론트엔드:**
+- [ ] `RescheduleService`에 `EventSource` 기반 SSE 연결 메서드 추가
+- [ ] `reschedule-list.component` — 일괄 재배정 시 progress bar + 개별 결과 실시간 테이블 갱신
+- [ ] 연결 실패/타임아웃 시 fallback (polling 또는 에러 표시)
+
+**설계 포인트:**
+- 건당 예약 → spinner (현재 구현 완료)
+- 일괄 재배정 (관리자) → SSE 진행률 + 실시간 결과 스트리밍
+
+### 3.6 환경 설정 파일 (LOW)
 
 현재 API baseUrl이 `/api/` 상대경로로 하드코딩. 프로덕션 배포 시 `environment.ts` 구성 필요:
 
