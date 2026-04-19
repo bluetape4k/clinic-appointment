@@ -213,7 +213,7 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 ## 7. 코드 품질 (LOW)
 
-- [x] Solver 벤치마크 — `BenchmarkTest.kt` 결과 기준선(baseline) 정의 ✅
+- [x] Solver 벤치마크 — `BenchmarkTest.kt` 결과 기준선(baseline) 정의 ✅ → [리포트](docs/solver-benchmark-report.md)
 - [x] `ConcurrencyResolver` — 동시 예약 충돌 시나리오 통합 테스트 ✅
 - ~~Notification 모듈~~ — 외부 Application 사용 예정, `DummyNotificationChannel` 유지 (의도적)
 
