@@ -99,32 +99,31 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 ---
 
-## 3. 프론트엔드 API 커버리지 (MEDIUM)
+## 3. 프론트엔드 API 커버리지 ✅
 
-18개 백엔드 엔드포인트 중 6개만 프론트엔드 연결 완료:
+18개 백엔드 엔드포인트 전체 프론트엔드 연결 완료:
 
 | Controller | 엔드포인트 | 구현 | 미구현 |
 |---|---|---|---|
 | AppointmentController | 5 | 5 | 0 |
 | SlotController | 1 | 1 | 0 |
-| RescheduleController | 4 | 0 | **4** |
-| EquipmentUnavailabilityController | 8 | 0 | **8** |
+| RescheduleController | 4 | 4 | 0 |
+| EquipmentUnavailabilityController | 8 | 8 | 0 |
 
-### 할 일
-
-- [ ] `RescheduleService` — 4개 엔드포인트 화면 연결 (서비스 파일은 생성됨)
-- [ ] `EquipmentUnavailabilityService` — 8개 엔드포인트 화면 연결 (서비스 파일은 생성됨)
-- [ ] Reschedule 관리 페이지 컴포넌트 작성
-- [ ] Equipment Unavailability 관리 페이지 컴포넌트 작성
+- [x] `RescheduleService` — 4개 엔드포인트 화면 연결
+- [x] `EquipmentUnavailabilityService` — 8개 엔드포인트 화면 연결
+- [x] Reschedule 관리 페이지 컴포넌트 작성
+- [x] Equipment Unavailability 관리 페이지 컴포넌트 작성
 
 ---
 
-## 4. 백엔드 API 확장 (MEDIUM)
+## 4. 백엔드 API 확장 ✅
 
-- [ ] `DoctorController` — 의사 CRUD API (현재 프론트엔드는 mock 데이터 사용)
-- [ ] `TreatmentTypeController` — 진료 유형 CRUD API (현재 프론트엔드 mock)
-- [ ] `ClinicController` — 클리닉 CRUD API
-- [ ] `EquipmentController` — 장비 CRUD API
+- [x] `ClinicController` — 클리닉 조회 API (GET /api/clinics, /{id}, /{id}/operating-hours, /{id}/break-times)
+- [x] `DoctorController` — 의사 조회 API (GET /api/clinics/{clinicId}/doctors, /doctors/{id}, /{id}/schedules, /{id}/absences)
+- [x] `TreatmentTypeController` — 진료 유형 조회 API (GET /api/clinics/{clinicId}/treatment-types, /treatment-types/{id})
+- [x] `EquipmentController` — 장비 조회 API (GET /api/clinics/{clinicId}/equipments, /equipments/{id})
+- [x] `EquipmentRepository` — 장비 전용 리포지토리 생성
 
 ---
 
