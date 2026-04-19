@@ -101,7 +101,7 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 ## 3. 프론트엔드 API 커버리지 ✅
 
-18개 백엔드 엔드포인트 전체 프론트엔드 연결 완료:
+전체 백엔드 엔드포인트 프론트엔드 연결 완료:
 
 | Controller | 엔드포인트 | 구현 | 미구현 |
 |---|---|---|---|
@@ -109,11 +109,20 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 | SlotController | 1 | 1 | 0 |
 | RescheduleController | 4 | 4 | 0 |
 | EquipmentUnavailabilityController | 8 | 8 | 0 |
+| ClinicController | 4 | 4 | 0 |
+| DoctorController | 4 | 4 | 0 |
+| TreatmentTypeController | 2 | 2 | 0 |
+| EquipmentController | 2 | 2 | 0 |
 
 - [x] `RescheduleService` — 4개 엔드포인트 화면 연결
 - [x] `EquipmentUnavailabilityService` — 8개 엔드포인트 화면 연결
 - [x] Reschedule 관리 페이지 컴포넌트 작성
 - [x] Equipment Unavailability 관리 페이지 컴포넌트 작성
+- [x] `ClinicService` — 신규 생성 (4개 엔드포인트)
+- [x] `DoctorService` — 목 데이터 → 실제 HTTP 전환 (4개 엔드포인트)
+- [x] `TreatmentTypeService` — 목 데이터 → 실제 HTTP 전환 (2개 엔드포인트)
+- [x] `EquipmentService` — 신규 생성 (2개 엔드포인트)
+- [x] 모델 인터페이스 백엔드 Record 스키마 동기화
 
 ---
 
