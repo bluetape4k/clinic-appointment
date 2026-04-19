@@ -86,6 +86,28 @@ import { AppointmentService, DoctorService } from '../../../core/services';
             <button mat-button color="primary" routerLink="/management/treatments">바로가기</button>
           </mat-card-actions>
         </mat-card>
+
+        <mat-card class="nav-card" routerLink="/management/reschedule">
+          <mat-card-content>
+            <mat-icon class="nav-icon">swap_horiz</mat-icon>
+            <h3>예약 재배정</h3>
+            <p>예약 재배정 후보 조회 및 확정을 관리합니다.</p>
+          </mat-card-content>
+          <mat-card-actions>
+            <button mat-button color="primary" routerLink="/management/reschedule">바로가기</button>
+          </mat-card-actions>
+        </mat-card>
+
+        <mat-card class="nav-card" routerLink="/management/equipment-unavailability">
+          <mat-card-content>
+            <mat-icon class="nav-icon">build_circle</mat-icon>
+            <h3>장비 사용불가</h3>
+            <p>장비 사용불가 스케줄 등록 및 충돌을 관리합니다.</p>
+          </mat-card-content>
+          <mat-card-actions>
+            <button mat-button color="primary" routerLink="/management/equipment-unavailability">바로가기</button>
+          </mat-card-actions>
+        </mat-card>
       </section>
     </div>
   `,

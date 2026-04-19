@@ -29,4 +29,18 @@ export const MANAGEMENT_ROUTES: Routes = [
         m => m.TreatmentTypeListComponent
       ),
   },
+  {
+    path: 'reschedule',
+    loadComponent: () =>
+      import('./reschedule-list/reschedule-list.component').then(
+        m => m.RescheduleListComponent
+      ),
+  },
+  {
+    path: 'equipment-unavailability',
+    loadComponent: () =>
+      import('./equipment-unavailability-list/equipment-unavailability-list.component').then(
+        m => m.EquipmentUnavailabilityListComponent
+      ),
+  },
 ];
