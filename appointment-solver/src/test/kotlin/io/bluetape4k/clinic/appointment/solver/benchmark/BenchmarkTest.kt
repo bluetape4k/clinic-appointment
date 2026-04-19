@@ -12,6 +12,8 @@ import io.bluetape4k.clinic.appointment.solver.domain.TreatmentFact
 import io.bluetape4k.clinic.appointment.solver.domain.generateTimeSlots
 import io.bluetape4k.clinic.appointment.solver.service.AppointmentSolverConfig
 import org.amshove.kluent.shouldBeGreaterThan
+import org.amshove.kluent.shouldBeGreaterOrEqualTo
+import org.amshove.kluent.shouldBeLessThan
 import org.amshove.kluent.shouldBeTrue
 import org.amshove.kluent.shouldNotBeNull
 import org.junit.jupiter.api.Tag
@@ -32,6 +34,16 @@ class BenchmarkTest {
 
     companion object : KLogging() {
         private val MONDAY = LocalDate.of(2026, 3, 23)
+
+        // 베이스라인: 각 시나리오별 최대 허용 실행 시간 (ms)
+        private const val SMALL_MAX_TIME_MS = 15_000L
+        private const val MEDIUM_MAX_TIME_MS = 20_000L
+        private const val LARGE_MAX_TIME_MS = 40_000L
+
+        // 베이스라인: 소프트 스코어 최소 기대값 (높을수록 좋음, 0이면 위반 없음)
+        private const val SMALL_MIN_SOFT_SCORE = -100
+        private const val MEDIUM_MIN_SOFT_SCORE = -500
+        private const val LARGE_MIN_SOFT_SCORE = -2000
     }
 
     @Test
@@ -44,10 +56,13 @@ class BenchmarkTest {
         val result = solver.solve(solution)
         val elapsed = System.currentTimeMillis() - startMillis
 
-        result.score.shouldNotBeNull()
-        result.score!!.isFeasible.shouldBeTrue()
+        val score = result.score.shouldNotBeNull()
+        score.isFeasible.shouldBeTrue()
+        score.hardScore() shouldBeGreaterOrEqualTo 0
+        score.softScore() shouldBeGreaterOrEqualTo SMALL_MIN_SOFT_SCORE
         elapsed.shouldBeGreaterThan(0L)
-        log.info { "소규모: score=${result.score}, time=${elapsed}ms" }
+        elapsed shouldBeLessThan SMALL_MAX_TIME_MS
+        log.info { "소규모: score=$score, time=${elapsed}ms" }
     }
 
     @Test
@@ -60,9 +75,12 @@ class BenchmarkTest {
         val result = solver.solve(solution)
         val elapsed = System.currentTimeMillis() - startMillis
 
-        result.score.shouldNotBeNull()
-        result.score!!.isFeasible.shouldBeTrue()
-        log.info { "중규모: score=${result.score}, time=${elapsed}ms" }
+        val score = result.score.shouldNotBeNull()
+        score.isFeasible.shouldBeTrue()
+        score.hardScore() shouldBeGreaterOrEqualTo 0
+        score.softScore() shouldBeGreaterOrEqualTo MEDIUM_MIN_SOFT_SCORE
+        elapsed shouldBeLessThan MEDIUM_MAX_TIME_MS
+        log.info { "중규모: score=$score, time=${elapsed}ms" }
     }
 
     @Test
@@ -75,8 +93,11 @@ class BenchmarkTest {
         val result = solver.solve(solution)
         val elapsed = System.currentTimeMillis() - startMillis
 
-        result.score.shouldNotBeNull()
-        log.info { "대규모: score=${result.score}, feasible=${result.score!!.isFeasible}, time=${elapsed}ms" }
+        val score = result.score.shouldNotBeNull()
+        score.hardScore() shouldBeGreaterOrEqualTo 0
+        score.softScore() shouldBeGreaterOrEqualTo LARGE_MIN_SOFT_SCORE
+        elapsed shouldBeLessThan LARGE_MAX_TIME_MS
+        log.info { "대규모: score=$score, feasible=${score.isFeasible}, time=${elapsed}ms" }
     }
 
     private fun buildSolution(

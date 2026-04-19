@@ -213,9 +213,9 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 ## 7. 코드 품질 (LOW)
 
-- [ ] Solver 벤치마크 — `BenchmarkTest.kt` 결과 기준선(baseline) 정의
-- [ ] Notification 모듈 — 실제 SMS/Email 채널 구현체 (현재 `DummyNotificationChannel`만 존재)
-- [ ] `ConcurrencyResolver` — 동시 예약 충돌 시나리오 통합 테스트
+- [x] Solver 벤치마크 — `BenchmarkTest.kt` 결과 기준선(baseline) 정의 ✅
+- [x] `ConcurrencyResolver` — 동시 예약 충돌 시나리오 통합 테스트 ✅
+- ~~Notification 모듈~~ — 외부 Application 사용 예정, `DummyNotificationChannel` 유지 (의도적)
 
 ---
 
@@ -236,3 +236,4 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 - ✅ API Controller 테스트 전면 전환 — MockMvc → Spring Boot 4 RestClient (2026-04-19)
 - ✅ 프론트엔드 30개 엔드포인트 API 연결 완료 (2026-04-19)
 - ✅ 백엔드 Clinic/Doctor/TreatmentType/Equipment Controller 추가 (2026-04-19)
+- ✅ Solver 벤치마크 baseline 정의 + ConcurrencyResolver 통합 테스트 (2026-04-19)
