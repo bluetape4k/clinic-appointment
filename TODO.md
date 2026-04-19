@@ -73,6 +73,16 @@
 
 리포트: `docs/gatling-multi-clinic-report.md`, `docs/gatling-reports/`
 
+### 1.3 프론트엔드 테스트 커버리지 (MEDIUM)
+
+현재 17개 spec 파일, 118 tests passing. 추가 필요:
+
+- [ ] `ClinicService` 테스트 — `clinic.service.spec.ts` 미작성
+- [ ] `EquipmentService` 테스트 — `equipment.service.spec.ts` 미작성
+- [ ] `RescheduleService` 테스트 — `reschedule.service.spec.ts` 미작성
+- [ ] Calendar 컴포넌트 테스트 — `day-view`, `week-view`, `month-view` spec 없음
+- [ ] Management 컴포넌트 테스트 — `doctor-list`, `treatment-type-list`, `clinic-list` spec 없음
+
 ---
 
 ## 2. 모바일 WebView 대응 — Angular 21 유지 + Capacitor (MEDIUM)
@@ -99,7 +109,9 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 ---
 
-## 3. 프론트엔드 API 커버리지 ✅
+## 3. 프론트엔드 개선 (MEDIUM)
+
+### 3.1 API 커버리지 ✅
 
 전체 백엔드 엔드포인트 프론트엔드 연결 완료:
 
@@ -114,15 +126,44 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 | TreatmentTypeController | 2 | 2 | 0 |
 | EquipmentController | 2 | 2 | 0 |
 
-- [x] `RescheduleService` — 4개 엔드포인트 화면 연결
-- [x] `EquipmentUnavailabilityService` — 8개 엔드포인트 화면 연결
-- [x] Reschedule 관리 페이지 컴포넌트 작성
-- [x] Equipment Unavailability 관리 페이지 컴포넌트 작성
-- [x] `ClinicService` — 신규 생성 (4개 엔드포인트)
-- [x] `DoctorService` — 목 데이터 → 실제 HTTP 전환 (4개 엔드포인트)
-- [x] `TreatmentTypeService` — 목 데이터 → 실제 HTTP 전환 (2개 엔드포인트)
-- [x] `EquipmentService` — 신규 생성 (2개 엔드포인트)
-- [x] 모델 인터페이스 백엔드 Record 스키마 동기화
+### 3.2 ClinicListComponent 실제 API 연결 (HIGH)
+
+`clinic-list.component.ts`가 아직 **MOCK_CLINICS** 하드코딩 데이터 사용 중. `ClinicService` 연결 필요.
+
+- [ ] `ClinicListComponent` → `ClinicService.loadAll()` 또는 `loadById()` 연결
+- [ ] 목 데이터(`MOCK_CLINICS`) 제거
+
+### 3.3 하드코딩 clinicId 해소 (MEDIUM)
+
+8개 컴포넌트에서 `const CLINIC_ID = 1` 또는 `private readonly clinicId = 1` 하드코딩됨:
+
+| 컴포넌트 | 위치 |
+|----------|------|
+| `day-view.component.ts` | `const CLINIC_ID = 1` |
+| `week-view.component.ts` | `const CLINIC_ID = 1` |
+| `month-view.component.ts` | `const CLINIC_ID = 1` |
+| `doctor-list.component.ts` | `const CLINIC_ID = 1` |
+| `treatment-type-list.component.ts` | `const CLINIC_ID = 1` |
+| `appointment-list.component.ts` | `private readonly clinicId = 1` |
+| `appointment-form.component.ts` | `private readonly clinicId = 1` |
+| `appointment-detail.component.ts` | `private readonly clinicId = 1` |
+
+**해결 방안:** JWT 토큰에서 clinicId 추출하는 `AuthService.clinicId` signal 추가 → 각 컴포넌트에서 inject하여 사용.
+
+### 3.4 Management 라우트 권한 보호 (MEDIUM)
+
+`/management` 하위 라우트에 `roleGuard` 미적용:
+- `/appointments/new`, `/appointments/:id/edit`은 guard 있음 ✅
+- `/management/**` 전체에 `canActivate: [roleGuard]` 필요 (ADMIN/STAFF만 접근)
+
+- [ ] `management.routes.ts`에 상위 레벨 `canActivate` 추가
+
+### 3.5 환경 설정 파일 (LOW)
+
+현재 API baseUrl이 `/api/` 상대경로로 하드코딩. 프로덕션 배포 시 `environment.ts` 구성 필요:
+
+- [ ] `src/environments/environment.ts` + `environment.prod.ts` 추가
+- [ ] 각 서비스의 `baseUrl`을 환경 설정에서 주입
 
 ---
 
@@ -138,7 +179,7 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 ## 5. 문서화 (LOW-MEDIUM)
 
-### 4.1 Living Documentation (미구현 부분)
+### 5.1 Living Documentation (미구현 부분)
 
 `docs/requirements/` 디렉토리 구조는 존재하나 내용 보강 필요:
 
@@ -149,7 +190,7 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 - [ ] `docs/requirements/notification.md` — 알림 모듈 아키텍처
 - [ ] `docs/requirements/frontend.md` — Angular 프론트엔드 구조
 
-### 4.2 모듈별 README
+### 5.2 모듈별 README
 
 - [ ] `appointment-core/README.md`
 - [ ] `appointment-event/README.md`
@@ -193,3 +234,5 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 - ✅ CHANGELOG.md — Keep a Changelog 형식 유지 중
 - ✅ GitHub Actions CI workflow 구성
 - ✅ API Controller 테스트 전면 전환 — MockMvc → Spring Boot 4 RestClient (2026-04-19)
+- ✅ 프론트엔드 30개 엔드포인트 API 연결 완료 (2026-04-19)
+- ✅ 백엔드 Clinic/Doctor/TreatmentType/Equipment Controller 추가 (2026-04-19)
