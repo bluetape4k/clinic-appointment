@@ -20,6 +20,7 @@ import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.logging.KLogging
+import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -28,29 +29,25 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
+import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
-import org.springframework.test.web.servlet.MockMvc
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.request
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.web.client.RestClient
 import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalTime
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-class AppointmentControllerTest {
+class AppointmentControllerTest @Autowired constructor() {
 
     companion object: KLogging()
 
-    @Autowired
-    private lateinit var mockMvc: MockMvc
+    @LocalServerPort
+    private var port: Int = 0
+
+    private lateinit var client: RestClient
 
     private var clinicId: Long = 0
     private var doctorId: Long = 0
@@ -58,6 +55,10 @@ class AppointmentControllerTest {
 
     @BeforeEach
     fun setup() {
+        client = RestClient.builder()
+            .baseUrl("http://localhost:$port")
+            .build()
+
         transaction {
             SchemaUtils.create(
                 Clinics, OperatingHoursTable, ClinicDefaultBreakTimes, BreakTimes, ClinicClosures,
@@ -68,7 +69,6 @@ class AppointmentControllerTest {
                 RescheduleCandidates, AppointmentEventLogs,
             )
 
-            // Clean up in reverse FK order
             AppointmentEventLogs.deleteAll()
             AppointmentStateHistory.deleteAll()
             RescheduleCandidates.deleteAll()
@@ -88,7 +88,6 @@ class AppointmentControllerTest {
             OperatingHoursTable.deleteAll()
             Clinics.deleteAll()
 
-            // Insert test data
             clinicId = Clinics.insertAndGetId {
                 it[name] = "Test Clinic"
                 it[slotDurationMinutes] = 30
@@ -119,16 +118,16 @@ class AppointmentControllerTest {
             OperatingHoursTable.insertAndGetId {
                 it[OperatingHoursTable.clinicId] = this@AppointmentControllerTest.clinicId
                 it[dayOfWeek] = DayOfWeek.MONDAY
-                it[openTime] = java.time.LocalTime.of(9, 0)
-                it[closeTime] = java.time.LocalTime.of(18, 0)
+                it[openTime] = LocalTime.of(9, 0)
+                it[closeTime] = LocalTime.of(18, 0)
                 it[isActive] = true
             }
 
             DoctorSchedules.insertAndGetId {
                 it[DoctorSchedules.doctorId] = this@AppointmentControllerTest.doctorId
                 it[dayOfWeek] = DayOfWeek.MONDAY
-                it[startTime] = java.time.LocalTime.of(9, 0)
-                it[endTime] = java.time.LocalTime.of(18, 0)
+                it[startTime] = LocalTime.of(9, 0)
+                it[endTime] = LocalTime.of(18, 0)
             }
         }
     }
@@ -148,99 +147,90 @@ class AppointmentControllerTest {
             }
         """.trimIndent()
 
-        mockMvc.perform(
-            post("/api/appointments")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)
-        )
-            .andExpect(status().isCreated)
-            .andExpect(jsonPath("$.success").value(true))
-            .andExpect(jsonPath("$.data.patientName").value("John Doe"))
-            .andExpect(jsonPath("$.data.status").value("REQUESTED"))
-            .andExpect(jsonPath("$.data.id").isNotEmpty())
-            .andExpect(jsonPath("$.data.timezone").value("Asia/Seoul"))
-            .andExpect(jsonPath("$.data.locale").value("ko-KR"))
+        val response = client.post()
+            .uri("/api/appointments")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.CREATED)
+        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
+        assertThat(response.jsonPath<String>("$.data.patientName")).isEqualTo("John Doe")
+        assertThat(response.jsonPath<String>("$.data.status")).isEqualTo("REQUESTED")
+        assertThat(response.jsonPath<String>("$.data.timezone")).isEqualTo("Asia/Seoul")
+        assertThat(response.jsonPath<String>("$.data.locale")).isEqualTo("ko-KR")
     }
 
     @Test
     fun `GET - find appointment by id`() {
         val appointmentId = createTestAppointment()
 
-        mockMvc.perform(get("/api/appointments/$appointmentId"))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.success").value(true))
-            .andExpect(jsonPath("$.data.id").value(appointmentId))
-            .andExpect(jsonPath("$.data.patientName").value("Jane Doe"))
-            .andExpect(jsonPath("$.data.timezone").value("Asia/Seoul"))
-            .andExpect(jsonPath("$.data.locale").value("ko-KR"))
+        val response = client.get()
+            .uri("/api/appointments/{id}", appointmentId)
+            .execute()
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
+        assertThat(response.jsonPath<Int>("$.data.id")).isEqualTo(appointmentId.toInt())
+        assertThat(response.jsonPath<String>("$.data.patientName")).isEqualTo("Jane Doe")
+        assertThat(response.jsonPath<String>("$.data.timezone")).isEqualTo("Asia/Seoul")
+        assertThat(response.jsonPath<String>("$.data.locale")).isEqualTo("ko-KR")
     }
 
     @Test
     fun `GET - return 404 for non-existent appointment`() {
-        mockMvc.perform(get("/api/appointments/999999"))
-            .andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.success").value(false))
+        val response = client.get()
+            .uri("/api/appointments/{id}", 999999)
+            .execute()
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.NOT_FOUND)
+        assertThat(response.jsonPath<Boolean>("$.success")).isFalse()
     }
 
     @Test
     fun `PATCH - update appointment status`() {
         val appointmentId = createTestAppointment()
 
-        val body = """{"status": "CONFIRMED"}"""
+        val response = client.patch()
+            .uri("/api/appointments/{id}/status", appointmentId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body("""{"status": "CONFIRMED"}""")
+            .execute()
 
-        val result = mockMvc
-            .perform(
-                patch("/api/appointments/$appointmentId/status")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(body)
-            )
-            .andExpect(request().asyncStarted())
-            .andReturn()
-
-        mockMvc.perform(asyncDispatch(result))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.success").value(true))
-            .andExpect(jsonPath("$.data.status").value("CONFIRMED"))
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
+        assertThat(response.jsonPath<String>("$.data.status")).isEqualTo("CONFIRMED")
     }
 
     @Test
     fun `PATCH - reject invalid status transition`() {
         val appointmentId = createTestAppointment()
 
-        // REQUESTED -> COMPLETED is not a valid transition
-        val body = """{"status": "COMPLETED"}"""
+        val response = client.patch()
+            .uri("/api/appointments/{id}/status", appointmentId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body("""{"status": "COMPLETED"}""")
+            .execute()
 
-        val result = mockMvc
-            .perform(
-                patch("/api/appointments/$appointmentId/status")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(body)
-            )
-            .andExpect(request().asyncStarted())
-            .andReturn()
-
-        mockMvc.perform(asyncDispatch(result))
-            .andExpect(status().isConflict)
-            .andExpect(jsonPath("$.success").value(false))
+        assertThat(response.statusCode).isEqualTo(HttpStatus.CONFLICT)
+        assertThat(response.jsonPath<Boolean>("$.success")).isFalse()
     }
 
     @Test
     fun `DELETE - cancel appointment`() {
         val appointmentId = createTestAppointment()
 
-        val result = mockMvc.perform(delete("/api/appointments/$appointmentId"))
-            .andExpect(request().asyncStarted())
-            .andReturn()
+        val response = client.delete()
+            .uri("/api/appointments/{id}", appointmentId)
+            .execute()
 
-        mockMvc.perform(asyncDispatch(result))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.success").value(true))
-            .andExpect(jsonPath("$.data.status").value("CANCELLED"))
+        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
+        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
+        assertThat(response.jsonPath<String>("$.data.status")).isEqualTo("CANCELLED")
     }
 
     @Test
     fun `POST - 응답에 timezone과 locale이 클리닉 설정과 일치`() {
-        // 교민 병원: locale=ko-KR 이지만 timezone은 미국 (LA 교민 병원 시나리오)
         val expatClinicId = transaction {
             Clinics.insertAndGetId {
                 it[name] = "LA 교민 클리닉"
@@ -283,15 +273,15 @@ class AppointmentControllerTest {
             }
         """.trimIndent()
 
-        mockMvc
-            .perform(
-                post("/api/appointments")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(body)
-            )
-            .andExpect(status().isCreated)
-            .andExpect(jsonPath("$.data.timezone").value("America/Los_Angeles"))
-            .andExpect(jsonPath("$.data.locale").value("ko-KR"))  // timezone과 독립적
+        val response = client.post()
+            .uri("/api/appointments")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        assertThat(response.statusCode).isEqualTo(HttpStatus.CREATED)
+        assertThat(response.jsonPath<String>("$.data.timezone")).isEqualTo("America/Los_Angeles")
+        assertThat(response.jsonPath<String>("$.data.locale")).isEqualTo("ko-KR")
     }
 
     private fun createTestAppointment(): Long =
@@ -302,10 +292,11 @@ class AppointmentControllerTest {
                 it[Appointments.treatmentTypeId] = this@AppointmentControllerTest.treatmentTypeId
                 it[patientName] = "Jane Doe"
                 it[patientPhone] = "010-9876-5432"
-                it[appointmentDate] = java.time.LocalDate.of(2026, 4, 6)
-                it[startTime] = java.time.LocalTime.of(11, 0)
-                it[endTime] = java.time.LocalTime.of(11, 30)
+                it[appointmentDate] = LocalDate.of(2026, 4, 6)
+                it[startTime] = LocalTime.of(11, 0)
+                it[endTime] = LocalTime.of(11, 30)
                 it[Appointments.status] = AppointmentState.REQUESTED
             }.value
         }
 }
+
