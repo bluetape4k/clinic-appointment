@@ -1,0 +1,27 @@
+title = "clinic-appointment gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlisted paths and patterns"
+
+paths = [
+    '''.idea/''',
+    '''build/''',
+    '''.gradle/''',
+    '''gradle/wrapper/''',
+    '''src/test/resources/''',
+    '''src/gatling/''',
+    '''docs/''',
+    '''README\.md''',
+    '''README\.ko\.md''',
+    '''node_modules/''',
+]
+
+regexes = [
+    '''YOUR_.*_HERE''',
+    '''example[-_]key''',
+    '''test[-_]api[-_]key''',
+    '''jwt\.secret=test-secret.*''',
+]

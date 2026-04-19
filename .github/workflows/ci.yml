@@ -2,33 +2,336 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [develop, main]
   pull_request:
-    branches: [ main, master ]
+    branches: [develop, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '25'
+  JAVA_DISTRIBUTION: 'temurin'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
-  build:
+  # ── 0. 시크릿 스캔 ────────────────────────────────────────────────────────────
+  gitleaks:
+    name: Secret Scan (gitleaks)
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
+      - name: Install gitleaks
+        run: |
+          GITLEAKS_VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/')
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Run gitleaks
+        run: gitleaks detect --source . --redact --no-git --config .gitleaks.toml
+
+  # ── 1. Gradle Wrapper 검증 ──────────────────────────────────────────────────
+  validate-wrapper:
+    name: Validate Gradle Wrapper
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gradle/actions/wrapper-validation@v4
+
+  # ── 2. 빌드 + Detekt 정적 분석 ─────────────────────────────────────────────
+  build:
+    name: Build & Detekt
+    runs-on: ubuntu-latest
+    needs: validate-wrapper
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
-          java-version: '25'
-          distribution: 'temurin'
-          cache: gradle
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
-      - name: Build (excluding frontend)
-        run: ./gradlew build -x :frontend:appointment-frontend:build --no-daemon
+      - name: Build (compile only, frontend 제외)
+        run: ./gradlew build -x test -x :frontend:appointment-frontend:build --parallel
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+      - name: Detekt static analysis
+        run: ./gradlew detekt --parallel
+
+      - name: Upload detekt report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detekt-report
+          path: '**/build/reports/detekt/*.xml'
+          retention-days: 7
+
+  # ── 3. Core 모듈 테스트 (appointment-core, appointment-event) ────────────────
+  test-core:
+    name: Test / Core & Event
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: true
+
+      - name: Test core & event modules
+        run: |
+          ./gradlew \
+            :appointment-core:test \
+            :appointment-event:test \
+            --parallel
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+      - name: Generate JaCoCo report
+        if: always()
+        run: |
+          ./gradlew \
+            :appointment-core:jacocoTestReport \
+            :appointment-event:jacocoTestReport \
+            --parallel
+        continue-on-error: true
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: '**/build/reports/tests/'
+          name: test-results-core
+          path: '**/build/test-results/test/*.xml'
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-core
+          path: '**/build/reports/jacoco/test/html/'
+          retention-days: 7
+
+  # ── 4. Solver 모듈 테스트 (appointment-solver) ───────────────────────────────
+  test-solver:
+    name: Test / Solver
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: true
+
+      - name: Test solver module
+        run: ./gradlew :appointment-solver:test --no-daemon
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+
+      - name: Generate JaCoCo report
+        if: always()
+        run: ./gradlew :appointment-solver:jacocoTestReport
+        continue-on-error: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-solver
+          path: '**/build/test-results/test/*.xml'
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-solver
+          path: '**/build/reports/jacoco/test/html/'
+          retention-days: 7
+
+  # ── 5. API 모듈 테스트 (appointment-api) ─────────────────────────────────────
+  test-api:
+    name: Test / API (Spring Boot)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: true
+
+      - name: Test API module
+        run: ./gradlew :appointment-api:test --no-daemon
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+
+      - name: Generate JaCoCo report
+        if: always()
+        run: ./gradlew :appointment-api:jacocoTestReport
+        continue-on-error: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-api
+          path: '**/build/test-results/test/*.xml'
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-api
+          path: '**/build/reports/jacoco/test/html/'
+          retention-days: 7
+
+  # ── 6. Notification 모듈 테스트 (appointment-notification) ───────────────────
+  test-notification:
+    name: Test / Notification
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: true
+
+      - name: Test notification module
+        run: ./gradlew :appointment-notification:test --no-daemon
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+
+      - name: Generate JaCoCo report
+        if: always()
+        run: ./gradlew :appointment-notification:jacocoTestReport
+        continue-on-error: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-notification
+          path: '**/build/test-results/test/*.xml'
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-notification
+          path: '**/build/reports/jacoco/test/html/'
+          retention-days: 7
+
+  # ── 7. 커버리지 집계 ─────────────────────────────────────────────────────────
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [test-core, test-solver, test-api, test-notification]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+          cache-read-only: true
+
+      - name: Generate aggregated coverage
+        run: |
+          ./gradlew \
+            :appointment-core:jacocoTestReport \
+            :appointment-event:jacocoTestReport \
+            :appointment-solver:jacocoTestReport \
+            :appointment-api:jacocoTestReport \
+            :appointment-notification:jacocoTestReport \
+            --parallel
+        continue-on-error: true
+
+      - name: Upload aggregated coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-all
+          path: '**/build/reports/jacoco/'
+          retention-days: 14
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "## Coverage Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          for module in appointment-core appointment-event appointment-solver appointment-api appointment-notification; do
+            CSV="${module}/build/reports/jacoco/test/jacocoTestReport.csv"
+            if [ -f "$CSV" ]; then
+              MISSED=$(awk -F',' 'NR>1 {sum += $4} END {print sum+0}' "$CSV")
+              COVERED=$(awk -F',' 'NR>1 {sum += $5} END {print sum+0}' "$CSV")
+              TOTAL=$((MISSED + COVERED))
+              if [ "$TOTAL" -gt 0 ]; then
+                PCT=$(( COVERED * 100 / TOTAL ))
+                echo "- **${module}**: ${PCT}% (${COVERED}/${TOTAL} branches)" >> "$GITHUB_STEP_SUMMARY"
+              fi
+            fi
+          done
+
+  # ── 8. CI 상태 집계 ──────────────────────────────────────────────────────────
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    needs: [gitleaks, build, test-core, test-solver, test-api, test-notification]
+    if: always()
+    steps:
+      - name: Check all jobs
+        env:
+          RESULTS: ${{ join(needs.*.result, ',') }}
+        run: |
+          echo "Job results: $RESULTS"
+          if echo "$RESULTS" | grep -qE "failure|cancelled"; then
+            echo "::error::CI failed"
+            exit 1
+          fi
+          echo "CI passed"
