@@ -4,6 +4,7 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
+import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
 import io.bluetape4k.clinic.appointment.repository.EquipmentUnavailabilityRepository
 import io.bluetape4k.clinic.appointment.repository.HolidayRepository
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
@@ -74,6 +75,9 @@ class ServiceConfig {
     @Bean
     fun clinicTimezoneService(clinicRepository: ClinicRepository): ClinicTimezoneService =
         ClinicTimezoneService(clinicRepository)
+
+    @Bean
+    fun equipmentRepository(): EquipmentRepository = EquipmentRepository()
 
     @Bean
     fun equipmentUnavailabilityRepository(): EquipmentUnavailabilityRepository = EquipmentUnavailabilityRepository()
