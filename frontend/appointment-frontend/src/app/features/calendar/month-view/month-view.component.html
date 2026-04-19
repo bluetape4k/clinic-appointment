@@ -1,4 +1,11 @@
-<div class="month-grid">
+@if (loading()) {
+  <div class="loading-overlay">
+    <mat-spinner diameter="40"></mat-spinner>
+    <p class="loading-text">예약 데이터 불러오는 중...</p>
+  </div>
+}
+
+<div class="month-grid" [class.loading-dim]="loading()">
   <!-- Weekday headers -->
   @for (wd of weekdays; track wd) {
     <div class="weekday-header">{{ wd }}</div>

@@ -1,4 +1,12 @@
-<div class="day-grid" [style.grid-template-columns]="'80px repeat(' + (doctors().length || 1) + ', 1fr)'">
+@if (loading()) {
+  <div class="loading-overlay">
+    <mat-spinner diameter="40"></mat-spinner>
+    <p class="loading-text">예약 데이터 불러오는 중...</p>
+  </div>
+}
+
+<div class="day-grid" [style.grid-template-columns]="'80px repeat(' + (doctors().length || 1) + ', 1fr)'"
+     [class.loading-dim]="loading()">
   <!-- Header row -->
   <div class="time-header">시간</div>
   @for (doctor of doctors(); track doctor.id) {

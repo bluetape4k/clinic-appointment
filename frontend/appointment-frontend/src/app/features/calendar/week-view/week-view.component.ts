@@ -1,6 +1,7 @@
-import { Component, computed, inject, OnInit } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AppointmentService, CalendarStateService } from '../../../core/services';
 
 const CLINIC_ID = 1;
@@ -25,7 +26,7 @@ interface TimeSlot {
 @Component({
   selector: 'app-week-view',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, MatProgressSpinnerModule],
   templateUrl: './week-view.component.html',
   styleUrl: './week-view.component.scss',
 })
@@ -35,6 +36,7 @@ export class WeekViewComponent implements OnInit {
   private readonly appointmentService = inject(AppointmentService);
   private readonly calendarState = inject(CalendarStateService);
 
+  protected readonly loading = signal(false);
   protected readonly timeSlots: TimeSlot[] = [];
 
   protected readonly weekDays = computed<WeekDay[]>(() => {
@@ -78,10 +80,15 @@ export class WeekViewComponent implements OnInit {
   }
 
   private async loadAppointments(): Promise<void> {
-    const range = this.calendarState.dateRange();
-    const from = range.start.toISOString().slice(0, 10);
-    const to = range.end.toISOString().slice(0, 10);
-    await this.appointmentService.getByDateRange(CLINIC_ID, from, to);
+    this.loading.set(true);
+    try {
+      const range = this.calendarState.dateRange();
+      const from = range.start.toISOString().slice(0, 10);
+      const to = range.end.toISOString().slice(0, 10);
+      await this.appointmentService.getByDateRange(CLINIC_ID, from, to);
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   protected getCount(dateStr: string, slot: TimeSlot): number {

@@ -1,6 +1,7 @@
-import { Component, computed, effect, inject, OnInit } from '@angular/core';
+import { Component, computed, effect, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AppointmentService, CalendarStateService } from '../../../core/services';
 
 const CLINIC_ID = 1;
@@ -17,7 +18,7 @@ interface CalendarCell {
 @Component({
   selector: 'app-month-view',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, MatProgressSpinnerModule],
   templateUrl: './month-view.component.html',
   styleUrl: './month-view.component.scss',
 })
@@ -27,6 +28,7 @@ export class MonthViewComponent implements OnInit {
   private readonly appointmentService = inject(AppointmentService);
   private readonly calendarState = inject(CalendarStateService);
 
+  protected readonly loading = signal(false);
   protected readonly weekdays = WEEKDAY_LABELS;
 
   protected readonly cells = computed<CalendarCell[]>(() => {
@@ -69,13 +71,14 @@ export class MonthViewComponent implements OnInit {
   });
 
   constructor() {
-    // currentDate가 변경될 때마다 예약 데이터 재조회
     effect(() => {
       const cells = this.cells();
       if (cells.length > 0) {
         const from = cells[0].dateStr;
         const to = cells[cells.length - 1].dateStr;
-        this.appointmentService.getByDateRange(CLINIC_ID, from, to);
+        this.loading.set(true);
+        this.appointmentService.getByDateRange(CLINIC_ID, from, to)
+          .finally(() => this.loading.set(false));
       }
     });
   }

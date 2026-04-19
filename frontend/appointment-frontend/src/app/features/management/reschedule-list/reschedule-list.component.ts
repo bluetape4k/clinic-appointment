@@ -70,6 +70,9 @@ import { RescheduleCandidate } from '../../../core/models';
       @if (loading()) {
         <div class="loading-container">
           <mat-spinner diameter="40"></mat-spinner>
+          @if (elapsedSeconds() > 0) {
+            <p class="loading-message">최적화 진행 중... {{ elapsedSeconds() }}초</p>
+          }
         </div>
       }
 
@@ -183,8 +186,17 @@ import { RescheduleCandidate } from '../../../core/models';
 
     .loading-container {
       display: flex;
+      flex-direction: column;
+      align-items: center;
       justify-content: center;
       padding: 48px;
+      gap: 12px;
+    }
+
+    .loading-message {
+      color: #666;
+      font-size: 0.9rem;
+      margin: 0;
     }
 
     .empty-card mat-card-content {
@@ -223,6 +235,8 @@ export class RescheduleListComponent {
   readonly loading = signal(false);
   readonly searched = signal(false);
   readonly candidates = signal<RescheduleCandidate[]>([]);
+  readonly elapsedSeconds = signal(0);
+  private elapsedTimer: ReturnType<typeof setInterval> | null = null;
 
   async search(): Promise<void> {
     const id = this.appointmentId();
@@ -265,6 +279,7 @@ export class RescheduleListComponent {
 
   async autoReschedule(): Promise<void> {
     this.loading.set(true);
+    this.startElapsedTimer();
     try {
       const newId = await this.rescheduleService.autoReschedule(this.appointmentId());
       if (newId) {
@@ -277,7 +292,22 @@ export class RescheduleListComponent {
     } catch (e) {
       this.snackBar.open('자동 재배정에 실패했습니다.', '확인', { duration: 3000 });
     } finally {
+      this.stopElapsedTimer();
       this.loading.set(false);
+    }
+  }
+
+  private startElapsedTimer(): void {
+    this.elapsedSeconds.set(0);
+    this.elapsedTimer = setInterval(() => {
+      this.elapsedSeconds.update(v => v + 1);
+    }, 1000);
+  }
+
+  private stopElapsedTimer(): void {
+    if (this.elapsedTimer) {
+      clearInterval(this.elapsedTimer);
+      this.elapsedTimer = null;
     }
   }
 }

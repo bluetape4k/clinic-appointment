@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AppointmentService, CalendarStateService, DoctorService } from '../../../core/services';
 import { Appointment } from '../../../core/models';
 import { TimeRangePipe } from '../../../shared/pipes/time-range.pipe';
@@ -19,7 +20,7 @@ interface TimeSlot {
 @Component({
   selector: 'app-day-view',
   standalone: true,
-  imports: [CommonModule, TimeRangePipe],
+  imports: [CommonModule, TimeRangePipe, MatProgressSpinnerModule],
   templateUrl: './day-view.component.html',
   styleUrl: './day-view.component.scss',
 })
@@ -32,6 +33,7 @@ export class DayViewComponent implements OnInit {
   protected readonly timeSlots: TimeSlot[] = [];
   protected readonly appointments = this.appointmentService.appointments;
   protected readonly doctors = this.doctorService.doctors;
+  protected readonly loading = signal(false);
 
   protected readonly gridCols = computed(() => this.doctors().length + 1);
 
@@ -58,10 +60,15 @@ export class DayViewComponent implements OnInit {
   }
 
   private async loadAppointments(): Promise<void> {
-    const range = this.calendarState.dateRange();
-    const from = range.start.toISOString().slice(0, 10);
-    const to = range.end.toISOString().slice(0, 10);
-    await this.appointmentService.getByDateRange(CLINIC_ID, from, to);
+    this.loading.set(true);
+    try {
+      const range = this.calendarState.dateRange();
+      const from = range.start.toISOString().slice(0, 10);
+      const to = range.end.toISOString().slice(0, 10);
+      await this.appointmentService.getByDateRange(CLINIC_ID, from, to);
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   protected getAppointmentsForSlot(doctorId: number, slot: TimeSlot): Appointment[] {
