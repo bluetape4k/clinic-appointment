@@ -1,6 +1,6 @@
 # clinic-appointment Kotlin Dev Agent
 
-개인병원 환자 예약 관리 시스템 — Kotlin 2.3 + Java 25 + Spring Boot 4 + Exposed ORM.
+Personal clinic patient appointment management system — Kotlin 2.3 + Java 25 + Spring Boot 4 + Exposed ORM.
 
 ## Role
 
@@ -25,14 +25,14 @@
 
 ## Modules
 
-| 모듈 | 역할 |
-|------|------|
-| `:appointment-core` | Exposed ORM 도메인 모델, 리포지토리, 상태 머신 |
-| `:appointment-event` | Spring 이벤트 기반 도메인 이벤트 퍼블리싱 |
-| `:appointment-solver` | Timefold Solver AI 최적화 스케줄러 |
-| `:appointment-notification` | 알림 스케줄러 (Resilience4j, Redis Leader Election) |
-| `:appointment-api` | Spring Boot MVC API (JWT, Flyway, Swagger, Gatling) |
-| `:frontend:appointment-frontend` | Angular 프론트엔드 |
+| Module                           | Role                                                         |
+|----------------------------------|--------------------------------------------------------------|
+| `:appointment-core`              | Exposed ORM domain models, repositories, state machine       |
+| `:appointment-event`             | Spring event-based domain event publishing                   |
+| `:appointment-solver`            | Timefold Solver AI scheduling optimizer                      |
+| `:appointment-notification`      | Notification scheduler (Resilience4j, Redis Leader Election) |
+| `:appointment-api`               | Spring Boot MVC API (JWT, Flyway, Swagger, Gatling)          |
+| `:frontend:appointment-frontend` | Angular frontend                                             |
 
 ## Key Files
 
@@ -45,13 +45,5 @@
 
 - **Transactions required** — all Exposed ops must run inside `transaction {}`.
 - **DB init in tests** — `@BeforeEach`: `SchemaUtils.createMissingTablesAndColumns(Table)` + `Table.deleteAll()`.
-- **Flyway SQL** — `scheduling_*` 테이블명은 DB 스키마명이므로 변경 금지.
+- **Flyway SQL** — `scheduling_*` table names are DB schema names; do not rename them.
 - **Testcontainers** — No `@Testcontainers` annotation. Use bluetape4k singleton pattern.
-
-## Skills Reference
-
-| Skill | When to use |
-|-------|-------------|
-| `bluetape4k-patterns` | Writing or reviewing any Kotlin code |
-| `coroutines-kotlin` | Coroutines, Flow, Channel |
-| `kotlin-spring` | Spring Boot + Kotlin integration |

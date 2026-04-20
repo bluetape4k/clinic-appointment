@@ -183,6 +183,7 @@ subprojects {
         imports {
             mavenBom(Libs.bluetape4k_bom)
             mavenBom(Libs.spring_boot4_dependencies)
+            mavenBom(Libs.jackson3_bom)
             mavenBom(Libs.testcontainers_bom)
             mavenBom(Libs.junit_bom)
             mavenBom(Libs.kotlinx_coroutines_bom)
