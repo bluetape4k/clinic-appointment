@@ -126,12 +126,12 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 | TreatmentTypeController | 2 | 2 | 0 |
 | EquipmentController | 2 | 2 | 0 |
 
-### 3.2 ClinicListComponent 실제 API 연결 (HIGH)
+### 3.2 ClinicListComponent 실제 API 연결 (HIGH) ✅
 
-`clinic-list.component.ts`가 아직 **MOCK_CLINICS** 하드코딩 데이터 사용 중. `ClinicService` 연결 필요.
+`clinic-list.component.ts` MOCK_CLINICS 제거, `ClinicService.getAll()` 연결 완료.
 
-- ⬜ `ClinicListComponent` → `ClinicService.loadAll()` 또는 `loadById()` 연결
-- ⬜ 목 데이터(`MOCK_CLINICS`) 제거
+- ✅ `ClinicListComponent` → `ClinicService.getAll()` 연결
+- ✅ 목 데이터(`MOCK_CLINICS`) 제거
 
 ### 3.3 하드코딩 clinicId 해소 (MEDIUM)
 
