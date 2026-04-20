@@ -1,67 +1,54 @@
-import { Component } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-
-interface ClinicDisplay {
-  id: number;
-  name: string;
-  phone: string;
-  address: string;
-  slotDurationMinutes: number;
-}
-
-const MOCK_CLINICS: ClinicDisplay[] = [
-  {
-    id: 1,
-    name: '서울 메인 클리닉',
-    phone: '02-1234-5678',
-    address: '서울특별시 강남구 테헤란로 123',
-    slotDurationMinutes: 30,
-  },
-  {
-    id: 2,
-    name: '부산 해운대 클리닉',
-    phone: '051-9876-5432',
-    address: '부산광역시 해운대구 해운대로 456',
-    slotDurationMinutes: 20,
-  },
-];
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { ClinicService } from '../../../core/services/clinic.service';
 
 @Component({
   selector: 'app-clinic-list',
   standalone: true,
-  imports: [MatCardModule, MatIconModule],
+  imports: [MatCardModule, MatIconModule, MatProgressSpinnerModule],
   template: `
     <div class="page-container">
       <h1 class="page-title">클리닉 정보</h1>
 
-      <div class="clinic-grid">
-        @for (clinic of clinics; track clinic.id) {
-          <mat-card class="clinic-card">
-            <mat-card-header>
-              <mat-icon mat-card-avatar>local_hospital</mat-icon>
-              <mat-card-title>{{ clinic.name }}</mat-card-title>
-              <mat-card-subtitle>클리닉 #{{ clinic.id }}</mat-card-subtitle>
-            </mat-card-header>
-            <mat-card-content>
-              <ul class="info-list">
-                <li>
-                  <mat-icon>phone</mat-icon>
-                  <span>{{ clinic.phone }}</span>
-                </li>
-                <li>
-                  <mat-icon>location_on</mat-icon>
-                  <span>{{ clinic.address }}</span>
-                </li>
-                <li>
-                  <mat-icon>schedule</mat-icon>
-                  <span>슬롯 단위: {{ clinic.slotDurationMinutes }}분</span>
-                </li>
-              </ul>
-            </mat-card-content>
-          </mat-card>
-        }
-      </div>
+      @if (loading()) {
+        <div class="loading-container">
+          <mat-spinner diameter="48" />
+        </div>
+      } @else {
+        <div class="clinic-grid">
+          @for (clinic of clinics(); track clinic.id) {
+            <mat-card class="clinic-card">
+              <mat-card-header>
+                <mat-icon mat-card-avatar>local_hospital</mat-icon>
+                <mat-card-title>{{ clinic.name }}</mat-card-title>
+                <mat-card-subtitle>클리닉 #{{ clinic.id }}</mat-card-subtitle>
+              </mat-card-header>
+              <mat-card-content>
+                <ul class="info-list">
+                  <li>
+                    <mat-icon>schedule</mat-icon>
+                    <span>슬롯 단위: {{ clinic.slotDurationMinutes }}분</span>
+                  </li>
+                  <li>
+                    <mat-icon>language</mat-icon>
+                    <span>시간대: {{ clinic.timezone }}</span>
+                  </li>
+                  <li>
+                    <mat-icon>people</mat-icon>
+                    <span>최대 동시 환자: {{ clinic.maxConcurrentPatients }}명</span>
+                  </li>
+                  <li>
+                    <mat-icon>event_available</mat-icon>
+                    <span>공휴일 운영: {{ clinic.openOnHolidays ? '예' : '아니오' }}</span>
+                  </li>
+                </ul>
+              </mat-card-content>
+            </mat-card>
+          }
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -76,6 +63,12 @@ const MOCK_CLINICS: ClinicDisplay[] = [
       font-weight: 600;
       margin-bottom: 24px;
       color: #1a1a1a;
+    }
+
+    .loading-container {
+      display: flex;
+      justify-content: center;
+      padding: 48px;
     }
 
     .clinic-grid {
@@ -113,6 +106,13 @@ const MOCK_CLINICS: ClinicDisplay[] = [
     }
   `],
 })
-export class ClinicListComponent {
-  readonly clinics: ClinicDisplay[] = MOCK_CLINICS;
+export class ClinicListComponent implements OnInit {
+  private readonly clinicService = inject(ClinicService);
+
+  readonly clinics = this.clinicService.clinics;
+  readonly loading = this.clinicService.loading;
+
+  ngOnInit(): void {
+    this.clinicService.getAll();
+  }
 }
