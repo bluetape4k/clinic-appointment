@@ -1,4 +1,4 @@
-package io.bluetape4k.clinic.appointment.service.model
+package io.bluetape4k.clinic.appointment.model.service
 
 import java.time.LocalDate
 import java.time.LocalTime

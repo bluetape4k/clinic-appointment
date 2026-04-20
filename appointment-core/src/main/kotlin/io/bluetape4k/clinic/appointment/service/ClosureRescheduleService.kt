@@ -6,7 +6,7 @@ import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistoryReco
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
-import io.bluetape4k.clinic.appointment.service.model.SlotQuery
+import io.bluetape4k.clinic.appointment.model.service.SlotQuery
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.support.requireNotNull

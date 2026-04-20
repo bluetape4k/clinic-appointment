@@ -53,6 +53,14 @@ val newState = machine.transition(
 
 > **중요**: 모든 리포지토리 호출은 `transaction { }` 블록 안에서 실행해야 함.
 
+### 서비스 value type (`model/service/`)
+
+| 클래스 | 역할 |
+|--------|------|
+| `SlotQuery` | 슬롯 조회 파라미터 (clinicId, doctorId, treatmentTypeId, date) |
+| `AvailableSlot` | 계산된 가용 슬롯 결과 (date, startTime, endTime, doctorId, remainingCapacity) |
+| `TimeRange` | 시간 범위 value type + `subtractRanges`, `computeEffectiveRanges` top-level 함수 |
+
 ### 서비스
 
 | 클래스 | 역할 |

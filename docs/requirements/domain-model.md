@@ -92,6 +92,16 @@ Timefold Solver가 이동할 수 없는 고정 상태:
 | `RequestReschedule(reason)` | REQUESTED/CONFIRMED → PENDING_RESCHEDULE |
 | `ConfirmReschedule` | PENDING_RESCHEDULE → RESCHEDULED |
 
+## 슬롯 계산 모델 (`model.service`)
+
+DB에 직접 의존하지 않는 순수 value type.
+
+| 클래스 | 역할 |
+|--------|------|
+| `SlotQuery` | 슬롯 조회 파라미터 — clinicId, doctorId, treatmentTypeId, date, requestedDurationMinutes |
+| `AvailableSlot` | 가용 슬롯 결과 — date, startTime, endTime, doctorId, equipmentIds, remainingCapacity |
+| `TimeRange` | 시간 범위 (start inclusive, end exclusive) + `subtractRanges`, `computeEffectiveRanges` 헬퍼 |
+
 ## 서비스
 
 | 서비스 | 역할 |

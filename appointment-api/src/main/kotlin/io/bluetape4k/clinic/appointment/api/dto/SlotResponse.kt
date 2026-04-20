@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.dto
 
-import io.bluetape4k.clinic.appointment.service.model.AvailableSlot
+import io.bluetape4k.clinic.appointment.model.service.AvailableSlot
 import java.io.Serializable
 import java.time.LocalDate
 import java.time.LocalTime

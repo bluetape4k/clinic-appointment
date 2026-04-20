@@ -20,7 +20,7 @@ import io.bluetape4k.clinic.appointment.model.tables.ProviderType
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentCategory
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
-import io.bluetape4k.clinic.appointment.service.model.SlotQuery
+import io.bluetape4k.clinic.appointment.model.service.SlotQuery
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import org.amshove.kluent.shouldBeEmpty
 import org.amshove.kluent.shouldBeEqualTo
