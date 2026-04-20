@@ -96,6 +96,24 @@ if (bluetape4kProjectsDir.exists()) {
 
 ---
 
+### ADR-9: appointment-core 패키지 구조 — model/service 배치
+
+**결정**: 슬롯 계산 value type(`AvailableSlot`, `SlotQuery`, `TimeRange`)을 `service.model` 대신 `model.service`에 배치.
+
+**이유**: `model/` 하위에 DB 무관 데이터 타입을 일관성 있게 집중. `service.model`은 "서비스의 내부 구현 세부 사항"처럼 읽히고, `model.service`는 "서비스 계층용 도메인 모델"로 의도가 명확하다.
+
+**결과**:
+
+| 패키지 | 내용 |
+|--------|------|
+| `model.dto` | DB 조회 결과 Record DTO (16개 엔티티) |
+| `model.service` | 슬롯 계산 value type — `AvailableSlot`, `SlotQuery`, `TimeRange` |
+| `model.tables` | Exposed ORM 테이블 정의 |
+
+미래에 Exposed DAO 방식 Entity가 추가되면 `model.entities`에 배치. `model.entities`는 Exposed에 의존하므로 `appointment-domain` 모듈(예정)에 위치.
+
+---
+
 ### ADR-8: Flyway 마이그레이션 — 벤더별 SQL 분리
 
 **결정**: H2 / PostgreSQL / MySQL 각각 별도 SQL 파일 유지 + CI 매트릭스로 전 벤더 검증.
