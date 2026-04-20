@@ -125,7 +125,23 @@ API 응답(`AppointmentResponse`)에는 항상 `timezone` 과 `locale` 필드가
 ## 테스트 실행
 
 ```bash
+# H2 in-memory (기본)
 ./gradlew :appointment-api:test
+
+# PostgreSQL Testcontainer
+./gradlew :appointment-api:test -Dspring.profiles.active=test,test-postgresql
+
+# MySQL8 Testcontainer
+./gradlew :appointment-api:test -Dspring.profiles.active=test,test-mysql
 ```
 
-> Controller 테스트는 `@SpringBootTest(RANDOM_PORT)` + `RestClient` 방식으로 작성. MockMvc 미사용.
+### 테스트 구조
+
+| 클래스 | 역할 |
+|--------|------|
+| `AbstractApiIntegrationTest` | `@SpringBootTest(RANDOM_PORT)` + `@DynamicPropertySource` 기반 추상 클래스 |
+| `Containers` | PostgreSQL / MySQL8 Testcontainer singleton |
+
+- Spring Profile에 따라 DataSource를 동적으로 주입 (`@DynamicPropertySource`)
+- Controller 테스트는 `RestClient` 방식 사용. MockMvc 미사용
+- CI에서 H2 / PostgreSQL / MySQL8 세 환경을 병렬로 검증

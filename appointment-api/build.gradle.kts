@@ -12,6 +12,8 @@ dependencies {
     implementation(Libs.springBootStarter("web"))
     implementation(Libs.springBootStarter("validation"))
     implementation(Libs.springBootStarter("security"))
+    // Spring MVC suspend 함수 지원에 reactor-core 필요 (CoroutinesUtils 의존)
+    implementation(Libs.kotlinx_coroutines_reactor)
     implementation(Libs.exposed_jdbc)
     implementation(Libs.exposed_spring_boot4_starter)
     implementation(Libs.bluetape4k_exposed_jdbc)
@@ -45,6 +47,7 @@ dependencies {
     testImplementation(Libs.exposed_migration_jdbc)
 
     // Testcontainers
+    testImplementation(Libs.bluetape4k_testcontainers)
     testImplementation(Libs.testcontainers)
     testImplementation(Libs.testcontainers_junit_jupiter)
     testImplementation(Libs.testcontainers_postgresql)
@@ -53,6 +56,14 @@ dependencies {
     // Gatling
     gatling(Libs.gatling_charts_highcharts)
     gatling(Libs.gatling_http_java)
+}
+
+// spring.profiles.active 시스템 프로퍼티를 테스트 JVM에 전달 (multi-DB 테스트 지원)
+tasks.withType<Test>().configureEach {
+    val activeProfiles = System.getProperty("spring.profiles.active")
+    if (activeProfiles != null) {
+        systemProperty("spring.profiles.active", activeProfiles)
+    }
 }
 
 // Gatling 런타임은 Java 21 기반이므로 Gatling 소스는 Java 21 타겟으로 컴파일

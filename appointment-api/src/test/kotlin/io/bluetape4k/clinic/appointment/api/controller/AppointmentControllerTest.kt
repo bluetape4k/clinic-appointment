@@ -19,6 +19,7 @@ import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.logging.KLogging
 import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -28,21 +29,17 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
-import org.springframework.test.context.ActiveProfiles
 import org.springframework.web.client.RestClient
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class AppointmentControllerTest @Autowired constructor() {
+class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
-    companion object: KLogging()
+    companion object : KLogging()
 
     @LocalServerPort
     private var port: Int = 0

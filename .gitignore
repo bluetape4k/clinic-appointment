@@ -40,4 +40,6 @@ dist/
 .omx/context/
 .omx/tmux-hook.json
 
+.worktrees/
+
 .profileconfig.json

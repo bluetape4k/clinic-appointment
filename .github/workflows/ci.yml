@@ -103,6 +103,7 @@ jobs:
             --parallel
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+          TESTCONTAINERS_RYUK_DISABLED: "true"  # Testcontainers 사용 모듈 공통 설정
 
       - name: Generate JaCoCo report
         if: always()
@@ -173,11 +174,21 @@ jobs:
           path: '**/build/reports/jacoco/test/html/'
           retention-days: 7
 
-  # ── 5. API 모듈 테스트 (appointment-api) ─────────────────────────────────────
+  # ── 5. API 모듈 테스트 (appointment-api, H2 / PostgreSQL / MySQL 병렬) ──────────
   test-api:
-    name: Test / API (Spring Boot)
+    name: Test / API (${{ matrix.db }})
     runs-on: ubuntu-latest
     needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: H2
+            profiles: "test"
+          - db: PostgreSQL
+            profiles: "test,test-postgresql"
+          - db: MySQL
+            profiles: "test,test-mysql"
     steps:
       - uses: actions/checkout@v4
 
@@ -191,10 +202,11 @@ jobs:
           gradle-version: wrapper
           cache-read-only: true
 
-      - name: Test API module
+      - name: Test API module (${{ matrix.db }})
         run: ./gradlew :appointment-api:test --no-daemon
         env:
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false -Dspring.profiles.active=${{ matrix.profiles }}"
+          TESTCONTAINERS_RYUK_DISABLED: "true"
 
       - name: Generate JaCoCo report
         if: always()
@@ -205,7 +217,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-api
+          name: test-results-api-${{ matrix.db }}
           path: '**/build/test-results/test/*.xml'
           retention-days: 7
 
@@ -213,7 +225,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-api
+          name: coverage-api-${{ matrix.db }}
           path: '**/build/reports/jacoco/test/html/'
           retention-days: 7
 

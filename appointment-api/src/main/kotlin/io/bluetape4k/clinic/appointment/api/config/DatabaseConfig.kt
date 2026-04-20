@@ -12,6 +12,8 @@ import io.bluetape4k.clinic.appointment.model.tables.ConsultationTopics
 import io.bluetape4k.clinic.appointment.model.tables.DoctorAbsences
 import io.bluetape4k.clinic.appointment.model.tables.DoctorSchedules
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
+import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
+import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
@@ -21,6 +23,7 @@ import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.boot.ApplicationRunner
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
@@ -36,6 +39,7 @@ import org.springframework.core.annotation.Order
  */
 @Configuration(proxyBeanMethods = false)
 @Profile("dev", "test")
+@ConditionalOnProperty(name = ["spring.flyway.enabled"], havingValue = "false", matchIfMissing = true)
 class SchemaInitConfig {
     /**
      * Exposed SchemaUtils로 스키마 생성 (dev/test 전용).
@@ -57,6 +61,8 @@ class SchemaInitConfig {
                     TreatmentTypes,
                     Equipments,
                     TreatmentEquipments,
+                    EquipmentUnavailabilities,
+                    EquipmentUnavailabilityExceptions,
                     ConsultationTopics,
                     Holidays,
                     Appointments,

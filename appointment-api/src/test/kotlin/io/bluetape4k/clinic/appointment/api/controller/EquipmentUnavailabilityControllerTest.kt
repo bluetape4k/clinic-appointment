@@ -27,21 +27,18 @@ import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
+import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
-import org.springframework.test.context.ActiveProfiles
 import org.springframework.web.client.RestClient
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-class EquipmentUnavailabilityControllerTest @Autowired constructor() {
+class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object: KLogging()
 
