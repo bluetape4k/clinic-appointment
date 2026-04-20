@@ -75,13 +75,13 @@
 
 ### 1.3 프론트엔드 테스트 커버리지 (MEDIUM)
 
-현재 17개 spec 파일, 118 tests passing. 추가 필요:
+26개 spec 파일, 176 tests passing. ✅ 완료:
 
-- ⬜ `ClinicService` 테스트 — `clinic.service.spec.ts` 미작성
-- ⬜ `EquipmentService` 테스트 — `equipment.service.spec.ts` 미작성
-- ⬜ `RescheduleService` 테스트 — `reschedule.service.spec.ts` 미작성
-- ⬜ Calendar 컴포넌트 테스트 — `day-view`, `week-view`, `month-view` spec 없음
-- ⬜ Management 컴포넌트 테스트 — `doctor-list`, `treatment-type-list`, `clinic-list` spec 없음
+- ✅ `ClinicService` 테스트 — `clinic.service.spec.ts` (10 tests)
+- ✅ `EquipmentService` 테스트 — `equipment.service.spec.ts` (7 tests)
+- ✅ `RescheduleService` 테스트 — `reschedule.service.spec.ts` (8 tests)
+- ✅ Calendar 컴포넌트 테스트 — `day-view` (5), `week-view` (4), `month-view` (5)
+- ✅ Management 컴포넌트 테스트 — `doctor-list` (4), `treatment-type-list` (4), `clinic-list` (4)
 
 ---
 
