@@ -6,7 +6,7 @@ import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.SlotResponse
 import io.bluetape4k.clinic.appointment.api.dto.toResponse
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
-import io.bluetape4k.clinic.appointment.service.model.SlotQuery
+import io.bluetape4k.clinic.appointment.model.service.SlotQuery
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping

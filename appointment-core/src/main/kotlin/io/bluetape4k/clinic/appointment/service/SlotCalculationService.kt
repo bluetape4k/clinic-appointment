@@ -8,10 +8,10 @@ import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
 import io.bluetape4k.clinic.appointment.repository.HolidayRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
-import io.bluetape4k.clinic.appointment.service.model.AvailableSlot
-import io.bluetape4k.clinic.appointment.service.model.SlotQuery
-import io.bluetape4k.clinic.appointment.service.model.TimeRange
-import io.bluetape4k.clinic.appointment.service.model.computeEffectiveRanges
+import io.bluetape4k.clinic.appointment.model.service.AvailableSlot
+import io.bluetape4k.clinic.appointment.model.service.SlotQuery
+import io.bluetape4k.clinic.appointment.model.service.TimeRange
+import io.bluetape4k.clinic.appointment.model.service.computeEffectiveRanges
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /**
