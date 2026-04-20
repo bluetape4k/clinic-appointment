@@ -39,6 +39,25 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 | `AppointmentEventLogRecord` | 이벤트 로그 DTO |
 | `AppointmentEventLogs` | Exposed 테이블 — event_type, appointment_id, payload_json, occurred_at |
 
+## 이벤트 발행/구독 흐름
+
+```mermaid
+flowchart LR
+    API["appointment-api\n(상태 변경 후)"] -->|"publishEvent()"| BUS["Spring\nApplicationEventPublisher"]
+
+    BUS -->|"@EventListener"| LOG["AppointmentEventLogger\n→ AppointmentEventLogs 테이블"]
+    BUS -->|"@EventListener"| NOTIF["appointment-notification\nNotificationEventListener"]
+
+    subgraph Events["AppointmentDomainEvent"]
+        E1["Created"] 
+        E2["StatusChanged"]
+        E3["Cancelled"]
+        E4["Rescheduled"]
+    end
+
+    API --> Events --> BUS
+```
+
 ## 의존성
 
 - **내부**: `appointment-core`

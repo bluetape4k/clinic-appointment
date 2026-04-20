@@ -32,6 +32,7 @@
 | H8 | `equipmentAvailability` | 장비 동시 사용 수가 quantity 이하 |
 | H9 | `providerTypeMatch` | 의사 providerType이 진료의 requiredProviderType과 일치 |
 | H10 | `doctorBelongsToClinic` | 배정된 의사가 해당 클리닉 소속 |
+| H11 | `noEquipmentUnavailabilityConflict` | 장비 사용불가 구간(`EquipmentUnavailabilityFact`) 중 해당 장비 예약 금지 |
 
 ## Soft 제약조건 (최적화 목표)
 
@@ -47,6 +48,7 @@
 | `AppointmentPlanning` | Planning Entity — doctorId, appointmentDate, startTime이 결정 변수 |
 | `ScheduleSolution` | Planning Solution — 예약 목록 + Problem Facts |
 | `ClinicFact` / `DoctorFact` / `EquipmentFact` / `TreatmentFact` | Problem Facts |
+| `EquipmentUnavailabilityFact` | Problem Fact — 장비 사용불가 구간 (H11 제약에서 참조) |
 | `AppointmentConstraintProvider` | H1~H10, S1~S2 제약 등록 |
 | `HardConstraints` | Hard 제약 구현 |
 | `SoftConstraints` | Soft 제약 구현 |
@@ -62,3 +64,7 @@
 | 처리 단위 | 단건 (의사, 날짜, 진료유형) | 복수 예약 동시 최적화 |
 | 방식 | Greedy | Timefold Constraint Streams |
 | 호출 시점 | API 요청 시 실시간 | 배치 작업 / 임시휴진 재배정 |
+
+## 벤치마크
+
+기준선(baseline) 정의 완료 (`BenchmarkTest.kt`). 상세 결과: [solver-benchmark-report.md](../solver-benchmark-report.md)

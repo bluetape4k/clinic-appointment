@@ -31,13 +31,6 @@ enum class ReminderType { DAY_BEFORE, SAME_DAY }
 | `DummyNotificationChannel` | `DUMMY` | 로그 출력 + `NotificationHistory` DB 저장, 항상 SUCCESS |
 | `ResilientNotificationChannel` | (위임) | Resilience4j CircuitBreaker/Retry/Bulkhead 래핑 |
 
-### 미구현 채널 (향후 구현 예정)
-
-| 채널 | 구현 방법 |
-|------|---------|
-| Email | SendGrid Feign 클라이언트 |
-| SMS | Twilio Feign 클라이언트 |
-| Push | FCM Feign 클라이언트 |
 
 ## 알림 이력 테이블 (`scheduling_notification_history`)
 

@@ -9,7 +9,7 @@ graph TD
     solver[appointment-solver\nTimefold AI 스케줄러]
     notification[appointment-notification\nHA 알림 스케줄러]
     api[appointment-api\nSpring Boot REST API]
-    frontend[appointment-frontend\nAngular 18]
+    frontend[appointment-frontend\nAngular 21]
 
     core --> event
     core --> solver
@@ -85,3 +85,21 @@ if (bluetape4kProjectsDir.exists()) {
 **결정**: `bluetape4k-experimental/scheduling/`에서 파일만 복사, 초기 커밋으로 시작.
 
 **이유**: 커밋 히스토리가 짧았고, 독립 저장소의 깨끗한 시작이 더 가치 있다. 원본은 `bluetape4k-experimental`에서 참조 가능.
+
+---
+
+### ADR-7: API Controller 테스트 — MockMvc → RestClient
+
+**결정**: `@SpringBootTest(RANDOM_PORT)` + Spring Boot 4 `RestClient` 방식으로 전면 전환 (v0.3.0).
+
+**이유**: MockMvc는 실제 HTTP 스택을 타지 않아 필터/인터셉터 누락 위험. RestClient는 실제 포트에서 전 계층을 통과하므로 통합 테스트 신뢰도가 높다.
+
+---
+
+### ADR-8: Flyway 마이그레이션 — 벤더별 SQL 분리
+
+**결정**: H2 / PostgreSQL / MySQL 각각 별도 SQL 파일 유지 + CI 매트릭스로 전 벤더 검증.
+
+**이유**: ORM-agnostic DDL 문법 차이(자동 증가, 타입명 등)가 벤더별로 달라 단일 SQL로 모두 커버 불가.
+
+**결과**: `resources/db/migration/h2/`, `postgresql/`, `mysql/` 경로 분리. `FlywayMigrationTest`가 CI에서 3 벤더 모두 실행.

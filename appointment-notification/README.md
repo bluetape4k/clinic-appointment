@@ -20,6 +20,24 @@ Redis Leader Election + Resilience4j 기반 고가용성(HA) 알림 스케줄러
 | `NotificationHistoryRepository` | 알림 이력 조회/저장 |
 | `NotificationAutoConfiguration` | Spring `@Configuration` — 자동 빈 등록 |
 
+## 알림 처리 흐름
+
+```mermaid
+flowchart LR
+    EVT["AppointmentDomainEvent"] --> LISTEN["NotificationEventListener\n@EventListener"]
+    LISTEN --> CB["CircuitBreaker\n(Resilience4j)"]
+    CB --> RETRY["Retry · Bulkhead"]
+    RETRY --> CH["DummyNotificationChannel\n로그 + DB 이력"]
+
+    subgraph HA["HA 리마인더 (1h 주기)"]
+        LEADER{"Redis Leader?"}
+        LEADER -->|"Yes"| REMIND["내일/오늘 예약\n리마인더 발송"]
+        LEADER -->|"No"| SKIP["SKIP"]
+    end
+```
+
+→ 전체 시나리오: [user-scenarios.md S5](../docs/requirements/user-scenarios.md#s5-ha-알림-리마인더-발송-스케줄러)
+
 ## HA 구성
 
 다중 인스턴스에서 단일 노드만 스케줄러 실행:

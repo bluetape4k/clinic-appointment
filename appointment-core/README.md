@@ -24,6 +24,7 @@
 | `DoctorAbsenceRecord` | 의사 부재 — absenceDate, startTime?(null=전일), endTime? |
 | `ClinicClosureRecord` | 임시휴진 — closureDate, isFullDay, startTime?, endTime? |
 | `HolidayRecord` | 공휴일 — holidayDate, recurring |
+| `EquipmentUnavailabilityRecord` | 장비 사용불가 구간 — equipmentId, startDate, endDate, recurrenceRule, exceptions |
 
 ### 상태머신
 
@@ -48,6 +49,7 @@ val newState = machine.transition(
 | `TreatmentTypeRepository` | `findAll()`, `findById()` |
 | `HolidayRepository` | `isHoliday(date)`, `findByYear()` |
 | `RescheduleCandidateRepository` | `findPendingByClinic()`, `save()` |
+| `EquipmentUnavailabilityRepository` | `findByEquipment()`, `findOverlapping()`, `save()`, `delete()` |
 
 > **중요**: 모든 리포지토리 호출은 `transaction { }` 블록 안에서 실행해야 함.
 
@@ -59,6 +61,7 @@ val newState = machine.transition(
 | `ClosureRescheduleService` | 임시휴진 날짜의 영향받는 예약을 첫 번째 가용 슬롯으로 재배정 |
 | `ConcurrencyResolver` | 동시 예약 충돌 해결 |
 | `ClinicTimezoneService` | 병원 타임존 변환 |
+| `EquipmentUnavailabilityService` | 장비 사용불가 구간 CRUD + `UnavailabilityExpander` 기반 반복 규칙 전개 |
 
 ## 의존성
 
@@ -76,6 +79,56 @@ val newState = machine.transition(
 
 > 테스트에서 DB 초기화: `@BeforeEach` — `SchemaUtils.createMissingTablesAndColumns(Table)` + `Table.deleteAll()`
 > Testcontainers: `@Testcontainers` 어노테이션 없이 bluetape4k singleton 패턴 사용
+
+## 주요 엔티티 관계도
+
+```mermaid
+erDiagram
+    Clinics ||--o{ Doctors : "employs"
+    Clinics ||--o{ TreatmentTypes : "offers"
+    Clinics ||--o{ Equipments : "owns"
+    Clinics ||--o{ Appointments : "receives"
+    Clinics ||--o{ OperatingHoursTable : "hours"
+    Clinics ||--o{ ClinicClosures : "closures"
+
+    Doctors ||--o{ DoctorSchedules : "schedules"
+    Doctors ||--o{ DoctorAbsences : "absences"
+    Doctors ||--o{ Appointments : "treats"
+
+    TreatmentTypes ||--o{ TreatmentEquipments : "requires"
+    TreatmentTypes ||--o{ Appointments : "applied in"
+
+    Equipments ||--o{ TreatmentEquipments : "used by"
+    Equipments ||--o{ EquipmentUnavailabilities : "unavailable"
+    Equipments |o--o{ Appointments : "used in"
+
+    Appointments ||--o{ AppointmentNotes : "notes"
+    Appointments ||--o{ RescheduleCandidates : "reschedule"
+```
+
+→ 전체 ERD: [erd.md](../docs/requirements/erd.md)
+
+## 예약 상태머신
+
+```mermaid
+stateDiagram-v2
+    [*] --> REQUESTED : 예약 요청
+    REQUESTED --> CONFIRMED : Confirm
+    REQUESTED --> CANCELLED : Cancel
+    CONFIRMED --> CHECKED_IN : CheckIn
+    CONFIRMED --> NO_SHOW : MarkNoShow
+    CONFIRMED --> PENDING_RESCHEDULE : RequestReschedule
+    CHECKED_IN --> IN_PROGRESS : StartTreatment
+    IN_PROGRESS --> COMPLETED : Complete
+    PENDING_RESCHEDULE --> RESCHEDULED : ConfirmReschedule
+    PENDING_RESCHEDULE --> CANCELLED : Cancel
+    COMPLETED --> [*]
+    RESCHEDULED --> [*]
+    CANCELLED --> [*]
+    NO_SHOW --> [*]
+```
+
+→ 상태 전이 전체 목록: [domain-model.md](../docs/requirements/domain-model.md#상태-전이도)
 
 ## 타임존 설계
 

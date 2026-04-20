@@ -11,6 +11,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.0] - 2026-04-20
+
+### Added
+- `appointment-api`: `ClinicController`, `DoctorController`, `TreatmentTypeController`, `EquipmentController` — 마스터 데이터 CRUD API 추가
+- `appointment-api`: Gatling 멀티 클리닉 부하 테스트 시뮬레이션 추가
+- `appointment-solver`: Solver 벤치마크 baseline 정의 및 `ConcurrencyResolver` 동시예약 통합 테스트
+- `frontend/appointment-frontend`: Reschedule + Equipment Unavailability 관리 페이지 구현
+- `frontend/appointment-frontend`: 실제 백엔드 API 연결 (30개 엔드포인트 전체 커버)
+- `frontend/appointment-frontend`: 캘린더 뷰 및 재배정 컴포넌트 로딩 스피너 추가
+- CI: Flyway 벤더별 마이그레이션 분리 + 멀티 DB 마이그레이션 테스트 매트릭스 추가
+- CI: 프론트엔드 빌드 CI 추가
+- CI: gitleaks 보안 스캔 설정 추가
+
+### Changed
+- `appointment-api`: Controller 테스트 전면 전환 (`MockMvc` → `RestClient`)
+- `buildSrc/Libs.kt`: bluetape4k `1.5.0-RC1` → `1.5.0` → `1.6.2` 업데이트
+- `buildSrc/Libs.kt`: jackson3 및 Exposed API 의존성 업데이트
+- `frontend/appointment-frontend`: Angular 21 유지 결정
+
+---
+
 ## [0.2.0] - 2026-03-31
 
 ### Added
@@ -48,6 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - GitHub Actions CI workflow (PR 빌드 + 테스트)
 - `settings.gradle.kts`: bluetape4k-projects 조건부 Composite Build (`includeBuild`) 연결
 
-[Unreleased]: https://github.com/bluetape4k/clinic-appointment/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/bluetape4k/clinic-appointment/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/bluetape4k/clinic-appointment/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bluetape4k/clinic-appointment/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bluetape4k/clinic-appointment/releases/tag/v0.1.0

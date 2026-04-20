@@ -20,6 +20,7 @@
 | `AppointmentNoteRecord` | `AppointmentNotes` | 예약 메모 |
 | `ConsultationTopicRecord` | `ConsultationTopics` | 상담 주제 |
 | `RescheduleCandidateRecord` | `RescheduleCandidates` | 재배정 후보 |
+| `EquipmentUnavailabilityRecord` | `EquipmentUnavailabilities` | 장비 사용불가 구간 — startDate, endDate, recurrenceRule, exceptions |
 
 ## 예약 상태머신
 
@@ -99,3 +100,4 @@ Timefold Solver가 이동할 수 없는 고정 상태:
 | `ClosureRescheduleService` | 임시휴진 시 영향받는 예약을 첫 번째 가용 슬롯으로 재배정 |
 | `ConcurrencyResolver` | 동시 예약 요청 충돌 해결 |
 | `ClinicTimezoneService` | 병원 타임존 관리 |
+| `EquipmentUnavailabilityService` | 장비 사용불가 구간 CRUD + 반복 규칙(`UnavailabilityExpander`) 기반 기간 전개 |
