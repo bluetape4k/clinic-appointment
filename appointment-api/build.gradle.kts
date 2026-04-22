@@ -89,3 +89,18 @@ tasks.bootJar {
 tasks.jar {
     enabled = false
 }
+
+// Gatling 시뮬레이션 클래스 및 main() 진입점은 coverage 측정 대상에서 제외
+kover {
+    reports {
+        filters {
+            excludes {
+                classes(
+                    "io.bluetape4k.clinic.appointment.api.AppointmentApiApplicationKt",
+                    "io.bluetape4k.clinic.appointment.api.*Simulation",
+                    "io.bluetape4k.clinic.appointment.api.*Simulation\$*",
+                )
+            }
+        }
+    }
+}

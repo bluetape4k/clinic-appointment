@@ -105,12 +105,12 @@ jobs:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
           TESTCONTAINERS_RYUK_DISABLED: "true"  # Testcontainers 사용 모듈 공통 설정
 
-      - name: Generate JaCoCo report
+      - name: Generate Kover report
         if: always()
         run: |
           ./gradlew \
-            :appointment-core:jacocoTestReport \
-            :appointment-event:jacocoTestReport \
+            :appointment-core:koverXmlReport \
+            :appointment-event:koverXmlReport \
             --parallel
         continue-on-error: true
 
@@ -127,7 +127,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-core
-          path: '**/build/reports/jacoco/test/html/'
+          path: 'build/*/reports/kover/'
           retention-days: 7
 
   # ── 4. Solver 모듈 테스트 (appointment-solver) ───────────────────────────────
@@ -153,9 +153,9 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
 
-      - name: Generate JaCoCo report
+      - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-solver:jacocoTestReport
+        run: ./gradlew :appointment-solver:koverXmlReport
         continue-on-error: true
 
       - name: Upload test results
@@ -171,7 +171,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-solver
-          path: '**/build/reports/jacoco/test/html/'
+          path: 'build/*/reports/kover/'
           retention-days: 7
 
   # ── 5. API 모듈 테스트 (appointment-api, H2 / PostgreSQL / MySQL 병렬) ──────────
@@ -208,9 +208,9 @@ jobs:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false -Dspring.profiles.active=${{ matrix.profiles }}"
           TESTCONTAINERS_RYUK_DISABLED: "true"
 
-      - name: Generate JaCoCo report
+      - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-api:jacocoTestReport
+        run: ./gradlew :appointment-api:koverXmlReport
         continue-on-error: true
 
       - name: Upload test results
@@ -226,7 +226,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-api-${{ matrix.db }}
-          path: '**/build/reports/jacoco/test/html/'
+          path: 'build/*/reports/kover/'
           retention-days: 7
 
   # ── 6. Notification 모듈 테스트 (appointment-notification) ───────────────────
@@ -253,9 +253,9 @@ jobs:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
           TESTCONTAINERS_RYUK_DISABLED: "true"
 
-      - name: Generate JaCoCo report
+      - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-notification:jacocoTestReport
+        run: ./gradlew :appointment-notification:koverXmlReport
         continue-on-error: true
 
       - name: Upload test results
@@ -271,7 +271,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-notification
-          path: '**/build/reports/jacoco/test/html/'
+          path: 'build/*/reports/kover/'
           retention-days: 7
 
   # ── 7. 커버리지 집계 ─────────────────────────────────────────────────────────
@@ -283,52 +283,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
         with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRIBUTION }}
-
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: wrapper
-          cache-read-only: true
-
-      - name: Generate aggregated coverage
-        run: |
-          ./gradlew \
-            :appointment-core:jacocoTestReport \
-            :appointment-event:jacocoTestReport \
-            :appointment-solver:jacocoTestReport \
-            :appointment-api:jacocoTestReport \
-            :appointment-notification:jacocoTestReport \
-            --parallel
-        continue-on-error: true
-
-      - name: Upload aggregated coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-all
-          path: '**/build/reports/jacoco/'
-          retention-days: 14
+          pattern: coverage-*
+          path: coverage-artifacts
+          merge-multiple: true
 
       - name: Coverage summary
         if: always()
-        run: |
-          echo "## Coverage Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          for module in appointment-core appointment-event appointment-solver appointment-api appointment-notification; do
-            CSV="${module}/build/reports/jacoco/test/jacocoTestReport.csv"
-            if [ -f "$CSV" ]; then
-              MISSED=$(awk -F',' 'NR>1 {sum += $4} END {print sum+0}' "$CSV")
-              COVERED=$(awk -F',' 'NR>1 {sum += $5} END {print sum+0}' "$CSV")
-              TOTAL=$((MISSED + COVERED))
-              if [ "$TOTAL" -gt 0 ]; then
-                PCT=$(( COVERED * 100 / TOTAL ))
-                echo "- **${module}**: ${PCT}% (${COVERED}/${TOTAL} branches)" >> "$GITHUB_STEP_SUMMARY"
-              fi
-            fi
-          done
+        run: python3 .github/scripts/aggregate-kover-coverage.py coverage-artifacts
 
   # ── 8. 프론트엔드 빌드 검증 ───────────────────────────────────────────────────
   build-frontend:
