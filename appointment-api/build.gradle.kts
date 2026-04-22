@@ -31,7 +31,8 @@ dependencies {
     // OpenAPI / Swagger
     implementation(Libs.springdoc_openapi_starter_webmvc_ui)
 
-    // Flyway
+    // Flyway (spring-boot-flyway: Spring Boot 4.x에서 FlywayAutoConfiguration이 별도 모듈로 분리됨)
+    implementation(Libs.springBoot("flyway"))
     implementation(Libs.flyway_core)
     runtimeOnly(Libs.flyway_database_postgresql)
     runtimeOnly(Libs.flyway_mysql)

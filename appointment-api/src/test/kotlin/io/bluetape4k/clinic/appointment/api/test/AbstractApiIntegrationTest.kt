@@ -3,8 +3,25 @@ package io.bluetape4k.clinic.appointment.api.test
 import io.bluetape4k.logging.KLogging
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.context.ActiveProfilesResolver
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
+
+/**
+ * `spring.profiles.active` 시스템 프로퍼티에 따라 DB 프로파일을 동적으로 활성화한다.
+ *
+ * 기본은 `test` 프로파일(H2)이며, `test-postgresql` 또는 `test-mysql` 포함 시 해당 프로파일을 추가한다.
+ */
+class DatabaseProfileResolver : ActiveProfilesResolver {
+    override fun resolve(testClass: Class<*>): Array<String> {
+        val sysProfiles = System.getProperty("spring.profiles.active", "")
+        return buildList {
+            add("test")
+            if ("test-postgresql" in sysProfiles) add("test-postgresql")
+            if ("test-mysql" in sysProfiles) add("test-mysql")
+        }.toTypedArray()
+    }
+}
 
 /**
  * API 통합 테스트 기반 클래스.
@@ -20,7 +37,7 @@ import org.springframework.test.context.DynamicPropertySource
  * ```
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
+@ActiveProfiles(resolver = DatabaseProfileResolver::class)
 abstract class AbstractApiIntegrationTest {
 
     companion object : KLogging() {
@@ -35,6 +52,7 @@ abstract class AbstractApiIntegrationTest {
                     registry.add("spring.datasource.url") { pg.jdbcUrl!! }
                     registry.add("spring.datasource.username") { pg.username ?: "test" }
                     registry.add("spring.datasource.password") { pg.password ?: "" }
+                    registry.add("spring.flyway.enabled") { "true" }
                 }
 
                 activeProfiles.contains("test-mysql") -> {
@@ -42,6 +60,7 @@ abstract class AbstractApiIntegrationTest {
                     registry.add("spring.datasource.url") { mysql.jdbcUrl!! }
                     registry.add("spring.datasource.username") { mysql.username ?: "test" }
                     registry.add("spring.datasource.password") { mysql.password ?: "" }
+                    registry.add("spring.flyway.enabled") { "true" }
                 }
             }
         }
