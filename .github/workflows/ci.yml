@@ -294,6 +294,15 @@ jobs:
         if: always()
         run: python3 .github/scripts/aggregate-kover-coverage.py coverage-artifacts
 
+      - name: Upload to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          directory: coverage-artifacts
+          files: '**/*.xml'
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
   # ── 8. 프론트엔드 빌드 검증 ───────────────────────────────────────────────────
   build-frontend:
     name: Build / Frontend (Angular)
