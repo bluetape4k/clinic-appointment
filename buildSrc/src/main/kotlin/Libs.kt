@@ -9,7 +9,7 @@ object Plugins {
         const val detekt = "1.23.8"     // https://mvnrepository.com/artifact/io.gitlab.arturbosch.detekt/detekt-gradle-plugin
         const val dependency_management = "1.1.7"  // https://mvnrepository.com/artifact/io.spring.gradle/dependency-management-plugin
 
-        const val jacoco = "0.8.13"
+        const val kover = "0.9.8"      // https://github.com/Kotlin/kotlinx-kover/releases
         const val jarTest = "1.0.1"
         const val testLogger = "4.0.0"
         const val shadow = "9.2.2"      // https://plugins.gradle.org/plugin/com.gradleup.shadow
@@ -33,6 +33,9 @@ object Plugins {
 
     // https://docs.gatling.io/reference/extensions/build-tools/gradle-plugin/
     const val gatling = "io.gatling.gradle"
+
+    // https://github.com/Kotlin/kotlinx-kover — Kotlin code coverage (inline/suspend 정확 지원)
+    const val kover = "org.jetbrains.kotlinx.kover"
 }
 
 object Versions {

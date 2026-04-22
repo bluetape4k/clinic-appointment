@@ -21,6 +21,8 @@ plugins {
     id(Plugins.testLogger) version Plugins.Versions.testLogger
     id(Plugins.shadow) version Plugins.Versions.shadow apply false
     id(Plugins.gatling) version Plugins.Versions.gatling apply false
+
+    id(Plugins.kover) version Plugins.Versions.kover
 }
 
 allprojects {
@@ -46,11 +48,7 @@ subprojects {
         plugin(Plugins.dependency_management)
         plugin(Plugins.dokka)
         plugin(Plugins.testLogger)
-        plugin("jacoco")
-    }
-
-    configure<JacocoPluginExtension> {
-        toolVersion = Plugins.Versions.jacoco
+        plugin(Plugins.kover)
     }
 
     java {
@@ -133,15 +131,6 @@ subprojects {
         testlogger {
             theme = com.adarshr.gradle.testlogger.theme.ThemeType.MOCHA_PARALLEL
             showFullStackTraces = true
-        }
-
-        withType<JacocoReport>().configureEach {
-            dependsOn(test)
-            reports {
-                xml.required = true
-                csv.required = true
-                html.required = true
-            }
         }
 
         val reportMerge by registering(ReportMergeTask::class) {
@@ -257,4 +246,11 @@ subprojects {
         testImplementation(Libs.datafaker)
         testImplementation(Libs.random_beans)
     }
+}
+
+// ─── Kover 집계 설정 ────────────────────────────────────────────────────
+// 루트에서 커버리지 측정 대상 서브모듈을 `kover` 의존성으로 등록하면
+// `./gradlew koverXmlReport` / `koverHtmlReport` 실행 시 집계 리포트를 생성한다.
+dependencies {
+    subprojects.forEach { sub -> kover(project(sub.path)) }
 }
