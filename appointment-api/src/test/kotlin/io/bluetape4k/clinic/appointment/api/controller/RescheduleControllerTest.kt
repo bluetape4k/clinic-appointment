@@ -19,15 +19,21 @@ import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.logging.KLogging
-import org.assertj.core.api.Assertions.assertThat
+import org.amshove.kluent.shouldBeEmpty
+import org.amshove.kluent.shouldBeEqualTo
+import org.amshove.kluent.shouldBeNull
+import org.amshove.kluent.shouldBePositive
+import org.amshove.kluent.shouldBeTrue
+import org.amshove.kluent.shouldHaveSize
+import org.amshove.kluent.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
@@ -39,7 +45,9 @@ import java.time.LocalTime
 
 class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
-    companion object : KLogging()
+    companion object : KLogging() {
+        private const val BASE_URL = "/api/appointments"
+    }
 
     @LocalServerPort
     private var port: Int = 0
@@ -147,24 +155,24 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
     @Test
     fun `POST closure - 휴진 일괄 재배정 후보 생성`() {
         val response = client.post()
-            .uri("/api/appointments/{id}/reschedule/closure?clinicId={clinicId}&closureDate={date}",
+            .uri("$BASE_URL/{id}/reschedule/closure?clinicId={clinicId}&closureDate={date}",
                 appointmentId, clinicId, "2026-04-06")
             .contentType(MediaType.APPLICATION_JSON)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
     }
 
     @Test
     fun `GET candidates - 재배정 후보 조회 (후보 없을 때 빈 목록)`() {
         val response = client.get()
-            .uri("/api/appointments/{id}/reschedule/candidates", appointmentId)
+            .uri("$BASE_URL/{id}/reschedule/candidates", appointmentId)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<List<*>>("$.data")).isEmpty()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldBeEmpty()
     }
 
     @Test
@@ -182,13 +190,13 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
         }
 
         val response = client.get()
-            .uri("/api/appointments/{id}/reschedule/candidates", appointmentId)
+            .uri("$BASE_URL/{id}/reschedule/candidates", appointmentId)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<List<*>>("$.data")).hasSize(1)
-        assertThat(response.jsonPath<String>("$.data[0].candidateDate")).isEqualTo("2026-04-07")
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<List<*>>("$.data").shouldNotBeNull() shouldHaveSize 1
+        response.jsonPath<String>("$.data[0].candidateDate") shouldBeEqualTo "2026-04-07"
     }
 
     @Test
@@ -206,25 +214,25 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
         }
 
         val response = client.post()
-            .uri("/api/appointments/{id}/reschedule/confirm/{candidateId}", appointmentId, candidateId)
+            .uri("$BASE_URL/{id}/reschedule/confirm/{candidateId}", appointmentId, candidateId)
             .contentType(MediaType.APPLICATION_JSON)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<Int>("$.data")).isPositive()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<Int>("$.data").shouldNotBeNull().shouldBePositive()
     }
 
     @Test
     fun `POST auto - 자동 재배정 (후보 없을 때 null)`() {
         val response = client.post()
-            .uri("/api/appointments/{id}/reschedule/auto", appointmentId)
+            .uri("$BASE_URL/{id}/reschedule/auto", appointmentId)
             .contentType(MediaType.APPLICATION_JSON)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<Any?>("$.data")).isNull()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<Any?>("$.data").shouldBeNull()
     }
 
     @Test
@@ -242,12 +250,12 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
         }
 
         val response = client.post()
-            .uri("/api/appointments/{id}/reschedule/auto", appointmentId)
+            .uri("$BASE_URL/{id}/reschedule/auto", appointmentId)
             .contentType(MediaType.APPLICATION_JSON)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<Int>("$.data")).isPositive()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<Int>("$.data").shouldNotBeNull().shouldBePositive()
     }
 }

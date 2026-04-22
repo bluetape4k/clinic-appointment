@@ -20,14 +20,20 @@ import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.logging.KLogging
-import org.assertj.core.api.Assertions.assertThat
+import org.amshove.kluent.shouldBeEmpty
+import org.amshove.kluent.shouldBeEqualTo
+import org.amshove.kluent.shouldBeFalse
+import org.amshove.kluent.shouldBeTrue
+import org.amshove.kluent.shouldContain
+import org.amshove.kluent.shouldNotBeEmpty
+import org.amshove.kluent.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
-import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.web.server.LocalServerPort
@@ -40,7 +46,9 @@ import java.time.LocalTime
 
 class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
-    companion object: KLogging()
+    companion object : KLogging() {
+        private const val CLINICS_BASE_URL = "/api/clinics"
+    }
 
     @LocalServerPort
     private var port: Int = 0
@@ -120,16 +128,16 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         """.trimIndent()
 
         val response = client.post()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities", clinicId, equipmentId)
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities", clinicId, equipmentId)
             .contentType(MediaType.APPLICATION_JSON)
             .body(body)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.CREATED)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<String>("$.data.unavailableDate")).isEqualTo("2026-04-10")
-        assertThat(response.jsonPath<Boolean>("$.data.isRecurring")).isFalse()
-        assertThat(response.jsonPath<String>("$.data.reason")).isEqualTo("정기 점검")
+        response.statusCode shouldBeEqualTo HttpStatus.CREATED
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<String>("$.data.unavailableDate") shouldBeEqualTo "2026-04-10"
+        response.jsonPath<Boolean>("$.data.isRecurring").shouldBeFalse()
+        response.jsonPath<String>("$.data.reason") shouldBeEqualTo "정기 점검"
     }
 
     @Test
@@ -147,15 +155,15 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         """.trimIndent()
 
         val response = client.post()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities", clinicId, equipmentId)
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities", clinicId, equipmentId)
             .contentType(MediaType.APPLICATION_JSON)
             .body(body)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.CREATED)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<Boolean>("$.data.isRecurring")).isTrue()
-        assertThat(response.jsonPath<String>("$.data.recurringDayOfWeek")).isEqualTo("WEDNESDAY")
+        response.statusCode shouldBeEqualTo HttpStatus.CREATED
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<Boolean>("$.data.isRecurring").shouldBeTrue()
+        response.jsonPath<String>("$.data.recurringDayOfWeek") shouldBeEqualTo "WEDNESDAY"
     }
 
     @Test
@@ -163,13 +171,13 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         createTestUnavailability()
 
         val response = client.get()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities?from={from}&to={to}",
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities?from={from}&to={to}",
                 clinicId, equipmentId, "2026-04-01", "2026-04-30")
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<List<*>>("$.data")).isNotEmpty()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldNotBeEmpty()
     }
 
     @Test
@@ -178,13 +186,13 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
 
         // effectiveFrom=2026-04-10 이전 범위를 조회하면 결과가 없어야 함
         val response = client.get()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities?from={from}&to={to}",
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities?from={from}&to={to}",
                 clinicId, equipmentId, "2026-03-01", "2026-03-31")
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<List<*>>("$.data")).isEmpty()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldBeEmpty()
     }
 
     @Test
@@ -203,16 +211,16 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         """.trimIndent()
 
         val response = client.put()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}",
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}",
                 clinicId, equipmentId, unavailabilityId)
             .contentType(MediaType.APPLICATION_JSON)
             .body(body)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<String>("$.data.unavailableDate")).isEqualTo("2026-04-15")
-        assertThat(response.jsonPath<String>("$.data.reason")).isEqualTo("수정된 점검")
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<String>("$.data.unavailableDate") shouldBeEqualTo "2026-04-15"
+        response.jsonPath<String>("$.data.reason") shouldBeEqualTo "수정된 점검"
     }
 
     @Test
@@ -228,13 +236,13 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         """.trimIndent()
 
         val response = client.put()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}",
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}",
                 clinicId, equipmentId, 999999)
             .contentType(MediaType.APPLICATION_JSON)
             .body(body)
             .execute()
 
-        assertThat(response.statusCode.value()).isIn(404, 500)
+        listOf(404, 500) shouldContain response.statusCode.value()
     }
 
     @Test
@@ -242,11 +250,11 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         val unavailabilityId = createTestUnavailability()
 
         val response = client.delete()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}",
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}",
                 clinicId, equipmentId, unavailabilityId)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.NO_CONTENT)
+        response.statusCode shouldBeEqualTo HttpStatus.NO_CONTENT
     }
 
     @Test
@@ -262,16 +270,16 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         """.trimIndent()
 
         val response = client.post()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}/exceptions",
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}/exceptions",
                 clinicId, equipmentId, unavailabilityId)
             .contentType(MediaType.APPLICATION_JSON)
             .body(body)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.CREATED)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<String>("$.data.exceptionType")).isEqualTo("SKIP")
-        assertThat(response.jsonPath<String>("$.data.originalDate")).isEqualTo("2026-04-09")
+        response.statusCode shouldBeEqualTo HttpStatus.CREATED
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<String>("$.data.exceptionType") shouldBeEqualTo "SKIP"
+        response.jsonPath<String>("$.data.originalDate") shouldBeEqualTo "2026-04-09"
     }
 
     @Test
@@ -290,16 +298,16 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         """.trimIndent()
 
         val response = client.post()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}/exceptions",
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}/exceptions",
                 clinicId, equipmentId, unavailabilityId)
             .contentType(MediaType.APPLICATION_JSON)
             .body(body)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.CREATED)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<String>("$.data.exceptionType")).isEqualTo("RESCHEDULE")
-        assertThat(response.jsonPath<String>("$.data.rescheduledDate")).isEqualTo("2026-04-10")
+        response.statusCode shouldBeEqualTo HttpStatus.CREATED
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<String>("$.data.exceptionType") shouldBeEqualTo "RESCHEDULE"
+        response.jsonPath<String>("$.data.rescheduledDate") shouldBeEqualTo "2026-04-10"
     }
 
     @Test
@@ -308,11 +316,11 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         val exceptionId = createTestException(unavailabilityId)
 
         val response = client.delete()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}/exceptions/{exId}",
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}/exceptions/{exId}",
                 clinicId, equipmentId, unavailabilityId, exceptionId)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.NO_CONTENT)
+        response.statusCode shouldBeEqualTo HttpStatus.NO_CONTENT
     }
 
     @Test
@@ -320,14 +328,14 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         val unavailabilityId = createTestUnavailability()
 
         val response = client.get()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}/conflicts",
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}/conflicts",
                 clinicId, equipmentId, unavailabilityId)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<Int>("$.data.conflictCount")).isZero()
-        assertThat(response.jsonPath<List<*>>("$.data.conflicts")).isEmpty()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<Int>("$.data.conflictCount") shouldBeEqualTo 0
+        response.jsonPath<List<*>>("$.data.conflicts").shouldNotBeNull().shouldBeEmpty()
     }
 
     @Test
@@ -343,15 +351,15 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         """.trimIndent()
 
         val response = client.post()
-            .uri("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/preview-conflicts",
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities/preview-conflicts",
                 clinicId, equipmentId)
             .contentType(MediaType.APPLICATION_JSON)
             .body(body)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<Int>("$.data.conflictCount")).isNotNull()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<Int>("$.data.conflictCount").shouldNotBeNull()
     }
 
     private fun createTestUnavailability(): Long =
