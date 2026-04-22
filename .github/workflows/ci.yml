@@ -294,14 +294,13 @@ jobs:
         if: always()
         run: python3 .github/scripts/aggregate-kover-coverage.py coverage-artifacts
 
-      - name: Upload to Codecov
+      - name: Upload to Coveralls
         if: always()
-        uses: codecov/codecov-action@v5
+        uses: coverallsapp/github-action@v2
         with:
-          directory: coverage-artifacts
-          files: '**/*.xml'
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+          files: coverage-artifacts/**/*.xml
+          token: ${{ secrets.COVERALLS_REPO_TOKEN }}
+          fail-on-error: false
 
   # ── 8. 프론트엔드 빌드 검증 ───────────────────────────────────────────────────
   build-frontend:
