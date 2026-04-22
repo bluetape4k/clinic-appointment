@@ -31,16 +31,14 @@ def parse_report(path: str) -> tuple[int, int]:
 
 
 def module_from_path(root_dir: str, path: str) -> str:
-    # Expected layout after artifact download:
-    #   <root>/coverage-<area>/<module>/reports/kover/report.xml
-    # Kover redirects every subproject build dir to rootProject/build/<module>/,
-    # so the module dir is the parent of `reports/`.
+    # Standard Gradle layout: <module>/build/reports/kover/report.xml
+    # Find the first 'build' segment and return the segment before it.
     rel = os.path.relpath(path, root_dir)
     parts = rel.split(os.sep)
-    for i in range(len(parts) - 1, -1, -1):
-        if parts[i] == "reports" and i >= 1:
+    for i, part in enumerate(parts):
+        if part == "build" and i >= 1:
             return parts[i - 1]
-    return os.path.basename(os.path.dirname(os.path.dirname(path)))
+    return parts[0] if parts else "unknown"
 
 
 def main() -> int:
