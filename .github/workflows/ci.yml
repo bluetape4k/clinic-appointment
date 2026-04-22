@@ -127,7 +127,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-core
-          path: 'build/*/reports/kover/'
+          path: '**/build/reports/kover/'
           retention-days: 7
 
   # ── 4. Solver 모듈 테스트 (appointment-solver) ───────────────────────────────
@@ -171,7 +171,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-solver
-          path: 'build/*/reports/kover/'
+          path: '**/build/reports/kover/'
           retention-days: 7
 
   # ── 5. API 모듈 테스트 (appointment-api, H2 / PostgreSQL / MySQL 병렬) ──────────
@@ -226,7 +226,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-api-${{ matrix.db }}
-          path: 'build/*/reports/kover/'
+          path: '**/build/reports/kover/'
           retention-days: 7
 
   # ── 6. Notification 모듈 테스트 (appointment-notification) ───────────────────
@@ -271,7 +271,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-notification
-          path: 'build/*/reports/kover/'
+          path: '**/build/reports/kover/'
           retention-days: 7
 
   # ── 7. 커버리지 집계 ─────────────────────────────────────────────────────────
