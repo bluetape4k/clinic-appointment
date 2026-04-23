@@ -11,6 +11,7 @@ build/
 out/
 
 # Kotlin
+.kotlin/
 *.class
 
 # OS
