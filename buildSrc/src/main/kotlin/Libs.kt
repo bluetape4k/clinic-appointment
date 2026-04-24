@@ -41,9 +41,9 @@ object Plugins {
 object Versions {
 
     // Java 21, Kotlin 2.3 이상에서 사용하세요
-    const val bluetape4k = "1.6.2"    // https://mvnrepository.com/artifact/io.github.bluetape4k/bluetape4k-bom
+    const val bluetape4k = "1.7.0"    // https://mvnrepository.com/artifact/io.github.bluetape4k/bluetape4k-bom
 
-    const val kotlin = "2.3.20"                 // https://mvnrepository.com/artifact/org.jetbrains.kotlin/kotlin-stdlib
+    const val kotlin = "2.3.21"                 // https://mvnrepository.com/artifact/org.jetbrains.kotlin/kotlin-stdlib
     const val kotlinx_coroutines = "1.10.2"     // https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
 
     const val spring_boot4 = Plugins.Versions.spring_boot4
@@ -109,6 +109,8 @@ object Libs {
     val bluetape4k_coroutines = bluetape4k("coroutines")
     val bluetape4k_logging = bluetape4k("logging")
     val bluetape4k_junit5 = bluetape4k("junit5")
+    val bluetape4k_mock_web_server = bluetape4k("mock-web-server")
+    val bluetape4k_mock_webflux_server = bluetape4k("mock-webflux-server")
     val bluetape4k_testcontainers = bluetape4k("testcontainers")
 
     // Virtual Thread
@@ -118,7 +120,6 @@ object Libs {
 
     // IO
     val bluetape4k_avro = bluetape4k("avro")
-    val bluetape4k_crypto = bluetape4k("crypto")
     val bluetape4k_csv = bluetape4k("csv")
     val bluetape4k_fastjson2 = bluetape4k("fastjson2")
     val bluetape4k_feign = bluetape4k("feign")
@@ -127,6 +128,7 @@ object Libs {
     val bluetape4k_io = bluetape4k("io")
     val bluetape4k_jackson2 = bluetape4k("jackson2")
     val bluetape4k_jackson3 = bluetape4k("jackson3")
+    val bluetape4k_lingua = bluetape4k("lingua")
     val bluetape4k_json = bluetape4k("json")
     val bluetape4k_netty = bluetape4k("netty")
     val bluetape4k_okio = bluetape4k("okio")
@@ -148,7 +150,6 @@ object Libs {
     val bluetape4k_exposed_fastjson2 = bluetape4k("exposed-fastjson2")
     val bluetape4k_exposed_jackson2 = bluetape4k("exposed-jackson2")
     val bluetape4k_exposed_jackson3 = bluetape4k("exposed-jackson3")
-    val bluetape4k_exposed_jasypt = bluetape4k("exposed-jasypt")
     val bluetape4k_exposed_jdbc_caffeine = bluetape4k("exposed-jdbc-caffeine")
     val bluetape4k_exposed_jdbc_lettuce = bluetape4k("exposed-jdbc-lettuce")
     val bluetape4k_exposed_jdbc_redisson = bluetape4k("exposed-jdbc-redisson")
