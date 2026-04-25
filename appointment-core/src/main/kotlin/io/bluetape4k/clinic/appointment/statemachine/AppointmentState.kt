@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.statemachine
 
+import java.io.Serializable
+
 /**
  * 예약 상태를 나타내는 sealed class.
  *
@@ -21,11 +23,15 @@ package io.bluetape4k.clinic.appointment.statemachine
  *     → CANCELLED
  *   → CANCELLED
  * ```
+ *
+ * @property name DB와 API에서 사용하는 상태 이름
  */
 sealed class AppointmentState(
     val name: String,
-) {
+) : Serializable {
     companion object {
+        private const val serialVersionUID = 1L
+
         val ACTIVE_STATUSES: List<AppointmentState> by lazy { listOf(REQUESTED, CONFIRMED) }
         val ACTIVE_STATUS_NAMES: List<String> by lazy { ACTIVE_STATUSES.map { it.name } }
 

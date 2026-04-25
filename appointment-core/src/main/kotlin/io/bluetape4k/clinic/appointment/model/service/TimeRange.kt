@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.model.service
 
+import java.io.Serializable
 import java.time.Duration
 import java.time.LocalTime
 
@@ -12,7 +13,11 @@ import java.time.LocalTime
 data class TimeRange(
     val start: LocalTime,
     val end: LocalTime,
-) {
+) : Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+
     init {
         require(start < end) { "start($start) must be before end($end)" }
     }

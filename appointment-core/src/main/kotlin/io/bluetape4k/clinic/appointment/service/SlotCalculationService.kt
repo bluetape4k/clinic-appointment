@@ -18,6 +18,13 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
  * 예약 가능한 슬롯을 계산하는 서비스.
  *
  * JDBC Exposed 트랜잭션을 사용하며, Spring Bean이 아닌 일반 클래스입니다.
+ *
+ * @param clinicRepository 병원 운영 정보 Repository
+ * @param doctorRepository 의사 스케줄 Repository
+ * @param treatmentTypeRepository 진료 유형 Repository
+ * @param appointmentRepository 기존 예약 Repository
+ * @param holidayRepository 휴일 Repository
+ * @param equipmentUnavailabilityService 장비 사용불가 서비스
  */
 class SlotCalculationService(
     private val clinicRepository: ClinicRepository = ClinicRepository(),

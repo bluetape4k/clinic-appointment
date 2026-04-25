@@ -26,6 +26,8 @@ import java.time.LocalDate
  *
  * 병원 휴진, 의사 임시휴진 시 영향받는 예약을 재배정하고
  * 관리자가 수동으로 재배정 후보를 선택할 수 있는 API를 제공합니다.
+ *
+ * @param closureRescheduleService 휴진 재배정 서비스
  */
 @RestController
 @RequestMapping("/api/appointments/{id}/reschedule")

@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController
  * 진료 유형 조회 REST 컨트롤러.
  *
  * 병원별 진료 유형 목록, 개별 진료 유형 정보, 필요 장비 조회 API를 제공합니다.
+ *
+ * @param treatmentTypeRepository 진료 유형 Repository
  */
 @RestController
 @RequestMapping("/api")

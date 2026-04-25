@@ -22,6 +22,8 @@ import java.time.LocalDate
  * 의사 정보 조회 REST 컨트롤러.
  *
  * 병원별 의사 목록, 개별 의사 정보, 운영 스케줄, 휴무 정보 조회 API를 제공합니다.
+ *
+ * @param doctorRepository 의사 Repository
  */
 @RestController
 @RequestMapping("/api")

@@ -16,6 +16,14 @@ import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import java.time.LocalDate
 
+/**
+ * 예약 API 유스케이스 서비스.
+ *
+ * @param appointmentRepository 예약 Repository
+ * @param stateMachine 예약 상태 전이 검증기
+ * @param eventPublisher 예약 도메인 이벤트 발행기
+ * @param stateHistoryRepository 예약 상태 이력 Repository
+ */
 @Service
 class AppointmentService(
     private val appointmentRepository: AppointmentRepository,

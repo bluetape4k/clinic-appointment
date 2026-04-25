@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RestController
  * 클리닉(병원) 정보 조회 REST 컨트롤러.
  *
  * 병원 목록, 개별 병원 정보, 운영 시간, 휴식 시간 조회 API를 제공합니다.
+ *
+ * @param clinicRepository 병원 Repository
  */
 @RestController
 @RequestMapping("/api/clinics")

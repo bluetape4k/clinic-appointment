@@ -14,6 +14,8 @@ import org.springframework.web.filter.OncePerRequestFilter
  *
  * Authorization 헤더에서 Bearer 토큰을 추출하여 검증하고,
  * SecurityContext에 인증 정보를 설정합니다.
+ *
+ * @param jwtTokenParser JWT 토큰 검증 및 Claims 파서
  */
 class JwtAuthenticationFilter(
     private val jwtTokenParser: JwtTokenParser,

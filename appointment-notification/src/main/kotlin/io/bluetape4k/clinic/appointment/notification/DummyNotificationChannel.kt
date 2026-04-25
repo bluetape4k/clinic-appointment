@@ -10,6 +10,8 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
  *
  * 로그 출력 + NotificationHistory 테이블에 이력 저장.
  * 운영 환경에서는 Feign 기반 외부 서비스 호출 구현체로 교체합니다.
+ *
+ * @param historyRepository 알림 이력 Repository
  */
 class DummyNotificationChannel(
     private val historyRepository: NotificationHistoryRepository,

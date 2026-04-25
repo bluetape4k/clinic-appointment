@@ -18,6 +18,12 @@ import java.time.LocalDate
  * 매시간 실행되어 내일/오늘 예약 중 CONFIRMED 상태인 예약에 리마인더를 발송합니다.
  * HA 환경에서는 [LettuceLeaderGroupElection]을 통해 리더로 선출된 인스턴스만 실행합니다.
  * 이미 발송한 리마인더는 중복 방지합니다.
+ *
+ * @param notificationChannel 알림 발송 채널
+ * @param appointmentRepository 예약 Repository
+ * @param historyRepository 알림 이력 Repository
+ * @param properties 알림 설정
+ * @param leaderElection Redis 기반 리더 선출기
  */
 @Component
 class AppointmentReminderScheduler(
