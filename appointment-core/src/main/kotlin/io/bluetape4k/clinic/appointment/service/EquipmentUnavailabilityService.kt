@@ -20,6 +20,9 @@ import java.time.LocalTime
  * 장비 사용불가 기간을 관리하는 서비스.
  *
  * JDBC Exposed 트랜잭션을 사용하며, Spring Bean이 아닌 일반 클래스입니다.
+ *
+ * @param repo 장비 사용불가 Repository
+ * @param appointmentRepository 충돌 예약 조회 Repository
  */
 class EquipmentUnavailabilityService(
     private val repo: EquipmentUnavailabilityRepository = EquipmentUnavailabilityRepository(),

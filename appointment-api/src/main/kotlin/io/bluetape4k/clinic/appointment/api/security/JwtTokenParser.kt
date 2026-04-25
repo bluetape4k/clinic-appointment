@@ -11,6 +11,8 @@ import java.util.Base64
  * JWT 토큰 파싱 및 검증.
  *
  * 외부 인증 서비스가 발급한 JWT를 검증하고 Claims를 추출합니다.
+ *
+ * @param properties JWT 보안 설정
  */
 class JwtTokenParser(
     private val properties: JwtSecurityProperties,

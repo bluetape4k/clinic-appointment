@@ -39,6 +39,8 @@ import java.util.Locale
  *     ↓  응답 시 Clinics.timezone 포함
  * Frontend (ZonedDateTime 복원 가능)
  * ```
+ *
+ * @param clinicRepository 병원 Repository
  */
 class ClinicTimezoneService(
     private val clinicRepository: ClinicRepository,

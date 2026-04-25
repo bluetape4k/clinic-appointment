@@ -23,6 +23,12 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
+/**
+ * 예약 REST 컨트롤러.
+ *
+ * @param appointmentService 예약 유스케이스 서비스
+ * @param timezoneService 병원 타임존 조회 서비스
+ */
 @RestController
 @RequestMapping("/api/appointments")
 class AppointmentController(

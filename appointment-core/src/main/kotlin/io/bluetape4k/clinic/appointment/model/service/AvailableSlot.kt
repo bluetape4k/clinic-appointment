@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.model.service
 
+import java.io.Serializable
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -20,4 +21,8 @@ data class AvailableSlot(
     val doctorId: Long,
     val equipmentIds: List<Long> = emptyList(),
     val remainingCapacity: Int,
-)
+) : Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}

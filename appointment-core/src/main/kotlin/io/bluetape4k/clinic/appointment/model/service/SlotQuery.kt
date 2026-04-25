@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.model.service
 
+import java.io.Serializable
 import java.time.LocalDate
 
 /**
@@ -17,4 +18,8 @@ data class SlotQuery(
     val treatmentTypeId: Long,
     val date: LocalDate,
     val requestedDurationMinutes: Int? = null,
-)
+) : Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}

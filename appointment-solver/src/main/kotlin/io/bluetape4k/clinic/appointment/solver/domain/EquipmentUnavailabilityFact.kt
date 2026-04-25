@@ -9,6 +9,11 @@ import java.time.LocalTime
  *
  * [ScheduleSolution]에 [ai.timefold.solver.core.api.domain.solution.ProblemFactCollectionProperty]로 등록되어
  * Hard Constraint H11에서 참조됩니다.
+ *
+ * @property equipmentId 장비 ID
+ * @property date 사용불가 날짜
+ * @property startTime 사용불가 시작 시간
+ * @property endTime 사용불가 종료 시간
  */
 data class EquipmentUnavailabilityFact(
     val equipmentId: Long,

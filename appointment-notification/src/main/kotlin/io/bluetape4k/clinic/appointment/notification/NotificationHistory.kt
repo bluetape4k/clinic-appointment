@@ -44,6 +44,16 @@ object NotificationEventType {
 
 /**
  * 알림 발송 이력 레코드.
+ *
+ * @property id 알림 이력 ID
+ * @property appointmentId 예약 ID
+ * @property channelType 알림 채널 유형
+ * @property eventType 알림 이벤트 유형
+ * @property recipient 수신자
+ * @property payloadJson 알림 페이로드 JSON
+ * @property status 발송 상태
+ * @property errorMessage 실패 오류 메시지
+ * @property createdAt 생성 시각
  */
 data class NotificationHistoryRecord(
     val id: Long? = null,

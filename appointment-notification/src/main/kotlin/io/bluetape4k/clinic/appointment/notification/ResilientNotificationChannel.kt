@@ -19,6 +19,11 @@ import java.time.Duration
  * 실제 [NotificationChannel] 구현체를 감싸서
  * CircuitBreaker, Retry, Bulkhead를 적용합니다.
  * 외부 알림 서비스 호출 시 장애 격리를 보장합니다.
+ *
+ * @param delegate 실제 알림 채널 구현체
+ * @param circuitBreaker 알림 호출 CircuitBreaker
+ * @param retry 알림 호출 Retry
+ * @param bulkhead 알림 호출 Bulkhead
  */
 class ResilientNotificationChannel(
     private val delegate: NotificationChannel,

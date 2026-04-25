@@ -18,6 +18,13 @@ import java.time.LocalDate
  * Solver 실행 진입점.
  *
  * Repository에서 데이터를 로딩하고 Solver를 실행하여 최적화된 예약 배치를 반환합니다.
+ *
+ * @param clinicRepository 병원 데이터 조회 Repository
+ * @param doctorRepository 의사 데이터 조회 Repository
+ * @param appointmentRepository 예약 데이터 조회 Repository
+ * @param treatmentTypeRepository 진료 유형 데이터 조회 Repository
+ * @param holidayRepository 휴일 데이터 조회 Repository
+ * @param solverFactory 기본 SolverFactory
  */
 class SolverService(
     private val clinicRepository: ClinicRepository = ClinicRepository(),
