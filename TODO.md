@@ -28,13 +28,13 @@
 
 ### 도입 예정 모듈
 
-| 모듈 | 용도 | 우선순위 |
-|------|------|----------|
-| `bluetape4k-cache-core` | Caffeine 기반 로컬 캐시 추상화 | **HIGH** |
-| `bluetape4k-exposed-jdbc-caffeine` | Exposed 쿼리 결과 Caffeine 캐싱 | **HIGH** |
-| `bluetape4k-jackson3` | Jackson 3 직렬화 유틸 | MEDIUM |
-| `bluetape4k-http` | HTTP 클라이언트 확장 (테스트 시) | LOW |
-| `bluetape4k-virtualthread-jdk25` | Virtual Thread 지원 | LOW |
+| 모듈 | 용도 | 우선순위 | 이슈 |
+|------|------|----------|------|
+| `bluetape4k-cache-core` | Caffeine 기반 로컬 캐시 추상화 | **HIGH** | [EPIC #12](https://github.com/bluetape4k/clinic-appointment/issues/12) |
+| `bluetape4k-exposed-jdbc-caffeine` | Exposed 쿼리 결과 Caffeine 캐싱 | **HIGH** | [#20](https://github.com/bluetape4k/clinic-appointment/issues/20) |
+| `bluetape4k-jackson3` | Jackson 3 직렬화 유틸 | MEDIUM | [#49](https://github.com/bluetape4k/clinic-appointment/issues/49) |
+| `bluetape4k-http` | HTTP 클라이언트 확장 (테스트 시) | LOW | — |
+| `bluetape4k-virtualthread-jdk25` | Virtual Thread 지원 | LOW | — |
 
 ### 활용 가이드라인
 
@@ -98,14 +98,14 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 - 마이그레이션 비용 32-48 영업일 — ROI 부적합
 - Angular는 헬스케어/규제 도메인에서 지배적 (opinionated 구조, 필수 TypeScript)
 
-### 할 일
+### 할 일 ([EPIC #13](https://github.com/bluetape4k/clinic-appointment/issues/13))
 
-- ⬜ Capacitor 프로젝트 초기화 (`@capacitor/core`, `@capacitor/ios`, `@capacitor/android`)
-- ⬜ iOS Safari WebView + Android WebView 통합 테스트
-- ⬜ PWA 지원 강화 (`@angular/pwa`, Service Worker, 오프라인 캐싱)
-- ⬜ 모바일 UX 최적화 (뷰포트, 터치 제스처, Safe Area, 키보드 처리)
+- ⬜ Capacitor 프로젝트 초기화 (`@capacitor/core`, `@capacitor/ios`, `@capacitor/android`) — [#23](https://github.com/bluetape4k/clinic-appointment/issues/23)
+- ⬜ iOS Safari WebView + Android WebView 통합 테스트 — [#24](https://github.com/bluetape4k/clinic-appointment/issues/24)
+- ⬜ PWA 지원 강화 (`@angular/pwa`, Service Worker, 오프라인 캐싱) — [#25](https://github.com/bluetape4k/clinic-appointment/issues/25)
+- ⬜ 모바일 UX 최적화 (뷰포트, 터치 제스처, Safe Area, 키보드 처리) — [#26](https://github.com/bluetape4k/clinic-appointment/issues/26)
 - ⬜ Lazy loading / code splitting 최적화 (라우트별 번들 분리)
-- ⬜ 네이티브 ↔ WebView 통신 계층 설계 (Deep link, postMessage)
+- ⬜ 네이티브 ↔ WebView 통신 계층 설계 (Deep link, postMessage) — [#27](https://github.com/bluetape4k/clinic-appointment/issues/27)
 
 ---
 
@@ -133,7 +133,7 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 - ✅ `ClinicListComponent` → `ClinicService.getAll()` 연결
 - ✅ 목 데이터(`MOCK_CLINICS`) 제거
 
-### 3.3 하드코딩 clinicId 해소 (MEDIUM)
+### 3.3 하드코딩 clinicId 해소 (MEDIUM) — [#46](https://github.com/bluetape4k/clinic-appointment/issues/46)
 
 8개 컴포넌트에서 `const CLINIC_ID = 1` 또는 `private readonly clinicId = 1` 하드코딩됨:
 
@@ -156,27 +156,27 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 - `/appointments/new`, `/appointments/:id/edit`은 guard 있음 ✅
 - `/management/**` 전체에 `canActivate: [roleGuard]` 필요 (ADMIN/STAFF만 접근)
 
-- ⬜ `management.routes.ts`에 상위 레벨 `canActivate` 추가
+- ⬜ `management.routes.ts`에 상위 레벨 `canActivate` 추가 — [#47](https://github.com/bluetape4k/clinic-appointment/issues/47)
 
-### 3.5 SSE 기반 일괄 재배정 진행 상황 표시 (HIGH)
+### 3.5 SSE 기반 일괄 재배정 진행 상황 표시 (HIGH) — [EPIC #14](https://github.com/bluetape4k/clinic-appointment/issues/14)
 
 건당 예약 취소/변경은 단순 spinner로 충분하지만, 휴진 일괄 재배정은 N건을 순차 처리하므로 실시간 진행 피드백이 필요.
 
 **백엔드:**
-- ⬜ `GET /api/reschedule/batch/stream` — `text/event-stream` SSE 엔드포인트
+- ⬜ `GET /api/reschedule/batch/stream` — `text/event-stream` SSE 엔드포인트 — [#29](https://github.com/bluetape4k/clinic-appointment/issues/29)
 - ⬜ 예약별 처리 결과를 이벤트로 스트리밍: `data: {"appointmentId": N, "status": "SUCCESS|FAILED", "newAppointmentId": M, "progress": "3/15"}`
 - ⬜ 완료 시 `event: complete` + 요약 데이터 전송
 
 **프론트엔드:**
-- ⬜ `RescheduleService`에 `EventSource` 기반 SSE 연결 메서드 추가
-- ⬜ `reschedule-list.component` — 일괄 재배정 시 progress bar + 개별 결과 실시간 테이블 갱신
+- ⬜ `RescheduleService`에 `EventSource` 기반 SSE 연결 메서드 추가 — [#30](https://github.com/bluetape4k/clinic-appointment/issues/30)
+- ⬜ `reschedule-list.component` — 일괄 재배정 시 progress bar + 개별 결과 실시간 테이블 갱신 — [#31](https://github.com/bluetape4k/clinic-appointment/issues/31)
 - ⬜ 연결 실패/타임아웃 시 fallback (polling 또는 에러 표시)
 
 **설계 포인트:**
 - 건당 예약 → spinner (현재 구현 완료)
 - 일괄 재배정 (관리자) → SSE 진행률 + 실시간 결과 스트리밍
 
-### 3.6 환경 설정 파일 (LOW)
+### 3.6 환경 설정 파일 (LOW) — [#48](https://github.com/bluetape4k/clinic-appointment/issues/48)
 
 현재 API baseUrl이 `/api/` 상대경로로 하드코딩. 프로덕션 배포 시 `environment.ts` 구성 필요:
 
@@ -237,7 +237,7 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 ---
 
-## 8. 의존성 관리 (LOW)
+## 8. 의존성 관리 (LOW) — [#49](https://github.com/bluetape4k/clinic-appointment/issues/49)
 
 - ⬜ bluetape4k BOM 버전 최신화 모니터링 (현재 1.6.2)
 - ⬜ Jackson 3 마이그레이션 완료 여부 확인
@@ -247,45 +247,45 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 ## 9. 백로그 — 미구현 요구사항 (`docs/requirements/README.md` 기준)
 
-### 9.1 환자 포털 (MEDIUM)
+### 9.1 환자 포털 (MEDIUM) — [EPIC #15](https://github.com/bluetape4k/clinic-appointment/issues/15)
 
 자가 예약 웹앱 — 환자가 직접 예약/확인/취소하는 별도 프론트엔드.
 
-- ⬜ `appointment-patient-portal` 모듈 신규 생성 (Angular 또는 별도 SPA)
-- ⬜ 환자 인증 (별도 JWT Role: `PATIENT`)
-- ⬜ 예약 생성/조회/취소 UI — 기존 `/api/appointments` 재사용
-- ⬜ 슬롯 선택 캘린더 UI
+- ⬜ `appointment-patient-portal` 모듈 신규 생성 (Angular 또는 별도 SPA) — [#32](https://github.com/bluetape4k/clinic-appointment/issues/32)
+- ⬜ 환자 인증 (별도 JWT Role: `PATIENT`) — [#33](https://github.com/bluetape4k/clinic-appointment/issues/33)
+- ⬜ 예약 생성/조회/취소 UI — 기존 `/api/appointments` 재사용 — [#34](https://github.com/bluetape4k/clinic-appointment/issues/34)
+- ⬜ 슬롯 선택 캘린더 UI — [#35](https://github.com/bluetape4k/clinic-appointment/issues/35)
 - ⬜ 예약 확인 알림 수신 (SSE 또는 polling)
 
-### 9.2 멀티테넌시 — 병원 그룹 데이터 격리 (MEDIUM)
+### 9.2 멀티테넌시 — 병원 그룹 데이터 격리 (MEDIUM) — [EPIC #16](https://github.com/bluetape4k/clinic-appointment/issues/16)
 
 현재 clinicId를 단순 FK로 관리. 병원 그룹(테넌트)별 데이터 격리 필요 시 별도 설계 필요.
 
-- ⬜ 테넌트 ID 전략 결정 (Row-level 격리 vs Schema 분리 vs DB 분리)
-- ⬜ `Clinic` → `TenantGroup` 상위 엔티티 도입 검토
-- ⬜ JWT 토큰에 `tenantId` 클레임 추가 + 스프링 시큐리티 필터 연동
-- ⬜ Exposed Row-level Security 또는 테넌트 필터 인터셉터 구현
-- ⬜ 기존 `clinicId` 하드코딩 해소(섹션 3.3) 이후 진행 권장
+- ⬜ 테넌트 ID 전략 결정 (Row-level 격리 vs Schema 분리 vs DB 분리) — [#36](https://github.com/bluetape4k/clinic-appointment/issues/36)
+- ⬜ `Clinic` → `TenantGroup` 상위 엔티티 도입 검토 — [#37](https://github.com/bluetape4k/clinic-appointment/issues/37)
+- ⬜ JWT 토큰에 `tenantId` 클레임 추가 + 스프링 시큐리티 필터 연동 — [#38](https://github.com/bluetape4k/clinic-appointment/issues/38)
+- ⬜ Exposed Row-level Security 또는 테넌트 필터 인터셉터 구현 — [#39](https://github.com/bluetape4k/clinic-appointment/issues/39)
+- ⬜ 기존 `clinicId` 하드코딩 해소(섹션 3.3, [#46](https://github.com/bluetape4k/clinic-appointment/issues/46)) 이후 진행 권장
 
-### 9.3 메시지 큐 — 비동기 이벤트 처리 (LOW)
+### 9.3 메시지 큐 — 비동기 이벤트 처리 (LOW) — [EPIC #17](https://github.com/bluetape4k/clinic-appointment/issues/17)
 
 현재 Spring `ApplicationEvent`로 동기 처리 중. 대용량/외부 시스템 연동 시 Kafka/RabbitMQ 필요.
 
-- ⬜ Kafka 또는 RabbitMQ 도입 검토 (bluetape4k 지원 여부 확인 선행)
-- ⬜ `appointment-messaging` 신규 모듈 생성
+- ⬜ Kafka 또는 RabbitMQ 도입 검토 (bluetape4k 지원 여부 확인 선행) — [#40](https://github.com/bluetape4k/clinic-appointment/issues/40)
+- ⬜ `appointment-messaging` 신규 모듈 생성 — [#41](https://github.com/bluetape4k/clinic-appointment/issues/41)
 - ⬜ 도메인 이벤트(Created/StatusChanged/Cancelled/Rescheduled) → 메시지 큐 발행
-- ⬜ 외부 시스템(알림, 통계) 구독 컨슈머 구현
+- ⬜ 외부 시스템(알림, 통계) 구독 컨슈머 구현 — [#42](https://github.com/bluetape4k/clinic-appointment/issues/42)
 - ⬜ 이벤트 스키마 버전 관리 (Avro/JSON Schema Registry)
 
-### 9.4 관리자 대시보드 — 통계/분석 (LOW)
+### 9.4 관리자 대시보드 — 통계/분석 (LOW) — [EPIC #18](https://github.com/bluetape4k/clinic-appointment/issues/18)
 
 예약 현황, 의사별 부하, 클리닉 운영 지표를 시각화하는 관리자 전용 뷰.
 
 - ⬜ `appointment-dashboard` 신규 모듈 또는 프론트엔드 `/admin` 라우트 확장
-- ⬜ 집계 쿼리 API 설계 — 일별/주별 예약 건수, 취소율, 의사 부하 분포
+- ⬜ 집계 쿼리 API 설계 — 일별/주별 예약 건수, 취소율, 의사 부하 분포 — [#44](https://github.com/bluetape4k/clinic-appointment/issues/44)
 - ⬜ Exposed `groupBy`/`sum`/`count` 집계 쿼리 구현
-- ⬜ 차트 라이브러리 도입 (Chart.js 또는 Recharts)
-- ⬜ 관리자 Role Guard 연동 (섹션 3.4 완료 선행)
+- ⬜ 차트 라이브러리 도입 (Chart.js 또는 Recharts) — [#45](https://github.com/bluetape4k/clinic-appointment/issues/45)
+- ⬜ 관리자 Role Guard 연동 (섹션 3.4 완료 선행, [#47](https://github.com/bluetape4k/clinic-appointment/issues/47))
 
 ---
 
