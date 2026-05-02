@@ -7,7 +7,7 @@ bluetape4k = "1.7.0"
 kotlin = "2.3.21"
 kotlinx-coroutines = "1.10.2"
 
-spring-boot4 = "4.0.5"
+spring-boot4 = "4.0.6"
 springdoc-openapi = "3.0.2"
 
 resilience4j = "2.4.0"
@@ -115,7 +115,7 @@ exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "e
 exposed-r2dbc = { module = "org.jetbrains.exposed:exposed-r2dbc", version.ref = "exposed" }
 exposed-java-time = { module = "org.jetbrains.exposed:exposed-java-time", version.ref = "exposed" }
 exposed-migration-jdbc = { module = "org.jetbrains.exposed:exposed-migration-jdbc", version.ref = "exposed" }
-exposed-spring7-transaction = { module = "org.jetbrains.exposed:exposed-spring7-transaction", version.ref = "exposed" }
+exposed-spring7-transaction = { module = "org.jetbrains.exposed:spring7-transaction", version.ref = "exposed" }
 exposed-spring-boot4-starter = { module = "org.jetbrains.exposed:exposed-spring-boot4-starter", version.ref = "exposed" }
 
 # Jackson 3
