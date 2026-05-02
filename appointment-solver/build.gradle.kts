@@ -2,14 +2,14 @@ dependencies {
     api(project(":appointment-core"))
 
     // Timefold Solver
-    api(Libs.timefold_solver_core)
-    implementation(Libs.timefold_solver_benchmark)
+    api(libs.timefold.solver.core)
+    implementation(libs.timefold.solver.benchmark)
 
-    implementation(Libs.bluetape4k_exposed_jdbc)
-    implementation(Libs.exposed_jdbc)
+    implementation(libs.bluetape4k.exposed.jdbc)
+    implementation(libs.exposed.jdbc)
 
-    testImplementation(Libs.timefold_solver_test)
-    testImplementation(Libs.bluetape4k_junit5)
-    testImplementation(Libs.kluent)
-    testImplementation(Libs.h2_v2)
+    testImplementation(libs.timefold.solver.test)
+    testImplementation(libs.bluetape4k.junit5)
+    testImplementation(libs.kluent)
+    testImplementation(libs.h2.v2)
 }

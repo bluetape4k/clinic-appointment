@@ -4,26 +4,28 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     base
-    kotlin("jvm") version Versions.kotlin
+    alias(libs.plugins.kotlin.jvm)
 
-    kotlin("plugin.spring") version Versions.kotlin apply false
-    kotlin("plugin.allopen") version Versions.kotlin apply false
-    kotlin("plugin.noarg") version Versions.kotlin apply false
-    kotlin("plugin.jpa") version Versions.kotlin apply false
-    kotlin("plugin.serialization") version Versions.kotlin apply false
+    alias(libs.plugins.kotlin.spring) apply false
+    alias(libs.plugins.kotlin.allopen) apply false
+    alias(libs.plugins.kotlin.noarg) apply false
+    alias(libs.plugins.kotlin.jpa) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
 
-    id(Plugins.detekt) version Plugins.Versions.detekt
+    alias(libs.plugins.detekt)
 
-    id(Plugins.dependency_management) version Plugins.Versions.dependency_management
-    id(Plugins.spring_boot) version Plugins.Versions.spring_boot4 apply false
+    alias(libs.plugins.dependency.management)
+    alias(libs.plugins.spring.boot) apply false
 
-    id(Plugins.dokka) version Plugins.Versions.dokka
-    id(Plugins.testLogger) version Plugins.Versions.testLogger
-    id(Plugins.shadow) version Plugins.Versions.shadow apply false
-    id(Plugins.gatling) version Plugins.Versions.gatling apply false
+    alias(libs.plugins.dokka)
+    alias(libs.plugins.test.logger)
+    alias(libs.plugins.shadow) apply false
+    alias(libs.plugins.gatling) apply false
 
-    id(Plugins.kover) version Plugins.Versions.kover
+    alias(libs.plugins.kover)
 }
+
+val rootLibs = libs
 
 allprojects {
     repositories {
@@ -45,10 +47,10 @@ subprojects {
     apply {
         plugin<JavaLibraryPlugin>()
         plugin("org.jetbrains.kotlin.jvm")
-        plugin(Plugins.dependency_management)
-        plugin(Plugins.dokka)
-        plugin(Plugins.testLogger)
-        plugin(Plugins.kover)
+        plugin("io.spring.dependency-management")
+        plugin("org.jetbrains.dokka")
+        plugin("com.adarshr.test-logger")
+        plugin("org.jetbrains.kotlinx.kover")
     }
 
     java {
@@ -170,44 +172,14 @@ subprojects {
         setApplyMavenExclusions(false)
 
         imports {
-            mavenBom(Libs.bluetape4k_bom)
-            mavenBom(Libs.spring_boot4_dependencies)
-            mavenBom(Libs.jackson3_bom)
-            mavenBom(Libs.testcontainers_bom)
-            mavenBom(Libs.junit_bom)
-            mavenBom(Libs.kotlinx_coroutines_bom)
-            mavenBom(Libs.kotlin_bom)
-            mavenBom(Libs.timefold_solver_bom)
-        }
-
-        dependencies {
-            dependency(Libs.jetbrains_annotations)
-
-            dependency(Libs.kotlinx_coroutines_core)
-            dependency(Libs.kotlinx_coroutines_core_jvm)
-            dependency(Libs.kotlinx_coroutines_reactor)
-            dependency(Libs.kotlinx_coroutines_slf4j)
-            dependency(Libs.kotlinx_coroutines_debug)
-            dependency(Libs.kotlinx_coroutines_test)
-            dependency(Libs.kotlinx_coroutines_test_jvm)
-
-            dependency(Libs.junit_jupiter)
-            dependency(Libs.junit_jupiter_api)
-            dependency(Libs.junit_jupiter_engine)
-            dependency(Libs.junit_jupiter_migrationsupport)
-            dependency(Libs.junit_jupiter_params)
-            dependency(Libs.junit_platform_commons)
-            dependency(Libs.junit_platform_engine)
-            dependency(Libs.junit_platform_launcher)
-            dependency(Libs.junit_platform_runner)
-
-            dependency(Libs.kluent)
-            dependency(Libs.assertj_core)
-            dependency(Libs.mockk)
-            dependency(Libs.datafaker)
-            dependency(Libs.random_beans)
-
-            dependency(Libs.lettuce_core)
+            mavenBom(rootLibs.bluetape4k.bom.get().toString())
+            mavenBom(rootLibs.spring.boot4.dependencies.get().toString())
+            mavenBom(rootLibs.jackson3.bom.get().toString())
+            mavenBom(rootLibs.testcontainers.bom.get().toString())
+            mavenBom(rootLibs.junit.bom.get().toString())
+            mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())
+            mavenBom(rootLibs.kotlin.bom.get().toString())
+            mavenBom(rootLibs.timefold.solver.bom.get().toString())
         }
     }
 
@@ -217,34 +189,34 @@ subprojects {
         val compileOnly by configurations
         val testRuntimeOnly by configurations
 
-        compileOnly(platform(Libs.bluetape4k_bom))
-        compileOnly(platform(Libs.spring_boot4_dependencies))
-        compileOnly(platform(Libs.kotlinx_coroutines_bom))
+        compileOnly(platform(rootLibs.bluetape4k.bom))
+        compileOnly(platform(rootLibs.spring.boot4.dependencies))
+        compileOnly(platform(rootLibs.kotlinx.coroutines.bom))
 
-        implementation(Libs.kotlin_stdlib)
-        implementation(Libs.kotlin_reflect)
-        testImplementation(Libs.kotlin_test)
-        testImplementation(Libs.kotlin_test_junit5)
+        implementation(rootLibs.kotlin.stdlib)
+        implementation(rootLibs.kotlin.reflect)
+        testImplementation(rootLibs.kotlin.test)
+        testImplementation(rootLibs.kotlin.test.junit5)
 
-        implementation(Libs.kotlinx_coroutines_core)
+        implementation(rootLibs.kotlinx.coroutines.core)
 
-        implementation(Libs.slf4j_api)
-        implementation(Libs.bluetape4k_logging)
-        implementation(Libs.logback)
-        testImplementation(Libs.jcl_over_slf4j)
-        testImplementation(Libs.jul_to_slf4j)
-        testImplementation(Libs.log4j_over_slf4j)
+        implementation(rootLibs.slf4j.api)
+        implementation(rootLibs.bluetape4k.logging)
+        implementation(rootLibs.logback)
+        testImplementation(rootLibs.jcl.over.slf4j)
+        testImplementation(rootLibs.jul.to.slf4j)
+        testImplementation(rootLibs.log4j.over.slf4j)
 
         // JUnit 5
-        testImplementation(Libs.bluetape4k_junit5)
-        testImplementation(Libs.junit_jupiter)
-        testRuntimeOnly(Libs.junit_platform_engine)
+        testImplementation(rootLibs.bluetape4k.junit5)
+        testImplementation(rootLibs.junit.jupiter)
+        testRuntimeOnly(rootLibs.junit.platform.engine)
 
-        testImplementation(Libs.kluent)
-        testImplementation(Libs.mockk)
+        testImplementation(rootLibs.kluent)
+        testImplementation(rootLibs.mockk)
 
-        testImplementation(Libs.datafaker)
-        testImplementation(Libs.random_beans)
+        testImplementation(rootLibs.datafaker)
+        testImplementation(rootLibs.random.beans)
     }
 }
 

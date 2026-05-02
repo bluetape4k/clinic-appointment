@@ -3,29 +3,29 @@ plugins {
 }
 
 dependencies {
-    api(Libs.exposed_core)
-    api(Libs.exposed_java_time)
-    api(Libs.exposed_spring7_transaction)
+    api(libs.exposed.core)
+    api(libs.exposed.java.time)
+    api(libs.exposed.spring7.transaction)
 
-    api(Libs.bluetape4k_exposed_core)
-    api(Libs.bluetape4k_coroutines)
-    api(Libs.kotlinx_coroutines_core)
+    api(libs.bluetape4k.exposed.core)
+    api(libs.bluetape4k.coroutines)
+    api(libs.kotlinx.coroutines.core)
 
-    implementation(Libs.exposed_jdbc)
-    implementation(Libs.bluetape4k_exposed_jdbc)
+    implementation(libs.exposed.jdbc)
+    implementation(libs.bluetape4k.exposed.jdbc)
 
-    testImplementation(Libs.bluetape4k_junit5)
-    testImplementation(Libs.bluetape4k_testcontainers)
-    testImplementation(Libs.bluetape4k_jdbc)
-    testImplementation(Libs.exposed_migration_jdbc)
-    testImplementation(Libs.h2_v2)
-    testImplementation(Libs.postgresql_driver)
-    testImplementation(Libs.mysql_connector_j)
-    testImplementation(Libs.testcontainers_postgresql)
-    testImplementation(Libs.testcontainers_mysql)
-    testImplementation(Libs.testcontainers_mariadb)
-    testImplementation(Libs.testcontainers_cockroachdb)
-    testImplementation(Libs.kotlinx_coroutines_test)
+    testImplementation(libs.bluetape4k.junit5)
+    testImplementation(libs.bluetape4k.testcontainers)
+    testImplementation(libs.bluetape4k.jdbc)
+    testImplementation(libs.exposed.migration.jdbc)
+    testImplementation(libs.h2.v2)
+    testImplementation(libs.postgresql.driver)
+    testImplementation(libs.mysql.connector.j)
+    testImplementation(libs.testcontainers.postgresql)
+    testImplementation(libs.testcontainers.mysql)
+    testImplementation(libs.testcontainers.mariadb)
+    testImplementation(libs.testcontainers.cockroachdb)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 tasks.withType<Test>().configureEach {
