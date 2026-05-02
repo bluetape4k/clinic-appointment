@@ -1,7 +1,7 @@
 plugins {
     kotlin("plugin.spring")
-    id(Plugins.spring_boot)
-    id(Plugins.gatling)
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.gatling)
 }
 
 dependencies {
@@ -9,54 +9,54 @@ dependencies {
     api(project(":appointment-event"))
     api(project(":appointment-solver"))
 
-    implementation(Libs.springBootStarter("web"))
-    implementation(Libs.springBootStarter("validation"))
-    implementation(Libs.springBootStarter("security"))
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-security")
     // Spring MVC suspend 함수 지원에 reactor-core 필요 (CoroutinesUtils 의존)
-    implementation(Libs.kotlinx_coroutines_reactor)
-    implementation(Libs.exposed_jdbc)
-    implementation(Libs.exposed_spring_boot4_starter)
-    implementation(Libs.bluetape4k_exposed_jdbc)
+    implementation(libs.kotlinx.coroutines.reactor)
+    implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.spring.boot4.starter)
+    implementation(libs.bluetape4k.exposed.jdbc)
 
     // Jackson 3
-    implementation(Libs.bluetape4k_jackson3)
-    implementation(Libs.jackson3_module_kotlin)
-    implementation(Libs.jackson3_module_blackbird)
+    implementation(libs.bluetape4k.jackson3)
+    implementation(libs.jackson3.module.kotlin)
+    implementation(libs.jackson3.module.blackbird)
 
     // JWT
-    implementation(Libs.jjwt_api)
-    runtimeOnly(Libs.jjwt_impl)
-    runtimeOnly(Libs.jjwt_jackson)
+    implementation(libs.jjwt.api)
+    runtimeOnly(libs.jjwt.impl)
+    runtimeOnly(libs.jjwt.jackson)
 
     // OpenAPI / Swagger
-    implementation(Libs.springdoc_openapi_starter_webmvc_ui)
+    implementation(libs.springdoc.openapi.starter.webmvc.ui)
 
     // Flyway (spring-boot-flyway: Spring Boot 4.x에서 FlywayAutoConfiguration이 별도 모듈로 분리됨)
-    implementation(Libs.springBoot("flyway"))
-    implementation(Libs.flyway_core)
-    runtimeOnly(Libs.flyway_database_postgresql)
-    runtimeOnly(Libs.flyway_mysql)
+    implementation("org.springframework.boot:spring-boot-flyway")
+    implementation(libs.flyway.core)
+    runtimeOnly(libs.flyway.database.postgresql)
+    runtimeOnly(libs.flyway.mysql)
 
     // Database drivers
-    runtimeOnly(Libs.h2_v2)
-    runtimeOnly(Libs.postgresql_driver)
-    runtimeOnly(Libs.mysql_connector_j)
+    runtimeOnly(libs.h2.v2)
+    runtimeOnly(libs.postgresql.driver)
+    runtimeOnly(libs.mysql.connector.j)
 
-    testImplementation(Libs.springBootStarter("test"))
-    testImplementation(Libs.bluetape4k_junit5)
-    testImplementation(Libs.kluent)
-    testImplementation(Libs.exposed_migration_jdbc)
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation(libs.bluetape4k.junit5)
+    testImplementation(libs.kluent)
+    testImplementation(libs.exposed.migration.jdbc)
 
     // Testcontainers
-    testImplementation(Libs.bluetape4k_testcontainers)
-    testImplementation(Libs.testcontainers)
-    testImplementation(Libs.testcontainers_junit_jupiter)
-    testImplementation(Libs.testcontainers_postgresql)
-    testImplementation(Libs.testcontainers_mysql)
+    testImplementation(libs.bluetape4k.testcontainers)
+    testImplementation(libs.testcontainers)
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.testcontainers.postgresql)
+    testImplementation(libs.testcontainers.mysql)
 
     // Gatling
-    gatling(Libs.gatling_charts_highcharts)
-    gatling(Libs.gatling_http_java)
+    gatling(libs.gatling.charts.highcharts)
+    gatling(libs.gatling.http.java)
 }
 
 // spring.profiles.active 시스템 프로퍼티를 테스트 JVM에 전달 (multi-DB 테스트 지원)

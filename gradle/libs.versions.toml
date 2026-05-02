@@ -1,0 +1,185 @@
+# @formatter:off
+# Gradle Version Catalog — migrated from buildSrc/src/main/kotlin/Libs.kt
+
+[versions]
+bluetape4k = "1.7.0"
+
+kotlin = "2.3.21"
+kotlinx-coroutines = "1.10.2"
+
+spring-boot4 = "4.0.5"
+springdoc-openapi = "3.0.2"
+
+resilience4j = "2.4.0"
+
+jackson3 = "3.1.2"
+jjwt = "0.13.0"
+
+lettuce = "6.8.2.RELEASE"
+exposed = "1.2.0"
+
+slf4j = "2.0.17"
+logback = "1.5.32"
+
+timefold-solver = "1.32.0"
+
+junit-jupiter = "6.0.3"
+junit-platform = "6.0.3"
+kluent = "1.73"
+mockk = "1.14.9"
+testcontainers = "2.0.4"
+assertj = "3.27.6"
+random-beans = "3.9.0"
+datafaker = "2.5.4"
+
+flyway = "11.16.0"
+h2-v2 = "2.4.240"
+mysql-connector-j = "9.6.0"
+postgresql = "42.7.10"
+r2dbc-h2 = "1.0.0.RELEASE"
+
+# Plugin versions
+dokka = "2.1.0"
+detekt = "1.23.8"
+dependency-management = "1.1.7"
+kover = "0.9.8"
+test-logger = "4.0.0"
+shadow = "9.2.2"
+gatling = "3.15.0"
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+kotlin-allopen = { id = "org.jetbrains.kotlin.plugin.allopen", version.ref = "kotlin" }
+kotlin-noarg = { id = "org.jetbrains.kotlin.plugin.noarg", version.ref = "kotlin" }
+kotlin-jpa = { id = "org.jetbrains.kotlin.plugin.jpa", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+dependency-management = { id = "io.spring.dependency-management", version.ref = "dependency-management" }
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot4" }
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
+test-logger = { id = "com.adarshr.test-logger", version.ref = "test-logger" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+gatling = { id = "io.gatling.gradle", version.ref = "gatling" }
+
+[libraries]
+jetbrains-annotations = { module = "org.jetbrains:annotations", version = "26.1.0" }
+
+# bluetape4k
+bluetape4k-bom = { module = "io.github.bluetape4k:bluetape4k-bom", version.ref = "bluetape4k" }
+bluetape4k-coroutines = { module = "io.github.bluetape4k:bluetape4k-coroutines" }
+bluetape4k-jackson3 = { module = "io.github.bluetape4k:bluetape4k-jackson3" }
+bluetape4k-jdbc = { module = "io.github.bluetape4k:bluetape4k-jdbc" }
+bluetape4k-junit5 = { module = "io.github.bluetape4k:bluetape4k-junit5" }
+bluetape4k-leader = { module = "io.github.bluetape4k:bluetape4k-leader" }
+bluetape4k-lettuce = { module = "io.github.bluetape4k:bluetape4k-lettuce" }
+bluetape4k-logging = { module = "io.github.bluetape4k:bluetape4k-logging" }
+bluetape4k-resilience4j = { module = "io.github.bluetape4k:bluetape4k-resilience4j" }
+bluetape4k-testcontainers = { module = "io.github.bluetape4k:bluetape4k-testcontainers" }
+bluetape4k-exposed-core = { module = "io.github.bluetape4k:bluetape4k-exposed-core" }
+bluetape4k-exposed-jdbc = { module = "io.github.bluetape4k:bluetape4k-exposed-jdbc" }
+bluetape4k-exposed-r2dbc-tests = { module = "io.github.bluetape4k:bluetape4k-exposed-r2dbc-tests" }
+
+# Kotlin
+kotlin-bom = { module = "org.jetbrains.kotlin:kotlin-bom", version.ref = "kotlin" }
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test" }
+kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }
+
+# Kotlinx Coroutines
+kotlinx-coroutines-bom = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-bom", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core" }
+kotlinx-coroutines-core-jvm = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm" }
+kotlinx-coroutines-debug = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-debug" }
+kotlinx-coroutines-reactor = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-reactor" }
+kotlinx-coroutines-slf4j = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-slf4j" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test" }
+kotlinx-coroutines-test-jvm = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test-jvm" }
+
+# Logging
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+jcl-over-slf4j = { module = "org.slf4j:jcl-over-slf4j", version.ref = "slf4j" }
+jul-to-slf4j = { module = "org.slf4j:jul-to-slf4j", version.ref = "slf4j" }
+log4j-over-slf4j = { module = "org.slf4j:log4j-over-slf4j", version.ref = "slf4j" }
+logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+
+# Lettuce
+lettuce-core = { module = "io.lettuce:lettuce-core", version.ref = "lettuce" }
+
+# Exposed
+exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
+exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
+exposed-r2dbc = { module = "org.jetbrains.exposed:exposed-r2dbc", version.ref = "exposed" }
+exposed-java-time = { module = "org.jetbrains.exposed:exposed-java-time", version.ref = "exposed" }
+exposed-migration-jdbc = { module = "org.jetbrains.exposed:exposed-migration-jdbc", version.ref = "exposed" }
+exposed-spring7-transaction = { module = "org.jetbrains.exposed:exposed-spring7-transaction", version.ref = "exposed" }
+exposed-spring-boot4-starter = { module = "org.jetbrains.exposed:exposed-spring-boot4-starter", version.ref = "exposed" }
+
+# Jackson 3
+jackson3-bom = { module = "tools.jackson:jackson-bom", version.ref = "jackson3" }
+jackson3-module-kotlin = { module = "tools.jackson.module:jackson-module-kotlin" }
+jackson3-module-blackbird = { module = "tools.jackson.module:jackson-module-blackbird" }
+
+# JJWT
+jjwt-api = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }
+jjwt-impl = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jjwt" }
+jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
+
+# Spring Boot
+spring-boot4-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot4" }
+springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc-openapi" }
+
+# Resilience4j
+resilience4j-bulkhead = { module = "io.github.resilience4j:resilience4j-bulkhead", version.ref = "resilience4j" }
+resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-circuitbreaker", version.ref = "resilience4j" }
+resilience4j-kotlin = { module = "io.github.resilience4j:resilience4j-kotlin", version.ref = "resilience4j" }
+resilience4j-retry = { module = "io.github.resilience4j:resilience4j-retry", version.ref = "resilience4j" }
+
+# Timefold
+timefold-solver-bom = { module = "ai.timefold.solver:timefold-solver-bom", version.ref = "timefold-solver" }
+timefold-solver-core = { module = "ai.timefold.solver:timefold-solver-core" }
+timefold-solver-test = { module = "ai.timefold.solver:timefold-solver-test" }
+timefold-solver-benchmark = { module = "ai.timefold.solver:timefold-solver-benchmark" }
+
+# DB
+flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
+flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
+h2-v2 = { module = "com.h2database:h2", version.ref = "h2-v2" }
+mysql-connector-j = { module = "com.mysql:mysql-connector-j", version.ref = "mysql-connector-j" }
+postgresql-driver = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+r2dbc-h2 = { module = "io.r2dbc:r2dbc-h2", version.ref = "r2dbc-h2" }
+
+# Test
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit-jupiter" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api" }
+junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine" }
+junit-jupiter-migrationsupport = { module = "org.junit.jupiter:junit-jupiter-migrationsupport" }
+junit-jupiter-params = { module = "org.junit.jupiter:junit-jupiter-params" }
+junit-platform-commons = { module = "org.junit.platform:junit-platform-commons" }
+junit-platform-engine = { module = "org.junit.platform:junit-platform-engine" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+junit-platform-runner = { module = "org.junit.platform:junit-platform-runner" }
+
+kluent = { module = "org.amshove.kluent:kluent", version.ref = "kluent" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+datafaker = { module = "net.datafaker:datafaker", version.ref = "datafaker" }
+random-beans = { module = "io.github.benas:random-beans", version.ref = "random-beans" }
+
+# Testcontainers
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter", version.ref = "testcontainers" }
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql", version.ref = "testcontainers" }
+testcontainers-mysql = { module = "org.testcontainers:testcontainers-mysql", version.ref = "testcontainers" }
+testcontainers-mariadb = { module = "org.testcontainers:testcontainers-mariadb", version.ref = "testcontainers" }
+testcontainers-cockroachdb = { module = "org.testcontainers:testcontainers-cockroachdb", version.ref = "testcontainers" }
+
+# Gatling
+gatling-charts-highcharts = { module = "io.gatling.highcharts:gatling-charts-highcharts", version.ref = "gatling" }
+gatling-http-java = { module = "io.gatling:gatling-http-java", version.ref = "gatling" }

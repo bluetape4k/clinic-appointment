@@ -6,27 +6,27 @@ dependencies {
     api(project(":appointment-core"))
     api(project(":appointment-event"))
 
-    implementation(Libs.exposed_jdbc)
-    implementation(Libs.bluetape4k_exposed_jdbc)
-    implementation(Libs.exposed_migration_jdbc)
-    implementation(Libs.springBootStarter("web"))
+    implementation(libs.exposed.jdbc)
+    implementation(libs.bluetape4k.exposed.jdbc)
+    implementation(libs.exposed.migration.jdbc)
+    implementation("org.springframework.boot:spring-boot-starter-web")
 
     // HA: Leader election for scheduler throttling
-    implementation(Libs.bluetape4k_leader)
-    implementation(Libs.bluetape4k_lettuce)
-    implementation(Libs.lettuce_core)
+    implementation(libs.bluetape4k.leader)
+    implementation(libs.bluetape4k.lettuce)
+    implementation(libs.lettuce.core)
 
     // Resilience4j: CircuitBreaker, Retry, Bulkhead
-    implementation(Libs.bluetape4k_resilience4j)
-    implementation(Libs.resilience4j_circuitbreaker)
-    implementation(Libs.resilience4j_retry)
-    implementation(Libs.resilience4j_bulkhead)
-    implementation(Libs.resilience4j_kotlin)
+    implementation(libs.bluetape4k.resilience4j)
+    implementation(libs.resilience4j.circuitbreaker)
+    implementation(libs.resilience4j.retry)
+    implementation(libs.resilience4j.bulkhead)
+    implementation(libs.resilience4j.kotlin)
 
-    testImplementation(Libs.springBootStarter("test"))
-    testImplementation(Libs.bluetape4k_junit5)
-    testImplementation(Libs.kluent)
-    testImplementation(Libs.mockk)
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation(libs.bluetape4k.junit5)
+    testImplementation(libs.kluent)
+    testImplementation(libs.mockk)
 
-    runtimeOnly(Libs.h2_v2)
+    runtimeOnly(libs.h2.v2)
 }
