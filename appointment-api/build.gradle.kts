@@ -17,6 +17,9 @@ dependencies {
     implementation(libs.bluetape4k.cache.lettuce)
     implementation(libs.bluetape4k.lettuce)
     implementation(libs.lettuce.core)
+    // NearCache 기본 코덱(LZ4 + Fory)이 optional 의존성이므로 명시적 추가 필요
+    implementation(libs.lz4.java)
+    implementation(libs.fory.kotlin)
     // Spring MVC suspend 함수 지원에 reactor-core 필요 (CoroutinesUtils 의존)
     implementation(libs.kotlinx.coroutines.reactor)
     implementation(libs.exposed.jdbc)
