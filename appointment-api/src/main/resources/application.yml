@@ -10,8 +10,6 @@ spring:
     flyway:
         enabled: false
         locations: classpath:db/migration/{vendor}
-
-spring:
     data:
         redis:
             url: redis://localhost:6379

@@ -36,6 +36,6 @@ class EquipmentRepository(
             .selectAll()
             .where { Equipments.clinicId eq clinicId }
             .map { it.toEquipmentRecord() }
-            .also { clinicEquipmentsCache?.put(cacheKey, it) }
+            .also { if (it.isNotEmpty()) clinicEquipmentsCache?.put(cacheKey, it) }
     }
 }

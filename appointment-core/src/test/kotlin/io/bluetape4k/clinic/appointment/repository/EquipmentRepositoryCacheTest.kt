@@ -2,9 +2,9 @@ package io.bluetape4k.clinic.appointment.repository
 
 import io.bluetape4k.cache.LettuceCaches
 import io.bluetape4k.cache.nearcache.NearCacheOperations
-import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
+import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
-import io.bluetape4k.clinic.appointment.model.tables.Doctors
+import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
@@ -21,14 +21,14 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import java.time.Duration
 
-class DoctorRepositoryCacheTest : AbstractExposedTest() {
+class EquipmentRepositoryCacheTest : AbstractExposedTest() {
 
     companion object : KLogging() {
 
         private val redis: RedisServer by lazy { RedisServer.Launcher.redis }
         private lateinit var redisClient: RedisClient
 
-        private val allTables = arrayOf(Clinics, Doctors)
+        private val allTables = arrayOf(Clinics, Equipments)
 
         @JvmStatic
         @BeforeAll
@@ -44,7 +44,7 @@ class DoctorRepositoryCacheTest : AbstractExposedTest() {
             }
         }
 
-        private fun createCache(name: String): NearCacheOperations<List<DoctorRecord>> =
+        private fun createCache(name: String): NearCacheOperations<List<EquipmentRecord>> =
             LettuceCaches.nearCache(redisClient) {
                 cacheName = name
                 maxLocalSize = 100
@@ -56,8 +56,8 @@ class DoctorRepositoryCacheTest : AbstractExposedTest() {
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
     fun `findByClinicId - DB 조회 결과를 캐시에 저장하고 재사용`(testDB: TestDB) {
-        val cache = createCache("test-doctors-01-${testDB.name}")
-        val repo = DoctorRepository(clinicDoctorsCache = cache)
+        val cache = createCache("test-equipments-01-${testDB.name}")
+        val repo = EquipmentRepository(clinicEquipmentsCache = cache)
 
         withTables(testDB, *allTables) {
             val clinicId = Clinics.insertAndGetId {
@@ -66,17 +66,16 @@ class DoctorRepositoryCacheTest : AbstractExposedTest() {
                 it[maxConcurrentPatients] = 3
             }.value
 
-            Doctors.insertAndGetId {
-                it[Doctors.clinicId] = clinicId
-                it[name] = "김의사"
-                it[specialty] = "내과"
-                it[providerType] = "DOCTOR"
+            Equipments.insertAndGetId {
+                it[Equipments.clinicId] = clinicId
+                it[name] = "MRI 장비"
+                it[usageDurationMinutes] = 30
+                it[quantity] = 2
             }
 
             val result1 = repo.findByClinicId(clinicId)
             result1 shouldHaveSize 1
-            result1[0].name shouldBeEqualTo "김의사"
-            result1[0].specialty shouldBeEqualTo "내과"
+            result1[0].name shouldBeEqualTo "MRI 장비"
 
             // DB 조회 후 캐시에 실제로 저장됐는지 검증
             cache.get(clinicId.toString()).shouldNotBeNull() shouldHaveSize 1
@@ -92,7 +91,7 @@ class DoctorRepositoryCacheTest : AbstractExposedTest() {
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
     fun `findByClinicId - 캐시 없이도 정상 동작`(testDB: TestDB) {
-        val repo = DoctorRepository(clinicDoctorsCache = null)
+        val repo = EquipmentRepository(clinicEquipmentsCache = null)
 
         withTables(testDB, *allTables) {
             val clinicId = Clinics.insertAndGetId {
@@ -104,40 +103,41 @@ class DoctorRepositoryCacheTest : AbstractExposedTest() {
             val empty = repo.findByClinicId(clinicId)
             empty shouldHaveSize 0
 
-            Doctors.insertAndGetId {
-                it[Doctors.clinicId] = clinicId
-                it[name] = "박의사"
-                it[specialty] = "피부과"
+            Equipments.insertAndGetId {
+                it[Equipments.clinicId] = clinicId
+                it[name] = "초음파 장비"
+                it[usageDurationMinutes] = 15
             }
 
             val result = repo.findByClinicId(clinicId)
             result shouldHaveSize 1
-            result[0].name shouldBeEqualTo "박의사"
+            result[0].name shouldBeEqualTo "초음파 장비"
         }
     }
 
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
     fun `findByClinicId - 빈 결과는 캐시에 저장하지 않음`(testDB: TestDB) {
-        val cache = createCache("test-doctors-03-${testDB.name}")
-        val repo = DoctorRepository(clinicDoctorsCache = cache)
+        val cache = createCache("test-equipments-03-${testDB.name}")
+        val repo = EquipmentRepository(clinicEquipmentsCache = cache)
 
         withTables(testDB, *allTables) {
             val clinicId = Clinics.insertAndGetId {
-                it[name] = "의사 없는 병원"
+                it[name] = "장비 없는 병원"
                 it[slotDurationMinutes] = 30
                 it[maxConcurrentPatients] = 1
             }.value
 
-            // 의사 없이 조회 — emptyList는 캐시 저장 안 됨
+            // 장비 없이 조회 — emptyList는 캐시 저장 안 됨
             val empty = repo.findByClinicId(clinicId)
             empty shouldHaveSize 0
             cache.get(clinicId.toString()) shouldBeEqualTo null
 
-            // 이후 의사 추가 시 캐시 스탈 없이 즉시 반영됨
-            Doctors.insertAndGetId {
-                it[Doctors.clinicId] = clinicId
-                it[name] = "신규 의사"
+            // 이후 장비 추가 시 캐시 스탈 없이 즉시 반영됨
+            Equipments.insertAndGetId {
+                it[Equipments.clinicId] = clinicId
+                it[name] = "신규 장비"
+                it[usageDurationMinutes] = 20
             }
             val result = repo.findByClinicId(clinicId)
             result shouldHaveSize 1
@@ -149,8 +149,8 @@ class DoctorRepositoryCacheTest : AbstractExposedTest() {
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
     fun `findByClinicId - 다른 clinicId는 별도 캐시 키로 독립 관리`(testDB: TestDB) {
-        val cache = createCache("test-doctors-02-${testDB.name}")
-        val repo = DoctorRepository(clinicDoctorsCache = cache)
+        val cache = createCache("test-equipments-02-${testDB.name}")
+        val repo = EquipmentRepository(clinicEquipmentsCache = cache)
 
         withTables(testDB, *allTables) {
             val clinicId1 = Clinics.insertAndGetId {
@@ -165,17 +165,20 @@ class DoctorRepositoryCacheTest : AbstractExposedTest() {
                 it[maxConcurrentPatients] = 1
             }.value
 
-            Doctors.insertAndGetId {
-                it[Doctors.clinicId] = clinicId1
-                it[name] = "의사 A"
+            Equipments.insertAndGetId {
+                it[Equipments.clinicId] = clinicId1
+                it[name] = "장비 A1"
+                it[usageDurationMinutes] = 20
             }
-            Doctors.insertAndGetId {
-                it[Doctors.clinicId] = clinicId2
-                it[name] = "의사 B1"
+            Equipments.insertAndGetId {
+                it[Equipments.clinicId] = clinicId2
+                it[name] = "장비 B1"
+                it[usageDurationMinutes] = 30
             }
-            Doctors.insertAndGetId {
-                it[Doctors.clinicId] = clinicId2
-                it[name] = "의사 B2"
+            Equipments.insertAndGetId {
+                it[Equipments.clinicId] = clinicId2
+                it[name] = "장비 B2"
+                it[usageDurationMinutes] = 45
             }
 
             repo.findByClinicId(clinicId1) shouldHaveSize 1

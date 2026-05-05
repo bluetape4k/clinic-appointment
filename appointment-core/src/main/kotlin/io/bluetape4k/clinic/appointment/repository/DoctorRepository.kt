@@ -73,7 +73,7 @@ class DoctorRepository(
             .selectAll()
             .where { Doctors.clinicId eq clinicId }
             .map { it.toDoctorRecord() }
-            .also { clinicDoctorsCache?.put(cacheKey, it) }
+            .also { if (it.isNotEmpty()) clinicDoctorsCache?.put(cacheKey, it) }
     }
 
     fun findAllSchedules(doctorId: Long): List<DoctorScheduleRecord> =
