@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.repository
 
+import io.bluetape4k.cache.nearcache.NearCacheOperations
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
@@ -14,7 +15,9 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
  *
  * 병원의 장비 목록 및 개별 장비 정보를 조회합니다.
  */
-class EquipmentRepository : LongJdbcRepository<EquipmentRecord> {
+class EquipmentRepository(
+    private val clinicEquipmentsCache: NearCacheOperations<List<EquipmentRecord>>? = null,
+) : LongJdbcRepository<EquipmentRecord> {
     companion object : KLogging()
 
     override val table = Equipments
@@ -27,9 +30,12 @@ class EquipmentRepository : LongJdbcRepository<EquipmentRecord> {
      * @param clinicId 병원 ID
      * @return 장비 목록
      */
-    fun findByClinicId(clinicId: Long): List<EquipmentRecord> =
-        Equipments
+    fun findByClinicId(clinicId: Long): List<EquipmentRecord> {
+        val cacheKey = clinicId.toString()
+        return clinicEquipmentsCache?.get(cacheKey) ?: Equipments
             .selectAll()
             .where { Equipments.clinicId eq clinicId }
             .map { it.toEquipmentRecord() }
+            .also { clinicEquipmentsCache?.put(cacheKey, it) }
+    }
 }

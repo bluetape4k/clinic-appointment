@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.repository
 
+import io.bluetape4k.cache.nearcache.NearCacheOperations
 import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.support.requireNotNull
@@ -23,7 +24,9 @@ import java.time.LocalDate
  *
  * 의사의 기본 정보, 운영 스케줄, 휴무 정보를 조회합니다.
  */
-class DoctorRepository : LongJdbcRepository<DoctorRecord> {
+class DoctorRepository(
+    private val clinicDoctorsCache: NearCacheOperations<List<DoctorRecord>>? = null,
+) : LongJdbcRepository<DoctorRecord> {
     companion object : KLogging()
 
     override val table = Doctors
@@ -64,11 +67,14 @@ class DoctorRepository : LongJdbcRepository<DoctorRecord> {
      * @param clinicId 병원 ID
      * @return 의사 목록
      */
-    fun findByClinicId(clinicId: Long): List<DoctorRecord> =
-        Doctors
+    fun findByClinicId(clinicId: Long): List<DoctorRecord> {
+        val cacheKey = clinicId.toString()
+        return clinicDoctorsCache?.get(cacheKey) ?: Doctors
             .selectAll()
             .where { Doctors.clinicId eq clinicId }
             .map { it.toDoctorRecord() }
+            .also { clinicDoctorsCache?.put(cacheKey, it) }
+    }
 
     fun findAllSchedules(doctorId: Long): List<DoctorScheduleRecord> =
         DoctorSchedules

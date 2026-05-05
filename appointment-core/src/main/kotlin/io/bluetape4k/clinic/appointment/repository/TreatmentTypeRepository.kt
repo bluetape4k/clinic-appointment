@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.repository
 
+import io.bluetape4k.cache.nearcache.NearCacheOperations
 import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.support.requireNotNull
@@ -14,7 +15,9 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
-class TreatmentTypeRepository : LongJdbcRepository<TreatmentTypeRecord> {
+class TreatmentTypeRepository(
+    private val clinicTreatmentTypesCache: NearCacheOperations<List<TreatmentTypeRecord>>? = null,
+) : LongJdbcRepository<TreatmentTypeRecord> {
     companion object : KLogging()
 
     override val table = TreatmentTypes
@@ -34,11 +37,14 @@ class TreatmentTypeRepository : LongJdbcRepository<TreatmentTypeRecord> {
             .where { Equipments.id inList equipmentIds }
             .associate { it[Equipments.id].value to it[Equipments.quantity] }
 
-    fun findByClinicId(clinicId: Long): List<TreatmentTypeRecord> =
-        TreatmentTypes
+    fun findByClinicId(clinicId: Long): List<TreatmentTypeRecord> {
+        val cacheKey = clinicId.toString()
+        return clinicTreatmentTypesCache?.get(cacheKey) ?: TreatmentTypes
             .selectAll()
             .where { TreatmentTypes.clinicId eq clinicId }
             .map { it.toTreatmentTypeRecord() }
+            .also { clinicTreatmentTypesCache?.put(cacheKey, it) }
+    }
 
     fun findEquipmentsByClinicId(clinicId: Long): List<EquipmentRecord> =
         Equipments

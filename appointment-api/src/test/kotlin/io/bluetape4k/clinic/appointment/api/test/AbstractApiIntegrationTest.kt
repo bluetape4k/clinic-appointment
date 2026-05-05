@@ -44,7 +44,9 @@ abstract class AbstractApiIntegrationTest {
 
         @JvmStatic
         @DynamicPropertySource
-        fun configureTestDatabase(registry: DynamicPropertyRegistry) {
+        fun configureTestContainers(registry: DynamicPropertyRegistry) {
+            registry.add("spring.data.redis.url") { Containers.Redis.url }
+
             val activeProfiles = System.getProperty("spring.profiles.active", "test")
             when {
                 activeProfiles.contains("test-postgresql") -> {

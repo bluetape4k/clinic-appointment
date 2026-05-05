@@ -12,6 +12,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-security")
+
+    // Cache: Lettuce NearCache (Caffeine local + Redis remote)
+    implementation(libs.bluetape4k.cache.lettuce)
+    implementation(libs.bluetape4k.lettuce)
+    implementation(libs.lettuce.core)
     // Spring MVC suspend 함수 지원에 reactor-core 필요 (CoroutinesUtils 의존)
     implementation(libs.kotlinx.coroutines.reactor)
     implementation(libs.exposed.jdbc)
