@@ -64,8 +64,13 @@ class DoctorRepository(
     /**
      * 병원의 모든 의사를 조회합니다.
      *
+     * 결과는 NearCache(Caffeine + Redis)에 캐싱됩니다. 이 캐시는 **read-mostly** 마스터 데이터
+     * 전용이며, 의사 정보가 변경될 경우 캐시 무효화가 자동으로 수행되지 않습니다.
+     * 데이터 변경이 발생하면 캐시 TTL(기본 5분) 만료 후 자동 갱신되거나,
+     * [NearCacheOperations.evict]를 직접 호출하여 무효화해야 합니다.
+     *
      * @param clinicId 병원 ID
-     * @return 의사 목록
+     * @return 의사 목록 (빈 결과는 캐싱하지 않음)
      */
     fun findByClinicId(clinicId: Long): List<DoctorRecord> {
         val cacheKey = clinicId.toString()

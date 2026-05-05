@@ -29,7 +29,7 @@ import java.time.Duration
 class ServiceConfig {
 
     companion object : KLogging() {
-        private const val MASTER_CACHE_LOCAL_SIZE = 500
+        private const val MASTER_CACHE_LOCAL_SIZE = 500L
         private val MASTER_CACHE_LOCAL_TTL: Duration = Duration.ofMinutes(10)
         private val MASTER_CACHE_REDIS_TTL: Duration = Duration.ofHours(1)
     }
