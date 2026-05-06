@@ -17,6 +17,8 @@ jjwt = "0.13.0"
 
 lettuce = "6.8.2.RELEASE"
 exposed = "1.2.0"
+lz4-java = "1.8.0"
+fory = "0.15.0"
 
 slf4j = "2.0.17"
 logback = "1.5.32"
@@ -74,6 +76,9 @@ bluetape4k-jackson3 = { module = "io.github.bluetape4k:bluetape4k-jackson3" }
 bluetape4k-jdbc = { module = "io.github.bluetape4k:bluetape4k-jdbc" }
 bluetape4k-junit5 = { module = "io.github.bluetape4k:bluetape4k-junit5" }
 bluetape4k-leader = { module = "io.github.bluetape4k:bluetape4k-leader" }
+bluetape4k-cache-core = { module = "io.github.bluetape4k:bluetape4k-cache-core" }
+bluetape4k-cache-lettuce = { module = "io.github.bluetape4k:bluetape4k-cache-lettuce" }
+bluetape4k-io = { module = "io.github.bluetape4k:bluetape4k-io" }
 bluetape4k-lettuce = { module = "io.github.bluetape4k:bluetape4k-lettuce" }
 bluetape4k-logging = { module = "io.github.bluetape4k:bluetape4k-logging" }
 bluetape4k-resilience4j = { module = "io.github.bluetape4k:bluetape4k-resilience4j" }
@@ -108,6 +113,11 @@ logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 
 # Lettuce
 lettuce-core = { module = "io.lettuce:lettuce-core", version.ref = "lettuce" }
+
+# Compression / Serialization
+lz4-java = { module = "org.lz4:lz4-java", version.ref = "lz4-java" }
+fory-core = { module = "org.apache.fory:fory-core", version.ref = "fory" }
+fory-kotlin = { module = "org.apache.fory:fory-kotlin", version.ref = "fory" }
 
 # Exposed
 exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
