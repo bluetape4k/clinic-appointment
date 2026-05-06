@@ -229,11 +229,11 @@ class NearCacheCacheManager(
 - 동일 패턴, 캐시 이름 `"clinic-treatment-types"`, 쿼리는 `TreatmentTypes.selectAll().where { TreatmentTypes.clinicId eq clinicId }.map { it.toTreatmentTypeRecord() }`
 
 **DoD:**
+- `rg "@Repository" appointment-core/src/main` — 3개 Repository 모두 확인 (allopen CGLIB 프록시 사전 검증)
 - `rg "NearCacheOperations" appointment-core/src/main` 결과 없음
-- `rg "@Repository" appointment-core/src/main` — 3개 Repository 모두 확인
 - `./gradlew :appointment-core:compileKotlin` 성공
 
-**blockedBy:** T-01 (또는 T-02의 spring-context 의존성 해소 이후)
+**blockedBy:** T-01, T-05
 
 ---
 
@@ -246,7 +246,7 @@ class NearCacheCacheManager(
 
 **사용 프레임워크:** Kotest + MockK (`io.mockk:mockk` — 이미 spring-boot-starter-test 전이 의존성에 포함)
 
-**검증 시나리오 (9개):**
+**검증 시나리오 (11개):**
 1. `lookup(key)`: delegate가 값 반환 → 해당 값 반환
 2. `lookup(key)`: delegate가 `null` 반환 → `null` 반환
 3. `lookup(key)`: delegate에서 Redis 예외 → `null` 반환 (예외 전파 없음)
@@ -254,12 +254,14 @@ class NearCacheCacheManager(
 5. `put(key, emptyList())`: delegate.put 미호출
 6. `put(key, nonEmptyList)`: delegate.put 1회 호출
 7. `put(key, value)` Redis 예외: 예외 삼키고 정상 완료
-8. `evict(key)`: delegate.remove 1회 호출
-9. `clear()`: delegate.clearAll 1회 호출
+8. `evict(key)`: `delegate.remove(key)` 1회 호출 (`delegate.evict` 아님)
+9. `clear()`: `delegate.clearAll()` 1회 호출 (`delegate.clear` 아님)
+10. `putIfAbsent(key, value)`: 키 없을 때 `delegate.putIfAbsent` 호출, `null` 반환
+11. `putIfAbsent(key, value)`: 키 있을 때 `SimpleValueWrapper(prev)` 반환
 
 **DoD:**
 - `./gradlew :appointment-api:test --tests "*.NearCacheAdapterTest"` 전체 통과
-- 9개 시나리오 전부 구현
+- 11개 시나리오 전부 구현
 
 **blockedBy:** T-03
 
@@ -277,30 +279,30 @@ class NearCacheCacheManager(
 **의존성 주입:**
 ```kotlin
 @Autowired lateinit var cacheManager: CacheManager
+// ⚠️ @SpyBean 주의: CGLIB(@Cacheable) + MockK spy 이중 프록시 충돌 위험
+// 캐시 히트 검증은 CacheManager.getCache(name)?.get(key) 방식을 primary로 사용
+// @SpyBean은 DB 호출 횟수 부가 검증 목적으로만 사용하고, CGLIB 충돌 시 제거
 @SpyBean lateinit var doctorRepository: DoctorRepository
-@SpyBean lateinit var equipmentRepository: EquipmentRepository
-@SpyBean lateinit var treatmentTypeRepository: TreatmentTypeRepository
 ```
 
-**검증 시나리오 (4개):**
-1. **캐시 히트 검증**: 동일 `clinicId`로 `DoctorRepository.findByClinicId` 2회 호출 → DB 쿼리 1회만 발생
-   (SpyBean + `verify(exactly = 1)` 또는 CacheManager에서 캐시 엔트리 존재 확인)
-2. **EquipmentRepository 캐시 히트** 동일 패턴
-3. **TreatmentTypeRepository 캐시 히트** 동일 패턴
-4. **빈 결과 미캐싱**: 존재하지 않는 clinicId로 조회 → 캐시에 엔트리 없음 확인
-   (`cacheManager.getCache("clinic-doctors")?.get(nonExistentClinicId)` → `null`)
+**검증 시나리오 (5개):**
+1. **DoctorRepository 캐시 히트**: 동일 `clinicId` 2회 조회 후 `cacheManager.getCache("clinic-doctors")?.get(clinicId.toString())` → non-null 엔트리 존재 확인. 결과 값 일치 검증
+2. **EquipmentRepository 캐시 히트** 동일 패턴 (`clinic-equipments`)
+3. **TreatmentTypeRepository 캐시 히트** 동일 패턴 (`clinic-treatment-types`)
+4. **빈 결과 미캐싱**: 존재하지 않는 clinicId로 조회 → `cacheManager.getCache("clinic-doctors")?.get(nonExistentId.toString())` → `null`
+5. **멀티 clinicId 키 격리**: clinicId A, B 각각 데이터 삽입 후 조회 → 두 캐시 엔트리가 독립적으로 존재 (`get(clinicIdA)` ≠ `get(clinicIdB)`)
 
 **주의사항:**
-- `@Transactional` + `TransactionTemplate`으로 각 테스트 전 데이터 삽입, 후 롤백
-- 각 테스트 전 캐시 clear (`cacheManager.getCache("clinic-doctors")?.clear()`)
+- 각 테스트 전 캐시 clear (`cacheManager.cacheNames.forEach { cacheManager.getCache(it)?.clear() }`)
 - `AbstractApiIntegrationTest`가 Redis Testcontainer를 DynamicProperty로 주입함 → 별도 Redis 설정 불필요
+- `@SpyBean`이 CGLIB 프록시 위에 재래핑되어 `verify` 실패 시 `CacheManager` 방식으로만 검증하도록 전환
 
 **DoD:**
 - `./gradlew :appointment-api:test --tests "*.CacheIntegrationTest"` 전체 통과
 - CGLIB 프록시 생성 성공 (`@Cacheable`이 실제로 인터셉트됨) 확인
 - 빈 결과 미캐싱 검증 통과
 
-**blockedBy:** T-05, T-06, T-07
+**blockedBy:** T-05, T-06, T-07, T-08
 
 ---
 

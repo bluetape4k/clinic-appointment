@@ -249,9 +249,12 @@ class NearCacheAdapter<V : Any>(
     }
 
     override fun evictIfPresent(key: Any): Boolean {
+        // Spring Cache 계약: 키가 실제로 존재했을 때만 true 반환
+        // NearCacheOperations.get()으로 사전 확인 후 존재하면 remove
         return try {
-            delegate.remove(key.toString())
-            true
+            val existed = delegate.get(key.toString()) != null
+            if (existed) delegate.remove(key.toString())
+            existed
         } catch (e: Exception) {
             log.warn(e) { "캐시 evictIfPresent 실패: name=$name, key=$key" }
             false
@@ -316,25 +319,32 @@ class CacheConfig {
 
     @Bean(destroyMethod = "close")
     fun clinicDoctorsCache(redisClient: RedisClient): NearCacheOperations<List<DoctorRecord>> {
-        return LettuceCaches.nearCache("clinic-doctors", redisClient) {
-            caffeine { maximumSize(MASTER_CACHE_LOCAL_SIZE).expireAfterWrite(MASTER_CACHE_LOCAL_TTL) }
-            redis { expireAfterWrite(MASTER_CACHE_REDIS_TTL) }
+        // ⚠️ LettuceCaches.nearCache API: 첫 번째 인자는 RedisClient, cacheName은 람다 내 프로퍼티
+        return LettuceCaches.nearCache(redisClient) {
+            cacheName = "clinic-doctors"
+            maxLocalSize = MASTER_CACHE_LOCAL_SIZE
+            frontExpireAfterWrite = MASTER_CACHE_LOCAL_TTL
+            redisTtl = MASTER_CACHE_REDIS_TTL
         }
     }
 
     @Bean(destroyMethod = "close")
     fun clinicEquipmentsCache(redisClient: RedisClient): NearCacheOperations<List<EquipmentRecord>> {
-        return LettuceCaches.nearCache("clinic-equipments", redisClient) {
-            caffeine { maximumSize(MASTER_CACHE_LOCAL_SIZE).expireAfterWrite(MASTER_CACHE_LOCAL_TTL) }
-            redis { expireAfterWrite(MASTER_CACHE_REDIS_TTL) }
+        return LettuceCaches.nearCache(redisClient) {
+            cacheName = "clinic-equipments"
+            maxLocalSize = MASTER_CACHE_LOCAL_SIZE
+            frontExpireAfterWrite = MASTER_CACHE_LOCAL_TTL
+            redisTtl = MASTER_CACHE_REDIS_TTL
         }
     }
 
     @Bean(destroyMethod = "close")
     fun clinicTreatmentTypesCache(redisClient: RedisClient): NearCacheOperations<List<TreatmentTypeRecord>> {
-        return LettuceCaches.nearCache("clinic-treatment-types", redisClient) {
-            caffeine { maximumSize(MASTER_CACHE_LOCAL_SIZE).expireAfterWrite(MASTER_CACHE_LOCAL_TTL) }
-            redis { expireAfterWrite(MASTER_CACHE_REDIS_TTL) }
+        return LettuceCaches.nearCache(redisClient) {
+            cacheName = "clinic-treatment-types"
+            maxLocalSize = MASTER_CACHE_LOCAL_SIZE
+            frontExpireAfterWrite = MASTER_CACHE_LOCAL_TTL
+            redisTtl = MASTER_CACHE_REDIS_TTL
         }
     }
 
