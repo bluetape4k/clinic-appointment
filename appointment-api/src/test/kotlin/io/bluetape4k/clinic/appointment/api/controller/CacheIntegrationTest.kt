@@ -10,6 +10,8 @@ import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.logging.KLogging
 import org.amshove.kluent.shouldBeEmpty
+import org.amshove.kluent.shouldBeEqualTo
+import org.springframework.aop.support.AopUtils
 import org.amshove.kluent.shouldBeNull
 import org.amshove.kluent.shouldBeTrue
 import org.amshove.kluent.shouldNotBeEmpty
@@ -79,11 +81,18 @@ class CacheIntegrationTest @Autowired constructor(
             }
         }
 
-        val result = transaction { doctorRepository.findByClinicId(id) }
-        result.shouldNotBeEmpty()
+        // 1회 호출 → DB 조회 후 캐시 적재
+        val first = transaction { doctorRepository.findByClinicId(id) }
+        first.shouldNotBeEmpty()
 
+        // 캐시에 저장됐는지 확인
         val cached = cacheManager.getCache("clinic-doctors")?.get(id.toString())?.get()
         cached.shouldNotBeNull()
+
+        // 2회 호출 → 캐시에서 반환 (결과 동일)
+        val second = transaction { doctorRepository.findByClinicId(id) }
+        second.shouldNotBeEmpty()
+        second shouldBeEqualTo first
     }
 
     @Test
@@ -98,11 +107,15 @@ class CacheIntegrationTest @Autowired constructor(
             }
         }
 
-        val result = transaction { equipmentRepository.findByClinicId(id) }
-        result.shouldNotBeEmpty()
+        val first = transaction { equipmentRepository.findByClinicId(id) }
+        first.shouldNotBeEmpty()
 
         val cached = cacheManager.getCache("clinic-equipments")?.get(id.toString())?.get()
         cached.shouldNotBeNull()
+
+        val second = transaction { equipmentRepository.findByClinicId(id) }
+        second.shouldNotBeEmpty()
+        second shouldBeEqualTo first
     }
 
     @Test
@@ -116,11 +129,15 @@ class CacheIntegrationTest @Autowired constructor(
             }
         }
 
-        val result = transaction { treatmentTypeRepository.findByClinicId(id) }
-        result.shouldNotBeEmpty()
+        val first = transaction { treatmentTypeRepository.findByClinicId(id) }
+        first.shouldNotBeEmpty()
 
         val cached = cacheManager.getCache("clinic-treatment-types")?.get(id.toString())?.get()
         cached.shouldNotBeNull()
+
+        val second = transaction { treatmentTypeRepository.findByClinicId(id) }
+        second.shouldNotBeEmpty()
+        second shouldBeEqualTo first
     }
 
     @Test
@@ -134,9 +151,6 @@ class CacheIntegrationTest @Autowired constructor(
 
     @Test
     fun `@Cacheable CGLIB 프록시 적용 확인 — DoctorRepository가 프록시로 감싸진다`() {
-        val isCglibProxy = doctorRepository.javaClass.name.contains("CGLIB") ||
-            doctorRepository.javaClass.name.contains("EnhancerBySpring") ||
-            doctorRepository.javaClass != DoctorRepository::class.java
-        isCglibProxy.shouldBeTrue()
+        AopUtils.isCglibProxy(doctorRepository).shouldBeTrue()
     }
 }

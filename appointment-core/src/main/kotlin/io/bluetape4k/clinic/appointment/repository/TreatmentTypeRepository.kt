@@ -62,7 +62,7 @@ class TreatmentTypeRepository : LongJdbcRepository<TreatmentTypeRecord> {
      * @param clinicId 병원 ID
      * @return 시술 유형 목록 (빈 결과는 캐싱하지 않음)
      */
-    @Cacheable(cacheNames = ["clinic-treatment-types"], key = "#clinicId", unless = "#result.isEmpty()")
+    @Cacheable(cacheNames = ["clinic-treatment-types"], key = "#clinicId", unless = "#result == null || #result.isEmpty()")
     fun findByClinicId(clinicId: Long): List<TreatmentTypeRecord> =
         TreatmentTypes.selectAll()
             .where { TreatmentTypes.clinicId eq clinicId }

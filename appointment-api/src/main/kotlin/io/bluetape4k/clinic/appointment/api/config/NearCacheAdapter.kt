@@ -37,6 +37,7 @@ class NearCacheAdapter<V : Any>(
         return try {
             delegate.get(key.toString())
         } catch (e: Exception) {
+            if (e is InterruptedException) Thread.currentThread().interrupt()
             log.warn(e) { "캐시 조회 실패: name=$name, key=$key" }
             null
         }
@@ -53,6 +54,7 @@ class NearCacheAdapter<V : Any>(
             put(key, value)
             value
         } catch (e: Exception) {
+            if (e is InterruptedException) Thread.currentThread().interrupt()
             throw Cache.ValueRetrievalException(key, valueLoader, e)
         }
     }
@@ -64,6 +66,7 @@ class NearCacheAdapter<V : Any>(
             @Suppress("UNCHECKED_CAST")
             delegate.put(key.toString(), value as V)
         } catch (e: Exception) {
+            if (e is InterruptedException) Thread.currentThread().interrupt()
             log.warn(e) { "캐시 저장 실패: name=$name, key=$key" }
         }
     }
@@ -76,8 +79,10 @@ class NearCacheAdapter<V : Any>(
             val prev = delegate.putIfAbsent(key.toString(), value as V)
             prev?.let { SimpleValueWrapper(it) }
         } catch (e: Exception) {
+            if (e is InterruptedException) Thread.currentThread().interrupt()
             log.warn(e) { "캐시 putIfAbsent 실패: name=$name, key=$key" }
-            null
+            // 저장 실패 시 "이미 존재"로 표시하여 Spring이 캐시됐다고 오인하는 것을 방지
+            SimpleValueWrapper(value)
         }
     }
 
@@ -85,16 +90,17 @@ class NearCacheAdapter<V : Any>(
         try {
             delegate.remove(key.toString())
         } catch (e: Exception) {
+            if (e is InterruptedException) Thread.currentThread().interrupt()
             log.warn(e) { "캐시 evict 실패: name=$name, key=$key" }
         }
     }
 
     override fun evictIfPresent(key: Any): Boolean {
         return try {
-            val existed = delegate.get(key.toString()) != null
-            if (existed) delegate.remove(key.toString())
-            existed
+            // getAndRemove는 원자적으로 조회+삭제를 수행하여 TOCTOU 경합을 방지한다
+            delegate.getAndRemove(key.toString()) != null
         } catch (e: Exception) {
+            if (e is InterruptedException) Thread.currentThread().interrupt()
             log.warn(e) { "캐시 evictIfPresent 실패: name=$name, key=$key" }
             false
         }
@@ -104,6 +110,7 @@ class NearCacheAdapter<V : Any>(
         try {
             delegate.clearAll()
         } catch (e: Exception) {
+            if (e is InterruptedException) Thread.currentThread().interrupt()
             log.warn(e) { "캐시 전체 삭제 실패: name=$name" }
         }
     }

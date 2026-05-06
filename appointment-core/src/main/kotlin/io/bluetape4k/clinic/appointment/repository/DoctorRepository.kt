@@ -69,7 +69,7 @@ class DoctorRepository : LongJdbcRepository<DoctorRecord> {
      * @param clinicId 병원 ID
      * @return 의사 목록 (빈 결과는 캐싱하지 않음)
      */
-    @Cacheable(cacheNames = ["clinic-doctors"], key = "#clinicId", unless = "#result.isEmpty()")
+    @Cacheable(cacheNames = ["clinic-doctors"], key = "#clinicId", unless = "#result == null || #result.isEmpty()")
     fun findByClinicId(clinicId: Long): List<DoctorRecord> =
         Doctors.selectAll()
             .where { Doctors.clinicId eq clinicId }

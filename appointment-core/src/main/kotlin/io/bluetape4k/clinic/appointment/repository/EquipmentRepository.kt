@@ -32,7 +32,7 @@ class EquipmentRepository : LongJdbcRepository<EquipmentRecord> {
      * @param clinicId 병원 ID
      * @return 장비 목록 (빈 결과는 캐싱하지 않음)
      */
-    @Cacheable(cacheNames = ["clinic-equipments"], key = "#clinicId", unless = "#result.isEmpty()")
+    @Cacheable(cacheNames = ["clinic-equipments"], key = "#clinicId", unless = "#result == null || #result.isEmpty()")
     fun findByClinicId(clinicId: Long): List<EquipmentRecord> =
         Equipments.selectAll()
             .where { Equipments.clinicId eq clinicId }
