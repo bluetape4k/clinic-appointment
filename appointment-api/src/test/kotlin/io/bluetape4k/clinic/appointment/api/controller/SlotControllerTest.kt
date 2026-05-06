@@ -20,7 +20,12 @@ import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.logging.KLogging
-import org.assertj.core.api.Assertions.assertThat
+import org.amshove.kluent.shouldBeEqualTo
+import org.amshove.kluent.shouldBeTrue
+import org.amshove.kluent.shouldContain
+import org.amshove.kluent.shouldBeEmpty
+import org.amshove.kluent.shouldNotBeEmpty
+import org.amshove.kluent.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -36,7 +41,9 @@ import java.time.LocalTime
 
 class SlotControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
-    companion object : KLogging()
+    companion object : KLogging() {
+        private const val BASE_URL = "/api/clinics"
+    }
 
     @LocalServerPort
     private var port: Int = 0
@@ -132,58 +139,58 @@ class SlotControllerTest @Autowired constructor() : AbstractApiIntegrationTest()
     fun `GET - 가용 슬롯 조회 성공`() {
         // 2026-04-06 은 월요일
         val response = client.get()
-            .uri("/api/clinics/{clinicId}/slots?doctorId={doctorId}&treatmentTypeId={treatmentTypeId}&date={date}",
+            .uri("$BASE_URL/{clinicId}/slots?doctorId={doctorId}&treatmentTypeId={treatmentTypeId}&date={date}",
                 clinicId, doctorId, treatmentTypeId, "2026-04-06")
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<List<*>>("$.data")).isNotEmpty()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldNotBeEmpty()
     }
 
     @Test
     fun `GET - 운영시간 외 날짜 조회 시 빈 슬롯 반환`() {
         // 2026-04-08 은 수요일 — 운영시간 미등록
         val response = client.get()
-            .uri("/api/clinics/{clinicId}/slots?doctorId={doctorId}&treatmentTypeId={treatmentTypeId}&date={date}",
+            .uri("$BASE_URL/{clinicId}/slots?doctorId={doctorId}&treatmentTypeId={treatmentTypeId}&date={date}",
                 clinicId, doctorId, treatmentTypeId, "2026-04-08")
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<List<*>>("$.data")).isEmpty()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldBeEmpty()
     }
 
     @Test
     fun `GET - 필수 파라미터 누락 시 4xx 또는 5xx`() {
         // doctorId 누락
         val response = client.get()
-            .uri("/api/clinics/{clinicId}/slots?treatmentTypeId={treatmentTypeId}&date={date}",
+            .uri("$BASE_URL/{clinicId}/slots?treatmentTypeId={treatmentTypeId}&date={date}",
                 clinicId, treatmentTypeId, "2026-04-06")
             .execute()
 
-        assertThat(response.statusCode.is4xxClientError || response.statusCode.is5xxServerError).isTrue()
+        (response.statusCode.is4xxClientError || response.statusCode.is5xxServerError).shouldBeTrue()
     }
 
     @Test
     fun `GET - requestedDurationMinutes 지정 시 해당 길이 슬롯 반환`() {
         val response = client.get()
-            .uri("/api/clinics/{clinicId}/slots?doctorId={doctorId}&treatmentTypeId={treatmentTypeId}&date={date}&requestedDurationMinutes={duration}",
+            .uri("$BASE_URL/{clinicId}/slots?doctorId={doctorId}&treatmentTypeId={treatmentTypeId}&date={date}&requestedDurationMinutes={duration}",
                 clinicId, doctorId, treatmentTypeId, "2026-04-06", 60)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
     }
 
     @Test
     fun `GET - 존재하지 않는 clinicId로 조회`() {
         val response = client.get()
-            .uri("/api/clinics/{clinicId}/slots?doctorId={doctorId}&treatmentTypeId={treatmentTypeId}&date={date}",
+            .uri("$BASE_URL/{clinicId}/slots?doctorId={doctorId}&treatmentTypeId={treatmentTypeId}&date={date}",
                 999999, doctorId, treatmentTypeId, "2026-04-06")
             .execute()
 
         // SlotCalculationService가 빈 결과를 반환하거나 404를 반환
-        assertThat(response.statusCode.value()).isIn(200, 404)
+        listOf(200, 404) shouldContain response.statusCode.value()
     }
 }

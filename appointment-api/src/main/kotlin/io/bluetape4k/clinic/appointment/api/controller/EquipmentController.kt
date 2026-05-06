@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController
  * 장비 정보 조회 REST 컨트롤러.
  *
  * 병원별 장비 목록 및 개별 장비 정보 조회 API를 제공합니다.
+ *
+ * @param equipmentRepository 장비 Repository
  */
 @RestController
 @RequestMapping("/api")

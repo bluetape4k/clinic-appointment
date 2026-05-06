@@ -5,18 +5,18 @@ plugins {
 dependencies {
     api(project(":appointment-core"))
 
-    compileOnly(Libs.springBoot("autoconfigure"))
+    compileOnly("org.springframework.boot:spring-boot-autoconfigure")
     compileOnly("org.springframework:spring-context")
 
-    api(Libs.exposed_core)
-    api(Libs.exposed_jdbc)
-    api(Libs.exposed_r2dbc)
-    api(Libs.exposed_java_time)
+    api(libs.exposed.core)
+    api(libs.exposed.jdbc)
+    api(libs.exposed.r2dbc)
+    api(libs.exposed.java.time)
 
-    testImplementation(Libs.bluetape4k_junit5)
-    testImplementation(Libs.bluetape4k_exposed_r2dbc_tests)
-    testImplementation(Libs.springBootStarter("test"))
-    testImplementation(Libs.h2_v2)
-    testImplementation(Libs.r2dbc_h2)
-    testImplementation(Libs.kotlinx_coroutines_test)
+    testImplementation(libs.bluetape4k.junit5)
+    testImplementation(libs.bluetape4k.exposed.r2dbc.tests)
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation(libs.h2.v2)
+    testImplementation(libs.r2dbc.h2)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

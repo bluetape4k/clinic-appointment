@@ -12,6 +12,10 @@ import org.springframework.stereotype.Component
  * 도메인 이벤트를 구독하여 알림을 발송하는 리스너.
  *
  * [NotificationProperties] 설정에 따라 이벤트별 on/off를 제어합니다.
+ *
+ * @param notificationChannel 알림 발송 채널
+ * @param appointmentRepository 예약 Repository
+ * @param properties 알림 설정
  */
 @Component
 class NotificationEventListener(

@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
+import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
 import io.bluetape4k.clinic.appointment.repository.HolidayRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.solver.converter.SolutionConverter
@@ -18,12 +19,20 @@ import java.time.LocalDate
  * Solver 실행 진입점.
  *
  * Repository에서 데이터를 로딩하고 Solver를 실행하여 최적화된 예약 배치를 반환합니다.
+ *
+ * @param clinicRepository 병원 데이터 조회 Repository
+ * @param doctorRepository 의사 데이터 조회 Repository
+ * @param appointmentRepository 예약 데이터 조회 Repository
+ * @param treatmentTypeRepository 진료 유형 데이터 조회 Repository
+ * @param holidayRepository 휴일 데이터 조회 Repository
+ * @param solverFactory 기본 SolverFactory
  */
 class SolverService(
     private val clinicRepository: ClinicRepository = ClinicRepository(),
     private val doctorRepository: DoctorRepository = DoctorRepository(),
     private val appointmentRepository: AppointmentRepository = AppointmentRepository(),
     private val treatmentTypeRepository: TreatmentTypeRepository = TreatmentTypeRepository(),
+    private val equipmentRepository: EquipmentRepository = EquipmentRepository(),
     private val holidayRepository: HolidayRepository = HolidayRepository(),
     private val solverFactory: SolverFactory<ScheduleSolution> = AppointmentSolverConfig.createFactory(),
 ) {
@@ -106,7 +115,7 @@ class SolverService(
             val doctors = doctorRepository.findByClinicId(clinicId)
             val appointments = appointmentRepository.findByClinicAndDateRange(clinicId, dateRange)
             val treatments = treatmentTypeRepository.findByClinicId(clinicId)
-            val equipments = treatmentTypeRepository.findEquipmentsByClinicId(clinicId)
+            val equipments = equipmentRepository.findByClinicId(clinicId)
             val operatingHours = clinicRepository.findAllOperatingHours(clinicId)
             val doctorSchedules = doctors.flatMap { doctorRepository.findAllSchedules(it.id!!) }
             val doctorAbsences = doctors.flatMap { doctorRepository.findAbsencesByDateRange(it.id!!, dateRange) }

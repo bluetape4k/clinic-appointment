@@ -21,6 +21,8 @@ import java.time.LocalDate
  *
  * 주어진 병원, 의사, 진료 유형, 날짜에 대해
  * 예약 가능한 시간대 목록을 반환합니다.
+ *
+ * @param slotCalculationService 가용 슬롯 계산 서비스
  */
 @RestController
 @RequestMapping("/api/clinics/{clinicId}/slots")

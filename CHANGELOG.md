@@ -7,7 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- (다음 릴리스에 포함될 항목)
+
+- `Libs.bluetape4k_lingua`, `Libs.bluetape4k_mock_web_server`, `Libs.bluetape4k_mock_webflux_server` 모듈 참조 추가 (BOM 1.7.0 신규 모듈)
+
+### Changed
+
+- **Bluetape4k**: `1.6.2` → `1.7.0`
+- **Kotlin**: `2.3.20` → `2.3.21`
+
+### Removed
+
+- `Libs.bluetape4k_crypto`, `Libs.bluetape4k_exposed_jasypt` 참조 제거 (BOM 1.7.0에서 제외됨)
 
 ---
 

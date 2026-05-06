@@ -24,6 +24,25 @@ import java.time.LocalTime
  *
  * 전체 문제 정의(Problem Facts)와 Planning Entity 목록,
  * 그리고 Value Range Provider를 포함합니다.
+ *
+ * @property clinic Solver 대상 병원 정보
+ * @property doctors Solver 대상 의사 목록
+ * @property treatments Solver 대상 진료 유형 목록
+ * @property equipments Solver 대상 장비 목록
+ * @property operatingHours 병원 운영 시간 목록
+ * @property doctorSchedules 의사 근무 시간 목록
+ * @property doctorAbsences 의사 부재 목록
+ * @property breakTimes 병원 휴게 시간 목록
+ * @property defaultBreakTimes 병원 기본 휴게 시간 목록
+ * @property closures 병원 휴진 목록
+ * @property holidays 휴일 목록
+ * @property treatmentEquipments 진료 유형별 필요 장비 목록
+ * @property equipmentUnavailabilities 장비 사용불가 목록
+ * @property doctorIds 의사 ID Value Range
+ * @property dateRange 예약 날짜 Value Range
+ * @property timeSlots 예약 시작 시간 Value Range
+ * @property appointments Solver가 최적화할 예약 엔티티 목록
+ * @property score Solver 점수
  */
 @PlanningSolution
 class ScheduleSolution(

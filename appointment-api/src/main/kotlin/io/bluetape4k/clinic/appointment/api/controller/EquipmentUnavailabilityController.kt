@@ -32,6 +32,8 @@ import java.time.LocalDate
  *
  * 장비의 사용불가 기간 등록, 조회, 수정, 삭제 API와
  * 예외 처리 및 충돌 예약 감지 API를 제공합니다.
+ *
+ * @param service 장비 사용불가 서비스
  */
 @RestController
 @RequestMapping("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities")

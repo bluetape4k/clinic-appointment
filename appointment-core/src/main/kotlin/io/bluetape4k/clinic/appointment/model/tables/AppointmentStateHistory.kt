@@ -32,6 +32,7 @@ object AppointmentStateHistory : LongIdTable("scheduling_appointment_state_histo
 /**
  * 예약 상태 변경 이력 레코드.
  *
+ * @property id 상태 변경 이력 ID
  * @property appointmentId 예약 ID
  * @property fromState 이전 상태
  * @property toState 변경된 새로운 상태

@@ -21,7 +21,12 @@ import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.logging.KLogging
-import org.assertj.core.api.Assertions.assertThat
+import org.amshove.kluent.shouldBeEmpty
+import org.amshove.kluent.shouldBeEqualTo
+import org.amshove.kluent.shouldBeFalse
+import org.amshove.kluent.shouldBeTrue
+import org.amshove.kluent.shouldNotBeEmpty
+import org.amshove.kluent.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -39,7 +44,9 @@ import java.time.LocalTime
 
 class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
-    companion object : KLogging()
+    companion object : KLogging() {
+        private const val BASE_URL = "/api/appointments"
+    }
 
     @LocalServerPort
     private var port: Int = 0
@@ -145,17 +152,17 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         """.trimIndent()
 
         val response = client.post()
-            .uri("/api/appointments")
+            .uri(BASE_URL)
             .contentType(MediaType.APPLICATION_JSON)
             .body(body)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.CREATED)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<String>("$.data.patientName")).isEqualTo("John Doe")
-        assertThat(response.jsonPath<String>("$.data.status")).isEqualTo("REQUESTED")
-        assertThat(response.jsonPath<String>("$.data.timezone")).isEqualTo("Asia/Seoul")
-        assertThat(response.jsonPath<String>("$.data.locale")).isEqualTo("ko-KR")
+        response.statusCode shouldBeEqualTo HttpStatus.CREATED
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<String>("$.data.patientName") shouldBeEqualTo "John Doe"
+        response.jsonPath<String>("$.data.status") shouldBeEqualTo "REQUESTED"
+        response.jsonPath<String>("$.data.timezone") shouldBeEqualTo "Asia/Seoul"
+        response.jsonPath<String>("$.data.locale") shouldBeEqualTo "ko-KR"
     }
 
     @Test
@@ -163,25 +170,25 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         val appointmentId = createTestAppointment()
 
         val response = client.get()
-            .uri("/api/appointments/{id}", appointmentId)
+            .uri("$BASE_URL/{id}", appointmentId)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<Int>("$.data.id")).isEqualTo(appointmentId.toInt())
-        assertThat(response.jsonPath<String>("$.data.patientName")).isEqualTo("Jane Doe")
-        assertThat(response.jsonPath<String>("$.data.timezone")).isEqualTo("Asia/Seoul")
-        assertThat(response.jsonPath<String>("$.data.locale")).isEqualTo("ko-KR")
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<Int>("$.data.id") shouldBeEqualTo appointmentId.toInt()
+        response.jsonPath<String>("$.data.patientName") shouldBeEqualTo "Jane Doe"
+        response.jsonPath<String>("$.data.timezone") shouldBeEqualTo "Asia/Seoul"
+        response.jsonPath<String>("$.data.locale") shouldBeEqualTo "ko-KR"
     }
 
     @Test
     fun `GET - return 404 for non-existent appointment`() {
         val response = client.get()
-            .uri("/api/appointments/{id}", 999999)
+            .uri("$BASE_URL/{id}", 999999)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.NOT_FOUND)
-        assertThat(response.jsonPath<Boolean>("$.success")).isFalse()
+        response.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
     }
 
     @Test
@@ -189,14 +196,14 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         val appointmentId = createTestAppointment()
 
         val response = client.patch()
-            .uri("/api/appointments/{id}/status", appointmentId)
+            .uri("$BASE_URL/{id}/status", appointmentId)
             .contentType(MediaType.APPLICATION_JSON)
             .body("""{"status": "CONFIRMED"}""")
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<String>("$.data.status")).isEqualTo("CONFIRMED")
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<String>("$.data.status") shouldBeEqualTo "CONFIRMED"
     }
 
     @Test
@@ -204,13 +211,13 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         val appointmentId = createTestAppointment()
 
         val response = client.patch()
-            .uri("/api/appointments/{id}/status", appointmentId)
+            .uri("$BASE_URL/{id}/status", appointmentId)
             .contentType(MediaType.APPLICATION_JSON)
             .body("""{"status": "COMPLETED"}""")
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.CONFLICT)
-        assertThat(response.jsonPath<Boolean>("$.success")).isFalse()
+        response.statusCode shouldBeEqualTo HttpStatus.CONFLICT
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
     }
 
     @Test
@@ -218,12 +225,43 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         val appointmentId = createTestAppointment()
 
         val response = client.delete()
-            .uri("/api/appointments/{id}", appointmentId)
+            .uri("$BASE_URL/{id}", appointmentId)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.OK)
-        assertThat(response.jsonPath<Boolean>("$.success")).isTrue()
-        assertThat(response.jsonPath<String>("$.data.status")).isEqualTo("CANCELLED")
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<String>("$.data.status") shouldBeEqualTo "CANCELLED"
+    }
+
+    @Test
+    fun `GET - date range 로 예약 목록 조회`() {
+        createTestAppointment()
+
+        val response = client.get()
+            .uri("$BASE_URL?clinicId={clinicId}&startDate={startDate}&endDate={endDate}",
+                clinicId, "2026-04-01", "2026-04-30")
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        val items = response.jsonPath<List<*>>("$.data").shouldNotBeNull()
+        items.shouldNotBeEmpty()
+        response.jsonPath<String>("$.data[0].patientName") shouldBeEqualTo "Jane Doe"
+        response.jsonPath<String>("$.data[0].timezone") shouldBeEqualTo "Asia/Seoul"
+    }
+
+    @Test
+    fun `GET - 범위 밖 날짜 조회 시 빈 목록 반환`() {
+        createTestAppointment()
+
+        val response = client.get()
+            .uri("$BASE_URL?clinicId={clinicId}&startDate={startDate}&endDate={endDate}",
+                clinicId, "2026-05-01", "2026-05-31")
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldBeEmpty()
     }
 
     @Test
@@ -271,14 +309,14 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         """.trimIndent()
 
         val response = client.post()
-            .uri("/api/appointments")
+            .uri(BASE_URL)
             .contentType(MediaType.APPLICATION_JSON)
             .body(body)
             .execute()
 
-        assertThat(response.statusCode).isEqualTo(HttpStatus.CREATED)
-        assertThat(response.jsonPath<String>("$.data.timezone")).isEqualTo("America/Los_Angeles")
-        assertThat(response.jsonPath<String>("$.data.locale")).isEqualTo("ko-KR")
+        response.statusCode shouldBeEqualTo HttpStatus.CREATED
+        response.jsonPath<String>("$.data.timezone") shouldBeEqualTo "America/Los_Angeles"
+        response.jsonPath<String>("$.data.locale") shouldBeEqualTo "ko-KR"
     }
 
     private fun createTestAppointment(): Long =
@@ -296,4 +334,3 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
             }.value
         }
 }
-

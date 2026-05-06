@@ -19,6 +19,11 @@ import java.time.LocalDate
  * 1. 영향받는 예약을 PENDING_RESCHEDULE로 전환
  * 2. 각 예약에 대해 재배정 후보 슬롯 탐색
  * 3. 관리자가 후보를 선택하면 새 예약 생성 + 원래 예약 RESCHEDULED 처리
+ *
+ * @param slotCalculationService 재배정 후보 슬롯 계산 서비스
+ * @param appointmentRepository 예약 Repository
+ * @param rescheduleCandidateRepository 재배정 후보 Repository
+ * @param stateHistoryRepository 예약 상태 이력 Repository
  */
 class ClosureRescheduleService(
     private val slotCalculationService: SlotCalculationService,

@@ -3,12 +3,15 @@ package io.bluetape4k.clinic.appointment.api.test
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.testcontainers.database.MySQL8Server
 import io.bluetape4k.testcontainers.database.PostgreSQLServer
+import io.bluetape4k.testcontainers.storage.RedisServer
 import io.bluetape4k.utils.ShutdownQueue
 
 /**
- * API 통합 테스트용 DB 컨테이너.
+ * API 통합 테스트용 컨테이너.
  */
 object Containers : KLogging() {
+
+    val Redis: RedisServer by lazy { RedisServer.Launcher.redis }
 
     val Postgres: PostgreSQLServer by lazy { PostgreSQLServer.Launcher.postgres }
 
