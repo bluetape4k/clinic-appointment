@@ -7,7 +7,6 @@ dependencies {
     api(libs.exposed.java.time)
     api(libs.exposed.spring7.transaction)
 
-    api(libs.bluetape4k.cache.core)
     api(libs.bluetape4k.exposed.core)
     api(libs.bluetape4k.coroutines)
     api(libs.kotlinx.coroutines.core)
@@ -15,6 +14,7 @@ dependencies {
     implementation(libs.exposed.jdbc)
     implementation(libs.bluetape4k.exposed.jdbc)
 
+    testImplementation(libs.bluetape4k.cache.core)
     testImplementation(libs.bluetape4k.junit5)
     testImplementation(libs.bluetape4k.testcontainers)
     testImplementation(libs.bluetape4k.io)
