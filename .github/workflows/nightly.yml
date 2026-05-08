@@ -1,30 +1,9 @@
-name: CI
+name: Nightly Tests
 
 on:
-  push:
-    branches: [develop]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.gitignore'
-      - '.editorconfig'
-      - '.gitleaks.toml'
-      - 'CHANGELOG.md'
-      - 'LICENSE'
-      - '.omc/**'
-      - '.claude/**'
-  pull_request:
-    branches: [develop]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.gitignore'
-      - '.editorconfig'
-      - '.gitleaks.toml'
-      - 'CHANGELOG.md'
-      - 'LICENSE'
-      - '.omc/**'
-      - '.claude/**'
+  schedule:
+    - cron: '0 20 * * *'  # 매일 오전 5시 KST (UTC 20:00)
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,87 +15,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
-  # ── 0. 시크릿 스캔 ────────────────────────────────────────────────────────────
-  gitleaks:
-    name: Secret Scan (gitleaks)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install gitleaks
-        run: |
-          GITLEAKS_VERSION=$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/')
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz gitleaks
-          sudo mv gitleaks /usr/local/bin/
-
-      - name: Run gitleaks
-        run: gitleaks detect --source . --redact --no-git --config .gitleaks.toml
-
-  # ── 1. Gradle Wrapper 검증 ──────────────────────────────────────────────────
-  validate-wrapper:
-    name: Validate Gradle Wrapper
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: gradle/actions/wrapper-validation@v4
-
-  # ── 2. 변경 모듈 감지 ──────────────────────────────────────────────────────
-  changes:
-    name: Detect Changed Modules
-    runs-on: ubuntu-latest
-    needs: validate-wrapper
-    outputs:
-      core-event: ${{ steps.filter.outputs.core-event }}
-      solver: ${{ steps.filter.outputs.solver }}
-      api: ${{ steps.filter.outputs.api }}
-      notification: ${{ steps.filter.outputs.notification }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            core-event:
-              - 'appointment-core/**'
-              - 'appointment-event/**'
-              - 'buildSrc/**'
-              - 'gradle/**'
-              - 'build.gradle.kts'
-              - 'settings.gradle.kts'
-            solver:
-              - 'appointment-solver/**'
-              - 'appointment-core/**'
-              - 'buildSrc/**'
-              - 'gradle/**'
-              - 'build.gradle.kts'
-              - 'settings.gradle.kts'
-            api:
-              - 'appointment-api/**'
-              - 'appointment-core/**'
-              - 'appointment-event/**'
-              - 'buildSrc/**'
-              - 'gradle/**'
-              - 'build.gradle.kts'
-              - 'settings.gradle.kts'
-            notification:
-              - 'appointment-notification/**'
-              - 'appointment-core/**'
-              - 'buildSrc/**'
-              - 'gradle/**'
-              - 'build.gradle.kts'
-              - 'settings.gradle.kts'
-            frontend:
-              - 'frontend/**'
-
-  # ── 3. 빌드 + Detekt 정적 분석 ─────────────────────────────────────────────
+  # ── 1. 빌드 + Detekt ─────────────────────────────────────────────────────────
   build:
     name: Build & Detekt
     runs-on: ubuntu-latest
-    needs: [validate-wrapper, changes]
     steps:
       - uses: actions/checkout@v4
 
@@ -128,7 +30,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: wrapper
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Build (compile only, frontend 제외)
         run: ./gradlew build -x test -x :frontend:appointment-frontend:build --parallel
@@ -146,12 +47,11 @@ jobs:
           path: '**/build/reports/detekt/*.xml'
           retention-days: 7
 
-  # ── 4. Core 모듈 테스트 (appointment-core, appointment-event) ────────────────
+  # ── 2. Core & Event 테스트 ───────────────────────────────────────────────────
   test-core:
     name: Test / Core & Event
     runs-on: ubuntu-latest
-    needs: [build, changes]
-    if: needs.changes.outputs.core-event == 'true'
+    needs: build
     steps:
       - uses: actions/checkout@v4
 
@@ -202,12 +102,11 @@ jobs:
           path: '**/build/reports/kover/'
           retention-days: 7
 
-  # ── 5. Solver 모듈 테스트 (appointment-solver) ───────────────────────────────
+  # ── 3. Solver 테스트 ─────────────────────────────────────────────────────────
   test-solver:
     name: Test / Solver
     runs-on: ubuntu-latest
-    needs: [build, changes]
-    if: needs.changes.outputs.solver == 'true'
+    needs: build
     steps:
       - uses: actions/checkout@v4
 
@@ -253,12 +152,11 @@ jobs:
           path: '**/build/reports/kover/'
           retention-days: 7
 
-  # ── 6. API 모듈 테스트 (appointment-api, H2 / PostgreSQL / MySQL 병렬) ──────────
+  # ── 4. API 테스트 (H2 / PostgreSQL / MySQL) ───────────────────────────────────
   test-api:
     name: Test / API (${{ matrix.db }})
     runs-on: ubuntu-latest
-    needs: [build, changes]
-    if: needs.changes.outputs.api == 'true'
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -317,12 +215,11 @@ jobs:
           path: '**/build/reports/kover/'
           retention-days: 7
 
-  # ── 7. Notification 모듈 테스트 (appointment-notification) ───────────────────
+  # ── 5. Notification 테스트 ───────────────────────────────────────────────────
   test-notification:
     name: Test / Notification
     runs-on: ubuntu-latest
-    needs: [build, changes]
-    if: needs.changes.outputs.notification == 'true'
+    needs: build
     steps:
       - uses: actions/checkout@v4
 
@@ -369,7 +266,7 @@ jobs:
           path: '**/build/reports/kover/'
           retention-days: 7
 
-  # ── 8. 커버리지 집계 ─────────────────────────────────────────────────────────
+  # ── 6. 커버리지 집계 ─────────────────────────────────────────────────────────
   coverage-report:
     name: Coverage Report
     runs-on: ubuntu-latest
@@ -392,7 +289,7 @@ jobs:
           if [ -d coverage-artifacts ]; then
             python3 .github/scripts/aggregate-kover-coverage.py coverage-artifacts
           else
-            echo "No coverage artifacts found (test jobs may have been skipped)"
+            echo "No coverage artifacts found"
           fi
         continue-on-error: true
 
@@ -405,87 +302,11 @@ jobs:
           fail-on-error: false
         continue-on-error: true
 
-  # ── 9. 프론트엔드 빌드 검증 ───────────────────────────────────────────────────
-  build-frontend:
-    name: Build / Frontend (Angular)
+  # ── 7. Nightly 상태 집계 ─────────────────────────────────────────────────────
+  nightly-status:
+    name: Nightly Status
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    defaults:
-      run:
-        working-directory: frontend/appointment-frontend
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: frontend/appointment-frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npx ng build --configuration production --dry-run 2>/dev/null || true
-
-      - name: Production build
-        run: npm run build
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/appointment-frontend/dist/
-          retention-days: 3
-
-  # ── 10. Flyway 마이그레이션 검증 (H2 / PostgreSQL / MySQL) ─────────────────────
-  flyway-migration:
-    name: Flyway Migration / ${{ matrix.db }}
-    runs-on: ubuntu-latest
-    needs: [build, changes]
-    if: needs.changes.outputs.api == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - db: H2
-            test-class: "io.bluetape4k.clinic.appointment.api.migration.FlywayMigrationTest"
-          - db: PostgreSQL
-            test-class: "io.bluetape4k.clinic.appointment.api.migration.FlywayPostgreSQLMigrationTest"
-          - db: MySQL
-            test-class: "io.bluetape4k.clinic.appointment.api.migration.FlywayMySQLMigrationTest"
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          java-version: ${{ env.JAVA_VERSION }}
-          distribution: ${{ env.JAVA_DISTRIBUTION }}
-
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: wrapper
-          cache-read-only: true
-
-      - name: Verify Flyway migration (${{ matrix.db }}) (retry 3)
-        env:
-          TEST_CLASS: ${{ matrix.test-class }}
-          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
-          TESTCONTAINERS_RYUK_DISABLED: "true"
-        run: |
-          for i in 1 2 3; do
-            ./gradlew :appointment-api:test --tests "$TEST_CLASS" --no-daemon && exit 0
-            echo "::warning::Attempt $i of 3 failed."
-            [ $i -lt 3 ] && sleep 20
-          done
-          exit 1
-
-  # ── 11. CI 상태 집계 ─────────────────────────────────────────────────────────
-  ci-status:
-    name: CI Status
-    runs-on: ubuntu-latest
-    needs: [gitleaks, build, build-frontend, flyway-migration, test-core, test-solver, test-api, test-notification]
+    needs: [build, test-core, test-solver, test-api, test-notification]
     if: always()
     steps:
       - name: Check all jobs
@@ -494,7 +315,7 @@ jobs:
         run: |
           echo "Job results: $RESULTS"
           if echo "$RESULTS" | grep -qE "failure|cancelled"; then
-            echo "::error::CI failed"
+            echo "::error::Nightly tests failed"
             exit 1
           fi
-          echo "CI passed"
+          echo "Nightly passed"
