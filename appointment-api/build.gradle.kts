@@ -52,7 +52,6 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation(libs.bluetape4k.junit5)
-    testImplementation(libs.kluent)
     testImplementation(libs.exposed.migration.jdbc)
 
     // Testcontainers

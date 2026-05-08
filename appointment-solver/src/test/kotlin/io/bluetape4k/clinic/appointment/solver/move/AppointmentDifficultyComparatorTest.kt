@@ -1,9 +1,9 @@
 package io.bluetape4k.clinic.appointment.solver.move
 
 import io.bluetape4k.clinic.appointment.solver.domain.AppointmentPlanning
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeGreaterThan
-import org.amshove.kluent.shouldBeLessThan
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeGreaterThan
+import io.bluetape4k.assertions.shouldBeLessThan
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
 

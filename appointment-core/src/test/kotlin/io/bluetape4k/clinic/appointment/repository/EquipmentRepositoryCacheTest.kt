@@ -11,9 +11,9 @@ import io.bluetape4k.clinic.appointment.test.withTables
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.testcontainers.storage.RedisServer
 import io.lettuce.core.RedisClient
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldHaveSize
-import org.amshove.kluent.shouldNotBeNull
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldHaveSize
+import io.bluetape4k.assertions.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll

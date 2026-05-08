@@ -9,10 +9,10 @@ import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
 import io.bluetape4k.logging.KLogging
-import org.amshove.kluent.shouldBeEqualTo
-import org.amshove.kluent.shouldBeNull
-import org.amshove.kluent.shouldHaveSize
-import org.amshove.kluent.shouldNotBeNull
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeNull
+import io.bluetape4k.assertions.shouldHaveSize
+import io.bluetape4k.assertions.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.junit.jupiter.params.ParameterizedTest

@@ -12,8 +12,8 @@ import io.bluetape4k.clinic.appointment.solver.domain.DoctorFact
 import io.bluetape4k.clinic.appointment.solver.domain.ScheduleSolution
 import io.mockk.every
 import io.mockk.mockk
-import org.amshove.kluent.shouldBeFalse
-import org.amshove.kluent.shouldBeTrue
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.DayOfWeek

@@ -2,8 +2,8 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
-import io.bluetape4k.redis.lettuce.leader.LettuceLeaderGroupElection
-import io.bluetape4k.redis.lettuce.leader.leaderGroupElection
+import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
+import io.bluetape4k.leader.lettuce.leaderGroupElection
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
@@ -81,8 +81,8 @@ class NotificationAutoConfiguration {
     @Bean
     @ConditionalOnClass(RedisClient::class)
     @ConditionalOnBean(StatefulRedisConnection::class)
-    fun notificationLeaderElection(connection: StatefulRedisConnection<String, String>): LettuceLeaderGroupElection {
-        log.info { "HA 리더 선출 활성화: LettuceLeaderGroupElection" }
+    fun notificationLeaderElection(connection: StatefulRedisConnection<String, String>): LettuceLeaderGroupElector {
+        log.info { "HA 리더 선출 활성화: LettuceLeaderGroupElector" }
         return connection.leaderGroupElection()
     }
 
@@ -100,7 +100,7 @@ class NotificationAutoConfiguration {
         appointmentRepository: AppointmentRepository,
         historyRepository: NotificationHistoryRepository,
         properties: NotificationProperties,
-        leaderElection: LettuceLeaderGroupElection?,
+        leaderElection: LettuceLeaderGroupElector?,
     ): AppointmentReminderScheduler =
         AppointmentReminderScheduler(
             resilientNotificationChannel,
