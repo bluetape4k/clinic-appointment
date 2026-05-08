@@ -4,7 +4,8 @@ plugins {
 
 node {
     version.set("22.14.0")
-    npmVersion.set("10.9.0")
+    npmVersion.set("11.12.0")
+    npmInstallCommand.set("ci")
     download.set(true)
 }
 
