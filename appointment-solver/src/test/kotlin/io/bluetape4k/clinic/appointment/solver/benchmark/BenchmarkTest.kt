@@ -11,11 +11,11 @@ import io.bluetape4k.clinic.appointment.solver.domain.ScheduleSolution
 import io.bluetape4k.clinic.appointment.solver.domain.TreatmentFact
 import io.bluetape4k.clinic.appointment.solver.domain.generateTimeSlots
 import io.bluetape4k.clinic.appointment.solver.service.AppointmentSolverConfig
-import org.amshove.kluent.shouldBeGreaterThan
-import org.amshove.kluent.shouldBeGreaterOrEqualTo
-import org.amshove.kluent.shouldBeLessThan
-import org.amshove.kluent.shouldBeTrue
-import org.amshove.kluent.shouldNotBeNull
+import io.bluetape4k.assertions.shouldBeGreaterThan
+import io.bluetape4k.assertions.shouldBeGreaterOrEqualTo
+import io.bluetape4k.assertions.shouldBeLessThan
+import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.time.DayOfWeek

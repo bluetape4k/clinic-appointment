@@ -3,6 +3,7 @@
 
 [versions]
 bluetape4k = "1.7.0"
+bluetape4k-assertions = "1.8.0-SNAPSHOT"
 
 kotlin = "2.3.21"
 kotlinx-coroutines = "1.10.2"
@@ -27,7 +28,6 @@ timefold-solver = "1.32.0"
 
 junit-jupiter = "6.0.3"
 junit-platform = "6.0.3"
-kluent = "1.73"
 mockk = "1.14.9"
 testcontainers = "2.0.4"
 assertj = "3.27.6"
@@ -71,6 +71,7 @@ jetbrains-annotations = { module = "org.jetbrains:annotations", version = "26.1.
 
 # bluetape4k
 bluetape4k-bom = { module = "io.github.bluetape4k:bluetape4k-bom", version.ref = "bluetape4k" }
+bluetape4k-assertions = { module = "io.github.bluetape4k:bluetape4k-assertions", version.ref = "bluetape4k-assertions" }
 bluetape4k-coroutines = { module = "io.github.bluetape4k:bluetape4k-coroutines" }
 bluetape4k-jackson3 = { module = "io.github.bluetape4k:bluetape4k-jackson3" }
 bluetape4k-jdbc = { module = "io.github.bluetape4k:bluetape4k-jdbc" }
@@ -175,7 +176,6 @@ junit-platform-engine = { module = "org.junit.platform:junit-platform-engine" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 junit-platform-runner = { module = "org.junit.platform:junit-platform-runner" }
 
-kluent = { module = "org.amshove.kluent:kluent", version.ref = "kluent" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 datafaker = { module = "net.datafaker:datafaker", version.ref = "datafaker" }
