@@ -2,8 +2,8 @@
 # Gradle Version Catalog — migrated from buildSrc/src/main/kotlin/Libs.kt
 
 [versions]
-bluetape4k = "1.7.0"
-bluetape4k-assertions = "1.8.0-SNAPSHOT"
+bluetape4k = "1.8.0-SNAPSHOT"
+bluetape4k-leader = "0.1.0-SNAPSHOT"
 
 kotlin = "2.3.21"
 kotlinx-coroutines = "1.10.2"
@@ -71,12 +71,13 @@ jetbrains-annotations = { module = "org.jetbrains:annotations", version = "26.1.
 
 # bluetape4k
 bluetape4k-bom = { module = "io.github.bluetape4k:bluetape4k-bom", version.ref = "bluetape4k" }
-bluetape4k-assertions = { module = "io.github.bluetape4k:bluetape4k-assertions", version.ref = "bluetape4k-assertions" }
+bluetape4k-assertions = { module = "io.github.bluetape4k:bluetape4k-assertions", version.ref = "bluetape4k" }
 bluetape4k-coroutines = { module = "io.github.bluetape4k:bluetape4k-coroutines" }
 bluetape4k-jackson3 = { module = "io.github.bluetape4k:bluetape4k-jackson3" }
 bluetape4k-jdbc = { module = "io.github.bluetape4k:bluetape4k-jdbc" }
 bluetape4k-junit5 = { module = "io.github.bluetape4k:bluetape4k-junit5" }
-bluetape4k-leader = { module = "io.github.bluetape4k:bluetape4k-leader" }
+bluetape4k-leader-bom = { module = "io.github.bluetape4k.leader:leader-bom", version.ref = "bluetape4k-leader" }
+bluetape4k-leader = { module = "io.github.bluetape4k.leader:leader-redis-lettuce", version.ref = "bluetape4k-leader" }
 bluetape4k-cache-core = { module = "io.github.bluetape4k:bluetape4k-cache-core" }
 bluetape4k-cache-lettuce = { module = "io.github.bluetape4k:bluetape4k-cache-lettuce" }
 bluetape4k-io = { module = "io.github.bluetape4k:bluetape4k-io" }

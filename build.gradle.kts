@@ -29,6 +29,7 @@ val rootLibs = libs
 
 allprojects {
     repositories {
+        mavenLocal()
         mavenCentral()
 
         // bluetape4k snapshot 버전 사용 시만 사용하세요.
@@ -173,6 +174,7 @@ subprojects {
 
         imports {
             mavenBom(rootLibs.bluetape4k.bom.get().toString())
+            mavenBom(rootLibs.bluetape4k.leader.bom.get().toString())
             mavenBom(rootLibs.spring.boot4.dependencies.get().toString())
             mavenBom(rootLibs.jackson3.bom.get().toString())
             mavenBom(rootLibs.testcontainers.bom.get().toString())
@@ -190,6 +192,7 @@ subprojects {
         val testRuntimeOnly by configurations
 
         compileOnly(platform(rootLibs.bluetape4k.bom))
+        compileOnly(platform(rootLibs.bluetape4k.leader.bom))
         compileOnly(platform(rootLibs.spring.boot4.dependencies))
         compileOnly(platform(rootLibs.kotlinx.coroutines.bom))
 

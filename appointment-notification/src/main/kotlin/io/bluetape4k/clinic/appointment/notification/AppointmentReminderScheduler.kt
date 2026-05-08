@@ -4,7 +4,7 @@ import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.logging.info
 import io.bluetape4k.logging.warn
-import io.bluetape4k.redis.lettuce.leader.LettuceLeaderGroupElection
+import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -16,7 +16,7 @@ import java.time.LocalDate
  * 예약 리마인더 스케줄러.
  *
  * 매시간 실행되어 내일/오늘 예약 중 CONFIRMED 상태인 예약에 리마인더를 발송합니다.
- * HA 환경에서는 [LettuceLeaderGroupElection]을 통해 리더로 선출된 인스턴스만 실행합니다.
+ * HA 환경에서는 [LettuceLeaderGroupElector]을 통해 리더로 선출된 인스턴스만 실행합니다.
  * 이미 발송한 리마인더는 중복 방지합니다.
  *
  * @param notificationChannel 알림 발송 채널
@@ -31,7 +31,7 @@ class AppointmentReminderScheduler(
     private val appointmentRepository: AppointmentRepository,
     private val historyRepository: NotificationHistoryRepository,
     private val properties: NotificationProperties,
-    private val leaderElection: LettuceLeaderGroupElection?,
+    private val leaderElection: LettuceLeaderGroupElector?,
 ) {
     companion object : KLogging() {
         private const val LEADER_LOCK_NAME = "clinic:reminder-scheduler"
@@ -42,12 +42,11 @@ class AppointmentReminderScheduler(
         if (!properties.enabled || !properties.reminder.enabled) return
 
         if (leaderElection != null) {
-            try {
-                leaderElection.runIfLeader(LEADER_LOCK_NAME) {
-                    log.debug { "리더 선출됨 — 리마인더 실행" }
-                    doCheckReminders()
-                }
-            } catch (e: IllegalStateException) {
+            val elected = leaderElection.runIfLeader(LEADER_LOCK_NAME) {
+                log.debug { "리더 선출됨 — 리마인더 실행" }
+                doCheckReminders()
+            }
+            if (elected == null) {
                 log.debug { "리더 선출 실패 — 다른 인스턴스가 실행 중" }
             }
         } else {
