@@ -401,7 +401,7 @@ jobs:
         uses: coverallsapp/github-action@v2
         with:
           files: coverage-artifacts/**/*.xml
-          token: ${{ secrets.COVERALLS_REPO_TOKEN }}
+          github-token: ${{ secrets.COVERALLS_REPO_TOKEN }}
           fail-on-error: false
         continue-on-error: true
 
