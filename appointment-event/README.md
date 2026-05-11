@@ -1,55 +1,62 @@
 # appointment-event
 
-Spring `ApplicationEvent` 기반 도메인 이벤트 발행/구독 + 이벤트 로그 DB 저장.
+[English](README.md) | [한국어](README.ko.md)
 
-## 책임
+Domain event publishing, subscription, and event-log persistence based on Spring `ApplicationEvent`.
 
-- **하는 것**: 도메인 이벤트 타입 정의, 이벤트 발행, 이벤트 로그 Exposed 테이블 저장
-- **하지 않는 것**: 알림 발송 없음 (알림은 `appointment-notification`이 이벤트 구독)
+## Responsibilities
 
-## 이벤트 타입
+- **Does**: defines domain event types, publishes events, and persists event logs with Exposed tables.
+- **Does not**: send notifications directly. Notification delivery is handled by `appointment-notification`, which subscribes to events.
+
+## Event Types
 
 ```kotlin
 sealed class AppointmentDomainEvent : ApplicationEvent {
     data class Created(val appointmentId: Long, val clinicId: Long)
-    data class StatusChanged(val appointmentId: Long, val clinicId: Long,
-                             val fromState: String, val toState: String, val reason: String?)
+    data class StatusChanged(
+        val appointmentId: Long,
+        val clinicId: Long,
+        val fromState: String,
+        val toState: String,
+        val reason: String?,
+    )
     data class Cancelled(val appointmentId: Long, val clinicId: Long, val reason: String)
     data class Rescheduled(val originalId: Long, val newId: Long, val clinicId: Long)
 }
 ```
 
-## 발행 패턴
+## Publishing Pattern
 
 ```kotlin
-// 발행 (appointment-api, appointment-core에서 사용)
+// Publish from appointment-api or appointment-core integration code.
 eventPublisher.publishEvent(AppointmentDomainEvent.Created(id, clinicId))
 
-// 구독
+// Subscribe from application modules.
 @EventListener
 fun on(event: AppointmentDomainEvent.Created) { ... }
 ```
 
-## 핵심 클래스
+## Core Classes
 
-| 클래스 | 역할 |
+| Class | Role |
 |--------|------|
-| `AppointmentDomainEvent` | 이벤트 sealed class — Created, StatusChanged, Cancelled, Rescheduled |
-| `AppointmentEventLogger` | `@EventListener` — 모든 이벤트를 `AppointmentEventLogs` 테이블에 저장 |
-| `AppointmentEventLogRecord` | 이벤트 로그 DTO |
-| `AppointmentEventLogs` | Exposed 테이블 — event_type, appointment_id, payload_json, occurred_at |
+| `AppointmentDomainEvent` | Sealed event hierarchy: Created, StatusChanged, Cancelled, Rescheduled. |
+| `AppointmentEventLogger` | `@EventListener` that stores every event in `AppointmentEventLogs`. |
+| `AppointmentEventLogRecord` | Event log DTO. |
+| `AppointmentEventLogs` | Exposed table with event_type, appointment_id, payload_json, and occurred_at. |
 
-## 이벤트 발행/구독 흐름
+## Event Flow
 
 ```mermaid
 flowchart LR
-    API["appointment-api\n(상태 변경 후)"] -->|"publishEvent()"| BUS["Spring\nApplicationEventPublisher"]
+    API["appointment-api\n(after state change)"] -->|"publishEvent()"| BUS["Spring\nApplicationEventPublisher"]
 
-    BUS -->|"@EventListener"| LOG["AppointmentEventLogger\n→ AppointmentEventLogs 테이블"]
+    BUS -->|"@EventListener"| LOG["AppointmentEventLogger\nAppointmentEventLogs table"]
     BUS -->|"@EventListener"| NOTIF["appointment-notification\nNotificationEventListener"]
 
     subgraph Events["AppointmentDomainEvent"]
-        E1["Created"] 
+        E1["Created"]
         E2["StatusChanged"]
         E3["Cancelled"]
         E4["Rescheduled"]
@@ -58,12 +65,12 @@ flowchart LR
     API --> Events --> BUS
 ```
 
-## 의존성
+## Dependencies
 
-- **내부**: `appointment-core`
-- **외부**: Spring Context
+- **Internal**: `appointment-core`
+- **External**: Spring Context
 
-## 테스트 실행
+## Tests
 
 ```bash
 ./gradlew :appointment-event:test
