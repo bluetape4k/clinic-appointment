@@ -36,7 +36,7 @@ datafaker = "2.5.4"
 
 flyway = "11.16.0"
 h2-v2 = "2.4.240"
-mysql-connector-j = "9.6.0"
+mysql-connector-j = "9.7.0"
 postgresql = "42.7.10"
 r2dbc-h2 = "1.0.0.RELEASE"
 
