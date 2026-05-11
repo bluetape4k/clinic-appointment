@@ -1,8 +1,10 @@
 # appointment-frontend
 
-Angular 18 기반 병원 예약 관리 웹 UI.
+[English](README.md) | [한국어](README.ko.md)
 
-## 개발 서버 실행
+Angular 18 web UI for clinic appointment management.
+
+## Development Server
 
 ```bash
 cd frontend/appointment-frontend
@@ -10,24 +12,24 @@ npm install
 npm start   # http://localhost:4200
 ```
 
-API 서버(`http://localhost:8080`)가 먼저 실행되어 있어야 합니다.
+The API server at `http://localhost:8080` must be running first.
 
-## 빌드
+## Build
 
 ```bash
-# Angular CLI 직접
-npm run build   # dist/ 생성
+# Direct Angular CLI build
+npm run build   # creates dist/
 
-# Gradle 통합 빌드
+# Gradle-integrated build
 ./gradlew :frontend:appointment-frontend:build
 ```
 
-## 테스트
+## Tests
 
 ```bash
-npm test   # Karma 단위 테스트
+npm test   # Karma unit tests
 ```
 
-## 설계 문서
+## Design Documents
 
-- [프론트엔드 설계](../../docs/requirements/frontend.md)
+- [Frontend Design](../../docs/requirements/frontend.md)

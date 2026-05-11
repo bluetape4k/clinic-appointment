@@ -1,95 +1,114 @@
 # appointment-solver
 
-Timefold Solver 기반 AI 예약 최적화 스케줄러.
-대량 예약을 동시에 고려하여 11개 Hard + 2개 Soft 제약을 만족하는 전역 최적 배치를 수행.
+[English](README.md) | [한국어](README.ko.md)
 
-## 책임
+Timefold Solver based AI appointment scheduler.
+It optimizes bulk appointment placement across the global schedule while satisfying 11 hard constraints and 2 soft constraints.
 
-- **하는 것**: Planning Variable(의사, 날짜, 시작시간) 최적 배정, Hard 제약 전부 충족, Soft 제약 최소화
-- **하지 않는 것**: 실시간 단건 슬롯 조회 (→ `SlotCalculationService`), DB 직접 쓰기 (→ `SolverService`가 결과 반환 후 호출자가 저장)
+## Responsibilities
 
-## 제약조건 요약
+- **Does**: assigns planning variables such as doctor, date, and start time; satisfies all hard constraints; minimizes soft-constraint penalties.
+- **Does not**: provide real-time single-slot lookup, which belongs to `SlotCalculationService`; write results directly to the database, because `SolverService` returns results to its caller.
 
-Hard (11개): 영업시간, 의사 스케줄, 의사 부재, 요일 휴식, 기본 휴식, 임시휴진, 공휴일, 동시 환자 수, 장비 가용성, 진료유형-의사 매칭, 장비 사용불가 구간
+## Constraint Summary
 
-Soft (2개): 의사 부하 분산(가중치 100), 스케줄 갭 최소화(가중치 10)
+Hard constraints (11):
 
-→ 전체 제약조건 상세: [solver.md](../docs/requirements/solver.md)
+- business hours
+- doctor schedule
+- doctor absence
+- day-of-week rest
+- default break time
+- temporary clinic closure
+- holiday
+- concurrent patient capacity
+- equipment availability
+- treatment-type and doctor matching
+- equipment unavailability windows
 
-## 핵심 클래스
+Soft constraints (2):
 
-| 클래스 | 역할 |
+- doctor load balancing, weight 100
+- schedule gap minimization, weight 10
+
+Full details: [solver.md](../docs/requirements/solver.md)
+
+## Core Classes
+
+| Class | Role |
 |--------|------|
-| `AppointmentPlanning` | `@PlanningEntity` — doctorId, appointmentDate, startTime이 결정 변수. status가 Pinned 상태면 고정 |
-| `ScheduleSolution` | `@PlanningSolution` — AppointmentPlanning 목록 + Problem Facts |
-| `SolverService` | 진입점 — DB에서 데이터 로드 → SolverConfig 실행 → 결과 반환 |
-| `SolverConfig` | Timefold SolverFactory 설정 (termination, moveFilters) |
-| `SolutionConverter` | DB Record ↔ Planning Domain 변환 |
-| `AppointmentConstraintProvider` | 모든 제약 등록 (H1~H11, S1~S2) |
-| `EquipmentUnavailabilityFact` | Problem Fact — 장비 사용불가 구간 데이터 (H11 제약용) |
+| `AppointmentPlanning` | `@PlanningEntity`; doctorId, appointmentDate, and startTime are planning variables. Pinned statuses are fixed. |
+| `ScheduleSolution` | `@PlanningSolution`; contains AppointmentPlanning entries and problem facts. |
+| `SolverService` | Entry point; loads data from the database, runs SolverConfig, and returns the result. |
+| `SolverConfig` | Timefold SolverFactory configuration, including termination and move filters. |
+| `SolutionConverter` | Converts between DB records and the planning domain. |
+| `AppointmentConstraintProvider` | Registers all constraints, H1-H11 and S1-S2. |
+| `EquipmentUnavailabilityFact` | Problem fact for equipment unavailability windows used by H11. |
 
-## Solver 데이터 흐름
+## Solver Data Flow
 
 ```mermaid
 flowchart TD
-    API["SolverService.solve()"] --> LOAD["SolutionConverter\nDB → Planning Domain"]
+    API["SolverService.solve()"] --> LOAD["SolutionConverter\nDB to Planning Domain"]
 
-    subgraph Facts["Problem Facts (고정 데이터)"]
+    subgraph Facts["Problem Facts"]
         direction LR
         F1["Doctor"] --- F2["Schedule"] --- F3["Absence"]
         F4["Closure"] --- F5["Holiday"] --- F6["EquipmentUnavailability"]
     end
 
     subgraph Planning["Planning Entities"]
-        PE["AppointmentPlanning\ndoctorId · date · startTime\n[Pinned: CONFIRMED+]"]
+        PE["AppointmentPlanning\ndoctorId / date / startTime\nPinned: CONFIRMED+"]
     end
 
     LOAD --> Facts
     LOAD --> Planning
-    Facts & Planning --> SOLVE["Timefold Solver\nH1~H11 + S1~S2"]
-    SOLVE --> RESULT["SolverResult\nappointmentId → Assignment"]
+    Facts & Planning --> SOLVE["Timefold Solver\nH1-H11 + S1-S2"]
+    SOLVE --> RESULT["SolverResult\nappointmentId to Assignment"]
 ```
 
-→ 전체 흐름: [data-flow.md](../docs/requirements/data-flow.md#6-solver-데이터-흐름)
+Full flow: [data-flow.md](../docs/requirements/data-flow.md#6-solver-데이터-흐름)
 
-## Pinned 예약
+## Pinned Appointments
 
-`@PlanningPin` — 아래 상태의 예약은 Solver가 이동 불가:
-- **고정**: `CONFIRMED`, `CHECKED_IN`, `IN_PROGRESS`, `COMPLETED`
-- **이동 가능**: `REQUESTED`, `PENDING_RESCHEDULE`
+`@PlanningPin` prevents Solver from moving appointments in the following states:
 
-## Solver 실행 예시
+- **Pinned**: `CONFIRMED`, `CHECKED_IN`, `IN_PROGRESS`, `COMPLETED`
+- **Movable**: `REQUESTED`, `PENDING_RESCHEDULE`
+
+## Usage Example
 
 ```kotlin
 val result: SolverResult = solverService.solve(
     clinicId = 1L,
     appointmentIds = listOf(10L, 11L, 12L),
-    dateRange = LocalDate.now()..LocalDate.now().plusDays(7)
+    dateRange = LocalDate.now()..LocalDate.now().plusDays(7),
 )
-// result.assignments: Map<Long, Assignment> — appointmentId → (doctorId, date, startTime)
+// result.assignments: Map<Long, Assignment>
+// appointmentId -> (doctorId, date, startTime)
 ```
 
-## 의존성
+## Dependencies
 
-- **내부**: `appointment-core`
-- **외부**: `ai.timefold.solver:timefold-solver-core`, `bluetape4k-exposed-jdbc`
+- **Internal**: `appointment-core`
+- **External**: `ai.timefold.solver:timefold-solver-core`, `bluetape4k-exposed-jdbc`
 
-## 테스트 실행
+## Tests
 
 ```bash
 ./gradlew :appointment-solver:test
 ```
 
-## 벤치마크
+## Benchmarks
 
 ```bash
 ./gradlew :appointment-solver:test --tests "*.SolverBenchmarkTest"
 ```
 
-결과는 `build/reports/solver-benchmark/` 에 HTML 리포트로 생성됩니다.
+HTML reports are generated under `build/reports/solver-benchmark/`.
 
-→ 상세: [solver-benchmark-report.md](../docs/requirements/solver.md#벤치마크)
+Details: [solver-benchmark-report.md](../docs/requirements/solver.md#벤치마크)
 
-## 설계 문서
+## Design Documents
 
-- [Solver 설계 전체](../docs/requirements/solver.md)
+- [Full Solver Design](../docs/requirements/solver.md)
