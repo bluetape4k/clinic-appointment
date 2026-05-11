@@ -24,7 +24,7 @@ fory = "0.15.0"
 slf4j = "2.0.17"
 logback = "1.5.32"
 
-timefold-solver = "1.32.0"
+timefold-solver = "2.0.0"
 
 junit-jupiter = "6.0.3"
 junit-platform = "6.0.3"
