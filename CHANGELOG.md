@@ -17,10 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Bluetape4k**: `1.6.2` → `1.7.0`
 - **Kotlin**: `2.3.20` → `2.3.21`
+- **Dependency governance**: `bluetape4k-bom` explicit import removed from `dependencyManagement` and `compileOnly` — now covered transitively by `bluetape4k-dependencies`. Removed the standalone `bluetape4k` version entry and `bluetape4k-bom` library alias from `libs.versions.toml`.
 
 ### Removed
 
 - `Libs.bluetape4k_crypto`, `Libs.bluetape4k_exposed_jasypt` 참조 제거 (BOM 1.7.0에서 제외됨)
+- `bluetape4k-bom` library alias and `bluetape4k` version entry from version catalog (redundant with `bluetape4k-dependencies`).
 
 ---
 

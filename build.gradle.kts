@@ -173,7 +173,6 @@ subprojects {
 
         imports {
             mavenBom(rootLibs.bluetape4k.dependencies.get().toString())
-            mavenBom(rootLibs.bluetape4k.bom.get().toString())
             mavenBom(rootLibs.spring.boot4.dependencies.get().toString())
             mavenBom(rootLibs.jackson3.bom.get().toString())
             mavenBom(rootLibs.testcontainers.bom.get().toString())
@@ -191,7 +190,6 @@ subprojects {
         val testRuntimeOnly by configurations
 
         compileOnly(platform(rootLibs.bluetape4k.dependencies))
-        compileOnly(platform(rootLibs.bluetape4k.bom))
         compileOnly(platform(rootLibs.spring.boot4.dependencies))
         compileOnly(platform(rootLibs.kotlinx.coroutines.bom))
 

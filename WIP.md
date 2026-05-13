@@ -8,6 +8,7 @@ Open count: 3 issues.
 
 - Bilingual README set, Java baseline alignment, Spring Cache conversion, NearCache adoption, dependency governance, and compatibility guard maintenance are merged.
 - Frontend dependency updates and backend test/solver coverage improvements are merged.
+- Dependency cleanup: removed redundant `bluetape4k-bom` imports — now fully covered by `bluetape4k-dependencies`.
 
 ## Current Direction
 

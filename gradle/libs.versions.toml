@@ -3,7 +3,6 @@
 
 [versions]
 bluetape4k-dependencies = "1.0.0-SNAPSHOT"
-bluetape4k = "1.8.0-SNAPSHOT"
 
 kotlin = "2.3.21"
 kotlinx-coroutines = "1.10.2"
@@ -71,7 +70,6 @@ jetbrains-annotations = { module = "org.jetbrains:annotations", version = "26.1.
 
 # bluetape4k
 bluetape4k-dependencies = { module = "io.github.bluetape4k:bluetape4k-dependencies", version.ref = "bluetape4k-dependencies" }
-bluetape4k-bom = { module = "io.github.bluetape4k:bluetape4k-bom", version.ref = "bluetape4k" }
 bluetape4k-coroutines = { module = "io.github.bluetape4k:bluetape4k-coroutines" }
 bluetape4k-jackson3 = { module = "io.github.bluetape4k:bluetape4k-jackson3" }
 bluetape4k-jdbc = { module = "io.github.bluetape4k:bluetape4k-jdbc" }
