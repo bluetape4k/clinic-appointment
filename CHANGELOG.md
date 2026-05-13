@@ -12,12 +12,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `WIP.md` snapshot synced with currently assigned GitHub issues.
 - MIT `LICENSE` file.
 - `Libs.bluetape4k_lingua`, `Libs.bluetape4k_mock_web_server`, `Libs.bluetape4k_mock_webflux_server` 모듈 참조 추가 (BOM 1.7.0 신규 모듈)
+- `appointment-api`: `NearCacheCacheManager` + `NearCacheAdapter` — Spring `CacheManager` 구현으로 NearCache 통합 ([#52](https://github.com/bluetape4k/clinic-appointment/issues/52))
+- `appointment-api`: `CacheIntegrationTest` — Spring `@Cacheable` 통합 테스트 추가
+- CI: `paths-filter` 기반 모듈별 selective test job 적용 ([#60](https://github.com/bluetape4k/clinic-appointment/issues/60))
+- CI: `nightly-tests.yml` — 전체 테스트 + 프론트엔드 빌드 야간 워크플로우 추가
 
 ### Changed
 
 - **Bluetape4k**: `1.6.2` → `1.7.0`
 - **Kotlin**: `2.3.20` → `2.3.21`
-- **Dependency governance**: `bluetape4k-bom` explicit import removed from `dependencyManagement` and `compileOnly` — now covered transitively by `bluetape4k-dependencies`. Removed the standalone `bluetape4k` version entry and `bluetape4k-bom` library alias from `libs.versions.toml`.
+- **Java baseline**: Java 25 toolchain → Java 21 (`.java-version`, `build.gradle.kts` 정렬)
+- **Cache**: `DoctorRepository`, `EquipmentRepository`, `TreatmentTypeRepository` 캐시 구현을 manual `NearCacheOperations` → Spring `@Cacheable`/`@CacheEvict` 선언적 방식으로 전환 ([#52](https://github.com/bluetape4k/clinic-appointment/issues/52))
+- **Tests**: `kluent` assertion → `bluetape4k-assertions` 전면 마이그레이션 ([#61](https://github.com/bluetape4k/clinic-appointment/issues/61))
+- **Dependency governance**: `bluetape4k-bom` explicit import removed — covered transitively by `bluetape4k-dependencies`. Removed standalone `bluetape4k` version entry and `bluetape4k-bom` alias from `libs.versions.toml`.
+- **Dependabot**: `dependabot.yml` — Kotlin/Spring/lettuce compatibility-line major upgrade guards 추가
+
+### Fixed
+
+- `appointment-api`: `CacheConfig` — `@EnableCaching` 누락 및 `NearCacheOperations` bean 복구
+- `appointment-api`: `NearCacheAdapterTest` 직접 주입 테스트 제거 (Spring Context 통합 테스트로 대체)
+- CI: coveralls token 파라미터 수정
 
 ### Removed
 

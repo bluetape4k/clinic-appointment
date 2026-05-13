@@ -2,25 +2,29 @@
 
 Snapshot: 2026-05-13 KST
 Scope: open GitHub issues assigned to `debop`, created on or after 2026-01-01.
-Open count: 3 issues.
+Open count: 1 issue (2 pending close).
 
 ## Recently Completed
 
-- Bilingual README set, Java baseline alignment, Spring Cache conversion, NearCache adoption, dependency governance, and compatibility guard maintenance are merged.
-- Frontend dependency updates and backend test/solver coverage improvements are merged.
-- Dependency cleanup: removed redundant `bluetape4k-bom` imports — now fully covered by `bluetape4k-dependencies`.
+- **#52** Repository cache → Spring `@Cacheable`/`@CacheEvict` 전환 완료 (commit `3fef28c`, `ceac3a0`). Issue still open — needs close.
+- **#60** CI paths-filter + nightly workflow 적용 완료 (commit `991cde7`, `b0be270`). Issue still open — needs close.
+- **#61** Kluent → `bluetape4k-assertions` 마이그레이션 완료 (commit `dd69e84`).
+- Java 21 baseline 정렬, Dependabot governance guards, bilingual README, frontend security patches merged.
+- Dependency cleanup: `bluetape4k-bom` redundant import removed (PR #79).
+
+## Action Items
+
+- [ ] Close issue #52 (work merged)
+- [ ] Close issue #60 (work merged)
 
 ## Current Direction
 
-The active queue is focused on CI selectivity, repository cache design direction,
-and multitenancy strategy. Keep these as separate PRs because they touch different risk areas.
+Only #36 (multitenancy) remains as active design work.
 
 ## Priority Queue
 
 | Priority | Issue | Difficulty | Notes |
 |---|---|---:|---|
-| P1 | [#60](https://github.com/bluetape4k/clinic-appointment/issues/60) CI paths-filter | M | Reduces CI cost; verify workflows carefully. |
-| P1 | [#52](https://github.com/bluetape4k/clinic-appointment/issues/52) Repository cache via Spring Cache annotations | M | Prior work exists; reconcile current code before editing. |
 | P2 | [#36](https://github.com/bluetape4k/clinic-appointment/issues/36) Multitenancy strategy decision/design | M | Design-first; keep implementation separate. |
 
 ## Dependency Map
@@ -28,18 +32,10 @@ and multitenancy strategy. Keep these as separate PRs because they touch differe
 ```text
 #36 multitenancy strategy
   -> future implementation issues
-
-#52 repository cache direction
-  -> cache behavior/tests
-
-#60 CI paths-filter
-  -> workflow-only verification
 ```
 
 ## WIP Limits
 
 | Lane | Limit | Current next |
 |---|---:|---|
-| CI/workflow | 1 | `#60` |
-| Cache design/implementation | 1 | `#52` after current code audit. |
-| Architecture/design | 1 | `#36` as design-only first. |
+| Architecture/design | 1 | `#36` design-only. |
