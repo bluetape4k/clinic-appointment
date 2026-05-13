@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Root README hero image plus refreshed project-purpose entrypoint documentation.
+- `WIP.md` snapshot synced with currently assigned GitHub issues.
+- MIT `LICENSE` file.
 - `Libs.bluetape4k_lingua`, `Libs.bluetape4k_mock_web_server`, `Libs.bluetape4k_mock_webflux_server` 모듈 참조 추가 (BOM 1.7.0 신규 모듈)
 
 ### Changed

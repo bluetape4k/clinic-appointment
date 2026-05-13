@@ -1,13 +1,14 @@
-# CLAUDE.md — clinic-appointment
+# CLAUDE.md - clinic-appointment
 
-개인 클리닉 환자 예약 관리 시스템 — Kotlin 2.3 + Java 25 + Spring Boot 4 + Exposed ORM.
+Clinic appointment management example app built with Kotlin 2.3, Java 25,
+Spring Boot 4, and Exposed ORM.
 
-- `bluetape4k-patterns` 스킬: 모든 Kotlin 코드에 예외 없이 적용
+- Use the `bluetape4k-patterns` skill for all Kotlin implementation and review work.
 
 ## Build
 
 ```bash
-# 모듈 단위만
+# Prefer module-scoped validation
 ./gradlew :<module>:build
 ./gradlew :<module>:test
 ./gradlew :<module>:test --tests "fully.qualified.ClassName.methodName"
@@ -24,6 +25,13 @@
 | `:appointment-api` | Spring Boot MVC API (JWT, Flyway, Swagger, Gatling) |
 | `:frontend:appointment-frontend` | Angular frontend |
 
+## Documentation Rules
+
+- Keep `README.md` and `README.ko.md` structurally aligned.
+- Store shared README images under `docs/assets/` and reference them with the
+  same relative path from both locales.
+- Keep this file and other agent-facing guidance in English.
+
 ## Key Files
 
 | Purpose | Path |
@@ -33,7 +41,8 @@
 
 ## Module Gotchas
 
-- **Transactions required** — 모든 Exposed 작업은 `transaction {}` 안에서
-- **DB init in tests** — `@BeforeEach`: `SchemaUtils.createMissingTablesAndColumns(Table)` + `Table.deleteAll()`
-- **Flyway SQL** — `scheduling_*` 테이블명은 DB 스키마명 — 이름 변경 금지
-- **Testcontainers** — `@Testcontainers` 어노테이션 사용 금지. bluetape4k singleton 패턴만
+- **Transactions required** - Run all Exposed work inside `transaction {}`.
+- **DB init in tests** - Use `SchemaUtils.createMissingTablesAndColumns(Table)`
+  plus `Table.deleteAll()` in `@BeforeEach`.
+- **Flyway SQL** - `scheduling_*` table names are database schema names; do not rename them.
+- **Testcontainers** - Do not use `@Testcontainers`; use bluetape4k singleton launchers.

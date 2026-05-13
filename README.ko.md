@@ -10,7 +10,14 @@
 [![Kover](https://img.shields.io/badge/coverage-Kover-7F52FF?logo=kotlin&logoColor=white)](https://github.com/Kotlin/kotlinx-kover)
 [![Last Commit](https://img.shields.io/github/last-commit/bluetape4k/clinic-appointment)](https://github.com/bluetape4k/clinic-appointment/commits/main)
 
+![clinic appointment 작업대 일러스트](./docs/assets/clinic-appointment-workbench.png)
+
 개인병원 환자 예약 관리 시스템 - Kotlin 2.3 + Spring Boot 4 + Timefold Solver AI 스케줄링
+
+## 프로젝트 목적
+
+`clinic-appointment`는 도메인 기반 예약 관리, Timefold 최적화, 고가용성 알림,
+Spring Boot API, Angular frontend를 포함한 end-to-end clinic scheduling system 예제입니다.
 
 ## 주요 기능
 
