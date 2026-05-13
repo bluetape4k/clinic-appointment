@@ -10,7 +10,15 @@
 [![Kover](https://img.shields.io/badge/coverage-Kover-7F52FF?logo=kotlin&logoColor=white)](https://github.com/Kotlin/kotlinx-kover)
 [![Last Commit](https://img.shields.io/github/last-commit/bluetape4k/clinic-appointment)](https://github.com/bluetape4k/clinic-appointment/commits/main)
 
+![Clinic appointment workbench](./docs/assets/clinic-appointment-workbench.png)
+
 A private clinic appointment management system built with Kotlin 2.3, Spring Boot 4, and Timefold Solver AI scheduling.
+
+## Project Purpose
+
+`clinic-appointment` demonstrates an end-to-end clinic scheduling system:
+domain-driven appointment management, Timefold optimization, high-availability
+notifications, Spring Boot APIs, and an Angular frontend.
 
 ## Key Features
 

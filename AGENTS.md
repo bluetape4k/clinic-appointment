@@ -26,6 +26,9 @@ Prefer module-scoped validation.
 | `:appointment-api` | Spring Boot MVC API with JWT, Flyway, Swagger, Gatling |
 | `:frontend:appointment-frontend` | Angular frontend |
 
+Root README visual assets live under `docs/assets/` and should be shared by
+`README.md` and `README.ko.md` through the same relative path.
+
 ## Key Files
 
 | Purpose | Path |
