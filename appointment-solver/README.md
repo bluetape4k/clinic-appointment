@@ -91,7 +91,7 @@ val result: SolverResult = solverService.solve(
 ## Dependencies
 
 - **Internal**: `appointment-core`
-- **External**: `ai.timefold.solver:timefold-solver-core`, `bluetape4k-exposed-jdbc`
+- **External**: `ai.timefold.solver:timefold-solver-core`, `exposed-jdbc`
 
 ## Tests
 

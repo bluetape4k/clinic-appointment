@@ -6,9 +6,9 @@ dependencies {
     api(project(":appointment-core"))
     api(project(":appointment-event"))
 
+    implementation(libs.jetbrains.exposed.jdbc)
     implementation(libs.exposed.jdbc)
-    implementation(libs.bluetape4k.exposed.jdbc)
-    implementation(libs.exposed.migration.jdbc)
+    implementation(libs.jetbrains.exposed.migration.jdbc)
     implementation("org.springframework.boot:spring-boot-starter-web")
 
     // HA: Leader election for scheduler throttling

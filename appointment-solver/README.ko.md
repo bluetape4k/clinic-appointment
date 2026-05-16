@@ -74,7 +74,7 @@ val result: SolverResult = solverService.solve(
 ## 의존성
 
 - **내부**: `appointment-core`
-- **외부**: `ai.timefold.solver:timefold-solver-core`, `bluetape4k-exposed-jdbc`
+- **외부**: `ai.timefold.solver:timefold-solver-core`, `exposed-jdbc`
 
 ## 테스트 실행
 

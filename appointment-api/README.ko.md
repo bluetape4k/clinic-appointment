@@ -88,7 +88,7 @@ Flyway — `src/main/resources/db/migration/V*.sql`
 ## 의존성
 
 - **내부**: `appointment-core`, `appointment-event`, `appointment-solver`
-- **외부**: Spring Boot 4 Web/Security, `jjwt`, Flyway, springdoc-openapi, `bluetape4k-exposed-jdbc`
+- **외부**: Spring Boot 4 Web/Security, `jjwt`, Flyway, springdoc-openapi, `exposed-jdbc`
 
 ## 실행
 
