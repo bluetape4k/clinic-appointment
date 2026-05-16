@@ -5,8 +5,8 @@ dependencies {
     api(libs.timefold.solver.core)
     implementation(libs.timefold.solver.benchmark)
 
-    implementation(libs.bluetape4k.exposed.jdbc)
     implementation(libs.exposed.jdbc)
+    implementation(libs.jetbrains.exposed.jdbc)
 
     testImplementation(libs.timefold.solver.test)
     testImplementation(libs.bluetape4k.junit5)

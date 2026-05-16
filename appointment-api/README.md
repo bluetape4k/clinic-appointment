@@ -89,7 +89,7 @@ Flyway migration scripts live under `src/main/resources/db/migration/V*.sql`.
 ## Dependencies
 
 - **Internal**: `appointment-core`, `appointment-event`, `appointment-solver`
-- **External**: Spring Boot 4 Web/Security, `jjwt`, Flyway, springdoc-openapi, `bluetape4k-exposed-jdbc`
+- **External**: Spring Boot 4 Web/Security, `jjwt`, Flyway, springdoc-openapi, `exposed-jdbc`
 
 ## Run
 

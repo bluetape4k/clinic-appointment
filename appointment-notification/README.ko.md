@@ -84,7 +84,7 @@ scheduling:
 ## 의존성
 
 - **내부**: `appointment-core`, `appointment-event`
-- **외부**: `bluetape4k-leader`, `bluetape4k-lettuce`, `bluetape4k-resilience4j`, `bluetape4k-exposed-jdbc`
+- **외부**: `bluetape4k-leader`, `bluetape4k-lettuce`, `bluetape4k-resilience4j`, `exposed-jdbc`
 
 ## 테스트 실행
 

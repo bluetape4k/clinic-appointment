@@ -76,7 +76,7 @@ val newState = machine.transition(
 ## 의존성
 
 - **내부**: 없음 (leaf 모듈)
-- **외부**: `bluetape4k-exposed-core`, `bluetape4k-exposed-jdbc`, `bluetape4k-coroutines`, Exposed ORM
+- **외부**: `exposed-core`, `exposed-jdbc`, `bluetape4k-coroutines`, Exposed ORM
 
 ## 테스트 실행
 

@@ -75,7 +75,7 @@ Full transition list: [domain model document](../docs/requirements/domain-model.
 ## Dependencies
 
 - **Internal**: none. This is a leaf module.
-- **External**: `bluetape4k-exposed-core`, `bluetape4k-exposed-jdbc`, `bluetape4k-coroutines`, Exposed ORM.
+- **External**: `exposed-core`, `exposed-jdbc`, `bluetape4k-coroutines`, Exposed ORM.
 
 ## Tests
 

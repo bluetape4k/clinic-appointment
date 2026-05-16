@@ -84,7 +84,7 @@ scheduling:
 ## Dependencies
 
 - **Internal**: `appointment-core`, `appointment-event`
-- **External**: `bluetape4k-leader`, `bluetape4k-lettuce`, `bluetape4k-resilience4j`, `bluetape4k-exposed-jdbc`
+- **External**: `bluetape4k-leader`, `bluetape4k-lettuce`, `bluetape4k-resilience4j`, `exposed-jdbc`
 
 ## Tests
 

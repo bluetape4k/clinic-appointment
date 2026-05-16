@@ -22,9 +22,9 @@ dependencies {
     implementation(libs.fory.kotlin)
     // Spring MVC suspend 함수 지원에 reactor-core 필요 (CoroutinesUtils 의존)
     implementation(libs.kotlinx.coroutines.reactor)
+    implementation(libs.jetbrains.exposed.jdbc)
+    implementation(libs.jetbrains.exposed.spring.boot4.starter)
     implementation(libs.exposed.jdbc)
-    implementation(libs.exposed.spring.boot4.starter)
-    implementation(libs.bluetape4k.exposed.jdbc)
 
     // Jackson 3
     implementation(libs.bluetape4k.jackson3)
@@ -52,7 +52,7 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation(libs.bluetape4k.junit5)
-    testImplementation(libs.exposed.migration.jdbc)
+    testImplementation(libs.jetbrains.exposed.migration.jdbc)
 
     // Testcontainers
     testImplementation(libs.bluetape4k.testcontainers)

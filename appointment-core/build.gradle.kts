@@ -3,17 +3,17 @@ plugins {
 }
 
 dependencies {
-    api(libs.exposed.core)
-    api(libs.exposed.java.time)
-    api(libs.exposed.spring7.transaction)
+    api(libs.jetbrains.exposed.core)
+    api(libs.jetbrains.exposed.java.time)
+    api(libs.jetbrains.exposed.spring7.transaction)
 
     api(libs.bluetape4k.cache.core)
-    api(libs.bluetape4k.exposed.core)
+    api(libs.exposed.core)
     api(libs.bluetape4k.coroutines)
     api(libs.kotlinx.coroutines.core)
 
+    implementation(libs.jetbrains.exposed.jdbc)
     implementation(libs.exposed.jdbc)
-    implementation(libs.bluetape4k.exposed.jdbc)
 
     testImplementation(libs.bluetape4k.junit5)
     testImplementation(libs.bluetape4k.testcontainers)
@@ -24,7 +24,7 @@ dependencies {
     testImplementation(libs.lz4.java)
     testImplementation(libs.fory.kotlin)
     testImplementation(libs.bluetape4k.jdbc)
-    testImplementation(libs.exposed.migration.jdbc)
+    testImplementation(libs.jetbrains.exposed.migration.jdbc)
     testImplementation(libs.h2.v2)
     testImplementation(libs.postgresql.driver)
     testImplementation(libs.mysql.connector.j)
