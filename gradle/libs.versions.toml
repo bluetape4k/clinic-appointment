@@ -45,7 +45,7 @@ detekt = "1.23.8"
 dependency-management = "1.1.7"
 kover = "0.9.8"
 test-logger = "4.0.0"
-shadow = "9.2.2"
+shadow = "9.4.1"
 gatling = "3.15.0"
 
 [plugins]
