@@ -8,7 +8,7 @@ kotlin = "2.3.21"
 kotlinx-coroutines = "1.10.2"
 
 spring-boot4 = "4.0.6"
-springdoc-openapi = "3.0.2"
+springdoc-openapi = "3.0.3"
 
 resilience4j = "2.4.0"
 
