@@ -74,7 +74,7 @@ bluetape4k-coroutines = { module = "io.github.bluetape4k:bluetape4k-coroutines" 
 bluetape4k-jackson3 = { module = "io.github.bluetape4k:bluetape4k-jackson3" }
 bluetape4k-jdbc = { module = "io.github.bluetape4k:bluetape4k-jdbc" }
 bluetape4k-junit5 = { module = "io.github.bluetape4k:bluetape4k-junit5" }
-bluetape4k-leader = { module = "io.github.bluetape4k.leader:leader-redis-lettuce" }
+bluetape4k-leader = { module = "io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce" }
 bluetape4k-cache-core = { module = "io.github.bluetape4k:bluetape4k-cache-core" }
 bluetape4k-cache-lettuce = { module = "io.github.bluetape4k:bluetape4k-cache-lettuce" }
 bluetape4k-io = { module = "io.github.bluetape4k:bluetape4k-io" }
@@ -82,9 +82,9 @@ bluetape4k-lettuce = { module = "io.github.bluetape4k:bluetape4k-lettuce" }
 bluetape4k-logging = { module = "io.github.bluetape4k:bluetape4k-logging" }
 bluetape4k-resilience4j = { module = "io.github.bluetape4k:bluetape4k-resilience4j" }
 bluetape4k-testcontainers = { module = "io.github.bluetape4k:bluetape4k-testcontainers" }
-exposed-core = { module = "io.github.bluetape4k.exposed:exposed-core" }
-exposed-jdbc = { module = "io.github.bluetape4k.exposed:exposed-jdbc" }
-exposed-r2dbc-tests = { module = "io.github.bluetape4k.exposed:exposed-r2dbc-tests" }
+exposed-core = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-core" }
+exposed-jdbc = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc" }
+exposed-r2dbc-tests = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-r2dbc-tests" }
 
 # Kotlin
 kotlin-bom = { module = "org.jetbrains.kotlin:kotlin-bom", version.ref = "kotlin" }
