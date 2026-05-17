@@ -18,7 +18,7 @@ jjwt = "0.13.0"
 lettuce = "6.8.2.RELEASE"
 exposed = "1.2.0"
 lz4-java = "1.8.0"
-fory = "0.15.0"
+fory = "0.17.0"
 
 slf4j = "2.0.17"
 logback = "1.5.32"
