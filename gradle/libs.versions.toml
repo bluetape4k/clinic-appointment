@@ -40,7 +40,7 @@ postgresql = "42.7.10"
 r2dbc-h2 = "1.0.0.RELEASE"
 
 # Plugin versions
-dokka = "2.1.0"
+dokka = "2.2.0"
 detekt = "1.23.8"
 dependency-management = "1.1.7"
 kover = "0.9.8"
