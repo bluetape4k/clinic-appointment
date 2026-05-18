@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { roleGuard } from './core/guards/role.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'calendar', pathMatch: 'full' },
@@ -12,6 +13,8 @@ export const routes: Routes = [
   },
   {
     path: 'management',
+    canActivate: [roleGuard],
+    data: { requiredRoles: ['ROLE_ADMIN', 'ROLE_STAFF', 'ROLE_DOCTOR'] },
     loadChildren: () => import('./features/management/management.routes').then(m => m.MANAGEMENT_ROUTES),
   },
 ];
