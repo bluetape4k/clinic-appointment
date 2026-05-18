@@ -30,9 +30,7 @@ import org.springframework.web.bind.annotation.RestController
 class ClinicController(
     private val clinicRepository: ClinicRepository,
 ) {
-    companion object : KLogging() {
-        private const val MAX_PAGE_SIZE = 100
-    }
+    companion object : KLogging()
 
     /**
      * 전체 클리닉 목록을 페이징 조회합니다.
@@ -46,9 +44,10 @@ class ClinicController(
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<ExposedPage<ClinicRecord>>> {
-        val pageSize = size.coerceIn(1, MAX_PAGE_SIZE)
-        log.debug { "GET all clinics page=$page, size=$pageSize" }
-        val result = transaction { clinicRepository.findPage(page, pageSize) }
+        val pageNumber = page.coerceAtLeast(0)
+        val pageSize = size.coerceIn(1, PaginationDefaults.MAX_PAGE_SIZE)
+        log.debug { "GET all clinics page=$pageNumber, size=$pageSize" }
+        val result = transaction { clinicRepository.findPage(pageNumber, pageSize) }
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
 

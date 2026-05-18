@@ -33,9 +33,7 @@ import java.time.LocalDate
 class DoctorController(
     private val doctorRepository: DoctorRepository,
 ) {
-    companion object : KLogging() {
-        private const val MAX_PAGE_SIZE = 100
-    }
+    companion object : KLogging()
 
     /**
      * 병원의 의사 목록을 페이징 조회합니다.
@@ -52,9 +50,10 @@ class DoctorController(
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<ExposedPage<DoctorRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
-        val pageSize = size.coerceIn(1, MAX_PAGE_SIZE)
-        log.debug { "GET doctors clinicId=$clinicId, page=$page, size=$pageSize" }
-        val result = transaction { doctorRepository.findPage(page, pageSize) { Doctors.clinicId eq clinicId } }
+        val pageNumber = page.coerceAtLeast(0)
+        val pageSize = size.coerceIn(1, PaginationDefaults.MAX_PAGE_SIZE)
+        log.debug { "GET doctors clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
+        val result = transaction { doctorRepository.findPage(pageNumber, pageSize) { Doctors.clinicId eq clinicId } }
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
 

@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { ApiResponse, Doctor, DoctorAbsence, DoctorSchedule } from '../models';
+import { ApiResponse, Doctor, DoctorAbsence, DoctorSchedule, PagedData } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class DoctorService {
@@ -16,11 +16,11 @@ export class DoctorService {
     this.loading.set(true);
     try {
       const res = await firstValueFrom(
-        this.http.get<ApiResponse<Doctor[]>>(
+        this.http.get<ApiResponse<PagedData<Doctor>>>(
           `/api/clinics/${clinicId}/doctors`
         )
       );
-      const data = res.data ?? [];
+      const data = res.data?.content ?? [];
       this._doctors.set(data);
       return data;
     } finally {
