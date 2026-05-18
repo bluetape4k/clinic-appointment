@@ -10,6 +10,11 @@ import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requirePositiveNumber
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.format.annotation.DateTimeFormat
@@ -28,6 +33,7 @@ import java.time.LocalDate
  *
  * @param doctorRepository 의사 Repository
  */
+@Tag(name = "Doctors", description = "Doctor management")
 @RestController
 @RequestMapping("/api")
 class DoctorController(
@@ -43,6 +49,11 @@ class DoctorController(
      * @param size 페이지 크기 (default 20, max 100)
      * @return 페이징된 의사 목록
      */
+    @Operation(summary = "Get doctors by clinic with pagination")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @GetMapping("/clinics/{clinicId}/doctors")
     fun getByClinic(
         @PathVariable clinicId: Long,
@@ -63,6 +74,12 @@ class DoctorController(
      * @param doctorId 의사 ID
      * @return 의사 정보
      */
+    @Operation(summary = "Get doctor by ID")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+        OApiResponse(responseCode = "404", description = "Doctor not found"),
+    )
     @GetMapping("/doctors/{doctorId}")
     fun getById(
         @PathVariable doctorId: Long,
@@ -80,6 +97,11 @@ class DoctorController(
      * @param doctorId 의사 ID
      * @return 요일별 운영 스케줄 목록
      */
+    @Operation(summary = "Get schedules for a doctor")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @GetMapping("/doctors/{doctorId}/schedules")
     fun getSchedules(
         @PathVariable doctorId: Long,
@@ -98,11 +120,16 @@ class DoctorController(
      * @param to 조회 종료 날짜
      * @return 휴무 정보 목록
      */
+    @Operation(summary = "Get absences for a doctor within date range")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @GetMapping("/doctors/{doctorId}/absences")
     fun getAbsences(
         @PathVariable doctorId: Long,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
+        @Parameter(description = "Start date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
+        @Parameter(description = "End date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
     ): ResponseEntity<ApiResponse<List<DoctorAbsenceRecord>>> {
         doctorId.requirePositiveNumber("doctorId")
         log.debug { "GET absences doctorId=$doctorId, from=$from, to=$to" }

@@ -14,6 +14,11 @@ import io.bluetape4k.clinic.appointment.service.EquipmentUnavailabilityService
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requirePositiveNumber
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -36,6 +41,7 @@ import java.time.LocalDate
  *
  * @param service 장비 사용불가 서비스
  */
+@Tag(name = "Equipment Unavailability", description = "Equipment unavailability schedule management")
 @RestController
 @RequestMapping("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities")
 class EquipmentUnavailabilityController(
@@ -52,12 +58,17 @@ class EquipmentUnavailabilityController(
      * @param to 조회 종료 날짜
      * @return 사용불가 스케줄 목록
      */
+    @Operation(summary = "Get equipment unavailability schedules")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @GetMapping
     fun getUnavailabilities(
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
+        @Parameter(description = "Start date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
+        @Parameter(description = "End date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
     ): ResponseEntity<ApiResponse<List<EquipmentUnavailabilityRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
@@ -74,6 +85,11 @@ class EquipmentUnavailabilityController(
      * @param request 사용불가 스케줄 생성 요청
      * @return 생성된 사용불가 스케줄
      */
+    @Operation(summary = "Create equipment unavailability schedule")
+    @ApiResponses(
+        OApiResponse(responseCode = "201", description = "Created"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @PostMapping
     fun create(
         @PathVariable clinicId: Long,
@@ -109,6 +125,12 @@ class EquipmentUnavailabilityController(
      * @param request 수정 요청
      * @return 수정된 사용불가 스케줄
      */
+    @Operation(summary = "Update equipment unavailability schedule")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+        OApiResponse(responseCode = "404", description = "Unavailability not found"),
+    )
     @PutMapping("/{id}")
     fun update(
         @PathVariable clinicId: Long,
@@ -145,6 +167,12 @@ class EquipmentUnavailabilityController(
      * @param id 사용불가 스케줄 ID
      * @return 204 No Content
      */
+    @Operation(summary = "Delete equipment unavailability schedule")
+    @ApiResponses(
+        OApiResponse(responseCode = "204", description = "Deleted"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+        OApiResponse(responseCode = "404", description = "Unavailability not found"),
+    )
     @DeleteMapping("/{id}")
     fun delete(
         @PathVariable clinicId: Long,
@@ -168,6 +196,12 @@ class EquipmentUnavailabilityController(
      * @param request 예외 처리 요청
      * @return 생성된 예외 레코드
      */
+    @Operation(summary = "Add exception to unavailability schedule")
+    @ApiResponses(
+        OApiResponse(responseCode = "201", description = "Created"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+        OApiResponse(responseCode = "404", description = "Unavailability not found"),
+    )
     @PostMapping("/{id}/exceptions")
     fun addException(
         @PathVariable clinicId: Long,
@@ -200,6 +234,12 @@ class EquipmentUnavailabilityController(
      * @param exId 예외 ID
      * @return 204 No Content
      */
+    @Operation(summary = "Delete unavailability exception")
+    @ApiResponses(
+        OApiResponse(responseCode = "204", description = "Deleted"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+        OApiResponse(responseCode = "404", description = "Exception not found"),
+    )
     @DeleteMapping("/{id}/exceptions/{exId}")
     fun deleteException(
         @PathVariable clinicId: Long,
@@ -224,6 +264,12 @@ class EquipmentUnavailabilityController(
      * @param id 사용불가 스케줄 ID
      * @return 충돌 예약 목록
      */
+    @Operation(summary = "Detect conflicting appointments")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+        OApiResponse(responseCode = "404", description = "Unavailability not found"),
+    )
     @GetMapping("/{id}/conflicts")
     fun detectConflicts(
         @PathVariable clinicId: Long,
@@ -247,6 +293,11 @@ class EquipmentUnavailabilityController(
      * @param request 사용불가 스케줄 생성 요청
      * @return 충돌 예약 미리보기
      */
+    @Operation(summary = "Preview conflicts before creating unavailability")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @PostMapping("/preview-conflicts")
     fun previewConflicts(
         @PathVariable clinicId: Long,

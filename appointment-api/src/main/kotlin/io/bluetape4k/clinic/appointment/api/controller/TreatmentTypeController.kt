@@ -8,6 +8,10 @@ import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requirePositiveNumber
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.http.ResponseEntity
@@ -24,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController
  *
  * @param treatmentTypeRepository 진료 유형 Repository
  */
+@Tag(name = "Treatment Types", description = "Treatment type management")
 @RestController
 @RequestMapping("/api")
 class TreatmentTypeController(
@@ -39,6 +44,11 @@ class TreatmentTypeController(
      * @param size 페이지 크기 (default 20, max 100)
      * @return 페이징된 진료 유형 목록
      */
+    @Operation(summary = "Get treatment types by clinic with pagination")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @GetMapping("/clinics/{clinicId}/treatment-types")
     fun getByClinic(
         @PathVariable clinicId: Long,
@@ -59,6 +69,12 @@ class TreatmentTypeController(
      * @param treatmentTypeId 진료 유형 ID
      * @return 진료 유형 정보
      */
+    @Operation(summary = "Get treatment type by ID")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+        OApiResponse(responseCode = "404", description = "Treatment type not found"),
+    )
     @GetMapping("/treatment-types/{treatmentTypeId}")
     fun getById(
         @PathVariable treatmentTypeId: Long,
