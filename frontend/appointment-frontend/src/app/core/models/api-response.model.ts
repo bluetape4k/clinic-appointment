@@ -3,3 +3,15 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
 }
+
+export interface PagedData<T> {
+  content: T[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+  isFirst: boolean;
+  isLast: boolean;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}

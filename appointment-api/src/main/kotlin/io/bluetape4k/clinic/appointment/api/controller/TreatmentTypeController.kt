@@ -29,9 +29,7 @@ import org.springframework.web.bind.annotation.RestController
 class TreatmentTypeController(
     private val treatmentTypeRepository: TreatmentTypeRepository,
 ) {
-    companion object : KLogging() {
-        private const val MAX_PAGE_SIZE = 100
-    }
+    companion object : KLogging()
 
     /**
      * 병원의 진료 유형 목록을 페이징 조회합니다.
@@ -48,9 +46,10 @@ class TreatmentTypeController(
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<ExposedPage<TreatmentTypeRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
-        val pageSize = size.coerceIn(1, MAX_PAGE_SIZE)
-        log.debug { "GET treatment types clinicId=$clinicId, page=$page, size=$pageSize" }
-        val result = transaction { treatmentTypeRepository.findPage(page, pageSize) { TreatmentTypes.clinicId eq clinicId } }
+        val pageNumber = page.coerceAtLeast(0)
+        val pageSize = size.coerceIn(1, PaginationDefaults.MAX_PAGE_SIZE)
+        log.debug { "GET treatment types clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
+        val result = transaction { treatmentTypeRepository.findPage(pageNumber, pageSize) { TreatmentTypes.clinicId eq clinicId } }
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
 

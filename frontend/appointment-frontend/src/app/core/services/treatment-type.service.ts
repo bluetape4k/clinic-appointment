@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { ApiResponse, TreatmentType } from '../models';
+import { ApiResponse, PagedData, TreatmentType } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class TreatmentTypeService {
@@ -16,11 +16,11 @@ export class TreatmentTypeService {
     this.loading.set(true);
     try {
       const res = await firstValueFrom(
-        this.http.get<ApiResponse<TreatmentType[]>>(
+        this.http.get<ApiResponse<PagedData<TreatmentType>>>(
           `/api/clinics/${clinicId}/treatment-types`
         )
       );
-      const data = res.data ?? [];
+      const data = res.data?.content ?? [];
       this._treatmentTypes.set(data);
       return data;
     } finally {
