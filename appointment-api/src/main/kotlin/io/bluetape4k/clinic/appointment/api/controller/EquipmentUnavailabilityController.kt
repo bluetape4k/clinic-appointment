@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
+import jakarta.validation.Valid
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.ConflictingAppointmentResponse
 import io.bluetape4k.clinic.appointment.api.dto.CreateEquipmentUnavailabilityRequest
@@ -77,7 +78,7 @@ class EquipmentUnavailabilityController(
     fun create(
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
-        @RequestBody request: CreateEquipmentUnavailabilityRequest,
+        @Valid @RequestBody request: CreateEquipmentUnavailabilityRequest,
     ): ResponseEntity<ApiResponse<EquipmentUnavailabilityRecord>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
@@ -113,7 +114,7 @@ class EquipmentUnavailabilityController(
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
         @PathVariable id: Long,
-        @RequestBody request: UpdateEquipmentUnavailabilityRequest,
+        @Valid @RequestBody request: UpdateEquipmentUnavailabilityRequest,
     ): ResponseEntity<ApiResponse<EquipmentUnavailabilityRecord>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
@@ -172,7 +173,7 @@ class EquipmentUnavailabilityController(
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
         @PathVariable id: Long,
-        @RequestBody request: UnavailabilityExceptionRequest,
+        @Valid @RequestBody request: UnavailabilityExceptionRequest,
     ): ResponseEntity<ApiResponse<EquipmentUnavailabilityExceptionRecord>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
@@ -250,7 +251,7 @@ class EquipmentUnavailabilityController(
     fun previewConflicts(
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
-        @RequestBody request: CreateEquipmentUnavailabilityRequest,
+        @Valid @RequestBody request: CreateEquipmentUnavailabilityRequest,
     ): ResponseEntity<ApiResponse<UnavailabilityConflictResponse>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")

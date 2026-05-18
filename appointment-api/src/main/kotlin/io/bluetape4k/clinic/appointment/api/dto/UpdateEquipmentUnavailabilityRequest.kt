@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.dto
 
+import jakarta.validation.constraints.NotNull
 import java.io.Serializable
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -21,9 +22,12 @@ data class UpdateEquipmentUnavailabilityRequest(
     val unavailableDate: LocalDate? = null,
     val isRecurring: Boolean = false,
     val recurringDayOfWeek: DayOfWeek? = null,
+    @field:NotNull
     val effectiveFrom: LocalDate,
     val effectiveUntil: LocalDate? = null,
+    @field:NotNull
     val startTime: LocalTime,
+    @field:NotNull
     val endTime: LocalTime,
     val reason: String? = null,
 ) : Serializable {

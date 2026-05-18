@@ -46,6 +46,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
 
     companion object : KLogging() {
         private const val BASE_URL = "/api/appointments"
+        private val futureDate: LocalDate = LocalDate.now().plusMonths(6)
     }
 
     @LocalServerPort
@@ -145,7 +146,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "treatmentTypeId": $treatmentTypeId,
                 "patientName": "John Doe",
                 "patientPhone": "010-1234-5678",
-                "appointmentDate": "2026-04-06",
+                "appointmentDate": "$futureDate",
                 "startTime": "10:00",
                 "endTime": "10:30"
             }
@@ -163,6 +164,68 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         response.jsonPath<String>("$.data.status") shouldBeEqualTo "REQUESTED"
         response.jsonPath<String>("$.data.timezone") shouldBeEqualTo "Asia/Seoul"
         response.jsonPath<String>("$.data.locale") shouldBeEqualTo "ko-KR"
+    }
+
+    @Test
+    fun `POST - return 400 when patientName is blank`() {
+        val body = """
+            {
+                "clinicId": $clinicId,
+                "doctorId": $doctorId,
+                "treatmentTypeId": $treatmentTypeId,
+                "patientName": "",
+                "appointmentDate": "$futureDate",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+
+        val response = client.post()
+            .uri(BASE_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
+    }
+
+    @Test
+    fun `POST - return 400 when clinicId is zero`() {
+        val body = """
+            {
+                "clinicId": 0,
+                "doctorId": $doctorId,
+                "treatmentTypeId": $treatmentTypeId,
+                "patientName": "John Doe",
+                "appointmentDate": "$futureDate",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+
+        val response = client.post()
+            .uri(BASE_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
+    }
+
+    @Test
+    fun `POST - return 400 when request body is malformed`() {
+        val body = """{ "clinicId": "not-a-number" }"""
+
+        val response = client.post()
+            .uri(BASE_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
     }
 
     @Test
@@ -239,7 +302,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
 
         val response = client.get()
             .uri("$BASE_URL?clinicId={clinicId}&startDate={startDate}&endDate={endDate}",
-                clinicId, "2026-04-01", "2026-04-30")
+                clinicId, futureDate.withDayOfMonth(1), futureDate.withDayOfMonth(futureDate.lengthOfMonth()))
             .execute()
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
@@ -302,7 +365,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "doctorId": $expatDoctorId,
                 "treatmentTypeId": $expatTreatmentId,
                 "patientName": "김철수",
-                "appointmentDate": "2026-04-06",
+                "appointmentDate": "$futureDate",
                 "startTime": "10:00",
                 "endTime": "10:30"
             }
@@ -327,7 +390,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 it[Appointments.treatmentTypeId] = this@AppointmentControllerTest.treatmentTypeId
                 it[patientName] = "Jane Doe"
                 it[patientPhone] = "010-9876-5432"
-                it[appointmentDate] = LocalDate.of(2026, 4, 6)
+                it[appointmentDate] = futureDate
                 it[startTime] = LocalTime.of(11, 0)
                 it[endTime] = LocalTime.of(11, 30)
                 it[Appointments.status] = AppointmentState.REQUESTED

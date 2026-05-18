@@ -12,6 +12,7 @@ import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import jakarta.validation.Valid
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -58,7 +59,7 @@ class AppointmentController(
     }
 
     @PostMapping
-    fun create(@RequestBody request: CreateAppointmentRequest): ResponseEntity<ApiResponse<AppointmentResponse>> {
+    fun create(@Valid @RequestBody request: CreateAppointmentRequest): ResponseEntity<ApiResponse<AppointmentResponse>> {
         log.debug { "POST /api/appointments - patient=${request.patientName}" }
         val saved = appointmentService.create(request)
         val (timezone, locale) = timezoneService.getTimezoneAndLocale(saved.clinicId)
@@ -69,7 +70,7 @@ class AppointmentController(
     @PatchMapping("/{id}/status")
     suspend fun updateStatus(
         @PathVariable id: Long,
-        @RequestBody request: UpdateStatusRequest,
+        @Valid @RequestBody request: UpdateStatusRequest,
     ): ResponseEntity<ApiResponse<AppointmentResponse>> {
         log.debug { "PATCH /api/appointments/$id/status - target=${request.status}" }
         val updated = appointmentService.updateStatus(id, request.status, request.reason)
