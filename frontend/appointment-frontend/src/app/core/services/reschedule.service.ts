@@ -2,11 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { ApiResponse, RescheduleCandidate } from '../models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class RescheduleService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = '/api/appointments';
+  private readonly baseUrl = `${environment.apiUrl}/appointments`;
 
   /**
    * 진료실 휴진 일괄 재배정 후보 조회 (R1)

@@ -2,11 +2,12 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { ApiResponse, Clinic, ClinicBreakTime, OperatingHours, PagedData } from '../models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class ClinicService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = '/api/clinics';
+  private readonly baseUrl = `${environment.apiUrl}/clinics`;
 
   private readonly _clinics = signal<Clinic[]>([]);
   readonly clinics = this._clinics.asReadonly();
