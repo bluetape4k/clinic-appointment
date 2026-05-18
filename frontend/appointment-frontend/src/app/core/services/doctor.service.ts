@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { ApiResponse, Doctor, DoctorAbsence, DoctorSchedule, PagedData } from '../models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class DoctorService {
@@ -17,7 +18,7 @@ export class DoctorService {
     try {
       const res = await firstValueFrom(
         this.http.get<ApiResponse<PagedData<Doctor>>>(
-          `/api/clinics/${clinicId}/doctors`
+          `${environment.apiUrl}/clinics/${clinicId}/doctors`
         )
       );
       const data = res.data?.content ?? [];
@@ -30,7 +31,7 @@ export class DoctorService {
 
   async getById(doctorId: number): Promise<Doctor> {
     const res = await firstValueFrom(
-      this.http.get<ApiResponse<Doctor>>(`/api/doctors/${doctorId}`)
+      this.http.get<ApiResponse<Doctor>>(`${environment.apiUrl}/doctors/${doctorId}`)
     );
     return res.data!;
   }
@@ -38,7 +39,7 @@ export class DoctorService {
   async getSchedules(doctorId: number): Promise<DoctorSchedule[]> {
     const res = await firstValueFrom(
       this.http.get<ApiResponse<DoctorSchedule[]>>(
-        `/api/doctors/${doctorId}/schedules`
+        `${environment.apiUrl}/doctors/${doctorId}/schedules`
       )
     );
     return res.data ?? [];
@@ -50,7 +51,7 @@ export class DoctorService {
       .set('to', to);
     const res = await firstValueFrom(
       this.http.get<ApiResponse<DoctorAbsence[]>>(
-        `/api/doctors/${doctorId}/absences`,
+        `${environment.apiUrl}/doctors/${doctorId}/absences`,
         { params }
       )
     );

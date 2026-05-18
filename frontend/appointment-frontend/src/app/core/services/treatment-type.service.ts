@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { ApiResponse, PagedData, TreatmentType } from '../models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class TreatmentTypeService {
@@ -17,7 +18,7 @@ export class TreatmentTypeService {
     try {
       const res = await firstValueFrom(
         this.http.get<ApiResponse<PagedData<TreatmentType>>>(
-          `/api/clinics/${clinicId}/treatment-types`
+          `${environment.apiUrl}/clinics/${clinicId}/treatment-types`
         )
       );
       const data = res.data?.content ?? [];
@@ -31,7 +32,7 @@ export class TreatmentTypeService {
   async getById(treatmentTypeId: number): Promise<TreatmentType> {
     const res = await firstValueFrom(
       this.http.get<ApiResponse<TreatmentType>>(
-        `/api/treatment-types/${treatmentTypeId}`
+        `${environment.apiUrl}/treatment-types/${treatmentTypeId}`
       )
     );
     return res.data!;

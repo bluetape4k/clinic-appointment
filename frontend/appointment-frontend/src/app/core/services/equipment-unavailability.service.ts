@@ -10,13 +10,14 @@ import {
   UnavailabilityExceptionRequest,
   UpdateEquipmentUnavailabilityRequest,
 } from '../models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class EquipmentUnavailabilityService {
   private readonly http = inject(HttpClient);
 
   private baseUrl(clinicId: number, equipmentId: number): string {
-    return `/api/clinics/${clinicId}/equipments/${equipmentId}/unavailabilities`;
+    return `${environment.apiUrl}/clinics/${clinicId}/equipments/${equipmentId}/unavailabilities`;
   }
 
   /** 사용불가 스케줄 목록 조회 (E1) */
