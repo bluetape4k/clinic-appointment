@@ -13,6 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { provideNativeDateAdapter } from '@angular/material/core';
 
 import { AppointmentService } from '../../../core/services/appointment.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { DoctorService } from '../../../core/services/doctor.service';
 import { TreatmentTypeService } from '../../../core/services/treatment-type.service';
 import { SlotService } from '../../../core/services/slot.service';
@@ -47,6 +48,7 @@ export class AppointmentFormComponent implements OnInit {
   private readonly doctorService = inject(DoctorService);
   private readonly treatmentTypeService = inject(TreatmentTypeService);
   private readonly slotService = inject(SlotService);
+  private readonly authService = inject(AuthService);
 
   readonly doctors = this.doctorService.doctors;
   readonly treatmentTypes = this.treatmentTypeService.treatmentTypes;
@@ -67,11 +69,9 @@ export class AppointmentFormComponent implements OnInit {
     patientPhone: [''],
   });
 
-  private readonly clinicId = 1;
-
   async ngOnInit(): Promise<void> {
-    this.doctorService.loadByClinic(this.clinicId);
-    this.treatmentTypeService.loadByClinic(this.clinicId);
+    this.doctorService.loadByClinic(this.authService.clinicId());
+    this.treatmentTypeService.loadByClinic(this.authService.clinicId());
 
     const idParam = this.route.snapshot.paramMap.get('id');
     if (idParam) {
@@ -98,7 +98,7 @@ export class AppointmentFormComponent implements OnInit {
     this.loadingSlots.set(true);
     try {
       const slots = await this.slotService.getAvailableSlots(
-        this.clinicId, doctorId, treatmentTypeId, dateStr, duration,
+        this.authService.clinicId(), doctorId, treatmentTypeId, dateStr, duration,
       );
       this.availableSlots.set(slots);
     } finally {
@@ -123,7 +123,7 @@ export class AppointmentFormComponent implements OnInit {
     try {
       const values = this.form.value;
       const request: CreateAppointmentRequest = {
-        clinicId: this.clinicId,
+        clinicId: this.authService.clinicId(),
         doctorId: values.doctorId,
         treatmentTypeId: values.treatmentTypeId,
         appointmentDate: this.formatDate(values.appointmentDate),

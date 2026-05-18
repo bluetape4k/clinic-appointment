@@ -95,11 +95,9 @@ export class AppointmentDetailComponent implements OnInit {
     return tt?.name ?? '-';
   });
 
-  private readonly clinicId = 1;
-
   async ngOnInit(): Promise<void> {
-    this.doctorService.loadByClinic(this.clinicId);
-    this.treatmentTypeService.loadByClinic(this.clinicId);
+    this.doctorService.loadByClinic(this.authService.clinicId());
+    this.treatmentTypeService.loadByClinic(this.authService.clinicId());
 
     const id = Number(this.route.snapshot.paramMap.get('id'));
     if (id) {

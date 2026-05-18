@@ -2,11 +2,9 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { AppointmentService, CalendarStateService, DoctorService } from '../../../core/services';
+import { AppointmentService, AuthService, CalendarStateService, DoctorService } from '../../../core/services';
 import { Appointment } from '../../../core/models';
 import { TimeRangePipe } from '../../../shared/pipes/time-range.pipe';
-
-const CLINIC_ID = 1;
 const START_HOUR = 8;
 const END_HOUR = 18;
 const SLOT_MINUTES = 30;
@@ -27,6 +25,7 @@ interface TimeSlot {
 export class DayViewComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly appointmentService = inject(AppointmentService);
+  private readonly authService = inject(AuthService);
   private readonly calendarState = inject(CalendarStateService);
   protected readonly doctorService = inject(DoctorService);
 
@@ -50,7 +49,7 @@ export class DayViewComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.doctorService.loadByClinic(CLINIC_ID);
+    this.doctorService.loadByClinic(this.authService.clinicId());
     const dateParam = this.route.snapshot.paramMap.get('date');
     if (dateParam) {
       this.calendarState.viewMode.set('day');
@@ -65,7 +64,7 @@ export class DayViewComponent implements OnInit {
       const range = this.calendarState.dateRange();
       const from = range.start.toISOString().slice(0, 10);
       const to = range.end.toISOString().slice(0, 10);
-      await this.appointmentService.getByDateRange(CLINIC_ID, from, to);
+      await this.appointmentService.getByDateRange(this.authService.clinicId(), from, to);
     } finally {
       this.loading.set(false);
     }
@@ -94,7 +93,5 @@ export class DayViewComponent implements OnInit {
     return colors[status] ?? '#9E9E9E';
   }
 
-  protected onAppointmentClick(appointment: Appointment): void {
-    console.log('Appointment clicked:', appointment);
-  }
+  protected onAppointmentClick(_appointment: Appointment): void {}
 }

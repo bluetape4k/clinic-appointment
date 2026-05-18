@@ -2,9 +2,8 @@ import { Component, computed, effect, inject, OnInit, signal } from '@angular/co
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { AppointmentService, CalendarStateService } from '../../../core/services';
+import { AppointmentService, AuthService, CalendarStateService } from '../../../core/services';
 
-const CLINIC_ID = 1;
 const WEEKDAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
 
 interface CalendarCell {
@@ -26,6 +25,7 @@ export class MonthViewComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly appointmentService = inject(AppointmentService);
+  private readonly authService = inject(AuthService);
   private readonly calendarState = inject(CalendarStateService);
 
   protected readonly loading = signal(false);
@@ -77,7 +77,7 @@ export class MonthViewComponent implements OnInit {
         const from = cells[0].dateStr;
         const to = cells[cells.length - 1].dateStr;
         this.loading.set(true);
-        this.appointmentService.getByDateRange(CLINIC_ID, from, to)
+        this.appointmentService.getByDateRange(this.authService.clinicId(), from, to)
           .finally(() => this.loading.set(false));
       }
     });

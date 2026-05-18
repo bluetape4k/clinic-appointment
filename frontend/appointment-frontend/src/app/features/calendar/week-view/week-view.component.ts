@@ -2,9 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { AppointmentService, CalendarStateService } from '../../../core/services';
-
-const CLINIC_ID = 1;
+import { AppointmentService, AuthService, CalendarStateService } from '../../../core/services';
 const START_HOUR = 8;
 const END_HOUR = 18;
 const SLOT_MINUTES = 30;
@@ -34,6 +32,7 @@ export class WeekViewComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly appointmentService = inject(AppointmentService);
+  private readonly authService = inject(AuthService);
   private readonly calendarState = inject(CalendarStateService);
 
   protected readonly loading = signal(false);
@@ -85,7 +84,7 @@ export class WeekViewComponent implements OnInit {
       const range = this.calendarState.dateRange();
       const from = range.start.toISOString().slice(0, 10);
       const to = range.end.toISOString().slice(0, 10);
-      await this.appointmentService.getByDateRange(CLINIC_ID, from, to);
+      await this.appointmentService.getByDateRange(this.authService.clinicId(), from, to);
     } finally {
       this.loading.set(false);
     }

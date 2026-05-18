@@ -10,6 +10,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
 import { FormsModule } from '@angular/forms';
+import { AuthService } from '../../../core/services/auth.service';
 import { RescheduleService } from '../../../core/services/reschedule.service';
 import { RescheduleCandidate } from '../../../core/models';
 
@@ -221,6 +222,7 @@ import { RescheduleCandidate } from '../../../core/models';
   `],
 })
 export class RescheduleListComponent {
+  private readonly authService = inject(AuthService);
   private readonly rescheduleService = inject(RescheduleService);
   private readonly snackBar = inject(MatSnackBar);
 
@@ -228,7 +230,7 @@ export class RescheduleListComponent {
 
   readonly appointmentId = signal<number>(0);
   readonly searchType = signal<'candidates' | 'closure'>('candidates');
-  readonly clinicId = signal<number>(1);
+  readonly clinicId = signal<number>(this.authService.clinicId());
   readonly closureDate = signal<string>('');
   readonly searchDays = signal<number>(7);
 
