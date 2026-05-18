@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { firstValueFrom, toArray } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { RescheduleService } from './reschedule.service';
+import { AuthService } from './auth.service';
+
+const mockAuthService = { getToken: () => 'test-token' };
 
 describe('RescheduleService', () => {
   let service: RescheduleService;
@@ -11,7 +15,11 @@ describe('RescheduleService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: mockAuthService },
+      ],
     });
     service = TestBed.inject(RescheduleService);
     httpTesting = TestBed.inject(HttpTestingController);
@@ -121,6 +129,57 @@ describe('RescheduleService', () => {
 
       const result = await promise;
       expect(result).toBeNull();
+    });
+  });
+
+  describe('streamBatchReschedule()', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('progress + complete 이벤트를 순서대로 방출한다', async () => {
+      const ssePayload =
+        'event: progress\ndata: {"appointmentId":1,"candidateCount":3,"totalProcessed":1,"done":false}\n\n' +
+        'event: complete\ndata: {"appointmentId":-1,"candidateCount":0,"totalProcessed":1,"done":true}\n\n';
+
+      const stream = new ReadableStream({
+        start(ctrl) {
+          ctrl.enqueue(new TextEncoder().encode(ssePayload));
+          ctrl.close();
+        },
+      });
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, body: stream } as Response);
+
+      const params = { clinicId: 1, closureDate: '2026-05-19', searchDays: 7 };
+      const events = await firstValueFrom(service.streamBatchReschedule(params).pipe(toArray()));
+
+      expect(events).toHaveLength(2);
+      expect(events[0]).toEqual({ appointmentId: 1, candidateCount: 3, totalProcessed: 1, done: false });
+      expect(events[1]).toEqual({ appointmentId: -1, candidateCount: 0, totalProcessed: 1, done: true });
+    });
+
+    it('HTTP 오류 응답 시 에러를 방출한다', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 403 } as Response);
+
+      const params = { clinicId: 1, closureDate: '2026-05-19', searchDays: 7 };
+      await expect(firstValueFrom(service.streamBatchReschedule(params))).rejects.toThrow('SSE failed: 403');
+    });
+
+    it('구독 취소 시 fetch를 abort한다', () => {
+      const abortFn = vi.fn();
+      vi.spyOn(globalThis, 'AbortController').mockImplementation(
+        class {
+          abort = abortFn;
+          signal = {} as AbortSignal;
+        } as unknown as new () => AbortController,
+      );
+      vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}));
+
+      const params = { clinicId: 1, closureDate: '2026-05-19', searchDays: 7 };
+      const sub = service.streamBatchReschedule(params).subscribe();
+      sub.unsubscribe();
+
+      expect(abortFn).toHaveBeenCalledOnce();
     });
   });
 });
