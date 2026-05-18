@@ -37,9 +37,9 @@ allprojects {
             url = uri("https://central.sonatype.com/repository/maven-snapshots/")
         }
     }
-    // bluetape4k snapshot 버전 사용 시만 사용하세요.
+    // SNAPSHOT artifacts must always be re-checked; caching stale metadata breaks CI
     configurations.all {
-        resolutionStrategy.cacheChangingModulesFor(1, TimeUnit.DAYS)
+        resolutionStrategy.cacheChangingModulesFor(0, TimeUnit.SECONDS)
     }
 }
 
