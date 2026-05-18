@@ -174,12 +174,10 @@ subprojects {
         imports {
             mavenBom(rootLibs.bluetape4k.dependencies.get().toString())
             mavenBom(rootLibs.spring.boot4.dependencies.get().toString())
-            mavenBom(rootLibs.jackson3.bom.get().toString())
-            mavenBom(rootLibs.testcontainers.bom.get().toString())
-            mavenBom(rootLibs.junit.bom.get().toString())
-            mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())
-            mavenBom(rootLibs.kotlin.bom.get().toString())
             mavenBom(rootLibs.timefold.solver.bom.get().toString())
+            // Override Spring Boot's lower Kotlin/Coroutines versions
+            mavenBom(rootLibs.kotlin.bom.get().toString())
+            mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())
         }
     }
 
@@ -191,7 +189,6 @@ subprojects {
 
         compileOnly(platform(rootLibs.bluetape4k.dependencies))
         compileOnly(platform(rootLibs.spring.boot4.dependencies))
-        compileOnly(platform(rootLibs.kotlinx.coroutines.bom))
 
         implementation(rootLibs.kotlin.stdlib)
         implementation(rootLibs.kotlin.reflect)
