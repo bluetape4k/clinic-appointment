@@ -68,10 +68,8 @@ export class AppointmentListComponent implements OnInit {
   selectedDoctorId: number | null = null;
   selectedStatuses: AppointmentStatus[] = [];
 
-  private readonly clinicId = 1;
-
   ngOnInit(): void {
-    this.doctorService.loadByClinic(this.clinicId);
+    this.doctorService.loadByClinic(this.authService.clinicId());
     this.loadAppointments();
   }
 
@@ -82,7 +80,7 @@ export class AppointmentListComponent implements OnInit {
   async loadAppointments(): Promise<void> {
     const from = this.formatDate(this.dateFrom);
     const to = this.formatDate(this.dateTo);
-    const appointments = await this.appointmentService.getByDateRange(this.clinicId, from, to);
+    const appointments = await this.appointmentService.getByDateRange(this.authService.clinicId(), from, to);
     this.applyFilters(appointments);
   }
 

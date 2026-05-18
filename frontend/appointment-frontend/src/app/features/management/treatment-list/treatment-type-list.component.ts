@@ -3,9 +3,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { TreatmentType } from '../../../core/models';
-import { TreatmentTypeService } from '../../../core/services';
-
-const CLINIC_ID = 1;
+import { AuthService, TreatmentTypeService } from '../../../core/services';
 
 @Component({
   selector: 'app-treatment-type-list',
@@ -82,12 +80,13 @@ const CLINIC_ID = 1;
   `],
 })
 export class TreatmentTypeListComponent implements OnInit {
+  private readonly authService = inject(AuthService);
   private readonly treatmentTypeService = inject(TreatmentTypeService);
 
   readonly displayedColumns = ['name', 'category', 'duration', 'requiresEquipment'];
   readonly treatmentTypes = this.treatmentTypeService.treatmentTypes;
 
   ngOnInit(): void {
-    this.treatmentTypeService.loadByClinic(CLINIC_ID);
+    this.treatmentTypeService.loadByClinic(this.authService.clinicId());
   }
 }

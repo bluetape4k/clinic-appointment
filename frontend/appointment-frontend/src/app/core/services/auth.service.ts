@@ -10,6 +10,18 @@ export class AuthService {
 
   readonly isAuthenticated = computed(() => !!this.getToken());
 
+  private readonly _decodedToken = computed(() => {
+    const token = this.getToken();
+    if (!token) return null;
+    try {
+      return JSON.parse(atob(token.split('.')[1])) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  });
+
+  readonly clinicId = computed(() => (this._decodedToken()?.['clinicId'] as number) ?? 0);
+
   readonly isAdmin = computed(() => this._roles().includes('ROLE_ADMIN'));
   readonly isStaff = computed(() => this._roles().includes('ROLE_STAFF'));
   readonly isDoctor = computed(() => this._roles().includes('ROLE_DOCTOR'));

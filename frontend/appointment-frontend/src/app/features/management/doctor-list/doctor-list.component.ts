@@ -2,9 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { MatTableModule } from '@angular/material/table';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
-import { DoctorService } from '../../../core/services';
-
-const CLINIC_ID = 1;
+import { AuthService, DoctorService } from '../../../core/services';
 
 @Component({
   selector: 'app-doctor-list',
@@ -76,12 +74,13 @@ const CLINIC_ID = 1;
   `],
 })
 export class DoctorListComponent implements OnInit {
+  private readonly authService = inject(AuthService);
   private readonly doctorService = inject(DoctorService);
 
   readonly displayedColumns = ['name', 'specialty', 'providerType'];
   readonly doctors = this.doctorService.doctors;
 
   ngOnInit(): void {
-    this.doctorService.loadByClinic(CLINIC_ID);
+    this.doctorService.loadByClinic(this.authService.clinicId());
   }
 }
