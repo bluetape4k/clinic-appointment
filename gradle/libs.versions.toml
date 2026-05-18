@@ -1,45 +1,23 @@
 # @formatter:off
-# Gradle Version Catalog — migrated from buildSrc/src/main/kotlin/Libs.kt
+# Gradle Version Catalog for clinic-appointment
+#
+# Policy: bluetape4k-dependencies BOM is the single source of truth for shared
+# library versions. This catalog declares only:
+#   1. The BOM version itself
+#   2. Plugin versions (Gradle plugins always need explicit versions)
+#   3. Project-local library versions NOT managed by any BOM
+#
+# Libraries managed by the BOM (bluetape4k-dependencies or spring-boot4-dependencies)
+# declare `module` only (no version). Gradle + spring-dependency-management plugin
+# resolves their versions from the imported BOM platform.
 
 [versions]
+# ── BOM (source of truth) ──────────────────────────────────────────────────
 bluetape4k-dependencies = "1.0.1-SNAPSHOT"
 
+# ── Plugin versions (always required) ─────────────────────────────────────
 kotlin = "2.3.21"
-kotlinx-coroutines = "1.11.0"
-
 spring-boot4 = "4.0.6"
-springdoc-openapi = "3.0.3"
-
-resilience4j = "2.4.0"
-
-jackson3 = "3.1.3"
-jjwt = "0.13.0"
-
-lettuce = "6.8.2.RELEASE"
-exposed = "1.3.0"
-lz4-java = "1.8.0"
-fory = "0.15.0"
-
-slf4j = "2.0.18"
-logback = "1.5.32"
-
-timefold-solver = "1.33.0"
-
-junit-jupiter = "6.0.3"
-junit-platform = "6.0.3"
-mockk = "1.14.9"
-testcontainers = "2.0.5"
-assertj = "3.27.6"
-random-beans = "3.9.0"
-datafaker = "2.5.4"
-
-flyway = "12.6.1"
-h2-v2 = "2.4.240"
-mysql-connector-j = "9.7.0"
-postgresql = "42.7.11"
-r2dbc-h2 = "1.1.0.RELEASE"
-
-# Plugin versions
 dokka = "2.2.0"
 detekt = "1.23.8"
 dependency-management = "1.1.7"
@@ -47,6 +25,19 @@ kover = "0.9.8"
 test-logger = "4.0.0"
 shadow = "9.4.1"
 gatling = "3.15.0"
+
+# ── Override versions (project uses newer than Spring Boot provides) ───────
+kotlinx-coroutines = "1.11.0" # https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
+
+# ── Project-local versions (NOT in any BOM) ───────────────────────────────
+springdoc-openapi = "3.0.3"   # https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-starter-webmvc-ui
+jjwt = "0.13.0"               # https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api
+timefold-solver = "1.33.0"    # https://mvnrepository.com/artifact/ai.timefold.solver/timefold-solver-bom
+lz4-java = "1.8.0"            # https://mvnrepository.com/artifact/org.lz4/lz4-java
+mockk = "1.14.9"              # https://mvnrepository.com/artifact/io.mockk/mockk
+random-beans = "3.9.0"        # https://mvnrepository.com/artifact/io.github.benas/random-beans
+datafaker = "2.5.4"           # https://mvnrepository.com/artifact/net.datafaker/datafaker
+resilience4j = "2.4.0"        # https://mvnrepository.com/artifact/io.github.resilience4j/resilience4j-retry
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
@@ -66,9 +57,9 @@ shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 gatling = { id = "io.gatling.gradle", version.ref = "gatling" }
 
 [libraries]
-jetbrains-annotations = { module = "org.jetbrains:annotations", version = "26.1.0" }
+jetbrains-annotations = { module = "org.jetbrains:annotations" }
 
-# bluetape4k
+# ── bluetape4k (versions from bluetape4k-dependencies BOM) ────────────────
 bluetape4k-dependencies = { module = "io.github.bluetape4k:bluetape4k-dependencies", version.ref = "bluetape4k-dependencies" }
 bluetape4k-coroutines = { module = "io.github.bluetape4k:bluetape4k-coroutines" }
 bluetape4k-jackson3 = { module = "io.github.bluetape4k:bluetape4k-jackson3" }
@@ -86,14 +77,14 @@ exposed-core = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-core"
 exposed-jdbc = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc" }
 exposed-r2dbc-tests = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-r2dbc-tests" }
 
-# Kotlin
+# ── Kotlin (override: project uses newer than Spring Boot) ────────────────
 kotlin-bom = { module = "org.jetbrains.kotlin:kotlin-bom", version.ref = "kotlin" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib" }
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test" }
 kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }
 
-# Kotlinx Coroutines
+# ── Kotlinx Coroutines (override: project uses newer than Spring Boot) ────
 kotlinx-coroutines-bom = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-bom", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core" }
 kotlinx-coroutines-core-jvm = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm" }
@@ -103,67 +94,67 @@ kotlinx-coroutines-slf4j = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test" }
 kotlinx-coroutines-test-jvm = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test-jvm" }
 
-# Logging
-slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
-jcl-over-slf4j = { module = "org.slf4j:jcl-over-slf4j", version.ref = "slf4j" }
-jul-to-slf4j = { module = "org.slf4j:jul-to-slf4j", version.ref = "slf4j" }
-log4j-over-slf4j = { module = "org.slf4j:log4j-over-slf4j", version.ref = "slf4j" }
-logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+# ── Logging (versions from spring-boot4-dependencies BOM) ─────────────────
+slf4j-api = { module = "org.slf4j:slf4j-api" }
+jcl-over-slf4j = { module = "org.slf4j:jcl-over-slf4j" }
+jul-to-slf4j = { module = "org.slf4j:jul-to-slf4j" }
+log4j-over-slf4j = { module = "org.slf4j:log4j-over-slf4j" }
+logback = { module = "ch.qos.logback:logback-classic" }
 
-# Lettuce
-lettuce-core = { module = "io.lettuce:lettuce-core", version.ref = "lettuce" }
+# ── Lettuce (version from spring-boot4-dependencies BOM) ──────────────────
+lettuce-core = { module = "io.lettuce:lettuce-core" }
 
-# Compression / Serialization
+# ── Compression / Serialization ───────────────────────────────────────────
 lz4-java = { module = "org.lz4:lz4-java", version.ref = "lz4-java" }
-fory-core = { module = "org.apache.fory:fory-core", version.ref = "fory" }
-fory-kotlin = { module = "org.apache.fory:fory-kotlin", version.ref = "fory" }
+fory-core = { module = "org.apache.fory:fory-core" }
+fory-kotlin = { module = "org.apache.fory:fory-kotlin" }
 
-# Exposed
-jetbrains-exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
-jetbrains-exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
-jetbrains-exposed-r2dbc = { module = "org.jetbrains.exposed:exposed-r2dbc", version.ref = "exposed" }
-jetbrains-exposed-java-time = { module = "org.jetbrains.exposed:exposed-java-time", version.ref = "exposed" }
-jetbrains-exposed-migration-jdbc = { module = "org.jetbrains.exposed:exposed-migration-jdbc", version.ref = "exposed" }
-jetbrains-exposed-spring7-transaction = { module = "org.jetbrains.exposed:spring7-transaction", version.ref = "exposed" }
-jetbrains-exposed-spring-boot4-starter = { module = "org.jetbrains.exposed:exposed-spring-boot4-starter", version.ref = "exposed" }
+# ── Exposed (versions from bluetape4k-dependencies BOM) ───────────────────
+jetbrains-exposed-core = { module = "org.jetbrains.exposed:exposed-core" }
+jetbrains-exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc" }
+jetbrains-exposed-r2dbc = { module = "org.jetbrains.exposed:exposed-r2dbc" }
+jetbrains-exposed-java-time = { module = "org.jetbrains.exposed:exposed-java-time" }
+jetbrains-exposed-migration-jdbc = { module = "org.jetbrains.exposed:exposed-migration-jdbc" }
+jetbrains-exposed-spring7-transaction = { module = "org.jetbrains.exposed:spring7-transaction" }
+jetbrains-exposed-spring-boot4-starter = { module = "org.jetbrains.exposed:exposed-spring-boot4-starter" }
 
-# Jackson 3
-jackson3-bom = { module = "tools.jackson:jackson-bom", version.ref = "jackson3" }
+# ── Jackson 3 (versions from spring-boot4-dependencies BOM) ───────────────
 jackson3-module-kotlin = { module = "tools.jackson.module:jackson-module-kotlin" }
 jackson3-module-blackbird = { module = "tools.jackson.module:jackson-module-blackbird" }
 
-# JJWT
+# ── JJWT (project-local version) ──────────────────────────────────────────
 jjwt-api = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }
 jjwt-impl = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jjwt" }
 jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
 
-# Spring Boot
+# ── Spring Boot (version from BOM) ────────────────────────────────────────
 spring-boot4-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot4" }
+
+# ── Springdoc (project-local version) ─────────────────────────────────────
 springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc-openapi" }
 
-# Resilience4j
+# ── Resilience4j (project-local version) ──────────────────────────────────
 resilience4j-bulkhead = { module = "io.github.resilience4j:resilience4j-bulkhead", version.ref = "resilience4j" }
 resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-circuitbreaker", version.ref = "resilience4j" }
 resilience4j-kotlin = { module = "io.github.resilience4j:resilience4j-kotlin", version.ref = "resilience4j" }
 resilience4j-retry = { module = "io.github.resilience4j:resilience4j-retry", version.ref = "resilience4j" }
 
-# Timefold
+# ── Timefold (project-local version) ──────────────────────────────────────
 timefold-solver-bom = { module = "ai.timefold.solver:timefold-solver-bom", version.ref = "timefold-solver" }
 timefold-solver-core = { module = "ai.timefold.solver:timefold-solver-core" }
 timefold-solver-test = { module = "ai.timefold.solver:timefold-solver-test" }
 timefold-solver-benchmark = { module = "ai.timefold.solver:timefold-solver-benchmark" }
 
-# DB
-flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
-flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
-flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
-h2-v2 = { module = "com.h2database:h2", version.ref = "h2-v2" }
-mysql-connector-j = { module = "com.mysql:mysql-connector-j", version.ref = "mysql-connector-j" }
-postgresql-driver = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
-r2dbc-h2 = { module = "io.r2dbc:r2dbc-h2", version.ref = "r2dbc-h2" }
+# ── DB (versions from spring-boot4-dependencies BOM) ──────────────────────
+flyway-core = { module = "org.flywaydb:flyway-core" }
+flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
+flyway-mysql = { module = "org.flywaydb:flyway-mysql" }
+h2-v2 = { module = "com.h2database:h2" }
+mysql-connector-j = { module = "com.mysql:mysql-connector-j" }
+postgresql-driver = { module = "org.postgresql:postgresql" }
+r2dbc-h2 = { module = "io.r2dbc:r2dbc-h2" }
 
-# Test
-junit-bom = { module = "org.junit:junit-bom", version.ref = "junit-jupiter" }
+# ── Test (versions from spring-boot4-dependencies BOM unless noted) ───────
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api" }
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine" }
@@ -175,19 +166,18 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 junit-platform-runner = { module = "org.junit.platform:junit-platform-runner" }
 
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
-assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+assertj-core = { module = "org.assertj:assertj-core" }
 datafaker = { module = "net.datafaker:datafaker", version.ref = "datafaker" }
 random-beans = { module = "io.github.benas:random-beans", version.ref = "random-beans" }
 
-# Testcontainers
-testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
-testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
-testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter", version.ref = "testcontainers" }
-testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql", version.ref = "testcontainers" }
-testcontainers-mysql = { module = "org.testcontainers:testcontainers-mysql", version.ref = "testcontainers" }
-testcontainers-mariadb = { module = "org.testcontainers:testcontainers-mariadb", version.ref = "testcontainers" }
-testcontainers-cockroachdb = { module = "org.testcontainers:testcontainers-cockroachdb", version.ref = "testcontainers" }
+# ── Testcontainers (versions from spring-boot4-dependencies BOM) ──────────
+testcontainers = { module = "org.testcontainers:testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
+testcontainers-mysql = { module = "org.testcontainers:testcontainers-mysql" }
+testcontainers-mariadb = { module = "org.testcontainers:testcontainers-mariadb" }
+testcontainers-cockroachdb = { module = "org.testcontainers:testcontainers-cockroachdb" }
 
-# Gatling
+# ── Gatling (project-local version) ───────────────────────────────────────
 gatling-charts-highcharts = { module = "io.gatling.highcharts:gatling-charts-highcharts", version.ref = "gatling" }
 gatling-http-java = { module = "io.gatling:gatling-http-java", version.ref = "gatling" }

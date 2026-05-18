@@ -37,9 +37,9 @@ allprojects {
             url = uri("https://central.sonatype.com/repository/maven-snapshots/")
         }
     }
-    // bluetape4k snapshot 버전 사용 시만 사용하세요.
+    // SNAPSHOT artifacts must always be re-checked; caching stale metadata breaks CI
     configurations.all {
-        resolutionStrategy.cacheChangingModulesFor(1, TimeUnit.DAYS)
+        resolutionStrategy.cacheChangingModulesFor(0, TimeUnit.SECONDS)
     }
 }
 
@@ -174,12 +174,10 @@ subprojects {
         imports {
             mavenBom(rootLibs.bluetape4k.dependencies.get().toString())
             mavenBom(rootLibs.spring.boot4.dependencies.get().toString())
-            mavenBom(rootLibs.jackson3.bom.get().toString())
-            mavenBom(rootLibs.testcontainers.bom.get().toString())
-            mavenBom(rootLibs.junit.bom.get().toString())
-            mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())
-            mavenBom(rootLibs.kotlin.bom.get().toString())
             mavenBom(rootLibs.timefold.solver.bom.get().toString())
+            // Override Spring Boot's lower Kotlin/Coroutines versions
+            mavenBom(rootLibs.kotlin.bom.get().toString())
+            mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())
         }
     }
 
@@ -191,7 +189,6 @@ subprojects {
 
         compileOnly(platform(rootLibs.bluetape4k.dependencies))
         compileOnly(platform(rootLibs.spring.boot4.dependencies))
-        compileOnly(platform(rootLibs.kotlinx.coroutines.bom))
 
         implementation(rootLibs.kotlin.stdlib)
         implementation(rootLibs.kotlin.reflect)
