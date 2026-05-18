@@ -104,6 +104,15 @@ class AppointmentService(
             ?: throw NoSuchElementException("Appointment not found after status update: $id")
     }
 
+    fun getStateHistory(appointmentId: Long): List<AppointmentStateHistoryRecord> {
+        log.debug { "getStateHistory: appointmentId=$appointmentId" }
+        return transaction {
+            appointmentRepository.findByIdOrNull(appointmentId)
+                ?: throw NoSuchElementException("Appointment not found: $appointmentId")
+            stateHistoryRepository.findByAppointmentId(appointmentId)
+        }
+    }
+
     suspend fun cancel(id: Long, reason: String? = null): AppointmentRecord {
         log.debug { "cancel: id=$id, reason=$reason" }
         val record = transaction { appointmentRepository.findByIdOrNull(id) }

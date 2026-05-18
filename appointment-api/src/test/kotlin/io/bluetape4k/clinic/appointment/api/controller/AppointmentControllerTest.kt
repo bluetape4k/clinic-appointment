@@ -284,6 +284,51 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
     }
 
     @Test
+    fun `GET - state history after status change`() {
+        val appointmentId = createTestAppointment()
+
+        client.patch()
+            .uri("$BASE_URL/{id}/status", appointmentId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body("""{"status": "CONFIRMED"}""")
+            .execute()
+
+        val response = client.get()
+            .uri("$BASE_URL/{id}/history", appointmentId)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        val history = response.jsonPath<List<*>>("$.data").shouldNotBeNull()
+        history.shouldNotBeEmpty()
+        response.jsonPath<String>("$.data[0].fromState") shouldBeEqualTo "REQUESTED"
+        response.jsonPath<String>("$.data[0].toState") shouldBeEqualTo "CONFIRMED"
+    }
+
+    @Test
+    fun `GET - history returns empty list for new appointment`() {
+        val appointmentId = createTestAppointment()
+
+        val response = client.get()
+            .uri("$BASE_URL/{id}/history", appointmentId)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldBeEmpty()
+    }
+
+    @Test
+    fun `GET - history returns 404 for non-existent appointment`() {
+        val response = client.get()
+            .uri("$BASE_URL/{id}/history", 999999)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
+    }
+
+    @Test
     fun `DELETE - cancel appointment`() {
         val appointmentId = createTestAppointment()
 
