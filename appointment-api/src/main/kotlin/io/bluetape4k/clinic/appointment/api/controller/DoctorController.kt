@@ -4,10 +4,13 @@ import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.model.dto.DoctorAbsenceRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorScheduleRecord
+import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
+import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requirePositiveNumber
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
@@ -30,22 +33,29 @@ import java.time.LocalDate
 class DoctorController(
     private val doctorRepository: DoctorRepository,
 ) {
-    companion object : KLogging()
+    companion object : KLogging() {
+        private const val MAX_PAGE_SIZE = 100
+    }
 
     /**
-     * 병원의 의사 목록을 조회합니다.
+     * 병원의 의사 목록을 페이징 조회합니다.
      *
      * @param clinicId 병원 ID
-     * @return 의사 목록
+     * @param page 페이지 번호 (0-based, default 0)
+     * @param size 페이지 크기 (default 20, max 100)
+     * @return 페이징된 의사 목록
      */
     @GetMapping("/clinics/{clinicId}/doctors")
     fun getByClinic(
         @PathVariable clinicId: Long,
-    ): ResponseEntity<ApiResponse<List<DoctorRecord>>> {
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int,
+    ): ResponseEntity<ApiResponse<ExposedPage<DoctorRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
-        log.debug { "GET doctors clinicId=$clinicId" }
-        val doctors = transaction { doctorRepository.findByClinicId(clinicId) }
-        return ResponseEntity.ok(ApiResponse.ok(doctors))
+        val pageSize = size.coerceIn(1, MAX_PAGE_SIZE)
+        log.debug { "GET doctors clinicId=$clinicId, page=$page, size=$pageSize" }
+        val result = transaction { doctorRepository.findPage(page, pageSize) { Doctors.clinicId eq clinicId } }
+        return ResponseEntity.ok(ApiResponse.ok(result))
     }
 
     /**

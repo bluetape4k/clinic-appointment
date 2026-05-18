@@ -80,14 +80,18 @@ class ClinicControllerTest @Autowired constructor() : AbstractApiIntegrationTest
     }
 
     @Test
-    fun `GET - all clinics`() {
+    fun `GET - all clinics with pagination`() {
         val response = client.get()
-            .uri(BASE_URL)
+            .uri("$BASE_URL?page=0&size=20")
             .execute()
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
-        response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldNotBeEmpty()
+        response.jsonPath<List<*>>("$.data.content").shouldNotBeNull().shouldNotBeEmpty()
+        response.jsonPath<Int>("$.data.totalCount") shouldBeEqualTo 1
+        response.jsonPath<Int>("$.data.pageNumber") shouldBeEqualTo 0
+        response.jsonPath<Int>("$.data.pageSize") shouldBeEqualTo 20
+        response.jsonPath<Int>("$.data.totalPages") shouldBeEqualTo 1
     }
 
     @Test

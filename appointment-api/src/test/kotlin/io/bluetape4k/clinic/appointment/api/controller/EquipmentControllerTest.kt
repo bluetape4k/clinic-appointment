@@ -66,15 +66,17 @@ class EquipmentControllerTest @Autowired constructor() : AbstractApiIntegrationT
     }
 
     @Test
-    fun `GET - equipments by clinic`() {
+    fun `GET - equipments by clinic with pagination`() {
         val response = client.get()
-            .uri("$CLINICS_BASE_URL/{clinicId}/equipments", clinicId)
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments?page=0&size=20", clinicId)
             .execute()
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
-        response.jsonPath<List<*>>("$.data").shouldNotBeNull() shouldHaveSize 1
-        response.jsonPath<String>("$.data[0].name") shouldBeEqualTo "MRI Scanner"
+        response.jsonPath<List<*>>("$.data.content").shouldNotBeNull() shouldHaveSize 1
+        response.jsonPath<String>("$.data.content[0].name") shouldBeEqualTo "MRI Scanner"
+        response.jsonPath<Int>("$.data.totalCount") shouldBeEqualTo 1
+        response.jsonPath<Int>("$.data.pageNumber") shouldBeEqualTo 0
     }
 
     @Test
@@ -99,7 +101,7 @@ class EquipmentControllerTest @Autowired constructor() : AbstractApiIntegrationT
     }
 
     @Test
-    fun `GET - equipments returns empty list for clinic with no equipments`() {
+    fun `GET - equipments returns empty page for clinic with no equipments`() {
         val emptyClinicId = transaction {
             Clinics.insertAndGetId {
                 it[name] = "Empty Clinic"
@@ -117,6 +119,7 @@ class EquipmentControllerTest @Autowired constructor() : AbstractApiIntegrationT
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
-        response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldBeEmpty()
+        response.jsonPath<List<*>>("$.data.content").shouldNotBeNull().shouldBeEmpty()
+        response.jsonPath<Int>("$.data.totalCount") shouldBeEqualTo 0
     }
 }

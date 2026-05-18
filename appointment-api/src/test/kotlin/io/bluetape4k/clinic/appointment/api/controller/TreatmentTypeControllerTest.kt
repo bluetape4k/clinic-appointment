@@ -69,15 +69,17 @@ class TreatmentTypeControllerTest @Autowired constructor() : AbstractApiIntegrat
     }
 
     @Test
-    fun `GET - treatment types by clinic`() {
+    fun `GET - treatment types by clinic with pagination`() {
         val response = client.get()
-            .uri("$CLINICS_BASE_URL/{clinicId}/treatment-types", clinicId)
+            .uri("$CLINICS_BASE_URL/{clinicId}/treatment-types?page=0&size=20", clinicId)
             .execute()
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
-        response.jsonPath<List<*>>("$.data").shouldNotBeNull() shouldHaveSize 1
-        response.jsonPath<String>("$.data[0].name") shouldBeEqualTo "General Checkup"
+        response.jsonPath<List<*>>("$.data.content").shouldNotBeNull() shouldHaveSize 1
+        response.jsonPath<String>("$.data.content[0].name") shouldBeEqualTo "General Checkup"
+        response.jsonPath<Int>("$.data.totalCount") shouldBeEqualTo 1
+        response.jsonPath<Int>("$.data.pageNumber") shouldBeEqualTo 0
     }
 
     @Test
@@ -103,7 +105,7 @@ class TreatmentTypeControllerTest @Autowired constructor() : AbstractApiIntegrat
     }
 
     @Test
-    fun `GET - treatment types returns empty list for clinic with no types`() {
+    fun `GET - treatment types returns empty page for clinic with no types`() {
         val emptyClinicId = transaction {
             Clinics.insertAndGetId {
                 it[name] = "Empty Clinic"
@@ -121,6 +123,7 @@ class TreatmentTypeControllerTest @Autowired constructor() : AbstractApiIntegrat
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
-        response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldBeEmpty()
+        response.jsonPath<List<*>>("$.data.content").shouldNotBeNull().shouldBeEmpty()
+        response.jsonPath<Int>("$.data.totalCount") shouldBeEqualTo 0
     }
 }
