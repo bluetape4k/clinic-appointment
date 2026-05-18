@@ -104,6 +104,87 @@ class ClosureRescheduleService(
         }
 
     /**
+     * Processes closure reschedule one appointment at a time and reports progress via callback.
+     *
+     * ## Behavior / Contract
+     * - Each appointment is processed in its own transaction so the DB connection is released
+     *   between appointments. [onProgress] is called AFTER each per-appointment transaction commits,
+     *   never while a DB connection is held. This is safe for callers that perform network I/O
+     *   (e.g. SSE flush) inside the callback.
+     * - Does NOT emit a terminal signal; the caller is responsible for signalling completion.
+     * - Status-update and state-history writes use a single shared transaction before per-appointment processing.
+     *
+     * @param clinicId clinic to reschedule for
+     * @param closureDate date of the clinic closure
+     * @param searchDays number of days to search for alternative slots (default 7)
+     * @param onProgress called AFTER each appointment's transaction commits, with (appointmentId, candidateCount)
+     * @return total number of appointments processed
+     */
+    fun streamClosureReschedule(
+        clinicId: Long,
+        closureDate: LocalDate,
+        searchDays: Int = 7,
+        onProgress: (appointmentId: Long, candidateCount: Int) -> Unit,
+    ): Int {
+        val affected = transaction {
+            val list = appointmentRepository.findActiveByClinicAndDate(clinicId, closureDate, ACTIVE_STATUSES)
+            if (list.isEmpty()) return@transaction emptyList()
+
+            appointmentRepository.updateStatusByClinicAndDate(
+                clinicId, closureDate, ACTIVE_STATUSES, AppointmentState.PENDING_RESCHEDULE
+            )
+            for (appointment in list) {
+                stateHistoryRepository.save(
+                    AppointmentStateHistoryRecord(
+                        appointmentId = appointment.id.requireNotNull("appointment.id"),
+                        fromState = appointment.status,
+                        toState = AppointmentState.PENDING_RESCHEDULE,
+                        reason = "임시휴진으로 인한 재배정",
+                    )
+                )
+            }
+            list
+        }
+
+        if (affected.isEmpty()) return 0
+
+        var processed = 0
+        for (appointment in affected) {
+            val appointmentId = appointment.id.requireNotNull("appointment.id")
+            // Per-appointment transaction — releases DB connection before onProgress callback
+            val candidateCount = transaction {
+                var count = 0
+                var priority = 0
+                for (dayOffset in 1..searchDays) {
+                    val candidateDate = closureDate.plusDays(dayOffset.toLong())
+                    val slots = slotCalculationService.findAvailableSlots(
+                        SlotQuery(clinicId, appointment.doctorId, appointment.treatmentTypeId, candidateDate)
+                    )
+                    for (slot in slots) {
+                        rescheduleCandidateRepository.save(
+                            RescheduleCandidateRecord(
+                                originalAppointmentId = appointmentId,
+                                candidateDate = candidateDate,
+                                startTime = slot.startTime,
+                                endTime = slot.endTime,
+                                doctorId = appointment.doctorId,
+                                priority = priority,
+                            )
+                        )
+                        count++
+                        priority++
+                    }
+                }
+                count
+            }
+            // DB connection released — safe to call onProgress with network I/O
+            onProgress(appointmentId, candidateCount)
+            processed++
+        }
+        return processed
+    }
+
+    /**
      * 관리자가 재배정 후보를 선택하여 확정합니다.
      * 원래 예약은 RESCHEDULED로 전환하고, 새 예약을 생성합니다.
      *
