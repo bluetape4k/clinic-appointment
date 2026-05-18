@@ -8,6 +8,11 @@ import io.bluetape4k.clinic.appointment.api.dto.toResponse
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.repository.toRescheduleCandidateRecord
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -29,6 +34,7 @@ import java.time.LocalDate
  *
  * @param closureRescheduleService 휴진 재배정 서비스
  */
+@Tag(name = "Reschedule", description = "Appointment rescheduling")
 @RestController
 @RequestMapping("/api/appointments/{id}/reschedule")
 class RescheduleController(
@@ -48,12 +54,17 @@ class RescheduleController(
      * @param searchDays 재배정 검색 기간 (기본값: 7일)
      * @return 예약별 재배정 후보 목록 (Map: appointmentId -> 후보 슬롯 목록)
      */
+    @Operation(summary = "Process closure reschedule for affected appointments")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @PostMapping("/closure")
     fun processClosureReschedule(
         @PathVariable id: Long,
         @RequestParam clinicId: Long,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) closureDate: LocalDate,
-        @RequestParam(defaultValue = "7") searchDays: Int,
+        @Parameter(description = "Number of days to search for alternative slots") @RequestParam(defaultValue = "7") searchDays: Int,
     ): ResponseEntity<ApiResponse<Map<Long, List<RescheduleCandidateResponse>>>> {
         log.debug { "POST /api/appointments/$id/reschedule/closure - clinic=$clinicId, date=$closureDate" }
         val result = closureRescheduleService.processClosureReschedule(clinicId, closureDate, searchDays)
@@ -71,6 +82,11 @@ class RescheduleController(
      * @param id 원본 예약 ID
      * @return 재배정 후보 목록
      */
+    @Operation(summary = "Get reschedule candidates for an appointment")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "404", description = "Appointment not found"),
+    )
     @GetMapping("/candidates")
     fun getCandidates(
         @PathVariable id: Long,
@@ -96,6 +112,12 @@ class RescheduleController(
      * @param candidateId 선택한 재배정 후보 ID
      * @return 생성된 새로운 예약 ID
      */
+    @Operation(summary = "Confirm a reschedule with selected candidate")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+        OApiResponse(responseCode = "404", description = "Candidate not found"),
+    )
     @PostMapping("/confirm/{candidateId}")
     fun confirmReschedule(
         @PathVariable id: Long,
@@ -115,6 +137,11 @@ class RescheduleController(
      * @param id 원본 예약 ID
      * @return 생성된 새로운 예약 ID (없으면 null)
      */
+    @Operation(summary = "Auto-reschedule using best available candidate")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "404", description = "Appointment not found"),
+    )
     @PostMapping("/auto")
     fun autoReschedule(
         @PathVariable id: Long,

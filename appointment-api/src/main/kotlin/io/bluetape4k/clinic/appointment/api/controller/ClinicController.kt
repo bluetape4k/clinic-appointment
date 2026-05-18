@@ -10,6 +10,10 @@ import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requirePositiveNumber
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -25,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController
  *
  * @param clinicRepository 병원 Repository
  */
+@Tag(name = "Clinics", description = "Clinic management")
 @RestController
 @RequestMapping("/api/clinics")
 class ClinicController(
@@ -39,6 +44,10 @@ class ClinicController(
      * @param size 페이지 크기 (default 20, max 100)
      * @return 페이징된 클리닉 목록
      */
+    @Operation(summary = "Get all clinics with pagination")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+    )
     @GetMapping
     fun getAll(
         @RequestParam(defaultValue = "0") page: Int,
@@ -57,6 +66,12 @@ class ClinicController(
      * @param clinicId 클리닉 ID
      * @return 클리닉 정보
      */
+    @Operation(summary = "Get clinic by ID")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+        OApiResponse(responseCode = "404", description = "Clinic not found"),
+    )
     @GetMapping("/{clinicId}")
     fun getById(
         @PathVariable clinicId: Long,
@@ -74,6 +89,11 @@ class ClinicController(
      * @param clinicId 클리닉 ID
      * @return 요일별 운영 시간 목록
      */
+    @Operation(summary = "Get operating hours for a clinic")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @GetMapping("/{clinicId}/operating-hours")
     fun getOperatingHours(
         @PathVariable clinicId: Long,
@@ -90,6 +110,11 @@ class ClinicController(
      * @param clinicId 클리닉 ID
      * @return 기본 휴식 시간 목록
      */
+    @Operation(summary = "Get default break times for a clinic")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @GetMapping("/{clinicId}/break-times")
     fun getBreakTimes(
         @PathVariable clinicId: Long,

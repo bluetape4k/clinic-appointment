@@ -7,6 +7,11 @@ import io.bluetape4k.clinic.appointment.api.dto.SlotResponse
 import io.bluetape4k.clinic.appointment.api.dto.toResponse
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.model.service.SlotQuery
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -24,6 +29,7 @@ import java.time.LocalDate
  *
  * @param slotCalculationService 가용 슬롯 계산 서비스
  */
+@Tag(name = "Slots", description = "Available time slot queries")
 @RestController
 @RequestMapping("/api/clinics/{clinicId}/slots")
 class SlotController(
@@ -44,13 +50,18 @@ class SlotController(
      * @param requestedDurationMinutes 요청한 진료 시간 (분, optional)
      * @return 가용 슬롯 목록
      */
+    @Operation(summary = "Get available appointment slots")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @GetMapping
     fun getAvailableSlots(
         @PathVariable clinicId: Long,
         @RequestParam doctorId: Long,
         @RequestParam treatmentTypeId: Long,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
-        @RequestParam(required = false) requestedDurationMinutes: Int? = null,
+        @Parameter(description = "Target date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
+        @Parameter(description = "Requested duration in minutes", required = false) @RequestParam(required = false) requestedDurationMinutes: Int? = null,
     ): ResponseEntity<ApiResponse<List<SlotResponse>>> {
         log.debug { "GET /api/clinics/$clinicId/slots - doctor=$doctorId, treatment=$treatmentTypeId, date=$date" }
         val query = SlotQuery(

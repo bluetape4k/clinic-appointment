@@ -8,6 +8,10 @@ import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requirePositiveNumber
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.http.ResponseEntity
@@ -24,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController
  *
  * @param equipmentRepository 장비 Repository
  */
+@Tag(name = "Equipments", description = "Equipment management")
 @RestController
 @RequestMapping("/api")
 class EquipmentController(
@@ -39,6 +44,11 @@ class EquipmentController(
      * @param size 페이지 크기 (default 20, max 100)
      * @return 페이징된 장비 목록
      */
+    @Operation(summary = "Get equipments by clinic with pagination")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+    )
     @GetMapping("/clinics/{clinicId}/equipments")
     fun getByClinic(
         @PathVariable clinicId: Long,
@@ -59,6 +69,12 @@ class EquipmentController(
      * @param equipmentId 장비 ID
      * @return 장비 정보
      */
+    @Operation(summary = "Get equipment by ID")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters"),
+        OApiResponse(responseCode = "404", description = "Equipment not found"),
+    )
     @GetMapping("/equipments/{equipmentId}")
     fun getById(
         @PathVariable equipmentId: Long,
