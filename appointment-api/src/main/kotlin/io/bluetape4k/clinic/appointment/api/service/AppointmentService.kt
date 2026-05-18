@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.service
 
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
+import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.clinic.appointment.api.dto.CreateAppointmentRequest
 import io.bluetape4k.clinic.appointment.event.AppointmentDomainEvent
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
@@ -61,7 +62,7 @@ class AppointmentService(
         val saved = transaction { appointmentRepository.save(record) }
         eventPublisher.publishEvent(
             AppointmentDomainEvent.Created(
-                appointmentId = saved.id!!,
+                appointmentId = saved.id.requireNotNull("saved.id"),
                 clinicId = saved.clinicId,
             )
         )
@@ -99,7 +100,8 @@ class AppointmentService(
             )
         )
 
-        return transaction { appointmentRepository.findByIdOrNull(id) }!!
+        return transaction { appointmentRepository.findByIdOrNull(id) }
+            ?: throw NoSuchElementException("Appointment not found after status update: $id")
     }
 
     suspend fun cancel(id: Long): AppointmentRecord {
@@ -130,7 +132,8 @@ class AppointmentService(
             )
         )
 
-        return transaction { appointmentRepository.findByIdOrNull(id) }!!
+        return transaction { appointmentRepository.findByIdOrNull(id) }
+            ?: throw NoSuchElementException("Appointment not found after cancel: $id")
     }
 }
 
