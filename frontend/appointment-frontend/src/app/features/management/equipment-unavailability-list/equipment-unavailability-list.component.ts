@@ -13,6 +13,7 @@ import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
+import { AuthService } from '../../../core/services/auth.service';
 import { EquipmentUnavailabilityService } from '../../../core/services/equipment-unavailability.service';
 import {
   EquipmentUnavailabilityRecord,
@@ -396,6 +397,7 @@ import {
   `],
 })
 export class EquipmentUnavailabilityListComponent {
+  private readonly authService = inject(AuthService);
   private readonly service = inject(EquipmentUnavailabilityService);
   private readonly snackBar = inject(MatSnackBar);
 
@@ -403,7 +405,7 @@ export class EquipmentUnavailabilityListComponent {
   readonly conflictColumns = ['appointmentId', 'patientName', 'appointmentDate', 'time'];
 
   // Search
-  readonly clinicId = signal<number>(1);
+  readonly clinicId = signal<number>(this.authService.clinicId());
   readonly equipmentId = signal<number>(1);
   readonly fromDate = signal<string>('');
   readonly toDate = signal<string>('');

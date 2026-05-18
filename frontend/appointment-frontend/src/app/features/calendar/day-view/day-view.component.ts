@@ -93,7 +93,5 @@ export class DayViewComponent implements OnInit {
     return colors[status] ?? '#9E9E9E';
   }
 
-  protected onAppointmentClick(appointment: Appointment): void {
-    console.log('Appointment clicked:', appointment);
-  }
+  protected onAppointmentClick(_appointment: Appointment): void {}
 }
