@@ -4,6 +4,7 @@ import io.bluetape4k.logging.KLogging
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistoryRecord
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -35,16 +36,16 @@ class AppointmentStateHistoryRepository {
     }
 
     /**
-     * 예약의 모든 상태 변경 이력을 조회합니다 (시간순).
+     * 예약의 모든 상태 변경 이력을 조회합니다 (최신순).
      *
      * @param appointmentId 예약 ID
-     * @return 상태 변경 이력 목록
+     * @return 상태 변경 이력 목록 (newest first)
      */
     fun findByAppointmentId(appointmentId: Long): List<AppointmentStateHistoryRecord> =
         AppointmentStateHistory
             .selectAll()
             .where { AppointmentStateHistory.appointmentId eq appointmentId }
-            .orderBy(AppointmentStateHistory.changedAt)
+            .orderBy(AppointmentStateHistory.changedAt to SortOrder.DESC, AppointmentStateHistory.id to SortOrder.DESC)
             .map { it.toRecord() }
 
     private fun ResultRow.toRecord() = AppointmentStateHistoryRecord(

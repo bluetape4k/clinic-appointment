@@ -5,6 +5,7 @@ import io.bluetape4k.logging.debug
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.AppointmentResponse
 import io.bluetape4k.clinic.appointment.api.dto.CreateAppointmentRequest
+import io.bluetape4k.clinic.appointment.api.dto.StateHistoryResponse
 import io.bluetape4k.clinic.appointment.api.dto.UpdateStatusRequest
 import io.bluetape4k.clinic.appointment.api.dto.toResponse
 import io.bluetape4k.clinic.appointment.api.service.AppointmentService
@@ -65,6 +66,13 @@ class AppointmentController(
         val (timezone, locale) = timezoneService.getTimezoneAndLocale(saved.clinicId)
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(ApiResponse.ok(saved.toResponse(timezone, locale)))
+    }
+
+    @GetMapping("/{id}/history")
+    fun getHistory(@PathVariable id: Long): ResponseEntity<ApiResponse<List<StateHistoryResponse>>> {
+        log.debug { "GET /api/appointments/$id/history" }
+        val history = appointmentService.getStateHistory(id)
+        return ResponseEntity.ok(ApiResponse.ok(history.map { it.toResponse() }))
     }
 
     @PatchMapping("/{id}/status")
