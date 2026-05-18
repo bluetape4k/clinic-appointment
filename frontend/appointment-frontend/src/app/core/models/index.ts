@@ -6,4 +6,5 @@ export * from './treatment-type.model';
 export * from './clinic.model';
 export * from './equipment.model';
 export * from './reschedule-candidate.model';
+export * from './reschedule-progress.model';
 export * from './equipment-unavailability.model';
