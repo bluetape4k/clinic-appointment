@@ -22,13 +22,14 @@ import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
 import io.bluetape4k.logging.KLogging
-import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldHaveSize
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.support.requireNotNull
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -166,7 +167,10 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
             val result = rescheduleService.processClosureReschedule(clinicId, MONDAY, searchDays = 1)
             val firstCandidate = result.values.first().first()
 
-            val newAppointmentId = rescheduleService.confirmReschedule(firstCandidate.id!!)
+            val newAppointmentId = rescheduleService.confirmReschedule(
+                firstCandidate.id.requireNotNull("firstCandidate.id"),
+                firstCandidate.originalAppointmentId,
+            )
 
             val originalAppointment = Appointments.selectAll()
                 .where { Appointments.status eq AppointmentState.RESCHEDULED }
@@ -265,6 +269,22 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
 
             val result = rescheduleService.autoReschedule(appointmentId.value)
             (result == null).shouldBeTrue()
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `7 - 다른 예약의 candidateId로 confirmReschedule 호출 시 예외 발생`(testDB: TestDB) {
+        withTables(testDB, *allTables) {
+            val (clinicId, _, _) = insertDataWithAppointment()
+            val result = rescheduleService.processClosureReschedule(clinicId, MONDAY, searchDays = 1)
+
+            val candidate = result.values.first().first()
+            val wrongAppointmentId = candidate.originalAppointmentId + 9999L
+
+            assertFailsWith<IllegalArgumentException> {
+                rescheduleService.confirmReschedule(candidate.id.requireNotNull("candidate.id"), wrongAppointmentId)
+            }
         }
     }
 }

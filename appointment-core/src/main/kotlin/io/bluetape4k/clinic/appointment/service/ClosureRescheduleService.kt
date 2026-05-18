@@ -63,7 +63,7 @@ class ClosureRescheduleService(
             for (appointment in affected) {
                 stateHistoryRepository.save(
                     AppointmentStateHistoryRecord(
-                        appointmentId = appointment.id!!,
+                        appointmentId = appointment.id.requireNotNull("appointment.id"),
                         fromState = appointment.status,
                         toState = AppointmentState.PENDING_RESCHEDULE,
                         reason = "임시휴진으로 인한 재배정",
@@ -74,7 +74,7 @@ class ClosureRescheduleService(
             val result = mutableMapOf<Long, List<RescheduleCandidateRecord>>()
 
             for (appointment in affected) {
-                val appointmentId = appointment.id!!
+                val appointmentId = appointment.id.requireNotNull("appointment.id")
                 val candidates = mutableListOf<RescheduleCandidateRecord>()
                 var priority = 0
 
@@ -108,12 +108,17 @@ class ClosureRescheduleService(
      * 원래 예약은 RESCHEDULED로 전환하고, 새 예약을 생성합니다.
      *
      * @param candidateId 선택한 후보 ID
+     * @param originalAppointmentId 원본 예약 ID — 후보가 이 예약에 속하는지 검증
      * @return 새로 생성된 예약 ID
      */
-    fun confirmReschedule(candidateId: Long): Long =
+    fun confirmReschedule(candidateId: Long, originalAppointmentId: Long): Long =
         transaction {
             val candidate = rescheduleCandidateRepository.findByIdOrNull(candidateId)
                 ?: throw IllegalArgumentException("Reschedule candidate not found: $candidateId")
+
+            require(candidate.originalAppointmentId == originalAppointmentId) {
+                "Candidate $candidateId does not belong to appointment $originalAppointmentId"
+            }
 
             val original = appointmentRepository.findByIdOrNull(candidate.originalAppointmentId)
                 ?: throw IllegalArgumentException("Original appointment not found: ${candidate.originalAppointmentId}")
@@ -136,7 +141,7 @@ class ClosureRescheduleService(
             )
 
             val newAppointment = appointmentRepository.save(appointmentRecord)
-            appointmentRepository.updateStatus(original.id!!, AppointmentState.RESCHEDULED)
+            appointmentRepository.updateStatus(original.id.requireNotNull("original.id"), AppointmentState.RESCHEDULED)
             stateHistoryRepository.save(
                 AppointmentStateHistoryRecord(
                     appointmentId = original.id,
@@ -160,6 +165,6 @@ class ClosureRescheduleService(
         transaction {
             val best = rescheduleCandidateRepository.findBestCandidate(originalAppointmentId)
                 ?: return@transaction null
-            confirmReschedule(best.id!!)
+            confirmReschedule(best.id.requireNotNull("best.id"), originalAppointmentId)
         }
 }

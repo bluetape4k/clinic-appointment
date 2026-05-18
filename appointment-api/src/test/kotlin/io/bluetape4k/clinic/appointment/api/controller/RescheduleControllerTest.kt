@@ -23,6 +23,7 @@ import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBePositive
 import io.bluetape4k.assertions.shouldBeTrue
@@ -221,6 +222,43 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
         response.jsonPath<Int>("$.data").shouldNotBeNull().shouldBePositive()
+    }
+
+    @Test
+    fun `POST confirm - 다른 예약의 candidateId로 확정 시 400 반환`() {
+        val otherAppointmentId = transaction {
+            Appointments.insertAndGetId {
+                it[Appointments.clinicId] = this@RescheduleControllerTest.clinicId
+                it[Appointments.doctorId] = this@RescheduleControllerTest.doctorId
+                it[Appointments.treatmentTypeId] = this@RescheduleControllerTest.treatmentTypeId
+                it[patientName] = "Other Patient"
+                it[patientPhone] = "010-9999-8888"
+                it[appointmentDate] = LocalDate.of(2026, 4, 6)
+                it[startTime] = LocalTime.of(11, 0)
+                it[endTime] = LocalTime.of(11, 30)
+                it[Appointments.status] = AppointmentState.CONFIRMED
+            }.value
+        }
+
+        val candidateId = transaction {
+            RescheduleCandidates.insertAndGetId {
+                it[originalAppointmentId] = otherAppointmentId
+                it[candidateDate] = LocalDate.of(2026, 4, 7)
+                it[startTime] = LocalTime.of(10, 0)
+                it[endTime] = LocalTime.of(10, 30)
+                it[RescheduleCandidates.doctorId] = this@RescheduleControllerTest.doctorId
+                it[priority] = 1
+                it[selected] = false
+            }.value
+        }
+
+        val response = client.post()
+            .uri("$BASE_URL/{id}/reschedule/confirm/{candidateId}", appointmentId, candidateId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
     }
 
     @Test

@@ -102,7 +102,7 @@ class RescheduleController(
         @PathVariable candidateId: Long,
     ): ResponseEntity<ApiResponse<Long>> {
         log.debug { "POST /api/appointments/$id/reschedule/confirm/$candidateId" }
-        val newAppointmentId = closureRescheduleService.confirmReschedule(candidateId)
+        val newAppointmentId = closureRescheduleService.confirmReschedule(candidateId, id)
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }
 
