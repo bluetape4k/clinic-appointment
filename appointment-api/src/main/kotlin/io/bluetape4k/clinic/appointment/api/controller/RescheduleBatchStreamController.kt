@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.logging.warn
+import io.bluetape4k.support.requireInRange
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.time.LocalDate
-import java.util.concurrent.Executors
 
 /**
  * SSE endpoint for streaming batch reschedule progress.
@@ -37,9 +37,7 @@ import java.util.concurrent.Executors
 class RescheduleBatchStreamController(
     private val closureRescheduleService: ClosureRescheduleService,
 ) {
-    companion object : KLogging() {
-        private val executor = Executors.newVirtualThreadPerTaskExecutor()
-    }
+    companion object : KLogging()
 
     /**
      * Streams batch closure reschedule progress as Server-Sent Events.
@@ -61,10 +59,11 @@ class RescheduleBatchStreamController(
         @Parameter(description = "Number of days to search for alternative slots")
         @RequestParam(defaultValue = "7") searchDays: Int,
     ): SseEmitter {
+        searchDays.requireInRange(1, 30, "searchDays")
         log.debug { "GET /api/reschedule/batch/stream - clinic=$clinicId, date=$closureDate, searchDays=$searchDays" }
 
         val emitter = SseEmitter(0L) // no timeout — stream length is proportional to affected count
-        executor.submit {
+        Thread.ofVirtual().start {
             runCatching {
                 var totalProcessed = 0
 
