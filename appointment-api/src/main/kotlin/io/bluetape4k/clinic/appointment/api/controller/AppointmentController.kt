@@ -78,9 +78,12 @@ class AppointmentController(
     }
 
     @DeleteMapping("/{id}")
-    suspend fun cancel(@PathVariable id: Long): ResponseEntity<ApiResponse<AppointmentResponse>> {
-        log.debug { "DELETE /api/appointments/$id" }
-        val cancelled = appointmentService.cancel(id)
+    suspend fun cancel(
+        @PathVariable id: Long,
+        @RequestParam(required = false) reason: String?,
+    ): ResponseEntity<ApiResponse<AppointmentResponse>> {
+        log.debug { "DELETE /api/appointments/$id reason=$reason" }
+        val cancelled = appointmentService.cancel(id, reason)
         val (timezone, locale) = timezoneService.getTimezoneAndLocale(cancelled.clinicId)
         return ResponseEntity.ok(ApiResponse.ok(cancelled.toResponse(timezone, locale)))
     }

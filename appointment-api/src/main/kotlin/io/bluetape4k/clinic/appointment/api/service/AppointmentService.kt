@@ -104,13 +104,14 @@ class AppointmentService(
             ?: throw NoSuchElementException("Appointment not found after status update: $id")
     }
 
-    suspend fun cancel(id: Long): AppointmentRecord {
-        log.debug { "cancel: id=$id" }
+    suspend fun cancel(id: Long, reason: String? = null): AppointmentRecord {
+        log.debug { "cancel: id=$id, reason=$reason" }
         val record = transaction { appointmentRepository.findByIdOrNull(id) }
             ?: throw NoSuchElementException("Appointment not found: $id")
 
+        val effectiveReason = reason ?: "Cancelled by user"
         val currentState = record.status
-        stateMachine.transition(currentState, AppointmentEvent.Cancel(reason = "Cancelled by user"))
+        stateMachine.transition(currentState, AppointmentEvent.Cancel(reason = effectiveReason))
 
         transaction {
             appointmentRepository.updateStatus(id, AppointmentState.CANCELLED)
@@ -119,7 +120,7 @@ class AppointmentService(
                     appointmentId = id,
                     fromState = currentState,
                     toState = AppointmentState.CANCELLED,
-                    reason = "Cancelled by user",
+                    reason = effectiveReason,
                 )
             )
         }
@@ -128,7 +129,7 @@ class AppointmentService(
             AppointmentDomainEvent.Cancelled(
                 appointmentId = id,
                 clinicId = record.clinicId,
-                reason = "Cancelled by user",
+                reason = effectiveReason,
             )
         )
 
