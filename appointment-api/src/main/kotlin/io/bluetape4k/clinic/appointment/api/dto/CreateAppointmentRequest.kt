@@ -1,5 +1,9 @@
 package io.bluetape4k.clinic.appointment.api.dto
 
+import jakarta.validation.constraints.FutureOrPresent
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Positive
 import java.io.Serializable
 import java.time.LocalDate
 import java.time.LocalTime
@@ -18,14 +22,22 @@ import java.time.LocalTime
  * @property endTime 예약 종료 시간
  */
 data class CreateAppointmentRequest(
+    @field:Positive
     val clinicId: Long,
+    @field:Positive
     val doctorId: Long,
+    @field:Positive
     val treatmentTypeId: Long,
     val equipmentId: Long? = null,
+    @field:NotBlank
     val patientName: String,
     val patientPhone: String? = null,
+    @field:NotNull
+    @field:FutureOrPresent
     val appointmentDate: LocalDate,
+    @field:NotNull
     val startTime: LocalTime,
+    @field:NotNull
     val endTime: LocalTime,
 ) : Serializable {
     companion object {

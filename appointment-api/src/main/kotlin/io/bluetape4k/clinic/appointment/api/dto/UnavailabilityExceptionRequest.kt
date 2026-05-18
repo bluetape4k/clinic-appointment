@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.dto
 
 import io.bluetape4k.clinic.appointment.model.tables.ExceptionType
+import jakarta.validation.constraints.NotNull
 import java.io.Serializable
 import java.time.LocalDate
 import java.time.LocalTime
@@ -16,7 +17,9 @@ import java.time.LocalTime
  * @property reason 사유
  */
 data class UnavailabilityExceptionRequest(
+    @field:NotNull
     val originalDate: LocalDate,
+    @field:NotNull
     val exceptionType: ExceptionType,
     val rescheduledDate: LocalDate? = null,
     val rescheduledStartTime: LocalTime? = null,

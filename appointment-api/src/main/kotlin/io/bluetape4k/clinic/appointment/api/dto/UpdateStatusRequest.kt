@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.dto
 
+import jakarta.validation.constraints.NotBlank
 import java.io.Serializable
 
 /**
@@ -9,6 +10,7 @@ import java.io.Serializable
  * @property reason 상태 변경 사유 (optional, 예: "임시휴진", "의사 확인 완료")
  */
 data class UpdateStatusRequest(
+    @field:NotBlank
     val status: String,
     val reason: String? = null,
 ) : Serializable {
