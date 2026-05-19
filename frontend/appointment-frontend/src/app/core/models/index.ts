@@ -8,3 +8,4 @@ export * from './equipment.model';
 export * from './reschedule-candidate.model';
 export * from './reschedule-progress.model';
 export * from './equipment-unavailability.model';
+export * from './dashboard-stats.model';

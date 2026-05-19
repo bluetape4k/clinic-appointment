@@ -8,3 +8,4 @@ export * from './equipment.service';
 export * from './calendar-state.service';
 export * from './reschedule.service';
 export * from './equipment-unavailability.service';
+export * from './dashboard-stats.service';
