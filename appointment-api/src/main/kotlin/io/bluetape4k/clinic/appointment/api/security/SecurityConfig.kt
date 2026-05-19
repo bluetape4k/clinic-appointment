@@ -46,6 +46,8 @@ class SecurityConfig {
                 auth
                     // OpenAPI / Swagger / Actuator
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
+                    // 어드민 대시보드 — ADMIN 전용
+                    .requestMatchers("/api/admin/**").hasRole(SchedulingRole.ADMIN)
                     // 읽기 API — 인증만 필요
                     .requestMatchers(HttpMethod.GET, "/api/**").authenticated()
                     // 쓰기 API — ADMIN 또는 STAFF
