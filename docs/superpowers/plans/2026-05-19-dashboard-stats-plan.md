@@ -142,7 +142,9 @@
   - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/DashboardStatsControllerTest.kt` (신규)
 - **dependencies**: T3, T5, T8
 - **작업**:
-  - `@WebMvcTest(DashboardStatsController::class)` + `@MockkBean DashboardStatsService` + **`@ActiveProfiles("test")`** 필수 — 미지정 시 `SecurityConfig`(`@Profile("!dev & !test")`)가 활성화되어 JWT 없는 요청이 401 반환.
+  - `@WebMvcTest(DashboardStatsController::class)` + `@MockkBean DashboardStatsService` + **`@Import(NoOpSecurityConfig::class)`** 필수.
+    - `@WebMvcTest`는 `@Configuration` 클래스를 자동 스캔하지 않으므로 `@ActiveProfiles("test")` 단독으로는 `NoOpSecurityConfig` 로드 불가.
+    - `@Import(NoOpSecurityConfig::class)` 로 명시 로드 → 모든 요청 permitAll → JWT 없이 MockMvc 테스트 가능.
   - 시나리오:
     - 200 — `/api/admin/stats/appointments?clinicId=1` → `success: true`, `data.totals` 키 존재.
     - **[F5] 200 — `?clinicId=999` (데이터 없음)** → `success: true`, `data.buckets` 빈 배열 (에러 응답 아님).
@@ -386,7 +388,8 @@
   - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/DashboardStatsControllerContractTest.kt` (신규)
 - **dependencies**: T7, T8
 - **작업**:
-  - `@WebMvcTest` + `@MockkBean DashboardStatsService`.
+  - `@WebMvcTest(DashboardStatsController::class)` + `@MockkBean DashboardStatsService` + `@Import(NoOpSecurityConfig::class)` 필수.
+  - **[T6와 동일한 제약]** `@WebMvcTest`는 `@Configuration` 클래스를 자동 스캔하지 않으므로 `@ActiveProfiles("test")` 단독으로는 `NoOpSecurityConfig` 로드 불가. `@Import(NoOpSecurityConfig::class)`로 명시 로드 → 모든 요청 `permitAll()` → JWT 없이 MockMvc 400 매트릭스 테스트 가능.
   - 시나리오:
     - `?from=2026-99-99` → 400 (MethodArgumentTypeMismatchException → T8).
     - `?from=2026-05-01&to=2026-04-01` → 400 + "from must be on or before to".
