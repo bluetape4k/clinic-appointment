@@ -10,10 +10,12 @@ import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.support.requireNotNull
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Repository
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /**
@@ -28,6 +30,19 @@ class TreatmentTypeRepository : LongJdbcRepository<TreatmentTypeRecord> {
     override val table = TreatmentTypes
     override fun extractId(entity: TreatmentTypeRecord): Long = entity.id.requireNotNull("id")
     override fun ResultRow.toEntity(): TreatmentTypeRecord = toTreatmentTypeRecord()
+
+    /**
+     * Finds a treatment type by ID only when the owning clinic belongs to [tenantGroupId].
+     */
+    fun findByIdAndTenant(treatmentTypeId: Long, tenantGroupId: Long): TreatmentTypeRecord? =
+        TreatmentTypes
+            .selectAll()
+            .where {
+                (TreatmentTypes.id eq treatmentTypeId) and
+                    (TreatmentTypes.clinicId inSubQuery tenantClinicIds(tenantGroupId))
+            }
+            .firstOrNull()
+            ?.toTreatmentTypeRecord()
 
     /**
      * 특정 시술 유형에 필요한 장비 ID 목록을 조회합니다.

@@ -7,6 +7,7 @@ import io.bluetape4k.clinic.appointment.api.dto.CreateEquipmentUnavailabilityReq
 import io.bluetape4k.clinic.appointment.api.dto.UnavailabilityConflictResponse
 import io.bluetape4k.clinic.appointment.api.dto.UnavailabilityExceptionRequest
 import io.bluetape4k.clinic.appointment.api.dto.UpdateEquipmentUnavailabilityRequest
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityExceptionRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityRecord
@@ -43,9 +44,10 @@ import java.time.LocalDate
  */
 @Tag(name = "Equipment Unavailability", description = "Equipment unavailability schedule management")
 @RestController
-@RequestMapping("/api/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities")
+@RequestMapping("/api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities")
 class EquipmentUnavailabilityController(
     private val service: EquipmentUnavailabilityService,
+    private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
     companion object : KLogging()
 
@@ -65,6 +67,7 @@ class EquipmentUnavailabilityController(
     )
     @GetMapping
     fun getUnavailabilities(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
         @Parameter(description = "Start date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
@@ -72,7 +75,8 @@ class EquipmentUnavailabilityController(
     ): ResponseEntity<ApiResponse<List<EquipmentUnavailabilityRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
-        log.debug { "GET unavailabilities clinicId=$clinicId, equipmentId=$equipmentId, from=$from, to=$to" }
+        tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        log.debug { "GET unavailabilities tenantCode=$tenantCode, clinicId=$clinicId, equipmentId=$equipmentId, from=$from, to=$to" }
         val records = service.findUnavailabilityRecords(equipmentId, from, to)
         return ResponseEntity.ok(ApiResponse.ok(records))
     }
@@ -92,13 +96,15 @@ class EquipmentUnavailabilityController(
     )
     @PostMapping
     fun create(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
         @Valid @RequestBody request: CreateEquipmentUnavailabilityRequest,
     ): ResponseEntity<ApiResponse<EquipmentUnavailabilityRecord>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
-        log.debug { "POST unavailability clinicId=$clinicId, equipmentId=$equipmentId" }
+        tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        log.debug { "POST unavailability tenantCode=$tenantCode, clinicId=$clinicId, equipmentId=$equipmentId" }
         val record = service.create(
             equipmentId = equipmentId,
             clinicId = clinicId,
@@ -133,6 +139,7 @@ class EquipmentUnavailabilityController(
     )
     @PutMapping("/{id}")
     fun update(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
         @PathVariable id: Long,
@@ -141,9 +148,10 @@ class EquipmentUnavailabilityController(
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
         id.requirePositiveNumber("id")
-        log.debug { "PUT unavailability id=$id, clinicId=$clinicId, equipmentId=$equipmentId" }
-        service.findById(id) ?: throw NoSuchElementException("EquipmentUnavailability not found: $id")
-        service.delete(id)
+        val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        log.debug { "PUT unavailability tenantCode=$tenantCode, id=$id, clinicId=$clinicId, equipmentId=$equipmentId" }
+        requireUnavailability(tenant.id, clinicId, equipmentId, id)
+        service.deleteByTenant(id, tenant.id)
         val updated = service.create(
             equipmentId = equipmentId,
             clinicId = clinicId,
@@ -175,6 +183,7 @@ class EquipmentUnavailabilityController(
     )
     @DeleteMapping("/{id}")
     fun delete(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
         @PathVariable id: Long,
@@ -182,8 +191,12 @@ class EquipmentUnavailabilityController(
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
         id.requirePositiveNumber("id")
-        log.debug { "DELETE unavailability id=$id, clinicId=$clinicId, equipmentId=$equipmentId" }
-        service.delete(id)
+        val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        log.debug { "DELETE unavailability tenantCode=$tenantCode, id=$id, clinicId=$clinicId, equipmentId=$equipmentId" }
+        requireUnavailability(tenant.id, clinicId, equipmentId, id)
+        if (!service.deleteByTenant(id, tenant.id)) {
+            throw NoSuchElementException("EquipmentUnavailability not found: $id")
+        }
         return ResponseEntity.noContent().build()
     }
 
@@ -204,6 +217,7 @@ class EquipmentUnavailabilityController(
     )
     @PostMapping("/{id}/exceptions")
     fun addException(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
         @PathVariable id: Long,
@@ -212,7 +226,9 @@ class EquipmentUnavailabilityController(
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
         id.requirePositiveNumber("id")
-        log.debug { "POST exception unavailabilityId=$id, date=${request.originalDate}" }
+        val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        requireUnavailability(tenant.id, clinicId, equipmentId, id)
+        log.debug { "POST exception tenantCode=$tenantCode, unavailabilityId=$id, date=${request.originalDate}" }
         val exception = service.addException(
             unavailabilityId = id,
             originalDate = request.originalDate,
@@ -242,6 +258,7 @@ class EquipmentUnavailabilityController(
     )
     @DeleteMapping("/{id}/exceptions/{exId}")
     fun deleteException(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
         @PathVariable id: Long,
@@ -251,7 +268,9 @@ class EquipmentUnavailabilityController(
         equipmentId.requirePositiveNumber("equipmentId")
         id.requirePositiveNumber("id")
         exId.requirePositiveNumber("exId")
-        log.debug { "DELETE exception exId=$exId, unavailabilityId=$id" }
+        val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        requireUnavailability(tenant.id, clinicId, equipmentId, id)
+        log.debug { "DELETE exception tenantCode=$tenantCode, exId=$exId, unavailabilityId=$id" }
         service.deleteException(exId)
         return ResponseEntity.noContent().build()
     }
@@ -272,6 +291,7 @@ class EquipmentUnavailabilityController(
     )
     @GetMapping("/{id}/conflicts")
     fun detectConflicts(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
         @PathVariable id: Long,
@@ -279,8 +299,10 @@ class EquipmentUnavailabilityController(
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
         id.requirePositiveNumber("id")
-        log.debug { "GET conflicts unavailabilityId=$id" }
-        val conflictingAppointments = service.detectConflicts(id)
+        val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        requireUnavailability(tenant.id, clinicId, equipmentId, id)
+        log.debug { "GET conflicts tenantCode=$tenantCode, unavailabilityId=$id" }
+        val conflictingAppointments = service.detectConflictsByTenant(id, tenant.id)
         val response = conflictingAppointments.toConflictResponse(id)
         return ResponseEntity.ok(ApiResponse.ok(response))
     }
@@ -300,13 +322,15 @@ class EquipmentUnavailabilityController(
     )
     @PostMapping("/preview-conflicts")
     fun previewConflicts(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @PathVariable equipmentId: Long,
         @Valid @RequestBody request: CreateEquipmentUnavailabilityRequest,
     ): ResponseEntity<ApiResponse<UnavailabilityConflictResponse>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
-        log.debug { "POST preview-conflicts equipmentId=$equipmentId" }
+        tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        log.debug { "POST preview-conflicts tenantCode=$tenantCode, equipmentId=$equipmentId" }
         val conflictingAppointments = service.previewConflicts(
             equipmentId = equipmentId,
             unavailableDate = request.unavailableDate,
@@ -319,6 +343,22 @@ class EquipmentUnavailabilityController(
         )
         val response = conflictingAppointments.toConflictResponse(unavailabilityId = 0L)
         return ResponseEntity.ok(ApiResponse.ok(response))
+    }
+
+    private fun requireUnavailability(
+        tenantGroupId: Long,
+        clinicId: Long,
+        equipmentId: Long,
+        id: Long,
+    ): EquipmentUnavailabilityRecord {
+        val record = service.findByIdAndTenant(id, tenantGroupId)
+            ?: throw NoSuchElementException("EquipmentUnavailability not found: $id")
+
+        if (record.clinicId != clinicId || record.equipmentId != equipmentId) {
+            throw NoSuchElementException("EquipmentUnavailability not found: $id")
+        }
+
+        return record
     }
 }
 

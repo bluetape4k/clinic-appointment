@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldContain
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import org.junit.jupiter.api.Test
 
 /**
@@ -25,6 +26,7 @@ class JwtTokenParserTest {
             userId = "user-123",
             clinicId = 5L,
             roles = listOf(SchedulingRole.ADMIN, SchedulingRole.STAFF),
+            allowedTenants = listOf("tenant-a", "tenant-b"),
         )
 
         val principal = parser.parse(token)
@@ -34,6 +36,8 @@ class JwtTokenParserTest {
         principal.clinicId.shouldBeEqualTo(5L)
         principal.roles.shouldContain(SchedulingRole.ADMIN)
         principal.roles.shouldContain(SchedulingRole.STAFF)
+        principal.allowedTenants.shouldContain("tenant-a")
+        principal.allowedTenants.shouldContain("tenant-b")
     }
 
     @Test
@@ -60,6 +64,7 @@ class JwtTokenParserTest {
 
         principal.shouldNotBeNull()
         principal.clinicId.shouldBeNull()
+        principal.allowedTenants.shouldContain(TenantGroups.DEFAULT_TENANT_CODE)
     }
 
     @Test

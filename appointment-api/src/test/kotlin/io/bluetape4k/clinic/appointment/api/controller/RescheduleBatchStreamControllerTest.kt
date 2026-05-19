@@ -42,7 +42,7 @@ import java.time.LocalTime
 class RescheduleBatchStreamControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
-        private const val STREAM_URL = "/api/reschedule/batch/stream"
+        private const val STREAM_URL = "/api/tenant-default/reschedule/batch/stream"
         // 2026-04-06 is Monday — in operating hours window
         private val CLOSURE_DATE: LocalDate = LocalDate.of(2026, 4, 6)
     }

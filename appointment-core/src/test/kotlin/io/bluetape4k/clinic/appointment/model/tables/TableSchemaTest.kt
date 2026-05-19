@@ -10,8 +10,9 @@ import org.junit.jupiter.params.provider.MethodSource
 class TableSchemaTest : AbstractExposedTest() {
 
     private val allTables = arrayOf(
-        Holidays,
+        TenantGroups,
         Clinics,
+        Holidays,
         ClinicDefaultBreakTimes,
         OperatingHoursTable,
         BreakTimes,

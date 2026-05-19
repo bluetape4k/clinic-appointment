@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.security
 
+import io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilter
+import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -7,18 +9,27 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
 import org.springframework.http.HttpMethod
+import org.springframework.http.HttpStatus
+import org.springframework.security.authorization.AuthenticatedAuthorizationManager
+import org.springframework.security.authorization.AuthorizationManager
+import org.springframework.security.authorization.AuthorizationManagers
+import org.springframework.security.authorization.AuthorityAuthorizationManager
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
+import org.springframework.security.core.Authentication
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext
+import org.springframework.security.web.authentication.HttpStatusEntryPoint
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
 /**
- * JWT 보안 설정. dev/test 외 모든 환경(prod, staging 등)에서 활성화됩니다.
+ * JWT security configuration for non-local profiles.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
-@Profile("!dev & !test")
+@Profile("(!dev & !test) | integration-test")
 @EnableConfigurationProperties(JwtSecurityProperties::class)
 class SecurityConfig {
 
@@ -35,37 +46,92 @@ class SecurityConfig {
         JwtAuthenticationFilter(jwtTokenParser)
 
     @Bean
+    fun tenantContextFilter(
+        tenantGroupRepository: TenantGroupRepository,
+        jwtTokenParser: JwtTokenParser,
+    ): TenantContextFilter =
+        TenantContextFilter(tenantGroupRepository, jwtTokenParser)
+
+    @Bean
+    fun tenantAuthorizationManager(): TenantAuthorizationManager =
+        TenantAuthorizationManager()
+
+    @Bean
     fun securityFilterChain(
         http: HttpSecurity,
         jwtAuthenticationFilter: JwtAuthenticationFilter,
+        tenantContextFilter: TenantContextFilter,
+        tenantAuthorizationManager: TenantAuthorizationManager,
     ): SecurityFilterChain =
         http
             .csrf { it.disable() }
+            .exceptionHandling {
+                it.authenticationEntryPoint(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                it.accessDeniedHandler { request, response, _ ->
+                    val principal = SecurityContextHolder.getContext().authentication?.principal
+                        ?: (request.userPrincipal as? Authentication)?.principal
+                    val status = if (principal is SchedulingUserPrincipal) {
+                        HttpStatus.FORBIDDEN
+                    } else {
+                        HttpStatus.UNAUTHORIZED
+                    }
+                    response.sendError(status.value())
+                }
+            }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
                     // OpenAPI / Swagger / Actuator
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
-                    // 어드민 대시보드 — ADMIN 전용
+                    // Transitional old admin route until controllers move under /api/{tenantCode}/admin.
                     .requestMatchers("/api/admin/**").hasRole(SchedulingRole.ADMIN)
-                    // 읽기 API — 인증만 필요
-                    .requestMatchers(HttpMethod.GET, "/api/**").authenticated()
-                    // 쓰기 API — ADMIN 또는 STAFF
-                    .requestMatchers(HttpMethod.POST, "/api/**").hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF)
-                    .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF)
-                    .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF)
+                    .requestMatchers("/api/{tenantCode}/admin/**")
+                    .access(adminTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/**")
+                    .access(readTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/**")
+                    .access(writeTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(HttpMethod.PATCH, "/api/{tenantCode}/**")
+                    .access(writeTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(HttpMethod.DELETE, "/api/{tenantCode}/**")
+                    .access(writeTenantAccess(tenantAuthorizationManager))
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
+            .addFilterBefore(tenantContextFilter, UsernamePasswordAuthenticationFilter::class.java)
             .build()
+
+    private fun adminTenantAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasRole(SchedulingRole.ADMIN),
+            tenantAuthorizationManager,
+        )
+
+    private fun readTenantAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthenticatedAuthorizationManager.authenticated(),
+            tenantAuthorizationManager,
+        )
+
+    private fun writeTenantAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF),
+            tenantAuthorizationManager,
+        )
 }
 
 /**
- * dev/test 프로파일 전용 — 모든 요청 허용 (JWT 인증 없음).
+ * Local dev/test security configuration that permits all requests.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
-@Profile("dev", "test")
+@Profile("(dev | test) & !integration-test")
 class NoOpSecurityConfig {
 
     companion object : KLogging()

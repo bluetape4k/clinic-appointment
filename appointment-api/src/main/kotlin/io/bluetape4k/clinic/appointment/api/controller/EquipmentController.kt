@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
@@ -30,9 +31,10 @@ import org.springframework.web.bind.annotation.RestController
  */
 @Tag(name = "Equipments", description = "Equipment management")
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/{tenantCode}")
 class EquipmentController(
     private val equipmentRepository: EquipmentRepository,
+    private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
     companion object : KLogging()
 
@@ -51,14 +53,16 @@ class EquipmentController(
     )
     @GetMapping("/clinics/{clinicId}/equipments")
     fun getByClinic(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<ExposedPage<EquipmentRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
         val pageNumber = page.coerceAtLeast(0)
         val pageSize = size.coerceIn(1, PaginationDefaults.MAX_PAGE_SIZE)
-        log.debug { "GET equipments clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
+        log.debug { "GET equipments tenantCode=$tenantCode, clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
         val result = transaction { equipmentRepository.findPage(pageNumber, pageSize) { Equipments.clinicId eq clinicId } }
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
@@ -77,11 +81,13 @@ class EquipmentController(
     )
     @GetMapping("/equipments/{equipmentId}")
     fun getById(
+        @PathVariable tenantCode: String,
         @PathVariable equipmentId: Long,
     ): ResponseEntity<ApiResponse<EquipmentRecord>> {
         equipmentId.requirePositiveNumber("equipmentId")
-        log.debug { "GET equipment id=$equipmentId" }
-        val equipment = runCatching { transaction { equipmentRepository.findById(equipmentId) } }
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        log.debug { "GET equipment tenantCode=$tenantCode, id=$equipmentId" }
+        val equipment = runCatching { transaction { equipmentRepository.findByIdAndTenant(equipmentId, tenant.id) } }
             .getOrNull() ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(ApiResponse.ok(equipment))
     }

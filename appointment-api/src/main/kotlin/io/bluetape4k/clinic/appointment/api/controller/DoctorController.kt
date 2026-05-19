@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.dto.DoctorAbsenceRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorScheduleRecord
@@ -35,9 +36,10 @@ import java.time.LocalDate
  */
 @Tag(name = "Doctors", description = "Doctor management")
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/{tenantCode}")
 class DoctorController(
     private val doctorRepository: DoctorRepository,
+    private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
     companion object : KLogging()
 
@@ -56,14 +58,16 @@ class DoctorController(
     )
     @GetMapping("/clinics/{clinicId}/doctors")
     fun getByClinic(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<ExposedPage<DoctorRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
         val pageNumber = page.coerceAtLeast(0)
         val pageSize = size.coerceIn(1, PaginationDefaults.MAX_PAGE_SIZE)
-        log.debug { "GET doctors clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
+        log.debug { "GET doctors tenantCode=$tenantCode, clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
         val result = transaction { doctorRepository.findPage(pageNumber, pageSize) { Doctors.clinicId eq clinicId } }
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
@@ -82,11 +86,13 @@ class DoctorController(
     )
     @GetMapping("/doctors/{doctorId}")
     fun getById(
+        @PathVariable tenantCode: String,
         @PathVariable doctorId: Long,
     ): ResponseEntity<ApiResponse<DoctorRecord>> {
         doctorId.requirePositiveNumber("doctorId")
-        log.debug { "GET doctor id=$doctorId" }
-        val doctor = runCatching { transaction { doctorRepository.findById(doctorId) } }
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        log.debug { "GET doctor tenantCode=$tenantCode, id=$doctorId" }
+        val doctor = runCatching { transaction { doctorRepository.findByIdAndTenant(doctorId, tenant.id) } }
             .getOrNull() ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(ApiResponse.ok(doctor))
     }
@@ -104,10 +110,14 @@ class DoctorController(
     )
     @GetMapping("/doctors/{doctorId}/schedules")
     fun getSchedules(
+        @PathVariable tenantCode: String,
         @PathVariable doctorId: Long,
     ): ResponseEntity<ApiResponse<List<DoctorScheduleRecord>>> {
         doctorId.requirePositiveNumber("doctorId")
-        log.debug { "GET schedules doctorId=$doctorId" }
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        transaction { doctorRepository.findByIdAndTenant(doctorId, tenant.id) }
+            ?: return ResponseEntity.notFound().build()
+        log.debug { "GET schedules tenantCode=$tenantCode, doctorId=$doctorId" }
         val schedules = transaction { doctorRepository.findAllSchedules(doctorId) }
         return ResponseEntity.ok(ApiResponse.ok(schedules))
     }
@@ -127,12 +137,16 @@ class DoctorController(
     )
     @GetMapping("/doctors/{doctorId}/absences")
     fun getAbsences(
+        @PathVariable tenantCode: String,
         @PathVariable doctorId: Long,
         @Parameter(description = "Start date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
         @Parameter(description = "End date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
     ): ResponseEntity<ApiResponse<List<DoctorAbsenceRecord>>> {
         doctorId.requirePositiveNumber("doctorId")
-        log.debug { "GET absences doctorId=$doctorId, from=$from, to=$to" }
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        transaction { doctorRepository.findByIdAndTenant(doctorId, tenant.id) }
+            ?: return ResponseEntity.notFound().build()
+        log.debug { "GET absences tenantCode=$tenantCode, doctorId=$doctorId, from=$from, to=$to" }
         val absences = transaction { doctorRepository.findAbsencesByDateRange(doctorId, from..to) }
         return ResponseEntity.ok(ApiResponse.ok(absences))
     }

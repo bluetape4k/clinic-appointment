@@ -1,10 +1,13 @@
 package io.bluetape4k.clinic.appointment.test
 
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.logging.error
 import org.jetbrains.exposed.v1.core.DatabaseConfig
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.inTopLevelTransaction
 import org.jetbrains.exposed.v1.jdbc.transactions.transactionManager
 
@@ -20,12 +23,15 @@ fun withTables(
     dropTables: Boolean = true,
     statement: JdbcTransaction.(TestDB) -> Unit,
 ) {
+    val tablesToUse = withTenantGroups(tables)
+
     withDb(testDB, configure = configure) {
         runCatching {
-            SchemaUtils.drop(*tables)
+            SchemaUtils.drop(*tablesToUse)
         }
 
-        SchemaUtils.create(*tables)
+        SchemaUtils.create(*tablesToUse)
+        seedDefaultTenantIfNeeded(tablesToUse)
         commit()
 
         try {
@@ -34,20 +40,40 @@ fun withTables(
         } finally {
             if (dropTables) {
                 try {
-                    SchemaUtils.drop(*tables)
+                    SchemaUtils.drop(*tablesToUse)
                     commit()
                 } catch (ex: Exception) {
-                    logger.error(ex) { "Drop Tables 에서 예외가 발생했습니다. 삭제할 테이블: ${tables.joinToString { it.tableName }}" }
+                    logger.error(ex) { "Drop Tables 에서 예외가 발생했습니다. 삭제할 테이블: ${tablesToUse.joinToString { it.tableName }}" }
                     val database = testDB.db ?: return@withDb
                     inTopLevelTransaction(
                         transactionIsolation = database.transactionManager.defaultIsolationLevel,
                         db = database
                     ) {
                         maxAttempts = 1
-                        SchemaUtils.drop(*tables)
+                        SchemaUtils.drop(*tablesToUse)
                     }
                 }
             }
         }
+    }
+}
+
+private fun withTenantGroups(tables: Array<out Table>): Array<out Table> =
+    if (tables.any { it === TenantGroups }) {
+        tables
+    } else {
+        arrayOf(TenantGroups, *tables)
+    }
+
+private fun seedDefaultTenantIfNeeded(tables: Array<out Table>) {
+    if (tables.none { it === TenantGroups }) {
+        return
+    }
+
+    TenantGroups.insert {
+        it[id] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+        it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
+        it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
+        it[active] = true
     }
 }

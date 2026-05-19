@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.ConsultationTopics
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.logging.KLogging
@@ -13,8 +14,10 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeEmpty
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
@@ -51,13 +54,15 @@ class DashboardStatsServiceTest {
     @BeforeEach
     fun setup() {
         transaction {
-            SchemaUtils.create(Clinics, Doctors, Equipments, TreatmentTypes, ConsultationTopics, Appointments)
+            SchemaUtils.create(TenantGroups, Clinics, Doctors, Equipments, TreatmentTypes, ConsultationTopics, Appointments)
             Appointments.deleteAll()
             ConsultationTopics.deleteAll()
             TreatmentTypes.deleteAll()
             Equipments.deleteAll()
             Doctors.deleteAll()
             Clinics.deleteAll()
+            TenantGroups.deleteAll()
+            seedDefaultTenant()
 
             // Extract locals to avoid implicit-receiver shadowing inside insertAndGetId lambdas.
             // Inside Clinics.insertAndGetId {}, the implicit receiver is Clinics, so local names
@@ -81,6 +86,15 @@ class DashboardStatsServiceTest {
                 it[defaultDurationMinutes] = 30
             }.value
             treatmentTypeId = ttId
+        }
+    }
+
+    private fun seedDefaultTenant() {
+        TenantGroups.insert {
+            it[id] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+            it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
+            it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
+            it[active] = true
         }
     }
 

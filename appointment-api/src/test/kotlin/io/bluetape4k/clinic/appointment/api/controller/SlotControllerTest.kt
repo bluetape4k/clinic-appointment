@@ -21,6 +21,7 @@ import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldContain
 import io.bluetape4k.assertions.shouldBeEmpty
@@ -42,7 +43,7 @@ import java.time.LocalTime
 class SlotControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
-        private const val BASE_URL = "/api/clinics"
+        private const val BASE_URL = "/api/tenant-default/clinics"
     }
 
     @LocalServerPort
@@ -181,6 +182,35 @@ class SlotControllerTest @Autowired constructor() : AbstractApiIntegrationTest()
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
+    }
+
+    @Test
+    fun `GET - return 404 when doctor belongs to another clinic`() {
+        val otherDoctorId = transaction {
+            val otherClinicId = Clinics.insertAndGetId {
+                it[name] = "Other Clinic"
+                it[slotDurationMinutes] = 30
+                it[timezone] = "Asia/Seoul"
+                it[locale] = "ko-KR"
+                it[maxConcurrentPatients] = 1
+            }.value
+
+            Doctors.insertAndGetId {
+                it[Doctors.clinicId] = otherClinicId
+                it[name] = "Dr. Other"
+                it[specialty] = "General"
+                it[providerType] = "DOCTOR"
+                it[maxConcurrentPatients] = 1
+            }.value
+        }
+
+        val response = client.get()
+            .uri("$BASE_URL/{clinicId}/slots?doctorId={doctorId}&treatmentTypeId={treatmentTypeId}&date={date}",
+                clinicId, otherDoctorId, treatmentTypeId, "2026-04-06")
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
     }
 
     @Test

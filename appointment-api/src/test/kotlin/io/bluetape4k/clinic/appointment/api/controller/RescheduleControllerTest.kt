@@ -47,7 +47,7 @@ import java.time.LocalTime
 class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
-        private const val BASE_URL = "/api/appointments"
+        private const val BASE_URL = "/api/tenant-default/appointments"
     }
 
     @LocalServerPort

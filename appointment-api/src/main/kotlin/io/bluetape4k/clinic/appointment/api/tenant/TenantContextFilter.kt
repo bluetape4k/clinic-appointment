@@ -1,0 +1,71 @@
+package io.bluetape4k.clinic.appointment.api.tenant
+
+import io.bluetape4k.clinic.appointment.api.security.JwtTokenParser
+import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
+import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
+import io.bluetape4k.logging.KLogging
+import io.bluetape4k.logging.debug
+import jakarta.servlet.FilterChain
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.springframework.http.HttpStatus
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.web.filter.OncePerRequestFilter
+
+/**
+ * Resolves the tenant path segment after JWT authentication and exposes it
+ * through [TenantContext] for downstream request handling.
+ */
+class TenantContextFilter(
+    private val tenantGroupRepository: TenantGroupRepository,
+    private val jwtTokenParser: JwtTokenParser,
+) : OncePerRequestFilter() {
+
+    companion object : KLogging()
+
+    override fun doFilterInternal(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        filterChain: FilterChain,
+    ) {
+        val tenantCode = TenantPathResolver.resolve(request)
+        if (tenantCode == null) {
+            filterChain.doFilter(request, response)
+            return
+        }
+
+        val bearerToken = request.extractBearerToken()
+        val principal = SecurityContextHolder.getContext().authentication?.principal as? SchedulingUserPrincipal
+            ?: bearerToken?.let(jwtTokenParser::parse)
+
+        if (principal == null) {
+            filterChain.doFilter(request, response)
+            return
+        }
+
+        val tenantInfo = transaction {
+            tenantGroupRepository.findActiveByCode(tenantCode)?.let(TenantInfo::from)
+        }
+
+        if (tenantInfo == null) {
+            response.sendError(HttpStatus.NOT_FOUND.value(), "Tenant not found")
+            return
+        }
+
+        if (tenantCode !in principal.allowedTenants) {
+            response.sendError(HttpStatus.FORBIDDEN.value())
+            return
+        }
+
+        log.debug { "Tenant resolved: tenantCode=${tenantInfo.tenantCode}, tenantGroupId=${tenantInfo.id}" }
+        TenantContext.withTenant(tenantInfo) {
+            filterChain.doFilter(request, response)
+        }
+    }
+
+    private fun HttpServletRequest.extractBearerToken(): String? =
+        getHeader("Authorization")
+            ?.takeIf { it.startsWith("Bearer ") }
+            ?.substring("Bearer ".length)
+}

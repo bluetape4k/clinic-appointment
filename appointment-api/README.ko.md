@@ -2,7 +2,7 @@
 
 [English](README.md) | [한국어](README.ko.md)
 
-Spring Boot 4 REST API 서버 — JWT 인증, Flyway 마이그레이션, Swagger UI, Gatling 부하 테스트.
+Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레이션, Swagger UI, Gatling 부하 테스트.
 
 ## 책임
 
@@ -13,21 +13,25 @@ Spring Boot 4 REST API 서버 — JWT 인증, Flyway 마이그레이션, Swagger
 
 | 그룹 | 경로 | 설명 |
 |------|------|------|
-| 예약 | `GET /api/appointments` | 기간별 예약 목록 조회 |
-| 예약 | `POST /api/appointments` | 예약 생성 |
-| 예약 | `PATCH /api/appointments/{id}/status` | 상태 변경 (Confirm, CheckIn, Complete 등) |
-| 예약 | `DELETE /api/appointments/{id}` | 예약 취소 |
-| 슬롯 | `GET /api/slots` | 가용 슬롯 조회 (의사/날짜/진료유형) |
-| 재배정 | `POST /api/reschedule/closure` | 임시휴진 날짜 재배정 실행 |
-| 재배정 | `GET /api/reschedule/candidates` | 재배정 후보 목록 조회 |
-| 장비 사용불가 | `GET /api/equipment-unavailability` | 목록 조회 |
-| 장비 사용불가 | `POST /api/equipment-unavailability` | 등록 |
-| 장비 사용불가 | `PUT /api/equipment-unavailability/{id}` | 수정 |
-| 장비 사용불가 | `DELETE /api/equipment-unavailability/{id}` | 삭제 |
-| 클리닉 | `GET /api/clinics`, `/{id}`, `/{id}/operating-hours`, `/{id}/break-times` | 클리닉 조회 |
-| 의사 | `GET /api/clinics/{id}/doctors`, `/doctors/{id}`, `/{id}/schedules`, `/{id}/absences` | 의사 조회 |
-| 진료유형 | `GET /api/clinics/{id}/treatment-types`, `/treatment-types/{id}` | 진료유형 조회 |
-| 장비 | `GET /api/clinics/{id}/equipments`, `/equipments/{id}` | 장비 조회 |
+| 예약 | `GET /api/{tenantCode}/appointments` | 기간별 예약 목록 조회 |
+| 예약 | `POST /api/{tenantCode}/appointments` | 예약 생성 |
+| 예약 | `PATCH /api/{tenantCode}/appointments/{id}/status` | 상태 변경 (Confirm, CheckIn, Complete 등) |
+| 예약 | `DELETE /api/{tenantCode}/appointments/{id}` | 예약 취소 |
+| 슬롯 | `GET /api/{tenantCode}/clinics/{clinicId}/slots` | 가용 슬롯 조회 (의사/날짜/진료유형) |
+| 재배정 | `POST /api/{tenantCode}/appointments/{id}/reschedule/closure` | 임시휴진 날짜 재배정 실행 |
+| 재배정 | `GET /api/{tenantCode}/appointments/{id}/reschedule/candidates` | 재배정 후보 목록 조회 |
+| 재배정 스트림 | `GET /api/{tenantCode}/reschedule/batch/stream` | SSE 일괄 재배정 진행 상황 조회 |
+| 장비 사용불가 | `GET /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities` | 목록 조회 |
+| 장비 사용불가 | `POST /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities` | 등록 |
+| 장비 사용불가 | `PUT /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}` | 수정 |
+| 장비 사용불가 | `DELETE /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}` | 삭제 |
+| 클리닉 | `GET /api/{tenantCode}/clinics`, `/{id}`, `/{id}/operating-hours`, `/{id}/break-times` | 클리닉 조회 |
+| 의사 | `GET /api/{tenantCode}/clinics/{id}/doctors`, `/doctors/{id}`, `/{id}/schedules`, `/{id}/absences` | 의사 조회 |
+| 진료유형 | `GET /api/{tenantCode}/clinics/{id}/treatment-types`, `/treatment-types/{id}` | 진료유형 조회 |
+| 장비 | `GET /api/{tenantCode}/clinics/{id}/equipments`, `/equipments/{id}` | 장비 조회 |
+| 대시보드 통계 | `GET /api/{tenantCode}/admin/stats/{appointments,doctors,cancellations}` | 관리자 집계 조회 |
+
+로컬 seed tenant는 `tenant-default` 입니다. JWT의 `allowedTenants` claim에는 요청 URL의 `tenantCode`가 포함되어야 합니다.
 
 **Swagger UI**: 서버 기동 후 `http://localhost:8080/swagger-ui.html`
 
@@ -42,8 +46,8 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant EVT as EventBus
 
-    FE->>API: POST /api/appointments (Bearer token)
-    API->>SEC: JWT 검증
+    FE->>API: POST /api/{tenantCode}/appointments (Bearer token)
+    API->>SEC: JWT와 allowedTenants 검증
     SEC-->>API: SchedulingUserPrincipal
     API->>SLOT: 슬롯 가용성 확인
     SLOT->>DB: 영업시간·스케줄·충돌 조회
@@ -60,6 +64,8 @@ sequenceDiagram
 
 JWT Bearer Token:
 - 헤더: `Authorization: Bearer <token>`
+- Tenant path: `/api/{tenantCode}/...`
+- Tenant claim: `allowedTenants`에 URL `tenantCode` 포함 필요
 - 설정: `JwtSecurityProperties` (`scheduling.security.jwt.*`)
 - 필터: `JwtAuthenticationFilter` → `SchedulingUserPrincipal`
 

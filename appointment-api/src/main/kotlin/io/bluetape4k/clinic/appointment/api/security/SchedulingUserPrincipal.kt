@@ -6,19 +6,21 @@ import org.springframework.security.core.userdetails.UserDetails
 import java.io.Serializable
 
 /**
- * JWT Claims에서 추출한 사용자 정보.
+ * User identity extracted from JWT claims.
  *
- * @property userId 사용자 ID
- * @property clinicId 사용자가 속한 병원 ID
- * @property roles 사용자 역할 목록
+ * @property userId user ID
+ * @property clinicId clinic ID associated with the user, when available
+ * @property roles scheduling roles
+ * @property allowedTenants tenant codes this user can access
  */
 data class SchedulingUserPrincipal(
     val userId: String,
     val clinicId: Long?,
     val roles: List<String>,
+    val allowedTenants: List<String>,
 ) : UserDetails, Serializable {
     companion object {
-        private const val serialVersionUID = 1L
+        private const val serialVersionUID = 2L
     }
 
     override fun getAuthorities(): Collection<GrantedAuthority> =

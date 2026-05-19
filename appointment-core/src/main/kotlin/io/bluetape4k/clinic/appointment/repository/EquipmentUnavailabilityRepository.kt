@@ -8,8 +8,10 @@ import io.bluetape4k.clinic.appointment.model.tables.ExceptionType
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requirePositiveNumber
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
@@ -74,6 +76,22 @@ class EquipmentUnavailabilityRepository {
         return EquipmentUnavailabilities
             .selectAll()
             .where { EquipmentUnavailabilities.id eq id }
+            .map { it.toEquipmentUnavailabilityRecord() }
+            .firstOrNull()
+    }
+
+    /**
+     * Finds an equipment unavailability by ID only when the owning clinic belongs to [tenantGroupId].
+     */
+    fun findByIdAndTenant(id: Long, tenantGroupId: Long): EquipmentUnavailabilityRecord? {
+        id.requirePositiveNumber("id")
+        tenantGroupId.requirePositiveNumber("tenantGroupId")
+        return EquipmentUnavailabilities
+            .selectAll()
+            .where {
+                (EquipmentUnavailabilities.id eq id) and
+                    (EquipmentUnavailabilities.clinicId inSubQuery tenantClinicIds(tenantGroupId))
+            }
             .map { it.toEquipmentUnavailabilityRecord() }
             .firstOrNull()
     }

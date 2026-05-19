@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.clinic.appointment.api.service.DashboardStatsService
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStatsRepository
@@ -10,6 +11,7 @@ import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
 import io.bluetape4k.clinic.appointment.repository.EquipmentUnavailabilityRepository
 import io.bluetape4k.clinic.appointment.repository.HolidayRepository
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
+import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.bluetape4k.clinic.appointment.service.EquipmentUnavailabilityService
@@ -53,6 +55,25 @@ class ServiceConfig {
 
     @Bean
     fun equipmentUnavailabilityRepository(): EquipmentUnavailabilityRepository = EquipmentUnavailabilityRepository()
+
+    @Bean
+    fun tenantGroupRepository(): TenantGroupRepository = TenantGroupRepository()
+
+    @Bean
+    fun tenantClinicAccessChecker(
+        tenantGroupRepository: TenantGroupRepository,
+        clinicRepository: ClinicRepository,
+        doctorRepository: DoctorRepository,
+        treatmentTypeRepository: TreatmentTypeRepository,
+        equipmentRepository: EquipmentRepository,
+    ): TenantClinicAccessChecker =
+        TenantClinicAccessChecker(
+            tenantGroupRepository,
+            clinicRepository,
+            doctorRepository,
+            treatmentTypeRepository,
+            equipmentRepository,
+        )
 
     // --- Service 빈 ---
 

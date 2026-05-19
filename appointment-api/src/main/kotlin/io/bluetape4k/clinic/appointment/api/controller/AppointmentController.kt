@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.api.dto.StateHistoryResponse
 import io.bluetape4k.clinic.appointment.api.dto.UpdateStatusRequest
 import io.bluetape4k.clinic.appointment.api.dto.toResponse
 import io.bluetape4k.clinic.appointment.api.service.AppointmentService
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -38,10 +39,11 @@ import java.time.LocalDate
  */
 @Tag(name = "Appointments", description = "Appointment scheduling and management")
 @RestController
-@RequestMapping("/api/appointments")
+@RequestMapping("/api/{tenantCode}/appointments")
 class AppointmentController(
     private val appointmentService: AppointmentService,
     private val timezoneService: ClinicTimezoneService,
+    private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
     companion object : KLogging()
 
@@ -52,11 +54,13 @@ class AppointmentController(
     )
     @GetMapping
     fun getByDateRange(
+        @PathVariable tenantCode: String,
         @RequestParam clinicId: Long,
         @Parameter(description = "Start date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) startDate: LocalDate,
         @Parameter(description = "End date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) endDate: LocalDate,
     ): ResponseEntity<ApiResponse<List<AppointmentResponse>>> {
-        log.debug { "GET /api/appointments?clinicId=$clinicId&startDate=$startDate&endDate=$endDate" }
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        log.debug { "GET appointments tenantCode=$tenantCode, clinicId=$clinicId, startDate=$startDate, endDate=$endDate" }
         val records = appointmentService.getByDateRange(clinicId, startDate, endDate)
         val (timezone, locale) = timezoneService.getTimezoneAndLocale(clinicId)
         return ResponseEntity.ok(ApiResponse.ok(records.map { it.toResponse(timezone, locale) }))
@@ -68,9 +72,13 @@ class AppointmentController(
         OApiResponse(responseCode = "404", description = "Appointment not found"),
     )
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: Long): ResponseEntity<ApiResponse<AppointmentResponse>> {
-        log.debug { "GET /api/appointments/$id" }
-        val record = appointmentService.getById(id)
+    fun getById(
+        @PathVariable tenantCode: String,
+        @PathVariable id: Long,
+    ): ResponseEntity<ApiResponse<AppointmentResponse>> {
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        log.debug { "GET appointment tenantCode=$tenantCode, id=$id" }
+        val record = appointmentService.getById(id, tenant.id)
         val (timezone, locale) = timezoneService.getTimezoneAndLocale(record.clinicId)
         return ResponseEntity.ok(ApiResponse.ok(record.toResponse(timezone, locale)))
     }
@@ -82,8 +90,18 @@ class AppointmentController(
         OApiResponse(responseCode = "409", description = "Scheduling conflict"),
     )
     @PostMapping
-    fun create(@Valid @RequestBody request: CreateAppointmentRequest): ResponseEntity<ApiResponse<AppointmentResponse>> {
-        log.debug { "POST /api/appointments - patient=${request.patientName}" }
+    fun create(
+        @PathVariable tenantCode: String,
+        @Valid @RequestBody request: CreateAppointmentRequest,
+    ): ResponseEntity<ApiResponse<AppointmentResponse>> {
+        tenantClinicAccessChecker.verifySchedulingResources(
+            tenantCode = tenantCode,
+            clinicId = request.clinicId,
+            doctorId = request.doctorId,
+            treatmentTypeId = request.treatmentTypeId,
+            equipmentId = request.equipmentId,
+        )
+        log.debug { "POST appointment tenantCode=$tenantCode, patient=${request.patientName}" }
         val saved = appointmentService.create(request)
         val (timezone, locale) = timezoneService.getTimezoneAndLocale(saved.clinicId)
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -96,9 +114,13 @@ class AppointmentController(
         OApiResponse(responseCode = "404", description = "Appointment not found"),
     )
     @GetMapping("/{id}/history")
-    fun getHistory(@PathVariable id: Long): ResponseEntity<ApiResponse<List<StateHistoryResponse>>> {
-        log.debug { "GET /api/appointments/$id/history" }
-        val history = appointmentService.getStateHistory(id)
+    fun getHistory(
+        @PathVariable tenantCode: String,
+        @PathVariable id: Long,
+    ): ResponseEntity<ApiResponse<List<StateHistoryResponse>>> {
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        log.debug { "GET appointment history tenantCode=$tenantCode, id=$id" }
+        val history = appointmentService.getStateHistory(id, tenant.id)
         return ResponseEntity.ok(ApiResponse.ok(history.map { it.toResponse() }))
     }
 
@@ -111,11 +133,13 @@ class AppointmentController(
     )
     @PatchMapping("/{id}/status")
     suspend fun updateStatus(
+        @PathVariable tenantCode: String,
         @PathVariable id: Long,
         @Valid @RequestBody request: UpdateStatusRequest,
     ): ResponseEntity<ApiResponse<AppointmentResponse>> {
-        log.debug { "PATCH /api/appointments/$id/status - target=${request.status}" }
-        val updated = appointmentService.updateStatus(id, request.status, request.reason)
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        log.debug { "PATCH appointment status tenantCode=$tenantCode, id=$id, target=${request.status}" }
+        val updated = appointmentService.updateStatus(id, tenant.id, request.status, request.reason)
         val (timezone, locale) = timezoneService.getTimezoneAndLocale(updated.clinicId)
         return ResponseEntity.ok(ApiResponse.ok(updated.toResponse(timezone, locale)))
     }
@@ -128,11 +152,13 @@ class AppointmentController(
     )
     @DeleteMapping("/{id}")
     suspend fun cancel(
+        @PathVariable tenantCode: String,
         @PathVariable id: Long,
         @Parameter(description = "Cancellation reason", required = false) @RequestParam(required = false) reason: String?,
     ): ResponseEntity<ApiResponse<AppointmentResponse>> {
-        log.debug { "DELETE /api/appointments/$id reason=$reason" }
-        val cancelled = appointmentService.cancel(id, reason)
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        log.debug { "DELETE appointment tenantCode=$tenantCode, id=$id, reason=$reason" }
+        val cancelled = appointmentService.cancel(id, tenant.id, reason)
         val (timezone, locale) = timezoneService.getTimezoneAndLocale(cancelled.clinicId)
         return ResponseEntity.ok(ApiResponse.ok(cancelled.toResponse(timezone, locale)))
     }

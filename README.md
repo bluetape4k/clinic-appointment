@@ -25,7 +25,7 @@ notifications, Spring Boot APIs, and an Angular frontend.
 - **Appointment state machine** - Supports PENDING -> REQUESTED -> CONFIRMED -> CHECKED_IN -> IN_PROGRESS -> COMPLETED transitions, cancellation, and reassignment.
 - **AI schedule optimization** - Uses Timefold Solver to assign appointments while satisfying doctor, equipment, business-hour, 10 hard, and 2 soft constraints.
 - **High-availability notifications** - Uses Redis Leader Election to guarantee single-node delivery, with Resilience4j CircuitBreaker/Retry/Bulkhead.
-- **REST API** - Provides Spring Boot 4 MVC APIs with JWT authentication, Flyway migrations, and Swagger UI.
+- **Tenant-scoped REST API** - Provides Spring Boot 4 MVC APIs under `/api/{tenantCode}/...` with JWT tenant authorization, Flyway migrations, and Swagger UI.
 - **Angular 18 web UI** - Provides appointment search, creation, and status-change workflows.
 
 ## Architecture
@@ -54,6 +54,8 @@ For now, start PostgreSQL and Redis manually, then run the API server.
 ./gradlew :appointment-api:bootRun
 # Swagger UI: http://localhost:8080/swagger-ui.html
 ```
+
+Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seeded local tenant; frontend tenant routing is a follow-up phase.
 
 ## Build & Test
 

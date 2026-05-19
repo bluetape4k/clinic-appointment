@@ -6,6 +6,7 @@ import java.io.Serializable
  * 병원 레코드.
  *
  * @property id 병원 ID
+ * @property tenantGroupId tenant group ID
  * @property name 병원 이름
  * @property slotDurationMinutes 예약 슬롯 단위(분)
  * @property timezone 병원 타임존 ID
@@ -15,6 +16,7 @@ import java.io.Serializable
  */
 data class ClinicRecord(
     val id: Long? = null,
+    val tenantGroupId: Long? = null,
     val name: String,
     val slotDurationMinutes: Int = 30,
     val timezone: String = "UTC",

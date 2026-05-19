@@ -73,6 +73,12 @@ class EquipmentUnavailabilityService(
         repo.findById(id)
     }
 
+    fun findByIdAndTenant(id: Long, tenantGroupId: Long): EquipmentUnavailabilityRecord? = transaction {
+        id.requirePositiveNumber("id")
+        tenantGroupId.requirePositiveNumber("tenantGroupId")
+        repo.findByIdAndTenant(id, tenantGroupId)
+    }
+
     fun findUnavailabilityRecords(
         equipmentId: Long,
         from: LocalDate,
@@ -86,6 +92,18 @@ class EquipmentUnavailabilityService(
         id.requirePositiveNumber("id")
         log.debug { "Deleting EquipmentUnavailability id=$id" }
         repo.delete(id)
+    }
+
+    fun deleteByTenant(id: Long, tenantGroupId: Long): Boolean = transaction {
+        id.requirePositiveNumber("id")
+        tenantGroupId.requirePositiveNumber("tenantGroupId")
+        if (repo.findByIdAndTenant(id, tenantGroupId) == null) {
+            false
+        } else {
+            log.debug { "Deleting EquipmentUnavailability id=$id for tenantGroupId=$tenantGroupId" }
+            repo.delete(id)
+            true
+        }
     }
 
     fun addException(
@@ -158,6 +176,20 @@ class EquipmentUnavailabilityService(
         unavailabilityId.requirePositiveNumber("unavailabilityId")
         return transaction {
             val record = repo.findById(unavailabilityId)
+                ?: return@transaction emptyList()
+            val exceptions = repo.findExceptions(unavailabilityId)
+            val rangeEnd = record.effectiveUntil ?: record.effectiveFrom.plusYears(1)
+            val periods = UnavailabilityExpander.expand(record, exceptions, record.effectiveFrom..rangeEnd)
+            log.debug { "Detecting conflicts for unavailabilityId=$unavailabilityId, periods=${periods.size}" }
+            appointmentRepository.findOverlappingByEquipment(record.equipmentId, periods)
+        }
+    }
+
+    fun detectConflictsByTenant(unavailabilityId: Long, tenantGroupId: Long): List<AppointmentRecord> {
+        unavailabilityId.requirePositiveNumber("unavailabilityId")
+        tenantGroupId.requirePositiveNumber("tenantGroupId")
+        return transaction {
+            val record = repo.findByIdAndTenant(unavailabilityId, tenantGroupId)
                 ?: return@transaction emptyList()
             val exceptions = repo.findExceptions(unavailabilityId)
             val rangeEnd = record.effectiveUntil ?: record.effectiveFrom.plusYears(1)

@@ -45,6 +45,12 @@ class AppointmentService(
             ?: throw NoSuchElementException("Appointment not found: $id")
     }
 
+    fun getById(id: Long, tenantGroupId: Long): AppointmentRecord {
+        log.debug { "getById: id=$id, tenantGroupId=$tenantGroupId" }
+        return transaction { appointmentRepository.findByIdAndTenant(id, tenantGroupId) }
+            ?: throw NoSuchElementException("Appointment not found: $id")
+    }
+
     fun create(request: CreateAppointmentRequest): AppointmentRecord {
         log.debug { "create: patient=${request.patientName}" }
         val record = AppointmentRecord(
@@ -104,10 +110,54 @@ class AppointmentService(
             ?: throw NoSuchElementException("Appointment not found after status update: $id")
     }
 
+    suspend fun updateStatus(id: Long, tenantGroupId: Long, targetStatus: String, reason: String?): AppointmentRecord {
+        log.debug { "updateStatus: id=$id, tenantGroupId=$tenantGroupId, target=$targetStatus" }
+        val record = transaction { appointmentRepository.findByIdAndTenant(id, tenantGroupId) }
+            ?: throw NoSuchElementException("Appointment not found: $id")
+
+        val currentState = record.status
+        val event = parseEvent(targetStatus, reason)
+        val nextState = stateMachine.transition(currentState, event)
+
+        transaction {
+            appointmentRepository.updateStatus(id, nextState)
+            stateHistoryRepository.save(
+                AppointmentStateHistoryRecord(
+                    appointmentId = id,
+                    fromState = currentState,
+                    toState = nextState,
+                    reason = reason,
+                )
+            )
+        }
+
+        eventPublisher.publishEvent(
+            AppointmentDomainEvent.StatusChanged(
+                appointmentId = id,
+                clinicId = record.clinicId,
+                fromState = currentState.name,
+                toState = nextState.name,
+                reason = reason,
+            )
+        )
+
+        return transaction { appointmentRepository.findByIdAndTenant(id, tenantGroupId) }
+            ?: throw NoSuchElementException("Appointment not found after status update: $id")
+    }
+
     fun getStateHistory(appointmentId: Long): List<AppointmentStateHistoryRecord> {
         log.debug { "getStateHistory: appointmentId=$appointmentId" }
         return transaction {
             appointmentRepository.findByIdOrNull(appointmentId)
+                ?: throw NoSuchElementException("Appointment not found: $appointmentId")
+            stateHistoryRepository.findByAppointmentId(appointmentId)
+        }
+    }
+
+    fun getStateHistory(appointmentId: Long, tenantGroupId: Long): List<AppointmentStateHistoryRecord> {
+        log.debug { "getStateHistory: appointmentId=$appointmentId, tenantGroupId=$tenantGroupId" }
+        return transaction {
+            appointmentRepository.findByIdAndTenant(appointmentId, tenantGroupId)
                 ?: throw NoSuchElementException("Appointment not found: $appointmentId")
             stateHistoryRepository.findByAppointmentId(appointmentId)
         }
@@ -143,6 +193,39 @@ class AppointmentService(
         )
 
         return transaction { appointmentRepository.findByIdOrNull(id) }
+            ?: throw NoSuchElementException("Appointment not found after cancel: $id")
+    }
+
+    suspend fun cancel(id: Long, tenantGroupId: Long, reason: String? = null): AppointmentRecord {
+        log.debug { "cancel: id=$id, tenantGroupId=$tenantGroupId, reason=$reason" }
+        val record = transaction { appointmentRepository.findByIdAndTenant(id, tenantGroupId) }
+            ?: throw NoSuchElementException("Appointment not found: $id")
+
+        val effectiveReason = reason ?: "Cancelled by user"
+        val currentState = record.status
+        stateMachine.transition(currentState, AppointmentEvent.Cancel(reason = effectiveReason))
+
+        transaction {
+            appointmentRepository.updateStatus(id, AppointmentState.CANCELLED)
+            stateHistoryRepository.save(
+                AppointmentStateHistoryRecord(
+                    appointmentId = id,
+                    fromState = currentState,
+                    toState = AppointmentState.CANCELLED,
+                    reason = effectiveReason,
+                )
+            )
+        }
+
+        eventPublisher.publishEvent(
+            AppointmentDomainEvent.Cancelled(
+                appointmentId = id,
+                clinicId = record.clinicId,
+                reason = effectiveReason,
+            )
+        )
+
+        return transaction { appointmentRepository.findByIdAndTenant(id, tenantGroupId) }
             ?: throw NoSuchElementException("Appointment not found after cancel: $id")
     }
 }
