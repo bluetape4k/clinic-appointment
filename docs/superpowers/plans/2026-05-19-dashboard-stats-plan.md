@@ -94,7 +94,9 @@
 - **dependencies**: T2, T3
 - **작업**:
   - **[F4] 통합 테스트 접근법** — MockK + `transaction {}` 비호환 문제 해결을 위해 실제 H2 Repository 사용.
-    - `DashboardStatsServiceTest`는 `AbstractExposedTest()`를 상속하고 `withTables(testDB, Clinics, Doctors, Appointments) { ... }` 블록 내에서 실제 `AppointmentStatsRepository()` 인스턴스를 주입한다.
+    - **[크로스 모듈 제약]** `appointment-core/src/test`의 `AbstractExposedTest`는 `appointment-core` 에 `java-test-fixtures` 플러그인이 없으므로 `appointment-api/src/test`에서 직접 상속 불가.
+    - `DashboardStatsServiceTest`는 `@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)` + `@ActiveProfiles("test")`로 Spring 컨텍스트 (H2 + Flyway + Exposed 자동 설정)를 로드한다.
+    - `@Autowired` 로 `DashboardStatsService` 주입; `@BeforeEach`에서 `transaction { SchemaUtils.create(Clinics, Doctors, Appointments); Appointments.deleteAll(); Doctors.deleteAll(); Clinics.deleteAll() }` 패턴 (기존 `ClinicControllerTest` 패턴과 동일).
     - Service 검증 로직만 MockK로 분리할 수 없으므로 Service + Repository 통합 단위 테스트로 작성 (Repository 동작은 T1/T2에서 이미 보장).
   - 시나리오:
     - `getAppointmentStats`: 정상 — bucket 조립/totals 계산 정확성.
@@ -140,7 +142,7 @@
   - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/DashboardStatsControllerTest.kt` (신규)
 - **dependencies**: T3, T5, T8
 - **작업**:
-  - `@WebMvcTest(DashboardStatsController::class)` + `@MockkBean DashboardStatsService`.
+  - `@WebMvcTest(DashboardStatsController::class)` + `@MockkBean DashboardStatsService` + **`@ActiveProfiles("test")`** 필수 — 미지정 시 `SecurityConfig`(`@Profile("!dev & !test")`)가 활성화되어 JWT 없는 요청이 401 반환.
   - 시나리오:
     - 200 — `/api/admin/stats/appointments?clinicId=1` → `success: true`, `data.totals` 키 존재.
     - **[F5] 200 — `?clinicId=999` (데이터 없음)** → `success: true`, `data.buckets` 빈 배열 (에러 응답 아님).
@@ -356,20 +358,17 @@
 - **complexity**: high
 - **files**:
   - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/security/SecurityConfigDashboardTest.kt` (신규)
-  - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/security/SecurityTestConfig.kt` (신규 — 보안 프로파일 활성화용)
 - **dependencies**: T7, T10
 - **작업**:
   - **[F8] 구체적 보안 우회 전략**:
-    - `SecurityTestConfig.kt`: `@TestConfiguration` + `@Profile("security-test")` 클래스로 `NoOpSecurityConfig`를 **제외**하고 실제 `SecurityConfig`를 **활성화**한다.
-      ```kotlin
-      @TestConfiguration
-      class SecurityTestConfig {
-          // NoOpSecurityConfig는 @Profile("dev","test") — "security-test" 프로파일에서 비활성
-          // 실제 SecurityConfig는 @Profile("!dev & !test") — "security-test"에서 활성
-      }
-      ```
+    - `SecurityTestConfig.kt` 신규 파일 불필요 — `@ActiveProfiles("security-test")` 지정만으로 프로파일 전환 충분.
+      - `"security-test"` 프로파일 → `NoOpSecurityConfig`(`@Profile("dev","test")`) 비활성; 실제 `SecurityConfig`(`@Profile("!dev & !test")`) 활성.
     - 테스트 클래스: `@SpringBootTest(webEnvironment=MOCK)` + `@AutoConfigureMockMvc` + `@ActiveProfiles("security-test")`.
-    - JWT 토큰 생성: 기존 프로젝트의 JWT 서명 유틸리티(`JwtTokenProvider` 등)를 사용해 테스트 토큰 발급. 없으면 `JwtTokenProvider`에서 `@Autowired`로 직접 호출. ROLE_ADMIN / ROLE_STAFF / ROLE_DOCTOR 역할별 토큰 발급.
+    - **JWT 토큰 생성**: 이미 존재하는 `TestJwtProvider` (`io.bluetape4k.clinic.appointment.api.security.TestJwtProvider`) 사용.
+      - `TestJwtProvider.adminToken()` → ROLE_ADMIN 토큰
+      - `TestJwtProvider.staffToken()` → ROLE_STAFF 토큰
+      - `TestJwtProvider.doctorToken()` → ROLE_DOCTOR 토큰
+      - `application-security-test.properties`에 `jwt.secret = ${TestJwtProvider.secret}`, `jwt.issuer = ${TestJwtProvider.issuer}` 설정 필요 (JwtSecurityProperties 바인딩용).
     - `MockMvc` 요청 헤더: `Authorization: Bearer <token>`.
   - 시나리오 (스펙 §5.2):
     - ADMIN 토큰 → 200.
@@ -540,7 +539,7 @@ T18, T20 → T21
 
 - [ ] T1–T2: AppointmentStatsRepository AbstractExposedTest + withTables 패턴 PASS (SQL LIMIT 부재 포함); countCancellationsByDate 없음 확인
 - [ ] T3: DTO 3종 Serializable + serialVersionUID
-- [ ] T4–T5: DashboardStatsService 통합 테스트 PASS (AbstractExposedTest + 실제 H2 Repository); 빈 clinic 200 확인; sortedByDescending 검증 포함
+- [ ] T4–T5: DashboardStatsService 통합 테스트 PASS (`@SpringBootTest(webEnvironment=NONE)` + `@ActiveProfiles("test")` + Spring 관리 H2); 빈 clinic 200 확인; sortedByDescending 검증 포함
 - [ ] T6–T7: DashboardStatsController MockMvc PASS; 빈 clinic 200 확인; 반복 파라미터 동작 확인
 - [ ] T8: GlobalExceptionHandlerTypeMismatchTest PASS; `?from=not-a-date → 400` + JSON envelope 확인
 - [ ] T9: ServiceConfig Bean 등록, 컨텍스트 로드 PASS
@@ -550,7 +549,7 @@ T18, T20 → T21
 - [ ] T14–T16: 차트 3종; **ngOnInit** 기반 라이프사이클; ngOnDestroy.destroy() 검증
 - [ ] T17: DashboardCharts, authService.isAdmin() 분기 양방향
 - [ ] T18: ManagementDashboard 회귀 + 로컬 isAdmin 재선언 없음
-- [ ] T19: Security 통합 — `@ActiveProfiles("security-test")` 하네스; 매처 순서 + 401/403 envelope
+- [ ] T19: Security 통합 — `@ActiveProfiles("security-test")` 하네스; `TestJwtProvider` 재사용; `application-security-test.properties` jwt 설정; 매처 순서 + 401/403 envelope
 - [ ] T20: Controller 400 매트릭스 + JSON envelope
 - [ ] T21: 모든 신규 public API 영문 KDoc; Kotlin 컴파일 에러 0; tsc --noEmit PASS
 - [ ] T22: README.md + README.ko.md 동시 갱신; 섹션 구조 1:1 정렬
