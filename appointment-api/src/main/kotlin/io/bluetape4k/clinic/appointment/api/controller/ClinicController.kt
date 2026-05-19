@@ -1,10 +1,12 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.dto.BreakTimeRecord
 import io.bluetape4k.clinic.appointment.model.dto.ClinicDefaultBreakTimeRecord
 import io.bluetape4k.clinic.appointment.model.dto.ClinicRecord
 import io.bluetape4k.clinic.appointment.model.dto.OperatingHoursRecord
+import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
@@ -14,6 +16,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -31,9 +34,10 @@ import org.springframework.web.bind.annotation.RestController
  */
 @Tag(name = "Clinics", description = "Clinic management")
 @RestController
-@RequestMapping("/api/clinics")
+@RequestMapping("/api/{tenantCode}/clinics")
 class ClinicController(
     private val clinicRepository: ClinicRepository,
+    private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
     companion object : KLogging()
 
@@ -50,13 +54,17 @@ class ClinicController(
     )
     @GetMapping
     fun getAll(
+        @PathVariable tenantCode: String,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<ExposedPage<ClinicRecord>>> {
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         val pageNumber = page.coerceAtLeast(0)
         val pageSize = size.coerceIn(1, PaginationDefaults.MAX_PAGE_SIZE)
-        log.debug { "GET all clinics page=$pageNumber, size=$pageSize" }
-        val result = transaction { clinicRepository.findPage(pageNumber, pageSize) }
+        log.debug { "GET clinics tenantCode=$tenantCode, page=$pageNumber, size=$pageSize" }
+        val result = transaction {
+            clinicRepository.findPage(pageNumber, pageSize) { Clinics.tenantGroupId eq tenant.id }
+        }
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
 
@@ -74,11 +82,13 @@ class ClinicController(
     )
     @GetMapping("/{clinicId}")
     fun getById(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
     ): ResponseEntity<ApiResponse<ClinicRecord>> {
         clinicId.requirePositiveNumber("clinicId")
-        log.debug { "GET clinic id=$clinicId" }
-        val clinic = runCatching { transaction { clinicRepository.findById(clinicId) } }
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        log.debug { "GET clinic tenantCode=$tenantCode, id=$clinicId" }
+        val clinic = runCatching { transaction { clinicRepository.findByIdAndTenant(clinicId, tenant.id) } }
             .getOrNull() ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(ApiResponse.ok(clinic))
     }
@@ -96,10 +106,12 @@ class ClinicController(
     )
     @GetMapping("/{clinicId}/operating-hours")
     fun getOperatingHours(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
     ): ResponseEntity<ApiResponse<List<OperatingHoursRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
-        log.debug { "GET operating hours clinicId=$clinicId" }
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        log.debug { "GET operating hours tenantCode=$tenantCode, clinicId=$clinicId" }
         val hours = transaction { clinicRepository.findAllOperatingHours(clinicId) }
         return ResponseEntity.ok(ApiResponse.ok(hours))
     }
@@ -117,10 +129,12 @@ class ClinicController(
     )
     @GetMapping("/{clinicId}/break-times")
     fun getBreakTimes(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
     ): ResponseEntity<ApiResponse<List<ClinicDefaultBreakTimeRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
-        log.debug { "GET break times clinicId=$clinicId" }
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        log.debug { "GET break times tenantCode=$tenantCode, clinicId=$clinicId" }
         val breakTimes = transaction { clinicRepository.findDefaultBreakTimes(clinicId) }
         return ResponseEntity.ok(ApiResponse.ok(breakTimes))
     }

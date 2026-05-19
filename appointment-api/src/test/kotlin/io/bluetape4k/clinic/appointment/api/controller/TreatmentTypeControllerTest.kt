@@ -23,8 +23,8 @@ import org.springframework.web.client.RestClient
 class TreatmentTypeControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
-        private const val CLINICS_BASE_URL = "/api/clinics"
-        private const val TREATMENT_TYPES_BASE_URL = "/api/treatment-types"
+        private const val CLINICS_BASE_URL = "/api/tenant-default/clinics"
+        private const val TREATMENT_TYPES_BASE_URL = "/api/tenant-default/treatment-types"
     }
 
     @LocalServerPort

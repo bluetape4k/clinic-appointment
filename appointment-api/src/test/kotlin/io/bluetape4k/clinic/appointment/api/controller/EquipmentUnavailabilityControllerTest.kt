@@ -47,7 +47,7 @@ import java.time.LocalTime
 class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
-        private const val CLINICS_BASE_URL = "/api/clinics"
+        private const val CLINICS_BASE_URL = "/api/tenant-default/clinics"
     }
 
     @LocalServerPort
@@ -193,6 +193,34 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
         response.jsonPath<List<*>>("$.data").shouldNotBeNull().shouldBeEmpty()
+    }
+
+    @Test
+    fun `GET - return 404 when equipment belongs to another clinic`() {
+        val otherEquipmentId = transaction {
+            val otherClinicId = Clinics.insertAndGetId {
+                it[name] = "Other Clinic"
+                it[slotDurationMinutes] = 30
+                it[timezone] = "Asia/Seoul"
+                it[locale] = "ko-KR"
+                it[maxConcurrentPatients] = 1
+            }.value
+
+            Equipments.insertAndGetId {
+                it[Equipments.clinicId] = otherClinicId
+                it[name] = "Other X-Ray"
+                it[usageDurationMinutes] = 15
+                it[quantity] = 1
+            }.value
+        }
+
+        val response = client.get()
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities?from={from}&to={to}",
+                clinicId, otherEquipmentId, "2026-04-01", "2026-04-30")
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
     }
 
     @Test

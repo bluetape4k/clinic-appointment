@@ -27,7 +27,7 @@ import java.time.LocalTime
 class DashboardStatsControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
-        private const val BASE_URL = "/api/admin/stats"
+        private const val BASE_URL = "/api/tenant-default/admin/stats"
         private val TEST_DATE: LocalDate = LocalDate.of(2026, 5, 1)
     }
 
@@ -110,13 +110,12 @@ class DashboardStatsControllerTest @Autowired constructor() : AbstractApiIntegra
     }
 
     @Test
-    fun `GET appointments stats - 200 empty for unknown clinic`() {
+    fun `GET appointments stats - 404 for unknown clinic`() {
         val response = client.get()
             .uri("$BASE_URL/appointments?clinicId=999999&from={date}&to={date}", TEST_DATE, TEST_DATE)
             .execute()
 
-        response.statusCode shouldBeEqualTo HttpStatus.OK
-        response.jsonPath<Boolean>("$.success").shouldBeTrue()
+        response.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
     }
 
     @Test

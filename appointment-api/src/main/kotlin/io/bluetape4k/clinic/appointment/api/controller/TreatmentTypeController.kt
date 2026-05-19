@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
@@ -30,9 +31,10 @@ import org.springframework.web.bind.annotation.RestController
  */
 @Tag(name = "Treatment Types", description = "Treatment type management")
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/{tenantCode}")
 class TreatmentTypeController(
     private val treatmentTypeRepository: TreatmentTypeRepository,
+    private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
     companion object : KLogging()
 
@@ -51,14 +53,16 @@ class TreatmentTypeController(
     )
     @GetMapping("/clinics/{clinicId}/treatment-types")
     fun getByClinic(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<ExposedPage<TreatmentTypeRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
         val pageNumber = page.coerceAtLeast(0)
         val pageSize = size.coerceIn(1, PaginationDefaults.MAX_PAGE_SIZE)
-        log.debug { "GET treatment types clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
+        log.debug { "GET treatment types tenantCode=$tenantCode, clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
         val result = transaction { treatmentTypeRepository.findPage(pageNumber, pageSize) { TreatmentTypes.clinicId eq clinicId } }
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
@@ -77,11 +81,13 @@ class TreatmentTypeController(
     )
     @GetMapping("/treatment-types/{treatmentTypeId}")
     fun getById(
+        @PathVariable tenantCode: String,
         @PathVariable treatmentTypeId: Long,
     ): ResponseEntity<ApiResponse<TreatmentTypeRecord>> {
         treatmentTypeId.requirePositiveNumber("treatmentTypeId")
-        log.debug { "GET treatment type id=$treatmentTypeId" }
-        val type = runCatching { transaction { treatmentTypeRepository.findById(treatmentTypeId) } }
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        log.debug { "GET treatment type tenantCode=$tenantCode, id=$treatmentTypeId" }
+        val type = runCatching { transaction { treatmentTypeRepository.findByIdAndTenant(treatmentTypeId, tenant.id) } }
             .getOrNull() ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(ApiResponse.ok(type))
     }

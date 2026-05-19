@@ -1,0 +1,6 @@
+scheduling:
+    security:
+        jwt:
+            enabled: true
+            secret: dGVzdC1zZWNyZXQta2V5LWZvci1hcHBvaW50bWVudC1zY2hlZHVsaW5nLXN5c3RlbS0yNTY=
+            issuer: appointment-auth-service

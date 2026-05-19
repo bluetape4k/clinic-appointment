@@ -18,6 +18,7 @@ class JwtTokenParser(
     private val properties: JwtSecurityProperties,
 ) {
     companion object : KLogging() {
+        private const val CLAIM_ALLOWED_TENANTS = "allowedTenants"
         private const val CLAIM_CLINIC_ID = "clinicId"
         private const val CLAIM_ROLES = "roles"
     }
@@ -44,17 +45,23 @@ class JwtTokenParser(
             val userId = claims.subject
             val clinicId = claims[CLAIM_CLINIC_ID]?.toString()?.toLongOrNull()
 
-            @Suppress("UNCHECKED_CAST")
-            val roles = (claims[CLAIM_ROLES] as? List<String>) ?: emptyList()
+            val roles = claims.readStringList(CLAIM_ROLES)
+            val allowedTenants = claims.readStringList(CLAIM_ALLOWED_TENANTS)
 
             SchedulingUserPrincipal(
                 userId = userId,
                 clinicId = clinicId,
                 roles = roles,
+                allowedTenants = allowedTenants,
             )
         } catch (e: Exception) {
             log.warn(e) { "JWT 토큰 파싱 실패" }
             null
         }
     }
+
+    private fun Claims.readStringList(claimName: String): List<String> =
+        (this[claimName] as? Collection<*>)
+            ?.mapNotNull { it as? String }
+            ?: emptyList()
 }

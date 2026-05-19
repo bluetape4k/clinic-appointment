@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.security
 
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import java.util.Base64
@@ -22,6 +23,7 @@ object TestJwtProvider {
         userId: String = "test-user",
         clinicId: Long? = 1L,
         roles: List<String> = listOf(SchedulingRole.ADMIN),
+        allowedTenants: List<String> = listOf(TenantGroups.DEFAULT_TENANT_CODE),
         expirationMs: Long = 3600000,
     ): String {
         val now = Date()
@@ -31,6 +33,7 @@ object TestJwtProvider {
             .issuedAt(now)
             .expiration(Date(now.time + expirationMs))
             .claim("roles", roles)
+            .claim("allowedTenants", allowedTenants)
 
         if (clinicId != null) {
             builder.claim("clinicId", clinicId)
@@ -39,17 +42,48 @@ object TestJwtProvider {
         return builder.signWith(signingKey).compact()
     }
 
-    fun adminToken(clinicId: Long? = 1L): String =
-        createToken(userId = "admin-user", clinicId = clinicId, roles = listOf(SchedulingRole.ADMIN))
+    fun adminToken(
+        clinicId: Long? = 1L,
+        allowedTenants: List<String> = listOf(TenantGroups.DEFAULT_TENANT_CODE),
+    ): String =
+        createToken(
+            userId = "admin-user",
+            clinicId = clinicId,
+            roles = listOf(SchedulingRole.ADMIN),
+            allowedTenants = allowedTenants,
+        )
 
-    fun staffToken(clinicId: Long = 1L): String =
-        createToken(userId = "staff-user", clinicId = clinicId, roles = listOf(SchedulingRole.STAFF))
+    fun staffToken(
+        clinicId: Long = 1L,
+        allowedTenants: List<String> = listOf(TenantGroups.DEFAULT_TENANT_CODE),
+    ): String =
+        createToken(
+            userId = "staff-user",
+            clinicId = clinicId,
+            roles = listOf(SchedulingRole.STAFF),
+            allowedTenants = allowedTenants,
+        )
 
-    fun doctorToken(clinicId: Long = 1L): String =
-        createToken(userId = "doctor-user", clinicId = clinicId, roles = listOf(SchedulingRole.DOCTOR))
+    fun doctorToken(
+        clinicId: Long = 1L,
+        allowedTenants: List<String> = listOf(TenantGroups.DEFAULT_TENANT_CODE),
+    ): String =
+        createToken(
+            userId = "doctor-user",
+            clinicId = clinicId,
+            roles = listOf(SchedulingRole.DOCTOR),
+            allowedTenants = allowedTenants,
+        )
 
-    fun patientToken(): String =
-        createToken(userId = "patient-user", clinicId = null, roles = listOf(SchedulingRole.PATIENT))
+    fun patientToken(
+        allowedTenants: List<String> = listOf(TenantGroups.DEFAULT_TENANT_CODE),
+    ): String =
+        createToken(
+            userId = "patient-user",
+            clinicId = null,
+            roles = listOf(SchedulingRole.PATIENT),
+            allowedTenants = allowedTenants,
+        )
 
     fun expiredToken(): String =
         createToken(expirationMs = -1000)

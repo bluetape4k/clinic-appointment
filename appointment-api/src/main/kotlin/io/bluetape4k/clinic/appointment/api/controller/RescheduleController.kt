@@ -5,6 +5,8 @@ import io.bluetape4k.logging.debug
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.RescheduleCandidateResponse
 import io.bluetape4k.clinic.appointment.api.dto.toResponse
+import io.bluetape4k.clinic.appointment.api.service.AppointmentService
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.repository.toRescheduleCandidateRecord
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
@@ -36,9 +38,11 @@ import java.time.LocalDate
  */
 @Tag(name = "Reschedule", description = "Appointment rescheduling")
 @RestController
-@RequestMapping("/api/appointments/{id}/reschedule")
+@RequestMapping("/api/{tenantCode}/appointments/{id}/reschedule")
 class RescheduleController(
     private val closureRescheduleService: ClosureRescheduleService,
+    private val appointmentService: AppointmentService,
+    private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
     companion object : KLogging()
 
@@ -61,12 +65,14 @@ class RescheduleController(
     )
     @PostMapping("/closure")
     fun processClosureReschedule(
+        @PathVariable tenantCode: String,
         @PathVariable id: Long,
         @RequestParam clinicId: Long,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) closureDate: LocalDate,
         @Parameter(description = "Number of days to search for alternative slots") @RequestParam(defaultValue = "7") searchDays: Int,
     ): ResponseEntity<ApiResponse<Map<Long, List<RescheduleCandidateResponse>>>> {
-        log.debug { "POST /api/appointments/$id/reschedule/closure - clinic=$clinicId, date=$closureDate" }
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        log.debug { "POST closure reschedule tenantCode=$tenantCode, appointmentId=$id, clinic=$clinicId, date=$closureDate" }
         val result = closureRescheduleService.processClosureReschedule(clinicId, closureDate, searchDays)
         val response = result.mapValues { (_, candidates) ->
             candidates.map { it.toResponse() }
@@ -89,9 +95,12 @@ class RescheduleController(
     )
     @GetMapping("/candidates")
     fun getCandidates(
+        @PathVariable tenantCode: String,
         @PathVariable id: Long,
     ): ResponseEntity<ApiResponse<List<RescheduleCandidateResponse>>> {
-        log.debug { "GET /api/appointments/$id/reschedule/candidates" }
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        appointmentService.getById(id, tenant.id)
+        log.debug { "GET reschedule candidates tenantCode=$tenantCode, appointmentId=$id" }
         val candidates = transaction {
             RescheduleCandidates
                 .selectAll()
@@ -120,10 +129,13 @@ class RescheduleController(
     )
     @PostMapping("/confirm/{candidateId}")
     fun confirmReschedule(
+        @PathVariable tenantCode: String,
         @PathVariable id: Long,
         @PathVariable candidateId: Long,
     ): ResponseEntity<ApiResponse<Long>> {
-        log.debug { "POST /api/appointments/$id/reschedule/confirm/$candidateId" }
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        appointmentService.getById(id, tenant.id)
+        log.debug { "POST confirm reschedule tenantCode=$tenantCode, appointmentId=$id, candidateId=$candidateId" }
         val newAppointmentId = closureRescheduleService.confirmReschedule(candidateId, id)
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }
@@ -144,9 +156,12 @@ class RescheduleController(
     )
     @PostMapping("/auto")
     fun autoReschedule(
+        @PathVariable tenantCode: String,
         @PathVariable id: Long,
     ): ResponseEntity<ApiResponse<Long?>> {
-        log.debug { "POST /api/appointments/$id/reschedule/auto" }
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
+        appointmentService.getById(id, tenant.id)
+        log.debug { "POST auto reschedule tenantCode=$tenantCode, appointmentId=$id" }
         val newAppointmentId = closureRescheduleService.autoReschedule(id)
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }

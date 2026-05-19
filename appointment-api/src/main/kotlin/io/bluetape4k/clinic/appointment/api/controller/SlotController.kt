@@ -5,6 +5,7 @@ import io.bluetape4k.logging.debug
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.SlotResponse
 import io.bluetape4k.clinic.appointment.api.dto.toResponse
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.model.service.SlotQuery
 import io.swagger.v3.oas.annotations.Operation
@@ -31,9 +32,10 @@ import java.time.LocalDate
  */
 @Tag(name = "Slots", description = "Available time slot queries")
 @RestController
-@RequestMapping("/api/clinics/{clinicId}/slots")
+@RequestMapping("/api/{tenantCode}/clinics/{clinicId}/slots")
 class SlotController(
     private val slotCalculationService: SlotCalculationService,
+    private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
     companion object : KLogging()
 
@@ -57,13 +59,21 @@ class SlotController(
     )
     @GetMapping
     fun getAvailableSlots(
+        @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
         @RequestParam doctorId: Long,
         @RequestParam treatmentTypeId: Long,
         @Parameter(description = "Target date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
         @Parameter(description = "Requested duration in minutes", required = false) @RequestParam(required = false) requestedDurationMinutes: Int? = null,
     ): ResponseEntity<ApiResponse<List<SlotResponse>>> {
-        log.debug { "GET /api/clinics/$clinicId/slots - doctor=$doctorId, treatment=$treatmentTypeId, date=$date" }
+        tenantClinicAccessChecker.verifySchedulingResources(
+            tenantCode = tenantCode,
+            clinicId = clinicId,
+            doctorId = doctorId,
+            treatmentTypeId = treatmentTypeId,
+            equipmentId = null,
+        )
+        log.debug { "GET slots tenantCode=$tenantCode, clinic=$clinicId, doctor=$doctorId, treatment=$treatmentTypeId, date=$date" }
         val query = SlotQuery(
             clinicId = clinicId,
             doctorId = doctorId,

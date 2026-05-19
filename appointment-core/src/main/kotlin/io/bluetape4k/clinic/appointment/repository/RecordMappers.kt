@@ -14,6 +14,7 @@ import io.bluetape4k.clinic.appointment.model.dto.HolidayRecord
 import io.bluetape4k.clinic.appointment.model.dto.OperatingHoursRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.RescheduleCandidateRecord
+import io.bluetape4k.clinic.appointment.model.dto.TenantGroupRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentEquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -31,11 +32,21 @@ import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import org.jetbrains.exposed.v1.core.ResultRow
 
+fun ResultRow.toTenantGroupRecord() = TenantGroupRecord(
+    id = this[TenantGroups.id].value,
+    tenantCode = this[TenantGroups.tenantCode],
+    displayName = this[TenantGroups.displayName],
+    active = this[TenantGroups.active],
+    createdAt = this[TenantGroups.createdAt],
+)
+
 fun ResultRow.toClinicRecord() = ClinicRecord(
     id = this[Clinics.id].value,
+    tenantGroupId = this[Clinics.tenantGroupId].value,
     name = this[Clinics.name],
     slotDurationMinutes = this[Clinics.slotDurationMinutes],
     timezone = this[Clinics.timezone],
@@ -119,6 +130,7 @@ fun ResultRow.toTreatmentTypeRecord() = TreatmentTypeRecord(
 
 fun ResultRow.toHolidayRecord() = HolidayRecord(
     id = this[Holidays.id].value,
+    tenantGroupId = this[Holidays.tenantGroupId].value,
     holidayDate = this[Holidays.holidayDate],
     name = this[Holidays.name],
     recurring = this[Holidays.recurring],

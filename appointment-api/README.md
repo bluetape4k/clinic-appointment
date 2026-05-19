@@ -2,7 +2,7 @@
 
 [English](README.md) | [한국어](README.ko.md)
 
-Spring Boot 4 REST API server with JWT authentication, Flyway migrations, Swagger UI, and Gatling load tests.
+Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migrations, Swagger UI, and Gatling load tests.
 
 ## Responsibilities
 
@@ -13,21 +13,25 @@ Spring Boot 4 REST API server with JWT authentication, Flyway migrations, Swagge
 
 | Group | Path | Description |
 |------|------|------|
-| Appointments | `GET /api/appointments` | List appointments by period. |
-| Appointments | `POST /api/appointments` | Create an appointment. |
-| Appointments | `PATCH /api/appointments/{id}/status` | Change status, such as Confirm, CheckIn, Complete. |
-| Appointments | `DELETE /api/appointments/{id}` | Cancel an appointment. |
-| Slots | `GET /api/slots` | Query available slots by doctor, date, and treatment type. |
-| Reschedule | `POST /api/reschedule/closure` | Reschedule appointments affected by a temporary clinic closure. |
-| Reschedule | `GET /api/reschedule/candidates` | List reschedule candidates. |
-| Equipment unavailability | `GET /api/equipment-unavailability` | List equipment unavailability windows. |
-| Equipment unavailability | `POST /api/equipment-unavailability` | Register an unavailability window. |
-| Equipment unavailability | `PUT /api/equipment-unavailability/{id}` | Update an unavailability window. |
-| Equipment unavailability | `DELETE /api/equipment-unavailability/{id}` | Delete an unavailability window. |
-| Clinics | `GET /api/clinics`, `/{id}`, `/{id}/operating-hours`, `/{id}/break-times` | Query clinic information. |
-| Doctors | `GET /api/clinics/{id}/doctors`, `/doctors/{id}`, `/{id}/schedules`, `/{id}/absences` | Query doctor information. |
-| Treatment types | `GET /api/clinics/{id}/treatment-types`, `/treatment-types/{id}` | Query treatment types. |
-| Equipment | `GET /api/clinics/{id}/equipments`, `/equipments/{id}` | Query equipment. |
+| Appointments | `GET /api/{tenantCode}/appointments` | List appointments by period. |
+| Appointments | `POST /api/{tenantCode}/appointments` | Create an appointment. |
+| Appointments | `PATCH /api/{tenantCode}/appointments/{id}/status` | Change status, such as Confirm, CheckIn, Complete. |
+| Appointments | `DELETE /api/{tenantCode}/appointments/{id}` | Cancel an appointment. |
+| Slots | `GET /api/{tenantCode}/clinics/{clinicId}/slots` | Query available slots by doctor, date, and treatment type. |
+| Reschedule | `POST /api/{tenantCode}/appointments/{id}/reschedule/closure` | Reschedule appointments affected by a temporary clinic closure. |
+| Reschedule | `GET /api/{tenantCode}/appointments/{id}/reschedule/candidates` | List reschedule candidates. |
+| Reschedule stream | `GET /api/{tenantCode}/reschedule/batch/stream` | Stream batch reschedule progress with SSE. |
+| Equipment unavailability | `GET /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities` | List equipment unavailability windows. |
+| Equipment unavailability | `POST /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities` | Register an unavailability window. |
+| Equipment unavailability | `PUT /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}` | Update an unavailability window. |
+| Equipment unavailability | `DELETE /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}` | Delete an unavailability window. |
+| Clinics | `GET /api/{tenantCode}/clinics`, `/{id}`, `/{id}/operating-hours`, `/{id}/break-times` | Query clinic information. |
+| Doctors | `GET /api/{tenantCode}/clinics/{id}/doctors`, `/doctors/{id}`, `/{id}/schedules`, `/{id}/absences` | Query doctor information. |
+| Treatment types | `GET /api/{tenantCode}/clinics/{id}/treatment-types`, `/treatment-types/{id}` | Query treatment types. |
+| Equipment | `GET /api/{tenantCode}/clinics/{id}/equipments`, `/equipments/{id}` | Query equipment. |
+| Dashboard stats | `GET /api/{tenantCode}/admin/stats/{appointments,doctors,cancellations}` | Query admin dashboard aggregates. |
+
+Use `tenant-default` for the local seed tenant. JWTs must include the requested tenant in the `allowedTenants` claim.
 
 **Swagger UI**: `http://localhost:8080/swagger-ui.html` after the server starts.
 
@@ -42,8 +46,8 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant EVT as EventBus
 
-    FE->>API: POST /api/appointments (Bearer token)
-    API->>SEC: Validate JWT
+    FE->>API: POST /api/{tenantCode}/appointments (Bearer token)
+    API->>SEC: Validate JWT and allowedTenants
     SEC-->>API: SchedulingUserPrincipal
     API->>SLOT: Check slot availability
     SLOT->>DB: Query hours, schedules, conflicts
@@ -61,6 +65,8 @@ Full data flow: [data-flow.md](../docs/requirements/data-flow.md)
 JWT Bearer Token:
 
 - Header: `Authorization: Bearer <token>`
+- Tenant path: `/api/{tenantCode}/...`
+- Tenant claim: `allowedTenants` must contain the URL `tenantCode`
 - Properties: `JwtSecurityProperties` (`scheduling.security.jwt.*`)
 - Filter: `JwtAuthenticationFilter` -> `SchedulingUserPrincipal`
 

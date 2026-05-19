@@ -18,6 +18,7 @@ import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -50,6 +51,7 @@ class SchemaInitConfig {
         ApplicationRunner {
             transaction {
                 SchemaUtils.create(
+                    TenantGroups,
                     Clinics,
                     OperatingHoursTable,
                     ClinicDefaultBreakTimes,

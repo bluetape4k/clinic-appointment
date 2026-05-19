@@ -4,9 +4,12 @@ import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.DoctorSchedules
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -55,6 +58,15 @@ class TestDataSeederConfig {
                 }
 
                 log.info { "스트레스 테스트용 시드 데이터를 생성합니다." }
+
+                if (TenantGroups.selectAll().where { TenantGroups.id eq TenantGroups.DEFAULT_TENANT_GROUP_ID }.empty()) {
+                    TenantGroups.insert {
+                        it[id] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+                        it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
+                        it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
+                        it[active] = true
+                    }
+                }
 
                 val clinicId =
                     Clinics

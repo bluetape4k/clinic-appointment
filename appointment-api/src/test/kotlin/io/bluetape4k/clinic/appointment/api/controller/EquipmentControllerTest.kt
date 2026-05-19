@@ -23,8 +23,8 @@ import org.springframework.web.client.RestClient
 class EquipmentControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
-        private const val CLINICS_BASE_URL = "/api/clinics"
-        private const val EQUIPMENTS_BASE_URL = "/api/equipments"
+        private const val CLINICS_BASE_URL = "/api/tenant-default/clinics"
+        private const val EQUIPMENTS_BASE_URL = "/api/tenant-default/equipments"
     }
 
     @LocalServerPort

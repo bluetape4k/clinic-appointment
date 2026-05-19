@@ -28,8 +28,8 @@ import java.time.LocalTime
 class DoctorControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
-        private const val CLINICS_BASE_URL = "/api/clinics"
-        private const val DOCTORS_BASE_URL = "/api/doctors"
+        private const val CLINICS_BASE_URL = "/api/tenant-default/clinics"
+        private const val DOCTORS_BASE_URL = "/api/tenant-default/doctors"
     }
 
     @LocalServerPort

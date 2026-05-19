@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.api.dto.AppointmentStatsResponse
 import io.bluetape4k.clinic.appointment.api.dto.CancellationStatsResponse
 import io.bluetape4k.clinic.appointment.api.dto.DoctorStatsResponse
 import io.bluetape4k.clinic.appointment.api.service.DashboardStatsService
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.swagger.v3.oas.annotations.Operation
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -31,9 +33,10 @@ import java.time.LocalDate
  */
 @Tag(name = "Admin - Dashboard Stats", description = "Appointment statistics for admin dashboard")
 @RestController
-@RequestMapping("/api/admin/stats")
+@RequestMapping("/api/{tenantCode}/admin/stats")
 class DashboardStatsController(
     private val dashboardStatsService: DashboardStatsService,
+    private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
     companion object : KLogging()
 
@@ -52,12 +55,14 @@ class DashboardStatsController(
     )
     @GetMapping("/appointments")
     fun getAppointmentStats(
+        @PathVariable tenantCode: String,
         @Parameter(description = "Clinic ID") @RequestParam clinicId: Long,
         @Parameter(description = "Start date (ISO)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate?,
         @Parameter(description = "End date (ISO)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate?,
         @Parameter(description = "Status name filter list") @RequestParam(required = false) statuses: List<String>?,
     ): ResponseEntity<ApiResponse<AppointmentStatsResponse>> {
-        log.debug { "GET /api/admin/stats/appointments clinicId=$clinicId from=$from to=$to statuses=$statuses" }
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        log.debug { "GET admin appointment stats tenantCode=$tenantCode, clinicId=$clinicId from=$from to=$to statuses=$statuses" }
         val result = dashboardStatsService.getAppointmentStats(clinicId, from, to, statuses)
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
@@ -77,12 +82,14 @@ class DashboardStatsController(
     )
     @GetMapping("/doctors")
     fun getDoctorStats(
+        @PathVariable tenantCode: String,
         @Parameter(description = "Clinic ID") @RequestParam clinicId: Long,
         @Parameter(description = "Start date (ISO)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate?,
         @Parameter(description = "End date (ISO)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate?,
         @Parameter(description = "Max doctors to return (1..100)") @RequestParam(defaultValue = "20") limit: Int,
     ): ResponseEntity<ApiResponse<DoctorStatsResponse>> {
-        log.debug { "GET /api/admin/stats/doctors clinicId=$clinicId from=$from to=$to limit=$limit" }
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        log.debug { "GET admin doctor stats tenantCode=$tenantCode, clinicId=$clinicId from=$from to=$to limit=$limit" }
         val result = dashboardStatsService.getDoctorStats(clinicId, from, to, limit)
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
@@ -101,11 +108,13 @@ class DashboardStatsController(
     )
     @GetMapping("/cancellations")
     fun getCancellationStats(
+        @PathVariable tenantCode: String,
         @Parameter(description = "Clinic ID") @RequestParam clinicId: Long,
         @Parameter(description = "Start date (ISO)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate?,
         @Parameter(description = "End date (ISO)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate?,
     ): ResponseEntity<ApiResponse<CancellationStatsResponse>> {
-        log.debug { "GET /api/admin/stats/cancellations clinicId=$clinicId from=$from to=$to" }
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        log.debug { "GET admin cancellation stats tenantCode=$tenantCode, clinicId=$clinicId from=$from to=$to" }
         val result = dashboardStatsService.getCancellationStats(clinicId, from, to)
         return ResponseEntity.ok(ApiResponse.ok(result))
     }

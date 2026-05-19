@@ -45,7 +45,7 @@ import java.time.LocalTime
 class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
-        private const val BASE_URL = "/api/appointments"
+        private const val BASE_URL = "/api/tenant-default/appointments"
         private val futureDate: LocalDate = LocalDate.now().plusMonths(6)
     }
 
@@ -225,6 +225,47 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
             .execute()
 
         response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
+    }
+
+    @Test
+    fun `POST - return 404 when doctor belongs to another clinic`() {
+        val otherDoctorId = transaction {
+            val otherClinicId = Clinics.insertAndGetId {
+                it[name] = "Other Clinic"
+                it[slotDurationMinutes] = 30
+                it[timezone] = "Asia/Seoul"
+                it[locale] = "ko-KR"
+                it[maxConcurrentPatients] = 1
+            }.value
+
+            Doctors.insertAndGetId {
+                it[Doctors.clinicId] = otherClinicId
+                it[name] = "Dr. Other"
+                it[specialty] = "General"
+                it[providerType] = "DOCTOR"
+                it[maxConcurrentPatients] = 1
+            }.value
+        }
+        val body = """
+            {
+                "clinicId": $clinicId,
+                "doctorId": $otherDoctorId,
+                "treatmentTypeId": $treatmentTypeId,
+                "patientName": "John Doe",
+                "appointmentDate": "$futureDate",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+
+        val response = client.post()
+            .uri(BASE_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
         response.jsonPath<Boolean>("$.success").shouldBeFalse()
     }
 

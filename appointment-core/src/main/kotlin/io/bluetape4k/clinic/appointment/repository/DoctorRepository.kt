@@ -12,8 +12,10 @@ import io.bluetape4k.clinic.appointment.model.tables.DoctorAbsences
 import io.bluetape4k.clinic.appointment.model.tables.DoctorSchedules
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -32,6 +34,18 @@ class DoctorRepository : LongJdbcRepository<DoctorRecord> {
     override val table = Doctors
     override fun extractId(entity: DoctorRecord): Long = entity.id.requireNotNull("id")
     override fun ResultRow.toEntity(): DoctorRecord = toDoctorRecord()
+
+    /**
+     * Finds a doctor by ID only when the owning clinic belongs to [tenantGroupId].
+     */
+    fun findByIdAndTenant(doctorId: Long, tenantGroupId: Long): DoctorRecord? =
+        Doctors
+            .selectAll()
+            .where {
+                (Doctors.id eq doctorId) and (Doctors.clinicId inSubQuery tenantClinicIds(tenantGroupId))
+            }
+            .firstOrNull()
+            ?.toDoctorRecord()
 
     /**
      * 특정 요일의 의사 운영 스케줄을 조회합니다.

@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.model.tables
 
+import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 
 /**
@@ -9,10 +11,16 @@ import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
  * 슬롯 계산과 운영 시간 설정의 기준이 됩니다.
  */
 object Clinics : LongIdTable("scheduling_clinics") {
+    val tenantGroupId = reference("tenant_group_id", TenantGroups, onDelete = ReferenceOption.RESTRICT)
+        .clientDefault { EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups) }
     val name = varchar("name", 255)
     val slotDurationMinutes = integer("slot_duration_minutes").default(30)
     val timezone = varchar("timezone", 50).default("UTC")
     val locale = varchar("locale", 20).default("ko-KR")
     val maxConcurrentPatients = integer("max_concurrent_patients").default(1)
     val openOnHolidays = bool("open_on_holidays").default(false)
+
+    init {
+        index("idx_clinics_tenant", false, tenantGroupId)
+    }
 }

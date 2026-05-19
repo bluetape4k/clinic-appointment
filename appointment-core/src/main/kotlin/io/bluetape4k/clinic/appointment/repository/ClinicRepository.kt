@@ -14,6 +14,7 @@ import io.bluetape4k.clinic.appointment.model.tables.ClinicDefaultBreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.lessEq
@@ -33,6 +34,18 @@ class ClinicRepository : LongJdbcRepository<ClinicRecord> {
     override val table = Clinics
     override fun extractId(entity: ClinicRecord): Long = entity.id.requireNotNull("id")
     override fun ResultRow.toEntity(): ClinicRecord = toClinicRecord()
+
+    /**
+     * Finds a clinic only when it belongs to [tenantGroupId].
+     */
+    fun findByIdAndTenant(clinicId: Long, tenantGroupId: Long): ClinicRecord? =
+        Clinics
+            .selectAll()
+            .where {
+                (Clinics.id eq clinicId) and (Clinics.tenantGroupId eq tenantGroupId)
+            }
+            .firstOrNull()
+            ?.toClinicRecord()
 
     /**
      * 병원의 특정 요일 운영 시간을 조회합니다.

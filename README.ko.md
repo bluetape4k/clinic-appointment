@@ -24,7 +24,7 @@ Spring Boot API, Angular frontend를 포함한 end-to-end clinic scheduling syst
 - **예약 상태 머신** - PENDING -> REQUESTED -> CONFIRMED -> CHECKED_IN -> IN_PROGRESS -> COMPLETED 전이, 취소/재배정 지원
 - **AI 최적 스케줄링** - Timefold Solver로 의사, 장비, 영업시간 10개 Hard + 2개 Soft 제약을 동시에 만족하는 최적 배치
 - **고가용성 알림** - Redis Leader Election으로 단일 노드 전송 보장, Resilience4j CircuitBreaker/Retry/Bulkhead 적용
-- **REST API** - Spring Boot 4 MVC, JWT 인증, Flyway 마이그레이션, Swagger UI 제공
+- **테넌트 범위 REST API** - `/api/{tenantCode}/...` 경로, JWT tenant 인가, Flyway 마이그레이션, Swagger UI 제공
 - **Angular 18 웹 UI** - 예약 조회/생성/상태 변경 인터페이스
 
 ## 아키텍처
@@ -69,6 +69,8 @@ graph TD
 ./gradlew :appointment-api:bootRun
 # Swagger UI: http://localhost:8080/swagger-ui.html
 ```
+
+Backend 엔드포인트는 tenant-scoped 입니다. 로컬 seed tenant는 `/api/tenant-default/...` 를 사용하며, frontend tenant 라우팅은 후속 단계입니다.
 
 ## 빌드 & 테스트
 

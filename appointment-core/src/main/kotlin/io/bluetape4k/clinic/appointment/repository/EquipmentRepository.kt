@@ -6,7 +6,9 @@ import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.support.requireNotNull
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Repository
@@ -23,6 +25,18 @@ class EquipmentRepository : LongJdbcRepository<EquipmentRecord> {
     override val table = Equipments
     override fun extractId(entity: EquipmentRecord): Long = entity.id.requireNotNull("id")
     override fun ResultRow.toEntity(): EquipmentRecord = toEquipmentRecord()
+
+    /**
+     * Finds equipment by ID only when the owning clinic belongs to [tenantGroupId].
+     */
+    fun findByIdAndTenant(equipmentId: Long, tenantGroupId: Long): EquipmentRecord? =
+        Equipments
+            .selectAll()
+            .where {
+                (Equipments.id eq equipmentId) and (Equipments.clinicId inSubQuery tenantClinicIds(tenantGroupId))
+            }
+            .firstOrNull()
+            ?.toEquipmentRecord()
 
     /**
      * 병원의 장비 목록을 조회합니다.

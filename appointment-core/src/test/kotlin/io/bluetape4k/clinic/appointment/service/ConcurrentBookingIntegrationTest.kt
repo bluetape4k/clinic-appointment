@@ -18,6 +18,7 @@ import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.ProviderType
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentCategory
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
@@ -26,6 +27,7 @@ import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeGreaterThan
 import io.bluetape4k.assertions.shouldBeLessOrEqualTo
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -67,6 +69,7 @@ class ConcurrentBookingIntegrationTest {
             )
             transaction {
                 SchemaUtils.create(
+                    TenantGroups,
                     Holidays,
                     Clinics,
                     ClinicDefaultBreakTimes,
@@ -113,6 +116,8 @@ class ConcurrentBookingIntegrationTest {
             OperatingHoursTable.deleteAll()
             Clinics.deleteAll()
             Holidays.deleteAll()
+            TenantGroups.deleteAll()
+            seedDefaultTenant()
         }
         val (c, d, t) = insertBaseData()
         clinicId = c
@@ -267,6 +272,8 @@ class ConcurrentBookingIntegrationTest {
             OperatingHoursTable.deleteAll()
             Clinics.deleteAll()
             Holidays.deleteAll()
+            TenantGroups.deleteAll()
+            seedDefaultTenant()
         }
         val (c, d, t) = insertBaseData(maxConcurrentPatients = 3)
         clinicId = c
@@ -366,5 +373,14 @@ class ConcurrentBookingIntegrationTest {
             repository.countOverlapping(localDoctorId, MONDAY, slotStart, slotEnd)
         }
         totalInserted shouldBeEqualTo 1
+    }
+
+    private fun seedDefaultTenant() {
+        TenantGroups.insert {
+            it[id] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+            it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
+            it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
+            it[active] = true
+        }
     }
 }

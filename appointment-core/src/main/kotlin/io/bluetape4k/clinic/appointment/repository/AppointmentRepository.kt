@@ -14,6 +14,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.neq
@@ -37,6 +38,19 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
     override val table = Appointments
     override fun extractId(entity: AppointmentRecord): Long = entity.id.requireNotNull("id")
     override fun ResultRow.toEntity(): AppointmentRecord = toAppointmentRecord()
+
+    /**
+     * Finds an appointment by ID only when the owning clinic belongs to [tenantGroupId].
+     */
+    fun findByIdAndTenant(appointmentId: Long, tenantGroupId: Long): AppointmentRecord? =
+        Appointments
+            .selectAll()
+            .where {
+                (Appointments.id eq appointmentId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(tenantGroupId))
+            }
+            .firstOrNull()
+            ?.toAppointmentRecord()
 
     /**
      * 의사와 시간대에 겹치는 예약 개수를 반환합니다.

@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.api.dto.RescheduleProgressEvent
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -33,9 +35,10 @@ import java.time.LocalDate
  */
 @Tag(name = "Reschedule", description = "Appointment rescheduling")
 @RestController
-@RequestMapping("/api/reschedule")
+@RequestMapping("/api/{tenantCode}/reschedule")
 class RescheduleBatchStreamController(
     private val closureRescheduleService: ClosureRescheduleService,
+    private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
     companion object : KLogging()
 
@@ -54,13 +57,15 @@ class RescheduleBatchStreamController(
     )
     @GetMapping("/batch/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun streamBatchReschedule(
+        @PathVariable tenantCode: String,
         @RequestParam clinicId: Long,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) closureDate: LocalDate,
         @Parameter(description = "Number of days to search for alternative slots")
         @RequestParam(defaultValue = "7") searchDays: Int,
     ): SseEmitter {
         searchDays.requireInRange(1, 30, "searchDays")
-        log.debug { "GET /api/reschedule/batch/stream - clinic=$clinicId, date=$closureDate, searchDays=$searchDays" }
+        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        log.debug { "GET reschedule batch stream tenantCode=$tenantCode, clinic=$clinicId, date=$closureDate, searchDays=$searchDays" }
 
         val emitter = SseEmitter(0L) // no timeout — stream length is proportional to affected count
         Thread.ofVirtual().start {
