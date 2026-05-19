@@ -164,11 +164,19 @@ data class DailyAppointmentBucket(
 **Exposed 쿼리 형태**:
 
 ```kotlin
+// Exposed 1.2+: count() 결과를 별칭으로 저장 후 row에서 추출
+val countExpr = Appointments.id.count()
 Appointments
-    .select(Appointments.appointmentDate, Appointments.status, Appointments.id.count())
+    .select(Appointments.appointmentDate, Appointments.status, countExpr)
     .where { (Appointments.clinicId eq clinicId) and (Appointments.appointmentDate.between(from, to)) }
     .groupBy(Appointments.appointmentDate, Appointments.status)
-    .map { ... }
+    .map { row ->
+        Triple(
+            row[Appointments.appointmentDate],
+            row[Appointments.status],  // AppointmentStateColumnType 매핑
+            row[countExpr],
+        )
+    }
 ```
 
 ### 3.3 `GET /api/admin/stats/doctors`
@@ -278,31 +286,70 @@ data class DailyCancellationBucket(
 
 | 경로 | 변경 내용 |
 |------|----------|
-| `appointment-api/.../security/SecurityConfig.kt` | `/api/admin/**` → `hasRole(ADMIN)` 매처 추가 (GET 규칙 **앞**에) |
+| `appointment-api/.../security/SecurityConfig.kt` | `/api/admin/**` → `hasRole(ADMIN)` 매처 추가 (GET 규칙 **앞**에); `authenticationEntryPoint` + `accessDeniedHandler` 등록 (ApiResponse 형태 JSON 반환) |
+| `appointment-api/.../config/GlobalExceptionHandler.kt` | `@ExceptionHandler(MethodArgumentTypeMismatchException::class)` → 400 핸들러 추가 |
 | `appointment-api/.../config/ServiceConfig.kt` | `AppointmentStatsRepository`, `DashboardStatsService` Bean 등록 |
+
+> **SecurityConfig 401/403 envelope**: Spring Security의 `AccessDeniedException`/`AuthenticationException`은 필터 체인에서 발생하므로 `@RestControllerAdvice`가 처리하지 못한다. `SecurityConfig`에 아래를 추가해야 `ApiResponse` 형태 JSON이 반환된다:
+> ```kotlin
+> exceptionHandling {
+>     authenticationEntryPoint { _, response, _ ->
+>         response.status = 401
+>         response.contentType = "application/json"
+>         response.writer.write("""{"success":false,"data":null,"error":"Unauthorized"}""")
+>     }
+>     accessDeniedHandler { _, response, _ ->
+>         response.status = 403
+>         response.contentType = "application/json"
+>         response.writer.write("""{"success":false,"data":null,"error":"Forbidden"}""")
+>     }
+> }
+> ```
+>
+> **MethodArgumentTypeMismatchException**: `?from=not-a-date` 같은 날짜 파싱 실패는 현재 `GlobalExceptionHandler`에서 처리되지 않아 500이 반환된다. `GlobalExceptionHandler`에 `MethodArgumentTypeMismatchException::class` 핸들러를 추가해야 §3.5의 400 계약을 충족한다.
 
 ### 4.3 인터페이스 스케치
 
 ```kotlin
 // AppointmentStatsRepository.kt
+
+/** 의사별 상태-카운트 행. Triple<Long, AppointmentState, Long> 사용 금지 — 동일 타입 위치 혼동 위험 (CLAUDE.md 규칙). */
+data class DoctorStatusCount(
+    val doctorId: Long,
+    val status: AppointmentState,
+    val count: Long,
+)
+
 class AppointmentStatsRepository {
     companion object : KLogging()
 
-    /** 일자별·상태별 카운트. 호출자는 transaction 내부에서 호출. */
+    /**
+     * 일자별·상태별 카운트. 호출자는 transaction 내부에서 호출.
+     *
+     * @return (date, status, count) 쌍 — date/count는 다른 타입이므로 Triple 허용
+     */
     fun countByDateAndStatus(
         clinicId: Long,
         dateRange: ClosedRange<LocalDate>,
         statuses: List<AppointmentState>? = null,
     ): List<Triple<LocalDate, AppointmentState, Long>>
 
-    /** 의사별 상태별 카운트. */
+    /**
+     * 의사별 상태별 카운트. 결과는 **총 예약 수 내림차순** 정렬 (`orderBy(count DESC) LIMIT limit`).
+     *
+     * doctorId와 count가 모두 Long이므로 named class DoctorStatusCount 사용 (CLAUDE.md: 동일 타입 파라미터 규칙).
+     */
     fun countByDoctorAndStatus(
         clinicId: Long,
         dateRange: ClosedRange<LocalDate>,
         limit: Int = 20,
-    ): List<Triple<Long, AppointmentState, Long>>  // doctorId, status, count
+    ): List<DoctorStatusCount>
 
-    /** 일자별 취소/노쇼/재배정 카운트. */
+    /**
+     * 일자별 취소/노쇼/재배정 카운트. 호출자는 transaction 내부에서 호출.
+     *
+     * @return (date, status, count) 쌍
+     */
     fun countCancellationsByDate(
         clinicId: Long,
         dateRange: ClosedRange<LocalDate>,
@@ -323,17 +370,21 @@ class DashboardStatsService(
         require(!from.isAfter(to)) { "from must be on or before to" }
         require(ChronoUnit.DAYS.between(from, to) <= 366) { "period exceeds 366 days" }
 
-        // P1: AppointmentState.fromName()은 미지원 상태명에서 IllegalArgumentException 발생
-        // (실제 API: `else -> throw IllegalArgumentException("Unknown appointment status: $name")`)
-        // Service는 이를 잡아 ApiResponse.error() 400으로 변환
+        // fromName() throws IAE on unknown name → GlobalExceptionHandler → 400 (자동)
         val statusEnums = statuses?.map { AppointmentState.fromName(it) }
-        // 호출부에서 try-catch로 IllegalArgumentException → 400 변환 처리
         return transaction {
             val rows = statsRepository.countByDateAndStatus(clinicId, from..to, statusEnums)
             // ... bucket 조립
         }
     }
-    // 나머지 2개 메서드 유사
+
+    fun getDoctorStats(clinicId: Long, from: LocalDate, to: LocalDate, limit: Int): DoctorStatsResponse {
+        clinicId.requirePositive("clinicId")
+        require(!from.isAfter(to)) { "from must be on or before to" }
+        require(ChronoUnit.DAYS.between(from, to) <= 366) { "period exceeds 366 days" }
+        require(limit in 1..100) { "limit must be between 1 and 100" }
+        // ... 동일 패턴
+    }
 }
 ```
 
@@ -461,7 +512,7 @@ Component ngOnInit (or afterNextRender)
 |------|------|--------|
 | Repository (실제 H2) | `AppointmentStatsRepository` | 시드 데이터 → `groupBy` 결과 검증, 빈 결과, 날짜 경계, 상태 필터 |
 | Service (MockK) | `DashboardStatsService` | 파라미터 검증, 비율 계산(분모 0 포함), 기본 날짜 범위, 미지원 상태명 → 400 |
-| Controller (MockMvc) | `DashboardStatsController` | ADMIN 200, STAFF 403, DOCTOR 403, 토큰 없음 401, from>to 400, 기간 초과 400, JSON 직렬화 |
+| Controller (MockMvc) | `DashboardStatsController` | ADMIN 200, STAFF 403, DOCTOR 403, 토큰 없음 401, from>to 400, 기간 초과 400, `?from=not-a-date` 400, JSON 직렬화 |
 | SecurityConfig 통합 | 매처 순서 | ADMIN 200, STAFF 403, DOCTOR 403, anon 401, GET `/api/admin/...`이 GET `/api/**`보다 먼저 매칭 |
 
 - H2: 기존 패턴 따름 (`SchemaUtils.createMissingTablesAndColumns`, `@BeforeEach deleteAll`)
@@ -590,9 +641,26 @@ it('컴포넌트 파괴 시 Chart 인스턴스를 destroy한다', () => {
 5. [P1-Performance] idx_appointments_doctor_date 멀티클리닉 갭 — §3.3 주의 노트 추가
 6. [P1-Arch] AppointmentState.fromName() — §4.3 실제 API 확인 후 정확한 사용법 명세
 
-### Round 2 목표
+### Round 2 (2026-05-19)
 
-Claude Code 6-tier advisor + Phase 3 Codex 리뷰 후 P0/P1 = 0 달성 여부 확인.
+| Reviewer | P0 | P1 | P2 | P3 |
+|----------|----|----|----|----|
+| Claude Code 6-tier advisor | 0 | 1 | 7 | 3 |
+| **통합 합계** | **0** | **1** | **7** | **3** |
+
+**Round 2 P1 적용 항목**:
+1. [P1-T4] `Triple<Long, AppointmentState, Long>` → `DoctorStatusCount` named data class (§4.3)
+
+**Round 2 P2 적용 항목** (spec에 반영):
+1. [P2-T1/T2] SecurityConfig에 `accessDeniedHandler`/`authenticationEntryPoint` 등록 → §4.2 추가
+2. [P2-T2/T5] `MethodArgumentTypeMismatchException` → 400 핸들러 추가 → §4.2 + §7.1 test case 추가
+3. [P2-T4] `countByDoctorAndStatus` `orderBy(count DESC)` 계약 명시 → §4.3
+4. [P2-T4] `limit in 1..100` 검증 → §4.3 getDoctorStats 스케치
+5. [P2-T6] Exposed `countExpr` alias 패턴 명시 → §3.2
+
+### Round 3 목표
+
+Phase 3 독립 리뷰 후 P0/P1 = 0 달성 여부 확인.
 
 ---
 
