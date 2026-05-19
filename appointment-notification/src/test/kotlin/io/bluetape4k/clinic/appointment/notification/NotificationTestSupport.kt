@@ -4,11 +4,16 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.LocalDate
 import java.time.LocalTime
@@ -26,12 +31,14 @@ object NotificationTestSupport {
     fun createSchema() {
         transaction {
             SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
                 Clinics,
                 Doctors,
                 TreatmentTypes,
                 Appointments,
                 NotificationHistoryTable,
             )
+            seedDefaultTenantIfMissing()
         }
     }
 
@@ -72,6 +79,7 @@ object NotificationTestSupport {
     }
 
     private fun insertSampleClinic(): Long = transaction {
+        seedDefaultTenantIfMissing()
         Clinics.insertAndGetId {
             it[Clinics.name] = "테스트 클리닉"
             it[Clinics.slotDurationMinutes] = 30
@@ -92,5 +100,28 @@ object NotificationTestSupport {
             it[TreatmentTypes.name] = "일반진료"
             it[TreatmentTypes.defaultDurationMinutes] = 30
         }.value
+    }
+
+    fun seedDefaultTenantIfMissing() {
+        val exists = TenantGroups
+            .selectAll()
+            .where {
+                TenantGroups.id eq EntityID(
+                    TenantGroups.DEFAULT_TENANT_GROUP_ID,
+                    TenantGroups,
+                )
+            }
+            .count() > 0
+
+        if (exists) {
+            return
+        }
+
+        TenantGroups.insert {
+            it[id] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+            it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
+            it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
+            it[active] = true
+        }
     }
 }
