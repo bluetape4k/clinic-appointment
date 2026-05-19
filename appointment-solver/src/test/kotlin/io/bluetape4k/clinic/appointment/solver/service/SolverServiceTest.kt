@@ -15,6 +15,7 @@ import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.ProviderType
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
@@ -23,6 +24,7 @@ import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldHaveSize
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -58,6 +60,7 @@ class SolverServiceTest {
         )
         transaction {
             SchemaUtils.create(
+                TenantGroups,
                 Holidays,
                 Clinics,
                 ClinicDefaultBreakTimes,
@@ -97,6 +100,7 @@ class SolverServiceTest {
             OperatingHoursTable.deleteAll()
             Clinics.deleteAll()
             Holidays.deleteAll()
+            TenantGroups.deleteAll()
         }
     }
 
@@ -112,6 +116,7 @@ class SolverServiceTest {
     )
 
     private fun insertBaseData(maxConcurrentPatients: Int = 1): BaseData = transaction {
+        seedDefaultTenant()
         val clinicId = Clinics.insertAndGetId {
             it[name] = "Test Clinic"
             it[slotDurationMinutes] = 30
@@ -167,6 +172,15 @@ class SolverServiceTest {
         }.value
 
         BaseData(clinicId, doctorId1, doctorId2, treatmentTypeId)
+    }
+
+    private fun seedDefaultTenant() {
+        TenantGroups.insert {
+            it[id] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+            it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
+            it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
+            it[active] = true
+        }
     }
 
     @Test

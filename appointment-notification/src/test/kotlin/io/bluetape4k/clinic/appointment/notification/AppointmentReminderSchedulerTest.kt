@@ -2,11 +2,11 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
-import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
+import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.mockk.clearMocks
 import io.mockk.mockk
 import io.mockk.verify
@@ -92,6 +92,7 @@ class AppointmentReminderSchedulerTest {
 
     private fun insertConfirmedAppointment(date: LocalDate): AppointmentRecord =
         transaction {
+            NotificationTestSupport.seedDefaultTenantIfMissing()
             val clinicId = Clinics.insertAndGetId {
                 it[name] = "테스트 클리닉"
                 it[slotDurationMinutes] = 30
