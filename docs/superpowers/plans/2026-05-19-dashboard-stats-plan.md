@@ -25,6 +25,8 @@
 - Kotlin `@Configuration(proxyBeanMethods = false)` 항상 명시.
 - `runCatching` 금지 (suspend 호출 영역). 단순 IAE는 `GlobalExceptionHandler`로 위임.
 
+> **[F1] 커밋 경계 주의**: 각 태스크의 RED/GREEN 단계는 하나의 커밋 단위이다. RED(컴파일 실패/테스트 실패)를 독립 커밋으로 push하지 말 것 — RED는 동일 태스크 내 구현 시작 전 확인 단계이며, GREEN(PASS)에서만 커밋한다. Phase 단위 중간 커밋(예: T2 완료 후, T5 완료 후, T10 완료 후, T18 완료 후)을 권장한다.
+
 ---
 
 ## Phase 1 — 백엔드
@@ -37,8 +39,15 @@
   - `appointment-core/src/test/resources/logback-test.xml` (없으면 신규)
 - **dependencies**: 없음
 - **작업**:
-  - JUnit5 + bluetape4k-assertions + H2 in-memory. `@BeforeEach`에서 `SchemaUtils.createMissingTablesAndColumns(...)` + `Appointments.deleteAll()`.
-  - 시나리오 (실패 상태): `countByDateAndStatus` — 날짜 경계/상태 필터/빈 결과/clinicId 분리 검증; `countByDoctorAndStatus` — 의사 3명 × 상태 다종 시드로 모든 (doctorId, status, count) 조합 반환 검증, **SQL LIMIT/orderBy 미포함을 결과 행 수로 단언**; `countCancellationsByDate` — CANCELLED/NO_SHOW/RESCHEDULED만 카운트.
+  - **[F2] AbstractExposedTest 패턴** — `EquipmentUnavailabilityRepositoryTest.kt`를 canonical 참조로 사용.
+    - `AppointmentStatsRepositoryTest : AbstractExposedTest()` 상속.
+    - 각 테스트는 `withTables(testDB, Clinics, Doctors, Appointments) { ... }` 블록 안에서 실행.
+    - `@ParameterizedTest @MethodSource(ENABLE_DIALECTS_METHOD)` per test.
+    - **`@BeforeEach SchemaUtils + deleteAll` 패턴 사용 금지** (CLAUDE.md Module Gotchas와 달리 appointment-core 실제 패턴은 AbstractExposedTest이다).
+  - 시나리오 (실패 상태):
+    - `countByDateAndStatus` — 날짜 경계/상태 필터/빈 결과/clinicId 분리 검증.
+    - `countByDoctorAndStatus` — 의사 3명 × 상태 다종 시드로 모든 (doctorId, status, count) 조합 반환 검증; **SQL LIMIT/orderBy 미포함을 결과 행 수로 단언**.
+    - (**[F3]** `countCancellationsByDate` 테스트 제외 — 해당 메서드는 리포지토리에 존재하지 않는다; 취소 집계는 Service가 `countByDateAndStatus`로 처리).
   - 백틱 한국어 테스트명, AAA 패턴.
 - **DoD**: 컴파일 후 메서드 부재로 실패 (RED 확인).
 
@@ -52,10 +61,10 @@
 - **작업**:
   - 패키지 `io.bluetape4k.clinic.appointment.repository`, `companion object : KLogging()`.
   - `DoctorStatusCount(doctorId: Long, status: AppointmentState, count: Long) : Serializable` — 동일 파일 선언, KDoc에 Triple 금지 사유 명시 (동일 타입 Long 두 개 위치 혼동 위험, CLAUDE.md 규칙).
-  - 세 메서드 구현 (스펙 §4.3 시그니처 그대로):
+  - **[F3] 두 메서드만 구현** (`countCancellationsByDate` 삭제 — dead code):
     - `countByDateAndStatus(clinicId, dateRange, statuses?) : List<Triple<LocalDate, AppointmentState, Long>>` — date/status는 다른 타입이므로 Triple 허용.
     - `countByDoctorAndStatus(clinicId, dateRange) : List<DoctorStatusCount>` — **SQL LIMIT/orderBy 없음** (Service가 Kotlin groupBy + sortedByDescending + take(limit)로 의사 단위 상위 N 선별; SQL LIMIT은 (doctorId, status) 행 수에 적용되어 의미가 다름 — KDoc 명시).
-    - `countCancellationsByDate(clinicId, dateRange) : List<Triple<LocalDate, AppointmentState, Long>>` — CANCELLED/NO_SHOW/RESCHEDULED `inList` 필터.
+  - `countCancellationsByDate` 메서드를 별도로 추가하지 않는다. 취소 집계는 Service T5에서 `countByDateAndStatus(clinicId, dateRange, listOf(CANCELLED, NO_SHOW, RESCHEDULED, COMPLETED))` 호출로 처리한다.
   - Exposed 1.2 패턴: `val countExpr = Appointments.id.count()` alias 후 `row[countExpr]` 추출.
   - 모든 메서드 KDoc: "호출자는 transaction {} 내부에서 호출" 명시 + 영문 `## Behavior / Contract`.
 - **DoD**: T1 PASS (GREEN); `./gradlew :appointment-core:test --tests AppointmentStatsRepositoryTest` PASS.
@@ -78,15 +87,18 @@
 
 ---
 
-### T4: DashboardStatsService 단위 테스트 (RED)
+### T4: DashboardStatsService 통합 테스트 (RED)
 - **complexity**: medium
 - **files**:
   - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/service/DashboardStatsServiceTest.kt` (신규)
 - **dependencies**: T2, T3
 - **작업**:
-  - JUnit5 + MockK. Repository는 `mockk()` 주입. H2 `Database.connect`를 `@BeforeAll`에서 1회 연결해 `transaction {}` 동작.
+  - **[F4] 통합 테스트 접근법** — MockK + `transaction {}` 비호환 문제 해결을 위해 실제 H2 Repository 사용.
+    - `DashboardStatsServiceTest`는 `AbstractExposedTest()`를 상속하고 `withTables(testDB, Clinics, Doctors, Appointments) { ... }` 블록 내에서 실제 `AppointmentStatsRepository()` 인스턴스를 주입한다.
+    - Service 검증 로직만 MockK로 분리할 수 없으므로 Service + Repository 통합 단위 테스트로 작성 (Repository 동작은 T1/T2에서 이미 보장).
   - 시나리오:
     - `getAppointmentStats`: 정상 — bucket 조립/totals 계산 정확성.
+    - **[F5] 빈 clinic**: `clinicId=999` (데이터 없음) → `data.buckets.isEmpty()`, `data.totals` 모두 0L, HTTP 200 (에러 아님).
     - `from > to` → `IllegalArgumentException("from must be on or before to")`.
     - 367일 범위 → `IllegalArgumentException("period exceeds 366 days")`.
     - `clinicId <= 0` → `IllegalArgumentException` (bluetape4k `requirePositive`).
@@ -131,10 +143,11 @@
   - `@WebMvcTest(DashboardStatsController::class)` + `@MockkBean DashboardStatsService`.
   - 시나리오:
     - 200 — `/api/admin/stats/appointments?clinicId=1` → `success: true`, `data.totals` 키 존재.
+    - **[F5] 200 — `?clinicId=999` (데이터 없음)** → `success: true`, `data.buckets` 빈 배열 (에러 응답 아님).
     - 200 — `?statuses=CONFIRMED&statuses=CANCELLED` 반복 파라미터 → Service에 `listOf("CONFIRMED","CANCELLED")` 전달 verify.
     - 200 — `/doctors?clinicId=1&limit=5` → DoctorStatsResponse JSON.
     - 200 — `/cancellations?clinicId=1` → `cancellationRate` double 직렬화.
-    - 400 — `?from=not-a-date` (T8 핸들러 의존).
+    - **[F6] `?from=not-a-date → 400` 케이스는 이 태스크에서 제외** — T8 RED 단계에서 검증 (T8이 T6보다 먼저 작성되어야 해당 케이스가 통과됨).
     - 400 — Service IAE(`from > to`) → `ApiResponse.error("from must be on or before to")`.
     - 기본 기간 미지정 시 Service에 null 전달 verify.
 - **DoD**: Controller 미존재로 컴파일 실패 (RED).
@@ -164,12 +177,15 @@
 - **complexity**: low
 - **files**:
   - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/GlobalExceptionHandler.kt` (수정)
+  - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/GlobalExceptionHandlerTypeMismatchTest.kt` (신규)
 - **dependencies**: 없음
 - **작업**:
-  - `@ExceptionHandler(MethodArgumentTypeMismatchException::class)` 추가 → 400 + `ApiResponse.error("Invalid parameter: ${ex.name}")`.
+  - **[F6] RED 단계**: `GlobalExceptionHandlerTypeMismatchTest` 작성 — `@WebMvcTest(DashboardStatsController::class)` + `@MockkBean DashboardStatsService`.
+    - `GET /api/admin/stats/appointments?clinicId=1&from=not-a-date` → 400 + `{"success":false,"error":"Invalid parameter: from"}` 단언.
+    - 컴파일은 되지만 핸들러 미존재로 실패 (RED 확인).
+  - **GREEN 단계**: `@ExceptionHandler(MethodArgumentTypeMismatchException::class)` 추가 → 400 + `ApiResponse.error("Invalid parameter: ${ex.name}")`.
   - `log.warn(ex) { "Type mismatch: name=${ex.name}, requiredType=${ex.requiredType?.simpleName}" }`.
-  - 테스트: `DashboardStatsControllerTest` T6의 `?from=not-a-date→400` 케이스로 검증.
-- **DoD**: T6 400 케이스 PASS.
+- **DoD**: `GlobalExceptionHandlerTypeMismatchTest` PASS (GREEN); T6의 400 케이스도 이 시점 이후 PASS.
 
 ---
 
@@ -189,9 +205,14 @@
 - **complexity**: high
 - **files**:
   - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/security/SecurityConfig.kt` (수정)
-- **dependencies**: T9
+- **dependencies**: T7
 - **작업**:
-  - 생성자에 `objectMapper: ObjectMapper` 추가 (injection).
+  - **[F7] 의존성 수정**: T9(ServiceConfig)는 이 태스크의 전제 조건이 아님 — T7(Controller 구현)이 완료되면 SecurityConfig 매처 추가가 가능하다. T9는 별도로 진행.
+  - **[F7] ObjectMapper 주입 방식**: 기존 `SecurityConfig`는 zero-arg 생성자 + `@Bean` 메서드 파라미터 패턴을 사용한다. 따라서 생성자에 ObjectMapper를 추가하지 말고, `filterChain(@Bean 메서드)` 파라미터로 `objectMapper: ObjectMapper` 를 받는다:
+    ```kotlin
+    @Bean
+    fun filterChain(http: HttpSecurity, objectMapper: ObjectMapper): SecurityFilterChain { ... }
+    ```
   - `authorizeHttpRequests` 블록: 기존 `permitAll` 다음, `GET /api/**` 매처 **앞**에 `.requestMatchers("/api/admin/**").hasRole(SchedulingRole.ADMIN)` 추가. 순서 주석 필수.
   - `.exceptionHandling { ... }` 블록:
     - `authenticationEntryPoint` → 401 + `objectMapper.writeValueAsString(ApiResponse.error<Nothing>("Unauthorized"))`.
@@ -261,7 +282,10 @@
     vi.mock('chart.js', () => ({ Chart: vi.fn().mockImplementation(() => ({ destroy: destroyFn, update: updateFn, data: { labels: [], datasets: [] } })), registerables: [] }));
     ```
     시나리오: 데이터 주입 → Chart 생성자 호출; 데이터 변경 → `update()` 호출; `ngOnDestroy()` → `destroyFn` 호출.
-  - **GREEN**: standalone, `input.required<AppointmentStatsResponse | null>()`, `@ViewChild('canvas')` ElementRef, `afterNextRender(() => initChart())`, `effect(() => rebuild())`, `ngOnDestroy: chart?.destroy()`.
+  - **[F9] 라이프사이클 방식 확정 — `ngOnInit` 사용**:
+    - `afterNextRender`는 TestBed에서 동기적으로 실행되지 않아 `chart?.destroy()` 단언이 실패한다.
+    - 대신 `ngOnInit`에서 차트를 초기화하고, `TestBed.flushEffects()` + `fixture.destroy()`로 `ngOnDestroy` 정리를 검증한다.
+  - **GREEN**: standalone, `input.required<AppointmentStatsResponse | null>()`, `@ViewChild('canvas')` ElementRef, `ngOnInit() { initChart(); }`, `effect(() => updateChart())`, `ngOnDestroy: chart?.destroy()`.
   - Chart.js `type: 'bar'`, stacked x/y, 상태별 색상 const map.
 - **DoD**: vitest PASS; `ng build` PASS.
 
@@ -274,7 +298,7 @@
   - `frontend/appointment-frontend/src/app/features/management/dashboard/charts/doctor-workload-chart.component.ts` (신규)
 - **dependencies**: T14
 - **작업**:
-  - T14 동일 라이프사이클 패턴.
+  - **[F9]** T14와 동일하게 `ngOnInit` 기반 라이프사이클 패턴 적용 (`afterNextRender` 금지).
   - inputs: `data = input.required<DoctorStatsResponse | null>()`, `doctorNameLookup = input<(id: number) => string>()`.
   - Chart.js `type: 'bar'` + `options: { indexAxis: 'y' }` (수평 막대).
   - datasets: totalAppointments (회색) + completed (녹색).
@@ -289,7 +313,7 @@
   - `frontend/appointment-frontend/src/app/features/management/dashboard/charts/cancellation-trend-chart.component.ts` (신규)
 - **dependencies**: T14
 - **작업**:
-  - T14 동일 라이프사이클.
+  - **[F9]** T14와 동일하게 `ngOnInit` 기반 라이프사이클 패턴 적용 (`afterNextRender` 금지).
   - Chart.js `type: 'line'` 멀티시리즈: cancelled(빨강), noShow(주황), rescheduled(파랑).
   - KPI 카드: `cancellationRate`, `noShowRate` — Material `<mat-card>`, `(rate * 100).toFixed(1) + '%'`.
 - **DoD**: vitest PASS.
@@ -332,14 +356,26 @@
 - **complexity**: high
 - **files**:
   - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/security/SecurityConfigDashboardTest.kt` (신규)
+  - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/security/SecurityTestConfig.kt` (신규 — 보안 프로파일 활성화용)
 - **dependencies**: T7, T10
 - **작업**:
-  - `@SpringBootTest(webEnvironment=MOCK)` + `@AutoConfigureMockMvc` + prod 프로파일 또는 SecurityConfig 직접 import.
+  - **[F8] 구체적 보안 우회 전략**:
+    - `SecurityTestConfig.kt`: `@TestConfiguration` + `@Profile("security-test")` 클래스로 `NoOpSecurityConfig`를 **제외**하고 실제 `SecurityConfig`를 **활성화**한다.
+      ```kotlin
+      @TestConfiguration
+      class SecurityTestConfig {
+          // NoOpSecurityConfig는 @Profile("dev","test") — "security-test" 프로파일에서 비활성
+          // 실제 SecurityConfig는 @Profile("!dev & !test") — "security-test"에서 활성
+      }
+      ```
+    - 테스트 클래스: `@SpringBootTest(webEnvironment=MOCK)` + `@AutoConfigureMockMvc` + `@ActiveProfiles("security-test")`.
+    - JWT 토큰 생성: 기존 프로젝트의 JWT 서명 유틸리티(`JwtTokenProvider` 등)를 사용해 테스트 토큰 발급. 없으면 `JwtTokenProvider`에서 `@Autowired`로 직접 호출. ROLE_ADMIN / ROLE_STAFF / ROLE_DOCTOR 역할별 토큰 발급.
+    - `MockMvc` 요청 헤더: `Authorization: Bearer <token>`.
   - 시나리오 (스펙 §5.2):
-    - ADMIN → 200.
-    - STAFF → **403** + body `{"success":false,"data":null,"error":"Forbidden"}`.
-    - DOCTOR → 403.
-    - 토큰 없음 → **401** + body `{"success":false,"data":null,"error":"Unauthorized"}`.
+    - ADMIN 토큰 → 200.
+    - STAFF 토큰 → **403** + `{"success":false,"data":null,"error":"Forbidden"}` JSON 단언.
+    - DOCTOR 토큰 → 403.
+    - 토큰 없음 → **401** + `{"success":false,"data":null,"error":"Unauthorized"}` JSON 단언.
     - **매처 순서 회귀**: STAFF가 `GET /api/admin/stats/appointments` 호출 시 200이 아닌 403 — `/api/admin/**`이 `GET /api/**`보다 앞에 있음 검증.
 - **DoD**: `./gradlew :appointment-api:test --tests SecurityConfigDashboardTest` PASS.
 
@@ -370,26 +406,46 @@
 
 ### T21: KDoc·JSDoc 영문 검증 및 보강
 - **complexity**: low
-- **files**: T2/T3/T5/T7 신규 Kotlin 파일; T13/T14/T15/T16/T17 신규 TypeScript 파일
+- **files**:
+  - `appointment-core/src/main/kotlin/.../repository/AppointmentStatsRepository.kt` (KDoc 보강)
+  - `appointment-core/src/main/kotlin/.../repository/DoctorStatusCount.kt` 또는 동일 파일 내 (KDoc)
+  - `appointment-api/src/main/kotlin/.../dto/AppointmentStatsResponse.kt` (KDoc + @Schema)
+  - `appointment-api/src/main/kotlin/.../dto/DoctorStatsResponse.kt` (KDoc + @Schema)
+  - `appointment-api/src/main/kotlin/.../dto/CancellationStatsResponse.kt` (KDoc + @Schema)
+  - `appointment-api/src/main/kotlin/.../service/DashboardStatsService.kt` (KDoc)
+  - `appointment-api/src/main/kotlin/.../controller/DashboardStatsController.kt` (KDoc + @Operation)
+  - `frontend/.../services/dashboard-stats.service.ts` (JSDoc)
+  - `frontend/.../charts/appointment-trend-chart.component.ts` (JSDoc)
+  - `frontend/.../charts/doctor-workload-chart.component.ts` (JSDoc)
+  - `frontend/.../charts/cancellation-trend-chart.component.ts` (JSDoc)
+  - `frontend/.../dashboard-charts.component.ts` (JSDoc)
 - **dependencies**: T18, T20
 - **작업**:
-  - 모든 신규 public 클래스/함수: 영문 one-line summary + `## Behavior / Contract`.
-  - `ide_diagnostics` deprecation 0 확인.
-- **DoD**: 모든 신규 public symbol 영문 KDoc; IDE 에러 0.
+  - **[F11]** 모든 신규 public 클래스/함수: 영문 one-line summary + `## Behavior / Contract` 섹션.
+  - Kotlin IDE 진단 단계:
+    1. `./gradlew :appointment-core:compileKotlin :appointment-api:compileKotlin` — 에러 0 확인.
+    2. `ide_diagnostics` (또는 `./gradlew :appointment-api:build`) — unresolved deprecation 0 확인.
+    3. `ide_optimize_imports` 실행 후 재확인.
+  - TypeScript: `npx tsc --noEmit` — 타입 오류 0 확인.
+- **DoD**: 모든 신규 public symbol 영문 KDoc/JSDoc 완료; Kotlin IDE 에러 0; `tsc --noEmit` PASS.
 
 ---
 
 ### T22: README 업데이트 (한/영 동시)
 - **complexity**: low
 - **files**:
-  - `README.md` (수정)
-  - `README.ko.md` (수정)
+  - `README.md` (수정 — 영문)
+  - `README.ko.md` (수정 — 한국어)
 - **dependencies**: T18
 - **작업**:
-  - 두 파일 구조 동일 유지 (clinic-appointment CLAUDE.md 규칙).
-  - 섹션 추가: 3 API endpoints + ADMIN role + Mermaid 아키텍처 다이어그램.
-  - curl 예시 포함.
-- **DoD**: 두 파일 갱신; 구조 정렬 유지.
+  - **[F12] 두 파일 명시적 작업**:
+    - `README.md`: 영문 섹션 추가 — "Dashboard Stats API" 섹션에 3개 엔드포인트 + ADMIN 역할 요건 + Mermaid 아키텍처 다이어그램 + curl 예시.
+    - `README.ko.md`: 동일 내용을 한국어로 추가 — "대시보드 통계 API" 섹션.
+    - 두 파일의 **섹션 순서, 헤딩 레벨, 다이어그램** 구조가 정렬됨을 단언.
+  - Mermaid 다이어그램: Angular `DashboardChartsComponent` → HTTP → Spring Controller → Service → Repository → DB 흐름.
+  - curl 예시 (`Authorization: Bearer <ADMIN_TOKEN>` 포함).
+  - **구조 정렬 DoD**: `README.md`와 `README.ko.md`의 `##` 섹션 헤딩 목록이 1:1 대응 확인.
+- **DoD**: 두 파일 모두 갱신; 섹션 구조 정렬 완료.
 
 ---
 
@@ -428,10 +484,28 @@
 
 ---
 
-### T25: PR 생성 (develop 대상)
+### T25: docs/lessons 작성 + 커밋 (PR 생성 전 필수)
+- **complexity**: low
+- **files**:
+  - `docs/lessons/2026-05-19-dashboard-stats.md` (신규)
+- **dependencies**: T24
+- **작업**:
+  - **[F10] bluetape4k-workflow Step 7 필수 단계** — PR 생성 전 lessons 커밋.
+  - 문서 내용:
+    - 설계 결정 근거: `countCancellationsByDate` 삭제(dead code) + `countByDateAndStatus` 단일화 이유.
+    - MockK + Exposed `transaction {}` 비호환 교훈 — Service 테스트를 `AbstractExposedTest` 통합 테스트로 전환한 이유.
+    - 보안 프로파일 하네스 — `@ActiveProfiles("security-test")`로 `NoOpSecurityConfig` 우회 + 실제 `SecurityConfig` 활성화 패턴.
+    - `afterNextRender` vs `ngOnInit` — TestBed 동기 실행 불가로 `ngOnInit` 선택.
+    - SQL LIMIT 의미 차이 — `(doctorId, status)` 행 기준 LIMIT vs 의사 단위 상위 N; Kotlin 집계로 해결.
+  - `git add docs/lessons/2026-05-19-dashboard-stats.md && git commit -m "docs: add lessons from dashboard stats implementation"`.
+- **DoD**: lessons 파일 커밋됨; `git log --oneline -1` 확인.
+
+---
+
+### T26: PR 생성 (develop 대상)
 - **complexity**: low
 - **files**: 없음
-- **dependencies**: T24
+- **dependencies**: T25
 - **작업**:
   - 브랜치 `feat/issue-44-45-dashboard` → develop.
   - PR 제목: `feat: dashboard stats API + Angular charts (closes #44, closes #45)`.
@@ -445,8 +519,9 @@
 ```
 T1 → T2 → T4 → T5 → T6 → T7
           T3 ────────────→ T6
-          T8 ──────────────→ T6 (400 case)
-T2, T5 → T9 → T10
+          T8 ──────────────→ T6 (400 case RED doD)
+T2, T5 → T9
+T7 → T10                         [F7: T10 depends on T7, not T9]
 T7, T10 → T19
 T7, T8 → T20
 
@@ -455,7 +530,7 @@ T12 → T14, T15, T16
 T13, T14, T15, T16 → T17 → T18
 
 T18 → T22 → T23
-T19, T20, T21, T22, T23 → T24 → T25
+T19, T20, T21, T22, T23 → T24 → T25 → T26
 T18, T20 → T21
 ```
 
@@ -463,25 +538,26 @@ T18, T20 → T21
 
 ## 검증 매트릭스
 
-- [ ] T1–T2: AppointmentStatsRepository H2 테스트 PASS (SQL LIMIT 부재 포함)
+- [ ] T1–T2: AppointmentStatsRepository AbstractExposedTest + withTables 패턴 PASS (SQL LIMIT 부재 포함); countCancellationsByDate 없음 확인
 - [ ] T3: DTO 3종 Serializable + serialVersionUID
-- [ ] T4–T5: DashboardStatsService MockK 테스트 PASS (sortedByDescending 검증 포함)
-- [ ] T6–T7: DashboardStatsController MockMvc PASS, 반복 파라미터 동작 확인
-- [ ] T8: MethodArgumentTypeMismatchException → 400
+- [ ] T4–T5: DashboardStatsService 통합 테스트 PASS (AbstractExposedTest + 실제 H2 Repository); 빈 clinic 200 확인; sortedByDescending 검증 포함
+- [ ] T6–T7: DashboardStatsController MockMvc PASS; 빈 clinic 200 확인; 반복 파라미터 동작 확인
+- [ ] T8: GlobalExceptionHandlerTypeMismatchTest PASS; `?from=not-a-date → 400` + JSON envelope 확인
 - [ ] T9: ServiceConfig Bean 등록, 컨텍스트 로드 PASS
-- [ ] T10: SecurityConfig 매처 + ObjectMapper 핸들러
-- [ ] T11–T13: 프론트엔드 모델/서비스, 반복 파라미터 송신 확인
+- [ ] T10: SecurityConfig 매처 + ObjectMapper @Bean 메서드 파라미터 패턴; T7 의존 확인
+- [ ] T11–T13: 프론트엔드 모델/서비스; 반복 파라미터 송신 확인
 - [ ] T12: chart.js ^4.5.0, ng build PASS
-- [ ] T14–T16: 차트 3종, afterNextRender + ngOnDestroy.destroy() 검증
+- [ ] T14–T16: 차트 3종; **ngOnInit** 기반 라이프사이클; ngOnDestroy.destroy() 검증
 - [ ] T17: DashboardCharts, authService.isAdmin() 분기 양방향
 - [ ] T18: ManagementDashboard 회귀 + 로컬 isAdmin 재선언 없음
-- [ ] T19: Security 통합 — 매처 순서 + 401/403 envelope
+- [ ] T19: Security 통합 — `@ActiveProfiles("security-test")` 하네스; 매처 순서 + 401/403 envelope
 - [ ] T20: Controller 400 매트릭스 + JSON envelope
-- [ ] T21: 모든 신규 public API 영문 KDoc
-- [ ] T22: README 한/영 갱신
+- [ ] T21: 모든 신규 public API 영문 KDoc; Kotlin 컴파일 에러 0; tsc --noEmit PASS
+- [ ] T22: README.md + README.ko.md 동시 갱신; 섹션 구조 1:1 정렬
 - [ ] T23: CHANGELOG 영문
 - [ ] T24: 모든 모듈 PASS, code-reviewer HIGH+ 0
-- [ ] T25: develop 대상 PR open, CI 통과
+- [ ] T25: docs/lessons/2026-05-19-dashboard-stats.md 커밋 완료
+- [ ] T26: develop 대상 PR open, CI 통과
 
 ---
 
