@@ -37,26 +37,7 @@ Use `tenant-default` for the local seed tenant. JWTs must include the requested 
 
 ## Appointment Creation Flow
 
-```mermaid
-sequenceDiagram
-    participant FE as Frontend
-    participant API as AppointmentController
-    participant SEC as JwtAuthFilter
-    participant SLOT as SlotCalculationService
-    participant DB as PostgreSQL
-    participant EVT as EventBus
-
-    FE->>API: POST /api/{tenantCode}/appointments (Bearer token)
-    API->>SEC: Validate JWT and allowedTenants
-    SEC-->>API: SchedulingUserPrincipal
-    API->>SLOT: Check slot availability
-    SLOT->>DB: Query hours, schedules, conflicts
-    DB-->>SLOT: Data
-    SLOT-->>API: isAvailable: true
-    API->>DB: INSERT appointments
-    API->>EVT: publishEvent(Created)
-    API-->>FE: AppointmentResponse (201)
-```
+![Appointment Creation Flow diagram](../docs/images/readme-diagrams/appointment-api-sequence-01.png)
 
 Full data flow: [data-flow.md](../docs/requirements/data-flow.md)
 

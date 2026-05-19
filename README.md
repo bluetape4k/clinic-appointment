@@ -30,7 +30,7 @@ notifications, Spring Boot APIs, and an Angular frontend.
 
 ## Architecture
 
-![Architecture diagram](docs/assets/readme-diagrams/clinic-appointment-architecture-01.png)
+![clinic appointment Architecture diagram](docs/assets/readme-diagrams/clinic-appointment-architecture-01.png)
 
 ## Modules
 

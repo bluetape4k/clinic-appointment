@@ -29,7 +29,7 @@ Spring Boot API, Angular frontend를 포함한 end-to-end clinic scheduling syst
 
 ## 아키텍처
 
-![Architecture diagram](docs/assets/readme-diagrams/clinic-appointment-architecture-01.png)
+![clinic appointment Architecture diagram](docs/assets/readme-diagrams/clinic-appointment-architecture-01.png)
 
 ## 모듈
 

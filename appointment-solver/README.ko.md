@@ -32,25 +32,7 @@ Soft (2개): 의사 부하 분산(가중치 100), 스케줄 갭 최소화(가중
 
 ## Solver 데이터 흐름
 
-```mermaid
-flowchart TD
-    API["SolverService.solve()"] --> LOAD["SolutionConverter\nDB → Planning Domain"]
-
-    subgraph Facts["Problem Facts (고정 데이터)"]
-        direction LR
-        F1["Doctor"] --- F2["Schedule"] --- F3["Absence"]
-        F4["Closure"] --- F5["Holiday"] --- F6["EquipmentUnavailability"]
-    end
-
-    subgraph Planning["Planning Entities"]
-        PE["AppointmentPlanning\ndoctorId · date · startTime\n[Pinned: CONFIRMED+]"]
-    end
-
-    LOAD --> Facts
-    LOAD --> Planning
-    Facts & Planning --> SOLVE["Timefold Solver\nH1~H11 + S1~S2"]
-    SOLVE --> RESULT["SolverResult\nappointmentId → Assignment"]
-```
+![Solver diagram](../docs/images/readme-diagrams/appointment-solver-architecture-01.png)
 
 → 전체 흐름: [data-flow.md](../docs/requirements/data-flow.md#6-solver-데이터-흐름)
 
