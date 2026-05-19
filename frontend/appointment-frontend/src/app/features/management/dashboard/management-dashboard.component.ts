@@ -108,6 +108,17 @@ import { AppointmentService, DoctorService } from '../../../core/services';
             <button mat-button color="primary" routerLink="/management/equipment-unavailability">바로가기</button>
           </mat-card-actions>
         </mat-card>
+
+        <mat-card class="nav-card" routerLink="/management/admin-dashboard">
+          <mat-card-content>
+            <mat-icon class="nav-icon">bar_chart</mat-icon>
+            <h3>통계 대시보드</h3>
+            <p>예약 현황, 의사별 실적, 취소율 차트를 조회합니다.</p>
+          </mat-card-content>
+          <mat-card-actions>
+            <button mat-button color="primary" routerLink="/management/admin-dashboard">바로가기</button>
+          </mat-card-actions>
+        </mat-card>
       </section>
     </div>
   `,

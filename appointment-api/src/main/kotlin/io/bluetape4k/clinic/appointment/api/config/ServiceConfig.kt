@@ -1,7 +1,9 @@
 package io.bluetape4k.clinic.appointment.api.config
 
+import io.bluetape4k.clinic.appointment.api.service.DashboardStatsService
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
+import io.bluetape4k.clinic.appointment.repository.AppointmentStatsRepository
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
 import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
@@ -97,4 +99,14 @@ class ServiceConfig {
         repo = equipmentUnavailabilityRepository,
         appointmentRepository = appointmentRepository,
     )
+
+    // --- Stats 빈 ---
+
+    @Bean
+    fun appointmentStatsRepository(): AppointmentStatsRepository = AppointmentStatsRepository()
+
+    @Bean
+    fun dashboardStatsService(
+        appointmentStatsRepository: AppointmentStatsRepository,
+    ): DashboardStatsService = DashboardStatsService(appointmentStatsRepository)
 }

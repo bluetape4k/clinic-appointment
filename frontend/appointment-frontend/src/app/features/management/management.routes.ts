@@ -43,4 +43,11 @@ export const MANAGEMENT_ROUTES: Routes = [
         m => m.EquipmentUnavailabilityListComponent
       ),
   },
+  {
+    path: 'admin-dashboard',
+    loadComponent: () =>
+      import('./admin-dashboard/admin-dashboard.component').then(
+        m => m.AdminDashboardComponent
+      ),
+  },
 ];

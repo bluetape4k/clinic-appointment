@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
@@ -21,6 +22,14 @@ class GlobalExceptionHandler {
         log.warn(ex) { "Validation failed: $message" }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(ApiResponse.error(message.ifBlank { "Validation failed" }))
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    fun handleTypeMismatch(ex: MethodArgumentTypeMismatchException): ResponseEntity<ApiResponse<Nothing>> {
+        val message = "Invalid value '${ex.value}' for parameter '${ex.name}'"
+        log.warn(ex) { "Type mismatch: $message" }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(ApiResponse.error(message))
     }
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
