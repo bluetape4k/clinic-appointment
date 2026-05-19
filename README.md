@@ -30,7 +30,7 @@ notifications, Spring Boot APIs, and an Angular frontend.
 
 ## Architecture
 
-![Architecture 1](docs/images/readme-diagrams/root-readme-en-diagram-01.svg)
+![Architecture 1](docs/images/readme-diagrams/root-readme-en-diagram-01.png)
 
 ## Modules
 
