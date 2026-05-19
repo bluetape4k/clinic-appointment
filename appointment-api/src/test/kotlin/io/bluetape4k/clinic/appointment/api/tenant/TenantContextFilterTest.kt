@@ -113,6 +113,27 @@ class TenantContextFilterTest {
     }
 
     @Test
+    fun `authenticated known tenant outside allowed tenants returns forbidden without calling chain`() {
+        val principal = SchedulingUserPrincipal(
+            userId = "user-1",
+            clinicId = 1L,
+            roles = listOf(SchedulingRole.ADMIN),
+            allowedTenants = listOf("tenant-b"),
+        )
+        SecurityContextHolder.getContext().authentication =
+            UsernamePasswordAuthenticationToken(principal, null, principal.authorities)
+
+        val response = MockHttpServletResponse()
+        val chain = CapturingFilterChain()
+
+        filter.doFilter(tenantRequest("/api/tenant-a/clinics"), response, chain)
+
+        chain.called shouldBeEqualTo false
+        response.status shouldBeEqualTo HttpStatus.FORBIDDEN.value()
+        TenantContext.current().shouldBeNull()
+    }
+
+    @Test
     fun `unauthenticated tenant path skips lookup so authorization can return unauthorized`() {
         val response = MockHttpServletResponse()
         val chain = CapturingFilterChain()

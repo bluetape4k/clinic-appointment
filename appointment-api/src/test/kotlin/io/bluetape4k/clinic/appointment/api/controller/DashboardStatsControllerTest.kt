@@ -92,7 +92,7 @@ class DashboardStatsControllerTest @Autowired constructor() : AbstractApiIntegra
         }
     }
 
-    // =================== GET /api/admin/stats/appointments ===================
+    // =================== GET /api/{tenantCode}/admin/stats/appointments ===================
 
     @Test
     fun `GET appointments stats - 200 with appointment data`() {
@@ -136,7 +136,7 @@ class DashboardStatsControllerTest @Autowired constructor() : AbstractApiIntegra
         response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
     }
 
-    // =================== GET /api/admin/stats/doctors ===================
+    // =================== GET /api/{tenantCode}/admin/stats/doctors ===================
 
     @Test
     fun `GET doctor stats - 200 with doctor data`() {
@@ -161,7 +161,7 @@ class DashboardStatsControllerTest @Autowired constructor() : AbstractApiIntegra
         response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
     }
 
-    // =================== GET /api/admin/stats/cancellations ===================
+    // =================== GET /api/{tenantCode}/admin/stats/cancellations ===================
 
     @Test
     fun `GET cancellation stats - 200 with cancellation data`() {

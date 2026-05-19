@@ -17,5 +17,31 @@ ALTER TABLE scheduling_clinics
 ALTER TABLE scheduling_holidays
     ADD COLUMN tenant_group_id BIGINT NULL;
 
-ALTER TABLE scheduling_holidays
-    DROP INDEX holiday_date;
+SET @holiday_date_index := (
+    SELECT s.INDEX_NAME
+    FROM INFORMATION_SCHEMA.STATISTICS s
+    WHERE s.TABLE_SCHEMA = DATABASE()
+      AND s.TABLE_NAME = 'scheduling_holidays'
+      AND s.COLUMN_NAME = 'holiday_date'
+      AND s.NON_UNIQUE = 0
+      AND NOT EXISTS (
+          SELECT 1
+          FROM INFORMATION_SCHEMA.STATISTICS s2
+          WHERE s2.TABLE_SCHEMA = s.TABLE_SCHEMA
+            AND s2.TABLE_NAME = s.TABLE_NAME
+            AND s2.INDEX_NAME = s.INDEX_NAME
+            AND s2.SEQ_IN_INDEX > 1
+      )
+    ORDER BY IF(s.INDEX_NAME = 'holiday_date', 0, 1), s.INDEX_NAME
+    LIMIT 1
+);
+
+SET @drop_holiday_date_index := IF(
+    @holiday_date_index IS NULL,
+    'SELECT 1',
+    CONCAT('ALTER TABLE scheduling_holidays DROP INDEX `', REPLACE(@holiday_date_index, '`', '``'), '`')
+);
+
+PREPARE drop_holiday_date_index_stmt FROM @drop_holiday_date_index;
+EXECUTE drop_holiday_date_index_stmt;
+DEALLOCATE PREPARE drop_holiday_date_index_stmt;

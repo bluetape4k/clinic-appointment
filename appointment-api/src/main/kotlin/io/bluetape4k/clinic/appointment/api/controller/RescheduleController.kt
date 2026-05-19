@@ -136,7 +136,7 @@ class RescheduleController(
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         appointmentService.getById(id, tenant.id)
         log.debug { "POST confirm reschedule tenantCode=$tenantCode, appointmentId=$id, candidateId=$candidateId" }
-        val newAppointmentId = closureRescheduleService.confirmReschedule(candidateId, id)
+        val newAppointmentId = closureRescheduleService.confirmReschedule(candidateId, id, tenant.id)
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }
 
@@ -162,7 +162,7 @@ class RescheduleController(
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         appointmentService.getById(id, tenant.id)
         log.debug { "POST auto reschedule tenantCode=$tenantCode, appointmentId=$id" }
-        val newAppointmentId = closureRescheduleService.autoReschedule(id)
+        val newAppointmentId = closureRescheduleService.autoReschedule(id, tenant.id)
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }
 }

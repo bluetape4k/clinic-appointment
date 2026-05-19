@@ -75,7 +75,7 @@ class AppointmentService(
         return saved
     }
 
-    suspend fun updateStatus(id: Long, targetStatus: String, reason: String?): AppointmentRecord {
+    internal suspend fun updateStatus(id: Long, targetStatus: String, reason: String?): AppointmentRecord {
         log.debug { "updateStatus: id=$id, target=$targetStatus" }
         val record = transaction { appointmentRepository.findByIdOrNull(id) }
             ?: throw NoSuchElementException("Appointment not found: $id")
@@ -145,7 +145,7 @@ class AppointmentService(
             ?: throw NoSuchElementException("Appointment not found after status update: $id")
     }
 
-    fun getStateHistory(appointmentId: Long): List<AppointmentStateHistoryRecord> {
+    internal fun getStateHistory(appointmentId: Long): List<AppointmentStateHistoryRecord> {
         log.debug { "getStateHistory: appointmentId=$appointmentId" }
         return transaction {
             appointmentRepository.findByIdOrNull(appointmentId)
@@ -163,7 +163,7 @@ class AppointmentService(
         }
     }
 
-    suspend fun cancel(id: Long, reason: String? = null): AppointmentRecord {
+    internal suspend fun cancel(id: Long, reason: String? = null): AppointmentRecord {
         log.debug { "cancel: id=$id, reason=$reason" }
         val record = transaction { appointmentRepository.findByIdOrNull(id) }
             ?: throw NoSuchElementException("Appointment not found: $id")

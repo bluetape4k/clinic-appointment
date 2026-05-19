@@ -5,7 +5,7 @@ import java.io.Serializable
 import java.time.LocalDate
 
 /**
- * Response for GET /api/admin/stats/cancellations.
+ * Response for GET /api/{tenantCode}/admin/stats/cancellations.
  *
  * ## Behavior / Contract
  * - Denominator for rate calculations: CANCELLED + COMPLETED + NO_SHOW + RESCHEDULED (terminal statuses only).

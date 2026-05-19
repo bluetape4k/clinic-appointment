@@ -83,8 +83,6 @@ class SecurityConfig {
                 auth
                     // OpenAPI / Swagger / Actuator
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
-                    // Transitional old admin route until controllers move under /api/{tenantCode}/admin.
-                    .requestMatchers("/api/admin/**").hasRole(SchedulingRole.ADMIN)
                     .requestMatchers("/api/{tenantCode}/admin/**")
                     .access(adminTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/**")
@@ -98,7 +96,7 @@ class SecurityConfig {
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
-            .addFilterBefore(tenantContextFilter, UsernamePasswordAuthenticationFilter::class.java)
+            .addFilterAfter(tenantContextFilter, JwtAuthenticationFilter::class.java)
             .build()
 
     private fun adminTenantAccess(
