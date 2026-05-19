@@ -48,22 +48,7 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 
 ## Event Flow
 
-```mermaid
-flowchart LR
-    API["appointment-api\n(after state change)"] -->|"publishEvent()"| BUS["Spring\nApplicationEventPublisher"]
-
-    BUS -->|"@EventListener"| LOG["AppointmentEventLogger\nAppointmentEventLogs table"]
-    BUS -->|"@EventListener"| NOTIF["appointment-notification\nNotificationEventListener"]
-
-    subgraph Events["AppointmentDomainEvent"]
-        E1["Created"]
-        E2["StatusChanged"]
-        E3["Cancelled"]
-        E4["Rescheduled"]
-    end
-
-    API --> Events --> BUS
-```
+![Event Flow diagram](../docs/images/readme-diagrams/appointment-event-architecture-01.png)
 
 ## Dependencies
 

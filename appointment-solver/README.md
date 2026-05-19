@@ -47,25 +47,7 @@ Full details: [solver.md](../docs/requirements/solver.md)
 
 ## Solver Data Flow
 
-```mermaid
-flowchart TD
-    API["SolverService.solve()"] --> LOAD["SolutionConverter\nDB to Planning Domain"]
-
-    subgraph Facts["Problem Facts"]
-        direction LR
-        F1["Doctor"] --- F2["Schedule"] --- F3["Absence"]
-        F4["Closure"] --- F5["Holiday"] --- F6["EquipmentUnavailability"]
-    end
-
-    subgraph Planning["Planning Entities"]
-        PE["AppointmentPlanning\ndoctorId / date / startTime\nPinned: CONFIRMED+"]
-    end
-
-    LOAD --> Facts
-    LOAD --> Planning
-    Facts & Planning --> SOLVE["Timefold Solver\nH1-H11 + S1-S2"]
-    SOLVE --> RESULT["SolverResult\nappointmentId to Assignment"]
-```
+![Solver Data Flow diagram](../docs/images/readme-diagrams/appointment-solver-architecture-01.png)
 
 Full flow: [data-flow.md](../docs/requirements/data-flow.md#6-solver-데이터-흐름)
 

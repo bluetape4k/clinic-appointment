@@ -91,51 +91,13 @@ Full transition list: [domain model document](../docs/requirements/domain-model.
 
 ## Entity Relationship Overview
 
-```mermaid
-erDiagram
-    Clinics ||--o{ Doctors : "employs"
-    Clinics ||--o{ TreatmentTypes : "offers"
-    Clinics ||--o{ Equipments : "owns"
-    Clinics ||--o{ Appointments : "receives"
-    Clinics ||--o{ OperatingHoursTable : "hours"
-    Clinics ||--o{ ClinicClosures : "closures"
-
-    Doctors ||--o{ DoctorSchedules : "schedules"
-    Doctors ||--o{ DoctorAbsences : "absences"
-    Doctors ||--o{ Appointments : "treats"
-
-    TreatmentTypes ||--o{ TreatmentEquipments : "requires"
-    TreatmentTypes ||--o{ Appointments : "applied in"
-
-    Equipments ||--o{ TreatmentEquipments : "used by"
-    Equipments ||--o{ EquipmentUnavailabilities : "unavailable"
-    Equipments |o--o{ Appointments : "used in"
-
-    Appointments ||--o{ AppointmentNotes : "notes"
-    Appointments ||--o{ RescheduleCandidates : "reschedule"
-```
+![Entity Relationship Overview diagram](../docs/images/readme-diagrams/appointment-core-erd-01.png)
 
 Full ERD: [erd.md](../docs/requirements/erd.md)
 
 ## Appointment State Machine
 
-```mermaid
-stateDiagram-v2
-    [*] --> REQUESTED : Request
-    REQUESTED --> CONFIRMED : Confirm
-    REQUESTED --> CANCELLED : Cancel
-    CONFIRMED --> CHECKED_IN : CheckIn
-    CONFIRMED --> NO_SHOW : MarkNoShow
-    CONFIRMED --> PENDING_RESCHEDULE : RequestReschedule
-    CHECKED_IN --> IN_PROGRESS : StartTreatment
-    IN_PROGRESS --> COMPLETED : Complete
-    PENDING_RESCHEDULE --> RESCHEDULED : ConfirmReschedule
-    PENDING_RESCHEDULE --> CANCELLED : Cancel
-    COMPLETED --> [*]
-    RESCHEDULED --> [*]
-    CANCELLED --> [*]
-    NO_SHOW --> [*]
-```
+![Appointment State Machine diagram](../docs/images/readme-diagrams/appointment-core-architecture-02.png)
 
 Full transition list: [domain-model.md](../docs/requirements/domain-model.md#상태-전이도)
 
