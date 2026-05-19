@@ -29,23 +29,7 @@ Spring Boot API, Angular frontend를 포함한 end-to-end clinic scheduling syst
 
 ## 아키텍처
 
-```mermaid
-graph TD
-    core[appointment-core\n도메인/리포지토리/상태머신]
-    event[appointment-event\n도메인 이벤트]
-    solver[appointment-solver\nTimefold AI 스케줄러]
-    notification[appointment-notification\nHA 알림 스케줄러]
-    api[appointment-api\nSpring Boot REST API]
-    frontend[frontend/appointment-frontend\nAngular 18]
-
-    core --> event
-    core --> solver
-    core --> notification
-    event --> notification
-    core --> api
-    event --> api
-    solver --> api
-```
+![Architecture diagram](docs/assets/readme-diagrams/clinic-appointment-architecture-01.png)
 
 ## 모듈
 
