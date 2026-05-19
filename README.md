@@ -30,23 +30,7 @@ notifications, Spring Boot APIs, and an Angular frontend.
 
 ## Architecture
 
-```mermaid
-graph TD
-    core[appointment-core\nDomain/Repositories/State Machine]
-    event[appointment-event\nDomain Events]
-    solver[appointment-solver\nTimefold AI Scheduler]
-    notification[appointment-notification\nHA Notification Scheduler]
-    api[appointment-api\nSpring Boot REST API]
-    frontend[frontend/appointment-frontend\nAngular 18]
-
-    core --> event
-    core --> solver
-    core --> notification
-    event --> notification
-    core --> api
-    event --> api
-    solver --> api
-```
+![Architecture 1](docs/images/readme-diagrams/root-readme-en-diagram-01.svg)
 
 ## Modules
 
