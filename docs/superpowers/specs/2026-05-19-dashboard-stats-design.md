@@ -107,9 +107,9 @@ Angular 21.2.10은 **bleeding edge**이며 `ng2-charts`/`ngx-echarts`의 Angular
 
 ```typescript
 // management-dashboard.component.ts
-readonly isAdmin = computed(() => this.authService.roles().includes('ROLE_ADMIN'));
-// template
-@if (isAdmin()) { <app-dashboard-charts /> }
+// AuthService.isAdmin 이미 computed signal로 선언됨 — 로컬 재선언 금지 (DRY)
+private readonly authService = inject(AuthService);
+// template: @if (authService.isAdmin()) { <app-dashboard-charts /> }
 ```
 
 ---
@@ -139,7 +139,7 @@ readonly isAdmin = computed(() => this.authService.roles().includes('ROLE_ADMIN'
 | `clinicId` | Long | yes | — | 병원 ID |
 | `from` | LocalDate (ISO) | no | `today - 29` | 조회 시작일 |
 | `to` | LocalDate (ISO) | no | `today` | 조회 종료일 |
-| `statuses` | List\<String\> | no | 전체 | 필터링할 상태 (CSV) |
+| `statuses` | List\<String\> | no | 전체 | 필터링할 상태 — **반복 파라미터** 방식 사용 (`?statuses=CONFIRMED&statuses=CANCELLED`), CSV 단일값 방식 불가 |
 
 **응답 스키마**:
 
@@ -292,16 +292,17 @@ data class DailyCancellationBucket(
 
 > **SecurityConfig 401/403 envelope**: Spring Security의 `AccessDeniedException`/`AuthenticationException`은 필터 체인에서 발생하므로 `@RestControllerAdvice`가 처리하지 못한다. `SecurityConfig`에 아래를 추가해야 `ApiResponse` 형태 JSON이 반환된다:
 > ```kotlin
+> // SecurityConfig constructor에 ObjectMapper 주입 — 하드코딩 금지, ApiResponse 직렬화 일관성 유지
 > exceptionHandling {
 >     authenticationEntryPoint { _, response, _ ->
 >         response.status = 401
 >         response.contentType = "application/json"
->         response.writer.write("""{"success":false,"data":null,"error":"Unauthorized"}""")
+>         response.writer.write(objectMapper.writeValueAsString(ApiResponse.error<Nothing>("Unauthorized")))
 >     }
 >     accessDeniedHandler { _, response, _ ->
 >         response.status = 403
 >         response.contentType = "application/json"
->         response.writer.write("""{"success":false,"data":null,"error":"Forbidden"}""")
+>         response.writer.write(objectMapper.writeValueAsString(ApiResponse.error<Nothing>("Forbidden")))
 >     }
 > }
 > ```
@@ -335,15 +336,18 @@ class AppointmentStatsRepository {
     ): List<Triple<LocalDate, AppointmentState, Long>>
 
     /**
-     * 의사별 상태별 카운트. 결과는 **총 예약 수 내림차순** 정렬 (`orderBy(count DESC) LIMIT limit`).
+     * 의사별 상태별 카운트 전체 결과. LIMIT 미적용 — 호출자(Service)가 top-N 선별.
+     *
+     * **왜 LIMIT을 여기에 두지 않는가**: 각 행은 (doctorId, status, count) 조합이므로
+     * SQL `LIMIT N`을 이 레벨에 적용하면 "상위 N명의 의사" 의미가 아닌
+     * "N개 (doctorId, status) 행"이 된다. Service에서 그룹핑 후 상위 N명을 선별한다.
      *
      * doctorId와 count가 모두 Long이므로 named class DoctorStatusCount 사용 (CLAUDE.md: 동일 타입 파라미터 규칙).
      */
     fun countByDoctorAndStatus(
         clinicId: Long,
         dateRange: ClosedRange<LocalDate>,
-        limit: Int = 20,
-    ): List<DoctorStatusCount>
+    ): List<DoctorStatusCount>  // 모든 doctorId × status 조합 반환; Service가 top-N 선별
 
     /**
      * 일자별 취소/노쇼/재배정 카운트. 호출자는 transaction 내부에서 호출.
@@ -383,7 +387,31 @@ class DashboardStatsService(
         require(!from.isAfter(to)) { "from must be on or before to" }
         require(ChronoUnit.DAYS.between(from, to) <= 366) { "period exceeds 366 days" }
         require(limit in 1..100) { "limit must be between 1 and 100" }
-        // ... 동일 패턴
+
+        return transaction {
+            val rows = statsRepository.countByDoctorAndStatus(clinicId, from..to)
+            // Kotlin groupBy: (doctorId, status, count) → per-doctor DoctorBucket → 상위 limit명 선별
+            val byDoctor = rows.groupBy { it.doctorId }
+            val topDoctors = byDoctor
+                .map { (doctorId, statusCounts) ->
+                    val completed = statusCounts.find { it.status == AppointmentState.COMPLETED }?.count ?: 0L
+                    val cancelled = statusCounts.find { it.status == AppointmentState.CANCELLED }?.count ?: 0L
+                    val noShow = statusCounts.find { it.status == AppointmentState.NO_SHOW }?.count ?: 0L
+                    val total = statusCounts.sumOf { it.count }
+                    val denom = completed + cancelled + noShow
+                    DoctorBucket(
+                        doctorId = doctorId,
+                        totalAppointments = total,
+                        completed = completed,
+                        cancelled = cancelled,
+                        noShow = noShow,
+                        completionRate = if (denom > 0) completed.toDouble() / denom else 0.0,
+                    )
+                }
+                .sortedByDescending { it.totalAppointments }
+                .take(limit)
+            DoctorStatsResponse(clinicId, from, to, topDoctors)
+        }
     }
 }
 ```
@@ -561,7 +589,7 @@ it('컴포넌트 파괴 시 Chart 인스턴스를 destroy한다', () => {
 | Angular 21 ↔ Chart.js 4 호환성 미검증 | 중 | 중 | Chart.js 단독(no Angular wrapper) 채택, 구현 단계에서 `ng build` 통과 확인 |
 | `/api/admin/**` 매처 순서 오류로 우회 가능 | 저 | 고 | SecurityConfig 통합 테스트로 first-match-wins 명시 검증 |
 | 대용량 병원에서 `groupBy` 풀스캔 | 중 | 중 | 기존 인덱스 활용, `to-from ≤ 366일` 강제, 추후 Materialized View는 별도 이슈 |
-| `AppointmentState.fromName` 미지원 상태 입력 → 500 | 저 | 저 | Service에서 catch → 400 응답으로 변환 |
+| `AppointmentState.fromName` 미지원 상태 입력 → IllegalArgumentException | 저 | 저 | `GlobalExceptionHandler.handleIllegalArgument`가 자동으로 400 변환 — Service 별도 try-catch 불필요 |
 | Chart.js 인스턴스 누수 (컴포넌트 재마운트) | 저 | 저 | `ngOnDestroy`에서 `destroy()` + effect cleanup |
 | 프론트 ADMIN 분기 우회 시 403 받지만 콘솔 에러 노이즈 | 저 | 저 | HttpInterceptor에서 `/api/admin/stats`에 한해 403을 silent fallback (signal `null` 유지) |
 | `ManagementDashboardComponent`의 기존 `doctorCount.set(0)` 로직 — 비동기 결과 사용 안 함 (기존 버그) | 저 | 저 | 본 이슈 범위 밖, 별도 PR에서 수정. 본 스펙에서는 회귀 테스트만 추가 |
@@ -658,9 +686,25 @@ it('컴포넌트 파괴 시 Chart 인스턴스를 destroy한다', () => {
 4. [P2-T4] `limit in 1..100` 검증 → §4.3 getDoctorStats 스케치
 5. [P2-T6] Exposed `countExpr` alias 패턴 명시 → §3.2
 
-### Round 3 목표
+### Round 3 (2026-05-19)
 
-Phase 3 독립 리뷰 후 P0/P1 = 0 달성 여부 확인.
+| Reviewer | P0 | P1 | P2 | P3 |
+|----------|----|----|----|----|
+| Phase 3 독립 Critic | 0 | 1 | 2 | 2 |
+| **통합 합계** | **0** | **1** | **2** | **2** |
+
+**Round 3 P1 적용 항목**:
+1. [P1] `countByDoctorAndStatus` LIMIT 의미 오류 — SQL LIMIT을 (doctorId, status) 행 수준에 적용하면 "상위 N명 의사" 달성 불가. 수정: 리포지토리에서 LIMIT 제거, Service에서 Kotlin groupBy + sortedByDescending + take(limit) (§4.3)
+
+**Round 3 P2/P3 적용 항목**:
+1. [P2] `isAdmin` 중복 computed — AuthService.isAdmin 기존 signal 직접 사용 (§2.4)
+2. [P2] SecurityConfig 핸들러 JSON 하드코딩 → ObjectMapper 주입으로 ApiResponse 직렬화 (§4.2)
+3. [P3] statuses CSV 바인딩 방식 명시 → 반복 파라미터 방식으로 확정 (§3.2)
+4. [P3] §8과 §5.4 `fromName` 처리 방식 충돌 → §8 수정으로 일관성 확보
+
+**누적 수렴 현황**: Round 1 P1=6 → Round 2 P1=1 → Round 3 P1=1 → Round 3 적용 후 P1=0
+
+**수렴 선언 조건**: 모든 reviewer 통합 P0/P1=0 → Round 3 완료 후 수렴 선언 가능.
 
 ---
 
