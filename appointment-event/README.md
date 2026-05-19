@@ -48,7 +48,7 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 
 ## Event Flow
 
-![Event Flow 1](../docs/images/readme-diagrams/appointment-event-diagram-01.svg)
+![Event Flow 1](../docs/images/readme-diagrams/appointment-event-diagram-01.png)
 
 ## Dependencies
 

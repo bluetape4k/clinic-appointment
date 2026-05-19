@@ -32,7 +32,7 @@ Soft (2개): 의사 부하 분산(가중치 100), 스케줄 갭 최소화(가중
 
 ## Solver 데이터 흐름
 
-![Solver Data Component 1](../docs/images/readme-diagrams/appointment-solver-ko-diagram-01.svg)
+![Solver Data Component 1](../docs/images/readme-diagrams/appointment-solver-ko-diagram-01.png)
 
 → 전체 흐름: [data-flow.md](../docs/requirements/data-flow.md#6-solver-데이터-흐름)
 

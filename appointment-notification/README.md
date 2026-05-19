@@ -24,7 +24,7 @@ It subscribes to domain events, sends appointment status notifications, and supp
 
 ## Notification Flow
 
-![Notification Flow 1](../docs/images/readme-diagrams/appointment-notification-diagram-01.svg)
+![Notification Flow 1](../docs/images/readme-diagrams/appointment-notification-diagram-01.png)
 
 Scenario details: [user-scenarios.md S5](../docs/requirements/user-scenarios.md#s5-ha-알림-리마인더-발송-스케줄러)
 

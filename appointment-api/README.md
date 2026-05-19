@@ -33,7 +33,7 @@ Spring Boot 4 REST API server with JWT authentication, Flyway migrations, Swagge
 
 ## Appointment Creation Flow
 
-![Appointment Creation Flow 1](../docs/images/readme-diagrams/appointment-api-diagram-01.svg)
+![Appointment Creation Flow 1](../docs/images/readme-diagrams/appointment-api-diagram-01.png)
 
 Full data flow: [data-flow.md](../docs/requirements/data-flow.md)
 

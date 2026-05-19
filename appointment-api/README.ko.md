@@ -33,7 +33,7 @@ Spring Boot 4 REST API 서버 — JWT 인증, Flyway 마이그레이션, Swagger
 
 ## 예약 생성 요청 흐름
 
-![YesComponent Component Request Component 1](../docs/images/readme-diagrams/appointment-api-ko-diagram-01.svg)
+![YesComponent Component Request Component 1](../docs/images/readme-diagrams/appointment-api-ko-diagram-01.png)
 
 → 전체 데이터 흐름: [data-flow.md](../docs/requirements/data-flow.md)
 

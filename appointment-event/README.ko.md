@@ -43,7 +43,7 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 
 ## 이벤트 발행/구독 흐름
 
-![Component Component/Component Component 1](../docs/images/readme-diagrams/appointment-event-ko-diagram-01.svg)
+![Component Component/Component Component 1](../docs/images/readme-diagrams/appointment-event-ko-diagram-01.png)
 
 ## 의존성
 

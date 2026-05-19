@@ -91,13 +91,13 @@ Full transition list: [domain model document](../docs/requirements/domain-model.
 
 ## Entity Relationship Overview
 
-![Entity Relationship Overview 1](../docs/images/readme-diagrams/appointment-core-diagram-01.svg)
+![Entity Relationship Overview 1](../docs/images/readme-diagrams/appointment-core-diagram-01.png)
 
 Full ERD: [erd.md](../docs/requirements/erd.md)
 
 ## Appointment State Machine
 
-![Appointment State Machine 2](../docs/images/readme-diagrams/appointment-core-diagram-02.svg)
+![Appointment State Machine 2](../docs/images/readme-diagrams/appointment-core-diagram-02.png)
 
 Full transition list: [domain-model.md](../docs/requirements/domain-model.md#상태-전이도)
 

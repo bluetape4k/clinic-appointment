@@ -47,7 +47,7 @@ Full details: [solver.md](../docs/requirements/solver.md)
 
 ## Solver Data Flow
 
-![Solver Data Flow 1](../docs/images/readme-diagrams/appointment-solver-diagram-01.svg)
+![Solver Data Flow 1](../docs/images/readme-diagrams/appointment-solver-diagram-01.png)
 
 Full flow: [data-flow.md](../docs/requirements/data-flow.md#6-solver-데이터-흐름)
 
