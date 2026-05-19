@@ -92,51 +92,13 @@ val newState = machine.transition(
 
 ## 주요 엔티티 관계도
 
-```mermaid
-erDiagram
-    Clinics ||--o{ Doctors : "employs"
-    Clinics ||--o{ TreatmentTypes : "offers"
-    Clinics ||--o{ Equipments : "owns"
-    Clinics ||--o{ Appointments : "receives"
-    Clinics ||--o{ OperatingHoursTable : "hours"
-    Clinics ||--o{ ClinicClosures : "closures"
-
-    Doctors ||--o{ DoctorSchedules : "schedules"
-    Doctors ||--o{ DoctorAbsences : "absences"
-    Doctors ||--o{ Appointments : "treats"
-
-    TreatmentTypes ||--o{ TreatmentEquipments : "requires"
-    TreatmentTypes ||--o{ Appointments : "applied in"
-
-    Equipments ||--o{ TreatmentEquipments : "used by"
-    Equipments ||--o{ EquipmentUnavailabilities : "unavailable"
-    Equipments |o--o{ Appointments : "used in"
-
-    Appointments ||--o{ AppointmentNotes : "notes"
-    Appointments ||--o{ RescheduleCandidates : "reschedule"
-```
+![Component Component Component 1](../docs/images/readme-diagrams/appointment-core-ko-diagram-01.svg)
 
 → 전체 ERD: [erd.md](../docs/requirements/erd.md)
 
 ## 예약 상태머신
 
-```mermaid
-stateDiagram-v2
-    [*] --> REQUESTED : 예약 요청
-    REQUESTED --> CONFIRMED : Confirm
-    REQUESTED --> CANCELLED : Cancel
-    CONFIRMED --> CHECKED_IN : CheckIn
-    CONFIRMED --> NO_SHOW : MarkNoShow
-    CONFIRMED --> PENDING_RESCHEDULE : RequestReschedule
-    CHECKED_IN --> IN_PROGRESS : StartTreatment
-    IN_PROGRESS --> COMPLETED : Complete
-    PENDING_RESCHEDULE --> RESCHEDULED : ConfirmReschedule
-    PENDING_RESCHEDULE --> CANCELLED : Cancel
-    COMPLETED --> [*]
-    RESCHEDULED --> [*]
-    CANCELLED --> [*]
-    NO_SHOW --> [*]
-```
+![YesComponent Component 2](../docs/images/readme-diagrams/appointment-core-ko-diagram-02.svg)
 
 → 상태 전이 전체 목록: [domain-model.md](../docs/requirements/domain-model.md#상태-전이도)
 

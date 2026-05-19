@@ -24,19 +24,7 @@ It subscribes to domain events, sends appointment status notifications, and supp
 
 ## Notification Flow
 
-```mermaid
-flowchart LR
-    EVT["AppointmentDomainEvent"] --> LISTEN["NotificationEventListener\n@EventListener"]
-    LISTEN --> CB["CircuitBreaker\nResilience4j"]
-    CB --> RETRY["Retry / Bulkhead"]
-    RETRY --> CH["DummyNotificationChannel\nlog + DB history"]
-
-    subgraph HA["HA reminders, every 1h"]
-        LEADER{"Redis Leader?"}
-        LEADER -->|"Yes"| REMIND["Tomorrow/today\nreminder delivery"]
-        LEADER -->|"No"| SKIP["SKIP"]
-    end
-```
+![Notification Flow 1](../docs/images/readme-diagrams/appointment-notification-diagram-01.svg)
 
 Scenario details: [user-scenarios.md S5](../docs/requirements/user-scenarios.md#s5-ha-알림-리마인더-발송-스케줄러)
 

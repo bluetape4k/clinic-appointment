@@ -43,22 +43,7 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 
 ## 이벤트 발행/구독 흐름
 
-```mermaid
-flowchart LR
-    API["appointment-api\n(상태 변경 후)"] -->|"publishEvent()"| BUS["Spring\nApplicationEventPublisher"]
-
-    BUS -->|"@EventListener"| LOG["AppointmentEventLogger\n→ AppointmentEventLogs 테이블"]
-    BUS -->|"@EventListener"| NOTIF["appointment-notification\nNotificationEventListener"]
-
-    subgraph Events["AppointmentDomainEvent"]
-        E1["Created"] 
-        E2["StatusChanged"]
-        E3["Cancelled"]
-        E4["Rescheduled"]
-    end
-
-    API --> Events --> BUS
-```
+![Component Component/Component Component 1](../docs/images/readme-diagrams/appointment-event-ko-diagram-01.svg)
 
 ## 의존성
 

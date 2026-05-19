@@ -33,26 +33,7 @@ Spring Boot 4 REST API server with JWT authentication, Flyway migrations, Swagge
 
 ## Appointment Creation Flow
 
-```mermaid
-sequenceDiagram
-    participant FE as Frontend
-    participant API as AppointmentController
-    participant SEC as JwtAuthFilter
-    participant SLOT as SlotCalculationService
-    participant DB as PostgreSQL
-    participant EVT as EventBus
-
-    FE->>API: POST /api/appointments (Bearer token)
-    API->>SEC: Validate JWT
-    SEC-->>API: SchedulingUserPrincipal
-    API->>SLOT: Check slot availability
-    SLOT->>DB: Query hours, schedules, conflicts
-    DB-->>SLOT: Data
-    SLOT-->>API: isAvailable: true
-    API->>DB: INSERT appointments
-    API->>EVT: publishEvent(Created)
-    API-->>FE: AppointmentResponse (201)
-```
+![Appointment Creation Flow 1](../docs/images/readme-diagrams/appointment-api-diagram-01.svg)
 
 Full data flow: [data-flow.md](../docs/requirements/data-flow.md)
 

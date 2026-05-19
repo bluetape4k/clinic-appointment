@@ -33,26 +33,7 @@ Spring Boot 4 REST API 서버 — JWT 인증, Flyway 마이그레이션, Swagger
 
 ## 예약 생성 요청 흐름
 
-```mermaid
-sequenceDiagram
-    participant FE as Frontend
-    participant API as AppointmentController
-    participant SEC as JwtAuthFilter
-    participant SLOT as SlotCalculationService
-    participant DB as PostgreSQL
-    participant EVT as EventBus
-
-    FE->>API: POST /api/appointments (Bearer token)
-    API->>SEC: JWT 검증
-    SEC-->>API: SchedulingUserPrincipal
-    API->>SLOT: 슬롯 가용성 확인
-    SLOT->>DB: 영업시간·스케줄·충돌 조회
-    DB-->>SLOT: 데이터 반환
-    SLOT-->>API: isAvailable: true
-    API->>DB: INSERT appointments
-    API->>EVT: publishEvent(Created)
-    API-->>FE: AppointmentResponse (201)
-```
+![YesComponent Component Request Component 1](../docs/images/readme-diagrams/appointment-api-ko-diagram-01.svg)
 
 → 전체 데이터 흐름: [data-flow.md](../docs/requirements/data-flow.md)
 
