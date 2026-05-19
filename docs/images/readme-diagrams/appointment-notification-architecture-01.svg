@@ -55,7 +55,8 @@
 </g>
 <g transform="translate(382,336)">
   <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#F1ECFF" stroke="#8A72D6"/>
-  <text class="smallLabel" x="140" y="45" text-anchor="middle">Redis Leader?</text>
+  <text class="smallLabel" x="140" y="33" text-anchor="middle">Redis Leader</text>
+<text class="smallLabel" x="140" y="59" text-anchor="middle">Election</text>
 </g>
 <g transform="translate(716,336)">
   <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#F7F1E7" stroke="#B88A44"/>
