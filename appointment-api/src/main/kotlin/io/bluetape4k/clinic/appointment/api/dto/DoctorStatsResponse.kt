@@ -5,7 +5,7 @@ import java.io.Serializable
 import java.time.LocalDate
 
 /**
- * Response for GET /api/admin/stats/doctors.
+ * Response for GET /api/{tenantCode}/admin/stats/doctors.
  *
  * ## Behavior / Contract
  * - [doctors] is sorted by [DoctorBucket.totalAppointments] descending (service layer responsibility).

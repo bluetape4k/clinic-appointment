@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.model.dto.RescheduleCandidateRecord
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistoryRecord
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
+import io.bluetape4k.clinic.appointment.repository.DoctorRepository
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
 import io.bluetape4k.clinic.appointment.model.service.SlotQuery
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
@@ -30,6 +31,7 @@ class ClosureRescheduleService(
     private val appointmentRepository: AppointmentRepository = AppointmentRepository(),
     private val rescheduleCandidateRepository: RescheduleCandidateRepository = RescheduleCandidateRepository(),
     private val stateHistoryRepository: AppointmentStateHistoryRepository = AppointmentStateHistoryRepository(),
+    private val doctorRepository: DoctorRepository = DoctorRepository(),
 ) {
     companion object: KLogging() {
         private val ACTIVE_STATUSES = AppointmentState.ACTIVE_STATUSES
@@ -192,48 +194,17 @@ class ClosureRescheduleService(
      * @param originalAppointmentId 원본 예약 ID — 후보가 이 예약에 속하는지 검증
      * @return 새로 생성된 예약 ID
      */
-    fun confirmReschedule(candidateId: Long, originalAppointmentId: Long): Long =
+    internal fun confirmReschedule(candidateId: Long, originalAppointmentId: Long): Long =
         transaction {
-            val candidate = rescheduleCandidateRepository.findByIdOrNull(candidateId)
-                ?: throw IllegalArgumentException("Reschedule candidate not found: $candidateId")
+            confirmRescheduleInTransaction(candidateId, originalAppointmentId, tenantGroupId = null)
+        }
 
-            require(candidate.originalAppointmentId == originalAppointmentId) {
-                "Candidate $candidateId does not belong to appointment $originalAppointmentId"
-            }
-
-            val original = appointmentRepository.findByIdOrNull(candidate.originalAppointmentId)
-                ?: throw IllegalArgumentException("Original appointment not found: ${candidate.originalAppointmentId}")
-
-            val appointmentRecord = AppointmentRecord(
-                clinicId = original.clinicId,
-                doctorId = candidate.doctorId,
-                treatmentTypeId = original.treatmentTypeId,
-                equipmentId = original.equipmentId,
-                consultationTopicId = original.consultationTopicId,
-                consultationMethod = original.consultationMethod,
-                rescheduleFromId = original.id,
-                patientName = original.patientName,
-                patientPhone = original.patientPhone,
-                patientExternalId = original.patientExternalId,
-                appointmentDate = candidate.candidateDate,
-                startTime = candidate.startTime,
-                endTime = candidate.endTime,
-                status = AppointmentState.CONFIRMED,
-            )
-
-            val newAppointment = appointmentRepository.save(appointmentRecord)
-            appointmentRepository.updateStatus(original.id.requireNotNull("original.id"), AppointmentState.RESCHEDULED)
-            stateHistoryRepository.save(
-                AppointmentStateHistoryRecord(
-                    appointmentId = original.id,
-                    fromState = original.status,
-                    toState = AppointmentState.RESCHEDULED,
-                    reason = "재배정 확정",
-                )
-            )
-            rescheduleCandidateRepository.markSelected(candidateId)
-
-            newAppointment.id.requireNotNull("newAppointment.id")
+    /**
+     * Tenant-scoped reschedule confirmation for API callers.
+     */
+    fun confirmReschedule(candidateId: Long, originalAppointmentId: Long, tenantGroupId: Long): Long =
+        transaction {
+            confirmRescheduleInTransaction(candidateId, originalAppointmentId, tenantGroupId)
         }
 
     /**
@@ -242,10 +213,79 @@ class ClosureRescheduleService(
      * @param originalAppointmentId 원래 예약 ID
      * @return 새로 생성된 예약 ID, 후보가 없으면 null
      */
-    fun autoReschedule(originalAppointmentId: Long): Long? =
+    internal fun autoReschedule(originalAppointmentId: Long): Long? =
         transaction {
             val best = rescheduleCandidateRepository.findBestCandidate(originalAppointmentId)
                 ?: return@transaction null
-            confirmReschedule(best.id.requireNotNull("best.id"), originalAppointmentId)
+            confirmRescheduleInTransaction(best.id.requireNotNull("best.id"), originalAppointmentId, tenantGroupId = null)
         }
+
+    /**
+     * Tenant-scoped automatic reschedule for API callers.
+     */
+    fun autoReschedule(originalAppointmentId: Long, tenantGroupId: Long): Long? =
+        transaction {
+            val best = rescheduleCandidateRepository.findBestCandidate(originalAppointmentId)
+                ?: return@transaction null
+            confirmRescheduleInTransaction(best.id.requireNotNull("best.id"), originalAppointmentId, tenantGroupId)
+        }
+
+    private fun confirmRescheduleInTransaction(
+        candidateId: Long,
+        originalAppointmentId: Long,
+        tenantGroupId: Long?,
+    ): Long {
+        val candidate = rescheduleCandidateRepository.findByIdOrNull(candidateId)
+            ?: throw IllegalArgumentException("Reschedule candidate not found: $candidateId")
+
+        require(candidate.originalAppointmentId == originalAppointmentId) {
+            "Candidate $candidateId does not belong to appointment $originalAppointmentId"
+        }
+
+        val original = if (tenantGroupId == null) {
+            appointmentRepository.findByIdOrNull(candidate.originalAppointmentId)
+        } else {
+            appointmentRepository.findByIdAndTenant(candidate.originalAppointmentId, tenantGroupId)
+        }
+            ?: throw IllegalArgumentException("Original appointment not found: ${candidate.originalAppointmentId}")
+
+        if (tenantGroupId != null) {
+            val candidateDoctor = doctorRepository.findByIdAndTenant(candidate.doctorId, tenantGroupId)
+                ?: throw IllegalArgumentException("Candidate doctor not found: ${candidate.doctorId}")
+            require(candidateDoctor.clinicId == original.clinicId) {
+                "Candidate doctor ${candidate.doctorId} does not belong to appointment clinic ${original.clinicId}"
+            }
+        }
+
+        val appointmentRecord = AppointmentRecord(
+            clinicId = original.clinicId,
+            doctorId = candidate.doctorId,
+            treatmentTypeId = original.treatmentTypeId,
+            equipmentId = original.equipmentId,
+            consultationTopicId = original.consultationTopicId,
+            consultationMethod = original.consultationMethod,
+            rescheduleFromId = original.id,
+            patientName = original.patientName,
+            patientPhone = original.patientPhone,
+            patientExternalId = original.patientExternalId,
+            appointmentDate = candidate.candidateDate,
+            startTime = candidate.startTime,
+            endTime = candidate.endTime,
+            status = AppointmentState.CONFIRMED,
+        )
+
+        val newAppointment = appointmentRepository.save(appointmentRecord)
+        appointmentRepository.updateStatus(original.id.requireNotNull("original.id"), AppointmentState.RESCHEDULED)
+        stateHistoryRepository.save(
+            AppointmentStateHistoryRecord(
+                appointmentId = original.id,
+                fromState = original.status,
+                toState = AppointmentState.RESCHEDULED,
+                reason = "재배정 확정",
+            )
+        )
+        rescheduleCandidateRepository.markSelected(candidateId)
+
+        return newAppointment.id.requireNotNull("newAppointment.id")
+    }
 }

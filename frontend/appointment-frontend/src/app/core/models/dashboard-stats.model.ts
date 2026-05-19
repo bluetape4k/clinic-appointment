@@ -5,7 +5,7 @@ export interface DailyAppointmentBucket {
   total: number;
 }
 
-/** GET /api/admin/stats/appointments response. */
+/** GET /api/{tenantCode}/admin/stats/appointments response. */
 export interface AppointmentStatsResponse {
   clinicId: number;
   from: string;
@@ -24,7 +24,7 @@ export interface DoctorBucket {
   completionRate: number;
 }
 
-/** GET /api/admin/stats/doctors response. */
+/** GET /api/{tenantCode}/admin/stats/doctors response. */
 export interface DoctorStatsResponse {
   clinicId: number;
   from: string;
@@ -32,7 +32,7 @@ export interface DoctorStatsResponse {
   doctors: DoctorBucket[];
 }
 
-/** GET /api/admin/stats/cancellations response. */
+/** GET /api/{tenantCode}/admin/stats/cancellations response. */
 export interface CancellationStatsResponse {
   clinicId: number;
   from: string;

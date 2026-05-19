@@ -15,6 +15,7 @@ import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
@@ -31,6 +32,7 @@ import io.bluetape4k.assertions.shouldHaveSize
 import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.support.requireNotNull
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -284,6 +286,51 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
 
             assertFailsWith<IllegalArgumentException> {
                 rescheduleService.confirmReschedule(candidate.id.requireNotNull("candidate.id"), wrongAppointmentId)
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `8 - tenant scoped confirm rejects candidate doctor outside appointment clinic`(testDB: TestDB) {
+        withTables(testDB, *allTables) {
+            val (clinicId, _, _) = insertDataWithAppointment()
+            val originalAppointmentId = Appointments.selectAll()
+                .where { Appointments.clinicId eq clinicId }
+                .single()[Appointments.id].value
+
+            val otherTenantId = 2L
+            TenantGroups.insert {
+                it[id] = EntityID(otherTenantId, TenantGroups)
+                it[tenantCode] = "tenant-b"
+                it[displayName] = "Tenant B"
+                it[active] = true
+            }
+            val otherClinicId = Clinics.insertAndGetId {
+                it[tenantGroupId] = EntityID(otherTenantId, TenantGroups)
+                it[name] = "Other Clinic"
+                it[slotDurationMinutes] = 30
+                it[maxConcurrentPatients] = 1
+            }
+            val otherDoctorId = Doctors.insertAndGetId {
+                it[Doctors.clinicId] = otherClinicId
+                it[name] = "Dr. Other"
+            }
+            val candidateId = RescheduleCandidates.insertAndGetId {
+                it[RescheduleCandidates.originalAppointmentId] = originalAppointmentId
+                it[candidateDate] = TUESDAY
+                it[startTime] = LocalTime.of(9, 0)
+                it[endTime] = LocalTime.of(9, 30)
+                it[doctorId] = otherDoctorId
+                it[priority] = 0
+            }.value
+
+            assertFailsWith<IllegalArgumentException> {
+                rescheduleService.confirmReschedule(
+                    candidateId,
+                    originalAppointmentId,
+                    TenantGroups.DEFAULT_TENANT_GROUP_ID,
+                )
             }
         }
     }

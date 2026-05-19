@@ -5,7 +5,7 @@ import java.io.Serializable
 import java.time.LocalDate
 
 /**
- * Response for GET /api/admin/stats/appointments.
+ * Response for GET /api/{tenantCode}/admin/stats/appointments.
  *
  * ## Behavior / Contract
  * - [daily] is ordered by date ascending.

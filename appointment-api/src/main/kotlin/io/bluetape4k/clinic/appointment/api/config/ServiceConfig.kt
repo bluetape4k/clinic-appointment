@@ -98,11 +98,13 @@ class ServiceConfig {
         appointmentRepository: AppointmentRepository,
         rescheduleCandidateRepository: RescheduleCandidateRepository,
         appointmentStateHistoryRepository: AppointmentStateHistoryRepository,
+        doctorRepository: DoctorRepository,
     ): ClosureRescheduleService = ClosureRescheduleService(
         slotCalculationService,
         appointmentRepository,
         rescheduleCandidateRepository,
         appointmentStateHistoryRepository,
+        doctorRepository,
     )
 
     @Bean
