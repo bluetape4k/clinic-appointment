@@ -26,3 +26,16 @@ Keep the existing diagram style and update only geometry in the generated SVG/PN
 ## Future Guidance
 
 Treat arrow head-only connectors as a failed rendering even when the SVG is syntactically valid. Geometry checks should cover architecture connector length, sequence header baseline, and sequence self-call arrows before PR creation.
+
+## 2026-05-20 ERD Layout Follow-up
+
+`appointment-core-erd-01` was regenerated from the current Exposed table set
+and `docs/requirements/erd.md`, not from the old compact image snapshot. The
+new layout includes the scheduling tables that were missing from the previous
+image and routes repeated `clinicId` references through a named FK lane instead
+of drawing many long crossing arrows.
+
+Future ERD diagrams should place parent, child, and bridge tables by
+relationship cluster, then route FKs with orthogonal lanes. Reject any layout
+where relationship lines pass through table interiors or where repeated parent
+FKs turn the diagram into a dense center-crossing bundle.
