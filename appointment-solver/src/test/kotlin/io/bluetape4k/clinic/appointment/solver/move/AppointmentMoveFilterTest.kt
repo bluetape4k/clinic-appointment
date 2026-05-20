@@ -1,7 +1,7 @@
 package io.bluetape4k.clinic.appointment.solver.move
 
-import ai.timefold.solver.core.api.score.director.ScoreDirector
-import ai.timefold.solver.core.impl.heuristic.move.Move
+import ai.timefold.solver.core.impl.score.director.ScoreDirector
+import ai.timefold.solver.core.preview.api.move.Move
 import io.bluetape4k.clinic.appointment.model.dto.ClinicClosureRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorAbsenceRecord
 import io.bluetape4k.clinic.appointment.model.dto.HolidayRecord
@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.SequencedCollection
 
 class AppointmentMoveFilterTest {
 
@@ -46,8 +47,16 @@ class AppointmentMoveFilterTest {
 
         sd = mockk()
         move = mockk()
-        every { move.planningEntities } returns listOf(entity)
+        every { move.planningEntities } returns sequencedEntities(entity)
     }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun sequencedEntities(vararg entities: Any): SequencedCollection<Any> =
+        ArrayList(entities.asList()) as SequencedCollection<Any>
+
+    @Suppress("UNCHECKED_CAST")
+    private fun sequencedValues(vararg values: Any?): SequencedCollection<Any?> =
+        ArrayList(values.asList()) as SequencedCollection<Any?>
 
     private fun solutionWith(
         closures: List<ClinicClosureRecord> = emptyList(),
@@ -69,7 +78,7 @@ class AppointmentMoveFilterTest {
     fun `accept returns true for valid date and doctor`() {
         val solution = solutionWith()
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeTrue()
     }
@@ -79,7 +88,7 @@ class AppointmentMoveFilterTest {
         val closure = ClinicClosureRecord(clinicId = clinicId, closureDate = monday, isFullDay = true)
         val solution = solutionWith(closures = listOf(closure))
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeFalse()
     }
@@ -89,7 +98,7 @@ class AppointmentMoveFilterTest {
         val closure = ClinicClosureRecord(clinicId = clinicId, closureDate = monday, isFullDay = false, startTime = LocalTime.of(14, 0))
         val solution = solutionWith(closures = listOf(closure))
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeTrue()
     }
@@ -98,7 +107,7 @@ class AppointmentMoveFilterTest {
     fun `accept returns false when no operating hours for day of week`() {
         val solution = solutionWith(operatingHoursList = emptyList())
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeFalse()
     }
@@ -108,7 +117,7 @@ class AppointmentMoveFilterTest {
         val holiday = HolidayRecord(holidayDate = monday, name = "Holiday")
         val solution = solutionWith(holidays = listOf(holiday), openOnHolidays = false)
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeFalse()
     }
@@ -118,7 +127,7 @@ class AppointmentMoveFilterTest {
         val holiday = HolidayRecord(holidayDate = monday, name = "Holiday")
         val solution = solutionWith(holidays = listOf(holiday), openOnHolidays = true)
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeTrue()
     }
@@ -128,7 +137,7 @@ class AppointmentMoveFilterTest {
         val absence = DoctorAbsenceRecord(doctorId = doctorId, absenceDate = monday, startTime = null)
         val solution = solutionWith(doctorAbsences = listOf(absence))
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeFalse()
     }
@@ -138,7 +147,7 @@ class AppointmentMoveFilterTest {
         val absence = DoctorAbsenceRecord(doctorId = doctorId, absenceDate = monday, startTime = LocalTime.of(14, 0))
         val solution = solutionWith(doctorAbsences = listOf(absence))
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeTrue()
     }
@@ -148,7 +157,7 @@ class AppointmentMoveFilterTest {
         val wrongClinicDoctor = DoctorFact(id = doctorId, clinicId = 999L, providerType = "DOCTOR", maxConcurrentPatients = 1)
         val solution = solutionWith(doctors = listOf(wrongClinicDoctor))
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeFalse()
     }
@@ -158,7 +167,7 @@ class AppointmentMoveFilterTest {
         val nurseDoctor = DoctorFact(id = doctorId, clinicId = clinicId, providerType = "NURSE", maxConcurrentPatients = 1)
         val solution = solutionWith(doctors = listOf(nurseDoctor))
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeFalse()
     }
@@ -167,7 +176,7 @@ class AppointmentMoveFilterTest {
     fun `accept returns false when doctor not found in solution`() {
         val solution = solutionWith(doctors = emptyList())
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns listOf(monday, doctorId)
+        every { move.planningValues } returns sequencedValues(monday, doctorId)
 
         filter.accept(sd, move).shouldBeFalse()
     }
@@ -178,7 +187,7 @@ class AppointmentMoveFilterTest {
         entity.appointmentDate = monday
         val solution = solutionWith()
         every { sd.workingSolution } returns solution
-        every { move.planningValues } returns emptyList<Any>()
+        every { move.planningValues } returns sequencedValues()
 
         filter.accept(sd, move).shouldBeTrue()
     }

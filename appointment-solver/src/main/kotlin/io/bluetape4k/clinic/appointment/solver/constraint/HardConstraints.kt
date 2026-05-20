@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.solver.constraint
 
-import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore
+import ai.timefold.solver.core.api.score.HardSoftScore
 import ai.timefold.solver.core.api.score.stream.Constraint
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory
 import ai.timefold.solver.core.api.score.stream.Joiners
@@ -50,7 +50,7 @@ object HardConstraints {
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H1: withinOperatingHours")
+            .asConstraint("H1 withinOperatingHours")
 
     // ----------------------------------------------------------------
     // H2: 예약 시간이 의사 근무 스케줄 내에 있어야 함
@@ -73,7 +73,7 @@ object HardConstraints {
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H2: withinDoctorSchedule")
+            .asConstraint("H2 withinDoctorSchedule")
 
     // ----------------------------------------------------------------
     // H3: 의사 부재 기간과 겹치지 않아야 함
@@ -101,7 +101,7 @@ object HardConstraints {
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H3: noDoctorAbsenceConflict")
+            .asConstraint("H3 noDoctorAbsenceConflict")
 
     // ----------------------------------------------------------------
     // H4a: 요일별 휴식시간과 겹치지 않아야 함
@@ -120,7 +120,7 @@ object HardConstraints {
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H4a: noBreakTimeConflict")
+            .asConstraint("H4a noBreakTimeConflict")
 
     // ----------------------------------------------------------------
     // H4b: 기본 휴식시간과 겹치지 않아야 함
@@ -135,7 +135,7 @@ object HardConstraints {
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H4b: noDefaultBreakTimeConflict")
+            .asConstraint("H4b noDefaultBreakTimeConflict")
 
     // ----------------------------------------------------------------
     // H5: 임시휴진(전일 또는 부분)과 겹치지 않아야 함
@@ -158,7 +158,7 @@ object HardConstraints {
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H5: noClinicClosureConflict")
+            .asConstraint("H5 noClinicClosureConflict")
 
     // ----------------------------------------------------------------
     // H6: 공휴일에 예약 불가 (clinic.openOnHolidays=false인 경우)
@@ -176,7 +176,7 @@ object HardConstraints {
                 ),
             )
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H6: noHolidayConflict")
+            .asConstraint("H6 noHolidayConflict")
 
     // ----------------------------------------------------------------
     // H7: 같은 의사의 동시 환자 수 제한
@@ -234,7 +234,7 @@ object HardConstraints {
                 maxConcurrent < 2
             }
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H7: maxConcurrentPatientsPerDoctor")
+            .asConstraint("H7 maxConcurrentPatientsPerDoctor")
 
     // ----------------------------------------------------------------
     // H8: 같은 시간에 장비 사용 수가 quantity 이하
@@ -282,7 +282,7 @@ object HardConstraints {
                 equipment.quantity < 2
             }
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H8: equipmentAvailability")
+            .asConstraint("H8 equipmentAvailability")
 
     // ----------------------------------------------------------------
     // H9: 의사의 providerType이 진료의 requiredProviderType과 일치
@@ -301,7 +301,7 @@ object HardConstraints {
                 appt.requiredProviderType != doctor.providerType
             }
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H9: providerTypeMatch")
+            .asConstraint("H9 providerTypeMatch")
 
     // ----------------------------------------------------------------
     // H10: 할당된 의사가 해당 클리닉 소속
@@ -320,7 +320,7 @@ object HardConstraints {
                 appt.clinicId != doctor.clinicId
             }
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H10: doctorBelongsToClinic")
+            .asConstraint("H10 doctorBelongsToClinic")
 
     // ----------------------------------------------------------------
     // H11: 장비 사용불가 기간 중 예약 배정 금지
@@ -339,7 +339,7 @@ object HardConstraints {
                 appt.startTime!! < fact.endTime && fact.startTime < appt.endTime!!
             }
             .penalize(HardSoftScore.ONE_HARD)
-            .asConstraint("H11: equipmentUnavailabilityConflict")
+            .asConstraint("H11 equipmentUnavailabilityConflict")
 
     /**
      * 3-level cascade로 maxConcurrent 값을 결정합니다.

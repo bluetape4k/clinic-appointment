@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.solver.constraint
 
-import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore
+import ai.timefold.solver.core.api.score.HardSoftScore
 import ai.timefold.solver.core.api.score.stream.Constraint
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory
 import ai.timefold.solver.core.api.score.stream.Joiners
@@ -23,7 +23,7 @@ object SoftConstraints {
                 Joiners.lessThan(AppointmentPlanning::id),
             )
             .penalize(HardSoftScore.ofSoft(100))
-            .asConstraint("S1: doctorLoadBalance")
+            .asConstraint("S1 doctorLoadBalance")
 
     /**
      * S2: 의사별 하루 스케줄의 빈 시간 간격 최소화 (LOW weight=10).
@@ -53,14 +53,14 @@ object SoftConstraints {
                 val bEnd = b.endTime
                 val aStart = a.startTime
                 if (aEnd != null && bStart != null && aEnd <= bStart) {
-                    ChronoUnit.MINUTES.between(aEnd, bStart).toInt()
+                    ChronoUnit.MINUTES.between(aEnd, bStart)
                 } else if (bEnd != null && aStart != null && bEnd <= aStart) {
-                    ChronoUnit.MINUTES.between(bEnd, aStart).toInt()
+                    ChronoUnit.MINUTES.between(bEnd, aStart)
                 } else {
-                    0
+                    0L
                 }
             }
-            .asConstraint("S2: minimizeGaps")
+            .asConstraint("S2 minimizeGaps")
 
     /**
      * S3: 재스케줄 시 원래 의사 유지 (HIGH weight=1000).
@@ -72,7 +72,7 @@ object SoftConstraints {
         factory.forEach(AppointmentPlanning::class.java)
             .filter { a -> a.originalDoctorId != null && a.doctorId != a.originalDoctorId }
             .penalize(HardSoftScore.ofSoft(1000))
-            .asConstraint("S3: preferOriginalDoctor")
+            .asConstraint("S3 preferOriginalDoctor")
 
     /**
      * S4: PENDING_RESCHEDULE 예약은 빠른 날짜/시간 선호 (LOW weight=10).
@@ -85,9 +85,9 @@ object SoftConstraints {
             .filter { a -> a.requestedDate != null && a.appointmentDate != null }
             .penalize(HardSoftScore.ofSoft(10)) { a ->
                 val days = ChronoUnit.DAYS.between(a.requestedDate, a.appointmentDate)
-                maxOf(0, days.toInt())
+                maxOf(0L, days)
             }
-            .asConstraint("S4: preferEarlySlot")
+            .asConstraint("S4 preferEarlySlot")
 
     /**
      * S5: 장비 사용 시간대를 연속 배치 (LOW weight=5).
@@ -118,14 +118,14 @@ object SoftConstraints {
                 val bEnd = b.endTime
                 val aStart = a.startTime
                 if (aEnd != null && bStart != null && aEnd <= bStart) {
-                    ChronoUnit.MINUTES.between(aEnd, bStart).toInt()
+                    ChronoUnit.MINUTES.between(aEnd, bStart)
                 } else if (bEnd != null && aStart != null && bEnd <= aStart) {
-                    ChronoUnit.MINUTES.between(bEnd, aStart).toInt()
+                    ChronoUnit.MINUTES.between(bEnd, aStart)
                 } else {
-                    0
+                    0L
                 }
             }
-            .asConstraint("S5: equipmentUtilization")
+            .asConstraint("S5 equipmentUtilization")
 
     /**
      * S6: 환자가 요청한 날짜에 가까울수록 선호 (HIGH weight=500).
@@ -137,7 +137,7 @@ object SoftConstraints {
         factory.forEach(AppointmentPlanning::class.java)
             .filter { a -> a.requestedDate != null && a.appointmentDate != null }
             .penalize(HardSoftScore.ofSoft(500)) { a ->
-                Math.abs(ChronoUnit.DAYS.between(a.requestedDate, a.appointmentDate)).toInt()
+                Math.abs(ChronoUnit.DAYS.between(a.requestedDate, a.appointmentDate))
             }
-            .asConstraint("S6: preferRequestedDate")
+            .asConstraint("S6 preferRequestedDate")
 }

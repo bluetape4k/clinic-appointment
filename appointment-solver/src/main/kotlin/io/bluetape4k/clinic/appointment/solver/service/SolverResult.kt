@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.solver.service
 
-import ai.timefold.solver.core.api.score.buildin.hardsoft.HardSoftScore
+import ai.timefold.solver.core.api.score.HardSoftScore
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import java.io.Serializable
 

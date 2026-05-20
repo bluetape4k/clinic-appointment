@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.solver.constraint
 
-import ai.timefold.solver.test.api.score.stream.ConstraintVerifier
+import ai.timefold.solver.core.api.score.stream.test.ConstraintVerifier
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.clinic.appointment.model.dto.ClinicClosureRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorAbsenceRecord
