@@ -41,9 +41,9 @@ class BenchmarkTest {
         private const val LARGE_MAX_TIME_MS = 40_000L
 
         // 베이스라인: 소프트 스코어 최소 기대값 (높을수록 좋음, 0이면 위반 없음)
-        private const val SMALL_MIN_SOFT_SCORE = -100
-        private const val MEDIUM_MIN_SOFT_SCORE = -500
-        private const val LARGE_MIN_SOFT_SCORE = -2000
+        private const val SMALL_MIN_SOFT_SCORE = -100L
+        private const val MEDIUM_MIN_SOFT_SCORE = -500L
+        private const val LARGE_MIN_SOFT_SCORE = -2000L
     }
 
     @Test

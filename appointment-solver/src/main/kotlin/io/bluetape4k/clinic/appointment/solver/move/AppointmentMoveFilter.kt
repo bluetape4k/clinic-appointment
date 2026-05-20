@@ -1,7 +1,7 @@
 package io.bluetape4k.clinic.appointment.solver.move
 
-import ai.timefold.solver.core.api.score.director.ScoreDirector
-import ai.timefold.solver.core.impl.heuristic.move.Move
+import ai.timefold.solver.core.impl.score.director.ScoreDirector
+import ai.timefold.solver.core.preview.api.move.Move
 import ai.timefold.solver.core.impl.heuristic.selector.common.decorator.SelectionFilter
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.clinic.appointment.solver.domain.AppointmentPlanning

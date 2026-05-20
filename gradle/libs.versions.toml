@@ -32,7 +32,7 @@ kotlinx-coroutines = "1.11.0" # https://mvnrepository.com/artifact/org.jetbrains
 # ── Project-local versions (NOT in any BOM) ───────────────────────────────
 springdoc-openapi = "3.0.3"   # https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-starter-webmvc-ui
 jjwt = "0.13.0"               # https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api
-timefold-solver = "1.33.0"    # https://mvnrepository.com/artifact/ai.timefold.solver/timefold-solver-bom
+timefold-solver = "2.1.0"     # https://mvnrepository.com/artifact/ai.timefold.solver/timefold-solver-bom
 lz4-java = "1.8.0"            # https://mvnrepository.com/artifact/org.lz4/lz4-java
 mockk = "1.14.9"              # https://mvnrepository.com/artifact/io.mockk/mockk
 random-beans = "3.9.0"        # https://mvnrepository.com/artifact/io.github.benas/random-beans
@@ -142,7 +142,6 @@ resilience4j-retry = { module = "io.github.resilience4j:resilience4j-retry", ver
 # ── Timefold (project-local version) ──────────────────────────────────────
 timefold-solver-bom = { module = "ai.timefold.solver:timefold-solver-bom", version.ref = "timefold-solver" }
 timefold-solver-core = { module = "ai.timefold.solver:timefold-solver-core" }
-timefold-solver-test = { module = "ai.timefold.solver:timefold-solver-test" }
 timefold-solver-benchmark = { module = "ai.timefold.solver:timefold-solver-benchmark" }
 
 # ── DB (versions from spring-boot4-dependencies BOM) ──────────────────────
