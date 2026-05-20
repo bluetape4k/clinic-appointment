@@ -24,43 +24,44 @@
 <rect class="frame" x="32" y="28" width="980" height="470" rx="28"/>
 <text class="title" x="66" y="82">clinic appointment Architecture</text>
 <text class="subtitle" x="70" y="118">Architecture nodes and edges from the original Mermaid source</text>
-<path class="line" d="M856 220 C856 303 522 303 522 386"/>
-<path class="line" d="M522 220 C522 303 522 303 522 386"/>
-<path class="line" d="M188 220 C188 303 522 303 522 386"/>
-<path class="line" d="M522 220 C522 303 188 303 188 386"/>
-<path class="line" d="M188 220 C188 303 188 303 188 386"/>
-<path class="line" d="M188 220 C188 220 856 220 856 220"/>
-<path class="line" d="M188 220 C188 220 522 220 522 220"/>
+<path class="line" d="M706 220 C706 303 672 303 672 386"/>
+<path class="line" d="M522 280 C522 303 522 303 522 326"/>
+<path class="line" d="M338 220 C338 303 372 303 372 386"/>
+<path class="line" d="M372 220 C372 303 338 303 338 386"/>
+<path class="line" d="M188 280 C188 303 188 303 188 326"/>
+<path class="line" d="M338 220 C338 220 706 220 706 220"/>
+<path class="line" d="M338 220 C338 220 372 220 372 220"/>
 <g transform="translate(48,170)">
   <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#E8F3FF" stroke="#5B8DEF"/>
   <text class="smallLabel" x="140" y="21" text-anchor="middle">appointment-core</text>
-<text class="smallLabel" x="140" y="47" text-anchor="middle">Domain/Repositories/State</text>
-<text class="smallLabel" x="140" y="73" text-anchor="middle">Machine</text>
+<text class="smallLabel" x="140" y="47" text-anchor="middle">Domain/Repositories/</text>
+<text class="smallLabel" x="140" y="73" text-anchor="middle">State Machine</text>
 </g>
 <g transform="translate(382,170)">
   <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#EAF7EF" stroke="#58A978"/>
-  <text class="smallLabel" x="140" y="33" text-anchor="middle">appointment-event Domain</text>
-<text class="smallLabel" x="140" y="59" text-anchor="middle">Events</text>
+  <text class="smallLabel" x="140" y="33" text-anchor="middle">appointment-event</text>
+<text class="smallLabel" x="140" y="59" text-anchor="middle">Domain Events</text>
 </g>
 <g transform="translate(716,170)">
   <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#FFF3D9" stroke="#D6A441"/>
-  <text class="smallLabel" x="140" y="33" text-anchor="middle">appointment-solver</text>
-<text class="smallLabel" x="140" y="59" text-anchor="middle">Timefold AI Scheduler</text>
+  <text class="smallLabel" x="140" y="21" text-anchor="middle">appointment-solver</text>
+<text class="smallLabel" x="140" y="47" text-anchor="middle">Timefold AI</text>
+<text class="smallLabel" x="140" y="73" text-anchor="middle">Scheduler</text>
 </g>
 <g transform="translate(48,336)">
   <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#FDECEF" stroke="#DC6B82"/>
-  <text class="smallLabel" x="140" y="21" text-anchor="middle">appointment-notification</text>
-<text class="smallLabel" x="140" y="47" text-anchor="middle">HA Notification</text>
+  <text class="smallLabel" x="140" y="21" text-anchor="middle">appointment-notifica</text>
+<text class="smallLabel" x="140" y="47" text-anchor="middle">tion HA Notification</text>
 <text class="smallLabel" x="140" y="73" text-anchor="middle">Scheduler</text>
 </g>
 <g transform="translate(382,336)">
   <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#E9F7F6" stroke="#45A7A1"/>
-  <text class="smallLabel" x="140" y="33" text-anchor="middle">appointment-api Spring</text>
-<text class="smallLabel" x="140" y="59" text-anchor="middle">Boot REST API</text>
+  <text class="smallLabel" x="140" y="33" text-anchor="middle">appointment-api</text>
+<text class="smallLabel" x="140" y="59" text-anchor="middle">Spring Boot REST API</text>
 </g>
 <g transform="translate(716,336)">
   <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#F1ECFF" stroke="#8A72D6"/>
-  <text class="smallLabel" x="140" y="33" text-anchor="middle">frontend/appointment-frontend</text>
-<text class="smallLabel" x="140" y="59" text-anchor="middle">Angular 18</text>
+  <text class="smallLabel" x="140" y="33" text-anchor="middle">frontend/appointment</text>
+<text class="smallLabel" x="140" y="59" text-anchor="middle">-frontend Angular 18</text>
 </g>
 </svg>

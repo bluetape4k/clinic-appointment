@@ -1,179 +1,102 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1480" viewBox="0 0 1680 1480" role="img" aria-label="Appointment Core Entity Relationship Diagram">
+<svg xmlns="http://www.w3.org/2000/svg" width="1244" height="1088" viewBox="0 0 1244 1088" role="img" aria-label="Entity Relationship Overview">
 <defs>
   <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#1f2937" flood-opacity="0.10"/></filter>
   <marker id="openArrow" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M 1 1 L 10 5 L 1 9" fill="none" stroke="#758297" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  <marker id="inherit" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 1 L 12 6 L 0 11 Z" fill="#ffffff" stroke="#758297" stroke-width="1.8"/></marker>
   <style>
     .canvas{fill:#f7f9fc}.frame{fill:#fff;stroke:#d8e0ea;stroke-width:1.5}
     .title{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:43px;font-weight:400;fill:#102033}
     .subtitle{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:15px;font-weight:400;fill:#536273}
-    .label{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:24px;font-weight:400;fill:#102033}
-    .smallLabel{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:20px;font-weight:400;fill:#102033}
+    .label{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:25px;font-weight:400;fill:#102033}
+    .smallLabel{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:21px;font-weight:400;fill:#102033}
     .mono{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:12px;font-weight:400;fill:#102033}
     .small{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:12px;font-weight:400;fill:#536273}
+    .strong{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:13px;font-weight:400;fill:#102033}
     .card{stroke-width:2.1;filter:url(#shadow)}.compartment{stroke-width:1.5;fill:none}
     .line{stroke:#758297;stroke-width:2.1;fill:none;marker-end:url(#openArrow)}
+    .plainLine{stroke:#758297;stroke-width:2.1;fill:none}
     .dashed{stroke:#758297;stroke-width:2.1;stroke-dasharray:7 6;fill:none;marker-end:url(#openArrow)}
+    .inheritLine{stroke:#758297;stroke-width:2.2;fill:none;marker-end:url(#inherit)}
+    .implLine{stroke:#758297;stroke-width:2.2;stroke-dasharray:8 7;fill:none;marker-end:url(#inherit)}
   </style>
 </defs>
-<rect class="canvas" width="1680" height="1480"/>
-<rect class="frame" x="32" y="28" width="1616" height="1424" rx="28"/>
-<text class="title" x="66" y="82">Appointment Core ERD</text>
-<text class="subtitle" x="70" y="118">Current Exposed tables and child-to-parent references from appointment-core/model/tables</text>
-
-<path class="line" d="M475 210 C395 210 395 210 315 210"/>
-<path class="line" d="M1285 210 C1415 210 1415 210 1465 210"/>
-<path class="line" d="M150 390 C150 312 545 312 545 235"/>
-<path class="line" d="M475 390 C475 312 545 312 545 235"/>
-<path class="line" d="M800 390 C800 312 870 312 870 235"/>
-<path class="line" d="M1125 390 C1125 312 1195 312 1195 235"/>
-<path class="line" d="M1450 390 C1450 312 545 312 545 235"/>
-<path class="line" d="M150 570 C150 492 545 492 545 235"/>
-<path class="line" d="M475 570 C475 492 545 492 545 235"/>
-<path class="line" d="M800 570 C800 492 870 492 870 235"/>
-<path class="line" d="M1125 570 C1125 492 1195 492 1195 235"/>
-<path class="line" d="M1450 570 C1450 492 545 492 545 235"/>
-<path class="line" d="M150 750 C150 672 545 672 545 235"/>
-<path class="line" d="M475 750 C475 672 545 672 545 235"/>
-<path class="line" d="M800 750 C800 672 870 672 870 235"/>
-<path class="line" d="M1125 750 C1125 672 1195 672 1195 235"/>
-<path class="line" d="M1450 750 C1450 672 1195 672 1195 235"/>
-<path class="line" d="M475 930 C475 852 1450 852 1450 775"/>
-<path class="line" d="M800 930 C800 852 1450 852 1450 775"/>
-<path class="line" d="M1125 930 C1125 852 1450 852 1450 775"/>
-<path class="line" d="M1450 930 C1450 852 800 852 800 775"/>
-<path class="line" d="M800 1110 C800 1032 1125 1032 1125 955"/>
-<path class="line" d="M1450 750 C1450 672 1450 672 1450 570"/>
-
+<rect class="canvas" width="1244" height="1088"/>
+<rect class="frame" x="32" y="28" width="1180" height="1032" rx="28"/>
+<text class="title" x="66" y="82">Entity Relationship Overview</text>
+<text class="subtitle" x="70" y="118">ERD tables and relationships from the original Mermaid source</text>
+<path class="line" d="M220 452 C220 452 622 452 622 452"/>
+<path class="line" d="M220 452 C220 678 622 678 622 904"/>
+<path class="line" d="M1024 226 C1024 339 622 339 622 452"/>
+<path class="line" d="M1024 226 C1024 565 622 565 622 904"/>
+<path class="line" d="M622 226 C622 339 622 339 622 452"/>
+<path class="line" d="M622 226 C622 452 1024 452 1024 678"/>
+<path class="line" d="M622 226 C622 452 622 452 622 678"/>
+<path class="line" d="M220 226 C220 452 220 452 220 678"/>
+<path class="line" d="M220 226 C220 339 1024 339 1024 452"/>
+<path class="line" d="M220 226 C220 339 622 339 622 452"/>
+<path class="line" d="M220 226 C220 339 220 339 220 452"/>
+<path class="line" d="M220 226 C220 226 1024 226 1024 226"/>
+<path class="line" d="M220 226 C220 226 622 226 622 226"/>
 <g transform="translate(60,170)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#E8F3FF" stroke="#5B8DEF"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#5B8DEF"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">TenantGroups</text>
-  <text class="mono" x="18" y="72">scheduling_tenant_groups</text>
-</g>
-<g transform="translate(385,170)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#EAF7EF" stroke="#58A978"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#58A978"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">Clinics</text>
-  <text class="mono" x="18" y="72">tenant_group_id FK</text>
-</g>
-<g transform="translate(710,170)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#FFF3D9" stroke="#D6A441"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#D6A441"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">Doctors</text>
-  <text class="mono" x="18" y="72">clinic_id FK</text>
-</g>
-<g transform="translate(1035,170)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#FDECEF" stroke="#DC6B82"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#DC6B82"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">TreatmentTypes</text>
-  <text class="mono" x="18" y="72">clinic_id FK</text>
-</g>
-<g transform="translate(1360,170)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#E9F7F6" stroke="#45A7A1"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#45A7A1"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">Holidays</text>
-  <text class="mono" x="18" y="72">tenant_group_id FK</text>
-</g>
+  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#E8F3FF" stroke="#5B8DEF"/>
+  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#5B8DEF"/>
+  <text class="label" x="160" y="44" text-anchor="middle">clinics</text>
 
-<g transform="translate(60,350)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#F1ECFF" stroke="#8A72D6"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#8A72D6"/>
-  <text class="smallLabel" x="127.5" y="38" text-anchor="middle">OperatingHoursTable</text>
-  <text class="mono" x="18" y="72">clinic_id FK</text>
 </g>
-<g transform="translate(385,350)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#F7F1E7" stroke="#B88A44"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#B88A44"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">ClinicClosures</text>
-  <text class="mono" x="18" y="72">clinic_id FK</text>
-</g>
-<g transform="translate(710,350)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#EEF6D9" stroke="#8BA84D"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#8BA84D"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">DoctorSchedules</text>
-  <text class="mono" x="18" y="72">doctor_id FK</text>
-</g>
-<g transform="translate(1035,350)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#E8F3FF" stroke="#5B8DEF"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#5B8DEF"/>
-  <text class="smallLabel" x="127.5" y="38" text-anchor="middle">TreatmentEquipments</text>
-  <text class="mono" x="18" y="72">treatment_type_id FK</text>
-</g>
-<g transform="translate(1360,350)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#EAF7EF" stroke="#58A978"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#58A978"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">Equipments</text>
-  <text class="mono" x="18" y="72">clinic_id FK</text>
-</g>
+<g transform="translate(462,170)">
+  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#EAF7EF" stroke="#58A978"/>
+  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#58A978"/>
+  <text class="label" x="160" y="44" text-anchor="middle">doctors</text>
 
-<g transform="translate(60,530)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#FFF3D9" stroke="#D6A441"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#D6A441"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">BreakTimes</text>
-  <text class="mono" x="18" y="72">clinic_id FK</text>
 </g>
-<g transform="translate(385,530)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#FDECEF" stroke="#DC6B82"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#DC6B82"/>
-  <text class="smallLabel" x="127.5" y="38" text-anchor="middle">ClinicDefaultBreakTimes</text>
-  <text class="mono" x="18" y="72">clinic_id FK</text>
-</g>
-<g transform="translate(710,530)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#E9F7F6" stroke="#45A7A1"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#45A7A1"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">DoctorAbsences</text>
-  <text class="mono" x="18" y="72">doctor_id FK</text>
-</g>
-<g transform="translate(1035,530)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#F1ECFF" stroke="#8A72D6"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#8A72D6"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">ConsultationTopics</text>
-  <text class="mono" x="18" y="72">clinic_id FK</text>
-</g>
-<g transform="translate(1360,530)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#F7F1E7" stroke="#B88A44"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#B88A44"/>
-  <text class="smallLabel" x="127.5" y="38" text-anchor="middle">EquipmentUnavailabilities</text>
-  <text class="mono" x="18" y="72">equipment_id, clinic_id FK</text>
-</g>
+<g transform="translate(864,170)">
+  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#FFF3D9" stroke="#D6A441"/>
+  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#D6A441"/>
+  <text class="label" x="160" y="44" text-anchor="middle">treatmenttypes</text>
 
-<g transform="translate(60,710)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#EEF6D9" stroke="#8BA84D"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#8BA84D"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">Appointments</text>
-  <text class="mono" x="18" y="72">clinic, doctor, treatment FK</text>
 </g>
-<g transform="translate(385,710)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#E8F3FF" stroke="#5B8DEF"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#5B8DEF"/>
-  <text class="label" x="127.5" y="38" text-anchor="middle">AppointmentNotes</text>
-  <text class="mono" x="18" y="72">appointment_id FK</text>
-</g>
-<g transform="translate(710,710)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#EAF7EF" stroke="#58A978"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#58A978"/>
-  <text class="smallLabel" x="127.5" y="38" text-anchor="middle">AppointmentStateHistory</text>
-  <text class="mono" x="18" y="72">appointment_id FK</text>
-</g>
-<g transform="translate(1035,710)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#FFF3D9" stroke="#D6A441"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#D6A441"/>
-  <text class="smallLabel" x="127.5" y="38" text-anchor="middle">RescheduleCandidates</text>
-  <text class="mono" x="18" y="72">appointment, doctor FK</text>
-</g>
-<g transform="translate(1360,710)">
-  <rect class="card" x="0" y="0" width="255" height="80" rx="5" fill="#FDECEF" stroke="#DC6B82"/>
-  <line class="compartment" x1="0" y1="54" x2="255" y2="54" stroke="#DC6B82"/>
-  <text class="smallLabel" x="127.5" y="28" text-anchor="middle">EquipmentUnavailability</text>
-  <text class="smallLabel" x="127.5" y="49" text-anchor="middle">Exceptions</text>
-  <text class="mono" x="18" y="72">unavailability_id FK</text>
-</g>
+<g transform="translate(60,396)">
+  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#FDECEF" stroke="#DC6B82"/>
+  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#DC6B82"/>
+  <text class="label" x="160" y="44" text-anchor="middle">equipments</text>
 
-<g transform="translate(100,1240)">
-  <rect class="card" x="0" y="0" width="1480" height="118" rx="18" fill="#f7fbff" stroke="#d8e0ea"/>
-  <text class="smallLabel" x="28" y="42">Reading rule</text>
-  <text class="mono" x="260" y="39">Arrows point from referencing child tables toward their parent tables.</text>
-  <text class="small" x="260" y="66">The diagram includes the current scheduling LongIdTable objects, including notes, state history, breaks, holidays, and equipment exceptions.</text>
-  <text class="small" x="260" y="91">Column lists stay in source files; this README image focuses on relationship topology.</text>
+</g>
+<g transform="translate(462,396)">
+  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#E9F7F6" stroke="#45A7A1"/>
+  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#45A7A1"/>
+  <text class="label" x="160" y="44" text-anchor="middle">appointments</text>
+
+</g>
+<g transform="translate(864,396)">
+  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#F1ECFF" stroke="#8A72D6"/>
+  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#8A72D6"/>
+  <text class="label" x="160" y="32" text-anchor="middle">operatinghourstabl</text>
+<text class="label" x="160" y="56" text-anchor="middle">e</text>
+
+</g>
+<g transform="translate(60,622)">
+  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#F7F1E7" stroke="#B88A44"/>
+  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#B88A44"/>
+  <text class="label" x="160" y="44" text-anchor="middle">clinicclosures</text>
+
+</g>
+<g transform="translate(462,622)">
+  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#EEF6D9" stroke="#8BA84D"/>
+  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#8BA84D"/>
+  <text class="label" x="160" y="44" text-anchor="middle">doctorschedules</text>
+
+</g>
+<g transform="translate(864,622)">
+  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#E8F3FF" stroke="#5B8DEF"/>
+  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#5B8DEF"/>
+  <text class="label" x="160" y="44" text-anchor="middle">doctorabsences</text>
+
+</g>
+<g transform="translate(462,848)">
+  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#EAF7EF" stroke="#58A978"/>
+  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#58A978"/>
+  <text class="label" x="160" y="32" text-anchor="middle">treatmentequipment</text>
+<text class="label" x="160" y="56" text-anchor="middle">s</text>
+
 </g>
 </svg>
