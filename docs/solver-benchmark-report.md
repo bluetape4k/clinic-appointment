@@ -10,6 +10,8 @@
 | 중규모 | 5 | 30 | 5 | 15s | **8,270ms** | `0hard/-500soft` | ✅ | 100,613/sec |
 | 대규모 | 10 | 100 | 10 | 30s | **16,163ms** | `0hard/-2000soft` | ✅ | 116,135/sec |
 
+![Solver benchmark summary chart](images/readme-charts/solver-benchmark-summary-chart-01.png)
+
 ## Baseline 기준선
 
 회귀 감지용 assertion 기준값:
