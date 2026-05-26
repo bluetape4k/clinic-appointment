@@ -1,7 +1,17 @@
 plugins {
+    alias(libs.plugins.exposed)
     kotlin("plugin.spring")
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.gatling)
+}
+
+exposed {
+    migrations {
+        tablesPackage = "io.bluetape4k.clinic.appointment.api.config"
+        databaseUrl = "jdbc:h2:mem:appointment-api-migrations;DB_CLOSE_DELAY=-1;MODE=PostgreSQL"
+        databaseUser = "sa"
+        databasePassword = ""
+    }
 }
 
 dependencies {
