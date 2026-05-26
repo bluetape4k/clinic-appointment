@@ -23,6 +23,7 @@ plugins {
     alias(libs.plugins.gatling) apply false
 
     alias(libs.plugins.kover)
+    alias(libs.plugins.exposed) apply false
 }
 
 val rootLibs = libs

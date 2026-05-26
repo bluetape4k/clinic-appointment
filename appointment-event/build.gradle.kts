@@ -1,5 +1,15 @@
 plugins {
+    alias(libs.plugins.exposed)
     kotlin("plugin.spring")
+}
+
+exposed {
+    migrations {
+        tablesPackage = "io.bluetape4k.clinic.appointment.event"
+        databaseUrl = "jdbc:h2:mem:appointment-event-migrations;DB_CLOSE_DELAY=-1;MODE=PostgreSQL"
+        databaseUser = "sa"
+        databasePassword = ""
+    }
 }
 
 dependencies {
