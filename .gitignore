@@ -45,3 +45,5 @@ dist/
 
 .profileconfig.json
 .omx/
+
+.codegraph/
