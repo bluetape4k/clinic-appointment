@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Dependency governance**: `bluetape4k-dependencies` aligned to the published
+  `1.2.0` BOM.
 - **Bluetape4k**: `1.6.2` → `1.7.0`
 - **Kotlin**: `2.3.20` → `2.3.21`
 - **Java baseline**: Java 25 toolchain → Java 21 (`.java-version`, `build.gradle.kts` 정렬)
