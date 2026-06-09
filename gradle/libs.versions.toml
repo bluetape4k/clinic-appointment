@@ -16,7 +16,7 @@
 bluetape4k-dependencies = "1.2.0"
 
 # ── Plugin versions (always required) ─────────────────────────────────────
-kotlin = "2.3.21"
+kotlin = "2.4.0"
 spring-boot4 = "4.0.6"
 dokka = "2.2.0"
 detekt = "1.23.8"
