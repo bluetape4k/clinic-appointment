@@ -1,5 +1,10 @@
 # AGENTS.md - clinic-appointment
 
+This repository inherits the workspace guidance from `../AGENTS.md`.
+Read and follow the workspace root guide first. This file only adds
+repo-specific layout, commands, domain rules, and local exceptions.
+
+
 Clinic appointment management example app built with Kotlin 2.3, Java 25,
 Spring Boot 4, and Exposed ORM.
 
@@ -25,9 +30,6 @@ Prefer module-scoped validation.
 | `:appointment-notification` | Notification scheduler with Resilience4j and Redis leader election |
 | `:appointment-api` | Spring Boot MVC API with JWT, Flyway, Swagger, Gatling |
 | `:frontend:appointment-frontend` | Angular frontend |
-
-Root README visual assets live under `docs/assets/` and should be shared by
-`README.md` and `README.ko.md` through the same relative path.
 
 ## Key Files
 
