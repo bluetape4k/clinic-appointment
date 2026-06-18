@@ -1,102 +1,90 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="878" height="1482" viewBox="0 0 878 1482" role="img" aria-label="Entity Relationship Overview">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" role="img" aria-label="appointment-core — Entity Relationship Diagram">
 <defs>
-  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#1f2937" flood-opacity="0.10"/></filter>
-  <marker id="openArrow" markerWidth="10" markerHeight="8" refX="8.5" refY="4" orient="auto" markerUnits="strokeWidth"><path d="M 1 1 L 8.5 4 L 1 7" fill="none" stroke="#758297" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
-  <marker id="inherit" markerWidth="11" markerHeight="10" refX="9.5" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M 0.5 1 L 9.5 5 L 0.5 9 Z" fill="#ffffff" stroke="#758297" stroke-width="1.7"/></marker>
+  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
+    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1f2937" flood-opacity="0.10"/>
+  </filter>
+  <marker id="arr" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#758297"/>
+  </marker>
+  <marker id="arr-blue" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#5B8DEF"/>
+  </marker>
+  <marker id="arr-green" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#58A978"/>
+  </marker>
+  <marker id="arr-amber" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#D6A441"/>
+  </marker>
+  <marker id="arr-pink" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#DC6B82"/>
+  </marker>
+  <marker id="arr-purple" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#8A72D6"/>
+  </marker>
+  <marker id="arr-teal" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#45A7A1"/>
+  </marker>
+  <marker id="inherit" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0 1 L 12 6 L 0 11 Z" fill="#ffffff" stroke="#758297" stroke-width="1.5"/>
+  </marker>
   <style>
-    .canvas{fill:#f7f9fc}.frame{fill:#fff;stroke:#d8e0ea;stroke-width:1.5}
-    .title{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:43px;font-weight:400;fill:#102033}
-    .subtitle{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:15px;font-weight:400;fill:#536273}
-    .label{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:25px;font-weight:400;fill:#102033}
-    .smallLabel{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:21px;font-weight:400;fill:#102033}
-    .mono{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:12px;font-weight:400;fill:#102033}
-    .small{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:12px;font-weight:400;fill:#536273}
-    .strong{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:13px;font-weight:400;fill:#102033}
-    .card{stroke-width:2.1;filter:url(#shadow)}.compartment{stroke-width:1.5;fill:none}
-    .line{stroke:#758297;stroke-width:2.1;fill:none;marker-end:url(#openArrow)}
-    .plainLine{stroke:#758297;stroke-width:2.1;fill:none}
-    .dashed{stroke:#758297;stroke-width:2.1;stroke-dasharray:7 6;fill:none;marker-end:url(#openArrow)}
-    .inheritLine{stroke:#758297;stroke-width:2.2;fill:none;marker-end:url(#inherit)}
-    .implLine{stroke:#758297;stroke-width:2.2;stroke-dasharray:8 7;fill:none;marker-end:url(#inherit)}
+    .canvas{fill:#F7F9FC}
+    .frame{fill:#FFFFFF;stroke:#D0D8E4;stroke-width:1.5}
+    .title{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:40px;fill:#102033}
+    .subtitle{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:13px;fill:#536273}
+    .label{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:22px;fill:#102033}
+    .smallLabel{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:17px;fill:#102033}
+    .mono{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:12px;fill:#102033}
+    .small{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:11px;fill:#536273}
+    .layerTitle{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:14px;fill:#536273;font-style:italic}
+    .card{stroke-width:2;filter:url(#shadow)}
+    .line{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#arr)}
+    .line-blue{stroke:#5B8DEF;stroke-width:2;fill:none;marker-end:url(#arr-blue)}
+    .line-green{stroke:#58A978;stroke-width:2;fill:none;marker-end:url(#arr-green)}
+    .line-amber{stroke:#D6A441;stroke-width:2;fill:none;marker-end:url(#arr-amber)}
+    .line-pink{stroke:#DC6B82;stroke-width:2;fill:none;marker-end:url(#arr-pink)}
+    .line-purple{stroke:#8A72D6;stroke-width:2;fill:none;marker-end:url(#arr-purple)}
+    .line-teal{stroke:#45A7A1;stroke-width:2;fill:none;marker-end:url(#arr-teal)}
+    .dashed{stroke:#758297;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr)}
+    .dashed-blue{stroke:#5B8DEF;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-blue)}
+    .dashed-green{stroke:#58A978;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-green)}
+    .dashed-amber{stroke:#D6A441;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-amber)}
+    .dashed-pink{stroke:#DC6B82;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-pink)}
+    .dashed-purple{stroke:#8A72D6;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-purple)}
+    .dashed-teal{stroke:#45A7A1;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-teal)}
+    .inheritLine{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#inherit)}
   </style>
 </defs>
-<rect class="canvas" width="878" height="1482"/>
-<rect class="frame" x="32" y="28" width="814" height="1426" rx="28"/>
-<text class="title" x="66" y="82">Entity Relationship Overview</text>
-<text class="subtitle" x="70" y="118">ERD tables and relationships from the original Mermaid source</text>
-<path class="line" d="M658 974 L658 818"/>
-<path class="line" d="M658 974 L658 904 L-2 904 L-2 636 L220 636 L220 550"/>
-<path class="line" d="M658 550 L658 706"/>
-<path class="line" d="M658 550 L658 620 L220 620 L220 438"/>
-<path class="line" d="M220 818 L220 880 L658 880 L658 706"/>
-<path class="line" d="M220 706 L220 604 L38 604 L38 336 L658 336 L658 282"/>
-<path class="line" d="M220 706 L220 652 L-22 652 L-22 384 L220 384 L220 282"/>
-<path class="line" d="M220 1086 L220 1180 L658 1180 L658 1242"/>
-<path class="line" d="M220 1086 L220 1242"/>
-<path class="line" d="M220 974 L220 896 L658 896 L658 818"/>
-<path class="line" d="M220 1086 L220 1156 L658 1156 L658 974"/>
-<path class="line" d="M220 974 L220 880 L28 880 L28 612 L658 612 L658 550"/>
-<path class="line" d="M220 974 L220 818"/>
-<g transform="translate(60,170)">
-  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#E8F3FF" stroke="#5B8DEF"/>
-  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#5B8DEF"/>
-  <text class="label" x="160" y="44" text-anchor="middle">doctorschedules</text>
-
-</g>
-<g transform="translate(498,170)">
-  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#EAF7EF" stroke="#58A978"/>
-  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#58A978"/>
-  <text class="label" x="160" y="44" text-anchor="middle">doctorabsences</text>
-
-</g>
-<g transform="translate(60,438)">
-  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#FFF3D9" stroke="#D6A441"/>
-  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#D6A441"/>
-  <text class="label" x="160" y="32" text-anchor="middle">treatmentequipment</text>
-<text class="label" x="160" y="56" text-anchor="middle">s</text>
-
-</g>
-<g transform="translate(498,438)">
-  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#FDECEF" stroke="#DC6B82"/>
-  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#DC6B82"/>
-  <text class="label" x="160" y="44" text-anchor="middle">treatmenttypes</text>
-
-</g>
-<g transform="translate(60,706)">
-  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#E9F7F6" stroke="#45A7A1"/>
-  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#45A7A1"/>
-  <text class="label" x="160" y="44" text-anchor="middle">doctors</text>
-
-</g>
-<g transform="translate(498,706)">
-  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#F1ECFF" stroke="#8A72D6"/>
-  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#8A72D6"/>
-  <text class="label" x="160" y="44" text-anchor="middle">appointments</text>
-
-</g>
-<g transform="translate(60,974)">
-  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#F7F1E7" stroke="#B88A44"/>
-  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#B88A44"/>
-  <text class="label" x="160" y="44" text-anchor="middle">clinics</text>
-
-</g>
-<g transform="translate(498,974)">
-  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#EEF6D9" stroke="#8BA84D"/>
-  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#8BA84D"/>
-  <text class="label" x="160" y="44" text-anchor="middle">equipments</text>
-
-</g>
-<g transform="translate(60,1242)">
-  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#E8F3FF" stroke="#5B8DEF"/>
-  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#5B8DEF"/>
-  <text class="label" x="160" y="32" text-anchor="middle">operatinghourstabl</text>
-<text class="label" x="160" y="56" text-anchor="middle">e</text>
-
-</g>
-<g transform="translate(498,1242)">
-  <rect class="card" x="0" y="0" width="320" height="112" rx="5" fill="#EAF7EF" stroke="#58A978"/>
-  <line class="compartment" x1="0" y1="74" x2="320" y2="74" stroke="#58A978"/>
-  <text class="label" x="160" y="44" text-anchor="middle">clinicclosures</text>
-
-</g>
+<rect class="canvas" width="1200" height="780"/>
+<rect class="frame" x="28" y="24" width="1144" height="732" rx="22"/>
+<text class="title" x="62" y="78">Domain Entity Relationships</text>
+<text class="subtitle" x="66" y="100">appointment-core · 16 entities · scheduling_* tables · Exposed ORM</text>
+<rect x="440" y="130" width="240" height="158" rx="6" fill="#E9F7F6" stroke="#45A7A1" stroke-width="2" filter="url(#shadow)"/><rect x="440" y="130" width="240" height="30" rx="6" fill="#45A7A1" stroke="#45A7A1" stroke-width="2"/><rect x="440" y="154" width="240" height="6" fill="#45A7A1"/><text class="smallLabel" x="560" y="146" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_clinics</text><text class="mono" x="448" y="174" dominant-baseline="middle" fill="#0E3533">🔑 id: Long</text><text class="small" x="450" y="192" dominant-baseline="middle" fill="#536273">tenant_group_id ⟶ TenantGroups</text><text class="small" x="450" y="212" dominant-baseline="middle" fill="#536273">name, timezone, locale</text><text class="small" x="450" y="232" dominant-baseline="middle" fill="#536273">slot_duration_minutes</text><text class="small" x="450" y="252" dominant-baseline="middle" fill="#536273">max_concurrent_patients</text><text class="small" x="450" y="272" dominant-baseline="middle" fill="#536273">open_on_holidays</text>
+<rect x="150" y="120" width="240" height="138" rx="6" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="2" filter="url(#shadow)"/><rect x="150" y="120" width="240" height="30" rx="6" fill="#5B8DEF" stroke="#5B8DEF" stroke-width="2"/><rect x="150" y="144" width="240" height="6" fill="#5B8DEF"/><text class="smallLabel" x="270" y="136" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_doctors</text><text class="mono" x="158" y="164" dominant-baseline="middle" fill="#1A3A5C">🔑 id: Long</text><text class="small" x="160" y="182" dominant-baseline="middle" fill="#5B8DEF">⟶ clinic_id</text><text class="small" x="160" y="202" dominant-baseline="middle" fill="#536273">name, specialty</text><text class="small" x="160" y="222" dominant-baseline="middle" fill="#536273">provider_type</text><text class="small" x="160" y="242" dominant-baseline="middle" fill="#536273">max_concurrent_patients</text>
+<rect x="730" y="120" width="240" height="158" rx="6" fill="#EAF7EF" stroke="#58A978" stroke-width="2" filter="url(#shadow)"/><rect x="730" y="120" width="240" height="30" rx="6" fill="#58A978" stroke="#58A978" stroke-width="2"/><rect x="730" y="144" width="240" height="6" fill="#58A978"/><text class="smallLabel" x="850" y="136" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_treatment_types</text><text class="mono" x="738" y="164" dominant-baseline="middle" fill="#1A3A26">🔑 id: Long</text><text class="small" x="740" y="182" dominant-baseline="middle" fill="#58A978">⟶ clinic_id</text><text class="small" x="740" y="202" dominant-baseline="middle" fill="#536273">name, category</text><text class="small" x="740" y="222" dominant-baseline="middle" fill="#536273">default_duration_minutes</text><text class="small" x="740" y="242" dominant-baseline="middle" fill="#536273">required_provider_type</text><text class="small" x="740" y="262" dominant-baseline="middle" fill="#536273">requires_equipment</text>
+<rect x="1000" y="120" width="180" height="138" rx="6" fill="#EEF6D9" stroke="#8BA84D" stroke-width="2" filter="url(#shadow)"/><rect x="1000" y="120" width="180" height="30" rx="6" fill="#8BA84D" stroke="#8BA84D" stroke-width="2"/><rect x="1000" y="144" width="180" height="6" fill="#8BA84D"/><text class="smallLabel" x="1090" y="136" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_equipments</text><text class="mono" x="1008" y="164" dominant-baseline="middle" fill="#2A3A0E">🔑 id: Long</text><text class="small" x="1010" y="182" dominant-baseline="middle" fill="#8BA84D">⟶ clinic_id</text><text class="small" x="1010" y="202" dominant-baseline="middle" fill="#536273">name</text><text class="small" x="1010" y="222" dominant-baseline="middle" fill="#536273">usage_duration_minutes</text><text class="small" x="1010" y="242" dominant-baseline="middle" fill="#536273">quantity</text>
+<rect x="360" y="320" width="480" height="178" rx="6" fill="#FDECEF" stroke="#DC6B82" stroke-width="2" filter="url(#shadow)"/><rect x="360" y="320" width="480" height="30" rx="6" fill="#DC6B82" stroke="#DC6B82" stroke-width="2"/><rect x="360" y="344" width="480" height="6" fill="#DC6B82"/><text class="smallLabel" x="600" y="336" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_appointments</text><text class="mono" x="368" y="364" dominant-baseline="middle" fill="#4A0E1C">🔑 id: Long</text><text class="small" x="370" y="382" dominant-baseline="middle" fill="#DC6B82">⟶ clinic_id, doctor_id</text><text class="small" x="370" y="402" dominant-baseline="middle" fill="#DC6B82">⟶ treatment_type_id, equipment_id</text><text class="small" x="370" y="422" dominant-baseline="middle" fill="#536273">patient_name, patient_phone</text><text class="small" x="370" y="442" dominant-baseline="middle" fill="#536273">appointment_date, start_time, end_time</text><text class="small" x="370" y="462" dominant-baseline="middle" fill="#536273">status (AppointmentState)</text><text class="small" x="370" y="482" dominant-baseline="middle" fill="#536273">reschedule_from_id</text>
+<rect x="50" y="320" width="240" height="138" rx="6" fill="#FFF3D9" stroke="#D6A441" stroke-width="2" filter="url(#shadow)"/><rect x="50" y="320" width="240" height="30" rx="6" fill="#D6A441" stroke="#D6A441" stroke-width="2"/><rect x="50" y="344" width="240" height="6" fill="#D6A441"/><text class="smallLabel" x="170" y="336" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_operating_hours</text><text class="mono" x="58" y="364" dominant-baseline="middle" fill="#4A3000">🔑 id: Long</text><text class="small" x="60" y="382" dominant-baseline="middle" fill="#D6A441">⟶ clinic_id</text><text class="small" x="60" y="402" dominant-baseline="middle" fill="#536273">day_of_week</text><text class="small" x="60" y="422" dominant-baseline="middle" fill="#536273">open_time, close_time</text><text class="small" x="60" y="442" dominant-baseline="middle" fill="#536273">is_active</text>
+<rect x="50" y="490" width="240" height="118" rx="6" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="2" filter="url(#shadow)"/><rect x="50" y="490" width="240" height="30" rx="6" fill="#5B8DEF" stroke="#5B8DEF" stroke-width="2"/><rect x="50" y="514" width="240" height="6" fill="#5B8DEF"/><text class="smallLabel" x="170" y="506" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_doctor_schedules</text><text class="mono" x="58" y="534" dominant-baseline="middle" fill="#1A3A5C">🔑 id: Long</text><text class="small" x="60" y="552" dominant-baseline="middle" fill="#5B8DEF">⟶ doctor_id</text><text class="small" x="60" y="572" dominant-baseline="middle" fill="#536273">day_of_week</text><text class="small" x="60" y="592" dominant-baseline="middle" fill="#536273">start_time, end_time</text>
+<rect x="50" y="610" width="240" height="118" rx="6" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="2" filter="url(#shadow)"/><rect x="50" y="610" width="240" height="30" rx="6" fill="#5B8DEF" stroke="#5B8DEF" stroke-width="2"/><rect x="50" y="634" width="240" height="6" fill="#5B8DEF"/><text class="smallLabel" x="170" y="626" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_doctor_absences</text><text class="mono" x="58" y="654" dominant-baseline="middle" fill="#1A3A5C">🔑 id: Long</text><text class="small" x="60" y="672" dominant-baseline="middle" fill="#5B8DEF">⟶ doctor_id</text><text class="small" x="60" y="692" dominant-baseline="middle" fill="#536273">absence_date</text><text class="small" x="60" y="712" dominant-baseline="middle" fill="#536273">start_time, end_time (opt)</text>
+<rect x="780" y="320" width="240" height="138" rx="6" fill="#FFF3D9" stroke="#D6A441" stroke-width="2" filter="url(#shadow)"/><rect x="780" y="320" width="240" height="30" rx="6" fill="#D6A441" stroke="#D6A441" stroke-width="2"/><rect x="780" y="344" width="240" height="6" fill="#D6A441"/><text class="smallLabel" x="900" y="336" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_clinic_closures</text><text class="mono" x="788" y="364" dominant-baseline="middle" fill="#4A3000">🔑 id: Long</text><text class="small" x="790" y="382" dominant-baseline="middle" fill="#D6A441">⟶ clinic_id</text><text class="small" x="790" y="402" dominant-baseline="middle" fill="#536273">closure_date</text><text class="small" x="790" y="422" dominant-baseline="middle" fill="#536273">is_full_day</text><text class="small" x="790" y="442" dominant-baseline="middle" fill="#536273">start_time, end_time (opt)</text>
+<rect x="780" y="480" width="240" height="118" rx="6" fill="#FFF3D9" stroke="#D6A441" stroke-width="2" filter="url(#shadow)"/><rect x="780" y="480" width="240" height="30" rx="6" fill="#D6A441" stroke="#D6A441" stroke-width="2"/><rect x="780" y="504" width="240" height="6" fill="#D6A441"/><text class="smallLabel" x="900" y="496" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_holidays</text><text class="mono" x="788" y="524" dominant-baseline="middle" fill="#4A3000">🔑 id: Long</text><text class="small" x="790" y="542" dominant-baseline="middle" fill="#536273">holiday_date</text><text class="small" x="790" y="562" dominant-baseline="middle" fill="#536273">name</text><text class="small" x="790" y="582" dominant-baseline="middle" fill="#536273">is_recurring</text>
+<rect x="780" y="590" width="240" height="118" rx="6" fill="#EEF6D9" stroke="#8BA84D" stroke-width="2" filter="url(#shadow)"/><rect x="780" y="590" width="240" height="30" rx="6" fill="#8BA84D" stroke="#8BA84D" stroke-width="2"/><rect x="780" y="614" width="240" height="6" fill="#8BA84D"/><text class="smallLabel" x="900" y="606" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_equipment_unavailabilities</text><text class="mono" x="788" y="634" dominant-baseline="middle" fill="#2A3A0E">🔑 id: Long</text><text class="small" x="790" y="652" dominant-baseline="middle" fill="#8BA84D">⟶ equipment_id</text><text class="small" x="790" y="672" dominant-baseline="middle" fill="#536273">start_datetime, end_datetime</text><text class="small" x="790" y="692" dominant-baseline="middle" fill="#536273">recurrence_rule</text>
+<rect x="360" y="580" width="360" height="138" rx="6" fill="#F1ECFF" stroke="#8A72D6" stroke-width="2" filter="url(#shadow)"/><rect x="360" y="580" width="360" height="30" rx="6" fill="#8A72D6" stroke="#8A72D6" stroke-width="2"/><rect x="360" y="604" width="360" height="6" fill="#8A72D6"/><text class="smallLabel" x="540" y="596" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_reschedule_candidates</text><text class="mono" x="368" y="624" dominant-baseline="middle" fill="#2A1A5C">🔑 id: Long</text><text class="small" x="370" y="642" dominant-baseline="middle" fill="#8A72D6">⟶ appointment_id</text><text class="small" x="370" y="662" dominant-baseline="middle" fill="#8A72D6">⟶ clinic_id</text><text class="small" x="370" y="682" dominant-baseline="middle" fill="#536273">proposed_date, proposed_start_time</text><text class="small" x="370" y="702" dominant-baseline="middle" fill="#536273">status, score</text>
+<rect x="360" y="700" width="360" height="118" rx="6" fill="#F2F5F9" stroke="#9AA8B8" stroke-width="2" filter="url(#shadow)"/><rect x="360" y="700" width="360" height="30" rx="6" fill="#9AA8B8" stroke="#9AA8B8" stroke-width="2"/><rect x="360" y="724" width="360" height="6" fill="#9AA8B8"/><text class="smallLabel" x="540" y="716" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_appointment_state_history</text><text class="mono" x="368" y="744" dominant-baseline="middle" fill="#2A3340">🔑 id: Long</text><text class="small" x="370" y="762" dominant-baseline="middle" fill="#9AA8B8">⟶ appointment_id</text><text class="small" x="370" y="782" dominant-baseline="middle" fill="#536273">from_state, to_state, event</text><text class="small" x="370" y="802" dominant-baseline="middle" fill="#536273">occurred_at</text>
+<path class="line-teal" d="M390 160 L440 160"/>
+<path class="line-teal" d="M730 160 L680 160"/>
+<path class="line-teal" d="M1090 120 L560 120 L560 130"/>
+<path class="line-teal" d="M170 320 L560 320 L560 260"/>
+<path class="line-teal" d="M600 320 L600 260"/>
+<path class="line-blue" d="M360 360 L360 260 L270 260"/>
+<path class="line-green" d="M840 360 L840 260 L850 260"/>
+<path class="line-olive" d="M840 380 L840 260 L1090 260"/>
+<path class="line-blue" d="M170 490 L170 380"/>
+<path class="line-blue" d="M170 610 L170 610 L170 380"/>
+<path class="line-amber" d="M900 320 L780 260"/>
+<path class="line-olive" d="M900 590 L1090 590 L1090 260"/>
+<path class="line-pink" d="M540 580 L540 500"/>
+<path class="line-gray" d="M540 700 L540 500"/>
+<text class="small" x="600" y="752" text-anchor="middle">appointment-core · scheduling_* tables · github.com/bluetape4k/clinic-appointment</text>
 </svg>

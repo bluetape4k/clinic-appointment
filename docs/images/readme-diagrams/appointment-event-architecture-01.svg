@@ -1,77 +1,90 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1378" height="692" viewBox="0 0 1378 692" role="img" aria-label="Event Flow">
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="560" viewBox="0 0 920 560" role="img" aria-label="appointment-event — Domain Event Flow">
 <defs>
-  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#1f2937" flood-opacity="0.10"/></filter>
-  <marker id="openArrow" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M 1 1 L 10 5 L 1 9" fill="none" stroke="#758297" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>
-  <marker id="inherit" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M 0 1 L 12 6 L 0 11 Z" fill="#ffffff" stroke="#758297" stroke-width="1.8"/></marker>
+  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
+    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1f2937" flood-opacity="0.10"/>
+  </filter>
+  <marker id="arr" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#758297"/>
+  </marker>
+  <marker id="arr-blue" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#5B8DEF"/>
+  </marker>
+  <marker id="arr-green" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#58A978"/>
+  </marker>
+  <marker id="arr-amber" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#D6A441"/>
+  </marker>
+  <marker id="arr-pink" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#DC6B82"/>
+  </marker>
+  <marker id="arr-purple" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#8A72D6"/>
+  </marker>
+  <marker id="arr-teal" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#45A7A1"/>
+  </marker>
+  <marker id="inherit" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth">
+    <path d="M 0 1 L 12 6 L 0 11 Z" fill="#ffffff" stroke="#758297" stroke-width="1.5"/>
+  </marker>
   <style>
-    .canvas{fill:#f7f9fc}.frame{fill:#fff;stroke:#d8e0ea;stroke-width:1.5}
-    .title{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:43px;font-weight:400;fill:#102033}
-    .subtitle{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:15px;font-weight:400;fill:#536273}
-    .label{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:25px;font-weight:400;fill:#102033}
-    .smallLabel{font-family:"Architects Daughter","Comic Sans MS","Comic Sans",cursive;font-size:21px;font-weight:400;fill:#102033}
-    .mono{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:12px;font-weight:400;fill:#102033}
-    .small{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:12px;font-weight:400;fill:#536273}
-    .strong{font-family:"Comic Sans MS","Comic Sans","Comic Neue",Arial,sans-serif;font-size:13px;font-weight:400;fill:#102033}
-    .card{stroke-width:2.1;filter:url(#shadow)}.compartment{stroke-width:1.5;fill:none}
-    .line{stroke:#758297;stroke-width:2.1;fill:none;marker-end:url(#openArrow)}
-    .plainLine{stroke:#758297;stroke-width:2.1;fill:none}
-    .dashed{stroke:#758297;stroke-width:2.1;stroke-dasharray:7 6;fill:none;marker-end:url(#openArrow)}
-    .inheritLine{stroke:#758297;stroke-width:2.2;fill:none;marker-end:url(#inherit)}
-    .implLine{stroke:#758297;stroke-width:2.2;stroke-dasharray:8 7;fill:none;marker-end:url(#inherit)}
+    .canvas{fill:#F7F9FC}
+    .frame{fill:#FFFFFF;stroke:#D0D8E4;stroke-width:1.5}
+    .title{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:40px;fill:#102033}
+    .subtitle{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:13px;fill:#536273}
+    .label{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:22px;fill:#102033}
+    .smallLabel{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:17px;fill:#102033}
+    .mono{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:12px;fill:#102033}
+    .small{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:11px;fill:#536273}
+    .layerTitle{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:14px;fill:#536273;font-style:italic}
+    .card{stroke-width:2;filter:url(#shadow)}
+    .line{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#arr)}
+    .line-blue{stroke:#5B8DEF;stroke-width:2;fill:none;marker-end:url(#arr-blue)}
+    .line-green{stroke:#58A978;stroke-width:2;fill:none;marker-end:url(#arr-green)}
+    .line-amber{stroke:#D6A441;stroke-width:2;fill:none;marker-end:url(#arr-amber)}
+    .line-pink{stroke:#DC6B82;stroke-width:2;fill:none;marker-end:url(#arr-pink)}
+    .line-purple{stroke:#8A72D6;stroke-width:2;fill:none;marker-end:url(#arr-purple)}
+    .line-teal{stroke:#45A7A1;stroke-width:2;fill:none;marker-end:url(#arr-teal)}
+    .dashed{stroke:#758297;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr)}
+    .dashed-blue{stroke:#5B8DEF;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-blue)}
+    .dashed-green{stroke:#58A978;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-green)}
+    .dashed-amber{stroke:#D6A441;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-amber)}
+    .dashed-pink{stroke:#DC6B82;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-pink)}
+    .dashed-purple{stroke:#8A72D6;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-purple)}
+    .dashed-teal{stroke:#45A7A1;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-teal)}
+    .inheritLine{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#inherit)}
   </style>
 </defs>
-<rect class="canvas" width="1378" height="692"/>
-<rect class="frame" x="32" y="28" width="1314" height="636" rx="28"/>
-<text class="title" x="66" y="82">Event Flow</text>
-<text class="subtitle" x="70" y="118">Architecture nodes and edges from the original Mermaid source</text>
-<path class="line" d="M338 220 C338 386 706 386 706 552"/>
-<path class="line" d="M372 220 C372 303 338 303 338 386"/>
-<path class="line" d="M672 220 C672 220 1040 220 1040 220"/>
-<path class="line" d="M338 220 C338 220 706 220 706 220"/>
-<g transform="translate(48,170)">
-  <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#E8F3FF" stroke="#5B8DEF"/>
-  <text class="smallLabel" x="140" y="33" text-anchor="middle">appointment-api</text>
-<text class="smallLabel" x="140" y="59" text-anchor="middle">(after state change)</text>
-</g>
-<g transform="translate(382,170)">
-  <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#EAF7EF" stroke="#58A978"/>
-  <text class="smallLabel" x="140" y="33" text-anchor="middle">Spring Application</text>
-<text class="smallLabel" x="140" y="59" text-anchor="middle">Event Publisher</text>
-</g>
-<g transform="translate(716,170)">
-  <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#FFF3D9" stroke="#D6A441"/>
-  <text class="smallLabel" x="140" y="45" text-anchor="middle">api</text>
-</g>
-<g transform="translate(1050,170)">
-  <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#FDECEF" stroke="#DC6B82"/>
-  <text class="smallLabel" x="140" y="21" text-anchor="middle">Appointment Event</text>
-<text class="smallLabel" x="140" y="47" text-anchor="middle">Logger</text>
-<text class="smallLabel" x="140" y="73" text-anchor="middle">AppointmentEventLogs</text>
-</g>
-<g transform="translate(48,336)">
-  <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#E9F7F6" stroke="#45A7A1"/>
-  <text class="smallLabel" x="140" y="21" text-anchor="middle">appointment-notifica</text>
-<text class="smallLabel" x="140" y="47" text-anchor="middle">tion Notification</text>
-<text class="smallLabel" x="140" y="73" text-anchor="middle">Event Listener</text>
-</g>
-<g transform="translate(382,336)">
-  <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#F1ECFF" stroke="#8A72D6"/>
-  <text class="smallLabel" x="140" y="45" text-anchor="middle">Created</text>
-</g>
-<g transform="translate(716,336)">
-  <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#F7F1E7" stroke="#B88A44"/>
-  <text class="smallLabel" x="140" y="45" text-anchor="middle">StatusChanged</text>
-</g>
-<g transform="translate(1050,336)">
-  <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#EEF6D9" stroke="#8BA84D"/>
-  <text class="smallLabel" x="140" y="45" text-anchor="middle">Cancelled</text>
-</g>
-<g transform="translate(382,502)">
-  <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#E8F3FF" stroke="#5B8DEF"/>
-  <text class="smallLabel" x="140" y="45" text-anchor="middle">Rescheduled</text>
-</g>
-<g transform="translate(716,502)">
-  <rect class="card" x="0" y="0" width="280" height="100" rx="14" fill="#EAF7EF" stroke="#58A978"/>
-  <text class="smallLabel" x="140" y="45" text-anchor="middle">Events</text>
-</g>
+<rect class="canvas" width="920" height="560"/>
+<rect class="frame" x="28" y="24" width="864" height="512" rx="22"/>
+<text class="title" x="62" y="78">Domain Event Flow</text>
+<text class="subtitle" x="66" y="100">appointment-event · Spring ApplicationEvent · EventLog persistence</text>
+<rect x="48" y="118" width="380" height="380" rx="14" fill="#EAF7EF" stroke="#58A978" stroke-width="1" opacity="0.5"/>
+<text class="layerTitle" x="62" y="138" dominant-baseline="middle">Publishers</text>
+<rect x="458" y="118" width="414" height="180" rx="14" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="1" opacity="0.5"/>
+<text class="layerTitle" x="472" y="138" dominant-baseline="middle">Event Bus</text>
+<rect x="458" y="318" width="414" height="180" rx="14" fill="#E9F7F6" stroke="#45A7A1" stroke-width="1" opacity="0.5"/>
+<text class="layerTitle" x="472" y="338" dominant-baseline="middle">Subscribers</text>
+<rect x="68" y="148" width="280" height="64" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="208" y="156" text-anchor="middle" dominant-baseline="middle">AppointmentController</text><text class="mono" x="208" y="174" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">POST /appointments</text><text class="mono" x="208" y="190" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">PATCH .../status</text><text class="mono" x="208" y="206" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">DELETE .../cancel</text>
+<rect x="68" y="228" width="280" height="64" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="208" y="244" text-anchor="middle" dominant-baseline="middle">RescheduleController</text><text class="mono" x="208" y="262" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">POST .../reschedule</text><text class="mono" x="208" y="278" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">batch reschedule stream</text>
+<rect x="68" y="308" width="280" height="64" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="208" y="324" text-anchor="middle" dominant-baseline="middle">SlotController</text><text class="mono" x="208" y="342" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">slot query triggers</text><text class="mono" x="208" y="358" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">availability events</text>
+<rect x="68" y="392" width="280" height="64" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="208" y="408" text-anchor="middle" dominant-baseline="middle">Domain Services</text><text class="mono" x="208" y="426" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">ClosureRescheduleService</text><text class="mono" x="208" y="442" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">ConcurrencyResolver</text>
+<rect x="478" y="148" width="180" height="52" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="568" y="166" text-anchor="middle" dominant-baseline="middle">Created</text><text class="mono" x="568" y="184" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">appointmentId, clinicId</text>
+<rect x="678" y="148" width="180" height="52" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="768" y="166" text-anchor="middle" dominant-baseline="middle">StatusChanged</text><text class="mono" x="768" y="184" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">fromState → toState</text>
+<rect x="478" y="218" width="180" height="52" rx="10" fill="#FDECEF" stroke="#DC6B82" class="card"/><text class="smallLabel" x="568" y="236" text-anchor="middle" dominant-baseline="middle">Cancelled</text><text class="mono" x="568" y="254" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">appointmentId, reason</text>
+<rect x="678" y="218" width="180" height="52" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="768" y="236" text-anchor="middle" dominant-baseline="middle">Rescheduled</text><text class="mono" x="768" y="254" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">originalId, newId</text>
+<rect x="478" y="348" width="180" height="64" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="568" y="364" text-anchor="middle" dominant-baseline="middle">AppointmentEventLogger</text><text class="mono" x="568" y="382" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">@EventListener</text><text class="mono" x="568" y="398" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">persists to EventLog DB</text>
+<rect x="678" y="348" width="180" height="64" rx="10" fill="#FDECEF" stroke="#DC6B82" class="card"/><text class="smallLabel" x="768" y="364" text-anchor="middle" dominant-baseline="middle">NotificationEventListener</text><text class="mono" x="768" y="382" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">@EventListener</text><text class="mono" x="768" y="398" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">calls NotificationChannel</text>
+<rect x="478" y="432" width="180" height="52" rx="10" fill="#F2F5F9" stroke="#9AA8B8" class="card"/><text class="smallLabel" x="568" y="442" text-anchor="middle" dominant-baseline="middle">AppointmentEventLogs</text><text class="mono" x="568" y="460" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">Exposed table</text><text class="mono" x="568" y="476" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">event_type, payload_json</text>
+<path class="line-blue" d="M348 180 L478 174"/>
+<path class="line-blue" d="M348 200 L678 174"/>
+<path class="line-pink" d="M348 260 L478 244"/>
+<path class="line-teal" d="M348 294 L678 244"/>
+<path class="dashed-pink" d="M348 424 L478 244"/>
+<path class="line-teal" d="M568 200 L568 348"/>
+<path class="line-pink" d="M768 200 L768 348"/>
+<path class="line-gray" d="M568 412 L568 432"/>
+<rect x="567" y="289" width="169" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
+<text class="small" x="571" y="300" fill="#536273">Spring ApplicationEvent</text>
+<text class="small" x="460" y="532" text-anchor="middle">appointment-event · github.com/bluetape4k/clinic-appointment</text>
 </svg>
