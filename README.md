@@ -28,19 +28,13 @@ notifications, Spring Boot APIs, and an Angular frontend.
 - **Tenant-scoped REST API** - Provides Spring Boot 4 MVC APIs under `/api/{tenantCode}/...` with JWT tenant authorization, Flyway migrations, and Swagger UI.
 - **Angular 18 web UI** - Provides appointment search, creation, and status-change workflows.
 
-<!-- README_VISUAL_OVERVIEW:START -->
-## Overview Diagram
-
-![Clinic Appointment overview diagram](docs/assets/readme-diagrams/root-readme-overview-01.png)
-
-## Module Composition Chart
-
-![Clinic Appointment module composition chart](docs/assets/readme-charts/root-readme-module-chart-01.png)
-<!-- README_VISUAL_OVERVIEW:END -->
-
 ## Architecture
 
-![clinic appointment Architecture diagram](docs/assets/readme-diagrams/clinic-appointment-architecture-01.png)
+![Clinic Appointment Architecture](docs/images/readme-diagrams/clinic-appointment-architecture-01.png)
+
+## Module Overview
+
+![Module Overview](docs/images/readme-diagrams/root-readme-overview-01.png)
 
 ## Modules
 
