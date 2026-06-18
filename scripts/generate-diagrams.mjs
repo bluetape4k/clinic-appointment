@@ -1,928 +1,614 @@
 #!/usr/bin/env node
 /**
  * clinic-appointment README diagram generator
- * Generates architecture, ERD, state machine, sequence, and flow diagrams
- * for all modules following the bluetape4k diagram visual language.
+ * Uses Graphviz dot for automatic layout with correct edge routing.
  *
  * Usage: node scripts/generate-diagrams.mjs [--module <name>]
+ *   modules: root, core, event, solver, notification, api
  */
-
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = path.resolve(import.meta.dirname ?? process.cwd(), "..");
 const outDir = path.join(root, "docs/images/readme-diagrams");
-const chartDir = path.join(root, "docs/images/readme-charts");
-
-// ─── Fonts ────────────────────────────────────────────────────────────────────
-const TITLE_FONT = "Architects Daughter";
-const DETAIL_FONT = "Comic Mono";
-const FONT_DIR = `${process.env.HOME}/Library/Fonts`;
-const TITLE_FONT_FILE = path.join(FONT_DIR, "ArchitectsDaughter-Regular.ttf");
-const DETAIL_FONT_FILE = path.join(FONT_DIR, "ComicMono.ttf");
+const assetsDir = path.join(root, "docs/assets/readme-diagrams");
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
-const P = {
-  blue:   { bg: "#E8F3FF", stroke: "#5B8DEF", text: "#1A3A5C" },
-  green:  { bg: "#EAF7EF", stroke: "#58A978", text: "#1A3A26" },
-  teal:   { bg: "#E9F7F6", stroke: "#45A7A1", text: "#0E3533" },
-  amber:  { bg: "#FFF3D9", stroke: "#D6A441", text: "#4A3000" },
-  pink:   { bg: "#FDECEF", stroke: "#DC6B82", text: "#4A0E1C" },
-  purple: { bg: "#F1ECFF", stroke: "#8A72D6", text: "#2A1A5C" },
-  olive:  { bg: "#EEF6D9", stroke: "#8BA84D", text: "#2A3A0E" },
-  gray:   { bg: "#F2F5F9", stroke: "#9AA8B8", text: "#2A3340" },
-  canvas: "#F7F9FC",
-  frame:  "#FFFFFF",
-  frameStroke: "#D0D8E4",
+const C = {
+  blue:   ["#E8F3FF", "#5B8DEF", "#1A3A5C"],
+  green:  ["#EAF7EF", "#58A978", "#1A3A26"],
+  teal:   ["#E9F7F6", "#45A7A1", "#0E3533"],
+  amber:  ["#FFF3D9", "#D6A441", "#4A3000"],
+  pink:   ["#FDECEF", "#DC6B82", "#4A0E1C"],
+  purple: ["#F1ECFF", "#8A72D6", "#2A1A5C"],
+  olive:  ["#EEF6D9", "#8BA84D", "#2A3A0E"],
+  gray:   ["#F2F5F9", "#9AA8B8", "#2A3340"],
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function esc(text) {
-  return String(text ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+/** Graphviz node fill/border/font attributes for a named color. */
+function nc(color) {
+  const [bg, stroke, text] = C[color] ?? C.gray;
+  return `fillcolor="${bg}" color="${stroke}" fontcolor="${text}"`;
+}
+/** Graphviz cluster background/border for a named color. */
+function cc(color) {
+  const [bg, stroke] = C[color] ?? C.gray;
+  return `style=filled fillcolor="${bg}88" color="${stroke}" penwidth=1.5 fontcolor="${stroke}"`;
 }
 
-function fontconfigEnv() {
-  const tmpCfg = `/tmp/clinic_fc_${Date.now()}.conf`;
-  const titlePath = TITLE_FONT_FILE.replace(/&/g, "&amp;");
-  const detailPath = DETAIL_FONT_FILE.replace(/&/g, "&amp;");
-  fs.writeFileSync(tmpCfg, `<?xml version="1.0"?>
+// ─── Runtime helpers ──────────────────────────────────────────────────────────
+function run(cmd, args) {
+  const r = spawnSync(cmd, args, {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: process.env,
+  });
+  return { ok: r.status === 0, stderr: r.stderr?.toString() ?? "" };
+}
+
+function dotRun(dotContent, fmt, outPath) {
+  const tmp = `/tmp/clin_${Date.now()}_${Math.random().toString(36).slice(2)}.dot`;
+  fs.writeFileSync(tmp, dotContent);
+  const r = run("/opt/homebrew/bin/dot", [`-T${fmt}`, tmp, "-o", outPath]);
+  try { fs.unlinkSync(tmp); } catch {}
+  return r;
+}
+
+function renderPng(svgPath, pngPath) {
+  let r = run("rsvg-convert", ["-o", pngPath, svgPath]);
+  if (!r.ok) r = run("/opt/homebrew/bin/convert", ["-density", "192", svgPath, pngPath]);
+  if (!r.ok) r = run("convert", ["-density", "192", svgPath, pngPath]);
+  return r.ok;
+}
+
+function saveDot(slug, dotContent, dir = outDir) {
+  fs.mkdirSync(dir, { recursive: true });
+  const svgPath = path.join(dir, `${slug}.svg`);
+  const pngPath = path.join(dir, `${slug}.png`);
+  const r = dotRun(dotContent, "svg", svgPath);
+  if (!r.ok) {
+    console.error(`  ✗ ${slug}: dot error\n    ${r.stderr.slice(0, 200)}`);
+    return false;
+  }
+  const ok = renderPng(svgPath, pngPath);
+  console.log(`  ${ok ? "✓" : "⚠ PNG fail"}  ${slug}.svg + .png`);
+  return true;
+}
+
+/** Save to assetsDir AND copy to outDir (for root diagrams). */
+function saveDotRoot(slug, dotContent) {
+  const ok = saveDot(slug, dotContent, assetsDir);
+  if (ok) {
+    for (const ext of ["svg", "png"]) {
+      const src = path.join(assetsDir, `${slug}.${ext}`);
+      if (fs.existsSync(src))
+        fs.copyFileSync(src, path.join(outDir, `${slug}.${ext}`));
+    }
+  }
+}
+
+// ─── Common DOT preamble ──────────────────────────────────────────────────────
+const GRAPH = `bgcolor="#F7F9FC" pad=0.8 nodesep=0.85 ranksep=1.1 fontname="Helvetica Neue" fontsize=12`;
+const NODES = `node [style="filled,rounded" shape=box fontname="Helvetica Neue" fontsize=11 margin="0.22,0.12" penwidth=2]`;
+const EDGES = `edge [fontname="Helvetica Neue" fontsize=9 arrowsize=0.75 penwidth=1.8 color="#758297"]`;
+
+// ─── 1. Root System Architecture ──────────────────────────────────────────────
+function genArchitecture() {
+  const dot = `digraph {
+  graph [${GRAPH} rankdir=TB splines=ortho
+    label="Clinic Appointment — System Architecture\\nKotlin 2.3 · Spring Boot 4 · Timefold Solver · Redis"
+    labelloc=t labeljust=l]
+  ${NODES}
+  ${EDGES}
+
+  { rank=same; fe; rest_cli; swagger; gatling; }
+  { rank=same; api; sec; exh; }
+  { rank=same; core; evt; }
+  { rank=same; solver; solver_svc; }
+  { rank=same; notif; redis_leader; r4j; }
+  { rank=same; pg; redis; docker; micrometer; timefold_ai; }
+
+  fe           [label="Angular 18 SPA\\nappointment-frontend"                          ${nc("blue")}]
+  rest_cli     [label="REST Client\\nHTTP / JWT Bearer"                                ${nc("blue")}]
+  swagger      [label="Swagger UI\\nspringdoc-openapi"                                 ${nc("blue")}]
+  gatling      [label="Gatling Tests\\nload simulation"                                ${nc("blue")}]
+
+  api          [label="appointment-api\\nSpring Boot 4 MVC · JWT · Flyway"            ${nc("green")}]
+  sec          [label="SecurityConfig\\nJwtAuthenticationFilter"                       ${nc("green")}]
+  exh          [label="GlobalExceptionHandler\\nApiResponse envelope"                  ${nc("green")}]
+
+  core         [label="appointment-core\\n16 entities · Exposed ORM · State Machine · Slot Calc" ${nc("teal")}]
+  evt          [label="appointment-event\\nSpring ApplicationEvent · EventLog"         ${nc("teal")}]
+
+  solver       [label="appointment-solver\\nTimefold Solver · 11 Hard + 2 Soft"       ${nc("amber")}]
+  solver_svc   [label="SolverService\\nbulk optimization · SolutionConverter"          ${nc("amber")}]
+
+  notif        [label="appointment-notification\\nHA Scheduler · Reminder"             ${nc("pink")}]
+  redis_leader [label="Redis Leader Election\\nbluetape4k-leader"                      ${nc("pink")}]
+  r4j          [label="Resilience4j\\nCircuitBreaker · Retry · Bulkhead"               ${nc("pink")}]
+
+  pg           [label="PostgreSQL\\nExposed JDBC · Flyway"  ${nc("gray")}]
+  redis        [label="Redis\\nLeader Election · Cache"      ${nc("gray")}]
+  docker       [label="Docker\\nTestcontainers"              ${nc("gray")}]
+  micrometer   [label="Micrometer\\nObservability"           ${nc("gray")}]
+  timefold_ai  [label="Timefold AI\\nSolver Engine"          ${nc("gray")}]
+
+  fe           -> api          [color="#58A978"]
+  api          -> core         [color="#45A7A1"]
+  api          -> evt          [color="#45A7A1" style=dashed]
+  core         -> solver       [color="#D6A441"]
+  core         -> notif        [color="#DC6B82"]
+  notif        -> redis_leader [color="#DC6B82"]
+  notif        -> r4j          [color="#DC6B82"]
+  api          -> pg           [style=dashed color="#9AA8B8"]
+  api          -> redis        [style=dashed color="#9AA8B8"]
+  notif        -> pg           [style=dashed color="#9AA8B8"]
+  solver       -> timefold_ai  [style=dashed color="#9AA8B8"]
+}`;
+  saveDotRoot("clinic-appointment-architecture-01", dot);
+}
+
+// ─── 2. Module Overview ───────────────────────────────────────────────────────
+function genModuleOverview() {
+  const dot = `digraph {
+  graph [${GRAPH} rankdir=TB splines=ortho
+    label="Module Overview — clinic-appointment · Gradle multi-module"
+    labelloc=t labeljust=l]
+  ${NODES}
+  ${EDGES}
+
+  core   [label="appointment-core\\nDomain model · Exposed ORM\\n16 entities · State machine\\nSlotCalculationService"  ${nc("teal")}]
+  evt    [label="appointment-event\\nSpring ApplicationEvent\\nDomain event publishing\\nEventLog persistence"            ${nc("blue")}]
+  solver [label="appointment-solver\\nTimefold Solver AI\\n11 hard + 2 soft constraints\\nBulk optimization"             ${nc("amber")}]
+  notif  [label="appointment-notification\\nHA notification scheduler\\nRedis Leader Election\\nResilience4j guards"      ${nc("pink")}]
+  api    [label="appointment-api\\nSpring Boot 4 REST API\\nJWT auth · Flyway · Swagger\\nGatling load tests"            ${nc("green")}]
+  fe     [label="frontend\\nappointment-frontend\\nAngular 18 SPA\\nappointment management UI"                           ${nc("purple")}]
+
+  evt    -> core   [label="depends on" color="#45A7A1"]
+  solver -> core   [color="#45A7A1"]
+  notif  -> core   [color="#45A7A1"]
+  api    -> core   [color="#45A7A1"]
+  api    -> evt    [color="#5B8DEF"]
+  api    -> solver [color="#D6A441"]
+  api    -> notif  [color="#DC6B82"]
+  fe     -> api    [label="HTTP REST" style=dashed color="#8A72D6"]
+}`;
+  saveDotRoot("root-readme-overview-01", dot);
+}
+
+// ─── 3. Core ERD ──────────────────────────────────────────────────────────────
+function genCoreErd() {
+  const dot = `digraph {
+  graph [${GRAPH} rankdir=TB splines=ortho
+    label="Domain Entity Relationships\\nappointment-core · 16 entities · scheduling_* tables · Exposed ORM"
+    labelloc=t labeljust=l]
+  node [style=filled shape=record fontname="Helvetica Neue" fontsize=10 margin="0.18,0.08" penwidth=2]
+  ${EDGES}
+
+  clinics [label="{scheduling_clinics|id: Long (PK)\\l| tenant_group_id (FK)\\lname, timezone, locale\\lslot_duration_minutes\\lmax_concurrent_patients, open_on_holidays\\l}" ${nc("teal")}]
+  doctors [label="{scheduling_doctors|id: Long (PK)\\l| clinic_id (FK)\\lname, specialty, provider_type\\lmax_concurrent_patients\\l}" ${nc("blue")}]
+  treatment_types [label="{scheduling_treatment_types|id: Long (PK)\\l| clinic_id (FK)\\lname, category\\ldefault_duration_minutes\\lrequired_provider_type, requires_equipment\\l}" ${nc("green")}]
+  equipments [label="{scheduling_equipments|id: Long (PK)\\l| clinic_id (FK)\\lname\\lusage_duration_minutes, quantity\\l}" ${nc("olive")}]
+  appointments [label="{scheduling_appointments|id: Long (PK)\\l| clinic_id, doctor_id (FK)\\l| treatment_type_id, equipment_id (FK)\\lpatient_name, patient_phone\\lappointment_date, start_time, end_time\\lstatus: AppointmentState\\lreschedule_from_id\\l}" ${nc("pink")}]
+  operating_hours [label="{scheduling_operating_hours|id: Long (PK)\\l| clinic_id (FK)\\lday_of_week\\lopen_time, close_time, is_active\\l}" ${nc("amber")}]
+  doctor_schedules [label="{scheduling_doctor_schedules|id: Long (PK)\\l| doctor_id (FK)\\lday_of_week, start_time, end_time\\l}" ${nc("blue")}]
+  doctor_absences [label="{scheduling_doctor_absences|id: Long (PK)\\l| doctor_id (FK)\\labsence_date\\lstart_time, end_time (opt)\\l}" ${nc("blue")}]
+  clinic_closures [label="{scheduling_clinic_closures|id: Long (PK)\\l| clinic_id (FK)\\lclosure_date, is_full_day\\lstart_time, end_time (opt)\\l}" ${nc("amber")}]
+  holidays [label="{scheduling_holidays|id: Long (PK)\\lholiday_date, name, is_recurring\\l}" ${nc("amber")}]
+  equip_unavail [label="{scheduling_equipment_unavailabilities|id: Long (PK)\\l| equipment_id (FK)\\lstart_datetime, end_datetime\\lrecurrence_rule\\l}" ${nc("olive")}]
+  resched_cand [label="{scheduling_reschedule_candidates|id: Long (PK)\\l| appointment_id, clinic_id (FK)\\lproposed_date, proposed_start_time\\lstatus, score\\l}" ${nc("purple")}]
+  state_history [label="{scheduling_appointment_state_history|id: Long (PK)\\l| appointment_id (FK)\\lfrom_state, to_state, event\\loccurred_at\\l}" ${nc("gray")}]
+
+  doctors         -> clinics           [label="clinic_id"         color="#45A7A1"]
+  treatment_types -> clinics           [label="clinic_id"         color="#45A7A1"]
+  equipments      -> clinics           [label="clinic_id"         color="#45A7A1"]
+  operating_hours -> clinics           [label="clinic_id"         color="#45A7A1"]
+  clinic_closures -> clinics           [label="clinic_id"         color="#45A7A1"]
+  appointments    -> clinics           [label="clinic_id"         color="#45A7A1"]
+  appointments    -> doctors           [label="doctor_id"         color="#5B8DEF"]
+  appointments    -> treatment_types   [label="treatment_type_id" color="#58A978"]
+  appointments    -> equipments        [label="equipment_id"      color="#8BA84D"]
+  doctor_schedules -> doctors          [label="doctor_id"         color="#5B8DEF"]
+  doctor_absences  -> doctors          [label="doctor_id"         color="#5B8DEF"]
+  equip_unavail    -> equipments       [label="equipment_id"      color="#8BA84D"]
+  resched_cand     -> appointments     [label="appointment_id"    color="#DC6B82"]
+  state_history    -> appointments     [label="appointment_id"    color="#9AA8B8"]
+}`;
+  saveDot("appointment-core-erd-01", dot);
+}
+
+// ─── 4. State Machine ─────────────────────────────────────────────────────────
+function genStateMachine() {
+  const dot = `digraph {
+  graph [${GRAPH} rankdir=TB splines=ortho
+    label="Appointment State Machine\\n10 states · 11 transitions · AppointmentStateMachine.kt"
+    labelloc=t labeljust=l]
+  ${NODES}
+  ${EDGES}
+
+  PENDING            [label="PENDING\\n가예약/미확정"           ${nc("gray")}]
+  REQUESTED          [label="REQUESTED\\n예약 요청"              ${nc("blue")}]
+  CONFIRMED          [label="CONFIRMED\\n예약 확정"              ${nc("green")}]
+  CHECKED_IN         [label="CHECKED_IN\\n내원 확인"             ${nc("teal")}]
+  IN_PROGRESS        [label="IN_PROGRESS\\n진료 중"              ${nc("amber")}]
+  COMPLETED          [label="COMPLETED\\n진료 완료"              ${nc("green")}]
+  NO_SHOW            [label="NO_SHOW\\n미내원"                   ${nc("pink")}]
+  PENDING_RESCHEDULE [label="PENDING_RESCHEDULE\\n재배정 대기"   ${nc("purple")}]
+  RESCHEDULED        [label="RESCHEDULED\\n재배정 완료"          ${nc("teal")}]
+  CANCELLED          [label="CANCELLED\\n취소"                   ${nc("pink")}]
+
+  PENDING            -> REQUESTED          [label="Request"           color="#5B8DEF"]
+  REQUESTED          -> CONFIRMED          [label="Confirm"           color="#58A978"]
+  CONFIRMED          -> CHECKED_IN         [label="CheckIn"           color="#45A7A1"]
+  CHECKED_IN         -> IN_PROGRESS        [label="StartTreatment"    color="#D6A441"]
+  IN_PROGRESS        -> COMPLETED          [label="Complete"          color="#58A978"]
+  CONFIRMED          -> NO_SHOW            [label="MarkNoShow"        color="#DC6B82"]
+  CONFIRMED          -> PENDING_RESCHEDULE [label="RequestReschedule" color="#8A72D6"]
+  REQUESTED          -> PENDING_RESCHEDULE [label="RequestReschedule" color="#8A72D6"]
+  PENDING_RESCHEDULE -> RESCHEDULED        [label="ConfirmReschedule" color="#45A7A1"]
+  CONFIRMED          -> PENDING            [label="Reschedule back"   color="#5B8DEF" style=dashed]
+
+  REQUESTED          -> CANCELLED          [label="Cancel" color="#DC6B82" style=dashed]
+  CONFIRMED          -> CANCELLED          [color="#DC6B82" style=dashed]
+  CHECKED_IN         -> CANCELLED          [color="#DC6B82" style=dashed]
+  PENDING_RESCHEDULE -> CANCELLED          [color="#DC6B82" style=dashed]
+}`;
+  saveDot("appointment-core-architecture-02", dot);
+}
+
+// ─── 5. Event Flow ────────────────────────────────────────────────────────────
+function genEventFlow() {
+  const dot = `digraph {
+  graph [${GRAPH} rankdir=LR splines=ortho
+    label="Domain Event Flow\\nappointment-event · Spring ApplicationEvent · EventLog persistence"
+    labelloc=t labeljust=l]
+  ${NODES}
+  ${EDGES}
+
+  subgraph cluster_pub {
+    label="Publishers" ${cc("green")} fontname="Helvetica Neue" fontsize=11
+    ctrl    [label="AppointmentController\\nPOST /appointments\\nPATCH .../status"  ${nc("green")}]
+    resched [label="RescheduleController\\nPOST .../reschedule"                     ${nc("green")}]
+    svc     [label="Domain Services\\nClosureRescheduleService"                     ${nc("teal")}]
+  }
+
+  subgraph cluster_events {
+    label="Events (Spring ApplicationEvent)" ${cc("blue")} fontname="Helvetica Neue" fontsize=11
+    ev_created   [label="Created\\nappointmentId, clinicId"     ${nc("blue")}]
+    ev_status    [label="StatusChanged\\nfromState → toState"   ${nc("blue")}]
+    ev_cancelled [label="Cancelled\\nappointmentId, reason"     ${nc("pink")}]
+    ev_resched   [label="Rescheduled\\noriginalId, newId"       ${nc("teal")}]
+  }
+
+  subgraph cluster_sub {
+    label="Subscribers" ${cc("teal")} fontname="Helvetica Neue" fontsize=11
+    logger   [label="AppointmentEventLogger\\n@EventListener\\npersists EventLog"          ${nc("teal")}]
+    notif_l  [label="NotificationEventListener\\n@EventListener\\ncalls NotificationChannel" ${nc("pink")}]
+    ev_table [label="AppointmentEventLogs\\nExposed table\\nevent_type, payload_json"       ${nc("gray")}]
+  }
+
+  ctrl    -> ev_created   [color="#5B8DEF"]
+  ctrl    -> ev_status    [color="#5B8DEF"]
+  ctrl    -> ev_cancelled [color="#DC6B82"]
+  resched -> ev_resched   [color="#45A7A1"]
+  svc     -> ev_cancelled [color="#DC6B82" style=dashed]
+
+  ev_created   -> logger  [color="#45A7A1"]
+  ev_status    -> logger  [color="#45A7A1"]
+  ev_created   -> notif_l [color="#DC6B82"]
+  ev_status    -> notif_l [color="#DC6B82"]
+  ev_cancelled -> notif_l [color="#DC6B82"]
+  ev_resched   -> notif_l [color="#DC6B82"]
+
+  logger -> ev_table [color="#9AA8B8"]
+}`;
+  saveDot("appointment-event-architecture-01", dot);
+}
+
+// ─── 6. Solver Data Flow ──────────────────────────────────────────────────────
+function genSolverFlow() {
+  const dot = `digraph {
+  graph [${GRAPH} rankdir=LR splines=ortho
+    label="Solver Data Flow\\nappointment-solver · Timefold AI · 11 Hard + 2 Soft constraints"
+    labelloc=t labeljust=l]
+  ${NODES}
+  ${EDGES}
+
+  subgraph cluster_input {
+    label="Input — Load from DB" ${cc("blue")} fontname="Helvetica Neue" fontsize=11
+    svc_call [label="SolverService.solve()\\nclinicId, appointmentIds\\ndateRange"             ${nc("blue")}]
+    repo     [label="AppointmentRepository\\nload REQUESTED &\\nPENDING_RESCHEDULE"           ${nc("blue")}]
+    facts    [label="Problem Facts\\nDoctors, Clinics\\nClosures, Holidays\\nEquipUnavail"    ${nc("blue")}]
+    conv     [label="SolutionConverter\\nDB records →\\nAppointmentPlanning"                  ${nc("blue")}]
+  }
+
+  subgraph cluster_domain {
+    label="Planning Domain" ${cc("teal")} fontname="Helvetica Neue" fontsize=11
+    entity   [label="AppointmentPlanning\\n@PlanningEntity\\ndoctorId, date, startTime = planning vars\\nPinned if CONFIRMED+" ${nc("teal")}]
+    solution [label="ScheduleSolution\\n@PlanningSolution\\nAppointmentPlanning list\\nProblemFacts, scoreHolder"               ${nc("teal")}]
+  }
+
+  subgraph cluster_constraints {
+    label="Constraint Evaluation" ${cc("amber")} fontname="Helvetica Neue" fontsize=11
+    hard     [label="Hard Constraints (11)\\nbusiness hours, doctor schedule\\nabsence, closure, holiday\\ncapacity, equipment, provider match" ${nc("amber")}]
+    soft     [label="Soft Constraints (2)\\ndoctor load balance\\nschedule gap minimize"                                                        ${nc("amber")}]
+    cprov    [label="AppointmentConstraintProvider\\nTimefold ConstraintProvider\\nH1–H11, S1–S2"                                               ${nc("amber")}]
+  }
+
+  subgraph cluster_engine {
+    label="Timefold Solver Engine" ${cc("green")} fontname="Helvetica Neue" fontsize=11
+    config   [label="SolverConfig\\ntermination config\\nmove filters"                           ${nc("green")}]
+    engine   [label="Timefold Solver Engine\\nlocal search · tabu search\\nscore evaluation"    ${nc("green")}]
+    best_sol [label="BestSolution\\noptimized assignments\\nHardSoftScore"                       ${nc("green")}]
+  }
+
+  subgraph cluster_output {
+    label="Output — Write Results" ${cc("purple")} fontname="Helvetica Neue" fontsize=11
+    result   [label="SolverResult\\nassignments: Map<Long, Assignment>\\nappointmentId → (doctorId, date, time)" ${nc("purple")}]
+    caller   [label="SolverController\\nreceives SolverResult\\ncalls AppointmentRepository.save()"              ${nc("purple")}]
+    db       [label="PostgreSQL\\nupdated appointments\\nExposed JDBC transaction"                                ${nc("gray")}]
+  }
+
+  svc_call -> repo -> facts -> conv
+  conv     -> entity
+  facts    -> solution
+  entity   -> solution
+  solution -> hard
+  solution -> soft
+  hard     -> cprov
+  soft     -> cprov
+  cprov    -> config -> engine -> best_sol
+  best_sol -> result -> caller -> db
+}`;
+  saveDot("appointment-solver-architecture-01", dot);
+}
+
+// ─── 7. Notification HA Flow ──────────────────────────────────────────────────
+function genNotificationFlow() {
+  const dot = `digraph {
+  graph [${GRAPH} rankdir=TB splines=ortho
+    label="HA Notification Flow\\nappointment-notification · Redis Leader Election · Resilience4j guards"
+    labelloc=t labeljust=l]
+  ${NODES}
+  ${EDGES}
+
+  subgraph cluster_sources {
+    label="Event Sources" ${cc("blue")} fontname="Helvetica Neue" fontsize=11
+    ctrl      [label="AppointmentController\\npublishes domain events\\nvia Spring ApplicationEvent"           ${nc("blue")}]
+    scheduler [label="AppointmentReminderScheduler\\n@Scheduled(fixedRate=1h)\\ntomorrow + same-day CONFIRMED" ${nc("blue")}]
+    resched   [label="RescheduleController\\nreschedule completion events\\nclosure-triggered"                 ${nc("blue")}]
+  }
+
+  subgraph cluster_module {
+    label="Notification Module" ${cc("pink")} fontname="Helvetica Neue" fontsize=11
+    listener [label="NotificationEventListener\\n@EventListener\\nCreated/StatusChanged/Cancelled/Rescheduled" ${nc("pink")}]
+    autoconf [label="NotificationAutoConfiguration\\nSpring @Configuration\\nregisters notification beans"      ${nc("pink")}]
+    dedup    [label="DuplicateGuard\\nRedis SETNX\\nprevents duplicate sends"                                   ${nc("pink")}]
+  }
+
+  subgraph cluster_ha {
+    label="Leader Election (HA)" ${cc("purple")} fontname="Helvetica Neue" fontsize=11
+    leader  [label="bluetape4k-leader (Redis SETNX)\\nif (!leaderElection.isLeader()) return\\nsingle node runs scheduler" ${nc("purple")}]
+    lettuce [label="Lettuce (Redis Client)\\nSETNX key, TTL=60s\\nperiodic heartbeat"                                      ${nc("purple")}]
+    redis_s [label="Redis Server\\nLeader key storage\\ncluster-safe"                                                      ${nc("purple")}]
+  }
+
+  subgraph cluster_r4j {
+    label="Resilience4j Guards" ${cc("amber")} fontname="Helvetica Neue" fontsize=11
+    cb     [label="CircuitBreaker\\nfailure rate threshold 50%\\n30s open state wait" ${nc("amber")}]
+    retry  [label="Retry\\nmax 3 attempts\\n1s wait between"                          ${nc("amber")}]
+    bh     [label="Bulkhead\\nmax 10 concurrent calls\\nprevents cascade"             ${nc("amber")}]
+    r_chan [label="ResilientNotificationChannel\\nwraps channel\\nwith all 3 guards"  ${nc("amber")}]
+  }
+
+  subgraph cluster_channels {
+    label="Notification Channels" ${cc("teal")} fontname="Helvetica Neue" fontsize=11
+    dummy   [label="DummyNotificationChannel\\nlogs + stores history\\nalways returns SUCCESS"                     ${nc("teal")}]
+    future  [label="Future: KakaoTalk / Email / SMS\\nimplement NotificationChannel interface"                     ${nc("teal")}]
+    history [label="NotificationHistoryRepository\\nExposed table\\nstores send history"                          ${nc("teal")}]
+  }
+
+  subgraph cluster_persist {
+    label="Persistence" ${cc("gray")} fontname="Helvetica Neue" fontsize=11
+    pg_hist [label="notification_history (PostgreSQL)" ${nc("gray")}]
+    evt_log [label="event_logs (appointment-event)"    ${nc("gray")}]
+  }
+
+  ctrl      -> listener  [color="#DC6B82"]
+  scheduler -> listener  [color="#DC6B82"]
+  resched   -> listener  [color="#DC6B82"]
+
+  listener -> leader  [color="#8A72D6"]
+  leader   -> lettuce [color="#8A72D6"]
+  lettuce  -> redis_s [color="#8A72D6"]
+
+  listener -> cb -> retry -> bh -> r_chan [color="#D6A441"]
+
+  r_chan  -> dummy   [color="#45A7A1"]
+  r_chan  -> future  [color="#45A7A1" style=dashed]
+  dummy   -> history [color="#45A7A1"]
+  history -> pg_hist [style=dashed color="#9AA8B8"]
+}`;
+  saveDot("appointment-notification-architecture-01", dot);
+}
+
+// ─── 8. API Sequence (manual SVG — Graphviz is poor at sequences) ─────────────
+function genApiSequence() {
+  // Fonts
+  const FONT_DIR = `${process.env.HOME}/Library/Fonts`;
+  const TITLE_FONT_FILE = path.join(FONT_DIR, "ArchitectsDaughter-Regular.ttf");
+  const DETAIL_FONT_FILE = path.join(FONT_DIR, "ComicMono.ttf");
+
+  function fontconfigEnv() {
+    const tmpCfg = `/tmp/clinic_fc_${Date.now()}.conf`;
+    fs.writeFileSync(tmpCfg, `<?xml version="1.0"?>
 <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
 <fontconfig>
   <dir>${FONT_DIR}</dir>
   <alias><family>Architects Daughter</family><prefer><family>Architects Daughter</family></prefer></alias>
   <alias><family>Comic Mono</family><prefer><family>Comic Mono</family></prefer></alias>
 </fontconfig>`);
-  return { FONTCONFIG_FILE: tmpCfg };
-}
+    return { FONTCONFIG_FILE: tmpCfg };
+  }
 
-function run(cmd, args, cwd = root) {
-  const result = spawnSync(cmd, args, {
-    cwd,
-    stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, ...fontconfigEnv() },
-  });
-  return {
-    ok: result.status === 0,
-    stdout: result.stdout?.toString() ?? "",
-    stderr: result.stderr?.toString() ?? "",
+  function run2(cmd, args) {
+    const r = spawnSync(cmd, args, {
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, ...fontconfigEnv() },
+    });
+    return { ok: r.status === 0, stderr: r.stderr?.toString() ?? "" };
+  }
+
+  const P = {
+    blue:   { bg: "#E8F3FF", stroke: "#5B8DEF", text: "#1A3A5C" },
+    green:  { bg: "#EAF7EF", stroke: "#58A978", text: "#1A3A26" },
+    teal:   { bg: "#E9F7F6", stroke: "#45A7A1", text: "#0E3533" },
+    pink:   { bg: "#FDECEF", stroke: "#DC6B82", text: "#4A0E1C" },
+    purple: { bg: "#F1ECFF", stroke: "#8A72D6", text: "#2A1A5C" },
+    gray:   { bg: "#F2F5F9", stroke: "#9AA8B8", text: "#2A3340" },
+    canvas: "#F7F9FC", frame: "#FFFFFF", frameStroke: "#D0D8E4",
   };
-}
 
-function renderPng(svgPath, pngPath) {
-  // Try rsvg-convert first, then ImageMagick convert
-  let r = run("rsvg-convert", ["-o", pngPath, svgPath]);
-  if (!r.ok) {
-    r = run("convert", ["-density", "192", svgPath, pngPath]);
+  function esc(t) {
+    return String(t ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
-  if (!r.ok) {
-    r = run("/opt/homebrew/bin/convert", ["-density", "192", svgPath, pngPath]);
-  }
-  if (!r.ok) {
-    // Try sips as last resort
-    r = run("sips", ["-s", "format", "png", svgPath, "--out", pngPath]);
-  }
-  return r.ok;
-}
 
-function dotRun(dotContent, fmt, outPath) {
-  const tmpDot = `/tmp/clinic_dot_${Date.now()}.dot`;
-  fs.writeFileSync(tmpDot, dotContent);
-  const r = run("/opt/homebrew/bin/dot", ["-T" + fmt, tmpDot, "-o", outPath]);
-  try { fs.unlinkSync(tmpDot); } catch {}
-  return r;
-}
+  const W = 1080, H = 790;
+  const parts = [];
 
-function saveSvgPng(slug, svgContent, dir = outDir) {
-  fs.mkdirSync(dir, { recursive: true });
-  const svgPath = path.join(dir, `${slug}.svg`);
-  const pngPath = path.join(dir, `${slug}.png`);
-  fs.writeFileSync(svgPath, svgContent, "utf8");
-  const ok = renderPng(svgPath, pngPath);
-  const status = ok ? "✓" : "⚠ PNG failed";
-  console.log(`  ${status}  ${slug}.svg + .png`);
-  return { svgPath, pngPath, ok };
-}
-
-// ─── SVG Building blocks ───────────────────────────────────────────────────────
-function svgHeader(w, h, title) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(title)}">
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
 <defs>
-  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
-    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1f2937" flood-opacity="0.10"/>
-  </filter>
+  <filter id="sh"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#1f2937" flood-opacity="0.10"/></filter>
   <marker id="arr" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#758297"/>
+    <path d="M0.5 0.5 L4.5 2.5 L0.5 4.5 Z" fill="#758297"/>
   </marker>
-  <marker id="arr-blue" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="${P.blue.stroke}"/>
+  <marker id="arr-g" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M0.5 0.5 L4.5 2.5 L0.5 4.5 Z" fill="${P.green.stroke}"/>
   </marker>
-  <marker id="arr-green" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="${P.green.stroke}"/>
+  <marker id="arr-p" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M0.5 0.5 L4.5 2.5 L0.5 4.5 Z" fill="${P.purple.stroke}"/>
   </marker>
-  <marker id="arr-amber" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="${P.amber.stroke}"/>
-  </marker>
-  <marker id="arr-pink" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="${P.pink.stroke}"/>
-  </marker>
-  <marker id="arr-purple" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="${P.purple.stroke}"/>
-  </marker>
-  <marker id="arr-teal" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="${P.teal.stroke}"/>
-  </marker>
-  <marker id="inherit" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0 1 L 12 6 L 0 11 Z" fill="#ffffff" stroke="#758297" stroke-width="1.5"/>
+  <marker id="arr-k" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
+    <path d="M0.5 0.5 L4.5 2.5 L0.5 4.5 Z" fill="${P.pink.stroke}"/>
   </marker>
   <style>
-    .canvas{fill:${P.canvas}}
-    .frame{fill:${P.frame};stroke:${P.frameStroke};stroke-width:1.5}
-    .title{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:40px;fill:#102033}
-    .subtitle{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:13px;fill:#536273}
-    .label{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:22px;fill:#102033}
-    .smallLabel{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:17px;fill:#102033}
-    .mono{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:12px;fill:#102033}
-    .small{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:11px;fill:#536273}
-    .layerTitle{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:14px;fill:#536273;font-style:italic}
-    .card{stroke-width:2;filter:url(#shadow)}
-    .line{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#arr)}
-    .line-blue{stroke:${P.blue.stroke};stroke-width:2;fill:none;marker-end:url(#arr-blue)}
-    .line-green{stroke:${P.green.stroke};stroke-width:2;fill:none;marker-end:url(#arr-green)}
-    .line-amber{stroke:${P.amber.stroke};stroke-width:2;fill:none;marker-end:url(#arr-amber)}
-    .line-pink{stroke:${P.pink.stroke};stroke-width:2;fill:none;marker-end:url(#arr-pink)}
-    .line-purple{stroke:${P.purple.stroke};stroke-width:2;fill:none;marker-end:url(#arr-purple)}
-    .line-teal{stroke:${P.teal.stroke};stroke-width:2;fill:none;marker-end:url(#arr-teal)}
-    .dashed{stroke:#758297;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr)}
-    .dashed-blue{stroke:${P.blue.stroke};stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-blue)}
-    .dashed-green{stroke:${P.green.stroke};stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-green)}
-    .dashed-amber{stroke:${P.amber.stroke};stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-amber)}
-    .dashed-pink{stroke:${P.pink.stroke};stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-pink)}
-    .dashed-purple{stroke:${P.purple.stroke};stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-purple)}
-    .dashed-teal{stroke:${P.teal.stroke};stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-teal)}
-    .inheritLine{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#inherit)}
+    text { font-family: "Comic Mono","Courier New",monospace; }
+    .title { font-family: "Architects Daughter","Comic Sans MS",cursive; font-size:38px; fill:#102033; }
+    .sub   { font-family: "Comic Mono","Courier New",monospace; font-size:12px; fill:#536273; }
+    .hdr   { font-family: "Comic Mono","Courier New",monospace; font-size:11px; }
+    .msg   { font-family: "Comic Mono","Courier New",monospace; font-size:10px; fill:#536273; }
   </style>
 </defs>
-<rect class="canvas" width="${w}" height="${h}"/>
-<rect class="frame" x="28" y="24" width="${w - 56}" height="${h - 48}" rx="22"/>`;
-}
+<rect width="${W}" height="${H}" fill="${P.canvas}"/>
+<rect x="24" y="20" width="${W-48}" height="${H-40}" rx="20" fill="${P.frame}" stroke="${P.frameStroke}" stroke-width="1.5"/>`);
 
-function svgFooter(w, h, repo, module) {
-  const fy = h - 28;
-  return `<text class="small" x="${w / 2}" y="${fy}" text-anchor="middle">${esc(repo)}${module ? ` · ${esc(module)}` : ""} · github.com/bluetape4k/clinic-appointment</text>
-</svg>`;
-}
+  parts.push(`<text class="title" x="56" y="72">Appointment Creation Flow</text>`);
+  parts.push(`<text class="sub" x="60" y="96">POST /api/{tenantCode}/appointments · JWT auth · Exposed transaction · Event publish</text>`);
 
-function card(x, y, w, h, title, details, color, rx = 10) {
-  const c = P[color] ?? P.blue;
-  const titleLines = Array.isArray(title) ? title : [title];
-  const detailLines = Array.isArray(details) ? details : details ? [details] : [];
-  const totalLines = titleLines.length + detailLines.length;
-  const lineH = 16;
-  const totalH = totalLines * lineH + 16;
-  const startY = y + (h - totalH) / 2 + lineH;
-  let out = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${c.bg}" stroke="${c.stroke}" class="card"/>`;
-  let cy = startY;
-  for (const tl of titleLines) {
-    out += `<text class="smallLabel" x="${x + w / 2}" y="${cy}" text-anchor="middle" dominant-baseline="middle">${esc(tl)}</text>`;
-    cy += lineH + 2;
-  }
-  for (const dl of detailLines) {
-    out += `<text class="mono" x="${x + w / 2}" y="${cy}" text-anchor="middle" dominant-baseline="middle" fill="${c.text}" opacity="0.75">${esc(dl)}</text>`;
-    cy += lineH;
-  }
-  return out;
-}
-
-function layerBand(x, y, w, h, label, color) {
-  const c = P[color] ?? P.gray;
-  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="14" fill="${c.bg}" stroke="${c.stroke}" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="${x + 14}" y="${y + 20}" dominant-baseline="middle">${esc(label)}</text>`;
-}
-
-function line(x1, y1, x2, y2, cls = "line") {
-  return `<path class="${cls}" d="M${x1} ${y1} L${x2} ${y2}"/>`;
-}
-
-function path90(x1, y1, x2, y2, cls = "line") {
-  const mx = (x1 + x2) / 2;
-  return `<path class="${cls}" d="M${x1} ${y1} L${mx} ${y1} L${mx} ${y2} L${x2} ${y2}"/>`;
-}
-
-function viaBottom(x1, y1, x2, y2, cls = "line") {
-  return `<path class="${cls}" d="M${x1} ${y1} L${x1} ${y2} L${x2} ${y2}"/>`;
-}
-
-function viaTop(x1, y1, x2, y2, cls = "line") {
-  return `<path class="${cls}" d="M${x1} ${y1} L${x2} ${y1} L${x2} ${y2}"/>`;
-}
-
-function lineLabel(lx, ly, text, color = "#536273") {
-  return `<rect x="${lx - 3}" y="${ly - 11}" width="${text.length * 7 + 8}" height="15" rx="4" fill="white" stroke="${color}" stroke-width="0.8"/>
-<text class="small" x="${lx + 1}" y="${ly}" fill="${color}">${esc(text)}</text>`;
-}
-
-// ─── Diagram: Root Architecture ───────────────────────────────────────────────
-function generateRootArchitecture() {
-  const W = 1100, H = 640;
-  const parts = [];
-  parts.push(svgHeader(W, H, "Clinic Appointment — System Architecture"));
-  parts.push(`<text class="title" x="62" y="78">Clinic Appointment</text>`);
-  parts.push(`<text class="subtitle" x="66" y="102">System Architecture — Kotlin 2.3 · Spring Boot 4 · Timefold Solver · Redis</text>`);
-
-  // Layer bands
-  parts.push(layerBand(48, 118, W - 96, 72, "Client / Frontend", "blue"));
-  parts.push(layerBand(48, 202, W - 96, 72, "API Layer", "green"));
-  parts.push(layerBand(48, 286, W - 96, 72, "Domain Logic", "teal"));
-  parts.push(layerBand(48, 370, W - 96, 72, "AI Optimization", "amber"));
-  parts.push(layerBand(48, 454, W - 96, 72, "Notification & HA", "pink"));
-  parts.push(layerBand(48, 538, W - 96, 74, "Infrastructure", "gray"));
-
-  // Row 1: Client
-  parts.push(card(68, 130, 200, 50, "Angular 18 SPA", ["appointment-frontend"], "blue"));
-  parts.push(card(286, 130, 200, 50, "REST Client", ["HTTP / JWT Bearer"], "blue"));
-  parts.push(card(504, 130, 200, 50, "Swagger UI", ["springdoc-openapi"], "blue"));
-  parts.push(card(722, 130, 200, 50, "Gatling Tests", ["load simulation"], "blue"));
-
-  // Row 2: API
-  parts.push(card(68, 214, 380, 50, "appointment-api", ["Spring Boot 4 MVC · JWT · Flyway"], "green"));
-  parts.push(card(466, 214, 200, 50, "SecurityConfig", ["JwtAuthenticationFilter"], "green"));
-  parts.push(card(684, 214, 220, 50, "GlobalExceptionHandler", ["ApiResponse envelope"], "green"));
-
-  // Row 3: Domain
-  parts.push(card(68, 298, 420, 50, "appointment-core", ["16 entities · Exposed ORM · State Machine · Slot Calc"], "teal"));
-  parts.push(card(506, 298, 280, 50, "appointment-event", ["Spring ApplicationEvent · EventLog"], "teal"));
-
-  // Row 4: AI
-  parts.push(card(68, 382, 420, 50, "appointment-solver", ["Timefold Solver · 11 Hard + 2 Soft constraints"], "amber"));
-  parts.push(card(506, 382, 280, 50, "SolverService", ["bulk optimization · SolutionConverter"], "amber"));
-
-  // Row 5: Notification
-  parts.push(card(68, 466, 300, 50, "appointment-notification", ["HA Scheduler · Reminder"], "pink"));
-  parts.push(card(386, 466, 200, 50, "Redis Leader Election", ["bluetape4k-leader"], "pink"));
-  parts.push(card(604, 466, 200, 50, "Resilience4j", ["CircuitBreaker · Retry · Bulkhead"], "pink"));
-
-  // Row 6: Infra
-  parts.push(card(68, 554, 180, 46, "PostgreSQL", ["Exposed JDBC · Flyway"], "gray"));
-  parts.push(card(262, 554, 160, 46, "Redis", ["Leader Election · Cache"], "gray"));
-  parts.push(card(438, 554, 160, 46, "Docker", ["Testcontainers"], "gray"));
-  parts.push(card(614, 554, 180, 46, "Micrometer", ["Observability"], "gray"));
-  parts.push(card(810, 554, 160, 46, "Timefold AI", ["Solver Engine"], "gray"));
-
-  // Connectors
-  // Frontend → API
-  parts.push(line(168, 180, 168, 214, "line-green"));
-  // API → Core
-  parts.push(line(258, 264, 258, 298, "line-teal"));
-  // API → Event
-  parts.push(viaTop(448, 264, 646, 298, "line-teal"));
-  // Core → Solver
-  parts.push(line(258, 348, 258, 382, "line-amber"));
-  // Core → Notification (via left)
-  parts.push(viaBottom(468, 348, 218, 466, "line-pink"));
-  // Notification → Redis
-  parts.push(line(368, 491, 386, 491, "line-pink"));
-  // Notification → Resilience4j
-  parts.push(line(586, 491, 604, 491, "line-pink"));
-  // API → PostgreSQL
-  parts.push(viaBottom(258, 264, 158, 554, "dashed"));
-  // API → Redis
-  parts.push(viaBottom(350, 264, 342, 554, "dashed"));
-
-  parts.push(svgFooter(W, H, "clinic-appointment"));
-  saveSvgPng("clinic-appointment-architecture-01", parts.join("\n"), path.join(root, "docs/assets/readme-diagrams"));
-}
-
-// ─── Diagram: Root Module Overview ────────────────────────────────────────────
-function generateRootModuleOverview() {
-  const W = 1060, H = 560;
-  const parts = [];
-  parts.push(svgHeader(W, H, "Clinic Appointment — Module Overview"));
-  parts.push(`<text class="title" x="62" y="78">Module Overview</text>`);
-  parts.push(`<text class="subtitle" x="66" y="100">clinic-appointment · Gradle multi-module project</text>`);
-
-  // Module boxes in dependency order
-  const modules = [
-    { id: "core",   x: 380, y: 140, w: 300, h: 80, title: "appointment-core", details: ["Domain model, Exposed ORM", "16 entities, State machine", "SlotCalculationService"], color: "teal" },
-    { id: "event",  x: 68,  y: 280, w: 280, h: 80, title: "appointment-event", details: ["Spring ApplicationEvent", "Domain event publishing", "EventLog persistence"], color: "blue" },
-    { id: "solver", x: 388, y: 280, w: 280, h: 80, title: "appointment-solver", details: ["Timefold Solver AI", "11 hard + 2 soft constraints", "Bulk optimization"], color: "amber" },
-    { id: "notif",  x: 710, y: 280, w: 280, h: 80, title: "appointment-notification", details: ["HA notification scheduler", "Redis Leader Election", "Resilience4j guards"], color: "pink" },
-    { id: "api",    x: 240, y: 420, w: 560, h: 80, title: "appointment-api", details: ["Spring Boot 4 REST API", "JWT auth · Flyway · Swagger", "Gatling load tests"], color: "green" },
-    { id: "fe",     x: 710, y: 140, w: 280, h: 80, title: "frontend", details: ["appointment-frontend", "Angular 18 SPA", "appointment management UI"], color: "purple" },
+  // Participants — spaced more evenly
+  const ppts = [
+    { x: 80,  label: "Frontend",               color: P.purple },
+    { x: 216, label: "SecurityFilter",          color: P.green  },
+    { x: 368, label: "AppointmentController",   color: P.green  },
+    { x: 524, label: "AppointmentService",      color: P.teal   },
+    { x: 680, label: "AppointmentRepository",   color: P.teal   },
+    { x: 836, label: "EventPublisher",          color: P.blue   },
+    { x: 990, label: "PostgreSQL",              color: P.gray   },
   ];
 
-  for (const m of modules) {
-    parts.push(card(m.x, m.y, m.w, m.h, m.title, m.details, m.color));
+  const lifeY1 = 156, lifeY2 = 760;
+  for (const p of ppts) {
+    const c = p.color;
+    const tw = p.label.length * 7.5 + 18;
+    const lx = p.x - tw / 2;
+    parts.push(`<rect x="${lx}" y="112" width="${tw}" height="40" rx="7" fill="${c.bg}" stroke="${c.stroke}" stroke-width="2" filter="url(#sh)"/>`);
+    parts.push(`<text class="hdr" x="${p.x}" y="135" text-anchor="middle" dominant-baseline="middle" fill="${c.text}">${esc(p.label)}</text>`);
+    parts.push(`<line x1="${p.x}" y1="${lifeY1}" x2="${p.x}" y2="${lifeY2}" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>`);
   }
 
-  // Dependency arrows (→ means "depends on")
-  // event → core
-  parts.push(viaTop(208, 280, 530, 220, "line-teal"));
-  parts.push(lineLabel(330, 244, "depends on"));
-  // solver → core
-  parts.push(line(528, 280, 528, 220, "line-teal"));
-  // notif → core
-  parts.push(viaTop(850, 280, 530, 220, "line-teal"));
-  // api → core (via center)
-  parts.push(viaBottom(520, 420, 530, 360, "line-teal"));
-  // api → event
-  parts.push(viaBottom(380, 420, 208, 360, "line-blue"));
-  // api → solver
-  parts.push(line(520, 420, 528, 360, "line-amber"));
-  // api → notif (via right)
-  parts.push(viaBottom(660, 420, 850, 360, "line-pink"));
-  // frontend → api
-  parts.push(viaTop(850, 140, 520, 420, "dashed-purple"));
-  parts.push(lineLabel(700, 280, "HTTP REST"));
+  let y = 182;
+  const S = 46; // step
 
-  parts.push(svgFooter(W, H, "clinic-appointment"));
-  saveSvgPng("root-readme-overview-01", parts.join("\n"), path.join(root, "docs/assets/readme-diagrams"));
-}
-
-// ─── Diagram: appointment-core ERD ────────────────────────────────────────────
-function generateCoreErd() {
-  const W = 1200, H = 780;
-  const parts = [];
-  parts.push(svgHeader(W, H, "appointment-core — Entity Relationship Diagram"));
-  parts.push(`<text class="title" x="62" y="78">Domain Entity Relationships</text>`);
-  parts.push(`<text class="subtitle" x="66" y="100">appointment-core · 16 entities · scheduling_* tables · Exposed ORM</text>`);
-
-  function erdTable(x, y, w, name, pk, cols, color) {
-    const c = P[color] ?? P.blue;
-    const rowH = 20;
-    const headerH = 30;
-    const totalH = headerH + (cols.length + 1) * rowH + 8;
-    let out = `<rect x="${x}" y="${y}" width="${w}" height="${totalH}" rx="6" fill="${c.bg}" stroke="${c.stroke}" stroke-width="2" filter="url(#shadow)"/>`;
-    // Header
-    out += `<rect x="${x}" y="${y}" width="${w}" height="${headerH}" rx="6" fill="${c.stroke}" stroke="${c.stroke}" stroke-width="2"/>`;
-    out += `<rect x="${x}" y="${y + headerH - 6}" width="${w}" height="6" fill="${c.stroke}"/>`;
-    out += `<text class="smallLabel" x="${x + w / 2}" y="${y + headerH / 2 + 1}" text-anchor="middle" dominant-baseline="middle" fill="white">${esc(name)}</text>`;
-    // PK row
-    out += `<text class="mono" x="${x + 8}" y="${y + headerH + rowH / 2 + 4}" dominant-baseline="middle" fill="${c.text}">🔑 ${esc(pk)}</text>`;
-    let ry = y + headerH + rowH + 2;
-    for (const col of cols) {
-      const isFk = col.startsWith("⟶");
-      out += `<text class="small" x="${x + 10}" y="${ry + rowH / 2}" dominant-baseline="middle" fill="${isFk ? c.stroke : "#536273"}">${esc(col)}</text>`;
-      ry += rowH;
-    }
-    return out;
+  function msg(fromX, toX, yy, label, arrowId = "arr", dash = false, retStyle = false) {
+    const x1 = Math.min(fromX, toX) + (fromX < toX ? 0 : 0);
+    const x2 = Math.max(fromX, toX);
+    const dir = fromX < toX ? 1 : -1;
+    const ax1 = fromX, ax2 = toX;
+    const dashAttr = dash ? 'stroke-dasharray="6 4"' : "";
+    parts.push(`<path d="M${ax1} ${yy} L${ax2} ${yy}" stroke="${retStyle ? "#9AA8B8" : "#758297"}" stroke-width="${retStyle ? 1.6 : 1.8}" ${dashAttr} fill="none" marker-end="url(#${arrowId})"/>`);
+    const lx = Math.min(ax1, ax2) + Math.abs(ax2 - ax1) * 0.18;
+    const tw = label.length * 6.2 + 10;
+    parts.push(`<rect x="${lx - 2}" y="${yy - 18}" width="${tw}" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>`);
+    parts.push(`<text class="msg" x="${lx + 1}" y="${yy - 7}">${esc(label)}</text>`);
   }
 
-  // Clinics (central)
-  parts.push(erdTable(440, 130, 240, "scheduling_clinics", "id: Long", [
-    "tenant_group_id ⟶ TenantGroups",
-    "name, timezone, locale",
-    "slot_duration_minutes",
-    "max_concurrent_patients",
-    "open_on_holidays",
-  ], "teal"));
-
-  // Doctors (left of Clinics)
-  parts.push(erdTable(150, 120, 240, "scheduling_doctors", "id: Long", [
-    "⟶ clinic_id",
-    "name, specialty",
-    "provider_type",
-    "max_concurrent_patients",
-  ], "blue"));
-
-  // TreatmentTypes (right of Clinics)
-  parts.push(erdTable(730, 120, 240, "scheduling_treatment_types", "id: Long", [
-    "⟶ clinic_id",
-    "name, category",
-    "default_duration_minutes",
-    "required_provider_type",
-    "requires_equipment",
-  ], "green"));
-
-  // Equipments (far right)
-  parts.push(erdTable(1000, 120, 180, "scheduling_equipments", "id: Long", [
-    "⟶ clinic_id",
-    "name",
-    "usage_duration_minutes",
-    "quantity",
-  ], "olive"));
-
-  // Appointments (center, below)
-  parts.push(erdTable(360, 320, 480, "scheduling_appointments", "id: Long", [
-    "⟶ clinic_id, doctor_id",
-    "⟶ treatment_type_id, equipment_id",
-    "patient_name, patient_phone",
-    "appointment_date, start_time, end_time",
-    "status (AppointmentState)",
-    "reschedule_from_id",
-  ], "pink"));
-
-  // OperatingHours
-  parts.push(erdTable(50, 320, 240, "scheduling_operating_hours", "id: Long", [
-    "⟶ clinic_id",
-    "day_of_week",
-    "open_time, close_time",
-    "is_active",
-  ], "amber"));
-
-  // DoctorSchedules
-  parts.push(erdTable(50, 490, 240, "scheduling_doctor_schedules", "id: Long", [
-    "⟶ doctor_id",
-    "day_of_week",
-    "start_time, end_time",
-  ], "blue"));
-
-  // DoctorAbsences
-  parts.push(erdTable(50, 610, 240, "scheduling_doctor_absences", "id: Long", [
-    "⟶ doctor_id",
-    "absence_date",
-    "start_time, end_time (opt)",
-  ], "blue"));
-
-  // ClinicClosures
-  parts.push(erdTable(780, 320, 240, "scheduling_clinic_closures", "id: Long", [
-    "⟶ clinic_id",
-    "closure_date",
-    "is_full_day",
-    "start_time, end_time (opt)",
-  ], "amber"));
-
-  // Holidays
-  parts.push(erdTable(780, 480, 240, "scheduling_holidays", "id: Long", [
-    "holiday_date",
-    "name",
-    "is_recurring",
-  ], "amber"));
-
-  // EquipmentUnavailabilities
-  parts.push(erdTable(780, 590, 240, "scheduling_equipment_unavailabilities", "id: Long", [
-    "⟶ equipment_id",
-    "start_datetime, end_datetime",
-    "recurrence_rule",
-  ], "olive"));
-
-  // RescheduleCandidates
-  parts.push(erdTable(360, 580, 360, "scheduling_reschedule_candidates", "id: Long", [
-    "⟶ appointment_id",
-    "⟶ clinic_id",
-    "proposed_date, proposed_start_time",
-    "status, score",
-  ], "purple"));
-
-  // AppointmentStateHistory
-  parts.push(erdTable(360, 700, 360, "scheduling_appointment_state_history", "id: Long", [
-    "⟶ appointment_id",
-    "from_state, to_state, event",
-    "occurred_at",
-  ], "gray"));
-
-  // FK connectors
-  // Doctors → Clinics
-  parts.push(line(390, 160, 440, 160, "line-teal"));
-  // TreatmentTypes → Clinics
-  parts.push(line(730, 160, 680, 160, "line-teal"));
-  // Equipments → Clinics
-  parts.push(viaTop(1090, 120, 560, 130, "line-teal"));
-  // OperatingHours → Clinics
-  parts.push(viaTop(170, 320, 560, 260, "line-teal"));
-  // Appointments → Clinics
-  parts.push(line(600, 320, 600, 260, "line-teal"));
-  // Appointments → Doctors
-  parts.push(viaBottom(360, 360, 270, 260, "line-blue"));
-  // Appointments → TreatmentTypes
-  parts.push(viaBottom(840, 360, 850, 260, "line-green"));
-  // Appointments → Equipments
-  parts.push(viaBottom(840, 380, 1090, 260, "line-olive"));
-  // DoctorSchedules → Doctors
-  parts.push(line(170, 490, 170, 380, "line-blue"));
-  // DoctorAbsences → Doctors
-  parts.push(viaTop(170, 610, 170, 380, "line-blue"));
-  // ClinicClosures → Clinics
-  parts.push(line(900, 320, 780, 260, "line-amber"));
-  // EquipmentUnavailabilities → Equipments
-  parts.push(viaTop(900, 590, 1090, 260, "line-olive"));
-  // RescheduleCandidates → Appointments
-  parts.push(line(540, 580, 540, 500, "line-pink"));
-  // StateHistory → Appointments
-  parts.push(line(540, 700, 540, 500, "line-gray"));
-
-  parts.push(svgFooter(W, H, "appointment-core", "scheduling_* tables"));
-  saveSvgPng("appointment-core-erd-01", parts.join("\n"), outDir);
-}
-
-// ─── Diagram: State Machine ────────────────────────────────────────────────────
-function generateStateMachine() {
-  const W = 1000, H = 680;
-  const parts = [];
-  parts.push(svgHeader(W, H, "Appointment State Machine"));
-  parts.push(`<text class="title" x="62" y="78">Appointment State Machine</text>`);
-  parts.push(`<text class="subtitle" x="66" y="100">10 states · 11 transitions · AppointmentStateMachine.kt</text>`);
-
-  function stateNode(x, y, w, h, name, label, color) {
-    return card(x, y, w, h, name, label, color);
+  function altBox(ya, yb, label, color) {
+    const c = color;
+    parts.push(`<rect x="50" y="${ya}" width="${W - 100}" height="${yb - ya}" rx="5" fill="${c.bg}" stroke="${c.stroke}" stroke-width="1" opacity="0.2"/>`);
+    parts.push(`<rect x="50" y="${ya}" width="40" height="16" rx="3" fill="${c.stroke}" opacity="0.65"/>`);
+    parts.push(`<text class="msg" x="70" y="${ya + 10}" text-anchor="middle" dominant-baseline="middle" fill="white">${esc(label)}</text>`);
   }
 
-  // States layout
-  const SH = 52, SW = 170;
-  // Column layout:
-  // Col 0: PENDING (top)
-  // Col 1: REQUESTED → CONFIRMED
-  // Col 2: CHECKED_IN → IN_PROGRESS → COMPLETED
-  // Side: NO_SHOW, CANCELLED, PENDING_RESCHEDULE, RESCHEDULED
+  const [fe, sec, ctrl, svc, repo, evt, db] = ppts.map(p => p.x);
 
-  parts.push(stateNode(410, 130, SW, SH, "PENDING", ["가예약 / 미확정"], "gray"));
-  parts.push(stateNode(410, 230, SW, SH, "REQUESTED", ["예약 요청"], "blue"));
-  parts.push(stateNode(410, 330, SW, SH, "CONFIRMED", ["예약 확정"], "green"));
-  parts.push(stateNode(410, 430, SW, SH, "CHECKED_IN", ["내원 확인"], "teal"));
-  parts.push(stateNode(410, 530, SW, SH, "IN_PROGRESS", ["진료 중"], "amber"));
-  parts.push(stateNode(410, 610, SW, SH, "COMPLETED", ["진료 완료"], "green"));
+  msg(fe, sec, y, "POST /api/{tenantCode}/appointments", "arr-p"); y += S;
 
-  // Side states
-  parts.push(stateNode(660, 310, SW, SH, "NO_SHOW", ["미내원"], "pink"));
-  parts.push(stateNode(660, 430, SW, SH, "PENDING_RESCHEDULE", ["재배정 대기"], "purple"));
-  parts.push(stateNode(660, 530, SW, SH, "RESCHEDULED", ["재배정 완료"], "teal"));
-  parts.push(stateNode(150, 500, SW + 10, SH, "CANCELLED", ["취소 (모든 상태에서 가능)"], "pink"));
+  altBox(y - 10, y + S * 2 - 6, "alt", P.green);
+  msg(sec, fe,   y, "401 Unauthorized (invalid JWT)", "arr-k", true, true); y += S;
+  msg(sec, ctrl, y, "SchedulingUserPrincipal (tenantCode validated)", "arr-g"); y += S;
 
-  // Normal transitions (left column, going down)
-  parts.push(line(495, 182, 495, 230, "line-blue"));
-  parts.push(lineLabel(500, 206, "Request"));
+  msg(ctrl, svc,  y, "validateAndCreate(CreateAppointmentRequest)", "arr"); y += S;
+  msg(svc,  repo, y, "findSlotConflicts(clinicId, doctorId, date, time)", "arr"); y += S;
+  msg(repo, db,   y, "SELECT appointments WHERE doctor + date overlap", "arr"); y += S;
+  msg(db,   repo, y, "conflicting: List<AppointmentRecord>", "arr", true, true); y += S;
 
-  parts.push(line(495, 282, 495, 330, "line-green"));
-  parts.push(lineLabel(500, 306, "Confirm"));
+  altBox(y - 10, y + S * 2 - 6, "alt", P.pink);
+  msg(repo, svc, y, "ConflictDetectedException (409 Conflict)", "arr-k", true, true); y += S;
+  msg(repo, svc, y, "OK (no conflict)", "arr-g", true, true); y += S;
 
-  parts.push(line(495, 382, 495, 430, "line-teal"));
-  parts.push(lineLabel(500, 406, "CheckIn"));
+  msg(svc,  repo, y, "save(AppointmentRecord)", "arr"); y += S;
+  msg(repo, db,   y, "INSERT scheduling_appointments", "arr"); y += S;
+  msg(db,   repo, y, "id: Long (new appointmentId)", "arr", true, true); y += S;
 
-  parts.push(line(495, 482, 495, 530, "line-amber"));
-  parts.push(lineLabel(500, 506, "StartTreatment"));
+  msg(svc,  evt,  y, "publishEvent(AppointmentDomainEvent.Created)", "arr"); y += S;
+  msg(evt,  ctrl, y, "AppointmentResponse(id, status=REQUESTED, timezone)", "arr-g", true, true); y += S;
+  msg(ctrl, fe,   y, "201 Created {id, appointmentDate, startTime, timezone}", "arr-g", true, true);
 
-  parts.push(line(495, 582, 495, 610, "line-green"));
-  parts.push(lineLabel(500, 596, "Complete"));
+  // Footer
+  parts.push(`<text class="msg" x="${W/2}" y="${H - 16}" text-anchor="middle">appointment-api · github.com/bluetape4k/clinic-appointment</text>`);
+  parts.push(`</svg>`);
 
-  // CONFIRMED → NO_SHOW
-  parts.push(viaTop(580, 356, 660, 310, "line-pink"));
-  parts.push(lineLabel(620, 320, "MarkNoShow"));
+  const svgContent = parts.join("\n");
+  fs.mkdirSync(outDir, { recursive: true });
+  const svgPath = path.join(outDir, "appointment-api-sequence-01.svg");
+  const pngPath = path.join(outDir, "appointment-api-sequence-01.png");
+  fs.writeFileSync(svgPath, svgContent, "utf8");
 
-  // CONFIRMED → PENDING_RESCHEDULE
-  parts.push(line(580, 360, 660, 430, "line-purple"));
-  parts.push(lineLabel(605, 394, "RequestReschedule"));
-
-  // REQUESTED → PENDING_RESCHEDULE
-  parts.push(viaTop(580, 254, 660, 430, "line-purple"));
-
-  // PENDING_RESCHEDULE → RESCHEDULED
-  parts.push(line(745, 482, 745, 530, "line-teal"));
-  parts.push(lineLabel(750, 506, "ConfirmReschedule"));
-
-  // CANCELLED from various states (left side)
-  parts.push(viaBottom(410, 254, 260, 500, "line-pink"));
-  parts.push(viaBottom(410, 354, 240, 500, "dashed-pink"));
-  parts.push(viaBottom(410, 454, 220, 500, "dashed-pink"));
-  parts.push(viaBottom(660, 454, 260, 526, "dashed-pink"));
-  parts.push(lineLabel(140, 430, "Cancel"));
-
-  // CONFIRMED → PENDING (reschedule back to pending)
-  parts.push(viaTop(410, 354, 390, 130, "dashed-blue"));
-  parts.push(lineLabel(330, 240, "Reschedule"));
-
-  // Pinned status indicator
-  parts.push(`<rect x="795" y="310" width="185" height="130" rx="8" fill="${P.amber.bg}" stroke="${P.amber.stroke}" stroke-width="1.5"/>`)
-  parts.push(`<text class="layerTitle" x="887" y="332" text-anchor="middle" dominant-baseline="middle">Pinned States</text>`);
-  parts.push(`<text class="small" x="807" y="352" fill="${P.amber.text}">CONFIRMED, CHECKED_IN</text>`);
-  parts.push(`<text class="small" x="807" y="370" fill="${P.amber.text}">IN_PROGRESS, COMPLETED</text>`);
-  parts.push(`<text class="small" x="807" y="390" fill="${P.amber.stroke}">→ Solver cannot move</text>`);
-  parts.push(`<text class="small" x="807" y="410" fill="${P.teal.stroke}">Movable: REQUESTED,</text>`);
-  parts.push(`<text class="small" x="807" y="428" fill="${P.teal.stroke}">PENDING_RESCHEDULE</text>`);
-
-  parts.push(svgFooter(W, H, "appointment-core", "AppointmentStateMachine.kt"));
-  saveSvgPng("appointment-core-architecture-02", parts.join("\n"), outDir);
+  let r = run2("rsvg-convert", ["-o", pngPath, svgPath]);
+  if (!r.ok) r = run2("/opt/homebrew/bin/convert", ["-density", "192", svgPath, pngPath]);
+  if (!r.ok) r = run2("convert", ["-density", "192", svgPath, pngPath]);
+  console.log(`  ${r.ok ? "✓" : "⚠ PNG fail"}  appointment-api-sequence-01.svg + .png`);
 }
 
-// ─── Diagram: appointment-event Flow ──────────────────────────────────────────
-function generateEventFlow() {
-  const W = 920, H = 560;
-  const parts = [];
-  parts.push(svgHeader(W, H, "appointment-event — Domain Event Flow"));
-  parts.push(`<text class="title" x="62" y="78">Domain Event Flow</text>`);
-  parts.push(`<text class="subtitle" x="66" y="100">appointment-event · Spring ApplicationEvent · EventLog persistence</text>`);
-
-  // Publisher side
-  parts.push(layerBand(48, 118, 380, 380, "Publishers", "green"));
-  parts.push(layerBand(458, 118, 414, 180, "Event Bus", "blue"));
-  parts.push(layerBand(458, 318, 414, 180, "Subscribers", "teal"));
-
-  // Publisher cards
-  parts.push(card(68, 148, 280, 64, "AppointmentController", ["POST /appointments", "PATCH .../status", "DELETE .../cancel"], "green"));
-  parts.push(card(68, 228, 280, 64, "RescheduleController", ["POST .../reschedule", "batch reschedule stream"], "green"));
-  parts.push(card(68, 308, 280, 64, "SlotController", ["slot query triggers", "availability events"], "green"));
-  parts.push(card(68, 392, 280, 64, "Domain Services", ["ClosureRescheduleService", "ConcurrencyResolver"], "teal"));
-
-  // Events
-  parts.push(card(478, 148, 180, 52, "Created", ["appointmentId, clinicId"], "blue"));
-  parts.push(card(678, 148, 180, 52, "StatusChanged", ["fromState → toState"], "blue"));
-  parts.push(card(478, 218, 180, 52, "Cancelled", ["appointmentId, reason"], "pink"));
-  parts.push(card(678, 218, 180, 52, "Rescheduled", ["originalId, newId"], "teal"));
-
-  // Subscribers
-  parts.push(card(478, 348, 180, 64, "AppointmentEventLogger", ["@EventListener", "persists to EventLog DB"], "teal"));
-  parts.push(card(678, 348, 180, 64, "NotificationEventListener", ["@EventListener", "calls NotificationChannel"], "pink"));
-  parts.push(card(478, 432, 180, 52, "AppointmentEventLogs", ["Exposed table", "event_type, payload_json"], "gray"));
-
-  // Connectors
-  // Publishers → Event types
-  parts.push(line(348, 180, 478, 174, "line-blue"));
-  parts.push(line(348, 200, 678, 174, "line-blue"));
-  parts.push(line(348, 260, 478, 244, "line-pink"));
-  parts.push(line(348, 294, 678, 244, "line-teal"));
-  parts.push(line(348, 424, 478, 244, "dashed-pink"));
-
-  // Events → EventBus → Subscribers
-  parts.push(line(568, 200, 568, 348, "line-teal"));
-  parts.push(line(768, 200, 768, 348, "line-pink"));
-
-  // EventLogger → EventLog table
-  parts.push(line(568, 412, 568, 432, "line-gray"));
-
-  // Label
-  parts.push(lineLabel(570, 300, "Spring ApplicationEvent"));
-
-  parts.push(svgFooter(W, H, "appointment-event"));
-  saveSvgPng("appointment-event-architecture-01", parts.join("\n"), outDir);
-}
-
-// ─── Diagram: Solver Data Flow ─────────────────────────────────────────────────
-function generateSolverDataFlow() {
-  const W = 1060, H = 600;
-  const parts = [];
-  parts.push(svgHeader(W, H, "appointment-solver — Timefold Solver Data Flow"));
-  parts.push(`<text class="title" x="62" y="78">Solver Data Flow</text>`);
-  parts.push(`<text class="subtitle" x="66" y="100">appointment-solver · Timefold AI · 11 Hard + 2 Soft constraints</text>`);
-
-  // Layers
-  parts.push(layerBand(48, 118, W - 96, 68, "Input — Load from DB", "blue"));
-  parts.push(layerBand(48, 200, W - 96, 68, "Planning Domain", "teal"));
-  parts.push(layerBand(48, 282, W - 96, 68, "Constraint Evaluation", "amber"));
-  parts.push(layerBand(48, 364, W - 96, 68, "Timefold Solver Engine", "green"));
-  parts.push(layerBand(48, 446, W - 96, 68, "Output — Write Results", "purple"));
-
-  // Row 1: Input
-  parts.push(card(68, 132, 220, 50, "SolverService.solve()", ["clinicId, appointmentIds", "dateRange"], "blue"));
-  parts.push(card(310, 132, 200, 50, "AppointmentRepository", ["load REQUESTED &", "PENDING_RESCHEDULE"], "blue"));
-  parts.push(card(530, 132, 200, 50, "Problem Facts", ["Doctors, Clinics", "ClosureRecords, Holidays", "EquipUnavailabilities"], "blue"));
-  parts.push(card(750, 132, 200, 50, "SolutionConverter", ["DB records →", "AppointmentPlanning"], "blue"));
-
-  // Row 2: Planning Domain
-  parts.push(card(68, 214, 300, 50, "AppointmentPlanning (@PlanningEntity)", ["doctorId, appointmentDate", "startTime = planning variables", "Pinned if CONFIRMED+"], "teal"));
-  parts.push(card(390, 214, 300, 50, "ScheduleSolution (@PlanningSolution)", ["AppointmentPlanning list", "ProblemFacts", "scoreHolder"], "teal"));
-
-  // Row 3: Constraints
-  parts.push(card(68, 296, 260, 50, "Hard Constraints (11)", ["business hours, doctor schedule", "absence, closure, holiday", "capacity, equipment, provider match"], "amber"));
-  parts.push(card(350, 296, 200, 50, "Soft Constraints (2)", ["doctor load balance", "schedule gap minimize"], "amber"));
-  parts.push(card(572, 296, 260, 50, "AppointmentConstraintProvider", ["Timefold ConstraintProvider", "H1–H11, S1–S2"], "amber"));
-
-  // Row 4: Solver
-  parts.push(card(68, 378, 200, 50, "SolverConfig", ["termination config", "move filters"], "green"));
-  parts.push(card(290, 378, 300, 50, "Timefold Solver Engine", ["local search · tabu search", "score evaluation · SSA"], "green"));
-  parts.push(card(612, 378, 200, 50, "BestSolution", ["optimized assignments", "HardSoftScore"], "green"));
-
-  // Row 5: Output
-  parts.push(card(68, 460, 300, 50, "SolverResult", ["assignments: Map<Long, Assignment>", "appointmentId → (doctorId, date, time)"], "purple"));
-  parts.push(card(390, 460, 280, 50, "Caller (SolverController)", ["receives SolverResult", "calls AppointmentRepository.save()"], "purple"));
-  parts.push(card(692, 460, 200, 50, "DB: PostgreSQL", ["updated appointments", "Exposed JDBC transaction"], "gray"));
-
-  // Connectors
-  parts.push(line(288, 157, 310, 157, "line-blue"));
-  parts.push(line(510, 157, 530, 157, "line-blue"));
-  parts.push(line(730, 157, 750, 157, "line-blue"));
-  parts.push(line(850, 182, 850, 200, "line-teal"));
-  parts.push(line(218, 264, 218, 282, "line-amber"));
-  parts.push(line(390, 246, 430, 282, "dashed-amber"));
-  parts.push(line(540, 296, 572, 296, "line-amber"));
-  parts.push(line(630, 296, 630, 364, "line-green"));
-  parts.push(line(268, 378, 290, 378, "line-green"));
-  parts.push(line(590, 378, 612, 378, "line-green"));
-  parts.push(line(712, 403, 712, 446, "line-purple"));
-  parts.push(line(218, 428, 218, 460, "line-purple"));
-  parts.push(line(368, 485, 390, 485, "line-purple"));
-  parts.push(line(670, 485, 692, 485, "line-gray"));
-
-  parts.push(svgFooter(W, H, "appointment-solver", "Timefold Solver"));
-  saveSvgPng("appointment-solver-architecture-01", parts.join("\n"), outDir);
-}
-
-// ─── Diagram: Notification HA Flow ────────────────────────────────────────────
-function generateNotificationFlow() {
-  const W = 1040, H = 620;
-  const parts = [];
-  parts.push(svgHeader(W, H, "appointment-notification — HA Notification Flow"));
-  parts.push(`<text class="title" x="62" y="78">HA Notification Flow</text>`);
-  parts.push(`<text class="subtitle" x="66" y="100">appointment-notification · Redis Leader Election · Resilience4j guards</text>`);
-
-  // Layers
-  parts.push(layerBand(48, 118, W - 96, 72, "Event Sources", "blue"));
-  parts.push(layerBand(48, 204, W - 96, 72, "Notification Module", "pink"));
-  parts.push(layerBand(48, 290, W - 96, 72, "Leader Election (HA)", "purple"));
-  parts.push(layerBand(48, 376, W - 96, 72, "Resilience4j Guards", "amber"));
-  parts.push(layerBand(48, 462, W - 96, 72, "Notification Channels", "teal"));
-  parts.push(layerBand(48, 548, W - 96, 52, "Persistence", "gray"));
-
-  // Row 1: Event Sources
-  parts.push(card(68, 134, 280, 50, "AppointmentController", ["publishes domain events", "via Spring ApplicationEvent"], "blue"));
-  parts.push(card(370, 134, 260, 50, "AppointmentReminderScheduler", ["@Scheduled(fixedRate=1h)", "tomorrow + same-day CONFIRMED"], "blue"));
-  parts.push(card(652, 134, 200, 50, "RescheduleController", ["reschedule completion events", "closure-triggered"], "blue"));
-
-  // Row 2: Notification Module
-  parts.push(card(68, 220, 280, 50, "NotificationEventListener", ["@EventListener", "Created/StatusChanged/Cancelled/Rescheduled"], "pink"));
-  parts.push(card(390, 220, 240, 50, "NotificationAutoConfiguration", ["Spring @Configuration", "registers notification beans"], "pink"));
-  parts.push(card(660, 220, 200, 50, "DuplicateGuard", ["Redis SETNX", "prevents duplicate sends"], "pink"));
-
-  // Row 3: Leader Election
-  parts.push(card(68, 306, 360, 50, "bluetape4k-leader (Redis SETNX)", ["if (!leaderElection.isLeader()) return", "single node runs scheduler"], "purple"));
-  parts.push(card(450, 306, 260, 50, "Lettuce (Redis Client)", ["SETNX key, TTL=60s", "periodic heartbeat"], "purple"));
-  parts.push(card(734, 306, 180, 50, "Redis Server", ["Leader key storage", "cluster-safe"], "purple"));
-
-  // Row 4: Resilience4j
-  parts.push(card(68, 392, 240, 50, "CircuitBreaker", ["failure rate threshold 50%", "30s open state wait"], "amber"));
-  parts.push(card(330, 392, 200, 50, "Retry", ["max 3 attempts", "1s wait between"], "amber"));
-  parts.push(card(552, 392, 200, 50, "Bulkhead", ["max 10 concurrent calls", "prevents cascade"], "amber"));
-  parts.push(card(774, 392, 200, 50, "ResilientNotificationChannel", ["wraps channel", "with all 3 guards"], "amber"));
-
-  // Row 5: Channels
-  parts.push(card(68, 478, 280, 50, "DummyNotificationChannel", ["logs + stores history", "always returns SUCCESS"], "teal"));
-  parts.push(card(380, 478, 280, 50, ["Future: KakaoTalk", "Email, SMS Channels"], ["implement NotificationChannel", "interface"], "teal"));
-  parts.push(card(692, 478, 220, 50, "NotificationHistoryRepository", ["Exposed table", "stores send history"], "teal"));
-
-  // Row 6: Persistence
-  parts.push(card(68, 560, 280, 30, "notification_history (PostgreSQL)", null, "gray"));
-  parts.push(card(380, 560, 260, 30, "event_logs (appointment-event)", null, "gray"));
-
-  // Connectors
-  // Events → NotificationEventListener
-  parts.push(line(208, 184, 208, 220, "line-pink"));
-  parts.push(viaTop(500, 184, 208, 220, "dashed-pink"));
-  parts.push(viaTop(752, 184, 208, 220, "dashed-pink"));
-  // NotificationEventListener → Leader check
-  parts.push(line(248, 270, 248, 306, "line-purple"));
-  // Leader → Lettuce
-  parts.push(line(428, 331, 450, 331, "line-purple"));
-  parts.push(line(710, 331, 734, 331, "line-purple"));
-  // NotificationEventListener → Resilience4j
-  parts.push(line(248, 356, 248, 392, "line-amber"));
-  // Resilience4j chain
-  parts.push(line(308, 417, 330, 417, "line-amber"));
-  parts.push(line(530, 417, 552, 417, "line-amber"));
-  parts.push(line(752, 417, 774, 417, "line-amber"));
-  // Resilience → DummyChannel
-  parts.push(line(874, 442, 874, 478, "line-teal"));
-  parts.push(viaBottom(874, 478, 208, 478, "dashed-teal"));
-  // Channel → History
-  parts.push(line(614, 503, 692, 503, "line-teal"));
-  // History → DB
-  parts.push(line(802, 528, 802, 560, "dashed-gray"));
-  // Scheduler → Notification
-  parts.push(viaTop(500, 184, 390, 220, "dashed-blue"));
-
-  parts.push(svgFooter(W, H, "appointment-notification"));
-  saveSvgPng("appointment-notification-architecture-01", parts.join("\n"), outDir);
-}
-
-// ─── Diagram: API Sequence ─────────────────────────────────────────────────────
-function generateApiSequence() {
-  const W = 1060, H = 760;
-  const parts = [];
-  parts.push(svgHeader(W, H, "appointment-api — Appointment Creation Sequence"));
-  parts.push(`<text class="title" x="62" y="78">Appointment Creation Flow</text>`);
-  parts.push(`<text class="subtitle" x="66" y="100">POST /api/{tenantCode}/appointments · JWT auth · Exposed transaction · Event publish</text>`);
-
-  // Participants
-  const participants = [
-    { id: "fe", x: 90, label: "Frontend", color: "purple" },
-    { id: "sec", x: 230, label: "SecurityFilter", color: "green" },
-    { id: "ctrl", x: 380, label: "AppointmentController", color: "green" },
-    { id: "svc", x: 540, label: "AppointmentService", color: "teal" },
-    { id: "repo", x: 700, label: "AppointmentRepository", color: "teal" },
-    { id: "evt", x: 860, label: "EventPublisher", color: "blue" },
-    { id: "db", x: 985, label: "PostgreSQL", color: "gray" },
-  ];
-
-  const headerH = 52, lifelineStart = 152, lifelineEnd = 720;
-  for (const p of participants) {
-    const c = P[p.color] ?? P.blue;
-    const lw = p.label.length * 9 + 20;
-    const lx = p.x - lw / 2;
-    parts.push(`<rect x="${lx}" y="116" width="${lw}" height="${headerH}" rx="8" fill="${c.bg}" stroke="${c.stroke}" stroke-width="2" filter="url(#shadow)"/>`);
-    parts.push(`<text class="small" x="${p.x}" y="${116 + headerH / 2 + 4}" text-anchor="middle" dominant-baseline="middle" fill="${c.text}">${esc(p.label)}</text>`);
-    parts.push(`<line x1="${p.x}" y1="${lifelineStart}" x2="${p.x}" y2="${lifelineEnd}" stroke="#C0C8D4" stroke-width="1.5" stroke-dasharray="6 4"/>`);
-  }
-
-  // Messages
-  function msg(fromX, toX, y, label, cls = "line", labelOffset = -14) {
-    parts.push(`<path class="${cls}" d="M${fromX} ${y} L${toX} ${y}"/>`);
-    const lx = Math.min(fromX, toX) + Math.abs(toX - fromX) * 0.35;
-    parts.push(`<rect x="${lx - 2}" y="${y + labelOffset - 10}" width="${label.length * 7 + 10}" height="14" rx="3" fill="white" stroke="#C0C8D4" stroke-width="0.8" opacity="0.9"/>`);
-    parts.push(`<text class="small" x="${lx}" y="${y + labelOffset}" dominant-baseline="middle">${esc(label)}</text>`);
-  }
-
-  function altBox(y1, y2, label, color) {
-    const c = P[color] ?? P.gray;
-    parts.push(`<rect x="60" y="${y1}" width="${W - 120}" height="${y2 - y1}" rx="6" fill="${c.bg}" stroke="${c.stroke}" stroke-width="1" opacity="0.25"/>`)
-    parts.push(`<rect x="60" y="${y1}" width="50" height="18" rx="3" fill="${c.stroke}" opacity="0.7"/>`);
-    parts.push(`<text class="small" x="85" y="${y1 + 9}" text-anchor="middle" dominant-baseline="middle" fill="white">${esc(label)}</text>`);
-  }
-
-  let y = 180;
-  const step = 48;
-
-  msg(participants[0].x, participants[1].x, y, "POST /api/{tenantCode}/appointments", "line-purple");
-  y += step;
-
-  // alt: JWT validation
-  altBox(y - 12, y + step * 2 - 4, "alt", "green");
-  msg(participants[1].x, participants[0].x, y, "401 Unauthorized (invalid/missing JWT)", "dashed-pink", -14);
-  y += step;
-  msg(participants[1].x, participants[2].x, y, "SchedulingUserPrincipal (tenantCode validated)", "line-green");
-  y += step;
-
-  msg(participants[2].x, participants[3].x, y, "validateAndCreate(CreateAppointmentRequest)", "line-teal");
-  y += step;
-
-  msg(participants[3].x, participants[4].x, y, "findSlotConflicts(clinicId, doctorId, date, time)", "line-teal");
-  y += step;
-  msg(participants[4].x, participants[6].x, y, "SELECT appointments WHERE doctor + date overlap", "line-gray");
-  y += step;
-  msg(participants[6].x, participants[4].x, y, "conflicting: List<AppointmentRecord>", "dashed", -14);
-  y += step;
-
-  // alt: conflict check
-  altBox(y - 12, y + step * 2 - 4, "alt", "pink");
-  msg(participants[4].x, participants[3].x, y, "ConflictDetectedException (409 Conflict)", "dashed-pink", -14);
-  y += step;
-  msg(participants[4].x, participants[3].x, y, "OK (no conflict)", "dashed-green", -14);
-  y += step;
-
-  msg(participants[3].x, participants[4].x, y, "save(AppointmentRecord)", "line-teal");
-  y += step;
-  msg(participants[4].x, participants[6].x, y, "INSERT scheduling_appointments", "line-gray");
-  y += step;
-  msg(participants[6].x, participants[4].x, y, "id: Long (new appointmentId)", "dashed", -14);
-  y += step;
-
-  msg(participants[3].x, participants[5].x, y, "publishEvent(AppointmentDomainEvent.Created)", "line-blue");
-  y += step;
-  msg(participants[5].x, participants[2].x, y, "AppointmentResponse(id, status=REQUESTED, timezone)", "dashed-green", -14);
-  y += step;
-  msg(participants[2].x, participants[0].x, y, "201 Created {id, appointmentDate, startTime, timezone}", "dashed-green", -14);
-
-  parts.push(svgFooter(W, H, "appointment-api", "AppointmentController.kt"));
-  saveSvgPng("appointment-api-sequence-01", parts.join("\n"), outDir);
-}
-
-// ─── Main ──────────────────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
-const moduleFilter = args.indexOf("--module") >= 0 ? args[args.indexOf("--module") + 1] : null;
+const modFilter = args.indexOf("--module") >= 0 ? args[args.indexOf("--module") + 1] : null;
+const go = (name, fn) => { if (!modFilter || modFilter === name) fn(); };
 
-function shouldRun(name) {
-  return !moduleFilter || name === moduleFilter;
-}
+fs.mkdirSync(outDir,    { recursive: true });
+fs.mkdirSync(assetsDir, { recursive: true });
 
-console.log("clinic-appointment diagram generator");
+console.log("clinic-appointment diagram generator (Graphviz)");
 console.log(`Output: ${outDir}`);
-console.log(`Fonts: ${TITLE_FONT_FILE.replace(process.env.HOME, "~")} / ${DETAIL_FONT_FILE.replace(process.env.HOME, "~")}`);
 console.log("");
 
-fs.mkdirSync(outDir, { recursive: true });
-fs.mkdirSync(path.join(root, "docs/assets/readme-diagrams"), { recursive: true });
-fs.mkdirSync(chartDir, { recursive: true });
-
-if (shouldRun("root")) {
-  console.log("▶ Root Architecture + Module Overview");
-  generateRootArchitecture();
-  generateRootModuleOverview();
-}
-
-if (shouldRun("core")) {
-  console.log("▶ appointment-core: ERD + State Machine");
-  generateCoreErd();
-  generateStateMachine();
-}
-
-if (shouldRun("event")) {
-  console.log("▶ appointment-event: Event Flow");
-  generateEventFlow();
-}
-
-if (shouldRun("solver")) {
-  console.log("▶ appointment-solver: Data Flow");
-  generateSolverDataFlow();
-}
-
-if (shouldRun("notification")) {
-  console.log("▶ appointment-notification: HA Flow");
-  generateNotificationFlow();
-}
-
-if (shouldRun("api")) {
-  console.log("▶ appointment-api: Creation Sequence");
-  generateApiSequence();
-}
-
-console.log("\nDone.");
+go("root",         () => { console.log("▶ Root Architecture + Module Overview"); genArchitecture(); genModuleOverview(); });
+go("core",         () => { console.log("▶ appointment-core: ERD + State Machine"); genCoreErd(); genStateMachine(); });
+go("event",        () => { console.log("▶ appointment-event: Event Flow"); genEventFlow(); });
+go("solver",       () => { console.log("▶ appointment-solver: Data Flow"); genSolverFlow(); });
+go("notification", () => { console.log("▶ appointment-notification: HA Flow"); genNotificationFlow(); });
+go("api",          () => { console.log("▶ appointment-api: Sequence"); genApiSequence(); });

@@ -1,103 +1,213 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="640" viewBox="0 0 1100 640" role="img" aria-label="Clinic Appointment — System Architecture">
-<defs>
-  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
-    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1f2937" flood-opacity="0.10"/>
-  </filter>
-  <marker id="arr" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#758297"/>
-  </marker>
-  <marker id="arr-blue" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#5B8DEF"/>
-  </marker>
-  <marker id="arr-green" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#58A978"/>
-  </marker>
-  <marker id="arr-amber" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#D6A441"/>
-  </marker>
-  <marker id="arr-pink" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#DC6B82"/>
-  </marker>
-  <marker id="arr-purple" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#8A72D6"/>
-  </marker>
-  <marker id="arr-teal" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#45A7A1"/>
-  </marker>
-  <marker id="inherit" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0 1 L 12 6 L 0 11 Z" fill="#ffffff" stroke="#758297" stroke-width="1.5"/>
-  </marker>
-  <style>
-    .canvas{fill:#F7F9FC}
-    .frame{fill:#FFFFFF;stroke:#D0D8E4;stroke-width:1.5}
-    .title{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:40px;fill:#102033}
-    .subtitle{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:13px;fill:#536273}
-    .label{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:22px;fill:#102033}
-    .smallLabel{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:17px;fill:#102033}
-    .mono{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:12px;fill:#102033}
-    .small{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:11px;fill:#536273}
-    .layerTitle{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:14px;fill:#536273;font-style:italic}
-    .card{stroke-width:2;filter:url(#shadow)}
-    .line{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#arr)}
-    .line-blue{stroke:#5B8DEF;stroke-width:2;fill:none;marker-end:url(#arr-blue)}
-    .line-green{stroke:#58A978;stroke-width:2;fill:none;marker-end:url(#arr-green)}
-    .line-amber{stroke:#D6A441;stroke-width:2;fill:none;marker-end:url(#arr-amber)}
-    .line-pink{stroke:#DC6B82;stroke-width:2;fill:none;marker-end:url(#arr-pink)}
-    .line-purple{stroke:#8A72D6;stroke-width:2;fill:none;marker-end:url(#arr-purple)}
-    .line-teal{stroke:#45A7A1;stroke-width:2;fill:none;marker-end:url(#arr-teal)}
-    .dashed{stroke:#758297;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr)}
-    .dashed-blue{stroke:#5B8DEF;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-blue)}
-    .dashed-green{stroke:#58A978;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-green)}
-    .dashed-amber{stroke:#D6A441;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-amber)}
-    .dashed-pink{stroke:#DC6B82;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-pink)}
-    .dashed-purple{stroke:#8A72D6;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-purple)}
-    .dashed-teal{stroke:#45A7A1;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-teal)}
-    .inheritLine{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#inherit)}
-  </style>
-</defs>
-<rect class="canvas" width="1100" height="640"/>
-<rect class="frame" x="28" y="24" width="1044" height="592" rx="22"/>
-<text class="title" x="62" y="78">Clinic Appointment</text>
-<text class="subtitle" x="66" y="102">System Architecture — Kotlin 2.3 · Spring Boot 4 · Timefold Solver · Redis</text>
-<rect x="48" y="118" width="1004" height="72" rx="14" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="138" dominant-baseline="middle">Client / Frontend</text>
-<rect x="48" y="202" width="1004" height="72" rx="14" fill="#EAF7EF" stroke="#58A978" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="222" dominant-baseline="middle">API Layer</text>
-<rect x="48" y="286" width="1004" height="72" rx="14" fill="#E9F7F6" stroke="#45A7A1" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="306" dominant-baseline="middle">Domain Logic</text>
-<rect x="48" y="370" width="1004" height="72" rx="14" fill="#FFF3D9" stroke="#D6A441" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="390" dominant-baseline="middle">AI Optimization</text>
-<rect x="48" y="454" width="1004" height="72" rx="14" fill="#FDECEF" stroke="#DC6B82" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="474" dominant-baseline="middle">Notification &amp; HA</text>
-<rect x="48" y="538" width="1004" height="74" rx="14" fill="#F2F5F9" stroke="#9AA8B8" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="558" dominant-baseline="middle">Infrastructure</text>
-<rect x="68" y="130" width="200" height="50" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="168" y="147" text-anchor="middle" dominant-baseline="middle">Angular 18 SPA</text><text class="mono" x="168" y="165" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">appointment-frontend</text>
-<rect x="286" y="130" width="200" height="50" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="386" y="147" text-anchor="middle" dominant-baseline="middle">REST Client</text><text class="mono" x="386" y="165" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">HTTP / JWT Bearer</text>
-<rect x="504" y="130" width="200" height="50" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="604" y="147" text-anchor="middle" dominant-baseline="middle">Swagger UI</text><text class="mono" x="604" y="165" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">springdoc-openapi</text>
-<rect x="722" y="130" width="200" height="50" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="822" y="147" text-anchor="middle" dominant-baseline="middle">Gatling Tests</text><text class="mono" x="822" y="165" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">load simulation</text>
-<rect x="68" y="214" width="380" height="50" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="258" y="231" text-anchor="middle" dominant-baseline="middle">appointment-api</text><text class="mono" x="258" y="249" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">Spring Boot 4 MVC · JWT · Flyway</text>
-<rect x="466" y="214" width="200" height="50" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="566" y="231" text-anchor="middle" dominant-baseline="middle">SecurityConfig</text><text class="mono" x="566" y="249" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">JwtAuthenticationFilter</text>
-<rect x="684" y="214" width="220" height="50" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="794" y="231" text-anchor="middle" dominant-baseline="middle">GlobalExceptionHandler</text><text class="mono" x="794" y="249" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">ApiResponse envelope</text>
-<rect x="68" y="298" width="420" height="50" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="278" y="315" text-anchor="middle" dominant-baseline="middle">appointment-core</text><text class="mono" x="278" y="333" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">16 entities · Exposed ORM · State Machine · Slot Calc</text>
-<rect x="506" y="298" width="280" height="50" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="646" y="315" text-anchor="middle" dominant-baseline="middle">appointment-event</text><text class="mono" x="646" y="333" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">Spring ApplicationEvent · EventLog</text>
-<rect x="68" y="382" width="420" height="50" rx="10" fill="#FFF3D9" stroke="#D6A441" class="card"/><text class="smallLabel" x="278" y="399" text-anchor="middle" dominant-baseline="middle">appointment-solver</text><text class="mono" x="278" y="417" text-anchor="middle" dominant-baseline="middle" fill="#4A3000" opacity="0.75">Timefold Solver · 11 Hard + 2 Soft constraints</text>
-<rect x="506" y="382" width="280" height="50" rx="10" fill="#FFF3D9" stroke="#D6A441" class="card"/><text class="smallLabel" x="646" y="399" text-anchor="middle" dominant-baseline="middle">SolverService</text><text class="mono" x="646" y="417" text-anchor="middle" dominant-baseline="middle" fill="#4A3000" opacity="0.75">bulk optimization · SolutionConverter</text>
-<rect x="68" y="466" width="300" height="50" rx="10" fill="#FDECEF" stroke="#DC6B82" class="card"/><text class="smallLabel" x="218" y="483" text-anchor="middle" dominant-baseline="middle">appointment-notification</text><text class="mono" x="218" y="501" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">HA Scheduler · Reminder</text>
-<rect x="386" y="466" width="200" height="50" rx="10" fill="#FDECEF" stroke="#DC6B82" class="card"/><text class="smallLabel" x="486" y="483" text-anchor="middle" dominant-baseline="middle">Redis Leader Election</text><text class="mono" x="486" y="501" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">bluetape4k-leader</text>
-<rect x="604" y="466" width="200" height="50" rx="10" fill="#FDECEF" stroke="#DC6B82" class="card"/><text class="smallLabel" x="704" y="483" text-anchor="middle" dominant-baseline="middle">Resilience4j</text><text class="mono" x="704" y="501" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">CircuitBreaker · Retry · Bulkhead</text>
-<rect x="68" y="554" width="180" height="46" rx="10" fill="#F2F5F9" stroke="#9AA8B8" class="card"/><text class="smallLabel" x="158" y="569" text-anchor="middle" dominant-baseline="middle">PostgreSQL</text><text class="mono" x="158" y="587" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">Exposed JDBC · Flyway</text>
-<rect x="262" y="554" width="160" height="46" rx="10" fill="#F2F5F9" stroke="#9AA8B8" class="card"/><text class="smallLabel" x="342" y="569" text-anchor="middle" dominant-baseline="middle">Redis</text><text class="mono" x="342" y="587" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">Leader Election · Cache</text>
-<rect x="438" y="554" width="160" height="46" rx="10" fill="#F2F5F9" stroke="#9AA8B8" class="card"/><text class="smallLabel" x="518" y="569" text-anchor="middle" dominant-baseline="middle">Docker</text><text class="mono" x="518" y="587" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">Testcontainers</text>
-<rect x="614" y="554" width="180" height="46" rx="10" fill="#F2F5F9" stroke="#9AA8B8" class="card"/><text class="smallLabel" x="704" y="569" text-anchor="middle" dominant-baseline="middle">Micrometer</text><text class="mono" x="704" y="587" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">Observability</text>
-<rect x="810" y="554" width="160" height="46" rx="10" fill="#F2F5F9" stroke="#9AA8B8" class="card"/><text class="smallLabel" x="890" y="569" text-anchor="middle" dominant-baseline="middle">Timefold AI</text><text class="mono" x="890" y="587" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">Solver Engine</text>
-<path class="line-green" d="M168 180 L168 214"/>
-<path class="line-teal" d="M258 264 L258 298"/>
-<path class="line-teal" d="M448 264 L646 264 L646 298"/>
-<path class="line-amber" d="M258 348 L258 382"/>
-<path class="line-pink" d="M468 348 L468 466 L218 466"/>
-<path class="line-pink" d="M368 491 L386 491"/>
-<path class="line-pink" d="M586 491 L604 491"/>
-<path class="dashed" d="M258 264 L258 554 L158 554"/>
-<path class="dashed" d="M350 264 L350 554 L342 554"/>
-<text class="small" x="550" y="612" text-anchor="middle">clinic-appointment · github.com/bluetape4k/clinic-appointment</text>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 15.0.0 (20260523.1842)
+ -->
+<!-- Pages: 1 -->
+<svg width="1596pt" height="691pt"
+ viewBox="0.00 0.00 1596.00 691.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(57.6 633)">
+<polygon fill="#f7f9fc" stroke="none" points="-57.6,57.6 -57.6,-633 1538.4,-633 1538.4,57.6 -57.6,57.6"/>
+<text xml:space="preserve" text-anchor="middle" x="140.75" y="-560" font-family="Helvetica Neue" font-size="12.00">Clinic Appointment — System Architecture</text>
+<text xml:space="preserve" text-anchor="middle" x="140.75" y="-545" font-family="Helvetica Neue" font-size="12.00">Kotlin 2.3 · Spring Boot 4 · Timefold Solver · Redis</text>
+<!-- fe -->
+<g id="node1" class="node">
+<title>fe</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M924.31,-537.4C924.31,-537.4 807.88,-537.4 807.88,-537.4 801.88,-537.4 795.88,-531.4 795.88,-525.4 795.88,-525.4 795.88,-505.12 795.88,-505.12 795.88,-499.12 801.88,-493.12 807.88,-493.12 807.88,-493.12 924.31,-493.12 924.31,-493.12 930.31,-493.12 936.31,-499.12 936.31,-505.12 936.31,-505.12 936.31,-525.4 936.31,-525.4 936.31,-531.4 930.31,-537.4 924.31,-537.4"/>
+<text xml:space="preserve" text-anchor="middle" x="866.09" y="-518.31" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">Angular 18 SPA</text>
+<text xml:space="preserve" text-anchor="middle" x="866.09" y="-504.81" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">appointment&#45;frontend</text>
+</g>
+<!-- api -->
+<g id="node5" class="node">
+<title>api</title>
+<path fill="#eaf7ef" stroke="#58a978" stroke-width="2" d="M954.31,-414.12C954.31,-414.12 777.88,-414.12 777.88,-414.12 771.88,-414.12 765.88,-408.12 765.88,-402.12 765.88,-402.12 765.88,-381.84 765.88,-381.84 765.88,-375.84 771.88,-369.84 777.88,-369.84 777.88,-369.84 954.31,-369.84 954.31,-369.84 960.31,-369.84 966.31,-375.84 966.31,-381.84 966.31,-381.84 966.31,-402.12 966.31,-402.12 966.31,-408.12 960.31,-414.12 954.31,-414.12"/>
+<text xml:space="preserve" text-anchor="middle" x="866.09" y="-395.03" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">appointment&#45;api</text>
+<text xml:space="preserve" text-anchor="middle" x="866.09" y="-381.53" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">Spring Boot 4 MVC · JWT · Flyway</text>
+</g>
+<!-- fe&#45;&gt;api -->
+<g id="edge1" class="edge">
+<title>fe&#45;&gt;api</title>
+<path fill="none" stroke="#58a978" stroke-width="1.8" d="M866.09,-492.36C866.09,-492.36 866.09,-424.98 866.09,-424.98"/>
+<polygon fill="#58a978" stroke="#58a978" stroke-width="1.8" points="868.72,-424.98 866.09,-417.48 863.47,-424.98 868.72,-424.98"/>
+</g>
+<!-- rest_cli -->
+<g id="node2" class="node">
+<title>rest_cli</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M1112.93,-537.4C1112.93,-537.4 1009.25,-537.4 1009.25,-537.4 1003.25,-537.4 997.25,-531.4 997.25,-525.4 997.25,-525.4 997.25,-505.12 997.25,-505.12 997.25,-499.12 1003.25,-493.12 1009.25,-493.12 1009.25,-493.12 1112.93,-493.12 1112.93,-493.12 1118.93,-493.12 1124.93,-499.12 1124.93,-505.12 1124.93,-505.12 1124.93,-525.4 1124.93,-525.4 1124.93,-531.4 1118.93,-537.4 1112.93,-537.4"/>
+<text xml:space="preserve" text-anchor="middle" x="1061.09" y="-518.31" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">REST Client</text>
+<text xml:space="preserve" text-anchor="middle" x="1061.09" y="-504.81" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">HTTP / JWT Bearer</text>
+</g>
+<!-- swagger -->
+<g id="node3" class="node">
+<title>swagger</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M1298.43,-537.4C1298.43,-537.4 1197.75,-537.4 1197.75,-537.4 1191.75,-537.4 1185.75,-531.4 1185.75,-525.4 1185.75,-525.4 1185.75,-505.12 1185.75,-505.12 1185.75,-499.12 1191.75,-493.12 1197.75,-493.12 1197.75,-493.12 1298.43,-493.12 1298.43,-493.12 1304.43,-493.12 1310.43,-499.12 1310.43,-505.12 1310.43,-505.12 1310.43,-525.4 1310.43,-525.4 1310.43,-531.4 1304.43,-537.4 1298.43,-537.4"/>
+<text xml:space="preserve" text-anchor="middle" x="1248.09" y="-518.31" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">Swagger UI</text>
+<text xml:space="preserve" text-anchor="middle" x="1248.09" y="-504.81" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">springdoc&#45;openapi</text>
+</g>
+<!-- gatling -->
+<g id="node4" class="node">
+<title>gatling</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M1464.68,-537.4C1464.68,-537.4 1383.5,-537.4 1383.5,-537.4 1377.5,-537.4 1371.5,-531.4 1371.5,-525.4 1371.5,-525.4 1371.5,-505.12 1371.5,-505.12 1371.5,-499.12 1377.5,-493.12 1383.5,-493.12 1383.5,-493.12 1464.68,-493.12 1464.68,-493.12 1470.68,-493.12 1476.68,-499.12 1476.68,-505.12 1476.68,-505.12 1476.68,-525.4 1476.68,-525.4 1476.68,-531.4 1470.68,-537.4 1464.68,-537.4"/>
+<text xml:space="preserve" text-anchor="middle" x="1424.09" y="-518.31" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">Gatling Tests</text>
+<text xml:space="preserve" text-anchor="middle" x="1424.09" y="-504.81" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">load simulation</text>
+</g>
+<!-- core -->
+<g id="node8" class="node">
+<title>core</title>
+<path fill="#e9f7f6" stroke="#45a7a1" stroke-width="2" d="M475.06,-290.84C475.06,-290.84 201.12,-290.84 201.12,-290.84 195.12,-290.84 189.13,-284.84 189.13,-278.84 189.13,-278.84 189.13,-258.56 189.13,-258.56 189.13,-252.56 195.13,-246.56 201.13,-246.56 201.13,-246.56 475.06,-246.56 475.06,-246.56 481.06,-246.56 487.06,-252.56 487.06,-258.56 487.06,-258.56 487.06,-278.84 487.06,-278.84 487.06,-284.84 481.06,-290.84 475.06,-290.84"/>
+<text xml:space="preserve" text-anchor="middle" x="338.09" y="-271.75" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">appointment&#45;core</text>
+<text xml:space="preserve" text-anchor="middle" x="338.09" y="-258.25" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">16 entities · Exposed ORM · State Machine · Slot Calc</text>
+</g>
+<!-- api&#45;&gt;core -->
+<g id="edge2" class="edge">
+<title>api&#45;&gt;core</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M764.91,-392C611.6,-392 338.09,-392 338.09,-392 338.09,-392 338.09,-301.83 338.09,-301.83"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="340.72,-301.83 338.09,-294.33 335.47,-301.83 340.72,-301.83"/>
+</g>
+<!-- evt -->
+<g id="node9" class="node">
+<title>evt</title>
+<path fill="#e9f7f6" stroke="#45a7a1" stroke-width="2" d="M859.56,-290.84C859.56,-290.84 678.62,-290.84 678.62,-290.84 672.62,-290.84 666.62,-284.84 666.62,-278.84 666.62,-278.84 666.62,-258.56 666.62,-258.56 666.62,-252.56 672.62,-246.56 678.62,-246.56 678.62,-246.56 859.56,-246.56 859.56,-246.56 865.56,-246.56 871.56,-252.56 871.56,-258.56 871.56,-258.56 871.56,-278.84 871.56,-278.84 871.56,-284.84 865.56,-290.84 859.56,-290.84"/>
+<text xml:space="preserve" text-anchor="middle" x="769.09" y="-271.75" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">appointment&#45;event</text>
+<text xml:space="preserve" text-anchor="middle" x="769.09" y="-258.25" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">Spring ApplicationEvent · EventLog</text>
+</g>
+<!-- api&#45;&gt;evt -->
+<g id="edge3" class="edge">
+<title>api&#45;&gt;evt</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" stroke-dasharray="5,2" d="M818.72,-369.08C818.72,-369.08 818.72,-301.7 818.72,-301.7"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="821.34,-301.7 818.72,-294.2 816.09,-301.7 821.34,-301.7"/>
+</g>
+<!-- pg -->
+<g id="node15" class="node">
+<title>pg</title>
+<path fill="#f2f5f9" stroke="#9aa8b8" stroke-width="2" d="M669.81,-44.28C669.81,-44.28 544.38,-44.28 544.38,-44.28 538.38,-44.28 532.38,-38.28 532.38,-32.28 532.38,-32.28 532.38,-12 532.38,-12 532.38,-6 538.38,0 544.38,0 544.38,0 669.81,0 669.81,0 675.81,0 681.81,-6 681.81,-12 681.81,-12 681.81,-32.28 681.81,-32.28 681.81,-38.28 675.81,-44.28 669.81,-44.28"/>
+<text xml:space="preserve" text-anchor="middle" x="607.09" y="-25.19" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">PostgreSQL</text>
+<text xml:space="preserve" text-anchor="middle" x="607.09" y="-11.69" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Exposed JDBC · Flyway</text>
+</g>
+<!-- api&#45;&gt;pg -->
+<g id="edge8" class="edge">
+<title>api&#45;&gt;pg</title>
+<path fill="none" stroke="#9aa8b8" stroke-width="1.8" stroke-dasharray="5,2" d="M918.93,-369.12C918.93,-288.45 918.93,-22 918.93,-22 918.93,-22 692.8,-22 692.8,-22"/>
+<polygon fill="#9aa8b8" stroke="#9aa8b8" stroke-width="1.8" points="692.8,-19.38 685.3,-22 692.8,-24.63 692.8,-19.38"/>
+</g>
+<!-- redis -->
+<g id="node16" class="node">
+<title>redis</title>
+<path fill="#f2f5f9" stroke="#9aa8b8" stroke-width="2" d="M1148.81,-44.28C1148.81,-44.28 1023.38,-44.28 1023.38,-44.28 1017.38,-44.28 1011.38,-38.28 1011.38,-32.28 1011.38,-32.28 1011.38,-12 1011.38,-12 1011.38,-6 1017.38,0 1023.38,0 1023.38,0 1148.81,0 1148.81,0 1154.81,0 1160.81,-6 1160.81,-12 1160.81,-12 1160.81,-32.28 1160.81,-32.28 1160.81,-38.28 1154.81,-44.28 1148.81,-44.28"/>
+<text xml:space="preserve" text-anchor="middle" x="1086.09" y="-25.19" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Redis</text>
+<text xml:space="preserve" text-anchor="middle" x="1086.09" y="-11.69" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Leader Election · Cache</text>
+</g>
+<!-- api&#45;&gt;redis -->
+<g id="edge9" class="edge">
+<title>api&#45;&gt;redis</title>
+<path fill="none" stroke="#9aa8b8" stroke-width="1.8" stroke-dasharray="5,2" d="M967.13,-392C995.86,-392 1019.5,-392 1019.5,-392 1019.5,-392 1019.5,-55.5 1019.5,-55.5"/>
+<polygon fill="#9aa8b8" stroke="#9aa8b8" stroke-width="1.8" points="1022.13,-55.5 1019.5,-48 1016.88,-55.5 1022.13,-55.5"/>
+</g>
+<!-- sec -->
+<g id="node6" class="node">
+<title>sec</title>
+<path fill="#eaf7ef" stroke="#58a978" stroke-width="2" d="M1160.56,-414.12C1160.56,-414.12 1039.63,-414.12 1039.63,-414.12 1033.63,-414.12 1027.63,-408.12 1027.63,-402.12 1027.63,-402.12 1027.63,-381.84 1027.63,-381.84 1027.63,-375.84 1033.63,-369.84 1039.63,-369.84 1039.63,-369.84 1160.56,-369.84 1160.56,-369.84 1166.56,-369.84 1172.56,-375.84 1172.56,-381.84 1172.56,-381.84 1172.56,-402.12 1172.56,-402.12 1172.56,-408.12 1166.56,-414.12 1160.56,-414.12"/>
+<text xml:space="preserve" text-anchor="middle" x="1100.09" y="-395.03" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">SecurityConfig</text>
+<text xml:space="preserve" text-anchor="middle" x="1100.09" y="-381.53" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">JwtAuthenticationFilter</text>
+</g>
+<!-- exh -->
+<g id="node7" class="node">
+<title>exh</title>
+<path fill="#eaf7ef" stroke="#58a978" stroke-width="2" d="M1372.93,-414.12C1372.93,-414.12 1245.25,-414.12 1245.25,-414.12 1239.25,-414.12 1233.25,-408.12 1233.25,-402.12 1233.25,-402.12 1233.25,-381.84 1233.25,-381.84 1233.25,-375.84 1239.25,-369.84 1245.25,-369.84 1245.25,-369.84 1372.93,-369.84 1372.93,-369.84 1378.93,-369.84 1384.93,-375.84 1384.93,-381.84 1384.93,-381.84 1384.93,-402.12 1384.93,-402.12 1384.93,-408.12 1378.93,-414.12 1372.93,-414.12"/>
+<text xml:space="preserve" text-anchor="middle" x="1309.09" y="-395.03" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">GlobalExceptionHandler</text>
+<text xml:space="preserve" text-anchor="middle" x="1309.09" y="-381.53" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">ApiResponse envelope</text>
+</g>
+<!-- solver -->
+<g id="node10" class="node">
+<title>solver</title>
+<path fill="#fff3d9" stroke="#d6a441" stroke-width="2" d="M186.18,-167.56C186.18,-167.56 12,-167.56 12,-167.56 6,-167.56 0,-161.56 0,-155.56 0,-155.56 0,-135.28 0,-135.28 0,-129.28 6,-123.28 12,-123.28 12,-123.28 186.18,-123.28 186.18,-123.28 192.18,-123.28 198.18,-129.28 198.18,-135.28 198.18,-135.28 198.18,-155.56 198.18,-155.56 198.18,-161.56 192.18,-167.56 186.18,-167.56"/>
+<text xml:space="preserve" text-anchor="middle" x="99.09" y="-148.47" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">appointment&#45;solver</text>
+<text xml:space="preserve" text-anchor="middle" x="99.09" y="-134.97" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">Timefold Solver · 11 Hard + 2 Soft</text>
+</g>
+<!-- core&#45;&gt;solver -->
+<g id="edge4" class="edge">
+<title>core&#45;&gt;solver</title>
+<path fill="none" stroke="#d6a441" stroke-width="1.8" d="M193.65,-245.8C193.65,-245.8 193.65,-178.42 193.65,-178.42"/>
+<polygon fill="#d6a441" stroke="#d6a441" stroke-width="1.8" points="196.28,-178.42 193.65,-170.92 191.03,-178.42 196.28,-178.42"/>
+</g>
+<!-- notif -->
+<g id="node12" class="node">
+<title>notif</title>
+<path fill="#fdecef" stroke="#dc6b82" stroke-width="2" d="M404.93,-167.56C404.93,-167.56 271.25,-167.56 271.25,-167.56 265.25,-167.56 259.25,-161.56 259.25,-155.56 259.25,-155.56 259.25,-135.28 259.25,-135.28 259.25,-129.28 265.25,-123.28 271.25,-123.28 271.25,-123.28 404.93,-123.28 404.93,-123.28 410.93,-123.28 416.93,-129.28 416.93,-135.28 416.93,-135.28 416.93,-155.56 416.93,-155.56 416.93,-161.56 410.93,-167.56 404.93,-167.56"/>
+<text xml:space="preserve" text-anchor="middle" x="338.09" y="-148.47" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">appointment&#45;notification</text>
+<text xml:space="preserve" text-anchor="middle" x="338.09" y="-134.97" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">HA Scheduler · Reminder</text>
+</g>
+<!-- core&#45;&gt;notif -->
+<g id="edge5" class="edge">
+<title>core&#45;&gt;notif</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" d="M311.81,-245.8C311.81,-245.8 311.81,-178.42 311.81,-178.42"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="314.44,-178.42 311.81,-170.92 309.19,-178.42 314.44,-178.42"/>
+</g>
+<!-- timefold_ai -->
+<g id="node19" class="node">
+<title>timefold_ai</title>
+<path fill="#f2f5f9" stroke="#9aa8b8" stroke-width="2" d="M136.31,-44.28C136.31,-44.28 61.88,-44.28 61.88,-44.28 55.88,-44.28 49.88,-38.28 49.88,-32.28 49.88,-32.28 49.88,-12 49.88,-12 49.88,-6 55.88,0 61.88,0 61.88,0 136.31,0 136.31,0 142.31,0 148.31,-6 148.31,-12 148.31,-12 148.31,-32.28 148.31,-32.28 148.31,-38.28 142.31,-44.28 136.31,-44.28"/>
+<text xml:space="preserve" text-anchor="middle" x="99.09" y="-25.19" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Timefold AI</text>
+<text xml:space="preserve" text-anchor="middle" x="99.09" y="-11.69" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Solver Engine</text>
+</g>
+<!-- solver&#45;&gt;timefold_ai -->
+<g id="edge11" class="edge">
+<title>solver&#45;&gt;timefold_ai</title>
+<path fill="none" stroke="#9aa8b8" stroke-width="1.8" stroke-dasharray="5,2" d="M99.09,-122.52C99.09,-122.52 99.09,-55.14 99.09,-55.14"/>
+<polygon fill="#9aa8b8" stroke="#9aa8b8" stroke-width="1.8" points="101.72,-55.14 99.09,-47.64 96.47,-55.14 101.72,-55.14"/>
+</g>
+<!-- solver_svc -->
+<g id="node11" class="node">
+<title>solver_svc</title>
+<path fill="#fff3d9" stroke="#d6a441" stroke-width="2" d="M1379.68,-167.56C1379.68,-167.56 1190.5,-167.56 1190.5,-167.56 1184.5,-167.56 1178.5,-161.56 1178.5,-155.56 1178.5,-155.56 1178.5,-135.28 1178.5,-135.28 1178.5,-129.28 1184.5,-123.28 1190.5,-123.28 1190.5,-123.28 1379.68,-123.28 1379.68,-123.28 1385.68,-123.28 1391.68,-129.28 1391.68,-135.28 1391.68,-135.28 1391.68,-155.56 1391.68,-155.56 1391.68,-161.56 1385.68,-167.56 1379.68,-167.56"/>
+<text xml:space="preserve" text-anchor="middle" x="1285.09" y="-148.47" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">SolverService</text>
+<text xml:space="preserve" text-anchor="middle" x="1285.09" y="-134.97" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">bulk optimization · SolutionConverter</text>
+</g>
+<!-- redis_leader -->
+<g id="node13" class="node">
+<title>redis_leader</title>
+<path fill="#fdecef" stroke="#dc6b82" stroke-width="2" d="M859.56,-167.56C859.56,-167.56 744.62,-167.56 744.62,-167.56 738.62,-167.56 732.62,-161.56 732.62,-155.56 732.62,-155.56 732.62,-135.28 732.62,-135.28 732.62,-129.28 738.62,-123.28 744.62,-123.28 744.62,-123.28 859.56,-123.28 859.56,-123.28 865.56,-123.28 871.56,-129.28 871.56,-135.28 871.56,-135.28 871.56,-155.56 871.56,-155.56 871.56,-161.56 865.56,-167.56 859.56,-167.56"/>
+<text xml:space="preserve" text-anchor="middle" x="802.09" y="-148.47" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">Redis Leader Election</text>
+<text xml:space="preserve" text-anchor="middle" x="802.09" y="-134.97" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">bluetape4k&#45;leader</text>
+</g>
+<!-- notif&#45;&gt;redis_leader -->
+<g id="edge6" class="edge">
+<title>notif&#45;&gt;redis_leader</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" d="M364.37,-168.35C364.37,-185.86 364.37,-207 364.37,-207 364.37,-207 802.09,-207 802.09,-207 802.09,-207 802.09,-178.57 802.09,-178.57"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="804.72,-178.57 802.09,-171.07 799.47,-178.57 804.72,-178.57"/>
+</g>
+<!-- r4j -->
+<g id="node14" class="node">
+<title>r4j</title>
+<path fill="#fdecef" stroke="#dc6b82" stroke-width="2" d="M659.93,-167.56C659.93,-167.56 490.25,-167.56 490.25,-167.56 484.25,-167.56 478.25,-161.56 478.25,-155.56 478.25,-155.56 478.25,-135.28 478.25,-135.28 478.25,-129.28 484.25,-123.28 490.25,-123.28 490.25,-123.28 659.93,-123.28 659.93,-123.28 665.93,-123.28 671.93,-129.28 671.93,-135.28 671.93,-135.28 671.93,-155.56 671.93,-155.56 671.93,-161.56 665.93,-167.56 659.93,-167.56"/>
+<text xml:space="preserve" text-anchor="middle" x="575.09" y="-148.47" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">Resilience4j</text>
+<text xml:space="preserve" text-anchor="middle" x="575.09" y="-134.97" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">CircuitBreaker · Retry · Bulkhead</text>
+</g>
+<!-- notif&#45;&gt;r4j -->
+<g id="edge7" class="edge">
+<title>notif&#45;&gt;r4j</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" d="M417.67,-145C417.67,-145 467.39,-145 467.39,-145"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="467.39,-147.63 474.89,-145 467.39,-142.38 467.39,-147.63"/>
+</g>
+<!-- notif&#45;&gt;pg -->
+<g id="edge10" class="edge">
+<title>notif&#45;&gt;pg</title>
+<path fill="none" stroke="#9aa8b8" stroke-width="1.8" stroke-dasharray="5,2" d="M338.09,-122.49C338.09,-86.8 338.09,-22 338.09,-22 338.09,-22 521.22,-22 521.22,-22"/>
+<polygon fill="#9aa8b8" stroke="#9aa8b8" stroke-width="1.8" points="521.22,-24.63 528.72,-22 521.22,-19.38 521.22,-24.63"/>
+</g>
+<!-- docker -->
+<g id="node17" class="node">
+<title>docker</title>
+<path fill="#f2f5f9" stroke="#9aa8b8" stroke-width="2" d="M1312.56,-44.28C1312.56,-44.28 1233.63,-44.28 1233.63,-44.28 1227.63,-44.28 1221.63,-38.28 1221.63,-32.28 1221.63,-32.28 1221.63,-12 1221.63,-12 1221.63,-6 1227.63,0 1233.63,0 1233.63,0 1312.56,0 1312.56,0 1318.56,0 1324.56,-6 1324.56,-12 1324.56,-12 1324.56,-32.28 1324.56,-32.28 1324.56,-38.28 1318.56,-44.28 1312.56,-44.28"/>
+<text xml:space="preserve" text-anchor="middle" x="1273.09" y="-25.19" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Docker</text>
+<text xml:space="preserve" text-anchor="middle" x="1273.09" y="-11.69" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Testcontainers</text>
+</g>
+<!-- micrometer -->
+<g id="node18" class="node">
+<title>micrometer</title>
+<path fill="#f2f5f9" stroke="#9aa8b8" stroke-width="2" d="M1468.81,-44.28C1468.81,-44.28 1397.38,-44.28 1397.38,-44.28 1391.38,-44.28 1385.38,-38.28 1385.38,-32.28 1385.38,-32.28 1385.38,-12 1385.38,-12 1385.38,-6 1391.38,0 1397.38,0 1397.38,0 1468.81,0 1468.81,0 1474.81,0 1480.81,-6 1480.81,-12 1480.81,-12 1480.81,-32.28 1480.81,-32.28 1480.81,-38.28 1474.81,-44.28 1468.81,-44.28"/>
+<text xml:space="preserve" text-anchor="middle" x="1433.09" y="-25.19" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Micrometer</text>
+<text xml:space="preserve" text-anchor="middle" x="1433.09" y="-11.69" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Observability</text>
+</g>
+</g>
 </svg>

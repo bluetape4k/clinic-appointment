@@ -1,102 +1,259 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="600" viewBox="0 0 1060 600" role="img" aria-label="appointment-solver — Timefold Solver Data Flow">
-<defs>
-  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
-    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1f2937" flood-opacity="0.10"/>
-  </filter>
-  <marker id="arr" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#758297"/>
-  </marker>
-  <marker id="arr-blue" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#5B8DEF"/>
-  </marker>
-  <marker id="arr-green" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#58A978"/>
-  </marker>
-  <marker id="arr-amber" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#D6A441"/>
-  </marker>
-  <marker id="arr-pink" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#DC6B82"/>
-  </marker>
-  <marker id="arr-purple" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#8A72D6"/>
-  </marker>
-  <marker id="arr-teal" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#45A7A1"/>
-  </marker>
-  <marker id="inherit" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0 1 L 12 6 L 0 11 Z" fill="#ffffff" stroke="#758297" stroke-width="1.5"/>
-  </marker>
-  <style>
-    .canvas{fill:#F7F9FC}
-    .frame{fill:#FFFFFF;stroke:#D0D8E4;stroke-width:1.5}
-    .title{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:40px;fill:#102033}
-    .subtitle{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:13px;fill:#536273}
-    .label{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:22px;fill:#102033}
-    .smallLabel{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:17px;fill:#102033}
-    .mono{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:12px;fill:#102033}
-    .small{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:11px;fill:#536273}
-    .layerTitle{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:14px;fill:#536273;font-style:italic}
-    .card{stroke-width:2;filter:url(#shadow)}
-    .line{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#arr)}
-    .line-blue{stroke:#5B8DEF;stroke-width:2;fill:none;marker-end:url(#arr-blue)}
-    .line-green{stroke:#58A978;stroke-width:2;fill:none;marker-end:url(#arr-green)}
-    .line-amber{stroke:#D6A441;stroke-width:2;fill:none;marker-end:url(#arr-amber)}
-    .line-pink{stroke:#DC6B82;stroke-width:2;fill:none;marker-end:url(#arr-pink)}
-    .line-purple{stroke:#8A72D6;stroke-width:2;fill:none;marker-end:url(#arr-purple)}
-    .line-teal{stroke:#45A7A1;stroke-width:2;fill:none;marker-end:url(#arr-teal)}
-    .dashed{stroke:#758297;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr)}
-    .dashed-blue{stroke:#5B8DEF;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-blue)}
-    .dashed-green{stroke:#58A978;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-green)}
-    .dashed-amber{stroke:#D6A441;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-amber)}
-    .dashed-pink{stroke:#DC6B82;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-pink)}
-    .dashed-purple{stroke:#8A72D6;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-purple)}
-    .dashed-teal{stroke:#45A7A1;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-teal)}
-    .inheritLine{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#inherit)}
-  </style>
-</defs>
-<rect class="canvas" width="1060" height="600"/>
-<rect class="frame" x="28" y="24" width="1004" height="552" rx="22"/>
-<text class="title" x="62" y="78">Solver Data Flow</text>
-<text class="subtitle" x="66" y="100">appointment-solver · Timefold AI · 11 Hard + 2 Soft constraints</text>
-<rect x="48" y="118" width="964" height="68" rx="14" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="138" dominant-baseline="middle">Input — Load from DB</text>
-<rect x="48" y="200" width="964" height="68" rx="14" fill="#E9F7F6" stroke="#45A7A1" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="220" dominant-baseline="middle">Planning Domain</text>
-<rect x="48" y="282" width="964" height="68" rx="14" fill="#FFF3D9" stroke="#D6A441" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="302" dominant-baseline="middle">Constraint Evaluation</text>
-<rect x="48" y="364" width="964" height="68" rx="14" fill="#EAF7EF" stroke="#58A978" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="384" dominant-baseline="middle">Timefold Solver Engine</text>
-<rect x="48" y="446" width="964" height="68" rx="14" fill="#F1ECFF" stroke="#8A72D6" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="466" dominant-baseline="middle">Output — Write Results</text>
-<rect x="68" y="132" width="220" height="50" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="178" y="141" text-anchor="middle" dominant-baseline="middle">SolverService.solve()</text><text class="mono" x="178" y="159" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">clinicId, appointmentIds</text><text class="mono" x="178" y="175" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">dateRange</text>
-<rect x="310" y="132" width="200" height="50" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="410" y="141" text-anchor="middle" dominant-baseline="middle">AppointmentRepository</text><text class="mono" x="410" y="159" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">load REQUESTED &amp;</text><text class="mono" x="410" y="175" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">PENDING_RESCHEDULE</text>
-<rect x="530" y="132" width="200" height="50" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="630" y="133" text-anchor="middle" dominant-baseline="middle">Problem Facts</text><text class="mono" x="630" y="151" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">Doctors, Clinics</text><text class="mono" x="630" y="167" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">ClosureRecords, Holidays</text><text class="mono" x="630" y="183" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">EquipUnavailabilities</text>
-<rect x="750" y="132" width="200" height="50" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="850" y="141" text-anchor="middle" dominant-baseline="middle">SolutionConverter</text><text class="mono" x="850" y="159" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">DB records →</text><text class="mono" x="850" y="175" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">AppointmentPlanning</text>
-<rect x="68" y="214" width="300" height="50" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="218" y="215" text-anchor="middle" dominant-baseline="middle">AppointmentPlanning (@PlanningEntity)</text><text class="mono" x="218" y="233" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">doctorId, appointmentDate</text><text class="mono" x="218" y="249" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">startTime = planning variables</text><text class="mono" x="218" y="265" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">Pinned if CONFIRMED+</text>
-<rect x="390" y="214" width="300" height="50" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="540" y="215" text-anchor="middle" dominant-baseline="middle">ScheduleSolution (@PlanningSolution)</text><text class="mono" x="540" y="233" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">AppointmentPlanning list</text><text class="mono" x="540" y="249" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">ProblemFacts</text><text class="mono" x="540" y="265" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">scoreHolder</text>
-<rect x="68" y="296" width="260" height="50" rx="10" fill="#FFF3D9" stroke="#D6A441" class="card"/><text class="smallLabel" x="198" y="297" text-anchor="middle" dominant-baseline="middle">Hard Constraints (11)</text><text class="mono" x="198" y="315" text-anchor="middle" dominant-baseline="middle" fill="#4A3000" opacity="0.75">business hours, doctor schedule</text><text class="mono" x="198" y="331" text-anchor="middle" dominant-baseline="middle" fill="#4A3000" opacity="0.75">absence, closure, holiday</text><text class="mono" x="198" y="347" text-anchor="middle" dominant-baseline="middle" fill="#4A3000" opacity="0.75">capacity, equipment, provider match</text>
-<rect x="350" y="296" width="200" height="50" rx="10" fill="#FFF3D9" stroke="#D6A441" class="card"/><text class="smallLabel" x="450" y="305" text-anchor="middle" dominant-baseline="middle">Soft Constraints (2)</text><text class="mono" x="450" y="323" text-anchor="middle" dominant-baseline="middle" fill="#4A3000" opacity="0.75">doctor load balance</text><text class="mono" x="450" y="339" text-anchor="middle" dominant-baseline="middle" fill="#4A3000" opacity="0.75">schedule gap minimize</text>
-<rect x="572" y="296" width="260" height="50" rx="10" fill="#FFF3D9" stroke="#D6A441" class="card"/><text class="smallLabel" x="702" y="305" text-anchor="middle" dominant-baseline="middle">AppointmentConstraintProvider</text><text class="mono" x="702" y="323" text-anchor="middle" dominant-baseline="middle" fill="#4A3000" opacity="0.75">Timefold ConstraintProvider</text><text class="mono" x="702" y="339" text-anchor="middle" dominant-baseline="middle" fill="#4A3000" opacity="0.75">H1–H11, S1–S2</text>
-<rect x="68" y="378" width="200" height="50" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="168" y="387" text-anchor="middle" dominant-baseline="middle">SolverConfig</text><text class="mono" x="168" y="405" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">termination config</text><text class="mono" x="168" y="421" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">move filters</text>
-<rect x="290" y="378" width="300" height="50" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="440" y="387" text-anchor="middle" dominant-baseline="middle">Timefold Solver Engine</text><text class="mono" x="440" y="405" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">local search · tabu search</text><text class="mono" x="440" y="421" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">score evaluation · SSA</text>
-<rect x="612" y="378" width="200" height="50" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="712" y="387" text-anchor="middle" dominant-baseline="middle">BestSolution</text><text class="mono" x="712" y="405" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">optimized assignments</text><text class="mono" x="712" y="421" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">HardSoftScore</text>
-<rect x="68" y="460" width="300" height="50" rx="10" fill="#F1ECFF" stroke="#8A72D6" class="card"/><text class="smallLabel" x="218" y="469" text-anchor="middle" dominant-baseline="middle">SolverResult</text><text class="mono" x="218" y="487" text-anchor="middle" dominant-baseline="middle" fill="#2A1A5C" opacity="0.75">assignments: Map&lt;Long, Assignment&gt;</text><text class="mono" x="218" y="503" text-anchor="middle" dominant-baseline="middle" fill="#2A1A5C" opacity="0.75">appointmentId → (doctorId, date, time)</text>
-<rect x="390" y="460" width="280" height="50" rx="10" fill="#F1ECFF" stroke="#8A72D6" class="card"/><text class="smallLabel" x="530" y="469" text-anchor="middle" dominant-baseline="middle">Caller (SolverController)</text><text class="mono" x="530" y="487" text-anchor="middle" dominant-baseline="middle" fill="#2A1A5C" opacity="0.75">receives SolverResult</text><text class="mono" x="530" y="503" text-anchor="middle" dominant-baseline="middle" fill="#2A1A5C" opacity="0.75">calls AppointmentRepository.save()</text>
-<rect x="692" y="460" width="200" height="50" rx="10" fill="#F2F5F9" stroke="#9AA8B8" class="card"/><text class="smallLabel" x="792" y="469" text-anchor="middle" dominant-baseline="middle">DB: PostgreSQL</text><text class="mono" x="792" y="487" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">updated appointments</text><text class="mono" x="792" y="503" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">Exposed JDBC transaction</text>
-<path class="line-blue" d="M288 157 L310 157"/>
-<path class="line-blue" d="M510 157 L530 157"/>
-<path class="line-blue" d="M730 157 L750 157"/>
-<path class="line-teal" d="M850 182 L850 200"/>
-<path class="line-amber" d="M218 264 L218 282"/>
-<path class="dashed-amber" d="M390 246 L430 282"/>
-<path class="line-amber" d="M540 296 L572 296"/>
-<path class="line-green" d="M630 296 L630 364"/>
-<path class="line-green" d="M268 378 L290 378"/>
-<path class="line-green" d="M590 378 L612 378"/>
-<path class="line-purple" d="M712 403 L712 446"/>
-<path class="line-purple" d="M218 428 L218 460"/>
-<path class="line-purple" d="M368 485 L390 485"/>
-<path class="line-gray" d="M670 485 L692 485"/>
-<text class="small" x="530" y="572" text-anchor="middle">appointment-solver · Timefold Solver · github.com/bluetape4k/clinic-appointment</text>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 15.0.0 (20260523.1842)
+ -->
+<!-- Pages: 1 -->
+<svg width="3565pt" height="403pt"
+ viewBox="0.00 0.00 3565.00 403.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(57.6 345.24)">
+<polygon fill="#f7f9fc" stroke="none" points="-57.6,57.6 -57.6,-345.24 3507.12,-345.24 3507.12,57.6 -57.6,57.6"/>
+<text xml:space="preserve" text-anchor="middle" x="175.25" y="-272.24" font-family="Helvetica Neue" font-size="12.00">Solver Data Flow</text>
+<text xml:space="preserve" text-anchor="middle" x="175.25" y="-257.24" font-family="Helvetica Neue" font-size="12.00">appointment&#45;solver · Timefold AI · 11 Hard + 2 Soft constraints</text>
+<g id="clust1" class="cluster">
+<title>cluster_input</title>
+<polygon fill="#e8f3ff" fill-opacity="0.533333" stroke="#5b8def" stroke-width="1.5" points="8,-9.64 8,-118.64 831.72,-118.64 831.72,-9.64 8,-9.64"/>
+<text xml:space="preserve" text-anchor="middle" x="71.5" y="-104.19" font-family="Helvetica Neue" font-size="11.00" fill="#5b8def">Input — Load from DB</text>
+</g>
+<g id="clust2" class="cluster">
+<title>cluster_domain</title>
+<polygon fill="#e9f7f6" fill-opacity="0.533333" stroke="#45a7a1" stroke-width="1.5" points="894.72,-16.64 894.72,-125.64 1388.33,-125.64 1388.33,-16.64 894.72,-16.64"/>
+<text xml:space="preserve" text-anchor="middle" x="943.97" y="-111.19" font-family="Helvetica Neue" font-size="11.00" fill="#45a7a1">Planning Domain</text>
+</g>
+<g id="clust3" class="cluster">
+<title>cluster_constraints</title>
+<polygon fill="#fff3d9" fill-opacity="0.533333" stroke="#d6a441" stroke-width="1.5" points="1451.33,-13.64 1451.33,-241.64 1948.69,-241.64 1948.69,-13.64 1451.33,-13.64"/>
+<text xml:space="preserve" text-anchor="middle" x="1511.45" y="-227.19" font-family="Helvetica Neue" font-size="11.00" fill="#d6a441">Constraint Evaluation</text>
+</g>
+<g id="clust4" class="cluster">
+<title>cluster_engine</title>
+<polygon fill="#eaf7ef" fill-opacity="0.533333" stroke="#58a978" stroke-width="1.5" points="2011.69,-82.64 2011.69,-177.64 2608.48,-177.64 2608.48,-82.64 2011.69,-82.64"/>
+<text xml:space="preserve" text-anchor="middle" x="2075.56" y="-163.19" font-family="Helvetica Neue" font-size="11.00" fill="#58a978">Timefold Solver Engine</text>
+</g>
+<g id="clust5" class="cluster">
+<title>cluster_output</title>
+<polygon fill="#f1ecff" fill-opacity="0.533333" stroke="#8a72d6" stroke-width="1.5" points="2671.48,-82.64 2671.48,-178.64 3441.52,-178.64 3441.52,-82.64 2671.48,-82.64"/>
+<text xml:space="preserve" text-anchor="middle" x="2737.6" y="-164.19" font-family="Helvetica Neue" font-size="11.00" fill="#8a72d6">Output — Write Results</text>
+</g>
+<!-- svc_call -->
+<g id="node1" class="node">
+<title>svc_call</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M154.18,-82.53C154.18,-82.53 28,-82.53 28,-82.53 22,-82.53 16,-76.53 16,-70.53 16,-70.53 16,-36.75 16,-36.75 16,-30.75 22,-24.75 28,-24.75 28,-24.75 154.18,-24.75 154.18,-24.75 160.18,-24.75 166.18,-30.75 166.18,-36.75 166.18,-36.75 166.18,-70.53 166.18,-70.53 166.18,-76.53 160.18,-82.53 154.18,-82.53"/>
+<text xml:space="preserve" text-anchor="middle" x="91.09" y="-63.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">SolverService.solve()</text>
+<text xml:space="preserve" text-anchor="middle" x="91.09" y="-49.94" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">clinicId, appointmentIds</text>
+<text xml:space="preserve" text-anchor="middle" x="91.09" y="-36.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">dateRange</text>
+</g>
+<!-- repo -->
+<g id="node2" class="node">
+<title>repo</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M393.11,-82.53C393.11,-82.53 257.18,-82.53 257.18,-82.53 251.18,-82.53 245.18,-76.53 245.18,-70.53 245.18,-70.53 245.18,-36.75 245.18,-36.75 245.18,-30.75 251.18,-24.75 257.18,-24.75 257.18,-24.75 393.11,-24.75 393.11,-24.75 399.11,-24.75 405.11,-30.75 405.11,-36.75 405.11,-36.75 405.11,-70.53 405.11,-70.53 405.11,-76.53 399.11,-82.53 393.11,-82.53"/>
+<text xml:space="preserve" text-anchor="middle" x="325.14" y="-63.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">AppointmentRepository</text>
+<text xml:space="preserve" text-anchor="middle" x="325.14" y="-49.94" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">load REQUESTED &amp;</text>
+<text xml:space="preserve" text-anchor="middle" x="325.14" y="-36.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">PENDING_RESCHEDULE</text>
+</g>
+<!-- svc_call&#45;&gt;repo -->
+<g id="edge1" class="edge">
+<title>svc_call&#45;&gt;repo</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M167.08,-53.64C167.08,-53.64 234.07,-53.64 234.07,-53.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="234.07,-56.27 241.57,-53.64 234.07,-51.02 234.07,-56.27"/>
+</g>
+<!-- facts -->
+<g id="node3" class="node">
+<title>facts</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M594.54,-89.28C594.54,-89.28 496.11,-89.28 496.11,-89.28 490.11,-89.28 484.11,-83.28 484.11,-77.28 484.11,-77.28 484.11,-30 484.11,-30 484.11,-24 490.11,-18 496.11,-18 496.11,-18 594.54,-18 594.54,-18 600.54,-18 606.54,-24 606.54,-30 606.54,-30 606.54,-77.28 606.54,-77.28 606.54,-83.28 600.54,-89.28 594.54,-89.28"/>
+<text xml:space="preserve" text-anchor="middle" x="545.32" y="-70.19" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">Problem Facts</text>
+<text xml:space="preserve" text-anchor="middle" x="545.32" y="-56.69" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">Doctors, Clinics</text>
+<text xml:space="preserve" text-anchor="middle" x="545.32" y="-43.19" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">Closures, Holidays</text>
+<text xml:space="preserve" text-anchor="middle" x="545.32" y="-29.69" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">EquipUnavail</text>
+</g>
+<!-- repo&#45;&gt;facts -->
+<g id="edge2" class="edge">
+<title>repo&#45;&gt;facts</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M405.88,-53.64C405.88,-53.64 473,-53.64 473,-53.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="473,-56.27 480.5,-53.64 473,-51.02 473,-56.27"/>
+</g>
+<!-- conv -->
+<g id="node4" class="node">
+<title>conv</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M811.72,-85.91C811.72,-85.91 697.54,-85.91 697.54,-85.91 691.54,-85.91 685.54,-79.91 685.54,-73.91 685.54,-73.91 685.54,-39.38 685.54,-39.38 685.54,-33.38 691.54,-27.38 697.54,-27.38 697.54,-27.38 811.72,-27.38 811.72,-27.38 817.72,-27.38 823.72,-33.38 823.72,-39.38 823.72,-39.38 823.72,-73.91 823.72,-73.91 823.72,-79.91 817.72,-85.91 811.72,-85.91"/>
+<text xml:space="preserve" text-anchor="middle" x="754.63" y="-66.81" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">SolutionConverter</text>
+<text xml:space="preserve" text-anchor="middle" x="754.63" y="-53.31" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">DB records →</text>
+<text xml:space="preserve" text-anchor="middle" x="754.63" y="-39.06" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">AppointmentPlanning</text>
+</g>
+<!-- facts&#45;&gt;conv -->
+<g id="edge3" class="edge">
+<title>facts&#45;&gt;conv</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M607.27,-56.64C607.27,-56.64 674.54,-56.64 674.54,-56.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="674.54,-59.27 682.04,-56.64 674.54,-54.02 674.54,-59.27"/>
+</g>
+<!-- solution -->
+<g id="node6" class="node">
+<title>solution</title>
+<path fill="#e9f7f6" stroke="#45a7a1" stroke-width="2" d="M1368.33,-96.28C1368.33,-96.28 1225.65,-96.28 1225.65,-96.28 1219.65,-96.28 1213.65,-90.28 1213.65,-84.28 1213.65,-84.28 1213.65,-37 1213.65,-37 1213.65,-31 1219.65,-25 1225.65,-25 1225.65,-25 1368.33,-25 1368.33,-25 1374.33,-25 1380.33,-31 1380.33,-37 1380.33,-37 1380.33,-84.28 1380.33,-84.28 1380.33,-90.28 1374.33,-96.28 1368.33,-96.28"/>
+<text xml:space="preserve" text-anchor="middle" x="1296.99" y="-77.19" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">ScheduleSolution</text>
+<text xml:space="preserve" text-anchor="middle" x="1296.99" y="-63.69" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">@PlanningSolution</text>
+<text xml:space="preserve" text-anchor="middle" x="1296.99" y="-50.19" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">AppointmentPlanning list</text>
+<text xml:space="preserve" text-anchor="middle" x="1296.99" y="-36.69" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">ProblemFacts, scoreHolder</text>
+</g>
+<!-- facts&#45;&gt;solution -->
+<g id="edge5" class="edge">
+<title>facts&#45;&gt;solution</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M545.52,-17.27C545.52,-7.7 545.52,0 545.52,0 545.52,0 1296.52,0 1296.52,0 1296.52,0 1296.52,-14.09 1296.52,-14.09"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="1293.9,-14.09 1296.52,-21.59 1299.15,-14.09 1293.9,-14.09"/>
+</g>
+<!-- entity -->
+<g id="node5" class="node">
+<title>entity</title>
+<path fill="#e9f7f6" stroke="#45a7a1" stroke-width="2" d="M1122.65,-96.28C1122.65,-96.28 914.72,-96.28 914.72,-96.28 908.72,-96.28 902.72,-90.28 902.72,-84.28 902.72,-84.28 902.72,-37 902.72,-37 902.72,-31 908.72,-25 914.72,-25 914.72,-25 1122.65,-25 1122.65,-25 1128.65,-25 1134.65,-31 1134.65,-37 1134.65,-37 1134.65,-84.28 1134.65,-84.28 1134.65,-90.28 1128.65,-96.28 1122.65,-96.28"/>
+<text xml:space="preserve" text-anchor="middle" x="1018.68" y="-77.19" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">AppointmentPlanning</text>
+<text xml:space="preserve" text-anchor="middle" x="1018.68" y="-63.69" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">@PlanningEntity</text>
+<text xml:space="preserve" text-anchor="middle" x="1018.68" y="-50.19" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">doctorId, date, startTime = planning vars</text>
+<text xml:space="preserve" text-anchor="middle" x="1018.68" y="-36.69" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">Pinned if CONFIRMED+</text>
+</g>
+<!-- conv&#45;&gt;entity -->
+<g id="edge4" class="edge">
+<title>conv&#45;&gt;entity</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M824.7,-56.64C824.7,-56.64 891.59,-56.64 891.59,-56.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="891.59,-59.27 899.09,-56.64 891.59,-54.02 891.59,-59.27"/>
+</g>
+<!-- entity&#45;&gt;solution -->
+<g id="edge6" class="edge">
+<title>entity&#45;&gt;solution</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M1135.5,-60.64C1135.5,-60.64 1202.81,-60.64 1202.81,-60.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="1202.81,-63.27 1210.31,-60.64 1202.81,-58.02 1202.81,-63.27"/>
+</g>
+<!-- hard -->
+<g id="node7" class="node">
+<title>hard</title>
+<path fill="#fff3d9" stroke="#d6a441" stroke-width="2" d="M1661.26,-93.28C1661.26,-93.28 1471.33,-93.28 1471.33,-93.28 1465.33,-93.28 1459.33,-87.28 1459.33,-81.28 1459.33,-81.28 1459.33,-34 1459.33,-34 1459.33,-28 1465.33,-22 1471.33,-22 1471.33,-22 1661.26,-22 1661.26,-22 1667.26,-22 1673.26,-28 1673.26,-34 1673.26,-34 1673.26,-81.28 1673.26,-81.28 1673.26,-87.28 1667.26,-93.28 1661.26,-93.28"/>
+<text xml:space="preserve" text-anchor="middle" x="1566.29" y="-74.19" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">Hard Constraints (11)</text>
+<text xml:space="preserve" text-anchor="middle" x="1566.29" y="-60.69" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">business hours, doctor schedule</text>
+<text xml:space="preserve" text-anchor="middle" x="1566.29" y="-47.19" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">absence, closure, holiday</text>
+<text xml:space="preserve" text-anchor="middle" x="1566.29" y="-33.69" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">capacity, equipment, provider match</text>
+</g>
+<!-- solution&#45;&gt;hard -->
+<g id="edge7" class="edge">
+<title>solution&#45;&gt;hard</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M1381.09,-59.14C1381.09,-59.14 1448.35,-59.14 1448.35,-59.14"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="1448.35,-61.77 1455.85,-59.14 1448.35,-56.52 1448.35,-61.77"/>
+</g>
+<!-- soft -->
+<g id="node8" class="node">
+<title>soft</title>
+<path fill="#fff3d9" stroke="#d6a441" stroke-width="2" d="M1626.38,-212.53C1626.38,-212.53 1506.2,-212.53 1506.2,-212.53 1500.2,-212.53 1494.2,-206.53 1494.2,-200.53 1494.2,-200.53 1494.2,-166.75 1494.2,-166.75 1494.2,-160.75 1500.2,-154.75 1506.2,-154.75 1506.2,-154.75 1626.38,-154.75 1626.38,-154.75 1632.38,-154.75 1638.38,-160.75 1638.38,-166.75 1638.38,-166.75 1638.38,-200.53 1638.38,-200.53 1638.38,-206.53 1632.38,-212.53 1626.38,-212.53"/>
+<text xml:space="preserve" text-anchor="middle" x="1566.29" y="-193.44" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">Soft Constraints (2)</text>
+<text xml:space="preserve" text-anchor="middle" x="1566.29" y="-179.94" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">doctor load balance</text>
+<text xml:space="preserve" text-anchor="middle" x="1566.29" y="-166.44" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">schedule gap minimize</text>
+</g>
+<!-- solution&#45;&gt;soft -->
+<g id="edge8" class="edge">
+<title>solution&#45;&gt;soft</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M1296.52,-97.21C1296.52,-133.47 1296.52,-183.64 1296.52,-183.64 1296.52,-183.64 1483.07,-183.64 1483.07,-183.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="1483.07,-186.27 1490.57,-183.64 1483.07,-181.02 1483.07,-186.27"/>
+</g>
+<!-- cprov -->
+<g id="node9" class="node">
+<title>cprov</title>
+<path fill="#fff3d9" stroke="#d6a441" stroke-width="2" d="M1928.69,-148.53C1928.69,-148.53 1764.26,-148.53 1764.26,-148.53 1758.26,-148.53 1752.26,-142.53 1752.26,-136.53 1752.26,-136.53 1752.26,-102.75 1752.26,-102.75 1752.26,-96.75 1758.26,-90.75 1764.26,-90.75 1764.26,-90.75 1928.69,-90.75 1928.69,-90.75 1934.69,-90.75 1940.69,-96.75 1940.69,-102.75 1940.69,-102.75 1940.69,-136.53 1940.69,-136.53 1940.69,-142.53 1934.69,-148.53 1928.69,-148.53"/>
+<text xml:space="preserve" text-anchor="middle" x="1846.47" y="-129.44" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">AppointmentConstraintProvider</text>
+<text xml:space="preserve" text-anchor="middle" x="1846.47" y="-115.94" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">Timefold ConstraintProvider</text>
+<text xml:space="preserve" text-anchor="middle" x="1846.47" y="-102.44" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">H1–H11, S1–S2</text>
+</g>
+<!-- hard&#45;&gt;cprov -->
+<g id="edge9" class="edge">
+<title>hard&#45;&gt;cprov</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M1655.52,-94.09C1655.52,-104.8 1655.52,-113.7 1655.52,-113.7 1655.52,-113.7 1741.05,-113.7 1741.05,-113.7"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="1741.05,-116.32 1748.55,-113.7 1741.05,-111.07 1741.05,-116.32"/>
+</g>
+<!-- soft&#45;&gt;cprov -->
+<g id="edge10" class="edge">
+<title>soft&#45;&gt;cprov</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M1566.52,-154C1566.52,-142.08 1566.52,-131.11 1566.52,-131.11 1566.52,-131.11 1741.08,-131.11 1741.08,-131.11"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="1741.08,-133.74 1748.58,-131.11 1741.08,-128.49 1741.08,-133.74"/>
+</g>
+<!-- config -->
+<g id="node10" class="node">
+<title>config</title>
+<path fill="#eaf7ef" stroke="#58a978" stroke-width="2" d="M2127.87,-148.53C2127.87,-148.53 2031.69,-148.53 2031.69,-148.53 2025.69,-148.53 2019.69,-142.53 2019.69,-136.53 2019.69,-136.53 2019.69,-102.75 2019.69,-102.75 2019.69,-96.75 2025.69,-90.75 2031.69,-90.75 2031.69,-90.75 2127.87,-90.75 2127.87,-90.75 2133.87,-90.75 2139.87,-96.75 2139.87,-102.75 2139.87,-102.75 2139.87,-136.53 2139.87,-136.53 2139.87,-142.53 2133.87,-148.53 2127.87,-148.53"/>
+<text xml:space="preserve" text-anchor="middle" x="2079.78" y="-129.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">SolverConfig</text>
+<text xml:space="preserve" text-anchor="middle" x="2079.78" y="-115.94" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">termination config</text>
+<text xml:space="preserve" text-anchor="middle" x="2079.78" y="-102.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">move filters</text>
+</g>
+<!-- cprov&#45;&gt;config -->
+<g id="edge11" class="edge">
+<title>cprov&#45;&gt;config</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M1941.37,-119.64C1941.37,-119.64 2008.52,-119.64 2008.52,-119.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="2008.52,-122.27 2016.02,-119.64 2008.52,-117.02 2008.52,-122.27"/>
+</g>
+<!-- engine -->
+<g id="node11" class="node">
+<title>engine</title>
+<path fill="#eaf7ef" stroke="#58a978" stroke-width="2" d="M2364.55,-148.53C2364.55,-148.53 2230.87,-148.53 2230.87,-148.53 2224.87,-148.53 2218.87,-142.53 2218.87,-136.53 2218.87,-136.53 2218.87,-102.75 2218.87,-102.75 2218.87,-96.75 2224.87,-90.75 2230.87,-90.75 2230.87,-90.75 2364.55,-90.75 2364.55,-90.75 2370.55,-90.75 2376.55,-96.75 2376.55,-102.75 2376.55,-102.75 2376.55,-136.53 2376.55,-136.53 2376.55,-142.53 2370.55,-148.53 2364.55,-148.53"/>
+<text xml:space="preserve" text-anchor="middle" x="2297.71" y="-129.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">Timefold Solver Engine</text>
+<text xml:space="preserve" text-anchor="middle" x="2297.71" y="-115.94" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">local search · tabu search</text>
+<text xml:space="preserve" text-anchor="middle" x="2297.71" y="-102.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">score evaluation</text>
+</g>
+<!-- config&#45;&gt;engine -->
+<g id="edge12" class="edge">
+<title>config&#45;&gt;engine</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M2140.78,-119.64C2140.78,-119.64 2207.73,-119.64 2207.73,-119.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="2207.73,-122.27 2215.23,-119.64 2207.73,-117.02 2207.73,-122.27"/>
+</g>
+<!-- best_sol -->
+<g id="node12" class="node">
+<title>best_sol</title>
+<path fill="#eaf7ef" stroke="#58a978" stroke-width="2" d="M2588.48,-148.53C2588.48,-148.53 2467.55,-148.53 2467.55,-148.53 2461.55,-148.53 2455.55,-142.53 2455.55,-136.53 2455.55,-136.53 2455.55,-102.75 2455.55,-102.75 2455.55,-96.75 2461.55,-90.75 2467.55,-90.75 2467.55,-90.75 2588.48,-90.75 2588.48,-90.75 2594.48,-90.75 2600.48,-96.75 2600.48,-102.75 2600.48,-102.75 2600.48,-136.53 2600.48,-136.53 2600.48,-142.53 2594.48,-148.53 2588.48,-148.53"/>
+<text xml:space="preserve" text-anchor="middle" x="2528.01" y="-129.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">BestSolution</text>
+<text xml:space="preserve" text-anchor="middle" x="2528.01" y="-115.94" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">optimized assignments</text>
+<text xml:space="preserve" text-anchor="middle" x="2528.01" y="-102.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">HardSoftScore</text>
+</g>
+<!-- engine&#45;&gt;best_sol -->
+<g id="edge13" class="edge">
+<title>engine&#45;&gt;best_sol</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M2377.29,-119.64C2377.29,-119.64 2444.39,-119.64 2444.39,-119.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="2444.39,-122.27 2451.89,-119.64 2444.39,-117.02 2444.39,-122.27"/>
+</g>
+<!-- result -->
+<g id="node13" class="node">
+<title>result</title>
+<path fill="#f1ecff" stroke="#8a72d6" stroke-width="2" d="M2893.41,-148.91C2893.41,-148.91 2691.48,-148.91 2691.48,-148.91 2685.48,-148.91 2679.48,-142.91 2679.48,-136.91 2679.48,-136.91 2679.48,-102.38 2679.48,-102.38 2679.48,-96.38 2685.48,-90.38 2691.48,-90.38 2691.48,-90.38 2893.41,-90.38 2893.41,-90.38 2899.41,-90.38 2905.41,-96.38 2905.41,-102.38 2905.41,-102.38 2905.41,-136.91 2905.41,-136.91 2905.41,-142.91 2899.41,-148.91 2893.41,-148.91"/>
+<text xml:space="preserve" text-anchor="middle" x="2792.44" y="-129.81" font-family="Helvetica Neue" font-size="11.00" fill="#2a1a5c">SolverResult</text>
+<text xml:space="preserve" text-anchor="middle" x="2792.44" y="-116.31" font-family="Helvetica Neue" font-size="11.00" fill="#2a1a5c">assignments: Map&lt;Long, Assignment&gt;</text>
+<text xml:space="preserve" text-anchor="middle" x="2792.44" y="-102.81" font-family="Helvetica Neue" font-size="11.00" fill="#2a1a5c">appointmentId → (doctorId, date, time)</text>
+</g>
+<!-- best_sol&#45;&gt;result -->
+<g id="edge14" class="edge">
+<title>best_sol&#45;&gt;result</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M2601.32,-119.64C2601.32,-119.64 2668.35,-119.64 2668.35,-119.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="2668.35,-122.27 2675.85,-119.64 2668.35,-117.02 2668.35,-122.27"/>
+</g>
+<!-- caller -->
+<g id="node14" class="node">
+<title>caller</title>
+<path fill="#f1ecff" stroke="#8a72d6" stroke-width="2" d="M3177.34,-148.53C3177.34,-148.53 2996.41,-148.53 2996.41,-148.53 2990.41,-148.53 2984.41,-142.53 2984.41,-136.53 2984.41,-136.53 2984.41,-102.75 2984.41,-102.75 2984.41,-96.75 2990.41,-90.75 2996.41,-90.75 2996.41,-90.75 3177.34,-90.75 3177.34,-90.75 3183.34,-90.75 3189.34,-96.75 3189.34,-102.75 3189.34,-102.75 3189.34,-136.53 3189.34,-136.53 3189.34,-142.53 3183.34,-148.53 3177.34,-148.53"/>
+<text xml:space="preserve" text-anchor="middle" x="3086.87" y="-129.44" font-family="Helvetica Neue" font-size="11.00" fill="#2a1a5c">SolverController</text>
+<text xml:space="preserve" text-anchor="middle" x="3086.87" y="-115.94" font-family="Helvetica Neue" font-size="11.00" fill="#2a1a5c">receives SolverResult</text>
+<text xml:space="preserve" text-anchor="middle" x="3086.87" y="-102.44" font-family="Helvetica Neue" font-size="11.00" fill="#2a1a5c">calls AppointmentRepository.save()</text>
+</g>
+<!-- result&#45;&gt;caller -->
+<g id="edge15" class="edge">
+<title>result&#45;&gt;caller</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M2906.28,-119.64C2906.28,-119.64 2973.23,-119.64 2973.23,-119.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="2973.23,-122.27 2980.73,-119.64 2973.23,-117.02 2973.23,-122.27"/>
+</g>
+<!-- db -->
+<g id="node15" class="node">
+<title>db</title>
+<path fill="#f2f5f9" stroke="#9aa8b8" stroke-width="2" d="M3421.52,-148.53C3421.52,-148.53 3280.34,-148.53 3280.34,-148.53 3274.34,-148.53 3268.34,-142.53 3268.34,-136.53 3268.34,-136.53 3268.34,-102.75 3268.34,-102.75 3268.34,-96.75 3274.34,-90.75 3280.34,-90.75 3280.34,-90.75 3421.52,-90.75 3421.52,-90.75 3427.52,-90.75 3433.52,-96.75 3433.52,-102.75 3433.52,-102.75 3433.52,-136.53 3433.52,-136.53 3433.52,-142.53 3427.52,-148.53 3421.52,-148.53"/>
+<text xml:space="preserve" text-anchor="middle" x="3350.93" y="-129.44" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">PostgreSQL</text>
+<text xml:space="preserve" text-anchor="middle" x="3350.93" y="-115.94" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">updated appointments</text>
+<text xml:space="preserve" text-anchor="middle" x="3350.93" y="-102.44" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Exposed JDBC transaction</text>
+</g>
+<!-- caller&#45;&gt;db -->
+<g id="edge16" class="edge">
+<title>caller&#45;&gt;db</title>
+<path fill="none" stroke="#758297" stroke-width="1.8" d="M3190.1,-119.64C3190.1,-119.64 3257.13,-119.64 3257.13,-119.64"/>
+<polygon fill="#758297" stroke="#758297" stroke-width="1.8" points="3257.13,-122.27 3264.63,-119.64 3257.13,-117.02 3257.13,-122.27"/>
+</g>
+</g>
 </svg>

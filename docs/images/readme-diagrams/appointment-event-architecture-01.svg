@@ -1,90 +1,175 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="920" height="560" viewBox="0 0 920 560" role="img" aria-label="appointment-event — Domain Event Flow">
-<defs>
-  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
-    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1f2937" flood-opacity="0.10"/>
-  </filter>
-  <marker id="arr" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#758297"/>
-  </marker>
-  <marker id="arr-blue" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#5B8DEF"/>
-  </marker>
-  <marker id="arr-green" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#58A978"/>
-  </marker>
-  <marker id="arr-amber" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#D6A441"/>
-  </marker>
-  <marker id="arr-pink" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#DC6B82"/>
-  </marker>
-  <marker id="arr-purple" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#8A72D6"/>
-  </marker>
-  <marker id="arr-teal" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#45A7A1"/>
-  </marker>
-  <marker id="inherit" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0 1 L 12 6 L 0 11 Z" fill="#ffffff" stroke="#758297" stroke-width="1.5"/>
-  </marker>
-  <style>
-    .canvas{fill:#F7F9FC}
-    .frame{fill:#FFFFFF;stroke:#D0D8E4;stroke-width:1.5}
-    .title{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:40px;fill:#102033}
-    .subtitle{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:13px;fill:#536273}
-    .label{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:22px;fill:#102033}
-    .smallLabel{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:17px;fill:#102033}
-    .mono{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:12px;fill:#102033}
-    .small{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:11px;fill:#536273}
-    .layerTitle{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:14px;fill:#536273;font-style:italic}
-    .card{stroke-width:2;filter:url(#shadow)}
-    .line{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#arr)}
-    .line-blue{stroke:#5B8DEF;stroke-width:2;fill:none;marker-end:url(#arr-blue)}
-    .line-green{stroke:#58A978;stroke-width:2;fill:none;marker-end:url(#arr-green)}
-    .line-amber{stroke:#D6A441;stroke-width:2;fill:none;marker-end:url(#arr-amber)}
-    .line-pink{stroke:#DC6B82;stroke-width:2;fill:none;marker-end:url(#arr-pink)}
-    .line-purple{stroke:#8A72D6;stroke-width:2;fill:none;marker-end:url(#arr-purple)}
-    .line-teal{stroke:#45A7A1;stroke-width:2;fill:none;marker-end:url(#arr-teal)}
-    .dashed{stroke:#758297;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr)}
-    .dashed-blue{stroke:#5B8DEF;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-blue)}
-    .dashed-green{stroke:#58A978;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-green)}
-    .dashed-amber{stroke:#D6A441;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-amber)}
-    .dashed-pink{stroke:#DC6B82;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-pink)}
-    .dashed-purple{stroke:#8A72D6;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-purple)}
-    .dashed-teal{stroke:#45A7A1;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-teal)}
-    .inheritLine{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#inherit)}
-  </style>
-</defs>
-<rect class="canvas" width="920" height="560"/>
-<rect class="frame" x="28" y="24" width="864" height="512" rx="22"/>
-<text class="title" x="62" y="78">Domain Event Flow</text>
-<text class="subtitle" x="66" y="100">appointment-event · Spring ApplicationEvent · EventLog persistence</text>
-<rect x="48" y="118" width="380" height="380" rx="14" fill="#EAF7EF" stroke="#58A978" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="62" y="138" dominant-baseline="middle">Publishers</text>
-<rect x="458" y="118" width="414" height="180" rx="14" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="472" y="138" dominant-baseline="middle">Event Bus</text>
-<rect x="458" y="318" width="414" height="180" rx="14" fill="#E9F7F6" stroke="#45A7A1" stroke-width="1" opacity="0.5"/>
-<text class="layerTitle" x="472" y="338" dominant-baseline="middle">Subscribers</text>
-<rect x="68" y="148" width="280" height="64" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="208" y="156" text-anchor="middle" dominant-baseline="middle">AppointmentController</text><text class="mono" x="208" y="174" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">POST /appointments</text><text class="mono" x="208" y="190" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">PATCH .../status</text><text class="mono" x="208" y="206" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">DELETE .../cancel</text>
-<rect x="68" y="228" width="280" height="64" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="208" y="244" text-anchor="middle" dominant-baseline="middle">RescheduleController</text><text class="mono" x="208" y="262" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">POST .../reschedule</text><text class="mono" x="208" y="278" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">batch reschedule stream</text>
-<rect x="68" y="308" width="280" height="64" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="208" y="324" text-anchor="middle" dominant-baseline="middle">SlotController</text><text class="mono" x="208" y="342" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">slot query triggers</text><text class="mono" x="208" y="358" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">availability events</text>
-<rect x="68" y="392" width="280" height="64" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="208" y="408" text-anchor="middle" dominant-baseline="middle">Domain Services</text><text class="mono" x="208" y="426" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">ClosureRescheduleService</text><text class="mono" x="208" y="442" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">ConcurrencyResolver</text>
-<rect x="478" y="148" width="180" height="52" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="568" y="166" text-anchor="middle" dominant-baseline="middle">Created</text><text class="mono" x="568" y="184" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">appointmentId, clinicId</text>
-<rect x="678" y="148" width="180" height="52" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="768" y="166" text-anchor="middle" dominant-baseline="middle">StatusChanged</text><text class="mono" x="768" y="184" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">fromState → toState</text>
-<rect x="478" y="218" width="180" height="52" rx="10" fill="#FDECEF" stroke="#DC6B82" class="card"/><text class="smallLabel" x="568" y="236" text-anchor="middle" dominant-baseline="middle">Cancelled</text><text class="mono" x="568" y="254" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">appointmentId, reason</text>
-<rect x="678" y="218" width="180" height="52" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="768" y="236" text-anchor="middle" dominant-baseline="middle">Rescheduled</text><text class="mono" x="768" y="254" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">originalId, newId</text>
-<rect x="478" y="348" width="180" height="64" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="568" y="364" text-anchor="middle" dominant-baseline="middle">AppointmentEventLogger</text><text class="mono" x="568" y="382" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">@EventListener</text><text class="mono" x="568" y="398" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">persists to EventLog DB</text>
-<rect x="678" y="348" width="180" height="64" rx="10" fill="#FDECEF" stroke="#DC6B82" class="card"/><text class="smallLabel" x="768" y="364" text-anchor="middle" dominant-baseline="middle">NotificationEventListener</text><text class="mono" x="768" y="382" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">@EventListener</text><text class="mono" x="768" y="398" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">calls NotificationChannel</text>
-<rect x="478" y="432" width="180" height="52" rx="10" fill="#F2F5F9" stroke="#9AA8B8" class="card"/><text class="smallLabel" x="568" y="442" text-anchor="middle" dominant-baseline="middle">AppointmentEventLogs</text><text class="mono" x="568" y="460" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">Exposed table</text><text class="mono" x="568" y="476" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">event_type, payload_json</text>
-<path class="line-blue" d="M348 180 L478 174"/>
-<path class="line-blue" d="M348 200 L678 174"/>
-<path class="line-pink" d="M348 260 L478 244"/>
-<path class="line-teal" d="M348 294 L678 244"/>
-<path class="dashed-pink" d="M348 424 L478 244"/>
-<path class="line-teal" d="M568 200 L568 348"/>
-<path class="line-pink" d="M768 200 L768 348"/>
-<path class="line-gray" d="M568 412 L568 432"/>
-<rect x="567" y="289" width="169" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="571" y="300" fill="#536273">Spring ApplicationEvent</text>
-<text class="small" x="460" y="532" text-anchor="middle">appointment-event · github.com/bluetape4k/clinic-appointment</text>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 15.0.0 (20260523.1842)
+ -->
+<!-- Pages: 1 -->
+<svg width="1021pt" height="568pt"
+ viewBox="0.00 0.00 1021.00 568.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(57.6 510.6)">
+<polygon fill="#f7f9fc" stroke="none" points="-57.6,57.6 -57.6,-510.6 963.89,-510.6 963.89,57.6 -57.6,57.6"/>
+<text xml:space="preserve" text-anchor="middle" x="191.38" y="-437.6" font-family="Helvetica Neue" font-size="12.00">Domain Event Flow</text>
+<text xml:space="preserve" text-anchor="middle" x="191.38" y="-422.6" font-family="Helvetica Neue" font-size="12.00">appointment&#45;event · Spring ApplicationEvent · EventLog persistence</text>
+<g id="clust1" class="cluster">
+<title>cluster_pub</title>
+<polygon fill="#eaf7ef" fill-opacity="0.533333" stroke="#58a978" stroke-width="1.5" points="8,-101 8,-407 187.68,-407 187.68,-101 8,-101"/>
+<text xml:space="preserve" text-anchor="middle" x="41.5" y="-392.55" font-family="Helvetica Neue" font-size="11.00" fill="#58a978">Publishers</text>
+</g>
+<g id="clust2" class="cluster">
+<title>cluster_events</title>
+<polygon fill="#e8f3ff" fill-opacity="0.533333" stroke="#5b8def" stroke-width="1.5" points="250.68,-8 250.68,-407 427.18,-407 427.18,-8 250.68,-8"/>
+<text xml:space="preserve" text-anchor="middle" x="338.93" y="-392.55" font-family="Helvetica Neue" font-size="11.00" fill="#5b8def">Events (Spring ApplicationEvent)</text>
+</g>
+<g id="clust3" class="cluster">
+<title>cluster_sub</title>
+<polygon fill="#e9f7f6" fill-opacity="0.533333" stroke="#45a7a1" stroke-width="1.5" points="490.18,-49 490.18,-263 898.29,-263 898.29,-49 490.18,-49"/>
+<text xml:space="preserve" text-anchor="middle" x="527.81" y="-248.55" font-family="Helvetica Neue" font-size="11.00" fill="#45a7a1">Subscribers</text>
+</g>
+<!-- ctrl -->
+<g id="node1" class="node">
+<title>ctrl</title>
+<path fill="#eaf7ef" stroke="#58a978" stroke-width="2" d="M157.93,-166.89C157.93,-166.89 37.75,-166.89 37.75,-166.89 31.75,-166.89 25.75,-160.89 25.75,-154.89 25.75,-154.89 25.75,-121.11 25.75,-121.11 25.75,-115.11 31.75,-109.11 37.75,-109.11 37.75,-109.11 157.93,-109.11 157.93,-109.11 163.93,-109.11 169.93,-115.11 169.93,-121.11 169.93,-121.11 169.93,-154.89 169.93,-154.89 169.93,-160.89 163.93,-166.89 157.93,-166.89"/>
+<text xml:space="preserve" text-anchor="middle" x="97.84" y="-147.8" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">AppointmentController</text>
+<text xml:space="preserve" text-anchor="middle" x="97.84" y="-134.3" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">POST /appointments</text>
+<text xml:space="preserve" text-anchor="middle" x="97.84" y="-120.8" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">PATCH .../status</text>
+</g>
+<!-- ev_created -->
+<g id="node4" class="node">
+<title>ev_created</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M398.9,-60.14C398.9,-60.14 277.97,-60.14 277.97,-60.14 271.97,-60.14 265.97,-54.14 265.97,-48.14 265.97,-48.14 265.97,-27.86 265.97,-27.86 265.97,-21.86 271.97,-15.86 277.97,-15.86 277.97,-15.86 398.9,-15.86 398.9,-15.86 404.9,-15.86 410.9,-21.86 410.9,-27.86 410.9,-27.86 410.9,-48.14 410.9,-48.14 410.9,-54.14 404.9,-60.14 398.9,-60.14"/>
+<text xml:space="preserve" text-anchor="middle" x="338.43" y="-41.05" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">Created</text>
+<text xml:space="preserve" text-anchor="middle" x="338.43" y="-27.55" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">appointmentId, clinicId</text>
+</g>
+<!-- ctrl&#45;&gt;ev_created -->
+<g id="edge1" class="edge">
+<title>ctrl&#45;&gt;ev_created</title>
+<path fill="none" stroke="#5b8def" stroke-width="1.8" d="M98.29,-108.27C98.29,-78.79 98.29,-38 98.29,-38 98.29,-38 254.85,-38 254.85,-38"/>
+<polygon fill="#5b8def" stroke="#5b8def" stroke-width="1.8" points="254.85,-40.63 262.35,-38 254.85,-35.38 254.85,-40.63"/>
+</g>
+<!-- ev_status -->
+<g id="node5" class="node">
+<title>ev_status</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M394.02,-166.51C394.02,-166.51 282.84,-166.51 282.84,-166.51 276.84,-166.51 270.84,-160.51 270.84,-154.51 270.84,-154.51 270.84,-133.49 270.84,-133.49 270.84,-127.48 276.84,-121.48 282.84,-121.48 282.84,-121.48 394.02,-121.48 394.02,-121.48 400.02,-121.48 406.02,-127.48 406.02,-133.48 406.02,-133.48 406.02,-154.51 406.02,-154.51 406.02,-160.51 400.02,-166.51 394.02,-166.51"/>
+<text xml:space="preserve" text-anchor="middle" x="338.43" y="-147.43" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">StatusChanged</text>
+<text xml:space="preserve" text-anchor="middle" x="338.43" y="-133.93" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">fromState → toState</text>
+</g>
+<!-- ctrl&#45;&gt;ev_status -->
+<g id="edge2" class="edge">
+<title>ctrl&#45;&gt;ev_status</title>
+<path fill="none" stroke="#5b8def" stroke-width="1.8" d="M170.68,-136.5C170.68,-136.5 259.73,-136.5 259.73,-136.5"/>
+<polygon fill="#5b8def" stroke="#5b8def" stroke-width="1.8" points="259.73,-139.12 267.23,-136.5 259.73,-133.87 259.73,-139.12"/>
+</g>
+<!-- ev_cancelled -->
+<g id="node6" class="node">
+<title>ev_cancelled</title>
+<path fill="#fdecef" stroke="#dc6b82" stroke-width="2" d="M398.15,-272.14C398.15,-272.14 278.72,-272.14 278.72,-272.14 272.72,-272.14 266.72,-266.14 266.72,-260.14 266.72,-260.14 266.72,-239.86 266.72,-239.86 266.72,-233.86 272.72,-227.86 278.72,-227.86 278.72,-227.86 398.15,-227.86 398.15,-227.86 404.15,-227.86 410.15,-233.86 410.15,-239.86 410.15,-239.86 410.15,-260.14 410.15,-260.14 410.15,-266.14 404.15,-272.14 398.15,-272.14"/>
+<text xml:space="preserve" text-anchor="middle" x="338.43" y="-253.05" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">Cancelled</text>
+<text xml:space="preserve" text-anchor="middle" x="338.43" y="-239.55" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">appointmentId, reason</text>
+</g>
+<!-- ctrl&#45;&gt;ev_cancelled -->
+<g id="edge3" class="edge">
+<title>ctrl&#45;&gt;ev_cancelled</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" d="M170.81,-151.5C198.41,-151.5 223.29,-151.5 223.29,-151.5 223.29,-151.5 223.29,-242.62 223.29,-242.62 223.29,-242.62 255.61,-242.62 255.61,-242.62"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="255.61,-245.25 263.11,-242.62 255.61,-240 255.61,-245.25"/>
+</g>
+<!-- resched -->
+<g id="node2" class="node">
+<title>resched</title>
+<path fill="#eaf7ef" stroke="#58a978" stroke-width="2" d="M154.56,-377.14C154.56,-377.14 41.13,-377.14 41.13,-377.14 35.13,-377.14 29.13,-371.14 29.13,-365.14 29.13,-365.14 29.13,-344.86 29.13,-344.86 29.13,-338.86 35.13,-332.86 41.13,-332.86 41.13,-332.86 154.56,-332.86 154.56,-332.86 160.56,-332.86 166.56,-338.86 166.56,-344.86 166.56,-344.86 166.56,-365.14 166.56,-365.14 166.56,-371.14 160.56,-377.14 154.56,-377.14"/>
+<text xml:space="preserve" text-anchor="middle" x="97.84" y="-358.05" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">RescheduleController</text>
+<text xml:space="preserve" text-anchor="middle" x="97.84" y="-344.55" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">POST .../reschedule</text>
+</g>
+<!-- ev_resched -->
+<g id="node7" class="node">
+<title>ev_resched</title>
+<path fill="#e9f7f6" stroke="#45a7a1" stroke-width="2" d="M382.4,-377.14C382.4,-377.14 294.47,-377.14 294.47,-377.14 288.47,-377.14 282.47,-371.14 282.47,-365.14 282.47,-365.14 282.47,-344.86 282.47,-344.86 282.47,-338.86 288.47,-332.86 294.47,-332.86 294.47,-332.86 382.4,-332.86 382.4,-332.86 388.4,-332.86 394.4,-338.86 394.4,-344.86 394.4,-344.86 394.4,-365.14 394.4,-365.14 394.4,-371.14 388.4,-377.14 382.4,-377.14"/>
+<text xml:space="preserve" text-anchor="middle" x="338.43" y="-358.05" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">Rescheduled</text>
+<text xml:space="preserve" text-anchor="middle" x="338.43" y="-344.55" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">originalId, newId</text>
+</g>
+<!-- resched&#45;&gt;ev_resched -->
+<g id="edge4" class="edge">
+<title>resched&#45;&gt;ev_resched</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M167.43,-355C167.43,-355 271.32,-355 271.32,-355"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="271.32,-357.63 278.82,-355 271.32,-352.38 271.32,-357.63"/>
+</g>
+<!-- svc -->
+<g id="node3" class="node">
+<title>svc</title>
+<path fill="#e9f7f6" stroke="#45a7a1" stroke-width="2" d="M167.68,-272.14C167.68,-272.14 28,-272.14 28,-272.14 22,-272.14 16,-266.14 16,-260.14 16,-260.14 16,-239.86 16,-239.86 16,-233.86 22,-227.86 28,-227.86 28,-227.86 167.68,-227.86 167.68,-227.86 173.68,-227.86 179.68,-233.86 179.68,-239.86 179.68,-239.86 179.68,-260.14 179.68,-260.14 179.68,-266.14 173.68,-272.14 167.68,-272.14"/>
+<text xml:space="preserve" text-anchor="middle" x="97.84" y="-253.05" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">Domain Services</text>
+<text xml:space="preserve" text-anchor="middle" x="97.84" y="-239.55" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">ClosureRescheduleService</text>
+</g>
+<!-- svc&#45;&gt;ev_cancelled -->
+<g id="edge5" class="edge">
+<title>svc&#45;&gt;ev_cancelled</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" stroke-dasharray="5,2" d="M180.64,-257.38C180.64,-257.38 255.7,-257.38 255.7,-257.38"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="255.7,-260.01 263.2,-257.38 255.7,-254.76 255.7,-260.01"/>
+</g>
+<!-- logger -->
+<g id="node8" class="node">
+<title>logger</title>
+<path fill="#e9f7f6" stroke="#45a7a1" stroke-width="2" d="M643.86,-114.89C643.86,-114.89 510.18,-114.89 510.18,-114.89 504.18,-114.89 498.18,-108.89 498.18,-102.89 498.18,-102.89 498.18,-69.11 498.18,-69.11 498.18,-63.11 504.18,-57.11 510.18,-57.11 510.18,-57.11 643.86,-57.11 643.86,-57.11 649.86,-57.11 655.86,-63.11 655.86,-69.11 655.86,-69.11 655.86,-102.89 655.86,-102.89 655.86,-108.89 649.86,-114.89 643.86,-114.89"/>
+<text xml:space="preserve" text-anchor="middle" x="577.02" y="-95.8" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">AppointmentEventLogger</text>
+<text xml:space="preserve" text-anchor="middle" x="577.02" y="-82.3" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">@EventListener</text>
+<text xml:space="preserve" text-anchor="middle" x="577.02" y="-68.8" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">persists EventLog</text>
+</g>
+<!-- ev_created&#45;&gt;logger -->
+<g id="edge6" class="edge">
+<title>ev_created&#45;&gt;logger</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M316.29,-60.82C316.29,-69.1 316.29,-76.46 316.29,-76.46 316.29,-76.46 487.15,-76.46 487.15,-76.46"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="487.15,-79.09 494.65,-76.46 487.15,-73.84 487.15,-79.09"/>
+</g>
+<!-- notif_l -->
+<g id="node9" class="node">
+<title>notif_l</title>
+<path fill="#fdecef" stroke="#dc6b82" stroke-width="2" d="M642.36,-233.89C642.36,-233.89 511.68,-233.89 511.68,-233.89 505.68,-233.89 499.68,-227.89 499.68,-221.89 499.68,-221.89 499.68,-188.11 499.68,-188.11 499.68,-182.11 505.68,-176.11 511.68,-176.11 511.68,-176.11 642.36,-176.11 642.36,-176.11 648.36,-176.11 654.36,-182.11 654.36,-188.11 654.36,-188.11 654.36,-221.89 654.36,-221.89 654.36,-227.89 648.36,-233.89 642.36,-233.89"/>
+<text xml:space="preserve" text-anchor="middle" x="577.02" y="-214.8" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">NotificationEventListener</text>
+<text xml:space="preserve" text-anchor="middle" x="577.02" y="-201.3" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">@EventListener</text>
+<text xml:space="preserve" text-anchor="middle" x="577.02" y="-187.8" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">calls NotificationChannel</text>
+</g>
+<!-- ev_created&#45;&gt;notif_l -->
+<g id="edge8" class="edge">
+<title>ev_created&#45;&gt;notif_l</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" d="M411.81,-36.48C434.8,-36.48 454.29,-36.48 454.29,-36.48 454.29,-36.48 454.29,-193.36 454.29,-193.36 454.29,-193.36 488.72,-193.36 488.72,-193.36"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="488.72,-195.99 496.22,-193.36 488.72,-190.74 488.72,-195.99"/>
+</g>
+<!-- ev_status&#45;&gt;logger -->
+<g id="edge7" class="edge">
+<title>ev_status&#45;&gt;logger</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M361.29,-120.49C361.29,-107.03 361.29,-92.79 361.29,-92.79 361.29,-92.79 487.08,-92.79 487.08,-92.79"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="487.08,-95.41 494.58,-92.79 487.08,-90.16 487.08,-95.41"/>
+</g>
+<!-- ev_status&#45;&gt;notif_l -->
+<g id="edge9" class="edge">
+<title>ev_status&#45;&gt;notif_l</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" d="M338.29,-167.3C338.29,-186.51 338.29,-210.61 338.29,-210.61 338.29,-210.61 488.63,-210.61 488.63,-210.61"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="488.63,-213.24 496.13,-210.61 488.63,-207.99 488.63,-213.24"/>
+</g>
+<!-- ev_cancelled&#45;&gt;notif_l -->
+<g id="edge10" class="edge">
+<title>ev_cancelled&#45;&gt;notif_l</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" d="M411.09,-253.01C472.75,-253.01 551.29,-253.01 551.29,-253.01 551.29,-253.01 551.29,-245.09 551.29,-245.09"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="553.92,-245.09 551.29,-237.59 548.67,-245.09 553.92,-245.09"/>
+</g>
+<!-- ev_resched&#45;&gt;notif_l -->
+<g id="edge11" class="edge">
+<title>ev_resched&#45;&gt;notif_l</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" d="M395.25,-355C473.07,-355 603.29,-355 603.29,-355 603.29,-355 603.29,-244.86 603.29,-244.86"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="605.92,-244.86 603.29,-237.36 600.67,-244.86 605.92,-244.86"/>
+</g>
+<!-- ev_table -->
+<g id="node10" class="node">
+<title>ev_table</title>
+<path fill="#f2f5f9" stroke="#9aa8b8" stroke-width="2" d="M878.29,-114.89C878.29,-114.89 746.86,-114.89 746.86,-114.89 740.86,-114.89 734.86,-108.89 734.86,-102.89 734.86,-102.89 734.86,-69.11 734.86,-69.11 734.86,-63.11 740.86,-57.11 746.86,-57.11 746.86,-57.11 878.29,-57.11 878.29,-57.11 884.29,-57.11 890.29,-63.11 890.29,-69.11 890.29,-69.11 890.29,-102.89 890.29,-102.89 890.29,-108.89 884.29,-114.89 878.29,-114.89"/>
+<text xml:space="preserve" text-anchor="middle" x="812.58" y="-95.8" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">AppointmentEventLogs</text>
+<text xml:space="preserve" text-anchor="middle" x="812.58" y="-82.3" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">Exposed table</text>
+<text xml:space="preserve" text-anchor="middle" x="812.58" y="-68.8" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">event_type, payload_json</text>
+</g>
+<!-- logger&#45;&gt;ev_table -->
+<g id="edge12" class="edge">
+<title>logger&#45;&gt;ev_table</title>
+<path fill="none" stroke="#9aa8b8" stroke-width="1.8" d="M656.77,-86C656.77,-86 723.88,-86 723.88,-86"/>
+<polygon fill="#9aa8b8" stroke="#9aa8b8" stroke-width="1.8" points="723.88,-88.63 731.38,-86 723.88,-83.38 723.88,-88.63"/>
+</g>
+</g>
 </svg>
