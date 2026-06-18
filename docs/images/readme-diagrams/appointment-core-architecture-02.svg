@@ -1,114 +1,179 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="680" viewBox="0 0 1000 680" role="img" aria-label="Appointment State Machine">
-<defs>
-  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
-    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1f2937" flood-opacity="0.10"/>
-  </filter>
-  <marker id="arr" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#758297"/>
-  </marker>
-  <marker id="arr-blue" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#5B8DEF"/>
-  </marker>
-  <marker id="arr-green" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#58A978"/>
-  </marker>
-  <marker id="arr-amber" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#D6A441"/>
-  </marker>
-  <marker id="arr-pink" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#DC6B82"/>
-  </marker>
-  <marker id="arr-purple" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#8A72D6"/>
-  </marker>
-  <marker id="arr-teal" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#45A7A1"/>
-  </marker>
-  <marker id="inherit" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0 1 L 12 6 L 0 11 Z" fill="#ffffff" stroke="#758297" stroke-width="1.5"/>
-  </marker>
-  <style>
-    .canvas{fill:#F7F9FC}
-    .frame{fill:#FFFFFF;stroke:#D0D8E4;stroke-width:1.5}
-    .title{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:40px;fill:#102033}
-    .subtitle{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:13px;fill:#536273}
-    .label{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:22px;fill:#102033}
-    .smallLabel{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:17px;fill:#102033}
-    .mono{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:12px;fill:#102033}
-    .small{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:11px;fill:#536273}
-    .layerTitle{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:14px;fill:#536273;font-style:italic}
-    .card{stroke-width:2;filter:url(#shadow)}
-    .line{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#arr)}
-    .line-blue{stroke:#5B8DEF;stroke-width:2;fill:none;marker-end:url(#arr-blue)}
-    .line-green{stroke:#58A978;stroke-width:2;fill:none;marker-end:url(#arr-green)}
-    .line-amber{stroke:#D6A441;stroke-width:2;fill:none;marker-end:url(#arr-amber)}
-    .line-pink{stroke:#DC6B82;stroke-width:2;fill:none;marker-end:url(#arr-pink)}
-    .line-purple{stroke:#8A72D6;stroke-width:2;fill:none;marker-end:url(#arr-purple)}
-    .line-teal{stroke:#45A7A1;stroke-width:2;fill:none;marker-end:url(#arr-teal)}
-    .dashed{stroke:#758297;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr)}
-    .dashed-blue{stroke:#5B8DEF;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-blue)}
-    .dashed-green{stroke:#58A978;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-green)}
-    .dashed-amber{stroke:#D6A441;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-amber)}
-    .dashed-pink{stroke:#DC6B82;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-pink)}
-    .dashed-purple{stroke:#8A72D6;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-purple)}
-    .dashed-teal{stroke:#45A7A1;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-teal)}
-    .inheritLine{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#inherit)}
-  </style>
-</defs>
-<rect class="canvas" width="1000" height="680"/>
-<rect class="frame" x="28" y="24" width="944" height="632" rx="22"/>
-<text class="title" x="62" y="78">Appointment State Machine</text>
-<text class="subtitle" x="66" y="100">10 states · 11 transitions · AppointmentStateMachine.kt</text>
-<rect x="410" y="130" width="170" height="52" rx="10" fill="#F2F5F9" stroke="#9AA8B8" class="card"/><text class="smallLabel" x="495" y="148" text-anchor="middle" dominant-baseline="middle">PENDING</text><text class="mono" x="495" y="166" text-anchor="middle" dominant-baseline="middle" fill="#2A3340" opacity="0.75">가예약 / 미확정</text>
-<rect x="410" y="230" width="170" height="52" rx="10" fill="#E8F3FF" stroke="#5B8DEF" class="card"/><text class="smallLabel" x="495" y="248" text-anchor="middle" dominant-baseline="middle">REQUESTED</text><text class="mono" x="495" y="266" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C" opacity="0.75">예약 요청</text>
-<rect x="410" y="330" width="170" height="52" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="495" y="348" text-anchor="middle" dominant-baseline="middle">CONFIRMED</text><text class="mono" x="495" y="366" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">예약 확정</text>
-<rect x="410" y="430" width="170" height="52" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="495" y="448" text-anchor="middle" dominant-baseline="middle">CHECKED_IN</text><text class="mono" x="495" y="466" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">내원 확인</text>
-<rect x="410" y="530" width="170" height="52" rx="10" fill="#FFF3D9" stroke="#D6A441" class="card"/><text class="smallLabel" x="495" y="548" text-anchor="middle" dominant-baseline="middle">IN_PROGRESS</text><text class="mono" x="495" y="566" text-anchor="middle" dominant-baseline="middle" fill="#4A3000" opacity="0.75">진료 중</text>
-<rect x="410" y="610" width="170" height="52" rx="10" fill="#EAF7EF" stroke="#58A978" class="card"/><text class="smallLabel" x="495" y="628" text-anchor="middle" dominant-baseline="middle">COMPLETED</text><text class="mono" x="495" y="646" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26" opacity="0.75">진료 완료</text>
-<rect x="660" y="310" width="170" height="52" rx="10" fill="#FDECEF" stroke="#DC6B82" class="card"/><text class="smallLabel" x="745" y="328" text-anchor="middle" dominant-baseline="middle">NO_SHOW</text><text class="mono" x="745" y="346" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">미내원</text>
-<rect x="660" y="430" width="170" height="52" rx="10" fill="#F1ECFF" stroke="#8A72D6" class="card"/><text class="smallLabel" x="745" y="448" text-anchor="middle" dominant-baseline="middle">PENDING_RESCHEDULE</text><text class="mono" x="745" y="466" text-anchor="middle" dominant-baseline="middle" fill="#2A1A5C" opacity="0.75">재배정 대기</text>
-<rect x="660" y="530" width="170" height="52" rx="10" fill="#E9F7F6" stroke="#45A7A1" class="card"/><text class="smallLabel" x="745" y="548" text-anchor="middle" dominant-baseline="middle">RESCHEDULED</text><text class="mono" x="745" y="566" text-anchor="middle" dominant-baseline="middle" fill="#0E3533" opacity="0.75">재배정 완료</text>
-<rect x="150" y="500" width="180" height="52" rx="10" fill="#FDECEF" stroke="#DC6B82" class="card"/><text class="smallLabel" x="240" y="518" text-anchor="middle" dominant-baseline="middle">CANCELLED</text><text class="mono" x="240" y="536" text-anchor="middle" dominant-baseline="middle" fill="#4A0E1C" opacity="0.75">취소 (모든 상태에서 가능)</text>
-<path class="line-blue" d="M495 182 L495 230"/>
-<rect x="497" y="195" width="57" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="501" y="206" fill="#536273">Request</text>
-<path class="line-green" d="M495 282 L495 330"/>
-<rect x="497" y="295" width="57" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="501" y="306" fill="#536273">Confirm</text>
-<path class="line-teal" d="M495 382 L495 430"/>
-<rect x="497" y="395" width="57" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="501" y="406" fill="#536273">CheckIn</text>
-<path class="line-amber" d="M495 482 L495 530"/>
-<rect x="497" y="495" width="106" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="501" y="506" fill="#536273">StartTreatment</text>
-<path class="line-green" d="M495 582 L495 610"/>
-<rect x="497" y="585" width="64" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="501" y="596" fill="#536273">Complete</text>
-<path class="line-pink" d="M580 356 L660 356 L660 310"/>
-<rect x="617" y="309" width="78" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="621" y="320" fill="#536273">MarkNoShow</text>
-<path class="line-purple" d="M580 360 L660 430"/>
-<rect x="602" y="383" width="127" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="606" y="394" fill="#536273">RequestReschedule</text>
-<path class="line-purple" d="M580 254 L660 254 L660 430"/>
-<path class="line-teal" d="M745 482 L745 530"/>
-<rect x="747" y="495" width="127" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="751" y="506" fill="#536273">ConfirmReschedule</text>
-<path class="line-pink" d="M410 254 L410 500 L260 500"/>
-<path class="dashed-pink" d="M410 354 L410 500 L240 500"/>
-<path class="dashed-pink" d="M410 454 L410 500 L220 500"/>
-<path class="dashed-pink" d="M660 454 L660 526 L260 526"/>
-<rect x="137" y="419" width="50" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="141" y="430" fill="#536273">Cancel</text>
-<path class="dashed-blue" d="M410 354 L390 354 L390 130"/>
-<rect x="327" y="229" width="78" height="15" rx="4" fill="white" stroke="#536273" stroke-width="0.8"/>
-<text class="small" x="331" y="240" fill="#536273">Reschedule</text>
-<rect x="795" y="310" width="185" height="130" rx="8" fill="#FFF3D9" stroke="#D6A441" stroke-width="1.5"/>
-<text class="layerTitle" x="887" y="332" text-anchor="middle" dominant-baseline="middle">Pinned States</text>
-<text class="small" x="807" y="352" fill="#4A3000">CONFIRMED, CHECKED_IN</text>
-<text class="small" x="807" y="370" fill="#4A3000">IN_PROGRESS, COMPLETED</text>
-<text class="small" x="807" y="390" fill="#D6A441">→ Solver cannot move</text>
-<text class="small" x="807" y="410" fill="#45A7A1">Movable: REQUESTED,</text>
-<text class="small" x="807" y="428" fill="#45A7A1">PENDING_RESCHEDULE</text>
-<text class="small" x="500" y="652" text-anchor="middle">appointment-core · AppointmentStateMachine.kt · github.com/bluetape4k/clinic-appointment</text>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 15.0.0 (20260523.1842)
+ -->
+<!-- Pages: 1 -->
+<svg width="919pt" height="880pt"
+ viewBox="0.00 0.00 919.00 880.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(57.6 822.03)">
+<polygon fill="#f7f9fc" stroke="none" points="-57.6,57.6 -57.6,-822.03 861.32,-822.03 861.32,57.6 -57.6,57.6"/>
+<text xml:space="preserve" text-anchor="middle" x="156.88" y="-749.03" font-family="Helvetica Neue" font-size="12.00">Appointment State Machine</text>
+<text xml:space="preserve" text-anchor="middle" x="156.88" y="-734.03" font-family="Helvetica Neue" font-size="12.00">10 states · 11 transitions · AppointmentStateMachine.kt</text>
+<!-- PENDING -->
+<g id="node1" class="node">
+<title>PENDING</title>
+<path fill="#f2f5f9" stroke="#9aa8b8" stroke-width="2" d="M396.93,-726.43C396.93,-726.43 327,-726.43 327,-726.43 321,-726.43 315,-720.43 315,-714.43 315,-714.43 315,-693.4 315,-693.4 315,-687.4 321,-681.4 327,-681.4 327,-681.4 396.93,-681.4 396.93,-681.4 402.93,-681.4 408.93,-687.4 408.93,-693.4 408.93,-693.4 408.93,-714.43 408.93,-714.43 408.93,-720.43 402.93,-726.43 396.93,-726.43"/>
+<text xml:space="preserve" text-anchor="middle" x="361.97" y="-707.34" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">PENDING</text>
+<text xml:space="preserve" text-anchor="middle" x="361.97" y="-693.84" font-family="Helvetica Neue" font-size="11.00" fill="#2a3340">가예약/미확정</text>
+</g>
+<!-- REQUESTED -->
+<g id="node2" class="node">
+<title>REQUESTED</title>
+<path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M293.43,-590.15C293.43,-590.15 220.5,-590.15 220.5,-590.15 214.5,-590.15 208.5,-584.15 208.5,-578.15 208.5,-578.15 208.5,-557.12 208.5,-557.12 208.5,-551.12 214.5,-545.12 220.5,-545.12 220.5,-545.12 293.43,-545.12 293.43,-545.12 299.43,-545.12 305.43,-551.12 305.43,-557.12 305.43,-557.12 305.43,-578.15 305.43,-578.15 305.43,-584.15 299.43,-590.15 293.43,-590.15"/>
+<text xml:space="preserve" text-anchor="middle" x="256.97" y="-571.06" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">REQUESTED</text>
+<text xml:space="preserve" text-anchor="middle" x="256.97" y="-557.56" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a5c">예약 요청</text>
+</g>
+<!-- PENDING&#45;&gt;REQUESTED -->
+<g id="edge1" class="edge">
+<title>PENDING&#45;&gt;REQUESTED</title>
+<path fill="none" stroke="#5b8def" stroke-width="1.8" d="M371.29,-680.55C371.29,-641.69 371.29,-568 371.29,-568 371.29,-568 316.34,-568 316.34,-568"/>
+<polygon fill="#5b8def" stroke="#5b8def" stroke-width="1.8" points="316.34,-565.38 308.84,-568 316.34,-570.63 316.34,-565.38"/>
+<text xml:space="preserve" text-anchor="middle" x="344.47" y="-632.85" font-family="Helvetica Neue" font-size="9.00">Request</text>
+</g>
+<!-- CONFIRMED -->
+<g id="node3" class="node">
+<title>CONFIRMED</title>
+<path fill="#eaf7ef" stroke="#58a978" stroke-width="2" d="M493.43,-453.87C493.43,-453.87 420.5,-453.87 420.5,-453.87 414.5,-453.87 408.5,-447.87 408.5,-441.87 408.5,-441.87 408.5,-420.84 408.5,-420.84 408.5,-414.84 414.5,-408.84 420.5,-408.84 420.5,-408.84 493.43,-408.84 493.43,-408.84 499.43,-408.84 505.43,-414.84 505.43,-420.84 505.43,-420.84 505.43,-441.87 505.43,-441.87 505.43,-447.87 499.43,-453.87 493.43,-453.87"/>
+<text xml:space="preserve" text-anchor="middle" x="456.97" y="-434.78" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">CONFIRMED</text>
+<text xml:space="preserve" text-anchor="middle" x="456.97" y="-421.28" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">예약 확정</text>
+</g>
+<!-- REQUESTED&#45;&gt;CONFIRMED -->
+<g id="edge2" class="edge">
+<title>REQUESTED&#45;&gt;CONFIRMED</title>
+<path fill="none" stroke="#58a978" stroke-width="1.8" d="M306.2,-556C365.48,-556 457.18,-556 457.18,-556 457.18,-556 457.18,-465.02 457.18,-465.02"/>
+<polygon fill="#58a978" stroke="#58a978" stroke-width="1.8" points="459.81,-465.02 457.18,-457.52 454.56,-465.02 459.81,-465.02"/>
+<text xml:space="preserve" text-anchor="middle" x="378.09" y="-496.57" font-family="Helvetica Neue" font-size="9.00">Confirm</text>
+</g>
+<!-- PENDING_RESCHEDULE -->
+<g id="node8" class="node">
+<title>PENDING_RESCHEDULE</title>
+<path fill="#f1ecff" stroke="#8a72d6" stroke-width="2" d="M147.93,-317.59C147.93,-317.59 12,-317.59 12,-317.59 6,-317.59 0,-311.59 0,-305.59 0,-305.59 0,-284.56 0,-284.56 0,-278.56 6,-272.56 12,-272.56 12,-272.56 147.93,-272.56 147.93,-272.56 153.93,-272.56 159.93,-278.56 159.93,-284.56 159.93,-284.56 159.93,-305.59 159.93,-305.59 159.93,-311.59 153.93,-317.59 147.93,-317.59"/>
+<text xml:space="preserve" text-anchor="middle" x="79.97" y="-298.5" font-family="Helvetica Neue" font-size="11.00" fill="#2a1a5c">PENDING_RESCHEDULE</text>
+<text xml:space="preserve" text-anchor="middle" x="79.97" y="-285" font-family="Helvetica Neue" font-size="11.00" fill="#2a1a5c">재배정 대기</text>
+</g>
+<!-- REQUESTED&#45;&gt;PENDING_RESCHEDULE -->
+<g id="edge8" class="edge">
+<title>REQUESTED&#45;&gt;PENDING_RESCHEDULE</title>
+<path fill="none" stroke="#8a72d6" stroke-width="1.8" d="M255.5,-544.23C255.5,-480.56 255.5,-309 255.5,-309 255.5,-309 171.02,-309 171.02,-309"/>
+<polygon fill="#8a72d6" stroke="#8a72d6" stroke-width="1.8" points="171.02,-306.38 163.52,-309 171.02,-311.63 171.02,-306.38"/>
+<text xml:space="preserve" text-anchor="middle" x="119.72" y="-428.43" font-family="Helvetica Neue" font-size="9.00">RequestReschedule</text>
+</g>
+<!-- CANCELLED -->
+<g id="node10" class="node">
+<title>CANCELLED</title>
+<path fill="#fdecef" stroke="#dc6b82" stroke-width="2" d="M387.43,-181.31C387.43,-181.31 314.5,-181.31 314.5,-181.31 308.5,-181.31 302.5,-175.31 302.5,-169.31 302.5,-169.31 302.5,-148.28 302.5,-148.28 302.5,-142.28 308.5,-136.28 314.5,-136.28 314.5,-136.28 387.43,-136.28 387.43,-136.28 393.43,-136.28 399.43,-142.28 399.43,-148.28 399.43,-148.28 399.43,-169.31 399.43,-169.31 399.43,-175.31 393.43,-181.31 387.43,-181.31"/>
+<text xml:space="preserve" text-anchor="middle" x="350.97" y="-162.22" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">CANCELLED</text>
+<text xml:space="preserve" text-anchor="middle" x="350.97" y="-148.72" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">취소</text>
+</g>
+<!-- REQUESTED&#45;&gt;CANCELLED -->
+<g id="edge11" class="edge">
+<title>REQUESTED&#45;&gt;CANCELLED</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" stroke-dasharray="5,2" d="M306.35,-579C309.72,-579 311.81,-579 311.81,-579 311.81,-579 311.81,-192.51 311.81,-192.51"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="314.44,-192.51 311.81,-185.01 309.19,-192.51 314.44,-192.51"/>
+<text xml:space="preserve" text-anchor="middle" x="265.84" y="-360.29" font-family="Helvetica Neue" font-size="9.00">Cancel</text>
+</g>
+<!-- CONFIRMED&#45;&gt;PENDING -->
+<g id="edge10" class="edge">
+<title>CONFIRMED&#45;&gt;PENDING</title>
+<path fill="none" stroke="#5b8def" stroke-width="1.8" stroke-dasharray="5,2" d="M407.78,-439C405.39,-439 403.97,-439 403.97,-439 403.97,-439 403.97,-670.18 403.97,-670.18"/>
+<polygon fill="#5b8def" stroke="#5b8def" stroke-width="1.8" points="401.34,-670.18 403.97,-677.68 406.59,-670.18 401.34,-670.18"/>
+<text xml:space="preserve" text-anchor="middle" x="480.72" y="-564.71" font-family="Helvetica Neue" font-size="9.00">Reschedule back</text>
+</g>
+<!-- CHECKED_IN -->
+<g id="node4" class="node">
+<title>CHECKED_IN</title>
+<path fill="#e9f7f6" stroke="#45a7a1" stroke-width="2" d="M631.68,-317.59C631.68,-317.59 554.25,-317.59 554.25,-317.59 548.25,-317.59 542.25,-311.59 542.25,-305.59 542.25,-305.59 542.25,-284.56 542.25,-284.56 542.25,-278.56 548.25,-272.56 554.25,-272.56 554.25,-272.56 631.68,-272.56 631.68,-272.56 637.68,-272.56 643.68,-278.56 643.68,-284.56 643.68,-284.56 643.68,-305.59 643.68,-305.59 643.68,-311.59 637.68,-317.59 631.68,-317.59"/>
+<text xml:space="preserve" text-anchor="middle" x="592.97" y="-298.5" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">CHECKED_IN</text>
+<text xml:space="preserve" text-anchor="middle" x="592.97" y="-285" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">내원 확인</text>
+</g>
+<!-- CONFIRMED&#45;&gt;CHECKED_IN -->
+<g id="edge3" class="edge">
+<title>CONFIRMED&#45;&gt;CHECKED_IN</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M473.12,-408.02C473.12,-366.01 473.12,-282 473.12,-282 473.12,-282 531.22,-282 531.22,-282"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="531.22,-284.63 538.72,-282 531.22,-279.38 531.22,-284.63"/>
+<text xml:space="preserve" text-anchor="middle" x="586.47" y="-360.29" font-family="Helvetica Neue" font-size="9.00">CheckIn</text>
+</g>
+<!-- NO_SHOW -->
+<g id="node7" class="node">
+<title>NO_SHOW</title>
+<path fill="#fdecef" stroke="#dc6b82" stroke-width="2" d="M780.93,-317.59C780.93,-317.59 717,-317.59 717,-317.59 711,-317.59 705,-311.59 705,-305.59 705,-305.59 705,-284.56 705,-284.56 705,-278.56 711,-272.56 717,-272.56 717,-272.56 780.93,-272.56 780.93,-272.56 786.93,-272.56 792.93,-278.56 792.93,-284.56 792.93,-284.56 792.93,-305.59 792.93,-305.59 792.93,-311.59 786.93,-317.59 780.93,-317.59"/>
+<text xml:space="preserve" text-anchor="middle" x="748.97" y="-298.5" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">NO_SHOW</text>
+<text xml:space="preserve" text-anchor="middle" x="748.97" y="-285" font-family="Helvetica Neue" font-size="11.00" fill="#4a0e1c">미내원</text>
+</g>
+<!-- CONFIRMED&#45;&gt;NO_SHOW -->
+<g id="edge6" class="edge">
+<title>CONFIRMED&#45;&gt;NO_SHOW</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" d="M506.17,-431C589.39,-431 748.97,-431 748.97,-431 748.97,-431 748.97,-328.67 748.97,-328.67"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="751.59,-328.67 748.97,-321.17 746.34,-328.67 751.59,-328.67"/>
+<text xml:space="preserve" text-anchor="middle" x="776.34" y="-360.29" font-family="Helvetica Neue" font-size="9.00">MarkNoShow</text>
+</g>
+<!-- CONFIRMED&#45;&gt;PENDING_RESCHEDULE -->
+<g id="edge7" class="edge">
+<title>CONFIRMED&#45;&gt;PENDING_RESCHEDULE</title>
+<path fill="none" stroke="#8a72d6" stroke-width="1.8" d="M440.81,-407.87C440.81,-370.09 440.81,-300 440.81,-300 440.81,-300 170.72,-300 170.72,-300"/>
+<polygon fill="#8a72d6" stroke="#8a72d6" stroke-width="1.8" points="170.72,-297.38 163.22,-300 170.72,-302.63 170.72,-297.38"/>
+<text xml:space="preserve" text-anchor="middle" x="385.72" y="-360.29" font-family="Helvetica Neue" font-size="9.00">RequestReschedule</text>
+</g>
+<!-- CONFIRMED&#45;&gt;CANCELLED -->
+<g id="edge12" class="edge">
+<title>CONFIRMED&#45;&gt;CANCELLED</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" stroke-dasharray="5,2" d="M407.7,-424C376.94,-424 343.14,-424 343.14,-424 343.14,-424 343.14,-192.09 343.14,-192.09"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="345.77,-192.09 343.14,-184.59 340.52,-192.09 345.77,-192.09"/>
+</g>
+<!-- IN_PROGRESS -->
+<g id="node5" class="node">
+<title>IN_PROGRESS</title>
+<path fill="#fff3d9" stroke="#d6a441" stroke-width="2" d="M656.43,-181.31C656.43,-181.31 571.5,-181.31 571.5,-181.31 565.5,-181.31 559.5,-175.31 559.5,-169.31 559.5,-169.31 559.5,-148.28 559.5,-148.28 559.5,-142.28 565.5,-136.28 571.5,-136.28 571.5,-136.28 656.43,-136.28 656.43,-136.28 662.43,-136.28 668.43,-142.28 668.43,-148.28 668.43,-148.28 668.43,-169.31 668.43,-169.31 668.43,-175.31 662.43,-181.31 656.43,-181.31"/>
+<text xml:space="preserve" text-anchor="middle" x="613.97" y="-162.22" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">IN_PROGRESS</text>
+<text xml:space="preserve" text-anchor="middle" x="613.97" y="-148.72" font-family="Helvetica Neue" font-size="11.00" fill="#4a3000">진료 중</text>
+</g>
+<!-- CHECKED_IN&#45;&gt;IN_PROGRESS -->
+<g id="edge4" class="edge">
+<title>CHECKED_IN&#45;&gt;IN_PROGRESS</title>
+<path fill="none" stroke="#d6a441" stroke-width="1.8" d="M601.59,-271.65C601.59,-271.65 601.59,-192.14 601.59,-192.14"/>
+<polygon fill="#d6a441" stroke="#d6a441" stroke-width="1.8" points="604.22,-192.14 601.59,-184.64 598.97,-192.14 604.22,-192.14"/>
+<text xml:space="preserve" text-anchor="middle" x="643.22" y="-224.01" font-family="Helvetica Neue" font-size="9.00">StartTreatment</text>
+</g>
+<!-- CHECKED_IN&#45;&gt;CANCELLED -->
+<g id="edge13" class="edge">
+<title>CHECKED_IN&#45;&gt;CANCELLED</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" stroke-dasharray="5,2" d="M550.88,-271.68C550.88,-232.78 550.88,-159 550.88,-159 550.88,-159 410.61,-159 410.61,-159"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="410.61,-156.38 403.11,-159 410.61,-161.63 410.61,-156.38"/>
+</g>
+<!-- COMPLETED -->
+<g id="node6" class="node">
+<title>COMPLETED</title>
+<path fill="#eaf7ef" stroke="#58a978" stroke-width="2" d="M651.18,-45.03C651.18,-45.03 576.75,-45.03 576.75,-45.03 570.75,-45.03 564.75,-39.03 564.75,-33.03 564.75,-33.03 564.75,-12 564.75,-12 564.75,-6 570.75,0 576.75,0 576.75,0 651.18,0 651.18,0 657.18,0 663.18,-6 663.18,-12 663.18,-12 663.18,-33.03 663.18,-33.03 663.18,-39.03 657.18,-45.03 651.18,-45.03"/>
+<text xml:space="preserve" text-anchor="middle" x="613.97" y="-25.94" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">COMPLETED</text>
+<text xml:space="preserve" text-anchor="middle" x="613.97" y="-12.44" font-family="Helvetica Neue" font-size="11.00" fill="#1a3a26">진료 완료</text>
+</g>
+<!-- IN_PROGRESS&#45;&gt;COMPLETED -->
+<g id="edge5" class="edge">
+<title>IN_PROGRESS&#45;&gt;COMPLETED</title>
+<path fill="none" stroke="#58a978" stroke-width="1.8" d="M613.97,-135.37C613.97,-135.37 613.97,-55.86 613.97,-55.86"/>
+<polygon fill="#58a978" stroke="#58a978" stroke-width="1.8" points="616.59,-55.86 613.97,-48.36 611.34,-55.86 616.59,-55.86"/>
+<text xml:space="preserve" text-anchor="middle" x="633.47" y="-87.73" font-family="Helvetica Neue" font-size="9.00">Complete</text>
+</g>
+<!-- RESCHEDULED -->
+<g id="node9" class="node">
+<title>RESCHEDULED</title>
+<path fill="#e9f7f6" stroke="#45a7a1" stroke-width="2" d="M114.31,-181.31C114.31,-181.31 25.63,-181.31 25.63,-181.31 19.63,-181.31 13.63,-175.31 13.63,-169.31 13.63,-169.31 13.63,-148.28 13.63,-148.28 13.63,-142.28 19.63,-136.28 25.63,-136.28 25.63,-136.28 114.31,-136.28 114.31,-136.28 120.31,-136.28 126.31,-142.28 126.31,-148.28 126.31,-148.28 126.31,-169.31 126.31,-169.31 126.31,-175.31 120.31,-181.31 114.31,-181.31"/>
+<text xml:space="preserve" text-anchor="middle" x="69.97" y="-162.22" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">RESCHEDULED</text>
+<text xml:space="preserve" text-anchor="middle" x="69.97" y="-148.72" font-family="Helvetica Neue" font-size="11.00" fill="#0e3533">재배정 완료</text>
+</g>
+<!-- PENDING_RESCHEDULE&#45;&gt;RESCHEDULED -->
+<g id="edge9" class="edge">
+<title>PENDING_RESCHEDULE&#45;&gt;RESCHEDULED</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M69.97,-271.65C69.97,-271.65 69.97,-192.14 69.97,-192.14"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="72.59,-192.14 69.97,-184.64 67.34,-192.14 72.59,-192.14"/>
+<text xml:space="preserve" text-anchor="middle" x="109.34" y="-224.01" font-family="Helvetica Neue" font-size="9.00">ConfirmReschedule</text>
+</g>
+<!-- PENDING_RESCHEDULE&#45;&gt;CANCELLED -->
+<g id="edge14" class="edge">
+<title>PENDING_RESCHEDULE&#45;&gt;CANCELLED</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" stroke-dasharray="5,2" d="M160.9,-291C226.68,-291 308.62,-291 308.62,-291 308.62,-291 308.62,-192.35 308.62,-192.35"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="311.25,-192.35 308.62,-184.85 306,-192.35 311.25,-192.35"/>
+</g>
+</g>
 </svg>

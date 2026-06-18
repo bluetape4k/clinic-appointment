@@ -1,90 +1,270 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" role="img" aria-label="appointment-core — Entity Relationship Diagram">
-<defs>
-  <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
-    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1f2937" flood-opacity="0.10"/>
-  </filter>
-  <marker id="arr" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#758297"/>
-  </marker>
-  <marker id="arr-blue" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#5B8DEF"/>
-  </marker>
-  <marker id="arr-green" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#58A978"/>
-  </marker>
-  <marker id="arr-amber" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#D6A441"/>
-  </marker>
-  <marker id="arr-pink" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#DC6B82"/>
-  </marker>
-  <marker id="arr-purple" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#8A72D6"/>
-  </marker>
-  <marker id="arr-teal" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0.5 0.5 L 4.5 2.5 L 0.5 4.5 Z" fill="#45A7A1"/>
-  </marker>
-  <marker id="inherit" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth">
-    <path d="M 0 1 L 12 6 L 0 11 Z" fill="#ffffff" stroke="#758297" stroke-width="1.5"/>
-  </marker>
-  <style>
-    .canvas{fill:#F7F9FC}
-    .frame{fill:#FFFFFF;stroke:#D0D8E4;stroke-width:1.5}
-    .title{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:40px;fill:#102033}
-    .subtitle{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:13px;fill:#536273}
-    .label{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:22px;fill:#102033}
-    .smallLabel{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:17px;fill:#102033}
-    .mono{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:12px;fill:#102033}
-    .small{font-family:"Comic Mono","Comic Sans MS",cursive;font-size:11px;fill:#536273}
-    .layerTitle{font-family:"Architects Daughter","Comic Sans MS",cursive;font-size:14px;fill:#536273;font-style:italic}
-    .card{stroke-width:2;filter:url(#shadow)}
-    .line{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#arr)}
-    .line-blue{stroke:#5B8DEF;stroke-width:2;fill:none;marker-end:url(#arr-blue)}
-    .line-green{stroke:#58A978;stroke-width:2;fill:none;marker-end:url(#arr-green)}
-    .line-amber{stroke:#D6A441;stroke-width:2;fill:none;marker-end:url(#arr-amber)}
-    .line-pink{stroke:#DC6B82;stroke-width:2;fill:none;marker-end:url(#arr-pink)}
-    .line-purple{stroke:#8A72D6;stroke-width:2;fill:none;marker-end:url(#arr-purple)}
-    .line-teal{stroke:#45A7A1;stroke-width:2;fill:none;marker-end:url(#arr-teal)}
-    .dashed{stroke:#758297;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr)}
-    .dashed-blue{stroke:#5B8DEF;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-blue)}
-    .dashed-green{stroke:#58A978;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-green)}
-    .dashed-amber{stroke:#D6A441;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-amber)}
-    .dashed-pink{stroke:#DC6B82;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-pink)}
-    .dashed-purple{stroke:#8A72D6;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-purple)}
-    .dashed-teal{stroke:#45A7A1;stroke-width:1.8;stroke-dasharray:7 5;fill:none;marker-end:url(#arr-teal)}
-    .inheritLine{stroke:#758297;stroke-width:2;fill:none;marker-end:url(#inherit)}
-  </style>
-</defs>
-<rect class="canvas" width="1200" height="780"/>
-<rect class="frame" x="28" y="24" width="1144" height="732" rx="22"/>
-<text class="title" x="62" y="78">Domain Entity Relationships</text>
-<text class="subtitle" x="66" y="100">appointment-core · 16 entities · scheduling_* tables · Exposed ORM</text>
-<rect x="440" y="130" width="240" height="158" rx="6" fill="#E9F7F6" stroke="#45A7A1" stroke-width="2" filter="url(#shadow)"/><rect x="440" y="130" width="240" height="30" rx="6" fill="#45A7A1" stroke="#45A7A1" stroke-width="2"/><rect x="440" y="154" width="240" height="6" fill="#45A7A1"/><text class="smallLabel" x="560" y="146" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_clinics</text><text class="mono" x="448" y="174" dominant-baseline="middle" fill="#0E3533">🔑 id: Long</text><text class="small" x="450" y="192" dominant-baseline="middle" fill="#536273">tenant_group_id ⟶ TenantGroups</text><text class="small" x="450" y="212" dominant-baseline="middle" fill="#536273">name, timezone, locale</text><text class="small" x="450" y="232" dominant-baseline="middle" fill="#536273">slot_duration_minutes</text><text class="small" x="450" y="252" dominant-baseline="middle" fill="#536273">max_concurrent_patients</text><text class="small" x="450" y="272" dominant-baseline="middle" fill="#536273">open_on_holidays</text>
-<rect x="150" y="120" width="240" height="138" rx="6" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="2" filter="url(#shadow)"/><rect x="150" y="120" width="240" height="30" rx="6" fill="#5B8DEF" stroke="#5B8DEF" stroke-width="2"/><rect x="150" y="144" width="240" height="6" fill="#5B8DEF"/><text class="smallLabel" x="270" y="136" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_doctors</text><text class="mono" x="158" y="164" dominant-baseline="middle" fill="#1A3A5C">🔑 id: Long</text><text class="small" x="160" y="182" dominant-baseline="middle" fill="#5B8DEF">⟶ clinic_id</text><text class="small" x="160" y="202" dominant-baseline="middle" fill="#536273">name, specialty</text><text class="small" x="160" y="222" dominant-baseline="middle" fill="#536273">provider_type</text><text class="small" x="160" y="242" dominant-baseline="middle" fill="#536273">max_concurrent_patients</text>
-<rect x="730" y="120" width="240" height="158" rx="6" fill="#EAF7EF" stroke="#58A978" stroke-width="2" filter="url(#shadow)"/><rect x="730" y="120" width="240" height="30" rx="6" fill="#58A978" stroke="#58A978" stroke-width="2"/><rect x="730" y="144" width="240" height="6" fill="#58A978"/><text class="smallLabel" x="850" y="136" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_treatment_types</text><text class="mono" x="738" y="164" dominant-baseline="middle" fill="#1A3A26">🔑 id: Long</text><text class="small" x="740" y="182" dominant-baseline="middle" fill="#58A978">⟶ clinic_id</text><text class="small" x="740" y="202" dominant-baseline="middle" fill="#536273">name, category</text><text class="small" x="740" y="222" dominant-baseline="middle" fill="#536273">default_duration_minutes</text><text class="small" x="740" y="242" dominant-baseline="middle" fill="#536273">required_provider_type</text><text class="small" x="740" y="262" dominant-baseline="middle" fill="#536273">requires_equipment</text>
-<rect x="1000" y="120" width="180" height="138" rx="6" fill="#EEF6D9" stroke="#8BA84D" stroke-width="2" filter="url(#shadow)"/><rect x="1000" y="120" width="180" height="30" rx="6" fill="#8BA84D" stroke="#8BA84D" stroke-width="2"/><rect x="1000" y="144" width="180" height="6" fill="#8BA84D"/><text class="smallLabel" x="1090" y="136" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_equipments</text><text class="mono" x="1008" y="164" dominant-baseline="middle" fill="#2A3A0E">🔑 id: Long</text><text class="small" x="1010" y="182" dominant-baseline="middle" fill="#8BA84D">⟶ clinic_id</text><text class="small" x="1010" y="202" dominant-baseline="middle" fill="#536273">name</text><text class="small" x="1010" y="222" dominant-baseline="middle" fill="#536273">usage_duration_minutes</text><text class="small" x="1010" y="242" dominant-baseline="middle" fill="#536273">quantity</text>
-<rect x="360" y="320" width="480" height="178" rx="6" fill="#FDECEF" stroke="#DC6B82" stroke-width="2" filter="url(#shadow)"/><rect x="360" y="320" width="480" height="30" rx="6" fill="#DC6B82" stroke="#DC6B82" stroke-width="2"/><rect x="360" y="344" width="480" height="6" fill="#DC6B82"/><text class="smallLabel" x="600" y="336" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_appointments</text><text class="mono" x="368" y="364" dominant-baseline="middle" fill="#4A0E1C">🔑 id: Long</text><text class="small" x="370" y="382" dominant-baseline="middle" fill="#DC6B82">⟶ clinic_id, doctor_id</text><text class="small" x="370" y="402" dominant-baseline="middle" fill="#DC6B82">⟶ treatment_type_id, equipment_id</text><text class="small" x="370" y="422" dominant-baseline="middle" fill="#536273">patient_name, patient_phone</text><text class="small" x="370" y="442" dominant-baseline="middle" fill="#536273">appointment_date, start_time, end_time</text><text class="small" x="370" y="462" dominant-baseline="middle" fill="#536273">status (AppointmentState)</text><text class="small" x="370" y="482" dominant-baseline="middle" fill="#536273">reschedule_from_id</text>
-<rect x="50" y="320" width="240" height="138" rx="6" fill="#FFF3D9" stroke="#D6A441" stroke-width="2" filter="url(#shadow)"/><rect x="50" y="320" width="240" height="30" rx="6" fill="#D6A441" stroke="#D6A441" stroke-width="2"/><rect x="50" y="344" width="240" height="6" fill="#D6A441"/><text class="smallLabel" x="170" y="336" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_operating_hours</text><text class="mono" x="58" y="364" dominant-baseline="middle" fill="#4A3000">🔑 id: Long</text><text class="small" x="60" y="382" dominant-baseline="middle" fill="#D6A441">⟶ clinic_id</text><text class="small" x="60" y="402" dominant-baseline="middle" fill="#536273">day_of_week</text><text class="small" x="60" y="422" dominant-baseline="middle" fill="#536273">open_time, close_time</text><text class="small" x="60" y="442" dominant-baseline="middle" fill="#536273">is_active</text>
-<rect x="50" y="490" width="240" height="118" rx="6" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="2" filter="url(#shadow)"/><rect x="50" y="490" width="240" height="30" rx="6" fill="#5B8DEF" stroke="#5B8DEF" stroke-width="2"/><rect x="50" y="514" width="240" height="6" fill="#5B8DEF"/><text class="smallLabel" x="170" y="506" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_doctor_schedules</text><text class="mono" x="58" y="534" dominant-baseline="middle" fill="#1A3A5C">🔑 id: Long</text><text class="small" x="60" y="552" dominant-baseline="middle" fill="#5B8DEF">⟶ doctor_id</text><text class="small" x="60" y="572" dominant-baseline="middle" fill="#536273">day_of_week</text><text class="small" x="60" y="592" dominant-baseline="middle" fill="#536273">start_time, end_time</text>
-<rect x="50" y="610" width="240" height="118" rx="6" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="2" filter="url(#shadow)"/><rect x="50" y="610" width="240" height="30" rx="6" fill="#5B8DEF" stroke="#5B8DEF" stroke-width="2"/><rect x="50" y="634" width="240" height="6" fill="#5B8DEF"/><text class="smallLabel" x="170" y="626" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_doctor_absences</text><text class="mono" x="58" y="654" dominant-baseline="middle" fill="#1A3A5C">🔑 id: Long</text><text class="small" x="60" y="672" dominant-baseline="middle" fill="#5B8DEF">⟶ doctor_id</text><text class="small" x="60" y="692" dominant-baseline="middle" fill="#536273">absence_date</text><text class="small" x="60" y="712" dominant-baseline="middle" fill="#536273">start_time, end_time (opt)</text>
-<rect x="780" y="320" width="240" height="138" rx="6" fill="#FFF3D9" stroke="#D6A441" stroke-width="2" filter="url(#shadow)"/><rect x="780" y="320" width="240" height="30" rx="6" fill="#D6A441" stroke="#D6A441" stroke-width="2"/><rect x="780" y="344" width="240" height="6" fill="#D6A441"/><text class="smallLabel" x="900" y="336" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_clinic_closures</text><text class="mono" x="788" y="364" dominant-baseline="middle" fill="#4A3000">🔑 id: Long</text><text class="small" x="790" y="382" dominant-baseline="middle" fill="#D6A441">⟶ clinic_id</text><text class="small" x="790" y="402" dominant-baseline="middle" fill="#536273">closure_date</text><text class="small" x="790" y="422" dominant-baseline="middle" fill="#536273">is_full_day</text><text class="small" x="790" y="442" dominant-baseline="middle" fill="#536273">start_time, end_time (opt)</text>
-<rect x="780" y="480" width="240" height="118" rx="6" fill="#FFF3D9" stroke="#D6A441" stroke-width="2" filter="url(#shadow)"/><rect x="780" y="480" width="240" height="30" rx="6" fill="#D6A441" stroke="#D6A441" stroke-width="2"/><rect x="780" y="504" width="240" height="6" fill="#D6A441"/><text class="smallLabel" x="900" y="496" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_holidays</text><text class="mono" x="788" y="524" dominant-baseline="middle" fill="#4A3000">🔑 id: Long</text><text class="small" x="790" y="542" dominant-baseline="middle" fill="#536273">holiday_date</text><text class="small" x="790" y="562" dominant-baseline="middle" fill="#536273">name</text><text class="small" x="790" y="582" dominant-baseline="middle" fill="#536273">is_recurring</text>
-<rect x="780" y="590" width="240" height="118" rx="6" fill="#EEF6D9" stroke="#8BA84D" stroke-width="2" filter="url(#shadow)"/><rect x="780" y="590" width="240" height="30" rx="6" fill="#8BA84D" stroke="#8BA84D" stroke-width="2"/><rect x="780" y="614" width="240" height="6" fill="#8BA84D"/><text class="smallLabel" x="900" y="606" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_equipment_unavailabilities</text><text class="mono" x="788" y="634" dominant-baseline="middle" fill="#2A3A0E">🔑 id: Long</text><text class="small" x="790" y="652" dominant-baseline="middle" fill="#8BA84D">⟶ equipment_id</text><text class="small" x="790" y="672" dominant-baseline="middle" fill="#536273">start_datetime, end_datetime</text><text class="small" x="790" y="692" dominant-baseline="middle" fill="#536273">recurrence_rule</text>
-<rect x="360" y="580" width="360" height="138" rx="6" fill="#F1ECFF" stroke="#8A72D6" stroke-width="2" filter="url(#shadow)"/><rect x="360" y="580" width="360" height="30" rx="6" fill="#8A72D6" stroke="#8A72D6" stroke-width="2"/><rect x="360" y="604" width="360" height="6" fill="#8A72D6"/><text class="smallLabel" x="540" y="596" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_reschedule_candidates</text><text class="mono" x="368" y="624" dominant-baseline="middle" fill="#2A1A5C">🔑 id: Long</text><text class="small" x="370" y="642" dominant-baseline="middle" fill="#8A72D6">⟶ appointment_id</text><text class="small" x="370" y="662" dominant-baseline="middle" fill="#8A72D6">⟶ clinic_id</text><text class="small" x="370" y="682" dominant-baseline="middle" fill="#536273">proposed_date, proposed_start_time</text><text class="small" x="370" y="702" dominant-baseline="middle" fill="#536273">status, score</text>
-<rect x="360" y="700" width="360" height="118" rx="6" fill="#F2F5F9" stroke="#9AA8B8" stroke-width="2" filter="url(#shadow)"/><rect x="360" y="700" width="360" height="30" rx="6" fill="#9AA8B8" stroke="#9AA8B8" stroke-width="2"/><rect x="360" y="724" width="360" height="6" fill="#9AA8B8"/><text class="smallLabel" x="540" y="716" text-anchor="middle" dominant-baseline="middle" fill="white">scheduling_appointment_state_history</text><text class="mono" x="368" y="744" dominant-baseline="middle" fill="#2A3340">🔑 id: Long</text><text class="small" x="370" y="762" dominant-baseline="middle" fill="#9AA8B8">⟶ appointment_id</text><text class="small" x="370" y="782" dominant-baseline="middle" fill="#536273">from_state, to_state, event</text><text class="small" x="370" y="802" dominant-baseline="middle" fill="#536273">occurred_at</text>
-<path class="line-teal" d="M390 160 L440 160"/>
-<path class="line-teal" d="M730 160 L680 160"/>
-<path class="line-teal" d="M1090 120 L560 120 L560 130"/>
-<path class="line-teal" d="M170 320 L560 320 L560 260"/>
-<path class="line-teal" d="M600 320 L600 260"/>
-<path class="line-blue" d="M360 360 L360 260 L270 260"/>
-<path class="line-green" d="M840 360 L840 260 L850 260"/>
-<path class="line-olive" d="M840 380 L840 260 L1090 260"/>
-<path class="line-blue" d="M170 490 L170 380"/>
-<path class="line-blue" d="M170 610 L170 610 L170 380"/>
-<path class="line-amber" d="M900 320 L780 260"/>
-<path class="line-olive" d="M900 590 L1090 590 L1090 260"/>
-<path class="line-pink" d="M540 580 L540 500"/>
-<path class="line-gray" d="M540 700 L540 500"/>
-<text class="small" x="600" y="752" text-anchor="middle">appointment-core · scheduling_* tables · github.com/bluetape4k/clinic-appointment</text>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 15.0.0 (20260523.1842)
+ -->
+<!-- Pages: 1 -->
+<svg width="1399pt" height="881pt"
+ viewBox="0.00 0.00 1399.00 881.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(57.6 823.11)">
+<polygon fill="#f7f9fc" stroke="none" points="-57.6,57.6 -57.6,-823.11 1341.52,-823.11 1341.52,57.6 -57.6,57.6"/>
+<text xml:space="preserve" text-anchor="middle" x="189.12" y="-750.11" font-family="Helvetica Neue" font-size="12.00">Domain Entity Relationships</text>
+<text xml:space="preserve" text-anchor="middle" x="189.12" y="-735.11" font-family="Helvetica Neue" font-size="12.00">appointment&#45;core · 16 entities · scheduling_* tables · Exposed ORM</text>
+<!-- clinics -->
+<g id="node1" class="node">
+<title>clinics</title>
+<polygon fill="#e9f7f6" stroke="#45a7a1" stroke-width="2" points="564.38,-0.5 564.38,-107.06 789.05,-107.06 789.05,-0.5 564.38,-0.5"/>
+<text xml:space="preserve" text-anchor="middle" x="676.71" y="-91.8" font-family="Helvetica Neue" font-size="10.00" fill="#0e3533">scheduling_clinics</text>
+<polyline fill="none" stroke="#45a7a1" stroke-width="2" points="564.38,-83.54 789.05,-83.54"/>
+<text xml:space="preserve" text-anchor="start" x="577.34" y="-68.28" font-family="Helvetica Neue" font-size="10.00" fill="#0e3533">id: Long (PK)</text>
+<polyline fill="none" stroke="#45a7a1" stroke-width="2" points="564.38,-60.02 789.05,-60.02"/>
+<text xml:space="preserve" text-anchor="start" x="577.34" y="-44.76" font-family="Helvetica Neue" font-size="10.00" fill="#0e3533">tenant_group_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="577.34" y="-32.76" font-family="Helvetica Neue" font-size="10.00" fill="#0e3533">name, timezone, locale</text>
+<text xml:space="preserve" text-anchor="start" x="577.34" y="-20.76" font-family="Helvetica Neue" font-size="10.00" fill="#0e3533">slot_duration_minutes</text>
+<text xml:space="preserve" text-anchor="start" x="577.34" y="-8.76" font-family="Helvetica Neue" font-size="10.00" fill="#0e3533">max_concurrent_patients, open_on_holidays</text>
+</g>
+<!-- doctors -->
+<g id="node2" class="node">
+<title>doctors</title>
+<polygon fill="#e8f3ff" stroke="#5b8def" stroke-width="2" points="683.88,-205.31 683.88,-299.87 845.55,-299.87 845.55,-205.31 683.88,-205.31"/>
+<text xml:space="preserve" text-anchor="middle" x="764.71" y="-284.61" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">scheduling_doctors</text>
+<polyline fill="none" stroke="#5b8def" stroke-width="2" points="683.88,-276.35 845.55,-276.35"/>
+<text xml:space="preserve" text-anchor="start" x="696.84" y="-261.09" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">id: Long (PK)</text>
+<polyline fill="none" stroke="#5b8def" stroke-width="2" points="683.88,-252.83 845.55,-252.83"/>
+<text xml:space="preserve" text-anchor="start" x="696.84" y="-237.57" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">clinic_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="696.84" y="-225.57" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">name, specialty, provider_type</text>
+<text xml:space="preserve" text-anchor="start" x="696.84" y="-213.57" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">max_concurrent_patients</text>
+</g>
+<!-- doctors&#45;&gt;clinics -->
+<g id="edge1" class="edge">
+<title>doctors&#45;&gt;clinics</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M736.46,-204.46C736.46,-204.46 736.46,-117.99 736.46,-117.99"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="739.09,-117.99 736.46,-110.49 733.84,-117.99 739.09,-117.99"/>
+<text xml:space="preserve" text-anchor="middle" x="742.21" y="-150.26" font-family="Helvetica Neue" font-size="9.00">clinic_id</text>
+</g>
+<!-- treatment_types -->
+<g id="node3" class="node">
+<title>treatment_types</title>
+<polygon fill="#eaf7ef" stroke="#58a978" stroke-width="2" points="245.88,-199.31 245.88,-305.87 467.55,-305.87 467.55,-199.31 245.88,-199.31"/>
+<text xml:space="preserve" text-anchor="middle" x="356.71" y="-290.61" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a26">scheduling_treatment_types</text>
+<polyline fill="none" stroke="#58a978" stroke-width="2" points="245.88,-282.35 467.55,-282.35"/>
+<text xml:space="preserve" text-anchor="start" x="258.84" y="-267.09" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a26">id: Long (PK)</text>
+<polyline fill="none" stroke="#58a978" stroke-width="2" points="245.88,-258.83 467.55,-258.83"/>
+<text xml:space="preserve" text-anchor="start" x="258.84" y="-243.57" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a26">clinic_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="258.84" y="-231.57" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a26">name, category</text>
+<text xml:space="preserve" text-anchor="start" x="258.84" y="-219.57" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a26">default_duration_minutes</text>
+<text xml:space="preserve" text-anchor="start" x="258.84" y="-207.57" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a26">required_provider_type, requires_equipment</text>
+</g>
+<!-- treatment_types&#45;&gt;clinics -->
+<g id="edge2" class="edge">
+<title>treatment_types&#45;&gt;clinics</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M468.48,-253C532.79,-253 600.97,-253 600.97,-253 600.97,-253 600.97,-118.18 600.97,-118.18"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="603.6,-118.18 600.97,-110.68 598.35,-118.18 603.6,-118.18"/>
+<text xml:space="preserve" text-anchor="middle" x="456.21" y="-150.26" font-family="Helvetica Neue" font-size="9.00">clinic_id</text>
+</g>
+<!-- equipments -->
+<g id="node4" class="node">
+<title>equipments</title>
+<polygon fill="#eef6d9" stroke="#8ba84d" stroke-width="2" points="10.13,-205.31 10.13,-299.87 185.3,-299.87 185.3,-205.31 10.13,-205.31"/>
+<text xml:space="preserve" text-anchor="middle" x="97.71" y="-284.61" font-family="Helvetica Neue" font-size="10.00" fill="#2a3a0e">scheduling_equipments</text>
+<polyline fill="none" stroke="#8ba84d" stroke-width="2" points="10.13,-276.35 185.3,-276.35"/>
+<text xml:space="preserve" text-anchor="start" x="23.09" y="-261.09" font-family="Helvetica Neue" font-size="10.00" fill="#2a3a0e">id: Long (PK)</text>
+<polyline fill="none" stroke="#8ba84d" stroke-width="2" points="10.13,-252.83 185.3,-252.83"/>
+<text xml:space="preserve" text-anchor="start" x="23.09" y="-237.57" font-family="Helvetica Neue" font-size="10.00" fill="#2a3a0e">clinic_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="23.09" y="-225.57" font-family="Helvetica Neue" font-size="10.00" fill="#2a3a0e">name</text>
+<text xml:space="preserve" text-anchor="start" x="23.09" y="-213.57" font-family="Helvetica Neue" font-size="10.00" fill="#2a3a0e">usage_duration_minutes, quantity</text>
+</g>
+<!-- equipments&#45;&gt;clinics -->
+<g id="edge3" class="edge">
+<title>equipments&#45;&gt;clinics</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M97.71,-204.52C97.71,-145.74 97.71,-54 97.71,-54 97.71,-54 553.47,-54 553.47,-54"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="553.47,-56.63 560.97,-54 553.47,-51.38 553.47,-56.63"/>
+<text xml:space="preserve" text-anchor="middle" x="195.21" y="-150.26" font-family="Helvetica Neue" font-size="9.00">clinic_id</text>
+</g>
+<!-- appointments -->
+<g id="node5" class="node">
+<title>appointments</title>
+<polygon fill="#fdecef" stroke="#dc6b82" stroke-width="2" points="346.63,-398.12 346.63,-540.2 548.8,-540.2 548.8,-398.12 346.63,-398.12"/>
+<text xml:space="preserve" text-anchor="middle" x="447.71" y="-524.94" font-family="Helvetica Neue" font-size="10.00" fill="#4a0e1c">scheduling_appointments</text>
+<polyline fill="none" stroke="#dc6b82" stroke-width="2" points="346.63,-516.68 548.8,-516.68"/>
+<text xml:space="preserve" text-anchor="start" x="359.59" y="-501.42" font-family="Helvetica Neue" font-size="10.00" fill="#4a0e1c">id: Long (PK)</text>
+<polyline fill="none" stroke="#dc6b82" stroke-width="2" points="346.63,-493.16 548.8,-493.16"/>
+<text xml:space="preserve" text-anchor="start" x="359.59" y="-477.9" font-family="Helvetica Neue" font-size="10.00" fill="#4a0e1c">clinic_id, doctor_id (FK)</text>
+<polyline fill="none" stroke="#dc6b82" stroke-width="2" points="346.63,-469.64 548.8,-469.64"/>
+<text xml:space="preserve" text-anchor="start" x="359.59" y="-454.38" font-family="Helvetica Neue" font-size="10.00" fill="#4a0e1c">treatment_type_id, equipment_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="359.59" y="-442.38" font-family="Helvetica Neue" font-size="10.00" fill="#4a0e1c">patient_name, patient_phone</text>
+<text xml:space="preserve" text-anchor="start" x="359.59" y="-430.38" font-family="Helvetica Neue" font-size="10.00" fill="#4a0e1c">appointment_date, start_time, end_time</text>
+<text xml:space="preserve" text-anchor="start" x="359.59" y="-418.38" font-family="Helvetica Neue" font-size="10.00" fill="#4a0e1c">status: AppointmentState</text>
+<text xml:space="preserve" text-anchor="start" x="359.59" y="-406.38" font-family="Helvetica Neue" font-size="10.00" fill="#4a0e1c">reschedule_from_id</text>
+</g>
+<!-- appointments&#45;&gt;clinics -->
+<g id="edge6" class="edge">
+<title>appointments&#45;&gt;clinics</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M549.59,-406C594.63,-406 637.57,-406 637.57,-406 637.57,-406 637.57,-118.27 637.57,-118.27"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="640.2,-118.27 637.57,-110.77 634.95,-118.27 640.2,-118.27"/>
+<text xml:space="preserve" text-anchor="middle" x="606.21" y="-249.67" font-family="Helvetica Neue" font-size="9.00">clinic_id</text>
+</g>
+<!-- appointments&#45;&gt;doctors -->
+<g id="edge7" class="edge">
+<title>appointments&#45;&gt;doctors</title>
+<path fill="none" stroke="#5b8def" stroke-width="1.8" d="M549.54,-413C616.57,-413 692,-413 692,-413 692,-413 692,-310.94 692,-310.94"/>
+<polygon fill="#5b8def" stroke="#5b8def" stroke-width="1.8" points="694.63,-310.94 692,-303.44 689.38,-310.94 694.63,-310.94"/>
+<text xml:space="preserve" text-anchor="middle" x="705.84" y="-349.07" font-family="Helvetica Neue" font-size="9.00">doctor_id</text>
+</g>
+<!-- appointments&#45;&gt;treatment_types -->
+<g id="edge8" class="edge">
+<title>appointments&#45;&gt;treatment_types</title>
+<path fill="none" stroke="#58a978" stroke-width="1.8" d="M407.09,-397.35C407.09,-397.35 407.09,-316.95 407.09,-316.95"/>
+<polygon fill="#58a978" stroke="#58a978" stroke-width="1.8" points="409.71,-316.95 407.09,-309.45 404.46,-316.95 409.71,-316.95"/>
+<text xml:space="preserve" text-anchor="middle" x="437.71" y="-349.07" font-family="Helvetica Neue" font-size="9.00">treatment_type_id</text>
+</g>
+<!-- appointments&#45;&gt;equipments -->
+<g id="edge9" class="edge">
+<title>appointments&#45;&gt;equipments</title>
+<path fill="none" stroke="#8ba84d" stroke-width="1.8" d="M345.76,-410C251.83,-410 126.91,-410 126.91,-410 126.91,-410 126.91,-310.9 126.91,-310.9"/>
+<polygon fill="#8ba84d" stroke="#8ba84d" stroke-width="1.8" points="129.53,-310.9 126.91,-303.4 124.28,-310.9 129.53,-310.9"/>
+<text xml:space="preserve" text-anchor="middle" x="300.09" y="-349.07" font-family="Helvetica Neue" font-size="9.00">equipment_id</text>
+</g>
+<!-- operating_hours -->
+<g id="node6" class="node">
+<title>operating_hours</title>
+<polygon fill="#fff3d9" stroke="#d6a441" stroke-width="2" points="907,-205.31 907,-299.87 1078.42,-299.87 1078.42,-205.31 907,-205.31"/>
+<text xml:space="preserve" text-anchor="middle" x="992.71" y="-284.61" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">scheduling_operating_hours</text>
+<polyline fill="none" stroke="#d6a441" stroke-width="2" points="907,-276.35 1078.42,-276.35"/>
+<text xml:space="preserve" text-anchor="start" x="919.96" y="-261.09" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">id: Long (PK)</text>
+<polyline fill="none" stroke="#d6a441" stroke-width="2" points="907,-252.83 1078.42,-252.83"/>
+<text xml:space="preserve" text-anchor="start" x="919.96" y="-237.57" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">clinic_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="919.96" y="-225.57" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">day_of_week</text>
+<text xml:space="preserve" text-anchor="start" x="919.96" y="-213.57" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">open_time, close_time, is_active</text>
+</g>
+<!-- operating_hours&#45;&gt;clinics -->
+<g id="edge4" class="edge">
+<title>operating_hours&#45;&gt;clinics</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M992.71,-204.67C992.71,-151.17 992.71,-72 992.71,-72 992.71,-72 800.13,-72 800.13,-72"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="800.13,-69.38 792.63,-72 800.13,-74.63 800.13,-69.38"/>
+<text xml:space="preserve" text-anchor="middle" x="1009.21" y="-150.26" font-family="Helvetica Neue" font-size="9.00">clinic_id</text>
+</g>
+<!-- doctor_schedules -->
+<g id="node7" class="node">
+<title>doctor_schedules</title>
+<polygon fill="#e8f3ff" stroke="#5b8def" stroke-width="2" points="700.12,-427.88 700.12,-510.44 881.3,-510.44 881.3,-427.88 700.12,-427.88"/>
+<text xml:space="preserve" text-anchor="middle" x="790.71" y="-495.18" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">scheduling_doctor_schedules</text>
+<polyline fill="none" stroke="#5b8def" stroke-width="2" points="700.12,-486.92 881.3,-486.92"/>
+<text xml:space="preserve" text-anchor="start" x="713.09" y="-471.66" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">id: Long (PK)</text>
+<polyline fill="none" stroke="#5b8def" stroke-width="2" points="700.12,-463.4 881.3,-463.4"/>
+<text xml:space="preserve" text-anchor="start" x="713.09" y="-448.14" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">doctor_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="713.09" y="-436.14" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">day_of_week, start_time, end_time</text>
+</g>
+<!-- doctor_schedules&#45;&gt;doctors -->
+<g id="edge10" class="edge">
+<title>doctor_schedules&#45;&gt;doctors</title>
+<path fill="none" stroke="#5b8def" stroke-width="1.8" d="M772.84,-426.89C772.84,-426.89 772.84,-311.02 772.84,-311.02"/>
+<polygon fill="#5b8def" stroke="#5b8def" stroke-width="1.8" points="775.46,-311.02 772.84,-303.52 770.21,-311.02 775.46,-311.02"/>
+<text xml:space="preserve" text-anchor="middle" x="809.84" y="-349.07" font-family="Helvetica Neue" font-size="9.00">doctor_id</text>
+</g>
+<!-- doctor_absences -->
+<g id="node8" class="node">
+<title>doctor_absences</title>
+<polygon fill="#e8f3ff" stroke="#5b8def" stroke-width="2" points="942.5,-421.88 942.5,-516.44 1098.92,-516.44 1098.92,-421.88 942.5,-421.88"/>
+<text xml:space="preserve" text-anchor="middle" x="1020.71" y="-501.18" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">scheduling_doctor_absences</text>
+<polyline fill="none" stroke="#5b8def" stroke-width="2" points="942.5,-492.92 1098.92,-492.92"/>
+<text xml:space="preserve" text-anchor="start" x="955.46" y="-477.66" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">id: Long (PK)</text>
+<polyline fill="none" stroke="#5b8def" stroke-width="2" points="942.5,-469.4 1098.92,-469.4"/>
+<text xml:space="preserve" text-anchor="start" x="955.46" y="-454.14" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">doctor_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="955.46" y="-442.14" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">absence_date</text>
+<text xml:space="preserve" text-anchor="start" x="955.46" y="-430.14" font-family="Helvetica Neue" font-size="10.00" fill="#1a3a5c">start_time, end_time (opt)</text>
+</g>
+<!-- doctor_absences&#45;&gt;doctors -->
+<g id="edge11" class="edge">
+<title>doctor_absences&#45;&gt;doctors</title>
+<path fill="none" stroke="#5b8def" stroke-width="1.8" d="M941.64,-469C915.51,-469 892.98,-469 892.98,-469 892.98,-469 892.98,-253 892.98,-253 892.98,-253 856.53,-253 856.53,-253"/>
+<polygon fill="#5b8def" stroke="#5b8def" stroke-width="1.8" points="856.53,-250.38 849.03,-253 856.53,-255.63 856.53,-250.38"/>
+<text xml:space="preserve" text-anchor="middle" x="1039.84" y="-349.07" font-family="Helvetica Neue" font-size="9.00">doctor_id</text>
+</g>
+<!-- clinic_closures -->
+<g id="node9" class="node">
+<title>clinic_closures</title>
+<polygon fill="#fff3d9" stroke="#d6a441" stroke-width="2" points="1139.5,-205.31 1139.5,-299.87 1283.92,-299.87 1283.92,-205.31 1139.5,-205.31"/>
+<text xml:space="preserve" text-anchor="middle" x="1211.71" y="-284.61" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">scheduling_clinic_closures</text>
+<polyline fill="none" stroke="#d6a441" stroke-width="2" points="1139.5,-276.35 1283.92,-276.35"/>
+<text xml:space="preserve" text-anchor="start" x="1152.46" y="-261.09" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">id: Long (PK)</text>
+<polyline fill="none" stroke="#d6a441" stroke-width="2" points="1139.5,-252.83 1283.92,-252.83"/>
+<text xml:space="preserve" text-anchor="start" x="1152.46" y="-237.57" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">clinic_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="1152.46" y="-225.57" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">closure_date, is_full_day</text>
+<text xml:space="preserve" text-anchor="start" x="1152.46" y="-213.57" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">start_time, end_time (opt)</text>
+</g>
+<!-- clinic_closures&#45;&gt;clinics -->
+<g id="edge5" class="edge">
+<title>clinic_closures&#45;&gt;clinics</title>
+<path fill="none" stroke="#45a7a1" stroke-width="1.8" d="M1211.71,-204.52C1211.71,-140.71 1211.71,-36 1211.71,-36 1211.71,-36 800.07,-36 800.07,-36"/>
+<polygon fill="#45a7a1" stroke="#45a7a1" stroke-width="1.8" points="800.07,-33.38 792.57,-36 800.07,-38.63 800.07,-33.38"/>
+<text xml:space="preserve" text-anchor="middle" x="1228.21" y="-150.26" font-family="Helvetica Neue" font-size="9.00">clinic_id</text>
+</g>
+<!-- holidays -->
+<g id="node10" class="node">
+<title>holidays</title>
+<polygon fill="#fff3d9" stroke="#d6a441" stroke-width="2" points="734.75,-650.21 734.75,-709.25 904.67,-709.25 904.67,-650.21 734.75,-650.21"/>
+<text xml:space="preserve" text-anchor="middle" x="819.71" y="-693.99" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">scheduling_holidays</text>
+<polyline fill="none" stroke="#d6a441" stroke-width="2" points="734.75,-685.73 904.67,-685.73"/>
+<text xml:space="preserve" text-anchor="start" x="747.71" y="-670.47" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">id: Long (PK)</text>
+<text xml:space="preserve" text-anchor="start" x="747.71" y="-658.47" font-family="Helvetica Neue" font-size="10.00" fill="#4a3000">holiday_date, name, is_recurring</text>
+</g>
+<!-- equip_unavail -->
+<g id="node11" class="node">
+<title>equip_unavail</title>
+<polygon fill="#eef6d9" stroke="#8ba84d" stroke-width="2" points="0,-421.88 0,-516.44 195.42,-516.44 195.42,-421.88 0,-421.88"/>
+<text xml:space="preserve" text-anchor="middle" x="97.71" y="-501.18" font-family="Helvetica Neue" font-size="10.00" fill="#2a3a0e">scheduling_equipment_unavailabilities</text>
+<polyline fill="none" stroke="#8ba84d" stroke-width="2" points="0,-492.92 195.42,-492.92"/>
+<text xml:space="preserve" text-anchor="start" x="12.96" y="-477.66" font-family="Helvetica Neue" font-size="10.00" fill="#2a3a0e">id: Long (PK)</text>
+<polyline fill="none" stroke="#8ba84d" stroke-width="2" points="0,-469.4 195.42,-469.4"/>
+<text xml:space="preserve" text-anchor="start" x="12.96" y="-454.14" font-family="Helvetica Neue" font-size="10.00" fill="#2a3a0e">equipment_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="12.96" y="-442.14" font-family="Helvetica Neue" font-size="10.00" fill="#2a3a0e">start_datetime, end_datetime</text>
+<text xml:space="preserve" text-anchor="start" x="12.96" y="-430.14" font-family="Helvetica Neue" font-size="10.00" fill="#2a3a0e">recurrence_rule</text>
+</g>
+<!-- equip_unavail&#45;&gt;equipments -->
+<g id="edge12" class="edge">
+<title>equip_unavail&#45;&gt;equipments</title>
+<path fill="none" stroke="#8ba84d" stroke-width="1.8" d="M68.51,-421.1C68.51,-421.1 68.51,-310.74 68.51,-310.74"/>
+<polygon fill="#8ba84d" stroke="#8ba84d" stroke-width="1.8" points="71.14,-310.74 68.52,-303.24 65.89,-310.74 71.14,-310.74"/>
+<text xml:space="preserve" text-anchor="middle" x="125.09" y="-349.07" font-family="Helvetica Neue" font-size="9.00">equipment_id</text>
+</g>
+<!-- resched_cand -->
+<g id="node12" class="node">
+<title>resched_cand</title>
+<polygon fill="#f1ecff" stroke="#8a72d6" stroke-width="2" points="223.5,-632.45 223.5,-727.01 415.92,-727.01 415.92,-632.45 223.5,-632.45"/>
+<text xml:space="preserve" text-anchor="middle" x="319.71" y="-711.75" font-family="Helvetica Neue" font-size="10.00" fill="#2a1a5c">scheduling_reschedule_candidates</text>
+<polyline fill="none" stroke="#8a72d6" stroke-width="2" points="223.5,-703.49 415.92,-703.49"/>
+<text xml:space="preserve" text-anchor="start" x="236.46" y="-688.23" font-family="Helvetica Neue" font-size="10.00" fill="#2a1a5c">id: Long (PK)</text>
+<polyline fill="none" stroke="#8a72d6" stroke-width="2" points="223.5,-679.97 415.92,-679.97"/>
+<text xml:space="preserve" text-anchor="start" x="236.46" y="-664.71" font-family="Helvetica Neue" font-size="10.00" fill="#2a1a5c">appointment_id, clinic_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="236.46" y="-652.71" font-family="Helvetica Neue" font-size="10.00" fill="#2a1a5c">proposed_date, proposed_start_time</text>
+<text xml:space="preserve" text-anchor="start" x="236.46" y="-640.71" font-family="Helvetica Neue" font-size="10.00" fill="#2a1a5c">status, score</text>
+</g>
+<!-- resched_cand&#45;&gt;appointments -->
+<g id="edge13" class="edge">
+<title>resched_cand&#45;&gt;appointments</title>
+<path fill="none" stroke="#dc6b82" stroke-width="1.8" d="M381.27,-631.68C381.27,-631.68 381.27,-551.21 381.27,-551.21"/>
+<polygon fill="#dc6b82" stroke="#dc6b82" stroke-width="1.8" points="383.9,-551.21 381.27,-543.71 378.65,-551.21 383.9,-551.21"/>
+<text xml:space="preserve" text-anchor="middle" x="351.21" y="-583.4" font-family="Helvetica Neue" font-size="9.00">appointment_id</text>
+</g>
+<!-- state_history -->
+<g id="node13" class="node">
+<title>state_history</title>
+<polygon fill="#f2f5f9" stroke="#9aa8b8" stroke-width="2" points="477.25,-632.45 477.25,-727.01 674.17,-727.01 674.17,-632.45 477.25,-632.45"/>
+<text xml:space="preserve" text-anchor="middle" x="575.71" y="-711.75" font-family="Helvetica Neue" font-size="10.00" fill="#2a3340">scheduling_appointment_state_history</text>
+<polyline fill="none" stroke="#9aa8b8" stroke-width="2" points="477.25,-703.49 674.17,-703.49"/>
+<text xml:space="preserve" text-anchor="start" x="490.21" y="-688.23" font-family="Helvetica Neue" font-size="10.00" fill="#2a3340">id: Long (PK)</text>
+<polyline fill="none" stroke="#9aa8b8" stroke-width="2" points="477.25,-679.97 674.17,-679.97"/>
+<text xml:space="preserve" text-anchor="start" x="490.21" y="-664.71" font-family="Helvetica Neue" font-size="10.00" fill="#2a3340">appointment_id (FK)</text>
+<text xml:space="preserve" text-anchor="start" x="490.21" y="-652.71" font-family="Helvetica Neue" font-size="10.00" fill="#2a3340">from_state, to_state, event</text>
+<text xml:space="preserve" text-anchor="start" x="490.21" y="-640.71" font-family="Helvetica Neue" font-size="10.00" fill="#2a3340">occurred_at</text>
+</g>
+<!-- state_history&#45;&gt;appointments -->
+<g id="edge14" class="edge">
+<title>state_history&#45;&gt;appointments</title>
+<path fill="none" stroke="#9aa8b8" stroke-width="1.8" d="M513.02,-631.68C513.02,-631.68 513.02,-551.21 513.02,-551.21"/>
+<polygon fill="#9aa8b8" stroke="#9aa8b8" stroke-width="1.8" points="515.65,-551.21 513.02,-543.71 510.4,-551.21 515.65,-551.21"/>
+<text xml:space="preserve" text-anchor="middle" x="607.21" y="-583.4" font-family="Helvetica Neue" font-size="9.00">appointment_id</text>
+</g>
+</g>
 </svg>
