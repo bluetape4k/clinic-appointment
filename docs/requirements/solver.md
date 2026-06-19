@@ -17,7 +17,7 @@
 | `startTime` | clinic.slotDurationMinutes 간격 이산 시간 목록 | 시작 시간 배정 |
 | `endTime` | startTime + treatmentDuration (Shadow Variable) | 자동 계산 |
 
-## Hard 제약조건 (위반 시 배치 불가)
+## Hard 제약조건 (12개, 위반 시 배치 불가)
 
 | ID | 제약 | 설명 |
 |----|------|------|
@@ -34,12 +34,16 @@
 | H10 | `doctorBelongsToClinic` | 배정된 의사가 해당 클리닉 소속 |
 | H11 | `noEquipmentUnavailabilityConflict` | 장비 사용불가 구간(`EquipmentUnavailabilityFact`) 중 해당 장비 예약 금지 |
 
-## Soft 제약조건 (최적화 목표)
+## Soft 제약조건 (6개, 최적화 목표)
 
 | ID | 제약 | 가중치 | 설명 |
 |----|------|--------|------|
 | S1 | `doctorLoadBalance` | 100 | 같은 날짜에 의사 간 예약 수 분산 |
 | S2 | `minimizeGaps` | 10 | 의사 하루 스케줄의 빈 시간 간격 최소화 |
+| S3 | `preferOriginalDoctor` | - | 재배정 시 기존 담당의 유지 선호 |
+| S4 | `preferEarlySlot` | - | 가능한 이른 슬롯 선호 |
+| S5 | `equipmentUtilization` | - | 장비 활용도 개선 선호 |
+| S6 | `preferRequestedDate` | - | 환자 요청일 유지 선호 |
 
 ## 주요 클래스
 
@@ -49,7 +53,7 @@
 | `ScheduleSolution` | Planning Solution — 예약 목록 + Problem Facts |
 | `ClinicFact` / `DoctorFact` / `EquipmentFact` / `TreatmentFact` | Problem Facts |
 | `EquipmentUnavailabilityFact` | Problem Fact — 장비 사용불가 구간 (H11 제약에서 참조) |
-| `AppointmentConstraintProvider` | H1~H10, S1~S2 제약 등록 |
+| `AppointmentConstraintProvider` | H1~H12, S1~S6 제약 등록 |
 | `HardConstraints` | Hard 제약 구현 |
 | `SoftConstraints` | Soft 제약 구현 |
 | `SolverService` | Solver 실행 진입점 |

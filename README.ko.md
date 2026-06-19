@@ -12,17 +12,17 @@
 
 ![clinic appointment 작업대 일러스트](./docs/assets/clinic-appointment-workbench.png)
 
-개인병원 환자 예약 관리 시스템 - Kotlin 2.3 + Spring Boot 4 + Timefold Solver AI 스케줄링
+Kotlin 2.3, Spring Boot 4, Timefold Solver AI 스케줄링으로 만든 개인병원 예약 관리 시스템입니다.
 
 ## 프로젝트 목적
 
 `clinic-appointment`는 도메인 기반 예약 관리, Timefold 최적화, 고가용성 알림,
-Spring Boot API, Angular frontend를 포함한 end-to-end clinic scheduling system 예제입니다.
+Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제입니다.
 
 ## 주요 기능
 
 - **예약 상태 머신** - PENDING -> REQUESTED -> CONFIRMED -> CHECKED_IN -> IN_PROGRESS -> COMPLETED 전이, 취소/재배정 지원
-- **AI 최적 스케줄링** - Timefold Solver로 의사, 장비, 영업시간 10개 Hard + 2개 Soft 제약을 동시에 만족하는 최적 배치
+- **AI 최적 스케줄링** - Timefold Solver로 의사, 장비, 영업시간을 포함한 12개 Hard + 6개 Soft 제약을 만족하는 최적 배치
 - **고가용성 알림** - Redis Leader Election으로 단일 노드 전송 보장, Resilience4j CircuitBreaker/Retry/Bulkhead 적용
 - **테넌트 범위 REST API** - `/api/{tenantCode}/...` 경로, JWT tenant 인가, Flyway 마이그레이션, Swagger UI 제공
 - **Angular 18 웹 UI** - 예약 조회/생성/상태 변경 인터페이스
@@ -41,7 +41,7 @@ Spring Boot API, Angular frontend를 포함한 end-to-end clinic scheduling syst
 |------|------|-----------|
 | `appointment-core` | 도메인 모델(16개 엔티티), Exposed ORM 테이블, 리포지토리, 예약 상태머신, 슬롯 계산 서비스 | [README](appointment-core/README.md) |
 | `appointment-event` | Spring ApplicationEvent 기반 도메인 이벤트 발행/구독, 이벤트 로그 저장 | [README](appointment-event/README.md) |
-| `appointment-solver` | Timefold Solver AI 최적화 - 10개 Hard + 2개 Soft 제약으로 대량 예약 최적 배치 | [README](appointment-solver/README.md) |
+| `appointment-solver` | Timefold Solver AI 최적화 - 12개 Hard + 6개 Soft 제약으로 대량 예약 최적 배치 | [README](appointment-solver/README.md) |
 | `appointment-notification` | Redis Leader Election + Resilience4j 기반 HA 알림 스케줄러, 리마인더 발송 | [README](appointment-notification/README.md) |
 | `appointment-api` | Spring Boot 4 REST API - 예약 CRUD, 슬롯 조회, 재배정, JWT 인증, Swagger | [README](appointment-api/README.md) |
 | `frontend/appointment-frontend` | Angular 18 웹 UI - 예약 관리 인터페이스 | [README](frontend/appointment-frontend/README.md) |
@@ -58,7 +58,7 @@ Spring Boot API, Angular frontend를 포함한 end-to-end clinic scheduling syst
 # Swagger UI: http://localhost:8080/swagger-ui.html
 ```
 
-Backend 엔드포인트는 tenant-scoped 입니다. 로컬 seed tenant는 `/api/tenant-default/...` 를 사용하며, frontend tenant 라우팅은 후속 단계입니다.
+백엔드 엔드포인트는 테넌트 범위로 동작합니다. 로컬 seed tenant는 `/api/tenant-default/...` 를 사용하며, 프런트엔드 테넌트 라우팅은 후속 단계입니다.
 
 ## 빌드 & 테스트
 
@@ -78,8 +78,8 @@ Backend 엔드포인트는 tenant-scoped 입니다. 로컬 seed tenant는 `/api/
 ### 사전 준비
 
 - JDK 25
-- Docker (Testcontainers - 테스트 시 자동 기동)
-- Node.js 22+ (frontend 빌드 시만 필요)
+- Docker (Testcontainers가 테스트 시 의존 서비스를 자동으로 기동)
+- Node.js 22+ (프런트엔드 빌드 시만 필요)
 
 ## 문서
 

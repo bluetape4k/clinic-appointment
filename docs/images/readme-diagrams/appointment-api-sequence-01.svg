@@ -1,101 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="790" viewBox="0 0 1080 790">
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1080" viewBox="0 0 2400 1080" role="img" aria-label="API Sequence: Appointment Write Path">
 <defs>
-  <filter id="sh"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#1f2937" flood-opacity="0.10"/></filter>
-  <marker id="arr" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M0.5 0.5 L4.5 2.5 L0.5 4.5 Z" fill="#758297"/>
-  </marker>
-  <marker id="arr-g" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M0.5 0.5 L4.5 2.5 L0.5 4.5 Z" fill="#58A978"/>
-  </marker>
-  <marker id="arr-p" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M0.5 0.5 L4.5 2.5 L0.5 4.5 Z" fill="#8A72D6"/>
-  </marker>
-  <marker id="arr-k" markerWidth="5" markerHeight="5" refX="4.5" refY="2.5" orient="auto" markerUnits="strokeWidth">
-    <path d="M0.5 0.5 L4.5 2.5 L0.5 4.5 Z" fill="#DC6B82"/>
-  </marker>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#27415f" flood-opacity="0.12"/></filter>
+  <marker id="arrow-blue" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#4f77c9" stroke="#4f77c9"/></marker>
+<marker id="arrow-cyan" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#4aa6b5" stroke="#4aa6b5"/></marker>
+<marker id="arrow-green" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#3c987e" stroke="#3c987e"/></marker>
+<marker id="arrow-amber" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d28a28" stroke="#d28a28"/></marker>
+<marker id="arrow-orange" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d9823b" stroke="#d9823b"/></marker>
+<marker id="arrow-pink" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d85f8d" stroke="#d85f8d"/></marker>
+<marker id="arrow-purple" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#8a65d8" stroke="#8a65d8"/></marker>
+<marker id="arrow-red" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#ca5f66" stroke="#ca5f66"/></marker>
+<marker id="arrow-slate" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#718096" stroke="#718096"/></marker>
   <style>
-    text { font-family: "Comic Mono","Courier New",monospace; }
-    .title { font-family: "Architects Daughter","Comic Sans MS",cursive; font-size:38px; fill:#102033; }
-    .sub   { font-family: "Comic Mono","Courier New",monospace; font-size:12px; fill:#536273; }
-    .hdr   { font-family: "Comic Mono","Courier New",monospace; font-size:11px; }
-    .msg   { font-family: "Comic Mono","Courier New",monospace; font-size:10px; fill:#536273; }
+    svg{font-family:"Comic Mono","Comic Sans MS",ui-sans-serif,system-ui,sans-serif}
+    .canvas{fill:#f6f9fc}.frame{fill:#ffffff;stroke:#c4d5e8;stroke-width:3;filter:url(#shadow)}
+    .title,.panel-title,.card-title,.state-title{font-family:"Architects Daughter","Comic Sans MS",cursive;fill:#263a57}
+    .title{font-size:46px}.subtitle{font-size:17px;fill:#526276}.panel-title{font-size:27px}.card-title{font-size:24px}.state-title{font-size:22px}
+    .detail,.small,.pill-text,.route-label,.footer{font-family:"Comic Mono","Comic Sans MS",ui-sans-serif,system-ui,sans-serif;fill:#526276}
+    .detail{font-size:14px}.small{font-size:12px}.pill-text{font-size:13px}.route-label{font-size:13px}.footer{font-size:14px}
+    .panel{stroke-width:2}.card{stroke-width:2.4;filter:url(#shadow)}.pill{stroke-width:1.8}.route{fill:none;stroke-linecap:round;stroke-linejoin:round}
+    .lifeline{stroke:#b7c8dc;stroke-width:2;stroke-dasharray:8 8}.message{fill:none;stroke-width:3;stroke-linecap:round}.note{fill:#fffdf7;stroke:#d7b970;stroke-width:2}
+    .table{stroke-width:2.2;filter:url(#shadow)}.table-head{font-family:"Architects Daughter";font-size:21px;fill:#263a57}.row{font-size:12.5px;fill:#526276}
   </style>
 </defs>
-<rect width="1080" height="790" fill="#F7F9FC"/>
-<rect x="24" y="20" width="1032" height="750" rx="20" fill="#FFFFFF" stroke="#D0D8E4" stroke-width="1.5"/>
-<text class="title" x="56" y="72">Appointment Creation Flow</text>
-<text class="sub" x="60" y="96">POST /api/{tenantCode}/appointments · JWT auth · Exposed transaction · Event publish</text>
-<rect x="41" y="112" width="78" height="40" rx="7" fill="#F1ECFF" stroke="#8A72D6" stroke-width="2" filter="url(#sh)"/>
-<text class="hdr" x="80" y="135" text-anchor="middle" dominant-baseline="middle" fill="#2A1A5C">Frontend</text>
-<line x1="80" y1="156" x2="80" y2="760" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
-<rect x="154.5" y="112" width="123" height="40" rx="7" fill="#EAF7EF" stroke="#58A978" stroke-width="2" filter="url(#sh)"/>
-<text class="hdr" x="216" y="135" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26">SecurityFilter</text>
-<line x1="216" y1="156" x2="216" y2="760" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
-<rect x="280.25" y="112" width="175.5" height="40" rx="7" fill="#EAF7EF" stroke="#58A978" stroke-width="2" filter="url(#sh)"/>
-<text class="hdr" x="368" y="135" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26">AppointmentController</text>
-<line x1="368" y1="156" x2="368" y2="760" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
-<rect x="447.5" y="112" width="153" height="40" rx="7" fill="#E9F7F6" stroke="#45A7A1" stroke-width="2" filter="url(#sh)"/>
-<text class="hdr" x="524" y="135" text-anchor="middle" dominant-baseline="middle" fill="#0E3533">AppointmentService</text>
-<line x1="524" y1="156" x2="524" y2="760" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
-<rect x="592.25" y="112" width="175.5" height="40" rx="7" fill="#E9F7F6" stroke="#45A7A1" stroke-width="2" filter="url(#sh)"/>
-<text class="hdr" x="680" y="135" text-anchor="middle" dominant-baseline="middle" fill="#0E3533">AppointmentRepository</text>
-<line x1="680" y1="156" x2="680" y2="760" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
-<rect x="774.5" y="112" width="123" height="40" rx="7" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="2" filter="url(#sh)"/>
-<text class="hdr" x="836" y="135" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C">EventPublisher</text>
-<line x1="836" y1="156" x2="836" y2="760" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
-<rect x="943.5" y="112" width="93" height="40" rx="7" fill="#F2F5F9" stroke="#9AA8B8" stroke-width="2" filter="url(#sh)"/>
-<text class="hdr" x="990" y="135" text-anchor="middle" dominant-baseline="middle" fill="#2A3340">PostgreSQL</text>
-<line x1="990" y1="156" x2="990" y2="760" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
-<path d="M80 182 L216 182" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#arr-p)"/>
-<rect x="102.48" y="164" width="227" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="105.48" y="175">POST /api/{tenantCode}/appointments</text>
-<rect x="50" y="218" width="980" height="96" rx="5" fill="#EAF7EF" stroke="#58A978" stroke-width="1" opacity="0.2"/>
-<rect x="50" y="218" width="40" height="16" rx="3" fill="#58A978" opacity="0.65"/>
-<text class="msg" x="70" y="228" text-anchor="middle" dominant-baseline="middle" fill="white">alt</text>
-<path d="M216 228 L80 228" stroke="#9AA8B8" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-k)"/>
-<rect x="102.48" y="210" width="196" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="105.48" y="221">401 Unauthorized (invalid JWT)</text>
-<path d="M216 274 L368 274" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#arr-g)"/>
-<rect x="241.36" y="256" width="295.2" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="244.36" y="267">SchedulingUserPrincipal (tenantCode validated)</text>
-<path d="M368 320 L524 320" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#arr)"/>
-<rect x="394.08" y="302" width="276.6" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="397.08" y="313">validateAndCreate(CreateAppointmentRequest)</text>
-<path d="M524 366 L680 366" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#arr)"/>
-<rect x="550.08" y="348" width="313.8" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="553.08" y="359">findSlotConflicts(clinicId, doctorId, date, time)</text>
-<path d="M680 412 L990 412" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#arr)"/>
-<rect x="733.8" y="394" width="301.40000000000003" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="736.8" y="405">SELECT appointments WHERE doctor + date overlap</text>
-<path d="M990 458 L680 458" stroke="#9AA8B8" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#arr)"/>
-<rect x="733.8" y="440" width="233.20000000000002" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="736.8" y="451">conflicting: List&lt;AppointmentRecord&gt;</text>
-<rect x="50" y="494" width="980" height="96" rx="5" fill="#FDECEF" stroke="#DC6B82" stroke-width="1" opacity="0.2"/>
-<rect x="50" y="494" width="40" height="16" rx="3" fill="#DC6B82" opacity="0.65"/>
-<text class="msg" x="70" y="504" text-anchor="middle" dominant-baseline="middle" fill="white">alt</text>
-<path d="M680 504 L524 504" stroke="#9AA8B8" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-k)"/>
-<rect x="550.08" y="486" width="258" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="553.08" y="497">ConflictDetectedException (409 Conflict)</text>
-<path d="M680 550 L524 550" stroke="#9AA8B8" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-g)"/>
-<rect x="550.08" y="532" width="109.2" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="553.08" y="543">OK (no conflict)</text>
-<path d="M524 596 L680 596" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#arr)"/>
-<rect x="550.08" y="578" width="152.6" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="553.08" y="589">save(AppointmentRecord)</text>
-<path d="M680 642 L990 642" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#arr)"/>
-<rect x="733.8" y="624" width="196" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="736.8" y="635">INSERT scheduling_appointments</text>
-<path d="M990 688 L680 688" stroke="#9AA8B8" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#arr)"/>
-<rect x="733.8" y="670" width="183.6" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="736.8" y="681">id: Long (new appointmentId)</text>
-<path d="M524 734 L836 734" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#arr)"/>
-<rect x="578.16" y="716" width="282.8" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="581.16" y="727">publishEvent(AppointmentDomainEvent.Created)</text>
-<path d="M836 780 L368 780" stroke="#9AA8B8" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-g)"/>
-<rect x="450.24" y="762" width="326.2" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="453.24" y="773">AppointmentResponse(id, status=REQUESTED, timezone)</text>
-<path d="M368 826 L80 826" stroke="#9AA8B8" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#arr-g)"/>
-<rect x="129.84" y="808" width="344.8" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
-<text class="msg" x="132.84" y="819">201 Created {id, appointmentDate, startTime, timezone}</text>
-<text class="msg" x="540" y="774" text-anchor="middle">appointment-api · github.com/bluetape4k/clinic-appointment</text>
+<rect class="canvas" width="2400" height="1080"/>
+<rect class="frame" x="48" y="42" width="2304" height="996" rx="34"/>
+<text class="title" x="1200" y="104" text-anchor="middle">API Sequence: Appointment Write Path</text>
+<text class="subtitle" x="1200" y="138" text-anchor="middle">Tenant authorization, state validation, transactional persistence, and event publication.</text>
+<rect class="card" x="80" y="210" width="220" height="74" rx="12" fill="#eefbff" stroke="#4aa6b5"/><text class="card-title" x="190" y="256" text-anchor="middle">Client</text><path class="lifeline" d="M190 285 L190 910"/><rect class="card" x="360" y="210" width="240" height="74" rx="12" fill="#f5f0ff" stroke="#8a65d8"/><text class="card-title" x="480" y="256" text-anchor="middle">Tenant / JWT</text><path class="lifeline" d="M480 285 L480 910"/><rect class="card" x="665" y="210" width="230" height="74" rx="12" fill="#eef5ff" stroke="#4f77c9"/><text class="card-title" x="780" y="256" text-anchor="middle">Controller</text><path class="lifeline" d="M780 285 L780 910"/><rect class="card" x="945" y="210" width="330" height="74" rx="12" fill="#edf8f4" stroke="#3c987e"/><text class="card-title" x="1110" y="256" text-anchor="middle">AppointmentService</text><path class="lifeline" d="M1110 285 L1110 910"/><rect class="card" x="1325" y="210" width="270" height="74" rx="12" fill="#fff7e8" stroke="#d28a28"/><text class="card-title" x="1460" y="256" text-anchor="middle">StateMachine</text><path class="lifeline" d="M1460 285 L1460 910"/><rect class="card" x="1615" y="210" width="290" height="74" rx="12" fill="#eef8f4" stroke="#3c987e"/><text class="card-title" x="1760" y="256" text-anchor="middle">Repository / DB</text><path class="lifeline" d="M1760 285 L1760 910"/><rect class="card" x="1915" y="210" width="300" height="74" rx="12" fill="#fff4ea" stroke="#d9823b"/><text class="card-title" x="2065" y="256" text-anchor="middle">EventPublisher</text><path class="lifeline" d="M2065 285 L2065 910"/><rect x="473" y="342" width="14" height="88" rx="6" fill="#fff" stroke="#8a65d8" stroke-width="2"/><rect x="773" y="402" width="14" height="98" rx="6" fill="#fff" stroke="#4f77c9" stroke-width="2"/><rect x="1103" y="462" width="14" height="328" rx="6" fill="#fff" stroke="#3c987e" stroke-width="2"/><rect x="1453" y="522" width="14" height="43" rx="6" fill="#fff" stroke="#d28a28" stroke-width="2"/><rect x="1753" y="598" width="14" height="42" rx="6" fill="#fff" stroke="#3c987e" stroke-width="2"/><rect x="2058" y="672" width="14" height="43" rx="6" fill="#fff" stroke="#d9823b" stroke-width="2"/><g><rect class="pill" x="208" y="312" width="254" height="30" rx="9" fill="#fff" stroke="#cfe0f1"/><circle cx="232" cy="327" r="13" fill="#8a65d8"/><text class="route-label" x="232" y="331" text-anchor="middle" fill="#fff">1</text><text class="route-label" x="353" y="331" text-anchor="middle">Bearer token + tenantCode</text></g><path class="route" d="M190 345 L466 345" stroke="#8a65d8" stroke-width="3.1" marker-end="url(#arrow-purple)"/><g><rect class="pill" x="518.4" y="372" width="223.20000000000002" height="30" rx="9" fill="#fff" stroke="#cfe0f1"/><circle cx="542.4" cy="387" r="13" fill="#4f77c9"/><text class="route-label" x="542.4" y="391" text-anchor="middle" fill="#fff">2</text><text class="route-label" x="648" y="391" text-anchor="middle">authorized request</text></g><path class="route" d="M480 405 L766 405" stroke="#4f77c9" stroke-width="3.1" marker-end="url(#arrow-blue)"/><g><rect class="pill" x="798" y="432" width="294" height="30" rx="9" fill="#fff" stroke="#cfe0f1"/><circle cx="822" cy="447" r="13" fill="#3c987e"/><text class="route-label" x="822" y="451" text-anchor="middle" fill="#fff">3</text><text class="route-label" x="963" y="451" text-anchor="middle">create/update/cancel use case</text></g><path class="route" d="M780 465 L1096 465" stroke="#3c987e" stroke-width="3.1" marker-end="url(#arrow-green)"/><g><rect class="pill" x="1169.2" y="492" width="231.6" height="30" rx="9" fill="#fff" stroke="#cfe0f1"/><circle cx="1193.2" cy="507" r="13" fill="#d28a28"/><text class="route-label" x="1193.2" y="511" text-anchor="middle" fill="#fff">4</text><text class="route-label" x="1303" y="511" text-anchor="middle">validate transition</text></g><path class="route" d="M1110 525 L1446 525" stroke="#d28a28" stroke-width="3.1" marker-end="url(#arrow-amber)"/><g><rect class="pill" x="1289.8" y="567" width="290.4" height="30" rx="9" fill="#fff" stroke="#cfe0f1"/><circle cx="1313.8" cy="582" r="13" fill="#3c987e"/><text class="route-label" x="1313.8" y="586" text-anchor="middle" fill="#fff">5</text><text class="route-label" x="1453" y="586" text-anchor="middle">transaction save + history</text></g><path class="route" d="M1110 600 L1746 600" stroke="#3c987e" stroke-width="3.1" marker-end="url(#arrow-green)"/><g><rect class="pill" x="1467.5" y="642" width="240" height="30" rx="9" fill="#fff" stroke="#cfe0f1"/><circle cx="1491.5" cy="657" r="13" fill="#d9823b"/><text class="route-label" x="1491.5" y="661" text-anchor="middle" fill="#fff">6</text><text class="route-label" x="1605.5" y="661" text-anchor="middle">publish domain event</text></g><path class="route" d="M1110 675 L2051 675" stroke="#d9823b" stroke-width="3.1" marker-end="url(#arrow-orange)"/><g><rect class="pill" x="479.6" y="752" width="340.8" height="30" rx="9" fill="#fff" stroke="#cfe0f1"/><circle cx="503.6" cy="767" r="13" fill="#4aa6b5"/><text class="route-label" x="503.6" y="771" text-anchor="middle" fill="#fff">7</text><text class="route-label" x="668" y="771" text-anchor="middle">ApiResponse with timezone/locale</text></g><path class="route" d="M1110 785 L204 785" stroke="#4aa6b5" stroke-width="3.1" stroke-dasharray="9 7" marker-end="url(#arrow-cyan)"/><rect class="note" x="300" y="965" width="1800" height="58" rx="16"/><text class="footer" x="1200" y="1001" text-anchor="middle">Sequence uses best-practice participant headers, dashed lifelines, numbered message pills, visible arrowheads, and labels that do not touch message lines.</text>
 </svg>

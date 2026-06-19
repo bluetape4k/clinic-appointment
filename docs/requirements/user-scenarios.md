@@ -119,7 +119,7 @@ sequenceDiagram
 
     API->>Solver: SolverService.solve(clinicId, appointmentIds, dateRange)
     Solver->>DB: Problem Facts 로드 (의사·스케줄·장비 등)
-    Solver->>Solver: Timefold 최적화<br/>(H1~H11 Hard + S1~S2 Soft)
+    Solver->>Solver: Timefold 최적화<br/>(H1~H12 Hard + S1~S6 Soft)
     Solver-->>API: SolverResult (appointmentId → Assignment)
 
     loop 각 재배정 예약

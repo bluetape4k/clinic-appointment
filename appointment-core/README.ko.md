@@ -92,13 +92,13 @@ val newState = machine.transition(
 
 ## 주요 엔티티 관계도
 
-![appointment core Entity Relationship diagram](../docs/images/readme-diagrams/appointment-core-erd-01.png)
+![예약 도메인 엔티티 관계도](../docs/images/readme-diagrams/appointment-core-erd-01.png)
 
 → 전체 ERD: [erd.md](../docs/requirements/erd.md)
 
 ## 예약 상태머신
 
-![appointment core Architecture 2 diagram](../docs/images/readme-diagrams/appointment-core-architecture-02.png)
+![예약 상태머신 다이어그램](../docs/images/readme-diagrams/appointment-core-architecture-02.png)
 
 → 상태 전이 전체 목록: [domain-model.md](../docs/requirements/domain-model.md#상태-전이도)
 
