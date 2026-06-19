@@ -12,7 +12,6 @@ import { spawnSync } from "node:child_process";
 
 const root = path.resolve(import.meta.dirname ?? process.cwd(), "..");
 const outDir = path.join(root, "docs/images/readme-diagrams");
-const assetsDir = path.join(root, "docs/assets/readme-diagrams");
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -76,18 +75,6 @@ function saveDot(slug, dotContent, dir = outDir) {
   return true;
 }
 
-/** Save to assetsDir AND copy to outDir (for root diagrams). */
-function saveDotRoot(slug, dotContent) {
-  const ok = saveDot(slug, dotContent, assetsDir);
-  if (ok) {
-    for (const ext of ["svg", "png"]) {
-      const src = path.join(assetsDir, `${slug}.${ext}`);
-      if (fs.existsSync(src))
-        fs.copyFileSync(src, path.join(outDir, `${slug}.${ext}`));
-    }
-  }
-}
-
 // ─── Common DOT preamble ──────────────────────────────────────────────────────
 const GRAPH = `bgcolor="#F7F9FC" pad=0.8 nodesep=0.85 ranksep=1.1 fontname="Helvetica Neue" fontsize=12`;
 const NODES = `node [style="filled,rounded" shape=box fontname="Helvetica Neue" fontsize=11 margin="0.22,0.12" penwidth=2]`;
@@ -146,7 +133,7 @@ function genArchitecture() {
   notif        -> pg           [style=dashed color="#9AA8B8"]
   solver       -> timefold_ai  [style=dashed color="#9AA8B8"]
 }`;
-  saveDotRoot("clinic-appointment-architecture-01", dot);
+  saveDot("clinic-appointment-architecture-01", dot);
 }
 
 // ─── 2. Module Overview ───────────────────────────────────────────────────────
@@ -174,7 +161,7 @@ function genModuleOverview() {
   api    -> notif  [color="#DC6B82"]
   fe     -> api    [label="HTTP REST" style=dashed color="#8A72D6"]
 }`;
-  saveDotRoot("root-readme-overview-01", dot);
+  saveDot("root-readme-overview-01", dot);
 }
 
 // ─── 3. Core ERD ──────────────────────────────────────────────────────────────
@@ -600,7 +587,6 @@ const modFilter = args.indexOf("--module") >= 0 ? args[args.indexOf("--module") 
 const go = (name, fn) => { if (!modFilter || modFilter === name) fn(); };
 
 fs.mkdirSync(outDir,    { recursive: true });
-fs.mkdirSync(assetsDir, { recursive: true });
 
 console.log("clinic-appointment diagram generator (Graphviz)");
 console.log(`Output: ${outDir}`);
