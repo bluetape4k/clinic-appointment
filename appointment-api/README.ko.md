@@ -37,7 +37,7 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 
 ## 예약 생성 요청 흐름
 
-![appointment api Sequence Flow diagram](../docs/images/readme-diagrams/appointment-api-sequence-01.png)
+![예약 API 쓰기 경로 시퀀스 다이어그램](../docs/images/readme-diagrams/appointment-api-sequence-01.png)
 
 → 전체 데이터 흐름: [data-flow.md](../docs/requirements/data-flow.md)
 

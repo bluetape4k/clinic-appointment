@@ -37,7 +37,7 @@ Use `tenant-default` for the local seed tenant. JWTs must include the requested 
 
 ## Appointment Creation Flow
 
-![Appointment Creation Flow diagram](../docs/images/readme-diagrams/appointment-api-sequence-01.png)
+![Appointment API write path sequence diagram](../docs/images/readme-diagrams/appointment-api-sequence-01.png)
 
 Full data flow: [data-flow.md](../docs/requirements/data-flow.md)
 

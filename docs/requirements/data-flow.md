@@ -58,7 +58,7 @@ flowchart TD
     subgraph Solver["Timefold Solver (선택적)"]
         direction TB
         LOAD["DB 데이터 로드\n(SolutionConverter)"] --> PLAN["ScheduleSolution 구성\n(Planning Variables)"]
-        PLAN --> OPT["제약 최적화\n(H1~H11, S1~S2)"]
+        PLAN --> OPT["제약 최적화\n(H1~H12, S1~S6)"]
         OPT --> RESULT["Assignment Map 반환"]
     end
 

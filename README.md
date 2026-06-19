@@ -23,7 +23,7 @@ notifications, Spring Boot APIs, and an Angular frontend.
 ## Key Features
 
 - **Appointment state machine** - Supports PENDING -> REQUESTED -> CONFIRMED -> CHECKED_IN -> IN_PROGRESS -> COMPLETED transitions, cancellation, and reassignment.
-- **AI schedule optimization** - Uses Timefold Solver to assign appointments while satisfying doctor, equipment, business-hour, 10 hard, and 2 soft constraints.
+- **AI schedule optimization** - Uses Timefold Solver to assign appointments while satisfying doctor, equipment, business-hour, 12 hard, and 6 soft constraints.
 - **High-availability notifications** - Uses Redis Leader Election to guarantee single-node delivery, with Resilience4j CircuitBreaker/Retry/Bulkhead.
 - **Tenant-scoped REST API** - Provides Spring Boot 4 MVC APIs under `/api/{tenantCode}/...` with JWT tenant authorization, Flyway migrations, and Swagger UI.
 - **Angular 18 web UI** - Provides appointment search, creation, and status-change workflows.
@@ -42,7 +42,7 @@ notifications, Spring Boot APIs, and an Angular frontend.
 |------|------|-----------|
 | `appointment-core` | Domain model with 16 entities, Exposed ORM tables, repositories, appointment state machine, and slot calculation services. | [README](appointment-core/README.md) |
 | `appointment-event` | Domain event publishing/subscription and event log persistence based on Spring ApplicationEvent. | [README](appointment-event/README.md) |
-| `appointment-solver` | Timefold Solver AI optimization for bulk appointment placement using 10 hard and 2 soft constraints. | [README](appointment-solver/README.md) |
+| `appointment-solver` | Timefold Solver AI optimization for bulk appointment placement using 12 hard and 6 soft constraints. | [README](appointment-solver/README.md) |
 | `appointment-notification` | HA notification scheduler and reminder delivery using Redis Leader Election and Resilience4j. | [README](appointment-notification/README.md) |
 | `appointment-api` | Spring Boot 4 REST API for appointment CRUD, slot lookup, reassignment, JWT authentication, and Swagger. | [README](appointment-api/README.md) |
 | `frontend/appointment-frontend` | Angular 18 web UI for appointment management. | [README](frontend/appointment-frontend/README.md) |

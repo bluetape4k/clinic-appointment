@@ -3,7 +3,7 @@
 [English](README.md) | [한국어](README.ko.md)
 
 Timefold Solver based AI appointment scheduler.
-It optimizes bulk appointment placement across the global schedule while satisfying 11 hard constraints and 2 soft constraints.
+It optimizes bulk appointment placement across the global schedule while satisfying 12 hard constraints and 6 soft constraints.
 
 ## Responsibilities
 
@@ -12,24 +12,29 @@ It optimizes bulk appointment placement across the global schedule while satisfy
 
 ## Constraint Summary
 
-Hard constraints (11):
+Hard constraints (12):
 
 - business hours
 - doctor schedule
 - doctor absence
-- day-of-week rest
+- configured break time
 - default break time
 - temporary clinic closure
 - holiday
 - concurrent patient capacity
 - equipment availability
 - treatment-type and doctor matching
+- doctor clinic membership
 - equipment unavailability windows
 
-Soft constraints (2):
+Soft constraints (6):
 
 - doctor load balancing, weight 100
 - schedule gap minimization, weight 10
+- original doctor preference
+- early slot preference
+- equipment utilization preference
+- requested date preference
 
 Full details: [solver.md](../docs/requirements/solver.md)
 
@@ -42,12 +47,12 @@ Full details: [solver.md](../docs/requirements/solver.md)
 | `SolverService` | Entry point; loads data from the database, runs SolverConfig, and returns the result. |
 | `SolverConfig` | Timefold SolverFactory configuration, including termination and move filters. |
 | `SolutionConverter` | Converts between DB records and the planning domain. |
-| `AppointmentConstraintProvider` | Registers all constraints, H1-H11 and S1-S2. |
+| `AppointmentConstraintProvider` | Registers all constraints, H1-H12 and S1-S6. |
 | `EquipmentUnavailabilityFact` | Problem fact for equipment unavailability windows used by H11. |
 
 ## Solver Data Flow
 
-![Solver Data Flow diagram](../docs/images/readme-diagrams/appointment-solver-architecture-01.png)
+![Solver data flow diagram](../docs/images/readme-diagrams/appointment-solver-architecture-01.png)
 
 Full flow: [data-flow.md](../docs/requirements/data-flow.md#6-solver-데이터-흐름)
 
