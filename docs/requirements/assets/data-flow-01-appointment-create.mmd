@@ -1,0 +1,17 @@
+flowchart TD
+    FE["Angular Frontend"] -->|"POST /api/appointments"| API["AppointmentController"]
+    API -->|"JWT 검증"| SEC["JwtAuthenticationFilter"]
+    SEC --> API
+    API -->|"SlotCalculationService.isAvailable()"| SLOT["슬롯 가용성 검증"]
+    SLOT -->|"영업시간 / 의사 스케줄 / 기존 예약 충돌 확인"| CORE["appointment-core"]
+    CORE --> DB[("PostgreSQL")]
+    API -->|"AppointmentRepository.save()"| DB
+    API -->|"publishEvent(Created)"| EVT["AppointmentEventPublisher"]
+    EVT -->|"@EventListener"| LOG["AppointmentEventLogger → DB"]
+    EVT -->|"@EventListener"| NOTIF["NotificationEventListener"]
+    NOTIF -->|"DummyNotificationChannel"| HIST["NotificationHistory → DB"]
+
+    style FE fill:#4A90D9,color:#fff
+    style API fill:#7B68EE,color:#fff
+    style DB fill:#336791,color:#fff
+    style EVT fill:#E8A838,color:#fff

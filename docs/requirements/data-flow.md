@@ -22,6 +22,10 @@ flowchart TD
     style EVT fill:#E8A838,color:#fff
 ```
 
+![Appointment creation data flow](assets/data-flow-01-appointment-create.png)
+
+[SVG](assets/data-flow-01-appointment-create.svg) · [Mermaid source](assets/data-flow-01-appointment-create.mmd)
+
 ## 2. 슬롯 조회 흐름
 
 ```mermaid
@@ -44,6 +48,10 @@ flowchart LR
     style FE fill:#4A90D9,color:#fff
     style CALC fill:#27AE60,color:#fff
 ```
+
+![Slot query data flow](assets/data-flow-02-slot-query.png)
+
+[SVG](assets/data-flow-02-slot-query.svg) · [Mermaid source](assets/data-flow-02-slot-query.mmd)
 
 ## 3. 임시휴진 재배정 흐름
 
@@ -78,6 +86,10 @@ flowchart TD
     style Greedy fill:#27AE60,color:#fff,stroke:#1E8449
 ```
 
+![Closure reschedule data flow](assets/data-flow-03-closure-reschedule.png)
+
+[SVG](assets/data-flow-03-closure-reschedule.svg) · [Mermaid source](assets/data-flow-03-closure-reschedule.mmd)
+
 ## 4. 장비 사용불가 등록 흐름
 
 ```mermaid
@@ -98,6 +110,10 @@ flowchart TD
     style CONFLICT fill:#F39C12,color:#fff
     style ERR fill:#C0392B,color:#fff
 ```
+
+![Equipment unavailability data flow](assets/data-flow-04-equipment-unavailability.png)
+
+[SVG](assets/data-flow-04-equipment-unavailability.svg) · [Mermaid source](assets/data-flow-04-equipment-unavailability.mmd)
 
 ## 5. 알림 이벤트 흐름
 
@@ -122,6 +138,10 @@ flowchart LR
     style PUB fill:#E8A838,color:#fff
     style HA fill:#16A085,color:#fff,stroke:#0E6655
 ```
+
+![Notification event data flow](assets/data-flow-05-notification-events.png)
+
+[SVG](assets/data-flow-05-notification-events.svg) · [Mermaid source](assets/data-flow-05-notification-events.mmd)
 
 ## 6. Solver 데이터 흐름
 
@@ -156,3 +176,7 @@ flowchart TD
     style Planning fill:#8E44AD,color:#fff,stroke:#6C3483
     style SOLVE fill:#D35400,color:#fff
 ```
+
+![Solver data flow](assets/data-flow-06-solver-data.png)
+
+[SVG](assets/data-flow-06-solver-data.svg) · [Mermaid source](assets/data-flow-06-solver-data.mmd)

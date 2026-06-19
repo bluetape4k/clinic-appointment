@@ -1,0 +1,16 @@
+flowchart TD
+    ADMIN["관리자"] -->|"POST /api/equipment-unavailability"| API["EquipmentUnavailabilityController"]
+    API --> SVC["EquipmentUnavailabilityService"]
+
+    SVC -->|"findOverlapping()"| REPO["EquipmentUnavailabilityRepository"]
+    REPO --> DB[("PostgreSQL")]
+
+    REPO -->|"충돌 기존 기간 반환"| CONFLICT{"충돌 있음?"}
+    CONFLICT -->|"Yes"| ERR["409 Conflict 반환"]
+    CONFLICT -->|"No"| EXPAND["UnavailabilityExpander\n반복 규칙(RRULE) 전개"]
+    EXPAND --> SAVE["DB 저장"]
+    SAVE -->|"EquipmentUnavailabilityResponse"| ADMIN
+
+    style ADMIN fill:#E74C3C,color:#fff
+    style CONFLICT fill:#F39C12,color:#fff
+    style ERR fill:#C0392B,color:#fff

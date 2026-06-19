@@ -49,6 +49,10 @@ sequenceDiagram
     Frontend-->>Patient: 예약 완료 확인
 ```
 
+![Patient booking sequence](assets/user-scenarios-01-patient-booking.png)
+
+[SVG](assets/user-scenarios-01-patient-booking.svg) · [Mermaid source](assets/user-scenarios-01-patient-booking.mmd)
+
 ---
 
 ## S2. 예약 확정 → 체크인 → 진료 완료
@@ -94,6 +98,10 @@ sequenceDiagram
     API-->>Frontend: 200 OK
 ```
 
+![Appointment status lifecycle sequence](assets/user-scenarios-02-status-lifecycle.png)
+
+[SVG](assets/user-scenarios-02-status-lifecycle.svg) · [Mermaid source](assets/user-scenarios-02-status-lifecycle.mmd)
+
 ---
 
 ## S3. 임시휴진 재배정 (Solver 활용)
@@ -134,6 +142,10 @@ sequenceDiagram
     Frontend-->>Admin: 재배정 완료 목록 표시
 ```
 
+![Closure reschedule solver sequence](assets/user-scenarios-03-closure-reschedule-solver.png)
+
+[SVG](assets/user-scenarios-03-closure-reschedule-solver.svg) · [Mermaid source](assets/user-scenarios-03-closure-reschedule-solver.mmd)
+
 ---
 
 ## S4. 장비 사용불가 등록 + 예약 충돌 확인
@@ -167,6 +179,10 @@ sequenceDiagram
     Note over API,Core: 이후 SlotCalculationService가<br/>해당 기간 슬롯 제외
 ```
 
+![Equipment unavailability sequence](assets/user-scenarios-04-equipment-unavailability.png)
+
+[SVG](assets/user-scenarios-04-equipment-unavailability.svg) · [Mermaid source](assets/user-scenarios-04-equipment-unavailability.mmd)
+
 ---
 
 ## S5. HA 알림 리마인더 발송 (스케줄러)
@@ -195,3 +211,7 @@ sequenceDiagram
         Scheduler->>Scheduler: SKIP (중복 발송 방지)
     end
 ```
+
+![HA reminder sequence](assets/user-scenarios-05-ha-reminder.png)
+
+[SVG](assets/user-scenarios-05-ha-reminder.svg) · [Mermaid source](assets/user-scenarios-05-ha-reminder.mmd)

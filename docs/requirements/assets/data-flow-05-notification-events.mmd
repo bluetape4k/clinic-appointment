@@ -1,0 +1,19 @@
+flowchart LR
+    APT["예약 상태 변경\n(CRUD 완료 후)"] -->|"publishEvent()"| PUB["ApplicationEventPublisher\n(Spring)"]
+
+    PUB -->|"@EventListener"| LOG["AppointmentEventLogger\n→ AppointmentEventLogs 테이블"]
+    PUB -->|"@EventListener"| NOTIF["NotificationEventListener"]
+
+    NOTIF --> CB["CircuitBreaker\n(Resilience4j)"]
+    CB --> RETRY["Retry (3회)"]
+    RETRY --> BH["Bulkhead (동시 10)"]
+    BH --> CH["DummyNotificationChannel\n로그 + 이력 저장"]
+
+    subgraph HA["HA 리마인더 스케줄러 (1h)"]
+        LEADER{"Redis Leader?"}
+        LEADER -->|"Yes"| REMIND["내일/오늘 CONFIRMED\n예약 리마인더 발송"]
+        LEADER -->|"No (다른 노드)"| SKIP["SKIP"]
+    end
+
+    style PUB fill:#E8A838,color:#fff
+    style HA fill:#16A085,color:#fff,stroke:#0E6655

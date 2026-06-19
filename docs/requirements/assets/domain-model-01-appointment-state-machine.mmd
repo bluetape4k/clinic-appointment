@@ -1,0 +1,27 @@
+stateDiagram-v2
+    [*] --> PENDING : 가예약 생성
+    PENDING --> REQUESTED : Request
+    PENDING --> CANCELLED : Cancel
+
+    REQUESTED --> CONFIRMED : Confirm
+    REQUESTED --> PENDING_RESCHEDULE : RequestReschedule
+    REQUESTED --> CANCELLED : Cancel
+
+    CONFIRMED --> CHECKED_IN : CheckIn
+    CONFIRMED --> NO_SHOW : MarkNoShow
+    CONFIRMED --> PENDING_RESCHEDULE : RequestReschedule
+    CONFIRMED --> PENDING : Reschedule
+    CONFIRMED --> CANCELLED : Cancel
+
+    CHECKED_IN --> IN_PROGRESS : StartTreatment
+    CHECKED_IN --> CANCELLED : Cancel
+
+    IN_PROGRESS --> COMPLETED : Complete
+
+    PENDING_RESCHEDULE --> RESCHEDULED : ConfirmReschedule
+    PENDING_RESCHEDULE --> CANCELLED : Cancel
+
+    COMPLETED --> [*]
+    RESCHEDULED --> [*]
+    CANCELLED --> [*]
+    NO_SHOW --> [*]

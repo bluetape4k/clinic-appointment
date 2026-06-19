@@ -1,0 +1,26 @@
+{
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Comic Mono, Architects Daughter, Comic Sans MS, ui-sans-serif, sans-serif",
+    "primaryTextColor": "#263a57",
+    "lineColor": "#526276",
+    "primaryBorderColor": "#8ca7c4",
+    "noteBkgColor": "#fffaf0",
+    "noteTextColor": "#263a57",
+    "actorBkg": "#ffffff",
+    "actorBorder": "#4f77c9",
+    "actorTextColor": "#263a57"
+  },
+  "flowchart": {
+    "curve": "basis",
+    "htmlLabels": true
+  },
+  "sequence": {
+    "mirrorActors": false,
+    "showSequenceNumbers": false,
+    "wrap": true
+  },
+  "er": {
+    "useMaxWidth": true
+  }
+}

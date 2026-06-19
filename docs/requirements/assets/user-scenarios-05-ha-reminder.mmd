@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant Scheduler as AppointmentReminderScheduler<br/>(1시간마다)
+    participant Redis
+    participant Core
+    participant DB as PostgreSQL
+    participant Channel as DummyNotificationChannel
+
+    Scheduler->>Redis: SETNX leader-lock (bluetape4k-leader)
+    alt 리더 획득 성공
+        Redis-->>Scheduler: OK (이 인스턴스가 리더)
+        Scheduler->>Core: findTomorrowConfirmed() + findTodayConfirmed()
+        Core->>DB: SELECT appointments WHERE status=CONFIRMED AND date IN (tomorrow, today)
+        DB-->>Core: 예약 목록
+        Core-->>Scheduler: List<AppointmentRecord>
+        loop 각 예약
+            Scheduler->>Channel: sendReminder(appointment)
+            Channel->>DB: INSERT notification_history (SUCCESS)
+        end
+    else 리더 획득 실패
+        Redis-->>Scheduler: 다른 인스턴스가 리더
+        Scheduler->>Scheduler: SKIP (중복 발송 방지)
+    end

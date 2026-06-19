@@ -1,0 +1,33 @@
+sequenceDiagram
+    actor Admin
+    participant Frontend
+    participant API
+    participant Core
+    participant Solver
+    participant DB as PostgreSQL
+    participant EventBus
+
+    Admin->>Frontend: 임시휴진 날짜 등록
+    Frontend->>API: POST /api/reschedule/closure {closureDate}
+    API->>Core: ClosureRescheduleService.findAffected(closureDate)
+    Core->>DB: SELECT appointments WHERE date=closureDate AND status IN (REQUESTED, CONFIRMED)
+    DB-->>Core: 영향받는 예약 목록
+
+    Core->>DB: UPDATE status=PENDING_RESCHEDULE (일괄)
+    API->>EventBus: publishEvent(StatusChanged × N)
+
+    API->>Solver: SolverService.solve(clinicId, appointmentIds, dateRange)
+    Solver->>DB: Problem Facts 로드 (의사·스케줄·장비 등)
+    Solver->>Solver: Timefold 최적화<br/>(H1~H12 Hard + S1~S6 Soft)
+    Solver-->>API: SolverResult (appointmentId → Assignment)
+
+    loop 각 재배정 예약
+        API->>Core: AppointmentRepository.save(newAppointment)
+        Core->>DB: INSERT new appointment (status=CONFIRMED)
+        API->>Core: updateStatus(original → RESCHEDULED)
+        Core->>DB: UPDATE original status=RESCHEDULED
+        API->>EventBus: publishEvent(Rescheduled)
+    end
+
+    API-->>Frontend: 재배정 결과 요약
+    Frontend-->>Admin: 재배정 완료 목록 표시
