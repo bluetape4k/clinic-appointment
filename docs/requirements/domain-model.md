@@ -71,6 +71,10 @@ stateDiagram-v2
     NO_SHOW --> [*]
 ```
 
+![Appointment state machine](assets/domain-model-01-appointment-state-machine.png)
+
+[SVG](assets/domain-model-01-appointment-state-machine.svg) · [Mermaid source](assets/domain-model-01-appointment-state-machine.mmd)
+
 ### Solver Pinned 상태
 
 Timefold Solver가 이동할 수 없는 고정 상태:

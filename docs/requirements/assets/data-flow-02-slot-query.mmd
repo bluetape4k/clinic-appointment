@@ -1,0 +1,18 @@
+flowchart LR
+    FE["Frontend"] -->|"GET /api/slots\n?doctorId&date&treatmentTypeId"| API["SlotController"]
+    API --> SVC["SlotCalculationService"]
+
+    SVC --> OH["OperatingHours 조회"]
+    SVC --> DS["DoctorSchedule 조회"]
+    SVC --> DA["DoctorAbsence 확인"]
+    SVC --> BT["BreakTime 확인"]
+    SVC --> CC["ClinicClosure 확인"]
+    SVC --> HOL["Holiday 확인"]
+    SVC --> EQ["EquipmentUnavailability 확인"]
+    SVC --> APT["기존 Appointment 조회\n(동시 환자 수 체크)"]
+
+    OH & DS & DA & BT & CC & HOL & EQ & APT --> CALC["빈 슬롯 목록 계산\n(Greedy)"]
+    CALC -->|"List<SlotResponse>"| FE
+
+    style FE fill:#4A90D9,color:#fff
+    style CALC fill:#27AE60,color:#fff

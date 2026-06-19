@@ -1,0 +1,28 @@
+sequenceDiagram
+    actor Patient
+    participant Frontend
+    participant API
+    participant Core
+    participant DB as PostgreSQL
+    participant EventBus
+    participant Notification
+
+    Patient->>Frontend: 의사/날짜 선택
+    Frontend->>API: GET /api/slots?doctorId&date&treatmentTypeId
+    API->>Core: SlotCalculationService.calculate()
+    Core->>DB: 영업시간·스케줄·기존예약 조회
+    DB-->>Core: 데이터 반환
+    Core-->>API: List<SlotResponse>
+    API-->>Frontend: 가용 슬롯 목록
+
+    Patient->>Frontend: 슬롯 선택 후 예약 확인
+    Frontend->>API: POST /api/appointments (JWT)
+    API->>Core: AppointmentRepository.save()
+    Core->>DB: INSERT appointments (status=REQUESTED)
+    DB-->>Core: 저장 완료
+    Core-->>API: AppointmentRecord
+    API->>EventBus: publishEvent(Created)
+    EventBus->>Notification: NotificationEventListener
+    Notification-->>DB: 알림 이력 저장
+    API-->>Frontend: AppointmentResponse (201 Created)
+    Frontend-->>Patient: 예약 완료 확인

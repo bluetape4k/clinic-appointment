@@ -1,0 +1,26 @@
+sequenceDiagram
+    actor Admin
+    participant Frontend
+    participant API
+    participant Core
+    participant DB as PostgreSQL
+
+    Admin->>Frontend: 장비 사용불가 기간 입력<br/>(recurrenceRule 포함 가능)
+    Frontend->>API: POST /api/equipment-unavailability
+    API->>Core: EquipmentUnavailabilityService.create()
+    Core->>DB: SELECT overlapping unavailabilities
+    DB-->>Core: 기존 기간 목록
+
+    alt 충돌 있음
+        Core-->>API: ConflictException
+        API-->>Frontend: 409 Conflict + 충돌 기간 목록
+        Frontend-->>Admin: 충돌 안내
+    else 충돌 없음
+        Core->>Core: UnavailabilityExpander.expand(RRULE)
+        Core->>DB: INSERT EquipmentUnavailabilities
+        DB-->>Core: 저장 완료
+        API-->>Frontend: 201 Created
+        Frontend-->>Admin: 등록 완료
+    end
+
+    Note over API,Core: 이후 SlotCalculationService가<br/>해당 기간 슬롯 제외

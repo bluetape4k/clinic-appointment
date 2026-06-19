@@ -1,0 +1,29 @@
+flowchart TD
+    API["SolverService.solve()"] --> LOAD["SolutionConverter\nDB → Planning Domain"]
+
+    subgraph Facts["Problem Facts (고정)"]
+        direction LR
+        F1["DoctorFact"] 
+        F2["OperatingHoursFact"]
+        F3["DoctorScheduleFact"]
+        F4["DoctorAbsenceFact"]
+        F5["ClinicClosureFact"]
+        F6["HolidayFact"]
+        F7["EquipmentFact"]
+        F8["EquipmentUnavailabilityFact"]
+    end
+
+    subgraph Planning["Planning Entities (Solver 결정)"]
+        PE["AppointmentPlanning\n- doctorId (변수)\n- appointmentDate (변수)\n- startTime (변수)\n[Pinned if CONFIRMED+]"]
+    end
+
+    LOAD --> Facts
+    LOAD --> Planning
+
+    Facts & Planning --> SOLVE["Timefold Solver\nHard 11개 + Soft 2개"]
+    SOLVE --> RESULT["SolverResult\n(appointmentId → Assignment)"]
+    RESULT --> CALLER["호출자가 DB 저장"]
+
+    style Facts fill:#2980B9,color:#fff,stroke:#1A5276
+    style Planning fill:#8E44AD,color:#fff,stroke:#6C3483
+    style SOLVE fill:#D35400,color:#fff

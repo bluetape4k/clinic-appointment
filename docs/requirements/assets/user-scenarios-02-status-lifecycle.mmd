@@ -1,0 +1,38 @@
+sequenceDiagram
+    actor Staff
+    participant Frontend
+    participant API
+    participant Core
+    participant DB as PostgreSQL
+    participant EventBus
+
+    Staff->>Frontend: 예약 목록 조회
+    Frontend->>API: GET /api/appointments?from=&to=
+    API->>Core: AppointmentRepository.findByDateRange()
+    Core->>DB: SELECT
+    DB-->>API: 예약 목록
+    API-->>Frontend: List<AppointmentResponse>
+
+    Staff->>Frontend: "확정" 버튼 클릭
+    Frontend->>API: PATCH /api/appointments/{id}/status {event: Confirm}
+    API->>Core: StateMachine.transition(REQUESTED → CONFIRMED)
+    Core->>DB: UPDATE status=CONFIRMED
+    API->>EventBus: publishEvent(StatusChanged)
+    API-->>Frontend: 200 OK
+
+    Staff->>Frontend: 환자 내원 확인 → "체크인"
+    Frontend->>API: PATCH /api/appointments/{id}/status {event: CheckIn}
+    API->>Core: StateMachine.transition(CONFIRMED → CHECKED_IN)
+    Core->>DB: UPDATE status=CHECKED_IN
+    API->>EventBus: publishEvent(StatusChanged)
+
+    Staff->>Frontend: 진료 시작
+    Frontend->>API: PATCH /api/appointments/{id}/status {event: StartTreatment}
+    API->>Core: StateMachine.transition(CHECKED_IN → IN_PROGRESS)
+
+    Staff->>Frontend: 진료 완료
+    Frontend->>API: PATCH /api/appointments/{id}/status {event: Complete}
+    API->>Core: StateMachine.transition(IN_PROGRESS → COMPLETED)
+    Core->>DB: UPDATE status=COMPLETED
+    API->>EventBus: publishEvent(StatusChanged)
+    API-->>Frontend: 200 OK

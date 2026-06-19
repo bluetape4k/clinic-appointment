@@ -50,3 +50,17 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 | [erd.md](erd.md) | 전체 테이블 ERD (Mermaid), 관계 요약, 컬럼 타입 규칙 |
 | [data-flow.md](data-flow.md) | 예약 생성·슬롯 조회·재배정·Solver·알림 데이터 흐름 다이어그램 |
 | [user-scenarios.md](user-scenarios.md) | 예약 생성·체크인·임시휴진 재배정·리마인더 시퀀스 다이어그램 |
+
+## 다이어그램 산출물
+
+Mermaid 원본 블록은 각 요구사항 문서에 유지하고, GitHub와 문서 사이트에서
+바로 확인할 수 있도록 PNG를 본문에 삽입했습니다. SVG와 추출된 Mermaid 원본은
+[`assets/`](assets/)에 함께 둡니다.
+
+| 문서 | 렌더링한 다이어그램 |
+|------|---------------------|
+| [architecture.md](architecture.md) | 모듈 의존성 그래프 |
+| [domain-model.md](domain-model.md) | 예약 상태머신 |
+| [erd.md](erd.md) | 전체 테이블 ERD |
+| [data-flow.md](data-flow.md) | 예약 생성, 슬롯 조회, 임시휴진 재배정, 장비 사용불가, 알림 이벤트, Solver 데이터 흐름 |
+| [user-scenarios.md](user-scenarios.md) | 환자 예약, 상태 변경, Solver 재배정, 장비 사용불가, HA 리마인더 시퀀스 |

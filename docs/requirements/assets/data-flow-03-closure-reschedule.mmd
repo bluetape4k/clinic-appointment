@@ -1,0 +1,28 @@
+flowchart TD
+    ADMIN["관리자"] -->|"POST /api/reschedule/closure\n{closureDate}"| API["RescheduleController"]
+    API --> CRS["ClosureRescheduleService"]
+
+    CRS -->|"closureDate 예약 조회"| AFFECTED["영향받는 예약\n(CONFIRMED, REQUESTED)"]
+    AFFECTED --> MARK["상태 → PENDING_RESCHEDULE"]
+
+    subgraph Solver["Timefold Solver (선택적)"]
+        direction TB
+        LOAD["DB 데이터 로드\n(SolutionConverter)"] --> PLAN["ScheduleSolution 구성\n(Planning Variables)"]
+        PLAN --> OPT["제약 최적화\n(H1~H12, S1~S6)"]
+        OPT --> RESULT["Assignment Map 반환"]
+    end
+
+    subgraph Greedy["Greedy 단건 재배정"]
+        direction TB
+        FIRST["첫 번째 가용 슬롯 탐색\n(SlotCalculationService)"] --> ASSIGN["새 예약 생성"]
+    end
+
+    MARK --> Solver
+    MARK --> Greedy
+    Solver -->|"대량 최적 배치"| SAVE["DB 저장\n(RESCHEDULED)"]
+    Greedy -->|"단건 빠른 처리"| SAVE
+    SAVE --> EVT["Rescheduled 이벤트 발행"]
+
+    style ADMIN fill:#E74C3C,color:#fff
+    style Solver fill:#9B59B6,color:#fff,stroke:#7D3C98
+    style Greedy fill:#27AE60,color:#fff,stroke:#1E8449
