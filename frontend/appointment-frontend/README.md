@@ -14,6 +14,12 @@ npm start   # http://localhost:4200
 
 The API server at `http://localhost:8080` must be running first.
 
+## User Flows
+
+![Patient booking scenario sequence](../../docs/requirements/assets/user-scenarios-01-patient-booking.png)
+
+![Equipment unavailability scenario sequence](../../docs/requirements/assets/user-scenarios-04-equipment-unavailability.png)
+
 ## Build
 
 ```bash

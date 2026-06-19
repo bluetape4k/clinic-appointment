@@ -36,6 +36,12 @@ notifications, Spring Boot APIs, and an Angular frontend.
 
 ![Module Overview](docs/images/readme-diagrams/root-readme-overview-01.png)
 
+## Representative Requirement Flow
+
+![Appointment creation requirement flow](docs/requirements/assets/data-flow-01-appointment-create.png)
+
+The full requirements diagram catalog is maintained in [docs/requirements](docs/requirements/README.md).
+
 ## Modules
 
 | Module | Role | Developer Docs |

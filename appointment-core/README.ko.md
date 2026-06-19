@@ -102,6 +102,14 @@ val newState = machine.transition(
 
 → 상태 전이 전체 목록: [domain-model.md](../docs/requirements/domain-model.md#상태-전이도)
 
+## 핵심 도메인 흐름
+
+![가용 슬롯 조회 데이터 흐름](../docs/requirements/assets/data-flow-02-slot-query.png)
+
+![임시휴진 재배정 데이터 흐름](../docs/requirements/assets/data-flow-03-closure-reschedule.png)
+
+![장비 사용불가 데이터 흐름](../docs/requirements/assets/data-flow-04-equipment-unavailability.png)
+
 ## 타임존 설계
 
 ### 저장 원칙

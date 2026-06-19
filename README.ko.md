@@ -35,6 +35,12 @@ Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제�
 
 ![Module Overview](docs/images/readme-diagrams/root-readme-overview-01.png)
 
+## 대표 요구사항 흐름
+
+![예약 생성 요구사항 흐름](docs/requirements/assets/data-flow-01-appointment-create.png)
+
+전체 요구사항 다이어그램 목록은 [docs/requirements](docs/requirements/README.md)에서 관리합니다.
+
 ## 모듈
 
 | 모듈 | 역할 | 개발자 문서 |
