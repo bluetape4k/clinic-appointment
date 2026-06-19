@@ -1,10 +1,12 @@
 # Requirements Diagram Assets
 
-This directory stores rendered assets generated from Mermaid blocks in
+This directory stores diagram assets for the Mermaid sketches embedded in
 `docs/requirements/*.md`.
 
-Each diagram keeps the extracted Mermaid source (`.mmd`) plus rendered `.svg`
-and `.png` files.
+Each diagram keeps the extracted Mermaid source (`.mmd`) as the semantic sketch
+plus curated `.svg` and `.png` files. The rendered assets are maintained as
+direct SVG diagrams following the bluetape4k diagram style and Fireworks graph
+layout rules; the Mermaid files are not the final visual source of truth.
 
 | Source | Diagram | Assets |
 |---|---|---|
@@ -23,5 +25,9 @@ and `.png` files.
 | `user-scenarios.md` | Equipment unavailability sequence | `user-scenarios-04-equipment-unavailability.{mmd,svg,png}` |
 | `user-scenarios.md` | HA reminder sequence | `user-scenarios-05-ha-reminder.{mmd,svg,png}` |
 
-Rendering uses `@mermaid-js/mermaid-cli` with `mermaid-config.json` and
-`puppeteer-config.json`.
+Render PNG files from SVG with the project-standard CairoSVG CLI:
+
+```bash
+~/.local/bin/cairosvg docs/requirements/assets/<diagram>.svg \
+  -o docs/requirements/assets/<diagram>.png -s 2
+```
