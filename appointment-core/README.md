@@ -101,6 +101,14 @@ Full ERD: [erd.md](../docs/requirements/erd.md)
 
 Full transition list: [domain-model.md](../docs/requirements/domain-model.md#상태-전이도)
 
+## Core Domain Flows
+
+![Available slot query data flow](../docs/requirements/assets/data-flow-02-slot-query.png)
+
+![Temporary closure reschedule data flow](../docs/requirements/assets/data-flow-03-closure-reschedule.png)
+
+![Equipment unavailability data flow](../docs/requirements/assets/data-flow-04-equipment-unavailability.png)
+
 ## Timezone Design
 
 ### Storage Rules

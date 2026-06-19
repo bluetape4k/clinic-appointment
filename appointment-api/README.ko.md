@@ -39,7 +39,15 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 
 ![예약 API 쓰기 경로 시퀀스 다이어그램](../docs/images/readme-diagrams/appointment-api-sequence-01.png)
 
+![예약 생성 데이터 흐름](../docs/requirements/assets/data-flow-01-appointment-create.png)
+
 → 전체 데이터 흐름: [data-flow.md](../docs/requirements/data-flow.md)
+
+## 사용자 시나리오 범위
+
+![환자 예약 시나리오 시퀀스](../docs/requirements/assets/user-scenarios-01-patient-booking.png)
+
+![예약 상태 라이프사이클 시나리오](../docs/requirements/assets/user-scenarios-02-status-lifecycle.png)
 
 ## 인증
 

@@ -26,6 +26,10 @@ It subscribes to domain events, sends appointment status notifications, and supp
 
 ![Notification architecture diagram](../docs/images/readme-diagrams/appointment-notification-architecture-01.png)
 
+![Notification event data flow](../docs/requirements/assets/data-flow-05-notification-events.png)
+
+![High-availability reminder scenario](../docs/requirements/assets/user-scenarios-05-ha-reminder.png)
+
 Scenario details: [user-scenarios.md S5](../docs/requirements/user-scenarios.md#s5-ha-알림-리마인더-발송-스케줄러)
 
 ## HA Configuration

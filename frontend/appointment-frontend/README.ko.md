@@ -14,6 +14,12 @@ npm start   # http://localhost:4200
 
 API 서버(`http://localhost:8080`)가 먼저 실행되어 있어야 합니다.
 
+## 사용자 흐름
+
+![환자 예약 시나리오 시퀀스](../../docs/requirements/assets/user-scenarios-01-patient-booking.png)
+
+![장비 사용불가 시나리오 시퀀스](../../docs/requirements/assets/user-scenarios-04-equipment-unavailability.png)
+
 ## 빌드
 
 ```bash
