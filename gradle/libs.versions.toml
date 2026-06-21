@@ -37,7 +37,7 @@ timefold-solver = "2.1.0"     # https://mvnrepository.com/artifact/ai.timefold.s
 lz4-java = "1.8.0"            # https://mvnrepository.com/artifact/org.lz4/lz4-java
 mockk = "1.14.9"              # https://mvnrepository.com/artifact/io.mockk/mockk
 random-beans = "3.9.0"        # https://mvnrepository.com/artifact/io.github.benas/random-beans
-datafaker = "2.5.4"           # https://mvnrepository.com/artifact/net.datafaker/datafaker
+datafaker = "2.6.0"           # https://mvnrepository.com/artifact/net.datafaker/datafaker
 resilience4j = "2.4.0"        # https://mvnrepository.com/artifact/io.github.resilience4j/resilience4j-retry
 
 [plugins]
