@@ -17,14 +17,14 @@ bluetape4k-dependencies = "1.2.0"
 
 # ── Plugin versions (always required) ─────────────────────────────────────
 kotlin = "2.4.0"
-spring-boot4 = "4.0.6"
+spring-boot4 = "4.1.0"
 dokka = "2.2.0"
 detekt = "1.23.8"
 dependency-management = "1.1.7"
 kover = "0.9.8"
 test-logger = "4.0.0"
-shadow = "9.4.1"
-gatling = "3.15.0"
+shadow = "9.4.2"
+gatling = "3.15.1"
 exposed = "1.3.0"
 
 # ── Override versions (project uses newer than Spring Boot provides) ───────
@@ -33,7 +33,7 @@ kotlinx-coroutines = "1.11.0" # https://mvnrepository.com/artifact/org.jetbrains
 # ── Project-local versions (NOT in any BOM) ───────────────────────────────
 springdoc-openapi = "3.0.3"   # https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-starter-webmvc-ui
 jjwt = "0.13.0"               # https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api
-timefold-solver = "2.1.0"     # https://mvnrepository.com/artifact/ai.timefold.solver/timefold-solver-bom
+timefold-solver = "2.2.0"     # https://mvnrepository.com/artifact/ai.timefold.solver/timefold-solver-bom
 lz4-java = "1.8.0"            # https://mvnrepository.com/artifact/org.lz4/lz4-java
 mockk = "1.14.9"              # https://mvnrepository.com/artifact/io.mockk/mockk
 random-beans = "3.9.0"        # https://mvnrepository.com/artifact/io.github.benas/random-beans
