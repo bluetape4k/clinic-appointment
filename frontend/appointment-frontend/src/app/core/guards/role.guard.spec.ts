@@ -1,11 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, Router, RouterStateSnapshot } from '@angular/router';
-import { signal } from '@angular/core';
 import { roleGuard } from './role.guard';
 import { AuthService } from '../services/auth.service';
 
 describe('roleGuard', () => {
-  let authService: { roles: ReturnType<typeof vi.fn> };
+  let authService: {
+    roles: ReturnType<typeof vi.fn>;
+    isAuthenticated: ReturnType<typeof vi.fn>;
+  };
   let router: { createUrlTree: ReturnType<typeof vi.fn> };
 
   const runGuard = (requiredRoles: string[]) => {
@@ -19,7 +21,7 @@ describe('roleGuard', () => {
   };
 
   beforeEach(() => {
-    authService = { roles: vi.fn() };
+    authService = { roles: vi.fn(), isAuthenticated: vi.fn().mockReturnValue(true) };
     router = { createUrlTree: vi.fn().mockReturnValue({ toString: () => '/calendar' }) };
     TestBed.configureTestingModule({
       providers: [
