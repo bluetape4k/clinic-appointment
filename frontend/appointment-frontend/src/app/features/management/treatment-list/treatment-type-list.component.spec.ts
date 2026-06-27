@@ -36,7 +36,7 @@ describe('TreatmentTypeListComponent', () => {
     await fixture.whenStable();
 
     httpMock.match(() => true).forEach(req =>
-      req.flush({ success: true, data: mockTypes })
+      req.flush({ success: true, data: { content: mockTypes } })
     );
     fixture.detectChanges();
     await fixture.whenStable();

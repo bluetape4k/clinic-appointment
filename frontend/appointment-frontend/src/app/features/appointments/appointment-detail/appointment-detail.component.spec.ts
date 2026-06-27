@@ -31,6 +31,7 @@ describe('AppointmentDetailComponent', () => {
     isStaff: signal(false),
     isDoctor: signal(false),
     isPatient: signal(false),
+    clinicId: signal(1),
     getToken: vi.fn().mockReturnValue(null),
   };
 

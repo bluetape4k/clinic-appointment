@@ -36,7 +36,7 @@ describe('DoctorService', () => {
 
       const req = httpTesting.expectOne('/api/clinics/1/doctors');
       expect(req.request.method).toBe('GET');
-      req.flush({ success: true, data: mockDoctors });
+      req.flush({ success: true, data: { content: mockDoctors } });
 
       await promise;
       expect(service.doctors()).toEqual(mockDoctors);
@@ -46,7 +46,7 @@ describe('DoctorService', () => {
       const promise = service.loadByClinic(999);
 
       const req = httpTesting.expectOne('/api/clinics/999/doctors');
-      req.flush({ success: true, data: [] });
+      req.flush({ success: true, data: { content: [] } });
 
       await promise;
       expect(service.doctors()).toEqual([]);

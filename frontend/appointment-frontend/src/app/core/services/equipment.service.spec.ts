@@ -44,7 +44,7 @@ describe('EquipmentService', () => {
 
       const req = httpTesting.expectOne('/api/clinics/1/equipments');
       expect(req.request.method).toBe('GET');
-      req.flush({ success: true, data: mockEquipments });
+      req.flush({ success: true, data: { content: mockEquipments } });
 
       const result = await promise;
       expect(result).toEqual(mockEquipments);
@@ -67,7 +67,7 @@ describe('EquipmentService', () => {
       expect(service.loading()).toBe(true);
 
       const req = httpTesting.expectOne('/api/clinics/1/equipments');
-      req.flush({ success: true, data: [] });
+      req.flush({ success: true, data: { content: [] } });
 
       await promise;
       expect(service.loading()).toBe(false);

@@ -36,7 +36,7 @@ describe('DoctorListComponent', () => {
     await fixture.whenStable();
 
     httpMock.match(() => true).forEach(req =>
-      req.flush({ success: true, data: mockDoctors })
+      req.flush({ success: true, data: { content: mockDoctors } })
     );
     fixture.detectChanges();
     await fixture.whenStable();
