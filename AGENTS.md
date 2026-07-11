@@ -8,7 +8,7 @@ repo-specific layout, commands, domain rules, and local exceptions.
 Clinic appointment management example app built with Kotlin 2.3, Java 25,
 Spring Boot 4, and Exposed ORM.
 
-Use `bluetape4k-code-patterns` for all Kotlin implementation and review work.
+Use `bluetape-kotlin-patterns` for all Kotlin implementation and review work.
 
 ## Commands
 
