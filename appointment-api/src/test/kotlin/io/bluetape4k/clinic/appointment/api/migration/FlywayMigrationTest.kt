@@ -46,6 +46,7 @@ class FlywayMigrationTest {
                     "SCHEDULING_CLINICS",
                     "SCHEDULING_DOCTORS",
                     "SCHEDULING_APPOINTMENTS",
+                    "SCHEDULING_APPOINTMENT_IDEMPOTENCY",
                     "SCHEDULING_EQUIPMENTS",
                     "SCHEDULING_EQUIPMENT_UNAVAILABILITIES",
                 )

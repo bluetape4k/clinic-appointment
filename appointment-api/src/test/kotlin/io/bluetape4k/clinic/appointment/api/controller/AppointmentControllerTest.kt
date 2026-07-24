@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -30,6 +32,7 @@ import io.bluetape4k.assertions.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -39,8 +42,12 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.web.client.RestClient
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
@@ -70,7 +77,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 Doctors, DoctorSchedules, DoctorAbsences,
                 TreatmentTypes, Equipments, TreatmentEquipments,
                 ConsultationTopics, Holidays,
-                Appointments, AppointmentNotes, AppointmentStateHistory,
+                Appointments, AppointmentIdempotencies, AppointmentNotes, AppointmentStateHistory,
                 RescheduleCandidates, AppointmentEventLogs,
             )
 
@@ -78,6 +85,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
             AppointmentStateHistory.deleteAll()
             RescheduleCandidates.deleteAll()
             AppointmentNotes.deleteAll()
+            AppointmentIdempotencies.deleteAll()
             Appointments.deleteAll()
             TreatmentEquipments.deleteAll()
             Equipments.deleteAll()
@@ -164,6 +172,207 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         response.jsonPath<String>("$.data.status") shouldBeEqualTo "REQUESTED"
         response.jsonPath<String>("$.data.timezone") shouldBeEqualTo "Asia/Seoul"
         response.jsonPath<String>("$.data.locale") shouldBeEqualTo "ko-KR"
+    }
+
+    @Test
+    fun `POST - replays same appointment for the same idempotency key`() {
+        val body = """
+            {
+                "clinicId": $clinicId,
+                "doctorId": $doctorId,
+                "treatmentTypeId": $treatmentTypeId,
+                "patientName": "John Doe",
+                "patientPhone": "010-1234-5678",
+                "appointmentDate": "$futureDate",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+
+        val first = client.post()
+            .uri(BASE_URL)
+            .header("Idempotency-Key", "retry-key-001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+        val second = client.post()
+            .uri(BASE_URL)
+            .header("Idempotency-Key", "retry-key-001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        first.statusCode shouldBeEqualTo HttpStatus.CREATED
+        second.statusCode shouldBeEqualTo HttpStatus.OK
+        second.jsonPath<Int>("$.data.id") shouldBeEqualTo first.jsonPath<Int>("$.data.id")
+        transaction {
+            Appointments.selectAll().count() shouldBeEqualTo 1L
+            AppointmentIdempotencies.selectAll().count() shouldBeEqualTo 1L
+        }
+    }
+
+    @Test
+    fun `POST - rejects idempotency key reused with a different request`() {
+        val firstBody = """
+            {
+                "clinicId": $clinicId,
+                "doctorId": $doctorId,
+                "treatmentTypeId": $treatmentTypeId,
+                "patientName": "John Doe",
+                "appointmentDate": "$futureDate",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+        val changedBody = firstBody.replace("John Doe", "Jane Doe")
+
+        client.post()
+            .uri(BASE_URL)
+            .header("Idempotency-Key", "retry-key-002")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(firstBody)
+            .execute()
+            .statusCode shouldBeEqualTo HttpStatus.CREATED
+
+        val response = client.post()
+            .uri(BASE_URL)
+            .header("Idempotency-Key", "retry-key-002")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(changedBody)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.CONFLICT
+        transaction { Appointments.selectAll().count() shouldBeEqualTo 1L }
+    }
+
+    @Test
+    fun `POST - rejects blank idempotency key`() {
+        val body = """
+            {
+                "clinicId": $clinicId,
+                "doctorId": $doctorId,
+                "treatmentTypeId": $treatmentTypeId,
+                "patientName": "John Doe",
+                "appointmentDate": "$futureDate",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+
+        val response = client.post()
+            .uri(BASE_URL)
+            .header("Idempotency-Key", "   ")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+    }
+
+    @Test
+    fun `POST - rejects idempotency key longer than 255 characters`() {
+        val body = """
+            {
+                "clinicId": $clinicId,
+                "doctorId": $doctorId,
+                "treatmentTypeId": $treatmentTypeId,
+                "patientName": "John Doe",
+                "appointmentDate": "$futureDate",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+
+        val response = client.post()
+            .uri(BASE_URL)
+            .header("Idempotency-Key", "x".repeat(256))
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+    }
+
+    @Test
+    fun `POST - creates a new appointment when an idempotency key has expired`() {
+        val oldAppointmentId = createTestAppointment()
+        transaction {
+            AppointmentIdempotencies.insertAndGetId {
+                it[tenantGroupId] = TenantGroups.DEFAULT_TENANT_GROUP_ID
+                it[clinicId] = this@AppointmentControllerTest.clinicId
+                it[idempotencyKey] = "expired-key-001"
+                it[requestFingerprint] = "f".repeat(64)
+                it[appointmentId] = oldAppointmentId
+                it[expiresAt] = Instant.now().minusSeconds(1)
+            }
+        }
+        val body = """
+            {
+                "clinicId": $clinicId,
+                "doctorId": $doctorId,
+                "treatmentTypeId": $treatmentTypeId,
+                "patientName": "John Doe",
+                "appointmentDate": "$futureDate",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+
+        val response = client.post()
+            .uri(BASE_URL)
+            .header("Idempotency-Key", "expired-key-001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.CREATED
+        transaction {
+            Appointments.selectAll().count() shouldBeEqualTo 2L
+            AppointmentIdempotencies.selectAll().count() shouldBeEqualTo 1L
+        }
+    }
+
+    @Test
+    fun `POST - concurrent requests converge on one appointment for the same idempotency key`() {
+        val body = """
+            {
+                "clinicId": $clinicId,
+                "doctorId": $doctorId,
+                "treatmentTypeId": $treatmentTypeId,
+                "patientName": "John Doe",
+                "appointmentDate": "$futureDate",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(2)
+
+        try {
+            val responses = (1..2).map {
+                executor.submit<Int> {
+                    start.await()
+                    client.post()
+                        .uri(BASE_URL)
+                        .header("Idempotency-Key", "concurrent-key-001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(body)
+                        .execute()
+                        .statusCode.value()
+                }
+            }
+            start.countDown()
+            val statuses = responses.map { it.get(15, TimeUnit.SECONDS) }
+
+            statuses.count { it == HttpStatus.CREATED.value() } shouldBeEqualTo 1
+            statuses.count { it == HttpStatus.OK.value() } shouldBeEqualTo 1
+            transaction {
+                Appointments.selectAll().count() shouldBeEqualTo 1L
+                AppointmentIdempotencies.selectAll().count() shouldBeEqualTo 1L
+            }
+        } finally {
+            executor.shutdownNow()
+        }
     }
 
     @Test

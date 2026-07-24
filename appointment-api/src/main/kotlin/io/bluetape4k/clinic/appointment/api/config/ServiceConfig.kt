@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.clinic.appointment.api.service.DashboardStatsService
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
+import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStatsRepository
@@ -31,6 +32,9 @@ class ServiceConfig {
 
     @Bean
     fun appointmentRepository(): AppointmentRepository = AppointmentRepository()
+
+    @Bean
+    fun appointmentIdempotencyRepository(): AppointmentIdempotencyRepository = AppointmentIdempotencyRepository()
 
     @Bean
     fun clinicRepository(): ClinicRepository = ClinicRepository()

@@ -48,6 +48,7 @@ class FlywayMySQLMigrationTest {
                     "scheduling_clinics",
                     "scheduling_doctors",
                     "scheduling_appointments",
+                    "scheduling_appointment_idempotency",
                     "scheduling_equipments",
                     "scheduling_equipment_unavailabilities",
                 )
