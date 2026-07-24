@@ -17,8 +17,11 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import java.time.Clock
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneOffset
 
 /**
  * [AppointmentReminderScheduler] 테스트.
@@ -41,13 +44,7 @@ class AppointmentReminderSchedulerTest {
 
     @BeforeEach
     fun cleanup() {
-        scheduler = AppointmentReminderScheduler(
-            notificationChannel = notificationChannel,
-            appointmentRepository = appointmentRepository,
-            historyRepository = historyRepository,
-            properties = properties,
-            leaderElection = null,
-        )
+        scheduler = createScheduler()
         clearMocks(notificationChannel)
         transaction {
             NotificationHistoryTable.deleteAll()
@@ -90,12 +87,80 @@ class AppointmentReminderSchedulerTest {
         }
     }
 
-    private fun insertConfirmedAppointment(date: LocalDate): AppointmentRecord =
+    @Test
+    fun `당일 리마인더는 병원 현지 시간의 설정된 발송 시점보다 이른 예약에 발송하지 않는다`() {
+        val clinicNow = LocalDateTime.of(2026, 7, 24, 9, 0)
+        val appointment = insertConfirmedAppointment(
+            date = clinicNow.toLocalDate(),
+            startTime = clinicNow.toLocalTime().plusHours(4),
+            timezone = "UTC",
+        )
+        scheduler = createScheduler(clock = fixedUtcClock(clinicNow))
+
+        scheduler.checkReminders()
+
+        verify(exactly = 0) {
+            notificationChannel.sendReminder(appointment, ReminderType.SAME_DAY)
+        }
+    }
+
+    @Test
+    fun `당일 리마인더는 설정된 시간 경계의 예약에 발송한다`() {
+        val clinicNow = LocalDateTime.of(2026, 7, 24, 9, 0)
+        val appointment = insertConfirmedAppointment(
+            date = clinicNow.toLocalDate(),
+            startTime = LocalTime.of(11, 0),
+            timezone = "UTC",
+        )
+        scheduler = createScheduler(clock = fixedUtcClock(clinicNow))
+
+        scheduler.checkReminders()
+
+        verify(exactly = 1) {
+            notificationChannel.sendReminder(appointment, ReminderType.SAME_DAY)
+        }
+    }
+
+    @Test
+    fun `당일 리마인더는 서버 날짜와 다른 병원 현지 날짜의 예약을 발송한다`() {
+        val instant = LocalDateTime.of(2026, 7, 24, 23, 30).toInstant(ZoneOffset.UTC)
+        val appointment = insertConfirmedAppointment(
+            date = LocalDate.of(2026, 7, 25),
+            startTime = LocalTime.of(10, 0),
+            timezone = "Asia/Seoul",
+        )
+        scheduler = createScheduler(clock = Clock.fixed(instant, ZoneOffset.UTC))
+
+        scheduler.checkReminders()
+
+        verify(exactly = 1) {
+            notificationChannel.sendReminder(appointment, ReminderType.SAME_DAY)
+        }
+    }
+
+    private fun createScheduler(clock: Clock = Clock.systemUTC()) = AppointmentReminderScheduler(
+        notificationChannel = notificationChannel,
+        appointmentRepository = appointmentRepository,
+        historyRepository = historyRepository,
+        properties = properties,
+        leaderElection = null,
+        clock = clock,
+    )
+
+    private fun fixedUtcClock(localDateTime: LocalDateTime): Clock =
+        Clock.fixed(localDateTime.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
+
+    private fun insertConfirmedAppointment(
+        date: LocalDate,
+        startTime: LocalTime = LocalTime.of(9, 0),
+        timezone: String = "UTC",
+    ): AppointmentRecord =
         transaction {
             NotificationTestSupport.seedDefaultTenantIfMissing()
             val clinicId = Clinics.insertAndGetId {
                 it[name] = "테스트 클리닉"
                 it[slotDurationMinutes] = 30
+                it[Clinics.timezone] = timezone
             }.value
 
             val doctorId = Doctors.insertAndGetId {
@@ -116,8 +181,8 @@ class AppointmentReminderSchedulerTest {
                 it[patientName] = "홍길동"
                 it[patientPhone] = "010-1234-5678"
                 it[appointmentDate] = date
-                it[startTime] = LocalTime.of(9, 0)
-                it[endTime] = LocalTime.of(9, 30)
+                it[Appointments.startTime] = startTime
+                it[endTime] = startTime.plusMinutes(30)
                 it[status] = AppointmentState.CONFIRMED
             }.value
 

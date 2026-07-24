@@ -5,17 +5,24 @@ import io.bluetape4k.logging.debug
 import io.bluetape4k.logging.info
 import io.bluetape4k.logging.warn
 import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
+import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.time.Clock
+import java.time.Duration
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 /**
  * 예약 리마인더 스케줄러.
  *
- * 매시간 실행되어 내일/오늘 예약 중 CONFIRMED 상태인 예약에 리마인더를 발송합니다.
+ * 매시간 전일 리마인더와 병원 현지 시간 기준 당일 시간창에 해당하는 CONFIRMED 예약의 리마인더를 발송합니다.
  * HA 환경에서는 [LettuceLeaderGroupElector]을 통해 리더로 선출된 인스턴스만 실행합니다.
  * 이미 발송한 리마인더는 중복 방지합니다.
  *
@@ -32,6 +39,8 @@ class AppointmentReminderScheduler(
     private val historyRepository: NotificationHistoryRepository,
     private val properties: NotificationProperties,
     private val leaderElection: LettuceLeaderGroupElector?,
+    private val clinicTimezoneService: ClinicTimezoneService = ClinicTimezoneService(ClinicRepository()),
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     companion object : KLogging() {
         private const val LEADER_LOCK_NAME = "clinic:reminder-scheduler"
@@ -55,19 +64,32 @@ class AppointmentReminderScheduler(
     }
 
     private fun doCheckReminders() {
-        val today = LocalDate.now()
-        val tomorrow = today.plusDays(1)
+        val sameDayCandidateDate = LocalDate.now(clock)
+        val tomorrow = LocalDate.now().plusDays(1)
+        val clinicZones = mutableMapOf<Long, ZoneId>()
 
         if (properties.reminder.dayBefore) {
-            sendReminders(tomorrow, ReminderType.DAY_BEFORE, NotificationEventType.REMINDER_DAY_BEFORE)
+            sendReminders(tomorrow, ReminderType.DAY_BEFORE, NotificationEventType.REMINDER_DAY_BEFORE, clinicZones)
         }
 
         if (properties.reminder.sameDay) {
-            sendReminders(today, ReminderType.SAME_DAY, NotificationEventType.REMINDER_SAME_DAY)
+            (-1L..1L).forEach { offset ->
+                sendReminders(
+                    sameDayCandidateDate.plusDays(offset),
+                    ReminderType.SAME_DAY,
+                    NotificationEventType.REMINDER_SAME_DAY,
+                    clinicZones,
+                )
+            }
         }
     }
 
-    private fun sendReminders(date: LocalDate, reminderType: ReminderType, eventType: String) {
+    private fun sendReminders(
+        date: LocalDate,
+        reminderType: ReminderType,
+        eventType: String,
+        clinicZones: MutableMap<Long, ZoneId>,
+    ) {
         val confirmedAppointments = transaction {
             appointmentRepository.findActiveByDate(
                 date = date,
@@ -77,8 +99,11 @@ class AppointmentReminderScheduler(
 
         var sent = 0
         for (appointment in confirmedAppointments) {
+            if (reminderType == ReminderType.SAME_DAY && !isSameDayReminderDue(appointment, clinicZones)) continue
+
+            val appointmentId = appointment.id ?: continue
             val alreadySent = transaction {
-                historyRepository.existsByAppointmentAndEventType(appointment.id!!, eventType)
+                historyRepository.existsByAppointmentAndEventType(appointmentId, eventType)
             }
             if (alreadySent) continue
 
@@ -86,12 +111,28 @@ class AppointmentReminderScheduler(
                 notificationChannel.sendReminder(appointment, reminderType)
                 sent++
             } catch (e: Exception) {
-                log.warn(e) { "리마인더 발송 실패: appointmentId=${appointment.id}, type=$reminderType" }
+                log.warn(e) { "리마인더 발송 실패: appointmentId=$appointmentId, type=$reminderType" }
             }
         }
 
         if (sent > 0) {
             log.info { "리마인더 발송 완료: date=$date, type=$reminderType, count=$sent" }
         }
+    }
+
+    private fun isSameDayReminderDue(
+        appointment: AppointmentRecord,
+        clinicZones: MutableMap<Long, ZoneId>,
+    ): Boolean {
+        val clinicZone = clinicZones.getOrPut(appointment.clinicId) {
+            clinicTimezoneService.getZoneId(appointment.clinicId)
+        }
+        val clinicNow = clock.instant().atZone(clinicZone)
+        if (appointment.appointmentDate != clinicNow.toLocalDate()) return false
+
+        val appointmentStart = ZonedDateTime.of(appointment.appointmentDate, appointment.startTime, clinicNow.zone)
+        val remaining = Duration.between(clinicNow, appointmentStart)
+        val leadTime = Duration.ofHours(properties.reminder.sameDayHoursBefore.toLong())
+        return !remaining.isNegative && remaining <= leadTime
     }
 }
