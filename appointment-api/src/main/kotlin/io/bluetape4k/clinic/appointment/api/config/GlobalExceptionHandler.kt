@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.config
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
+import io.bluetape4k.clinic.appointment.api.service.IdempotencyKeyConflictException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -56,6 +57,13 @@ class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException::class)
     fun handleConflict(ex: IllegalStateException): ResponseEntity<ApiResponse<Nothing>> {
         log.warn(ex) { "Conflict: ${ex.message}" }
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(ApiResponse.error(ex.message ?: "Conflict"))
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException::class)
+    fun handleIdempotencyConflict(ex: IdempotencyKeyConflictException): ResponseEntity<ApiResponse<Nothing>> {
+        log.warn(ex) { "Idempotency request conflict" }
         return ResponseEntity.status(HttpStatus.CONFLICT)
             .body(ApiResponse.error(ex.message ?: "Conflict"))
     }

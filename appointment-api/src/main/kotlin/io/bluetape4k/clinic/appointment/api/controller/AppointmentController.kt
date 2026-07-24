@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -85,27 +86,30 @@ class AppointmentController(
 
     @Operation(summary = "Create a new appointment")
     @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Existing appointment replayed for the idempotency key"),
         OApiResponse(responseCode = "201", description = "Appointment created"),
         OApiResponse(responseCode = "400", description = "Invalid parameters"),
-        OApiResponse(responseCode = "409", description = "Scheduling conflict"),
+        OApiResponse(responseCode = "409", description = "Scheduling conflict or idempotency key reused with a different request"),
     )
     @PostMapping
     fun create(
         @PathVariable tenantCode: String,
+        @Parameter(description = "Optional key that safely replays the same appointment creation request")
+        @RequestHeader("Idempotency-Key", required = false) idempotencyKey: String?,
         @Valid @RequestBody request: CreateAppointmentRequest,
     ): ResponseEntity<ApiResponse<AppointmentResponse>> {
-        tenantClinicAccessChecker.verifySchedulingResources(
+        val tenant = tenantClinicAccessChecker.verifySchedulingResources(
             tenantCode = tenantCode,
             clinicId = request.clinicId,
             doctorId = request.doctorId,
             treatmentTypeId = request.treatmentTypeId,
             equipmentId = request.equipmentId,
         )
-        log.debug { "POST appointment tenantCode=$tenantCode, patient=${request.patientName}" }
-        val saved = appointmentService.create(request)
-        val (timezone, locale) = timezoneService.getTimezoneAndLocale(saved.clinicId)
-        return ResponseEntity.status(HttpStatus.CREATED)
-            .body(ApiResponse.ok(saved.toResponse(timezone, locale)))
+        log.debug { "POST appointment tenantCode=$tenantCode, clinicId=${request.clinicId}" }
+        val result = appointmentService.create(tenant.id, request, idempotencyKey)
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(result.appointment.clinicId)
+        return ResponseEntity.status(if (result.replayed) HttpStatus.OK else HttpStatus.CREATED)
+            .body(ApiResponse.ok(result.appointment.toResponse(timezone, locale)))
     }
 
     @Operation(summary = "Get state change history for an appointment")

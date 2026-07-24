@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -68,6 +69,7 @@ class SchemaInitConfig {
                     ConsultationTopics,
                     Holidays,
                     Appointments,
+                    AppointmentIdempotencies,
                     AppointmentNotes,
                     AppointmentStateHistory,
                     RescheduleCandidates,

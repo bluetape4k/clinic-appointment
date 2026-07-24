@@ -5,16 +5,24 @@ import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.clinic.appointment.api.dto.CreateAppointmentRequest
 import io.bluetape4k.clinic.appointment.event.AppointmentDomainEvent
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentIdempotencyRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistoryRecord
+import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentEvent
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentStateMachine
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.sql.SQLException
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 
 /**
@@ -31,6 +39,9 @@ class AppointmentService(
     private val stateMachine: AppointmentStateMachine,
     private val eventPublisher: ApplicationEventPublisher,
     private val stateHistoryRepository: AppointmentStateHistoryRepository,
+    private val idempotencyRepository: AppointmentIdempotencyRepository,
+    private val idempotencyProperties: AppointmentIdempotencyProperties,
+    private val idempotencyClock: Clock,
 ) {
     companion object : KLogging()
 
@@ -52,8 +63,98 @@ class AppointmentService(
     }
 
     fun create(request: CreateAppointmentRequest): AppointmentRecord {
-        log.debug { "create: patient=${request.patientName}" }
-        val record = AppointmentRecord(
+        val saved = transaction { appointmentRepository.save(newAppointmentRecord(request)) }
+        publishCreated(saved)
+        return saved
+    }
+
+    fun create(
+        tenantGroupId: Long,
+        request: CreateAppointmentRequest,
+        idempotencyKey: String?,
+    ): AppointmentCreationResult {
+        val key = idempotencyKey?.also(::validateIdempotencyKey)
+        if (key == null) {
+            return AppointmentCreationResult(create(request), replayed = false)
+        }
+
+        val fingerprint = request.fingerprint()
+        val result = try {
+            transaction {
+                createIdempotently(tenantGroupId, request, key, fingerprint, Instant.now(idempotencyClock))
+            }
+        } catch (ex: ExposedSQLException) {
+            if (!ex.isUniqueConstraintViolation()) {
+                throw ex
+            }
+            resolveConcurrentIdempotencyResult(tenantGroupId, request.clinicId, key, fingerprint)
+                ?: throw ex
+        }
+        if (!result.replayed) {
+            publishCreated(result.appointment)
+        }
+        return result
+    }
+
+    private fun createIdempotently(
+        tenantGroupId: Long,
+        request: CreateAppointmentRequest,
+        idempotencyKey: String,
+        fingerprint: String,
+        now: Instant,
+    ): AppointmentCreationResult {
+        idempotencyRepository.deleteExpired(tenantGroupId, request.clinicId, idempotencyKey, now)
+        val existing = idempotencyRepository.findByTenantGroupAndClinicAndKey(
+            tenantGroupId,
+            request.clinicId,
+            idempotencyKey,
+        )
+        if (existing != null) {
+            return replay(existing, fingerprint)
+        }
+
+        val saved = appointmentRepository.save(newAppointmentRecord(request))
+        idempotencyRepository.save(
+            AppointmentIdempotencyRecord(
+                tenantGroupId = tenantGroupId,
+                clinicId = request.clinicId,
+                idempotencyKey = idempotencyKey,
+                requestFingerprint = fingerprint,
+                appointmentId = saved.id.requireNotNull("saved.id"),
+                expiresAt = now.plus(idempotencyProperties.ttl),
+            )
+        )
+        return AppointmentCreationResult(saved, replayed = false)
+    }
+
+    private fun resolveConcurrentIdempotencyResult(
+        tenantGroupId: Long,
+        clinicId: Long,
+        idempotencyKey: String,
+        fingerprint: String,
+    ): AppointmentCreationResult? = transaction {
+        val existing = idempotencyRepository.findByTenantGroupAndClinicAndKey(tenantGroupId, clinicId, idempotencyKey)
+            ?: return@transaction null
+        if (existing.expiresAt <= Instant.now(idempotencyClock)) {
+            return@transaction null
+        }
+        replay(existing, fingerprint)
+    }
+
+    private fun replay(
+        existing: AppointmentIdempotencyRecord,
+        fingerprint: String,
+    ): AppointmentCreationResult {
+        if (existing.requestFingerprint != fingerprint) {
+            throw IdempotencyKeyConflictException()
+        }
+        val appointment = appointmentRepository.findByIdOrNull(existing.appointmentId)
+            ?: throw IllegalStateException("Idempotency record points to a missing appointment")
+        return AppointmentCreationResult(appointment, replayed = true)
+    }
+
+    private fun newAppointmentRecord(request: CreateAppointmentRequest): AppointmentRecord =
+        AppointmentRecord(
             clinicId = request.clinicId,
             doctorId = request.doctorId,
             treatmentTypeId = request.treatmentTypeId,
@@ -65,14 +166,14 @@ class AppointmentService(
             endTime = request.endTime,
             status = AppointmentState.REQUESTED,
         )
-        val saved = transaction { appointmentRepository.save(record) }
+
+    private fun publishCreated(saved: AppointmentRecord) {
         eventPublisher.publishEvent(
             AppointmentDomainEvent.Created(
                 appointmentId = saved.id.requireNotNull("saved.id"),
                 clinicId = saved.clinicId,
             )
         )
-        return saved
     }
 
     internal suspend fun updateStatus(id: Long, targetStatus: String, reason: String?): AppointmentRecord {
@@ -229,6 +330,51 @@ class AppointmentService(
             ?: throw NoSuchElementException("Appointment not found after cancel: $id")
     }
 }
+
+data class AppointmentCreationResult(
+    val appointment: AppointmentRecord,
+    val replayed: Boolean,
+)
+
+private fun validateIdempotencyKey(idempotencyKey: String) {
+    require(idempotencyKey.isNotBlank()) { "Idempotency-Key must not be blank" }
+    require(idempotencyKey.length <= 255) { "Idempotency-Key must be at most 255 characters" }
+}
+
+private fun CreateAppointmentRequest.fingerprint(): String =
+    MessageDigest.getInstance("SHA-256")
+        .apply {
+            updateField("clinicId", clinicId.toString())
+            updateField("doctorId", doctorId.toString())
+            updateField("treatmentTypeId", treatmentTypeId.toString())
+            updateField("equipmentId", equipmentId?.toString())
+            updateField("patientName", patientName)
+            updateField("patientPhone", patientPhone)
+            updateField("appointmentDate", appointmentDate.toString())
+            updateField("startTime", startTime.toString())
+            updateField("endTime", endTime.toString())
+        }
+        .digest()
+        .joinToString("") { "%02x".format(it) }
+
+private fun MessageDigest.updateField(name: String, value: String?) {
+    update(name.toByteArray(StandardCharsets.UTF_8))
+    update(0)
+    if (value == null) {
+        update(-1)
+    } else {
+        val valueBytes = value.toByteArray(StandardCharsets.UTF_8)
+        update(valueBytes.size.toString().toByteArray(StandardCharsets.UTF_8))
+        update(0)
+        update(valueBytes)
+    }
+    update(0)
+}
+
+private fun ExposedSQLException.isUniqueConstraintViolation(): Boolean =
+    generateSequence(this as Throwable?) { it.cause }
+        .filterIsInstance<SQLException>()
+        .any { it.sqlState == "23505" || it.sqlState == "23000" }
 
 internal fun parseEvent(targetStatus: String, reason: String? = null): AppointmentEvent = when (targetStatus) {
     "REQUESTED" -> AppointmentEvent.Request

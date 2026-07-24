@@ -27,6 +27,7 @@ class TableSchemaTest : AbstractExposedTest() {
         TreatmentEquipments,
         ConsultationTopics,
         Appointments,
+        AppointmentIdempotencies,
         AppointmentNotes,
         AppointmentStateHistory,
         RescheduleCandidates
