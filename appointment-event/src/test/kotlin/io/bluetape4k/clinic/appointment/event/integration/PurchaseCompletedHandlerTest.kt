@@ -5,6 +5,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus
 import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
 import io.bluetape4k.clinic.appointment.model.dto.ProductCatalogProjectionRecord
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
@@ -62,6 +63,8 @@ class PurchaseCompletedHandlerTest {
                 TreatmentDependencies,
                 SchedulingInboxEvents,
                 SchedulingOutboxEvents,
+                SchedulingQuarantineEvents,
+                SchedulingQuarantineAuditEvents,
             )
             TenantGroups.insert {
                 it[id] = EntityID(1L, TenantGroups)
@@ -127,7 +130,36 @@ class PurchaseCompletedHandlerTest {
     }
 
     @Test
-    fun `scope mismatch and unknown catalog are quarantined without plan or outbox`() {
+    fun `the same authority-local purchase identity is independent across tenant and clinic scope`() {
+        handler().handle(envelope(), null, protected()).status shouldBeEqualTo PurchaseHandleStatus.CREATED
+        val otherClinicId = transaction {
+            val createdClinicId = Clinics.insertAndGetId {
+                it[tenantGroupId] = EntityID(2L, TenantGroups)
+                it[name] = "Other Tenant Clinic"
+            }.value
+            catalogRepository.saveAggregate(catalogRecord(createdClinicId, tenantGroupId = 2L))
+            createdClinicId
+        }
+        val otherScope = envelope(
+            eventId = "other-scope-event",
+            payload = payload(
+                sourceAggregateId = "other-scope-aggregate",
+                tenantGroupId = 2L,
+                clinicId = otherClinicId,
+            ),
+        )
+
+        handler().handle(otherScope, null, protected(fingerprint = "other-patient"))
+            .status shouldBeEqualTo PurchaseHandleStatus.CREATED
+
+        transaction {
+            AppointmentPlans.selectAll().count() shouldBeEqualTo 2L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 2L
+        }
+    }
+
+    @Test
+    fun `scope mismatch unknown catalog and retired catalog are quarantined without plan or outbox`() {
         val wrongTenant = envelope(
             eventId = "scope-event",
             payload = payload(tenantGroupId = 2L),
@@ -138,11 +170,31 @@ class PurchaseCompletedHandlerTest {
             payload = payload(sourceAggregateId = "purchase-aggregate-2", sourcePurchaseId = "purchase-2", catalogVersion = 99L),
         )
         handler().handle(unknownCatalog, null, protected()).status shouldBeEqualTo PurchaseHandleStatus.QUARANTINED
+        transaction {
+            catalogRepository.saveAggregate(
+                catalogRecord(
+                    clinicId = clinicId,
+                    sourceAuthority = "legacy-catalog",
+                    status = CatalogProjectionStatus.RETIRED,
+                )
+            )
+        }
+        val retiredCatalog = envelope(
+            eventId = "retired-catalog-event",
+            payload = payload(
+                sourceAggregateId = "purchase-aggregate-3",
+                sourcePurchaseId = "purchase-3",
+                catalogSourceAuthority = "legacy-catalog",
+            ),
+        )
+        val retiredResult = handler().handle(retiredCatalog, null, protected(fingerprint = "retired"))
+        retiredResult.status shouldBeEqualTo PurchaseHandleStatus.QUARANTINED
+        retiredResult.reasonCode shouldBeEqualTo "CATALOG_RETIRED"
 
         transaction {
             AppointmentPlans.selectAll().count() shouldBeEqualTo 0L
             SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
-            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 2L
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 3L
         }
     }
 
@@ -275,6 +327,7 @@ class PurchaseCompletedHandlerTest {
         observer: AtomicPlanWriteObserver = AtomicPlanWriteObserver.NOOP,
     ) = PurchaseCompletedHandler(
         eventRepository = eventRepository,
+        quarantineRepository = SchedulingQuarantineRepository(),
         catalogRepository = catalogRepository,
         planRepository = planRepository,
         planFactory = factory,
@@ -282,6 +335,19 @@ class PurchaseCompletedHandlerTest {
         clock = clock,
         mode = mode,
         writeObserver = observer,
+    )
+
+    private fun PurchaseCompletedHandler.handle(
+        envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        versionProof: SourceAuthorityVersionProof?,
+        protectedPatientReference: ProtectedPatientReference,
+    ): PurchaseHandleResult =
+        handle(envelope, versionProof, protectedPatientReference, protectedQuarantineEnvelope())
+
+    private fun protectedQuarantineEnvelope() = ProtectedQuarantineEnvelope(
+        ciphertext = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        keyId = "quarantine-key-1",
+        envelopeHash = "b".repeat(64),
     )
 
     private fun protected(fingerprint: String = "patient-fingerprint") =
@@ -310,7 +376,9 @@ class PurchaseCompletedHandlerTest {
         sourceAggregateId: String = "purchase-aggregate",
         sourceAggregateVersion: Long = 1L,
         tenantGroupId: Long = 1L,
+        clinicId: Long = this.clinicId,
         sourcePurchaseId: String = "purchase-1",
+        catalogSourceAuthority: String = "product-catalog",
         catalogVersion: Long = 7L,
     ) = PurchaseCompletedEvent(
         sourceAggregateId = sourceAggregateId,
@@ -320,21 +388,28 @@ class PurchaseCompletedHandlerTest {
         sourcePurchaseAuthority = "commerce",
         sourcePurchaseId = sourcePurchaseId,
         patientReferenceToken = "patient-token",
+        catalogSourceAuthority = catalogSourceAuthority,
         productId = "laser-care",
         catalogVersion = catalogVersion,
         bookingPreference = BookingPreferenceSnapshot.NotProvided,
     )
 
-    private fun catalogRecord(clinicId: Long) = ProductCatalogProjectionRecord(
+    private fun catalogRecord(
+        clinicId: Long,
+        tenantGroupId: Long = 1L,
+        sourceAuthority: String = "product-catalog",
+        status: CatalogProjectionStatus = CatalogProjectionStatus.ACTIVE,
+    ) = ProductCatalogProjectionRecord(
         definition = ProductCatalogDefinition(
-            tenantGroupId = 1L,
+            tenantGroupId = tenantGroupId,
             clinicId = clinicId,
-            sourceAuthority = "product-catalog",
+            sourceAuthority = sourceAuthority,
             productId = "laser-care",
             catalogVersion = 7L,
             productName = "Laser Care",
             schemaVersion = 1,
             sourceUpdatedAt = now.minusSeconds(60),
+            status = status,
             items = listOf(
                 CatalogBomItem(
                     bomItemId = "laser",

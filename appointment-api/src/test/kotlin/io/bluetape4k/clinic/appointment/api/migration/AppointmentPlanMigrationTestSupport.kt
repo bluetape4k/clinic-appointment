@@ -51,6 +51,18 @@ internal object AppointmentPlanMigrationTestSupport {
             val missingForeignKeys = EXPECTED_FOREIGN_KEYS - foreignKeys(connection)
             check(missingForeignKeys.isEmpty()) { "Missing V8 foreign keys: $missingForeignKeys" }
 
+            EXPECTED_CRITICAL_COLUMNS.forEach { (table, expectedColumns) ->
+                val missingColumns = expectedColumns - columns(connection, table)
+                check(missingColumns.isEmpty()) {
+                    "Missing V8 columns on $table: $missingColumns"
+                }
+            }
+
+            EXPECTED_UNIQUE_IDENTITIES.forEach { (identity, expectedColumns) ->
+                val (table, constraint) = identity
+                uniqueIndexColumns(connection, table, constraint) shouldBeEqualTo expectedColumns
+            }
+
             readLegacyAppointment(connection) shouldBeEqualTo before
         }
     }
@@ -183,6 +195,42 @@ internal object AppointmentPlanMigrationTestSupport {
             }
         }
 
+    private fun columns(connection: Connection, table: String): Set<String> =
+        metadataTableNames(table).flatMapTo(mutableSetOf()) { metadataTableName ->
+            connection.metaData.getColumns(null, null, metadataTableName, null).use { rows ->
+                buildList {
+                    while (rows.next()) {
+                        rows.getString("COLUMN_NAME")?.lowercase()?.let(::add)
+                    }
+                }
+            }
+        }
+
+    private fun uniqueIndexColumns(
+        connection: Connection,
+        table: String,
+        indexName: String,
+    ): List<String> =
+        connection.prepareStatement(
+            """
+            SELECT column_name
+              FROM information_schema.key_column_usage
+             WHERE LOWER(table_name) = ?
+               AND LOWER(constraint_name) = ?
+             ORDER BY ordinal_position
+            """.trimIndent()
+        ).use { statement ->
+            statement.setString(1, table.lowercase())
+            statement.setString(2, indexName.lowercase())
+            statement.executeQuery().use { rows ->
+                buildList {
+                    while (rows.next()) {
+                        add(rows.getString("column_name").lowercase())
+                    }
+                }
+            }
+        }
+
     private fun metadataTableNames(table: String): Set<String> = setOf(table, table.uppercase())
 
     private data class LegacyAppointment(
@@ -206,8 +254,11 @@ internal object AppointmentPlanMigrationTestSupport {
         "scheduling_treatment_dependencies",
         "scheduling_inbox_events",
         "scheduling_outbox_events",
+        "scheduling_quarantine_events",
+        "scheduling_quarantine_audit_events",
     )
     private val EXPECTED_INDEXES = setOf(
+        "idx_catalog_scope_product",
         "idx_treatment_dependency_plan",
         "idx_plan_tenant_clinic_status",
         "idx_plan_scope_purchase",
@@ -216,6 +267,9 @@ internal object AppointmentPlanMigrationTestSupport {
         "idx_inbox_source_version",
         "idx_outbox_status_created_at",
         "idx_outbox_status_next_attempt",
+        "idx_quarantine_status_expiry",
+        "idx_quarantine_scope_reason",
+        "idx_quarantine_audit_quarantine_created",
     )
     private val EXPECTED_UNIQUE_CONSTRAINTS = setOf(
         "uq_catalog_scope_version",
@@ -226,6 +280,7 @@ internal object AppointmentPlanMigrationTestSupport {
         "uq_treatment_dependency",
         "uq_inbox_event_id",
         "uq_outbox_event_id",
+        "uq_quarantine_event_id",
     )
     private val EXPECTED_FOREIGN_KEYS = setOf(
         "fk_catalog_projection_tenant",
@@ -244,5 +299,50 @@ internal object AppointmentPlanMigrationTestSupport {
         "fk_outbox_tenant",
         "fk_outbox_clinic",
         "fk_outbox_plan",
+        "fk_quarantine_tenant",
+        "fk_quarantine_clinic",
+        "fk_quarantine_audit_quarantine",
+    )
+    private val EXPECTED_CRITICAL_COLUMNS = mapOf(
+        "scheduling_product_catalog_projections" to setOf(
+            "source_authority",
+            "catalog_status",
+        ),
+        "scheduling_appointment_plans" to setOf(
+            "tenant_group_id",
+            "clinic_id",
+            "source_purchase_authority",
+            "source_purchase_id",
+            "catalog_source_authority",
+        ),
+        "scheduling_quarantine_events" to setOf(
+            "envelope_hash",
+            "encrypted_original_envelope",
+            "encryption_key_id",
+            "retention_class",
+            "payload_expires_at",
+            "legal_hold",
+        ),
+        "scheduling_quarantine_audit_events" to setOf(
+            "quarantine_id",
+            "action",
+            "approval_references",
+            "created_at",
+        ),
+    )
+    private val EXPECTED_UNIQUE_IDENTITIES = mapOf(
+        ("scheduling_product_catalog_projections" to "uq_catalog_scope_version") to listOf(
+            "tenant_group_id",
+            "clinic_id",
+            "source_authority",
+            "product_id",
+            "catalog_version",
+        ),
+        ("scheduling_appointment_plans" to "uq_plan_source_purchase") to listOf(
+            "tenant_group_id",
+            "clinic_id",
+            "source_purchase_authority",
+            "source_purchase_id",
+        ),
     )
 }

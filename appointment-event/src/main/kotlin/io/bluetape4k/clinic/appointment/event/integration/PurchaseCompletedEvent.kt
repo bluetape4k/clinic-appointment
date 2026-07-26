@@ -11,6 +11,7 @@ data class PurchaseCompletedEvent(
     val sourcePurchaseAuthority: String,
     val sourcePurchaseId: String,
     val patientReferenceToken: String,
+    val catalogSourceAuthority: String,
     val productId: String,
     val catalogVersion: Long,
     val bookingPreference: BookingPreferenceSnapshot,

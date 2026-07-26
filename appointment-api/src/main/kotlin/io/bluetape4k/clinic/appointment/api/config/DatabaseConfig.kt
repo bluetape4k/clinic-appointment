@@ -3,6 +3,8 @@ package io.bluetape4k.clinic.appointment.api.config
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingInboxEvents
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingQuarantineAuditEvents
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingQuarantineEvents
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
@@ -90,6 +92,8 @@ class SchemaInitConfig {
                     TreatmentDependencies,
                     SchedulingInboxEvents,
                     SchedulingOutboxEvents,
+                    SchedulingQuarantineEvents,
+                    SchedulingQuarantineAuditEvents,
                 )
             }
         }

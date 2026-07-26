@@ -102,6 +102,7 @@ class AppointmentPlanControllerTest : AbstractApiIntegrationTest() {
         listOf(byId, byPurchase).forEach { response ->
             response.statusCode shouldBeEqualTo HttpStatus.OK
             response.jsonPath<Number>("$.data.id").toLong() shouldBeEqualTo planId
+            response.jsonPath<String>("$.data.catalogSourceAuthority") shouldBeEqualTo "product-catalog"
             response.jsonPath<Number>("$.data.catalogVersion").toLong() shouldBeEqualTo 7L
             response.jsonPath<String>("$.data.catalogPayloadHash") shouldBeEqualTo "a".repeat(64)
             response.jsonPath<String>("$.data.bookingPreference.type") shouldBeEqualTo "DATE_RANGE"

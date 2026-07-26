@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.event.integration
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
 import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
 import io.bluetape4k.clinic.appointment.model.dto.ProductCatalogProjectionRecord
@@ -60,6 +61,8 @@ class PurchaseEventRedriveServiceTest {
                 TreatmentDependencies,
                 SchedulingInboxEvents,
                 SchedulingOutboxEvents,
+                SchedulingQuarantineEvents,
+                SchedulingQuarantineAuditEvents,
             )
             TenantGroups.insert {
                 it[id] = EntityID(1L, TenantGroups)
@@ -189,14 +192,55 @@ class PurchaseEventRedriveServiceTest {
         }
     }
 
-    private fun ingress() = PurchaseCompletedIngress(
+    @Test
+    fun `source authority timeout and circuit open stage bounded retries without plan transaction`() {
+        var protectionCalls = 0
+        var planWriteCalls = 0
+        SourceAuthorityFailureReason.entries.forEach { failureReason ->
+            val eventId = "authority-${failureReason.name.lowercase()}"
+            val result = ingress(
+                versionProofProvider = SourceAuthorityVersionProofProvider {
+                    throw SourceAuthorityUnavailableException(failureReason)
+                },
+                patientReferenceProtector = PatientReferenceProtector { _, _ ->
+                    protectionCalls += 1
+                    protected()
+                },
+                observer = AtomicPlanWriteObserver { planWriteCalls += 1 },
+            ).accept(raw(eventId = eventId))
+
+            result.status shouldBeEqualTo PurchaseHandleStatus.WAITING_GAP
+            result.reasonCode shouldBeEqualTo failureReason.reasonCode
+            val replayAfter = requireNotNull(result.replayAfter)
+            replayAfter.isAfter(now.plusSeconds(3)).shouldBeTrue()
+            replayAfter.isBefore(now.plusSeconds(7)).shouldBeTrue()
+        }
+
+        protectionCalls shouldBeEqualTo 0
+        planWriteCalls shouldBeEqualTo 0
+        transaction {
+            AppointmentPlans.selectAll().count() shouldBeEqualTo 0L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
+            val inboxRows = SchedulingInboxEvents.selectAll().toList()
+            inboxRows.size shouldBeEqualTo 2
+            inboxRows.all { it[SchedulingInboxEvents.status] == SchedulingInboxStatus.WAITING_GAP }
+                .shouldBeTrue()
+            inboxRows.map { it[SchedulingInboxEvents.failureCode] }.toSet() shouldBeEqualTo
+                SourceAuthorityFailureReason.entries.map { it.reasonCode }.toSet()
+        }
+    }
+
+    private fun ingress(
+        versionProofProvider: SourceAuthorityVersionProofProvider = SourceAuthorityVersionProofProvider { null },
+        patientReferenceProtector: PatientReferenceProtector = PatientReferenceProtector { _, _ -> protected() },
+        observer: AtomicPlanWriteObserver = AtomicPlanWriteObserver.NOOP,
+    ) = PurchaseCompletedIngress(
         trustVerifier = trustVerifier(),
         eventAdapter = PurchaseCompletedEventAdapter(),
-        versionProofProvider = SourceAuthorityVersionProofProvider { null },
-        patientReferenceProtector = PatientReferenceProtector { _, _ -> protected() },
-        handler = handler(PurchaseHandlingMode.WRITE),
-        eventRepository = eventRepository,
-        clock = clock,
+        versionProofProvider = versionProofProvider,
+        patientReferenceProtector = patientReferenceProtector,
+        quarantineEnvelopeProtector = QuarantineEnvelopeProtector { protectedQuarantineEnvelope() },
+        handler = handler(PurchaseHandlingMode.WRITE, observer),
     )
 
     private fun redriveService() = PurchaseEventRedriveService(
@@ -204,6 +248,7 @@ class PurchaseEventRedriveServiceTest {
         eventAdapter = PurchaseCompletedEventAdapter(),
         versionProofProvider = SourceAuthorityVersionProofProvider { null },
         patientReferenceProtector = PatientReferenceProtector { _, _ -> protected() },
+        quarantineEnvelopeProtector = QuarantineEnvelopeProtector { protectedQuarantineEnvelope() },
         writeHandler = handler(PurchaseHandlingMode.WRITE),
         shadowHandler = handler(PurchaseHandlingMode.SHADOW),
     )
@@ -218,17 +263,28 @@ class PurchaseEventRedriveServiceTest {
         clock = clock,
     )
 
-    private fun handler(mode: PurchaseHandlingMode) = PurchaseCompletedHandler(
+    private fun handler(
+        mode: PurchaseHandlingMode,
+        observer: AtomicPlanWriteObserver = AtomicPlanWriteObserver.NOOP,
+    ) = PurchaseCompletedHandler(
         eventRepository = eventRepository,
+        quarantineRepository = SchedulingQuarantineRepository(),
         catalogRepository = catalogRepository,
         planRepository = planRepository,
         planFactory = AppointmentPlanFactory(),
         versionVerifier = SourceAggregateVersionVerifier(clock),
         clock = clock,
         mode = mode,
+        writeObserver = observer,
     )
 
     private fun protected() = ProtectedPatientReference("encrypted", "key-1", "fingerprint")
+
+    private fun protectedQuarantineEnvelope() = ProtectedQuarantineEnvelope(
+        ciphertext = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        keyId = "quarantine-key-1",
+        envelopeHash = "b".repeat(64),
+    )
 
     private fun raw(
         eventId: String = "event-1",
@@ -264,6 +320,7 @@ class PurchaseEventRedriveServiceTest {
         sourcePurchaseAuthority = "commerce",
         sourcePurchaseId = "purchase-1",
         patientReferenceToken = "patient-token",
+        catalogSourceAuthority = "product-catalog",
         productId = "laser-care",
         catalogVersion = 7L,
         bookingPreference = BookingPreferenceSnapshot.NotProvided,

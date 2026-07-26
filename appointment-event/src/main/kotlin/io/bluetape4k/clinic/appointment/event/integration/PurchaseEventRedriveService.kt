@@ -16,6 +16,7 @@ class PurchaseEventRedriveService(
     private val eventAdapter: PurchaseCompletedEventAdapter,
     private val versionProofProvider: SourceAuthorityVersionProofProvider,
     private val patientReferenceProtector: PatientReferenceProtector,
+    private val quarantineEnvelopeProtector: QuarantineEnvelopeProtector,
     private val writeHandler: PurchaseCompletedHandler,
     private val shadowHandler: PurchaseCompletedHandler,
 ) {
@@ -29,6 +30,7 @@ class PurchaseEventRedriveService(
         require(originalEnvelope.payload.sourceAggregateVersion == expectedSourceAggregateVersion) {
             "sourceAggregateVersion confirmation does not match"
         }
+        val protectedQuarantineEnvelope = quarantineEnvelopeProtector.protect(originalEnvelope)
         val normalized = eventAdapter.adapt(trustVerifier.verify(originalEnvelope))
         val proof = versionProofProvider.obtain(normalized.payload)
         val protectedReference = patientReferenceProtector.protect(
@@ -36,9 +38,9 @@ class PurchaseEventRedriveService(
             normalized.payload.patientReferenceToken,
         )
         val result = if (dryRun) {
-            shadowHandler.handle(normalized, proof, protectedReference)
+            shadowHandler.handle(normalized, proof, protectedReference, protectedQuarantineEnvelope)
         } else {
-            writeHandler.handle(normalized, proof, protectedReference)
+            writeHandler.handle(normalized, proof, protectedReference, protectedQuarantineEnvelope)
         }
         return PurchaseRedriveResult(
             dryRun = dryRun,

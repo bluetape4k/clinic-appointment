@@ -6,6 +6,7 @@ import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.clinic.appointment.event.integration.AtomicPlanWriteObserver
 import io.bluetape4k.clinic.appointment.event.integration.ProtectedPatientReference
+import io.bluetape4k.clinic.appointment.event.integration.ProtectedQuarantineEnvelope
 import io.bluetape4k.clinic.appointment.event.integration.PurchaseCompletedEvent
 import io.bluetape4k.clinic.appointment.event.integration.PurchaseCompletedHandler
 import io.bluetape4k.clinic.appointment.event.integration.PurchaseCompletedPayloadHasher
@@ -16,6 +17,9 @@ import io.bluetape4k.clinic.appointment.event.integration.PurchasePlanMetrics
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingEventRepository
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingInboxEvents
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingQuarantineAuditEvents
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingQuarantineEvents
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingQuarantineRepository
 import io.bluetape4k.clinic.appointment.event.integration.SourceAggregateVersionVerifier
 import io.bluetape4k.clinic.appointment.event.integration.TrustedSchedulingEventEnvelope
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
@@ -85,6 +89,8 @@ class PurchaseCompletedDialectIntegrationTest : AbstractApiIntegrationTest() {
     @AfterEach
     fun cleanUpCatalog() {
         transaction {
+            SchedulingQuarantineAuditEvents.deleteAll()
+            SchedulingQuarantineEvents.deleteAll()
             SchedulingOutboxEvents.deleteAll()
             SchedulingInboxEvents.deleteAll()
             TreatmentDependencies.deleteAll()
@@ -180,6 +186,7 @@ class PurchaseCompletedDialectIntegrationTest : AbstractApiIntegrationTest() {
         observer: AtomicPlanWriteObserver = AtomicPlanWriteObserver.NOOP,
     ) = PurchaseCompletedHandler(
         eventRepository = eventRepository,
+        quarantineRepository = SchedulingQuarantineRepository(),
         catalogRepository = catalogRepository,
         planRepository = planRepository,
         planFactory = AppointmentPlanFactory(),
@@ -188,6 +195,19 @@ class PurchaseCompletedDialectIntegrationTest : AbstractApiIntegrationTest() {
         mode = PurchaseHandlingMode.WRITE,
         writeObserver = observer,
         metrics = metrics,
+    )
+
+    private fun PurchaseCompletedHandler.handle(
+        envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        versionProof: io.bluetape4k.clinic.appointment.event.integration.SourceAuthorityVersionProof?,
+        protectedPatientReference: ProtectedPatientReference,
+    ): PurchaseHandleResult =
+        handle(envelope, versionProof, protectedPatientReference, protectedQuarantineEnvelope())
+
+    private fun protectedQuarantineEnvelope() = ProtectedQuarantineEnvelope(
+        ciphertext = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        keyId = "quarantine-key-1",
+        envelopeHash = "b".repeat(64),
     )
 
     private fun envelope(
@@ -220,6 +240,7 @@ class PurchaseCompletedDialectIntegrationTest : AbstractApiIntegrationTest() {
         sourcePurchaseAuthority = "commerce",
         sourcePurchaseId = "$prefix-$sourcePurchaseId",
         patientReferenceToken = "patient-token",
+        catalogSourceAuthority = "product-catalog",
         productId = "$prefix-laser-care",
         catalogVersion = 7L,
         bookingPreference = BookingPreferenceSnapshot.NotProvided,

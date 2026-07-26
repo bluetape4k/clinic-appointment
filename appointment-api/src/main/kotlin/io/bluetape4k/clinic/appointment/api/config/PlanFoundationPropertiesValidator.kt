@@ -23,6 +23,19 @@ class PlanFoundationPropertiesValidator(
             "consumerMaxBackoff must not be shorter than consumerInitialBackoff"
         }
         require(properties.consumerJitter in 0.0..1.0) { "consumerJitter must be between 0 and 1" }
+        requirePositive(properties.eventReplayWindow, "eventReplayWindow")
+        requirePositive(properties.trustVerificationTimeout, "trustVerificationTimeout")
+        requirePositive(properties.sourceAuthorityTimeout, "sourceAuthorityTimeout")
+        requirePositive(properties.redriveDryRunTimeout, "redriveDryRunTimeout")
+        require(properties.eventReplayWindow >= properties.trustVerificationTimeout) {
+            "eventReplayWindow must not be shorter than trustVerificationTimeout"
+        }
+        require(properties.redriveDryRunTimeout >= properties.trustVerificationTimeout) {
+            "redriveDryRunTimeout must not be shorter than trustVerificationTimeout"
+        }
+        require(properties.redriveDryRunTimeout >= properties.sourceAuthorityTimeout) {
+            "redriveDryRunTimeout must not be shorter than sourceAuthorityTimeout"
+        }
 
         val testLike = environment.activeProfiles.any { profile -> profile == "test" || profile == "dev" }
         if (!testLike && properties.purchaseConsumerMode == PurchaseConsumerMode.WRITE) {
@@ -31,5 +44,9 @@ class PlanFoundationPropertiesValidator(
                 "WRITE purchase consumer mode requires an available OutboxTransportCapability"
             }
         }
+    }
+
+    private fun requirePositive(duration: java.time.Duration, propertyName: String) {
+        require(!duration.isNegative && !duration.isZero) { "$propertyName must be positive" }
     }
 }
