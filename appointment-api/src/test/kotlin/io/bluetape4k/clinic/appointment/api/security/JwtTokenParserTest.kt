@@ -27,6 +27,8 @@ class JwtTokenParserTest {
             clinicId = 5L,
             roles = listOf(SchedulingRole.ADMIN, SchedulingRole.STAFF),
             allowedTenants = listOf("tenant-a", "tenant-b"),
+            scopes = setOf("catalog:write", "appointment:read"),
+            catalogSourceAuthorities = setOf("product-catalog"),
         )
 
         val principal = parser.parse(token)
@@ -38,6 +40,8 @@ class JwtTokenParserTest {
         principal.roles.shouldContain(SchedulingRole.STAFF)
         principal.allowedTenants.shouldContain("tenant-a")
         principal.allowedTenants.shouldContain("tenant-b")
+        principal.scopes.shouldContain("catalog:write")
+        principal.catalogSourceAuthorities.shouldContain("product-catalog")
     }
 
     @Test
@@ -69,12 +73,16 @@ class JwtTokenParserTest {
 
     @Test
     fun `authorities에 ROLE_ prefix 포함`() {
-        val token = TestJwtProvider.adminToken()
+        val token = TestJwtProvider.createToken(
+            scopes = setOf("catalog:write"),
+            catalogSourceAuthorities = setOf("product-catalog"),
+        )
 
         val principal = parser.parse(token)
 
         principal.shouldNotBeNull()
         val authorityNames = principal.authorities.map { it.authority }
         authorityNames.shouldContain("ROLE_ADMIN")
+        authorityNames.shouldContain("SCOPE_catalog:write")
     }
 }

@@ -1,6 +1,9 @@
 package io.bluetape4k.clinic.appointment.repository
 
 import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogSyncResult
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogSyncStatus
+import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
 import io.bluetape4k.clinic.appointment.model.dto.ProductCatalogProjectionRecord
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependencies
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
@@ -19,6 +22,64 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
  * Stores and loads complete immutable catalog projections inside a caller-owned transaction.
  */
 class ProductCatalogRepository {
+
+    /**
+     * Resolves an immutable catalog synchronization against the latest version
+     * in the same tenant, clinic, and product scope.
+     */
+    fun resolveSync(
+        definition: ProductCatalogDefinition,
+        payloadHash: String,
+    ): CatalogSyncResult {
+        val exactVersion = findByScopeVersion(
+            tenantGroupId = definition.tenantGroupId,
+            clinicId = definition.clinicId,
+            productId = definition.productId,
+            catalogVersion = definition.catalogVersion,
+        )
+        if (exactVersion != null) {
+            val status = if (exactVersion.payloadHash == payloadHash) {
+                CatalogSyncStatus.UNCHANGED
+            } else {
+                CatalogSyncStatus.VERSION_CONFLICT
+            }
+            return CatalogSyncResult(
+                status = status,
+                productId = definition.productId,
+                catalogVersion = definition.catalogVersion,
+                payloadHash = payloadHash,
+                existingPayloadHash = exactVersion.payloadHash,
+            )
+        }
+
+        val latestVersion = ProductCatalogProjections
+            .selectAll()
+            .where {
+                (ProductCatalogProjections.tenantGroupId eq definition.tenantGroupId) and
+                    (ProductCatalogProjections.clinicId eq definition.clinicId) and
+                    (ProductCatalogProjections.productId eq definition.productId)
+            }
+            .orderBy(ProductCatalogProjections.catalogVersion, SortOrder.DESC)
+            .limit(1)
+            .singleOrNull()
+            ?.get(ProductCatalogProjections.catalogVersion)
+        if (latestVersion != null && latestVersion > definition.catalogVersion) {
+            return CatalogSyncResult(
+                status = CatalogSyncStatus.STALE_IGNORED,
+                productId = definition.productId,
+                catalogVersion = definition.catalogVersion,
+                payloadHash = payloadHash,
+            )
+        }
+
+        saveAggregate(ProductCatalogProjectionRecord(definition = definition, payloadHash = payloadHash))
+        return CatalogSyncResult(
+            status = CatalogSyncStatus.CREATED,
+            productId = definition.productId,
+            catalogVersion = definition.catalogVersion,
+            payloadHash = payloadHash,
+        )
+    }
 
     /**
      * Inserts a catalog root and all of its BOM children atomically in the current transaction.

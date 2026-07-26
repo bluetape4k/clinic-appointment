@@ -49,12 +49,12 @@ class TenantContextFilter(
         }
 
         if (tenantInfo == null) {
-            response.sendError(HttpStatus.NOT_FOUND.value(), "Tenant not found")
+            response.status = HttpStatus.NOT_FOUND.value()
             return
         }
 
         if (tenantCode !in principal.allowedTenants) {
-            response.sendError(HttpStatus.FORBIDDEN.value())
+            response.status = HttpStatus.FORBIDDEN.value()
             return
         }
 

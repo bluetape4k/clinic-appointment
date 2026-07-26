@@ -19,8 +19,10 @@ class JwtTokenParser(
 ) {
     companion object : KLogging() {
         private const val CLAIM_ALLOWED_TENANTS = "allowedTenants"
+        private const val CLAIM_CATALOG_SOURCE_AUTHORITIES = "catalogSourceAuthorities"
         private const val CLAIM_CLINIC_ID = "clinicId"
         private const val CLAIM_ROLES = "roles"
+        private const val CLAIM_SCOPE = "scope"
     }
 
     private val signingKey by lazy {
@@ -45,14 +47,23 @@ class JwtTokenParser(
             val userId = claims.subject
             val clinicId = claims[CLAIM_CLINIC_ID]?.toString()?.toLongOrNull()
 
-            val roles = claims.readStringList(CLAIM_ROLES)
-            val allowedTenants = claims.readStringList(CLAIM_ALLOWED_TENANTS)
+            val roles = claims.readStringSet(CLAIM_ROLES)
+            val allowedTenants = claims.readStringSet(CLAIM_ALLOWED_TENANTS)
+            val scopes = claims[CLAIM_SCOPE]
+                ?.toString()
+                ?.split(Regex("\\s+"))
+                ?.filter(String::isNotBlank)
+                ?.toSet()
+                ?: emptySet()
+            val catalogSourceAuthorities = claims.readStringSet(CLAIM_CATALOG_SOURCE_AUTHORITIES)
 
             SchedulingUserPrincipal(
                 userId = userId,
                 clinicId = clinicId,
                 roles = roles,
                 allowedTenants = allowedTenants,
+                scopes = scopes,
+                catalogSourceAuthorities = catalogSourceAuthorities,
             )
         } catch (e: Exception) {
             log.warn(e) { "JWT 토큰 파싱 실패" }
@@ -60,8 +71,9 @@ class JwtTokenParser(
         }
     }
 
-    private fun Claims.readStringList(claimName: String): List<String> =
+    private fun Claims.readStringSet(claimName: String): Set<String> =
         (this[claimName] as? Collection<*>)
             ?.mapNotNull { it as? String }
-            ?: emptyList()
+            ?.toSet()
+            ?: emptySet()
 }
