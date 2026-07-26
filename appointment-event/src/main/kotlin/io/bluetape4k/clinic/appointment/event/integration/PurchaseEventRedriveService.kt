@@ -31,7 +31,10 @@ class PurchaseEventRedriveService(
         }
         val normalized = eventAdapter.adapt(trustVerifier.verify(originalEnvelope))
         val proof = versionProofProvider.obtain(normalized.payload)
-        val protectedReference = patientReferenceProtector.protect(normalized.payload.patientReferenceToken)
+        val protectedReference = patientReferenceProtector.protect(
+            normalized.payload.tenantGroupId,
+            normalized.payload.patientReferenceToken,
+        )
         val result = if (dryRun) {
             shadowHandler.handle(normalized, proof, protectedReference)
         } else {

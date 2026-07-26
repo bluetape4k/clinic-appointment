@@ -30,6 +30,21 @@ Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migr
 | Treatment types | `GET /api/{tenantCode}/clinics/{id}/treatment-types`, `/treatment-types/{id}` | Query treatment types. |
 | Equipment | `GET /api/{tenantCode}/clinics/{id}/equipments`, `/equipments/{id}` | Query equipment. |
 | Dashboard stats | `GET /api/{tenantCode}/admin/stats/{appointments,doctors,cancellations}` | Query admin dashboard aggregates. |
+| Catalog plan input | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-products/{productId}/versions/{catalogVersion}` | Synchronize one immutable catalog BOM version. |
+| Appointment plans | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | Read one purchased treatment plan. |
+| Appointment plans | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{authority}/{purchaseId}` | Read by authority-qualified source purchase. |
+
+### Plan Foundation Flags
+
+| Property | Default | Meaning |
+|------|------|------|
+| `appointment.plan-foundation.catalog-sync-enabled` | `false` | Enables the catalog sync route. |
+| `appointment.plan-foundation.plan-read-enabled` | `false` | Enables clinic-operator plan reads. |
+| `appointment.plan-foundation.purchase-consumer-mode` | `OFF` | `OFF`, `SHADOW`, or gated `WRITE`; production `WRITE` requires an outbox transport capability. |
+
+Plan reads require `ADMIN`, `STAFF`, or `DOCTOR`, a matching tenant claim, and
+an exact matching clinic claim. `PATIENT` access is deferred. Disabled routes
+remain visible in OpenAPI and return sanitized `404 FEATURE_DISABLED`.
 
 Use `tenant-default` for the local seed tenant. JWTs must include the requested tenant in the `allowedTenants` claim.
 
@@ -79,6 +94,8 @@ Flyway migration scripts live under `src/main/resources/db/migration/V*.sql`.
 | `EquipmentController` | Equipment lookup. |
 | `SecurityConfig` | JWT-based Spring Security configuration. |
 | `GlobalExceptionHandler` | Global exception handling that returns `ApiResponse`. |
+| `CatalogProductSyncController` | Bounded immutable catalog version synchronization. |
+| `AppointmentPlanController` | Tenant/clinic-scoped, patient-reference-free plan reads. |
 | `TestDataSeeder` | Automatic development/test seed data insertion. |
 
 ## Dependencies

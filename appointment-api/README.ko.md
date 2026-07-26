@@ -30,6 +30,21 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 | 진료유형 | `GET /api/{tenantCode}/clinics/{id}/treatment-types`, `/treatment-types/{id}` | 진료유형 조회 |
 | 장비 | `GET /api/{tenantCode}/clinics/{id}/equipments`, `/equipments/{id}` | 장비 조회 |
 | 대시보드 통계 | `GET /api/{tenantCode}/admin/stats/{appointments,doctors,cancellations}` | 관리자 집계 조회 |
+| 플랜용 카탈로그 입력 | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-products/{productId}/versions/{catalogVersion}` | 불변 상품 BOM 버전 동기화 |
+| 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | 구매 진료 플랜 한 건 조회 |
+| 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{authority}/{purchaseId}` | authority가 포함된 원천 구매로 조회 |
+
+### 플랜 기반 기능 플래그
+
+| 설정 | 기본값 | 의미 |
+|------|------|------|
+| `appointment.plan-foundation.catalog-sync-enabled` | `false` | 카탈로그 동기화 경로 활성화 |
+| `appointment.plan-foundation.plan-read-enabled` | `false` | 병원 운영자용 플랜 조회 활성화 |
+| `appointment.plan-foundation.purchase-consumer-mode` | `OFF` | `OFF`, `SHADOW`, 제한된 `WRITE`; 운영 `WRITE`에는 outbox transport capability 필요 |
+
+플랜 조회는 `ADMIN`, `STAFF`, `DOCTOR` 역할, 일치하는 tenant claim, 정확히 일치하는
+clinic claim이 모두 필요합니다. `PATIENT` 조회는 보류했습니다. 비활성 경로도 OpenAPI에는
+남아 있으며 정제된 `404 FEATURE_DISABLED`를 반환합니다.
 
 로컬 seed tenant는 `tenant-default` 입니다. JWT의 `allowedTenants` claim에는 요청 URL의 `tenantCode`가 포함되어야 합니다.
 
@@ -78,6 +93,8 @@ Flyway — `src/main/resources/db/migration/V*.sql`
 | `EquipmentController` | 장비 조회 |
 | `SecurityConfig` | JWT 기반 Spring Security 설정 |
 | `GlobalExceptionHandler` | 전역 예외 처리 → `ApiResponse` 반환 |
+| `CatalogProductSyncController` | 제한 검증을 거치는 불변 카탈로그 버전 동기화 |
+| `AppointmentPlanController` | tenant/clinic 범위, 환자 참조 미포함 플랜 조회 |
 | `TestDataSeeder` | 개발/테스트 초기 데이터 자동 삽입 |
 
 ## 의존성

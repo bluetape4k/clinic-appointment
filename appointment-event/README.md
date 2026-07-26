@@ -6,8 +6,21 @@ Domain event publishing, subscription, and event-log persistence based on Spring
 
 ## Responsibilities
 
-- **Does**: defines domain event types, publishes events, and persists event logs with Exposed tables.
-- **Does not**: send notifications directly. Notification delivery is handled by `appointment-notification`, which subscribes to events.
+- **Does**: defines domain event types, publishes events, persists event logs, and converges trusted purchase events into appointment plans.
+- **Does not**: send notifications or publish the appointment-plan outbox directly.
+
+## Purchase Event Convergence
+
+`PurchaseCompletedIngress` verifies producer, signature, issuer, audience,
+payload hash, replay window, and bounded payload shape before protecting the
+patient reference. In `WRITE` mode, `PurchaseCompletedHandler` claims the inbox,
+creates the immutable plan, and inserts one pending `AppointmentPlanCreated`
+outbox row in the same transaction.
+
+Duplicate event IDs and source purchases converge. Aggregate-version gaps retry
+with bounded backoff and end in quarantine after attempt 5. `SHADOW` evaluates
+without writes. Production `WRITE` remains prohibited until a follow-up
+transport owns outbox publish, acknowledgement, retry/DLQ, and alerts.
 
 ## Event Types
 
@@ -45,6 +58,9 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 | `AppointmentEventLogger` | `@EventListener` that stores every event in `AppointmentEventLogs`. |
 | `AppointmentEventLogRecord` | Event log DTO. |
 | `AppointmentEventLogs` | Exposed table with event_type, appointment_id, payload_json, and occurred_at. |
+| `PurchaseCompletedIngress` | Trust, bounds, version-proof, and patient-reference protection boundary. |
+| `PurchaseCompletedHandler` | Atomic inbox/plan/outbox convergence with duplicate and gap classification. |
+| `PurchaseEventRedriveService` | Exact-event dry-run and named redrive without trust bypass. |
 
 ## Event Flow
 

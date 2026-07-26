@@ -10,6 +10,18 @@ This is the leaf module that all other modules build on.
 - **Does**: defines domain entities, database table schemas, repository CRUD operations, state-machine transition validation, and available-slot calculation.
 - **Does not**: depend on Spring Context, expose HTTP APIs, send notifications, or publish events.
 
+## Appointment Plan Foundation
+
+`ProductCatalogProjection` stores one immutable, tenant/clinic-scoped product
+version and its canonical payload hash. `AppointmentPlanFactory` expands that
+snapshot into ordered `PlannedTreatment` occurrences and materialized dependency
+edges without assigning dates or IDs. `AppointmentPlanRepository` persists and
+loads the aggregate in a caller-owned Exposed transaction.
+
+`AppointmentPlanQueryService` exposes only a sanitized `AppointmentPlanView`;
+patient ciphertext, key IDs, and fingerprints remain inside the persistence
+boundary. A plan is a purchased obligation, not a visit or resource hold.
+
 ## Core Classes
 
 ### Domain Entities (Record)
@@ -51,6 +63,8 @@ Full transition list: [domain model document](../docs/requirements/domain-model.
 | `HolidayRepository` | `isHoliday(date)`, `findByYear()` |
 | `RescheduleCandidateRepository` | `findPendingByClinic()`, `save()` |
 | `EquipmentUnavailabilityRepository` | `findByEquipment()`, `findOverlapping()`, `save()`, `delete()` |
+| `ProductCatalogRepository` | Saves immutable catalog versions and detects same-version content conflicts. |
+| `AppointmentPlanRepository` | Saves/loads one complete plan aggregate within exact tenant and clinic scope. |
 
 > **Important**: every repository call must run inside a `transaction { }` block.
 

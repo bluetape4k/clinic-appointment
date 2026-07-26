@@ -21,7 +21,20 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 /**
  * Stores and loads complete immutable catalog projections inside a caller-owned transaction.
  */
-class ProductCatalogRepository {
+fun interface CatalogSyncWriteObserver {
+    /**
+     * Transaction-local race-test hook. Implementations must not perform external I/O.
+     */
+    fun afterVersionAbsent()
+
+    companion object {
+        val NOOP = CatalogSyncWriteObserver { }
+    }
+}
+
+class ProductCatalogRepository(
+    private val writeObserver: CatalogSyncWriteObserver = CatalogSyncWriteObserver.NOOP,
+) {
 
     /**
      * Resolves an immutable catalog synchronization against the latest version
@@ -38,19 +51,9 @@ class ProductCatalogRepository {
             catalogVersion = definition.catalogVersion,
         )
         if (exactVersion != null) {
-            val status = if (exactVersion.payloadHash == payloadHash) {
-                CatalogSyncStatus.UNCHANGED
-            } else {
-                CatalogSyncStatus.VERSION_CONFLICT
-            }
-            return CatalogSyncResult(
-                status = status,
-                productId = definition.productId,
-                catalogVersion = definition.catalogVersion,
-                payloadHash = payloadHash,
-                existingPayloadHash = exactVersion.payloadHash,
-            )
+            return classifyExisting(definition, payloadHash, exactVersion)
         }
+        writeObserver.afterVersionAbsent()
 
         val latestVersion = ProductCatalogProjections
             .selectAll()
@@ -80,6 +83,37 @@ class ProductCatalogRepository {
             payloadHash = payloadHash,
         )
     }
+
+    /**
+     * Re-reads and classifies the immutable version after a concurrent unique-key conflict.
+     */
+    fun classifyExistingSync(
+        definition: ProductCatalogDefinition,
+        payloadHash: String,
+    ): CatalogSyncResult? =
+        findByScopeVersion(
+            tenantGroupId = definition.tenantGroupId,
+            clinicId = definition.clinicId,
+            productId = definition.productId,
+            catalogVersion = definition.catalogVersion,
+        )?.let { existing -> classifyExisting(definition, payloadHash, existing) }
+
+    private fun classifyExisting(
+        definition: ProductCatalogDefinition,
+        payloadHash: String,
+        existing: ProductCatalogProjectionRecord,
+    ): CatalogSyncResult =
+        CatalogSyncResult(
+            status = if (existing.payloadHash == payloadHash) {
+                CatalogSyncStatus.UNCHANGED
+            } else {
+                CatalogSyncStatus.VERSION_CONFLICT
+            },
+            productId = definition.productId,
+            catalogVersion = definition.catalogVersion,
+            payloadHash = payloadHash,
+            existingPayloadHash = existing.payloadHash,
+        )
 
     /**
      * Inserts a catalog root and all of its BOM children atomically in the current transaction.

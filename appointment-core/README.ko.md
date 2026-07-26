@@ -10,6 +10,18 @@
 - **하는 것**: 도메인 엔티티 정의, DB 테이블 스키마, 리포지토리 CRUD, 상태머신 전이 검증, 가용 슬롯 계산
 - **하지 않는 것**: Spring Context 의존성 없음, HTTP 없음, 알림 없음, 이벤트 발행 없음
 
+## 예약 플랜 기반
+
+`ProductCatalogProjection`은 tenant/clinic 범위의 불변 상품 버전과 정규 payload hash를
+저장합니다. `AppointmentPlanFactory`는 날짜나 ID를 배정하지 않고 이 스냅샷을 순서가
+있는 `PlannedTreatment` 회차와 구체화된 의존관계로 확장합니다.
+`AppointmentPlanRepository`는 호출자가 연 Exposed transaction 안에서 전체 aggregate를
+저장하고 조회합니다.
+
+`AppointmentPlanQueryService`는 정제된 `AppointmentPlanView`만 노출합니다. 환자 참조
+ciphertext, key ID, fingerprint는 영속성 경계 밖으로 나오지 않습니다. 플랜은 구매한
+진료 의무이며 방문 예약이나 자원 선점이 아닙니다.
+
 ## 핵심 클래스
 
 ### 도메인 엔티티 (Record)
@@ -52,6 +64,8 @@ val newState = machine.transition(
 | `HolidayRepository` | `isHoliday(date)`, `findByYear()` |
 | `RescheduleCandidateRepository` | `findPendingByClinic()`, `save()` |
 | `EquipmentUnavailabilityRepository` | `findByEquipment()`, `findOverlapping()`, `save()`, `delete()` |
+| `ProductCatalogRepository` | 불변 카탈로그 버전을 저장하고 동일 버전의 내용 충돌을 감지 |
+| `AppointmentPlanRepository` | 정확한 tenant/clinic 범위에서 전체 플랜 aggregate 저장·조회 |
 
 > **중요**: 모든 리포지토리 호출은 `transaction { }` 블록 안에서 실행해야 함.
 

@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
 import io.bluetape4k.clinic.appointment.repository.ProductCatalogRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /**
@@ -32,8 +33,15 @@ class CatalogSyncApplicationService(
         val actualHash = CatalogPayloadHasher.hash(valid)
         require(actualHash == claimedPayloadHash) { "payloadHash does not match the canonical catalog definition" }
 
-        val result = transaction {
-            repository.resolveSync(valid, actualHash)
+        val result = try {
+            transaction {
+                repository.resolveSync(valid, actualHash)
+            }
+        } catch (failure: ExposedSQLException) {
+            if (!failure.sqlState.startsWith("23")) throw failure
+            transaction {
+                repository.classifyExistingSync(valid, actualHash)
+            } ?: throw failure
         }
         log.info {
             "Catalog synchronization completed: tenantGroupId=${valid.tenantGroupId}, " +

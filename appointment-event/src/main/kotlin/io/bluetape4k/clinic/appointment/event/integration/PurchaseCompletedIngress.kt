@@ -32,7 +32,10 @@ class PurchaseCompletedIngress(
         }
         val normalized = eventAdapter.adapt(trusted)
         val proof = versionProofProvider.obtain(normalized.payload)
-        val protectedReference = patientReferenceProtector.protect(normalized.payload.patientReferenceToken)
+        val protectedReference = patientReferenceProtector.protect(
+            normalized.payload.tenantGroupId,
+            normalized.payload.patientReferenceToken,
+        )
         return handler.handle(normalized, proof, protectedReference)
     }
 
