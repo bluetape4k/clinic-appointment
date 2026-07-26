@@ -1,0 +1,411 @@
+package io.bluetape4k.clinic.appointment.api.controller
+
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeNull
+import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
+import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
+import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
+import io.bluetape4k.clinic.appointment.model.tables.Clinics
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependencies
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.service.CatalogPayloadHasher
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.web.client.RestClient
+import java.time.Instant
+
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = ["appointment.plan-foundation.catalog-sync-enabled=true"],
+)
+class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
+
+    @LocalServerPort
+    private var port: Int = 0
+
+    private lateinit var client: RestClient
+    private var clinicId: Long = 0
+
+    @BeforeEach
+    fun setupCatalog() {
+        client = RestClient.builder().baseUrl("http://localhost:$port").build()
+        transaction {
+            SchemaUtils.createMissingTablesAndColumns(
+                ProductCatalogProjections,
+                ProductCatalogBomItems,
+                ProductCatalogBomDependencies,
+            )
+            ProductCatalogBomDependencies.deleteAll()
+            ProductCatalogBomItems.deleteAll()
+            ProductCatalogProjections.deleteAll()
+            clinicId = Clinics.insertAndGetId {
+                it[tenantGroupId] = 1L
+                it[name] = "Catalog API Clinic"
+            }.value
+        }
+    }
+
+    @AfterEach
+    fun cleanupCatalog() {
+        transaction {
+            ProductCatalogBomDependencies.deleteAll()
+            ProductCatalogBomItems.deleteAll()
+            ProductCatalogProjections.deleteAll()
+        }
+    }
+
+    @Test
+    fun `creates replays ignores stale and rejects conflicting catalog versions`() {
+        putCatalog(catalogDefinition(clinicId = clinicId, version = 7L))
+            .also { response ->
+                response.statusCode shouldBeEqualTo HttpStatus.CREATED
+                response.jsonPath<Boolean>("$.success").shouldBeTrue()
+                response.jsonPath<String>("$.data.status") shouldBeEqualTo "CREATED"
+            }
+        putCatalog(catalogDefinition(clinicId = clinicId, version = 7L))
+            .also { response ->
+                response.statusCode shouldBeEqualTo HttpStatus.OK
+                response.jsonPath<String>("$.data.status") shouldBeEqualTo "UNCHANGED"
+            }
+        putCatalog(catalogDefinition(clinicId = clinicId, version = 6L))
+            .also { response ->
+                response.statusCode shouldBeEqualTo HttpStatus.ACCEPTED
+                response.jsonPath<String>("$.data.status") shouldBeEqualTo "STALE_IGNORED"
+            }
+        putCatalog(catalogDefinition(clinicId = clinicId, version = 7L, productName = "Changed"))
+            .also { response ->
+                response.statusCode shouldBeEqualTo HttpStatus.CONFLICT
+                assertSanitizedError(response, "CATALOG_VERSION_CONFLICT")
+            }
+    }
+
+    @Test
+    fun `rejects path and body identity mismatches with a sanitized error`() {
+        val definition = catalogDefinition(clinicId = clinicId)
+        val otherClinicId = transaction {
+            Clinics.insertAndGetId {
+                it[tenantGroupId] = 1L
+                it[name] = "Other Catalog Clinic"
+            }.value
+        }
+
+        listOf(
+            putCatalog(definition.copy(tenantGroupId = 999L)),
+            putCatalog(definition, pathClinicId = otherClinicId),
+            putCatalog(definition, pathProductId = "different-product"),
+            putCatalog(definition, pathVersion = 8L),
+        ).forEach { response ->
+            response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+            assertSanitizedError(response, "VALIDATION_FAILED")
+        }
+    }
+
+    @Test
+    fun `hides a clinic outside the requested tenant`() {
+        transaction {
+            TenantGroups.insert {
+                it[TenantGroups.id] = EntityID(2L, TenantGroups)
+                it[tenantCode] = "other-tenant"
+                it[displayName] = "Other Tenant"
+                it[active] = true
+            }
+        }
+        val definition = catalogDefinition(clinicId = clinicId)
+
+        val response = putCatalog(definition, tenantCode = "other-tenant")
+
+        response.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
+        assertSanitizedError(response, "RESOURCE_NOT_FOUND")
+    }
+
+    @Test
+    fun `rejects a cyclic BOM without persisting partial rows`() {
+        val body = """
+            {
+              "sourceAuthority": "product-catalog",
+              "tenantGroupId": 1,
+              "clinicId": $clinicId,
+              "productId": "laser-care",
+              "catalogVersion": 7,
+              "schemaVersion": 1,
+              "sourceUpdatedAt": "2026-07-26T05:00:00Z",
+              "productName": "Laser Care",
+              "items": [
+                {
+                  "bomItemId": "laser",
+                  "representativeTreatmentName": "Laser",
+                  "repeatCount": 1,
+                  "durationMinutes": 30
+                },
+                {
+                  "bomItemId": "care",
+                  "representativeTreatmentName": "Care",
+                  "repeatCount": 1,
+                  "durationMinutes": 20
+                }
+              ],
+              "dependencies": [
+                {
+                  "predecessorBomItemId": "laser",
+                  "successorBomItemId": "care",
+                  "minimumIntervalDays": 1,
+                  "preferredIntervalDays": 2,
+                  "maximumIntervalDays": 3
+                },
+                {
+                  "predecessorBomItemId": "care",
+                  "successorBomItemId": "laser",
+                  "minimumIntervalDays": 1,
+                  "preferredIntervalDays": 2,
+                  "maximumIntervalDays": 3
+                }
+              ],
+              "payloadHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+        """.trimIndent()
+
+        val response = client.put()
+            .uri(path("tenant-default", clinicId, "laser-care", 7L))
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+        assertSanitizedError(response, "VALIDATION_FAILED")
+        transaction {
+            ProductCatalogProjections.selectAll().count() shouldBeEqualTo 0L
+        }
+    }
+
+    @Test
+    fun `rejects canonical hash mismatch without echoing the supplied hash`() {
+        val definition = catalogDefinition(clinicId = clinicId)
+
+        val response = putCatalog(definition, payloadHash = "a".repeat(64))
+
+        response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+        assertSanitizedError(response, "VALIDATION_FAILED")
+        response.bodyText().contains("a".repeat(64)).shouldBeFalse()
+    }
+
+    @Test
+    fun `rejects invalid bounds and malformed instants`() {
+        val invalidBounds = requestJson(catalogDefinition(clinicId = clinicId))
+            .replace("\"repeatCount\": 3", "\"repeatCount\": 0")
+        client.put()
+            .uri(path("tenant-default", clinicId, "laser-care", 7L))
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(invalidBounds)
+            .execute()
+            .also { response ->
+                response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+                assertSanitizedError(response, "VALIDATION_FAILED")
+            }
+
+        val invalidInstant = requestJson(catalogDefinition(clinicId = clinicId))
+            .replace("2026-07-26T05:00:00Z", "2026-07-26 14:00 Asia/Seoul")
+        client.put()
+            .uri(path("tenant-default", clinicId, "laser-care", 7L))
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(invalidInstant)
+            .execute()
+            .also { response ->
+                response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+                assertSanitizedError(response, "VALIDATION_FAILED")
+            }
+    }
+
+    @Test
+    fun `sanitizes unexpected persistence failures`() {
+        transaction {
+            exec(
+                """
+                ALTER TABLE scheduling_product_catalog_bom_items
+                ADD CONSTRAINT reject_catalog_api_laser CHECK (bom_item_id <> 'laser')
+                """.trimIndent()
+            )
+        }
+        val definition = catalogDefinition(clinicId = clinicId)
+
+        val response = try {
+            putCatalog(definition)
+        } finally {
+            transaction {
+                exec("ALTER TABLE scheduling_product_catalog_bom_items DROP CONSTRAINT reject_catalog_api_laser")
+            }
+        }
+
+        response.statusCode shouldBeEqualTo HttpStatus.INTERNAL_SERVER_ERROR
+        assertSanitizedError(response, "INTERNAL_ERROR")
+        response.body.contains(definition.productName).shouldBeFalse()
+        response.body.contains(CatalogPayloadHasher.hash(definition)).shouldBeFalse()
+    }
+
+    private fun putCatalog(
+        definition: ProductCatalogDefinition,
+        payloadHash: String = CatalogPayloadHasher.hash(definition),
+        tenantCode: String = "tenant-default",
+        pathClinicId: Long = definition.clinicId,
+        pathProductId: String = definition.productId,
+        pathVersion: Long = definition.catalogVersion,
+    ) = client.put()
+        .uri(path(tenantCode, pathClinicId, pathProductId, pathVersion))
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(requestJson(definition, payloadHash))
+        .execute()
+
+    private fun path(tenantCode: String, clinicId: Long, productId: String, version: Long) =
+        "/api/$tenantCode/clinics/$clinicId/catalog-products/$productId/versions/$version"
+
+    private fun requestJson(
+        definition: ProductCatalogDefinition,
+        payloadHash: String = CatalogPayloadHasher.hash(definition),
+    ): String =
+        """
+        {
+          "sourceAuthority": "${definition.sourceAuthority}",
+          "tenantGroupId": ${definition.tenantGroupId},
+          "clinicId": ${definition.clinicId},
+          "productId": "${definition.productId}",
+          "catalogVersion": ${definition.catalogVersion},
+          "schemaVersion": ${definition.schemaVersion},
+          "sourceUpdatedAt": "${definition.sourceUpdatedAt}",
+          "productName": "${definition.productName}",
+          "items": [{
+            "bomItemId": "laser",
+            "representativeTreatmentName": "Laser",
+            "detailedTreatmentCodes": ["LASER"],
+            "repeatCount": 3,
+            "durationMinutes": 30,
+            "minimumIntervalDays": 21,
+            "preferredIntervalDays": 28,
+            "maximumIntervalDays": 42,
+            "practitionerQualifications": ["DERMATOLOGIST"],
+            "equipmentTypes": ["LASER_A"],
+            "roomTypes": ["PROCEDURE"]
+          }],
+          "dependencies": [],
+          "initialBookingRule": {
+            "type": "WITHIN_DAYS_AFTER_PURCHASE",
+            "maximumDays": 14
+          },
+          "payloadHash": "$payloadHash"
+        }
+        """.trimIndent()
+
+    private fun assertSanitizedError(
+        response: TestResponse,
+        errorCode: String,
+    ) {
+        response.jsonPath<Boolean>("$.success").shouldBeFalse()
+        response.jsonPath<Any?>("$.data").shouldBeNull()
+        response.jsonPath<String>("$.errorCode") shouldBeEqualTo errorCode
+        response.jsonPath<String>("$.correlationId").isNotBlank().shouldBeTrue()
+        response.jsonPath<Map<String, Any?>>("$").keys shouldBeEqualTo setOf(
+            "success",
+            "data",
+            "error",
+            "errorCode",
+            "correlationId",
+        )
+    }
+
+    private fun TestResponse.bodyText(): String = body
+
+    private fun catalogDefinition(
+        clinicId: Long,
+        version: Long = 7L,
+        productName: String = "Laser Care",
+    ) = ProductCatalogDefinition(
+        sourceAuthority = "product-catalog",
+        tenantGroupId = 1L,
+        clinicId = clinicId,
+        productId = "laser-care",
+        catalogVersion = version,
+        schemaVersion = 1,
+        sourceUpdatedAt = Instant.parse("2026-07-26T05:00:00Z"),
+        productName = productName,
+        items = listOf(
+            CatalogBomItem(
+                bomItemId = "laser",
+                representativeTreatmentName = "Laser",
+                detailedTreatmentCodes = listOf("LASER"),
+                repeatCount = 3,
+                durationMinutes = 30,
+                minimumIntervalDays = 21,
+                preferredIntervalDays = 28,
+                maximumIntervalDays = 42,
+                practitionerQualifications = listOf("DERMATOLOGIST"),
+                equipmentTypes = listOf("LASER_A"),
+                roomTypes = listOf("PROCEDURE"),
+            )
+        ),
+        dependencies = emptyList(),
+        initialBookingRule = InitialBookingRule.WithinDaysAfterPurchase(14),
+    )
+}
+
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = ["appointment.plan-foundation.catalog-sync-enabled=false"],
+)
+class CatalogProductSyncDisabledControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
+
+    @LocalServerPort
+    private var port: Int = 0
+
+    @Test
+    fun `returns a sanitized feature disabled response`() {
+        val response = RestClient.builder()
+            .baseUrl("http://localhost:$port")
+            .build()
+            .put()
+            .uri("/api/tenant-default/clinics/1/catalog-products/laser-care/versions/7")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(
+                """
+                {
+                  "sourceAuthority": "product-catalog",
+                  "tenantGroupId": 1,
+                  "clinicId": 1,
+                  "productId": "laser-care",
+                  "catalogVersion": 7,
+                  "schemaVersion": 1,
+                  "sourceUpdatedAt": "2026-07-26T05:00:00Z",
+                  "productName": "Laser Care",
+                  "items": [{
+                    "bomItemId": "laser",
+                    "representativeTreatmentName": "Laser",
+                    "repeatCount": 1,
+                    "durationMinutes": 30
+                  }],
+                  "dependencies": [],
+                  "payloadHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                }
+                """.trimIndent()
+            )
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
+        response.jsonPath<String>("$.errorCode") shouldBeEqualTo "FEATURE_DISABLED"
+        response.jsonPath<String>("$.correlationId").isNotBlank().shouldBeTrue()
+    }
+}

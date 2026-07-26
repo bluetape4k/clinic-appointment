@@ -11,10 +11,12 @@ import io.bluetape4k.clinic.appointment.repository.DoctorRepository
 import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
 import io.bluetape4k.clinic.appointment.repository.EquipmentUnavailabilityRepository
 import io.bluetape4k.clinic.appointment.repository.HolidayRepository
+import io.bluetape4k.clinic.appointment.repository.ProductCatalogRepository
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
+import io.bluetape4k.clinic.appointment.service.CatalogSyncApplicationService
 import io.bluetape4k.clinic.appointment.service.EquipmentUnavailabilityService
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentStateMachine
@@ -22,8 +24,12 @@ import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
 import io.bluetape4k.logging.KLogging
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.beans.factory.ObjectProvider
+import org.springframework.core.env.Environment
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(PlanFoundationProperties::class)
 class ServiceConfig {
 
     companion object : KLogging()
@@ -62,6 +68,9 @@ class ServiceConfig {
 
     @Bean
     fun tenantGroupRepository(): TenantGroupRepository = TenantGroupRepository()
+
+    @Bean
+    fun productCatalogRepository(): ProductCatalogRepository = ProductCatalogRepository()
 
     @Bean
     fun tenantClinicAccessChecker(
@@ -126,6 +135,19 @@ class ServiceConfig {
         repo = equipmentUnavailabilityRepository,
         appointmentRepository = appointmentRepository,
     )
+
+    @Bean
+    fun catalogSyncApplicationService(
+        productCatalogRepository: ProductCatalogRepository,
+    ): CatalogSyncApplicationService = CatalogSyncApplicationService(productCatalogRepository)
+
+    @Bean
+    fun planFoundationPropertiesValidator(
+        properties: PlanFoundationProperties,
+        environment: Environment,
+        outboxTransportCapability: ObjectProvider<OutboxTransportCapability>,
+    ): PlanFoundationPropertiesValidator =
+        PlanFoundationPropertiesValidator(properties, environment, outboxTransportCapability)
 
     // --- Stats 빈 ---
 

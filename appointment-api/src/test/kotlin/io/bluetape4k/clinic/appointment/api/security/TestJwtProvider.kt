@@ -24,6 +24,8 @@ object TestJwtProvider {
         clinicId: Long? = 1L,
         roles: List<String> = listOf(SchedulingRole.ADMIN),
         allowedTenants: List<String> = listOf(TenantGroups.DEFAULT_TENANT_CODE),
+        scopes: Set<String> = emptySet(),
+        catalogSourceAuthorities: Set<String> = emptySet(),
         expirationMs: Long = 3600000,
     ): String {
         val now = Date()
@@ -34,6 +36,8 @@ object TestJwtProvider {
             .expiration(Date(now.time + expirationMs))
             .claim("roles", roles)
             .claim("allowedTenants", allowedTenants)
+            .claim("scope", scopes.sorted().joinToString(" "))
+            .claim("catalogSourceAuthorities", catalogSourceAuthorities.sorted())
 
         if (clinicId != null) {
             builder.claim("clinicId", clinicId)

@@ -75,7 +75,7 @@ class SecurityConfig {
                     } else {
                         HttpStatus.UNAUTHORIZED
                     }
-                    response.sendError(status.value())
+                    response.status = status.value()
                 }
             }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
@@ -85,6 +85,11 @@ class SecurityConfig {
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
                     .requestMatchers("/api/{tenantCode}/admin/**")
                     .access(adminTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.PUT,
+                        "/api/{tenantCode}/clinics/*/catalog-products/*/versions/*",
+                    )
+                    .access(catalogWriteTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/**")
                     .access(readTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/**")
@@ -120,6 +125,14 @@ class SecurityConfig {
     ): AuthorizationManager<RequestAuthorizationContext> =
         AuthorizationManagers.allOf(
             AuthorityAuthorizationManager.hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF),
+            tenantAuthorizationManager,
+        )
+
+    private fun catalogWriteTenantAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_catalog:write"),
             tenantAuthorizationManager,
         )
 }

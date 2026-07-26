@@ -16,15 +16,32 @@ import java.io.Serializable
 data class SchedulingUserPrincipal(
     val userId: String,
     val clinicId: Long?,
-    val roles: List<String>,
-    val allowedTenants: List<String>,
+    val roles: Set<String>,
+    val allowedTenants: Set<String>,
+    val scopes: Set<String> = emptySet(),
+    val catalogSourceAuthorities: Set<String> = emptySet(),
 ) : UserDetails, Serializable {
     companion object {
-        private const val serialVersionUID = 2L
+        private const val serialVersionUID = 3L
     }
 
+    constructor(
+        userId: String,
+        clinicId: Long?,
+        roles: List<String>,
+        allowedTenants: List<String>,
+    ) : this(
+        userId = userId,
+        clinicId = clinicId,
+        roles = roles.toSet(),
+        allowedTenants = allowedTenants.toSet(),
+    )
+
     override fun getAuthorities(): Collection<GrantedAuthority> =
-        roles.map { SimpleGrantedAuthority("ROLE_$it") }
+        buildSet {
+            roles.mapTo(this) { SimpleGrantedAuthority("ROLE_$it") }
+            scopes.mapTo(this) { SimpleGrantedAuthority("SCOPE_$it") }
+        }
 
     override fun getPassword(): String = ""
     override fun getUsername(): String = userId

@@ -21,3 +21,17 @@ scheduling:
     appointment:
         idempotency:
             ttl: 24h
+
+appointment:
+    plan-foundation:
+        catalog-sync-enabled: false
+        plan-read-enabled: false
+        purchase-consumer-mode: OFF
+        consumer-max-attempts: 5
+        consumer-initial-backoff: 5s
+        consumer-max-backoff: 5m
+        consumer-jitter: 0.20
+        event-replay-window: 15m
+        trust-verification-timeout: 500ms
+        source-authority-timeout: 2s
+        redrive-dry-run-timeout: 10s
