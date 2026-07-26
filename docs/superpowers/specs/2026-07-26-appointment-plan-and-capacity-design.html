@@ -304,6 +304,7 @@
 
     table {
       width: 100%;
+      min-width: 760px;
       border-collapse: collapse;
       background: rgba(12, 27, 46, .7);
       font-size: 14px;
@@ -314,6 +315,12 @@
       border-bottom: 1px solid var(--line);
       text-align: left;
       vertical-align: top;
+    }
+
+    th:first-child,
+    td:first-child {
+      width: 24%;
+      min-width: 11rem;
     }
 
     th {
@@ -498,6 +505,35 @@
           <span class="pill">Controlled Overbooking</span>
         </div>
       </header>
+
+      <section aria-labelledby="foundation-slice-title">
+        <p class="eyebrow">Current executable slice</p>
+        <h2 id="foundation-slice-title">이번 구현은 Appointment Plan Foundation까지</h2>
+        <div class="grid two">
+          <article class="card">
+            <h3 class="green">현재 포함</h3>
+            <ul class="list">
+              <li>tenant·clinic·<code>sourceAuthority</code> 범위 catalog snapshot</li>
+              <li><code>sourcePurchaseAuthority</code>가 포함된 구매 identity에서 plan·진료 의무·dependency 생성</li>
+              <li>inbox/plan/outbox 원자적 수렴</li>
+              <li>병원 운영자용 scope-safe plan 조회</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3 class="orange">후속 roadmap</h3>
+            <ul class="list">
+              <li>방문·item·자원 배정과 slot search</li>
+              <li>PROPOSED·HELD·CONFIRMED와 고객 동의</li>
+              <li>부분 이행·환불·disruption</li>
+              <li>정책 compiler·solver·오버부킹·영업 연장</li>
+            </ul>
+          </article>
+        </div>
+        <div class="callout warning">
+          <h3>Foundation은 예약 확정이나 outbox 전달 완료가 아니다</h3>
+          <p>현재 production consumer <code>WRITE</code>는 transport와 운영 증거가 갖춰질 때까지 차단한다. 비활성 API는 안전한 <code>FEATURE_DISABLED</code> 계약을 사용한다. 이 HTML의 나머지 모델은 장기 설계이며 Markdown의 현재 실행 경계와 인수 명령이 규범이다.</p>
+        </div>
+      </section>
 
       <section id="boundary">
         <p class="eyebrow">01 · Bounded Context</p>
@@ -724,7 +760,7 @@
           </article>
         </div>
 
-        <div class="state-line" aria-label="예약 상태 흐름">
+        <div class="state-line" role="img" aria-label="예약 상태 흐름: PROPOSED에서 HELD, CONFIRMED, CHECKED_IN, IN_PROGRESS를 거쳐 COMPLETED 또는 INTERRUPTED가 된다. PROPOSED와 HELD는 EXPIRED가 될 수 있고, 시작 전에는 CANCELLED, 방문하지 않으면 NO_SHOW가 될 수 있다.">
           <span class="state">PROPOSED</span><span class="arrow">→</span>
           <span class="state">HELD</span><span class="arrow">→</span>
           <span class="state">CONFIRMED</span><span class="arrow">→</span>
@@ -732,6 +768,10 @@
           <span class="state">IN_PROGRESS</span><span class="arrow">→</span>
           <span class="state">COMPLETED / INTERRUPTED</span>
         </div>
+        <p class="muted">
+          종료·이탈 경로: 제안 또는 hold 만료는 <code>EXPIRED</code>, 시작 전 취소는
+          <code>CANCELLED</code>, grace period까지 방문하지 않으면 <code>NO_SHOW</code>다.
+        </p>
 
         <div class="callout danger">
           <h3>확정 예약은 조용히 바꾸지 않는다</h3>
@@ -935,7 +975,7 @@
           </article>
         </div>
 
-        <div class="state-line">
+        <div class="state-line" role="img" aria-label="영업 연장 한도 흐름: 정상 종료, 자동 연장 한도, 승인 필요 한도">
           <span class="state">normalCloseTime</span><span class="arrow">→ soft cost →</span>
           <span class="state">autoExtensionLimit</span><span class="arrow">→ approval / higher cost →</span>
           <span class="state">absoluteExtensionLimit</span>
@@ -1008,8 +1048,8 @@
           </article>
           <article class="card">
             <span class="tag">ADDITIVE SCHEMA</span>
-            <h3>visit shell 유지</h3>
-            <p class="muted">기존 <code>scheduling_appointments</code>는 방문 shell로 유지하고 plan, item, allocation, proposal, policy set, effective snapshot 테이블을 추가한다. 기존 row는 legacy item으로 backfill한다.</p>
+            <h3>후속 visit/item 단계에서 backfill</h3>
+            <p class="muted">Foundation V8은 catalog·plan 기반만 추가하므로 기존 row backfill이 없다. 후속 visit/item 단계에서 <code>scheduling_appointments</code>를 방문 shell로 유지하고 기존 row를 legacy item으로 온라인 backfill한다.</p>
           </article>
         </div>
 
@@ -1112,7 +1152,11 @@
         </div>
         <div class="callout">
           <h3>Normative acceptance</h3>
-          <p>위 목록은 시각 요약이다. duplicate/역순 event, 만료, crash replay, disruption storm, 동시 confirm, tenant·consent 보안, migration·SLO와 실행 명령을 포함한 정식 기준은 <a href="./2026-07-26-appointment-plan-and-capacity-design.md#201-acceptance-commands">Markdown §20 및 §20.1</a>을 따른다.</p>
+          <p>위 목록은 장기 설계의 시각 요약이다. 현재 Foundation 범위, authority-qualified identity, API/event 보안, duplicate/역순 event, migration·SLO와 정확한 실행 명령은 <a href="./2026-07-26-appointment-plan-and-capacity-design.md#201-acceptance-commands">Markdown §20 및 §20.1</a>을 따른다.</p>
+        </div>
+        <div class="callout warning">
+          <h3>Known risks</h3>
+          <p>slot/policy cache와 online backfill 규모, disruption·solver 품질, quarantine과 운영 alert, reliability profile의 이의제기 절차는 각 후속 실행 계획에서 검증해야 한다. 이 HTML은 요약이며 남은 위험과 production enablement gate는 Markdown §17–§21이 규범이다.</p>
         </div>
 
         <div class="callout warning">
