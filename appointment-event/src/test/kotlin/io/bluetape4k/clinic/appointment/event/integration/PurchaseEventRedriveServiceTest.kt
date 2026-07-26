@@ -157,11 +157,15 @@ class PurchaseEventRedriveServiceTest {
             keyId = "patient-key-1",
         )
 
-        val protected = protector.protect("patient-token")
+        val protected = protector.protect(tenantGroupId = 1L, patientReferenceToken = "patient-token")
+        val sameTenant = protector.protect(tenantGroupId = 1L, patientReferenceToken = "patient-token")
+        val otherTenant = protector.protect(tenantGroupId = 2L, patientReferenceToken = "patient-token")
 
         protected.ciphertext.contains("patient-token").shouldBeFalse()
         protected.fingerprint.contains("patient-token").shouldBeFalse()
         protected.keyId shouldBeEqualTo "patient-key-1"
+        sameTenant.fingerprint shouldBeEqualTo protected.fingerprint
+        otherTenant.fingerprint.equals(protected.fingerprint).shouldBeFalse()
     }
 
     @Test
@@ -189,7 +193,7 @@ class PurchaseEventRedriveServiceTest {
         trustVerifier = trustVerifier(),
         eventAdapter = PurchaseCompletedEventAdapter(),
         versionProofProvider = SourceAuthorityVersionProofProvider { null },
-        patientReferenceProtector = PatientReferenceProtector { protected() },
+        patientReferenceProtector = PatientReferenceProtector { _, _ -> protected() },
         handler = handler(PurchaseHandlingMode.WRITE),
         eventRepository = eventRepository,
         clock = clock,
@@ -199,7 +203,7 @@ class PurchaseEventRedriveServiceTest {
         trustVerifier = trustVerifier(),
         eventAdapter = PurchaseCompletedEventAdapter(),
         versionProofProvider = SourceAuthorityVersionProofProvider { null },
-        patientReferenceProtector = PatientReferenceProtector { protected() },
+        patientReferenceProtector = PatientReferenceProtector { _, _ -> protected() },
         writeHandler = handler(PurchaseHandlingMode.WRITE),
         shadowHandler = handler(PurchaseHandlingMode.SHADOW),
     )

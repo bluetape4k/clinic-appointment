@@ -297,5 +297,5 @@ class PurchaseCompletedHandler(
         PurchaseHandleResult(status, reason, planId, replayAfter)
 
     private fun ExposedSQLException.isConstraintConflict(): Boolean =
-        sqlState?.startsWith("23") == true
+        sqlState.startsWith("23")
 }

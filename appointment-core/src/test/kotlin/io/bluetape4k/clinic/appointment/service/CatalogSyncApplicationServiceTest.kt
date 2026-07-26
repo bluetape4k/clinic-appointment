@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomDependency
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogSyncResult
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogSyncStatus
 import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
 import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
@@ -12,13 +13,21 @@ import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependenci
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
 import io.bluetape4k.clinic.appointment.repository.ProductCatalogRepository
+import io.bluetape4k.clinic.appointment.repository.CatalogSyncWriteObserver
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 import java.time.Instant
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
 
 class CatalogSyncApplicationServiceTest {
 
@@ -113,6 +122,67 @@ class CatalogSyncApplicationServiceTest {
         ProductCatalogProjections.selectAll().count() shouldBeEqualTo 0L
         ProductCatalogBomItems.selectAll().count() shouldBeEqualTo 0L
         ProductCatalogBomDependencies.selectAll().count() shouldBeEqualTo 0L
+    }
+
+    @Test
+    fun `concurrent identical and conflicting catalog versions converge deterministically`() {
+        Database.connect(
+            "jdbc:h2:mem:catalog_sync_race_${System.nanoTime()};DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        val clinicId = transaction {
+            SchemaUtils.create(
+                io.bluetape4k.clinic.appointment.model.tables.TenantGroups,
+                Clinics,
+                ProductCatalogProjections,
+                ProductCatalogBomItems,
+                ProductCatalogBomDependencies,
+            )
+            io.bluetape4k.clinic.appointment.model.tables.TenantGroups.insert {
+                it[id] = org.jetbrains.exposed.v1.core.dao.id.EntityID(
+                    1L,
+                    io.bluetape4k.clinic.appointment.model.tables.TenantGroups,
+                )
+                it[tenantCode] = "tenant-default"
+                it[displayName] = "Default"
+                it[active] = true
+            }
+            createClinic()
+        }
+        val original = catalogDefinition(clinicId)
+
+        val identical = raceCatalogSync(original, original)
+        identical.map(CatalogSyncResult::status).toSet() shouldBeEqualTo
+            setOf(CatalogSyncStatus.CREATED, CatalogSyncStatus.UNCHANGED)
+
+        transaction {
+            ProductCatalogBomDependencies.deleteAll()
+            ProductCatalogBomItems.deleteAll()
+            ProductCatalogProjections.deleteAll()
+        }
+        val conflicting = original.copy(productName = "Concurrent conflict")
+        val conflictResults = raceCatalogSync(original, conflicting)
+        conflictResults.map(CatalogSyncResult::status).toSet() shouldBeEqualTo
+            setOf(CatalogSyncStatus.CREATED, CatalogSyncStatus.VERSION_CONFLICT)
+    }
+
+    private fun raceCatalogSync(
+        first: ProductCatalogDefinition,
+        second: ProductCatalogDefinition,
+    ): List<CatalogSyncResult> {
+        val barrier = CyclicBarrier(2)
+        val repository = ProductCatalogRepository(CatalogSyncWriteObserver { barrier.await() })
+        val concurrentService = CatalogSyncApplicationService(repository)
+        val executor = Executors.newFixedThreadPool(2)
+        return try {
+            listOf(first, second).map { definition ->
+                executor.submit<CatalogSyncResult> {
+                    concurrentService.synchronize(definition, CatalogPayloadHasher.hash(definition))
+                }
+            }.map { it.get() }
+        } finally {
+            executor.shutdownNow()
+        }
     }
 
     private fun withCatalogTables(block: JdbcTransaction.() -> Unit) {

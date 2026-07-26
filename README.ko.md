@@ -25,7 +25,18 @@ Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제�
 - **AI 최적 스케줄링** - Timefold Solver로 의사, 장비, 영업시간을 포함한 12개 Hard + 6개 Soft 제약을 만족하는 최적 배치
 - **고가용성 알림** - Redis Leader Election으로 단일 노드 전송 보장, Resilience4j CircuitBreaker/Retry/Bulkhead 적용
 - **테넌트 범위 REST API** - `/api/{tenantCode}/...` 경로, JWT tenant 인가, Flyway 마이그레이션, Swagger UI 제공
+- **예약 플랜 기반** - 구매 상품 BOM을 불변 진료 의무로 스냅샷하고, 카탈로그 동기화와 신뢰된 구매 이벤트를 통해 방문 예약 이전 단계를 관리
 - **Angular 18 웹 UI** - 예약 조회/생성/상태 변경 인터페이스
+
+### 예약 플랜 경계
+
+`AppointmentPlan`은 한 번의 구매로 병원이 제공해야 할 진료 의무를 기록합니다.
+방문 예약은 그중 어떤 진료를 언제 진행할지 기록합니다. 이번 기반 구현은 카탈로그
+스냅샷, 진료 회차, 의존관계, 구매 inbox 판정, 대기 중인 plan-created outbox 이벤트를
+저장합니다.
+
+방문 일정 배정, 자원 선점, 고객 동의, outbox 발행, 시술 완료·환불 처리는 구현하지
+않았습니다. 이 기능들은 별도 워크플로와 서비스의 책임입니다.
 
 ## 아키텍처
 
@@ -99,6 +110,8 @@ Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제�
 | [AI 스케줄러](docs/requirements/solver.md) | Timefold Solver 제약조건 설계 |
 | [알림 모듈](docs/requirements/notification.md) | 알림 채널, HA 구성, Resilience4j |
 | [프론트엔드](docs/requirements/frontend.md) | Angular 구성, 페이지 구조 |
+| [예약 플랜 설계](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 가예약, 장애 재조정, 병원 정책을 다루는 대화형 설계 문서 |
+| [예약 플랜 복구 런북](docs/runbooks/appointment-plan-foundation-recovery.md) | 격리 확인, dry-run redrive, 롤백, 원천 서비스 책임 |
 
 ### 변경 이력
 

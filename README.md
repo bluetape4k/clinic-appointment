@@ -26,7 +26,19 @@ notifications, Spring Boot APIs, and an Angular frontend.
 - **AI schedule optimization** - Uses Timefold Solver to assign appointments while satisfying doctor, equipment, business-hour, 12 hard, and 6 soft constraints.
 - **High-availability notifications** - Uses Redis Leader Election to guarantee single-node delivery, with Resilience4j CircuitBreaker/Retry/Bulkhead.
 - **Tenant-scoped REST API** - Provides Spring Boot 4 MVC APIs under `/api/{tenantCode}/...` with JWT tenant authorization, Flyway migrations, and Swagger UI.
+- **Appointment plan foundation** - Snapshots a purchased product BOM into immutable treatment obligations through catalog sync and trusted purchase-event convergence, before any visit is scheduled.
 - **Angular 18 web UI** - Provides appointment search, creation, and status-change workflows.
+
+### Appointment Plan Boundary
+
+An `AppointmentPlan` records what the clinic owes for one purchase. A visit
+appointment records when selected treatments will be performed. The foundation
+implemented here stores catalog snapshots, treatment occurrences, dependency
+edges, purchase inbox decisions, and a pending plan-created outbox event.
+
+It does **not** schedule visits, reserve resources, obtain customer consent,
+publish the outbox, or process treatment completion/refunds. Those capabilities
+remain separate workflows and services.
 
 ## Architecture
 
@@ -100,6 +112,8 @@ Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seede
 | [AI Scheduler](docs/requirements/solver.md) | Timefold Solver constraint design. |
 | [Notification Module](docs/requirements/notification.md) | Notification channels, HA configuration, and Resilience4j. |
 | [Frontend](docs/requirements/frontend.md) | Angular structure and page design. |
+| [Appointment plan design](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | Interactive plan, provisional booking, disruption, and policy design. |
+| [Appointment plan recovery](docs/runbooks/appointment-plan-foundation-recovery.md) | Quarantine inspection, dry-run redrive, rollback, and authority ownership. |
 
 ### Change History
 
