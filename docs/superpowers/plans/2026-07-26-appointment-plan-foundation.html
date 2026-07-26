@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Appointment Plan Foundation · Implementation Plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: #0d1c30;
+      --panel-2: #10243c;
+      --line: #25415f;
+      --text: #edf6ff;
+      --muted: #9db2c9;
+      --cyan: #55d6e6;
+      --blue: #6da5ff;
+      --green: #70dfac;
+      --amber: #ffc96b;
+      --red: #ff8292;
+      --radius: 18px;
+      --shadow: 0 18px 48px rgba(0, 0, 0, .24);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 75% 0%, rgba(58, 112, 164, .22), transparent 38rem),
+        radial-gradient(circle at 0% 60%, rgba(47, 163, 171, .09), transparent 34rem),
+        var(--bg);
+      font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+
+    a { color: var(--cyan); }
+
+    code {
+      padding: .14em .42em;
+      border: 1px solid rgba(109, 165, 255, .32);
+      border-radius: 7px;
+      color: #dbeaff;
+      background: rgba(109, 165, 255, .1);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: .88em;
+      overflow-wrap: anywhere;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 26px 18px;
+      border-right: 1px solid var(--line);
+      background: rgba(5, 14, 26, .82);
+      backdrop-filter: blur(18px);
+      overflow: auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      margin-bottom: 24px;
+      font-weight: 850;
+      line-height: 1.3;
+    }
+
+    .logo {
+      display: grid;
+      width: 39px;
+      height: 39px;
+      place-items: center;
+      flex: 0 0 auto;
+      border: 1px solid rgba(85, 214, 230, .48);
+      border-radius: 12px;
+      color: var(--cyan);
+      background: linear-gradient(145deg, rgba(85, 214, 230, .2), rgba(109, 165, 255, .07));
+    }
+
+    nav a {
+      display: block;
+      padding: 8px 10px;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+    }
+
+    nav a:hover {
+      border-color: var(--cyan);
+      color: var(--text);
+      background: rgba(85, 214, 230, .06);
+    }
+
+    main {
+      width: min(1180px, 100%);
+      min-width: 0;
+      padding: 52px 52px 96px;
+      margin: 0 auto;
+    }
+
+    .hero {
+      position: relative;
+      padding: 52px;
+      border: 1px solid rgba(109, 165, 255, .26);
+      border-radius: 30px;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(33, 78, 112, .68), rgba(27, 38, 73, .5)),
+        var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      right: -130px;
+      bottom: -190px;
+      border: 58px solid rgba(85, 214, 230, .08);
+      border-radius: 50%;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 { line-height: 1.22; letter-spacing: -.035em; }
+    h1 { max-width: 840px; margin: 0; font-size: clamp(38px, 6vw, 66px); }
+    h2 { margin: 0 0 22px; font-size: clamp(27px, 4vw, 41px); }
+    h3 { margin: 0 0 10px; font-size: 20px; }
+    p { margin: 0 0 16px; }
+
+    .lead {
+      max-width: 850px;
+      margin: 22px 0 0;
+      color: #c7d9ec;
+      font-size: 18px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 26px;
+    }
+
+    .pill {
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: #c7d9ec;
+      background: rgba(8, 21, 37, .58);
+      font-size: 12px;
+    }
+
+    section { padding-top: 80px; scroll-margin-top: 24px; }
+    .section-lead { max-width: 880px; color: var(--muted); font-size: 17px; }
+    .grid { display: grid; gap: 16px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    .card {
+      min-width: 0;
+      padding: 21px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, .12);
+    }
+
+    .card p:last-child { margin-bottom: 0; }
+    .muted { color: var(--muted); }
+    .green { color: var(--green); }
+    .amber { color: var(--amber); }
+    .red { color: var(--red); }
+
+    .tag {
+      display: inline-block;
+      margin-bottom: 12px;
+      padding: 4px 8px;
+      border-radius: 8px;
+      color: var(--cyan);
+      background: rgba(85, 214, 230, .1);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .05em;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 28px;
+      margin: 30px 0;
+    }
+
+    .flow .node {
+      position: relative;
+      min-width: 0;
+      min-height: 118px;
+      padding: 17px;
+      border: 1px solid rgba(109, 165, 255, .3);
+      border-radius: 16px;
+      background: linear-gradient(145deg, rgba(36, 73, 111, .58), rgba(15, 31, 52, .9));
+    }
+
+    .flow .node:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: -22px;
+      color: var(--cyan);
+      font-size: 23px;
+      transform: translateY(-50%);
+    }
+
+    .node small {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .callout {
+      margin: 24px 0;
+      padding: 21px 23px;
+      border: 1px solid rgba(85, 214, 230, .28);
+      border-left: 4px solid var(--cyan);
+      border-radius: 14px;
+      background: linear-gradient(90deg, rgba(85, 214, 230, .1), rgba(13, 28, 48, .48));
+    }
+
+    .callout.warning {
+      border-color: rgba(255, 201, 107, .3);
+      border-left-color: var(--amber);
+      background: linear-gradient(90deg, rgba(255, 201, 107, .09), rgba(13, 28, 48, .48));
+    }
+
+    .steps {
+      counter-reset: plan-step;
+      display: grid;
+      gap: 12px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .steps li {
+      counter-increment: plan-step;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 13px;
+      align-items: start;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: #cfdeee;
+      background: rgba(13, 28, 48, .7);
+    }
+
+    .steps li::before {
+      content: counter(plan-step);
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 10px;
+      color: #06131e;
+      background: var(--cyan);
+      font-weight: 900;
+    }
+
+    .steps li > span { min-width: 0; }
+    .steps strong { color: white; }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+    }
+
+    table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+      background: rgba(12, 27, 46, .74);
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 14px 15px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+
+    th {
+      color: #ddecff;
+      background: rgba(44, 78, 115, .35);
+      font-size: 12px;
+      letter-spacing: .03em;
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: rgba(85, 214, 230, .035); }
+
+    .phase-table col:nth-child(1) { width: 12%; }
+    .phase-table col:nth-child(2) { width: 24%; }
+    .phase-table col:nth-child(3) { width: 42%; }
+    .phase-table col:nth-child(4) { width: 22%; }
+
+    .risk-table col:nth-child(1) { width: 22%; }
+    .risk-table col:nth-child(2) { width: 23%; }
+    .risk-table col:nth-child(3) { width: 31%; }
+    .risk-table col:nth-child(4) { width: 24%; }
+
+    .contract {
+      display: grid;
+      grid-template-columns: 1fr 72px 1fr 72px 1fr;
+      align-items: stretch;
+      gap: 10px;
+      margin: 28px 0;
+    }
+
+    .contract .box {
+      min-width: 0;
+      padding: 20px;
+      border: 1px solid rgba(154, 184, 220, .28);
+      border-radius: 17px;
+      background: var(--panel);
+    }
+
+    .contract .arrow {
+      display: grid;
+      place-items: center;
+      color: var(--cyan);
+      font-size: 25px;
+    }
+
+    footer {
+      margin-top: 84px;
+      padding-top: 27px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 1050px) {
+      .shell { grid-template-columns: 1fr; }
+      nav { position: static; width: 100%; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+      nav .links { display: flex; flex-wrap: wrap; }
+      nav a { border-left: 0; }
+      main { padding: 36px 24px 78px; }
+      .flow { grid-template-columns: 1fr; }
+      .flow .node:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -29px; transform: translateX(50%); }
+      .contract { grid-template-columns: 1fr; }
+      .contract .arrow { transform: rotate(90deg); }
+    }
+
+    @media (max-width: 760px) {
+      .hero { padding: 32px 23px; }
+      .grid.two, .grid.three { grid-template-columns: 1fr; }
+      section { padding-top: 58px; }
+      nav .links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      nav a { min-width: 0; overflow-wrap: anywhere; }
+      .steps li { grid-template-columns: 38px minmax(0, 1fr); padding: 14px; gap: 10px; }
+    }
+
+    @media print {
+      :root { --bg: white; --text: #172235; --muted: #526075; --panel: white; --line: #ccd4df; }
+      body { background: white; color: #172235; }
+      .shell { display: block; }
+      nav { display: none; }
+      main { width: 100%; padding: 0; }
+      .hero, .card, .node, .box, .steps li, table { background: white !important; box-shadow: none; }
+      section { break-inside: avoid; }
+      a { color: #155ca8; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav aria-label="문서 목차">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">01</div>
+        <div>Plan Foundation<br><span class="muted">Implementation Slice</span></div>
+      </div>
+      <div class="links">
+        <a href="#boundary">01 범위</a>
+        <a href="#architecture">02 실행 경계</a>
+        <a href="#tasks">03 구현 순서</a>
+        <a href="#roadmap">04 후속 로드맵</a>
+        <a href="#traceability">05 인수 기준</a>
+        <a href="#risks">06 위험과 복구</a>
+        <a href="#done">07 완료 조건</a>
+      </div>
+    </nav>
+
+    <main>
+      <header class="hero">
+        <p class="eyebrow">Implementation Plan · Slice 1</p>
+        <h1>상품 snapshot을<br>진료 의무로 전개한다</h1>
+        <p class="lead">
+          카탈로그 version을 안전하게 동기화하고, 구매 event 한 건을 하나의
+          <code>AppointmentPlan</code>과 결정적인 <code>PlannedTreatment</code> DAG로 만든다.
+          방문 예약과 자원 선점은 다음 slice로 미룬다.
+        </p>
+        <div class="meta">
+          <span class="pill">Type A · Foundation</span>
+          <span class="pill">Kotlin 2.3</span>
+          <span class="pill">Spring Boot 4</span>
+          <span class="pill">Exposed + Flyway V8</span>
+          <span class="pill">H2 · PostgreSQL · MySQL</span>
+        </div>
+      </header>
+
+      <section id="boundary">
+        <p class="eyebrow">01 · Delivery Boundary</p>
+        <h2>이번 배포는 “계획”까지만 만든다</h2>
+        <div class="grid two">
+          <article class="card">
+            <span class="tag">IN</span>
+            <h3 class="green">구매가 만든 미래 의무</h3>
+            <p class="muted">catalog version, BOM, 반복 횟수, dependency, 고객 희망 일정, plan 상태, inbox/outbox를 저장하고 조회한다.</p>
+          </article>
+          <article class="card">
+            <span class="tag">OUT</span>
+            <h3 class="amber">아직 방문을 만들지 않는다</h3>
+            <p class="muted"><code>AppointmentItem</code>, allocation, hold, confirm, consent, refund, disruption, overbooking과 broker publish/ack는 후속 slice다.</p>
+          </article>
+        </div>
+        <div class="callout warning">
+          <p><strong>순서 보정:</strong> 예약 확정은 typed policy snapshot을 요구한다. 따라서 plan foundation 다음에 policy foundation을 먼저 구현하고, 그 뒤 visit/commitment로 간다.</p>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <p class="eyebrow">02 · Module Boundary</p>
+        <h2>core는 사실을, event는 수렴을, API는 adapter를 맡는다</h2>
+        <div class="contract">
+          <div class="box">
+            <span class="tag">appointment-core</span>
+            <h3>Typed aggregate</h3>
+            <p class="muted">catalog validation, deterministic hash, plan factory, Exposed repositories.</p>
+          </div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="box">
+            <span class="tag">appointment-event</span>
+            <h3>Atomic convergence</h3>
+            <p class="muted">signed envelope 검증 뒤 inbox claim, plan creation, outbox insert를 한 transaction으로 묶는다.</p>
+          </div>
+          <div class="arrow" aria-hidden="true">→</div>
+          <div class="box">
+            <span class="tag">appointment-api</span>
+            <h3>HTTP adapter</h3>
+            <p class="muted">catalog sync와 tenant-scoped plan query만 공개한다.</p>
+          </div>
+        </div>
+
+        <div class="flow">
+          <div class="node"><strong>Catalog PUT</strong><small>version · BOM · claimed hash</small></div>
+          <div class="node"><strong>Validate</strong><small>bounds · known refs · DAG · actual hash</small></div>
+          <div class="node"><strong>Trusted event</strong><small>signature · issuer · audience · replay window</small></div>
+          <div class="node"><strong>Expand plan</strong><small>repeat count → treatment sequence</small></div>
+          <div class="node"><strong>Outbox</strong><small>pending enqueue ≠ delivered</small></div>
+        </div>
+      </section>
+
+      <section id="tasks">
+        <p class="eyebrow">03 · Execution Order</p>
+        <h2>7개 task, 매 단계 RED → GREEN → commit</h2>
+        <ol class="steps">
+          <li><span><strong>계약 고정</strong><br>catalog·plan value model, bounded validator, deterministic hasher를 순수 Kotlin으로 만든다.</span></li>
+          <li><span><strong>aggregate 저장</strong><br>catalog 3개 테이블과 plan 3개 테이블, repository, mapper를 multi-dialect test로 고정한다.</span></li>
+          <li><span><strong>V8 schema parity</strong><br>core 6개 테이블과 inbox/outbox를 H2·PostgreSQL·MySQL에 additive migration한다.</span></li>
+          <li><span><strong>catalog sync API</strong><br>전용 source authority 아래 <code>CREATED</code>, <code>UNCHANGED</code>, <code>STALE_IGNORED</code>, conflict 계약을 제공한다.</span></li>
+          <li><span><strong>purchase event 수렴</strong><br>OFF/SHADOW/WRITE gate 아래 inbox + plan + outbox를 한 transaction에서 처리하고 중복·scope mismatch·redrive를 검증한다.</span></li>
+          <li><span><strong>plan read API</strong><br>clinic operator가 tenant/clinic 범위 안에서 상품 근거, 희망 일정, treatment DAG를 조회한다.</span></li>
+          <li><span><strong>문서·회귀·리뷰</strong><br>README parity, migration matrix, module regression, 보안·안정성 review를 수렴한다.</span></li>
+        </ol>
+      </section>
+
+      <section id="roadmap">
+        <p class="eyebrow">04 · Follow-up Roadmap</p>
+        <h2>정책을 먼저 세우고 실제 예약으로 간다</h2>
+        <div class="table-wrap">
+          <table class="phase-table">
+            <colgroup><col><col><col><col></colgroup>
+            <thead>
+              <tr><th>순서</th><th>실행 계획</th><th>주요 결과</th><th>선행 조건</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td>Plan foundation</td><td>catalog · purchase snapshot · treatment DAG</td><td>승인된 설계</td></tr>
+              <tr><td>2</td><td>Policy foundation</td><td>tenant default · clinic override · effective snapshot · generation</td><td>plan identity</td></tr>
+              <tr><td>3</td><td>Visit &amp; commitment</td><td>item · allocation · proposal · hold · confirm · consent</td><td>plan + policy</td></tr>
+              <tr><td>4</td><td>Fulfillment</td><td>actual completion · partial · retry · refund · cross-plan visit</td><td>item lifecycle</td></tr>
+              <tr><td>5</td><td>Disruption</td><td>case · proposal · solver partition · notification</td><td>consent + allocation</td></tr>
+              <tr><td>6</td><td>Capacity operations</td><td>reliability · overbooking · extension · SLA</td><td>policy + solver</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="traceability">
+        <p class="eyebrow">05 · Acceptance Traceability</p>
+        <h2>이번 slice가 증명하는 것</h2>
+        <div class="grid three">
+          <article class="card">
+            <span class="tag">AC-1</span>
+            <h3>N회 반복 전개</h3>
+            <p class="muted">repeat count가 정확한 수의 treatment와 sequence를 만든다.</p>
+          </article>
+          <article class="card">
+            <span class="tag">AC-2</span>
+            <h3>패키지 DAG</h3>
+            <p class="muted">기본은 선행 마지막 회차 → 후속 첫 회차이며, 명시한 sequence는 pairwise dependency로 보존한다.</p>
+          </article>
+          <article class="card">
+            <span class="tag">AC-16</span>
+            <h3>중복 수렴</h3>
+            <p class="muted">catalog version과 purchase event가 재전송되어도 plan은 하나다.</p>
+          </article>
+          <article class="card">
+            <span class="tag">AC-21</span>
+            <h3>Scope fail-closed</h3>
+            <p class="muted">tenant/clinic 불일치는 저장하지 않고 존재도 노출하지 않는다.</p>
+          </article>
+          <article class="card">
+            <span class="tag">AC-23</span>
+            <h3>Additive migration</h3>
+            <p class="muted">기존 appointment row와 state/API를 그대로 둔다.</p>
+          </article>
+          <article class="card">
+            <span class="tag">PRECURSOR</span>
+            <h3>희망 일정 보존</h3>
+            <p class="muted">날짜 계산은 하지 않고 구매 시 받은 preference snapshot만 잃지 않는다.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="risks">
+        <p class="eyebrow">06 · Risk &amp; Recovery</p>
+        <h2>실패 지점마다 재실행 경계를 둔다</h2>
+        <div class="table-wrap">
+          <table class="risk-table">
+            <colgroup><col><col><col><col></colgroup>
+            <thead>
+              <tr><th>위험</th><th>탐지 신호</th><th>방어</th><th>복구</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>version 의미 충돌</td><td>같은 version, 다른 hash</td><td>immutable unique + conflict</td><td>sync route 중지, source 확인</td></tr>
+              <tr><td>중복 plan</td><td>event/purchase unique race</td><td>inbox + source purchase unique</td><td>named event re-drive</td></tr>
+              <tr><td>부분 commit</td><td>inbox만 있고 outbox 없음</td><td>하나의 DB transaction</td><td>rollback test 후 재처리</td></tr>
+              <tr><td>scope 오염</td><td>event/catalog clinic 불일치</td><td>소유권 재검증</td><td>quarantine + alert</td></tr>
+              <tr><td>위조·stale event</td><td>signature/issuer/audience/replay 실패</td><td>verified envelope만 handler 진입</td><td>격리, generic replay 금지</td></tr>
+              <tr><td>legacy 회귀</td><td>V8 전후 appointment diff</td><td>additive schema</td><td>새 write flag off</td></tr>
+              <tr><td>전달 완료 오인</td><td>outbox pending age 증가</td><td>enqueue와 ack 상태 분리, production WRITE 금지</td><td>transport 후속 계획 전까지 OFF/SHADOW</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="done">
+        <p class="eyebrow">07 · Stop Condition</p>
+        <h2>여기까지 증명되면 첫 slice가 끝난다</h2>
+        <div class="callout">
+          <p>
+            한 구매는 하나의 plan과 결정적인 treatment DAG를 만들고, catalog·event 재전송은 중복을 만들지 않으며,
+            tenant/clinic 경계를 넘지 않는다. 세 DB migration이 통과하고 기존 appointment API가 그대로 동작해야 한다.
+            outbox enqueue는 delivery 완료로 표시하지 않으며 transport가 연결되기 전 production WRITE는 비활성이다.
+          </p>
+        </div>
+        <div class="grid two">
+          <article class="card">
+            <h3 class="green">완료 증거</h3>
+            <p class="muted">targeted RED/GREEN, migration matrix, shadow diff, redrive·rollback rehearsal, redacted ops proof, module tests/build, P0=0/P1=0.</p>
+          </article>
+          <article class="card">
+            <h3 class="amber">다음 gate</h3>
+            <p class="muted">계획 승인 후 Task 1부터 subagent-driven TDD로 실행한다. PR·push·merge는 별도 권한이다.</p>
+          </article>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          상세 실행 절차: <a href="./2026-07-26-appointment-plan-foundation.md">Markdown plan</a>
+          · 원 설계: <a href="../specs/2026-07-26-appointment-plan-and-capacity-design.html">HTML design</a>
+        </p>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
