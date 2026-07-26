@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Profile
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.security.authorization.AuthenticatedAuthorizationManager
+import org.springframework.security.authorization.AuthorizationDecision
 import org.springframework.security.authorization.AuthorizationManager
 import org.springframework.security.authorization.AuthorizationManagers
 import org.springframework.security.authorization.AuthorityAuthorizationManager
@@ -90,6 +91,11 @@ class SecurityConfig {
                         "/api/{tenantCode}/clinics/*/catalog-products/*/versions/*",
                     )
                     .access(catalogWriteTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/{tenantCode}/clinics/{clinicId}/appointment-plans/**",
+                    )
+                    .access(clinicOperatorReadAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/**")
                     .access(readTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/**")
@@ -134,6 +140,23 @@ class SecurityConfig {
         AuthorizationManagers.allOf(
             AuthorityAuthorizationManager.hasAuthority("SCOPE_catalog:write"),
             tenantAuthorizationManager,
+        )
+
+    private fun clinicOperatorReadAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(
+                SchedulingRole.ADMIN,
+                SchedulingRole.STAFF,
+                SchedulingRole.DOCTOR,
+            ),
+            tenantAuthorizationManager,
+            AuthorizationManager { authentication, context ->
+                val principal = authentication.get().principal as? SchedulingUserPrincipal
+                val requestedClinicId = context.variables["clinicId"]?.toLongOrNull()
+                AuthorizationDecision(principal?.clinicId != null && principal.clinicId == requestedClinicId)
+            },
         )
 }
 

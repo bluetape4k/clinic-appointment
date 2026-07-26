@@ -24,15 +24,22 @@ import io.bluetape4k.clinic.appointment.model.dto.ProductCatalogProjectionRecord
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlans
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
+import io.bluetape4k.clinic.appointment.model.tables.PlannedTreatments
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependencies
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.model.tables.TreatmentDependencies
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.ProductCatalogRepository
 import io.bluetape4k.clinic.appointment.service.AppointmentPlanFactory
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -72,6 +79,20 @@ class PurchaseCompletedDialectIntegrationTest : AbstractApiIntegrationTest() {
                 it[name] = "Dialect Integration Clinic"
             }.value
             catalogRepository.saveAggregate(catalog())
+        }
+    }
+
+    @AfterEach
+    fun cleanUpCatalog() {
+        transaction {
+            SchedulingOutboxEvents.deleteAll()
+            SchedulingInboxEvents.deleteAll()
+            TreatmentDependencies.deleteAll()
+            PlannedTreatments.deleteAll()
+            AppointmentPlans.deleteAll()
+            ProductCatalogBomDependencies.deleteAll()
+            ProductCatalogBomItems.deleteAll()
+            ProductCatalogProjections.deleteAll()
         }
     }
 
