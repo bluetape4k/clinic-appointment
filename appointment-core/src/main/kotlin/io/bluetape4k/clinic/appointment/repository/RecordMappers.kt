@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.repository
 
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentPlanRecord
 import io.bluetape4k.clinic.appointment.model.dto.BreakTimeRecord
 import io.bluetape4k.clinic.appointment.model.dto.ClinicClosureRecord
 import io.bluetape4k.clinic.appointment.model.dto.ClinicDefaultBreakTimeRecord
@@ -12,11 +13,22 @@ import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityExcepti
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityRecord
 import io.bluetape4k.clinic.appointment.model.dto.HolidayRecord
 import io.bluetape4k.clinic.appointment.model.dto.OperatingHoursRecord
+import io.bluetape4k.clinic.appointment.model.dto.PlannedTreatmentKey
+import io.bluetape4k.clinic.appointment.model.dto.PlannedTreatmentRecord
+import io.bluetape4k.clinic.appointment.model.dto.ProductCatalogProjectionRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.RescheduleCandidateRecord
 import io.bluetape4k.clinic.appointment.model.dto.TenantGroupRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentEquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
+import io.bluetape4k.clinic.appointment.model.dto.TreatmentDependencyRecord
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomDependency
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
+import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
+import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
+import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
+import io.bluetape4k.clinic.appointment.model.plan.LocalTimeWindow
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlans
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
 import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
@@ -31,10 +43,22 @@ import io.bluetape4k.clinic.appointment.model.tables.DoctorSchedules
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
+import io.bluetape4k.clinic.appointment.model.tables.PlannedTreatments
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependencies
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.model.tables.TreatmentDependencies
 import org.jetbrains.exposed.v1.core.ResultRow
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 fun ResultRow.toTenantGroupRecord() = TenantGroupRecord(
     id = this[TenantGroups.id].value,
@@ -206,3 +230,194 @@ fun ResultRow.toEquipmentUnavailabilityExceptionRecord() = EquipmentUnavailabili
     rescheduledEndTime = this[EquipmentUnavailabilityExceptions.rescheduledEndTime],
     reason = this[EquipmentUnavailabilityExceptions.reason],
 )
+
+internal fun ResultRow.toCatalogBomItem(): CatalogBomItem = CatalogBomItem(
+    bomItemId = this[ProductCatalogBomItems.bomItemId],
+    representativeTreatmentName = this[ProductCatalogBomItems.representativeTreatmentName],
+    detailedTreatmentCodes = decodeStringList(this[ProductCatalogBomItems.detailedTreatmentCodesJson]),
+    repeatCount = this[ProductCatalogBomItems.repeatCount],
+    durationMinutes = this[ProductCatalogBomItems.durationMinutes],
+    minimumIntervalDays = this[ProductCatalogBomItems.minimumIntervalDays],
+    preferredIntervalDays = this[ProductCatalogBomItems.preferredIntervalDays],
+    maximumIntervalDays = this[ProductCatalogBomItems.maximumIntervalDays],
+    practitionerQualifications = decodeStringList(this[ProductCatalogBomItems.practitionerQualificationsJson]),
+    equipmentTypes = decodeStringList(this[ProductCatalogBomItems.equipmentTypesJson]),
+    roomTypes = decodeStringList(this[ProductCatalogBomItems.roomTypesJson]),
+)
+
+internal fun ResultRow.toCatalogBomDependency(): CatalogBomDependency = CatalogBomDependency(
+    predecessorBomItemId = this[ProductCatalogBomDependencies.predecessorBomItemId],
+    predecessorSequenceNo = this[ProductCatalogBomDependencies.predecessorSequenceNo].sentinelToSequence(),
+    successorBomItemId = this[ProductCatalogBomDependencies.successorBomItemId],
+    successorSequenceNo = this[ProductCatalogBomDependencies.successorSequenceNo].sentinelToSequence(),
+    minimumIntervalDays = this[ProductCatalogBomDependencies.minimumIntervalDays],
+    preferredIntervalDays = this[ProductCatalogBomDependencies.preferredIntervalDays],
+    maximumIntervalDays = this[ProductCatalogBomDependencies.maximumIntervalDays],
+)
+
+internal fun ResultRow.toProductCatalogProjectionRecord(
+    items: List<CatalogBomItem>,
+    dependencies: List<CatalogBomDependency>,
+): ProductCatalogProjectionRecord {
+    val rule = when (this[ProductCatalogProjections.initialBookingRuleType]) {
+        null -> null
+        "WITHIN_DAYS_AFTER_PURCHASE" -> InitialBookingRule.WithinDaysAfterPurchase(
+            requireNotNull(this[ProductCatalogProjections.initialBookingMaximumDays])
+        )
+        else -> error("Unknown initial booking rule type")
+    }
+    return ProductCatalogProjectionRecord(
+        id = this[ProductCatalogProjections.id].value,
+        definition = ProductCatalogDefinition(
+            tenantGroupId = this[ProductCatalogProjections.tenantGroupId].value,
+            clinicId = this[ProductCatalogProjections.clinicId].value,
+            sourceAuthority = this[ProductCatalogProjections.sourceAuthority],
+            productId = this[ProductCatalogProjections.productId],
+            catalogVersion = this[ProductCatalogProjections.catalogVersion],
+            productName = this[ProductCatalogProjections.productName],
+            schemaVersion = this[ProductCatalogProjections.schemaVersion],
+            sourceUpdatedAt = this[ProductCatalogProjections.sourceUpdatedAt],
+            items = items,
+            dependencies = dependencies,
+            initialBookingRule = rule,
+        ),
+        payloadHash = this[ProductCatalogProjections.payloadHash],
+        createdAt = this[ProductCatalogProjections.createdAt],
+    )
+}
+
+internal fun ResultRow.toAppointmentPlanRecord(): AppointmentPlanRecord =
+    AppointmentPlanRecord(
+        id = this[AppointmentPlans.id].value,
+        tenantGroupId = this[AppointmentPlans.tenantGroupId].value,
+        clinicId = this[AppointmentPlans.clinicId].value,
+        catalogProjectionId = this[AppointmentPlans.catalogProjectionId].value,
+        sourcePurchaseAuthority = this[AppointmentPlans.sourcePurchaseAuthority],
+        sourcePurchaseId = this[AppointmentPlans.sourcePurchaseId],
+        patientReferenceCiphertext = this[AppointmentPlans.patientReferenceCiphertext],
+        patientReferenceKeyId = this[AppointmentPlans.patientReferenceKeyId],
+        patientReferenceFingerprint = this[AppointmentPlans.patientReferenceFingerprint],
+        productId = this[AppointmentPlans.productId],
+        catalogVersion = this[AppointmentPlans.catalogVersion],
+        catalogPayloadHash = this[AppointmentPlans.catalogPayloadHash],
+        productName = this[AppointmentPlans.productName],
+        bookingPreference = decodeBookingPreference(
+            this[AppointmentPlans.bookingPreferenceType],
+            this[AppointmentPlans.bookingPreferencePayload],
+        ),
+        status = this[AppointmentPlans.status],
+        createdAt = this[AppointmentPlans.createdAt],
+        updatedAt = this[AppointmentPlans.updatedAt],
+    )
+
+internal fun ResultRow.toPlannedTreatmentRecord(): PlannedTreatmentRecord =
+    PlannedTreatmentRecord(
+        id = this[PlannedTreatments.id].value,
+        planId = this[PlannedTreatments.planId].value,
+        bomItemId = this[PlannedTreatments.bomItemId],
+        sequenceNo = this[PlannedTreatments.sequenceNo],
+        bomOrder = this[PlannedTreatments.bomOrder],
+        representativeTreatmentName = this[PlannedTreatments.representativeTreatmentName],
+        detailedTreatmentCodes = decodeStringList(this[PlannedTreatments.detailedTreatmentCodesJson]),
+        durationMinutes = this[PlannedTreatments.durationMinutes],
+        minimumIntervalDays = this[PlannedTreatments.minimumIntervalDays],
+        preferredIntervalDays = this[PlannedTreatments.preferredIntervalDays],
+        maximumIntervalDays = this[PlannedTreatments.maximumIntervalDays],
+        practitionerQualifications = decodeStringList(this[PlannedTreatments.practitionerQualificationsJson]),
+        equipmentTypes = decodeStringList(this[PlannedTreatments.equipmentTypesJson]),
+        roomTypes = decodeStringList(this[PlannedTreatments.roomTypesJson]),
+        earliestStartAt = this[PlannedTreatments.earliestStartAt],
+        latestStartAt = this[PlannedTreatments.latestStartAt],
+        status = this[PlannedTreatments.status],
+    )
+
+internal fun ResultRow.toTreatmentDependencyRecord(
+    keysByTreatmentId: Map<Long, PlannedTreatmentKey>,
+): TreatmentDependencyRecord {
+    val predecessorId = this[TreatmentDependencies.predecessorTreatmentId].value
+    val successorId = this[TreatmentDependencies.successorTreatmentId].value
+    return TreatmentDependencyRecord(
+        id = this[TreatmentDependencies.id].value,
+        planId = this[TreatmentDependencies.planId].value,
+        predecessorTreatmentId = predecessorId,
+        successorTreatmentId = successorId,
+        predecessor = requireNotNull(keysByTreatmentId[predecessorId]),
+        successor = requireNotNull(keysByTreatmentId[successorId]),
+        minimumIntervalDays = this[TreatmentDependencies.minimumIntervalDays],
+        preferredIntervalDays = this[TreatmentDependencies.preferredIntervalDays],
+        maximumIntervalDays = this[TreatmentDependencies.maximumIntervalDays],
+    )
+}
+
+internal fun encodeStringList(values: List<String>): String =
+    if (values.isEmpty()) {
+        "[]"
+    } else {
+        values.joinToString(prefix = "[\"", separator = "\",\"", postfix = "\"]")
+    }
+
+internal fun decodeStringList(value: String): List<String> =
+    if (value == "[]") {
+        emptyList()
+    } else {
+        require(value.startsWith("[\"") && value.endsWith("\"]")) { "Invalid canonical string list" }
+        value.substring(2, value.length - 2).split("\",\"")
+    }
+
+internal fun encodeBookingPreference(preference: BookingPreferenceSnapshot): Pair<String, String> =
+    when (preference) {
+        is BookingPreferenceSnapshot.ExactDateTime ->
+            "EXACT_DATE_TIME" to listOf(
+                preference.originalLocalDateTime,
+                preference.originalOffset,
+                preference.zoneId,
+                preference.normalizedInstant,
+            ).joinToString("\n")
+        is BookingPreferenceSnapshot.DateRange ->
+            "DATE_RANGE" to listOf(
+                preference.startDate,
+                preference.endDate,
+                preference.zoneId,
+            ).joinToString("\n")
+        is BookingPreferenceSnapshot.PreferredWeekdaysAndWindows ->
+            "PREFERRED_WEEKDAYS_AND_WINDOWS" to listOf(
+                preference.weekdays.joinToString(","),
+                preference.localTimeWindows.joinToString(",") { window -> "${window.start}/${window.end}" },
+                preference.zoneId,
+            ).joinToString("\n")
+        BookingPreferenceSnapshot.NotProvided -> "NOT_PROVIDED" to ""
+    }
+
+private fun decodeBookingPreference(
+    type: String,
+    payload: String,
+): BookingPreferenceSnapshot {
+    val fields = if (payload.isEmpty()) emptyList() else payload.split("\n")
+    return when (type) {
+        "EXACT_DATE_TIME" -> BookingPreferenceSnapshot.ExactDateTime(
+            originalLocalDateTime = LocalDateTime.parse(fields[0]),
+            originalOffset = ZoneOffset.of(fields[1]),
+            zoneId = ZoneId.of(fields[2]),
+            normalizedInstant = Instant.parse(fields[3]),
+        )
+        "DATE_RANGE" -> BookingPreferenceSnapshot.DateRange(
+            startDate = LocalDate.parse(fields[0]),
+            endDate = LocalDate.parse(fields[1]),
+            zoneId = ZoneId.of(fields[2]),
+        )
+        "PREFERRED_WEEKDAYS_AND_WINDOWS" -> BookingPreferenceSnapshot.PreferredWeekdaysAndWindows(
+            weekdays = fields[0].split(",").map(DayOfWeek::valueOf),
+            localTimeWindows = fields[1].split(",").filter(String::isNotEmpty).map { encoded ->
+                val (start, end) = encoded.split("/", limit = 2)
+                LocalTimeWindow(LocalTime.parse(start), LocalTime.parse(end))
+            },
+            zoneId = ZoneId.of(fields[2]),
+        )
+        "NOT_PROVIDED" -> BookingPreferenceSnapshot.NotProvided
+        else -> error("Unknown booking preference type")
+    }
+}
+
+internal fun Int?.sequenceToSentinel(): Int = this ?: 0
+
+private fun Int.sentinelToSequence(): Int? = takeIf { it > 0 }
