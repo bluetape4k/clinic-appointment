@@ -30,7 +30,13 @@ class TableSchemaTest : AbstractExposedTest() {
         AppointmentIdempotencies,
         AppointmentNotes,
         AppointmentStateHistory,
-        RescheduleCandidates
+        RescheduleCandidates,
+        ProductCatalogProjections,
+        ProductCatalogBomItems,
+        ProductCatalogBomDependencies,
+        AppointmentPlans,
+        PlannedTreatments,
+        TreatmentDependencies,
     )
 
     @ParameterizedTest

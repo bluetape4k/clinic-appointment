@@ -1,0 +1,146 @@
+package io.bluetape4k.clinic.appointment.repository
+
+import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
+import io.bluetape4k.clinic.appointment.model.dto.ProductCatalogProjectionRecord
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependencies
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
+import io.bluetape4k.clinic.appointment.model.tables.Clinics
+import io.bluetape4k.clinic.appointment.service.CatalogDefinitionValidator
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.selectAll
+
+/**
+ * Stores and loads complete immutable catalog projections inside a caller-owned transaction.
+ */
+class ProductCatalogRepository {
+
+    /**
+     * Inserts a catalog root and all of its BOM children atomically in the current transaction.
+     */
+    fun saveAggregate(record: ProductCatalogProjectionRecord): ProductCatalogProjectionRecord {
+        val definition = CatalogDefinitionValidator.validate(record.definition)
+        require(record.payloadHash.matches(Regex("[0-9a-f]{64}"))) {
+            "payloadHash must be a lowercase SHA-256 value"
+        }
+        val clinicTenantId = Clinics
+            .selectAll()
+            .where { Clinics.id eq definition.clinicId }
+            .singleOrNull()
+            ?.get(Clinics.tenantGroupId)
+            ?.value
+        requireNotNull(clinicTenantId) { "clinic does not exist" }
+        require(clinicTenantId == definition.tenantGroupId) {
+            "clinic does not belong to catalog tenant"
+        }
+        val initialRule = definition.initialBookingRule
+        val projectionId = ProductCatalogProjections.insertAndGetId {
+            it[tenantGroupId] = definition.tenantGroupId
+            it[clinicId] = definition.clinicId
+            it[sourceAuthority] = definition.sourceAuthority
+            it[productId] = definition.productId
+            it[catalogVersion] = definition.catalogVersion
+            it[productName] = definition.productName
+            it[schemaVersion] = definition.schemaVersion
+            it[sourceUpdatedAt] = definition.sourceUpdatedAt
+            it[payloadHash] = record.payloadHash
+            it[initialBookingRuleType] = when (initialRule) {
+                null -> null
+                is InitialBookingRule.WithinDaysAfterPurchase -> "WITHIN_DAYS_AFTER_PURCHASE"
+            }
+            it[initialBookingMaximumDays] = when (initialRule) {
+                null -> null
+                is InitialBookingRule.WithinDaysAfterPurchase -> initialRule.maximumDays
+            }
+        }.value
+
+        definition.items.forEachIndexed { bomOrder, item ->
+            ProductCatalogBomItems.insert {
+                it[catalogProjectionId] = projectionId
+                it[bomItemId] = item.bomItemId
+                it[ProductCatalogBomItems.bomOrder] = bomOrder
+                it[representativeTreatmentName] = item.representativeTreatmentName
+                it[detailedTreatmentCodesJson] = encodeStringList(item.detailedTreatmentCodes)
+                it[repeatCount] = item.repeatCount
+                it[durationMinutes] = item.durationMinutes
+                it[minimumIntervalDays] = item.minimumIntervalDays
+                it[preferredIntervalDays] = item.preferredIntervalDays
+                it[maximumIntervalDays] = item.maximumIntervalDays
+                it[practitionerQualificationsJson] = encodeStringList(item.practitionerQualifications)
+                it[equipmentTypesJson] = encodeStringList(item.equipmentTypes)
+                it[roomTypesJson] = encodeStringList(item.roomTypes)
+            }
+        }
+
+        definition.dependencies.forEach { dependency ->
+            ProductCatalogBomDependencies.insert {
+                it[catalogProjectionId] = projectionId
+                it[predecessorBomItemId] = dependency.predecessorBomItemId
+                it[predecessorSequenceNo] = dependency.predecessorSequenceNo.sequenceToSentinel()
+                it[successorBomItemId] = dependency.successorBomItemId
+                it[successorSequenceNo] = dependency.successorSequenceNo.sequenceToSentinel()
+                it[minimumIntervalDays] = dependency.minimumIntervalDays
+                it[preferredIntervalDays] = dependency.preferredIntervalDays
+                it[maximumIntervalDays] = dependency.maximumIntervalDays
+            }
+        }
+
+        return requireNotNull(findById(projectionId))
+    }
+
+    /**
+     * Finds one catalog projection by its tenant, clinic, product, and immutable version.
+     */
+    fun findByScopeVersion(
+        tenantGroupId: Long,
+        clinicId: Long,
+        productId: String,
+        catalogVersion: Long,
+    ): ProductCatalogProjectionRecord? =
+        ProductCatalogProjections
+            .selectAll()
+            .where {
+                (ProductCatalogProjections.tenantGroupId eq tenantGroupId) and
+                    (ProductCatalogProjections.clinicId eq clinicId) and
+                    (ProductCatalogProjections.productId eq productId) and
+                    (ProductCatalogProjections.catalogVersion eq catalogVersion)
+            }
+            .singleOrNull()
+            ?.let(::mapAggregate)
+
+    /**
+     * Finds one catalog projection by its internal identifier.
+     */
+    fun findById(id: Long): ProductCatalogProjectionRecord? =
+        ProductCatalogProjections
+            .selectAll()
+            .where { ProductCatalogProjections.id eq id }
+            .singleOrNull()
+            ?.let(::mapAggregate)
+
+    /**
+     * Deletes an unreferenced projection. Database ancestry constraints reject referenced versions.
+     */
+    fun deleteProjection(id: Long): Int =
+        ProductCatalogProjections.deleteWhere { ProductCatalogProjections.id eq id }
+
+    private fun mapAggregate(row: org.jetbrains.exposed.v1.core.ResultRow): ProductCatalogProjectionRecord {
+        val projectionId = row[ProductCatalogProjections.id]
+        val items = ProductCatalogBomItems
+            .selectAll()
+            .where { ProductCatalogBomItems.catalogProjectionId eq projectionId }
+            .orderBy(ProductCatalogBomItems.bomOrder, SortOrder.ASC)
+            .map { itemRow -> itemRow.toCatalogBomItem() }
+        val dependencies = ProductCatalogBomDependencies
+            .selectAll()
+            .where { ProductCatalogBomDependencies.catalogProjectionId eq projectionId }
+            .orderBy(ProductCatalogBomDependencies.id, SortOrder.ASC)
+            .map { dependencyRow -> dependencyRow.toCatalogBomDependency() }
+        return row.toProductCatalogProjectionRecord(items, dependencies)
+    }
+}
