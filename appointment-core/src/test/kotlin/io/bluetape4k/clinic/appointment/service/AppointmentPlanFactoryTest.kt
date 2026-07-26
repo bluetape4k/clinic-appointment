@@ -1,8 +1,10 @@
 package io.bluetape4k.clinic.appointment.service
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomDependency
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus
 import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
 import io.bluetape4k.clinic.appointment.model.dto.PlannedTreatmentKey
 import io.bluetape4k.clinic.appointment.model.dto.ProductCatalogProjectionRecord
@@ -25,6 +27,7 @@ class AppointmentPlanFactoryTest {
         val aggregate = factory.create(catalog(), input(preference))
 
         aggregate.plan.bookingPreference shouldBeEqualTo preference
+        aggregate.plan.catalogSourceAuthority shouldBeEqualTo "product-catalog"
         aggregate.plan.catalogVersion shouldBeEqualTo 7L
         aggregate.plan.catalogPayloadHash shouldBeEqualTo "a".repeat(64)
         aggregate.treatments.map { it.key } shouldBeEqualTo listOf(
@@ -38,6 +41,18 @@ class AppointmentPlanFactoryTest {
         aggregate.dependencies.single().predecessor shouldBeEqualTo PlannedTreatmentKey("laser", 3)
         aggregate.dependencies.single().successor shouldBeEqualTo PlannedTreatmentKey("care", 1)
         aggregate.treatments.all { it.earliestStartAt == null && it.latestStartAt == null } shouldBeEqualTo true
+    }
+
+    @Test
+    fun `rejects plan creation from a retired catalog projection`() {
+        val active = catalog()
+        val retired = active.copy(
+            definition = active.definition.copy(status = CatalogProjectionStatus.RETIRED),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            factory.create(retired, input(BookingPreferenceSnapshot.NotProvided))
+        }
     }
 
     @Test

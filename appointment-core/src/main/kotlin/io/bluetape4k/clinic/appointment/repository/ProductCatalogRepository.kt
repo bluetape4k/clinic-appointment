@@ -47,6 +47,7 @@ class ProductCatalogRepository(
         val exactVersion = findByScopeVersion(
             tenantGroupId = definition.tenantGroupId,
             clinicId = definition.clinicId,
+            sourceAuthority = definition.sourceAuthority,
             productId = definition.productId,
             catalogVersion = definition.catalogVersion,
         )
@@ -60,6 +61,7 @@ class ProductCatalogRepository(
             .where {
                 (ProductCatalogProjections.tenantGroupId eq definition.tenantGroupId) and
                     (ProductCatalogProjections.clinicId eq definition.clinicId) and
+                    (ProductCatalogProjections.sourceAuthority eq definition.sourceAuthority) and
                     (ProductCatalogProjections.productId eq definition.productId)
             }
             .orderBy(ProductCatalogProjections.catalogVersion, SortOrder.DESC)
@@ -94,6 +96,7 @@ class ProductCatalogRepository(
         findByScopeVersion(
             tenantGroupId = definition.tenantGroupId,
             clinicId = definition.clinicId,
+            sourceAuthority = definition.sourceAuthority,
             productId = definition.productId,
             catalogVersion = definition.catalogVersion,
         )?.let { existing -> classifyExisting(definition, payloadHash, existing) }
@@ -143,6 +146,7 @@ class ProductCatalogRepository(
             it[productName] = definition.productName
             it[schemaVersion] = definition.schemaVersion
             it[sourceUpdatedAt] = definition.sourceUpdatedAt
+            it[status] = definition.status
             it[payloadHash] = record.payloadHash
             it[initialBookingRuleType] = when (initialRule) {
                 null -> null
@@ -194,6 +198,7 @@ class ProductCatalogRepository(
     fun findByScopeVersion(
         tenantGroupId: Long,
         clinicId: Long,
+        sourceAuthority: String,
         productId: String,
         catalogVersion: Long,
     ): ProductCatalogProjectionRecord? =
@@ -202,6 +207,7 @@ class ProductCatalogRepository(
             .where {
                 (ProductCatalogProjections.tenantGroupId eq tenantGroupId) and
                     (ProductCatalogProjections.clinicId eq clinicId) and
+                    (ProductCatalogProjections.sourceAuthority eq sourceAuthority) and
                     (ProductCatalogProjections.productId eq productId) and
                     (ProductCatalogProjections.catalogVersion eq catalogVersion)
             }

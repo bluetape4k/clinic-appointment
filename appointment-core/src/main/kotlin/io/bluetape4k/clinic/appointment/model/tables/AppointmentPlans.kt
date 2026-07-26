@@ -22,6 +22,7 @@ object AppointmentPlans : LongIdTable("scheduling_appointment_plans") {
     val patientReferenceCiphertext = text("patient_reference_ciphertext")
     val patientReferenceKeyId = varchar("patient_reference_key_id", 128)
     val patientReferenceFingerprint = varchar("patient_reference_fingerprint", 128)
+    val catalogSourceAuthority = varchar("catalog_source_authority", 128)
     val productId = varchar("product_id", 128)
     val catalogVersion = long("catalog_version")
     val catalogPayloadHash = varchar("catalog_payload_hash", 64)
@@ -33,7 +34,13 @@ object AppointmentPlans : LongIdTable("scheduling_appointment_plans") {
     val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
 
     init {
-        uniqueIndex("uq_plan_source_purchase", sourcePurchaseAuthority, sourcePurchaseId)
+        uniqueIndex(
+            "uq_plan_source_purchase",
+            tenantGroupId,
+            clinicId,
+            sourcePurchaseAuthority,
+            sourcePurchaseId,
+        )
         index("idx_plan_tenant_clinic_status", false, tenantGroupId, clinicId, status)
         index(
             "idx_plan_scope_purchase",

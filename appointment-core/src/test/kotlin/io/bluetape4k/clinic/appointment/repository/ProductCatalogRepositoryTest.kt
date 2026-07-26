@@ -5,6 +5,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomDependency
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus
 import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
 import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
 import io.bluetape4k.clinic.appointment.model.dto.ProductCatalogProjectionRecord
@@ -38,7 +39,7 @@ class ProductCatalogRepositoryTest : AbstractExposedTest() {
             val record = catalogRecord(clinicId)
 
             val saved = repository.saveAggregate(record)
-            val found = repository.findByScopeVersion(1L, clinicId, "product-1", 7L)
+            val found = repository.findByScopeVersion(1L, clinicId, "product-catalog", "product-1", 7L)
 
             saved.id.shouldNotBeNull()
             found.shouldNotBeNull()
@@ -52,6 +53,17 @@ class ProductCatalogRepositoryTest : AbstractExposedTest() {
                     )
                 )
             }
+            val alternateAuthority = record.copy(
+                definition = record.definition.copy(
+                    sourceAuthority = "legacy-catalog",
+                    status = CatalogProjectionStatus.RETIRED,
+                ),
+            )
+            repository.saveAggregate(alternateAuthority)
+            val retired = repository.findByScopeVersion(1L, clinicId, "legacy-catalog", "product-1", 7L)
+                .shouldNotBeNull()
+            retired.definition.status shouldBeEqualTo CatalogProjectionStatus.RETIRED
+
             assertFailsWith<ExposedSQLException> {
                 repository.saveAggregate(record)
             }
@@ -74,6 +86,7 @@ class ProductCatalogRepositoryTest : AbstractExposedTest() {
             productName = "Laser package",
             schemaVersion = 1,
             sourceUpdatedAt = Instant.parse("2026-07-26T00:00:00Z"),
+            status = CatalogProjectionStatus.ACTIVE,
             items = listOf(
                 CatalogBomItem(
                     bomItemId = "laser",

@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.model.tables
 
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
@@ -17,13 +18,21 @@ object ProductCatalogProjections : LongIdTable("scheduling_product_catalog_proje
     val productName = varchar("product_name", 256)
     val schemaVersion = integer("schema_version")
     val sourceUpdatedAt = timestamp("source_updated_at")
+    val status = enumerationByName<CatalogProjectionStatus>("catalog_status", 16)
     val payloadHash = varchar("payload_hash", 64)
     val initialBookingRuleType = varchar("initial_booking_rule_type", 64).nullable()
     val initialBookingMaximumDays = integer("initial_booking_maximum_days").nullable()
     val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
 
     init {
-        uniqueIndex("uq_catalog_scope_version", tenantGroupId, clinicId, productId, catalogVersion)
-        index("idx_catalog_scope_product", false, tenantGroupId, clinicId, productId)
+        uniqueIndex(
+            "uq_catalog_scope_version",
+            tenantGroupId,
+            clinicId,
+            sourceAuthority,
+            productId,
+            catalogVersion,
+        )
+        index("idx_catalog_scope_product", false, tenantGroupId, clinicId, sourceAuthority, productId)
     }
 }

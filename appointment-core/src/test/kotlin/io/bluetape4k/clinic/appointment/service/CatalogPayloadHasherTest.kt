@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomDependency
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus
 import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
 import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
 import org.junit.jupiter.api.Test
@@ -41,8 +42,17 @@ class CatalogPayloadHasherTest {
         }
     }
 
+    @Test
+    fun `catalog lifecycle status participates in the payload hash`() {
+        val active = definition(status = CatalogProjectionStatus.ACTIVE)
+        val retired = definition(status = CatalogProjectionStatus.RETIRED)
+
+        (CatalogPayloadHasher.hash(active) == CatalogPayloadHasher.hash(retired)) shouldBeEqualTo false
+    }
+
     private fun definition(
         productId: String = "product-1",
+        status: CatalogProjectionStatus = CatalogProjectionStatus.ACTIVE,
         items: List<CatalogBomItem> = listOf(item("a")),
         dependencies: List<CatalogBomDependency> = emptyList(),
     ) = ProductCatalogDefinition(
@@ -54,6 +64,7 @@ class CatalogPayloadHasherTest {
         productName = "Package",
         schemaVersion = 1,
         sourceUpdatedAt = Instant.parse("2026-07-26T00:00:00Z"),
+        status = status,
         items = items,
         dependencies = dependencies,
         initialBookingRule = InitialBookingRule.WithinDaysAfterPurchase(30),
