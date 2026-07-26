@@ -156,6 +156,25 @@ class AppointmentPlanRepository {
             .singleOrNull()
             ?.let(::mapAggregate)
 
+    /**
+     * Finds the globally unique source purchase regardless of request scope.
+     *
+     * This method is for trusted event convergence only. Tenant-facing reads
+     * must use [findBySourcePurchaseAndTenantClinic].
+     */
+    fun findBySourcePurchase(
+        sourcePurchaseAuthority: String,
+        sourcePurchaseId: String,
+    ): AppointmentPlanAggregateRecord? =
+        AppointmentPlans
+            .selectAll()
+            .where {
+                (AppointmentPlans.sourcePurchaseAuthority eq sourcePurchaseAuthority) and
+                    (AppointmentPlans.sourcePurchaseId eq sourcePurchaseId)
+            }
+            .singleOrNull()
+            ?.let(::mapAggregate)
+
     private fun mapAggregate(row: org.jetbrains.exposed.v1.core.ResultRow): AppointmentPlanAggregateRecord {
         val plan = row.toAppointmentPlanRecord()
         val planId = requireNotNull(plan.id)
