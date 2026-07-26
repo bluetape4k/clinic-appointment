@@ -15,6 +15,7 @@ data class ProductCatalogDefinition(
     val productName: String,
     val schemaVersion: Int,
     val sourceUpdatedAt: Instant,
+    val status: CatalogProjectionStatus = CatalogProjectionStatus.ACTIVE,
     val items: List<CatalogBomItem>,
     val dependencies: List<CatalogBomDependency>,
     val initialBookingRule: InitialBookingRule?,
@@ -22,6 +23,11 @@ data class ProductCatalogDefinition(
     companion object {
         private const val serialVersionUID = 1L
     }
+}
+
+enum class CatalogProjectionStatus {
+    ACTIVE,
+    RETIRED,
 }
 
 /**

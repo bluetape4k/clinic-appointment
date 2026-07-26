@@ -43,6 +43,9 @@ class AppointmentPlanRepository {
         require(catalogScope[ProductCatalogProjections.clinicId].value == plan.clinicId) {
             "catalog clinic does not match plan clinic"
         }
+        require(catalogScope[ProductCatalogProjections.sourceAuthority] == plan.catalogSourceAuthority) {
+            "catalog source authority does not match plan catalogSourceAuthority"
+        }
         require(catalogScope[ProductCatalogProjections.productId] == plan.productId) {
             "catalog product does not match plan product"
         }
@@ -66,6 +69,7 @@ class AppointmentPlanRepository {
             it[patientReferenceCiphertext] = plan.patientReferenceCiphertext
             it[patientReferenceKeyId] = plan.patientReferenceKeyId
             it[patientReferenceFingerprint] = plan.patientReferenceFingerprint
+            it[catalogSourceAuthority] = plan.catalogSourceAuthority
             it[productId] = plan.productId
             it[catalogVersion] = plan.catalogVersion
             it[catalogPayloadHash] = plan.catalogPayloadHash
@@ -151,25 +155,6 @@ class AppointmentPlanRepository {
                 (AppointmentPlans.tenantGroupId eq tenantGroupId) and
                     (AppointmentPlans.clinicId eq clinicId) and
                     (AppointmentPlans.sourcePurchaseAuthority eq sourcePurchaseAuthority) and
-                    (AppointmentPlans.sourcePurchaseId eq sourcePurchaseId)
-            }
-            .singleOrNull()
-            ?.let(::mapAggregate)
-
-    /**
-     * Finds the globally unique source purchase regardless of request scope.
-     *
-     * This method is for trusted event convergence only. Tenant-facing reads
-     * must use [findBySourcePurchaseAndTenantClinic].
-     */
-    fun findBySourcePurchase(
-        sourcePurchaseAuthority: String,
-        sourcePurchaseId: String,
-    ): AppointmentPlanAggregateRecord? =
-        AppointmentPlans
-            .selectAll()
-            .where {
-                (AppointmentPlans.sourcePurchaseAuthority eq sourcePurchaseAuthority) and
                     (AppointmentPlans.sourcePurchaseId eq sourcePurchaseId)
             }
             .singleOrNull()

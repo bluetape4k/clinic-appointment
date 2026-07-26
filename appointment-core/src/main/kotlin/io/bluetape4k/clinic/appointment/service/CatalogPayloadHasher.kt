@@ -32,6 +32,7 @@ object CatalogPayloadHasher {
         updateField("productName", definition.productName)
         updateField("schemaVersion", definition.schemaVersion)
         updateField("sourceUpdatedAt", definition.sourceUpdatedAt)
+        updateField("status", definition.status)
 
         val sortedItems = definition.items.sortedBy(CatalogBomItem::bomItemId)
         updateField("items.size", sortedItems.size)

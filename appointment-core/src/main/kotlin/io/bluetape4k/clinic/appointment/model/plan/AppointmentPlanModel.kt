@@ -34,6 +34,7 @@ data class AppointmentPlanView(
     val clinicId: Long,
     val sourcePurchaseAuthority: String,
     val sourcePurchaseId: String,
+    val catalogSourceAuthority: String,
     val productId: String,
     val catalogVersion: Long,
     val catalogPayloadHash: String,

@@ -18,6 +18,7 @@ data class AppointmentPlanRecord(
     val patientReferenceCiphertext: String,
     val patientReferenceKeyId: String,
     val patientReferenceFingerprint: String,
+    val catalogSourceAuthority: String,
     val productId: String,
     val catalogVersion: Long,
     val catalogPayloadHash: String,

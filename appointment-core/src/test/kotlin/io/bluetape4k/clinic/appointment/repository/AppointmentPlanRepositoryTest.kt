@@ -52,6 +52,7 @@ class AppointmentPlanRepositoryTest : AbstractExposedTest() {
             val found = repository.findByIdAndTenantClinic(planId, 1L, clinicId)
 
             found.shouldNotBeNull()
+            found.plan.catalogSourceAuthority shouldBeEqualTo "product-catalog"
             found.plan.patientReferenceCiphertext shouldBeEqualTo "ciphertext"
             found.plan.patientReferenceFingerprint shouldBeEqualTo "f".repeat(64)
             found.treatments.map { it.key } shouldBeEqualTo listOf(
@@ -86,7 +87,7 @@ class AppointmentPlanRepositoryTest : AbstractExposedTest() {
 
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
-    fun `source purchase is globally unique and catalog deletion is restricted after plan creation`(testDB: TestDB) {
+    fun `source purchase is scoped and catalog deletion is restricted after plan creation`(testDB: TestDB) {
         withPlanTables(testDB) {
             val clinicId = createClinic("First Clinic")
             val otherTenantId = 2L
@@ -114,19 +115,37 @@ class AppointmentPlanRepositoryTest : AbstractExposedTest() {
                     )
                 )
             }
-            assertFailsWith<ExposedSQLException> {
-                val otherAggregate = planAggregate(otherClinicId, otherCatalogId)
-                repository.saveAggregate(
-                    otherAggregate.copy(
-                        plan = otherAggregate.plan.copy(
-                            tenantGroupId = otherTenantId,
-                            productId = "product-2",
-                        )
+            val otherAggregate = planAggregate(otherClinicId, otherCatalogId)
+            repository.saveAggregate(
+                otherAggregate.copy(
+                    plan = otherAggregate.plan.copy(
+                        tenantGroupId = otherTenantId,
+                        productId = "product-2",
                     )
                 )
-            }
+            )
             assertFailsWith<ExposedSQLException> {
                 catalogRepository.deleteProjection(catalogId)
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `source purchase identity includes authority inside one tenant and clinic scope`(testDB: TestDB) {
+        withPlanTables(testDB) {
+            val clinicId = createClinic("Unique Clinic")
+            val catalogId = saveCatalog(clinicId)
+            val aggregate = planAggregate(clinicId, catalogId)
+            repository.saveAggregate(aggregate)
+            repository.saveAggregate(
+                aggregate.copy(
+                    plan = aggregate.plan.copy(sourcePurchaseAuthority = "legacy-commerce"),
+                )
+            )
+
+            assertFailsWith<ExposedSQLException> {
+                repository.saveAggregate(aggregate)
             }
         }
     }
@@ -183,6 +202,7 @@ class AppointmentPlanRepositoryTest : AbstractExposedTest() {
                 patientReferenceCiphertext = "ciphertext",
                 patientReferenceKeyId = "key-1",
                 patientReferenceFingerprint = "f".repeat(64),
+                catalogSourceAuthority = "product-catalog",
                 productId = "product-1",
                 catalogVersion = 7L,
                 catalogPayloadHash = "a".repeat(64),

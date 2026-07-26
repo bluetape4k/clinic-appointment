@@ -44,6 +44,7 @@ class AppointmentPlanQueryService(
             clinicId = plan.clinicId,
             sourcePurchaseAuthority = plan.sourcePurchaseAuthority,
             sourcePurchaseId = plan.sourcePurchaseId,
+            catalogSourceAuthority = plan.catalogSourceAuthority,
             productId = plan.productId,
             catalogVersion = plan.catalogVersion,
             catalogPayloadHash = plan.catalogPayloadHash,

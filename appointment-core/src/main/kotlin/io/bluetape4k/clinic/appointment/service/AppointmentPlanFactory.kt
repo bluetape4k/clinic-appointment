@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.service
 
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentPlanAggregateRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentPlanRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlannedTreatmentKey
@@ -34,6 +35,9 @@ class AppointmentPlanFactory {
     ): AppointmentPlanAggregateRecord {
         val catalogId = requireNotNull(catalog.id) { "catalog projection id is required" }
         val definition = CatalogDefinitionValidator.validate(catalog.definition)
+        require(definition.status == CatalogProjectionStatus.ACTIVE) {
+            "retired catalog projections cannot create appointment plans"
+        }
         require(input.sourcePurchaseAuthority.isNotBlank()) { "sourcePurchaseAuthority must not be blank" }
         require(input.sourcePurchaseId.isNotBlank()) { "sourcePurchaseId must not be blank" }
         require(input.patientReferenceCiphertext.isNotBlank()) { "patientReferenceCiphertext must not be blank" }
@@ -85,6 +89,7 @@ class AppointmentPlanFactory {
                 patientReferenceCiphertext = input.patientReferenceCiphertext,
                 patientReferenceKeyId = input.patientReferenceKeyId,
                 patientReferenceFingerprint = input.patientReferenceFingerprint,
+                catalogSourceAuthority = definition.sourceAuthority,
                 productId = definition.productId,
                 catalogVersion = definition.catalogVersion,
                 catalogPayloadHash = catalog.payloadHash,
