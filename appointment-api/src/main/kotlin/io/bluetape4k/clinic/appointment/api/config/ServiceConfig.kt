@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.config
 import io.bluetape4k.clinic.appointment.api.service.DashboardStatsService
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
+import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStatsRepository
@@ -16,6 +17,7 @@ import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
+import io.bluetape4k.clinic.appointment.service.AppointmentPlanQueryService
 import io.bluetape4k.clinic.appointment.service.CatalogSyncApplicationService
 import io.bluetape4k.clinic.appointment.service.EquipmentUnavailabilityService
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
@@ -71,6 +73,9 @@ class ServiceConfig {
 
     @Bean
     fun productCatalogRepository(): ProductCatalogRepository = ProductCatalogRepository()
+
+    @Bean
+    fun appointmentPlanRepository(): AppointmentPlanRepository = AppointmentPlanRepository()
 
     @Bean
     fun tenantClinicAccessChecker(
@@ -140,6 +145,11 @@ class ServiceConfig {
     fun catalogSyncApplicationService(
         productCatalogRepository: ProductCatalogRepository,
     ): CatalogSyncApplicationService = CatalogSyncApplicationService(productCatalogRepository)
+
+    @Bean
+    fun appointmentPlanQueryService(
+        appointmentPlanRepository: AppointmentPlanRepository,
+    ): AppointmentPlanQueryService = AppointmentPlanQueryService(appointmentPlanRepository)
 
     @Bean
     fun planFoundationPropertiesValidator(
