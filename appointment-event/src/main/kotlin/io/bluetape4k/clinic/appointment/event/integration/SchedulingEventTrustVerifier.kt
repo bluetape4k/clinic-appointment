@@ -61,6 +61,7 @@ object PurchaseCompletedPayloadHasher {
             event.sourcePurchaseAuthority,
             event.sourcePurchaseId,
             event.patientReferenceToken,
+            event.catalogSourceAuthority,
             event.productId,
             event.catalogVersion.toString(),
             event.bookingPreference.toString(),
@@ -128,6 +129,7 @@ internal object PurchaseEventBounds {
         boundedIdentifier(payload.sourceAggregateId)
         boundedIdentifier(payload.sourcePurchaseAuthority)
         boundedIdentifier(payload.sourcePurchaseId)
+        boundedIdentifier(payload.catalogSourceAuthority)
         boundedIdentifier(payload.productId)
         require(payload.sourceAggregateVersion > 0) { "sourceAggregateVersion must be positive" }
         require(payload.tenantGroupId > 0) { "tenantGroupId must be positive" }

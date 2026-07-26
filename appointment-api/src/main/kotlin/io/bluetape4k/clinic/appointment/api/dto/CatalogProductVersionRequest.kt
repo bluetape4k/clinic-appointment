@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.dto
 
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomDependency
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus
 import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
 import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
 import io.bluetape4k.clinic.appointment.service.CatalogDefinitionValidator
@@ -31,6 +32,7 @@ data class CatalogProductVersionRequest(
     @field:Positive
     val schemaVersion: Int,
     val sourceUpdatedAt: Instant,
+    val status: CatalogProjectionStatus,
     @field:NotBlank
     @field:Size(max = CatalogDefinitionValidator.MAX_NAME_LENGTH)
     val productName: String,
@@ -54,6 +56,7 @@ data class CatalogProductVersionRequest(
         catalogVersion = catalogVersion,
         schemaVersion = schemaVersion,
         sourceUpdatedAt = sourceUpdatedAt,
+        status = status,
         productName = productName,
         items = items.map(CatalogBomItemRequest::toDomain),
         dependencies = dependencies.map(CatalogBomDependencyRequest::toDomain),

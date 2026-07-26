@@ -58,8 +58,20 @@ fun interface PurchasePlanMetrics {
     }
 }
 
+fun interface InboxInsertObserver {
+    /**
+     * Transaction-local diagnostic hook used to exercise read-before-insert races.
+     */
+    fun beforeInsert(eventId: String)
+
+    companion object {
+        val NOOP = InboxInsertObserver { }
+    }
+}
+
 class PurchaseCompletedHandler(
     private val eventRepository: SchedulingEventRepository,
+    private val quarantineRepository: SchedulingQuarantineRepository,
     private val catalogRepository: ProductCatalogRepository,
     private val planRepository: AppointmentPlanRepository,
     private val planFactory: AppointmentPlanFactory,
@@ -70,8 +82,10 @@ class PurchaseCompletedHandler(
     private val initialBackoff: Duration = Duration.ofSeconds(5),
     private val maxBackoff: Duration = Duration.ofMinutes(5),
     private val jitter: Double = 0.20,
+    private val quarantineRetention: Duration = Duration.ofDays(30),
     private val writeObserver: AtomicPlanWriteObserver = AtomicPlanWriteObserver.NOOP,
     private val metrics: PurchasePlanMetrics = PurchasePlanMetrics.NOOP,
+    private val inboxInsertObserver: InboxInsertObserver = InboxInsertObserver.NOOP,
 ) {
     companion object : KLogging()
 
@@ -80,12 +94,14 @@ class PurchaseCompletedHandler(
         require(!initialBackoff.isNegative && !initialBackoff.isZero)
         require(maxBackoff >= initialBackoff)
         require(jitter in 0.0..1.0)
+        require(!quarantineRetention.isNegative && !quarantineRetention.isZero)
     }
 
     fun handle(
         envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
         versionProof: SourceAuthorityVersionProof?,
         protectedPatientReference: ProtectedPatientReference,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
     ): PurchaseHandleResult {
         PurchaseEventBounds.validate(envelope)
         val handled = when (mode) {
@@ -100,11 +116,16 @@ class PurchaseCompletedHandler(
             PurchaseHandlingMode.WRITE ->
                 try {
                     transaction {
-                        convergeInTransaction(envelope, versionProof, protectedPatientReference)
+                        convergeInTransaction(
+                            envelope,
+                            versionProof,
+                            protectedPatientReference,
+                            protectedQuarantineEnvelope,
+                        )
                     }
                 } catch (failure: ExposedSQLException) {
                     if (!failure.isConstraintConflict()) throw failure
-                    reconcileConstraintRace(envelope, protectedPatientReference)
+                    reconcileConstraintRace(envelope, protectedPatientReference, protectedQuarantineEnvelope)
                 }
         }
         metrics.record(handled.status.name, handled.reasonCode)
@@ -119,10 +140,75 @@ class PurchaseCompletedHandler(
         return handled
     }
 
+    /**
+     * Persists only bounded retry state after the external source-authority
+     * adapter times out or opens its circuit. No plan-write transaction starts.
+     */
+    fun stageAuthorityUnavailable(
+        envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        failureReason: SourceAuthorityFailureReason,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
+    ): PurchaseHandleResult {
+        PurchaseEventBounds.validate(envelope)
+        val handled = try {
+            transaction {
+                maxAttempts = 1
+                val existingInbox = eventRepository.findInbox(envelope.eventId)
+                if (existingInbox != null && existingInbox.status != SchedulingInboxStatus.WAITING_GAP) {
+                    return@transaction result(PurchaseHandleStatus.DUPLICATE, "EVENT_ALREADY_TERMINAL")
+                }
+                val inboxId = existingInbox?.id ?: run {
+                    inboxInsertObserver.beforeInsert(envelope.eventId)
+                    eventRepository.insertReceived(envelope)
+                }
+                waitForGap(
+                    inboxId = inboxId,
+                    existingInbox = existingInbox,
+                    eventId = envelope.eventId,
+                    waitingReason = failureReason.reasonCode,
+                    exhaustedReason = "${failureReason.reasonCode}_EXHAUSTED",
+                    envelope = envelope,
+                    protectedQuarantineEnvelope = protectedQuarantineEnvelope,
+                )
+            }
+        } catch (failure: ExposedSQLException) {
+            if (!failure.isConstraintConflict()) throw failure
+            reconcileInboxRace(envelope.eventId)
+        }
+        metrics.record(handled.status.name, handled.reasonCode)
+        return handled
+    }
+
+    fun quarantineRejectedEnvelope(
+        envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
+        reasonCode: String,
+    ): PurchaseHandleResult {
+        PurchaseEventBounds.validate(envelope)
+        val handled = try {
+            transaction {
+                maxAttempts = 1
+                eventRepository.findInbox(envelope.eventId)?.let {
+                    return@transaction result(PurchaseHandleStatus.DUPLICATE, "EVENT_ALREADY_TERMINAL")
+                }
+                inboxInsertObserver.beforeInsert(envelope.eventId)
+                val inboxId = eventRepository.insertReceived(envelope)
+                quarantine(inboxId, envelope, protectedQuarantineEnvelope, reasonCode)
+                result(PurchaseHandleStatus.QUARANTINED, reasonCode)
+            }
+        } catch (failure: ExposedSQLException) {
+            if (!failure.isConstraintConflict()) throw failure
+            reconcileInboxRace(envelope.eventId)
+        }
+        metrics.record(handled.status.name, handled.reasonCode)
+        return handled
+    }
+
     private fun convergeInTransaction(
         envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
         versionProof: SourceAuthorityVersionProof?,
         protectedPatientReference: ProtectedPatientReference,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
     ): PurchaseHandleResult {
         val existingInbox = eventRepository.findInbox(envelope.eventId)
         if (existingInbox != null && existingInbox.status != SchedulingInboxStatus.WAITING_GAP) {
@@ -130,18 +216,29 @@ class PurchaseCompletedHandler(
         }
 
         val payload = envelope.payload
-        val inboxId = existingInbox?.id ?: eventRepository.insertReceived(envelope)
+        val inboxId = existingInbox?.id ?: run {
+            inboxInsertObserver.beforeInsert(envelope.eventId)
+            eventRepository.insertReceived(envelope)
+        }
         if (!clinicBelongsToTenant(payload.tenantGroupId, payload.clinicId)) {
-            eventRepository.markQuarantined(inboxId, "TENANT_CLINIC_MISMATCH", clock.instant())
+            quarantine(inboxId, envelope, protectedQuarantineEnvelope, "TENANT_CLINIC_MISMATCH")
             return result(PurchaseHandleStatus.QUARANTINED, "TENANT_CLINIC_MISMATCH")
         }
 
-        val existingPlan = planRepository.findBySourcePurchase(
-            payload.sourcePurchaseAuthority,
-            payload.sourcePurchaseId,
+        val existingPlan = planRepository.findBySourcePurchaseAndTenantClinic(
+            sourcePurchaseAuthority = payload.sourcePurchaseAuthority,
+            sourcePurchaseId = payload.sourcePurchaseId,
+            tenantGroupId = payload.tenantGroupId,
+            clinicId = payload.clinicId,
         )
         if (existingPlan != null) {
-            return convergeExistingPurchase(inboxId, existingPlan.plan, payload, protectedPatientReference)
+            return convergeExistingPurchase(
+                inboxId,
+                existingPlan.plan,
+                envelope,
+                protectedPatientReference,
+                protectedQuarantineEnvelope,
+            )
         }
 
         val localVersion = eventRepository.latestProcessedSourceVersion(
@@ -153,19 +250,33 @@ class PurchaseCompletedHandler(
                 eventRepository.markProcessed(inboxId, clock.instant(), "STALE_SOURCE_VERSION")
                 return result(PurchaseHandleStatus.STALE, "STALE_SOURCE_VERSION")
             }
-            SourceVersionDecision.WAITING_GAP -> return waitForGap(inboxId, existingInbox, envelope.eventId)
+            SourceVersionDecision.WAITING_GAP ->
+                return waitForGap(
+                    inboxId = inboxId,
+                    existingInbox = existingInbox,
+                    eventId = envelope.eventId,
+                    envelope = envelope,
+                    protectedQuarantineEnvelope = protectedQuarantineEnvelope,
+                )
             SourceVersionDecision.ACCEPT -> Unit
         }
 
         val catalog = catalogRepository.findByScopeVersion(
             tenantGroupId = payload.tenantGroupId,
             clinicId = payload.clinicId,
+            sourceAuthority = payload.catalogSourceAuthority,
             productId = payload.productId,
             catalogVersion = payload.catalogVersion,
         )
         if (catalog == null) {
-            eventRepository.markQuarantined(inboxId, "CATALOG_VERSION_UNAVAILABLE", clock.instant())
+            quarantine(inboxId, envelope, protectedQuarantineEnvelope, "CATALOG_VERSION_UNAVAILABLE")
             return result(PurchaseHandleStatus.QUARANTINED, "CATALOG_VERSION_UNAVAILABLE")
+        }
+        if (catalog.definition.status ==
+            io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus.RETIRED
+        ) {
+            quarantine(inboxId, envelope, protectedQuarantineEnvelope, "CATALOG_RETIRED")
+            return result(PurchaseHandleStatus.QUARANTINED, "CATALOG_RETIRED")
         }
 
         val draft = planFactory.create(
@@ -190,12 +301,15 @@ class PurchaseCompletedHandler(
     private fun convergeExistingPurchase(
         inboxId: Long,
         existing: io.bluetape4k.clinic.appointment.model.dto.AppointmentPlanRecord,
-        payload: PurchaseCompletedEvent,
+        envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
         protectedPatientReference: ProtectedPatientReference,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
     ): PurchaseHandleResult {
+        val payload = envelope.payload
         val immutableOwnershipMatches =
             existing.tenantGroupId == payload.tenantGroupId &&
                 existing.clinicId == payload.clinicId &&
+                existing.catalogSourceAuthority == payload.catalogSourceAuthority &&
                 existing.productId == payload.productId &&
                 existing.catalogVersion == payload.catalogVersion &&
                 existing.patientReferenceFingerprint == protectedPatientReference.fingerprint
@@ -203,7 +317,7 @@ class PurchaseCompletedHandler(
             eventRepository.markProcessed(inboxId, clock.instant(), "PURCHASE_ALREADY_PLANNED")
             result(PurchaseHandleStatus.DUPLICATE, "PURCHASE_ALREADY_PLANNED", existing.id)
         } else {
-            eventRepository.markQuarantined(inboxId, "PURCHASE_OWNERSHIP_CONFLICT", clock.instant())
+            quarantine(inboxId, envelope, protectedQuarantineEnvelope, "PURCHASE_OWNERSHIP_CONFLICT")
             result(PurchaseHandleStatus.QUARANTINED, "PURCHASE_OWNERSHIP_CONFLICT")
         }
     }
@@ -212,20 +326,25 @@ class PurchaseCompletedHandler(
         inboxId: Long,
         existingInbox: SchedulingInboxRecord?,
         eventId: String,
+        waitingReason: String = "SOURCE_VERSION_GAP",
+        exhaustedReason: String = "SOURCE_VERSION_GAP_EXHAUSTED",
+        envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
     ): PurchaseHandleResult {
         val attempt = (existingInbox?.attemptCount ?: 0) + 1
         if (attempt >= maxAttempts) {
-            eventRepository.markQuarantined(
+            quarantine(
                 inboxId = inboxId,
-                reasonCode = "SOURCE_VERSION_GAP_EXHAUSTED",
-                processedAt = clock.instant(),
+                envelope = envelope,
+                protectedQuarantineEnvelope = protectedQuarantineEnvelope,
+                reasonCode = exhaustedReason,
                 attemptCount = attempt,
             )
-            return result(PurchaseHandleStatus.QUARANTINED, "SOURCE_VERSION_GAP_EXHAUSTED")
+            return result(PurchaseHandleStatus.QUARANTINED, exhaustedReason)
         }
         val replayAfter = clock.instant().plus(backoff(eventId, attempt))
-        eventRepository.markWaitingGap(inboxId, attempt, replayAfter)
-        return result(PurchaseHandleStatus.WAITING_GAP, "SOURCE_VERSION_GAP", replayAfter = replayAfter)
+        eventRepository.markWaitingGap(inboxId, attempt, replayAfter, waitingReason)
+        return result(PurchaseHandleStatus.WAITING_GAP, waitingReason, replayAfter = replayAfter)
     }
 
     private fun backoff(eventId: String, attempt: Int): Duration {
@@ -244,10 +363,11 @@ class PurchaseCompletedHandler(
             val payload = envelope.payload
             if (!clinicBelongsToTenant(payload.tenantGroupId, payload.clinicId)) return@transaction
             val catalog = catalogRepository.findByScopeVersion(
-                payload.tenantGroupId,
-                payload.clinicId,
-                payload.productId,
-                payload.catalogVersion,
+                tenantGroupId = payload.tenantGroupId,
+                clinicId = payload.clinicId,
+                sourceAuthority = payload.catalogSourceAuthority,
+                productId = payload.productId,
+                catalogVersion = payload.catalogVersion,
             ) ?: return@transaction
             planFactory.create(
                 catalog,
@@ -266,19 +386,74 @@ class PurchaseCompletedHandler(
     private fun reconcileConstraintRace(
         envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
         protectedPatientReference: ProtectedPatientReference,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
     ): PurchaseHandleResult =
         transaction {
             eventRepository.findInbox(envelope.eventId)?.let {
                 return@transaction result(PurchaseHandleStatus.DUPLICATE, "EVENT_RACE_CONVERGED")
             }
             val payload = envelope.payload
-            val existingPlan = planRepository.findBySourcePurchase(
-                payload.sourcePurchaseAuthority,
-                payload.sourcePurchaseId,
+            val existingPlan = planRepository.findBySourcePurchaseAndTenantClinic(
+                sourcePurchaseAuthority = payload.sourcePurchaseAuthority,
+                sourcePurchaseId = payload.sourcePurchaseId,
+                tenantGroupId = payload.tenantGroupId,
+                clinicId = payload.clinicId,
             ) ?: throw IllegalStateException("Constraint conflict could not be classified")
             val inboxId = eventRepository.insertReceived(envelope)
-            convergeExistingPurchase(inboxId, existingPlan.plan, payload, protectedPatientReference)
+            convergeExistingPurchase(
+                inboxId,
+                existingPlan.plan,
+                envelope,
+                protectedPatientReference,
+                protectedQuarantineEnvelope,
+            )
         }
+
+    private fun reconcileInboxRace(eventId: String): PurchaseHandleResult =
+        transaction {
+            val existingInbox = requireNotNull(eventRepository.findInbox(eventId)) {
+                "Inbox constraint conflict could not be classified: $eventId"
+            }
+            if (existingInbox.status == SchedulingInboxStatus.WAITING_GAP) {
+                result(
+                    status = PurchaseHandleStatus.WAITING_GAP,
+                    reason = existingInbox.failureCode,
+                    replayAfter = existingInbox.replayAfter,
+                )
+            } else {
+                result(PurchaseHandleStatus.DUPLICATE, "EVENT_RACE_CONVERGED")
+            }
+        }
+
+    private fun quarantine(
+        inboxId: Long,
+        envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
+        reasonCode: String,
+        attemptCount: Int? = null,
+    ) {
+        val detectedAt = clock.instant()
+        eventRepository.markQuarantined(inboxId, reasonCode, detectedAt, attemptCount)
+        quarantineRepository.recordDetected(
+            QuarantineDetection(
+                eventId = envelope.eventId,
+                eventType = envelope.eventType,
+                protectedEnvelope = protectedQuarantineEnvelope,
+                producer = envelope.producer,
+                sourceAuthority = envelope.payload.sourcePurchaseAuthority,
+                schemaVersion = envelope.schemaVersion,
+                sourceAggregateId = envelope.payload.sourceAggregateId,
+                sourceAggregateVersion = envelope.payload.sourceAggregateVersion,
+                tenantGroupId = envelope.payload.tenantGroupId,
+                clinicId = envelope.payload.clinicId,
+                reasonCode = reasonCode,
+                detectedAt = detectedAt,
+                correlationId = envelope.correlationId,
+                retentionClass = QuarantineRetentionClass.STANDARD,
+                payloadExpiresAt = detectedAt.plus(quarantineRetention),
+            )
+        )
+    }
 
     private fun clinicBelongsToTenant(tenantGroupId: Long, clinicId: Long): Boolean =
         Clinics.selectAll()

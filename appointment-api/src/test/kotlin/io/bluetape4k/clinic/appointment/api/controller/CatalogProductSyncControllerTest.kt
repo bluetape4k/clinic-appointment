@@ -6,6 +6,7 @@ import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
+import io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus
 import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
 import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
@@ -119,6 +120,19 @@ class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiInt
     }
 
     @Test
+    fun `requires and persists the explicit catalog lifecycle status`() {
+        val retired = catalogDefinition(clinicId = clinicId, version = 8L)
+            .copy(status = CatalogProjectionStatus.RETIRED)
+
+        putCatalog(retired).statusCode shouldBeEqualTo HttpStatus.CREATED
+
+        transaction {
+            ProductCatalogProjections.selectAll().single()[ProductCatalogProjections.status] shouldBeEqualTo
+                CatalogProjectionStatus.RETIRED
+        }
+    }
+
+    @Test
     fun `hides a clinic outside the requested tenant`() {
         transaction {
             TenantGroups.insert {
@@ -147,6 +161,7 @@ class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiInt
               "catalogVersion": 7,
               "schemaVersion": 1,
               "sourceUpdatedAt": "2026-07-26T05:00:00Z",
+              "status": "ACTIVE",
               "productName": "Laser Care",
               "items": [
                 {
@@ -288,6 +303,7 @@ class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiInt
           "catalogVersion": ${definition.catalogVersion},
           "schemaVersion": ${definition.schemaVersion},
           "sourceUpdatedAt": "${definition.sourceUpdatedAt}",
+          "status": "${definition.status}",
           "productName": "${definition.productName}",
           "items": [{
             "bomItemId": "laser",
@@ -390,6 +406,7 @@ class CatalogProductSyncDisabledControllerTest @Autowired constructor() : Abstra
                   "catalogVersion": 7,
                   "schemaVersion": 1,
                   "sourceUpdatedAt": "2026-07-26T05:00:00Z",
+                  "status": "ACTIVE",
                   "productName": "Laser Care",
                   "items": [{
                     "bomItemId": "laser",

@@ -8,3 +8,14 @@ data class SourceAuthorityVersionProof(
     val verifiedAt: Instant,
     val expiresAt: Instant,
 )
+
+enum class SourceAuthorityFailureReason(
+    val reasonCode: String,
+) {
+    TIMEOUT("SOURCE_AUTHORITY_TIMEOUT"),
+    CIRCUIT_OPEN("SOURCE_AUTHORITY_CIRCUIT_OPEN"),
+}
+
+class SourceAuthorityUnavailableException(
+    val failureReason: SourceAuthorityFailureReason,
+) : RuntimeException(failureReason.reasonCode)

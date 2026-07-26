@@ -7,6 +7,7 @@ CREATE TABLE scheduling_product_catalog_projections (
     source_authority VARCHAR(128) NOT NULL,
     product_id VARCHAR(128) NOT NULL,
     catalog_version BIGINT NOT NULL,
+    catalog_status VARCHAR(32) NOT NULL,
     product_name VARCHAR(256) NOT NULL,
     schema_version INTEGER NOT NULL,
     source_updated_at DATETIME(6) NOT NULL,
@@ -18,8 +19,12 @@ CREATE TABLE scheduling_product_catalog_projections (
         REFERENCES scheduling_tenant_groups(id) ON DELETE RESTRICT,
     CONSTRAINT fk_catalog_projection_clinic FOREIGN KEY (clinic_id)
         REFERENCES scheduling_clinics(id) ON DELETE RESTRICT,
-    CONSTRAINT uq_catalog_scope_version UNIQUE (tenant_group_id, clinic_id, product_id, catalog_version),
-    INDEX idx_catalog_scope_product (tenant_group_id, clinic_id, product_id)
+    CONSTRAINT uq_catalog_scope_version UNIQUE (
+        tenant_group_id, clinic_id, source_authority, product_id, catalog_version
+    ),
+    INDEX idx_catalog_scope_product (
+        tenant_group_id, clinic_id, source_authority, product_id
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE scheduling_product_catalog_bom_items (
@@ -70,6 +75,7 @@ CREATE TABLE scheduling_appointment_plans (
     patient_reference_ciphertext TEXT NOT NULL,
     patient_reference_key_id VARCHAR(128) NOT NULL,
     patient_reference_fingerprint VARCHAR(128) NOT NULL,
+    catalog_source_authority VARCHAR(128) NOT NULL,
     product_id VARCHAR(128) NOT NULL,
     catalog_version BIGINT NOT NULL,
     catalog_payload_hash VARCHAR(64) NOT NULL,
@@ -85,7 +91,9 @@ CREATE TABLE scheduling_appointment_plans (
         REFERENCES scheduling_clinics(id) ON DELETE RESTRICT,
     CONSTRAINT fk_appointment_plan_catalog FOREIGN KEY (catalog_projection_id)
         REFERENCES scheduling_product_catalog_projections(id) ON DELETE RESTRICT,
-    CONSTRAINT uq_plan_source_purchase UNIQUE (source_purchase_authority, source_purchase_id),
+    CONSTRAINT uq_plan_source_purchase UNIQUE (
+        tenant_group_id, clinic_id, source_purchase_authority, source_purchase_id
+    ),
     INDEX idx_plan_tenant_clinic_status (tenant_group_id, clinic_id, status),
     INDEX idx_plan_scope_purchase (
         tenant_group_id, clinic_id, source_purchase_authority, source_purchase_id
@@ -188,4 +196,50 @@ CREATE TABLE scheduling_outbox_events (
     CONSTRAINT uq_outbox_event_id UNIQUE (event_id),
     INDEX idx_outbox_status_created_at (status, created_at),
     INDEX idx_outbox_status_next_attempt (status, next_attempt_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE scheduling_quarantine_events (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(128) NOT NULL,
+    event_type VARCHAR(128) NOT NULL,
+    envelope_hash VARCHAR(64) NOT NULL,
+    encrypted_original_envelope TEXT,
+    encryption_key_id VARCHAR(128) NOT NULL,
+    producer VARCHAR(128) NOT NULL,
+    source_authority VARCHAR(128) NOT NULL,
+    schema_version INTEGER NOT NULL,
+    source_aggregate_id VARCHAR(128) NOT NULL,
+    source_aggregate_version BIGINT NOT NULL,
+    tenant_group_id BIGINT NOT NULL,
+    clinic_id BIGINT NOT NULL,
+    reason_code VARCHAR(128) NOT NULL,
+    detected_at DATETIME(6) NOT NULL,
+    correlation_id VARCHAR(128) NOT NULL,
+    retention_class VARCHAR(32) NOT NULL,
+    payload_expires_at DATETIME(6) NOT NULL,
+    legal_hold BOOLEAN DEFAULT FALSE NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    CONSTRAINT fk_quarantine_tenant FOREIGN KEY (tenant_group_id)
+        REFERENCES scheduling_tenant_groups(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_quarantine_clinic FOREIGN KEY (clinic_id)
+        REFERENCES scheduling_clinics(id) ON DELETE RESTRICT,
+    CONSTRAINT uq_quarantine_event_id UNIQUE (event_id),
+    INDEX idx_quarantine_status_expiry (status, legal_hold, payload_expires_at),
+    INDEX idx_quarantine_scope_reason (tenant_group_id, clinic_id, reason_code, detected_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE scheduling_quarantine_audit_events (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    quarantine_id BIGINT NOT NULL,
+    action VARCHAR(32) NOT NULL,
+    actor VARCHAR(128) NOT NULL,
+    reason VARCHAR(256) NOT NULL,
+    dry_run_diff_hash VARCHAR(128),
+    before_status VARCHAR(32),
+    after_status VARCHAR(32),
+    approval_references VARCHAR(512),
+    created_at DATETIME(6) NOT NULL,
+    CONSTRAINT fk_quarantine_audit_quarantine FOREIGN KEY (quarantine_id)
+        REFERENCES scheduling_quarantine_events(id) ON DELETE RESTRICT,
+    INDEX idx_quarantine_audit_quarantine_created (quarantine_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

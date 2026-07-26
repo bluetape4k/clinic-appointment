@@ -91,12 +91,13 @@ class SchedulingEventRepository {
         inboxId: Long,
         attemptCount: Int,
         replayAfter: Instant,
+        reasonCode: String = "SOURCE_VERSION_GAP",
     ) {
         SchedulingInboxEvents.update({ SchedulingInboxEvents.id eq inboxId }) {
             it[status] = SchedulingInboxStatus.WAITING_GAP
             it[SchedulingInboxEvents.attemptCount] = attemptCount
             it[SchedulingInboxEvents.replayAfter] = replayAfter
-            it[failureCode] = "SOURCE_VERSION_GAP"
+            it[failureCode] = reasonCode
         }
     }
 

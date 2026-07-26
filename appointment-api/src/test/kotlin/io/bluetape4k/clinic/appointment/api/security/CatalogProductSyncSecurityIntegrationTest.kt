@@ -155,6 +155,7 @@ class CatalogProductSyncSecurityIntegrationTest {
               "catalogVersion": 7,
               "schemaVersion": 1,
               "sourceUpdatedAt": "2026-07-26T05:00:00Z",
+              "status": "ACTIVE",
               "productName": "Laser Care",
               "items": [{
                 "bomItemId": "laser",
