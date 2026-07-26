@@ -1,10 +1,13 @@
 package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingInboxEvents
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlans
 import io.bluetape4k.clinic.appointment.model.tables.BreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.ClinicClosures
 import io.bluetape4k.clinic.appointment.model.tables.ClinicDefaultBreakTimes
@@ -18,10 +21,15 @@ import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExce
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
+import io.bluetape4k.clinic.appointment.model.tables.PlannedTreatments
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependencies
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
+import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.model.tables.TreatmentDependencies
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.boot.ApplicationRunner
@@ -73,7 +81,15 @@ class SchemaInitConfig {
                     AppointmentNotes,
                     AppointmentStateHistory,
                     RescheduleCandidates,
-                    AppointmentEventLogs
+                    AppointmentEventLogs,
+                    ProductCatalogProjections,
+                    ProductCatalogBomItems,
+                    ProductCatalogBomDependencies,
+                    AppointmentPlans,
+                    PlannedTreatments,
+                    TreatmentDependencies,
+                    SchedulingInboxEvents,
+                    SchedulingOutboxEvents,
                 )
             }
         }
