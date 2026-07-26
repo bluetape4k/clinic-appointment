@@ -5,6 +5,31 @@
 - **대상 모듈**: `appointment-core`, `appointment-event`, `appointment-solver`, `appointment-notification`, `appointment-api`
 - **시각 문서**: [독립 실행형 HTML](./2026-07-26-appointment-plan-and-capacity-design.html)
 
+### 현재 실행 단위: Appointment Plan Foundation
+
+이 문서는 전체 장기 설계를 기록하지만, 현재 실행·검증 단위는
+[Appointment Plan Foundation 계획](../plans/2026-07-26-appointment-plan-foundation.md)으로 제한한다.
+
+| 현재 포함 | 현재 제외·후속 단계 |
+|---|---|
+| tenant/clinic/source authority 범위의 catalog projection | `AppointmentItem`, `ResourceAllocation`, slot search |
+| 구매 event에서 `AppointmentPlan`, `PlannedTreatment`, dependency 생성 | `PROPOSED`, `HELD`, `CONFIRMED`, 고객 동의 |
+| inbox/plan/outbox의 원자적 수렴과 병원 운영자용 plan 조회 | 실제 완료, 부분 이행, 환불, disruption |
+| additive V8 schema와 기존 appointment 무변경 | 정책 compiler, solver 변경, 오버부킹, 영업 연장 |
+
+따라서 Foundation의 완료는 방문 예약, 가예약, 자원 선점 또는 outbox 전달 완료를
+의미하지 않는다. 아래 전체 모델과 장기 인수 기준은 roadmap이며, Foundation의
+실행 인수 기준은 §20.1의 별도 명령과 운영 차단 조건을 따른다.
+
+### 용어
+
+- **환자**: 진료를 받는 사람
+- **보호자**: 환자를 대신해 동의할 법적 권한이 있는 사람
+- **병원 운영자**: 한 clinic의 예약을 운영하는 사용자
+- **tenant admin**: SaaS tenant 기본 정책과 소속 clinic을 관리하는 사용자
+- **clinic admin**: 위임된 clinic 범위만 관리하는 사용자
+- **API caller**: 인증된 사용자 또는 신뢰된 서비스 producer
+
 ## 1. 목적
 
 성형외과·피부과처럼 한 번의 구매로 여러 차례 또는 여러 종류의 시술을 제공하는 병원의 예약을 현실적으로 관리한다. 상품과 구매 계약을 예약 자체로 복제하지 않고, 구매 시점의 상품 BOM을 바탕으로 **앞으로 이행해야 할 진료 의무**, **실제 방문**, **방문 안의 세부 진료**, **자원 배정**을 분리한다.
@@ -91,7 +116,7 @@ PlannedTreatment ── TreatmentDependency(DAG) ──> PlannedTreatment
 
 상품관리서비스가 소유한 최신 상품 정의의 예약용 복제본이다.
 
-- 키: `productId`, `catalogVersion`
+- 키: `tenantGroupId`, `clinicId`, `sourceAuthority`, `productId`, `catalogVersion`
 - 내용: 상품명, BOM 항목, 반복 횟수, 간격·허용 기간, 의존 관계, 예상 소요시간, 필요한 의료진·장비·공간, 최초 예약 규칙
 - 상태: `ACTIVE`, `RETIRED`
 - 동기화 정보: `sourceUpdatedAt`, `receivedAt`, `payloadHash`
@@ -109,9 +134,12 @@ projection은 현재 REST API upsert로 갱신한다. 향후 Pub/Sub consumer도
 
 구매 한 건이 만든 진료 이행 계획이다.
 
-- 한 구매당 하나의 plan
-- `sourcePurchaseId` 전역 유일
-- 생성 시 정확한 `catalogVersion`과 BOM snapshot을 불변으로 저장
+- 한 authority-qualified 구매당 하나의 plan
+- `(tenantGroupId, clinicId, sourcePurchaseAuthority, sourcePurchaseId)` 유일
+- 원천 aggregate ID와 version을 별도로 보존하며, 동일 identity의 다른 payload는
+  replay 성공이 아니라 conflict/quarantine 대상
+- 생성 시 정확한 `catalogSourceAuthority`, `catalogVersion`과 BOM snapshot을
+  불변으로 저장
 - `ACTIVE`, `PARTIALLY_FULFILLED`, `FULFILLED`, `CANCELLED`
 - 상품 카탈로그가 바뀌어도 기존 plan은 자동으로 덮어쓰지 않음
 
@@ -160,7 +188,8 @@ projection은 현재 REST API upsert로 갱신한다. 향후 Pub/Sub consumer도
 - 대표 진료명
 - 시작·종료 또는 도착 시간대
 - commitment mode
-- `PROPOSED`, `HELD`, `CONFIRMED`, `CHECKED_IN`, `IN_PROGRESS`, `COMPLETED`, `INTERRUPTED`, `CANCELLED`, `NO_SHOW`
+- `PROPOSED`, `HELD`, `CONFIRMED`, `CHECKED_IN`, `IN_PROGRESS`, `COMPLETED`,
+  `INTERRUPTED`, `EXPIRED`, `CANCELLED`, `NO_SHOW`
 - fulfillment: `NONE`, `PARTIAL`, `FULL`
 
 ### 4.7 `AppointmentItem`
@@ -246,7 +275,26 @@ clinic override의 각 필드는 `INHERIT`, `SET(value)`, `DISABLE` 중 하나�
 
 정책 publish는 `draft → validate → impact preview → approve → schedule/activate` 순서다. validation 또는 compile이 실패하면 새 version은 활성화하지 않고 직전 active policy를 유지한다. overbooking, service tier, 운영 연장, 확정 예약에 영향을 줄 수 있는 변경은 step-up 인증과 선택적 이중 승인을 요구한다. 긴급 override도 사유, 승인자, 만료시각을 필수로 하며 자동 만료 후 이전 effective policy로 돌아간다.
 
+활성화 commit은 draft revision, 현재 active revision, activation idempotency key를
+한 트랜잭션의 compare-and-set precondition으로 검증한다. scope·kind별 effective
+interval overlap은 DB 제약 또는 동등한 직렬화로 금지한다. 중복 scheduler 실행은
+같은 결과를 반환하고, 성공한 commit만 `policyGeneration` 증가와 outbox event
+한 건을 원자적으로 기록한다. 충돌은 `409 POLICY_ACTIVATION_CONFLICT`, stale
+preview는 `409 POLICY_PREVIEW_STALE`로 구분한다.
+
 대규모 tenant의 정책 활성화가 모든 clinic snapshot을 한 번에 다시 쓰게 만들지 않는다. 활성화 트랜잭션은 scope의 `policyGeneration`을 증가시키고 `SchedulingPolicyActivated`를 발행한다. compiler cache는 `(tenantId, clinicId, policyGeneration, decisionAt/serviceAt bucket)`으로 key를 잡아 영향 범위만 무효화하고, effective snapshot은 다음 조회·예약 계산에서 lazy compile한다. impact preview와 cache warm-up은 clinic partition별 bounded job으로 실행한다.
+
+시간 bucket은 임의의 고정 폭만 사용하지 않는다. 모든 `effectiveFrom`,
+`effectiveUntil`, scheduled activation, 긴급 override 만료, clinic timezone의 DST
+gap/overlap 경계에서 분할한다. cache는 `policyGeneration` 변경 시 해당 scope만
+무효화하며 bounded LRU와 tenant별 entry/memory quota를 가진다. cold/warm compile
+latency와 hit ratio를 각각 측정하고, 서로 다른 경계 시각이 같은 cache entry를
+공유하지 않는 테스트를 필수로 한다.
+
+impact preview는 10,000 row 또는 2초 이내 예상 작업만 동기 처리한다. 그 이상은
+partition당 최대 5,000 row의 비동기 job으로 전환하고 cursor, draft revision,
+policy generation을 checkpoint한다. draft나 generation이 바뀌면 결과를 stale로
+폐기하며 partial 결과로 활성화할 수 없다.
 
 slot/proposal 응답은 `effectivePolicyId`와 `policyGeneration`을 포함하고 새 hold·confirm 명령은 이를 `expectedPolicyGeneration`으로 돌려보낸다. allocation 트랜잭션이 최신 generation과 다르면 새 자원 점유는 `409 POLICY_CHANGED`로 거부하고 최신 후보를 반환한다. 단, 이미 만든 hold를 같은 allocation으로 확정하는 명령은 해당 hold의 pinned snapshot을 사용한다.
 
@@ -323,6 +371,14 @@ INTERRUPTION_RECORDED
 ```
 
 각 checkpoint는 재실행 가능하고, 중간 crash 뒤에는 완료된 item과 이미 생성된 attempt를 idempotency key로 재사용한다. repair job은 원 방문이 `PARTIAL`인데 잔여 의무 checkpoint가 없는 경우를 탐지해 다시 시작한다.
+
+각 checkpoint는 시작 시각, deadline, attempt, 마지막 오류와 다음 재시도 시각을
+저장한다. exponential backoff와 jitter를 적용해 최대 5회 또는 30분 중 먼저
+도달한 한도까지만 자동 재시도하고 이후 quarantine/manual review로 보낸다.
+취소·환불·새 disruption이 도착하면 in-flight candidate 작업을 취소하거나
+결과 commit을 차단한다. repair job은 checkpoint 부재뿐 아니라 stale
+`CANDIDATES_PREPARED`, 만료된 `CUSTOMER_CONSENT_PENDING`, orphan allocation,
+중복 attempt도 탐지해 idempotent하게 해제·복구한다.
 
 고객·운영자 화면에는 완료 항목, 남은 항목, 남은 임상 기한, 새 방문 필요 여부, 동의 기한을 분리해 표시한다. 고객이 재예약을 거절하면 예약은 사실 event를 발행하고 CRM·커머스의 상담/환불 workflow로 넘긴다.
 
@@ -418,6 +474,12 @@ Solver partition key는 `tenantId + clinicId + localDate + resourceGroup`이다.
 4. 운영자 수동 검토
 
 stale proposal은 새 case version이 발행되는 순간 `SUPERSEDED`가 되며 allocation을 해제한다. 소비자 backlog와 solver queue가 상한을 넘으면 backpressure를 걸고 새 저우선 자동 proposal보다 이미 확정된 고객 복구를 우선한다.
+
+모든 candidate/solver 결과는 commit 시점에 `RescheduleCase.version`,
+`policyGeneration`, proposal version을 다시 비교한다. 하나라도 달라진 in-flight
+결과는 적용하지 않고 `SUPERSEDED`로 기록하며 후보 allocation을 idempotent하게
+해제한다. solver benchmark는 termination 시간뿐 아니라 고정 seed에서 hard
+constraint 0건, 기준 score 대비 허용 degradation을 함께 판정한다.
 
 ## 10. 우선순위와 고객 신뢰도
 
@@ -571,36 +633,80 @@ quota 변경은 권한 있는 운영자와 정책 publish workflow가 필요하�
 
 ### 13.3 Event convergence와 신뢰
 
-모든 event에는 `clinicId`, `producer`, `schemaVersion`, `correlationId`를 추가한다. transport는 mTLS 또는 서명된 envelope를 사용하고 event type별 허용 producer, issuer, audience를 검증한다. 서명 실패, tenant/clinic 불일치, 허용 replay window 밖 event는 반영하지 않고 quarantine한다.
+clinic 범위 event에는 `clinicId`를, tenant 범위 event에는 명시적 scope type을
+포함한다. 모든 event에는 `producer`, `sourceAuthority`, `schemaVersion`,
+`correlationId`를 추가한다. transport는 mTLS 또는 서명된 envelope를 사용하고
+event type별 허용 producer, issuer, audience를 검증한다. 서명 실패, scope 불일치,
+허용 replay window 밖 event는 반영하지 않고 quarantine한다.
+
+trust material은 platform security가 producer별 allowlist와 trust store/JWKS를
+소유한다. envelope은 `kid`와 허용 algorithm을 명시하며 consumer는 issuer와
+audience별 key를 pin한다. rotation은 신·구 key의 제한된 overlap window를
+사용하고, revocation cache TTL은 replay window보다 짧게 둔다. compromised key는
+즉시 revoke하고 해당 `kid` event를 quarantine하며 emergency rollover, alert,
+행위자와 변경 전후 fingerprint를 append-only audit에 남긴다. 외부 wire field
+`kid`는 내부 typed envelope의 `keyId`로 adapter 경계에서 1:1 mapping하며,
+로그·outbox·quarantine에서 두 이름을 별도 의미로 취급하지 않는다.
 
 | Event 군 | Dedupe key | Version 처리 | 충돌·복구 |
 |---|---|---|---|
-| catalog | `eventId`, `productId+catalogVersion` | 낮은 version 무시, 같은 version hash 충돌 격리 | catalog conflict queue |
+| catalog | `eventId`, `(tenantGroupId, clinicId, sourceAuthority, productId, catalogVersion)` | 낮은 version 무시, 같은 version hash 충돌 격리 | catalog conflict queue |
 | purchase/refund/cancel | `eventId`, source aggregate version | duplicate idempotent, gap 대기 | 원천 재조회 후 DLQ |
 | treatment start/complete | `eventId`, treatment execution version | 완료 terminal, 낮은 version 무시 | gap이면 후속 의존 계산 보류 |
 | disruption | `eventId`, resource aggregate version | merge key로 중복 collapse | case 재계산 가능 |
 | customer consent | `eventId`, proposal version, nonce | 현재 proposal만 수락 | stale/replay 거부 |
 | scheduling policy | `eventId`, scope+kind+version, payload hash | 낮은 version 무시, 같은 version hash 충돌 격리 | compile 실패 시 직전 active 유지 |
 
-consumer side effect와 inbox 기록은 같은 트랜잭션이다. gap은 bounded retry 후 DLQ로 보내고, operator는 `eventId`와 aggregate version을 지정해 안전하게 re-drive할 수 있다. outbox는 batch publish 후 ack된 row만 완료 처리한다.
+consumer side effect와 inbox 기록은 같은 트랜잭션이다. gap은 exponential
+backoff+jitter로 최대 5회 또는 30분 중 먼저 도달한 한도까지 재시도한 뒤 DLQ로
+보낸다. DLQ 보존 기간과 복구 SLO는 운영 정책에 고정한다. operator는 `eventId`와
+aggregate version을 지정해 안전하게 re-drive할 수 있다. outbox는 batch publish
+후 ack된 row만 완료 처리한다.
+
+quarantine은 DLQ와 별도인 immutable record다. 원 envelope hash, encrypted 원문,
+producer/authority, schema/source version, reason code, detectedAt, correlationId를
+저장하고 scheduling on-call과 security operator만 조회한다. signature/scope/
+ownership 위반은 원천 정정과 trust 재검증 전에는 re-drive할 수 없다. quarantine
+release, DLQ replay, conflict resolution은 privileged role, bounded selector,
+사유, dry-run diff hash, append-only audit와 alert를 요구한다. 환불·동의·안전
+영향 replay는 이중 승인을 요구한다. quarantine 원문은 PHI/security incident
+retention class 중 더 엄격한 기간을 적용하고, 만료 시 암호문을 삭제하되 envelope
+hash, reason, 승인·release 이력은 감사 보존기간 동안 남긴다. legal hold가 있으면
+자동 삭제를 중지하고 security data steward가 분기별로 보존 예외를 검토한다.
 
 event 상세 payload는 별도 schema registry 또는 versioned contract 문서가 소유한다. 최소 계약은 다음과 같다.
 
 | Event | 필수 도메인 payload | 예약 모듈 |
 |---|---|---|
-| `ProductCatalogChanged` | product/catalog version, hash, BOM snapshot | `appointment-api` → `appointment-core` |
-| `PurchaseCompleted` | purchase/customer/clinic/product/version, desired window | `appointment-event` → `appointment-core` |
+| `ProductCatalogChanged` | tenant/clinic/source authority, product/catalog version, hash, BOM snapshot | `appointment-api` → `appointment-core` |
+| `PurchaseCompleted` | purchase/customer/clinic, catalog source authority, product/version, desired window | `appointment-event` → `appointment-core` |
 | `TreatmentStarted/Completed` | planned treatment, attempt, actual time, execution version | `appointment-event` |
 | `PurchaseRefunded/PlanCancelled` | purchase, scope/targets, effective time, reason | `appointment-event` |
 | disruption events | resource ID/type, interval, source version | `appointment-event` → `appointment-core` |
 | consent events | proposal/version/nonce, decision, actor/channel/time | `appointment-api` |
 | `SchedulingPolicyActivated` | scope, kind/version, effective window, hash, actor | `appointment-api` → core/solver/notification |
 
+Foundation의 `PurchaseCompleted` 최소 계약은 별도 문서가 없어도 구현 가능해야 한다.
+
+| 구분 | 필수 필드/규칙 |
+|---|---|
+| envelope | `eventId`, `eventType`, `schemaVersion`, `occurredAt`, `receivedAt`, `issuer`, `audience`, `producer`, `kid`, signature |
+| source | `tenantGroupId`, `clinicId`, `sourcePurchaseAuthority`, `sourcePurchaseId`, `sourceAggregateVersion`, `catalogSourceAuthority`, `productId`, `catalogVersion` |
+| booking preference | exact instant, date range, weekday/time preference 중 하나 또는 없음; 크기·날짜 범위 제한 |
+| 환자 참조 | tenant-bound encrypted/pseudonymous token만 허용; 연락처와 진료 상세 금지 |
+| compatibility | current와 immediately previous schema만 허용하고 하나의 current command로 정규화 |
+| idempotency | `eventId`와 authority-qualified purchase identity; duplicate는 동일 결과, version gap은 retry/DLQ |
+| outbox | 원천 ID와 plan ID, 최소 진료 의무 요약만 포함하고 환자 token/ciphertext는 금지 |
+
+HTTP catalog adapter는 `appointment-api`, 향후 broker catalog ingress와 구매
+consumer는 `appointment-event`, canonical validation·hash·application service는
+`appointment-core`가 소유한다.
+
 ### 13.4 Lifecycle conflict와 우선순위
 
 같은 item에 대한 event는 원천 aggregate version과 실제 발생 시각을 함께 비교한다. 이미 시작된 진료 사실은 예약·환불 명령보다 우선하고, 아직 시작하지 않은 미래 의무에는 환불·plan 취소가 proposal보다 우선한다.
 
-| Event/명령 | `PROPOSED/HELD/CONFIRMED` | `CHECKED_IN/IN_PROGRESS` | `COMPLETED/INTERRUPTED` | `CANCELLED/NO_SHOW` |
+| Event/명령 | `PROPOSED/HELD/CONFIRMED` | `CHECKED_IN/IN_PROGRESS` | `COMPLETED/INTERRUPTED` | `EXPIRED/CANCELLED/NO_SHOW` |
 |---|---|---|---|---|
 | `PurchaseRefunded` | 대상 미래 item 취소, proposal supersede, allocation 해제 | 실제 시작 전이면 취소; 시작 후면 현재 attempt 보존하고 미래만 취소 | 과거 attempt 보존, 잔여 미래만 취소 | terminal 유지 |
 | `PlanCancelled` | plan의 미래 item 전체 취소, 빈 방문 취소 | 시작된 attempt 보존, 이후 의무 취소 | 과거 보존 | terminal 유지 |
@@ -626,6 +732,23 @@ event 상세 payload는 별도 schema registry 또는 versioned contract 문서�
 
 날짜·기간·횟수·소요시간·capacity 값은 bounded validation을 거친다. clinic timezone을 기준으로 local date/time을 정규화하고 event에는 원래 offset과 UTC instant를 함께 보존한다. BOM dependency는 알려진 item만 참조하고 DAG cycle이 없어야 한다.
 
+Foundation HTTP 오류는 legacy handler의 원문 메시지를 재사용하지 않는다.
+
+| 조건 | HTTP / code | 호출자 계약 |
+|---|---|---|
+| malformed/bounded validation 실패 | `400 VALIDATION_FAILED` | 고정된 안전 메시지와 `correlationId` |
+| 인증 없음/실패 | `401 UNAUTHORIZED` | resource 존재 여부 비공개 |
+| role 또는 tenant/clinic scope 불일치 | `403 FORBIDDEN` | payload·환자 정보 비공개 |
+| plan/catalog 없음 또는 다른 clinic | `404 RESOURCE_NOT_FOUND` | existence hiding |
+| 기능 flag 비활성 | `404 FEATURE_DISABLED` | OpenAPI path는 유지 |
+| 같은 version·다른 payload | `409 CATALOG_VERSION_CONFLICT` | 기존/요청 hash 원문은 비공개 |
+| 예상하지 못한 오류 | `500 INTERNAL_ERROR` | 예외·SQL·secret 원문 비공개 |
+
+운영자 plan 조회는 `(tenantCode, clinicId, planId)` 또는
+`(tenantCode, clinicId, sourcePurchaseAuthority, sourcePurchaseId)`로만 가능하고,
+응답은 환자 token/ciphertext, raw event payload, 내부 signing metadata를 노출하지
+않는다.
+
 ### 14.2 Policy management API
 
 예약 정책은 tenant 관리자와 권한이 위임된 clinic 관리자가 다음 API로 관리한다.
@@ -644,11 +767,54 @@ tenant 관리자는 tenant 기본값과 모든 소속 clinic 정책을 조회할
 
 slot/proposal 응답의 `effectivePolicyId`와 `policyGeneration`은 hold·confirm의 precondition이다. 새 allocation 전에 generation이 바뀌면 `409 POLICY_CHANGED`와 최신 effective policy 참조를 반환한다.
 
-### 14.3 기존 appointment 상태와 스키마
+### 14.3 후속 booking·동의 caller 계약
+
+이 표는 Foundation에서 구현하지 않지만 후속 API가 따라야 할 고정 계약이다.
+
+| Command family | Actor/scope | 필수 precondition | 대표 실패 |
+|---|---|---|---|
+| slot search | 환자/보호자, 병원 운영자 | tenant·clinic·patient ownership, bounded window | `NO_VALID_SLOT`, `BLOCKED_REVIEW` |
+| hold/confirm | 환자/보호자 또는 권한 있는 운영자 | appointment/resource version, policy generation | `POLICY_CHANGED`, `CAPACITY_CONFLICT` |
+| proposal accept/reject/request-call | 인증된 환자/보호자 | proposal/version/nonce/expiry | `PROPOSAL_EXPIRED`, `PROPOSAL_SUPERSEDED` |
+| partial fulfillment status | 환자/보호자, 병원 운영자 | appointment ownership | 완료·잔여·기한·다음 행동을 분리 |
+| reschedule/disruption operation | 병원 운영자, on-call producer | case/version, scoped privileged role | stale result 차단, manual review |
+| policy administration | tenant admin 또는 위임된 clinic admin | scope, revision, preview hash, step-up | `POLICY_PREVIEW_STALE`, ceiling 위반 |
+
+환자 메시지는 채널별 번역이 가능하지만 reason/action code와 의미는 고정한다.
+
+| 상황 | 환자용 예시 의미 | 운영자 action |
+|---|---|---|
+| confirm | 확정된 날짜·시간·방식·예상 대기 | `NONE` |
+| reschedule proposal | 기존 약속과 새 후보의 차이, 응답 기한, 원 예약 보호 여부 | `WAIT_CONSENT` |
+| expired/rejected | 기존 약속 유지 여부와 새 후보/상담 선택 | `REPROPOSE_OR_CALL` |
+| partial fulfillment | 완료 항목, 남은 항목, 임상 기한, 새 방문·동의 필요 | `PREPARE_RESIDUAL_VISIT` |
+| overflow/overbooking | commitment mode, 예상 대기 범위, 자발적 재예약 선택 | `MONITOR_WAIT_SLO` |
+| request call | 자동 변경 없음, 상담 예정 | `CONTACT_PATIENT` |
+
+직접 확정, cross-plan 병합, 정책 없는 오버부킹, no valid slot, stale generation,
+expired/superseded proposal, `BLOCKED_REVIEW`는 같은 fail-closed matrix를 사용한다.
+각 응답은 HTTP status, stable code, 환자 안전 문구, operator queue/action,
+`retryable`을 제공하며 자동 retry가 고객 동의나 자원 점유를 대신할 수 없다.
+
+### 14.4 기존 appointment 상태와 스키마
 
 기존 `scheduling_appointments`는 방문 shell로 유지한다. 새 테이블 `scheduling_appointment_plans`, `scheduling_planned_treatments`, `scheduling_treatment_dependencies`, `scheduling_appointment_items`, `scheduling_resource_allocations`, `scheduling_reschedule_proposals`, `scheduling_policy_sets`, `scheduling_effective_policy_snapshots`를 additive하게 도입한다.
 
 기존 row는 하나의 legacy plan/treatment/item을 backfill해 읽기 호환성을 유지한다. 기존 doctor/treatment/equipment 필드는 migration 기간 동안 대표 item에서 채운 projection으로 유지한 뒤, 모든 consumer가 item API로 이동한 다음 deprecated한다.
+
+이 backfill은 후속 visit/item 단계의 계약이며 Foundation V8에서는 실행하지 않는다.
+후속 단계에서는 tenant/clinic과 legacy PK 순서의 cursor를 사용해 기본 1,000 row
+chunk로 처리하고, chunk transaction은 5초 이내와 사전 정의된 lock budget을
+지켜야 한다. checkpoint/resume key, source/target count와 canonical hash,
+마지막 성공 cursor를 저장한다. mismatch 허용치는 0이며 tenant/clinic 단위
+reconciliation PASS 전에는 cutover할 수 없다. PostgreSQL/MySQL online index
+전략과 `EXPLAIN`을 증거로 남긴다.
+
+new write 활성화 이후 migration window 동안 plan/item write는 legacy read
+projection도 같은 transaction/outbox repair path로 유지한다. rollback 시 새
+history를 삭제하지 않고 이 projection 또는 결정적 rebuild job으로 legacy caller를
+복원한다. partial failure는 마지막 성공 checkpoint부터 재개하고 reconciliation
+불일치·lock budget 초과·traffic SLO 악화 시 해당 clinic cutover만 되돌린다.
 
 상태 호환:
 
@@ -701,6 +867,31 @@ slot/proposal 응답의 `effectivePolicyId`와 `policyGeneration`은 hold·confi
 - policy activation audit는 이전·새 version, effective window, preview hash, 승인자, 사유를 append-only로 보존한다.
 - policy payload는 typed allowlist schema와 bounded 값만 허용하며 임의 script, expression language, 외부 URL을 실행하지 않는다.
 
+권한은 endpoint 이름이 아니라 command family와 object ownership으로 검증한다.
+
+| Actor | 허용 범위 | 금지 |
+|---|---|---|
+| 환자/보호자 | 자기 환자의 후보 조회와 유효 proposal 응답 | 다른 환자·clinic, policy/운영 override |
+| 병원 운영자 | 소속 clinic의 plan/appointment 운영 | 다른 clinic, tenant ceiling 변경 |
+| clinic admin | 위임된 clinic override | tenant 기본값·platform guardrail 완화 |
+| tenant admin | tenant 기본값과 소속 clinic 조회 | 다른 tenant, 의료 안전 guardrail 완화 |
+| 신뢰된 producer | allowlist event type과 authority 범위 | 사용자 API, 다른 producer authority |
+| scheduling on-call/security operator | bounded redrive/quarantine 운영 | 승인 없는 환불·동의·안전 event 재생 |
+
+데이터 분류:
+
+| Event/경로 | 허용 | 금지 |
+|---|---|---|
+| purchase ingress | tenant-bound encrypted/pseudonymous patient reference | 연락처, 자유서술 진료 상세 |
+| solver | 비식별 patient key, 필요한 임상·자원 제약 | 이름, 연락처, raw event |
+| outbox/metric/log | plan/event ID, scope, reason code, bounded count | token/ciphertext, direct identifier, payload dump |
+| 운영자 plan read | 진료 의무와 예약 선호 요약 | patient token, signature/key material |
+
+reliability profile을 사용하면 환자/보호자에게 적용 특징군과 결과 영향을 설명하고,
+정정·이의제기·일시 제외 요청 경로를 제공한다. 운영자는 원천 no-show/cancel
+사실을 교정할 수 있지만 임의 평판 문자열을 입력할 수 없다. 모든 변경은 감사하고,
+profile은 의료적으로 필요한 진료를 거부하는 hard constraint로 사용할 수 없다.
+
 ## 17. 관측 가능성·SLO·성능 기준
 
 - projection lag, catalog version conflict
@@ -734,7 +925,34 @@ slot/proposal 응답의 `effectivePolicyId`와 `policyGeneration`은 hold·confi
 
 benchmark dataset은 빈 clinic, 정상일, 최대 partition, disruption 10,000 item, 동시 confirm 경쟁, 모두 방문한 overbooking day를 포함한다. 인프라별 최종 숫자는 배포 전 capacity test로 pin하되 위 항목 자체를 제거할 수 없다.
 
+slot search는 candidate마다 개별 DB query를 반복하지 않는다. 한 요청당 DB round
+trip 상한, bulk interval query 또는 precomputed capacity counter, item/allocation
+복합 index를 구현 계획에서 pin한다. benchmark는 candidate 수, 의료진·장비·공간
+cardinality, 기존 appointment/allocation row 수를 고정하고 PostgreSQL/MySQL
+`EXPLAIN`에서 scoped index 사용을 증명한다.
+
+benchmark matrix의 최소 fixture는 Foundation의 plan 2,000 treatment/10,000 edge,
+slot search 2,000 appointment/10,000 item/20,000 allocation, confirm 경쟁 100개,
+policy cache 1,000 clinic×20 version, disruption 10,000 item이다. cold/warm policy
+compile, queue backlog, online backfill을 별도 측정한다. solver는 고정 seed,
+hard-constraint violation 0건과 승인된 기준 score 대비 degradation 한도를 함께
+통과해야 한다.
+
 alert는 tenant/clinic 범위를 포함하고 PHI를 제외한다. `absoluteBookingLimit` 위반 시도, policy compile 실패, `POLICY_CAPACITY_DEBT`, 서명 실패, consent replay, outbox/DLQ 적체, solver timeout, SLA error budget 소진은 즉시 운영 경보 대상이다.
+
+metric label은 tenant/clinic, bounded state/reason code, event type의 allowlist만
+허용한다. patient, purchase, plan, appointment, event ID는 label로 쓰지 않고
+trace/log field에 sampling·redaction 정책을 적용한다. redaction test와 cardinality
+budget 초과 경보를 release evidence에 포함한다.
+
+| Alert | Severity / owner | Ack·다음 행동 |
+|---|---|---|
+| tenant/scope/signature/consent replay | critical / security on-call | 5분, consumer 차단·quarantine |
+| absolute limit/policy compile/capacity debt | critical / scheduling on-call | 5분, 신규 점유 차단·runbook |
+| outbox/DLQ/solver queue 80% | warning / scheduling on-call | 영업일 내, 원인 제거 |
+| outbox/DLQ/solver queue 95% | high / scheduling on-call | 15분, backpressure·저우선 proposal pause |
+| catalog version conflict | warning / catalog owner | conflict queue 확인; 증가율 급등 시 page |
+| CRM/commerce/clinical handoff timeout | high / 해당 secondary owner | 15분, 소유 workflow로 escalation |
 
 ## 18. 운영 복구와 배포
 
@@ -748,6 +966,11 @@ alert는 tenant/clinic 범위를 포함하고 PHI를 제외한다. `absoluteBook
 
 Scheduling on-call은 일정 상태와 재처리를, CRM은 고객 연락 timeout을, 커머스는 환불 결정을, 진료서비스는 completion 사실 정정을 소유한다.
 
+backpressure는 queue별로 적용한다. trust 검증과 완료·취소 사실 수신은 계속하고,
+새 저우선 proposal, warm-up, bulk preview 순서로 shed한다. 80% warning에서
+자동 확장을 준비하고 95%에서 해당 producer/worker에 backpressure를 적용한다.
+70% 아래가 10분 유지되고 oldest-age SLO가 회복된 뒤에만 resume한다.
+
 ### 18.2 Migration·rollout·rollback
 
 1. additive schema와 index 배포
@@ -760,9 +983,37 @@ Scheduling on-call은 일정 상태와 재처리를, CRM은 고객 연락 timeou
 8. clinic override를 feature flag로 활성화
 9. capacity/overbooking은 quota 0 기본값에서 별도 승인 후 활성화
 
+기능 제어는 최소 다음 계약을 가진다.
+
+| Flag/kill switch | 기본값·범위 | 의존성과 rollback |
+|---|---|---|
+| `catalog-sync-enabled` | `false`, clinic | schema 후 활성; 끄면 새 sync만 차단 |
+| `purchase-consumer-mode` | `OFF`, tenant/clinic | `OFF → SHADOW → WRITE`; transport capability 없으면 `WRITE` 거부 |
+| `plan-read-enabled` | `false`, clinic | schema와 plan 생성 증거 후 활성 |
+| `proposal-generation-paused` | `false`, clinic/case | 안전 탐지는 계속, 신규 proposal만 pause |
+| `overbooking-emergency-disabled` | disabled 아님, clinic | 활성화하면 quota 0; absolute limit 증가는 불가 |
+
+flag 변경은 권한, 사유, 이전/새 값, actor, 만료와 correlationId를 감사하고
+dependency 순서를 위반하면 fail closed한다.
+
 old/new event schema는 최소 한 릴리스 window 동안 함께 읽는다. rollback은 새 write flag를 끄고 legacy projection read로 돌아가되 생성된 plan/item history는 삭제하지 않는다. backfill 불일치, tenant scope 오류, absolute limit 위반, DLQ 급증, SLO error budget 급소진은 즉시 rollback 기준이다.
 
 release evidence에는 schema dry-run, backfill count/hash, shadow diff, event replay, 동시성·성능 benchmark, alert smoke test, rollback rehearsal 결과가 포함되어야 한다.
+
+production enablement는 다음이 모두 PASS일 때만 가능하다.
+
+- H2/PostgreSQL/MySQL schema dry-run과 legacy count/hash mismatch 0
+- Foundation backfill은 명시적 N/A; 후속 backfill은 tenant/clinic mismatch 0
+- SHADOW plan/outbox diff 0, current/previous schema와 duplicate/gap replay PASS
+- 대표/최대 fixture SLO와 scoped `EXPLAIN` PASS
+- trust failure, 80%, 95%, catalog conflict alert smoke와 owner ack 확인
+- rollback rehearsal에서 flag OFF 후 기존 history와 legacy read 보존
+- canary 기간과 error budget을 배포 계획에 pin하고 scope 오류·conflict 급증·SLO
+  소진 시 즉시 abort
+
+증거 artifact는 commit SHA, command/tool version, timestamp, target dialect/scope,
+result, correlationId, artifact checksum, approver/signoff를 포함해 append-only
+저장한다. 수정은 새 revision으로만 가능하며 이전 checksum을 보존한다.
 
 ## 19. 단계적 구현 순서
 
@@ -815,18 +1066,47 @@ release evidence에는 schema dry-run, backfill count/hash, shadow diff, event r
 
 ### 20.1 Acceptance commands
 
-구현 계획에서 실제 test class 이름을 pin하고 다음 module-scoped 검증을 최소 기준으로 사용한다.
+Foundation은 다음 targeted proof를 최소 기준으로 사용한다.
 
 ```bash
+./gradlew :appointment-core:test --tests "*CatalogDefinitionValidatorTest"
+./gradlew :appointment-core:test --tests "*CatalogPayloadHasherTest"
+./gradlew :appointment-core:test --tests "*BookingPreferenceNormalizerTest"
+./gradlew :appointment-core:test --tests "*ProductCatalogRepositoryTest"
+./gradlew :appointment-core:test --tests "*AppointmentPlanRepositoryTest"
+./gradlew :appointment-core:test --tests "*AppointmentPlanFactoryTest"
+./gradlew :appointment-event:test --tests "*PurchaseCompletedHandlerTest"
+./gradlew :appointment-event:test --tests "*PurchaseEventRedriveServiceTest"
+./gradlew :appointment-api:test --tests "*CatalogProductSyncControllerTest"
+./gradlew :appointment-api:test --tests "*AppointmentPlanControllerTest"
+./gradlew :appointment-api:test --tests "*AppointmentPlanReadSecurityIntegrationTest"
+./gradlew :appointment-api:test --tests "*CatalogProductSyncSecurityIntegrationTest"
+./gradlew :appointment-api:test --tests "*PurchaseCompletedDialectIntegrationTest"
+```
+
+DB 검증은 shared container 충돌을 피하기 위해 순차 실행한다.
+
+```bash
+./gradlew :appointment-api:test --tests "*FlywayMigrationTest"
+./gradlew :appointment-api:test --tests "*FlywayPostgreSQLMigrationTest" -Dspring.profiles.active=test,test-postgresql
+./gradlew :appointment-api:test --tests "*FlywayMySQLMigrationTest" -Dspring.profiles.active=test,test-mysql
 ./gradlew :appointment-core:test
 ./gradlew :appointment-event:test
 ./gradlew :appointment-solver:test
 ./gradlew :appointment-notification:test
 ./gradlew :appointment-api:test
-./gradlew :appointment-core:build :appointment-event:build :appointment-solver:build :appointment-api:build
+./gradlew :appointment-core:build :appointment-event:build :appointment-solver:build \
+  :appointment-notification:build :appointment-api:build
+./gradlew detekt
+git diff --check
 ```
 
-추가로 DB별 Flyway 검증, catalog/policy API contract test, effective policy compiler determinism·inheritance·time-basis test, event duplicate/out-of-order test, hold/confirm concurrency test, disruption benchmark와 HTML parse/link/browser smoke test를 수행한다.
+OpenAPI는 catalog request, sanitized error envelope, feature-disabled 응답,
+authority-qualified purchase lookup을 assertion한다. release evidence는
+duplicate/out-of-order/version-gap, barrier 동시성, tenant-bound 환자 참조,
+redacted log/metric, flag rollback을 포함한다. Foundation 이후 단계는
+catalog/policy API, effective policy compiler, hold/confirm concurrency,
+disruption benchmark와 HTML parse/link/browser smoke를 해당 실행 계획에 추가한다.
 
 ## 21. 남은 위험
 

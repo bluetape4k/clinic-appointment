@@ -476,7 +476,7 @@
         </div>
 
         <div class="flow">
-          <div class="node"><strong>Catalog PUT</strong><small>version · BOM · claimed hash</small></div>
+          <div class="node"><strong>Catalog PUT</strong><small>authority · version · BOM · claimed hash</small></div>
           <div class="node"><strong>Validate</strong><small>bounds · known refs · DAG · actual hash</small></div>
           <div class="node"><strong>Trusted event</strong><small>signature · issuer · audience · replay window</small></div>
           <div class="node"><strong>Expand plan</strong><small>repeat count → treatment sequence</small></div>
@@ -490,9 +490,9 @@
         <ol class="steps">
           <li><span><strong>계약 고정</strong><br>catalog·plan value model, bounded validator, deterministic hasher를 순수 Kotlin으로 만든다.</span></li>
           <li><span><strong>aggregate 저장</strong><br>catalog 3개 테이블과 plan 3개 테이블, repository, mapper를 multi-dialect test로 고정한다.</span></li>
-          <li><span><strong>V8 schema parity</strong><br>core 6개 테이블과 inbox/outbox를 H2·PostgreSQL·MySQL에 additive migration한다.</span></li>
-          <li><span><strong>catalog sync API</strong><br>전용 source authority 아래 <code>CREATED</code>, <code>UNCHANGED</code>, <code>STALE_IGNORED</code>, conflict 계약을 제공한다.</span></li>
-          <li><span><strong>purchase event 수렴</strong><br>OFF/SHADOW/WRITE gate 아래 inbox + plan + outbox를 한 transaction에서 처리하고 중복·scope mismatch·redrive를 검증한다.</span></li>
+          <li><span><strong>V8 schema parity</strong><br>core 6개 테이블과 inbox/outbox/quarantine/audit를 H2·PostgreSQL·MySQL에 additive migration한다.</span></li>
+          <li><span><strong>catalog sync API</strong><br>tenant·clinic·source authority가 포함된 identity 아래 <code>CREATED</code>, <code>UNCHANGED</code>, <code>STALE_IGNORED</code>, conflict 계약을 제공한다.</span></li>
+          <li><span><strong>purchase event 수렴</strong><br>OFF/SHADOW/WRITE gate 아래 inbox + plan + outbox를 한 transaction에서 처리하고, 실패 event는 별도 암호화 quarantine과 append-only audit로 보존한다.</span></li>
           <li><span><strong>plan read API</strong><br>clinic operator가 tenant/clinic 범위 안에서 상품 근거, 희망 일정, treatment DAG를 조회한다.</span></li>
           <li><span><strong>문서·회귀·리뷰</strong><br>README parity, migration matrix, module regression, 보안·안정성 review를 수렴한다.</span></li>
         </ol>
@@ -566,11 +566,12 @@
               <tr><th>위험</th><th>탐지 신호</th><th>방어</th><th>복구</th></tr>
             </thead>
             <tbody>
-              <tr><td>version 의미 충돌</td><td>같은 version, 다른 hash</td><td>immutable unique + conflict</td><td>sync route 중지, source 확인</td></tr>
-              <tr><td>중복 plan</td><td>event/purchase unique race</td><td>inbox + source purchase unique</td><td>named event re-drive</td></tr>
+              <tr><td>version 의미 충돌</td><td>같은 authority/version, 다른 hash</td><td>authority-qualified immutable unique + conflict</td><td>sync route 중지, source 확인</td></tr>
+              <tr><td>중복 plan</td><td>event/scoped purchase unique race</td><td>inbox + tenant/clinic purchase unique</td><td>named event re-drive</td></tr>
               <tr><td>부분 commit</td><td>inbox만 있고 outbox 없음</td><td>하나의 DB transaction</td><td>rollback test 후 재처리</td></tr>
               <tr><td>scope 오염</td><td>event/catalog clinic 불일치</td><td>소유권 재검증</td><td>quarantine + alert</td></tr>
-              <tr><td>위조·stale event</td><td>signature/issuer/audience/replay 실패</td><td>verified envelope만 handler 진입</td><td>격리, generic replay 금지</td></tr>
+              <tr><td>위조·stale event</td><td>signature/issuer/audience/replay 실패</td><td>verified envelope만 handler 진입</td><td>5분 내 consumer 차단 + quarantine</td></tr>
+              <tr><td>격리 증거 손실</td><td>원문·release history 누락</td><td>encrypted artifact + append-only audit</td><td>retention/legal hold 규칙 적용</td></tr>
               <tr><td>legacy 회귀</td><td>V8 전후 appointment diff</td><td>additive schema</td><td>새 write flag off</td></tr>
               <tr><td>전달 완료 오인</td><td>outbox pending age 증가</td><td>enqueue와 ack 상태 분리, production WRITE 금지</td><td>transport 후속 계획 전까지 OFF/SHADOW</td></tr>
             </tbody>
@@ -583,19 +584,19 @@
         <h2>여기까지 증명되면 첫 slice가 끝난다</h2>
         <div class="callout">
           <p>
-            한 구매는 하나의 plan과 결정적인 treatment DAG를 만들고, catalog·event 재전송은 중복을 만들지 않으며,
-            tenant/clinic 경계를 넘지 않는다. 세 DB migration이 통과하고 기존 appointment API가 그대로 동작해야 한다.
+            authority-qualified 한 구매는 하나의 plan과 결정적인 treatment DAG를 만들고, catalog·event 재전송은 중복을 만들지 않으며,
+            tenant/clinic 경계를 넘지 않는다. 세 DB migration과 PostgreSQL/MySQL 성능·EXPLAIN 증거가 통과하고 기존 appointment API가 그대로 동작해야 한다.
             outbox enqueue는 delivery 완료로 표시하지 않으며 transport가 연결되기 전 production WRITE는 비활성이다.
           </p>
         </div>
         <div class="grid two">
           <article class="card">
             <h3 class="green">완료 증거</h3>
-            <p class="muted">targeted RED/GREEN, migration matrix, shadow diff, redrive·rollback rehearsal, redacted ops proof, module tests/build, P0=0/P1=0.</p>
+            <p class="muted">targeted RED/GREEN, migration matrix, performance·EXPLAIN, shadow diff, quarantine/redrive·rollback, HTML smoke, module tests/build, 7-Tier P0=0/P1=0.</p>
           </article>
           <article class="card">
             <h3 class="amber">다음 gate</h3>
-            <p class="muted">계획 승인 후 Task 1부터 subagent-driven TDD로 실행한다. PR·push·merge는 별도 권한이다.</p>
+            <p class="muted">3-R 수렴 뒤 현재 코드와 계획의 차이를 TDD로 보정하고 verifier·7-Tier를 통과한다. PR·push·merge는 별도 권한이다.</p>
           </article>
         </div>
       </section>
