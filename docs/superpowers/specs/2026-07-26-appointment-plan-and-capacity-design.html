@@ -390,7 +390,7 @@
     .numbered li {
       counter-increment: item;
       display: grid;
-      grid-template-columns: 34px 1fr;
+      grid-template-columns: 34px minmax(0, 1fr);
       gap: 12px;
       align-items: start;
       padding: 14px;
@@ -399,6 +399,8 @@
       color: #c9d8e9;
       background: rgba(13, 28, 48, .68);
     }
+
+    .numbered li > span { min-width: 0; }
 
     .numbered li::before {
       content: counter(item);
@@ -761,12 +763,12 @@
         </p>
 
         <ol class="numbered" style="margin-top: 28px">
-          <li>원래 방문을 <code>INTERRUPTED</code>, fulfillment를 <code>PARTIAL</code>로 기록한다.</li>
-          <li>완료한 item은 <code>COMPLETED</code>로 동결한다.</li>
-          <li>진행 중 중단 item은 <code>INTERRUPTED</code>, 미시작 item은 <code>DEFERRED</code>로 남긴다.</li>
-          <li>미이행 의무에 새 <code>AppointmentItem</code>을 만들고 <code>attemptNo</code>와 <code>previousAttemptId</code>를 연결한다.</li>
-          <li>남은 item을 새 <code>PROPOSED</code> 또는 <code>HELD</code> 방문으로 분리한다.</li>
-          <li>고객 동의 후 확정하고, 선행 item 실제 완료 전까지 후속 의존 항목을 잠근다.</li>
+          <li><span>원래 방문을 <code>INTERRUPTED</code>, fulfillment를 <code>PARTIAL</code>로 기록한다.</span></li>
+          <li><span>완료한 item은 <code>COMPLETED</code>로 동결한다.</span></li>
+          <li><span>진행 중 중단 item은 <code>INTERRUPTED</code>, 미시작 item은 <code>DEFERRED</code>로 남긴다.</span></li>
+          <li><span>미이행 의무에 새 <code>AppointmentItem</code>을 만들고 <code>attemptNo</code>와 <code>previousAttemptId</code>를 연결한다.</span></li>
+          <li><span>남은 item을 새 <code>PROPOSED</code> 또는 <code>HELD</code> 방문으로 분리한다.</span></li>
+          <li><span>고객 동의 후 확정하고, 선행 item 실제 완료 전까지 후속 의존 항목을 잠근다.</span></li>
         </ol>
 
         <div class="grid two" style="margin-top: 20px">
