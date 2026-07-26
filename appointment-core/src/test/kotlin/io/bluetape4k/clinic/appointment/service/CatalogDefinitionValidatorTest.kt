@@ -138,6 +138,33 @@ class CatalogDefinitionValidatorTest {
         }
     }
 
+    @Test
+    fun `accepts the maximum reachable compact graph within the payload bound`() {
+        val items = (0 until 20).map { index ->
+            bomItem(id = "item$index", repeatCount = 100)
+        }
+        val dependencies = buildList {
+            for (predecessor in 0 until 10) {
+                for (successor in 10 until 20) {
+                    for (sequence in 1..10) {
+                        add(
+                            dependency(
+                                predecessor = "item$predecessor",
+                                successor = "item$successor",
+                                predecessorSequenceNo = sequence,
+                                successorSequenceNo = sequence,
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        dependencies.size shouldBeEqualTo 1_000
+        val definition = catalogDefinition(items = items, dependencies = dependencies)
+
+        CatalogDefinitionValidator.validate(definition) shouldBeEqualTo definition
+    }
+
     private fun catalogDefinition(
         productId: String = "product-1",
         productName: String = "Laser package",

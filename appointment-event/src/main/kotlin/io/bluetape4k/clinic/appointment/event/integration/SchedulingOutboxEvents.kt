@@ -27,6 +27,7 @@ object SchedulingOutboxEvents : LongIdTable("scheduling_outbox_events") {
 
     init {
         uniqueIndex("uq_outbox_event_id", eventId)
+        index("idx_outbox_plan_id", false, planId)
         index("idx_outbox_status_created_at", false, status, createdAt)
         index("idx_outbox_status_next_attempt", false, status, nextAttemptAt)
     }
