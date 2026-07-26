@@ -21,6 +21,7 @@
 - 객관적인 고객 신뢰도와 서비스 등급을 고려한 배정
 - 의도적인 오버부킹, 도착 시간대 예약, 날짜 대기형 예약
 - 정상 영업시간을 넘겨 진료하는 운영 정책
+- SaaS tenant 기본값과 병원별 override를 결합한 버전형 예약 정책
 
 ## 2. 서비스 경계
 
@@ -33,6 +34,7 @@
 | 실제 시술 완료의 원천 사실 | 시술/진료서비스 | 완료 event를 받아 계획 이행 여부와 후속 기간을 갱신 |
 | 환불 가능 여부·금액·승인 | 결제/커머스서비스 | 환불 event를 받아 미래 예약 의무만 취소·재계산 |
 | 고객 불만·사과·보상·상담 | 고객서비스/CRM | 지연·중단·재예약·SLA 위반 사실 event를 제공 |
+| SaaS 예약 운영 정책 | 예약서비스 | tenant 기본값, clinic override, 유효 정책 snapshot과 감사 이력을 소유 |
 | 일정·가예약·확정·자원 배정 | 예약서비스 | 소유 |
 
 고객이 병원 사유로 화가 나서 재예약 또는 환불을 요구하더라도, 예약 서비스는 감정·민원·보상 정책을 판단하지 않는다. 다음과 같은 객관적 사실만 기록하고 발행한다.
@@ -177,6 +179,77 @@ projection은 현재 REST API upsert로 갱신한다. 향후 Pub/Sub consumer도
 
 세부 진료별 의료진·장비·공간 점유다. 같은 방문 안에서도 항목마다 시간과 자원이 다를 수 있다.
 
+### 4.9 `SchedulingPolicySet`과 `EffectiveSchedulingPolicy`
+
+SaaS 고객마다 운영 방식이 다르므로 예약서비스는 정책을 코드 분기나 전역 환경변수가 아니라 typed·versioned aggregate로 관리한다.
+
+```text
+Platform safety guardrail
+          │ hard ceiling
+Tenant SchedulingPolicySet (default)
+          │ typed overlay
+Clinic SchedulingPolicySet (override)
+          │ compile at evaluation time
+EffectiveSchedulingPolicy snapshot
+          │ referenced by
+Appointment / RescheduleCase / SolverRun
+```
+
+`SchedulingPolicySet`의 범위는 `TENANT_DEFAULT` 또는 `CLINIC_OVERRIDE`다.
+
+- 공통 식별자: `tenantId`, 선택적 `clinicId`, `policyKind`, `version`
+- 수명주기: `DRAFT`, `SCHEDULED`, `ACTIVE`, `RETIRED`
+- 시간: `effectiveFrom`, 선택적 `effectiveUntil`
+- 무결성: `schemaVersion`, `payloadHash`, `createdBy`, `approvedBy`, `changeReason`
+- 동시성: scope와 policy kind별 optimistic revision, 같은 시점의 active version은 하나
+
+초기 `policyKind`는 다음 typed schema를 가진다.
+
+| 정책군 | 대표 설정 |
+|---|---|
+| `BOOKING_COMMITMENT` | 허용 commitment mode, 직접 확정 허용 여부, 최초 proposal 전략 |
+| `HOLD_AND_CONSENT` | hold TTL, proposal TTL, 고객 동의·만료·재제안 규칙 |
+| `CAPACITY_AND_OVERBOOKING` | nominal capacity, quota, absolute limit, 자동 완화 |
+| `PRIORITY_AND_RELIABILITY` | service tier weight, reliability allowlist와 회복·감쇠 |
+| `RECONFIRMATION` | 대상, 시점, 채널, 미응답 처리 |
+| `DISRUPTION_RECOVERY` | 자동 재계산 범위, 최소 변경 weight, 수동 검토 임계값 |
+| `OPERATING_EXTENSION` | 자동·절대 연장 한도, 승인과 안전 제한 |
+| `NOTIFICATION_AND_SLA` | mode별 대기·SLA 기준, 알림 cadence와 escalation |
+
+clinic override의 각 필드는 `INHERIT`, `SET(value)`, `DISABLE` 중 하나다. 값 부재를 `null`과 혼용하지 않는다. `INHERIT`는 tenant 기본값을 사용하고, `DISABLE`은 schema가 선택 기능으로 선언한 항목만 끈다. 필수 policy kind와 필수 SLA·안전 필드는 `DISABLE`할 수 없으며 effective 결과에 필수값이 없으면 활성화를 거부한다. tenant의 hard ceiling과 platform safety guardrail은 clinic override로 완화할 수 없고, 수치 상한은 가장 엄격한 값을 사용한다.
+
+`EffectiveSchedulingPolicy`는 `(tenantId, clinicId, decisionAt, serviceAt)`에 대해 활성 tenant 정책과 clinic override를 결정적으로 compile한 불변 snapshot이다. 각 typed policy는 평가 기준 시각을 고정한다.
+
+- `DECISION_TIME`: hold·동의·proposal·disruption 처리처럼 지금 실행하는 workflow
+- `SERVICE_TIME`: capacity·reconfirm·SLA·영업 연장처럼 실제 진료 예정 시점의 운영 조건
+
+평가 기준은 tenant가 임의로 바꾸는 설정이 아니라 policy schema 계약이다. `effectiveFrom`과 `effectiveUntil`은 offset이 있는 입력을 `Instant`로 저장한다. clinic 화면에서 입력한 local time은 clinic timezone으로 정규화하며 DST gap·overlap을 명시적으로 검증한다.
+
+- `effectivePolicyId`, 구성 policy별 version map, `compiledAt`, `payloadHash`
+- 상속 결과와 각 값의 출처(`PLATFORM`, `TENANT`, `CLINIC`)
+- validation warning과 비활성화된 기능
+- 계산 결과는 동일 입력에 동일 hash를 반환
+
+`Appointment`, `RescheduleCase`, `SolverRun`은 의사결정에 사용한 `effectivePolicyId`, version map, snapshot hash를 저장한다. 감사·재현을 위해 snapshot 본문도 별도 불변 저장소에 보존한다. `AppointmentPlan`은 생성 시 최초 예약 계산에 사용한 정책 참조만 남기며, 상품 BOM snapshot과 정책 snapshot을 하나로 합치지 않는다.
+
+정책 변경의 기본 적용 범위는 `FUTURE_ONLY`다.
+
+| 대상 | 새 정책 활성화 시 처리 |
+|---|---|
+| 새 예약·새 solver run | 새 effective policy 사용 |
+| `PROPOSED` | 아직 고객이 수락하지 않았다면 최신 정책으로 supersede·재계산 가능 |
+| `HELD` | 당시 snapshot과 allocation을 만료까지 보호하며 같은 allocation의 확정은 허용 |
+| `CONFIRMED` | 당시 snapshot을 유지하며 자동 변경 금지; 변경에는 새 proposal과 고객 동의 필요 |
+| `IN_PROGRESS`, `COMPLETED` | 과거 사실과 정책 근거를 영구 보존 |
+
+상한을 낮춰 기존 hold·확정 합계가 새 한도를 넘더라도 기존 약속을 조용히 취소하지 않는다. 기존 hold를 같은 allocation의 confirmed로 바꾸는 것은 수용량 증가가 아니므로 당시 snapshot 아래 허용한다. 신규 hold와 신규 capacity를 늘리는 confirm은 차단하고 `POLICY_CAPACITY_DEBT`를 운영 경보로 만들며 disruption 또는 고객 동의 기반 재예약으로 해소한다. 실제 자원 안전이 깨진 경우는 정책 변경이 아니라 disruption 절차로 처리한다.
+
+정책 publish는 `draft → validate → impact preview → approve → schedule/activate` 순서다. validation 또는 compile이 실패하면 새 version은 활성화하지 않고 직전 active policy를 유지한다. overbooking, service tier, 운영 연장, 확정 예약에 영향을 줄 수 있는 변경은 step-up 인증과 선택적 이중 승인을 요구한다. 긴급 override도 사유, 승인자, 만료시각을 필수로 하며 자동 만료 후 이전 effective policy로 돌아간다.
+
+대규모 tenant의 정책 활성화가 모든 clinic snapshot을 한 번에 다시 쓰게 만들지 않는다. 활성화 트랜잭션은 scope의 `policyGeneration`을 증가시키고 `SchedulingPolicyActivated`를 발행한다. compiler cache는 `(tenantId, clinicId, policyGeneration, decisionAt/serviceAt bucket)`으로 key를 잡아 영향 범위만 무효화하고, effective snapshot은 다음 조회·예약 계산에서 lazy compile한다. impact preview와 cache warm-up은 clinic partition별 bounded job으로 실행한다.
+
+slot/proposal 응답은 `effectivePolicyId`와 `policyGeneration`을 포함하고 새 hold·confirm 명령은 이를 `expectedPolicyGeneration`으로 돌려보낸다. allocation 트랜잭션이 최신 generation과 다르면 새 자원 점유는 `409 POLICY_CHANGED`로 거부하고 최신 후보를 반환한다. 단, 이미 만든 hold를 같은 allocation으로 확정하는 명령은 해당 hold의 pinned snapshot을 사용한다.
+
 ## 5. 예약 생성과 확정
 
 ### 5.1 최초 날짜
@@ -197,7 +270,7 @@ projection은 현재 REST API upsert로 갱신한다. 향후 Pub/Sub consumer도
 | `HELD` | 만료 시각이 있는 선점형 가예약 | 있음 |
 | `CONFIRMED` | 고객 동의가 완료된 확정 예약 | 있음 |
 
-상품·채널·병원 정책에 따라 `PROPOSED → HELD → CONFIRMED` 또는 직접 `CONFIRMED`가 가능하다. hold는 만료되면 자동 해제한다.
+상품 규칙과 해당 병원의 `EffectiveSchedulingPolicy`에 따라 `PROPOSED → HELD → CONFIRMED` 또는 직접 `CONFIRMED`가 가능하다. hold는 정책 snapshot에 고정된 TTL이 지나면 자동 해제한다.
 
 ### 5.3 확정 예약 변경
 
@@ -223,7 +296,7 @@ projection은 현재 REST API upsert로 갱신한다. 향후 Pub/Sub consumer도
 - `ACCEPT`, `REJECT`, `REQUEST_CALL` 중 하나
 - 동의 채널과 수집 시각
 
-재사용 nonce, 만료·구버전 proposal, 일부 필드만 바꾼 동의, tenant/clinic 불일치는 거부한다. 응답이 없으면 원래 확정 예약을 유지하고 운영자에게 만료 사실을 전달한다. 직접 확정, cross-plan 병합, 오버부킹은 명시적 정책이 없으면 기본적으로 금지한다.
+재사용 nonce, 만료·구버전 proposal, 일부 필드만 바꾼 동의, tenant/clinic 불일치는 거부한다. 응답이 없으면 원래 확정 예약을 유지하고 운영자에게 만료 사실을 전달한다. 직접 확정, cross-plan 병합, 오버부킹은 유효한 typed 정책이 없으면 기본적으로 금지한다.
 
 ## 6. 한 방문의 부분 완료와 단계 분리
 
@@ -404,7 +477,7 @@ VIP라는 이유만으로 정상 상태의 다른 확정 예약을 빼앗지 않
 
 ### 11.2 `CapacityPolicy`
 
-병원·진료군·요일·시간대별로 다음을 정의한다.
+`CAPACITY_AND_OVERBOOKING` effective policy가 병원·진료군·요일·시간대별로 다음을 정의한다.
 
 - `nominalCapacity`: 정상 운영 수용량
 - `overbookingQuota`: 의도적으로 추가 확정할 수 있는 수
@@ -447,11 +520,11 @@ no-show 모델은 보호 속성 proxy를 제외한 allowlist 특징만 사용하
 - commitment mode별 대기 SLO error budget 소진
 - 모두 방문한 overflow가 주간 상한 초과
 
-quota 변경은 권한 있는 운영자와 승인 workflow가 필요하며 cooldown과 변경 이력을 가진다. emergency disable은 quota를 0으로 만들 수 있지만 `absoluteBookingLimit`을 높이지 못한다.
+quota 변경은 권한 있는 운영자와 정책 publish workflow가 필요하며 cooldown과 변경 이력을 가진다. emergency disable은 quota를 0으로 만들 수 있지만 tenant ceiling이나 `absoluteBookingLimit`을 높이지 못한다.
 
 ## 12. 영업시간 연장
 
-개인병원·공장형 시술 병원은 정상 종료 시각을 넘겨서라도 당일 고객을 진료할 수 있다. 이를 예외적인 데이터 오류가 아니라 `OperatingExtensionPolicy`로 모델링한다.
+개인병원·공장형 시술 병원은 정상 종료 시각을 넘겨서라도 당일 고객을 진료할 수 있다. 이를 예외적인 데이터 오류가 아니라 `OPERATING_EXTENSION` effective policy로 모델링한다.
 
 - `normalCloseTime`
 - `autoExtensionLimit`
@@ -491,6 +564,8 @@ quota 변경은 권한 있는 운영자와 승인 workflow가 필요하며 coold
 - `AppointmentDelayExceeded`
 - `AppointmentServiceLevelBreached`
 - `AppointmentCancelled`
+- `SchedulingPolicyActivated`
+- `EffectiveSchedulingPolicyChanged`
 
 모든 외부 event는 `eventId`, `occurredAt`, `tenantId`, 원천 aggregate ID와 version을 포함한다. consumer는 inbox 또는 동등한 중복 방지 저장소를 사용하며, publish는 outbox 기반으로 원자성을 확보한다.
 
@@ -505,6 +580,7 @@ quota 변경은 권한 있는 운영자와 승인 workflow가 필요하며 coold
 | treatment start/complete | `eventId`, treatment execution version | 완료 terminal, 낮은 version 무시 | gap이면 후속 의존 계산 보류 |
 | disruption | `eventId`, resource aggregate version | merge key로 중복 collapse | case 재계산 가능 |
 | customer consent | `eventId`, proposal version, nonce | 현재 proposal만 수락 | stale/replay 거부 |
+| scheduling policy | `eventId`, scope+kind+version, payload hash | 낮은 version 무시, 같은 version hash 충돌 격리 | compile 실패 시 직전 active 유지 |
 
 consumer side effect와 inbox 기록은 같은 트랜잭션이다. gap은 bounded retry 후 DLQ로 보내고, operator는 `eventId`와 aggregate version을 지정해 안전하게 re-drive할 수 있다. outbox는 batch publish 후 ack된 row만 완료 처리한다.
 
@@ -518,6 +594,7 @@ event 상세 payload는 별도 schema registry 또는 versioned contract 문서�
 | `PurchaseRefunded/PlanCancelled` | purchase, scope/targets, effective time, reason | `appointment-event` |
 | disruption events | resource ID/type, interval, source version | `appointment-event` → `appointment-core` |
 | consent events | proposal/version/nonce, decision, actor/channel/time | `appointment-api` |
+| `SchedulingPolicyActivated` | scope, kind/version, effective window, hash, actor | `appointment-api` → core/solver/notification |
 
 ### 13.4 Lifecycle conflict와 우선순위
 
@@ -549,9 +626,27 @@ event 상세 payload는 별도 schema registry 또는 versioned contract 문서�
 
 날짜·기간·횟수·소요시간·capacity 값은 bounded validation을 거친다. clinic timezone을 기준으로 local date/time을 정규화하고 event에는 원래 offset과 UTC instant를 함께 보존한다. BOM dependency는 알려진 item만 참조하고 DAG cycle이 없어야 한다.
 
-### 14.2 기존 appointment 상태와 스키마
+### 14.2 Policy management API
 
-기존 `scheduling_appointments`는 방문 shell로 유지한다. 새 테이블 `scheduling_appointment_plans`, `scheduling_planned_treatments`, `scheduling_treatment_dependencies`, `scheduling_appointment_items`, `scheduling_resource_allocations`, `scheduling_reschedule_proposals`를 additive하게 도입한다.
+예약 정책은 tenant 관리자와 권한이 위임된 clinic 관리자가 다음 API로 관리한다.
+
+- tenant 기본값: `PUT /api/{tenantCode}/scheduling-policies/{policyKind}/versions/{version}`
+- clinic override: `PUT /api/{tenantCode}/clinics/{clinicId}/scheduling-policies/{policyKind}/versions/{version}`
+- 검증·영향 미리보기: `POST .../versions/{version}/validate`, `POST .../versions/{version}/impact-preview`
+- 승인·활성화: `POST .../versions/{version}/activate`
+- 유효 정책 조회: `GET /api/{tenantCode}/clinics/{clinicId}/effective-scheduling-policy?at={instant}`
+
+upsert는 `schemaVersion`, typed payload, `payloadHash`, `effectiveFrom`, 선택적 `effectiveUntil`, `changeReason`, idempotency key를 받는다. 같은 version과 hash는 idempotent 성공, 같은 version의 다른 hash는 `409 POLICY_VERSION_CONFLICT`, 더 낮은 version은 `202 STALE_IGNORED`다.
+
+tenant 관리자는 tenant 기본값과 모든 소속 clinic 정책을 조회할 수 있다. clinic 관리자는 자기 clinic override만 수정할 수 있고 tenant hard ceiling은 변경할 수 없다. effective policy 조회는 각 값의 출처와 구성 version을 반환하되 PHI를 포함하지 않는다.
+
+활성화 전 impact preview는 영향받는 `PROPOSED`, `HELD`, `CONFIRMED` 수, capacity debt, 예상 solver 재계산량, mode 비활성화 영향과 경고를 반환한다. preview 결과와 활성화 명령은 policy draft revision을 비교하며, 중간에 draft가 바뀌면 `409 POLICY_PREVIEW_STALE`로 거부한다.
+
+slot/proposal 응답의 `effectivePolicyId`와 `policyGeneration`은 hold·confirm의 precondition이다. 새 allocation 전에 generation이 바뀌면 `409 POLICY_CHANGED`와 최신 effective policy 참조를 반환한다.
+
+### 14.3 기존 appointment 상태와 스키마
+
+기존 `scheduling_appointments`는 방문 shell로 유지한다. 새 테이블 `scheduling_appointment_plans`, `scheduling_planned_treatments`, `scheduling_treatment_dependencies`, `scheduling_appointment_items`, `scheduling_resource_allocations`, `scheduling_reschedule_proposals`, `scheduling_policy_sets`, `scheduling_effective_policy_snapshots`를 additive하게 도입한다.
 
 기존 row는 하나의 legacy plan/treatment/item을 backfill해 읽기 호환성을 유지한다. 기존 doctor/treatment/equipment 필드는 migration 기간 동안 대표 item에서 채운 projection으로 유지한 뒤, 모든 consumer가 item API로 이동한 다음 deprecated한다.
 
@@ -577,11 +672,14 @@ event 상세 payload는 별도 schema registry 또는 versioned contract 문서�
 5. 후속 의존 기간의 anchor는 선행 item의 실제 완료 시각이다.
 6. `CONFIRMED` 예약의 실질 변경에는 고객 동의가 필요하다.
 7. 완료·진행 항목은 catalog revision 또는 환불로 과거를 다시 쓰지 않는다.
-8. 오버부킹은 `CapacityPolicy`와 `absoluteBookingLimit` 안에서만 가능하다.
+8. 오버부킹은 `CAPACITY_AND_OVERBOOKING` effective policy와 `absoluteBookingLimit` 안에서만 가능하다.
 9. 영업 연장은 안전·법정·절대 종료 hard constraint를 넘지 않는다.
 10. 고객 불만, 환불 판단, 보상은 예약서비스가 소유하지 않는다.
 11. event와 객체의 tenant/clinic/patient ownership이 일치하지 않으면 fail closed한다.
 12. hold·confirm 동시 경쟁에서도 자원 배타성과 `absoluteBookingLimit`이 보존된다.
+13. 동일 policy 입력은 동일한 `EffectiveSchedulingPolicy` hash로 compile된다.
+14. clinic override는 tenant ceiling과 platform safety guardrail을 완화할 수 없다.
+15. 정책 변경은 확정·진행·완료 예약의 snapshot과 과거 사실을 자동으로 다시 쓰지 않는다.
 
 ## 16. 보안·감사·개인정보
 
@@ -599,6 +697,9 @@ event 상세 payload는 별도 schema registry 또는 versioned contract 문서�
 - reliability 특징은 allowlist와 최소 표본 기준을 사용하며 고객에게 정정·이의제기 경로를 제공한다. 의료적으로 필요한 진료를 거부하는 근거로 사용할 수 없다.
 - 고위험 override는 privileged role과 step-up 인증을 요구한다. consent, quota, safety 관련 override는 이중 승인을 지원하고 append-only tamper-evident audit와 경보를 남긴다.
 - 어떤 override도 의료 안전, 법정 근로, absolute booking/extension limit, tenant/clinic 경계를 무시할 수 없다.
+- policy 조회·수정·검증·preview·활성화 권한을 분리하고 tenant/clinic scope를 매 요청에서 재검증한다.
+- policy activation audit는 이전·새 version, effective window, preview hash, 승인자, 사유를 append-only로 보존한다.
+- policy payload는 typed allowlist schema와 bounded 값만 허용하며 임의 script, expression language, 외부 URL을 실행하지 않는다.
 
 ## 17. 관측 가능성·SLO·성능 기준
 
@@ -613,6 +714,8 @@ event 상세 payload는 별도 schema registry 또는 versioned contract 문서�
 - 연장 진료 시간과 absolute limit 근접도
 - no-show 예측 오차와 신뢰도 profile 편향
 - SLA breach event 발행 건수
+- policy activation·compile 실패, effective-policy cache hit/miss, clinic override 비율
+- 정책 변경으로 생긴 `POLICY_CAPACITY_DEBT`와 해소 시간
 
 운영 dashboard는 `Catalog & Event`, `Booking Funnel`, `Disruption Recovery`, `Capacity & Wait`, `Consent & SLA` 패널로 구성하고 scheduling on-call이 소유한다.
 
@@ -631,7 +734,7 @@ event 상세 payload는 별도 schema registry 또는 versioned contract 문서�
 
 benchmark dataset은 빈 clinic, 정상일, 최대 partition, disruption 10,000 item, 동시 confirm 경쟁, 모두 방문한 overbooking day를 포함한다. 인프라별 최종 숫자는 배포 전 capacity test로 pin하되 위 항목 자체를 제거할 수 없다.
 
-alert는 tenant/clinic 범위를 포함하고 PHI를 제외한다. `absoluteBookingLimit` 위반 시도, 서명 실패, consent replay, outbox/DLQ 적체, solver timeout, SLA error budget 소진은 즉시 운영 경보 대상이다.
+alert는 tenant/clinic 범위를 포함하고 PHI를 제외한다. `absoluteBookingLimit` 위반 시도, policy compile 실패, `POLICY_CAPACITY_DEBT`, 서명 실패, consent replay, outbox/DLQ 적체, solver timeout, SLA error budget 소진은 즉시 운영 경보 대상이다.
 
 ## 18. 운영 복구와 배포
 
@@ -651,9 +754,11 @@ Scheduling on-call은 일정 상태와 재처리를, CRM은 고객 연락 timeou
 2. 새 write 비활성 상태로 legacy row backfill·검증
 3. event consumer를 shadow/dry-run으로 실행해 diff 확인
 4. clinic feature flag로 plan/item read 활성화
-5. 신규 구매부터 plan/item write 활성화
-6. consent bridge와 disruption pipeline 순차 활성화
-7. capacity/overbooking은 quota 0 기본값에서 별도 승인 후 활성화
+5. tenant default policy를 현재 운영값으로 backfill하고 clinic별 effective snapshot shadow 비교
+6. 신규 구매부터 plan/item write 활성화
+7. consent bridge와 disruption pipeline 순차 활성화
+8. clinic override를 feature flag로 활성화
+9. capacity/overbooking은 quota 0 기본값에서 별도 승인 후 활성화
 
 old/new event schema는 최소 한 릴리스 window 동안 함께 읽는다. rollback은 새 write flag를 끄고 legacy projection read로 돌아가되 생성된 plan/item history는 삭제하지 않는다. backfill 불일치, tenant scope 오류, absolute limit 위반, DLQ 급증, SLO error budget 급소진은 즉시 rollback 기준이다.
 
@@ -670,7 +775,8 @@ release evidence에는 schema dry-run, backfill count/hash, shadow diff, event r
 7. 환불·추가 구매·cross-plan 합동 방문
 8. 통합 disruption과 최소 변경 재예약
 9. service tier·reliability·reconfirm
-10. commitment mode·통제된 오버부킹·영업 연장
+10. tenant default·clinic override·effective policy snapshot
+11. commitment mode·통제된 오버부킹·영업 연장
 
 각 단계는 이전 event 계약과 상태 이력을 유지하는 additive migration으로 진행한다.
 
@@ -700,6 +806,12 @@ release evidence에는 schema dry-run, backfill count/hash, shadow diff, event r
 22. 고객은 확정 전 commitment mode·대기·overflow 조건을 보고, 재예약 proposal에서 전후 차이와 응답 기한을 확인한다.
 23. 기존 appointment row/state/API가 additive backfill과 bridge를 통해 migration window 동안 동작한다.
 24. 정의된 SLO·최대 partition·disruption benchmark와 recovery/rollback rehearsal가 통과한다.
+25. tenant 기본값과 clinic override가 typed 규칙으로 결정적으로 compile되고 값별 출처를 조회할 수 있다.
+26. clinic override가 tenant hard ceiling을 완화하려 하면 validation에서 거부된다.
+27. 정책 변경 후 새 예약과 proposal만 새 snapshot을 사용하고 기존 확정 예약은 고객 동의 전까지 유지된다.
+28. stale preview·동시 activation·같은 version의 다른 payload·compile 실패가 이전 active policy를 손상하지 않는다.
+29. tenant 정책 활성화가 clinic 수만큼 동기 fan-out write를 만들지 않고 generation 기반 lazy compile로 수렴한다.
+30. 정책 활성화와 동시 실행된 새 hold·confirm은 stale generation으로 자원을 점유하지 않으며 기존 hold 확정은 pinned snapshot으로 보호된다.
 
 ### 20.1 Acceptance commands
 
@@ -714,7 +826,7 @@ release evidence에는 schema dry-run, backfill count/hash, shadow diff, event r
 ./gradlew :appointment-core:build :appointment-event:build :appointment-solver:build :appointment-api:build
 ```
 
-추가로 DB별 Flyway 검증, catalog sync API contract test, event duplicate/out-of-order test, hold/confirm concurrency test, disruption benchmark와 HTML parse/link/browser smoke test를 수행한다.
+추가로 DB별 Flyway 검증, catalog/policy API contract test, effective policy compiler determinism·inheritance·time-basis test, event duplicate/out-of-order test, hold/confirm concurrency test, disruption benchmark와 HTML parse/link/browser smoke test를 수행한다.
 
 ## 21. 남은 위험
 
@@ -728,3 +840,7 @@ release evidence에는 schema dry-run, backfill count/hash, shadow diff, event r
 | 오버부킹으로 과도한 대기·연장 발생 | nominal/overbooking/absolute 3단계 한도와 SLA 관측 |
 | 연장 진료가 안전·노동 제약을 침해 | 관련 제한을 hard constraint로 분리 |
 | 예약 서비스가 고객 응대·환불 책임까지 흡수 | 객관적 사실 event만 발행하는 경계 테스트 |
+| tenant와 clinic 정책 상속이 운영자에게 불투명 | effective 조회에서 값별 출처와 구성 version 제공 |
+| 미래 정책의 적용 시점이 예약 생성일과 진료일 사이에서 혼동 | policy kind별 `DECISION_TIME`/`SERVICE_TIME` 평가 기준 고정 |
+| 상한 축소가 기존 확정 예약을 대량 취소 | 기존 snapshot 보호, 신규 확정 차단, `POLICY_CAPACITY_DEBT` 복구 |
+| tenant 정책 활성화가 수천 clinic에 fan-out storm을 만듦 | generation 기반 cache invalidation, lazy compile, bounded partition warm-up |

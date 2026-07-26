@@ -464,17 +464,18 @@
         <a href="#boundary">01 서비스 경계</a>
         <a href="#model">02 핵심 모델</a>
         <a href="#catalog">03 상품 snapshot</a>
-        <a href="#booking">04 가예약과 확정</a>
-        <a href="#partial">05 부분 완료·단계 분리</a>
-        <a href="#purchase-refund">06 추가 구매·환불</a>
-        <a href="#disruption">07 운영 중단·재조정</a>
-        <a href="#priority">08 우선순위·신뢰도</a>
-        <a href="#capacity">09 오버부킹·대기형 예약</a>
-        <a href="#overtime">10 영업시간 연장</a>
-        <a href="#events">11 이벤트 경계</a>
-        <a href="#api-security">12 API·보안·호환</a>
-        <a href="#operations">13 SLO·복구·배포</a>
-        <a href="#invariants">14 불변식·인수 기준</a>
+        <a href="#policy">04 SaaS 병원별 정책</a>
+        <a href="#booking">05 가예약과 확정</a>
+        <a href="#partial">06 부분 완료·단계 분리</a>
+        <a href="#purchase-refund">07 추가 구매·환불</a>
+        <a href="#disruption">08 운영 중단·재조정</a>
+        <a href="#priority">09 우선순위·신뢰도</a>
+        <a href="#capacity">10 오버부킹·대기형 예약</a>
+        <a href="#overtime">11 영업시간 연장</a>
+        <a href="#events">12 이벤트 경계</a>
+        <a href="#api-security">13 API·보안·호환</a>
+        <a href="#operations">14 SLO·복구·배포</a>
+        <a href="#invariants">15 불변식·인수 기준</a>
       </div>
     </nav>
 
@@ -489,6 +490,7 @@
         <div class="meta">
           <span class="pill">Approach C</span>
           <span class="pill">Purchase Snapshot</span>
+          <span class="pill">Tenant Policy</span>
           <span class="pill">Item-level Fulfillment</span>
           <span class="pill">Customer Consent</span>
           <span class="pill">Controlled Overbooking</span>
@@ -511,8 +513,8 @@
           </article>
           <article class="card">
             <span class="tag">THIS SERVICE</span>
-            <h3>계획·방문·자원</h3>
-            <p class="muted">구매 snapshot에서 진료 의무를 만들고, 가예약·확정·재배정과 자원 점유를 소유한다.</p>
+            <h3>계획·방문·자원·정책</h3>
+            <p class="muted">구매 snapshot에서 진료 의무를 만들고, 병원별 정책과 가예약·확정·재배정·자원 점유를 소유한다.</p>
           </article>
           <article class="card">
             <span class="tag">DOWNSTREAM</span>
@@ -539,6 +541,7 @@
               <tr><td>실제 시술 완료</td><td>진료/시술</td><td>완료 event로 의무 이행·후속 기간 갱신</td></tr>
               <tr><td>환불 판단·금액</td><td>커머스</td><td>환불 event로 미래 예약만 취소</td></tr>
               <tr><td>민원·보상</td><td>CRM</td><td>SLA 위반과 재예약 사실 제공</td></tr>
+              <tr><td>SaaS 예약 운영 정책</td><td>예약</td><td>Tenant 기본값·Clinic override·effective snapshot</td></tr>
             </tbody>
           </table>
         </div>
@@ -628,8 +631,73 @@
         </div>
       </section>
 
+      <section id="policy">
+        <p class="eyebrow">04 · SaaS Scheduling Policy</p>
+        <h2>Tenant 기본값과 Clinic override를 결정적으로 합성한다</h2>
+        <p class="section-lead">
+          병원별 운영 차이를 코드 분기나 전역 설정으로 숨기지 않는다. 예약서비스가 typed·versioned
+          정책을 소유하고, 예약·재예약·solver 실행마다 당시의 유효 정책 snapshot을 남긴다.
+        </p>
+
+        <div class="flow">
+          <div class="node"><strong>Platform Guardrail</strong><small>의료 안전과 절대 상한</small></div>
+          <div class="node"><strong>Tenant Default</strong><small>조직 공통 기본값과 ceiling</small></div>
+          <div class="node"><strong>Clinic Override</strong><small>INHERIT · SET · DISABLE</small></div>
+          <div class="node"><strong>Policy Compiler</strong><small>scope·version·decision/service time·상한 검증</small></div>
+          <div class="node"><strong>Effective Snapshot</strong><small>값별 출처와 hash를 불변 보존</small></div>
+        </div>
+
+        <div class="grid three">
+          <article class="card">
+            <span class="tag">TYPED POLICY</span>
+            <h3>운영 기능별 schema</h3>
+            <p class="muted">commitment, hold·consent, capacity·overbooking, priority·reliability, reconfirmation, disruption, extension, notification·SLA를 독립 정책군으로 관리한다.</p>
+          </article>
+          <article class="card">
+            <span class="tag">VERSIONED</span>
+            <h3>Draft에서 Active까지</h3>
+            <p class="muted"><code>DRAFT → validate → impact preview → approve → SCHEDULED/ACTIVE</code>. compile 실패 시 직전 active를 유지한다.</p>
+          </article>
+          <article class="card">
+            <span class="tag">SAFE OVERRIDE</span>
+            <h3>더 느슨해질 수 없는 상한</h3>
+            <p class="muted">Clinic은 Tenant ceiling과 platform safety guardrail을 완화할 수 없다. 수치 상한은 가장 엄격한 값을 선택한다.</p>
+          </article>
+        </div>
+
+        <div class="table-wrap" style="margin-top: 20px">
+          <table>
+            <thead><tr><th>예약 상태</th><th>새 정책 활성화 시</th><th>보호 원칙</th></tr></thead>
+            <tbody>
+              <tr><td><code>PROPOSED</code></td><td>최신 정책으로 supersede·재계산 가능</td><td>아직 고객이 수락하지 않은 후보만</td></tr>
+              <tr><td><code>HELD</code></td><td>당시 snapshot과 allocation을 만료까지 보호</td><td>같은 allocation의 확정은 수용량 증가 없이 허용</td></tr>
+              <tr><td><code>CONFIRMED</code></td><td>기존 snapshot 유지</td><td>새 proposal과 고객 동의 없이는 변경 금지</td></tr>
+              <tr><td><code>IN_PROGRESS / COMPLETED</code></td><td>과거 정책 근거 보존</td><td>재계산·재작성 금지</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <h3>정책을 낮췄는데 이미 예약이 더 많다면</h3>
+          <p>
+            기존 약속을 조용히 취소하지 않는다. 신규 hold와 신규 capacity를 늘리는 confirm은 차단하고,
+            기존 hold의 같은 allocation 확정은 허용한다.
+            <code>POLICY_CAPACITY_DEBT</code>를 경보한 뒤 disruption 또는 고객 동의 기반 재예약으로 해소한다.
+            긴급 override도 사유·승인자·만료시간을 요구한다.
+          </p>
+        </div>
+        <div class="callout warning">
+          <h3>어느 시점의 정책인가</h3>
+          <p><code>HOLD_AND_CONSENT</code>처럼 지금 수행하는 workflow는 <code>DECISION_TIME</code>을, capacity·reconfirm·SLA·영업 연장은 실제 진료의 <code>SERVICE_TIME</code>을 사용한다. 이 평가 기준은 병원이 바꾸는 옵션이 아니라 typed schema 계약이며, clinic local time은 timezone과 DST를 검증해 Instant로 저장한다.</p>
+        </div>
+        <div class="callout">
+          <h3>SaaS 규모의 활성화</h3>
+          <p>Tenant 정책 활성화는 모든 Clinic snapshot을 동기 갱신하지 않는다. <code>policyGeneration</code>을 올리고 영향 cache만 무효화한 뒤 lazy compile한다. 새 hold·confirm은 조회 때 받은 generation을 precondition으로 보내며 stale이면 <code>409 POLICY_CHANGED</code>로 최신 후보를 받는다. 기존 hold의 같은 allocation 확정은 pinned snapshot으로 보호한다.</p>
+        </div>
+      </section>
+
       <section id="booking">
-        <p class="eyebrow">04 · Booking Lifecycle</p>
+        <p class="eyebrow">05 · Booking Lifecycle</p>
         <h2>희망일을 우선하고, 가예약 방식은 상품 정책으로</h2>
         <p class="section-lead">
           구매일은 임상 과정이 아니다. 고객의 희망 날짜·범위를 먼저 사용하고, 입력이 없을 때만
@@ -685,7 +753,7 @@
       </section>
 
       <section id="partial">
-        <p class="eyebrow">05 · Partial Fulfillment</p>
+        <p class="eyebrow">06 · Partial Fulfillment</p>
         <h2>하루에 못 끝내면 남은 단계만 분리한다</h2>
         <p class="section-lead">
           장비 고장, 의료진 이탈, 환자 상태, 시간 부족 등 어떤 이유든 방문 전체를 성공 또는 실패로 뭉개지 않는다.
@@ -717,7 +785,7 @@
       </section>
 
       <section id="purchase-refund">
-        <p class="eyebrow">06 · Purchase & Refund</p>
+        <p class="eyebrow">07 · Purchase & Refund</p>
         <h2>새 구매는 새 plan, 환불은 미래 의무만</h2>
         <div class="grid two">
           <article class="card">
@@ -743,7 +811,7 @@
       </section>
 
       <section id="disruption">
-        <p class="eyebrow">07 · Disruption & Rescheduling</p>
+        <p class="eyebrow">08 · Disruption & Rescheduling</p>
         <h2>공휴일·휴진·장비 고장을 하나의 파이프라인으로</h2>
         <p class="section-lead">
           중단 원인은 다르지만 영향 분석과 복구 원리는 같다. 예약 전체가 아니라 item과 allocation 수준에서
@@ -779,7 +847,7 @@
       </section>
 
       <section id="priority">
-        <p class="eyebrow">08 · Priority & Reliability</p>
+        <p class="eyebrow">09 · Priority & Reliability</p>
         <h2>주관적 고객 라벨 대신 설명 가능한 가중치</h2>
         <div class="grid two">
           <article class="card">
@@ -812,10 +880,10 @@
       </section>
 
       <section id="capacity">
-        <p class="eyebrow">09 · Capacity Policy</p>
+        <p class="eyebrow">10 · Capacity Policy</p>
         <h2>오버부킹과 대기형 예약을 숨기지 않는다</h2>
         <p class="section-lead">
-          노쇼와 당일 취소를 고려해 병원이 의도적으로 정상 수용량보다 많은 확정 예약을 받을 수 있다.
+          병원별 <code>CAPACITY_AND_OVERBOOKING</code> effective policy에 따라 노쇼와 당일 취소를 고려해 정상 수용량보다 많은 확정 예약을 받을 수 있다.
           고객에게 한 약속의 형태와 수용량 초과 정책을 명시적으로 구분한다.
         </p>
 
@@ -850,7 +918,7 @@
       </section>
 
       <section id="overtime">
-        <p class="eyebrow">10 · Operating Extension</p>
+        <p class="eyebrow">11 · Operating Extension</p>
         <h2>정상 종료 이후 진료도 정책으로 계산한다</h2>
         <div class="grid two">
           <article class="card">
@@ -873,7 +941,7 @@
       </section>
 
       <section id="events">
-        <p class="eyebrow">11 · Event Contract</p>
+        <p class="eyebrow">12 · Event Contract</p>
         <h2>외부 결정은 consume하고 일정 사실을 publish한다</h2>
         <div class="grid two">
           <article class="card">
@@ -898,6 +966,7 @@
               <li><code>AppointmentDelayExceeded</code></li>
               <li><code>AppointmentServiceLevelBreached</code></li>
               <li><code>AppointmentCancelled</code></li>
+              <li><code>SchedulingPolicyActivated</code>, <code>EffectiveSchedulingPolicyChanged</code></li>
             </ul>
           </article>
         </div>
@@ -922,18 +991,23 @@
       </section>
 
       <section id="api-security">
-        <p class="eyebrow">12 · API, Compatibility & Security</p>
+        <p class="eyebrow">13 · API, Compatibility & Security</p>
         <h2>기존 예약을 살린 채 item 모델로 이동한다</h2>
-        <div class="grid two">
+        <div class="grid three">
           <article class="card">
             <span class="tag">CATALOG API</span>
             <h3>버전 upsert</h3>
             <p class="muted"><code>PUT /api/{tenant}/clinics/{clinicId}/catalog-products/{productId}/versions/{version}</code>. 새 version 201, 동일 hash 200, 동일 version 충돌 409, 낮은 version은 202 <code>STALE_IGNORED</code>.</p>
           </article>
           <article class="card">
+            <span class="tag">POLICY API</span>
+            <h3>기본값·override·effective 조회</h3>
+            <p class="muted">Tenant와 Clinic version upsert, validate·impact preview·activate, 값별 출처가 있는 effective policy 조회를 분리한다. stale preview·version hash·expected generation 충돌은 409로 거부한다.</p>
+          </article>
+          <article class="card">
             <span class="tag">ADDITIVE SCHEMA</span>
             <h3>visit shell 유지</h3>
-            <p class="muted">기존 <code>scheduling_appointments</code>는 방문 shell로 유지하고 plan, planned treatment, item, allocation, proposal 테이블을 추가한다. 기존 row는 legacy item으로 backfill한다.</p>
+            <p class="muted">기존 <code>scheduling_appointments</code>는 방문 shell로 유지하고 plan, item, allocation, proposal, policy set, effective snapshot 테이블을 추가한다. 기존 row는 legacy item으로 backfill한다.</p>
           </article>
         </div>
 
@@ -954,10 +1028,14 @@
           <article class="card"><h3>PHI</h3><p class="muted">전송·저장 암호화, 최소 projection, 로그·metric allowlist redaction, solver 비식별 key, 읽기 감사와 보존 정책을 적용한다.</p></article>
           <article class="card"><h3>Override</h3><p class="muted">step-up/고위험 이중 승인과 append-only 감사를 적용하며 safety, 법정 근로, absolute limit, tenant 경계는 override할 수 없다.</p></article>
         </div>
+        <div class="callout">
+          <h3>병원 정책 권한과 감사</h3>
+          <p>Tenant 관리자는 조직 기본값과 소속 Clinic 정책을 관리하고, Clinic 관리자는 자기 병원 override만 수정한다. 조회·수정·preview·활성화 권한을 분리하며 고위험 변경은 step-up과 선택적 이중 승인, 이전·새 version·preview hash·사유가 있는 append-only 감사를 요구한다.</p>
+        </div>
       </section>
 
       <section id="operations">
-        <p class="eyebrow">13 · SLO, Recovery & Rollout</p>
+        <p class="eyebrow">14 · SLO, Recovery & Rollout</p>
         <h2>측정·복구·롤백이 가능한 설계</h2>
         <div class="table-wrap">
           <table>
@@ -968,6 +1046,7 @@
               <tr><td>purchase → plan</td><td>p95 30초</td><td>outbox/inbox backlog 경보</td></tr>
               <tr><td>disruption → proposal</td><td>10,000 item에서 p95 5분</td><td>backpressure·chunk·manual review</td></tr>
               <tr><td>solver</td><td>interactive 10초 · batch 60초</td><td>best feasible 또는 fallback</td></tr>
+              <tr><td>policy activation</td><td>결정적 hash와 impact preview 일치</td><td>직전 active 유지·경보</td></tr>
             </tbody>
           </table>
         </div>
@@ -981,7 +1060,7 @@
           <article class="card">
             <span class="tag">ROLLOUT</span>
             <h3>shadow부터 clinic flag까지</h3>
-            <p class="muted">additive schema → backfill → shadow diff → clinic read/write flag → consent/disruption → quota 0에서 overbooking 승인 순으로 진행한다.</p>
+            <p class="muted">additive schema → backfill → tenant·clinic effective policy shadow diff → clinic read/write flag → consent/disruption → quota 0에서 overbooking 승인 순으로 진행한다.</p>
           </article>
           <article class="card">
             <span class="tag">ROLLBACK</span>
@@ -991,12 +1070,12 @@
         </div>
         <div class="callout">
           <h3>Release evidence</h3>
-          <p>schema dry-run, backfill count/hash, shadow diff, event replay, hold/confirm 동시성 및 성능 benchmark, alert smoke test, rollback rehearsal 결과가 모두 있어야 rollout gate를 통과한다.</p>
+          <p>schema dry-run, backfill count/hash, tenant·clinic effective policy shadow diff, event replay, hold/confirm 동시성 및 성능 benchmark, alert smoke test, rollback rehearsal 결과가 모두 있어야 rollout gate를 통과한다.</p>
         </div>
       </section>
 
       <section id="invariants">
-        <p class="eyebrow">14 · Invariants & Acceptance</p>
+        <p class="eyebrow">15 · Invariants & Acceptance</p>
         <h2>설계를 지키는 핵심 규칙</h2>
         <div class="grid two">
           <article class="card">
@@ -1010,6 +1089,8 @@
               <li>확정 예약의 실질 변경은 고객 동의가 필요하다.</li>
               <li>완료·진행 항목은 revision·환불로 다시 쓰지 않는다.</li>
               <li>absolute booking/extension limit은 hard constraint다.</li>
+              <li>Clinic override는 Tenant ceiling을 완화할 수 없다.</li>
+              <li>동일 정책 입력은 동일 effective snapshot hash를 만든다.</li>
             </ol>
           </article>
           <article class="card">
@@ -1023,6 +1104,7 @@
               <li>service tier와 신뢰도는 hard constraint를 침범하지 않는다.</li>
               <li>오버부킹과 대기형 약속이 명시적이다.</li>
               <li>민원·보상·환불 판단이 서비스 밖에 남는다.</li>
+              <li>정책 변경은 미래 후보에 적용되고 확정 예약은 동의 전까지 보호된다.</li>
             </ol>
           </article>
         </div>
