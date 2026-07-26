@@ -69,6 +69,18 @@ fun interface InboxInsertObserver {
     }
 }
 
+fun interface PurchaseTransactionObserver {
+    /**
+     * Transaction-local diagnostic hook invoked before the first happy-path read.
+     * Implementations must not perform external I/O.
+     */
+    fun afterTransactionStarted()
+
+    companion object {
+        val NOOP = PurchaseTransactionObserver { }
+    }
+}
+
 class PurchaseCompletedHandler(
     private val eventRepository: SchedulingEventRepository,
     private val quarantineRepository: SchedulingQuarantineRepository,
@@ -86,6 +98,7 @@ class PurchaseCompletedHandler(
     private val writeObserver: AtomicPlanWriteObserver = AtomicPlanWriteObserver.NOOP,
     private val metrics: PurchasePlanMetrics = PurchasePlanMetrics.NOOP,
     private val inboxInsertObserver: InboxInsertObserver = InboxInsertObserver.NOOP,
+    private val transactionObserver: PurchaseTransactionObserver = PurchaseTransactionObserver.NOOP,
 ) {
     companion object : KLogging()
 
@@ -116,6 +129,7 @@ class PurchaseCompletedHandler(
             PurchaseHandlingMode.WRITE ->
                 try {
                     transaction {
+                        transactionObserver.afterTransactionStarted()
                         convergeInTransaction(
                             envelope,
                             versionProof,

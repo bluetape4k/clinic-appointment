@@ -24,6 +24,7 @@ object TreatmentDependencies : LongIdTable("scheduling_treatment_dependencies") 
 
     init {
         uniqueIndex("uq_treatment_dependency", predecessorTreatmentId, successorTreatmentId)
+        index("idx_treatment_dependency_successor", false, successorTreatmentId)
         index(
             "idx_treatment_dependency_plan",
             false,

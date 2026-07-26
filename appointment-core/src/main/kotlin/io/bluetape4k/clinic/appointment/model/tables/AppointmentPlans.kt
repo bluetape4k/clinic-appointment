@@ -42,13 +42,5 @@ object AppointmentPlans : LongIdTable("scheduling_appointment_plans") {
             sourcePurchaseId,
         )
         index("idx_plan_tenant_clinic_status", false, tenantGroupId, clinicId, status)
-        index(
-            "idx_plan_scope_purchase",
-            false,
-            tenantGroupId,
-            clinicId,
-            sourcePurchaseAuthority,
-            sourcePurchaseId,
-        )
     }
 }

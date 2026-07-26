@@ -94,10 +94,7 @@ CREATE TABLE scheduling_appointment_plans (
     CONSTRAINT uq_plan_source_purchase UNIQUE (
         tenant_group_id, clinic_id, source_purchase_authority, source_purchase_id
     ),
-    INDEX idx_plan_tenant_clinic_status (tenant_group_id, clinic_id, status),
-    INDEX idx_plan_scope_purchase (
-        tenant_group_id, clinic_id, source_purchase_authority, source_purchase_id
-    )
+    INDEX idx_plan_tenant_clinic_status (tenant_group_id, clinic_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE scheduling_planned_treatments (
@@ -139,6 +136,7 @@ CREATE TABLE scheduling_treatment_dependencies (
     CONSTRAINT fk_treatment_dependency_successor FOREIGN KEY (successor_treatment_id)
         REFERENCES scheduling_planned_treatments(id) ON DELETE CASCADE,
     CONSTRAINT uq_treatment_dependency UNIQUE (predecessor_treatment_id, successor_treatment_id),
+    INDEX idx_treatment_dependency_successor (successor_treatment_id),
     INDEX idx_treatment_dependency_plan (
         plan_id, predecessor_treatment_id, successor_treatment_id
     )
@@ -194,6 +192,7 @@ CREATE TABLE scheduling_outbox_events (
     CONSTRAINT fk_outbox_plan FOREIGN KEY (plan_id)
         REFERENCES scheduling_appointment_plans(id) ON DELETE RESTRICT,
     CONSTRAINT uq_outbox_event_id UNIQUE (event_id),
+    INDEX idx_outbox_plan_id (plan_id),
     INDEX idx_outbox_status_created_at (status, created_at),
     INDEX idx_outbox_status_next_attempt (status, next_attempt_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

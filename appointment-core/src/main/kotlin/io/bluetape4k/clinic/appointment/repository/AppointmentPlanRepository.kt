@@ -11,6 +11,7 @@ import io.bluetape4k.clinic.appointment.model.tables.TreatmentDependencies
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
@@ -79,44 +80,50 @@ class AppointmentPlanRepository {
             it[status] = plan.status
         }.value
 
-        val treatmentIds = LinkedHashMap<PlannedTreatmentKey, Long>(aggregate.treatments.size)
-        aggregate.treatments.forEach { treatment ->
-            val treatmentId = PlannedTreatments.insertAndGetId {
-                it[PlannedTreatments.planId] = planId
-                it[bomItemId] = treatment.bomItemId
-                it[sequenceNo] = treatment.sequenceNo
-                it[bomOrder] = treatment.bomOrder
-                it[representativeTreatmentName] = treatment.representativeTreatmentName
-                it[detailedTreatmentCodesJson] = encodeStringList(treatment.detailedTreatmentCodes)
-                it[durationMinutes] = treatment.durationMinutes
-                it[minimumIntervalDays] = treatment.minimumIntervalDays
-                it[preferredIntervalDays] = treatment.preferredIntervalDays
-                it[maximumIntervalDays] = treatment.maximumIntervalDays
-                it[practitionerQualificationsJson] = encodeStringList(treatment.practitionerQualifications)
-                it[equipmentTypesJson] = encodeStringList(treatment.equipmentTypes)
-                it[roomTypesJson] = encodeStringList(treatment.roomTypes)
-                it[earliestStartAt] = treatment.earliestStartAt
-                it[latestStartAt] = treatment.latestStartAt
-                it[status] = treatment.status
-            }.value
-            treatmentIds[treatment.key] = treatmentId
+        val insertedTreatments = PlannedTreatments.batchInsert(aggregate.treatments) { treatment ->
+            this[PlannedTreatments.planId] = planId
+            this[PlannedTreatments.bomItemId] = treatment.bomItemId
+            this[PlannedTreatments.sequenceNo] = treatment.sequenceNo
+            this[PlannedTreatments.bomOrder] = treatment.bomOrder
+            this[PlannedTreatments.representativeTreatmentName] = treatment.representativeTreatmentName
+            this[PlannedTreatments.detailedTreatmentCodesJson] = encodeStringList(treatment.detailedTreatmentCodes)
+            this[PlannedTreatments.durationMinutes] = treatment.durationMinutes
+            this[PlannedTreatments.minimumIntervalDays] = treatment.minimumIntervalDays
+            this[PlannedTreatments.preferredIntervalDays] = treatment.preferredIntervalDays
+            this[PlannedTreatments.maximumIntervalDays] = treatment.maximumIntervalDays
+            this[PlannedTreatments.practitionerQualificationsJson] =
+                encodeStringList(treatment.practitionerQualifications)
+            this[PlannedTreatments.equipmentTypesJson] = encodeStringList(treatment.equipmentTypes)
+            this[PlannedTreatments.roomTypesJson] = encodeStringList(treatment.roomTypes)
+            this[PlannedTreatments.earliestStartAt] = treatment.earliestStartAt
+            this[PlannedTreatments.latestStartAt] = treatment.latestStartAt
+            this[PlannedTreatments.status] = treatment.status
         }
+        require(insertedTreatments.size == aggregate.treatments.size) {
+            "batch insert did not return every planned treatment"
+        }
+        val treatmentIds = aggregate.treatments
+            .zip(insertedTreatments)
+            .associateTo(LinkedHashMap(aggregate.treatments.size)) { (treatment, insertedRow) ->
+                treatment.key to insertedRow[PlannedTreatments.id].value
+            }
 
-        aggregate.dependencies.forEach { dependency ->
+        TreatmentDependencies.batchInsert(
+            aggregate.dependencies,
+            shouldReturnGeneratedValues = false,
+        ) { dependency ->
             val predecessorId = requireNotNull(treatmentIds[dependency.predecessor]) {
                 "unknown predecessor treatment(${dependency.predecessor})"
             }
             val successorId = requireNotNull(treatmentIds[dependency.successor]) {
                 "unknown successor treatment(${dependency.successor})"
             }
-            TreatmentDependencies.insertAndGetId {
-                it[TreatmentDependencies.planId] = planId
-                it[predecessorTreatmentId] = predecessorId
-                it[successorTreatmentId] = successorId
-                it[minimumIntervalDays] = dependency.minimumIntervalDays
-                it[preferredIntervalDays] = dependency.preferredIntervalDays
-                it[maximumIntervalDays] = dependency.maximumIntervalDays
-            }
+            this[TreatmentDependencies.planId] = planId
+            this[TreatmentDependencies.predecessorTreatmentId] = predecessorId
+            this[TreatmentDependencies.successorTreatmentId] = successorId
+            this[TreatmentDependencies.minimumIntervalDays] = dependency.minimumIntervalDays
+            this[TreatmentDependencies.preferredIntervalDays] = dependency.preferredIntervalDays
+            this[TreatmentDependencies.maximumIntervalDays] = dependency.maximumIntervalDays
         }
 
         return requireNotNull(findByIdAndTenantClinic(planId, plan.tenantGroupId, plan.clinicId))

@@ -103,10 +103,6 @@ CREATE TABLE scheduling_appointment_plans (
 
 CREATE INDEX idx_plan_tenant_clinic_status
     ON scheduling_appointment_plans(tenant_group_id, clinic_id, status);
-CREATE INDEX idx_plan_scope_purchase
-    ON scheduling_appointment_plans(
-        tenant_group_id, clinic_id, source_purchase_authority, source_purchase_id
-    );
 
 CREATE TABLE scheduling_planned_treatments (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -155,6 +151,8 @@ CREATE INDEX idx_treatment_dependency_plan
     ON scheduling_treatment_dependencies(
         plan_id, predecessor_treatment_id, successor_treatment_id
     );
+CREATE INDEX idx_treatment_dependency_successor
+    ON scheduling_treatment_dependencies(successor_treatment_id);
 
 CREATE TABLE scheduling_inbox_events (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -215,6 +213,8 @@ CREATE INDEX idx_outbox_status_created_at
     ON scheduling_outbox_events(status, created_at);
 CREATE INDEX idx_outbox_status_next_attempt
     ON scheduling_outbox_events(status, next_attempt_at);
+CREATE INDEX idx_outbox_plan_id
+    ON scheduling_outbox_events(plan_id);
 
 CREATE TABLE scheduling_quarantine_events (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

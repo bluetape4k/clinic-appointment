@@ -260,11 +260,12 @@ internal object AppointmentPlanMigrationTestSupport {
     private val EXPECTED_INDEXES = setOf(
         "idx_catalog_scope_product",
         "idx_treatment_dependency_plan",
+        "idx_treatment_dependency_successor",
         "idx_plan_tenant_clinic_status",
-        "idx_plan_scope_purchase",
         "idx_treatment_plan_status_window",
         "idx_inbox_status_replay_after_received",
         "idx_inbox_source_version",
+        "idx_outbox_plan_id",
         "idx_outbox_status_created_at",
         "idx_outbox_status_next_attempt",
         "idx_quarantine_status_expiry",

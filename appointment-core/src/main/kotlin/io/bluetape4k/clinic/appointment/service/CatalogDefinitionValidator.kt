@@ -20,7 +20,7 @@ object CatalogDefinitionValidator {
     const val MAX_CATALOG_DEPENDENCIES = 1_000
     const val MAX_REPEATS_PER_ITEM = 100
     const val MAX_EXPANDED_TREATMENTS = 2_000
-    const val MAX_MATERIALIZED_EDGES = 10_000
+    const val MAX_VALIDATION_GRAPH_EDGES = 2_980
     const val MAX_REQUIREMENT_VALUES = 64
     const val MAX_DURATION_MINUTES = 480
     const val MAX_INTERVAL_DAYS = 3_650
@@ -152,8 +152,8 @@ object CatalogDefinitionValidator {
             require(edges.add(edge)) { "duplicate materialized dependency($edge)" }
         }
 
-        require(edges.size <= MAX_MATERIALIZED_EDGES) {
-            "materialized treatment edges must not exceed $MAX_MATERIALIZED_EDGES"
+        require(edges.size <= MAX_VALIDATION_GRAPH_EDGES) {
+            "dependency validation graph must not exceed $MAX_VALIDATION_GRAPH_EDGES edges"
         }
         require(isAcyclic(nodes, edges)) { "catalog dependency graph must be acyclic" }
     }
@@ -264,13 +264,15 @@ object CatalogDefinitionValidator {
         var bytes = 0L
 
         fun add(name: String, value: Any?) {
-            bytes += name.toByteArray(StandardCharsets.UTF_8).size + 2L
+            // Count a conservative JSON-shaped representation. Property paths
+            // and array indexes are not transmitted in the wire payload, so
+            // including them would reject valid compact graphs long before the
+            // actual 256 KiB boundary.
+            bytes += jsonStringBytes(name) + 2L
             bytes += when (value) {
-                null -> 1L
-                else -> {
-                    val valueSize = value.toString().toByteArray(StandardCharsets.UTF_8).size
-                    valueSize + valueSize.toString().length + 1L
-                }
+                null -> 4L
+                is Number, is Boolean -> value.toString().toByteArray(StandardCharsets.UTF_8).size.toLong()
+                else -> jsonStringBytes(value.toString())
             }
         }
 
@@ -282,31 +284,30 @@ object CatalogDefinitionValidator {
         add("productName", definition.productName)
         add("schemaVersion", definition.schemaVersion)
         add("sourceUpdatedAt", definition.sourceUpdatedAt)
+        add("status", definition.status)
         add("items.size", definition.items.size)
-        definition.items.forEachIndexed { index, item ->
-            val prefix = "items[$index]"
-            add("$prefix.bomItemId", item.bomItemId)
-            add("$prefix.representativeTreatmentName", item.representativeTreatmentName)
-            add("$prefix.repeatCount", item.repeatCount)
-            add("$prefix.durationMinutes", item.durationMinutes)
-            add("$prefix.minimumIntervalDays", item.minimumIntervalDays)
-            add("$prefix.preferredIntervalDays", item.preferredIntervalDays)
-            add("$prefix.maximumIntervalDays", item.maximumIntervalDays)
-            addList("$prefix.detailedTreatmentCodes", item.detailedTreatmentCodes, ::add)
-            addList("$prefix.practitionerQualifications", item.practitionerQualifications, ::add)
-            addList("$prefix.equipmentTypes", item.equipmentTypes, ::add)
-            addList("$prefix.roomTypes", item.roomTypes, ::add)
+        definition.items.forEach { item ->
+            add("bomItemId", item.bomItemId)
+            add("representativeTreatmentName", item.representativeTreatmentName)
+            add("repeatCount", item.repeatCount)
+            add("durationMinutes", item.durationMinutes)
+            add("minimumIntervalDays", item.minimumIntervalDays)
+            add("preferredIntervalDays", item.preferredIntervalDays)
+            add("maximumIntervalDays", item.maximumIntervalDays)
+            addList("detailedTreatmentCodes", item.detailedTreatmentCodes, ::add)
+            addList("practitionerQualifications", item.practitionerQualifications, ::add)
+            addList("equipmentTypes", item.equipmentTypes, ::add)
+            addList("roomTypes", item.roomTypes, ::add)
         }
         add("dependencies.size", definition.dependencies.size)
-        definition.dependencies.forEachIndexed { index, dependency ->
-            val prefix = "dependencies[$index]"
-            add("$prefix.predecessorBomItemId", dependency.predecessorBomItemId)
-            add("$prefix.predecessorSequenceNo", dependency.predecessorSequenceNo)
-            add("$prefix.successorBomItemId", dependency.successorBomItemId)
-            add("$prefix.successorSequenceNo", dependency.successorSequenceNo)
-            add("$prefix.minimumIntervalDays", dependency.minimumIntervalDays)
-            add("$prefix.preferredIntervalDays", dependency.preferredIntervalDays)
-            add("$prefix.maximumIntervalDays", dependency.maximumIntervalDays)
+        definition.dependencies.forEach { dependency ->
+            add("predecessorBomItemId", dependency.predecessorBomItemId)
+            add("predecessorSequenceNo", dependency.predecessorSequenceNo)
+            add("successorBomItemId", dependency.successorBomItemId)
+            add("successorSequenceNo", dependency.successorSequenceNo)
+            add("minimumIntervalDays", dependency.minimumIntervalDays)
+            add("preferredIntervalDays", dependency.preferredIntervalDays)
+            add("maximumIntervalDays", dependency.maximumIntervalDays)
         }
         when (val rule = definition.initialBookingRule) {
             null -> add("initialBookingRule.type", null)
@@ -318,13 +319,25 @@ object CatalogDefinitionValidator {
         return bytes
     }
 
+    private fun jsonStringBytes(value: String): Long {
+        var escapedBytes = value.toByteArray(StandardCharsets.UTF_8).size.toLong() + 2L
+        value.forEach { character ->
+            escapedBytes += when (character) {
+                '"', '\\', '\b', '\t', '\n', '\u000C', '\r' -> 1L
+                in '\u0000'..'\u001F' -> 5L
+                else -> 0L
+            }
+        }
+        return escapedBytes
+    }
+
     private fun addList(
         name: String,
         values: List<String>,
         add: (String, Any?) -> Unit,
     ) {
         add("$name.size", values.size)
-        values.forEachIndexed { index, value -> add("$name[$index]", value) }
+        values.forEach { value -> add(name, value) }
     }
 
     private fun String.hasControlCharacter(): Boolean = any(Char::isISOControl)
