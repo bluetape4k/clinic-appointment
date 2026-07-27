@@ -83,6 +83,9 @@ class CatalogProductSyncController(
             request = request,
         )
         val principal = authentication?.principal as? SchedulingUserPrincipal
+        if (principal != null && principal.clinicId != clinicId) {
+            throw AccessDeniedException("Clinic is not permitted")
+        }
         if (principal != null && request.sourceAuthority !in principal.catalogSourceAuthorities) {
             throw AccessDeniedException("Catalog source authority is not permitted")
         }

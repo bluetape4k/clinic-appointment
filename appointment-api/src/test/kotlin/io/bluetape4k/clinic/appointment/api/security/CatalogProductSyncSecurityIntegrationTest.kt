@@ -57,6 +57,7 @@ class CatalogProductSyncSecurityIntegrationTest {
 
     private lateinit var client: RestClient
     private var tenantAClinicId: Long = 0
+    private var tenantASiblingClinicId: Long = 0
     private var tenantBClinicId: Long = 0
 
     @BeforeEach
@@ -71,6 +72,7 @@ class CatalogProductSyncSecurityIntegrationTest {
             insertTenant(TENANT_A_ID, TENANT_A)
             insertTenant(TENANT_B_ID, TENANT_B)
             tenantAClinicId = insertClinic(TENANT_A_ID, "Catalog A Clinic")
+            tenantASiblingClinicId = insertClinic(TENANT_A_ID, "Catalog A Sibling Clinic")
             tenantBClinicId = insertClinic(TENANT_B_ID, "Catalog B Clinic")
         }
     }
@@ -108,6 +110,15 @@ class CatalogProductSyncSecurityIntegrationTest {
             token = catalogWriterToken(allowedTenants = listOf(TENANT_A)),
             tenantGroupId = TENANT_B_ID,
         ).statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
+
+        request(
+            tenantCode = TENANT_A,
+            clinicId = tenantASiblingClinicId,
+            token = catalogWriterToken(allowedTenants = listOf(TENANT_A)),
+        ).also {
+            it.statusCode shouldBeEqualTo HttpStatus.FORBIDDEN
+            it.jsonPath<String>("$.errorCode") shouldBeEqualTo "FORBIDDEN"
+        }
 
         request(TENANT_A, tenantAClinicId, TestJwtProvider.patientToken(listOf(TENANT_A)))
             .statusCode shouldBeEqualTo HttpStatus.FORBIDDEN
