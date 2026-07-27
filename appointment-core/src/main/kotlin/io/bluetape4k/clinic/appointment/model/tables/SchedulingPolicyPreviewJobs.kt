@@ -42,6 +42,15 @@ object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs
      */
     val cursorLastAppointmentId = long("cursor_last_appointment_id").nullable()
 
+    /** 복합 impact cursor의 마지막 UTC scheduled instant입니다. */
+    val cursorScheduledAt = timestamp("cursor_scheduled_at").nullable()
+
+    /** 복합 impact cursor의 안정적인 aggregate enum 이름입니다. */
+    val cursorAggregateType = varchar("cursor_aggregate_type", 32).nullable()
+
+    /** 복합 impact cursor의 양수 database ID 문자열입니다. */
+    val cursorAggregateId = varchar("cursor_aggregate_id", 64).nullable()
+
     /** 검사한 appointment 수입니다. 단조 증가합니다. */
     val scannedCount = long("scanned_count").default(0L)
 
@@ -56,6 +65,12 @@ object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs
 
     /** worker가 claim할 수 있는 가장 이른 UTC instant입니다. */
     val nextAttemptAt = timestamp("next_attempt_at")
+
+    /** preview의 포함 UTC horizon 시작 시각입니다. */
+    val horizonFrom = timestamp("horizon_from")
+
+    /** preview의 제외 UTC horizon 종료 시각입니다. 재시작 후에도 변경하지 않습니다. */
+    val horizonUntil = timestamp("horizon_until")
 
     /**
      * 현재 worker의 opaque identity입니다.
@@ -74,6 +89,22 @@ object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs
     val leaseUntil = timestamp("lease_until").nullable()
 
     /**
+     * 성공한 전체 scan의 canonical lowercase SHA-256입니다.
+     *
+     * [status]가 [PolicyPreviewJobStatus.COMPLETED]일 때만 non-null입니다. 중간 checkpoint나
+     * stale/cancelled/failed 결과는 hash를 남기지 않습니다.
+     */
+    val resultHash = varchar("result_hash", 64).nullable()
+
+    /**
+     * 현재 revision·generation에서 activation에 사용할 수 있는 opaque 증적입니다.
+     *
+     * [status]가 [PolicyPreviewJobStatus.COMPLETED]일 때만 non-null입니다. 운영 로그, metric,
+     * URL path, correlation metadata에 기록하면 안 됩니다.
+     */
+    val activationEvidenceToken = varchar("activation_evidence_token", 192).nullable()
+
+    /**
      * sanitized stable retry 또는 terminal error code입니다. 실패가 기록되지 않았으면 `null`입니다.
      *
      * raw exception text, appointment data, policy/request payload, credential,
@@ -90,5 +121,6 @@ object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs
     init {
         index("idx_policy_preview_due", false, status, nextAttemptAt, leaseUntil)
         index("idx_policy_preview_scope", false, tenantGroupId, clinicId, id)
+        uniqueIndex("uq_policy_preview_evidence_token", activationEvidenceToken)
     }
 }

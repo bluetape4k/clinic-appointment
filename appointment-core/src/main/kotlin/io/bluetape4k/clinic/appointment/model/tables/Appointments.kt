@@ -41,5 +41,15 @@ object Appointments : LongIdTable("scheduling_appointments") {
         index("idx_appointments_equipment_date", false, equipmentId, appointmentDate)
         // 날짜+상태 조회 (전체 활성 예약 조회, 리마인더 스케줄러)
         index("idx_appointments_date_status", false, appointmentDate, status)
+        // 정책 미리보기 keyset scan: clinic/status로 범위를 제한한 뒤 예약 시각과 ID 순으로 진행
+        index(
+            "idx_appointments_policy_preview",
+            false,
+            clinicId,
+            status,
+            appointmentDate,
+            startTime,
+            id,
+        )
     }
 }

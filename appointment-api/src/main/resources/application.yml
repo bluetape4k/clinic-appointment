@@ -28,6 +28,33 @@ scheduling:
             issuer: ${SCHEDULING_JWT_ISSUER:appointment-auth-service}
             audience: ${SCHEDULING_JWT_AUDIENCE:appointment-api}
             allowed-clock-skew: ${SCHEDULING_JWT_ALLOWED_CLOCK_SKEW:30s}
+    policy:
+        # 공개 순서는 shadow compile -> effective read -> admin write -> preview -> activation이다.
+        # 기본값은 모두 false이며 후행 flag만 단독으로 켜면 시작 시 configuration validation이 실패한다.
+        shadow-compile-enabled: false
+        effective-read-enabled: false
+        admin-write-enabled: false
+        preview-worker-enabled: false
+        scheduled-activation-enabled: false
+        preview-page-size: 5000
+        preview-sync-row-limit: 10000
+        preview-sync-deadline: 2s
+        preview-job-deadline: 5m
+        # 한 병원 scope가 보유할 수 있는 PENDING/RUNNING preview 상한이다.
+        preview-queue-capacity: 100
+        preview-tenant-concurrency: 2
+        max-preview-jobs-per-tick: 10
+        max-activation-claims-per-tick: 25
+        worker-poll-interval: 1s
+        worker-lease: 30s
+        worker-shutdown-grace: 10s
+        activation-lateness-warning: 60s
+        activation-missed-after: 5m
+        activation-max-attempts: 5
+        activation-initial-backoff: 5s
+        activation-max-backoff: 2m
+        activation-jitter: 0.20
+        # idempotency-hash-secret은 기본값을 두지 않는다. 설정된 환경에서만 policy write/worker bean이 생성된다.
 
 appointment:
     plan-foundation:

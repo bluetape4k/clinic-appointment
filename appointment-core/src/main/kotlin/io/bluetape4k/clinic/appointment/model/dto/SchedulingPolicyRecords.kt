@@ -202,6 +202,15 @@ enum class PolicyActivationCommandStatus {
  * row를 다시 쓰라는 지시가 아닙니다.
  * @property expectedDraftRevision caller가 검증한 draft revision입니다.
  * @property expectedActiveRevision activation 시 기대하는 scope-head revision입니다.
+ * @property expectedTenantGeneration preview가 관측한 tenant effective generation입니다.
+ * worker는 이 값을 현재 잠긴 generation과 다시 비교하여 예약 이후 정책 변경을 stale로
+ * 판정합니다. `0`은 tenant 정책이 아직 한 번도 활성화되지 않은 초기 generation입니다.
+ * @property expectedClinicGeneration preview가 관측한 clinic override generation입니다.
+ * `0`은 아직 clinic override가 활성화되지 않았다는 sentinel이며 음수는 허용하지 않습니다.
+ * @property previewEvidenceToken 완전히 완료된 durable preview job을 가리키는 opaque token입니다.
+ * worker는 요청 메모리나 Gateway context가 없어도 이 값과 고정된 revision·generation으로
+ * 원래 검증 증거를 복원합니다. 환자, 예약, actor, credential 또는 원본 idempotency key를
+ * 포함해서는 안 됩니다.
  * @property idempotencyKeyHash 검증된 raw key의 lowercase HMAC-SHA-256입니다. raw key는
  * 저장, log, 반환하지 않습니다.
  * @property requestFingerprint canonical request의 lowercase SHA-256입니다. 같은 key로
@@ -236,6 +245,9 @@ data class SchedulingPolicyActivationCommandRecord(
     val replayOfCommandId: Long? = null,
     val expectedDraftRevision: Long,
     val expectedActiveRevision: Long,
+    val expectedTenantGeneration: Long,
+    val expectedClinicGeneration: Long,
+    val previewEvidenceToken: String,
     val idempotencyKeyHash: String,
     val requestFingerprint: String,
     val status: PolicyActivationCommandStatus = PolicyActivationCommandStatus.PENDING,
@@ -250,7 +262,11 @@ data class SchedulingPolicyActivationCommandRecord(
     val lastErrorCode: String? = null,
     val createdAt: Instant = Instant.EPOCH,
     val updatedAt: Instant = Instant.EPOCH,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /** 비동기 scheduling-policy impact preview의 durable state입니다. */
 enum class PolicyPreviewJobStatus {
@@ -305,15 +321,26 @@ data class PolicyPreviewProgress(
  * @property cursorPartition 저장된 zero-based partition cursor입니다.
  * @property cursorLastAppointmentId partition 안에서 마지막으로 처리한 양수 appointment ID입니다.
  * [cursorPartition]이 증가한 직후를 포함해 해당 partition에서 아직 row를 처리하지 않았으면 `null`입니다.
+ * @property cursorScheduledAt 복합 impact keyset의 마지막 UTC 시각입니다.
+ * @property cursorAggregateType 마지막 aggregate type의 안정적인 enum 이름입니다.
+ * @property cursorAggregateId 마지막 aggregate의 양수 database ID 문자열입니다. 세 값은 모두
+ * `null`이거나 모두 non-null이어야 하며 worker 재시작 시 정확한 exclusive cursor를 복원합니다.
  * @property scannedCount 검사한 row 총수입니다. 단조 증가합니다.
  * @property affectedCount 영향을 받는 row 수입니다. 단조 증가하며 [scannedCount]를 넘을 수 없습니다.
  * @property status 현재 preview lifecycle입니다.
  * @property deadlineAt 이 시각 이후 partial result를 사용할 수 없는 UTC hard deadline입니다.
  * @property nextAttemptAt worker가 claim할 수 있는 가장 이른 UTC instant입니다.
+ * @property horizonFrom 영향도 scan에 포함되는 UTC 시작 시각입니다.
+ * @property horizonUntil 영향도 scan에서 제외되는 UTC 종료 시각입니다. worker 재시작 후에도
+ * 같은 범위를 재개할 수 있도록 job 입력으로 영속화됩니다.
  * @property leaseOwner opaque current worker ID입니다. [status]가 `RUNNING`일 때만 non-null이고
  * [leaseUntil]과 함께 있어야 합니다.
  * @property leaseUntil exclusive UTC fencing deadline입니다. [status]가 `RUNNING`일 때만 non-null이며,
  * 이 instant 이후의 owner는 stale입니다.
+ * @property resultHash 전체 bounded scan 결과의 canonical lowercase SHA-256입니다.
+ * `COMPLETED`에서만 non-null이며 partial checkpoint나 비종결 상태의 결과를 나타내지 않습니다.
+ * @property activationEvidenceToken 정확한 definition revision과 generation에 묶인 opaque
+ * 활성화 증적입니다. `COMPLETED`에서만 non-null이고 로그나 metric tag에 기록하면 안 됩니다.
  * @property lastErrorCode stable sanitized retry 또는 terminal error code입니다. 실패 기록이 없으면
  * `null`입니다. raw exception, appointment data, request/policy payload, credential, claim을
  * 포함하면 안 됩니다.
@@ -331,14 +358,25 @@ data class SchedulingPolicyPreviewJobRecord(
     val partitionCount: Int,
     val cursorPartition: Int = 0,
     val cursorLastAppointmentId: Long? = null,
+    val cursorScheduledAt: Instant? = null,
+    val cursorAggregateType: String? = null,
+    val cursorAggregateId: String? = null,
     val scannedCount: Long = 0,
     val affectedCount: Long = 0,
     val status: PolicyPreviewJobStatus = PolicyPreviewJobStatus.PENDING,
     val deadlineAt: Instant,
     val nextAttemptAt: Instant,
+    val horizonFrom: Instant = nextAttemptAt,
+    val horizonUntil: Instant = deadlineAt,
     val leaseOwner: String? = null,
     val leaseUntil: Instant? = null,
+    val resultHash: String? = null,
+    val activationEvidenceToken: String? = null,
     val lastErrorCode: String? = null,
     val createdAt: Instant = Instant.EPOCH,
     val updatedAt: Instant = Instant.EPOCH,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}

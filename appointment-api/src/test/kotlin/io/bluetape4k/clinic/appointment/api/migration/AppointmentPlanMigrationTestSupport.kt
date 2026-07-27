@@ -1,6 +1,17 @@
 package io.bluetape4k.clinic.appointment.api.migration
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.clinic.appointment.model.tables.Appointments
+import io.bluetape4k.clinic.appointment.model.tables.EffectiveSchedulingPolicySnapshots
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyActivationCommands
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyApprovals
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyDefinitions
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyPreviewJobs
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyScopeHeads
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
 import org.flywaydb.core.Flyway
 import java.sql.Connection
 import java.sql.Date
@@ -80,6 +91,52 @@ internal object AppointmentPlanMigrationTestSupport {
             verifyV8OutboxBackfill(connection)
             readLegacyAppointment(connection) shouldBeEqualTo before
         }
+        verifyExposedModelHasNoAdditiveDrift(dataSource)
+    }
+
+    /**
+     * Flyway가 적용한 실제 스키마에 Exposed 모델이 요구하는 additive DDL이 남지 않았음을 검증한다.
+     *
+     * 운영 스키마의 이력, 순서, 롤백 판단은 계속 Flyway가 소유한다. Exposed [MigrationUtils]가
+     * 반환하는 SQL에는 `DROP` 또는 dialect별 column/constraint 재작성처럼 운영에서 자동 실행하면
+     * 위험한 구문도 포함될 수 있으므로 이 검사는 어떤 SQL도 실행하지 않는다. 대신 모델에
+     * 존재하는 table, column, index가 Flyway migration에서 빠진 경우만 fail-fast 한다.
+     *
+     * Flyway가 Exposed DSL보다 강하게 정의한 named CHECK constraint, 명시적으로 이름을 붙인
+     * foreign key, dialect별 column type은 이 검사의 자동 수정 대상이 아니다. Exposed는 같은
+     * foreign key도 생성 이름과 `ON UPDATE` 표현 차이 때문에 additive DDL로 다시 제안할 수 있다.
+     * constraint 존재와 의미는 V9의 명시적 metadata 검증이 별도로 담당한다.
+     */
+    private fun verifyExposedModelHasNoAdditiveDrift(dataSource: DataSource) {
+        val database = Database.connect(dataSource)
+        val additiveDrift = transaction(database) {
+            MigrationUtils.statementsRequiredForDatabaseMigration(
+                *EXPOSED_POLICY_MIGRATION_TABLES,
+                withLogs = false,
+            ).filter(::isAdditiveSchemaChange)
+        }
+
+        check(additiveDrift.isEmpty()) {
+            "Flyway schema is missing additive DDL required by Exposed models:\n" +
+                additiveDrift.joinToString(separator = "\n")
+        }
+    }
+
+    /**
+     * Exposed가 제안한 전체 migration 중 Flyway 누락을 확실히 의미하는 DDL만 분류한다.
+     *
+     * destructive proposal은 사람이 검토해야 하며 이 테스트가 실행하거나 승인하지 않는다.
+     */
+    private fun isAdditiveSchemaChange(statement: String): Boolean {
+        val normalized = statement
+            .trim()
+            .replace(Regex("\\s+"), " ")
+            .uppercase()
+        return normalized.startsWith("CREATE TABLE ") ||
+            normalized.startsWith("CREATE INDEX ") ||
+            normalized.startsWith("CREATE UNIQUE INDEX ") ||
+            (normalized.startsWith("ALTER TABLE ") &&
+                normalized.contains(" ADD COLUMN "))
     }
 
     /**
@@ -358,7 +415,7 @@ internal object AppointmentPlanMigrationTestSupport {
         }
 
     private fun indexes(connection: Connection): Set<String> =
-        EXPECTED_TABLES.flatMapTo(mutableSetOf()) { table ->
+        INDEXED_TABLES.flatMapTo(mutableSetOf()) { table ->
             metadataTableNames(table).flatMap { metadataTableName ->
                 connection.metaData.getIndexInfo(null, null, metadataTableName, false, false).use { rows ->
                     buildList {
@@ -518,6 +575,11 @@ internal object AppointmentPlanMigrationTestSupport {
         "idx_policy_preview_due",
         "idx_policy_preview_scope",
         "idx_outbox_aggregate",
+        "idx_appointments_doctor_date",
+        "idx_appointments_clinic_date_status",
+        "idx_appointments_equipment_date",
+        "idx_appointments_date_status",
+        "idx_appointments_policy_preview",
     )
     private val EXPECTED_UNIQUE_CONSTRAINTS = setOf(
         "uq_catalog_scope_version",
@@ -537,6 +599,16 @@ internal object AppointmentPlanMigrationTestSupport {
         "uq_policy_activation_idempotency",
     )
     private const val POLICY_JSON_MAX_BYTES = 256L * 1024L
+    private val INDEXED_TABLES = EXPECTED_TABLES + "scheduling_appointments"
+    private val EXPOSED_POLICY_MIGRATION_TABLES: Array<Table> = arrayOf(
+        Appointments,
+        SchedulingPolicyDefinitions,
+        SchedulingPolicyApprovals,
+        SchedulingPolicyScopeHeads,
+        EffectiveSchedulingPolicySnapshots,
+        SchedulingPolicyActivationCommands,
+        SchedulingPolicyPreviewJobs,
+    )
     private val EXPECTED_FOREIGN_KEYS = setOf(
         "fk_catalog_projection_tenant",
         "fk_catalog_projection_clinic",
