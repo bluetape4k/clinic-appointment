@@ -18,7 +18,13 @@ object SchedulingPolicyActivationCommands : LongIdTable("scheduling_policy_activ
     /** Tenant baseline or clinic override boundary. */
     val scope = enumerationByName<PolicyScope>("scope", 32)
 
-    /** Nullable clinic identity retained for domain reads. */
+    /**
+     * Positive clinic identity for [PolicyScope.CLINIC_OVERRIDE], and `null`
+     * only for [PolicyScope.TENANT_DEFAULT].
+     *
+     * Cross-dialect uniqueness and joins use [clinicScopeKey], where `0`
+     * represents tenant scope and a positive value must equal this column.
+     */
     val clinicId = long("clinic_id").nullable()
 
     /** Non-null tenant sentinel `0` or positive clinic ID. */
@@ -57,16 +63,39 @@ object SchedulingPolicyActivationCommands : LongIdTable("scheduling_policy_activ
     /** Number of successful claims. */
     val attempt = integer("attempt").default(0)
 
-    /** Tenant generation produced by a completed command. */
+    /**
+     * Tenant generation produced atomically with completion.
+     *
+     * It is `null` before [PolicyActivationCommandStatus.COMPLETED]. A completed
+     * row must populate this column, [resultClinicGeneration], and [eventId]
+     * together; consumers must not infer publication from this value alone.
+     */
     val resultTenantGeneration = long("result_tenant_generation").nullable()
 
-    /** Clinic generation produced by a completed command. */
+    /**
+     * Clinic generation produced atomically with completion.
+     *
+     * It is `null` before [PolicyActivationCommandStatus.COMPLETED]. `0` is a
+     * valid completed value when no clinic override generation exists.
+     */
     val resultClinicGeneration = long("result_clinic_generation").nullable()
 
-    /** Deterministic outbox event identity written with completion. */
+    /**
+     * Deterministic outbox event identity written in the activation transaction.
+     *
+     * It is `null` before [PolicyActivationCommandStatus.COMPLETED]. A completed
+     * row is publishable evidence only when this value and both result
+     * generations are non-null.
+     */
     val eventId = varchar("event_id", 160).nullable()
 
-    /** Sanitized stable error code; never raw exception or request text. */
+    /**
+     * Sanitized stable error code, or `null` when no retry or terminal failure
+     * has been recorded.
+     *
+     * It must never contain raw exception text, request JSON, an idempotency
+     * key, actor data, credentials, or authentication claims.
+     */
     val lastErrorCode = varchar("last_error_code", 96).nullable()
 
     /** Database insertion instant. */
