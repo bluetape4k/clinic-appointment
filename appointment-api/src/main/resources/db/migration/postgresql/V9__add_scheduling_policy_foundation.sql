@@ -202,9 +202,9 @@ CREATE INDEX idx_policy_preview_due
 CREATE INDEX idx_policy_preview_scope
     ON scheduling_policy_preview_jobs(tenant_group_id, clinic_id, id);
 
--- Backfill every V8 plan event while the legacy plan and clinic foreign keys
--- are still populated. Tenant policy events may later omit both plan_id and
--- clinic_id. The WHERE clause is rerun-safe for recovery tooling.
+-- Backfill every V8 plan event while legacy plan, clinic, and causation values
+-- are still populated. Command-driven tenant policy events may later omit all
+-- three. The WHERE clause is rerun-safe for recovery tooling.
 ALTER TABLE scheduling_outbox_events ADD COLUMN aggregate_type VARCHAR(64);
 ALTER TABLE scheduling_outbox_events ADD COLUMN aggregate_id VARCHAR(160);
 
@@ -216,6 +216,7 @@ UPDATE scheduling_outbox_events
 
 ALTER TABLE scheduling_outbox_events ALTER COLUMN plan_id DROP NOT NULL;
 ALTER TABLE scheduling_outbox_events ALTER COLUMN clinic_id DROP NOT NULL;
+ALTER TABLE scheduling_outbox_events ALTER COLUMN causation_event_id DROP NOT NULL;
 
 CREATE INDEX idx_outbox_aggregate
     ON scheduling_outbox_events(aggregate_type, aggregate_id, created_at);

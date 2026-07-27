@@ -312,6 +312,9 @@ internal object AppointmentPlanMigrationTestSupport {
         check(columnIsNullable(connection, "scheduling_outbox_events", "clinic_id")) {
             "V9 clinic_id must become nullable for tenant-scope policy aggregates"
         }
+        check(columnIsNullable(connection, "scheduling_outbox_events", "causation_event_id")) {
+            "V9 causation_event_id must become nullable for command-driven policy events"
+        }
     }
 
     private fun foundationTables(connection: Connection): Set<String> =
