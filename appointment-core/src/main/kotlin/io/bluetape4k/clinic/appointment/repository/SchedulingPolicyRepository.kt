@@ -74,7 +74,13 @@ class SchedulingPolicyRepository {
             ?: error("Inserted policy definition $definitionId was not readable")
     }
 
-    /** Returns a definition by database identity inside the current transaction. */
+    /**
+     * Returns a definition visible in the caller-owned transaction.
+     *
+     * @param definitionId Positive database identity.
+     * @return The immutable definition, or `null` when no row is visible.
+     * Absence does not by itself mean the current actor is unauthorized.
+     */
     fun findDefinition(definitionId: Long): SchedulingPolicyDefinitionRecord? =
         SchedulingPolicyDefinitions
             .selectAll()
@@ -112,7 +118,16 @@ class SchedulingPolicyRepository {
             .toSchedulingPolicyApprovalRecord()
     }
 
-    /** Returns approval evidence for one exact definition revision. */
+    /**
+     * Returns approval evidence visible for one exact draft revision.
+     *
+     * @param definitionId Positive definition identity.
+     * @param draftRevision Positive revision whose evidence remains valid only
+     * while the definition is still at that revision.
+     * @return Evidence in stable insertion order, or an empty list when none is
+     * visible. An empty list does not by itself distinguish absence from
+     * insufficient authorization; the command layer owns that decision.
+     */
     fun findApprovals(
         definitionId: Long,
         draftRevision: Long,
@@ -228,6 +243,28 @@ class SchedulingPolicyRepository {
      * If the hash already exists, the original bytes and generation metadata
      * win. This makes retry behavior idempotent and prevents an update path from
      * rewriting historical scheduling evidence.
+     *
+     * @param tenantGroupId Positive tenant boundary of every source definition.
+     * @param clinicId Positive clinic for which the decision was compiled.
+     * @param decisionAt UTC instant when the decision was evaluated.
+     * @param serviceAt UTC service instant; it must not precede [decisionAt].
+     * @param tenantGeneration Positive tenant scope generation rechecked by the
+     * compiler.
+     * @param clinicGeneration Non-negative clinic scope generation; `0` means
+     * no clinic override generation has yet been activated.
+     * @param sourceVersionsJson Canonical JSON map of contributing definition
+     * versions by policy kind.
+     * @param sourceByPathJson Canonical JSON map from compiled leaf path to its
+     * platform, tenant, or clinic source.
+     * @param disabledFeaturesJson Canonical sorted JSON array of paths explicitly
+     * disabled by an override.
+     * @param warningsJson Canonical ordered JSON array of customer-safe compiler
+     * warnings.
+     * @param payloadJson Canonical compiled-policy JSON used by scheduling
+     * decisions; it contains no actor credentials or idempotency key.
+     * @param snapshotHash Lowercase 64-character SHA-256 covering scope, times,
+     * generations, source evidence, warnings, disabled paths, and payload.
+     * @return Existing or newly inserted immutable snapshot for the scoped hash.
      */
     @Suppress("LongParameterList")
     fun saveSnapshot(
@@ -270,7 +307,15 @@ class SchedulingPolicyRepository {
         }
     }
 
-    /** Returns one immutable snapshot by tenant, clinic, and canonical hash. */
+    /**
+     * Returns one immutable snapshot visible for an exact scoped hash.
+     *
+     * @param tenantGroupId Positive tenant boundary.
+     * @param clinicId Positive clinic boundary.
+     * @param snapshotHash Lowercase 64-character canonical snapshot SHA-256.
+     * @return The snapshot, or `null` when no row is visible in the current
+     * caller-owned transaction. `null` is not an authorization verdict.
+     */
     fun findSnapshot(
         tenantGroupId: Long,
         clinicId: Long,

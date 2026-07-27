@@ -196,6 +196,17 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
             checkpoint.cursorLastAppointmentId shouldBeEqualTo 100L
             checkpoint.scannedCount shouldBeEqualTo 10L
             checkpoint.affectedCount shouldBeEqualTo 3L
+
+            assertFailsWith<IllegalArgumentException> {
+                repository.checkpointPreview(
+                    jobId,
+                    "preview-a",
+                    PolicyPreviewCursor(partition = 4, lastAppointmentId = null),
+                    PolicyPreviewProgress(scannedCount = 10L, affectedCount = 3L),
+                )
+            }
+            repository.findPreviewJob(jobId).shouldNotBeNull()
+                .cursorPartition shouldBeEqualTo 1
         }
     }
 

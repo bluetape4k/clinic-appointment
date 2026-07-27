@@ -96,7 +96,13 @@ class SchedulingPolicyJobRepository(
         return requireNotNull(findActivation(commandId))
     }
 
-    /** Returns one activation command by database identity. */
+    /**
+     * Returns one activation command visible in the caller-owned transaction.
+     *
+     * @param commandId Positive database identity.
+     * @return The stored command, or `null` when no row is visible. `null`
+     * conveys absence only and must not be interpreted as authorization denial.
+     */
     fun findActivation(commandId: Long): SchedulingPolicyActivationCommandRecord? =
         SchedulingPolicyActivationCommands
             .selectAll()
@@ -208,7 +214,13 @@ class SchedulingPolicyJobRepository(
         return requireNotNull(findPreviewJob(jobId))
     }
 
-    /** Returns one preview job by database identity. */
+    /**
+     * Returns one preview job visible in the caller-owned transaction.
+     *
+     * @param jobId Positive database identity.
+     * @return The stored job, or `null` when no row is visible. `null` conveys
+     * absence only and must not be interpreted as authorization denial.
+     */
     fun findPreviewJob(jobId: Long): SchedulingPolicyPreviewJobRecord? =
         SchedulingPolicyPreviewJobs
             .selectAll()
@@ -217,7 +229,17 @@ class SchedulingPolicyJobRepository(
             ?.toSchedulingPolicyPreviewJobRecord()
 
     /**
-     * Claims a pending preview or reclaims an expired running lease.
+     * Claims an eligible preview or reclaims an expired running lease.
+     *
+     * [leaseUntil] must be strictly after [now]. Eligible rows are either
+     * `PENDING` with `nextAttemptAt <= now`, or `RUNNING` with an existing
+     * `leaseUntil <= now`; both cases also require `deadlineAt > now`.
+     * A successful conditional update writes `RUNNING`, [owner], [leaseUntil],
+     * and the transition time in the caller-owned transaction.
+     *
+     * @return `true` only when this caller won the conditional update. `false`
+     * means the row is missing, not yet due, still leased, past its deadline,
+     * in a terminal state, or was won concurrently.
      */
     fun claimDuePreview(
         jobId: Long,
@@ -250,8 +272,16 @@ class SchedulingPolicyJobRepository(
     /**
      * Persists a monotonic preview checkpoint for the live lease owner.
      *
-     * Cursor and counters may stay unchanged for a heartbeat but must never
-     * move backward. A stale owner receives `false`.
+     * [PolicyPreviewCursor.partition] is zero-based, remains below the job's
+     * fixed partition count, and never moves backward. Its appointment ID is
+     * `null` only before the first row of a partition; otherwise it is positive
+     * and non-decreasing within that partition. Progress counters are
+     * non-negative and monotonic, with `affectedCount <= scannedCount`.
+     * Unchanged values are permitted for a heartbeat.
+     *
+     * @return `false` when the job is missing, is not `RUNNING`, the [owner] is
+     * stale, or a concurrent transition wins. Invalid or regressing cursor and
+     * progress supplied by the current owner throw [IllegalArgumentException].
      */
     fun checkpointPreview(
         jobId: Long,
@@ -273,6 +303,9 @@ class SchedulingPolicyJobRepository(
         val current = findPreviewJob(jobId) ?: return false
         if (current.status != PolicyPreviewJobStatus.RUNNING || current.leaseOwner != owner) {
             return false
+        }
+        require(cursor.partition < current.partitionCount) {
+            "cursor partition must be inside partitionCount"
         }
         require(cursor.partition >= current.cursorPartition) { "cursor partition cannot move backward" }
         if (cursor.partition == current.cursorPartition &&

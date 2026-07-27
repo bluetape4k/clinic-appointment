@@ -20,6 +20,10 @@ object SchedulingPolicyHasher {
     /**
      * Computes a lowercase SHA-256 for one typed schema-one payload.
      *
+     * @param payload Typed schema-one payload that should already have passed
+     * [SchedulingPolicyValidator]. This method canonicalizes and size-bounds
+     * fields, but does not authorize, persist, or apply all business rules.
+     * @return Lowercase 64-character SHA-256 of the canonical payload fields.
      * @throws IllegalArgumentException when the canonical byte stream is larger
      * than the same 256 KiB safety bound used by the JSON codec.
      */

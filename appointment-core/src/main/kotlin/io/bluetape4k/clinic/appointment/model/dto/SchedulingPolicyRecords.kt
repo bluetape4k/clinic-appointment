@@ -209,9 +209,17 @@ enum class PolicyActivationCommandStatus {
  * @property leaseUntil UTC lease expiry; stale owners lose write authority.
  * @property attempt Number of successful worker claims.
  * @property resultTenantGeneration Tenant generation produced by completion.
+ * It is `null` for every non-completed state and must be populated atomically
+ * with [resultClinicGeneration] and [eventId] when status becomes `COMPLETED`.
  * @property resultClinicGeneration Clinic generation produced by completion.
+ * It is `null` for every non-completed state; `0` is valid after completion
+ * when no clinic override generation exists.
  * @property eventId Deterministic outbox event identity produced atomically.
- * @property lastErrorCode Stable sanitized retry/error code, never raw input.
+ * It is `null` until completion. Consumers must require `COMPLETED` plus this
+ * value and both result generations before treating activation as published.
+ * @property lastErrorCode Stable sanitized retry or terminal error code, or
+ * `null` when no failure is recorded. It never contains a raw exception,
+ * request JSON, idempotency key, actor data, credential, or claim.
  * @property createdAt Database creation instant.
  * @property updatedAt Database last-transition instant.
  */
@@ -291,15 +299,21 @@ data class PolicyPreviewProgress(
  * @property clinicGeneration Expected clinic generation at each resume.
  * @property partitionCount Positive fixed partition count for deterministic resume.
  * @property cursorPartition Zero-based persisted partition cursor.
- * @property cursorLastAppointmentId Last processed key in the partition.
+ * @property cursorLastAppointmentId Last processed positive appointment ID in
+ * the partition. `null` means no row has yet been processed in that partition,
+ * including immediately after advancing [cursorPartition].
  * @property scannedCount Monotonic total rows inspected.
  * @property affectedCount Monotonic affected-row count, never above scanned.
  * @property status Current preview lifecycle.
  * @property deadlineAt UTC hard deadline after which partial results are unusable.
  * @property nextAttemptAt Earliest UTC worker claim instant.
- * @property leaseOwner Opaque current worker ID.
- * @property leaseUntil UTC lease expiry.
- * @property lastErrorCode Stable sanitized error code.
+ * @property leaseOwner Opaque current worker ID. It is non-null only while
+ * [status] is `RUNNING` and must be paired with [leaseUntil].
+ * @property leaseUntil Exclusive UTC fencing deadline. It is non-null only
+ * while [status] is `RUNNING`; at or after this instant the owner is stale.
+ * @property lastErrorCode Stable sanitized retry or terminal error code, or
+ * `null` when no failure is recorded. It never contains raw exceptions,
+ * appointment data, request/policy payloads, credentials, or claims.
  * @property createdAt Database creation instant.
  * @property updatedAt Database last-transition/checkpoint instant.
  */

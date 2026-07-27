@@ -436,6 +436,14 @@ internal fun Int?.sequenceToSentinel(): Int = this ?: 0
 
 private fun Int.sentinelToSequence(): Int? = takeIf { it > 0 }
 
+/**
+ * Maps a selected definition row without decoding or re-canonicalizing JSON.
+ *
+ * The caller-owned transaction must select every definition column. This
+ * mapper preserves the `clinicScopeKey` sentinel, half-open effective interval,
+ * canonical payload bytes, hash, and trusted actor audit fields exactly as
+ * stored.
+ */
 internal fun ResultRow.toSchedulingPolicyDefinitionRecord() = SchedulingPolicyDefinitionRecord(
     id = this[SchedulingPolicyDefinitions.id].value,
     tenantGroupId = this[SchedulingPolicyDefinitions.tenantGroupId],
@@ -457,6 +465,13 @@ internal fun ResultRow.toSchedulingPolicyDefinitionRecord() = SchedulingPolicyDe
     createdAt = this[SchedulingPolicyDefinitions.createdAt],
 )
 
+/**
+ * Maps immutable approval evidence for one exact draft revision.
+ *
+ * The caller-owned transaction must select every approval column. Actor and
+ * assurance values are copied as bounded audit metadata and are never expanded
+ * into credentials or current authorization state.
+ */
 internal fun ResultRow.toSchedulingPolicyApprovalRecord() = SchedulingPolicyApprovalRecord(
     id = this[SchedulingPolicyApprovals.id].value,
     definitionId = this[SchedulingPolicyApprovals.definitionId].value,
@@ -467,6 +482,13 @@ internal fun ResultRow.toSchedulingPolicyApprovalRecord() = SchedulingPolicyAppr
     approvedAt = this[SchedulingPolicyApprovals.approvedAt],
 )
 
+/**
+ * Maps a scope serialization head while preserving its non-null clinic sentinel.
+ *
+ * The returned revision and generation are an observation inside the current
+ * caller-owned transaction; callers that make activation decisions must still
+ * hold or re-acquire the required scope-head lock.
+ */
 internal fun ResultRow.toSchedulingPolicyScopeHeadRecord() = SchedulingPolicyScopeHeadRecord(
     id = this[SchedulingPolicyScopeHeads.id].value,
     tenantGroupId = this[SchedulingPolicyScopeHeads.tenantGroupId],
@@ -477,6 +499,13 @@ internal fun ResultRow.toSchedulingPolicyScopeHeadRecord() = SchedulingPolicySco
     updatedAt = this[SchedulingPolicyScopeHeads.updatedAt],
 )
 
+/**
+ * Maps an immutable effective-policy snapshot without interpreting JSON fields.
+ *
+ * Canonical source maps, disabled paths, warnings, compiled payload bytes,
+ * generation vector, and hash are preserved verbatim so historical decision
+ * evidence cannot be silently normalized during reads.
+ */
 internal fun ResultRow.toEffectiveSchedulingPolicySnapshotRecord() = EffectiveSchedulingPolicySnapshotRecord(
     id = this[EffectiveSchedulingPolicySnapshots.id].value,
     tenantGroupId = this[EffectiveSchedulingPolicySnapshots.tenantGroupId],
@@ -494,6 +523,14 @@ internal fun ResultRow.toEffectiveSchedulingPolicySnapshotRecord() = EffectiveSc
     createdAt = this[EffectiveSchedulingPolicySnapshots.createdAt],
 )
 
+/**
+ * Maps a durable activation command without interpreting worker terminal state.
+ *
+ * Scope sentinel, keyed hashes, nullable lease, result-generation, event, and
+ * sanitized error columns are preserved exactly as stored. Callers must apply
+ * the documented status invariants rather than treating nullable fields as
+ * independent signals.
+ */
 internal fun ResultRow.toSchedulingPolicyActivationCommandRecord() = SchedulingPolicyActivationCommandRecord(
     id = this[SchedulingPolicyActivationCommands.id].value,
     tenantGroupId = this[SchedulingPolicyActivationCommands.tenantGroupId],
@@ -519,6 +556,13 @@ internal fun ResultRow.toSchedulingPolicyActivationCommandRecord() = SchedulingP
     updatedAt = this[SchedulingPolicyActivationCommands.updatedAt],
 )
 
+/**
+ * Maps a durable preview job without advancing or normalizing its checkpoint.
+ *
+ * The zero-based partition cursor, nullable first-row marker, monotonic
+ * counters, lease fencing fields, deadline, and sanitized error code are copied
+ * verbatim for validation by the owner-fenced repository operation.
+ */
 internal fun ResultRow.toSchedulingPolicyPreviewJobRecord() = SchedulingPolicyPreviewJobRecord(
     id = this[SchedulingPolicyPreviewJobs.id].value,
     tenantGroupId = this[SchedulingPolicyPreviewJobs.tenantGroupId],

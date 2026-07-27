@@ -47,6 +47,12 @@ import java.time.Duration
  * ```
  *
  * `INHERIT` and `DISABLE` must omit `value`; `SET` must provide it.
+ *
+ * @param objectMapper Mapper used only with the closed set of concrete wire
+ * classes selected by the trusted envelope. An injected mapper must retain the
+ * Kotlin module, `FAIL_ON_UNKNOWN_PROPERTIES`, and disabled default typing; it
+ * must not enable polymorphic class-name dispatch. Violating those conditions
+ * weakens the closed-world decoding and unknown-field rejection guarantees.
  */
 class SchedulingPolicyPayloadCodec(
     private val objectMapper: JsonMapper = JsonMapper.builder()
