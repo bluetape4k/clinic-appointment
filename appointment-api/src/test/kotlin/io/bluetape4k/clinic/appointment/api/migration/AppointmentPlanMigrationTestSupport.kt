@@ -10,7 +10,7 @@ import javax.sql.DataSource
 
 internal object AppointmentPlanMigrationTestSupport {
 
-    fun verifyV8Migration(
+    fun verifyV9Migration(
         dataSource: DataSource,
         location: String,
     ) {
@@ -30,6 +30,14 @@ internal object AppointmentPlanMigrationTestSupport {
         dataSource.connection.use(::seedLegacyAppointment)
         val before = dataSource.connection.use(::readLegacyAppointment)
 
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .target("8")
+            .load()
+            .migrate()
+        dataSource.connection.use(::seedV8PlanOutbox)
+
         val result = Flyway.configure()
             .dataSource(dataSource)
             .locations(location)
@@ -42,20 +50,23 @@ internal object AppointmentPlanMigrationTestSupport {
             foundationTables(connection) shouldBeEqualTo EXPECTED_TABLES
 
             val missingIndexes = EXPECTED_INDEXES - indexes(connection)
-            check(missingIndexes.isEmpty()) { "Missing V8 indexes: $missingIndexes" }
+            check(missingIndexes.isEmpty()) { "Missing V9 indexes: $missingIndexes" }
 
             val missingUniqueConstraints = EXPECTED_UNIQUE_CONSTRAINTS - uniqueConstraints(connection)
             check(missingUniqueConstraints.isEmpty()) {
-                "Missing V8 unique constraints: $missingUniqueConstraints"
+                "Missing V9 unique constraints: $missingUniqueConstraints"
             }
 
             val missingForeignKeys = EXPECTED_FOREIGN_KEYS - foreignKeys(connection)
-            check(missingForeignKeys.isEmpty()) { "Missing V8 foreign keys: $missingForeignKeys" }
+            check(missingForeignKeys.isEmpty()) { "Missing V9 foreign keys: $missingForeignKeys" }
+
+            val missingChecks = EXPECTED_CHECK_CONSTRAINTS - checkConstraints(connection)
+            check(missingChecks.isEmpty()) { "Missing V9 check constraints: $missingChecks" }
 
             EXPECTED_CRITICAL_COLUMNS.forEach { (table, expectedColumns) ->
                 val missingColumns = expectedColumns - columns(connection, table)
                 check(missingColumns.isEmpty()) {
-                    "Missing V8 columns on $table: $missingColumns"
+                    "Missing V9 columns on $table: $missingColumns"
                 }
             }
 
@@ -65,6 +76,7 @@ internal object AppointmentPlanMigrationTestSupport {
             }
 
             verifyInvalidQuarantineStatusRejected(connection)
+            verifyV8OutboxBackfill(connection)
             readLegacyAppointment(connection) shouldBeEqualTo before
         }
     }
@@ -201,6 +213,104 @@ internal object AppointmentPlanMigrationTestSupport {
             }
         }
 
+    private fun seedV8PlanOutbox(connection: Connection) {
+        connection.prepareStatement(
+            """
+            INSERT INTO scheduling_product_catalog_projections(
+                id, tenant_group_id, clinic_id, source_authority, product_id,
+                catalog_version, catalog_status, product_name, schema_version,
+                source_updated_at, payload_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+            """.trimIndent()
+        ).use { statement ->
+            statement.setLong(1, 501)
+            statement.setLong(2, 1)
+            statement.setLong(3, 101)
+            statement.setString(4, "product-catalog")
+            statement.setString(5, "legacy-product")
+            statement.setLong(6, 1)
+            statement.setString(7, "ACTIVE")
+            statement.setString(8, "Legacy Product")
+            statement.setInt(9, 1)
+            statement.setString(10, "a".repeat(64))
+            statement.executeUpdate()
+        }
+        connection.prepareStatement(
+            """
+            INSERT INTO scheduling_appointment_plans(
+                id, tenant_group_id, clinic_id, catalog_projection_id,
+                source_purchase_authority, source_purchase_id,
+                patient_reference_ciphertext, patient_reference_key_id,
+                patient_reference_fingerprint, catalog_source_authority,
+                product_id, catalog_version, catalog_payload_hash, product_name,
+                booking_preference_type, booking_preference_payload, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent()
+        ).use { statement ->
+            statement.setLong(1, 601)
+            statement.setLong(2, 1)
+            statement.setLong(3, 101)
+            statement.setLong(4, 501)
+            statement.setString(5, "commerce")
+            statement.setString(6, "legacy-purchase")
+            statement.setString(7, "ciphertext")
+            statement.setString(8, "key-1")
+            statement.setString(9, "b".repeat(64))
+            statement.setString(10, "product-catalog")
+            statement.setString(11, "legacy-product")
+            statement.setLong(12, 1)
+            statement.setString(13, "a".repeat(64))
+            statement.setString(14, "Legacy Product")
+            statement.setString(15, "NOT_PROVIDED")
+            statement.setString(16, "")
+            statement.setString(17, "ACTIVE")
+            statement.executeUpdate()
+        }
+        connection.prepareStatement(
+            """
+            INSERT INTO scheduling_outbox_events(
+                event_id, causation_event_id, correlation_id, event_type,
+                tenant_group_id, clinic_id, plan_id, schema_version,
+                payload_json, status, attempt_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent()
+        ).use { statement ->
+            statement.setString(1, "legacy-plan-outbox")
+            statement.setString(2, "legacy-purchase-event")
+            statement.setString(3, "legacy-correlation")
+            statement.setString(4, "AppointmentPlanCreated")
+            statement.setLong(5, 1)
+            statement.setLong(6, 101)
+            statement.setLong(7, 601)
+            statement.setInt(8, 1)
+            statement.setString(9, "{}")
+            statement.setString(10, "PENDING")
+            statement.setInt(11, 0)
+            statement.executeUpdate()
+        }
+    }
+
+    private fun verifyV8OutboxBackfill(connection: Connection) {
+        connection.prepareStatement(
+            """
+            SELECT aggregate_type, aggregate_id, plan_id
+              FROM scheduling_outbox_events
+             WHERE event_id = ?
+            """.trimIndent()
+        ).use { statement ->
+            statement.setString(1, "legacy-plan-outbox")
+            statement.executeQuery().use { rows ->
+                check(rows.next()) { "Legacy V8 outbox row must be preserved" }
+                rows.getString("aggregate_type") shouldBeEqualTo "APPOINTMENT_PLAN"
+                rows.getString("aggregate_id") shouldBeEqualTo "601"
+                rows.getLong("plan_id") shouldBeEqualTo 601L
+            }
+        }
+        check(columnIsNullable(connection, "scheduling_outbox_events", "plan_id")) {
+            "V9 plan_id must remain available but become nullable for non-plan aggregates"
+        }
+    }
+
     private fun foundationTables(connection: Connection): Set<String> =
         buildSet {
             connection.metaData.getTables(null, null, null, arrayOf("TABLE")).use { rows ->
@@ -241,6 +351,21 @@ internal object AppointmentPlanMigrationTestSupport {
             }
         }
 
+    private fun checkConstraints(connection: Connection): Set<String> =
+        connection.createStatement().use { statement ->
+            statement.executeQuery(
+                """
+                SELECT constraint_name
+                  FROM information_schema.table_constraints
+                 WHERE constraint_type = 'CHECK'
+                """.trimIndent()
+            ).use { rows ->
+                buildSet {
+                    while (rows.next()) add(rows.getString("constraint_name").lowercase())
+                }
+            }
+        }
+
     private fun foreignKeys(connection: Connection): Set<String> =
         EXPECTED_TABLES.flatMapTo(mutableSetOf()) { table ->
             metadataTableNames(table).flatMap { metadataTableName ->
@@ -261,6 +386,19 @@ internal object AppointmentPlanMigrationTestSupport {
                     while (rows.next()) {
                         rows.getString("COLUMN_NAME")?.lowercase()?.let(::add)
                     }
+                }
+            }
+        }
+
+    private fun columnIsNullable(
+        connection: Connection,
+        table: String,
+        column: String,
+    ): Boolean =
+        metadataTableNames(table).any { metadataTableName ->
+            setOf(column, column.uppercase()).any { metadataColumnName ->
+                connection.metaData.getColumns(null, null, metadataTableName, metadataColumnName).use { rows ->
+                    rows.next() && rows.getInt("NULLABLE") == java.sql.DatabaseMetaData.columnNullable
                 }
             }
         }
@@ -316,6 +454,12 @@ internal object AppointmentPlanMigrationTestSupport {
         "scheduling_untrusted_event_rejections",
         "scheduling_quarantine_events",
         "scheduling_quarantine_audit_events",
+        "scheduling_policy_definitions",
+        "scheduling_policy_approvals",
+        "scheduling_policy_scope_heads",
+        "effective_scheduling_policy_snapshots",
+        "scheduling_policy_activation_commands",
+        "scheduling_policy_preview_jobs",
     )
     private val EXPECTED_INDEXES = setOf(
         "idx_catalog_scope_product",
@@ -333,6 +477,12 @@ internal object AppointmentPlanMigrationTestSupport {
         "idx_quarantine_status_expiry",
         "idx_quarantine_scope_reason",
         "idx_quarantine_audit_quarantine_created",
+        "idx_policy_definition_effective",
+        "idx_effective_policy_generation",
+        "idx_policy_activation_due",
+        "idx_policy_preview_due",
+        "idx_policy_preview_scope",
+        "idx_outbox_aggregate",
     )
     private val EXPECTED_UNIQUE_CONSTRAINTS = setOf(
         "uq_catalog_scope_version",
@@ -345,6 +495,11 @@ internal object AppointmentPlanMigrationTestSupport {
         "uq_outbox_event_id",
         "uq_untrusted_rejection_event_id",
         "uq_quarantine_event_id",
+        "uq_policy_definition",
+        "uq_policy_approval",
+        "uq_policy_scope_head",
+        "uq_effective_policy_hash",
+        "uq_policy_activation_idempotency",
     )
     private val EXPECTED_FOREIGN_KEYS = setOf(
         "fk_catalog_projection_tenant",
@@ -366,6 +521,21 @@ internal object AppointmentPlanMigrationTestSupport {
         "fk_quarantine_tenant",
         "fk_quarantine_clinic",
         "fk_quarantine_audit_quarantine",
+        "fk_policy_approval_definition",
+    )
+    private val EXPECTED_CHECK_CONSTRAINTS = setOf(
+        "ck_policy_definition_scope",
+        "ck_policy_definition_interval",
+        "ck_policy_definition_versions",
+        "ck_policy_definition_lifecycle",
+        "ck_policy_approval_revision",
+        "ck_policy_scope_head_scope",
+        "ck_policy_scope_head_counters",
+        "ck_effective_policy_generation",
+        "ck_policy_activation_scope",
+        "ck_policy_activation_state",
+        "ck_policy_preview_state",
+        "ck_policy_preview_progress",
     )
     private val EXPECTED_CRITICAL_COLUMNS = mapOf(
         "scheduling_product_catalog_projections" to setOf(
@@ -406,6 +576,40 @@ internal object AppointmentPlanMigrationTestSupport {
             "approval_references",
             "created_at",
         ),
+        "scheduling_outbox_events" to setOf(
+            "aggregate_type",
+            "aggregate_id",
+            "plan_id",
+        ),
+        "scheduling_policy_definitions" to setOf(
+            "tenant_group_id",
+            "scope",
+            "clinic_id",
+            "clinic_scope_key",
+            "policy_kind",
+            "version",
+            "schema_version",
+            "revision",
+            "payload_hash",
+            "payload_json",
+        ),
+        "scheduling_policy_activation_commands" to setOf(
+            "idempotency_key_hash",
+            "request_fingerprint",
+            "lease_owner",
+            "lease_until",
+            "result_tenant_generation",
+            "result_clinic_generation",
+        ),
+        "scheduling_policy_preview_jobs" to setOf(
+            "draft_revision",
+            "tenant_generation",
+            "clinic_generation",
+            "cursor_partition",
+            "cursor_last_appointment_id",
+            "scanned_count",
+            "affected_count",
+        ),
     )
     private val EXPECTED_UNIQUE_IDENTITIES = mapOf(
         ("scheduling_product_catalog_projections" to "uq_catalog_scope_version") to listOf(
@@ -420,6 +624,24 @@ internal object AppointmentPlanMigrationTestSupport {
             "clinic_id",
             "source_purchase_authority",
             "source_purchase_id",
+        ),
+        ("scheduling_policy_definitions" to "uq_policy_definition") to listOf(
+            "tenant_group_id",
+            "scope",
+            "clinic_scope_key",
+            "policy_kind",
+            "version",
+        ),
+        ("scheduling_policy_scope_heads" to "uq_policy_scope_head") to listOf(
+            "tenant_group_id",
+            "scope",
+            "clinic_scope_key",
+        ),
+        ("scheduling_policy_activation_commands" to "uq_policy_activation_idempotency") to listOf(
+            "tenant_group_id",
+            "scope",
+            "clinic_scope_key",
+            "idempotency_key_hash",
         ),
     )
 }

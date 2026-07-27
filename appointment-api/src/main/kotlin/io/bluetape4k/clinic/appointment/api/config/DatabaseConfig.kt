@@ -22,6 +22,7 @@ import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
 import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
+import io.bluetape4k.clinic.appointment.model.tables.EffectiveSchedulingPolicySnapshots
 import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.PlannedTreatments
@@ -29,6 +30,11 @@ import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependenci
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyActivationCommands
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyApprovals
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyDefinitions
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyPreviewJobs
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyScopeHeads
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
@@ -43,19 +49,27 @@ import org.springframework.context.annotation.Profile
 import org.springframework.core.annotation.Order
 
 /**
- * 데이터베이스 스키마 초기화 설정.
+ * Creates the complete Exposed schema for local development and tests.
  *
- * dev/test 프로파일에서만 활성화됩니다.
- * Exposed SchemaUtils로 in-memory 스키마를 생성합니다.
+ * This configuration is deliberately disabled when Flyway owns the schema. The
+ * table list therefore mirrors the latest Flyway migration, including policy
+ * definitions, approval evidence, effective snapshots, activation commands,
+ * and preview jobs. Keeping both paths aligned prevents local tests from
+ * accepting a schema that production migrations cannot create.
  *
- * prod에서는 Flyway SQL 마이그레이션이 스키마를 관리합니다.
+ * Production environments must use Flyway instead of this initializer.
  */
 @Configuration(proxyBeanMethods = false)
 @Profile("dev", "test")
 @ConditionalOnProperty(name = ["spring.flyway.enabled"], havingValue = "false", matchIfMissing = true)
 class SchemaInitConfig {
     /**
-     * Exposed SchemaUtils로 스키마 생성 (dev/test 전용).
+     * Creates all application tables in dependency order for dev/test profiles.
+     *
+     * Policy definition rows precede approval and execution tables because
+     * approval evidence references a definition. Runtime policy heads and
+     * effective snapshots are registered before activation/preview work tables
+     * so a fresh in-memory database exposes the same persistence surface as V9.
      */
     @Bean
     @Order(1)
@@ -96,6 +110,12 @@ class SchemaInitConfig {
                     UntrustedSchedulingEventRejections,
                     SchedulingQuarantineEvents,
                     SchedulingQuarantineAuditEvents,
+                    SchedulingPolicyDefinitions,
+                    SchedulingPolicyApprovals,
+                    SchedulingPolicyScopeHeads,
+                    EffectiveSchedulingPolicySnapshots,
+                    SchedulingPolicyActivationCommands,
+                    SchedulingPolicyPreviewJobs,
                 )
             }
         }

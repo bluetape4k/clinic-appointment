@@ -11,7 +11,7 @@ import java.sql.Driver
 class FlywayMySQLMigrationTest {
 
     @Test
-    fun `V8 adds the plan foundation without changing a legacy appointment on MySQL 8`() {
+    fun `V9 adds policy persistence and expands legacy outbox rows on MySQL 8`() {
         val mysql = Containers.MySql8
         val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
         val dataSource = SimpleDriverDataSource(
@@ -21,7 +21,7 @@ class FlywayMySQLMigrationTest {
             mysql.password ?: "",
         )
 
-        AppointmentPlanMigrationTestSupport.verifyV8Migration(
+        AppointmentPlanMigrationTestSupport.verifyV9Migration(
             dataSource = dataSource,
             location = "classpath:db/migration/mysql",
         )
