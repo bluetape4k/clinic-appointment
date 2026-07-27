@@ -54,7 +54,7 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 | `AppointmentEventLogs` | Exposed 테이블 — event_type, appointment_id, payload_json, occurred_at |
 | `PurchaseCompletedIngress` | 신뢰, 입력 제한, version proof, 환자 참조 보호 경계 |
 | `PurchaseCompletedHandler` | 중복·gap 판정을 포함한 inbox/plan/outbox 원자 수렴 |
-| `PurchaseEventRedriveService` | 신뢰 검증을 우회하지 않는 exact-event dry-run·지정 redrive |
+| `PurchaseEventRedriveService` | 전체 identity 확인, 행위자/사유, release 승인 참조, append-only audit를 강제하는 exact-quarantine dry-run·승인 redrive |
 
 ## 이벤트 발행/구독 흐름
 

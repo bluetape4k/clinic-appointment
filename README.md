@@ -29,6 +29,9 @@ notifications, Spring Boot APIs, and an Angular frontend.
 - **Appointment plan foundation** - Snapshots a purchased product BOM into immutable treatment obligations through catalog sync and trusted purchase-event convergence, before any visit is scheduled.
 - **Angular 18 web UI** - Provides appointment search, creation, and status-change workflows.
 
+Catalog sync callers can reproduce `payloadHash` from the canonical hash
+contract and fixture in [docs/api/catalog-payload-hash.md](docs/api/catalog-payload-hash.md).
+
 ### Appointment Plan Boundary
 
 An `AppointmentPlan` records what the clinic owes for one purchase. A visit
