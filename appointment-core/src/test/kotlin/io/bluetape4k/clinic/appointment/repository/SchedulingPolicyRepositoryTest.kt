@@ -19,12 +19,24 @@ import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyScopeHeads
 import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
+import org.jetbrains.exposed.v1.core.Transaction
+import org.jetbrains.exposed.v1.core.statements.StatementContext
+import org.jetbrains.exposed.v1.core.statements.StatementInterceptor
+import org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import java.time.Instant
 
+/**
+ * 버전 정책 영속성의 잠금 순서·반개구간·불변 snapshot 계약을 데이터베이스 방언별로 검증한다.
+ *
+ * 호출자 소유 트랜잭션 안에서 tenant 스코프를 clinic보다 먼저 잠그고, revision CAS와 generation
+ * 증가를 분리하며, `effectiveFrom <= at < effectiveUntil`인 `ACTIVE` 정의만 선택하는지
+ * 확인한다. 같은 scoped hash는 최초 canonical bytes를 보존하고 과거 예약 증거를 갱신하지
+ * 않아야 한다.
+ */
 class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
 
     private val repository = SchedulingPolicyRepository()
@@ -93,6 +105,107 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
             assertFailsWith<PolicyScopeHeadConflictException> {
                 repository.compareAndIncrementGeneration(tenantScope, expectedRevision = 0L)
             }
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `authoritative head reads do not bootstrap and active selection uses half open boundaries`(testDB: TestDB) {
+        withPolicyTables(testDB) {
+            val tenantScope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
+            val from = Instant.parse("2026-07-27T00:00:00Z")
+            val until = from.plusSeconds(3_600)
+
+            repository.findScopeHead(tenantScope).shouldBeNull()
+            repository.lockScopeHead(tenantScope)
+            repository.findScopeHead(tenantScope).shouldNotBeNull().generation shouldBeEqualTo 0L
+
+            repository.createDefinition(
+                definition(
+                    lifecycle = PolicyLifecycle.ACTIVE,
+                    effectiveFrom = from,
+                    effectiveUntil = until,
+                )
+            )
+            repository.createDefinition(
+                definition(
+                    version = 2L,
+                    lifecycle = PolicyLifecycle.SCHEDULED,
+                    effectiveFrom = until,
+                    effectiveUntil = null,
+                )
+            )
+
+            repository.findActiveDefinitionAt(
+                tenantScope,
+                SchedulingPolicyKind.BOOKING_COMMITMENT,
+                from,
+            ).shouldNotBeNull().version shouldBeEqualTo 1L
+            repository.findActiveDefinitionAt(
+                tenantScope,
+                SchedulingPolicyKind.BOOKING_COMMITMENT,
+                until.minusNanos(1),
+            ).shouldNotBeNull().version shouldBeEqualTo 1L
+            repository.findActiveDefinitionAt(
+                tenantScope,
+                SchedulingPolicyKind.BOOKING_COMMITMENT,
+                until,
+            ).shouldBeNull()
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `bulk active lookup binds each policy kind to its exact evaluation instant`(testDB: TestDB) {
+        withPolicyTables(testDB) {
+            val scope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
+            val decisionAt = Instant.parse("2026-01-01T00:00:00Z")
+            val serviceAt = Instant.parse("2027-01-01T00:00:00Z")
+            repository.createDefinition(
+                definition(
+                    kind = SchedulingPolicyKind.BOOKING_COMMITMENT,
+                    lifecycle = PolicyLifecycle.ACTIVE,
+                    effectiveFrom = decisionAt.minusSeconds(86_400),
+                    effectiveUntil = decisionAt.plusSeconds(86_400),
+                )
+            )
+            repository.createDefinition(
+                definition(
+                    kind = SchedulingPolicyKind.BOOKING_COMMITMENT,
+                    version = 2L,
+                    lifecycle = PolicyLifecycle.ACTIVE,
+                    effectiveFrom = Instant.parse("2026-06-01T00:00:00Z"),
+                    effectiveUntil = Instant.parse("2026-07-01T00:00:00Z"),
+                )
+            )
+            repository.createDefinition(
+                definition(
+                    kind = SchedulingPolicyKind.CAPACITY_AND_OVERBOOKING,
+                    lifecycle = PolicyLifecycle.ACTIVE,
+                    effectiveFrom = serviceAt.minusSeconds(86_400),
+                    effectiveUntil = serviceAt.plusSeconds(86_400),
+                )
+            )
+            val capture = SqlStatementCapture()
+            registerInterceptor(capture)
+
+            val active = repository.findActiveDefinitionsAt(
+                scope,
+                mapOf(
+                    SchedulingPolicyKind.BOOKING_COMMITMENT to decisionAt,
+                    SchedulingPolicyKind.CAPACITY_AND_OVERBOOKING to serviceAt,
+                )
+            )
+
+            active.keys shouldBeEqualTo setOf(
+                SchedulingPolicyKind.BOOKING_COMMITMENT,
+                SchedulingPolicyKind.CAPACITY_AND_OVERBOOKING,
+            )
+            val sql = capture.statements.last {
+                it.startsWith("select") && SchedulingPolicyDefinitions.tableName in it
+            }
+            Regex("effective_from[^<]{0,16}<=").findAll(sql).count() shouldBeEqualTo 2
+            Regex("policy_kind[^=]{0,16}=").findAll(sql).count() shouldBeEqualTo 2
         }
     }
 
@@ -281,6 +394,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
     private fun definition(
         scope: PolicyScope = PolicyScope.TENANT_DEFAULT,
         clinicId: Long? = null,
+        kind: SchedulingPolicyKind = SchedulingPolicyKind.BOOKING_COMMITMENT,
         version: Long = 1L,
         lifecycle: PolicyLifecycle = PolicyLifecycle.DRAFT,
         effectiveFrom: Instant = Instant.parse("2026-07-27T00:00:00Z"),
@@ -289,7 +403,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
         tenantGroupId = 1L,
         scope = scope,
         clinicId = clinicId,
-        kind = SchedulingPolicyKind.BOOKING_COMMITMENT,
+        kind = kind,
         version = version,
         schemaVersion = 1,
         lifecycle = lifecycle,
@@ -314,4 +428,22 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
         assuranceLevel = "MFA",
         approvedAt = Instant.parse("2026-07-27T01:00:00Z"),
     )
+
+    /**
+     * repository가 생성한 SQL만 수집하여 정책 종류별 정확한 시각 predicate가 DB 경계에
+     * 유지되는지 검증한다. bind 값이나 SQL은 테스트 assertion에만 사용하고 로그로 남기지 않는다.
+     */
+    private class SqlStatementCapture : StatementInterceptor {
+        val statements = mutableListOf<String>()
+
+        override fun afterExecution(
+            transaction: Transaction,
+            contexts: List<StatementContext>,
+            executedStatement: PreparedStatementApi,
+        ) {
+            contexts.firstOrNull()?.let { context ->
+                statements += context.sql(transaction).lowercase()
+            }
+        }
+    }
 }

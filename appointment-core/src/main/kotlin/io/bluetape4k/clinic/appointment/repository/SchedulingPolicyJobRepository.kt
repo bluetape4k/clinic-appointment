@@ -25,16 +25,16 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Caller-transaction persistence primitives for activation and preview workers.
+ * 정책 활성화 작업자와 영향도 미리보기 작업자가 사용하는 영속화 저장소입니다.
  *
- * Every method must execute inside a caller-owned Exposed `transaction {}`.
- * Claims are conditional updates and terminal/checkpoint writes are fenced by
- * the live lease owner. The constructor secret is used only to derive an
- * HMAC-SHA-256 idempotency hash; callers must inject a rotated secret from
- * protected configuration and must never log it.
+ * 모든 메서드는 호출자가 소유한 Exposed `transaction {}` 안에서 실행되어야 합니다.
+ * 작업 선점은 조건부 `UPDATE`로만 수행하며, 완료/누락/체크포인트 기록은 현재 lease
+ * 소유자로 한 번 더 fencing 됩니다. 생성자에 전달하는 비밀값은 원본 idempotency key를
+ * HMAC-SHA-256 digest로 바꾸는 용도로만 사용합니다. 호출자는 보호된 설정에서 주기적으로
+ * 교체되는 비밀값을 주입해야 하며, 이 값이나 원본 key를 로그에 남기면 안 됩니다.
  *
- * @param idempotencyHashSecret secret HMAC key with at least 16 bytes. The byte
- * array is defensively copied and is never exposed by this repository.
+ * @param idempotencyHashSecret 최소 16바이트의 HMAC 비밀 키입니다. 저장소는 byte array를
+ * 방어적으로 복사하며 외부로 다시 노출하지 않습니다.
  */
 class SchedulingPolicyJobRepository(
     idempotencyHashSecret: ByteArray,
@@ -46,11 +46,11 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
-     * Validates and HMAC-hashes a raw idempotency key.
+     * 원본 idempotency key를 검증한 뒤 HMAC digest로 변환합니다.
      *
-     * Accepted keys contain 1..128 ASCII letters, digits, `.`, `_`, `:`, `/`,
-     * or `-`. The returned lowercase hash is the only value suitable for
-     * persistence, logs, and responses.
+     * 허용되는 key는 1..128자의 ASCII 영문자, 숫자, `.`, `_`, `:`, `/`, `-`로만
+     * 구성됩니다. 반환되는 소문자 64자 hash만 저장, 로그, 응답에 사용할 수 있으며,
+     * 원본 key는 저장소 경계를 넘겨 보관하지 않습니다.
      */
     fun hashIdempotencyKey(rawKey: String): String {
         require(IDEMPOTENCY_KEY_REGEX.matches(rawKey)) {
@@ -62,11 +62,11 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
-     * Inserts a pending activation command.
+     * 대기 상태의 정책 활성화 명령을 생성합니다.
      *
-     * The unique boundary is tenant, scope, non-null clinic sentinel, and
-     * [SchedulingPolicyActivationCommandRecord.idempotencyKeyHash]. A duplicate
-     * hash therefore replays only inside the same authorized policy scope.
+     * 중복 판단 경계는 테넌트, 정책 범위, null이 아닌 병원 sentinel,
+     * [SchedulingPolicyActivationCommandRecord.idempotencyKeyHash]입니다. 따라서 같은
+     * digest가 재사용되더라도 동일하게 인가된 정책 범위 안에서만 재실행으로 취급됩니다.
      */
     fun createActivation(
         record: SchedulingPolicyActivationCommandRecord,
@@ -98,11 +98,11 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
-     * Returns one activation command visible in the caller-owned transaction.
+     * 호출자 트랜잭션에서 보이는 활성화 명령 하나를 조회합니다.
      *
-     * @param commandId Positive database identity.
-     * @return The stored command, or `null` when no row is visible. `null`
-     * conveys absence only and must not be interpreted as authorization denial.
+     * @param commandId 양수 데이터베이스 식별자입니다.
+     * @return 저장된 명령입니다. 보이는 행이 없으면 `null`을 반환합니다. `null`은 부재만
+     * 의미하며 인가 거부로 해석하면 안 됩니다.
      */
     fun findActivation(commandId: Long): SchedulingPolicyActivationCommandRecord? =
         SchedulingPolicyActivationCommands
@@ -112,16 +112,16 @@ class SchedulingPolicyJobRepository(
             ?.toSchedulingPolicyActivationCommandRecord()
 
     /**
-     * Finds the command occupying one scoped keyed-idempotency boundary.
+     * 특정 범위의 keyed-idempotency 경계를 점유한 명령을 조회합니다.
      *
-     * Lookup uses only the HMAC digest; the raw idempotency header is never
-     * accepted by this method, persisted, logged, or returned. The tenant,
-     * scope, and non-null clinic sentinel prevent a digest used in one clinic
-     * from disclosing or replaying a command in another scope.
+     * 조회에는 HMAC digest만 사용합니다. 이 메서드는 원본 idempotency header를 받지
+     * 않으며, 저장하거나 로그로 남기거나 반환하지도 않습니다. 테넌트, 정책 범위,
+     * null이 아닌 병원 sentinel을 함께 사용하므로 한 병원에서 사용된 digest가 다른 범위의
+     * 명령을 노출하거나 재실행하지 못합니다.
      *
-     * @param scope Exact authorized policy scope.
-     * @param idempotencyKeyHash Lowercase 64-character HMAC-SHA-256 digest.
-     * @return Existing command, or `null` when the scoped key is unused.
+     * @param scope 정확히 인가된 정책 범위입니다.
+     * @param idempotencyKeyHash 소문자 64자 HMAC-SHA-256 digest입니다.
+     * @return 기존 명령입니다. 해당 범위의 key가 사용되지 않았으면 `null`을 반환합니다.
      */
     fun findActivation(
         scope: PolicyScopeRef,
@@ -143,11 +143,11 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
-     * Claims an eligible activation command or reclaims an expired lease.
+     * 실행 가능한 활성화 명령을 선점하거나 만료된 lease를 재선점합니다.
      *
-     * [leaseUntil] must be later than [now]. The conditional update permits
-     * pending/retry rows whose `nextAttemptAt <= now`, plus claimed rows whose
-     * previous lease has expired. A non-expired owner cannot be displaced.
+     * [leaseUntil]은 [now]보다 이후여야 합니다. 조건부 갱신은 `nextAttemptAt <= now`인
+     * 대기/재시도 행과 기존 lease가 만료된 `CLAIMED` 행만 허용합니다. 아직 만료되지 않은
+     * 소유자는 다른 작업자가 밀어낼 수 없습니다.
      */
     fun claimDueActivation(
         commandId: Long,
@@ -179,10 +179,10 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
-     * Completes a claimed activation only for the live lease owner.
+     * 현재 lease 소유자에게만 선점된 활성화 명령의 완료 기록을 허용합니다.
      *
-     * A stale worker receives `false` and cannot overwrite generations or event
-     * identity produced by the current owner.
+     * 오래된 작업자는 `false`를 받으며, 현재 소유자가 만든 generation 또는 event 식별자를
+     * 덮어쓸 수 없습니다.
      */
     fun completeActivation(
         commandId: Long,
@@ -217,16 +217,16 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
-     * Marks a claimed activation terminally missed for the live lease owner.
+     * 현재 lease 소유자에게만 선점된 활성화 명령을 최종 누락 상태로 표시합니다.
      *
-     * A stale or wrong owner receives `false` and cannot erase a completed
-     * result. [errorCode] is a stable sanitized operator code, never raw
-     * exception text, request JSON, actor data, claims, or an idempotency key.
-     * The source row remains immutable afterward; a human recovery creates a
-     * new command whose `replayOfCommandId` references this row.
+     * 오래되었거나 잘못된 소유자는 `false`를 받으며, 이미 완료된 결과를 지울 수 없습니다.
+     * [errorCode]는 운영자가 식별할 수 있는 안정적이고 정제된 코드여야 하며, 원본 예외
+     * 메시지, 요청 JSON, 행위자 정보, claim, idempotency key를 포함하면 안 됩니다.
+     * 이후 원본 행은 불변으로 남기고, 사람이 복구할 때는 이 행을 `replayOfCommandId`로
+     * 참조하는 새 명령을 생성합니다.
      *
-     * @param missedAt UTC transition instant that must precede the live lease
-     * expiry; an expired worker must reacquire a lease before deciding MISSED.
+     * @param missedAt UTC 기준 상태 전이 시각입니다. 현재 lease 만료보다 앞서야 하며,
+     * lease가 만료된 작업자는 MISSED 판단 전에 lease를 다시 획득해야 합니다.
      */
     fun markActivationMissed(
         commandId: Long,
@@ -256,10 +256,10 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
-     * Inserts an asynchronous impact-preview job.
+     * 비동기 영향도 미리보기 작업을 생성합니다.
      *
-     * The draft revision and generation pair are immutable inputs. Workers must
-     * compare them with authoritative state whenever a partition resumes.
+     * draft revision과 generation 쌍은 작업의 불변 입력입니다. 작업자는 partition을 재개할
+     * 때마다 이 값을 권위 있는 현재 상태와 비교해야 합니다.
      */
     fun createPreviewJob(record: SchedulingPolicyPreviewJobRecord): SchedulingPolicyPreviewJobRecord {
         validatePreview(record)
@@ -286,11 +286,11 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
-     * Returns one preview job visible in the caller-owned transaction.
+     * 호출자 트랜잭션에서 보이는 미리보기 작업 하나를 조회합니다.
      *
-     * @param jobId Positive database identity.
-     * @return The stored job, or `null` when no row is visible. `null` conveys
-     * absence only and must not be interpreted as authorization denial.
+     * @param jobId 양수 데이터베이스 식별자입니다.
+     * @return 저장된 작업입니다. 보이는 행이 없으면 `null`을 반환합니다. `null`은 부재만
+     * 의미하며 인가 거부로 해석하면 안 됩니다.
      */
     fun findPreviewJob(jobId: Long): SchedulingPolicyPreviewJobRecord? =
         SchedulingPolicyPreviewJobs
@@ -300,17 +300,16 @@ class SchedulingPolicyJobRepository(
             ?.toSchedulingPolicyPreviewJobRecord()
 
     /**
-     * Claims an eligible preview or reclaims an expired running lease.
+     * 실행 가능한 미리보기 작업을 선점하거나 만료된 실행 lease를 재선점합니다.
      *
-     * [leaseUntil] must be strictly after [now]. Eligible rows are either
-     * `PENDING` with `nextAttemptAt <= now`, or `RUNNING` with an existing
-     * `leaseUntil <= now`; both cases also require `deadlineAt > now`.
-     * A successful conditional update writes `RUNNING`, [owner], [leaseUntil],
-     * and the transition time in the caller-owned transaction.
+     * [leaseUntil]은 반드시 [now]보다 이후여야 합니다. 실행 가능한 행은
+     * `nextAttemptAt <= now`인 `PENDING` 행 또는 기존 `leaseUntil <= now`인 `RUNNING`
+     * 행이며, 두 경우 모두 `deadlineAt > now`여야 합니다. 조건부 갱신에 성공하면 호출자
+     * 트랜잭션 안에서 `RUNNING`, [owner], [leaseUntil], 전이 시각을 기록합니다.
      *
-     * @return `true` only when this caller won the conditional update. `false`
-     * means the row is missing, not yet due, still leased, past its deadline,
-     * in a terminal state, or was won concurrently.
+     * @return 이 호출자가 조건부 갱신에서 이긴 경우에만 `true`입니다. `false`는 행 부재,
+     * 아직 실행 시각 전, 유효한 lease 존재, deadline 경과, 종결 상태, 또는 동시 선점 패배를
+     * 의미합니다.
      */
     fun claimDuePreview(
         jobId: Long,
@@ -341,18 +340,18 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
-     * Persists a monotonic preview checkpoint for the live lease owner.
+     * 현재 lease 소유자의 단조 증가 미리보기 체크포인트를 저장합니다.
      *
-     * [PolicyPreviewCursor.partition] is zero-based, remains below the job's
-     * fixed partition count, and never moves backward. Its appointment ID is
-     * `null` only before the first row of a partition; otherwise it is positive
-     * and non-decreasing within that partition. Progress counters are
-     * non-negative and monotonic, with `affectedCount <= scannedCount`.
-     * Unchanged values are permitted for a heartbeat.
+     * [PolicyPreviewCursor.partition]은 0부터 시작하며 작업 생성 시 고정된 partition 수보다
+     * 작아야 하고 뒤로 이동할 수 없습니다. appointment ID는 partition의 첫 행을 읽기
+     * 전일 때만 `null`이며, 값이 있으면 양수이고 같은 partition 안에서 감소하지 않아야
+     * 합니다. 진행 카운터는 음수가 아니고 단조 증가해야 하며
+     * `affectedCount <= scannedCount`를 만족해야 합니다. heartbeat 목적의 동일 값 저장은
+     * 허용합니다.
      *
-     * @return `false` when the job is missing, is not `RUNNING`, the [owner] is
-     * stale, or a concurrent transition wins. Invalid or regressing cursor and
-     * progress supplied by the current owner throw [IllegalArgumentException].
+     * @return 작업이 없거나, `RUNNING` 상태가 아니거나, [owner]가 오래되었거나, 동시 전이가
+     * 먼저 성공하면 `false`입니다. 현재 소유자가 유효하지 않거나 후퇴하는 cursor/progress를
+     * 제공하면 [IllegalArgumentException]을 던집니다.
      */
     fun checkpointPreview(
         jobId: Long,

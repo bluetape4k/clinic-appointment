@@ -24,12 +24,12 @@ import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyPayload
 import java.time.Duration
 
 /**
- * Enforces schema-one scheduling-policy invariants at every trust boundary.
+ * 모든 trust boundary에서 schema-one scheduling-policy invariant를 강제합니다.
  *
- * Call this validator after strict JSON decoding, before canonical hashing,
- * before persistence, and again after tenant/clinic compilation. Data classes
- * intentionally remain copyable; central validation prevents `copy()` or a
- * future persistence adapter from becoming an invariant bypass.
+ * strict JSON decoding 이후, canonical hashing 이전, persistence 이전, tenant/clinic
+ * compilation 이후에 이 validator를 호출합니다. data class는 의도적으로 copy 가능하게
+ * 남겨 두므로, 중앙 validation이 `copy()` 또는 향후 persistence adapter가 invariant
+ * 우회 경로가 되는 것을 막습니다.
  */
 object SchedulingPolicyValidator {
     private val minimumRequestTtl: Duration = Duration.ofMinutes(5)
@@ -39,15 +39,14 @@ object SchedulingPolicyValidator {
     private val sha256 = Regex("[0-9a-f]{64}")
 
     /**
-     * Validates a complete definition envelope and its payload.
+     * 완전한 definition envelope와 payload를 validate합니다.
      *
-     * The check covers tenant/clinic identity coupling, positive versions and
-     * revisions, schema support, effective interval, canonical SHA-256 syntax,
-     * envelope/payload kind equality, audit reason bounds, and payload-specific
-     * safety rules.
+     * 검사 범위는 tenant/clinic identity coupling, 양수 version/revision, schema 지원,
+     * effective interval, canonical SHA-256 syntax, envelope/payload kind equality,
+     * audit reason bounds, payload별 safety rule입니다.
      *
-     * @return The same [definition] instance, enabling validated expression use.
-     * @throws IllegalArgumentException when any caller-supplied contract is invalid.
+     * @return 같은 [definition] instance입니다. 호출자는 validated expression으로 이어서 사용할 수 있습니다.
+     * @throws IllegalArgumentException caller가 제공한 계약 중 하나라도 유효하지 않을 때 발생합니다.
      */
     fun validate(definition: SchedulingPolicyDefinition): SchedulingPolicyDefinition {
         require(definition.tenantGroupId > 0L) { "tenantGroupId must be positive" }
@@ -78,16 +77,16 @@ object SchedulingPolicyValidator {
     }
 
     /**
-     * Validates one typed payload against its declared organizational scope.
+     * typed payload 하나를 선언된 organizational scope에 대해 validate합니다.
      *
-     * Complete policies are valid only at tenant scope. Override payloads are
-     * valid only at clinic scope. Required and safety fields reject
-     * [io.bluetape4k.clinic.appointment.model.policy.OverrideValue.Disable];
-     * set values must satisfy their documented units and ranges.
+     * complete policy는 tenant scope에서만 유효합니다. override payload는 clinic scope에서만
+     * 유효합니다. 필수 field와 safety field는
+     * [io.bluetape4k.clinic.appointment.model.policy.OverrideValue.Disable]을 거부합니다.
+     * `Set` 값은 각 속성 KDoc에 적힌 단위와 범위를 만족해야 합니다.
      *
-     * @return The same [payload] instance.
-     * @throws IllegalArgumentException when scope, override mode, range, or
-     * cross-field invariants are violated.
+     * @return 같은 [payload] instance입니다.
+     * @throws IllegalArgumentException scope, override mode, range, cross-field
+     * invariant를 위반할 때 발생합니다.
      */
     fun validatePayload(
         payload: SchedulingPolicyPayload,

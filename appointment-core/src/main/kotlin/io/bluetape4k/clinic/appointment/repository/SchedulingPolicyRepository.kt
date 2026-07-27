@@ -20,6 +20,7 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -33,22 +34,20 @@ import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import java.time.Instant
 
 /**
- * Caller-transaction persistence primitives for scheduling policies.
+ * 예약 정책을 저장하기 위한 호출자 트랜잭션 기반 영속성 프리미티브다.
  *
- * Every method must execute inside a caller-owned Exposed `transaction {}`.
- * This class intentionally does not open transactions because activation must
- * combine definition checks, scope-head CAS, snapshot/outbox writes, and
- * command completion atomically. Callers acquiring both scopes must use
- * [lockScopeHeads], which always locks tenant before clinic to avoid inversion.
+ * 모든 메서드는 호출자가 소유한 Exposed `transaction {}` 안에서 실행해야 한다. 활성화는
+ * 정의 검증, 스코프 헤드 CAS, 스냅샷·outbox 기록, 명령 완료를 하나의 원자적 작업으로
+ * 묶어야 하므로 이 클래스가 트랜잭션을 열지 않는다. 두 스코프를 함께 잠그는 호출자는 잠금
+ * 순서 역전을 막기 위해 항상 테넌트 다음 병원 순서로 잠그는 [lockScopeHeads]를 사용해야 한다.
  */
 class SchedulingPolicyRepository {
 
     /**
-     * Inserts one policy definition after validating its cross-dialect scope key.
+     * 데이터베이스 방언에 공통으로 적용되는 스코프 키를 검증한 뒤 정책 정의 하나를 삽입한다.
      *
-     * The unique definition identity is tenant, scope, non-null clinic sentinel,
-     * kind, and version. Published payload bytes must be represented by a new
-     * version rather than updated in place.
+     * 정의의 유일성은 테넌트, 스코프, non-null 병원 sentinel, 정책 종류, 버전의 조합이다.
+     * 공개한 payload 바이트는 제자리 수정하지 않고 반드시 새 버전으로 표현해야 한다.
      */
     fun createDefinition(record: SchedulingPolicyDefinitionRecord): SchedulingPolicyDefinitionRecord {
         validateDefinitionRecord(record)
@@ -75,11 +74,11 @@ class SchedulingPolicyRepository {
     }
 
     /**
-     * Returns a definition visible in the caller-owned transaction.
+     * 호출자 소유 트랜잭션에서 보이는 정의를 반환한다.
      *
-     * @param definitionId Positive database identity.
-     * @return The immutable definition, or `null` when no row is visible.
-     * Absence does not by itself mean the current actor is unauthorized.
+     * @param definitionId 양수 데이터베이스 식별자.
+     * @return 불변 정의. 현재 트랜잭션에서 행이 보이지 않으면 `null`이다. 조회 결과가 없다는
+     * 사실만으로 현재 행위자에게 권한이 없다고 판단하면 안 된다.
      */
     fun findDefinition(definitionId: Long): SchedulingPolicyDefinitionRecord? =
         SchedulingPolicyDefinitions
@@ -89,16 +88,14 @@ class SchedulingPolicyRepository {
             ?.toSchedulingPolicyDefinitionRecord()
 
     /**
-     * Returns the next positive definition version inside one scope and kind.
+     * 하나의 스코프와 정책 종류 안에서 다음 양수 정의 버전을 반환한다.
      *
-     * This is a lock-dependent allocation helper, not a globally safe sequence.
-     * The caller must hold [lockScopeHead] for [scope] until the new definition
-     * and corresponding scope revision are committed. Without that lock, two
-     * creators may observe the same value and one will lose at the unique
-     * constraint.
+     * 전역적으로 안전한 sequence가 아니라 스코프 잠금을 전제로 한 할당 도우미다. 호출자는 새
+     * 정의와 대응하는 스코프 revision이 커밋될 때까지 [scope]의 [lockScopeHead] 잠금을
+     * 유지해야 한다. 잠금이 없으면 두 생성자가 같은 값을 읽고 한쪽이 유일성 제약에서 실패한다.
      *
-     * @return `1` when no definition exists, otherwise the greatest persisted
-     * version plus one. Retired definitions remain part of the sequence.
+     * @return 기존 정의가 없으면 `1`, 있으면 영속화된 최대 버전에 1을 더한 값. 퇴역한 정의도
+     * 버전 계보에 계속 포함한다.
      */
     fun nextDefinitionVersion(
         scope: PolicyScopeRef,
@@ -120,25 +117,23 @@ class SchedulingPolicyRepository {
             ?: 1L
 
     /**
-     * Replaces editable draft content iff the caller still owns [expectedRevision].
+     * 호출자가 [expectedRevision]을 계속 소유할 때만 편집 가능한 초안 내용을 교체한다.
      *
-     * The definition identity, version, scope, kind, and creator audit remain
-     * immutable. A successful compare-and-set increments the revision exactly
-     * once, which makes approvals and preview evidence bound to the prior
-     * revision stale without deleting their audit rows. This method does not
-     * open or commit a transaction; callers own the surrounding Exposed
-     * `transaction {}` and all related validation or outbox work.
+     * 정의 식별자, 버전, 스코프, 종류, 생성자 감사정보는 불변이다. CAS 성공 시 revision을
+     * 정확히 한 번 증가시켜 이전 revision에 묶인 승인과 미리보기 증거를 무효화하되 감사 행은
+     * 삭제하지 않는다. 이 메서드는 트랜잭션을 열거나 커밋하지 않으며 호출자가 주변 Exposed
+     * `transaction {}`과 관련 검증·outbox 작업을 소유한다.
      *
-     * @param definitionId Positive draft identity.
-     * @param expectedRevision Positive revision read by the caller.
-     * @param schemaVersion Positive closed payload schema version.
-     * @param effectiveFrom Inclusive UTC policy boundary.
-     * @param effectiveUntil Exclusive UTC boundary, or `null` for no upper end.
-     * @param payloadHash Lowercase SHA-256 of canonical payload bytes.
-     * @param payloadJson Canonical payload JSON, limited to 256 KiB UTF-8.
-     * @param changeReason Non-secret operator rationale of 1..1000 characters.
-     * @return The new draft revision, or `null` when the definition is absent,
-     * no longer `DRAFT`, or its revision is stale.
+     * @param definitionId 양수 초안 식별자.
+     * @param expectedRevision 호출자가 읽은 양수 revision.
+     * @param schemaVersion 폐쇄형 payload의 양수 schema 버전.
+     * @param effectiveFrom 정책 적용 구간의 포함 UTC 시작 시각.
+     * @param effectiveUntil 정책 적용 구간의 제외 UTC 종료 시각. 상한이 없으면 `null`.
+     * @param payloadHash 정규 payload 바이트의 소문자 SHA-256.
+     * @param payloadJson 최대 256 KiB UTF-8인 정규 payload JSON.
+     * @param changeReason 비밀정보를 포함하지 않는 1..1000자 운영자 변경 사유.
+     * @return 수정된 새 초안 revision. 정의가 없거나 더 이상 `DRAFT`가 아니거나 revision이
+     * 오래되었으면 `null`.
      */
     @Suppress("LongParameterList")
     fun compareAndReviseDraft(
@@ -181,18 +176,16 @@ class SchedulingPolicyRepository {
     }
 
     /**
-     * Changes lifecycle iff revision and current state still match.
+     * revision과 현재 상태가 모두 일치할 때만 수명 주기를 변경한다.
      *
-     * Allowed transitions are `DRAFT -> SCHEDULED|ACTIVE|RETIRED`,
-     * `SCHEDULED -> ACTIVE|RETIRED`, and `ACTIVE -> RETIRED`. The retirement
-     * paths preserve definition, approval, command, snapshot, and outbox rows.
-     * Callers must hold the matching scope-head lock while publishing or
-     * replacing an active definition; this primitive intentionally does not
-     * acquire locks or increment generations on its own.
+     * 허용 전이는 `DRAFT -> SCHEDULED|ACTIVE|RETIRED`,
+     * `SCHEDULED -> ACTIVE|RETIRED`, `ACTIVE -> RETIRED`다. 퇴역 경로에서도 정의,
+     * 승인, 명령, 스냅샷, outbox 행을 보존한다. 활성 정의를 공개하거나 교체하는 호출자는
+     * 일치하는 스코프 헤드 잠금을 유지해야 하며, 이 프리미티브는 자체적으로 잠금을 획득하거나
+     * 세대를 증가시키지 않는다.
      *
-     * @return The transitioned definition, or `null` for an absent row, stale
-     * revision, or state mismatch. Unsupported transition pairs are programming
-     * errors and fail before SQL execution.
+     * @return 전이된 정의. 행이 없거나 revision이 오래되었거나 현재 상태가 다르면 `null`.
+     * 지원하지 않는 전이 조합은 프로그래밍 오류로 SQL 실행 전에 실패한다.
      */
     fun compareAndTransitionLifecycle(
         definitionId: Long,
@@ -216,10 +209,10 @@ class SchedulingPolicyRepository {
     }
 
     /**
-     * Appends approval evidence for exactly one draft revision and actor.
+     * 정확한 초안 revision과 행위자 한 명에 대한 승인 증거를 추가한다.
      *
-     * Duplicate actor approval for the same revision is rejected by the
-     * database. Approvals from older revisions remain queryable but stale.
+     * 같은 revision에 같은 행위자가 중복 승인하면 데이터베이스 유일성 제약으로 거부한다.
+     * 이전 revision의 승인은 감사 목적으로 조회할 수 있지만 현재 승인으로 사용할 수 없다.
      */
     fun addApproval(record: SchedulingPolicyApprovalRecord): SchedulingPolicyApprovalRecord {
         require(record.definitionId > 0) { "definitionId must be positive" }
@@ -246,14 +239,12 @@ class SchedulingPolicyRepository {
     }
 
     /**
-     * Returns approval evidence visible for one exact draft revision.
+     * 정확한 초안 revision 하나에 대해 현재 트랜잭션에서 보이는 승인 증거를 반환한다.
      *
-     * @param definitionId Positive definition identity.
-     * @param draftRevision Positive revision whose evidence remains valid only
-     * while the definition is still at that revision.
-     * @return Evidence in stable insertion order, or an empty list when none is
-     * visible. An empty list does not by itself distinguish absence from
-     * insufficient authorization; the command layer owns that decision.
+     * @param definitionId 양수 정의 식별자.
+     * @param draftRevision 정의가 동일 revision에 머무는 동안에만 유효한 양수 증거 revision.
+     * @return 안정된 삽입 순서의 증거 목록. 보이는 증거가 없으면 빈 목록이다. 빈 목록만으로
+     * 행 부재와 권한 부족을 구분하지 않으며 그 판단은 명령 계층이 소유한다.
      */
     fun findApprovals(
         definitionId: Long,
@@ -269,11 +260,11 @@ class SchedulingPolicyRepository {
             .map { it.toSchedulingPolicyApprovalRecord() }
 
     /**
-     * Bootstraps and locks the scope serialization row.
+     * 스코프 직렬화 행을 초기화하고 잠근다.
      *
-     * `insertIgnore` makes first access race-safe. The subsequent `FOR UPDATE`
-     * lock must remain held by the caller transaction through all overlap,
-     * generation, snapshot, command-result, and outbox writes.
+     * `insertIgnore`로 최초 접근 경쟁을 안전하게 처리한다. 이어서 획득한 `FOR UPDATE`
+     * 잠금은 중첩 구간, 세대, 스냅샷, 명령 결과, outbox 쓰기가 모두 끝날 때까지 호출자
+     * 트랜잭션이 유지해야 한다.
      */
     fun lockScopeHead(scope: PolicyScopeRef): SchedulingPolicyScopeHeadRecord {
         bootstrapScopeHead(scope)
@@ -286,10 +277,10 @@ class SchedulingPolicyRepository {
     }
 
     /**
-     * Locks distinct scopes in deterministic tenant-before-clinic order.
+     * 서로 다른 스코프를 항상 테넌트 다음 병원 순서로 잠근다.
      *
-     * Passing clinic first does not change lock order. Duplicate references are
-     * collapsed so the same row is never acquired twice.
+     * 병원 스코프를 먼저 전달해도 실제 잠금 순서는 바뀌지 않는다. 중복 참조는 제거하여 같은
+     * 행을 두 번 획득하지 않는다.
      */
     fun lockScopeHeads(vararg scopes: PolicyScopeRef): List<SchedulingPolicyScopeHeadRecord> =
         scopes
@@ -298,15 +289,32 @@ class SchedulingPolicyRepository {
             .map(::lockScopeHead)
 
     /**
-     * Advances the optimistic scope revision without changing effective generation.
+     * 스코프 헤드를 새로 만들거나 잠그지 않고 읽는다.
      *
-     * Draft creation and scheduling mutate administrative scope state but do
-     * not change the effective policy selected by schedulers. They therefore
-     * advance [SchedulingPolicyScopeHeadRecord.revision] exactly once while
-     * preserving [SchedulingPolicyScopeHeadRecord.generation]. The caller must
-     * already hold the matching scope-head lock through all related writes.
+     * 캐시 조회 전에 수행하는 권위 최신성 조회다. 테넌트 헤드가 없으면 완전한 유효 테넌트
+     * 기본 정책이 아직 존재하지 않는다는 뜻이다. 병원별 재정의는 선택 사항이므로 병원 헤드가
+     * 없으면 호출자가 세대 `0`으로 해석할 수 있다.
      *
-     * @throws PolicyScopeHeadConflictException when [expectedRevision] is stale.
+     * @param scope 정확한 테넌트 또는 병원 정책 스코프.
+     * @return 현재 스코프 헤드 레코드. 한 번도 초기화하지 않은 스코프면 `null`이다. 반환값은
+     * 특정 시점의 관측값이며 이후 트랜잭션까지 동일함을 보장하지 않는다.
+     */
+    fun findScopeHead(scope: PolicyScopeRef): SchedulingPolicyScopeHeadRecord? =
+        SchedulingPolicyScopeHeads
+            .selectAll()
+            .where { scopeHeadPredicate(scope) }
+            .singleOrNull()
+            ?.toSchedulingPolicyScopeHeadRecord()
+
+    /**
+     * 유효 정책 세대는 유지하면서 낙관적 스코프 revision만 증가시킨다.
+     *
+     * 초안 생성과 활성화 예약은 관리 상태를 바꾸지만 스케줄러가 선택하는 유효 정책은 바꾸지
+     * 않는다. 따라서 [SchedulingPolicyScopeHeadRecord.generation]은 유지하고
+     * [SchedulingPolicyScopeHeadRecord.revision]만 정확히 한 번 증가시킨다. 호출자는 관련
+     * 쓰기가 끝날 때까지 일치하는 스코프 헤드 잠금을 이미 보유해야 한다.
+     *
+     * @throws PolicyScopeHeadConflictException [expectedRevision]이 오래되었을 때.
      */
     fun compareAndIncrementRevision(
         scope: PolicyScopeRef,
@@ -331,10 +339,10 @@ class SchedulingPolicyRepository {
     }
 
     /**
-     * Advances both revision and generation iff [expectedRevision] is current.
+     * [expectedRevision]이 현재 값일 때만 revision과 generation을 함께 증가시킨다.
      *
-     * The scope row is locked first. A mismatch throws
-     * [PolicyScopeHeadConflictException] and changes no counter.
+     * 먼저 스코프 행을 잠근다. revision이 다르면 [PolicyScopeHeadConflictException]을
+     * 던지고 어떤 카운터도 변경하지 않는다.
      */
     fun compareAndIncrementGeneration(
         scope: PolicyScopeRef,
@@ -360,11 +368,10 @@ class SchedulingPolicyRepository {
     }
 
     /**
-     * Finds active or scheduled definitions whose half-open validity interval
-     * overlaps `[from, until)`. A null [until] means an unbounded query end.
+     * 반개구간 유효 범위가 `[from, until)`과 겹치는 활성 또는 활성화 예정 정의를 찾는다.
      *
-     * Callers must hold the matching scope-head lock before using this result to
-     * decide an activation winner.
+     * [until]이 `null`이면 조회 종료 상한이 없다. 호출자는 이 결과로 활성화 승자를 결정하기
+     * 전에 일치하는 스코프 헤드 잠금을 보유해야 한다.
      */
     fun findOverlappingPublishedDefinitions(
         scope: PolicyScopeRef,
@@ -398,33 +405,105 @@ class SchedulingPolicyRepository {
     }
 
     /**
-     * Inserts or reuses an immutable snapshot by scoped canonical hash.
+     * 하나의 UTC 평가 시각에 적용되는 활성 정의 하나를 선택한다.
      *
-     * If the hash already exists, the original bytes and generation metadata
-     * win. This makes retry behavior idempotent and prevents an update path from
-     * rewriting historical scheduling evidence.
+     * `effectiveFrom <= evaluationAt < effectiveUntil`인 반개구간으로 적용 가능 여부를
+     * 판단하며 종료 시각이 `null`이면 끝이 없는 구간이다. 활성화 트랜잭션이 스코프 세대를
+     * 증가시키기 전까지 `SCHEDULED` 정의는 의도적으로 제외한다. 이 규칙은 미래 정의가
+     * 승인·활성화를 우회하거나 아직 그 정의를 대표하지 않는 세대로 캐시되는 것을 막는다.
      *
-     * @param tenantGroupId Positive tenant boundary of every source definition.
-     * @param clinicId Positive clinic for which the decision was compiled.
-     * @param decisionAt UTC instant when the decision was evaluated.
-     * @param serviceAt UTC service instant; it must not precede [decisionAt].
-     * @param tenantGeneration Positive tenant scope generation rechecked by the
-     * compiler.
-     * @param clinicGeneration Non-negative clinic scope generation; `0` means
-     * no clinic override generation has yet been activated.
-     * @param sourceVersionsJson Canonical JSON map of contributing definition
-     * versions by policy kind.
-     * @param sourceByPathJson Canonical JSON map from compiled leaf path to its
-     * platform, tenant, or clinic source.
-     * @param disabledFeaturesJson Canonical sorted JSON array of paths explicitly
-     * disabled by an override.
-     * @param warningsJson Canonical ordered JSON array of customer-safe compiler
-     * warnings.
-     * @param payloadJson Canonical compiled-policy JSON used by scheduling
-     * decisions; it contains no actor credentials or idempotency key.
-     * @param snapshotHash Lowercase 64-character SHA-256 covering scope, times,
-     * generations, source evidence, warnings, disabled paths, and payload.
-     * @return Existing or newly inserted immutable snapshot for the scoped hash.
+     * @param scope 정확한 테넌트 또는 병원 정책 스코프.
+     * @param kind 선택할 폐쇄형 정책 영역.
+     * @param evaluationAt 정책 종류가 지정한 UTC 평가 시각.
+     * @return 적용 가능한 활성 정의. 없으면 `null`이다.
+     * @throws IllegalArgumentException 활성 정의가 둘 이상 적용되어 활성화 불변식이 깨졌을 때.
+     */
+    fun findActiveDefinitionAt(
+        scope: PolicyScopeRef,
+        kind: SchedulingPolicyKind,
+        evaluationAt: Instant,
+    ): SchedulingPolicyDefinitionRecord? =
+        findActiveDefinitionsAt(scope, mapOf(kind to evaluationAt))[kind]
+
+    /**
+     * 여러 정책 종류의 활성 정의를 하나의 스코프 쿼리로 선택한다.
+     *
+     * 쿼리는 정확한 테넌트/스코프 키와 `ACTIVE` 수명 주기에 더해, 각 정책 종류를 그 종류가
+     * 사용하는 평가 시각의 반개구간 predicate와 직접 결합한다. 예를 들어 의사결정 시각과
+     * 시술 시각이 수개월 떨어져 있어도 그 사이의 관계없는 활성 이력을 JVM으로 가져오지
+     * 않는다. 요청 종류 수는 폐쇄형 [SchedulingPolicyKind] 개수로 제한되므로 OR predicate
+     * 크기도 고정 상한을 가진다. 메모리 재검사는 데이터베이스 이상으로 같은 종류·시각에
+     * 둘 이상의 활성 행이 반환된 경우를 닫힌 실패로 검출하기 위한 방어선이다.
+     *
+     * @param scope 정확한 테넌트 또는 병원 정책 스코프.
+     * @param evaluationAtByKind 요청한 정책 종류와 해당 종류의 의사결정 시점 또는 시술 시점
+     * UTC 시각을 연결한 비어 있지 않은 맵.
+     * @return 종류별 적용 가능한 활성 정의. 키가 없으면 그 종류의 평가 시각에 적용 가능한 활성
+     * 정의가 없다는 뜻이다.
+     * @throws IllegalArgumentException 요청 종류가 없거나 같은 종류에 적용 가능한 활성 행이 둘
+     * 이상일 때.
+     */
+    fun findActiveDefinitionsAt(
+        scope: PolicyScopeRef,
+        evaluationAtByKind: Map<SchedulingPolicyKind, Instant>,
+    ): Map<SchedulingPolicyKind, SchedulingPolicyDefinitionRecord> {
+        require(evaluationAtByKind.isNotEmpty()) { "evaluationAtByKind must not be empty" }
+        val exactEvaluationPredicate = evaluationAtByKind
+            .map { (kind, evaluationAt) ->
+                (SchedulingPolicyDefinitions.policyKind eq kind) and
+                    (SchedulingPolicyDefinitions.effectiveFrom lessEq evaluationAt) and
+                    (
+                        SchedulingPolicyDefinitions.effectiveUntil.isNull() or
+                            (SchedulingPolicyDefinitions.effectiveUntil greater evaluationAt)
+                    )
+            }
+            .reduce { aggregate, predicate -> aggregate or predicate }
+        val activeDefinitions = SchedulingPolicyDefinitions
+            .selectAll()
+            .where {
+                (SchedulingPolicyDefinitions.tenantGroupId eq scope.tenantGroupId) and
+                    (SchedulingPolicyDefinitions.scope eq scope.scope) and
+                    (SchedulingPolicyDefinitions.clinicScopeKey eq scope.clinicScopeKey) and
+                    (SchedulingPolicyDefinitions.lifecycle eq PolicyLifecycle.ACTIVE) and
+                    exactEvaluationPredicate
+            }
+            .map { it.toSchedulingPolicyDefinitionRecord() }
+        return evaluationAtByKind.mapNotNull { (kind, evaluationAt) ->
+            val matches = activeDefinitions.filter { definition ->
+                definition.kind == kind &&
+                    !evaluationAt.isBefore(definition.effectiveFrom) &&
+                    (definition.effectiveUntil == null || evaluationAt < definition.effectiveUntil)
+            }
+            require(matches.size <= 1) {
+                "multiple active definitions exist for one policy scope, kind, and instant"
+            }
+            matches.singleOrNull()?.let { kind to it }
+        }.toMap()
+    }
+
+    /**
+     * 스코프 범위의 정규 해시를 기준으로 불변 스냅샷을 삽입하거나 기존 행을 재사용한다.
+     *
+     * 같은 해시가 이미 있으면 최초로 저장한 바이트와 세대 메타데이터를 유지한다. 이 규칙은
+     * 재시도를 멱등하게 만들고 갱신 경로가 과거 예약 결정 증거를 다시 쓰는 것을 막는다.
+     *
+     * @param tenantGroupId 모든 원본 정의가 속한 양수 테넌트 경계.
+     * @param clinicId 정책 결정을 컴파일한 양수 병원 식별자.
+     * @param decisionAt 의사결정 정책을 평가한 UTC 시각.
+     * @param serviceAt 시술 시점 정책을 평가한 UTC 시각. [decisionAt]보다 빠를 수 없다.
+     * @param tenantGeneration 컴파일러가 재확인한 양수 테넌트 스코프 세대.
+     * @param clinicGeneration 0 이상의 병원 스코프 세대. `0`은 병원 재정의 세대가 아직 한
+     * 번도 활성화되지 않았다는 뜻이다.
+     * @param sourceVersionsJson 정책 종류별 기여 정의 버전의 정규 JSON 맵.
+     * @param sourceByPathJson 컴파일된 leaf 경로와 platform·tenant·clinic 원본을 연결한
+     * 정규 JSON 맵.
+     * @param disabledFeaturesJson 재정의가 명시적으로 비활성화한 경로의 정렬된 정규 JSON 배열.
+     * @param warningsJson 고객에게 안전한 컴파일러 경고의 순서 있는 정규 JSON 배열.
+     * @param payloadJson 예약 판단에 사용하는 정규 컴파일 정책 JSON. 행위자 인증정보나
+     * 멱등 키를 포함하지 않는다.
+     * @param snapshotHash 스코프, 시각, 세대, 원본 증거, 경고, 비활성 경로, payload를
+     * 포함해 계산한 64자 소문자 SHA-256.
+     * @return 같은 스코프 해시로 이미 존재하거나 새로 삽입한 불변 스냅샷.
      */
     @Suppress("LongParameterList")
     fun saveSnapshot(
@@ -468,13 +547,13 @@ class SchedulingPolicyRepository {
     }
 
     /**
-     * Returns one immutable snapshot visible for an exact scoped hash.
+     * 정확한 스코프 해시로 현재 트랜잭션에서 보이는 불변 스냅샷 하나를 반환한다.
      *
-     * @param tenantGroupId Positive tenant boundary.
-     * @param clinicId Positive clinic boundary.
-     * @param snapshotHash Lowercase 64-character canonical snapshot SHA-256.
-     * @return The snapshot, or `null` when no row is visible in the current
-     * caller-owned transaction. `null` is not an authorization verdict.
+     * @param tenantGroupId 양수 테넌트 경계.
+     * @param clinicId 양수 병원 경계.
+     * @param snapshotHash 64자 소문자 정규 스냅샷 SHA-256.
+     * @return 스냅샷. 호출자 소유 트랜잭션에서 행이 보이지 않으면 `null`이다. `null`은
+     * 권한 판정 결과가 아니다.
      */
     fun findSnapshot(
         tenantGroupId: Long,
@@ -608,11 +687,11 @@ class SchedulingPolicyRepository {
 }
 
 /**
- * Optimistic scope-head mismatch.
+ * 스코프 헤드의 낙관적 revision 불일치를 나타내는 예외다.
  *
- * @property scope Scope whose revision changed.
- * @property expectedRevision Revision supplied by the caller.
- * @property actualRevision Revision observed under row lock.
+ * @property scope 직렬화 revision이 변경된 신뢰된 스코프.
+ * @property expectedRevision 호출자가 제공한 예상 revision.
+ * @property actualRevision 행 잠금을 보유한 상태에서 실제로 관측한 revision.
  */
 class PolicyScopeHeadConflictException(
     val scope: PolicyScopeRef,

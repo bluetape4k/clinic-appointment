@@ -9,96 +9,94 @@ import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.timestamp
 
 /**
- * Generic durable scheduling events waiting for downstream publication.
+ * downstream publication을 기다리는 generic durable scheduling event 테이블이다.
  *
- * New writers always populate [aggregateType] and [aggregateId]. The columns
- * remain nullable only for rolling compatibility with pre-V9 writers, and
- * [SchedulingEventRepository.readOutboxDualWriteConvergence] must report zero
- * missing identities before a later migration makes them mandatory.
+ * 새 writer는 항상 [aggregateType]과 [aggregateId]를 채운다. 이 column들이 nullable로
+ * 남아 있는 이유는 pre-V9 writer와의 rolling compatibility뿐이다. 이후 migration에서
+ * mandatory로 전환하기 전에는 [SchedulingEventRepository.readOutboxDualWriteConvergence]가
+ * missing identity 0건을 보고해야 한다.
  *
- * Event-driven plan rows preserve [causationEventId], [clinicId], and [planId].
- * Command-driven tenant policy rows legitimately leave all three `null`; they
- * use [correlationId] for trace continuity without inventing event lineage.
+ * event-driven plan row는 [causationEventId], [clinicId], [planId]를 보존한다.
+ * command-driven tenant policy row는 세 값이 모두 `null`일 수 있으며, event lineage를
+ * 꾸며내지 않고 trace continuity를 위해 [correlationId]를 사용한다.
  */
 object SchedulingOutboxEvents : LongIdTable("scheduling_outbox_events") {
-    /** Stable deterministic event identity used for publisher deduplication. */
+    /** publisher deduplication에 사용하는 안정적인 deterministic event identity. */
     val eventId = varchar("event_id", 128)
 
     /**
-     * Real upstream event identity, or `null` for command-driven events.
+     * 실제 upstream event identity. command-driven event이면 `null`.
      *
-     * Correlation IDs and this event's own ID must never be substituted for a
-     * missing cause because that would falsify event lineage.
+     * correlation ID나 이 event의 자체 ID를 누락된 cause 대신 넣으면 event lineage를
+     * 허위로 만들게 되므로 절대 대체하지 않는다.
      */
     val causationEventId = varchar("causation_event_id", 128).nullable()
 
-    /** Bounded request/workflow trace identifier; it is not a causation ID. */
+    /** 길이가 제한된 request/workflow trace identifier. causation ID가 아니다. */
     val correlationId = varchar("correlation_id", 128)
 
-    /** Closed consumer-facing event contract name. */
+    /** consumer-facing event contract의 닫힌 이름. */
     val eventType = varchar("event_type", 128)
 
-    /** Required tenant ownership boundary for every outbox row. */
+    /** 모든 outbox row에 필요한 tenant ownership boundary. */
     val tenantGroupId = reference("tenant_group_id", TenantGroups, onDelete = ReferenceOption.RESTRICT)
 
     /**
-     * Clinic ownership boundary for clinic-scoped events.
+     * clinic-scoped event의 clinic ownership boundary.
      *
-     * It is `null` only for tenant-scoped aggregates. Plan writers always
-     * preserve the real clinic foreign key.
+     * tenant-scoped aggregate에서만 `null`이다. plan writer는 항상 실제 clinic foreign key를 보존한다.
      */
     val clinicId = reference("clinic_id", Clinics, onDelete = ReferenceOption.RESTRICT).nullable()
 
     /**
-     * Legacy plan foreign key retained for backward-compatible consumers.
+     * backward-compatible consumer를 위해 유지하는 legacy plan foreign key.
      *
-     * It is non-null for `APPOINTMENT_PLAN` events and `null` for non-plan
-     * aggregates. Generic routing uses [aggregateType] and [aggregateId].
+     * `APPOINTMENT_PLAN` event에서는 non-null이고 non-plan aggregate에서는 `null`이다.
+     * generic routing은 [aggregateType]과 [aggregateId]를 사용한다.
      */
     val planId = reference("plan_id", AppointmentPlans, onDelete = ReferenceOption.RESTRICT).nullable()
 
     /**
-     * Generic aggregate category, such as `APPOINTMENT_PLAN` or
-     * `SCHEDULING_POLICY`.
+     * `APPOINTMENT_PLAN` 또는 `SCHEDULING_POLICY` 같은 generic aggregate category.
      *
-     * New writers must populate it. `null` identifies a legacy writer that has
-     * not converged and therefore blocks policy publication/cutover.
+     * 새 writer는 반드시 값을 채워야 한다. `null`은 아직 converged되지 않은 legacy writer를
+     * 의미하며 policy publication/cutover를 차단한다.
      */
     val aggregateType = varchar("aggregate_type", 64).nullable()
 
     /**
-     * Stable aggregate-local identity encoded as bounded text.
+     * 길이가 제한된 text로 encode한 안정적인 aggregate-local identity.
      *
-     * New writers must populate it. Plan events use the decimal plan ID and
-     * policy events use the decimal immutable definition ID.
+     * 새 writer는 반드시 값을 채워야 한다. plan event는 decimal plan ID를 사용하고,
+     * policy event는 decimal immutable definition ID를 사용한다.
      */
     val aggregateId = varchar("aggregate_id", 160).nullable()
 
-    /** Positive wire-schema version of [payloadJson]. */
+    /** [payloadJson]의 양수 wire-schema version. */
     val schemaVersion = integer("schema_version")
 
     /**
-     * Redacted event payload JSON.
+     * redacted event payload JSON.
      *
-     * It may contain stable IDs, generations, hashes, and bounded actor audit
-     * references, but never credentials, bearer tokens, patient references,
-     * raw policy payloads, or idempotency keys.
+     * stable ID, generation, hash, 길이가 제한된 actor audit reference는 포함할 수 있지만,
+     * credential, bearer token, patient reference, raw policy payload, idempotency key는
+     * 절대 포함하지 않는다.
      */
     val payloadJson = text("payload_json")
 
-    /** Current publisher lifecycle. */
+    /** 현재 publisher lifecycle. */
     val status = enumerationByName<SchedulingOutboxStatus>("status", 32)
 
-    /** Number of completed publication attempts; it starts at zero. */
+    /** 완료된 publication attempt 횟수. 0에서 시작한다. */
     val attemptCount = integer("attempt_count").default(0)
 
-    /** Earliest UTC retry instant, or `null` while no retry is scheduled. */
+    /** 가장 이른 UTC retry instant. 예약된 retry가 없으면 `null`. */
     val nextAttemptAt = timestamp("next_attempt_at").nullable()
 
-    /** Database insertion instant in UTC. */
+    /** 데이터베이스 삽입 UTC instant. */
     val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
 
-    /** UTC successful publication instant, or `null` until published. */
+    /** publication 성공 UTC instant. 아직 published 전이면 `null`. */
     val publishedAt = timestamp("published_at").nullable()
 
     init {
@@ -110,14 +108,14 @@ object SchedulingOutboxEvents : LongIdTable("scheduling_outbox_events") {
     }
 }
 
-/** Durable publisher lifecycle for one generic scheduling event. */
+/** generic scheduling event 하나에 대한 durable publisher lifecycle. */
 enum class SchedulingOutboxStatus {
-    /** Waiting for the first or next publication attempt. */
+    /** 첫 번째 또는 다음 publication attempt를 기다리는 상태. */
     PENDING,
 
-    /** Successfully published; [SchedulingOutboxEvents.publishedAt] is set. */
+    /** 성공적으로 published됨. [SchedulingOutboxEvents.publishedAt]이 설정된다. */
     PUBLISHED,
 
-    /** Retry policy was exhausted or an operator must intervene. */
+    /** retry policy가 소진되었거나 operator 개입이 필요한 상태. */
     FAILED,
 }

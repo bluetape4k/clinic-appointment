@@ -437,12 +437,12 @@ internal fun Int?.sequenceToSentinel(): Int = this ?: 0
 private fun Int.sentinelToSequence(): Int? = takeIf { it > 0 }
 
 /**
- * Maps a selected definition row without decoding or re-canonicalizing JSON.
+ * 선택된 정책 정의 행을 JSON 해석이나 재정규화 없이 레코드로 매핑합니다.
  *
- * The caller-owned transaction must select every definition column. This
- * mapper preserves the `clinicScopeKey` sentinel, half-open effective interval,
- * canonical payload bytes, hash, and trusted actor audit fields exactly as
- * stored.
+ * 호출자 트랜잭션은 정의 테이블의 모든 컬럼을 조회해야 합니다. 이 mapper는
+ * `clinicScopeKey` sentinel, 반열림 유효 기간, canonical payload 문자열, hash,
+ * 신뢰된 행위자 감사 필드를 저장된 그대로 보존합니다. 정책 payload의 의미 해석과 검증은
+ * 별도 codec/validator의 책임이며, 이 함수는 영속 상태를 손실 없이 옮기는 경계입니다.
  */
 internal fun ResultRow.toSchedulingPolicyDefinitionRecord() = SchedulingPolicyDefinitionRecord(
     id = this[SchedulingPolicyDefinitions.id].value,
@@ -466,11 +466,11 @@ internal fun ResultRow.toSchedulingPolicyDefinitionRecord() = SchedulingPolicyDe
 )
 
 /**
- * Maps immutable approval evidence for one exact draft revision.
+ * 정확한 draft revision 하나에 대한 불변 승인 증거를 레코드로 매핑합니다.
  *
- * The caller-owned transaction must select every approval column. Actor and
- * assurance values are copied as bounded audit metadata and are never expanded
- * into credentials or current authorization state.
+ * 호출자 트랜잭션은 승인 테이블의 모든 컬럼을 조회해야 합니다. actor와 assurance 값은
+ * 제한된 감사 메타데이터로만 복사되며, 현재 credential이나 실시간 인가 상태로 확장해서
+ * 해석하지 않습니다. 이미 내려진 승인의 역사적 증거를 보존하는 용도입니다.
  */
 internal fun ResultRow.toSchedulingPolicyApprovalRecord() = SchedulingPolicyApprovalRecord(
     id = this[SchedulingPolicyApprovals.id].value,
@@ -483,11 +483,11 @@ internal fun ResultRow.toSchedulingPolicyApprovalRecord() = SchedulingPolicyAppr
 )
 
 /**
- * Maps a scope serialization head while preserving its non-null clinic sentinel.
+ * 정책 범위 직렬화 head를 null이 아닌 병원 sentinel과 함께 매핑합니다.
  *
- * The returned revision and generation are an observation inside the current
- * caller-owned transaction; callers that make activation decisions must still
- * hold or re-acquire the required scope-head lock.
+ * 반환되는 revision과 generation은 현재 호출자 트랜잭션 안에서 관측한 값입니다. 정책 활성화
+ * 결정을 내리는 호출자는 이 값을 사용하기 전에 필요한 scope-head lock을 이미 보유하고
+ * 있거나 다시 획득해야 합니다. 단순 조회 결과만으로 직렬화 권한이 생기지는 않습니다.
  */
 internal fun ResultRow.toSchedulingPolicyScopeHeadRecord() = SchedulingPolicyScopeHeadRecord(
     id = this[SchedulingPolicyScopeHeads.id].value,
@@ -500,11 +500,11 @@ internal fun ResultRow.toSchedulingPolicyScopeHeadRecord() = SchedulingPolicySco
 )
 
 /**
- * Maps an immutable effective-policy snapshot without interpreting JSON fields.
+ * 불변 effective-policy snapshot을 JSON 필드 해석 없이 매핑합니다.
  *
- * Canonical source maps, disabled paths, warnings, compiled payload bytes,
- * generation vector, and hash are preserved verbatim so historical decision
- * evidence cannot be silently normalized during reads.
+ * canonical source map, 비활성 경로, warning, compiled payload 문자열, generation vector,
+ * hash를 그대로 보존합니다. 이렇게 해야 과거 예약 판단에 사용된 증거가 조회 과정에서
+ * 조용히 정규화되거나 변경되지 않습니다. snapshot 해석은 호출 측 서비스의 명시적 책임입니다.
  */
 internal fun ResultRow.toEffectiveSchedulingPolicySnapshotRecord() = EffectiveSchedulingPolicySnapshotRecord(
     id = this[EffectiveSchedulingPolicySnapshots.id].value,
@@ -524,12 +524,12 @@ internal fun ResultRow.toEffectiveSchedulingPolicySnapshotRecord() = EffectiveSc
 )
 
 /**
- * Maps a durable activation command without interpreting worker terminal state.
+ * 작업자 종결 상태를 해석하지 않고 영속 활성화 명령을 매핑합니다.
  *
- * Scope sentinel, keyed hashes, nullable lease, result-generation, event, and
- * sanitized error columns are preserved exactly as stored. Callers must apply
- * the documented status invariants rather than treating nullable fields as
- * independent signals.
+ * scope sentinel, keyed hash, nullable lease, 결과 generation, event, 정제된 error 컬럼을
+ * 저장된 그대로 복사합니다. 호출자는 nullable 필드를 독립 신호처럼 추론하지 말고, 상태별
+ * 불변식에 따라 해석해야 합니다. 특히 실패/완료/재실행 판단은 repository 명령 메서드가
+ * 제공하는 fencing 규칙과 함께 사용해야 합니다.
  */
 internal fun ResultRow.toSchedulingPolicyActivationCommandRecord() = SchedulingPolicyActivationCommandRecord(
     id = this[SchedulingPolicyActivationCommands.id].value,
@@ -558,11 +558,11 @@ internal fun ResultRow.toSchedulingPolicyActivationCommandRecord() = SchedulingP
 )
 
 /**
- * Maps a durable preview job without advancing or normalizing its checkpoint.
+ * 체크포인트를 전진시키거나 정규화하지 않고 영속 미리보기 작업을 매핑합니다.
  *
- * The zero-based partition cursor, nullable first-row marker, monotonic
- * counters, lease fencing fields, deadline, and sanitized error code are copied
- * verbatim for validation by the owner-fenced repository operation.
+ * 0부터 시작하는 partition cursor, 첫 행 이전을 나타내는 nullable marker, 단조 증가
+ * counter, lease fencing 필드, deadline, 정제된 error code를 그대로 복사합니다. cursor와
+ * progress의 유효성 판단은 현재 소유자를 확인하는 repository 작업에서 수행해야 합니다.
  */
 internal fun ResultRow.toSchedulingPolicyPreviewJobRecord() = SchedulingPolicyPreviewJobRecord(
     id = this[SchedulingPolicyPreviewJobs.id].value,

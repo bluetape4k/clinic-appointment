@@ -12,44 +12,39 @@ import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 /**
- * Caller-transaction repository for scheduling-policy integration events.
+ * scheduling-policy integration event를 다루는 caller-transaction repository이다.
  *
- * This repository deliberately owns neither transaction creation nor
- * activation state. The activation application service must update the policy
- * head, complete its durable command, and call [insertPolicyActivated] inside
- * one Exposed `transaction {}`. A failure in any step then rolls back every
- * state change and prevents a false activation notification.
+ * 이 repository는 transaction 생성도 activation state도 소유하지 않는다. activation
+ * application service는 하나의 Exposed `transaction {}` 안에서 policy head를 갱신하고,
+ * durable command를 완료하고, [insertPolicyActivated]를 호출해야 한다. 어느 단계에서든 실패하면
+ * 모든 state change가 rollback되어 잘못된 activation notification이 발행되지 않는다.
  */
 class SchedulingPolicyEventRepository {
 
     /**
-     * Appends one deterministic, redacted `SchedulingPolicyActivated` event.
+     * deterministic하고 redacted된 `SchedulingPolicyActivated` event 하나를 추가한다.
      *
-     * Only an already persisted, `ACTIVE` definition may be published.
-     * Definition identity, version, effective start, and the committed
-     * generation vector form the deterministic event identity. Raw policy JSON,
-     * change rationale, creator metadata, credentials, and command idempotency
-     * keys are intentionally excluded from the wire payload.
+     * 이미 영속화된 `ACTIVE` definition만 publish할 수 있다. definition identity, version,
+     * effective start, committed generation vector가 deterministic event identity를 구성한다.
+     * raw policy JSON, change rationale, creator metadata, credential, command idempotency key는
+     * wire payload에서 의도적으로 제외한다.
      *
-     * A duplicate deterministic ID violates the outbox unique constraint. The
-     * activation command layer must return its stored completion result for an
-     * idempotent retry instead of inserting a second event with potentially
-     * different actor or correlation metadata.
+     * 중복 deterministic ID는 outbox unique constraint를 위반한다. idempotent retry에서는
+     * activation command layer가 두 번째 event를 삽입하지 않고 저장된 completion result를 반환해야 한다.
+     * 그렇지 않으면 같은 activation에 대해 actor 또는 correlation metadata가 다른 event가 생길 수 있다.
      *
-     * This method must run in the caller's existing Exposed transaction and
-     * does not commit independently.
+     * 이 메서드는 caller의 기존 Exposed transaction 안에서 실행되어야 하며 독립적으로 commit하지 않는다.
      *
-     * @param definition Persisted active definition. Its ID, tenant, version,
-     * schema, revision, and payload hash must satisfy the immutable-definition
-     * contract; scope determines whether the outbox clinic ID is null.
-     * @param generation Freshness counters committed by the same activation.
-     * Tenant generation must be positive; clinic generation is non-negative.
-     * @param actor Stable trusted Gateway subject and evaluated role. The actor
-     * ID must be non-blank and at most 160 characters.
-     * @param correlationId Non-secret request/workflow trace ID of 1..128 safe
-     * ASCII characters. It is correlation only; command activation has no
-     * upstream event causation.
-     * @return Deterministic UUID string stored as the outbox event ID.
+     * @param definition 영속화된 active definition. ID, tenant, version, schema, revision,
+     * payload hash가 immutable-definition contract를 만족해야 하며, scope가 outbox clinic ID의
+     * null 여부를 결정한다.
+     * @param generation 같은 activation에서 commit된 freshness counter. tenant generation은
+     * 양수이고 clinic generation은 non-negative여야 한다.
+     * @param actor 안정적인 trusted Gateway subject와 평가된 role. actor ID는 non-blank이고
+     * 최대 160자여야 한다.
+     * @param correlationId 1..128자의 safe ASCII로 제한된 비밀 없는 request/workflow trace ID.
+     * correlation 전용이며 command activation에는 upstream event causation이 없다.
+     * @return outbox event ID로 저장되는 deterministic UUID string.
      */
     fun insertPolicyActivated(
         definition: SchedulingPolicyDefinitionRecord,
@@ -127,10 +122,10 @@ class SchedulingPolicyEventRepository {
     }
 
     /**
-     * Produces stable schema-v1 JSON without serializing the source definition.
+     * source definition을 그대로 serialize하지 않고 안정적인 schema-v1 JSON을 만든다.
      *
-     * Keeping this allow-list serializer next to the writer makes accidental
-     * leakage of raw policy JSON or audit rationale a review-visible change.
+     * 이 allow-list serializer를 writer 옆에 두면 raw policy JSON 또는 audit rationale의
+     * 우발적 유출이 review에서 보이는 변경으로 드러난다.
      */
     private fun SchedulingPolicyActivatedEvent.toRedactedJson(): String =
         buildString {
@@ -153,7 +148,7 @@ class SchedulingPolicyEventRepository {
             append('}')
         }
 
-    /** Appends one JSON string with control characters and metacharacters escaped. */
+    /** control character와 metacharacter를 escape하여 JSON string 하나를 추가한다. */
     private fun StringBuilder.appendJsonString(value: String) {
         append('"')
         value.forEach { character ->

@@ -18,6 +18,13 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.web.client.RestClient
 
+/**
+ * 실제 HTTP 보안 필터 체인에서 예약 정책 관리 경계가 Gateway JWT claim을 강제하는지 검증한다.
+ *
+ * 서명·audience·만료·tenant·clinic 범위가 유효한 token만 요청을 통과시키고, body 또는 path
+ * 조작으로 행위자 역할과 소속을 확장할 수 없는지 확인한다. 오류 응답의 correlation ID는
+ * 진단에 사용할 수 있어야 하지만 bearer token이나 전체 claim은 노출하지 않아야 한다.
+ */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test", "integration-test")
 class SchedulingPolicySecurityIntegrationTest {

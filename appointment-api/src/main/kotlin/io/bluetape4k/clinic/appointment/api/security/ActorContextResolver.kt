@@ -7,27 +7,25 @@ import java.io.Serializable
 import java.time.Instant
 
 /**
- * Immutable authorization and audit context for one scheduling command.
+ * 스케줄링 명령 하나에 대한 불변 authorization/audit context이다.
  *
- * Every field originates from a verified [SchedulingUserPrincipal] except the
- * correlation ID, which comes from [CorrelationIdFilter]. Request DTOs cannot
- * override actor, tenant, clinic, patient, assurance, or token evidence.
+ * correlation ID만 [CorrelationIdFilter]에서 오고, 나머지 모든 필드는 검증된
+ * [SchedulingUserPrincipal]에서 온다. request DTO는 actor, tenant, clinic, patient,
+ * assurance, token evidence를 덮어쓸 수 없다.
  *
- * @property actorId Stable trusted Gateway subject, never a display name or
- * credential.
- * @property actorType Primary authenticated identity category.
- * @property roles Closed roles evaluated for the command.
- * @property scopes Bounded OAuth-style capabilities.
- * @property allowedTenantCodes Exact Gateway-authorized tenant codes.
- * @property allowedClinicIds Positive Gateway-authorized clinic IDs. Empty
- * means tenant-only authority rather than unrestricted clinic authority.
- * @property patientSubjectId Stable patient-domain subject only for patients.
- * @property assurance Gateway authentication evidence; this service does not
- * perform or upgrade MFA.
- * @property issuer Verified JWT issuer retained for audit.
- * @property tokenId Verified non-blank JWT `jti`, not an idempotency key.
- * @property authenticatedAt UTC JWT `auth_time`.
- * @property correlationId Bounded request trace ID, not a causation event ID.
+ * @property actorId 안정적이고 신뢰된 Gateway subject. display name 또는 credential이 아니다.
+ * @property actorType 인증된 주체의 기본 identity category.
+ * @property roles 명령 평가에 사용하는 닫힌 role 집합.
+ * @property scopes 길이가 제한된 OAuth-style capability 집합.
+ * @property allowedTenantCodes Gateway가 허가한 정확한 tenant code 집합.
+ * @property allowedClinicIds Gateway가 허가한 양수 clinic ID 집합. 비어 있으면 tenant-only
+ * authority이며, 모든 clinic에 대한 무제한 권한이 아니다.
+ * @property patientSubjectId patient actor에만 존재하는 안정적인 patient-domain subject.
+ * @property assurance Gateway 인증 증적. 이 service는 MFA를 수행하거나 승격하지 않는다.
+ * @property issuer 감사 목적으로 보존하는 검증된 JWT issuer.
+ * @property tokenId 검증된 non-blank JWT `jti`. idempotency key가 아니다.
+ * @property authenticatedAt JWT `auth_time`의 UTC instant.
+ * @property correlationId 길이가 제한된 request trace ID. causation event ID가 아니다.
  */
 data class ActorContext(
     val actorId: String,
@@ -49,26 +47,23 @@ data class ActorContext(
 }
 
 /**
- * Resolves a verified Spring authentication into a path-scoped [ActorContext].
+ * 검증된 Spring authentication을 path-scoped [ActorContext]로 변환한다.
  *
- * Tenant and clinic membership are checked again here even if an upstream
- * authorization manager already ran. This makes application services safe
- * against controller mapping mistakes and direct invocation with a principal
- * authorized for a different scope.
+ * upstream authorization manager가 이미 실행되었더라도 tenant/clinic membership을 여기서
+ * 다시 확인한다. 이렇게 해야 controller mapping 실수나 다른 scope 권한을 가진 principal로
+ * application service가 직접 호출되는 경우에도 안전하게 실패한다.
  */
 class ActorContextResolver {
 
     /**
-     * Resolves the actor for one tenant or clinic policy command.
+     * tenant 또는 clinic 정책 명령 하나에 사용할 actor를 해석한다.
      *
-     * @param authentication Authenticated Spring token whose principal must be
-     * [SchedulingUserPrincipal].
-     * @param tenantCode Exact path tenant code.
-     * @param clinicId Positive path clinic ID for clinic scope, or `null` for a
-     * tenant-default command.
-     * @param correlationId Validated request correlation ID.
-     * @throws AccessDeniedException when authentication or path scope is not
-     * authorized. No token or claim value is included in the message.
+     * @param authentication principal이 [SchedulingUserPrincipal]이어야 하는 인증된 Spring token.
+     * @param tenantCode 요청 경로의 정확한 tenant code.
+     * @param clinicId clinic scope이면 요청 경로의 양수 clinic ID, tenant-default 명령이면 `null`.
+     * @param correlationId 검증된 request correlation ID.
+     * @throws AccessDeniedException authentication 또는 path scope가 허가되지 않은 경우.
+     * 메시지에는 token 또는 claim 값을 포함하지 않는다.
      */
     fun resolve(
         authentication: Authentication?,

@@ -5,31 +5,28 @@ import jakarta.servlet.http.HttpServletResponse
 import java.util.UUID
 
 /**
- * Writes the stable, privacy-safe JSON contract used when authentication or
- * authorization fails before a controller can handle the request.
+ * controller가 요청을 처리하기 전에 authentication 또는 authorization이 실패했을 때 사용하는
+ * 안정적인 privacy-safe JSON 계약을 작성한다.
  *
- * Security failures deliberately expose only the public [PlanFoundationError]
- * code and message. Raw JWTs, claim values, parser exception text, signing
- * details, and authorization rules must never be copied into this response.
+ * security failure는 의도적으로 공개 [PlanFoundationError] code와 message만 노출한다.
+ * raw JWT, claim 값, parser exception text, signing detail, authorization rule은 이 응답에
+ * 절대 복사하면 안 된다.
  *
- * The correlation identifier is established by [CorrelationIdFilter]. The
- * header and JSON body must contain exactly the same value so an operator can
- * join a customer's error report to server-side audit records without using
- * sensitive authentication material. The UUID fallback exists only for direct
- * invocations outside the normal filter chain; when used, it is also written
- * to the response header to preserve that invariant.
+ * correlation identifier는 [CorrelationIdFilter]가 수립한다. header와 JSON body는 정확히
+ * 같은 값을 가져야 하므로, 운영자는 민감한 authentication material 없이 고객의 오류 보고를
+ * 서버 감사 기록과 연결할 수 있다. UUID fallback은 정상 filter chain 밖에서 직접 호출된 경우에만
+ * 존재하며, 사용 시에도 이 불변식을 보존하기 위해 response header에 함께 기록한다.
  */
 object SecurityErrorResponseWriter {
     /**
-     * Writes one terminal security error response.
+     * terminal security error response 하나를 작성한다.
      *
-     * This method owns response serialization but does not authenticate,
-     * authorize, log, or retry the request. [error] must therefore contain an
-     * already classified public error contract, never an exception message.
+     * 이 메서드는 response serialization만 소유하며 request를 authenticate, authorize, log,
+     * retry하지 않는다. 따라서 [error]는 이미 분류된 public error contract여야 하고,
+     * exception message가 아니어야 한다.
      *
-     * @param response servlet response whose status, media type, correlation
-     * header, and JSON body are completed by this call
-     * @param error public error classification with a non-sensitive message
+     * @param response 이 호출로 status, media type, correlation header, JSON body가 완성되는 servlet response.
+     * @param error 비민감 message를 가진 public error classification.
      */
     fun write(response: HttpServletResponse, error: PlanFoundationError) {
         val correlationId = response.getHeader(CorrelationIdFilter.HEADER_NAME)
@@ -47,12 +44,11 @@ object SecurityErrorResponseWriter {
     }
 
     /**
-     * Escapes a bounded public response value for a JSON string literal.
+     * 길이가 제한된 공개 response 값을 JSON string literal로 escape한다.
      *
-     * This is intentionally a serializer-local helper rather than a general
-     * JSON API. It prevents future public error text from breaking the response
-     * shape or injecting additional fields. Authentication inputs must never be
-     * passed to this method.
+     * 이 helper는 general JSON API가 아니라 serializer-local helper로 의도적으로 제한한다.
+     * 향후 공개 오류 문구가 response shape를 깨거나 추가 field를 주입하지 못하게 하기 위해서다.
+     * authentication input은 이 메서드에 절대 전달하면 안 된다.
      */
     private fun escapeJson(value: String): String = buildString(value.length) {
         value.forEach { character ->

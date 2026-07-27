@@ -33,26 +33,25 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 
 /**
- * Strict closed-world JSON decoder for persisted scheduling-policy payloads.
+ * 저장된 scheduling-policy payload를 strict closed-world 방식으로 decode하는 codec입니다.
  *
- * Dispatch is selected only from the trusted envelope tuple `(kind, scope,
- * schemaVersion)`. JSON cannot supply a class name or polymorphic discriminator.
- * Unknown fields, malformed override states, unsupported schema versions, and
- * payloads above [MAX_PAYLOAD_BYTES] are rejected before domain compilation.
+ * dispatch는 신뢰된 envelope tuple `(kind, scope, schemaVersion)`으로만 선택됩니다.
+ * JSON은 class name이나 polymorphic discriminator를 제공할 수 없습니다. 알 수 없는 field,
+ * 잘못된 override state, 지원하지 않는 schema version, [MAX_PAYLOAD_BYTES]를 초과하는
+ * payload는 domain compilation 전에 거부됩니다.
  *
- * Clinic override values use an explicit wire shape:
+ * clinic override 값은 다음과 같은 명시적 wire shape을 사용합니다.
  *
  * ```json
  * { "mode": "SET", "value": 8 }
  * ```
  *
- * `INHERIT` and `DISABLE` must omit `value`; `SET` must provide it.
+ * `INHERIT`와 `DISABLE`은 `value`를 생략해야 하고, `SET`은 반드시 제공해야 합니다.
  *
- * @param objectMapper Mapper used only with the closed set of concrete wire
- * classes selected by the trusted envelope. An injected mapper must retain the
- * Kotlin module, `FAIL_ON_UNKNOWN_PROPERTIES`, and disabled default typing; it
- * must not enable polymorphic class-name dispatch. Violating those conditions
- * weakens the closed-world decoding and unknown-field rejection guarantees.
+ * @param objectMapper trusted envelope이 선택한 닫힌 concrete wire class 집합에만
+ * 사용하는 mapper입니다. 주입된 mapper도 Kotlin module, `FAIL_ON_UNKNOWN_PROPERTIES`,
+ * disabled default typing 조건을 유지해야 하며 polymorphic class-name dispatch를 켜면
+ * 안 됩니다. 이 조건을 어기면 closed-world decoding과 unknown-field rejection 보장이 약해집니다.
  */
 class SchedulingPolicyPayloadCodec(
     private val objectMapper: JsonMapper = JsonMapper.builder()
@@ -61,22 +60,21 @@ class SchedulingPolicyPayloadCodec(
         .build(),
 ) {
     companion object {
-        /** Maximum accepted UTF-8 JSON size: 256 KiB. */
+        /** 허용되는 최대 UTF-8 JSON 크기입니다. 값은 256 KiB입니다. */
         const val MAX_PAYLOAD_BYTES: Int = 256 * 1024
     }
 
     /**
-     * Decodes and validates one schema-versioned policy payload.
+     * schema version이 붙은 policy payload 하나를 decode하고 validate합니다.
      *
-     * @param kind Trusted policy kind from the surrounding definition envelope.
-     * @param scope Trusted tenant/clinic scope from the definition envelope.
-     * @param schemaVersion Wire schema version. This implementation accepts `1`.
-     * @param json Raw UTF-8 JSON text. It must not exceed [MAX_PAYLOAD_BYTES].
-     * @return Typed tenant policy or clinic override whose kind and scope match
-     * the dispatch tuple.
-     * @throws IllegalArgumentException if the tuple is unsupported, JSON is
-     * oversized or malformed, an unknown field is present, an override state is
-     * inconsistent, or a business invariant fails.
+     * @param kind 주변 definition envelope에서 온 trusted policy kind입니다.
+     * @param scope definition envelope에서 온 trusted tenant/clinic scope입니다.
+     * @param schemaVersion wire schema version입니다. 이 구현은 `1`만 허용합니다.
+     * @param json raw UTF-8 JSON text입니다. [MAX_PAYLOAD_BYTES]를 초과하면 안 됩니다.
+     * @return dispatch tuple과 kind/scope가 일치하는 typed tenant policy 또는 clinic override입니다.
+     * @throws IllegalArgumentException tuple이 지원되지 않거나, JSON이 너무 크거나 malformed인 경우,
+     * unknown field가 있는 경우, override state가 일관되지 않은 경우, 또는 업무 invariant가
+     * 실패한 경우 발생합니다.
      */
     fun decode(
         kind: SchedulingPolicyKind,

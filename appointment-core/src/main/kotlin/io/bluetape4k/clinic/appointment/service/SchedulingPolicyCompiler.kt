@@ -5,44 +5,42 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * Deterministically compiles active tenant policy and clinic overrides.
+ * active tenant policy와 clinic override를 deterministic하게 compile합니다.
  *
- * Compilation never reads clocks, databases, caches, or authentication state.
- * Callers supply the evaluation instants, generation vector, and exact source
- * versions. Every resolved leaf is recorded in
- * [EffectiveSchedulingPolicy.sourceByPath], optional `Disable` instructions are
- * recorded in [EffectiveSchedulingPolicy.disabledFeatures], and the resulting
- * immutable snapshot receives a canonical hash.
+ * compilation은 clock, database, cache, authentication state를 직접 읽지 않습니다.
+ * caller가 evaluation instant, generation vector, 정확한 source version을 제공합니다.
+ * 해석된 모든 leaf는 [EffectiveSchedulingPolicy.sourceByPath]에 기록되고, 선택 기능의
+ * `Disable` 지시는 [EffectiveSchedulingPolicy.disabledFeatures]에 기록되며, 결과
+ * immutable snapshot에는 canonical hash가 부여됩니다.
  *
- * Platform and tenant safety ceilings are never overrideable. In the capacity
- * contract, [CapacityAndOverbookingPolicy.absoluteBookingLimit] remains sourced
- * from the tenant baseline and clinic values must fit below it.
+ * platform과 tenant safety ceiling은 override할 수 없습니다. capacity 계약에서
+ * [CapacityAndOverbookingPolicy.absoluteBookingLimit]는 tenant baseline source로 남고,
+ * clinic 값은 이 한도 아래에 들어와야 합니다.
  */
 object SchedulingPolicyCompiler {
 
     /**
-     * Compiles all eight active tenant policies with optional clinic overrides.
+     * 여덟 개 active tenant policy와 선택적 clinic override를 모두 compile합니다.
      *
-     * [tenant] must contain every schema-one kind. [sourceVersions] must contain
-     * the same eight kinds, with a positive tenant version and a clinic version
-     * exactly when [clinic] contains that kind. This makes an incomplete read or
-     * stale version vector fail before a snapshot can be persisted.
+     * [tenant]는 schema-one의 모든 kind를 포함해야 합니다. [sourceVersions]도 같은 여덟
+     * kind를 포함해야 하며, 각 kind는 양수 tenant version을 가지고 [clinic]이 해당 kind를
+     * 포함할 때만 clinic version을 가져야 합니다. 이 조건으로 incomplete read나 stale
+     * version vector가 snapshot persistence 전에 실패하게 만듭니다.
      *
-     * Clinic values can narrow retry, delay, extension, and capacity bounds but
-     * cannot raise them above the tenant value. Non-overrideable safety fields
-     * remain sourced from the tenant definition.
+     * clinic 값은 retry, delay, extension, capacity bound를 좁힐 수 있지만 tenant 값보다
+     * 높일 수 없습니다. override 불가 safety field는 tenant definition source로 유지됩니다.
      *
-     * @param tenantGroupId Positive tenant boundary.
-     * @param clinicId Positive clinic identity.
-     * @param decisionAt UTC policy-decision instant.
-     * @param serviceAt UTC appointment/service instant.
-     * @param generation Generation vector observed while reading active heads.
-     * @param sourceVersions Exact active definition versions for every kind.
-     * @param tenant Complete active tenant policy set.
-     * @param clinic Active clinic override set; defaults to no overrides.
-     * @return Immutable effective snapshot with every leaf source recorded.
-     * @throws IllegalArgumentException for incomplete inputs, inconsistent
-     * versions, invalid overrides, required-field disable, or relaxed ceilings.
+     * @param tenantGroupId 양수 tenant boundary입니다.
+     * @param clinicId 양수 clinic identity입니다.
+     * @param decisionAt UTC policy-decision instant입니다.
+     * @param serviceAt UTC appointment/service instant입니다.
+     * @param generation active head를 읽는 동안 관찰한 generation vector입니다.
+     * @param sourceVersions 모든 kind에 대한 정확한 active definition version입니다.
+     * @param tenant 완전한 active tenant policy set입니다.
+     * @param clinic active clinic override set입니다. 기본값은 override 없음입니다.
+     * @return 모든 leaf source가 기록된 immutable effective snapshot입니다.
+     * @throws IllegalArgumentException 입력이 incomplete이거나, version이 일관되지 않거나,
+     * override가 유효하지 않거나, 필수 field를 disable했거나, ceiling을 완화하려는 경우 발생합니다.
      */
     @Suppress("LongMethod", "LongParameterList")
     fun compile(
@@ -268,27 +266,27 @@ object SchedulingPolicyCompiler {
     }
 
     /**
-     * Compiles the capacity/overbooking kind for one clinic.
+     * 하나의 clinic에 대한 capacity/overbooking kind를 compile합니다.
      *
-     * Resolution order is tenant baseline followed by clinic override. `INHERIT`
-     * preserves the tenant value, `SET` records the clinic as source, and
-     * `DISABLE` is accepted only for automatic reduction where it resolves to
-     * `false`. Nominal capacity and quota are required and cannot be disabled.
+     * resolution 순서는 tenant baseline 다음 clinic override입니다. `INHERIT`는 tenant
+     * 값을 보존하고, `SET`은 clinic을 source로 기록하며, `DISABLE`은 automatic reduction에서만
+     * 허용되어 `false`로 해석됩니다. nominal capacity와 quota는 필수 값이므로 disable할
+     * 수 없습니다.
      *
-     * @param tenantGroupId Positive tenant boundary.
-     * @param clinicId Positive clinic identity.
-     * @param decisionAt UTC instant at which policy was selected.
-     * @param serviceAt UTC appointment/service instant being evaluated.
-     * @param generation Tenant/clinic generations read for this compilation.
-     * @param tenantVersion Positive active tenant capacity-policy version.
-     * @param clinicVersion Positive active clinic-override version, or `null`
-     * when [clinic] is `null`.
-     * @param tenant Valid complete tenant capacity policy.
-     * @param clinic Optional clinic override. Its compiled nominal-plus-quota
-     * sum cannot exceed [CapacityAndOverbookingPolicy.absoluteBookingLimit].
-     * @return Immutable effective snapshot containing the resolved capacity kind.
-     * @throws IllegalArgumentException for invalid identities, versions,
-     * scope/range violations, required-field disable, or a relaxed hard ceiling.
+     * @param tenantGroupId 양수 tenant boundary입니다.
+     * @param clinicId 양수 clinic identity입니다.
+     * @param decisionAt policy가 선택된 UTC instant입니다.
+     * @param serviceAt 평가 대상 appointment/service UTC instant입니다.
+     * @param generation 이 compilation을 위해 읽은 tenant/clinic generation입니다.
+     * @param tenantVersion active tenant capacity-policy의 양수 version입니다.
+     * @param clinicVersion active clinic-override의 양수 version입니다. [clinic]이 `null`이면
+     * 이 값도 `null`이어야 합니다.
+     * @param tenant 유효한 완전 tenant capacity policy입니다.
+     * @param clinic 선택적 clinic override입니다. 컴파일된 nominal-plus-quota 합은
+     * [CapacityAndOverbookingPolicy.absoluteBookingLimit]를 초과할 수 없습니다.
+     * @return resolved capacity kind를 포함하는 immutable effective snapshot입니다.
+     * @throws IllegalArgumentException identity, version, scope/range 위반, 필수 field
+     * disable, hard ceiling 완화가 있을 때 발생합니다.
      */
     @Suppress("LongParameterList")
     fun compileCapacity(

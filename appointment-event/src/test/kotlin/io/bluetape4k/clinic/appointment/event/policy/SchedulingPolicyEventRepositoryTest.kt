@@ -32,6 +32,13 @@ import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util.UUID
 
+/**
+ * 정책 활성화 도메인 이벤트가 기존 outbox 계약으로 정확히 한 번 기록되는지 검증한다.
+ *
+ * tenant 기본 정책과 clinic 재정의의 nullable scope를 보존하고, actor audit ref·generation·
+ * source version·correlation을 직렬화해 재현 가능한 감사 증거로 남기는지 확인한다. 같은
+ * event ID 재시도는 멱등해야 하며 다른 payload로 기존 이벤트를 덮어쓰면 안 된다.
+ */
 class SchedulingPolicyEventRepositoryTest {
 
     private val repository = SchedulingPolicyEventRepository()

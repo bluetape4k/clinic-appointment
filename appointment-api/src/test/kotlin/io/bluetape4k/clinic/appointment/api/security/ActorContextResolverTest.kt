@@ -8,6 +8,13 @@ import org.junit.jupiter.api.Test
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 
+/**
+ * Spring Security 인증 주체를 불변 예약 정책 [ActorContext]로 변환하는 신뢰 경계를 검증한다.
+ *
+ * 지원하지 않는 principal이나 인증되지 않은 요청은 거부하고, tenant·clinic·patient 범위와
+ * correlation 정보는 검증된 [SchedulingUserPrincipal]에서만 복사하는지 확인한다. 요청
+ * 본문이나 임의 Authentication detail이 행위자 역할과 예약 출처를 승격할 수 없어야 한다.
+ */
 class ActorContextResolverTest {
 
     private val resolver = ActorContextResolver()

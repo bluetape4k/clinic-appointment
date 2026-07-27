@@ -8,6 +8,13 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
 
+/**
+ * 테넌트 기본값과 병원 재정의를 결정적으로 합성하는 예약 정책 컴파일러 계약을 검증한다.
+ *
+ * `INHERIT`, `SET`, `DISABLE`의 우선순위와 source path 추적, generation·평가 시각 보존,
+ * booking origin 규칙을 함께 확인한다. 같은 논리 입력은 순서와 무관하게 같은 불변 snapshot을
+ * 만들고, 이미 진행된 예약이 아니라 향후 의사결정에만 소비될 수 있는 증거를 남겨야 한다.
+ */
 class SchedulingPolicyCompilerTest {
 
     @Test

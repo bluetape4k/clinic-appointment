@@ -4,6 +4,8 @@ import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse
+import io.bluetape4k.clinic.appointment.api.policy.EffectivePolicyGenerationConflictException
+import io.bluetape4k.clinic.appointment.api.policy.EffectivePolicyReadUnavailableException
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.service.IdempotencyKeyConflictException
 import jakarta.servlet.http.HttpServletRequest
@@ -18,17 +20,16 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import java.util.UUID
 
 /**
- * Global exception normalization for scheduling APIs.
+ * 예약 API 전역 예외를 공개 가능한 응답 계약으로 정규화한다.
  *
- * Catalog-product, appointment-plan, and scheduling-policy paths use the same
- * stable customer-facing error envelope. Domain, decoding, and unexpected
- * exception details are reduced to public codes and messages so request
- * payloads, persistence identifiers, and stack details are not exposed.
+ * 상품 카탈로그, 예약 플랜, 스케줄링 정책 경로는 고객에게 노출되는 안정적인 오류
+ * envelope를 공유한다. 도메인 검증 오류, 요청 디코딩 오류, 예상하지 못한 예외의
+ * 내부 세부사항은 공개 코드와 안전한 메시지로 축약하여 요청 payload, 영속화 식별자,
+ * stack trace가 응답에 드러나지 않도록 한다.
  *
- * The correlation ID established before authentication is reused in the error
- * body. Security failures raised inside the Spring Security filter chain are
- * handled separately by [io.bluetape4k.clinic.appointment.api.security.SecurityErrorResponseWriter]
- * under the same correlation and privacy contract.
+ * 인증보다 먼저 수립된 correlation ID는 오류 본문에서도 재사용한다. Spring Security
+ * filter chain 내부에서 발생한 인증/인가 실패는 같은 correlation/privacy 계약 아래
+ * [io.bluetape4k.clinic.appointment.api.security.SecurityErrorResponseWriter]가 별도로 처리한다.
  */
 @RestControllerAdvice
 class GlobalExceptionHandler {
@@ -43,26 +44,61 @@ class GlobalExceptionHandler {
         foundationResponse(ex.error, request)
 
     /**
-     * Maps the sole scheduling-policy error registry to the shared wire DTO.
+     * 스케줄링 정책 전용 오류 registry를 공용 wire DTO로 변환한다.
      *
-     * [SchedulingPolicyApiException.detail] is already sanitized by the
-     * application service. The raw exception, request body, JWT, claims, SQL,
-     * and idempotency material are deliberately excluded.
+     * 서비스가 제공한 [SchedulingPolicyApiException.detail]은 응답에 반사하지 않는다.
+     * registry의 고정 [SchedulingPolicyErrorCode.safeMessage]만 공개하여 미래 호출자가
+     * 실수로 원본 예외, 요청 본문, JWT, claim, SQL, idempotency 관련 값을 detail에
+     * 넣더라도 wire 응답으로 유출되지 않게 한다.
      */
     @ExceptionHandler(SchedulingPolicyApiException::class)
     fun handleSchedulingPolicy(
         ex: SchedulingPolicyApiException,
         request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> =
+        schedulingPolicyResponse(ex.errorCode, request)
+
+    /**
+     * 정책 활성화가 계속 겹쳐 하나의 세대 스냅샷을 만들지 못한 경우를 재시도 가능한
+     * 안정 오류로 변환한다. 내부 시도 횟수와 관측 세대는 응답에 노출하지 않는다.
+     */
+    @ExceptionHandler(EffectivePolicyGenerationConflictException::class)
+    fun handleEffectivePolicyGenerationConflict(
+        ex: EffectivePolicyGenerationConflictException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> =
+        schedulingPolicyResponse(
+            SchedulingPolicyErrorCode.POLICY_EFFECTIVE_READ_CONFLICT,
+            request,
+        )
+
+    /**
+     * 권위 정책 저장소 장애를 `503` 안정 오류로 변환한다. 원인 예외의 메시지, SQL,
+     * 테넌트·병원 식별자는 응답에 포함하지 않는다.
+     */
+    @ExceptionHandler(EffectivePolicyReadUnavailableException::class)
+    fun handleEffectivePolicyReadUnavailable(
+        ex: EffectivePolicyReadUnavailableException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> =
+        schedulingPolicyResponse(
+            SchedulingPolicyErrorCode.POLICY_EFFECTIVE_READ_UNAVAILABLE,
+            request,
+        )
+
+    private fun schedulingPolicyResponse(
+        errorCode: SchedulingPolicyErrorCode,
+        request: HttpServletRequest,
     ): ResponseEntity<SchedulingApiErrorResponse> {
         val correlationId = request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) as? String
             ?: UUID.randomUUID().toString()
-        return ResponseEntity.status(ex.errorCode.httpStatus).body(
+        return ResponseEntity.status(errorCode.httpStatus).body(
             SchedulingApiErrorResponse(
-                error = ex.detail,
-                errorCode = ex.errorCode.name,
+                error = errorCode.safeMessage,
+                errorCode = errorCode.name,
                 correlationId = correlationId,
-                retryable = ex.errorCode.retryable,
-                action = ex.errorCode.action,
+                retryable = errorCode.retryable,
+                action = errorCode.action,
             )
         )
     }

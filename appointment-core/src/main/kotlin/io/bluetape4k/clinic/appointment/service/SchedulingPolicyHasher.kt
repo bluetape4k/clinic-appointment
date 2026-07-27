@@ -6,26 +6,25 @@ import java.security.MessageDigest
 import java.time.Instant
 
 /**
- * Canonical SHA-256 contract for policy payloads and effective snapshots.
+ * policy payload와 effective snapshot에 대한 canonical SHA-256 계약입니다.
  *
- * Canonical input contains schema version, stable field names, explicit null
- * markers, sorted map/set entries, and semantically ordered lists. It never
- * relies on data-class `toString()` for a policy value. Database identities and
- * actor audit metadata are excluded from payload hashes; snapshot hashes add
- * evaluation instants, generations, source versions, source paths, disabled
- * paths, warnings, and the fully compiled payload.
+ * canonical input은 schema version, stable field name, 명시적 null marker, 정렬된
+ * map/set entry, 의미상 순서가 있는 list를 포함합니다. policy 값에 대해 data class
+ * `toString()`에 의존하지 않습니다. payload hash에서는 database identity와 actor audit
+ * metadata를 제외합니다. snapshot hash에는 evaluation instant, generation, source version,
+ * source path, disabled path, warning, fully compiled payload를 추가합니다.
  */
 object SchedulingPolicyHasher {
 
     /**
-     * Computes a lowercase SHA-256 for one typed schema-one payload.
+     * typed schema-one payload 하나에 대한 lowercase SHA-256을 계산합니다.
      *
-     * @param payload Typed schema-one payload that should already have passed
-     * [SchedulingPolicyValidator]. This method canonicalizes and size-bounds
-     * fields, but does not authorize, persist, or apply all business rules.
-     * @return Lowercase 64-character SHA-256 of the canonical payload fields.
-     * @throws IllegalArgumentException when the canonical byte stream is larger
-     * than the same 256 KiB safety bound used by the JSON codec.
+     * @param payload 이미 [SchedulingPolicyValidator]를 통과했어야 하는 typed schema-one
+     * payload입니다. 이 method는 field를 canonicalize하고 size bound를 적용하지만,
+     * authorization, persistence, 모든 업무 규칙 적용을 수행하지는 않습니다.
+     * @return canonical payload field에 대한 lowercase 64-character SHA-256입니다.
+     * @throws IllegalArgumentException canonical byte stream이 JSON codec과 같은 256 KiB
+     * safety bound보다 큰 경우 발생합니다.
      */
     fun payloadHash(payload: SchedulingPolicyPayload): String =
         digest(maxBytes = SchedulingPolicyPayloadCodec.MAX_PAYLOAD_BYTES) {
@@ -33,24 +32,23 @@ object SchedulingPolicyHasher {
         }
 
     /**
-     * Computes the identity of an immutable effective-policy snapshot.
+     * immutable effective-policy snapshot의 identity를 계산합니다.
      *
-     * Map and set insertion order does not affect the result. Warning order is
-     * intentionally preserved because it communicates deterministic compiler
-     * decision order.
+     * map과 set의 insertion order는 결과에 영향을 주지 않습니다. warning order는 compiler의
+     * deterministic decision order를 전달하므로 의도적으로 보존합니다.
      *
-     * @param tenantGroupId Positive tenant boundary included in the identity.
-     * @param clinicId Positive clinic identity included in the identity.
-     * @param decisionAt UTC instant at which the policy decision was made.
-     * @param serviceAt UTC instant for which future-effective policy was selected.
-     * @param generation Tenant/clinic head generations observed by the compiler.
-     * @param sourceVersions Exact contributing definition versions by kind.
-     * @param sourceByPath Organizational source of every compiled leaf path.
-     * @param disabledFeatures Semantic paths explicitly disabled by a clinic
-     * override. Their set order is canonicalized.
-     * @param warnings Ordered compiler warnings; list order remains hash-significant.
-     * @param payload Fully resolved policy values for all included kinds.
-     * @return Lowercase 64-character SHA-256 string.
+     * @param tenantGroupId identity에 포함되는 양수 tenant boundary입니다.
+     * @param clinicId identity에 포함되는 양수 clinic identity입니다.
+     * @param decisionAt policy decision이 이루어진 UTC instant입니다.
+     * @param serviceAt future-effective policy를 선택할 UTC service instant입니다.
+     * @param generation compiler가 관찰한 tenant/clinic head generation입니다.
+     * @param sourceVersions kind별 정확한 contributing definition version입니다.
+     * @param sourceByPath compiled leaf path마다 기록된 조직적 source입니다.
+     * @param disabledFeatures clinic override가 명시적으로 disable한 semantic path입니다.
+     * set order는 canonicalize됩니다.
+     * @param warnings 순서가 있는 compiler warning입니다. list order는 hash에서 의미가 있습니다.
+     * @param payload 포함된 모든 kind의 fully resolved policy value입니다.
+     * @return lowercase 64-character SHA-256 string입니다.
      */
     @Suppress("LongParameterList")
     fun snapshotHash(

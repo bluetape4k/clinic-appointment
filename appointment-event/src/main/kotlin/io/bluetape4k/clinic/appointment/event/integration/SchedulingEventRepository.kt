@@ -12,15 +12,15 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * Read model for one durable inbound scheduling event.
+ * durable inbound scheduling event 하나를 표현하는 read model이다.
  *
- * @property id Database identity.
- * @property eventId Stable producer event identity used for deduplication.
- * @property sourceAggregateVersion Positive producer aggregate version.
- * @property status Current convergence lifecycle.
- * @property attemptCount Number of bounded gap/replay attempts.
- * @property failureCode Sanitized stable reason code, or `null` when none.
- * @property replayAfter Earliest UTC replay instant, or `null` when not waiting.
+ * @property id 데이터베이스 identity.
+ * @property eventId deduplication에 사용하는 안정적인 producer event identity.
+ * @property sourceAggregateVersion 양수 producer aggregate version.
+ * @property status 현재 convergence lifecycle.
+ * @property attemptCount 길이가 제한된 gap/replay attempt 횟수.
+ * @property failureCode 정제된 안정 reason code. 없으면 `null`.
+ * @property replayAfter 가장 이른 UTC replay instant. 대기 중이 아니면 `null`.
  */
 data class SchedulingInboxRecord(
     val id: Long,
@@ -33,27 +33,27 @@ data class SchedulingInboxRecord(
 )
 
 /**
- * Database-computed V9 outbox dual-write convergence evidence.
+ * 데이터베이스가 계산한 V9 outbox dual-write convergence evidence이다.
  *
- * @property aggregateIdentityMissingCount Rows missing `aggregate_type` or
- * `aggregate_id`. Policy publication and V10 cutover require zero.
- * @property legacyPlanRowCount Rows that still carry the legacy plan foreign
- * key and therefore must also carry the equivalent generic plan identity.
- * @property legacyPlanMismatchCount Legacy plan rows whose generic type is not
- * `APPOINTMENT_PLAN` or whose generic ID differs from the decimal plan ID.
- * @property dualWriteParityGauge Ratio in `0.0..1.0` of legacy plan rows with
- * matching generic identity. An empty legacy set reports `1.0`.
+ * @property aggregateIdentityMissingCount `aggregate_type` 또는 `aggregate_id`가 없는 row 수.
+ * 정책 publication과 V10 cutover를 위해서는 0이어야 한다.
+ * @property legacyPlanRowCount 아직 legacy plan foreign key를 가진 row 수. 이런 row는
+ * equivalent generic plan identity도 함께 가져야 한다.
+ * @property legacyPlanMismatchCount generic type이 `APPOINTMENT_PLAN`이 아니거나 generic ID가
+ * decimal plan ID와 다른 legacy plan row 수.
+ * @property dualWriteParityGauge generic identity가 일치하는 legacy plan row 비율. 범위는
+ * `0.0..1.0`이며 legacy row가 없으면 `1.0`을 보고한다.
  */
 data class OutboxDualWriteConvergence(
     val aggregateIdentityMissingCount: Long,
     val legacyPlanRowCount: Long,
     val legacyPlanMismatchCount: Long,
 ) {
-    /** True only when every current row satisfies the V9 writer contract. */
+    /** 현재 모든 row가 V9 writer contract를 만족할 때만 true. */
     val converged: Boolean
         get() = aggregateIdentityMissingCount == 0L && legacyPlanMismatchCount == 0L
 
-    /** Legacy plan identity parity exposed as an operator gauge in `0.0..1.0`. */
+    /** operator gauge로 노출되는 legacy plan identity parity. 범위는 `0.0..1.0`. */
     val dualWriteParityGauge: Double
         get() = if (legacyPlanRowCount == 0L) {
             1.0
@@ -63,19 +63,19 @@ data class OutboxDualWriteConvergence(
 }
 
 /**
- * Caller-transaction repository for redacted inbox/outbox convergence state.
+ * redacted inbox/outbox convergence state를 다루는 caller-transaction repository이다.
  *
- * Every method must run inside a caller-owned Exposed `transaction {}` so inbox
- * state, appointment-plan creation, and outbox publication evidence can commit
- * or roll back atomically.
+ * 모든 메서드는 caller가 소유한 Exposed `transaction {}` 안에서 실행되어야 한다. 그래야 inbox
+ * state, appointment-plan creation, outbox publication evidence가 원자적으로 commit되거나
+ * rollback된다.
  */
 class SchedulingEventRepository {
 
     /**
-     * Returns one inbox record visible in the current transaction.
+     * 현재 transaction에서 보이는 inbox record 하나를 반환한다.
      *
-     * @param eventId Stable bounded producer event ID.
-     * @return The record, or `null` when no row is visible.
+     * @param eventId 안정적이고 길이가 제한된 producer event ID.
+     * @return record. 보이는 row가 없으면 `null`.
      */
     fun findInbox(eventId: String): SchedulingInboxRecord? =
         SchedulingInboxEvents
@@ -95,12 +95,12 @@ class SchedulingEventRepository {
             }
 
     /**
-     * Returns the latest processed version for one exact producer aggregate.
+     * 정확한 producer aggregate 하나에 대해 마지막으로 처리된 version을 반환한다.
      *
-     * Tenant, clinic, producer, authority, and source ID form the isolation
-     * boundary; a version from another boundary must never suppress this event.
+     * tenant, clinic, producer, authority, source ID가 isolation boundary를 이룬다.
+     * 다른 boundary의 version이 이 event 처리를 억제해서는 안 된다.
      *
-     * @return Highest processed positive version, or `null` before convergence.
+     * @return 처리된 가장 큰 양수 version. 아직 convergence 전이면 `null`.
      */
     fun latestProcessedSourceVersion(
         tenantGroupId: Long,
@@ -125,12 +125,12 @@ class SchedulingEventRepository {
             ?.get(SchedulingInboxEvents.sourceAggregateVersion)
 
     /**
-     * Inserts a redacted `RECEIVED` inbox row from a trusted envelope.
+     * trusted envelope에서 redacted `RECEIVED` inbox row를 삽입한다.
      *
-     * Only verified metadata and the payload hash are persisted. Patient
-     * reference tokens and signatures have no inbox columns.
+     * 검증된 metadata와 payload hash만 영속화한다. patient reference token과 signature는
+     * inbox column을 갖지 않는다.
      *
-     * @return Generated database identity.
+     * @return 생성된 데이터베이스 identity.
      */
     fun insertReceived(
         envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
@@ -152,10 +152,10 @@ class SchedulingEventRepository {
         }.value
 
     /**
-     * Marks one inbox row processed at the supplied UTC instant.
+     * inbox row 하나를 주어진 UTC instant에 processed로 표시한다.
      *
-     * [reasonCode] is an optional sanitized convergence code, never raw
-     * exception text or payload data.
+     * [reasonCode]는 선택적인 정제된 convergence code이며, 원본 exception text 또는
+     * payload data가 아니어야 한다.
      */
     fun markProcessed(
         inboxId: Long,
@@ -171,10 +171,10 @@ class SchedulingEventRepository {
     }
 
     /**
-     * Records a bounded source-version gap retry.
+     * 길이가 제한된 source-version gap retry를 기록한다.
      *
-     * [attemptCount] is the total attempt number and [replayAfter] is the
-     * earliest UTC retry instant determined by the domain backoff contract.
+     * [attemptCount]는 전체 attempt 번호이고 [replayAfter]는 domain backoff contract가
+     * 결정한 가장 이른 UTC retry instant이다.
      */
     fun markWaitingGap(
         inboxId: Long,
@@ -191,10 +191,10 @@ class SchedulingEventRepository {
     }
 
     /**
-     * Terminally quarantines one trusted inbox row with a stable reason code.
+     * trusted inbox row 하나를 안정적인 reason code와 함께 terminal quarantine 상태로 만든다.
      *
-     * [processedAt] is the UTC terminal instant. [attemptCount] is replaced
-     * only when the caller supplies a final bounded retry count.
+     * [processedAt]은 UTC terminal instant이다. [attemptCount]는 caller가 최종 bounded retry
+     * count를 제공한 경우에만 교체한다.
      */
     fun markQuarantined(
         inboxId: Long,
@@ -212,21 +212,18 @@ class SchedulingEventRepository {
     }
 
     /**
-     * Appends one redacted `AppointmentPlanCreated` event.
+     * redacted `AppointmentPlanCreated` event 하나를 추가한다.
      *
-     * The deterministic event ID binds the trusted inbound event to the newly
-     * created positive [planId]. The row dual-writes the legacy plan foreign key
-     * and generic `APPOINTMENT_PLAN` aggregate identity until every consumer has
-     * migrated. It preserves the real inbound event as causation and never
-     * copies patient references, signatures, treatment details, or credentials.
+     * deterministic event ID는 trusted inbound event와 새로 생성된 양수 [planId]를 묶는다.
+     * 모든 consumer가 migration을 끝낼 때까지 이 row는 legacy plan foreign key와 generic
+     * `APPOINTMENT_PLAN` aggregate identity를 dual-write한다. 실제 inbound event를 causation으로
+     * 보존하지만 patient reference, signature, treatment detail, credential은 절대 복사하지 않는다.
      *
-     * This method does not open or commit a transaction. The caller must invoke
-     * it in the same Exposed transaction that persists the plan and marks the
-     * inbox event processed, so all three effects roll back together.
+     * 이 메서드는 transaction을 열거나 commit하지 않는다. caller는 plan을 영속화하고 inbox event를
+     * processed로 표시하는 같은 Exposed transaction 안에서 호출해야 하며, 그래야 세 효과가 함께 rollback된다.
      *
-     * @param envelope Authenticated, integrity-checked purchase event envelope.
-     * @param planId Positive database identity of the plan created in the same
-     * transaction.
+     * @param envelope 인증 및 integrity check가 완료된 purchase event envelope.
+     * @param planId 같은 transaction에서 생성된 plan의 양수 데이터베이스 identity.
      */
     fun insertPlanCreatedOutbox(
         envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
@@ -255,11 +252,11 @@ class SchedulingEventRepository {
     }
 
     /**
-     * Produces stable plan-event JSON from an explicit privacy-safe allow-list.
+     * 명시적인 privacy-safe allow-list에서 안정적인 plan-event JSON을 생성한다.
      *
-     * Every string is JSON escaped, including metadata from an already trusted
-     * envelope. This prevents malformed payloads or field injection without
-     * broadening the contract to patient references or treatment details.
+     * 이미 trusted envelope에서 온 metadata를 포함해 모든 문자열을 JSON escape한다.
+     * 이렇게 하면 contract를 patient reference 또는 treatment detail로 넓히지 않고도
+     * malformed payload나 field injection을 막을 수 있다.
      */
     private fun planCreatedPayloadJson(
         outboxEventId: String,
@@ -282,7 +279,7 @@ class SchedulingEventRepository {
         }
     }
 
-    /** Appends one JSON string with control characters and metacharacters escaped. */
+    /** control character와 metacharacter를 escape하여 JSON string 하나를 추가한다. */
     private fun StringBuilder.appendJsonString(value: String) {
         append('"')
         value.forEach { character ->
@@ -305,12 +302,11 @@ class SchedulingEventRepository {
     }
 
     /**
-     * Reads database-computed evidence that all V9 outbox writers dual-write.
+     * 모든 V9 outbox writer가 dual-write하고 있음을 보여주는 데이터베이스 계산 evidence를 읽는다.
      *
-     * The aggregation executes in SQL and returns one bounded row regardless of
-     * outbox size. Operators keep policy publication disabled when either
-     * missing or mismatch count is non-zero. This method is observational and
-     * does not repair legacy rows.
+     * aggregation은 SQL에서 실행되며 outbox 크기와 관계없이 길이가 제한된 row 하나를 반환한다.
+     * missing 또는 mismatch count 중 하나라도 non-zero이면 운영자는 policy publication을 비활성 상태로
+     * 유지해야 한다. 이 메서드는 observational이며 legacy row를 repair하지 않는다.
      */
     fun readOutboxDualWriteConvergence(): OutboxDualWriteConvergence {
         val dialect = TransactionManager.current().db.dialect.name

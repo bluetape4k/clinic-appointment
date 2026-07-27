@@ -7,111 +7,109 @@ import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.timestamp
 
 /**
- * Durable activation commands with lease fencing and keyed idempotency.
+ * lease fencing과 keyed idempotency를 가진 durable activation command table입니다.
  *
- * The raw idempotency key has intentionally no column.
+ * raw idempotency key는 의도적으로 컬럼이 없습니다. 저장되는 값은 검증된 key의
+ * HMAC hash뿐이며, replay와 conflict 판단도 privacy-safe metadata로 수행합니다.
  */
 object SchedulingPolicyActivationCommands : LongIdTable("scheduling_policy_activation_commands") {
-    /** Positive tenant owner. */
+    /** 양수 tenant owner입니다. */
     val tenantGroupId = long("tenant_group_id")
 
-    /** Tenant baseline or clinic override boundary. */
+    /** tenant baseline 또는 clinic override boundary입니다. */
     val scope = enumerationByName<PolicyScope>("scope", 32)
 
     /**
-     * Positive clinic identity for [PolicyScope.CLINIC_OVERRIDE], and `null`
-     * only for [PolicyScope.TENANT_DEFAULT].
+     * [PolicyScope.CLINIC_OVERRIDE]에서는 양수 clinic identity이고
+     * [PolicyScope.TENANT_DEFAULT]에서만 `null`입니다.
      *
-     * Cross-dialect uniqueness and joins use [clinicScopeKey], where `0`
-     * represents tenant scope and a positive value must equal this column.
+     * dialect별 unique/join 차이를 없애기 위해 [clinicScopeKey]를 사용합니다. 그 값은
+     * tenant scope에서는 `0`, clinic scope에서는 이 컬럼과 같은 양수 값이어야 합니다.
      */
     val clinicId = long("clinic_id").nullable()
 
-    /** Non-null tenant sentinel `0` or positive clinic ID. */
+    /** non-null tenant sentinel `0` 또는 양수 clinic ID입니다. */
     val clinicScopeKey = long("clinic_scope_key")
 
-    /** Definition selected for activation. */
+    /** activation 대상으로 선택된 definition ID입니다. */
     val definitionId = long("definition_id")
 
     /**
-     * Original terminal command referenced by a manual replay.
+     * 수동 replay가 참조하는 원본 terminal command입니다.
      *
-     * `null` marks an original immediate or scheduled command. A positive value
-     * is accepted only after the repository verifies that the source command is
-     * `MISSED`, belongs to the same scope, and selects the same definition.
-     * Terminal source rows are never rewritten.
+     * `null`은 original immediate/scheduled command를 의미합니다. 양수 값은 repository가
+     * source command가 `MISSED`이고 같은 scope에 속하며 같은 definition을 선택했음을
+     * 검증한 뒤에만 허용됩니다. terminal source row는 다시 쓰지 않습니다.
      */
     val replayOfCommandId = long("replay_of_command_id").nullable()
 
-    /** Exact draft revision validated by approval checks. */
+    /** approval check가 검증한 정확한 draft revision입니다. */
     val expectedDraftRevision = long("expected_draft_revision")
 
-    /** Expected scope-head revision for activation CAS. */
+    /** activation CAS에서 기대하는 scope-head revision입니다. */
     val expectedActiveRevision = long("expected_active_revision")
 
-    /** Lowercase HMAC-SHA-256; the raw idempotency key is never stored. */
+    /** lowercase HMAC-SHA-256입니다. raw idempotency key는 저장하지 않습니다. */
     val idempotencyKeyHash = varchar("idempotency_key_hash", 64)
 
-    /** Lowercase canonical request SHA-256 used to detect key conflicts. */
+    /** key conflict 감지에 사용하는 canonical request의 lowercase SHA-256입니다. */
     val requestFingerprint = varchar("request_fingerprint", 64)
 
-    /** Current durable worker lifecycle. */
+    /** 현재 durable worker lifecycle입니다. */
     val status = enumerationByName<PolicyActivationCommandStatus>("status", 24)
 
-    /** UTC policy activation boundary. */
+    /** UTC policy activation boundary입니다. */
     val effectiveFrom = timestamp("effective_from")
 
-    /** Earliest UTC worker claim instant. */
+    /** worker가 claim할 수 있는 가장 이른 UTC instant입니다. */
     val nextAttemptAt = timestamp("next_attempt_at")
 
-    /** Opaque current worker identity, or null while unclaimed. */
+    /** 현재 worker의 opaque identity입니다. claim 전에는 `null`입니다. */
     val leaseOwner = varchar("lease_owner", 160).nullable()
 
-    /** UTC lease expiry, or null while unclaimed. */
+    /** UTC lease expiry입니다. claim 전에는 `null`입니다. */
     val leaseUntil = timestamp("lease_until").nullable()
 
-    /** Number of successful claims. */
+    /** 성공한 claim 횟수입니다. */
     val attempt = integer("attempt").default(0)
 
     /**
-     * Tenant generation produced atomically with completion.
+     * completion과 atomic하게 생성된 tenant generation입니다.
      *
-     * It is `null` before [PolicyActivationCommandStatus.COMPLETED]. A completed
-     * row must populate this column, [resultClinicGeneration], and [eventId]
-     * together; consumers must not infer publication from this value alone.
+     * [PolicyActivationCommandStatus.COMPLETED] 전에는 `null`입니다. completed row는 이
+     * 컬럼, [resultClinicGeneration], [eventId]를 함께 채워야 하며, consumer는 이 값
+     * 하나만으로 publish 여부를 추론하면 안 됩니다.
      */
     val resultTenantGeneration = long("result_tenant_generation").nullable()
 
     /**
-     * Clinic generation produced atomically with completion.
+     * completion과 atomic하게 생성된 clinic generation입니다.
      *
-     * It is `null` before [PolicyActivationCommandStatus.COMPLETED]. `0` is a
-     * valid completed value when no clinic override generation exists.
+     * [PolicyActivationCommandStatus.COMPLETED] 전에는 `null`입니다. clinic override
+     * generation이 없을 때 완료 row에서 `0`은 유효한 값입니다.
      */
     val resultClinicGeneration = long("result_clinic_generation").nullable()
 
     /**
-     * Deterministic outbox event identity written in the activation transaction.
+     * activation transaction에서 기록되는 deterministic outbox event identity입니다.
      *
-     * It is `null` before [PolicyActivationCommandStatus.COMPLETED]. A completed
-     * row is publishable evidence only when this value and both result
-     * generations are non-null.
+     * [PolicyActivationCommandStatus.COMPLETED] 전에는 `null`입니다. completed row가
+     * publish 가능한 증빙이 되려면 이 값과 두 result generation이 모두 non-null이어야 합니다.
      */
     val eventId = varchar("event_id", 160).nullable()
 
     /**
-     * Sanitized stable error code, or `null` when no retry or terminal failure
-     * has been recorded.
+     * sanitized stable error code입니다. retry 또는 terminal failure가 기록되지 않았으면 `null`입니다.
      *
-     * It must never contain raw exception text, request JSON, an idempotency
-     * key, actor data, credentials, or authentication claims.
+     * raw exception text, request JSON, idempotency key, actor data, credential,
+     * authentication claim을 포함하면 안 됩니다.
      */
     val lastErrorCode = varchar("last_error_code", 96).nullable()
 
-    /** Database insertion instant. */
+    /** database insertion instant입니다. */
     val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
 
-    /** UTC instant of the latest state transition. */
+    /** 마지막 state transition의 UTC instant입니다. */
     val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
 
     init {

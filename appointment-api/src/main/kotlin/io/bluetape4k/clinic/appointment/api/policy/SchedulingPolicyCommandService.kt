@@ -29,44 +29,40 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * Transactional application service for scheduling-policy administration.
+ * 스케줄링 정책 관리를 담당하는 transactional application service이다.
  *
- * This service is the only layer allowed to combine lifecycle changes, approval
- * evidence, scope-head counters, durable activation commands, and an activation
- * outbox event. Repositories deliberately inherit the Exposed transaction
- * opened here. An exception from validation, CAS, command completion, or
- * [publisher] therefore rolls back the entire business decision.
+ * lifecycle 변경, 승인 증적, scope-head counter, durable activation command,
+ * activation outbox event를 하나의 업무 결정으로 묶을 수 있는 유일한 계층이다.
+ * repository는 여기서 열린 Exposed transaction을 의도적으로 상속한다. 따라서 검증,
+ * CAS, command completion, [publisher]에서 예외가 발생하면 전체 업무 결정이 함께 rollback된다.
  *
- * Trust and privacy boundaries:
+ * 신뢰 및 privacy 경계:
  *
- * - [ActorContext] must come from the verified Gateway JWT and path-scoped
- *   `ActorContextResolver`; request payloads cannot supply identity or scope.
- * - typed payload validation and canonical hashing finish before draft commands
- *   reach this service.
- * - raw idempotency keys are validated and HMAC-hashed before a transaction is
- *   opened. Only the digest and a payload-free intent fingerprint are stored.
- * - preview evidence is checked by [previewVerifier] against the exact draft
- *   revision and generation vector. Partial or stale evidence fails closed.
+ * - [ActorContext]는 검증된 Gateway JWT와 path-scoped `ActorContextResolver`에서 와야 한다.
+ *   request payload가 identity 또는 scope를 공급할 수 없다.
+ * - typed payload validation과 canonical hashing은 draft command가 이 service에 도달하기 전에 끝난다.
+ * - raw idempotency key는 transaction을 열기 전에 검증되고 HMAC hash로 변환된다.
+ *   저장되는 값은 digest와 payload-free intent fingerprint뿐이다.
+ * - preview evidence는 정확한 draft revision 및 generation vector를 기준으로 [previewVerifier]가 검증한다.
+ *   partial 또는 stale evidence는 fail-closed로 거절된다.
  *
- * Serialization invariant:
+ * 직렬화 불변식:
  *
- * Every scope mutation locks its scope head. Clinic commands lock the tenant
- * head first and clinic head second even when only the clinic generation is
- * advanced. This prevents tenant/clinic lock inversion and makes interval
- * overlap, retirement, activation, generation, command result, and outbox
- * publication one atomic decision.
+ * 모든 scope mutation은 해당 scope head를 잠근다. clinic command는 clinic generation만
+ * 증가시키는 경우에도 tenant head를 먼저, clinic head를 두 번째로 잠근다. 이렇게 해야
+ * tenant/clinic lock inversion을 피하고 interval overlap, retirement, activation,
+ * generation, command result, outbox publication을 하나의 원자적 결정으로 만들 수 있다.
  *
- * @param policyRepository Caller-transaction definition/approval/head store.
- * @param jobRepository Caller-transaction activation-command store and keyed
- * idempotency hasher.
- * @param tenantBoundaryVerifier Rechecks the numeric tenant ID against trusted
- * request tenant resolution; it must fail closed outside request context.
- * @param previewVerifier Local, fail-closed verifier for completed preview
- * evidence. It must not perform remote I/O while scope locks are held.
- * @param publisher Caller-transaction redacted outbox publisher.
- * @param clock UTC business clock; tests inject a fixed clock.
- * @param activationLease Positive live-owner interval used only inside an
- * immediate activation transaction. The default is 30 seconds.
+ * @param policyRepository caller transaction을 사용하는 definition/approval/head 저장소.
+ * @param jobRepository caller transaction을 사용하는 activation-command 저장소와 keyed idempotency hasher.
+ * @param tenantBoundaryVerifier 숫자 tenant ID를 신뢰된 request tenant resolution과 다시 비교한다.
+ * request context 밖에서는 fail-closed여야 한다.
+ * @param previewVerifier completed preview evidence를 검증하는 local fail-closed verifier.
+ * scope lock을 잡은 동안 remote I/O를 수행하면 안 된다.
+ * @param publisher caller transaction을 사용하는 redacted outbox publisher.
+ * @param clock UTC business clock. 테스트에서는 fixed clock을 주입한다.
+ * @param activationLease immediate activation transaction 안에서만 사용하는 양수 live-owner interval.
+ * 기본값은 30초이다.
  */
 class SchedulingPolicyCommandService(
     private val policyRepository: SchedulingPolicyRepository,
@@ -84,16 +80,14 @@ class SchedulingPolicyCommandService(
     }
 
     /**
-     * Creates a new policy version at revision `1` and lifecycle `DRAFT`.
+     * revision `1`, lifecycle `DRAFT`인 새 정책 버전을 생성한다.
      *
-     * Version allocation and the administrative head increment occur under the
-     * same scope lock. The effective generation remains unchanged because a
-     * draft cannot affect scheduling decisions.
+     * version 할당과 administrative head 증가는 같은 scope lock 아래에서 일어난다.
+     * draft는 스케줄링 결정에 영향을 줄 수 없으므로 effective generation은 변경하지 않는다.
      *
-     * @param command Canonical payload, trusted scope/actor, and expected
-     * non-negative scope revision.
-     * @return Persisted draft plus the post-create scope head.
-     * @throws SchedulingPolicyApiException for authority or stale-head failure.
+     * @param command canonical payload, 신뢰된 scope/actor, 기대하는 non-negative scope revision.
+     * @return 영속화된 draft와 생성 이후 scope head.
+     * @throws SchedulingPolicyApiException 권한 또는 stale head 검증에 실패한 경우.
      */
     fun createDraft(command: CreateSchedulingPolicyDraftCommand): SchedulingPolicyMutationResult {
         authorizeHumanWrite(command.actor, command.scope)
@@ -130,14 +124,13 @@ class SchedulingPolicyCommandService(
     }
 
     /**
-     * Revises editable draft data and invalidates old approvals/previews by revision.
+     * 편집 가능한 draft 데이터를 수정하고 기존 approval/preview를 revision 기준으로 무효화한다.
      *
-     * Evidence rows are retained for audit; no destructive cleanup is performed.
-     * The successful definition revision is exactly
-     * `command.expectedDraftRevision + 1`, while effective generation is
-     * unchanged.
+     * evidence row는 감사 목적으로 보존하며 destructive cleanup은 수행하지 않는다.
+     * 성공한 definition revision은 정확히 `command.expectedDraftRevision + 1`이고,
+     * effective generation은 변경하지 않는다.
      *
-     * @return Persisted revised draft and post-edit administrative head.
+     * @return 영속화된 revised draft와 edit 이후 administrative head.
      */
     fun reviseDraft(command: ReviseSchedulingPolicyDraftCommand): SchedulingPolicyMutationResult {
         authorizeHumanWrite(command.actor, command.scope)
@@ -177,15 +170,14 @@ class SchedulingPolicyCommandService(
     }
 
     /**
-     * Appends idempotent human approval for an exact draft revision.
+     * 정확한 draft revision에 대한 human approval을 idempotent하게 추가한다.
      *
-     * High-impact policy kinds require MFA and forbid the draft creator from
-     * approving their own revision. A repeated approval by the same actor
-     * returns the existing evidence rather than creating a second vote.
+     * 영향도가 큰 policy kind는 MFA를 요구하고 draft 생성자가 자기 revision을 직접 승인하는
+     * 것을 금지한다. 같은 actor의 반복 승인은 두 번째 vote를 만들지 않고 기존 evidence를 반환한다.
      *
-     * @return Existing or newly appended approval for this actor and revision.
-     * @throws SchedulingPolicyApiException when scope, role, revision, MFA, or
-     * creator-separation rules are not satisfied.
+     * @return 이 actor/revision에 대한 기존 또는 신규 approval.
+     * @throws SchedulingPolicyApiException scope, role, revision, MFA, creator-separation
+     * 규칙을 만족하지 못한 경우.
      */
     fun approve(command: ApproveSchedulingPolicyCommand): SchedulingPolicyApprovalRecord {
         authorizeHumanWrite(command.actor, command.scope)
@@ -226,17 +218,14 @@ class SchedulingPolicyCommandService(
     }
 
     /**
-     * Moves a draft to `SCHEDULED` and creates its deterministic pending command.
+     * draft를 `SCHEDULED`로 이동시키고 deterministic pending command를 생성한다.
      *
-     * The service derives its raw HMAC input from durable
-     * `(definitionId, version, effectiveFrom)` values. A runner can therefore
-     * execute by command ID without knowing a human request key. On an
-     * identical retry, the existing scoped command is returned. Scheduling
-     * advances only administrative revision; generation changes later when the
-     * runner activates successfully.
+     * service는 durable `(definitionId, version, effectiveFrom)` 값에서 raw HMAC input을 만든다.
+     * 따라서 runner는 human request key를 몰라도 command ID로 실행할 수 있다.
+     * 동일 retry에서는 기존 scoped command를 반환한다. scheduling은 administrative revision만
+     * 증가시키며, generation은 이후 runner가 성공적으로 activate할 때 변경된다.
      *
-     * @return Durable `PENDING` activation command, or the same existing row on
-     * a deterministic retry.
+     * @return durable `PENDING` activation command. deterministic retry이면 같은 기존 row.
      */
     fun schedule(command: ScheduleSchedulingPolicyCommand): SchedulingPolicyActivationCommandRecord {
         authorizeHumanWrite(command.actor, command.scope)
@@ -326,19 +315,17 @@ class SchedulingPolicyCommandService(
     }
 
     /**
-     * Activates a draft, scheduled command, or explicit replay atomically.
+     * draft, scheduled command, explicit replay 중 하나를 원자적으로 activate한다.
      *
-     * The outbox publisher currently returns the deterministic event ID, so the
-     * insert is performed immediately before durable command completion. Both
-     * writes remain in the same transaction: either both commit with lifecycle
-     * and generations, or neither is visible. Human immediate/replay commands
-     * require a raw idempotency key; scheduled service execution requires a
-     * command ID and forbids a raw key. Clinic activation additionally requires
-     * a positive tenant generation.
+     * outbox publisher는 현재 deterministic event ID를 반환하므로, durable command completion
+     * 직전에 insert를 수행한다. 두 write는 같은 transaction 안에 남는다. 즉 lifecycle과
+     * generation이 함께 commit되거나, 둘 다 보이지 않아야 한다. human immediate/replay command는
+     * raw idempotency key를 요구하고, scheduled service execution은 command ID를 요구하며 raw key를
+     * 금지한다. clinic activation은 추가로 양수 tenant generation을 요구한다.
      *
-     * @return Newly committed activation or a stored completed idempotent result.
-     * @throws SchedulingPolicyApiException for stale preview/approval/head,
-     * overlap, authority, lease, missed-replay, or idempotency intent conflicts.
+     * @return 새로 commit된 activation 또는 저장되어 있던 completed idempotent result.
+     * @throws SchedulingPolicyApiException stale preview/approval/head, interval overlap,
+     * authority, lease, missed-replay, idempotency intent conflict가 발생한 경우.
      */
     fun activate(command: ActivateSchedulingPolicyCommand): SchedulingPolicyActivationResult {
         authorizeActivation(command.actor, command.scope, command.scheduledCommandId)
@@ -453,13 +440,13 @@ class SchedulingPolicyCommandService(
     }
 
     /**
-     * Retires history without deleting definition, approval, command, or event rows.
+     * definition, approval, command, event row를 삭제하지 않고 정책 이력을 retire한다.
      *
-     * Retiring `ACTIVE` advances revision and generation because effective
-     * behavior changed. Retiring `DRAFT` or `SCHEDULED` advances revision only.
-     * The method never rewrites a `MISSED` or `COMPLETED` activation command.
+     * `ACTIVE`를 retire하면 effective behavior가 바뀌므로 revision과 generation을 모두
+     * 증가시킨다. `DRAFT` 또는 `SCHEDULED`를 retire하면 revision만 증가시킨다.
+     * 이 메서드는 `MISSED` 또는 `COMPLETED` activation command를 절대 다시 쓰지 않는다.
      *
-     * @return Retired immutable definition and post-retirement scope head.
+     * @return retire된 불변 definition과 retirement 이후 scope head.
      */
     fun retire(command: RetireSchedulingPolicyCommand): SchedulingPolicyMutationResult {
         authorizeHumanWrite(command.actor, command.scope)
@@ -920,18 +907,16 @@ class SchedulingPolicyCommandService(
         val UNIQUE_VIOLATION_SQL_STATES = setOf("23000", "23505")
 
         /**
-         * Sensitivity is deliberately classified by the exhaustive `when` in
-         * [isSensitive], so adding an enum value cannot silently inherit weak
-         * approval. Capacity, priority, disruption recovery, and operating
-         * extension can change promises or safety margins and require dual MFA
-         * approval. Booking commitment, hold/consent, reconfirmation, and
-         * notification/SLA remain standard only because this foundation limits
-         * them to workflow/evidence timing; a schema that lets one weaken a
-         * safety ceiling must reclassify the kind or carry versioned approval
-         * policy before activation.
+         * sensitivity는 [isSensitive]의 exhaustive `when`에서 의도적으로 분류한다.
+         * 그래야 enum 값이 추가될 때 약한 approval을 조용히 상속하지 못한다.
+         * capacity, priority, disruption recovery, operating extension은 약속이나 안전 여유를
+         * 바꿀 수 있으므로 dual MFA approval이 필요하다. booking commitment, hold/consent,
+         * reconfirmation, notification/SLA가 standard로 남는 이유는 이 foundation에서 이들을
+         * workflow/evidence timing으로 제한하기 때문이다. 안전 상한을 약화할 수 있는 schema가
+         * 추가되면 activation 전에 해당 kind를 재분류하거나 versioned approval policy를 가져야 한다.
          *
-         * This comment is a security decision record, not permission for future
-         * kinds to default to standard sensitivity.
+         * 이 주석은 security decision record이며, 향후 kind가 standard sensitivity를 기본값으로
+         * 사용해도 된다는 허가가 아니다.
          */
     }
 }

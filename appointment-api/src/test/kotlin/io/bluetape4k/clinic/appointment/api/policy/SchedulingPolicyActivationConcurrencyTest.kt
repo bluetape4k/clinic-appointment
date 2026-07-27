@@ -42,11 +42,11 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * Pins the scope-head row as the cross-thread activation serialization point.
+ * 스코프 헤드 행이 병렬 활성화의 유일한 직렬화 지점임을 검증한다.
  *
- * The test intentionally uses different idempotency keys: keyed idempotency is
- * not the mutex. Exactly one transaction may replace the draft, increment the
- * generation, complete a command, and publish an event.
+ * 두 요청은 의도적으로 서로 다른 멱등 키를 사용한다. 따라서 멱등 키가 동시성 mutex인 것처럼
+ * 우연히 통과할 수 없다. 정확히 한 트랜잭션만 초안을 교체하고 세대를 증가시키며 명령 완료와
+ * outbox 이벤트 기록까지 원자적으로 끝내야 한다.
  */
 class SchedulingPolicyActivationConcurrencyTest {
     private val now = Instant.parse("2026-07-27T00:00:00Z")

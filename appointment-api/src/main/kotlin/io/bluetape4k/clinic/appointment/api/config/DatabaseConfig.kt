@@ -49,27 +49,27 @@ import org.springframework.context.annotation.Profile
 import org.springframework.core.annotation.Order
 
 /**
- * Creates the complete Exposed schema for local development and tests.
+ * 로컬 개발과 테스트에서 사용할 전체 Exposed 스키마를 생성한다.
  *
- * This configuration is deliberately disabled when Flyway owns the schema. The
- * table list therefore mirrors the latest Flyway migration, including policy
- * definitions, approval evidence, effective snapshots, activation commands,
- * and preview jobs. Keeping both paths aligned prevents local tests from
- * accepting a schema that production migrations cannot create.
+ * 운영 스키마를 Flyway가 관리하는 환경에서는 이 초기화 구성이 의도적으로 비활성화된다.
+ * 따라서 이 테이블 목록은 정책 정의, 승인 증적, 유효 정책 스냅샷, 활성화 명령,
+ * 미리보기 작업까지 최신 Flyway 마이그레이션과 같은 영속화 표면을 가져야 한다.
+ * 두 경로가 어긋나면 로컬 테스트는 통과하지만 운영 마이그레이션으로는 만들 수 없는
+ * 스키마를 허용하게 되므로, 예제 저장소에서도 이 목록을 명시적으로 유지한다.
  *
- * Production environments must use Flyway instead of this initializer.
+ * 운영 환경은 이 초기화기 대신 Flyway 마이그레이션을 사용해야 한다.
  */
 @Configuration(proxyBeanMethods = false)
 @Profile("dev", "test")
 @ConditionalOnProperty(name = ["spring.flyway.enabled"], havingValue = "false", matchIfMissing = true)
 class SchemaInitConfig {
     /**
-     * Creates all application tables in dependency order for dev/test profiles.
+     * `dev`/`test` 프로필에서 애플리케이션 테이블을 의존 순서대로 생성한다.
      *
-     * Policy definition rows precede approval and execution tables because
-     * approval evidence references a definition. Runtime policy heads and
-     * effective snapshots are registered before activation/preview work tables
-     * so a fresh in-memory database exposes the same persistence surface as V9.
+     * 승인 증적은 정책 정의를 참조하므로 정책 정의 테이블을 승인/실행 테이블보다
+     * 먼저 둔다. 런타임 정책 head와 유효 정책 스냅샷은 활성화/미리보기 작업
+     * 테이블보다 먼저 등록하여, 새 인메모리 데이터베이스도 V9 마이그레이션과
+     * 동일한 정책 영속화 표면을 노출하도록 한다.
      */
     @Bean
     @Order(1)
