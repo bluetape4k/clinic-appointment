@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <title>Scheduling Policy Foundation 설계</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: #0d1d31;
+      --panel-2: #102640;
+      --line: rgba(157, 185, 219, .22);
+      --text: #edf6ff;
+      --muted: #a6b8cc;
+      --cyan: #5bd9e8;
+      --blue: #72aaff;
+      --violet: #b395ff;
+      --green: #74dfad;
+      --amber: #ffd078;
+      --red: #ff8798;
+      --shadow: 0 24px 64px rgba(0, 0, 0, .28);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% -10%, rgba(91, 217, 232, .18), transparent 34rem),
+        radial-gradient(circle at 92% 8%, rgba(179, 149, 255, .15), transparent 30rem),
+        var(--bg);
+      font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+    a { color: var(--cyan); text-underline-offset: 3px; }
+    code {
+      padding: .12rem .38rem;
+      border: 1px solid rgba(114, 170, 255, .24);
+      border-radius: 7px;
+      color: #d6e8ff;
+      background: rgba(48, 84, 126, .28);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+    .shell {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      padding: 28px 20px;
+      border-right: 1px solid var(--line);
+      background: rgba(5, 14, 26, .83);
+      backdrop-filter: blur(18px);
+      overflow: auto;
+    }
+    .brand { margin-bottom: 24px; font-size: 15px; font-weight: 800; }
+    .brand span { display: block; margin-top: 5px; color: var(--cyan); font-size: 11px; letter-spacing: .12em; }
+    nav a {
+      display: block;
+      padding: 8px 10px;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+    }
+    nav a:hover { border-color: var(--cyan); color: var(--text); background: rgba(91, 217, 232, .06); }
+    main { width: min(1180px, 100%); min-width: 0; padding: 50px 52px 100px; margin: 0 auto; }
+    .hero {
+      position: relative;
+      padding: 54px;
+      border: 1px solid rgba(114, 170, 255, .28);
+      border-radius: 30px;
+      background: linear-gradient(135deg, rgba(35, 81, 118, .64), rgba(34, 38, 77, .5)), var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      right: -130px;
+      bottom: -180px;
+      border: 56px solid rgba(91, 217, 232, .08);
+      border-radius: 50%;
+    }
+    .eyebrow { margin: 0 0 10px; color: var(--cyan); font-size: 12px; font-weight: 800; letter-spacing: .15em; }
+    h1, h2, h3 { line-height: 1.22; letter-spacing: -.03em; }
+    h1 { max-width: 800px; margin: 0; font-size: clamp(36px, 6vw, 64px); }
+    h2 { margin: 0 0 20px; font-size: clamp(27px, 4vw, 40px); }
+    h3 { margin: 0 0 10px; font-size: 19px; }
+    p { margin: 0 0 14px; }
+    .lead { max-width: 850px; margin-top: 22px; color: #ccdaeb; font-size: 18px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 25px; }
+    .pill { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: #c9d8e9; background: rgba(7, 20, 36, .58); font-size: 12px; }
+    section { padding-top: 82px; scroll-margin-top: 20px; }
+    .section-lead { max-width: 850px; color: var(--muted); font-size: 16px; }
+    .grid { display: grid; gap: 16px; }
+    .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card {
+      min-width: 0;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(13, 29, 49, .9);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .14);
+    }
+    .card p:last-child { margin-bottom: 0; }
+    .tag {
+      display: inline-block;
+      margin-bottom: 12px;
+      padding: 4px 8px;
+      border-radius: 7px;
+      color: var(--cyan);
+      background: rgba(91, 217, 232, .1);
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(125px, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+      align-items: stretch;
+    }
+    .node {
+      position: relative;
+      min-width: 0;
+      padding: 18px;
+      border: 1px solid rgba(114, 170, 255, .28);
+      border-radius: 16px;
+      background: var(--panel-2);
+    }
+    .node:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -18px;
+      top: 50%;
+      z-index: 2;
+      color: var(--cyan);
+      font-size: 20px;
+      transform: translateY(-50%);
+    }
+    .node strong { display: block; margin-bottom: 6px; }
+    .node span { color: var(--muted); font-size: 13px; }
+    .branch { display: grid; gap: 12px; margin-top: 18px; }
+    .branch-row {
+      display: grid;
+      grid-template-columns: minmax(160px, .8fr) minmax(0, 2.2fr);
+      gap: 16px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: rgba(13, 29, 49, .76);
+    }
+    .branch-row strong { color: var(--cyan); }
+    .callout {
+      margin: 22px 0;
+      padding: 20px 22px;
+      border: 1px solid rgba(91, 217, 232, .28);
+      border-left: 4px solid var(--cyan);
+      border-radius: 14px;
+      background: rgba(12, 39, 56, .6);
+    }
+    .warn { border-color: rgba(255, 208, 120, .3); border-left-color: var(--amber); background: rgba(69, 48, 18, .28); }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; }
+    table { width: 100%; border-collapse: collapse; background: rgba(11, 26, 44, .86); }
+    th, td { padding: 14px 16px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    th { color: #d9eaff; background: rgba(42, 74, 110, .36); font-size: 13px; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .wide-first th:first-child, .wide-first td:first-child { min-width: 330px; width: 34%; }
+    .wide-first td:first-child code { white-space: nowrap; }
+    .status { font-weight: 800; }
+    .green { color: var(--green); }
+    .amber { color: var(--amber); }
+    .red { color: var(--red); }
+    ul { padding-left: 22px; }
+    li + li { margin-top: 6px; }
+    footer { padding-top: 80px; color: var(--muted); font-size: 13px; }
+    @media (max-width: 900px) {
+      .shell { display: block; }
+      nav { position: static; width: 100%; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+      nav a { display: inline-block; }
+      main { padding: 28px 20px 70px; }
+      .hero { padding: 34px 26px; }
+      .two, .three { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .node:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -24px; transform: translateX(50%); }
+      .branch-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <nav>
+    <div class="brand">Scheduling Policy Foundation<span>ISSUE #182 · TYPE A</span></div>
+    <a href="#problem">01 · 문제와 결정</a>
+    <a href="#trust">02 · 인증 경계</a>
+    <a href="#booking">03 · 관리자·고객 예약</a>
+    <a href="#model">04 · 정책 모델</a>
+    <a href="#compile">05 · Compile과 generation</a>
+    <a href="#activation">06 · 활성화 transaction</a>
+    <a href="#storage">07 · 영속 구조</a>
+    <a href="#errors">08 · 실패 의미론</a>
+    <a href="#operations">09 · 운영·설명 기준</a>
+    <a href="#scope">10 · 범위와 후속 작업</a>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <p class="eyebrow">CLINIC APPOINTMENT · POLICY FOUNDATION</p>
+      <h1>병원마다 다른 예약 규칙을<br>재현 가능한 정책으로</h1>
+      <p class="lead">
+        tenant 기본값과 clinic override를 typed policy로 관리하고, Gateway 인증정보를
+        ActorContext로 고정하며, 의사결정 당시의 effective snapshot을 영구 보존한다.
+      </p>
+      <div class="meta">
+        <span class="pill">FUTURE_ONLY</span>
+        <span class="pill">Immutable Snapshot</span>
+        <span class="pill">ActorContext</span>
+        <span class="pill">CAS + Idempotency</span>
+        <span class="pill">H2 · PostgreSQL · MySQL</span>
+        <span class="pill">PLAN APPROVED · STEP 3-P PASS</span>
+      </div>
+    </header>
+
+    <section id="problem">
+      <h2>01 · 문제와 결정</h2>
+      <p class="section-lead">
+        정책을 controller 분기나 nullable 설정으로 흩뜨리면 과거 결정을 설명할 수 없고,
+        동시 활성화와 병원별 override가 충돌한다.
+      </p>
+      <div class="grid three">
+        <article class="card">
+          <span class="tag">REJECTED</span>
+          <h3>정책별 정규화 table</h3>
+          <p>SQL 무결성은 강하지만 kind마다 migration과 compiler branch가 반복된다.</p>
+        </article>
+        <article class="card">
+          <span class="tag">REJECTED</span>
+          <h3>단일 JSON document</h3>
+          <p>확장은 쉽지만 lifecycle, revision, interval 유일성과 타입 검증이 약하다.</p>
+        </article>
+        <article class="card">
+          <span class="tag">SELECTED</span>
+          <h3>Envelope + typed payload</h3>
+          <p>공통 동시성·감사는 정규화하고 payload는 Kotlin sealed type으로 검증한다.</p>
+        </article>
+      </div>
+      <div class="callout">
+        <strong>불변 원칙</strong>
+        <p>새 정책은 앞으로의 작업에만 적용한다. 이미 진행된 예약, hold, 확정 약속과 그 판단 근거는 수정하지 않는다.</p>
+      </div>
+    </section>
+
+    <section id="trust">
+      <h2>02 · 인증 경계</h2>
+      <p class="section-lead">Gateway는 인증하고 예약서비스는 업무 권한을 판단한다.</p>
+      <div class="flow">
+        <div class="node"><strong>Client</strong><span>관리자·직원·고객</span></div>
+        <div class="node"><strong>Gateway</strong><span>인증과 signed JWT 발급</span></div>
+        <div class="node"><strong>Appointment API</strong><span>signature·issuer·audience 검증</span></div>
+        <div class="node"><strong>ActorContext</strong><span>actor·tenant·clinic·patient scope</span></div>
+        <div class="node"><strong>Domain Command</strong><span>권한·감사·상태 전이</span></div>
+      </div>
+      <div class="callout warn">
+        <strong>신뢰하지 않는 값</strong>
+        <p>request body의 actor type, role, tenant, clinic, patient, booking origin과 일반 <code>X-User-*</code> header는 권한 근거가 아니다.</p>
+      </div>
+      <div class="grid two">
+        <article class="card">
+          <h3>보관하는 감사 근거</h3>
+          <p>actor ID/type, issuer, token ID, 인증 시각, correlation ID, tenant/clinic scope.</p>
+        </article>
+        <article class="card">
+          <h3>보관하지 않는 정보</h3>
+          <p>Bearer token 원문, 전체 JWT claims, parser detail, raw idempotency key, 불필요한 환자 개인정보.</p>
+        </article>
+      </div>
+      <div class="callout">
+        <strong>구현 경계</strong>
+        <p>현재 JWT 구현의 issuer/HMAC 검증을 required <code>jti</code>, audience, algorithm allowlist, assurance, actor type, patient subject, 복수 clinic scope까지 확장한다. 모순된 claim은 fail closed하며 실패 응답·로그는 token/claim/parser detail을 redaction한다.</p>
+      </div>
+    </section>
+
+    <section id="booking">
+      <h2>03 · 관리자·고객 예약</h2>
+      <p class="section-lead">
+        예약 생성 출처는 body parameter가 아니라 ActorContext에서 파생한다.
+        이번 foundation은 규칙을 compile하고 실제 예약 상태 머신은 다음 issue가 구현한다.
+      </p>
+      <div class="branch">
+        <div class="branch-row">
+          <strong>관리자·직원 등록</strong>
+          <span><code>ADMIN|STAFF</code> → scope·capacity·동의 증빙 검증 → 정책이 허용하면 <code>CONFIRMED</code></span>
+        </div>
+        <div class="branch-row">
+          <strong>고객 등록</strong>
+          <span><code>PATIENT</code> → own-patient scope 검증 → <code>PROVISIONAL</code> → 관리자 승인 → <code>CONFIRMED</code></span>
+        </div>
+        <div class="branch-row">
+          <strong>승인 중 조건 변경</strong>
+          <span>관리자가 시간·시술 조건을 바꾸면 바로 확정하지 않고 새 proposal과 고객 동의를 요구한다.</span>
+        </div>
+        <div class="branch-row">
+          <strong>확정 후 조건 변경</strong>
+          <span>기존 확정은 유지하고 새 proposal을 만든다. 고객이 새 조건에 동의한 뒤에만 변경을 확정한다.</span>
+        </div>
+      </div>
+      <h3 style="margin-top:28px">가예약 자원 보장 정책</h3>
+      <div class="grid three">
+        <article class="card"><span class="tag">NO_HOLD</span><p>요청만 기록한다. 자원을 점유하지 않는다.</p></article>
+        <article class="card"><span class="tag">SOFT_HOLD</span><p>운영 후보로 표시하지만 충돌 방지 점유는 아니다.</p></article>
+        <article class="card"><span class="tag">HARD_HOLD</span><p>제한된 TTL 동안 실제 자원을 점유한다.</p></article>
+      </div>
+      <div class="callout warn">
+        <strong>TTL 의미</strong>
+        <p>가예약 요청 TTL 기본값은 24시간이며 5분~7일 범위다. HARD_HOLD만 1~30분의 별도 resource hold TTL이 필수이고 request TTL을 넘을 수 없다.</p>
+      </div>
+    </section>
+
+    <section id="model">
+      <h2>04 · 정책 모델</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3>공통 envelope</h3>
+          <p>tenant, scope, clinic, kind, version, schema version, lifecycle, effective interval, revision, payload hash, actor audit.</p>
+        </article>
+        <article class="card">
+          <h3>typed payload</h3>
+          <p><code>BOOKING_COMMITMENT</code>, hold/consent, capacity, reliability, reconfirmation, disruption, extension, SLA.</p>
+        </article>
+      </div>
+      <div class="callout">
+        <strong>Override는 nullable이 아니다</strong>
+        <p><code>INHERIT</code>, <code>SET(value)</code>, <code>DISABLE</code>을 명시한다. clinic은 platform·tenant hard ceiling을 완화할 수 없다.</p>
+      </div>
+      <div class="flow">
+        <div class="node"><strong>Platform</strong><span>safety guardrail</span></div>
+        <div class="node"><strong>Tenant</strong><span>default policy</span></div>
+        <div class="node"><strong>Clinic</strong><span>typed override</span></div>
+        <div class="node"><strong>Compiler</strong><span>deterministic merge</span></div>
+        <div class="node"><strong>Snapshot</strong><span>hash + source map</span></div>
+      </div>
+    </section>
+
+    <section id="compile">
+      <h2>05 · Compile과 generation</h2>
+      <p class="section-lead">
+        동일 logical input은 map 순서와 관계없이 같은 snapshot hash를 만든다.
+        각 값의 출처와 policy version을 함께 보존한다.
+      </p>
+      <div class="grid two">
+        <article class="card">
+          <h3>시간 기준</h3>
+          <p><code>DECISION_TIME</code>은 hold·consent·proposal, <code>SERVICE_TIME</code>은 capacity·reconfirm·SLA에 사용한다.</p>
+        </article>
+        <article class="card">
+          <h3>Generation vector</h3>
+          <p><code>{tenantGeneration, clinicGeneration}</code>으로 clinic 변경이 tenant 전체 cache를 불필요하게 무효화하지 않게 한다.</p>
+        </article>
+      </div>
+      <div class="callout warn">
+        <strong>시간 경계</strong>
+        <p>cache bucket은 effective interval, scheduled activation, emergency expiration, clinic timezone의 DST gap/overlap 경계를 넘지 않는다.</p>
+      </div>
+      <div class="callout">
+        <strong>Effective read API</strong>
+        <p><code>decisionAt</code>과 <code>serviceAt</code>은 offset 포함 RFC 3339 필수 query다. server-now default와 local date-time은 허용하지 않으며 두 값을 <code>Instant</code>로 정규화해 응답에 그대로 표시한다.</p>
+      </div>
+    </section>
+
+    <section id="activation">
+      <h2>06 · 활성화 transaction</h2>
+      <div class="flow">
+        <div class="node"><strong>Validate</strong><span>typed schema·ceiling</span></div>
+        <div class="node"><strong>Preview</strong><span>revision·generation pin</span></div>
+        <div class="node"><strong>Approve</strong><span>actor·assurance evidence</span></div>
+        <div class="node"><strong>CAS Activate</strong><span>head·interval·generation</span></div>
+        <div class="node"><strong>Outbox</strong><span>atomic event insert</span></div>
+      </div>
+      <ul>
+        <li>validation과 canonical hash는 transaction 전에 수행한다.</li>
+        <li>head CAS, previous retirement, generation 증가, activation result, outbox insert는 한 transaction이다.</li>
+        <li>bounded idempotency key는 keyed hash만 저장한다. 같은 hash와 fingerprint는 기존 결과를 반환하며 raw key는 저장·로그·응답하지 않는다.</li>
+        <li>다른 fingerprint, stale preview, interval overlap은 서로 다른 stable code로 거절한다.</li>
+        <li>민감 정책은 approve와 activate authority를 분리하고 작성자·승인자·활성자 직무분리를 검증한다.</li>
+        <li>interval overlap은 세 DB 모두 scope head lock 안에서 검사해 같은 conflict code로 매핑한다.</li>
+      </ul>
+      <div class="callout warn">
+        <strong>Scheduled activation 복구</strong>
+        <p>DB time due scan, lease CAS, deterministic idempotency key, bounded retry와 startup catch-up을 사용한다. 60초 지연은 warning, 5분 지연은 MISSED critical이며 이전 active를 유지한 채 manual replay 또는 retire한다.</p>
+      </div>
+    </section>
+
+    <section id="storage">
+      <h2>07 · 영속 구조</h2>
+      <div class="table-wrap">
+        <table class="wide-first">
+          <thead><tr><th>Table</th><th>책임</th><th>핵심 invariant</th></tr></thead>
+          <tbody>
+          <tr><td><code>scheduling_policy_definitions</code></td><td>공통 envelope와 typed canonical payload</td><td>scope/version 유일성, 불변 published payload</td></tr>
+          <tr><td><code>scheduling_policy_approvals</code></td><td>draft revision별 승인 evidence</td><td>stale revision과 동일 actor 이중 승인 거절</td></tr>
+          <tr><td><code>scheduling_policy_scope_heads</code></td><td>scope-wide revision과 generation</td><td>모든 policy kind 활성화 CAS serialization point</td></tr>
+          <tr><td><code>effective_scheduling_policy_snapshots</code></td><td>compiled payload와 source map</td><td>불변 hash와 tenant/clinic 경계</td></tr>
+          <tr><td><code>scheduling_policy_activation_commands</code></td><td>keyed idempotency hash·due runner lease·retry</td><td>동일 hash+fingerprint 재현, raw key 비보존, crash catch-up, MISSED 가시성</td></tr>
+          <tr><td><code>scheduling_policy_preview_jobs</code></td><td>bounded async preview</td><td>cursor·revision·generation·deadline checkpoint</td></tr>
+          <tr><td><code>scheduling_outbox_events</code></td><td>generic aggregate event</td><td>V9 nullable aggregate 열 + nullable legacy planId, backfill/dual-write; 운영 parity 후 별도 V10 aggregate NOT NULL cutover</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="errors">
+      <h2>08 · 실패 의미론</h2>
+      <div class="table-wrap">
+        <table class="wide-first">
+          <thead><tr><th>Stable code</th><th>HTTP</th><th>Retryable</th><th>의미</th><th>Caller action</th></tr></thead>
+          <tbody>
+          <tr><td><code>POLICY_PAYLOAD_INVALID</code></td><td>400</td><td>false</td><td>typed validation 실패</td><td>payload 수정</td></tr>
+          <tr><td><code>POLICY_OVERRIDE_FORBIDDEN</code></td><td>400</td><td>false</td><td>hard ceiling 완화 또는 필수값 disable</td><td>override 수정</td></tr>
+          <tr><td><code>POLICY_ACTOR_FORBIDDEN</code></td><td>403</td><td>false</td><td>actor scope 또는 명령 권한 없음</td><td>권한·대상 확인</td></tr>
+          <tr><td><code>POLICY_RESOURCE_NOT_FOUND</code></td><td>404</td><td>false</td><td>path scope와 resource 불일치 또는 없음</td><td>tenant·clinic·ID 확인</td></tr>
+          <tr><td><code>POLICY_DRAFT_STALE</code></td><td>409</td><td>false</td><td>expected revision 불일치</td><td>최신 draft 재조회</td></tr>
+          <tr><td><code>POLICY_PREVIEW_STALE</code></td><td>409</td><td>false</td><td>preview revision/generation 불일치</td><td>preview 재실행</td></tr>
+          <tr><td><code>POLICY_ACTIVATION_CONFLICT</code></td><td>409</td><td>false</td><td>head CAS 또는 interval 충돌</td><td>최신 active head 재조회</td></tr>
+          <tr><td><code>POLICY_IDEMPOTENCY_CONFLICT</code></td><td>409</td><td>false</td><td>같은 key의 다른 명령</td><td>의도 확인 후 새 key 사용</td></tr>
+          <tr><td><code>POLICY_APPROVAL_INSUFFICIENT</code></td><td>422</td><td>false</td><td>승인 수 또는 assurance 부족</td><td>필요한 승인 수집</td></tr>
+          <tr><td><code>POLICY_PREVIEW_LIMITED</code></td><td>429</td><td>true</td><td>tenant async queue 포화</td><td>Retry-After 뒤 같은 요청 재시도</td></tr>
+          <tr><td><code>POLICY_ACTIVATION_MISSED</code></td><td>409</td><td>false</td><td>scheduled deadline 경과</td><td>manual replay 또는 retire</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>모든 오류는 HTTP status, stable code, retryable, correlation ID와 caller/operator action을 제공한다. 같은 요청의 자동 재시도는 <code>POLICY_PREVIEW_LIMITED</code>만 허용한다. Preview는 동기 완료 시 200, async 전환 시 202와 jobId·Location·Retry-After를 반환하며 job endpoint에서 terminal status를 조회한다.</p>
+    </section>
+
+    <section id="operations">
+      <h2>09 · 운영과 설명 기준</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3>운영 증거</h3>
+          <p>activation 결과·lateness·missed, compile latency, authoritative generation read, stale cache rejection, preview deadline, outbox 상태를 metric과 structured log로 남긴다.</p>
+        </article>
+        <article class="card">
+          <h3>안전한 rollout</h3>
+          <p>feature flag off → shadow compile → effective read/admin API → 후속 consumer 순으로 활성화한다.</p>
+        </article>
+      </div>
+      <div class="grid two">
+        <article class="card">
+          <h3>Cache correctness</h3>
+          <p>activation event는 eviction 최적화다. 모든 effective read는 DB scope head generation을 확인하며 DB 장애 시 stale snapshot을 반환하지 않는다.</p>
+        </article>
+        <article class="card">
+          <h3>Rollback과 forward repair</h3>
+          <p>이전 compatible version을 새 activation으로 복구하고 snapshot은 수정하지 않는다. destructive down migration과 DB 직접 수정은 금지한다.</p>
+        </article>
+      </div>
+      <div class="callout warn">
+        <strong>기본 경보</strong>
+        <p>scheduled lateness 60초/5분, outbox pending 60초·failed 지속, preview stale/deadline 5%, activation conflict 5%, authoritative generation read failure 1%를 warning/critical 기준으로 삼고 tenant별 조정한다.</p>
+      </div>
+      <div class="callout">
+        <strong>코드 설명 원칙</strong>
+        <p>주석과 KDoc은 코드 문장을 반복하지 않는다. transaction 소유권, 상태 전이 거절 이유, CAS가 보호하는 invariant, hash 규칙, caller/operator action처럼 “왜 필요한가”를 설명한다.</p>
+      </div>
+    </section>
+
+    <section id="scope">
+      <h2>10 · 범위와 후속 작업</h2>
+      <div class="grid two">
+        <article class="card">
+          <span class="tag">THIS ISSUE</span>
+          <h3>정책 foundation</h3>
+          <p>typed policy, ActorContext, compiler, snapshot, lifecycle, approval, generation, preview, cache, generic outbox, admin API.</p>
+        </article>
+        <article class="card">
+          <span class="tag">FOLLOW-UP</span>
+          <h3>실제 예약 상태 머신</h3>
+          <p>PROVISIONAL·HELD·CONFIRMED, 고객 동의, resource allocation, waitlist, disruption, overbooking.</p>
+        </article>
+      </div>
+      <div class="callout warn">
+        <strong>기존 약속 보호</strong>
+        <p>정책 활성화는 이미 진행된 시술·확정 예약·유효 hold를 조용히 취소하거나 재작성하지 않는다. 실제 안전 위반은 정책 변경이 아니라 disruption workflow로 처리한다.</p>
+      </div>
+    </section>
+
+    <footer>
+      규범 문서:
+      <a href="2026-07-27-scheduling-policy-foundation-design.md">2026-07-27-scheduling-policy-foundation-design.md</a>
+      · Issue <a href="https://github.com/bluetape4k/clinic-appointment/issues/182">#182</a>
+    </footer>
+  </main>
+</div>
+</body>
+</html>
