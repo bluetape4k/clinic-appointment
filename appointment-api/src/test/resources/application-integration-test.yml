@@ -2,5 +2,7 @@ scheduling:
     security:
         jwt:
             enabled: true
-            secret: dGVzdC1zZWNyZXQta2V5LWZvci1hcHBvaW50bWVudC1zY2hlZHVsaW5nLXN5c3RlbS0yNTY=
+            secret: dGVzdC1zZWNyZXQta2V5LWZvci1hcHBvaW50bWVudC1zY2hlZHVsaW5nLXN5c3RlbS01MTItYml0LW1hdGVyaWFsIQ==
             issuer: appointment-auth-service
+            audience: appointment-api
+            allowed-clock-skew: 30s
