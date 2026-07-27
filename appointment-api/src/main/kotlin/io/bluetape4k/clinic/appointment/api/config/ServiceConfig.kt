@@ -1,7 +1,13 @@
 package io.bluetape4k.clinic.appointment.api.config
 
+import io.bluetape4k.clinic.appointment.api.policy.PolicyActivationPublisher
+import io.bluetape4k.clinic.appointment.api.policy.PolicyPreviewEvidenceVerifier
+import io.bluetape4k.clinic.appointment.api.policy.PolicyTenantBoundaryVerifier
+import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyCommandService
 import io.bluetape4k.clinic.appointment.api.service.DashboardStatsService
+import io.bluetape4k.clinic.appointment.api.tenant.TenantContext
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
+import io.bluetape4k.clinic.appointment.event.policy.SchedulingPolicyEventRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
@@ -14,6 +20,8 @@ import io.bluetape4k.clinic.appointment.repository.EquipmentUnavailabilityReposi
 import io.bluetape4k.clinic.appointment.repository.HolidayRepository
 import io.bluetape4k.clinic.appointment.repository.ProductCatalogRepository
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
+import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyJobRepository
+import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
@@ -24,11 +32,13 @@ import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentStateMachine
 import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
 import io.bluetape4k.logging.KLogging
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.core.env.Environment
+import java.util.Base64
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(PlanFoundationProperties::class)
@@ -76,6 +86,36 @@ class ServiceConfig {
 
     @Bean
     fun appointmentPlanRepository(): AppointmentPlanRepository = AppointmentPlanRepository()
+
+    @Bean
+    fun schedulingPolicyRepository(): SchedulingPolicyRepository = SchedulingPolicyRepository()
+
+    @Bean
+    fun schedulingPolicyEventRepository(): SchedulingPolicyEventRepository = SchedulingPolicyEventRepository()
+
+    /**
+     * Creates the keyed-idempotency repository only when an operator supplies
+     * a dedicated Base64 secret.
+     *
+     * The secret is not derived from the JWT signing key and has no source-code
+     * default. Decoded bytes are copied by the repository and never exposed.
+     * Environments enabling policy commands must provide at least 16 decoded
+     * bytes at `scheduling.policy.idempotency-hash-secret`.
+     */
+    @Bean
+    @ConditionalOnProperty("scheduling.policy.idempotency-hash-secret")
+    fun schedulingPolicyJobRepository(environment: Environment): SchedulingPolicyJobRepository {
+        val encoded = environment.getRequiredProperty("scheduling.policy.idempotency-hash-secret")
+        val decoded = try {
+            Base64.getDecoder().decode(encoded)
+        } catch (ex: IllegalArgumentException) {
+            throw IllegalStateException(
+                "scheduling.policy.idempotency-hash-secret must be valid Base64",
+                ex,
+            )
+        }
+        return SchedulingPolicyJobRepository(decoded)
+    }
 
     @Bean
     fun tenantClinicAccessChecker(
@@ -150,6 +190,40 @@ class ServiceConfig {
     fun appointmentPlanQueryService(
         appointmentPlanRepository: AppointmentPlanRepository,
     ): AppointmentPlanQueryService = AppointmentPlanQueryService(appointmentPlanRepository)
+
+    /**
+     * Wires policy commands behind explicit secret configuration.
+     *
+     * Until the durable preview implementation is installed, the missing
+     * [PolicyPreviewEvidenceVerifier] is replaced by a fail-closed verifier.
+     * Draft creation/revision/approval remain usable, while scheduling and
+     * activation cannot bypass preview evidence.
+     */
+    @Bean
+    @ConditionalOnProperty("scheduling.policy.idempotency-hash-secret")
+    fun schedulingPolicyCommandService(
+        schedulingPolicyRepository: SchedulingPolicyRepository,
+        schedulingPolicyJobRepository: SchedulingPolicyJobRepository,
+        schedulingPolicyEventRepository: SchedulingPolicyEventRepository,
+        previewVerifierProvider: ObjectProvider<PolicyPreviewEvidenceVerifier>,
+    ): SchedulingPolicyCommandService {
+        val previewVerifier = previewVerifierProvider.getIfAvailable {
+            PolicyPreviewEvidenceVerifier { _, _, _ -> false }
+        }
+        val publisher = PolicyActivationPublisher(schedulingPolicyEventRepository::insertPolicyActivated)
+        val tenantBoundaryVerifier = PolicyTenantBoundaryVerifier { scope, actor ->
+            TenantContext.current()?.let { tenant ->
+                tenant.id == scope.tenantGroupId && tenant.tenantCode in actor.allowedTenantCodes
+            } == true
+        }
+        return SchedulingPolicyCommandService(
+            schedulingPolicyRepository,
+            schedulingPolicyJobRepository,
+            tenantBoundaryVerifier,
+            previewVerifier,
+            publisher,
+        )
+    }
 
     @Bean
     fun planFoundationPropertiesValidator(

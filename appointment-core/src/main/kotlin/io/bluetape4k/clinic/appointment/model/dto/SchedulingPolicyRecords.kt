@@ -61,8 +61,9 @@ data class PolicyScopeRef(
  * @property effectiveUntil Exclusive UTC boundary, or `null` when open ended.
  * @property revision Positive draft revision to which approvals bind.
  * @property payloadHash Lowercase 64-character canonical payload SHA-256.
- * @property payloadJson Canonical, schema-versioned JSON. It must not contain
- * actor credentials or an idempotency key.
+ * @property payloadJson Canonical, schema-versioned JSON limited to 256 KiB in
+ * UTF-8 bytes across H2, PostgreSQL, and MySQL. It must not contain actor
+ * credentials or an idempotency key.
  * @property createdByActorId Stable trusted Gateway subject, never a display
  * name, access token, or request-body identity.
  * @property createdByActorRole Role captured for audit at creation time.
@@ -196,6 +197,10 @@ enum class PolicyActivationCommandStatus {
  * @property clinicId Positive clinic for override scope, otherwise `null`.
  * @property clinicScopeKey Non-null uniqueness sentinel derived from scope.
  * @property definitionId Definition selected for activation.
+ * @property replayOfCommandId Immutable source command for a manual replay, or
+ * `null` for an original immediate or scheduled activation. A non-null value
+ * must identify a terminal `MISSED` command in the same tenant and policy
+ * scope; it is audit lineage, not an instruction to rewrite the source row.
  * @property expectedDraftRevision Draft revision validated by the caller.
  * @property expectedActiveRevision Scope-head revision expected at activation.
  * @property idempotencyKeyHash Lowercase HMAC-SHA-256 of the validated raw key.
@@ -230,6 +235,7 @@ data class SchedulingPolicyActivationCommandRecord(
     val clinicId: Long? = null,
     val clinicScopeKey: Long = if (scope == PolicyScope.TENANT_DEFAULT) 0L else requireNotNull(clinicId),
     val definitionId: Long,
+    val replayOfCommandId: Long? = null,
     val expectedDraftRevision: Long,
     val expectedActiveRevision: Long,
     val idempotencyKeyHash: String,

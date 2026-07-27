@@ -538,6 +538,7 @@ internal fun ResultRow.toSchedulingPolicyActivationCommandRecord() = SchedulingP
     clinicId = this[SchedulingPolicyActivationCommands.clinicId],
     clinicScopeKey = this[SchedulingPolicyActivationCommands.clinicScopeKey],
     definitionId = this[SchedulingPolicyActivationCommands.definitionId],
+    replayOfCommandId = this[SchedulingPolicyActivationCommands.replayOfCommandId],
     expectedDraftRevision = this[SchedulingPolicyActivationCommands.expectedDraftRevision],
     expectedActiveRevision = this[SchedulingPolicyActivationCommands.expectedActiveRevision],
     idempotencyKeyHash = this[SchedulingPolicyActivationCommands.idempotencyKeyHash],

@@ -20,10 +20,10 @@ import java.util.UUID
 /**
  * Global exception normalization for scheduling APIs.
  *
- * Catalog-product and appointment-plan foundation paths use the same stable
- * customer-facing error envelope. Domain, decoding, and unexpected exception
- * details are reduced to public codes and messages so request payloads,
- * persistence identifiers, and stack details are not exposed.
+ * Catalog-product, appointment-plan, and scheduling-policy paths use the same
+ * stable customer-facing error envelope. Domain, decoding, and unexpected
+ * exception details are reduced to public codes and messages so request
+ * payloads, persistence identifiers, and stack details are not exposed.
  *
  * The correlation ID established before authentication is reused in the error
  * body. Security failures raised inside the Spring Security filter chain are
@@ -41,6 +41,31 @@ class GlobalExceptionHandler {
         request: HttpServletRequest,
     ): ResponseEntity<SchedulingApiErrorResponse> =
         foundationResponse(ex.error, request)
+
+    /**
+     * Maps the sole scheduling-policy error registry to the shared wire DTO.
+     *
+     * [SchedulingPolicyApiException.detail] is already sanitized by the
+     * application service. The raw exception, request body, JWT, claims, SQL,
+     * and idempotency material are deliberately excluded.
+     */
+    @ExceptionHandler(SchedulingPolicyApiException::class)
+    fun handleSchedulingPolicy(
+        ex: SchedulingPolicyApiException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) as? String
+            ?: UUID.randomUUID().toString()
+        return ResponseEntity.status(ex.errorCode.httpStatus).body(
+            SchedulingApiErrorResponse(
+                error = ex.detail,
+                errorCode = ex.errorCode.name,
+                correlationId = correlationId,
+                retryable = ex.errorCode.retryable,
+                action = ex.errorCode.action,
+            )
+        )
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(
@@ -97,7 +122,7 @@ class GlobalExceptionHandler {
         }
         log.warn(ex) { "Bad request: ${ex.message}" }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-            .body(ApiResponse.error<Nothing>(ex.message ?: "Bad request"))
+            .body(ApiResponse.error<Nothing>("Bad request"))
     }
 
     @ExceptionHandler(NoSuchElementException::class)
@@ -111,7 +136,7 @@ class GlobalExceptionHandler {
         }
         log.warn(ex) { "Not found: ${ex.message}" }
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(ApiResponse.error<Nothing>(ex.message ?: "Not found"))
+            .body(ApiResponse.error<Nothing>("Not found"))
     }
 
     @ExceptionHandler(IllegalStateException::class)
@@ -125,7 +150,7 @@ class GlobalExceptionHandler {
         }
         log.warn(ex) { "Conflict: ${ex.message}" }
         return ResponseEntity.status(HttpStatus.CONFLICT)
-            .body(ApiResponse.error<Nothing>(ex.message ?: "Conflict"))
+            .body(ApiResponse.error<Nothing>("Conflict"))
     }
 
     @ExceptionHandler(IdempotencyKeyConflictException::class)
@@ -154,7 +179,7 @@ class GlobalExceptionHandler {
         }
         log.warn(ex) { "Internal server error: ${ex.message}" }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(ApiResponse.error<Nothing>(ex.message ?: "Internal server error"))
+            .body(ApiResponse.error<Nothing>("Internal server error"))
     }
 
     private fun foundationResponse(

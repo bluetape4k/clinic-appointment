@@ -33,6 +33,16 @@ object SchedulingPolicyActivationCommands : LongIdTable("scheduling_policy_activ
     /** Definition selected for activation. */
     val definitionId = long("definition_id")
 
+    /**
+     * Original terminal command referenced by a manual replay.
+     *
+     * `null` marks an original immediate or scheduled command. A positive value
+     * is accepted only after the repository verifies that the source command is
+     * `MISSED`, belongs to the same scope, and selects the same definition.
+     * Terminal source rows are never rewritten.
+     */
+    val replayOfCommandId = long("replay_of_command_id").nullable()
+
     /** Exact draft revision validated by approval checks. */
     val expectedDraftRevision = long("expected_draft_revision")
 
@@ -113,5 +123,6 @@ object SchedulingPolicyActivationCommands : LongIdTable("scheduling_policy_activ
             idempotencyKeyHash,
         )
         index("idx_policy_activation_due", false, status, nextAttemptAt, leaseUntil)
+        index("idx_policy_activation_replay_source", false, replayOfCommandId)
     }
 }

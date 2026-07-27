@@ -18,7 +18,7 @@ CREATE TABLE scheduling_policy_definitions (
     effective_until DATETIME(6),
     revision BIGINT NOT NULL,
     payload_hash VARCHAR(64) NOT NULL,
-    payload_json TEXT NOT NULL,
+    payload_json MEDIUMTEXT NOT NULL,
     created_by_actor_id VARCHAR(160) NOT NULL,
     created_by_actor_role VARCHAR(24) NOT NULL,
     change_reason VARCHAR(1000) NOT NULL,
@@ -85,11 +85,11 @@ CREATE TABLE effective_scheduling_policy_snapshots (
     service_at DATETIME(6) NOT NULL,
     tenant_generation BIGINT NOT NULL,
     clinic_generation BIGINT NOT NULL,
-    source_versions_json TEXT NOT NULL,
-    source_by_path_json TEXT NOT NULL,
-    disabled_features_json TEXT NOT NULL,
-    warnings_json TEXT NOT NULL,
-    payload_json TEXT NOT NULL,
+    source_versions_json MEDIUMTEXT NOT NULL,
+    source_by_path_json MEDIUMTEXT NOT NULL,
+    disabled_features_json MEDIUMTEXT NOT NULL,
+    warnings_json MEDIUMTEXT NOT NULL,
+    payload_json MEDIUMTEXT NOT NULL,
     snapshot_hash VARCHAR(64) NOT NULL,
     created_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) NOT NULL,
     CONSTRAINT uq_effective_policy_hash UNIQUE (tenant_group_id, clinic_id, snapshot_hash),
@@ -110,6 +110,7 @@ CREATE TABLE scheduling_policy_activation_commands (
     clinic_id BIGINT,
     clinic_scope_key BIGINT NOT NULL,
     definition_id BIGINT NOT NULL,
+    replay_of_command_id BIGINT,
     expected_draft_revision BIGINT NOT NULL,
     expected_active_revision BIGINT NOT NULL,
     idempotency_key_hash VARCHAR(64) NOT NULL,
@@ -153,7 +154,8 @@ CREATE TABLE scheduling_policy_activation_commands (
                 AND result_clinic_generation IS NOT NULL AND event_id IS NOT NULL)
         )
     ),
-    INDEX idx_policy_activation_due (status, next_attempt_at, lease_until)
+    INDEX idx_policy_activation_due (status, next_attempt_at, lease_until),
+    INDEX idx_policy_activation_replay_source (replay_of_command_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE scheduling_policy_preview_jobs (

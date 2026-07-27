@@ -78,6 +78,7 @@ class SchedulingPolicyJobRepository(
             it[clinicId] = record.clinicId
             it[clinicScopeKey] = record.clinicScopeKey
             it[definitionId] = record.definitionId
+            it[replayOfCommandId] = record.replayOfCommandId
             it[expectedDraftRevision] = record.expectedDraftRevision
             it[expectedActiveRevision] = record.expectedActiveRevision
             it[idempotencyKeyHash] = record.idempotencyKeyHash
@@ -109,6 +110,37 @@ class SchedulingPolicyJobRepository(
             .where { SchedulingPolicyActivationCommands.id eq commandId }
             .singleOrNull()
             ?.toSchedulingPolicyActivationCommandRecord()
+
+    /**
+     * Finds the command occupying one scoped keyed-idempotency boundary.
+     *
+     * Lookup uses only the HMAC digest; the raw idempotency header is never
+     * accepted by this method, persisted, logged, or returned. The tenant,
+     * scope, and non-null clinic sentinel prevent a digest used in one clinic
+     * from disclosing or replaying a command in another scope.
+     *
+     * @param scope Exact authorized policy scope.
+     * @param idempotencyKeyHash Lowercase 64-character HMAC-SHA-256 digest.
+     * @return Existing command, or `null` when the scoped key is unused.
+     */
+    fun findActivation(
+        scope: PolicyScopeRef,
+        idempotencyKeyHash: String,
+    ): SchedulingPolicyActivationCommandRecord? {
+        require(SHA256_REGEX.matches(idempotencyKeyHash)) {
+            "idempotencyKeyHash must be lowercase SHA-256"
+        }
+        return SchedulingPolicyActivationCommands
+            .selectAll()
+            .where {
+                (SchedulingPolicyActivationCommands.tenantGroupId eq scope.tenantGroupId) and
+                    (SchedulingPolicyActivationCommands.scope eq scope.scope) and
+                    (SchedulingPolicyActivationCommands.clinicScopeKey eq scope.clinicScopeKey) and
+                    (SchedulingPolicyActivationCommands.idempotencyKeyHash eq idempotencyKeyHash)
+            }
+            .singleOrNull()
+            ?.toSchedulingPolicyActivationCommandRecord()
+    }
 
     /**
      * Claims an eligible activation command or reclaims an expired lease.
@@ -181,6 +213,45 @@ class SchedulingPolicyJobRepository(
             it[leaseUntil] = null
             it[lastErrorCode] = null
             it[updatedAt] = completedAt
+        } == 1
+    }
+
+    /**
+     * Marks a claimed activation terminally missed for the live lease owner.
+     *
+     * A stale or wrong owner receives `false` and cannot erase a completed
+     * result. [errorCode] is a stable sanitized operator code, never raw
+     * exception text, request JSON, actor data, claims, or an idempotency key.
+     * The source row remains immutable afterward; a human recovery creates a
+     * new command whose `replayOfCommandId` references this row.
+     *
+     * @param missedAt UTC transition instant that must precede the live lease
+     * expiry; an expired worker must reacquire a lease before deciding MISSED.
+     */
+    fun markActivationMissed(
+        commandId: Long,
+        owner: String,
+        errorCode: String,
+        missedAt: Instant,
+    ): Boolean {
+        require(commandId > 0) { "commandId must be positive" }
+        require(owner.isNotBlank() && owner.length <= MAX_OWNER_LENGTH) {
+            "owner must contain 1..$MAX_OWNER_LENGTH characters"
+        }
+        require(STABLE_ERROR_CODE_REGEX.matches(errorCode)) {
+            "errorCode must contain 1..$MAX_ERROR_CODE_LENGTH uppercase safe characters"
+        }
+        return SchedulingPolicyActivationCommands.update({
+            (SchedulingPolicyActivationCommands.id eq commandId) and
+                (SchedulingPolicyActivationCommands.status eq PolicyActivationCommandStatus.CLAIMED) and
+                (SchedulingPolicyActivationCommands.leaseOwner eq owner) and
+                (SchedulingPolicyActivationCommands.leaseUntil greater missedAt)
+        }) {
+            it[status] = PolicyActivationCommandStatus.MISSED
+            it[leaseOwner] = null
+            it[leaseUntil] = null
+            it[lastErrorCode] = errorCode
+            it[updatedAt] = missedAt
         } == 1
     }
 
@@ -337,6 +408,25 @@ class SchedulingPolicyJobRepository(
             "clinicScopeKey must match scope and clinicId"
         }
         require(record.definitionId > 0) { "definitionId must be positive" }
+        record.replayOfCommandId?.let { sourceCommandId ->
+            require(sourceCommandId > 0) { "replayOfCommandId must be positive" }
+            val source = requireNotNull(findActivation(sourceCommandId)) {
+                "replayOfCommandId must identify an existing activation command"
+            }
+            require(source.status == PolicyActivationCommandStatus.MISSED) {
+                "replay source command must be MISSED"
+            }
+            require(
+                source.tenantGroupId == record.tenantGroupId &&
+                    source.scope == record.scope &&
+                    source.clinicScopeKey == record.clinicScopeKey
+            ) {
+                "replay source command must belong to the same policy scope"
+            }
+            require(source.definitionId == record.definitionId) {
+                "replay source command must select the same definition"
+            }
+        }
         require(record.expectedDraftRevision > 0) { "expectedDraftRevision must be positive" }
         require(record.expectedActiveRevision >= 0) { "expectedActiveRevision must be non-negative" }
         require(SHA256_REGEX.matches(record.idempotencyKeyHash)) {
@@ -414,8 +504,10 @@ class SchedulingPolicyJobRepository(
         const val MIN_HASH_SECRET_BYTES = 16
         const val MAX_OWNER_LENGTH = 160
         const val MAX_EVENT_ID_LENGTH = 160
+        const val MAX_ERROR_CODE_LENGTH = 96
         val IDEMPOTENCY_KEY_REGEX = Regex("[A-Za-z0-9._:/-]{1,128}")
         val SHA256_REGEX = Regex("[0-9a-f]{64}")
+        val STABLE_ERROR_CODE_REGEX = Regex("[A-Z][A-Z0-9_]{0,${MAX_ERROR_CODE_LENGTH - 1}}")
         val ACTIVATION_READY_STATES = listOf(
             PolicyActivationCommandStatus.PENDING,
             PolicyActivationCommandStatus.RETRY_WAIT,

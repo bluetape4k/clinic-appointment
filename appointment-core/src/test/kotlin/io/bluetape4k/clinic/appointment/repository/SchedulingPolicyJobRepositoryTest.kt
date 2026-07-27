@@ -11,6 +11,7 @@ import io.bluetape4k.clinic.appointment.model.dto.PolicyPreviewCursor
 import io.bluetape4k.clinic.appointment.model.dto.PolicyPreviewProgress
 import io.bluetape4k.clinic.appointment.model.dto.PolicyActivationCommandStatus
 import io.bluetape4k.clinic.appointment.model.dto.PolicyPreviewJobStatus
+import io.bluetape4k.clinic.appointment.model.dto.PolicyScopeRef
 import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyActivationCommandRecord
 import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyPreviewJobRecord
 import io.bluetape4k.clinic.appointment.model.policy.PolicyGenerationVector
@@ -154,6 +155,75 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
             completed.resultClinicGeneration shouldBeEqualTo 1L
             completed.eventId shouldBeEqualTo "event-current"
             completed.leaseOwner.shouldBeNull()
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `scoped idempotency lookup and manual replay preserve immutable missed evidence`(testDB: TestDB) {
+        withJobTables(testDB) {
+            val now = Instant.parse("2026-07-27T00:00:00Z")
+            val scope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
+            val originalHash = repository.hashIdempotencyKey("activation-original")
+            val original = repository.createActivation(
+                activation(
+                    idempotencyKeyHash = originalHash,
+                    requestFingerprint = "a".repeat(64),
+                    nextAttemptAt = now,
+                )
+            )
+            val originalId = original.id.shouldNotBeNull()
+
+            repository.findActivation(scope, originalHash).shouldNotBeNull().id shouldBeEqualTo originalId
+            repository.findActivation(
+                PolicyScopeRef(tenantGroupId = 2L, scope = PolicyScope.TENANT_DEFAULT),
+                originalHash,
+            ).shouldBeNull()
+
+            repository.claimDueActivation(originalId, "worker-a", now, now.plusSeconds(30)).shouldBeTrue()
+            repository.markActivationMissed(
+                commandId = originalId,
+                owner = "worker-b",
+                errorCode = "POLICY_ACTIVATION_MISSED",
+                missedAt = now.plusSeconds(10),
+            ).shouldBeFalse()
+            repository.markActivationMissed(
+                commandId = originalId,
+                owner = "worker-a",
+                errorCode = "POLICY_ACTIVATION_MISSED",
+                missedAt = now.plusSeconds(30),
+            ).shouldBeFalse()
+            repository.findActivation(originalId).shouldNotBeNull().status shouldBeEqualTo
+                PolicyActivationCommandStatus.CLAIMED
+            repository.markActivationMissed(
+                commandId = originalId,
+                owner = "worker-a",
+                errorCode = "POLICY_ACTIVATION_MISSED",
+                missedAt = now.plusSeconds(10),
+            ).shouldBeTrue()
+
+            val missed = repository.findActivation(originalId).shouldNotBeNull()
+            missed.status shouldBeEqualTo PolicyActivationCommandStatus.MISSED
+            missed.lastErrorCode shouldBeEqualTo "POLICY_ACTIVATION_MISSED"
+
+            val replay = repository.createActivation(
+                activation(
+                    idempotencyKeyHash = repository.hashIdempotencyKey("activation-replay"),
+                    requestFingerprint = "b".repeat(64),
+                    nextAttemptAt = now.plusSeconds(60),
+                ).copy(replayOfCommandId = originalId)
+            )
+            replay.replayOfCommandId shouldBeEqualTo originalId
+
+            assertFailsWith<IllegalArgumentException> {
+                repository.createActivation(
+                    activation(
+                        idempotencyKeyHash = repository.hashIdempotencyKey("activation-invalid-replay"),
+                        requestFingerprint = "c".repeat(64),
+                        nextAttemptAt = now.plusSeconds(120),
+                    ).copy(replayOfCommandId = replay.id.shouldNotBeNull())
+                )
+            }
         }
     }
 
