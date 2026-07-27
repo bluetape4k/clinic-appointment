@@ -207,10 +207,11 @@ CREATE INDEX idx_policy_preview_due
 CREATE INDEX idx_policy_preview_scope
     ON scheduling_policy_preview_jobs(tenant_group_id, clinic_id, id);
 
--- Rolling-safe generic outbox expansion. V9 keeps plan_id and clinic_id for old
--- and new plan writers, but permits tenant policy events to omit both legacy
--- plan identity and clinic scope. V10 NOT NULL cutover for aggregate columns is
--- intentionally deferred until all writers dual-write.
+-- Rolling-safe generic outbox expansion. V9 keeps plan_id, clinic_id, and
+-- causation_event_id for old and new plan writers, but permits command-driven
+-- tenant policy events to omit legacy plan, clinic, and causation identity.
+-- V10 NOT NULL cutover for aggregate columns is intentionally deferred until
+-- all writers dual-write.
 ALTER TABLE scheduling_outbox_events ADD COLUMN aggregate_type VARCHAR(64);
 ALTER TABLE scheduling_outbox_events ADD COLUMN aggregate_id VARCHAR(160);
 
@@ -222,6 +223,7 @@ UPDATE scheduling_outbox_events
 
 ALTER TABLE scheduling_outbox_events ALTER COLUMN plan_id DROP NOT NULL;
 ALTER TABLE scheduling_outbox_events ALTER COLUMN clinic_id DROP NOT NULL;
+ALTER TABLE scheduling_outbox_events ALTER COLUMN causation_event_id DROP NOT NULL;
 
 CREATE INDEX idx_outbox_aggregate
     ON scheduling_outbox_events(aggregate_type, aggregate_id, created_at);
