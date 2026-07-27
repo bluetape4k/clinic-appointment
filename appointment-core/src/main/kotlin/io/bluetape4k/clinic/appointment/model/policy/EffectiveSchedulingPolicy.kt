@@ -4,13 +4,13 @@ import java.io.Serializable
 import java.time.Instant
 
 /**
- * Generation counters used to detect concurrent policy changes during compilation.
+ * compilation 중 동시 정책 변경을 감지하기 위해 사용하는 generation counter입니다.
  *
- * @property tenantGeneration Positive monotonic generation of the tenant policy
- * head. It changes whenever an active tenant definition changes.
- * @property clinicGeneration Monotonic generation of the clinic override head.
- * It starts at `0` when no clinic override has ever been activated and changes
- * whenever an active clinic override changes.
+ * @property tenantGeneration tenant policy head의 양수 단조 증가 generation입니다.
+ * active tenant definition이 바뀔 때마다 증가합니다.
+ * @property clinicGeneration clinic override head의 단조 증가 generation입니다.
+ * clinic override가 아직 한 번도 activate되지 않았으면 `0`에서 시작하고, active clinic
+ * override가 바뀔 때마다 증가합니다.
  */
 data class PolicyGenerationVector(
     val tenantGeneration: Long,
@@ -20,11 +20,11 @@ data class PolicyGenerationVector(
 }
 
 /**
- * Exact source versions that contributed one policy kind to a snapshot.
+ * snapshot의 한 policy kind에 기여한 정확한 source version입니다.
  *
- * @property tenantVersion Positive active tenant version.
- * @property clinicVersion Positive active clinic-override version, or `null`
- * when the clinic inherits the tenant policy for this kind.
+ * @property tenantVersion active tenant definition의 양수 version입니다.
+ * @property clinicVersion active clinic override definition의 양수 version입니다.
+ * 해당 kind에서 clinic이 tenant policy를 그대로 상속하면 `null`입니다.
  */
 data class SourceVersion(
     val tenantVersion: Long,
@@ -33,34 +33,33 @@ data class SourceVersion(
     companion object { private const val serialVersionUID = 1L }
 }
 
-/** Organizational source that supplied one compiled leaf value. */
+/** 컴파일된 leaf 값 하나를 제공한 조직적 출처입니다. */
 enum class PolicyValueSource {
-    /** Immutable platform safety/default value used because no tenant value replaced it. */
+    /** tenant 값이 대체하지 않아 사용된 immutable platform safety/default 값입니다. */
     PLATFORM,
 
-    /** Active tenant baseline value. */
+    /** active tenant baseline 값입니다. */
     TENANT,
 
-    /** Active clinic override value that passed all non-relaxation checks. */
+    /** 모든 non-relaxation 검사를 통과한 active clinic override 값입니다. */
     CLINIC,
 }
 
 /**
- * Fully resolved policy values consumed by downstream scheduling decisions.
+ * downstream scheduling decision이 소비하는 완전히 해석된 policy 값입니다.
  *
- * Each nullable property corresponds to one independently activated policy
- * kind. A `null` kind has no compiled contract and must be handled as
- * unavailable, not as an implicit zero or permissive default.
+ * nullable 속성 하나는 독립적으로 activate되는 policy kind 하나에 대응합니다.
+ * `null`인 kind는 compiled contract가 없다는 뜻이며, 암묵적 zero나 관대한 default가
+ * 아니라 unavailable 상태로 처리해야 합니다.
  *
- * @property bookingCommitment Resolved booking-origin, approval, hold, and
- * confirmed-change contract.
- * @property holdAndConsent Resolved hold-time consent requirement.
- * @property capacityAndOverbooking Resolved capacity counts and hard ceiling.
- * @property priorityAndReliability Resolved objective reliability scoring inputs.
- * @property reconfirmation Resolved reconfirmation schedule and retry ceiling.
- * @property disruptionRecovery Resolved disruption proposal behavior.
- * @property operatingExtension Resolved overtime and safety ceiling.
- * @property notificationAndSla Resolved channels and mandatory response bounds.
+ * @property bookingCommitment 예약 출처, 승인, hold, 확정 예약 변경에 대한 resolved contract입니다.
+ * @property holdAndConsent hold 중 동의 증빙 요구사항입니다.
+ * @property capacityAndOverbooking 수용량 count와 hard ceiling입니다.
+ * @property priorityAndReliability 객관적 신뢰도 scoring 입력값입니다.
+ * @property reconfirmation 재확인 일정과 retry ceiling입니다.
+ * @property disruptionRecovery 운영 장애 후 변경 제안 동작입니다.
+ * @property operatingExtension 초과 진료와 안전 ceiling입니다.
+ * @property notificationAndSla 통지 channel과 필수 응답 한도입니다.
  */
 data class CompiledSchedulingPolicy(
     val bookingCommitment: BookingCommitmentPolicy? = null,
@@ -76,20 +75,20 @@ data class CompiledSchedulingPolicy(
 }
 
 /**
- * Typed clinic overrides supplied to full effective-policy compilation.
+ * 전체 effective-policy compilation에 제공되는 typed clinic override 묶음입니다.
  *
- * A `null` property means the clinic has no active override definition for that
- * policy kind. Non-null values still contain per-field [OverrideValue] states,
- * so absence of a definition is distinct from inheriting each field.
+ * 속성이 `null`이면 해당 policy kind에 active clinic override definition이 없다는 뜻입니다.
+ * non-null 값도 field별 [OverrideValue] 상태를 가지므로, definition 자체의 부재와
+ * 각 field의 inherit은 서로 다른 lifecycle 의미를 가집니다.
  *
- * @property bookingCommitment Active clinic booking override, if any.
- * @property holdAndConsent Active clinic hold/consent override, if any.
- * @property capacityAndOverbooking Active clinic capacity override, if any.
- * @property priorityAndReliability Active clinic reliability override, if any.
- * @property reconfirmation Active clinic reconfirmation override, if any.
- * @property disruptionRecovery Active clinic disruption-recovery override, if any.
- * @property operatingExtension Active clinic operating-extension override, if any.
- * @property notificationAndSla Active clinic notification/SLA override, if any.
+ * @property bookingCommitment active clinic booking override입니다. 없으면 `null`입니다.
+ * @property holdAndConsent active clinic hold/consent override입니다. 없으면 `null`입니다.
+ * @property capacityAndOverbooking active clinic capacity override입니다. 없으면 `null`입니다.
+ * @property priorityAndReliability active clinic reliability override입니다. 없으면 `null`입니다.
+ * @property reconfirmation active clinic reconfirmation override입니다. 없으면 `null`입니다.
+ * @property disruptionRecovery active clinic disruption-recovery override입니다. 없으면 `null`입니다.
+ * @property operatingExtension active clinic operating-extension override입니다. 없으면 `null`입니다.
+ * @property notificationAndSla active clinic notification/SLA override입니다. 없으면 `null`입니다.
  */
 data class ClinicSchedulingPolicyOverrides(
     val bookingCommitment: BookingCommitmentOverride? = null,
@@ -105,34 +104,33 @@ data class ClinicSchedulingPolicyOverrides(
 }
 
 /**
- * Immutable, reproducible scheduling-policy snapshot for one clinic and decision.
+ * 하나의 clinic과 decision에 대해 재현 가능한 immutable scheduling-policy snapshot입니다.
  *
- * A snapshot is evaluated twice in time: [decisionAt] selects definitions that
- * govern the present command, while [serviceAt] allows future-effective rules
- * to be considered for the appointment date. The generation vector and source
- * versions make stale compilation detectable and the canonical hash makes the
- * result reproducible.
+ * snapshot은 두 시간 축으로 평가됩니다. [decisionAt]은 현재 command를 지배하는
+ * definition을 선택하고, [serviceAt]은 실제 예약일에 적용될 future-effective rule을
+ * 고려하게 합니다. generation vector와 source version은 stale compilation을 감지하게
+ * 하고, canonical hash는 결과 재현성을 제공합니다.
  *
- * @property id Stable snapshot identity. Schema 1 uses the same lowercase
- * SHA-256 value as [snapshotHash].
- * @property tenantGroupId Positive tenant boundary.
- * @property clinicId Positive clinic for which the policy was compiled.
- * @property decisionAt UTC instant at which the command evaluates policy.
- * @property serviceAt UTC instant of the planned service; it may select a
- * scheduled future policy version.
- * @property generation Tenant/clinic generations observed by the compiler.
- * Persistence must verify them again before publishing this snapshot.
- * @property sourceVersions Version pair per included policy kind.
- * @property sourceByPath Source of every compiled leaf path. Absence is not
- * equivalent to platform inheritance and indicates an incomplete compiler.
- * @property disabledFeatures Canonically sorted semantic paths explicitly
- * disabled by a valid clinic override.
- * @property warnings Ordered, customer-safe diagnostic codes or messages
- * produced during compilation. Order is semantically significant in the hash.
- * @property payload Fully resolved policy values.
- * @property snapshotHash Lowercase SHA-256 over schema version, tenant/clinic,
- * evaluation instants, generations, source metadata, disabled paths, warnings,
- * and the compiled payload.
+ * @property id stable snapshot identity입니다. schema 1에서는 [snapshotHash]와 같은
+ * lowercase SHA-256 값을 사용합니다.
+ * @property tenantGroupId 양수 tenant boundary입니다.
+ * @property clinicId 이 policy가 compile된 양수 clinic identity입니다.
+ * @property decisionAt command가 정책을 평가한 UTC instant입니다.
+ * @property serviceAt 계획된 시술/진료의 UTC instant입니다. 예약일 기준 future policy
+ * version을 선택할 수 있습니다.
+ * @property generation compiler가 관찰한 tenant/clinic generation입니다. persistence는
+ * snapshot publish 전에 이 값을 다시 검증해야 합니다.
+ * @property sourceVersions 포함된 policy kind별 tenant/clinic version pair입니다.
+ * @property sourceByPath compiled leaf path별 source입니다. 누락은 platform inherit과
+ * 같지 않으며 compiler가 해당 leaf 출처를 기록하지 못한 결함을 의미합니다.
+ * @property disabledFeatures 유효한 clinic override가 명시적으로 disable한 semantic path
+ * 집합입니다. canonical hash를 위해 정렬됩니다.
+ * @property warnings compilation 중 생성된 고객-safe diagnostic code 또는 message입니다.
+ * 순서는 hash에서 의미가 있으므로 보존됩니다.
+ * @property payload 완전히 해석된 policy 값입니다.
+ * @property snapshotHash schema version, tenant/clinic, 평가 instant, generation,
+ * source metadata, disabled path, warning, compiled payload를 모두 포함해 계산한
+ * lowercase SHA-256입니다.
  */
 data class EffectiveSchedulingPolicy(
     val id: String,

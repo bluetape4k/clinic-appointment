@@ -26,16 +26,16 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
 /**
- * JWT security configuration for non-local profiles.
+ * non-local profile에서 사용하는 JWT security configuration이다.
  *
- * Rule flow:
- * 1) correlation ID is created first to keep every failure observable.
- * 2) JWT is parsed before tenant-context authorization.
- * 3) endpoint path authorization is evaluated as a composition of:
- *    tenant membership + role/scope checks + clinic membership checks.
+ * 규칙 흐름:
+ * 1. 모든 실패를 추적할 수 있도록 correlation ID를 가장 먼저 만든다.
+ * 2. tenant-context authorization 전에 JWT를 parsing한다.
+ * 3. endpoint path authorization은 tenant membership, role/scope check,
+ *    clinic membership check의 조합으로 평가한다.
  *
- * 401 means no trusted authenticated principal was established.
- * 403 means principal exists but failed one of policy checks.
+ * 401은 신뢰된 authenticated principal이 수립되지 않았다는 뜻이다.
+ * 403은 principal은 있지만 policy check 중 하나를 통과하지 못했다는 뜻이다.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
@@ -46,10 +46,10 @@ class SecurityConfig {
     companion object : KLogging()
 
     /**
-     * Builds the fail-closed token verifier.
+     * fail-closed token verifier를 생성한다.
      *
-     * Invalid signing-key configuration fails bean construction. Individual
-     * request token failures return no principal and disclose no claim detail.
+     * signing-key 설정이 잘못되면 bean construction이 실패한다. 개별 request token 실패는
+     * principal을 만들지 않고 어떤 claim이 실패했는지도 공개하지 않는다.
      */
     @Bean
     fun jwtTokenParser(properties: JwtSecurityProperties): JwtTokenParser {
@@ -60,22 +60,22 @@ class SecurityConfig {
         return JwtTokenParser(properties)
     }
 
-    /** Validates a bearer token before attaching its principal to the context. */
+    /** principal을 context에 붙이기 전에 bearer token을 검증한다. */
     @Bean
     fun jwtAuthenticationFilter(jwtTokenParser: JwtTokenParser): JwtAuthenticationFilter =
         JwtAuthenticationFilter(jwtTokenParser)
 
-    /** Resolves verified principals into immutable command audit contexts. */
+    /** 검증된 principal을 불변 command audit context로 변환한다. */
     @Bean
     fun actorContextResolver(): ActorContextResolver = ActorContextResolver()
 
-    /** Establishes correlation before authentication or controller failures. */
+    /** authentication 또는 controller 실패 전에 correlation을 수립한다. */
     @Bean
     fun correlationIdFilter(): CorrelationIdFilter = CorrelationIdFilter()
 
     /**
-     * Build tenant membership filter to keep tenant and clinic routing aligned
-     * with scheduling data ownership before entering controllers.
+     * controller 진입 전에 tenant/clinic routing을 scheduling data ownership과 맞추는
+     * tenant membership filter를 생성한다.
      */
     @Bean
     fun tenantContextFilter(
@@ -85,21 +85,19 @@ class SecurityConfig {
         TenantContextFilter(tenantGroupRepository, jwtTokenParser)
 
     /**
-     * Shared tenant policy authorization manager reused by endpoint-specific rules.
+     * endpoint-specific rule에서 재사용하는 공용 tenant policy authorization manager.
      */
     @Bean
     fun tenantAuthorizationManager(): TenantAuthorizationManager =
         TenantAuthorizationManager()
 
     /**
-     * Builds the stateless production-style security chain.
+     * stateless production-style security chain을 구성한다.
      *
-     * Correlation is established before authentication, tenant routing follows
-     * authentication, and authorization then composes role, capability,
-     * tenant, and exact clinic membership. Swagger documentation is public;
-     * admin APIs require `ADMIN`, catalog writes require
-     * `SCOPE_catalog:write`, and clinic-plan reads require an operator role plus
-     * membership in the requested positive clinic ID.
+     * correlation은 authentication 전에 수립하고, tenant routing은 authentication 이후에 수행한다.
+     * authorization은 role, capability, tenant, 정확한 clinic membership을 조합한다.
+     * Swagger 문서는 공개한다. admin API는 `ADMIN`, catalog write는 `SCOPE_catalog:write`,
+     * clinic-plan read는 operator role과 요청된 양수 clinic ID membership을 요구한다.
      */
     @Bean
     fun securityFilterChain(
@@ -219,7 +217,7 @@ class SecurityConfig {
 }
 
 /**
- * Local dev/test security configuration that permits all requests.
+ * local dev/test에서 모든 요청을 허용하는 security configuration이다.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity

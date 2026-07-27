@@ -11,27 +11,26 @@ import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyKind
 import java.time.Instant
 
 /**
- * Creates a new immutable policy version in `DRAFT`.
+ * 새 불변 정책 버전을 `DRAFT` 상태로 생성하는 명령이다.
  *
- * Payload decoding, typed validation, canonicalization, and SHA-256 calculation
- * happen before this command is constructed. Consequently [payloadJson] and
- * [payloadHash] are trusted only as output of the application codec, never as
- * arbitrary request-body fields passed through unchanged.
+ * payload decoding, typed validation, canonicalization, SHA-256 계산은 이 명령이
+ * 만들어지기 전에 끝나야 한다. 따라서 [payloadJson]과 [payloadHash]는 임의의
+ * request body field를 그대로 통과시킨 값이 아니라, 애플리케이션 codec이 만든
+ * 결과로만 신뢰한다.
  *
- * @property scope Numeric persistence boundary resolved from the authenticated
- * request path. `clinicId` is null only for a tenant default.
- * @property kind Closed payload schema and compilation area.
- * @property schemaVersion Positive wire-schema version understood by the codec.
- * @property effectiveFrom Inclusive UTC eligibility boundary.
- * @property effectiveUntil Exclusive UTC boundary, or `null` for no planned end.
- * @property payloadHash Lowercase SHA-256 of canonical UTF-8 [payloadJson].
- * @property payloadJson Canonical schema-versioned JSON, at most 256 KiB UTF-8.
- * It must contain no credentials, claims, idempotency key, or actor identity.
- * @property changeReason Non-secret operator rationale of 1..1000 characters.
- * @property expectedScopeRevision Non-negative revision read from the locked
- * scope head. A mismatch rejects the command instead of silently rebasing it.
- * @property actor Gateway-derived current actor. Request bodies cannot supply
- * or override it.
+ * @property scope 인증된 요청 경로에서 해석한 숫자 영속화 경계. `clinicId`는
+ * tenant default일 때만 null이다.
+ * @property kind 닫힌 payload schema이자 effective policy compilation 영역.
+ * @property schemaVersion codec이 이해하는 양수 wire-schema version.
+ * @property effectiveFrom 이 정책 버전이 적용 후보가 되는 inclusive UTC 경계.
+ * @property effectiveUntil exclusive UTC 종료 경계. 계획된 종료가 없으면 `null`.
+ * @property payloadHash canonical UTF-8 [payloadJson]의 lowercase SHA-256.
+ * @property payloadJson schema version이 포함된 canonical JSON. UTF-8 기준 최대 256 KiB이며
+ * credential, claim, idempotency key, actor identity를 포함하지 않아야 한다.
+ * @property changeReason 1..1000자의 비밀 없는 운영자 변경 사유.
+ * @property expectedScopeRevision 잠긴 scope head에서 읽은 non-negative revision.
+ * 불일치하면 조용히 rebase하지 않고 명령을 거절한다.
+ * @property actor Gateway에서 파생된 현재 actor. 요청 본문으로 공급하거나 덮어쓸 수 없다.
  */
 data class CreateSchedulingPolicyDraftCommand(
     val scope: PolicyScopeRef,
@@ -47,76 +46,75 @@ data class CreateSchedulingPolicyDraftCommand(
 )
 
 /**
- * Replaces editable content of one exact draft revision.
+ * 정확한 draft revision 하나의 편집 가능한 내용을 교체하는 명령이다.
  *
- * A successful edit increments both the definition revision and administrative
- * scope revision. Approval rows and preview evidence remain immutable audit
- * records but become unusable because they are pinned to [expectedDraftRevision].
+ * 성공하면 definition revision과 administrative scope revision을 모두 증가시킨다.
+ * 승인 row와 preview evidence는 불변 감사 기록으로 남지만, [expectedDraftRevision]에
+ * 고정되어 있으므로 수정 이후에는 더 이상 사용할 수 없다.
  *
- * @property definitionId Positive database identity resolved within [scope].
- * @property expectedDraftRevision Positive optimistic revision being replaced.
- * @property expectedScopeRevision Non-negative administrative head revision.
- * Other fields have the same canonical and time-bound meanings as
- * [CreateSchedulingPolicyDraftCommand].
+ * @property definitionId [scope] 내부에서 해석된 양수 데이터베이스 식별자.
+ * @property expectedDraftRevision 교체 대상인 양수 optimistic revision.
+ * @property expectedScopeRevision non-negative administrative head revision.
+ * 나머지 필드는 [CreateSchedulingPolicyDraftCommand]와 같은 canonical/time-bound 의미를 가진다.
  */
 data class ReviseSchedulingPolicyDraftCommand(
-    /** Trusted numeric tenant/clinic boundary resolved from the request path. */
+    /** 요청 경로에서 해석한 신뢰된 숫자 tenant/clinic 경계. */
     val scope: PolicyScopeRef,
-    /** Positive database identity that must belong to [scope]. */
+    /** [scope]에 속해야 하는 양수 데이터베이스 식별자. */
     val definitionId: Long,
-    /** Positive editable revision; a mismatch returns `POLICY_DRAFT_STALE`. */
+    /** 양수 편집 가능 revision. 불일치하면 `POLICY_DRAFT_STALE`을 반환한다. */
     val expectedDraftRevision: Long,
-    /** Non-negative scope-head revision protecting the administrative edit. */
+    /** administrative edit를 보호하는 non-negative scope-head revision. */
     val expectedScopeRevision: Long,
-    /** Positive wire schema understood by the typed payload codec. */
+    /** typed payload codec이 이해하는 양수 wire schema. */
     val schemaVersion: Int,
-    /** Inclusive UTC eligibility boundary for the revised definition. */
+    /** 수정된 definition의 inclusive UTC 적용 후보 경계. */
     val effectiveFrom: Instant,
-    /** Exclusive UTC end, or `null` for an open-ended interval. */
+    /** exclusive UTC 종료 시각. open-ended interval이면 `null`. */
     val effectiveUntil: Instant?,
-    /** Lowercase SHA-256 of canonical UTF-8 [payloadJson]. */
+    /** canonical UTF-8 [payloadJson]의 lowercase SHA-256. */
     val payloadHash: String,
-    /** Canonical JSON of at most 256 KiB with no credentials or actor data. */
+    /** credential 또는 actor data가 없는 최대 256 KiB canonical JSON. */
     val payloadJson: String,
-    /** Non-secret audit rationale containing 1..1000 characters. */
+    /** 1..1000자의 비밀 없는 감사용 변경 사유. */
     val changeReason: String,
-    /** Current Gateway-derived actor; never accepted from the request body. */
+    /** Gateway에서 파생된 현재 actor. 요청 본문에서는 절대 받지 않는다. */
     val actor: ActorContext,
 )
 
 /**
- * Records approval evidence for one exact draft revision.
+ * 정확한 draft revision 하나에 대한 승인 증적을 기록하는 명령이다.
  *
- * Approval is not a lifecycle state. Editing the draft does not delete this
- * evidence; the revision mismatch makes it stale. [actor] is both the authority
- * evaluated now and the audit subject stored on success.
+ * 승인은 lifecycle 상태가 아니다. draft를 수정해도 이 증적은 삭제되지 않지만,
+ * revision이 맞지 않게 되어 stale evidence가 된다. [actor]는 지금 평가되는 권한 주체이자
+ * 성공 시 저장되는 감사 주체이다.
  */
 data class ApproveSchedulingPolicyCommand(
-    /** Trusted tenant/clinic boundary against which ownership is rechecked. */
+    /** 소유권을 다시 확인할 신뢰된 tenant/clinic 경계. */
     val scope: PolicyScopeRef,
-    /** Positive draft identity that must belong to [scope]. */
+    /** [scope]에 속해야 하는 양수 draft 식별자. */
     val definitionId: Long,
-    /** Positive exact revision reviewed by the approver. */
+    /** 승인자가 검토한 정확한 양수 revision. */
     val expectedDraftRevision: Long,
-    /** Gateway-derived current approver and authentication assurance evidence. */
+    /** Gateway에서 파생된 현재 승인자와 인증 assurance 증적. */
     val actor: ActorContext,
 )
 
 /**
- * Evidence that a complete impact preview was evaluated against exact inputs.
+ * 완전한 impact preview가 정확한 입력에 대해 평가되었음을 나타내는 증적이다.
  *
- * This value is an application boundary, not self-authenticating proof. The
- * injected [PolicyPreviewEvidenceVerifier] must verify its durable job/token
- * source. A stale or partial preview must never produce an accepted instance.
+ * 이 값은 애플리케이션 경계의 입력이지, 자체 인증되는 proof가 아니다. 주입된
+ * [PolicyPreviewEvidenceVerifier]가 durable job/token 출처를 확인해야 한다.
+ * stale 또는 partial preview는 accepted instance가 되어서는 안 된다.
  *
- * @property definitionId Draft evaluated by the preview.
- * @property draftRevision Exact definition revision evaluated.
- * @property tenantGeneration Tenant effective generation observed by the scan.
- * It is positive once a tenant baseline exists.
- * @property clinicGeneration Clinic generation observed by the scan; `0` means
- * no clinic override has yet been activated.
- * @property evidenceId Bounded opaque preview job or signed-token identity. It
- * is safe metadata and must not embed patient or appointment details.
+ * @property definitionId preview가 평가한 draft 식별자.
+ * @property draftRevision preview가 평가한 정확한 definition revision.
+ * @property tenantGeneration scan이 관측한 tenant effective generation.
+ * tenant baseline이 있으면 양수이다.
+ * @property clinicGeneration scan이 관측한 clinic generation. `0`은 아직 활성화된
+ * clinic override generation이 없다는 sentinel이다.
+ * @property evidenceId 길이가 제한된 opaque preview job 또는 signed-token identity.
+ * 안전한 metadata여야 하며 patient 또는 appointment 세부사항을 embed하면 안 된다.
  */
 data class PolicyPreviewEvidence(
     val definitionId: Long,
@@ -127,18 +125,18 @@ data class PolicyPreviewEvidence(
 )
 
 /**
- * Verifies preview evidence against the definition and locked generation vector.
+ * preview evidence가 definition 및 잠긴 generation vector와 일치하는지 검증한다.
  *
- * Implementations must fail closed and perform no network call while database
- * scope-head locks are held. The production preview service can satisfy this
- * contract with locally persisted evidence in a later task.
+ * 구현체는 fail-closed로 동작해야 하며, 데이터베이스 scope-head lock을 잡은 동안
+ * network call을 수행하면 안 된다. 운영 preview service는 이후 작업에서 로컬에
+ * 저장된 evidence로 이 계약을 만족시킬 수 있다.
  */
 fun interface PolicyPreviewEvidenceVerifier {
     /**
-     * Returns `true` only for complete durable evidence matching all inputs.
+     * 모든 입력과 일치하는 완전한 durable evidence에 대해서만 `true`를 반환한다.
      *
-     * [generation] uses the tenant generation first and clinic generation
-     * second; `clinicGeneration=0` is the no-override sentinel.
+     * [generation]은 tenant generation을 먼저, clinic generation을 두 번째로 사용한다.
+     * `clinicGeneration=0`은 override가 없다는 sentinel이다.
      */
     fun verify(
         evidence: PolicyPreviewEvidence,
@@ -148,17 +146,17 @@ fun interface PolicyPreviewEvidenceVerifier {
 }
 
 /**
- * Rechecks the numeric persistence tenant against trusted request context.
+ * 숫자 영속화 tenant가 신뢰된 요청 context와 일치하는지 다시 확인한다.
  *
- * [ActorContext.allowedTenantCodes] contains Gateway codes rather than database
- * IDs. A production verifier must combine those codes with the already resolved
- * request `TenantContext` and require its numeric ID to equal [PolicyScopeRef.tenantGroupId].
- * It must also fail when invoked outside a tenant-scoped request.
+ * [ActorContext.allowedTenantCodes]에는 데이터베이스 ID가 아니라 Gateway tenant code가
+ * 들어 있다. 운영 verifier는 이 code 집합과 이미 해석된 요청 `TenantContext`를 결합하고,
+ * 그 숫자 ID가 [PolicyScopeRef.tenantGroupId]와 같아야 한다. tenant-scoped 요청 밖에서
+ * 호출되면 반드시 실패해야 한다.
  */
 fun interface PolicyTenantBoundaryVerifier {
     /**
-     * Returns `true` only when [scope]'s numeric tenant equals trusted request
-     * resolution and [actor] carries the matching Gateway tenant code.
+     * [scope]의 숫자 tenant가 신뢰된 요청 해석 결과와 같고 [actor]가 대응되는
+     * Gateway tenant code를 가진 경우에만 `true`를 반환한다.
      */
     fun isAuthorized(
         scope: PolicyScopeRef,
@@ -167,93 +165,92 @@ fun interface PolicyTenantBoundaryVerifier {
 }
 
 /**
- * Schedules a validated draft for later activation.
+ * 검증된 draft를 나중에 활성화되도록 예약하는 명령이다.
  *
- * @property expectedActiveRevision Scope-head revision before scheduling.
- * The persisted activation command stores the post-schedule revision because
- * that is the revision it must observe when a worker activates.
- * @property preview Completed evidence pinned to this draft and current heads.
+ * @property expectedActiveRevision scheduling 전 scope-head revision. 영속화되는
+ * activation command는 schedule 이후 revision을 저장한다. worker가 활성화할 때 관측해야
+ * 하는 revision이 바로 그 값이기 때문이다.
+ * @property preview 이 draft와 현재 head에 고정된 완료 preview evidence.
  */
 data class ScheduleSchedulingPolicyCommand(
-    /** Trusted numeric tenant/clinic boundary resolved from the request path. */
+    /** 요청 경로에서 해석한 신뢰된 숫자 tenant/clinic 경계. */
     val scope: PolicyScopeRef,
-    /** Positive draft identity that must belong to [scope]. */
+    /** [scope]에 속해야 하는 양수 draft 식별자. */
     val definitionId: Long,
-    /** Positive revision approved and previewed for scheduling. */
+    /** scheduling 대상으로 승인 및 preview가 완료된 양수 revision. */
     val expectedDraftRevision: Long,
-    /** Non-negative scope-head revision before the schedule mutation. */
+    /** schedule mutation 전 non-negative scope-head revision. */
     val expectedActiveRevision: Long,
-    /** Complete preview pinned to the pre-schedule generation vector. */
+    /** schedule 전 generation vector에 고정된 완전한 preview. */
     val preview: PolicyPreviewEvidence,
-    /** Current Gateway-derived human actor; service actors cannot schedule. */
+    /** Gateway에서 파생된 현재 human actor. service actor는 schedule할 수 없다. */
     val actor: ActorContext,
 )
 
 /**
- * Activates a draft immediately or executes a persisted scheduled command.
+ * draft를 즉시 활성화하거나 영속화된 scheduled command를 실행하는 명령이다.
  *
- * @property scheduledCommandId Positive durable command identity for a
- * scheduled worker execution or manual replay; `null` means a human immediate
- * activation and is forbidden for a `SYSTEM` actor.
- * @property replayOfCommandId Terminal `MISSED` source for manual recovery, or
- * `null` for an original command. Replay creates a new durable row.
- * @property idempotencyKey Raw bounded human key transformed before the
- * transaction, or `null` only when [scheduledCommandId] identifies a durable
- * scheduled command. A runner needs the command ID, not the original human
- * scheduling request key.
- * @property expectedActiveRevision Exact scope-head revision protected by CAS.
+ * @property scheduledCommandId scheduled worker 실행 또는 manual replay를 위한
+ * 양수 durable command identity. `null`은 human immediate activation을 의미하며
+ * `SYSTEM` actor에는 허용되지 않는다.
+ * @property replayOfCommandId manual recovery의 출처가 되는 terminal `MISSED` command ID.
+ * 원본 command이면 `null`이다. replay는 새 durable row를 만든다.
+ * @property idempotencyKey transaction 전에 변환되는 길이 제한 human raw key.
+ * [scheduledCommandId]가 durable scheduled command를 식별할 때만 `null`이다.
+ * runner에는 원래 human scheduling request key가 아니라 command ID가 필요하다.
+ * @property expectedActiveRevision CAS로 보호되는 정확한 scope-head revision.
  */
 data class ActivateSchedulingPolicyCommand(
-    /** Trusted numeric tenant/clinic boundary resolved from request context. */
+    /** 요청 context에서 해석한 신뢰된 숫자 tenant/clinic 경계. */
     val scope: PolicyScopeRef,
-    /** Positive definition identity that must belong to [scope]. */
+    /** [scope]에 속해야 하는 양수 definition 식별자. */
     val definitionId: Long,
-    /** Positive revision approved and previewed for activation. */
+    /** activation 대상으로 승인 및 preview가 완료된 양수 revision. */
     val expectedDraftRevision: Long,
-    /** Non-negative exact scope-head revision protected by activation CAS. */
+    /** activation CAS로 보호되는 정확한 non-negative scope-head revision. */
     val expectedActiveRevision: Long,
-    /** Raw human idempotency key, or `null` for durable scheduled execution. */
+    /** human raw idempotency key. durable scheduled execution이면 `null`. */
     val idempotencyKey: String?,
-    /** Complete preview evidence pinned to definition and generations. */
+    /** definition과 generation에 고정된 완전한 preview evidence. */
     val preview: PolicyPreviewEvidence,
-    /** Gateway-derived human or service activation authority. */
+    /** Gateway에서 파생된 human 또는 service activation authority. */
     val actor: ActorContext,
-    /** Durable scheduled command ID, or `null` for immediate/manual activation. */
+    /** durable scheduled command ID. immediate/manual activation이면 `null`. */
     val scheduledCommandId: Long? = null,
-    /** Immutable terminal `MISSED` source, or `null` for an original command. */
+    /** 불변 terminal `MISSED` source. 원본 command이면 `null`. */
     val replayOfCommandId: Long? = null,
 )
 
 /**
- * Retires one active or not-yet-active definition without deleting history.
+ * active 또는 아직 active가 아닌 definition 하나를 이력 삭제 없이 retire한다.
  *
- * Retirement advances the scope generation only when an `ACTIVE` definition
- * stops contributing to effective scheduling. Retiring `DRAFT` or `SCHEDULED`
- * advances only the administrative revision.
+ * `ACTIVE` definition이 effective scheduling에 더 이상 기여하지 않게 될 때만
+ * retirement가 scope generation을 증가시킨다. `DRAFT` 또는 `SCHEDULED` retirement는
+ * administrative revision만 증가시킨다.
  */
 data class RetireSchedulingPolicyCommand(
-    /** Trusted numeric tenant/clinic boundary resolved from request context. */
+    /** 요청 context에서 해석한 신뢰된 숫자 tenant/clinic 경계. */
     val scope: PolicyScopeRef,
-    /** Positive definition identity retained permanently after retirement. */
+    /** retirement 이후에도 영구 보존되는 양수 definition 식별자. */
     val definitionId: Long,
-    /** Positive exact definition revision being retired. */
+    /** retire 대상인 정확한 양수 definition revision. */
     val expectedDraftRevision: Long,
-    /** Non-negative scope-head revision protecting the retirement CAS. */
+    /** retirement CAS를 보호하는 non-negative scope-head revision. */
     val expectedScopeRevision: Long,
-    /** Gateway-derived human administrator or staff actor. */
+    /** Gateway에서 파생된 human administrator 또는 staff actor. */
     val actor: ActorContext,
 )
 
 /**
- * Result of an activation or an idempotent replay.
+ * activation 또는 idempotent replay의 결과이다.
  *
- * @property command Durable activation command. Successful results are always
- * `COMPLETED` and contain generations plus event identity.
- * @property definition Newly active immutable definition.
- * @property generation Fresh generation vector committed atomically with the
- * definition, command result, and outbox event.
- * @property idempotentReplay `true` when no write occurred and a prior
- * completed command with the same scoped key and fingerprint was returned.
+ * @property command durable activation command. 성공 결과는 항상 `COMPLETED`이며
+ * generation과 event identity를 함께 가진다.
+ * @property definition 새로 활성화된 불변 definition.
+ * @property generation definition, command result, outbox event와 함께 원자적으로
+ * commit된 최신 generation vector.
+ * @property idempotentReplay write가 발생하지 않았고 같은 scoped key/fingerprint의
+ * 이전 completed command를 반환한 경우 `true`.
  */
 data class SchedulingPolicyActivationResult(
     val command: SchedulingPolicyActivationCommandRecord,
@@ -263,18 +260,18 @@ data class SchedulingPolicyActivationResult(
 )
 
 /**
- * Appends the redacted activation integration event inside the caller transaction.
+ * caller transaction 안에서 redacted activation integration event를 추가한다.
  *
- * Implementations must not open or commit a transaction. Throwing rolls back
- * lifecycle, head counters, durable command, and outbox together.
+ * 구현체는 transaction을 새로 열거나 commit하면 안 된다. 예외가 발생하면 lifecycle,
+ * head counter, durable command, outbox가 함께 rollback되어야 한다.
  */
 fun interface PolicyActivationPublisher {
     /**
-     * Inserts one redacted outbox event and returns its deterministic ID.
+     * redacted outbox event 하나를 삽입하고 deterministic ID를 반환한다.
      *
-     * [definition] must already be `ACTIVE`; [generation] must be the
-     * post-increment vector; [actor] contains only stable audit identity; and
-     * [correlationId] is bounded non-secret trace metadata.
+     * [definition]은 이미 `ACTIVE`여야 한다. [generation]은 increment 이후 vector여야 하고,
+     * [actor]는 안정적인 감사 identity만 포함해야 하며, [correlationId]는 길이가 제한된
+     * 비밀 없는 trace metadata여야 한다.
      */
     fun publish(
         definition: SchedulingPolicyDefinitionRecord,
@@ -285,15 +282,15 @@ fun interface PolicyActivationPublisher {
 }
 
 /**
- * Combined result of a definition mutation and its serialized scope head.
+ * definition mutation과 직렬화된 scope head를 함께 담는 결과이다.
  *
- * [head] is the post-commit logical value read inside the transaction and lets
- * callers form their next optimistic command without an extra unlocked read.
+ * [head]는 transaction 안에서 읽은 post-commit 논리 값이다. 호출자는 잠금 없는 추가
+ * read 없이 다음 optimistic command를 만들 수 있다.
  *
- * @property definition Persisted post-mutation definition, never a detached
- * request-body projection.
- * @property head Post-mutation serialization head. Revision is non-negative;
- * generation changes only when effective scheduling behavior changes.
+ * @property definition mutation 이후 영속화된 definition. request body에서 분리된
+ * projection이 아니다.
+ * @property head mutation 이후 serialization head. revision은 non-negative이며,
+ * generation은 effective scheduling 동작이 바뀔 때만 변경된다.
  */
 data class SchedulingPolicyMutationResult(
     val definition: SchedulingPolicyDefinitionRecord,

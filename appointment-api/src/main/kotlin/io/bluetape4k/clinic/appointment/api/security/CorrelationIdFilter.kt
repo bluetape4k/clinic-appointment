@@ -7,12 +7,11 @@ import org.springframework.web.filter.OncePerRequestFilter
 import java.util.UUID
 
 /**
- * Establishes one bounded correlation ID for the complete HTTP request.
+ * HTTP 요청 전체에서 사용할 길이 제한 correlation ID 하나를 수립한다.
  *
- * A caller value is preserved only when it contains 1..128 safe ASCII
- * characters. Missing, blank, oversized, or unsafe values are replaced by a
- * UUID and are never reflected. The chosen value is stored as a request
- * attribute and response header for controllers and error handlers.
+ * caller가 보낸 값은 1..128자의 safe ASCII인 경우에만 보존한다. 값이 없거나 blank,
+ * oversize, unsafe이면 UUID로 대체하고 원본 값을 반사하지 않는다. 선택된 값은 controller와
+ * error handler가 사용할 수 있도록 request attribute 및 response header에 저장한다.
  */
 class CorrelationIdFilter : OncePerRequestFilter() {
 
@@ -31,19 +30,19 @@ class CorrelationIdFilter : OncePerRequestFilter() {
     }
 
     companion object {
-        /** Public HTTP request/response header carrying the bounded trace ID. */
+        /** 길이가 제한된 trace ID를 전달하는 공개 HTTP request/response header. */
         const val HEADER_NAME = "X-Correlation-Id"
 
-        /** Servlet request attribute containing the already validated trace ID. */
+        /** 이미 검증된 trace ID를 담는 Servlet request attribute. */
         const val REQUEST_ATTRIBUTE =
             "io.bluetape4k.clinic.appointment.api.security.correlationId"
 
         private val CORRELATION_ID_REGEX = Regex("[A-Za-z0-9._:/-]{1,128}")
 
         /**
-         * Returns the validated request correlation ID.
+         * 검증된 request correlation ID를 반환한다.
          *
-         * @throws IllegalStateException when invoked before this filter.
+         * @throws IllegalStateException 이 filter가 실행되기 전에 호출된 경우.
          */
         fun requireCorrelationId(request: HttpServletRequest): String =
             request.getAttribute(REQUEST_ATTRIBUTE) as? String

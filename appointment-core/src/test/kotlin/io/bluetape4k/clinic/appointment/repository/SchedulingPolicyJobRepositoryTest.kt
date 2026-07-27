@@ -27,6 +27,13 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import java.time.Instant
 
+/**
+ * preview job과 activation command의 durable claim·lease·checkpoint 계약을 방언별로 검증한다.
+ *
+ * H2, PostgreSQL, MySQL에서 한 worker만 claim을 획득하고, 만료된 lease만 회수하며, terminal
+ * 상태는 다시 실행되지 않는지 확인한다. preview evidence token과 command 결과는 원본
+ * revision·generation에 고정되어 stale 또는 부분 결과가 활성화 근거가 될 수 없어야 한다.
+ */
 class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
 
     private val repository = SchedulingPolicyJobRepository("unit-test-signing-secret".toByteArray())

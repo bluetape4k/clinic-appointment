@@ -13,6 +13,13 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 import kotlin.random.Random
 
+/**
+ * 정책 payload와 유효 snapshot의 SHA-256이 논리 내용에만 의존하는지 검증한다.
+ *
+ * Map·Set 삽입 순서, JSON 표현 순서 같은 비본질적 차이는 같은 해시를 만들어야 한다. 반대로
+ * tenant·clinic·generation·평가 시각·source version·비활성 경로 중 하나라도 달라지면
+ * 별도의 예약 결정 증거가 되도록 해시가 달라져야 한다.
+ */
 class SchedulingPolicyHashTest {
 
     @Test

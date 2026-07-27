@@ -16,25 +16,26 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import java.time.LocalDate
 
 /**
- * Caller-transaction keyset scans used by policy impact preview.
+ * 정책 영향도 미리보기에서 사용하는 keyset 기반 조회 저장소입니다.
  *
- * Every method must execute inside a caller-owned Exposed `transaction {}`.
- * Results contain database IDs only, are strictly ordered, and are bounded to
- * at most 1,000 rows so preview cannot materialize an unbounded tenant data
- * set. Callers must re-read each aggregate through its tenant/clinic-qualified
- * repository before evaluating policy.
+ * 모든 메서드는 호출자가 소유한 Exposed `transaction {}` 안에서 실행되어야 합니다.
+ * 반환값은 데이터베이스 식별자만 포함하며, 정렬 순서는 항상 오름차순이고, 한 번에 최대
+ * 1,000건까지만 읽습니다. 이 제한은 정책 미리보기가 테넌트 전체 데이터를 한 번에
+ * 메모리로 적재하지 않도록 하는 안전장치입니다. 호출자는 정책을 평가하기 전에 반환된
+ * 식별자를 테넌트/병원 범위가 검증되는 저장소를 통해 다시 읽어야 합니다.
  */
 class SchedulingPolicyImpactRepository {
 
     /**
-     * Scans future, non-terminal appointment IDs for one tenant and clinic.
+     * 특정 테넌트와 병원의 미래 비종결 예약 식별자를 조회합니다.
      *
-     * @param tenantGroupId positive tenant boundary, enforced through `Clinics`.
-     * @param clinicId positive clinic boundary.
-     * @param fromDate inclusive clinic-local appointment date.
-     * @param afterAppointmentId exclusive keyset cursor; `0` starts the scan.
-     * @param limit requested page size in `1..1000`.
-     * @return ascending appointment IDs, never more than [limit].
+     * @param tenantGroupId 양수 테넌트 경계입니다. `Clinics` 조인을 통해 예약이 해당
+     * 테넌트의 병원에 속하는지 확인합니다.
+     * @param clinicId 양수 병원 경계입니다.
+     * @param fromDate 병원 로컬 날짜 기준의 포함 시작일입니다.
+     * @param afterAppointmentId 제외 keyset 커서입니다. `0`이면 첫 페이지부터 조회합니다.
+     * @param limit 요청 페이지 크기입니다. 허용 범위는 `1..1000`입니다.
+     * @return [limit]을 초과하지 않는 예약 식별자 오름차순 목록입니다.
      */
     fun scanFutureAppointmentIds(
         tenantGroupId: Long,
@@ -59,13 +60,13 @@ class SchedulingPolicyImpactRepository {
     }
 
     /**
-     * Scans active or partially fulfilled purchase-plan IDs for one scope.
+     * 특정 범위의 활성 또는 부분 이행 구매 플랜 식별자를 조회합니다.
      *
-     * @param tenantGroupId positive tenant boundary.
-     * @param clinicId positive clinic boundary.
-     * @param afterPlanId exclusive keyset cursor; `0` starts the scan.
-     * @param limit requested page size in `1..1000`.
-     * @return ascending plan IDs, never more than [limit].
+     * @param tenantGroupId 양수 테넌트 경계입니다.
+     * @param clinicId 양수 병원 경계입니다.
+     * @param afterPlanId 제외 keyset 커서입니다. `0`이면 첫 페이지부터 조회합니다.
+     * @param limit 요청 페이지 크기입니다. 허용 범위는 `1..1000`입니다.
+     * @return [limit]을 초과하지 않는 플랜 식별자 오름차순 목록입니다.
      */
     fun scanActivePlanIds(
         tenantGroupId: Long,

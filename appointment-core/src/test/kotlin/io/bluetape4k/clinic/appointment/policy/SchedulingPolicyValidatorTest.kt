@@ -23,6 +23,13 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
 
+/**
+ * 예약 정책 정의가 활성화 가능한 업무 규칙을 모두 만족하는지 검증한다.
+ *
+ * 관리자 직접 확정과 환자 가예약 승인 경로, capacity/overbooking 상한, 신뢰도 가중치,
+ * 재확인·장애복구·연장 운영의 시간 범위를 교차 검증한다. 오류는 저장 이후가 아니라 draft
+ * 검증 단계에서 안정된 경로와 사유로 반환되어야 한다.
+ */
 class SchedulingPolicyValidatorTest {
 
     @Test

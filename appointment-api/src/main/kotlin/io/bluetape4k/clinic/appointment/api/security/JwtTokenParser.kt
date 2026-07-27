@@ -11,23 +11,21 @@ import java.time.Instant
 import java.util.Base64
 
 /**
- * Fail-closed Gateway JWT verifier and principal mapper.
+ * fail-closed Gateway JWT verifier이자 principal mapper이다.
  *
- * Only HS256, the configured issuer/audience, bounded time claims, and the
- * closed scheduling claim contract are accepted. Rejections return `null` and
- * emit only a generic log message: raw tokens, claim values, and parser details
- * are never exposed.
+ * HS256, 설정된 issuer/audience, 길이가 제한된 time claim, 닫힌 scheduling claim
+ * 계약만 허용한다. 거절 시에는 `null`을 반환하고 일반화된 로그 메시지만 남긴다.
+ * raw token, claim 값, parser 세부사항은 절대 노출하지 않는다.
  *
- * Required identity strings use safe ASCII and are limited to 160 characters;
- * tenant codes to 64 and individual scopes to 128. Role, tenant, clinic, scope,
- * and catalog-authority collections contain at most 64 entries. Clinic IDs are
- * positive integers. `iat`, `exp`, and numeric `auth_time` are epoch seconds;
- * `iat` and `auth_time` cannot be later than the verifier clock plus configured
- * skew, and `auth_time` cannot be later than `iat` plus that skew.
+ * 필수 identity 문자열은 safe ASCII를 사용하고 160자로 제한된다. tenant code는 64자,
+ * 개별 scope는 128자로 제한된다. role, tenant, clinic, scope, catalog-authority collection은
+ * 최대 64개 entry만 허용한다. clinic ID는 양수 integer이다. `iat`, `exp`, numeric `auth_time`은
+ * epoch seconds이며, `iat`와 `auth_time`은 verifier clock + configured skew보다 늦을 수 없고,
+ * `auth_time`은 `iat` + skew보다 늦을 수 없다.
  *
- * @param properties Trusted verification and clock-skew configuration.
- * @param clock UTC-capable verifier clock. Production uses the system UTC
- * clock; tests may inject a fixed clock for boundary cases.
+ * @param properties 신뢰된 verification 및 clock-skew 설정.
+ * @param clock UTC를 표현할 수 있는 verifier clock. 운영은 system UTC clock을 사용하고,
+ * 테스트는 경계 조건을 위해 fixed clock을 주입할 수 있다.
  */
 class JwtTokenParser(
     private val properties: JwtSecurityProperties,
@@ -57,12 +55,12 @@ class JwtTokenParser(
     }
 
     /**
-     * Verifies one compact JWT and maps its closed claims to a principal.
+     * compact JWT 하나를 검증하고 닫힌 claim을 principal로 매핑한다.
      *
-     * @param token Compact bearer token. Blank or values over 8,192 characters
-     * are rejected before cryptographic parsing.
-     * @return Verified immutable principal, or `null` for every authentication
-     * failure without disclosing which claim failed.
+     * @param token compact bearer token. blank 또는 8,192자를 초과하는 값은 cryptographic
+     * parsing 전에 거절한다.
+     * @return 검증된 불변 principal. 인증 실패는 어떤 claim이 실패했는지 드러내지 않고
+     * 모두 `null`을 반환한다.
      */
     fun parse(token: String): SchedulingUserPrincipal? {
         return try {

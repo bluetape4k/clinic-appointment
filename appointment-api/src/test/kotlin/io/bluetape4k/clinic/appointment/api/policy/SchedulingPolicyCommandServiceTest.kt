@@ -46,6 +46,14 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 
+/**
+ * 예약 정책 관리 명령의 권한·수명 주기·멱등성·감사 불변식을 검증한다.
+ *
+ * Gateway에서 파생된 [ActorContext]만 권한 판단에 사용하고, 초안 revision과 스코프 헤드
+ * revision이 어긋나면 자동 병합하지 않는지 확인한다. 또한 승인·preview·활성화가 한
+ * 트랜잭션 경계에서 연결되고, 동일 멱등 명령은 같은 결과를 재사용하지만 다른 payload는
+ * 충돌하는지 증명한다.
+ */
 class SchedulingPolicyCommandServiceTest {
     private val now = Instant.parse("2026-07-27T00:00:00Z")
     private val scope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
@@ -86,12 +94,20 @@ class SchedulingPolicyCommandServiceTest {
             SchedulingPolicyErrorCode.POLICY_ACTIVATION_MISSED to 409,
             SchedulingPolicyErrorCode.POLICY_APPROVAL_INSUFFICIENT to 422,
             SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED to 429,
+            SchedulingPolicyErrorCode.POLICY_EFFECTIVE_READ_CONFLICT to 409,
+            SchedulingPolicyErrorCode.POLICY_EFFECTIVE_READ_UNAVAILABLE to 503,
+        )
+        val retryableErrors = setOf(
+            SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED,
+            SchedulingPolicyErrorCode.POLICY_EFFECTIVE_READ_CONFLICT,
+            SchedulingPolicyErrorCode.POLICY_EFFECTIVE_READ_UNAVAILABLE,
         )
 
         assertEquals(expectedStatus.keys, SchedulingPolicyErrorCode.entries.toSet())
         expectedStatus.forEach { (error, status) ->
             assertEquals(status, error.httpStatus.value())
-            assertEquals(error == SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED, error.retryable)
+            assertEquals(error in retryableErrors, error.retryable)
+            assertTrue(error.safeMessage.isNotBlank())
             assertTrue(error.action.isNotBlank())
         }
         val nonRetryableJson = ObjectMapper().writeValueAsString(
@@ -113,7 +129,7 @@ class SchedulingPolicyCommandServiceTest {
         }
         val error = SchedulingPolicyApiException(
             SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED,
-            "The preview queue has reached its configured limit.",
+            "internal SQL detail that must never be reflected",
         )
 
         val response = GlobalExceptionHandler().handleSchedulingPolicy(error, request)
@@ -123,6 +139,34 @@ class SchedulingPolicyCommandServiceTest {
         assertEquals("correlation-policy-error", response.body!!.correlationId)
         assertEquals(true, response.body!!.retryable)
         assertEquals(SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED.action, response.body!!.action)
+        assertEquals(SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED.safeMessage, response.body!!.error)
+        assertFalse(response.body!!.error.contains("internal SQL detail"))
+    }
+
+    @Test
+    fun `effective read handlers preserve stable conflict and unavailable contracts`() {
+        val request = MockHttpServletRequest().apply {
+            setAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE, "correlation-effective-read")
+        }
+        val handler = GlobalExceptionHandler()
+
+        val conflict = handler.handleEffectivePolicyGenerationConflict(
+            EffectivePolicyGenerationConflictException(3),
+            request,
+        )
+        val unavailable = handler.handleEffectivePolicyReadUnavailable(
+            EffectivePolicyReadUnavailableException(IllegalStateException("secret database detail")),
+            request,
+        )
+
+        assertEquals(409, conflict.statusCode.value())
+        assertEquals("POLICY_EFFECTIVE_READ_CONFLICT", conflict.body!!.errorCode)
+        assertEquals(true, conflict.body!!.retryable)
+        assertEquals("correlation-effective-read", conflict.body!!.correlationId)
+        assertEquals(503, unavailable.statusCode.value())
+        assertEquals("POLICY_EFFECTIVE_READ_UNAVAILABLE", unavailable.body!!.errorCode)
+        assertEquals(true, unavailable.body!!.retryable)
+        assertFalse(unavailable.body!!.error.contains("secret database detail"))
     }
 
     @Test

@@ -6,87 +6,85 @@ import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.timestamp
 
 /**
- * Durable bounded impact-preview jobs with owner-fenced checkpoints.
+ * owner-fenced checkpoint를 가진 durable bounded impact-preview job table입니다.
  */
 object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs") {
-    /** Positive tenant boundary for every scanned row. */
+    /** scan되는 모든 row의 양수 tenant boundary입니다. */
     val tenantGroupId = long("tenant_group_id")
 
-    /** Positive clinic boundary for every scanned row. */
+    /** scan되는 모든 row의 양수 clinic boundary입니다. */
     val clinicId = long("clinic_id")
 
-    /** Draft definition being previewed. */
+    /** preview 대상 draft definition입니다. */
     val definitionId = long("definition_id")
 
-    /** Exact draft revision; mismatch makes the job stale. */
+    /** 정확한 draft revision입니다. mismatch가 발생하면 job은 stale입니다. */
     val draftRevision = long("draft_revision")
 
-    /** Tenant generation expected at every resume. */
+    /** resume마다 기대하는 tenant generation입니다. */
     val tenantGeneration = long("tenant_generation")
 
-    /** Clinic generation expected at every resume. */
+    /** resume마다 기대하는 clinic generation입니다. */
     val clinicGeneration = long("clinic_generation")
 
-    /** Positive fixed partition count. */
+    /** deterministic resume을 위한 양수 fixed partition count입니다. */
     val partitionCount = integer("partition_count")
 
-    /** Zero-based persisted partition cursor. */
+    /** 저장된 zero-based partition cursor입니다. */
     val cursorPartition = integer("cursor_partition").default(0)
 
     /**
-     * Last processed positive appointment ID in the current partition.
+     * 현재 partition에서 마지막으로 처리한 양수 appointment ID입니다.
      *
-     * `null` means the partition has not yielded its first row yet, including
-     * immediately after advancing [cursorPartition]. Resume logic must start at
-     * the beginning of that partition instead of treating `null` as zero.
+     * `null`은 [cursorPartition]을 증가시킨 직후를 포함해 partition의 첫 row를 아직
+     * 처리하지 않았다는 뜻입니다. resume logic은 `null`을 zero처럼 취급하지 않고 해당
+     * partition 시작부터 진행해야 합니다.
      */
     val cursorLastAppointmentId = long("cursor_last_appointment_id").nullable()
 
-    /** Monotonic number of inspected appointments. */
+    /** 검사한 appointment 수입니다. 단조 증가합니다. */
     val scannedCount = long("scanned_count").default(0L)
 
-    /** Monotonic affected count, never above scanned count. */
+    /** 영향을 받은 appointment 수입니다. 단조 증가하며 scanned count를 넘을 수 없습니다. */
     val affectedCount = long("affected_count").default(0L)
 
-    /** Current durable preview lifecycle. */
+    /** 현재 durable preview lifecycle입니다. */
     val status = enumerationByName<PolicyPreviewJobStatus>("status", 24)
 
-    /** UTC hard deadline after which partial evidence is unusable. */
+    /** 이 시각 이후 partial evidence를 사용할 수 없는 UTC hard deadline입니다. */
     val deadlineAt = timestamp("deadline_at")
 
-    /** Earliest UTC worker claim instant. */
+    /** worker가 claim할 수 있는 가장 이른 UTC instant입니다. */
     val nextAttemptAt = timestamp("next_attempt_at")
 
     /**
-     * Opaque current worker identity.
+     * 현재 worker의 opaque identity입니다.
      *
-     * This and [leaseUntil] are both non-null only while [status] is
-     * [PolicyPreviewJobStatus.RUNNING]; all other states require both columns
-     * to be `null`.
+     * 이 값과 [leaseUntil]은 [status]가 [PolicyPreviewJobStatus.RUNNING]일 때만
+     * 둘 다 non-null입니다. 다른 모든 상태에서는 두 컬럼이 모두 `null`이어야 합니다.
      */
     val leaseOwner = varchar("lease_owner", 160).nullable()
 
     /**
-     * Exclusive UTC fencing deadline for [leaseOwner].
+     * [leaseOwner]의 exclusive UTC fencing deadline입니다.
      *
-     * It is non-null only while [status] is [PolicyPreviewJobStatus.RUNNING].
-     * A worker at or after this instant has lost checkpoint authority.
+     * [status]가 [PolicyPreviewJobStatus.RUNNING]일 때만 non-null입니다. 이 instant
+     * 이후의 worker는 checkpoint authority를 잃습니다.
      */
     val leaseUntil = timestamp("lease_until").nullable()
 
     /**
-     * Sanitized stable retry or terminal error code, or `null` when no failure
-     * is recorded.
+     * sanitized stable retry 또는 terminal error code입니다. 실패가 기록되지 않았으면 `null`입니다.
      *
-     * It must never contain raw exception text, appointment data, policy or
-     * request payloads, credentials, or authentication claims.
+     * raw exception text, appointment data, policy/request payload, credential,
+     * authentication claim을 포함하면 안 됩니다.
      */
     val lastErrorCode = varchar("last_error_code", 96).nullable()
 
-    /** Database insertion instant. */
+    /** database insertion instant입니다. */
     val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
 
-    /** UTC instant of the latest transition or checkpoint. */
+    /** 마지막 transition 또는 checkpoint의 UTC instant입니다. */
     val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
 
     init {

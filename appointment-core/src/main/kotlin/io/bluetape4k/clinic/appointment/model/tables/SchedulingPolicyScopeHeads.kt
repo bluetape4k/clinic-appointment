@@ -6,25 +6,25 @@ import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.timestamp
 
 /**
- * Scope-level CAS and row-lock serialization point for policy activation.
+ * policy activation을 위한 scope-level CAS 및 row-lock 직렬화 지점입니다.
  */
 object SchedulingPolicyScopeHeads : LongIdTable("scheduling_policy_scope_heads") {
-    /** Positive tenant owner of the serialized scope. */
+    /** 직렬화 대상 scope의 양수 tenant owner입니다. */
     val tenantGroupId = long("tenant_group_id")
 
-    /** Tenant baseline or clinic override boundary. */
+    /** tenant baseline 또는 clinic override boundary입니다. */
     val scope = enumerationByName<PolicyScope>("scope", 32)
 
-    /** Non-null tenant sentinel `0` or positive clinic ID. */
+    /** non-null tenant sentinel `0` 또는 양수 clinic ID입니다. */
     val clinicScopeKey = long("clinic_scope_key")
 
-    /** Monotonic optimistic mutation revision, initially zero. */
+    /** 단조 증가 optimistic mutation revision입니다. 초기값은 zero입니다. */
     val revision = long("revision").default(0L)
 
-    /** Monotonic effective-policy freshness generation, initially zero. */
+    /** effective-policy freshness를 나타내는 단조 증가 generation입니다. 초기값은 zero입니다. */
     val generation = long("generation").default(0L)
 
-    /** UTC instant of the latest successful scope mutation. */
+    /** 마지막 성공 scope mutation의 UTC instant입니다. */
     val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
 
     init {
