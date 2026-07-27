@@ -23,9 +23,11 @@ import io.bluetape4k.clinic.appointment.service.AppointmentPlanFactory
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -104,12 +106,82 @@ class PurchaseCompletedHandlerTest {
             (outbox[SchedulingOutboxEvents.eventId] == envelope.eventId).shouldBeFalse()
             outbox[SchedulingOutboxEvents.causationEventId] shouldBeEqualTo envelope.eventId
             outbox[SchedulingOutboxEvents.correlationId] shouldBeEqualTo envelope.correlationId
+            outbox[SchedulingOutboxEvents.aggregateType] shouldBeEqualTo "APPOINTMENT_PLAN"
+            outbox[SchedulingOutboxEvents.aggregateId] shouldBeEqualTo
+                outbox[SchedulingOutboxEvents.planId]?.value.toString()
+            outbox[SchedulingOutboxEvents.planId]?.value shouldBeEqualTo
+                AppointmentPlans.selectAll().single()[AppointmentPlans.id].value
             val payload = outbox[SchedulingOutboxEvents.payloadJson]
             payload.contains("patient-token").shouldBeFalse()
             payload.contains("Laser").shouldBeFalse()
             payload.contains("\"sourcePurchaseAuthority\":\"commerce\"").shouldBeTrue()
             payload.contains("\"sourcePurchaseId\":\"purchase-1\"").shouldBeTrue()
             payload.contains("\"sourceAggregateVersion\":1").shouldBeTrue()
+
+            val convergence = eventRepository.readOutboxDualWriteConvergence()
+            convergence.aggregateIdentityMissingCount shouldBeEqualTo 0L
+            convergence.legacyPlanRowCount shouldBeEqualTo 1L
+            convergence.legacyPlanMismatchCount shouldBeEqualTo 0L
+            convergence.dualWriteParityGauge shouldBeEqualTo 1.0
+        }
+    }
+
+    @Test
+    fun `operator convergence query detects a plan aggregate mismatch`() {
+        handler().handle(envelope(), null, protected())
+
+        transaction {
+            SchedulingOutboxEvents.update {
+                it[aggregateId] = "wrong-plan"
+            }
+            val convergence = eventRepository.readOutboxDualWriteConvergence()
+            convergence.aggregateIdentityMissingCount shouldBeEqualTo 0L
+            convergence.legacyPlanRowCount shouldBeEqualTo 1L
+            convergence.legacyPlanMismatchCount shouldBeEqualTo 1L
+            convergence.dualWriteParityGauge shouldBeEqualTo 0.0
+        }
+    }
+
+    @Test
+    fun `operator convergence query detects missing generic aggregate identity`() {
+        handler().handle(envelope(), null, protected())
+
+        transaction {
+            SchedulingOutboxEvents.update {
+                it[aggregateId] = null
+            }
+            val convergence = eventRepository.readOutboxDualWriteConvergence()
+            convergence.aggregateIdentityMissingCount shouldBeEqualTo 1L
+            convergence.legacyPlanRowCount shouldBeEqualTo 1L
+            convergence.legacyPlanMismatchCount shouldBeEqualTo 1L
+            convergence.converged.shouldBeFalse()
+            convergence.dualWriteParityGauge shouldBeEqualTo 0.0
+        }
+    }
+
+    @Test
+    fun `plan outbox allow-list escapes trusted string metadata without field injection`() {
+        val sourcePurchaseId = "purchase-\\\"},\\\"injected\\\":\\\"secret\\nline"
+        val correlationId = "correlation-\\\\quoted\\\""
+        handler().handle(envelope(), null, protected())
+        val craftedEnvelope = envelope(
+            correlationId = correlationId,
+            payload = payload(sourcePurchaseId = sourcePurchaseId),
+        )
+
+        transaction {
+            val planId = AppointmentPlans.selectAll().single()[AppointmentPlans.id].value
+            SchedulingOutboxEvents.deleteAll()
+            eventRepository.insertPlanCreatedOutbox(craftedEnvelope, planId)
+            val outbox = SchedulingOutboxEvents.selectAll().single()
+            outbox[SchedulingOutboxEvents.correlationId] shouldBeEqualTo correlationId
+            val payloadJson = outbox[SchedulingOutboxEvents.payloadJson]
+            payloadJson.contains(""","injected":""").shouldBeFalse()
+            payloadJson.contains("injected").shouldBeTrue()
+            payloadJson.contains("\\\\").shouldBeTrue()
+            payloadJson.contains("\\nline").shouldBeTrue()
+            payloadJson.contains('\n').shouldBeFalse()
+            payloadJson.contains("patient-token").shouldBeFalse()
         }
     }
 
@@ -419,6 +491,7 @@ class PurchaseCompletedHandlerTest {
     private fun envelope(
         eventId: String = "event-1",
         schemaVersion: Int = 2,
+        correlationId: String = "correlation-1",
         payload: PurchaseCompletedEvent = payload(),
     ) = TrustedSchedulingEventEnvelope(
         eventId = eventId,
@@ -431,7 +504,7 @@ class PurchaseCompletedHandlerTest {
         keyId = "commerce-key",
         algorithm = "EdDSA",
         schemaVersion = schemaVersion,
-        correlationId = "correlation-1",
+        correlationId = correlationId,
         payloadHash = PurchaseCompletedPayloadHasher.hash(payload),
         payload = payload,
     )
