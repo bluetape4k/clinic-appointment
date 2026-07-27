@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.security
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.controller.execute
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingInboxEvents
@@ -116,8 +117,16 @@ class AppointmentPlanReadSecurityIntegrationTest {
 
     @Test
     fun `plan reads require operator role tenant membership and exact clinic claim`() {
-        request(token = null).statusCode shouldBeEqualTo HttpStatus.UNAUTHORIZED
-        request(TestJwtProvider.patientToken(listOf(TENANT_A))).statusCode shouldBeEqualTo HttpStatus.FORBIDDEN
+        request(token = null).also {
+            it.statusCode shouldBeEqualTo HttpStatus.UNAUTHORIZED
+            it.jsonPath<String>("$.errorCode") shouldBeEqualTo "UNAUTHORIZED"
+            it.jsonPath<String>("$.correlationId").isNotBlank().shouldBeTrue()
+        }
+        request(TestJwtProvider.patientToken(listOf(TENANT_A))).also {
+            it.statusCode shouldBeEqualTo HttpStatus.FORBIDDEN
+            it.jsonPath<String>("$.errorCode") shouldBeEqualTo "FORBIDDEN"
+            it.jsonPath<String>("$.correlationId").isNotBlank().shouldBeTrue()
+        }
         request(
             TestJwtProvider.staffToken(clinicAId, listOf(TENANT_B)),
         ).statusCode shouldBeEqualTo HttpStatus.FORBIDDEN

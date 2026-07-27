@@ -27,7 +27,9 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class CatalogSyncApplicationServiceTest {
 
@@ -164,6 +166,73 @@ class CatalogSyncApplicationServiceTest {
         val conflictResults = raceCatalogSync(original, conflicting)
         conflictResults.map(CatalogSyncResult::status).toSet() shouldBeEqualTo
             setOf(CatalogSyncStatus.CREATED, CatalogSyncStatus.VERSION_CONFLICT)
+    }
+
+    @Test
+    fun `stale version observed absent cannot persist after a higher version commits`() {
+        Database.connect(
+            "jdbc:h2:mem:catalog_sync_stale_race_${System.nanoTime()};DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        val clinicId = transaction {
+            SchemaUtils.create(
+                io.bluetape4k.clinic.appointment.model.tables.TenantGroups,
+                Clinics,
+                ProductCatalogProjections,
+                ProductCatalogBomItems,
+                ProductCatalogBomDependencies,
+            )
+            io.bluetape4k.clinic.appointment.model.tables.TenantGroups.insert {
+                it[id] = org.jetbrains.exposed.v1.core.dao.id.EntityID(
+                    1L,
+                    io.bluetape4k.clinic.appointment.model.tables.TenantGroups,
+                )
+                it[tenantCode] = "tenant-default"
+                it[displayName] = "Default"
+                it[active] = true
+            }
+            createClinic()
+        }
+        val staleReachedAbsent = CountDownLatch(1)
+        val allowStaleAfterLatestCommit = CountDownLatch(1)
+        val service = CatalogSyncApplicationService(
+            ProductCatalogRepository(
+                CatalogSyncWriteObserver {
+                    if (Thread.currentThread().name == "catalog-stale-v7") {
+                        staleReachedAbsent.countDown()
+                        allowStaleAfterLatestCommit.await(5, TimeUnit.SECONDS) shouldBeEqualTo true
+                    }
+                },
+            ),
+        )
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            val stale = catalogDefinition(clinicId, catalogVersion = 7L)
+            val latest = catalogDefinition(clinicId, catalogVersion = 8L)
+            val staleFuture = executor.submit<CatalogSyncResult> {
+                Thread.currentThread().name = "catalog-stale-v7"
+                service.synchronize(stale, CatalogPayloadHasher.hash(stale))
+            }
+
+            staleReachedAbsent.await(5, TimeUnit.SECONDS) shouldBeEqualTo true
+            val latestResult = executor.submit<CatalogSyncResult> {
+                Thread.currentThread().name = "catalog-latest-v8"
+                service.synchronize(latest, CatalogPayloadHasher.hash(latest))
+            }.get(5, TimeUnit.SECONDS)
+            allowStaleAfterLatestCommit.countDown()
+            val staleResult = staleFuture.get(5, TimeUnit.SECONDS)
+
+            latestResult.status shouldBeEqualTo CatalogSyncStatus.CREATED
+            staleResult.status shouldBeEqualTo CatalogSyncStatus.STALE_IGNORED
+            transaction {
+                ProductCatalogProjections.selectAll().count() shouldBeEqualTo 1L
+                ProductCatalogProjections
+                    .selectAll()
+                    .single()[ProductCatalogProjections.catalogVersion] shouldBeEqualTo 8L
+            }
+        } finally {
+            executor.shutdownNow()
+        }
     }
 
     private fun raceCatalogSync(

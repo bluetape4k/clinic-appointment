@@ -8,14 +8,20 @@ data class PlanFoundationProperties(
     val catalogSyncEnabled: Boolean = false,
     val planReadEnabled: Boolean = false,
     val purchaseConsumerMode: PurchaseConsumerMode = PurchaseConsumerMode.OFF,
+    val scopeOverrides: List<PlanFoundationScopeOverride> = emptyList(),
     val consumerMaxAttempts: Int = 5,
     val consumerInitialBackoff: Duration = Duration.ofSeconds(5),
     val consumerMaxBackoff: Duration = Duration.ofMinutes(5),
     val consumerJitter: Double = 0.20,
     val eventReplayWindow: Duration = Duration.ofMinutes(15),
-    val trustVerificationTimeout: Duration = Duration.ofMillis(500),
-    val sourceAuthorityTimeout: Duration = Duration.ofSeconds(2),
-    val redriveDryRunTimeout: Duration = Duration.ofSeconds(10),
+)
+
+data class PlanFoundationScopeOverride(
+    val tenantGroupId: Long,
+    val clinicId: Long,
+    val catalogSyncEnabled: Boolean? = null,
+    val planReadEnabled: Boolean? = null,
+    val purchaseConsumerMode: PurchaseConsumerMode? = null,
 )
 
 enum class PurchaseConsumerMode {

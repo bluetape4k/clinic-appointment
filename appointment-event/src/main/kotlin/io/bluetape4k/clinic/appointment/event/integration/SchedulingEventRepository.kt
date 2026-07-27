@@ -6,7 +6,9 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
+import java.nio.charset.StandardCharsets
 import java.time.Instant
+import java.util.UUID
 
 data class SchedulingInboxRecord(
     val id: Long,
@@ -41,13 +43,19 @@ class SchedulingEventRepository {
             }
 
     fun latestProcessedSourceVersion(
+        tenantGroupId: Long,
+        clinicId: Long,
         producer: String,
+        sourceAuthority: String,
         sourceAggregateId: String,
     ): Long? =
         SchedulingInboxEvents
             .selectAll()
             .where {
-                (SchedulingInboxEvents.producer eq producer) and
+                (SchedulingInboxEvents.tenantGroupId eq tenantGroupId) and
+                    (SchedulingInboxEvents.clinicId eq clinicId) and
+                    (SchedulingInboxEvents.producer eq producer) and
+                    (SchedulingInboxEvents.sourceAuthority eq sourceAuthority) and
                     (SchedulingInboxEvents.sourceAggregateId eq sourceAggregateId) and
                     (SchedulingInboxEvents.status eq SchedulingInboxStatus.PROCESSED)
             }
@@ -63,6 +71,7 @@ class SchedulingEventRepository {
             it[eventId] = envelope.eventId
             it[eventType] = envelope.eventType
             it[producer] = envelope.producer
+            it[sourceAuthority] = envelope.payload.sourcePurchaseAuthority
             it[sourceAggregateId] = envelope.payload.sourceAggregateId
             it[sourceAggregateVersion] = envelope.payload.sourceAggregateVersion
             it[tenantGroupId] = envelope.payload.tenantGroupId
@@ -120,15 +129,21 @@ class SchedulingEventRepository {
         envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
         planId: Long,
     ) {
+        val outboxEventId = UUID.nameUUIDFromBytes(
+            "AppointmentPlanCreated:${envelope.eventId}:$planId".toByteArray(StandardCharsets.UTF_8)
+        ).toString()
+        val payload = envelope.payload
         SchedulingOutboxEvents.insertAndGetId {
-            it[eventId] = envelope.eventId
+            it[eventId] = outboxEventId
+            it[causationEventId] = envelope.eventId
+            it[correlationId] = envelope.correlationId
             it[eventType] = "AppointmentPlanCreated"
-            it[tenantGroupId] = envelope.payload.tenantGroupId
-            it[clinicId] = envelope.payload.clinicId
+            it[tenantGroupId] = payload.tenantGroupId
+            it[clinicId] = payload.clinicId
             it[SchedulingOutboxEvents.planId] = planId
             it[schemaVersion] = 1
             it[payloadJson] =
-                """{"eventId":"${envelope.eventId}","planId":$planId,"tenantGroupId":${envelope.payload.tenantGroupId},"clinicId":${envelope.payload.clinicId}}"""
+                """{"eventId":"$outboxEventId","causationEventId":"${envelope.eventId}","correlationId":"${envelope.correlationId}","planId":$planId,"tenantGroupId":${payload.tenantGroupId},"clinicId":${payload.clinicId},"sourcePurchaseAuthority":"${payload.sourcePurchaseAuthority}","sourcePurchaseId":"${payload.sourcePurchaseId}","sourceAggregateVersion":${payload.sourceAggregateVersion}}"""
             it[status] = SchedulingOutboxStatus.PENDING
             it[attemptCount] = 0
         }

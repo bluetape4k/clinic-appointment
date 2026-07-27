@@ -24,21 +24,21 @@ class PlanFoundationPropertiesValidator(
         }
         require(properties.consumerJitter in 0.0..1.0) { "consumerJitter must be between 0 and 1" }
         requirePositive(properties.eventReplayWindow, "eventReplayWindow")
-        requirePositive(properties.trustVerificationTimeout, "trustVerificationTimeout")
-        requirePositive(properties.sourceAuthorityTimeout, "sourceAuthorityTimeout")
-        requirePositive(properties.redriveDryRunTimeout, "redriveDryRunTimeout")
-        require(properties.eventReplayWindow >= properties.trustVerificationTimeout) {
-            "eventReplayWindow must not be shorter than trustVerificationTimeout"
+        properties.scopeOverrides.forEach { override ->
+            require(override.tenantGroupId > 0) { "scope override tenantGroupId must be positive" }
+            require(override.clinicId > 0) { "scope override clinicId must be positive" }
         }
-        require(properties.redriveDryRunTimeout >= properties.trustVerificationTimeout) {
-            "redriveDryRunTimeout must not be shorter than trustVerificationTimeout"
-        }
-        require(properties.redriveDryRunTimeout >= properties.sourceAuthorityTimeout) {
-            "redriveDryRunTimeout must not be shorter than sourceAuthorityTimeout"
-        }
+        require(
+            properties.scopeOverrides
+                .map { it.tenantGroupId to it.clinicId }
+                .distinct()
+                .size == properties.scopeOverrides.size
+        ) { "scope overrides must be unique by tenantGroupId and clinicId" }
 
         val testLike = environment.activeProfiles.any { profile -> profile == "test" || profile == "dev" }
-        if (!testLike && properties.purchaseConsumerMode == PurchaseConsumerMode.WRITE) {
+        val writeRequested = properties.purchaseConsumerMode == PurchaseConsumerMode.WRITE ||
+            properties.scopeOverrides.any { it.purchaseConsumerMode == PurchaseConsumerMode.WRITE }
+        if (!testLike && writeRequested) {
             val capability = outboxTransportCapability.ifAvailable
             check(capability?.isAvailable() == true) {
                 "WRITE purchase consumer mode requires an available OutboxTransportCapability"

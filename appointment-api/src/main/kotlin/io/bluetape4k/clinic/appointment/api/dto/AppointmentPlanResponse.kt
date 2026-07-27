@@ -45,6 +45,15 @@ data class AppointmentPlanResponse(
     }
 }
 
+/**
+ * Concrete OpenAPI schema for the successful appointment plan envelope.
+ */
+data class AppointmentPlanApiResponse(
+    val success: Boolean,
+    val data: AppointmentPlanResponse,
+    val error: String? = null,
+)
+
 data class BookingPreferenceResponse(
     val type: String,
     val originalLocalDateTime: LocalDateTime? = null,

@@ -159,6 +159,11 @@ class ServiceConfig {
     ): PlanFoundationPropertiesValidator =
         PlanFoundationPropertiesValidator(properties, environment, outboxTransportCapability)
 
+    @Bean
+    fun planFoundationFeatureControlResolver(
+        properties: PlanFoundationProperties,
+    ): PlanFoundationFeatureControlResolver = PlanFoundationFeatureControlResolver(properties)
+
     // --- Stats 빈 ---
 
     @Bean

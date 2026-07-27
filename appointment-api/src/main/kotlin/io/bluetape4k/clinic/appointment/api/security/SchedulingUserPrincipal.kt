@@ -12,6 +12,8 @@ import java.io.Serializable
  * @property clinicId clinic ID associated with the user, when available
  * @property roles scheduling roles
  * @property allowedTenants tenant codes this user can access
+ * @property scopes OAuth-style authorities exposed as `SCOPE_*` Spring authorities
+ * @property catalogSourceAuthorities catalog source authorities this caller may write through the catalog sync API
  */
 data class SchedulingUserPrincipal(
     val userId: String,

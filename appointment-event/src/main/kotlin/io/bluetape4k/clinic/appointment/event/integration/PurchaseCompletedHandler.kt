@@ -99,6 +99,8 @@ class PurchaseCompletedHandler(
     private val metrics: PurchasePlanMetrics = PurchasePlanMetrics.NOOP,
     private val inboxInsertObserver: InboxInsertObserver = InboxInsertObserver.NOOP,
     private val transactionObserver: PurchaseTransactionObserver = PurchaseTransactionObserver.NOOP,
+    private val rejectionRepository: UntrustedSchedulingEventRejectionRepository =
+        UntrustedSchedulingEventRejectionRepository(),
 ) {
     companion object : KLogging()
 
@@ -121,10 +123,8 @@ class PurchaseCompletedHandler(
             PurchaseHandlingMode.OFF ->
                 result(PurchaseHandleStatus.OFF, "CONSUMER_OFF")
 
-            PurchaseHandlingMode.SHADOW -> {
-                evaluateShadow(envelope, protectedPatientReference)
-                result(PurchaseHandleStatus.SHADOW, "SHADOW_NO_WRITE")
-            }
+            PurchaseHandlingMode.SHADOW ->
+                preview(envelope, versionProof, protectedPatientReference)
 
             PurchaseHandlingMode.WRITE ->
                 try {
@@ -155,6 +155,84 @@ class PurchaseCompletedHandler(
     }
 
     /**
+     * Evaluates the same ownership, source-version, catalog, and plan-factory
+     * decisions as WRITE without creating inbox, plan, outbox, or quarantine rows.
+     */
+    fun preview(
+        envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        versionProof: SourceAuthorityVersionProof?,
+        protectedPatientReference: ProtectedPatientReference,
+    ): PurchaseHandleResult {
+        PurchaseEventBounds.validate(envelope)
+        return transaction {
+            val existingInbox = eventRepository.findInbox(envelope.eventId)
+            if (existingInbox != null && existingInbox.status != SchedulingInboxStatus.WAITING_GAP) {
+                return@transaction result(PurchaseHandleStatus.DUPLICATE, "EVENT_ALREADY_TERMINAL")
+            }
+            val payload = envelope.payload
+            if (!clinicBelongsToTenant(payload.tenantGroupId, payload.clinicId)) {
+                return@transaction result(PurchaseHandleStatus.QUARANTINED, "TENANT_CLINIC_MISMATCH")
+            }
+            val existingPlan = planRepository.findBySourcePurchaseAndTenantClinic(
+                sourcePurchaseAuthority = payload.sourcePurchaseAuthority,
+                sourcePurchaseId = payload.sourcePurchaseId,
+                tenantGroupId = payload.tenantGroupId,
+                clinicId = payload.clinicId,
+            )
+            if (existingPlan != null) {
+                return@transaction if (immutableOwnershipMatches(
+                        existingPlan.plan,
+                        envelope,
+                        protectedPatientReference,
+                    )
+                ) {
+                    result(PurchaseHandleStatus.DUPLICATE, "PURCHASE_ALREADY_PLANNED", existingPlan.plan.id)
+                } else {
+                    result(PurchaseHandleStatus.QUARANTINED, "PURCHASE_OWNERSHIP_CONFLICT")
+                }
+            }
+            val localVersion = eventRepository.latestProcessedSourceVersion(
+                tenantGroupId = payload.tenantGroupId,
+                clinicId = payload.clinicId,
+                producer = envelope.producer,
+                sourceAuthority = payload.sourcePurchaseAuthority,
+                sourceAggregateId = payload.sourceAggregateId,
+            )
+            when (versionVerifier.verify(envelope.producer, payload, localVersion, versionProof)) {
+                SourceVersionDecision.STALE_OR_DUPLICATE ->
+                    return@transaction result(PurchaseHandleStatus.STALE, "STALE_SOURCE_VERSION")
+                SourceVersionDecision.WAITING_GAP ->
+                    return@transaction result(PurchaseHandleStatus.WAITING_GAP, "SOURCE_VERSION_GAP")
+                SourceVersionDecision.ACCEPT -> Unit
+            }
+            val catalog = catalogRepository.findByScopeVersion(
+                tenantGroupId = payload.tenantGroupId,
+                clinicId = payload.clinicId,
+                sourceAuthority = payload.catalogSourceAuthority,
+                productId = payload.productId,
+                catalogVersion = payload.catalogVersion,
+            ) ?: return@transaction result(PurchaseHandleStatus.QUARANTINED, "CATALOG_VERSION_UNAVAILABLE")
+            if (catalog.definition.status ==
+                io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus.RETIRED
+            ) {
+                return@transaction result(PurchaseHandleStatus.QUARANTINED, "CATALOG_RETIRED")
+            }
+            planFactory.create(
+                catalog = catalog,
+                input = AppointmentPlanFactoryInput(
+                    sourcePurchaseAuthority = payload.sourcePurchaseAuthority,
+                    sourcePurchaseId = payload.sourcePurchaseId,
+                    patientReferenceCiphertext = protectedPatientReference.ciphertext,
+                    patientReferenceKeyId = protectedPatientReference.keyId,
+                    patientReferenceFingerprint = protectedPatientReference.fingerprint,
+                    bookingPreference = payload.bookingPreference,
+                ),
+            )
+            result(PurchaseHandleStatus.SHADOW, "WOULD_CREATE_PLAN")
+        }
+    }
+
+    /**
      * Persists only bounded retry state after the external source-authority
      * adapter times out or opens its circuit. No plan-write transaction starts.
      */
@@ -166,7 +244,7 @@ class PurchaseCompletedHandler(
         PurchaseEventBounds.validate(envelope)
         val handled = try {
             transaction {
-                maxAttempts = 1
+                this.maxAttempts = 1
                 val existingInbox = eventRepository.findInbox(envelope.eventId)
                 if (existingInbox != null && existingInbox.status != SchedulingInboxStatus.WAITING_GAP) {
                     return@transaction result(PurchaseHandleStatus.DUPLICATE, "EVENT_ALREADY_TERMINAL")
@@ -194,25 +272,44 @@ class PurchaseCompletedHandler(
     }
 
     fun quarantineRejectedEnvelope(
-        envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        envelope: UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
         protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
         reasonCode: String,
     ): PurchaseHandleResult {
-        PurchaseEventBounds.validate(envelope)
+        PurchaseEventBounds.validateEnvelopeMetadata(envelope)
         val handled = try {
             transaction {
-                maxAttempts = 1
-                eventRepository.findInbox(envelope.eventId)?.let {
+                if (rejectionRepository.exists(envelope.eventId)) {
                     return@transaction result(PurchaseHandleStatus.DUPLICATE, "EVENT_ALREADY_TERMINAL")
                 }
                 inboxInsertObserver.beforeInsert(envelope.eventId)
-                val inboxId = eventRepository.insertReceived(envelope)
-                quarantine(inboxId, envelope, protectedQuarantineEnvelope, reasonCode)
+                rejectionRepository.record(
+                    UntrustedEventRejection(
+                        eventId = envelope.eventId,
+                        eventType = envelope.eventType,
+                        producer = envelope.producer,
+                        sourceAuthority = envelope.payload.sourcePurchaseAuthority,
+                        sourceAggregateId = envelope.payload.sourceAggregateId,
+                        sourceAggregateVersion = envelope.payload.sourceAggregateVersion,
+                        claimedTenantGroupId = envelope.payload.tenantGroupId,
+                        claimedClinicId = envelope.payload.clinicId,
+                        schemaVersion = envelope.schemaVersion,
+                        correlationId = envelope.correlationId,
+                        reasonCode = reasonCode,
+                        envelopeHash = protectedQuarantineEnvelope.envelopeHash,
+                        detectedAt = clock.instant(),
+                    )
+                )
                 result(PurchaseHandleStatus.QUARANTINED, reasonCode)
             }
         } catch (failure: ExposedSQLException) {
             if (!failure.isConstraintConflict()) throw failure
-            reconcileInboxRace(envelope.eventId)
+            transaction {
+                check(rejectionRepository.exists(envelope.eventId)) {
+                    "Untrusted rejection constraint conflict could not be classified: ${envelope.eventId}"
+                }
+                result(PurchaseHandleStatus.DUPLICATE, "EVENT_RACE_CONVERGED")
+            }
         }
         metrics.record(handled.status.name, handled.reasonCode)
         return handled
@@ -230,13 +327,32 @@ class PurchaseCompletedHandler(
         }
 
         val payload = envelope.payload
+        if (rejectionRepository.exists(envelope.eventId)) {
+            return result(PurchaseHandleStatus.DUPLICATE, "EVENT_ALREADY_TERMINAL")
+        }
+        if (!clinicBelongsToTenant(payload.tenantGroupId, payload.clinicId)) {
+            rejectionRepository.record(
+                UntrustedEventRejection(
+                    eventId = envelope.eventId,
+                    eventType = envelope.eventType,
+                    producer = envelope.producer,
+                    sourceAuthority = payload.sourcePurchaseAuthority,
+                    sourceAggregateId = payload.sourceAggregateId,
+                    sourceAggregateVersion = payload.sourceAggregateVersion,
+                    claimedTenantGroupId = payload.tenantGroupId,
+                    claimedClinicId = payload.clinicId,
+                    schemaVersion = envelope.schemaVersion,
+                    correlationId = envelope.correlationId,
+                    reasonCode = "TENANT_CLINIC_MISMATCH",
+                    envelopeHash = protectedQuarantineEnvelope.envelopeHash,
+                    detectedAt = clock.instant(),
+                )
+            )
+            return result(PurchaseHandleStatus.QUARANTINED, "TENANT_CLINIC_MISMATCH")
+        }
         val inboxId = existingInbox?.id ?: run {
             inboxInsertObserver.beforeInsert(envelope.eventId)
             eventRepository.insertReceived(envelope)
-        }
-        if (!clinicBelongsToTenant(payload.tenantGroupId, payload.clinicId)) {
-            quarantine(inboxId, envelope, protectedQuarantineEnvelope, "TENANT_CLINIC_MISMATCH")
-            return result(PurchaseHandleStatus.QUARANTINED, "TENANT_CLINIC_MISMATCH")
         }
 
         val existingPlan = planRepository.findBySourcePurchaseAndTenantClinic(
@@ -256,10 +372,13 @@ class PurchaseCompletedHandler(
         }
 
         val localVersion = eventRepository.latestProcessedSourceVersion(
-            envelope.producer,
-            payload.sourceAggregateId,
+            tenantGroupId = payload.tenantGroupId,
+            clinicId = payload.clinicId,
+            producer = envelope.producer,
+            sourceAuthority = payload.sourcePurchaseAuthority,
+            sourceAggregateId = payload.sourceAggregateId,
         )
-        when (versionVerifier.verify(payload, localVersion, versionProof)) {
+        when (versionVerifier.verify(envelope.producer, payload, localVersion, versionProof)) {
             SourceVersionDecision.STALE_OR_DUPLICATE -> {
                 eventRepository.markProcessed(inboxId, clock.instant(), "STALE_SOURCE_VERSION")
                 return result(PurchaseHandleStatus.STALE, "STALE_SOURCE_VERSION")
@@ -320,13 +439,11 @@ class PurchaseCompletedHandler(
         protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
     ): PurchaseHandleResult {
         val payload = envelope.payload
-        val immutableOwnershipMatches =
-            existing.tenantGroupId == payload.tenantGroupId &&
-                existing.clinicId == payload.clinicId &&
-                existing.catalogSourceAuthority == payload.catalogSourceAuthority &&
-                existing.productId == payload.productId &&
-                existing.catalogVersion == payload.catalogVersion &&
-                existing.patientReferenceFingerprint == protectedPatientReference.fingerprint
+        val immutableOwnershipMatches = immutableOwnershipMatches(
+            existing,
+            envelope,
+            protectedPatientReference,
+        )
         return if (immutableOwnershipMatches) {
             eventRepository.markProcessed(inboxId, clock.instant(), "PURCHASE_ALREADY_PLANNED")
             result(PurchaseHandleStatus.DUPLICATE, "PURCHASE_ALREADY_PLANNED", existing.id)
@@ -369,32 +486,18 @@ class PurchaseCompletedHandler(
         return Duration.ofMillis((capped * multiplier * 1_000.0).toLong())
     }
 
-    private fun evaluateShadow(
+    private fun immutableOwnershipMatches(
+        existing: io.bluetape4k.clinic.appointment.model.dto.AppointmentPlanRecord,
         envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
         protectedPatientReference: ProtectedPatientReference,
-    ) {
-        transaction {
-            val payload = envelope.payload
-            if (!clinicBelongsToTenant(payload.tenantGroupId, payload.clinicId)) return@transaction
-            val catalog = catalogRepository.findByScopeVersion(
-                tenantGroupId = payload.tenantGroupId,
-                clinicId = payload.clinicId,
-                sourceAuthority = payload.catalogSourceAuthority,
-                productId = payload.productId,
-                catalogVersion = payload.catalogVersion,
-            ) ?: return@transaction
-            planFactory.create(
-                catalog,
-                AppointmentPlanFactoryInput(
-                    sourcePurchaseAuthority = payload.sourcePurchaseAuthority,
-                    sourcePurchaseId = payload.sourcePurchaseId,
-                    patientReferenceCiphertext = protectedPatientReference.ciphertext,
-                    patientReferenceKeyId = protectedPatientReference.keyId,
-                    patientReferenceFingerprint = protectedPatientReference.fingerprint,
-                    bookingPreference = payload.bookingPreference,
-                ),
-            )
-        }
+    ): Boolean {
+        val payload = envelope.payload
+        return existing.tenantGroupId == payload.tenantGroupId &&
+            existing.clinicId == payload.clinicId &&
+            existing.catalogSourceAuthority == payload.catalogSourceAuthority &&
+            existing.productId == payload.productId &&
+            existing.catalogVersion == payload.catalogVersion &&
+            existing.patientReferenceFingerprint == protectedPatientReference.fingerprint
     }
 
     private fun reconcileConstraintRace(
@@ -403,6 +506,9 @@ class PurchaseCompletedHandler(
         protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
     ): PurchaseHandleResult =
         transaction {
+            if (rejectionRepository.exists(envelope.eventId)) {
+                return@transaction result(PurchaseHandleStatus.DUPLICATE, "EVENT_RACE_CONVERGED")
+            }
             eventRepository.findInbox(envelope.eventId)?.let {
                 return@transaction result(PurchaseHandleStatus.DUPLICATE, "EVENT_RACE_CONVERGED")
             }

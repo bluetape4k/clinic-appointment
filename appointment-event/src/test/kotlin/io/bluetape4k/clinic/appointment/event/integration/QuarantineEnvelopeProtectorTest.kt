@@ -28,6 +28,9 @@ class QuarantineEnvelopeProtectorTest {
         first.ciphertext.equals(second.ciphertext).shouldBeFalse()
         first.ciphertext.contains("patient-token").shouldBeFalse()
         Base64.getDecoder().decode(first.ciphertext).size.let { it >= 29 }.shouldBeTrue()
+        protector.protect(envelope.copy(algorithm = "ES256")).envelopeHash
+            .equals(first.envelopeHash)
+            .shouldBeFalse()
     }
 
     @Test
@@ -60,6 +63,7 @@ class QuarantineEnvelopeProtectorTest {
             issuer = "commerce-issuer",
             audience = "appointment-service",
             keyId = "commerce-key",
+            algorithm = "EdDSA",
             schemaVersion = 2,
             correlationId = "correlation-1",
             payloadHash = PurchaseCompletedPayloadHasher.hash(payload),

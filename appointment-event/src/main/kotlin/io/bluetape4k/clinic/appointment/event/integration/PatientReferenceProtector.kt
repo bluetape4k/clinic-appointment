@@ -23,6 +23,18 @@ class AesGcmPatientReferenceProtector(
     fingerprintKey: ByteArray,
     private val keyId: String,
 ) : PatientReferenceProtector {
+    init {
+        require(encryptionKey.size in setOf(16, 24, 32)) {
+            "encryptionKey must be a 128, 192, or 256 bit AES key"
+        }
+        require(fingerprintKey.size >= 32) {
+            "fingerprintKey must contain at least 32 bytes"
+        }
+        require(SAFE_KEY_ID.matches(keyId)) {
+            "keyId must be a safe 1-128 character identifier"
+        }
+    }
+
     private val encryptionKey: SecretKey = SecretKeySpec(encryptionKey.copyOf(), "AES")
     private val fingerprintKey: SecretKey = SecretKeySpec(fingerprintKey.copyOf(), "HmacSHA256")
 
@@ -49,5 +61,9 @@ class AesGcmPatientReferenceProtector(
             keyId = keyId,
             fingerprint = fingerprint,
         )
+    }
+
+    private companion object {
+        val SAFE_KEY_ID = Regex("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
     }
 }

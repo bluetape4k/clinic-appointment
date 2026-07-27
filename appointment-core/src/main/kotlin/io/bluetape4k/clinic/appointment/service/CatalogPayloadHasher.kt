@@ -34,25 +34,13 @@ object CatalogPayloadHasher {
         updateField("sourceUpdatedAt", definition.sourceUpdatedAt)
         updateField("status", definition.status)
 
-        val sortedItems = definition.items.sortedBy(CatalogBomItem::bomItemId)
-        updateField("items.size", sortedItems.size)
-        sortedItems.forEachIndexed { index, item ->
+        updateField("items.size", definition.items.size)
+        definition.items.forEachIndexed { index, item ->
             updateItem("items[$index]", item)
         }
 
-        val sortedDependencies = definition.dependencies.sortedWith(
-            compareBy<CatalogBomDependency>(
-                CatalogBomDependency::predecessorBomItemId,
-                { dependency -> dependency.predecessorSequenceNo ?: 0 },
-                CatalogBomDependency::successorBomItemId,
-                { dependency -> dependency.successorSequenceNo ?: 0 },
-                CatalogBomDependency::minimumIntervalDays,
-                CatalogBomDependency::preferredIntervalDays,
-                CatalogBomDependency::maximumIntervalDays,
-            )
-        )
-        updateField("dependencies.size", sortedDependencies.size)
-        sortedDependencies.forEachIndexed { index, dependency ->
+        updateField("dependencies.size", definition.dependencies.size)
+        definition.dependencies.forEachIndexed { index, dependency ->
             updateDependency("dependencies[$index]", dependency)
         }
 

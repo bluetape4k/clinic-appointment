@@ -41,6 +41,7 @@ class PurchaseCompletedIngressTest {
             SchemaUtils.create(
                 TenantGroups,
                 Clinics,
+                UntrustedSchedulingEventRejections,
                 SchedulingInboxEvents,
                 SchedulingQuarantineEvents,
                 SchedulingQuarantineAuditEvents,
@@ -73,9 +74,32 @@ class PurchaseCompletedIngressTest {
         results.map { it.status }.toSet() shouldBeEqualTo
             setOf(PurchaseHandleStatus.QUARANTINED, PurchaseHandleStatus.DUPLICATE)
         transaction {
-            SchedulingInboxEvents.selectAll().toList().shouldHaveSize(1)
-            SchedulingQuarantineEvents.selectAll().toList().shouldHaveSize(1)
-            SchedulingQuarantineAuditEvents.selectAll().toList().shouldHaveSize(1)
+            UntrustedSchedulingEventRejections.selectAll().toList().shouldHaveSize(1)
+            SchedulingInboxEvents.selectAll().toList().shouldHaveSize(0)
+            SchedulingQuarantineEvents.selectAll().toList().shouldHaveSize(0)
+            SchedulingQuarantineAuditEvents.selectAll().toList().shouldHaveSize(0)
+        }
+    }
+
+    @Test
+    fun `trust failure with unknown claimed scope is durably rejected and duplicate retry converges`() {
+        val ingress = ingress(
+            signatureVerifier = SchedulingEventSignatureVerifier { false },
+            inboxInsertObserver = InboxInsertObserver.NOOP,
+        )
+        val poison = envelope(signature = "invalid").let {
+            val payload = it.payload.copy(tenantGroupId = 99_001L, clinicId = 99_002L)
+            it.copy(payload = payload, payloadHash = PurchaseCompletedPayloadHasher.hash(payload))
+        }
+
+        ingress.accept(poison).status shouldBeEqualTo PurchaseHandleStatus.QUARANTINED
+        ingress.accept(poison).status shouldBeEqualTo PurchaseHandleStatus.DUPLICATE
+
+        transaction {
+            val rejection = UntrustedSchedulingEventRejections.selectAll().single()
+            rejection[UntrustedSchedulingEventRejections.claimedTenantGroupId] shouldBeEqualTo 99_001L
+            rejection[UntrustedSchedulingEventRejections.claimedClinicId] shouldBeEqualTo 99_002L
+            SchedulingInboxEvents.selectAll().toList().shouldHaveSize(0)
         }
     }
 
@@ -84,7 +108,7 @@ class PurchaseCompletedIngressTest {
         val barrier = CyclicBarrier(2)
         val ingress = ingress(
             signatureVerifier = SchedulingEventSignatureVerifier { true },
-            versionProofProvider = SourceAuthorityVersionProofProvider {
+            versionProofProvider = SourceAuthorityVersionProofProvider { _, _ ->
                 throw SourceAuthorityUnavailableException(SourceAuthorityFailureReason.TIMEOUT)
             },
             inboxInsertObserver = InboxInsertObserver {
@@ -106,7 +130,7 @@ class PurchaseCompletedIngressTest {
 
     private fun ingress(
         signatureVerifier: SchedulingEventSignatureVerifier,
-        versionProofProvider: SourceAuthorityVersionProofProvider = SourceAuthorityVersionProofProvider { null },
+        versionProofProvider: SourceAuthorityVersionProofProvider = SourceAuthorityVersionProofProvider { _, _ -> null },
         inboxInsertObserver: InboxInsertObserver,
     ): PurchaseCompletedIngress {
         val handler = PurchaseCompletedHandler(
@@ -125,6 +149,7 @@ class PurchaseCompletedIngressTest {
                 signatureVerifier = signatureVerifier,
                 allowedProducers = setOf("commerce-service"),
                 allowedKeyIds = setOf("commerce-key"),
+                allowedAlgorithms = setOf("EdDSA"),
                 expectedIssuer = "commerce-issuer",
                 expectedAudience = "appointment-service",
                 replayWindow = Duration.ofMinutes(15),
@@ -182,6 +207,7 @@ class PurchaseCompletedIngressTest {
             issuer = "commerce-issuer",
             audience = "appointment-service",
             keyId = "commerce-key",
+            algorithm = "EdDSA",
             schemaVersion = 2,
             correlationId = "correlation-1",
             payloadHash = PurchaseCompletedPayloadHasher.hash(payload),

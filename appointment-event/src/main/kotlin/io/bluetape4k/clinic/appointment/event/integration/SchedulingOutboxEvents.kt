@@ -13,6 +13,8 @@ import org.jetbrains.exposed.v1.javatime.timestamp
  */
 object SchedulingOutboxEvents : LongIdTable("scheduling_outbox_events") {
     val eventId = varchar("event_id", 128)
+    val causationEventId = varchar("causation_event_id", 128)
+    val correlationId = varchar("correlation_id", 128)
     val eventType = varchar("event_type", 128)
     val tenantGroupId = reference("tenant_group_id", TenantGroups, onDelete = ReferenceOption.RESTRICT)
     val clinicId = reference("clinic_id", Clinics, onDelete = ReferenceOption.RESTRICT)

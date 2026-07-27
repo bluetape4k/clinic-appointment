@@ -159,6 +159,7 @@ CREATE TABLE scheduling_inbox_events (
     event_id VARCHAR(128) NOT NULL,
     event_type VARCHAR(128) NOT NULL,
     producer VARCHAR(128) NOT NULL,
+    source_authority VARCHAR(128) NOT NULL,
     source_aggregate_id VARCHAR(128) NOT NULL,
     source_aggregate_version BIGINT NOT NULL,
     tenant_group_id BIGINT NOT NULL,
@@ -184,11 +185,16 @@ CREATE TABLE scheduling_inbox_events (
 CREATE INDEX idx_inbox_status_replay_after_received
     ON scheduling_inbox_events(status, replay_after, received_at);
 CREATE INDEX idx_inbox_source_version
-    ON scheduling_inbox_events(producer, source_aggregate_id, source_aggregate_version);
+    ON scheduling_inbox_events(
+        tenant_group_id, clinic_id, producer, source_authority,
+        source_aggregate_id, status, source_aggregate_version
+    );
 
 CREATE TABLE scheduling_outbox_events (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     event_id VARCHAR(128) NOT NULL,
+    causation_event_id VARCHAR(128) NOT NULL,
+    correlation_id VARCHAR(128) NOT NULL,
     event_type VARCHAR(128) NOT NULL,
     tenant_group_id BIGINT NOT NULL,
     clinic_id BIGINT NOT NULL,
@@ -216,6 +222,30 @@ CREATE INDEX idx_outbox_status_next_attempt
 CREATE INDEX idx_outbox_plan_id
     ON scheduling_outbox_events(plan_id);
 
+CREATE TABLE scheduling_untrusted_event_rejections (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(128) NOT NULL,
+    event_type VARCHAR(128) NOT NULL,
+    producer VARCHAR(128) NOT NULL,
+    source_authority VARCHAR(128) NOT NULL,
+    source_aggregate_id VARCHAR(128) NOT NULL,
+    source_aggregate_version BIGINT NOT NULL,
+    claimed_tenant_group_id BIGINT NOT NULL,
+    claimed_clinic_id BIGINT NOT NULL,
+    schema_version INTEGER NOT NULL,
+    correlation_id VARCHAR(128) NOT NULL,
+    reason_code VARCHAR(128) NOT NULL,
+    envelope_hash VARCHAR(64) NOT NULL,
+    detected_at TIMESTAMP NOT NULL,
+    CONSTRAINT uq_untrusted_rejection_event_id UNIQUE (event_id)
+);
+CREATE INDEX idx_untrusted_rejection_detected
+    ON scheduling_untrusted_event_rejections(detected_at, reason_code);
+CREATE INDEX idx_untrusted_rejection_claimed_scope
+    ON scheduling_untrusted_event_rejections(
+        claimed_tenant_group_id, claimed_clinic_id, detected_at
+    );
+
 CREATE TABLE scheduling_quarantine_events (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     event_id VARCHAR(128) NOT NULL,
@@ -241,11 +271,13 @@ CREATE TABLE scheduling_quarantine_events (
         REFERENCES scheduling_tenant_groups(id) ON DELETE RESTRICT,
     CONSTRAINT fk_quarantine_clinic FOREIGN KEY (clinic_id)
         REFERENCES scheduling_clinics(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_quarantine_status
+        CHECK (status IN ('OPEN', 'RELEASE_DENIED', 'RELEASE_APPROVED', 'PAYLOAD_EXPIRED')),
     CONSTRAINT uq_quarantine_event_id UNIQUE (event_id)
 );
 
 CREATE INDEX idx_quarantine_status_expiry
-    ON scheduling_quarantine_events(status, legal_hold, payload_expires_at);
+    ON scheduling_quarantine_events(legal_hold, status, payload_expires_at, id);
 CREATE INDEX idx_quarantine_scope_reason
     ON scheduling_quarantine_events(tenant_group_id, clinic_id, reason_code, detected_at);
 

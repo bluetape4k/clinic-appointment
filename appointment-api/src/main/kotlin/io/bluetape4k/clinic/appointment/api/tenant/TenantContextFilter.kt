@@ -1,7 +1,9 @@
 package io.bluetape4k.clinic.appointment.api.tenant
 
+import io.bluetape4k.clinic.appointment.api.config.PlanFoundationError
 import io.bluetape4k.clinic.appointment.api.security.JwtTokenParser
 import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
+import io.bluetape4k.clinic.appointment.api.security.SecurityErrorResponseWriter
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
@@ -9,7 +11,6 @@ import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.springframework.http.HttpStatus
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.filter.OncePerRequestFilter
 
@@ -49,12 +50,12 @@ class TenantContextFilter(
         }
 
         if (tenantInfo == null) {
-            response.status = HttpStatus.NOT_FOUND.value()
+            SecurityErrorResponseWriter.write(response, PlanFoundationError.RESOURCE_NOT_FOUND)
             return
         }
 
         if (tenantCode !in principal.allowedTenants) {
-            response.status = HttpStatus.FORBIDDEN.value()
+            SecurityErrorResponseWriter.write(response, PlanFoundationError.FORBIDDEN)
             return
         }
 
