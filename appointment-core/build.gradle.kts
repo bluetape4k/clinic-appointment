@@ -24,6 +24,7 @@ dependencies {
 
     implementation(libs.jetbrains.exposed.jdbc)
     implementation(libs.exposed.jdbc)
+    implementation(libs.jackson3.module.kotlin)
 
     testImplementation(libs.bluetape4k.junit5)
     testImplementation(libs.bluetape4k.testcontainers)
