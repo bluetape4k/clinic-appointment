@@ -27,6 +27,15 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 /**
  * JWT security configuration for non-local profiles.
+ *
+ * Rule flow:
+ * 1) correlation ID is created first to keep every failure observable.
+ * 2) JWT is parsed before tenant-context authorization.
+ * 3) endpoint path authorization is evaluated as a composition of:
+ *    tenant membership + role/scope checks + clinic membership checks.
+ *
+ * 401 means no trusted authenticated principal was established.
+ * 403 means principal exists but failed one of policy checks.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
@@ -36,16 +45,38 @@ class SecurityConfig {
 
     companion object : KLogging()
 
+    /**
+     * Builds the fail-closed token verifier.
+     *
+     * Invalid signing-key configuration fails bean construction. Individual
+     * request token failures return no principal and disclose no claim detail.
+     */
     @Bean
     fun jwtTokenParser(properties: JwtSecurityProperties): JwtTokenParser {
+        require(properties.enabled) {
+            "JWT security cannot be disabled in a protected profile"
+        }
         log.info { "JWT 보안 활성화: issuer=${properties.issuer}" }
         return JwtTokenParser(properties)
     }
 
+    /** Validates a bearer token before attaching its principal to the context. */
     @Bean
     fun jwtAuthenticationFilter(jwtTokenParser: JwtTokenParser): JwtAuthenticationFilter =
         JwtAuthenticationFilter(jwtTokenParser)
 
+    /** Resolves verified principals into immutable command audit contexts. */
+    @Bean
+    fun actorContextResolver(): ActorContextResolver = ActorContextResolver()
+
+    /** Establishes correlation before authentication or controller failures. */
+    @Bean
+    fun correlationIdFilter(): CorrelationIdFilter = CorrelationIdFilter()
+
+    /**
+     * Build tenant membership filter to keep tenant and clinic routing aligned
+     * with scheduling data ownership before entering controllers.
+     */
     @Bean
     fun tenantContextFilter(
         tenantGroupRepository: TenantGroupRepository,
@@ -53,14 +84,28 @@ class SecurityConfig {
     ): TenantContextFilter =
         TenantContextFilter(tenantGroupRepository, jwtTokenParser)
 
+    /**
+     * Shared tenant policy authorization manager reused by endpoint-specific rules.
+     */
     @Bean
     fun tenantAuthorizationManager(): TenantAuthorizationManager =
         TenantAuthorizationManager()
 
+    /**
+     * Builds the stateless production-style security chain.
+     *
+     * Correlation is established before authentication, tenant routing follows
+     * authentication, and authorization then composes role, capability,
+     * tenant, and exact clinic membership. Swagger documentation is public;
+     * admin APIs require `ADMIN`, catalog writes require
+     * `SCOPE_catalog:write`, and clinic-plan reads require an operator role plus
+     * membership in the requested positive clinic ID.
+     */
     @Bean
     fun securityFilterChain(
         http: HttpSecurity,
         jwtAuthenticationFilter: JwtAuthenticationFilter,
+        correlationIdFilter: CorrelationIdFilter,
         tenantContextFilter: TenantContextFilter,
         tenantAuthorizationManager: TenantAuthorizationManager,
     ): SecurityFilterChain =
@@ -118,7 +163,8 @@ class SecurityConfig {
                     .access(writeTenantAccess(tenantAuthorizationManager))
                     .anyRequest().authenticated()
             }
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
+            .addFilterBefore(correlationIdFilter, UsernamePasswordAuthenticationFilter::class.java)
+            .addFilterAfter(jwtAuthenticationFilter, CorrelationIdFilter::class.java)
             .addFilterAfter(tenantContextFilter, JwtAuthenticationFilter::class.java)
             .build()
 
@@ -167,7 +213,7 @@ class SecurityConfig {
             AuthorizationManager { authentication, context ->
                 val principal = authentication.get().principal as? SchedulingUserPrincipal
                 val requestedClinicId = context.variables["clinicId"]?.toLongOrNull()
-                AuthorizationDecision(principal?.clinicId != null && principal.clinicId == requestedClinicId)
+                AuthorizationDecision(requestedClinicId != null && requestedClinicId in principal?.allowedClinicIds.orEmpty())
             },
         )
 }

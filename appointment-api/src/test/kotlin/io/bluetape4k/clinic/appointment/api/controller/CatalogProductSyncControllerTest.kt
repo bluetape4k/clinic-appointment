@@ -340,7 +340,15 @@ class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiInt
         }
         openApi.jsonPath<Map<String, Any?>>(
             "$.components.schemas.SchedulingApiErrorResponse.properties"
-        ).keys shouldBeEqualTo setOf("success", "data", "error", "errorCode", "correlationId")
+        ).keys shouldBeEqualTo setOf(
+            "success",
+            "data",
+            "error",
+            "errorCode",
+            "correlationId",
+            "retryable",
+            "action",
+        )
     }
 
     private fun putCatalog(

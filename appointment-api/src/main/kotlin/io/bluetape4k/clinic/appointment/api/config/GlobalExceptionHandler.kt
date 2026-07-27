@@ -4,6 +4,7 @@ import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse
+import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.service.IdempotencyKeyConflictException
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
@@ -16,14 +17,30 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import java.util.UUID
 
+/**
+ * Global exception normalization for scheduling APIs.
+ *
+ * Catalog-product and appointment-plan foundation paths use the same stable
+ * customer-facing error envelope. Domain, decoding, and unexpected exception
+ * details are reduced to public codes and messages so request payloads,
+ * persistence identifiers, and stack details are not exposed.
+ *
+ * The correlation ID established before authentication is reused in the error
+ * body. Security failures raised inside the Spring Security filter chain are
+ * handled separately by [io.bluetape4k.clinic.appointment.api.security.SecurityErrorResponseWriter]
+ * under the same correlation and privacy contract.
+ */
 @RestControllerAdvice
 class GlobalExceptionHandler {
 
     companion object : KLogging()
 
     @ExceptionHandler(PlanFoundationApiException::class)
-    fun handlePlanFoundation(ex: PlanFoundationApiException): ResponseEntity<SchedulingApiErrorResponse> =
-        foundationResponse(ex.error)
+    fun handlePlanFoundation(
+        ex: PlanFoundationApiException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> =
+        foundationResponse(ex.error, request)
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(
@@ -32,7 +49,7 @@ class GlobalExceptionHandler {
     ): ResponseEntity<*> {
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request validation failed" }
-            return foundationResponse(PlanFoundationError.VALIDATION_FAILED)
+            return foundationResponse(PlanFoundationError.VALIDATION_FAILED, request)
         }
         val message = ex.bindingResult.fieldErrors.joinToString("; ") { "${it.field}: ${it.defaultMessage}" }
         log.warn(ex) { "Validation failed: $message" }
@@ -47,7 +64,7 @@ class GlobalExceptionHandler {
     ): ResponseEntity<*> {
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation path parameter validation failed" }
-            return foundationResponse(PlanFoundationError.VALIDATION_FAILED)
+            return foundationResponse(PlanFoundationError.VALIDATION_FAILED, request)
         }
         val message = "Invalid value '${ex.value}' for parameter '${ex.name}'"
         log.warn(ex) { "Type mismatch: $message" }
@@ -62,7 +79,7 @@ class GlobalExceptionHandler {
     ): ResponseEntity<*> {
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request body could not be decoded" }
-            return foundationResponse(PlanFoundationError.VALIDATION_FAILED)
+            return foundationResponse(PlanFoundationError.VALIDATION_FAILED, request)
         }
         log.warn(ex) { "Malformed request body: ${ex.mostSpecificCause.message}" }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -76,7 +93,7 @@ class GlobalExceptionHandler {
     ): ResponseEntity<*> {
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request failed domain validation" }
-            return foundationResponse(PlanFoundationError.VALIDATION_FAILED)
+            return foundationResponse(PlanFoundationError.VALIDATION_FAILED, request)
         }
         log.warn(ex) { "Bad request: ${ex.message}" }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -90,7 +107,7 @@ class GlobalExceptionHandler {
     ): ResponseEntity<*> {
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation resource lookup was hidden" }
-            return foundationResponse(PlanFoundationError.RESOURCE_NOT_FOUND)
+            return foundationResponse(PlanFoundationError.RESOURCE_NOT_FOUND, request)
         }
         log.warn(ex) { "Not found: ${ex.message}" }
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -104,7 +121,7 @@ class GlobalExceptionHandler {
     ): ResponseEntity<*> {
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request failed unexpectedly" }
-            return foundationResponse(PlanFoundationError.INTERNAL_ERROR)
+            return foundationResponse(PlanFoundationError.INTERNAL_ERROR, request)
         }
         log.warn(ex) { "Conflict: ${ex.message}" }
         return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -121,7 +138,7 @@ class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException::class)
     fun handleAccessDenied(request: HttpServletRequest): ResponseEntity<*> =
         if (request.isPlanFoundationRequest()) {
-            foundationResponse(PlanFoundationError.FORBIDDEN)
+            foundationResponse(PlanFoundationError.FORBIDDEN, request)
         } else {
             ResponseEntity.status(HttpStatus.FORBIDDEN).build<Void>()
         }
@@ -133,15 +150,19 @@ class GlobalExceptionHandler {
     ): ResponseEntity<*> {
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request failed with an internal error" }
-            return foundationResponse(PlanFoundationError.INTERNAL_ERROR)
+            return foundationResponse(PlanFoundationError.INTERNAL_ERROR, request)
         }
         log.warn(ex) { "Internal server error: ${ex.message}" }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(ApiResponse.error<Nothing>(ex.message ?: "Internal server error"))
     }
 
-    private fun foundationResponse(error: PlanFoundationError): ResponseEntity<SchedulingApiErrorResponse> {
-        val correlationId = UUID.randomUUID().toString()
+    private fun foundationResponse(
+        error: PlanFoundationError,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) as? String
+            ?: UUID.randomUUID().toString()
         return ResponseEntity.status(error.status).body(
             SchedulingApiErrorResponse(
                 error = error.safeMessage,

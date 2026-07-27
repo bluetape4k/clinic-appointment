@@ -21,6 +21,13 @@ scheduling:
     appointment:
         idempotency:
             ttl: 24h
+    security:
+        jwt:
+            enabled: true
+            secret: ${SCHEDULING_JWT_SECRET:}
+            issuer: ${SCHEDULING_JWT_ISSUER:appointment-auth-service}
+            audience: ${SCHEDULING_JWT_AUDIENCE:appointment-api}
+            allowed-clock-skew: ${SCHEDULING_JWT_ALLOWED_CLOCK_SKEW:30s}
 
 appointment:
     plan-foundation:

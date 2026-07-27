@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.security
 
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.jsonwebtoken.Jwts
+import io.jsonwebtoken.security.MacAlgorithm
 import io.jsonwebtoken.security.Keys
 import java.util.Base64
 import java.util.Date
@@ -11,39 +12,63 @@ import java.util.Date
  */
 object TestJwtProvider {
 
-    private const val TEST_SECRET = "dGVzdC1zZWNyZXQta2V5LWZvci1hcHBvaW50bWVudC1zY2hlZHVsaW5nLXN5c3RlbS0yNTY="
+    private const val TEST_SECRET =
+        "dGVzdC1zZWNyZXQta2V5LWZvci1hcHBvaW50bWVudC1zY2hlZHVsaW5nLXN5c3RlbS01MTItYml0LW1hdGVyaWFsIQ=="
     private const val TEST_ISSUER = "appointment-auth-service"
+    private const val TEST_AUDIENCE = "appointment-api"
 
     private val signingKey = Keys.hmacShaKeyFor(Base64.getDecoder().decode(TEST_SECRET))
 
     val secret: String = TEST_SECRET
     val issuer: String = TEST_ISSUER
+    val audience: String = TEST_AUDIENCE
 
     fun createToken(
         userId: String = "test-user",
         clinicId: Long? = 1L,
         roles: List<String> = listOf(SchedulingRole.ADMIN),
+        actorType: ActorType = roles.firstOrNull()
+            ?.let(ActorType::valueOf)
+            ?: ActorType.ADMIN,
         allowedTenants: List<String> = listOf(TenantGroups.DEFAULT_TENANT_CODE),
+        allowedClinicIds: Collection<Number> = clinicId?.let(::setOf) ?: emptySet(),
         scopes: Set<String> = emptySet(),
         catalogSourceAuthorities: Set<String> = emptySet(),
-        expirationMs: Long = 3600000,
+        patientSubjectId: String? = null,
+        assurance: AuthenticationAssurance = AuthenticationAssurance.MFA,
+        issuer: String = TEST_ISSUER,
+        audience: String? = TEST_AUDIENCE,
+        tokenId: String? = "test-jti",
+        issuedAt: Date? = Date(),
+        authenticatedAt: Date? = issuedAt,
+        notBefore: Date? = null,
+        expiration: Date = Date((issuedAt ?: Date()).time + 3_600_000),
+        algorithm: MacAlgorithm = Jwts.SIG.HS256,
     ): String {
-        val now = Date()
         val builder = Jwts.builder()
             .subject(userId)
-            .issuer(TEST_ISSUER)
-            .issuedAt(now)
-            .expiration(Date(now.time + expirationMs))
+            .issuer(issuer)
+            .expiration(expiration)
             .claim("roles", roles)
+            .claim("actorType", actorType.name)
             .claim("allowedTenants", allowedTenants)
+            .claim("allowedClinicIds", allowedClinicIds.toList())
             .claim("scope", scopes.sorted().joinToString(" "))
             .claim("catalogSourceAuthorities", catalogSourceAuthorities.sorted())
+            .claim("assurance", assurance.name)
+
+        audience?.let { builder.audience().add(it).and() }
+        tokenId?.let(builder::id)
+        issuedAt?.let(builder::issuedAt)
+        authenticatedAt?.let { builder.claim("auth_time", it.time / 1_000) }
+        notBefore?.let(builder::notBefore)
+        patientSubjectId?.let { builder.claim("patientSubject", it) }
 
         if (clinicId != null) {
             builder.claim("clinicId", clinicId)
         }
 
-        return builder.signWith(signingKey).compact()
+        return builder.signWith(signingKey, algorithm).compact()
     }
 
     fun adminToken(
@@ -54,6 +79,7 @@ object TestJwtProvider {
             userId = "admin-user",
             clinicId = clinicId,
             roles = listOf(SchedulingRole.ADMIN),
+            actorType = ActorType.ADMIN,
             allowedTenants = allowedTenants,
         )
 
@@ -65,6 +91,7 @@ object TestJwtProvider {
             userId = "staff-user",
             clinicId = clinicId,
             roles = listOf(SchedulingRole.STAFF),
+            actorType = ActorType.STAFF,
             allowedTenants = allowedTenants,
         )
 
@@ -76,6 +103,7 @@ object TestJwtProvider {
             userId = "doctor-user",
             clinicId = clinicId,
             roles = listOf(SchedulingRole.DOCTOR),
+            actorType = ActorType.DOCTOR,
             allowedTenants = allowedTenants,
         )
 
@@ -86,9 +114,11 @@ object TestJwtProvider {
             userId = "patient-user",
             clinicId = null,
             roles = listOf(SchedulingRole.PATIENT),
+            actorType = ActorType.PATIENT,
             allowedTenants = allowedTenants,
+            patientSubjectId = "patient-subject",
         )
 
     fun expiredToken(): String =
-        createToken(expirationMs = -1000)
+        createToken(expiration = Date(System.currentTimeMillis() - 31_000))
 }
