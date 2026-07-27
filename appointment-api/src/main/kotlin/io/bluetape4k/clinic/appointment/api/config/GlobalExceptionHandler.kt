@@ -119,8 +119,12 @@ class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AccessDeniedException::class)
-    fun handleAccessDenied(): ResponseEntity<Void> =
-        ResponseEntity.status(HttpStatus.FORBIDDEN).build()
+    fun handleAccessDenied(request: HttpServletRequest): ResponseEntity<*> =
+        if (request.isPlanFoundationRequest()) {
+            foundationResponse(PlanFoundationError.FORBIDDEN)
+        } else {
+            ResponseEntity.status(HttpStatus.FORBIDDEN).build<Void>()
+        }
 
     @ExceptionHandler(Exception::class)
     fun handleGeneral(

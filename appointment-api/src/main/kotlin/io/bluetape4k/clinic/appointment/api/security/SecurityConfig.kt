@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.security
 
+import io.bluetape4k.clinic.appointment.api.config.PlanFoundationError
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilter
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.logging.KLogging
@@ -22,7 +23,6 @@ import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext
-import org.springframework.security.web.authentication.HttpStatusEntryPoint
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
 /**
@@ -67,7 +67,9 @@ class SecurityConfig {
         http
             .csrf { it.disable() }
             .exceptionHandling {
-                it.authenticationEntryPoint(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                it.authenticationEntryPoint { _, response, _ ->
+                    SecurityErrorResponseWriter.write(response, PlanFoundationError.UNAUTHORIZED)
+                }
                 it.accessDeniedHandler { request, response, _ ->
                     val principal = SecurityContextHolder.getContext().authentication?.principal
                         ?: (request.userPrincipal as? Authentication)?.principal
@@ -76,19 +78,29 @@ class SecurityConfig {
                     } else {
                         HttpStatus.UNAUTHORIZED
                     }
-                    response.status = status.value()
+                    val error = if (status == HttpStatus.FORBIDDEN) {
+                        PlanFoundationError.FORBIDDEN
+                    } else {
+                        PlanFoundationError.UNAUTHORIZED
+                    }
+                    SecurityErrorResponseWriter.write(response, error)
                 }
             }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
-                    // OpenAPI / Swagger / Actuator
-                    .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
+                    // OpenAPI / Swagger remain public; operational endpoints
+                    // stay authenticated unless a deployment adds an explicit policy.
+                    .requestMatchers(
+                        "/swagger-ui/**",
+                        "/v3/api-docs/**",
+                    )
+                    .permitAll()
                     .requestMatchers("/api/{tenantCode}/admin/**")
                     .access(adminTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(
                         HttpMethod.PUT,
-                        "/api/{tenantCode}/clinics/*/catalog-products/*/versions/*",
+                        "/api/{tenantCode}/clinics/*/catalog-sources/*/catalog-products/*/versions/*",
                     )
                     .access(catalogWriteTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(

@@ -62,20 +62,21 @@ class AesGcmQuarantineEnvelopeProtector(
     private fun canonicalBytes(
         envelope: UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
     ): ByteArray {
-        val metadata = listOf(
-            envelope.eventId,
-            envelope.eventType,
-            envelope.occurredAt.toString(),
-            envelope.receivedAt.toString(),
-            envelope.producer,
-            envelope.issuer,
-            envelope.audience,
-            envelope.keyId,
-            envelope.schemaVersion.toString(),
-            envelope.correlationId,
-            envelope.payloadHash,
-            envelope.signature,
-        ).joinToString("\u0000").toByteArray(StandardCharsets.UTF_8)
-        return metadata + byteArrayOf(0) + PurchaseCompletedPayloadHasher.canonicalBytes(envelope.payload)
+        val metadata = CanonicalFrameWriter().apply {
+            string("eventId", envelope.eventId)
+            string("eventType", envelope.eventType)
+            instant("occurredAt", envelope.occurredAt)
+            instant("receivedAt", envelope.receivedAt)
+            string("producer", envelope.producer)
+            string("issuer", envelope.issuer)
+            string("audience", envelope.audience)
+            string("keyId", envelope.keyId)
+            string("algorithm", envelope.algorithm)
+            int("schemaVersion", envelope.schemaVersion)
+            string("correlationId", envelope.correlationId)
+            string("payloadHash", envelope.payloadHash)
+            string("signature", envelope.signature)
+        }.toByteArray()
+        return metadata + PurchaseCompletedPayloadHasher.canonicalBytes(envelope.payload)
     }
 }

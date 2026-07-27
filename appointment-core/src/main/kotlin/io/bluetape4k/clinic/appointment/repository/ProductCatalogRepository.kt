@@ -13,10 +13,11 @@ import io.bluetape4k.clinic.appointment.service.CatalogDefinitionValidator
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 
 /**
  * Stores and loads complete immutable catalog projections inside a caller-owned transaction.
@@ -55,6 +56,18 @@ class ProductCatalogRepository(
             return classifyExisting(definition, payloadHash, exactVersion)
         }
         writeObserver.afterVersionAbsent()
+        lockClinicScope(definition)
+
+        val exactVersionAfterLock = findByScopeVersion(
+            tenantGroupId = definition.tenantGroupId,
+            clinicId = definition.clinicId,
+            sourceAuthority = definition.sourceAuthority,
+            productId = definition.productId,
+            catalogVersion = definition.catalogVersion,
+        )
+        if (exactVersionAfterLock != null) {
+            return classifyExisting(definition, payloadHash, exactVersionAfterLock)
+        }
 
         val latestVersion = ProductCatalogProjections
             .selectAll()
@@ -84,6 +97,27 @@ class ProductCatalogRepository(
             catalogVersion = definition.catalogVersion,
             payloadHash = payloadHash,
         )
+    }
+
+    private fun lockClinicScope(definition: ProductCatalogDefinition) {
+        val tenantGroupIdColumn = Clinics.tenantGroupId.name
+        var clinicTenantGroupId: Long? = null
+        TransactionManager.current().exec(
+            """
+            SELECT $tenantGroupIdColumn
+            FROM ${Clinics.tableName}
+            WHERE ${Clinics.id.name} = ${definition.clinicId}
+            FOR UPDATE
+            """.trimIndent(),
+        ) { result ->
+            if (result.next()) {
+                clinicTenantGroupId = result.getLong(tenantGroupIdColumn)
+            }
+        }
+        requireNotNull(clinicTenantGroupId) { "clinic does not exist" }
+        require(clinicTenantGroupId == definition.tenantGroupId) {
+            "clinic does not belong to catalog tenant"
+        }
     }
 
     /**
@@ -158,35 +192,39 @@ class ProductCatalogRepository(
             }
         }.value
 
-        definition.items.forEachIndexed { bomOrder, item ->
-            ProductCatalogBomItems.insert {
-                it[catalogProjectionId] = projectionId
-                it[bomItemId] = item.bomItemId
-                it[ProductCatalogBomItems.bomOrder] = bomOrder
-                it[representativeTreatmentName] = item.representativeTreatmentName
-                it[detailedTreatmentCodesJson] = encodeStringList(item.detailedTreatmentCodes)
-                it[repeatCount] = item.repeatCount
-                it[durationMinutes] = item.durationMinutes
-                it[minimumIntervalDays] = item.minimumIntervalDays
-                it[preferredIntervalDays] = item.preferredIntervalDays
-                it[maximumIntervalDays] = item.maximumIntervalDays
-                it[practitionerQualificationsJson] = encodeStringList(item.practitionerQualifications)
-                it[equipmentTypesJson] = encodeStringList(item.equipmentTypes)
-                it[roomTypesJson] = encodeStringList(item.roomTypes)
-            }
+        ProductCatalogBomItems.batchInsert(
+            definition.items.withIndex(),
+            shouldReturnGeneratedValues = false,
+        ) { indexedItem ->
+            val item = indexedItem.value
+            this[ProductCatalogBomItems.catalogProjectionId] = projectionId
+            this[ProductCatalogBomItems.bomItemId] = item.bomItemId
+            this[ProductCatalogBomItems.bomOrder] = indexedItem.index
+            this[ProductCatalogBomItems.representativeTreatmentName] = item.representativeTreatmentName
+            this[ProductCatalogBomItems.detailedTreatmentCodesJson] = encodeStringList(item.detailedTreatmentCodes)
+            this[ProductCatalogBomItems.repeatCount] = item.repeatCount
+            this[ProductCatalogBomItems.durationMinutes] = item.durationMinutes
+            this[ProductCatalogBomItems.minimumIntervalDays] = item.minimumIntervalDays
+            this[ProductCatalogBomItems.preferredIntervalDays] = item.preferredIntervalDays
+            this[ProductCatalogBomItems.maximumIntervalDays] = item.maximumIntervalDays
+            this[ProductCatalogBomItems.practitionerQualificationsJson] =
+                encodeStringList(item.practitionerQualifications)
+            this[ProductCatalogBomItems.equipmentTypesJson] = encodeStringList(item.equipmentTypes)
+            this[ProductCatalogBomItems.roomTypesJson] = encodeStringList(item.roomTypes)
         }
 
-        definition.dependencies.forEach { dependency ->
-            ProductCatalogBomDependencies.insert {
-                it[catalogProjectionId] = projectionId
-                it[predecessorBomItemId] = dependency.predecessorBomItemId
-                it[predecessorSequenceNo] = dependency.predecessorSequenceNo.sequenceToSentinel()
-                it[successorBomItemId] = dependency.successorBomItemId
-                it[successorSequenceNo] = dependency.successorSequenceNo.sequenceToSentinel()
-                it[minimumIntervalDays] = dependency.minimumIntervalDays
-                it[preferredIntervalDays] = dependency.preferredIntervalDays
-                it[maximumIntervalDays] = dependency.maximumIntervalDays
-            }
+        ProductCatalogBomDependencies.batchInsert(
+            definition.dependencies,
+            shouldReturnGeneratedValues = false,
+        ) { dependency ->
+            this[ProductCatalogBomDependencies.catalogProjectionId] = projectionId
+            this[ProductCatalogBomDependencies.predecessorBomItemId] = dependency.predecessorBomItemId
+            this[ProductCatalogBomDependencies.predecessorSequenceNo] = dependency.predecessorSequenceNo.sequenceToSentinel()
+            this[ProductCatalogBomDependencies.successorBomItemId] = dependency.successorBomItemId
+            this[ProductCatalogBomDependencies.successorSequenceNo] = dependency.successorSequenceNo.sequenceToSentinel()
+            this[ProductCatalogBomDependencies.minimumIntervalDays] = dependency.minimumIntervalDays
+            this[ProductCatalogBomDependencies.preferredIntervalDays] = dependency.preferredIntervalDays
+            this[ProductCatalogBomDependencies.maximumIntervalDays] = dependency.maximumIntervalDays
         }
 
         return requireNotNull(findById(projectionId))

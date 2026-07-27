@@ -147,6 +147,7 @@ CREATE TABLE scheduling_inbox_events (
     event_id VARCHAR(128) NOT NULL,
     event_type VARCHAR(128) NOT NULL,
     producer VARCHAR(128) NOT NULL,
+    source_authority VARCHAR(128) NOT NULL,
     source_aggregate_id VARCHAR(128) NOT NULL,
     source_aggregate_version BIGINT NOT NULL,
     tenant_group_id BIGINT NOT NULL,
@@ -168,12 +169,17 @@ CREATE TABLE scheduling_inbox_events (
     ),
     CONSTRAINT uq_inbox_event_id UNIQUE (event_id),
     INDEX idx_inbox_status_replay_after_received (status, replay_after, received_at),
-    INDEX idx_inbox_source_version (producer, source_aggregate_id, source_aggregate_version)
+    INDEX idx_inbox_source_version (
+        tenant_group_id, clinic_id, producer, source_authority,
+        source_aggregate_id, status, source_aggregate_version
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE scheduling_outbox_events (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     event_id VARCHAR(128) NOT NULL,
+    causation_event_id VARCHAR(128) NOT NULL,
+    correlation_id VARCHAR(128) NOT NULL,
     event_type VARCHAR(128) NOT NULL,
     tenant_group_id BIGINT NOT NULL,
     clinic_id BIGINT NOT NULL,
@@ -197,6 +203,28 @@ CREATE TABLE scheduling_outbox_events (
     INDEX idx_outbox_status_next_attempt (status, next_attempt_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE scheduling_untrusted_event_rejections (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(128) NOT NULL,
+    event_type VARCHAR(128) NOT NULL,
+    producer VARCHAR(128) NOT NULL,
+    source_authority VARCHAR(128) NOT NULL,
+    source_aggregate_id VARCHAR(128) NOT NULL,
+    source_aggregate_version BIGINT NOT NULL,
+    claimed_tenant_group_id BIGINT NOT NULL,
+    claimed_clinic_id BIGINT NOT NULL,
+    schema_version INTEGER NOT NULL,
+    correlation_id VARCHAR(128) NOT NULL,
+    reason_code VARCHAR(128) NOT NULL,
+    envelope_hash VARCHAR(64) NOT NULL,
+    detected_at DATETIME(6) NOT NULL,
+    CONSTRAINT uq_untrusted_rejection_event_id UNIQUE (event_id),
+    INDEX idx_untrusted_rejection_detected (detected_at, reason_code),
+    INDEX idx_untrusted_rejection_claimed_scope (
+        claimed_tenant_group_id, claimed_clinic_id, detected_at
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE scheduling_quarantine_events (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     event_id VARCHAR(128) NOT NULL,
@@ -217,13 +245,13 @@ CREATE TABLE scheduling_quarantine_events (
     retention_class VARCHAR(32) NOT NULL,
     payload_expires_at DATETIME(6) NOT NULL,
     legal_hold BOOLEAN DEFAULT FALSE NOT NULL,
-    status VARCHAR(32) NOT NULL,
+    status ENUM('OPEN', 'RELEASE_DENIED', 'RELEASE_APPROVED', 'PAYLOAD_EXPIRED') NOT NULL,
     CONSTRAINT fk_quarantine_tenant FOREIGN KEY (tenant_group_id)
         REFERENCES scheduling_tenant_groups(id) ON DELETE RESTRICT,
     CONSTRAINT fk_quarantine_clinic FOREIGN KEY (clinic_id)
         REFERENCES scheduling_clinics(id) ON DELETE RESTRICT,
     CONSTRAINT uq_quarantine_event_id UNIQUE (event_id),
-    INDEX idx_quarantine_status_expiry (status, legal_hold, payload_expires_at),
+    INDEX idx_quarantine_status_expiry (legal_hold, status, payload_expires_at, id),
     INDEX idx_quarantine_scope_reason (tenant_group_id, clinic_id, reason_code, detected_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -3,12 +3,16 @@ package io.bluetape4k.clinic.appointment.event.integration
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.javatime.timestamp
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import java.io.Serializable
@@ -41,7 +45,7 @@ object SchedulingQuarantineEvents : LongIdTable("scheduling_quarantine_events") 
     val status = enumerationByName<QuarantineStatus>("status", 32)
 
     init {
-        index("idx_quarantine_status_expiry", false, status, legalHold, payloadExpiresAt)
+        index("idx_quarantine_status_expiry", false, legalHold, status, payloadExpiresAt, id)
         index("idx_quarantine_scope_reason", false, tenantGroupId, clinicId, reasonCode, detectedAt)
     }
 }
@@ -81,6 +85,7 @@ enum class QuarantineAuditAction {
     DETECTED,
     INSPECTED,
     DRY_RUN,
+    REDRIVE,
     RELEASE_DENIED,
     RELEASE_APPROVED,
     PAYLOAD_EXPIRED,
@@ -137,11 +142,37 @@ data class QuarantineReleaseEvidence(
     val trustRevalidated: Boolean = false,
 ) : Serializable
 
+fun interface QuarantineExpiryObserver {
+    /**
+     * Transaction-local test/diagnostic hook invoked after selection and before
+     * the conditional payload-expiry update.
+     */
+    fun beforeExpireCandidate(quarantineId: Long)
+
+    companion object {
+        val NOOP = QuarantineExpiryObserver { }
+    }
+}
+
+fun interface QuarantineTransitionObserver {
+    /**
+     * Transaction-local test/diagnostic hook invoked after the transition
+     * snapshot is read and before its compare-and-set update.
+     */
+    fun beforeTransition(quarantineId: Long, nextStatus: QuarantineStatus)
+
+    companion object {
+        val NOOP = QuarantineTransitionObserver { _, _ -> }
+    }
+}
+
 /**
  * Caller-transaction repository for quarantine records and append-only audit rows.
  */
 class SchedulingQuarantineRepository(
     private val clock: Clock = Clock.systemUTC(),
+    private val expiryObserver: QuarantineExpiryObserver = QuarantineExpiryObserver.NOOP,
+    private val transitionObserver: QuarantineTransitionObserver = QuarantineTransitionObserver.NOOP,
 ) {
 
     fun recordDetected(detection: QuarantineDetection): QuarantineRecord {
@@ -176,7 +207,9 @@ class SchedulingQuarantineRepository(
             afterStatus = QuarantineStatus.OPEN,
             createdAt = detection.detectedAt,
         )
-        return findById(quarantineId)!!
+        return requireNotNull(findById(quarantineId)) {
+            "inserted quarantine record could not be read back: $quarantineId"
+        }
     }
 
     fun findById(id: Long): QuarantineRecord? =
@@ -223,8 +256,18 @@ class SchedulingQuarantineRepository(
         appendAudit(quarantineId, QuarantineAuditAction.INSPECTED, actor, reason, current.status, current.status)
     }
 
-    fun recordDryRun(quarantineId: Long, actor: String, reason: String, dryRunDiffHash: String) {
+    fun recordDryRun(
+        quarantineId: Long,
+        expectedEventId: String,
+        actor: String,
+        reason: String,
+        dryRunDiffHash: String,
+    ) {
         val current = requireRecord(quarantineId)
+        require(current.eventId == expectedEventId) { "quarantine eventId does not match dry-run confirmation" }
+        require(current.status in payloadRetainedStatuses && current.encryptedOriginalEnvelope != null) {
+            "dry-run requires a retained quarantine payload"
+        }
         validateIdentifier(dryRunDiffHash, "dryRunDiffHash")
         appendAudit(
             quarantineId = quarantineId,
@@ -237,7 +280,46 @@ class SchedulingQuarantineRepository(
         )
     }
 
+    fun recordRedrive(
+        quarantineId: Long,
+        expectedEventId: String,
+        actor: String,
+        reason: String,
+        approvalReferences: List<String>,
+    ) {
+        val current = requireRecord(quarantineId)
+        require(current.eventId == expectedEventId) { "quarantine eventId does not match redrive confirmation" }
+        require(current.status == QuarantineStatus.RELEASE_APPROVED) {
+            "redrive requires RELEASE_APPROVED quarantine status"
+        }
+        require(current.encryptedOriginalEnvelope != null) { "redrive payload is no longer available" }
+        require(approvalReferences.isNotEmpty()) { "redrive requires at least one approval reference" }
+        approvalReferences.forEach { validateIdentifier(it, "approvalReference") }
+        val approvedReferences = auditTrail(quarantineId)
+            .lastOrNull { it.action == QuarantineAuditAction.RELEASE_APPROVED }
+            ?.approvalReferences
+            ?.split(",")
+            ?.toSet()
+            .orEmpty()
+        require(approvalReferences.toSet().all { it in approvedReferences }) {
+            "redrive approval references do not match the recorded release approval"
+        }
+        appendAudit(
+            quarantineId = quarantineId,
+            action = QuarantineAuditAction.REDRIVE,
+            actor = actor,
+            reason = reason,
+            beforeStatus = current.status,
+            afterStatus = current.status,
+            approvalReferences = approvalReferences.distinct().joinToString(","),
+        )
+    }
+
     fun denyRelease(quarantineId: Long, actor: String, reason: String) {
+        val current = requireRecord(quarantineId)
+        require(current.status != QuarantineStatus.PAYLOAD_EXPIRED) {
+            "payload-expired quarantine cannot change release status"
+        }
         transition(quarantineId, QuarantineStatus.RELEASE_DENIED, QuarantineAuditAction.RELEASE_DENIED, actor, reason)
     }
 
@@ -248,6 +330,12 @@ class SchedulingQuarantineRepository(
         evidence: QuarantineReleaseEvidence,
     ) {
         val current = requireRecord(quarantineId)
+        require(current.status in setOf(QuarantineStatus.OPEN, QuarantineStatus.RELEASE_DENIED)) {
+            "release approval requires OPEN or RELEASE_DENIED quarantine status"
+        }
+        require(current.encryptedOriginalEnvelope != null) {
+            "release approval requires a retained quarantine payload"
+        }
         val requiredApprovals = if (current.reasonCode in dualApprovalReasonCodes) 2 else 1
         require(evidence.approvalReferences.distinct().size >= requiredApprovals) {
             "release requires at least $requiredApprovals distinct approval reference(s)"
@@ -277,9 +365,21 @@ class SchedulingQuarantineRepository(
 
     fun setLegalHold(quarantineId: Long, enabled: Boolean, actor: String, reason: String) {
         val current = requireRecord(quarantineId)
-        SchedulingQuarantineEvents.update({ SchedulingQuarantineEvents.id eq quarantineId }) {
+        if (enabled) {
+            require(current.status != QuarantineStatus.PAYLOAD_EXPIRED && current.encryptedOriginalEnvelope != null) {
+                "payload-expired quarantine cannot be placed on legal hold"
+            }
+        }
+        val updated = SchedulingQuarantineEvents.update({
+            (SchedulingQuarantineEvents.id eq quarantineId) and
+                (SchedulingQuarantineEvents.status eq current.status) and
+                (SchedulingQuarantineEvents.legalHold eq current.legalHold) and
+                if (enabled) SchedulingQuarantineEvents.encryptedOriginalEnvelope.isNotNull()
+                else SchedulingQuarantineEvents.id eq quarantineId
+        }) {
             it[legalHold] = enabled
         }
+        check(updated == 1) { "quarantine changed concurrently before legal-hold update" }
         appendAudit(
             quarantineId = quarantineId,
             action = if (enabled) QuarantineAuditAction.LEGAL_HOLD_ENABLED else QuarantineAuditAction.LEGAL_HOLD_DISABLED,
@@ -290,31 +390,54 @@ class SchedulingQuarantineRepository(
         )
     }
 
-    fun expireEligiblePayloads(expiresAtOrBefore: Instant, actor: String, reason: String): Int {
+    fun expireEligiblePayloads(
+        expiresAtOrBefore: Instant,
+        actor: String,
+        reason: String,
+        batchSize: Int,
+    ): Int {
+        require(batchSize in 1..1_000) { "batchSize must be between 1 and 1000" }
         val records = SchedulingQuarantineEvents
-            .selectAll()
+            .select(SchedulingQuarantineEvents.id, SchedulingQuarantineEvents.status)
             .where {
                 (SchedulingQuarantineEvents.payloadExpiresAt lessEq expiresAtOrBefore) and
-                    (SchedulingQuarantineEvents.legalHold eq false)
+                    (SchedulingQuarantineEvents.legalHold eq false) and
+                    (SchedulingQuarantineEvents.status inList payloadRetainedStatuses) and
+                    SchedulingQuarantineEvents.encryptedOriginalEnvelope.isNotNull()
             }
-            .filter { it[SchedulingQuarantineEvents.encryptedOriginalEnvelope] != null }
+            .orderBy(
+                SchedulingQuarantineEvents.payloadExpiresAt to SortOrder.ASC,
+                SchedulingQuarantineEvents.id to SortOrder.ASC,
+            )
+            .limit(batchSize)
             .map { it[SchedulingQuarantineEvents.id].value to it[SchedulingQuarantineEvents.status] }
 
+        var expiredCount = 0
         records.forEach { (quarantineId, previousStatus) ->
-            SchedulingQuarantineEvents.update({ SchedulingQuarantineEvents.id eq quarantineId }) {
+            expiryObserver.beforeExpireCandidate(quarantineId)
+            val updated = SchedulingQuarantineEvents.update({
+                (SchedulingQuarantineEvents.id eq quarantineId) and
+                    (SchedulingQuarantineEvents.payloadExpiresAt lessEq expiresAtOrBefore) and
+                    (SchedulingQuarantineEvents.legalHold eq false) and
+                    (SchedulingQuarantineEvents.status inList payloadRetainedStatuses) and
+                    SchedulingQuarantineEvents.encryptedOriginalEnvelope.isNotNull()
+            }) {
                 it[encryptedOriginalEnvelope] = null
                 it[status] = QuarantineStatus.PAYLOAD_EXPIRED
             }
-            appendAudit(
-                quarantineId = quarantineId,
-                action = QuarantineAuditAction.PAYLOAD_EXPIRED,
-                actor = actor,
-                reason = reason,
-                beforeStatus = previousStatus,
-                afterStatus = QuarantineStatus.PAYLOAD_EXPIRED,
-            )
+            if (updated == 1) {
+                appendAudit(
+                    quarantineId = quarantineId,
+                    action = QuarantineAuditAction.PAYLOAD_EXPIRED,
+                    actor = actor,
+                    reason = reason,
+                    beforeStatus = previousStatus,
+                    afterStatus = QuarantineStatus.PAYLOAD_EXPIRED,
+                )
+                expiredCount += 1
+            }
         }
-        return records.size
+        return expiredCount
     }
 
     private fun transition(
@@ -326,9 +449,15 @@ class SchedulingQuarantineRepository(
         approvalReferences: String? = null,
     ) {
         val current = requireRecord(quarantineId)
-        SchedulingQuarantineEvents.update({ SchedulingQuarantineEvents.id eq quarantineId }) {
+        transitionObserver.beforeTransition(quarantineId, nextStatus)
+        val updated = SchedulingQuarantineEvents.update({
+            (SchedulingQuarantineEvents.id eq quarantineId) and
+                (SchedulingQuarantineEvents.status eq current.status) and
+                SchedulingQuarantineEvents.encryptedOriginalEnvelope.isNotNull()
+        }) {
             it[status] = nextStatus
         }
+        check(updated == 1) { "quarantine changed concurrently before status transition" }
         appendAudit(quarantineId, action, actor, reason, current.status, nextStatus, approvalReferences = approvalReferences)
     }
 
@@ -418,6 +547,11 @@ class SchedulingQuarantineRepository(
         const val MIN_ENCRYPTED_ENVELOPE_BYTES = 29
         val identifier = Regex("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
         val sha256 = Regex("[0-9a-f]{64}")
+        val payloadRetainedStatuses = listOf(
+            QuarantineStatus.OPEN,
+            QuarantineStatus.RELEASE_DENIED,
+            QuarantineStatus.RELEASE_APPROVED,
+        )
         val dualApprovalReasonCodes = setOf("REFUND_REVIEW", "CONSENT_REQUIRED", "SAFETY_REVIEW")
         val trustFailureReasonCodes = setOf(
             "TRUST_FAILED",

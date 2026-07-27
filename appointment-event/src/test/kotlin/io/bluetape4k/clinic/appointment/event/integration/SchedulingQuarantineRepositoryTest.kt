@@ -8,12 +8,14 @@ import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -86,7 +88,7 @@ class SchedulingQuarantineRepositoryTest {
 
         transaction {
             repository.recordInspection(record.id, "ops-user", "case review")
-            repository.recordDryRun(record.id, "ops-user", "dry run before release", "diff-hash")
+            repository.recordDryRun(record.id, record.eventId, "ops-user", "dry run before release", "diff-hash")
             repository.denyRelease(record.id, "ops-user", "trust still failed")
 
             val actions = repository.auditTrail(record.id).map { it.action }
@@ -179,6 +181,84 @@ class SchedulingQuarantineRepositoryTest {
     }
 
     @Test
+    fun `concurrent payload expiry wins over release approval without stale audit`() {
+        val raceAwareRepository = SchedulingQuarantineRepository(
+            clock = Clock.fixed(now, ZoneOffset.UTC),
+            transitionObserver = QuarantineTransitionObserver { quarantineId, nextStatus ->
+                if (nextStatus == QuarantineStatus.RELEASE_APPROVED) {
+                    SchedulingQuarantineEvents.update({ SchedulingQuarantineEvents.id eq quarantineId }) {
+                        it[encryptedOriginalEnvelope] = null
+                        it[status] = QuarantineStatus.PAYLOAD_EXPIRED
+                    }
+                }
+            },
+        )
+        val record = transaction {
+            raceAwareRepository.recordDetected(detection(reasonCode = "UNKNOWN_CATALOG"))
+        }
+
+        transaction {
+            assertFailsWith<IllegalStateException> {
+                raceAwareRepository.approveRelease(
+                    record.id,
+                    "ops-user",
+                    "catalog restored",
+                    QuarantineReleaseEvidence(listOf("catalog-owner-1")),
+                )
+            }
+            raceAwareRepository.findById(record.id)!!.status shouldBeEqualTo QuarantineStatus.PAYLOAD_EXPIRED
+            raceAwareRepository.auditTrail(record.id).map { it.action } shouldBeEqualTo
+                listOf(QuarantineAuditAction.DETECTED)
+        }
+    }
+
+    @Test
+    fun `payload expired quarantine rejects release dry run and redrive transitions`() {
+        val record = transaction {
+            repository.recordDetected(
+                detection(
+                    reasonCode = "UNKNOWN_CATALOG",
+                    payloadExpiresAt = now,
+                )
+            ).also {
+                repository.expireEligiblePayloads(now, "retention-job", "ttl", batchSize = 10)
+            }
+        }
+
+        listOf<() -> Unit>(
+            {
+                repository.approveRelease(
+                    record.id,
+                    "ops-user",
+                    "late approval",
+                    QuarantineReleaseEvidence(listOf("catalog-owner-1")),
+                )
+            },
+            { repository.denyRelease(record.id, "ops-user", "late denial") },
+            { repository.recordDryRun(record.id, record.eventId, "ops-user", "late preview", "diff-hash") },
+            {
+                repository.recordRedrive(
+                    record.id,
+                    record.eventId,
+                    "ops-user",
+                    "late redrive",
+                    listOf("catalog-owner-1"),
+                )
+            },
+        ).forEach { transition ->
+            assertFailsWith<IllegalArgumentException> {
+                transaction { transition() }
+            }
+        }
+
+        transaction {
+            repository.findById(record.id)!!.status shouldBeEqualTo QuarantineStatus.PAYLOAD_EXPIRED
+            repository.auditTrail(record.id).map { it.action } shouldBeEqualTo
+                listOf(QuarantineAuditAction.DETECTED, QuarantineAuditAction.PAYLOAD_EXPIRED)
+        }
+    }
+
+    @Test
     fun `invalid reason and malformed ciphertext are rejected before insert`() {
         assertFailsWith<IllegalArgumentException> {
             transaction {
@@ -210,6 +290,7 @@ class SchedulingQuarantineRepositoryTest {
             keyId = "quarantine-key-1",
             envelopeHash = "a".repeat(64),
         ),
+        payloadExpiresAt: Instant = Instant.parse("2026-08-25T05:10:00Z"),
     ) = QuarantineDetection(
         eventId = "event-1",
         eventType = "PurchaseCompleted",
@@ -225,7 +306,7 @@ class SchedulingQuarantineRepositoryTest {
         detectedAt = now,
         correlationId = "correlation-1",
         retentionClass = QuarantineRetentionClass.STANDARD,
-        payloadExpiresAt = Instant.parse("2026-08-25T05:10:00Z"),
+        payloadExpiresAt = payloadExpiresAt,
     )
 
     private fun encryptedEnvelope(seed: String): String =
@@ -254,6 +335,7 @@ class SchedulingQuarantineRepositoryTest {
             issuer = "commerce-issuer",
             audience = "appointment-service",
             keyId = "commerce-key",
+            algorithm = "EdDSA",
             schemaVersion = 2,
             correlationId = "correlation-1",
             payloadHash = PurchaseCompletedPayloadHasher.hash(payload),

@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.event.integration
 
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
+import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Clock
@@ -18,11 +19,19 @@ class SchedulingEventTrustVerifier(
     private val signatureVerifier: SchedulingEventSignatureVerifier,
     private val allowedProducers: Set<String>,
     private val allowedKeyIds: Set<String>,
+    private val allowedAlgorithms: Set<String>,
     private val expectedIssuer: String,
     private val expectedAudience: String,
     private val replayWindow: Duration,
     private val clock: Clock,
 ) {
+    init {
+        require(allowedProducers.isNotEmpty()) { "allowedProducers must not be empty" }
+        require(allowedKeyIds.isNotEmpty()) { "allowedKeyIds must not be empty" }
+        require(allowedAlgorithms.isNotEmpty()) { "allowedAlgorithms must not be empty" }
+        require(!replayWindow.isZero && !replayWindow.isNegative) { "replayWindow must be positive" }
+    }
+
     fun verify(
         envelope: UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
     ): TrustedSchedulingEventEnvelope<PurchaseCompletedEvent> {
@@ -30,6 +39,7 @@ class SchedulingEventTrustVerifier(
         trust(envelope.eventType == "PurchaseCompleted", "EVENT_TYPE_NOT_ALLOWED")
         trust(envelope.producer in allowedProducers, "PRODUCER_NOT_ALLOWED")
         trust(envelope.keyId in allowedKeyIds, "KEY_NOT_ALLOWED")
+        trust(envelope.algorithm in allowedAlgorithms, "ALGORITHM_NOT_ALLOWED")
         trust(envelope.issuer == expectedIssuer, "ISSUER_NOT_ALLOWED")
         trust(envelope.audience == expectedAudience, "AUDIENCE_NOT_ALLOWED")
         val now = clock.instant()
@@ -53,20 +63,96 @@ object PurchaseCompletedPayloadHasher {
     }
 
     internal fun canonicalBytes(event: PurchaseCompletedEvent): ByteArray {
-        val canonical = listOf(
-            event.sourceAggregateId,
-            event.sourceAggregateVersion.toString(),
-            event.tenantGroupId.toString(),
-            event.clinicId.toString(),
-            event.sourcePurchaseAuthority,
-            event.sourcePurchaseId,
-            event.patientReferenceToken,
-            event.catalogSourceAuthority,
-            event.productId,
-            event.catalogVersion.toString(),
-            event.bookingPreference.toString(),
-        ).joinToString("\u0000")
-        return canonical.toByteArray(StandardCharsets.UTF_8)
+        return CanonicalFrameWriter().apply {
+            string("sourceAggregateId", event.sourceAggregateId)
+            long("sourceAggregateVersion", event.sourceAggregateVersion)
+            long("tenantGroupId", event.tenantGroupId)
+            long("clinicId", event.clinicId)
+            string("sourcePurchaseAuthority", event.sourcePurchaseAuthority)
+            string("sourcePurchaseId", event.sourcePurchaseId)
+            string("patientReferenceToken", event.patientReferenceToken)
+            string("catalogSourceAuthority", event.catalogSourceAuthority)
+            string("productId", event.productId)
+            long("catalogVersion", event.catalogVersion)
+            bookingPreference("bookingPreference", event.bookingPreference)
+        }.toByteArray()
+    }
+}
+
+internal class CanonicalFrameWriter {
+    private val out = ByteArrayOutputStream()
+
+    fun string(name: String, value: String?) {
+        frame(name, "string", value?.toByteArray(StandardCharsets.UTF_8))
+    }
+
+    fun int(name: String, value: Int) {
+        frame(name, "int", value.toString().toByteArray(StandardCharsets.UTF_8))
+    }
+
+    fun long(name: String, value: Long) {
+        frame(name, "long", value.toString().toByteArray(StandardCharsets.UTF_8))
+    }
+
+    fun instant(name: String, value: java.time.Instant) {
+        frame(name, "instant", value.toString().toByteArray(StandardCharsets.UTF_8))
+    }
+
+    fun bookingPreference(name: String, value: BookingPreferenceSnapshot) {
+        when (value) {
+            is BookingPreferenceSnapshot.ExactDateTime -> {
+                string("$name.type", "EXACT_DATE_TIME")
+                string("$name.originalLocalDateTime", value.originalLocalDateTime.toString())
+                string("$name.originalOffset", value.originalOffset.toString())
+                string("$name.zoneId", value.zoneId.id)
+                instant("$name.normalizedInstant", value.normalizedInstant)
+            }
+            is BookingPreferenceSnapshot.DateRange -> {
+                string("$name.type", "DATE_RANGE")
+                string("$name.startDate", value.startDate.toString())
+                string("$name.endDate", value.endDate.toString())
+                string("$name.zoneId", value.zoneId.id)
+            }
+            is BookingPreferenceSnapshot.PreferredWeekdaysAndWindows -> {
+                string("$name.type", "PREFERRED_WEEKDAYS_AND_WINDOWS")
+                int("$name.weekdays.size", value.weekdays.size)
+                value.weekdays.forEachIndexed { index, weekday ->
+                    string("$name.weekdays[$index]", weekday.name)
+                }
+                int("$name.localTimeWindows.size", value.localTimeWindows.size)
+                value.localTimeWindows.forEachIndexed { index, window ->
+                    string("$name.localTimeWindows[$index].start", window.start.toString())
+                    string("$name.localTimeWindows[$index].end", window.end.toString())
+                }
+                string("$name.zoneId", value.zoneId.id)
+            }
+            BookingPreferenceSnapshot.NotProvided -> string("$name.type", "NOT_PROVIDED")
+        }
+    }
+
+    fun toByteArray(): ByteArray = out.toByteArray()
+
+    private fun frame(
+        name: String,
+        type: String,
+        value: ByteArray?,
+    ) {
+        writeAscii(name)
+        out.write(0)
+        writeAscii(type)
+        out.write(0)
+        if (value == null) {
+            writeAscii("-1")
+        } else {
+            writeAscii(value.size.toString())
+            out.write(0)
+            out.write(value)
+        }
+        out.write(0)
+    }
+
+    private fun writeAscii(value: String) {
+        out.write(value.toByteArray(StandardCharsets.US_ASCII))
     }
 }
 
@@ -86,6 +172,7 @@ internal object PurchaseEventBounds {
             envelope.issuer,
             envelope.audience,
             envelope.keyId,
+            envelope.algorithm,
             envelope.correlationId,
             envelope.payloadHash,
             envelope.schemaVersion,
@@ -101,6 +188,7 @@ internal object PurchaseEventBounds {
             envelope.issuer,
             envelope.audience,
             envelope.keyId,
+            envelope.algorithm,
             envelope.correlationId,
             envelope.payloadHash,
             envelope.schemaVersion,
@@ -116,11 +204,13 @@ internal object PurchaseEventBounds {
         issuer: String,
         audience: String,
         keyId: String,
+        algorithm: String,
         correlationId: String,
         payloadHash: String,
         schemaVersion: Int,
     ) {
-        listOf(eventId, eventType, producer, issuer, audience, keyId, correlationId).forEach(::boundedIdentifier)
+        listOf(eventId, eventType, producer, issuer, audience, keyId, algorithm, correlationId)
+            .forEach(::boundedIdentifier)
         require(payloadHash.matches(Regex("[0-9a-f]{64}"))) { "payloadHash must be lowercase SHA-256" }
         require(schemaVersion > 0) { "schemaVersion must be positive" }
     }

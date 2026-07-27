@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import org.flywaydb.core.Flyway
 import java.sql.Connection
 import java.sql.Date
+import java.sql.SQLException
 import java.sql.Time
 import javax.sql.DataSource
 
@@ -63,7 +64,65 @@ internal object AppointmentPlanMigrationTestSupport {
                 uniqueIndexColumns(connection, table, constraint) shouldBeEqualTo expectedColumns
             }
 
+            verifyInvalidQuarantineStatusRejected(connection)
             readLegacyAppointment(connection) shouldBeEqualTo before
+        }
+    }
+
+    private fun verifyInvalidQuarantineStatusRejected(connection: Connection) {
+        if (connection.metaData.databaseProductName.contains("MySQL", ignoreCase = true)) {
+            connection.createStatement().use {
+                it.execute("SET SESSION sql_mode = 'STRICT_ALL_TABLES'")
+            }
+        }
+        val failure = try {
+            connection.prepareStatement(
+                """
+                INSERT INTO scheduling_quarantine_events(
+                    event_id, event_type, envelope_hash, encrypted_original_envelope,
+                    encryption_key_id, producer, source_authority, schema_version,
+                    source_aggregate_id, source_aggregate_version, tenant_group_id,
+                    clinic_id, reason_code, detected_at, correlation_id,
+                    retention_class, payload_expires_at, legal_hold, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?,
+                          ?, CURRENT_TIMESTAMP, ?, ?)
+                """.trimIndent()
+            ).use { statement ->
+                statement.setString(1, "invalid-quarantine-status")
+                statement.setString(2, "PurchaseCompleted")
+                statement.setString(3, "a".repeat(64))
+                statement.setString(4, "encrypted")
+                statement.setString(5, "quarantine-key")
+                statement.setString(6, "commerce-service")
+                statement.setString(7, "commerce")
+                statement.setInt(8, 2)
+                statement.setString(9, "purchase-aggregate")
+                statement.setLong(10, 1)
+                statement.setLong(11, 1)
+                statement.setLong(12, 101)
+                statement.setString(13, "TRUST_FAILED")
+                statement.setString(14, "migration-check")
+                statement.setString(15, "STANDARD")
+                statement.setBoolean(16, false)
+                statement.setString(17, "INVALID_STATUS")
+                statement.executeUpdate()
+            }
+            null
+        } catch (caught: SQLException) {
+            caught
+        }
+        val persisted = connection.prepareStatement(
+            "SELECT COUNT(*) FROM scheduling_quarantine_events WHERE event_id = ?"
+        ).use { statement ->
+            statement.setString(1, "invalid-quarantine-status")
+            statement.executeQuery().use { result ->
+                result.next()
+                result.getLong(1)
+            }
+        }
+        check(failure != null && persisted == 0L) {
+            "V8 must reject invalid quarantine status without persisting it; " +
+                "sqlState=${failure?.sqlState}, persisted=$persisted"
         }
     }
 
@@ -254,6 +313,7 @@ internal object AppointmentPlanMigrationTestSupport {
         "scheduling_treatment_dependencies",
         "scheduling_inbox_events",
         "scheduling_outbox_events",
+        "scheduling_untrusted_event_rejections",
         "scheduling_quarantine_events",
         "scheduling_quarantine_audit_events",
     )
@@ -268,6 +328,8 @@ internal object AppointmentPlanMigrationTestSupport {
         "idx_outbox_plan_id",
         "idx_outbox_status_created_at",
         "idx_outbox_status_next_attempt",
+        "idx_untrusted_rejection_detected",
+        "idx_untrusted_rejection_claimed_scope",
         "idx_quarantine_status_expiry",
         "idx_quarantine_scope_reason",
         "idx_quarantine_audit_quarantine_created",
@@ -281,6 +343,7 @@ internal object AppointmentPlanMigrationTestSupport {
         "uq_treatment_dependency",
         "uq_inbox_event_id",
         "uq_outbox_event_id",
+        "uq_untrusted_rejection_event_id",
         "uq_quarantine_event_id",
     )
     private val EXPECTED_FOREIGN_KEYS = setOf(
@@ -316,6 +379,13 @@ internal object AppointmentPlanMigrationTestSupport {
             "source_purchase_id",
             "catalog_source_authority",
         ),
+        "scheduling_inbox_events" to setOf(
+            "tenant_group_id",
+            "clinic_id",
+            "source_authority",
+            "source_aggregate_id",
+            "source_aggregate_version",
+        ),
         "scheduling_quarantine_events" to setOf(
             "envelope_hash",
             "encrypted_original_envelope",
@@ -323,6 +393,12 @@ internal object AppointmentPlanMigrationTestSupport {
             "retention_class",
             "payload_expires_at",
             "legal_hold",
+        ),
+        "scheduling_untrusted_event_rejections" to setOf(
+            "claimed_tenant_group_id",
+            "claimed_clinic_id",
+            "envelope_hash",
+            "reason_code",
         ),
         "scheduling_quarantine_audit_events" to setOf(
             "quarantine_id",

@@ -172,6 +172,7 @@ class PurchasePlanPerformanceIntegrationTest : AbstractApiIntegrationTest() {
             issuer = "commerce-issuer",
             audience = "appointment-service",
             keyId = "commerce-key",
+            algorithm = "EdDSA",
             schemaVersion = 2,
             correlationId = "$prefix-correlation",
             payloadHash = PurchaseCompletedPayloadHasher.hash(payload),
@@ -215,9 +216,15 @@ class PurchasePlanPerformanceIntegrationTest : AbstractApiIntegrationTest() {
         statements: List<String>,
         sample: String,
     ) {
+        if (statements.size != EXPECTED_STATEMENT_COUNT) {
+            statements.forEachIndexed { index, statement ->
+                println("PURCHASE_PLAN_SQL_DEBUG sample=$sample index=$index sql=${statement.replace(Regex("\\s+"), " ")}")
+            }
+        }
         statements.size shouldBeEqualTo EXPECTED_STATEMENT_COUNT
         statements.countSql("insert into scheduling_inbox_events") shouldBeEqualTo 1
         statements.countSql("from scheduling_inbox_events").shouldBeBetween(2, 2)
+        statements.countSql("from scheduling_untrusted_event_rejections") shouldBeEqualTo 1
         statements.countSql("from scheduling_clinics").shouldBeBetween(1, 1)
         statements.countSql("from scheduling_appointment_plans").shouldBeBetween(2, 2)
         statements.countSql("from scheduling_product_catalog_projections").shouldBeBetween(2, 2)
@@ -362,7 +369,7 @@ class PurchasePlanPerformanceIntegrationTest : AbstractApiIntegrationTest() {
     }
 
     private companion object {
-        const val EXPECTED_STATEMENT_COUNT = 17
+        const val EXPECTED_STATEMENT_COUNT = 18
         const val MEASURED_EVENTS = 10
         const val PURCHASE_TO_PLAN_SLO_MILLIS = 30_000L
     }

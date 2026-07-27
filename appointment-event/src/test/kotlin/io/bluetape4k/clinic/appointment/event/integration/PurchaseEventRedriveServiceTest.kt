@@ -39,6 +39,7 @@ class PurchaseEventRedriveServiceTest {
     private val now = Instant.parse("2026-07-26T05:10:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val eventRepository = SchedulingEventRepository()
+    private val quarantineRepository = SchedulingQuarantineRepository(clock)
     private val catalogRepository = ProductCatalogRepository()
     private val planRepository = AppointmentPlanRepository()
     private var clinicId: Long = 0
@@ -61,6 +62,7 @@ class PurchaseEventRedriveServiceTest {
                 TreatmentDependencies,
                 SchedulingInboxEvents,
                 SchedulingOutboxEvents,
+                UntrustedSchedulingEventRejections,
                 SchedulingQuarantineEvents,
                 SchedulingQuarantineAuditEvents,
             )
@@ -81,38 +83,63 @@ class PurchaseEventRedriveServiceTest {
     @Test
     fun `dry run validates and returns a redacted diff without writes`() {
         val service = redriveService()
+        val envelope = raw()
 
-        val result = service.redrive(raw(), "event-1", 1L, dryRun = true)
+        val result = service.redrive(envelope, confirmation(envelope), dryRun = true)
 
         result.status shouldBeEqualTo PurchaseHandleStatus.SHADOW
+        result.reasonCode shouldBeEqualTo "WOULD_CREATE_PLAN"
         result.wouldCreatePlan shouldBeEqualTo true
         transaction {
             SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 0L
             AppointmentPlans.selectAll().count() shouldBeEqualTo 0L
             SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
+            quarantineRepository.auditTrail(confirmation(envelope).quarantineId)
+                .map { it.action }
+                .contains(QuarantineAuditAction.DRY_RUN)
+                .shouldBeTrue()
         }
     }
 
     @Test
     fun `named trusted redrive writes through the atomic handler`() {
-        val result = redriveService().redrive(raw(), "event-1", 1L, dryRun = false)
+        val envelope = raw()
+        val result = redriveService().redrive(envelope, confirmation(envelope), dryRun = false)
 
         result.status shouldBeEqualTo PurchaseHandleStatus.CREATED
         transaction {
             SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 1L
             AppointmentPlans.selectAll().count() shouldBeEqualTo 1L
             SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
+            quarantineRepository.auditTrail(confirmation(envelope).quarantineId)
+                .map { it.action }
+                .contains(QuarantineAuditAction.REDRIVE)
+                .shouldBeTrue()
         }
     }
 
     @Test
     fun `generic redrive cannot bypass trust or identity confirmation`() {
         val service = redriveService()
+        val envelope = raw()
         assertFailsWith<IllegalArgumentException> {
-            service.redrive(raw(), "different-event", 1L, dryRun = true)
+            service.redrive(envelope, confirmation(envelope).copy(eventId = "different-event"), dryRun = true)
         }
         assertFailsWith<IllegalArgumentException> {
-            service.redrive(raw(), "event-1", 2L, dryRun = true)
+            service.redrive(envelope, confirmation(envelope).copy(sourceAggregateVersion = 2L), dryRun = true)
+        }
+        listOf(
+            confirmation(envelope).copy(tenantGroupId = 2L),
+            confirmation(envelope).copy(clinicId = clinicId + 1),
+            confirmation(envelope).copy(sourcePurchaseAuthority = "other-commerce"),
+            confirmation(envelope).copy(sourcePurchaseId = "other-purchase"),
+            confirmation(envelope).copy(catalogSourceAuthority = "other-catalog"),
+            confirmation(envelope).copy(productId = "other-product"),
+            confirmation(envelope).copy(catalogVersion = 8L),
+        ).forEach { mismatched ->
+            assertFailsWith<IllegalArgumentException> {
+                service.redrive(envelope, mismatched, dryRun = true)
+            }
         }
         listOf(
             raw(signature = "invalid"),
@@ -122,11 +149,46 @@ class PurchaseEventRedriveServiceTest {
             raw(occurredAt = now.minus(Duration.ofMinutes(16))),
         ).forEach { untrusted ->
             assertFailsWith<SchedulingTrustException> {
-                service.redrive(untrusted, untrusted.eventId, 1L, dryRun = true)
+                service.redrive(untrusted, confirmation(untrusted), dryRun = true)
             }
         }
         transaction {
             SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 0L
+        }
+    }
+
+    @Test
+    fun `dry run reports missing catalog without claiming a plan would be created`() {
+        val missingCatalogPayload = payload().copy(productId = "unknown-product")
+        val envelope = raw(payload = missingCatalogPayload)
+
+        val result = redriveService().redrive(envelope, confirmation(envelope), dryRun = true)
+
+        result.status shouldBeEqualTo PurchaseHandleStatus.QUARANTINED
+        result.reasonCode shouldBeEqualTo "CATALOG_VERSION_UNAVAILABLE"
+        result.wouldCreatePlan.shouldBeFalse()
+        transaction {
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 0L
+            AppointmentPlans.selectAll().count() shouldBeEqualTo 0L
+        }
+    }
+
+    @Test
+    fun `dry run reports an existing purchase as duplicate without writes`() {
+        val first = raw(eventId = "event-first")
+        redriveService().redrive(first, confirmation(first), dryRun = false).status shouldBeEqualTo
+            PurchaseHandleStatus.CREATED
+        val duplicate = raw(eventId = "event-preview")
+
+        val result = redriveService().redrive(duplicate, confirmation(duplicate), dryRun = true)
+
+        result.status shouldBeEqualTo PurchaseHandleStatus.DUPLICATE
+        result.reasonCode shouldBeEqualTo "PURCHASE_ALREADY_PLANNED"
+        result.wouldCreatePlan.shouldBeFalse()
+        transaction {
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 1L
+            AppointmentPlans.selectAll().count() shouldBeEqualTo 1L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
         }
     }
 
@@ -146,7 +208,8 @@ class PurchaseEventRedriveServiceTest {
             ingress.accept(raw(eventId = "unsafe event id"))
         }
         transaction {
-            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 5L
+            UntrustedSchedulingEventRejections.selectAll().count() shouldBeEqualTo 5L
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 0L
             AppointmentPlans.selectAll().count() shouldBeEqualTo 0L
             SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
         }
@@ -169,6 +232,35 @@ class PurchaseEventRedriveServiceTest {
         protected.keyId shouldBeEqualTo "patient-key-1"
         sameTenant.fingerprint shouldBeEqualTo protected.fingerprint
         otherTenant.fingerprint.equals(protected.fingerprint).shouldBeFalse()
+    }
+
+    @Test
+    fun `patient protector rejects weak or unsafe key material at construction`() {
+        listOf(0, 15, 17, 31, 33).forEach { invalidAesBytes ->
+            assertFailsWith<IllegalArgumentException> {
+                AesGcmPatientReferenceProtector(
+                    encryptionKey = ByteArray(invalidAesBytes),
+                    fingerprintKey = ByteArray(32),
+                    keyId = "patient-key-1",
+                )
+            }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AesGcmPatientReferenceProtector(
+                encryptionKey = ByteArray(32),
+                fingerprintKey = ByteArray(31),
+                keyId = "patient-key-1",
+            )
+        }
+        listOf("", "unsafe key", "../patient-key").forEach { unsafeKeyId ->
+            assertFailsWith<IllegalArgumentException> {
+                AesGcmPatientReferenceProtector(
+                    encryptionKey = ByteArray(32),
+                    fingerprintKey = ByteArray(32),
+                    keyId = unsafeKeyId,
+                )
+            }
+        }
     }
 
     @Test
@@ -199,7 +291,7 @@ class PurchaseEventRedriveServiceTest {
         SourceAuthorityFailureReason.entries.forEach { failureReason ->
             val eventId = "authority-${failureReason.name.lowercase()}"
             val result = ingress(
-                versionProofProvider = SourceAuthorityVersionProofProvider {
+                versionProofProvider = SourceAuthorityVersionProofProvider { _, _ ->
                     throw SourceAuthorityUnavailableException(failureReason)
                 },
                 patientReferenceProtector = PatientReferenceProtector { _, _ ->
@@ -231,7 +323,7 @@ class PurchaseEventRedriveServiceTest {
     }
 
     private fun ingress(
-        versionProofProvider: SourceAuthorityVersionProofProvider = SourceAuthorityVersionProofProvider { null },
+        versionProofProvider: SourceAuthorityVersionProofProvider = SourceAuthorityVersionProofProvider { _, _ -> null },
         patientReferenceProtector: PatientReferenceProtector = PatientReferenceProtector { _, _ -> protected() },
         observer: AtomicPlanWriteObserver = AtomicPlanWriteObserver.NOOP,
     ) = PurchaseCompletedIngress(
@@ -246,17 +338,18 @@ class PurchaseEventRedriveServiceTest {
     private fun redriveService() = PurchaseEventRedriveService(
         trustVerifier = trustVerifier(),
         eventAdapter = PurchaseCompletedEventAdapter(),
-        versionProofProvider = SourceAuthorityVersionProofProvider { null },
+        versionProofProvider = SourceAuthorityVersionProofProvider { _, _ -> null },
         patientReferenceProtector = PatientReferenceProtector { _, _ -> protected() },
         quarantineEnvelopeProtector = QuarantineEnvelopeProtector { protectedQuarantineEnvelope() },
+        quarantineRepository = quarantineRepository,
         writeHandler = handler(PurchaseHandlingMode.WRITE),
-        shadowHandler = handler(PurchaseHandlingMode.SHADOW),
     )
 
     private fun trustVerifier() = SchedulingEventTrustVerifier(
         signatureVerifier = SchedulingEventSignatureVerifier { it.signature == "valid" },
         allowedProducers = setOf("commerce-service"),
         allowedKeyIds = setOf("commerce-key"),
+        allowedAlgorithms = setOf("EdDSA"),
         expectedIssuer = "commerce-issuer",
         expectedAudience = "appointment-service",
         replayWindow = Duration.ofMinutes(15),
@@ -304,11 +397,68 @@ class PurchaseEventRedriveServiceTest {
             issuer = issuer,
             audience = audience,
             keyId = "commerce-key",
+            algorithm = "EdDSA",
             schemaVersion = 2,
             correlationId = "correlation-1",
             payloadHash = PurchaseCompletedPayloadHasher.hash(payload),
             signature = signature,
             payload = payload,
+        )
+    }
+
+    private fun confirmation(
+        envelope: UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+    ): PurchaseRedriveConfirmation {
+        val payload = envelope.payload
+        val quarantineId = transaction {
+            SchedulingQuarantineEvents
+                .selectAll()
+                .firstOrNull { it[SchedulingQuarantineEvents.eventId] == envelope.eventId }
+                ?.get(SchedulingQuarantineEvents.id)
+                ?.value
+                ?: quarantineRepository.recordDetected(
+                    QuarantineDetection(
+                        eventId = envelope.eventId,
+                        eventType = envelope.eventType,
+                        protectedEnvelope = protectedQuarantineEnvelope(),
+                        producer = envelope.producer,
+                        sourceAuthority = payload.sourcePurchaseAuthority,
+                        schemaVersion = envelope.schemaVersion,
+                        sourceAggregateId = payload.sourceAggregateId,
+                        sourceAggregateVersion = payload.sourceAggregateVersion,
+                        tenantGroupId = payload.tenantGroupId,
+                        clinicId = payload.clinicId,
+                        reasonCode = "CATALOG_VERSION_UNAVAILABLE",
+                        detectedAt = now,
+                        correlationId = envelope.correlationId,
+                        retentionClass = QuarantineRetentionClass.STANDARD,
+                        payloadExpiresAt = now.plus(Duration.ofDays(30)),
+                    )
+                ).also { quarantine ->
+                    quarantineRepository.approveRelease(
+                        quarantineId = quarantine.id,
+                        actor = "security-operator",
+                        reason = "approved exact-event redrive",
+                        evidence = QuarantineReleaseEvidence(
+                            approvalReferences = listOf("approval-1"),
+                        ),
+                    )
+                }.id
+        }
+        return PurchaseRedriveConfirmation(
+            quarantineId = quarantineId,
+            actor = "scheduling-operator",
+            reason = "redrive after source correction",
+            approvalReferences = listOf("approval-1"),
+            eventId = envelope.eventId,
+            sourceAggregateVersion = payload.sourceAggregateVersion,
+            tenantGroupId = payload.tenantGroupId,
+            clinicId = payload.clinicId,
+            sourcePurchaseAuthority = payload.sourcePurchaseAuthority,
+            sourcePurchaseId = payload.sourcePurchaseId,
+            catalogSourceAuthority = payload.catalogSourceAuthority,
+            productId = payload.productId,
+            catalogVersion = payload.catalogVersion,
         )
     }
 

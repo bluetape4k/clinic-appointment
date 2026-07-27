@@ -147,7 +147,7 @@ data class InitialBookingRuleRequest(
     val maximumDays: Int,
 ) {
     fun toDomain(): InitialBookingRule {
-        require(type == "WITHIN_DAYS_AFTER_PURCHASE") { "Unsupported initial booking rule type" }
+        require(type == "WITHIN_DAYS_AFTER_PURCHASE") { "initialBookingRule.type is unsupported" }
         return InitialBookingRule.WithinDaysAfterPurchase(maximumDays)
     }
 }

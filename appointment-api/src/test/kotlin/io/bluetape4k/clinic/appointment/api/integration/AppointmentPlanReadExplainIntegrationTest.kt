@@ -361,6 +361,7 @@ class AppointmentPlanReadExplainIntegrationTest @Autowired constructor(
                 "$fixturePrefix-inbox-$index",
                 "PurchaseCompleted",
                 "commerce-service",
+                "commerce",
                 "$fixturePrefix-purchase-$index",
                 1L,
                 scope.tenantGroupId,
@@ -385,6 +386,8 @@ class AppointmentPlanReadExplainIntegrationTest @Autowired constructor(
             listOf(
                 outboxId,
                 "$fixturePrefix-outbox-$index",
+                "$fixturePrefix-cause-$index",
+                "$fixturePrefix-correlation-$index",
                 "AppointmentPlanCreated",
                 scope.tenantGroupId,
                 scope.clinicId,
@@ -593,8 +596,8 @@ class AppointmentPlanReadExplainIntegrationTest @Autowired constructor(
         private const val DEPENDENCY_FIXTURE_PLAN_COUNT = 20
         private const val REPEATS_PER_ITEM = 100
         private const val PLAN_COLUMN_COUNT = 17
-        private const val INBOX_COLUMN_COUNT = 14
-        private const val OUTBOX_COLUMN_COUNT = 12
+        private const val INBOX_COLUMN_COUNT = 15
+        private const val OUTBOX_COLUMN_COUNT = 14
         private const val TREATMENT_COLUMN_COUNT = 15
         private const val DEPENDENCY_COLUMN_COUNT = 7
         private val PLAN_INSERT_PREFIX = """
@@ -609,14 +612,15 @@ class AppointmentPlanReadExplainIntegrationTest @Autowired constructor(
         """.trimIndent()
         private val INBOX_INSERT_PREFIX = """
             INSERT INTO scheduling_inbox_events(
-                id, event_id, event_type, producer, source_aggregate_id,
+                id, event_id, event_type, producer, source_authority, source_aggregate_id,
                 source_aggregate_version, tenant_group_id, clinic_id, payload_hash,
                 status, occurred_at, attempt_count, replay_after, received_at
             )
         """.trimIndent()
         private val OUTBOX_INSERT_PREFIX = """
             INSERT INTO scheduling_outbox_events(
-                id, event_id, event_type, tenant_group_id, clinic_id, plan_id,
+                id, event_id, causation_event_id, correlation_id, event_type,
+                tenant_group_id, clinic_id, plan_id,
                 schema_version, payload_json, status, attempt_count,
                 next_attempt_at, created_at
             )

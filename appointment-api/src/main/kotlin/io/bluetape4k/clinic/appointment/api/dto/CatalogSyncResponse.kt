@@ -16,3 +16,15 @@ data class CatalogSyncResponse(
         )
     }
 }
+
+/**
+ * Concrete OpenAPI schema for the successful catalog synchronization envelope.
+ *
+ * Runtime responses continue to use [ApiResponse]; this non-generic type keeps
+ * generated clients aware of the exact `data` contract.
+ */
+data class CatalogSyncApiResponse(
+    val success: Boolean,
+    val data: CatalogSyncResponse,
+    val error: String? = null,
+)

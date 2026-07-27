@@ -18,7 +18,7 @@ object ProductCatalogProjections : LongIdTable("scheduling_product_catalog_proje
     val productName = varchar("product_name", 256)
     val schemaVersion = integer("schema_version")
     val sourceUpdatedAt = timestamp("source_updated_at")
-    val status = enumerationByName<CatalogProjectionStatus>("catalog_status", 16)
+    val status = enumerationByName<CatalogProjectionStatus>("catalog_status", 32)
     val payloadHash = varchar("payload_hash", 64)
     val initialBookingRuleType = varchar("initial_booking_rule_type", 64).nullable()
     val initialBookingMaximumDays = integer("initial_booking_maximum_days").nullable()

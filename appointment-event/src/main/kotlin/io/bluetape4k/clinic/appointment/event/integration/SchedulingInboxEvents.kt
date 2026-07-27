@@ -13,6 +13,7 @@ object SchedulingInboxEvents : LongIdTable("scheduling_inbox_events") {
     val eventId = varchar("event_id", 128)
     val eventType = varchar("event_type", 128)
     val producer = varchar("producer", 128)
+    val sourceAuthority = varchar("source_authority", 128)
     val sourceAggregateId = varchar("source_aggregate_id", 128)
     val sourceAggregateVersion = long("source_aggregate_version")
     val tenantGroupId = reference("tenant_group_id", TenantGroups, onDelete = ReferenceOption.RESTRICT)
@@ -29,7 +30,17 @@ object SchedulingInboxEvents : LongIdTable("scheduling_inbox_events") {
     init {
         uniqueIndex("uq_inbox_event_id", eventId)
         index("idx_inbox_status_replay_after_received", false, status, replayAfter, receivedAt)
-        index("idx_inbox_source_version", false, producer, sourceAggregateId, sourceAggregateVersion)
+        index(
+            "idx_inbox_source_version",
+            false,
+            tenantGroupId,
+            clinicId,
+            producer,
+            sourceAuthority,
+            sourceAggregateId,
+            status,
+            sourceAggregateVersion,
+        )
     }
 }
 

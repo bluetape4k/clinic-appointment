@@ -22,6 +22,7 @@ import io.bluetape4k.clinic.appointment.event.integration.SchedulingQuarantineEv
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingQuarantineRepository
 import io.bluetape4k.clinic.appointment.event.integration.SourceAggregateVersionVerifier
 import io.bluetape4k.clinic.appointment.event.integration.TrustedSchedulingEventEnvelope
+import io.bluetape4k.clinic.appointment.event.integration.UntrustedSchedulingEventRejections
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
 import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
 import io.bluetape4k.clinic.appointment.model.dto.ProductCatalogProjectionRecord
@@ -91,6 +92,7 @@ class PurchaseCompletedDialectIntegrationTest : AbstractApiIntegrationTest() {
         transaction {
             SchedulingQuarantineAuditEvents.deleteAll()
             SchedulingQuarantineEvents.deleteAll()
+            UntrustedSchedulingEventRejections.deleteAll()
             SchedulingOutboxEvents.deleteAll()
             SchedulingInboxEvents.deleteAll()
             TreatmentDependencies.deleteAll()
@@ -222,6 +224,7 @@ class PurchaseCompletedDialectIntegrationTest : AbstractApiIntegrationTest() {
         issuer = "commerce-issuer",
         audience = "appointment-service",
         keyId = "commerce-key",
+        algorithm = "EdDSA",
         schemaVersion = 2,
         correlationId = "$prefix-correlation",
         payloadHash = PurchaseCompletedPayloadHasher.hash(payload),

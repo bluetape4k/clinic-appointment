@@ -4,12 +4,14 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -57,9 +59,7 @@ class QuarantineRetentionServiceTest {
             repository.recordDetected(detection("expired-event", now.minusSeconds(1))).id
         }
 
-        val result = transaction {
-            service.expireEligiblePayloads(actor = "retention-job", reason = "ttl")
-        }
+        val result = service.expireEligiblePayloads(actor = "retention-job", reason = "ttl")
 
         result.expiredCount shouldBeEqualTo 1
         transaction {
@@ -81,12 +81,61 @@ class QuarantineRetentionServiceTest {
             record.id
         }
 
+        service.expireEligiblePayloads(actor = "retention-job", reason = "ttl").expiredCount shouldBeEqualTo 0
         transaction {
-            service.expireEligiblePayloads(actor = "retention-job", reason = "ttl").expiredCount shouldBeEqualTo 0
             repository.findById(id)!!.encryptedOriginalEnvelope shouldBeEqualTo encryptedEnvelope("held-event")
             repository.setLegalHold(id, enabled = false, actor = "legal", reason = "released")
-            service.expireEligiblePayloads(actor = "retention-job", reason = "ttl").expiredCount shouldBeEqualTo 1
+        }
+        service.expireEligiblePayloads(actor = "retention-job", reason = "ttl").expiredCount shouldBeEqualTo 1
+        transaction {
             repository.findById(id)!!.encryptedOriginalEnvelope.shouldBeNull()
+        }
+    }
+
+    @Test
+    fun `expiry rechecks legal hold after selecting a candidate`() {
+        var selectedId = 0L
+        val raceAwareRepository = SchedulingQuarantineRepository(
+            clock = clock,
+            expiryObserver = QuarantineExpiryObserver { quarantineId ->
+                selectedId = quarantineId
+                SchedulingQuarantineEvents.update({ SchedulingQuarantineEvents.id eq quarantineId }) {
+                    it[legalHold] = true
+                }
+            },
+        )
+        val id = transaction {
+            raceAwareRepository.recordDetected(detection("race-held-event", now.minusSeconds(1))).id
+        }
+
+        val result = QuarantineRetentionService(raceAwareRepository, clock)
+            .expireEligiblePayloads(actor = "retention-job", reason = "ttl")
+
+        selectedId shouldBeEqualTo id
+        result.expiredCount shouldBeEqualTo 0
+        transaction {
+            raceAwareRepository.findById(id)!!.encryptedOriginalEnvelope shouldBeEqualTo
+                encryptedEnvelope("race-held-event")
+            raceAwareRepository.auditTrail(id).map { it.action } shouldBeEqualTo
+                listOf(QuarantineAuditAction.DETECTED)
+        }
+    }
+
+    @Test
+    fun `expiry processes at most the configured batch size in deterministic order`() {
+        val ids = transaction {
+            listOf("batch-1", "batch-2", "batch-3").mapIndexed { index, eventId ->
+                repository.recordDetected(detection(eventId, now.minusSeconds((3 - index).toLong()))).id
+            }
+        }
+        val boundedService = QuarantineRetentionService(repository, clock, batchSize = 2)
+
+        boundedService.expireEligiblePayloads("retention-job", "ttl").expiredCount shouldBeEqualTo 2
+
+        transaction {
+            repository.findById(ids[0])!!.encryptedOriginalEnvelope.shouldBeNull()
+            repository.findById(ids[1])!!.encryptedOriginalEnvelope.shouldBeNull()
+            repository.findById(ids[2])!!.encryptedOriginalEnvelope shouldBeEqualTo encryptedEnvelope("batch-3")
         }
     }
 

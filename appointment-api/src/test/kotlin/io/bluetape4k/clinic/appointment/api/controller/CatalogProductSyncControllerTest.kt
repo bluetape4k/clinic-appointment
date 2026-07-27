@@ -14,6 +14,7 @@ import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependenci
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.service.CatalogDefinitionValidator
 import io.bluetape4k.clinic.appointment.service.CatalogPayloadHasher
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -31,6 +32,11 @@ import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.web.client.RestClient
+import java.io.ByteArrayInputStream
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.time.Instant
 
 @SpringBootTest(
@@ -111,6 +117,7 @@ class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiInt
         listOf(
             putCatalog(definition.copy(tenantGroupId = 999L)),
             putCatalog(definition, pathClinicId = otherClinicId),
+            putCatalog(definition, pathSourceAuthority = "other-catalog"),
             putCatalog(definition, pathProductId = "different-product"),
             putCatalog(definition, pathVersion = 8L),
         ).forEach { response ->
@@ -134,12 +141,17 @@ class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiInt
 
     @Test
     fun `hides a clinic outside the requested tenant`() {
-        transaction {
-            TenantGroups.insert {
-                it[TenantGroups.id] = EntityID(2L, TenantGroups)
+        val otherTenantId = transaction {
+            TenantGroups.insertAndGetId {
                 it[tenantCode] = "other-tenant"
                 it[displayName] = "Other Tenant"
                 it[active] = true
+            }.value
+        }
+        transaction {
+            Clinics.insertAndGetId {
+                it[tenantGroupId] = otherTenantId
+                it[name] = "Other Tenant Clinic"
             }
         }
         val definition = catalogDefinition(clinicId = clinicId)
@@ -198,7 +210,7 @@ class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiInt
         """.trimIndent()
 
         val response = client.put()
-            .uri(path("tenant-default", clinicId, "laser-care", 7L))
+            .uri(path("tenant-default", clinicId, "product-catalog", "laser-care", 7L))
             .contentType(MediaType.APPLICATION_JSON)
             .body(body)
             .execute()
@@ -222,11 +234,39 @@ class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiInt
     }
 
     @Test
+    fun `rejects oversized catalog payload before JSON deserialization without content length`() {
+        val payload = ByteArray(CatalogDefinitionValidator.MAX_PAYLOAD_BYTES + 1) { '{'.code.toByte() }
+
+        val response = HttpClient.newHttpClient()
+            .send(
+                HttpRequest.newBuilder()
+                    .uri(
+                        URI.create(
+                            "http://localhost:$port" +
+                                path("tenant-default", clinicId, "product-catalog", "laser-care", 7L)
+                        )
+                    )
+                    .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                    .PUT(HttpRequest.BodyPublishers.ofInputStream { ByteArrayInputStream(payload) })
+                    .build(),
+                HttpResponse.BodyHandlers.ofString(),
+            )
+
+        response.statusCode() shouldBeEqualTo HttpStatus.CONTENT_TOO_LARGE.value()
+        val error = com.jayway.jsonpath.JsonPath.parse(response.body())
+        error.read<Map<String, Any?>>("$").keys shouldBeEqualTo
+            setOf("success", "data", "error", "errorCode", "correlationId")
+        error.read<Boolean>("$.success").shouldBeFalse()
+        error.read<String>("$.errorCode") shouldBeEqualTo "PAYLOAD_TOO_LARGE"
+        error.read<String>("$.correlationId").isNotBlank().shouldBeTrue()
+    }
+
+    @Test
     fun `rejects invalid bounds and malformed instants`() {
         val invalidBounds = requestJson(catalogDefinition(clinicId = clinicId))
             .replace("\"repeatCount\": 3", "\"repeatCount\": 0")
         client.put()
-            .uri(path("tenant-default", clinicId, "laser-care", 7L))
+            .uri(path("tenant-default", clinicId, "product-catalog", "laser-care", 7L))
             .contentType(MediaType.APPLICATION_JSON)
             .body(invalidBounds)
             .execute()
@@ -238,7 +278,7 @@ class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiInt
         val invalidInstant = requestJson(catalogDefinition(clinicId = clinicId))
             .replace("2026-07-26T05:00:00Z", "2026-07-26 14:00 Asia/Seoul")
         client.put()
-            .uri(path("tenant-default", clinicId, "laser-care", 7L))
+            .uri(path("tenant-default", clinicId, "product-catalog", "laser-care", 7L))
             .contentType(MediaType.APPLICATION_JSON)
             .body(invalidInstant)
             .execute()
@@ -274,21 +314,57 @@ class CatalogProductSyncControllerTest @Autowired constructor() : AbstractApiInt
         response.body.contains(CatalogPayloadHasher.hash(definition)).shouldBeFalse()
     }
 
+    @Test
+    fun `documents source-qualified catalog sync path security responses and hash contract`() {
+        val openApi = client.get().uri("/v3/api-docs").execute()
+
+        openApi.statusCode shouldBeEqualTo HttpStatus.OK
+        openApi.jsonPath<String>(
+            "$.paths['/api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}'].put.externalDocs.url"
+        ) shouldBeEqualTo "https://github.com/bluetape4k/clinic-appointment/blob/main/docs/api/catalog-payload-hash.md"
+        openApi.jsonPath<String>(
+            "$.paths['/api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}'].put.responses['401'].description"
+        ) shouldBeEqualTo "Missing or invalid bearer token"
+        openApi.jsonPath<String>(
+            "$.paths['/api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}'].put.responses['403'].description"
+        ) shouldBeEqualTo "Authenticated caller lacks tenant or catalog-source write authority"
+        listOf("200", "201", "202").forEach { status ->
+            openApi.jsonPath<String>(
+                "$.paths['/api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}'].put.responses['$status'].content['application/json'].schema['\$ref']"
+            ) shouldBeEqualTo "#/components/schemas/CatalogSyncApiResponse"
+        }
+        listOf("400", "401", "403", "404", "409", "413", "500").forEach { status ->
+            openApi.jsonPath<String>(
+                "$.paths['/api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}'].put.responses['$status'].content['application/json'].schema['\$ref']"
+            ) shouldBeEqualTo "#/components/schemas/SchedulingApiErrorResponse"
+        }
+        openApi.jsonPath<Map<String, Any?>>(
+            "$.components.schemas.SchedulingApiErrorResponse.properties"
+        ).keys shouldBeEqualTo setOf("success", "data", "error", "errorCode", "correlationId")
+    }
+
     private fun putCatalog(
         definition: ProductCatalogDefinition,
         payloadHash: String = CatalogPayloadHasher.hash(definition),
         tenantCode: String = "tenant-default",
         pathClinicId: Long = definition.clinicId,
+        pathSourceAuthority: String = definition.sourceAuthority,
         pathProductId: String = definition.productId,
         pathVersion: Long = definition.catalogVersion,
     ) = client.put()
-        .uri(path(tenantCode, pathClinicId, pathProductId, pathVersion))
+        .uri(path(tenantCode, pathClinicId, pathSourceAuthority, pathProductId, pathVersion))
         .contentType(MediaType.APPLICATION_JSON)
         .body(requestJson(definition, payloadHash))
         .execute()
 
-    private fun path(tenantCode: String, clinicId: Long, productId: String, version: Long) =
-        "/api/$tenantCode/clinics/$clinicId/catalog-products/$productId/versions/$version"
+    private fun path(
+        tenantCode: String,
+        clinicId: Long,
+        sourceAuthority: String,
+        productId: String,
+        version: Long,
+    ) =
+        "/api/$tenantCode/clinics/$clinicId/catalog-sources/$sourceAuthority/catalog-products/$productId/versions/$version"
 
     private fun requestJson(
         definition: ProductCatalogDefinition,
@@ -388,20 +464,43 @@ class CatalogProductSyncDisabledControllerTest @Autowired constructor() : Abstra
     @LocalServerPort
     private var port: Int = 0
 
+    private var tenantGroupId: Long = 0
+    private var clinicId: Long = 0
+    private lateinit var tenantCode: String
+
+    @BeforeEach
+    fun setUpDisabledScope() {
+        tenantCode = "catalog-disabled-${System.nanoTime()}"
+        transaction {
+            tenantGroupId = TenantGroups.insertAndGetId {
+                it[TenantGroups.tenantCode] = this@CatalogProductSyncDisabledControllerTest.tenantCode
+                it[displayName] = "Catalog Disabled Tenant"
+                it[active] = true
+            }.value
+            clinicId = Clinics.insertAndGetId {
+                it[Clinics.tenantGroupId] = EntityID(
+                    this@CatalogProductSyncDisabledControllerTest.tenantGroupId,
+                    TenantGroups,
+                )
+                it[name] = "Catalog Disabled Clinic"
+            }.value
+        }
+    }
+
     @Test
     fun `returns a sanitized feature disabled response`() {
         val response = RestClient.builder()
             .baseUrl("http://localhost:$port")
             .build()
             .put()
-            .uri("/api/tenant-default/clinics/1/catalog-products/laser-care/versions/7")
+            .uri("/api/$tenantCode/clinics/$clinicId/catalog-sources/product-catalog/catalog-products/laser-care/versions/7")
             .contentType(MediaType.APPLICATION_JSON)
             .body(
                 """
                 {
                   "sourceAuthority": "product-catalog",
-                  "tenantGroupId": 1,
-                  "clinicId": 1,
+                  "tenantGroupId": $tenantGroupId,
+                  "clinicId": $clinicId,
                   "productId": "laser-care",
                   "catalogVersion": 7,
                   "schemaVersion": 1,

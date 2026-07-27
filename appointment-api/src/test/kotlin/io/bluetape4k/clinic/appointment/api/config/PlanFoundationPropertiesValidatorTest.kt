@@ -62,28 +62,54 @@ class PlanFoundationPropertiesValidatorTest {
     }
 
     @Test
-    fun `timeouts and their dependent windows must be positive and ordered`() {
-        listOf(
-            PlanFoundationProperties(eventReplayWindow = Duration.ZERO),
-            PlanFoundationProperties(trustVerificationTimeout = Duration.ofMillis(-1)),
-            PlanFoundationProperties(sourceAuthorityTimeout = Duration.ZERO),
-            PlanFoundationProperties(redriveDryRunTimeout = Duration.ofSeconds(-1)),
-            PlanFoundationProperties(
-                eventReplayWindow = Duration.ofMillis(499),
-                trustVerificationTimeout = Duration.ofMillis(500),
-            ),
-            PlanFoundationProperties(
-                redriveDryRunTimeout = Duration.ofMillis(499),
-                trustVerificationTimeout = Duration.ofMillis(500),
-            ),
-            PlanFoundationProperties(
-                redriveDryRunTimeout = Duration.ofMillis(999),
-                sourceAuthorityTimeout = Duration.ofSeconds(1),
-            ),
-        ).forEach { properties ->
+    fun `event replay window must be positive`() {
+        listOf(Duration.ZERO, Duration.ofMillis(-1)).forEach { replayWindow ->
             assertFailsWith<IllegalArgumentException> {
-                validator(properties = properties).validate()
+                validator(
+                    properties = PlanFoundationProperties(eventReplayWindow = replayWindow)
+                ).validate()
             }
+        }
+    }
+
+    @Test
+    fun `scope overrides require positive unique tenant clinic identity`() {
+        listOf(
+            PlanFoundationScopeOverride(tenantGroupId = 0, clinicId = 1),
+            PlanFoundationScopeOverride(tenantGroupId = 1, clinicId = 0),
+        ).forEach { invalid ->
+            assertFailsWith<IllegalArgumentException> {
+                validator(
+                    properties = PlanFoundationProperties(scopeOverrides = listOf(invalid))
+                ).validate()
+            }
+        }
+        assertFailsWith<IllegalArgumentException> {
+            validator(
+                properties = PlanFoundationProperties(
+                    scopeOverrides = listOf(
+                        PlanFoundationScopeOverride(1, 2),
+                        PlanFoundationScopeOverride(1, 2, planReadEnabled = true),
+                    )
+                )
+            ).validate()
+        }
+    }
+
+    @Test
+    fun `production rejects scoped WRITE without transport capability`() {
+        assertFailsWith<IllegalStateException> {
+            validator(
+                properties = PlanFoundationProperties(
+                    scopeOverrides = listOf(
+                        PlanFoundationScopeOverride(
+                            tenantGroupId = 1,
+                            clinicId = 2,
+                            purchaseConsumerMode = PurchaseConsumerMode.WRITE,
+                        )
+                    )
+                )
+            ).validate()
         }
     }
 

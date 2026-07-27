@@ -12,11 +12,16 @@ data class TrustedSchedulingEventEnvelope<T>(
     val issuer: String,
     val audience: String,
     val keyId: String,
+    val algorithm: String,
     val schemaVersion: Int,
     val correlationId: String,
     val payloadHash: String,
     val payload: T,
-) : Serializable
+) : Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
 
 data class UntrustedSchedulingEventEnvelope<T>(
     val eventId: String,
@@ -27,6 +32,7 @@ data class UntrustedSchedulingEventEnvelope<T>(
     val issuer: String,
     val audience: String,
     val keyId: String,
+    val algorithm: String,
     val schemaVersion: Int,
     val correlationId: String,
     val payloadHash: String,
@@ -42,9 +48,14 @@ data class UntrustedSchedulingEventEnvelope<T>(
         issuer = issuer,
         audience = audience,
         keyId = keyId,
+        algorithm = algorithm,
         schemaVersion = schemaVersion,
         correlationId = correlationId,
         payloadHash = payloadHash,
         payload = payload,
     )
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
 }

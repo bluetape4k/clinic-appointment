@@ -1,7 +1,7 @@
 package io.bluetape4k.clinic.appointment.event.integration
 
 fun interface SourceAuthorityVersionProofProvider {
-    fun obtain(event: PurchaseCompletedEvent): SourceAuthorityVersionProof?
+    fun obtain(producer: String, event: PurchaseCompletedEvent): SourceAuthorityVersionProof?
 }
 
 /**
@@ -27,14 +27,14 @@ class PurchaseCompletedIngress(
             trustVerifier.verify(rawEnvelope)
         } catch (failure: SchedulingTrustException) {
             return handler.quarantineRejectedEnvelope(
-                rawEnvelope.trusted(),
+                rawEnvelope,
                 protectedQuarantineEnvelope,
                 failure.reasonCode,
             )
         }
         val normalized = eventAdapter.adapt(trusted)
         val proof = try {
-            versionProofProvider.obtain(normalized.payload)
+            versionProofProvider.obtain(normalized.producer, normalized.payload)
         } catch (failure: SourceAuthorityUnavailableException) {
             return handler.stageAuthorityUnavailable(
                 normalized,

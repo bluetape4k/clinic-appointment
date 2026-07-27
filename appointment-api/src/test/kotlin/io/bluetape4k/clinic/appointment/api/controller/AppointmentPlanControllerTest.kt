@@ -17,11 +17,13 @@ import io.bluetape4k.clinic.appointment.model.tables.PlannedTreatments
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependencies
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentDependencies
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.ProductCatalogRepository
 import io.bluetape4k.clinic.appointment.service.AppointmentPlanFactory
 import io.bluetape4k.clinic.appointment.service.AppointmentPlanFactoryInput
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -232,11 +234,34 @@ class AppointmentPlanDisabledControllerTest : AbstractApiIntegrationTest() {
     @LocalServerPort
     private var port: Int = 0
 
+    private var tenantGroupId: Long = 0
+    private var clinicId: Long = 0
+    private lateinit var tenantCode: String
+
+    @BeforeEach
+    fun setUpDisabledScope() {
+        tenantCode = "plan-disabled-${System.nanoTime()}"
+        transaction {
+            tenantGroupId = TenantGroups.insertAndGetId {
+                it[TenantGroups.tenantCode] = this@AppointmentPlanDisabledControllerTest.tenantCode
+                it[displayName] = "Plan Disabled Tenant"
+                it[active] = true
+            }.value
+            clinicId = Clinics.insertAndGetId {
+                it[Clinics.tenantGroupId] = EntityID(
+                    this@AppointmentPlanDisabledControllerTest.tenantGroupId,
+                    TenantGroups,
+                )
+                it[name] = "Plan Disabled Clinic"
+            }.value
+        }
+    }
+
     @Test
     fun `keeps OpenAPI discoverable while returning sanitized feature disabled`() {
         val client = RestClient.builder().baseUrl("http://localhost:$port").build()
         val disabled = client.get()
-            .uri("/api/tenant-default/clinics/1/appointment-plans/1")
+            .uri("/api/$tenantCode/clinics/$clinicId/appointment-plans/1")
             .execute()
 
         disabled.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
@@ -246,5 +271,28 @@ class AppointmentPlanDisabledControllerTest : AbstractApiIntegrationTest() {
         openApi.statusCode shouldBeEqualTo HttpStatus.OK
         openApi.body.contains("/appointment-plans/{planId}").shouldBeTrue()
         openApi.body.contains("/appointment-plans/by-purchase/").shouldBeTrue()
+        openApi.jsonPath<String>(
+            "$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}'].get.responses['401'].description"
+        ) shouldBeEqualTo "Missing or invalid bearer token"
+        openApi.jsonPath<String>(
+            "$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}'].get.responses['403'].description"
+        ) shouldBeEqualTo "Authenticated caller lacks tenant or clinic read authority"
+        openApi.jsonPath<String>(
+            "$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}'].get.responses['200'].content['application/json'].schema['\$ref']"
+        ) shouldBeEqualTo "#/components/schemas/AppointmentPlanApiResponse"
+        openApi.jsonPath<String>(
+            "$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{sourcePurchaseAuthority}/{sourcePurchaseId}'].get.responses['200'].content['application/json'].schema['\$ref']"
+        ) shouldBeEqualTo "#/components/schemas/AppointmentPlanApiResponse"
+        listOf("400", "401", "403", "404", "500").forEach { status ->
+            openApi.jsonPath<String>(
+                "$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}'].get.responses['$status'].content['application/json'].schema['\$ref']"
+            ) shouldBeEqualTo "#/components/schemas/SchedulingApiErrorResponse"
+            openApi.jsonPath<String>(
+                "$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{sourcePurchaseAuthority}/{sourcePurchaseId}'].get.responses['$status'].content['application/json'].schema['\$ref']"
+            ) shouldBeEqualTo "#/components/schemas/SchedulingApiErrorResponse"
+        }
+        openApi.jsonPath<Map<String, Any?>>(
+            "$.components.schemas.SchedulingApiErrorResponse.properties"
+        ).keys shouldBeEqualTo setOf("success", "data", "error", "errorCode", "correlationId")
     }
 }

@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.security
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.controller.execute
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
@@ -85,14 +86,21 @@ class CatalogProductSyncSecurityIntegrationTest {
 
     @Test
     fun `catalog write security requires authentication tenant scope and source authority`() {
-        request(tenantCode = TENANT_A, clinicId = tenantAClinicId, token = null)
-            .statusCode shouldBeEqualTo HttpStatus.UNAUTHORIZED
+        request(tenantCode = TENANT_A, clinicId = tenantAClinicId, token = null).also {
+            it.statusCode shouldBeEqualTo HttpStatus.UNAUTHORIZED
+            it.jsonPath<String>("$.errorCode") shouldBeEqualTo "UNAUTHORIZED"
+            it.jsonPath<String>("$.correlationId").isNotBlank().shouldBeTrue()
+        }
 
         request(
             tenantCode = TENANT_A,
             clinicId = tenantAClinicId,
             token = catalogWriterToken(allowedTenants = listOf(TENANT_B)),
-        ).statusCode shouldBeEqualTo HttpStatus.FORBIDDEN
+        ).also {
+            it.statusCode shouldBeEqualTo HttpStatus.FORBIDDEN
+            it.jsonPath<String>("$.errorCode") shouldBeEqualTo "FORBIDDEN"
+            it.jsonPath<String>("$.correlationId").isNotBlank().shouldBeTrue()
+        }
 
         request(
             tenantCode = TENANT_A,
@@ -126,7 +134,7 @@ class CatalogProductSyncSecurityIntegrationTest {
         token: String?,
         tenantGroupId: Long = TENANT_A_ID,
     ) = client.put()
-        .uri("/api/$tenantCode/clinics/$clinicId/catalog-products/laser-care/versions/7")
+        .uri("/api/$tenantCode/clinics/$clinicId/catalog-sources/product-catalog/catalog-products/laser-care/versions/7")
         .contentType(MediaType.APPLICATION_JSON)
         .apply {
             if (token != null) header(HttpHeaders.AUTHORIZATION, "Bearer $token")

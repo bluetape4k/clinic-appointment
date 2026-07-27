@@ -13,13 +13,13 @@ import java.time.Instant
 class CatalogPayloadHasherTest {
 
     @Test
-    fun `produces the same hash for semantically identical list orderings`() {
+    fun `produces the same hash for unordered treatment attribute lists`() {
         val first = definition(
             items = listOf(item("b", listOf("code-2", "code-1")), item("a")),
             dependencies = listOf(dependency("a", "b")),
         )
         val reordered = first.copy(
-            items = first.items.reversed().map { item ->
+            items = first.items.map { item ->
                 item.copy(
                     detailedTreatmentCodes = item.detailedTreatmentCodes.reversed(),
                     equipmentTypes = item.equipmentTypes.reversed(),
@@ -28,6 +28,32 @@ class CatalogPayloadHasherTest {
         )
 
         CatalogPayloadHasher.hash(first) shouldBeEqualTo CatalogPayloadHasher.hash(reordered)
+    }
+
+    @Test
+    fun `BOM order participates in the catalog payload hash`() {
+        val first = definition(
+            items = listOf(item("laser"), item("care")),
+            dependencies = listOf(dependency("laser", "care")),
+        )
+        val reordered = first.copy(
+            items = first.items.reversed(),
+        )
+
+        (CatalogPayloadHasher.hash(first) == CatalogPayloadHasher.hash(reordered)) shouldBeEqualTo false
+    }
+
+    @Test
+    fun `dependency order participates in the catalog payload hash`() {
+        val first = definition(
+            items = listOf(item("laser"), item("care"), item("toning")),
+            dependencies = listOf(dependency("laser", "care"), dependency("care", "toning")),
+        )
+        val reordered = first.copy(
+            dependencies = first.dependencies.reversed(),
+        )
+
+        (CatalogPayloadHasher.hash(first) == CatalogPayloadHasher.hash(reordered)) shouldBeEqualTo false
     }
 
     @Test

@@ -63,6 +63,7 @@ class PurchaseCompletedHandlerTest {
                 TreatmentDependencies,
                 SchedulingInboxEvents,
                 SchedulingOutboxEvents,
+                UntrustedSchedulingEventRejections,
                 SchedulingQuarantineEvents,
                 SchedulingQuarantineAuditEvents,
             )
@@ -100,10 +101,15 @@ class PurchaseCompletedHandlerTest {
                 SchedulingInboxStatus.PROCESSED
             val outbox = SchedulingOutboxEvents.selectAll().single()
             outbox[SchedulingOutboxEvents.status] shouldBeEqualTo SchedulingOutboxStatus.PENDING
+            (outbox[SchedulingOutboxEvents.eventId] == envelope.eventId).shouldBeFalse()
+            outbox[SchedulingOutboxEvents.causationEventId] shouldBeEqualTo envelope.eventId
+            outbox[SchedulingOutboxEvents.correlationId] shouldBeEqualTo envelope.correlationId
             val payload = outbox[SchedulingOutboxEvents.payloadJson]
             payload.contains("patient-token").shouldBeFalse()
             payload.contains("Laser").shouldBeFalse()
-            payload.contains("purchase-1").shouldBeFalse()
+            payload.contains("\"sourcePurchaseAuthority\":\"commerce\"").shouldBeTrue()
+            payload.contains("\"sourcePurchaseId\":\"purchase-1\"").shouldBeTrue()
+            payload.contains("\"sourceAggregateVersion\":1").shouldBeTrue()
         }
     }
 
@@ -143,7 +149,6 @@ class PurchaseCompletedHandlerTest {
         val otherScope = envelope(
             eventId = "other-scope-event",
             payload = payload(
-                sourceAggregateId = "other-scope-aggregate",
                 tenantGroupId = 2L,
                 clinicId = otherClinicId,
             ),
@@ -159,7 +164,7 @@ class PurchaseCompletedHandlerTest {
     }
 
     @Test
-    fun `scope mismatch unknown catalog and retired catalog are quarantined without plan or outbox`() {
+    fun `scope mismatch is terminally rejected while catalog failures are quarantined without plan or outbox`() {
         val wrongTenant = envelope(
             eventId = "scope-event",
             payload = payload(tenantGroupId = 2L),
@@ -194,7 +199,8 @@ class PurchaseCompletedHandlerTest {
         transaction {
             AppointmentPlans.selectAll().count() shouldBeEqualTo 0L
             SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
-            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 3L
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 2L
+            UntrustedSchedulingEventRejections.selectAll().count() shouldBeEqualTo 1L
         }
     }
 
@@ -259,6 +265,52 @@ class PurchaseCompletedHandlerTest {
             row[SchedulingInboxEvents.attemptCount] shouldBeEqualTo 5
             row[SchedulingInboxEvents.failureCode] shouldBeEqualTo "SOURCE_VERSION_GAP_EXHAUSTED"
             AppointmentPlans.selectAll().count() shouldBeEqualTo 1L
+        }
+    }
+
+    @Test
+    fun `a version proof is accepted only for the exact tenant clinic producer and source authority`() {
+        val gap = envelope(
+            eventId = "scoped-proof-event",
+            payload = payload(
+                sourceAggregateId = "scoped-proof-aggregate",
+                sourceAggregateVersion = 3L,
+                sourcePurchaseId = "scoped-proof-purchase",
+            ),
+        )
+        val wrongScopeProof = proof(gap.payload).copy(tenantGroupId = 2L)
+
+        handler().handle(gap, wrongScopeProof, protected(fingerprint = "scoped-proof"))
+            .status shouldBeEqualTo PurchaseHandleStatus.WAITING_GAP
+
+        handler().handle(
+            gap,
+            proof(gap.payload).copy(producer = "other-producer"),
+            protected(fingerprint = "scoped-proof"),
+        ).status shouldBeEqualTo PurchaseHandleStatus.WAITING_GAP
+
+        handler().handle(gap, proof(gap.payload), protected(fingerprint = "scoped-proof"))
+            .status shouldBeEqualTo PurchaseHandleStatus.CREATED
+    }
+
+    @Test
+    fun `trusted event with unknown clinic scope is terminally rejected before the foreign key inbox`() {
+        val invalidScope = envelope(
+            eventId = "unknown-clinic-scope",
+            payload = payload(
+                clinicId = 99_999L,
+                sourcePurchaseId = "unknown-clinic-purchase",
+            ),
+        )
+
+        handler().handle(invalidScope, null, protected()).status shouldBeEqualTo PurchaseHandleStatus.QUARANTINED
+        handler().handle(invalidScope, null, protected()).status shouldBeEqualTo PurchaseHandleStatus.DUPLICATE
+
+        transaction {
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 0L
+            val rejection = UntrustedSchedulingEventRejections.selectAll().single()
+            rejection[UntrustedSchedulingEventRejections.reasonCode] shouldBeEqualTo "TENANT_CLINIC_MISMATCH"
+            rejection[UntrustedSchedulingEventRejections.claimedClinicId] shouldBeEqualTo 99_999L
         }
     }
 
@@ -353,6 +405,17 @@ class PurchaseCompletedHandlerTest {
     private fun protected(fingerprint: String = "patient-fingerprint") =
         ProtectedPatientReference("encrypted-reference", "key-1", fingerprint)
 
+    private fun proof(payload: PurchaseCompletedEvent) = SourceAuthorityVersionProof(
+        tenantGroupId = payload.tenantGroupId,
+        clinicId = payload.clinicId,
+        producer = "commerce-service",
+        sourceAuthority = payload.sourcePurchaseAuthority,
+        sourceAggregateId = payload.sourceAggregateId,
+        verifiedVersion = payload.sourceAggregateVersion,
+        verifiedAt = now.minusSeconds(1),
+        expiresAt = now.plusSeconds(60),
+    )
+
     private fun envelope(
         eventId: String = "event-1",
         schemaVersion: Int = 2,
@@ -366,6 +429,7 @@ class PurchaseCompletedHandlerTest {
         issuer = "commerce-issuer",
         audience = "appointment-service",
         keyId = "commerce-key",
+        algorithm = "EdDSA",
         schemaVersion = schemaVersion,
         correlationId = "correlation-1",
         payloadHash = PurchaseCompletedPayloadHasher.hash(payload),
