@@ -18,6 +18,12 @@ import io.bluetape4k.clinic.appointment.model.dto.PlannedTreatmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.ProductCatalogProjectionRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.RescheduleCandidateRecord
+import io.bluetape4k.clinic.appointment.model.dto.EffectiveSchedulingPolicySnapshotRecord
+import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyActivationCommandRecord
+import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyApprovalRecord
+import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyDefinitionRecord
+import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyPreviewJobRecord
+import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyScopeHeadRecord
 import io.bluetape4k.clinic.appointment.model.dto.TenantGroupRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentEquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
@@ -48,6 +54,12 @@ import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependenci
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
+import io.bluetape4k.clinic.appointment.model.tables.EffectiveSchedulingPolicySnapshots
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyActivationCommands
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyApprovals
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyDefinitions
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyPreviewJobs
+import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyScopeHeads
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentDependencies
@@ -423,3 +435,109 @@ private fun decodeBookingPreference(
 internal fun Int?.sequenceToSentinel(): Int = this ?: 0
 
 private fun Int.sentinelToSequence(): Int? = takeIf { it > 0 }
+
+internal fun ResultRow.toSchedulingPolicyDefinitionRecord() = SchedulingPolicyDefinitionRecord(
+    id = this[SchedulingPolicyDefinitions.id].value,
+    tenantGroupId = this[SchedulingPolicyDefinitions.tenantGroupId],
+    scope = this[SchedulingPolicyDefinitions.scope],
+    clinicId = this[SchedulingPolicyDefinitions.clinicId],
+    clinicScopeKey = this[SchedulingPolicyDefinitions.clinicScopeKey],
+    kind = this[SchedulingPolicyDefinitions.policyKind],
+    version = this[SchedulingPolicyDefinitions.version],
+    schemaVersion = this[SchedulingPolicyDefinitions.schemaVersion],
+    lifecycle = this[SchedulingPolicyDefinitions.lifecycle],
+    effectiveFrom = this[SchedulingPolicyDefinitions.effectiveFrom],
+    effectiveUntil = this[SchedulingPolicyDefinitions.effectiveUntil],
+    revision = this[SchedulingPolicyDefinitions.revision],
+    payloadHash = this[SchedulingPolicyDefinitions.payloadHash],
+    payloadJson = this[SchedulingPolicyDefinitions.payloadJson],
+    createdByActorId = this[SchedulingPolicyDefinitions.createdByActorId],
+    createdByActorRole = this[SchedulingPolicyDefinitions.createdByActorRole],
+    changeReason = this[SchedulingPolicyDefinitions.changeReason],
+    createdAt = this[SchedulingPolicyDefinitions.createdAt],
+)
+
+internal fun ResultRow.toSchedulingPolicyApprovalRecord() = SchedulingPolicyApprovalRecord(
+    id = this[SchedulingPolicyApprovals.id].value,
+    definitionId = this[SchedulingPolicyApprovals.definitionId].value,
+    draftRevision = this[SchedulingPolicyApprovals.draftRevision],
+    actorId = this[SchedulingPolicyApprovals.actorId],
+    actorRole = this[SchedulingPolicyApprovals.actorRole],
+    assuranceLevel = this[SchedulingPolicyApprovals.assuranceLevel],
+    approvedAt = this[SchedulingPolicyApprovals.approvedAt],
+)
+
+internal fun ResultRow.toSchedulingPolicyScopeHeadRecord() = SchedulingPolicyScopeHeadRecord(
+    id = this[SchedulingPolicyScopeHeads.id].value,
+    tenantGroupId = this[SchedulingPolicyScopeHeads.tenantGroupId],
+    scope = this[SchedulingPolicyScopeHeads.scope],
+    clinicScopeKey = this[SchedulingPolicyScopeHeads.clinicScopeKey],
+    revision = this[SchedulingPolicyScopeHeads.revision],
+    generation = this[SchedulingPolicyScopeHeads.generation],
+    updatedAt = this[SchedulingPolicyScopeHeads.updatedAt],
+)
+
+internal fun ResultRow.toEffectiveSchedulingPolicySnapshotRecord() = EffectiveSchedulingPolicySnapshotRecord(
+    id = this[EffectiveSchedulingPolicySnapshots.id].value,
+    tenantGroupId = this[EffectiveSchedulingPolicySnapshots.tenantGroupId],
+    clinicId = this[EffectiveSchedulingPolicySnapshots.clinicId],
+    decisionAt = this[EffectiveSchedulingPolicySnapshots.decisionAt],
+    serviceAt = this[EffectiveSchedulingPolicySnapshots.serviceAt],
+    tenantGeneration = this[EffectiveSchedulingPolicySnapshots.tenantGeneration],
+    clinicGeneration = this[EffectiveSchedulingPolicySnapshots.clinicGeneration],
+    sourceVersionsJson = this[EffectiveSchedulingPolicySnapshots.sourceVersionsJson],
+    sourceByPathJson = this[EffectiveSchedulingPolicySnapshots.sourceByPathJson],
+    disabledFeaturesJson = this[EffectiveSchedulingPolicySnapshots.disabledFeaturesJson],
+    warningsJson = this[EffectiveSchedulingPolicySnapshots.warningsJson],
+    payloadJson = this[EffectiveSchedulingPolicySnapshots.payloadJson],
+    snapshotHash = this[EffectiveSchedulingPolicySnapshots.snapshotHash],
+    createdAt = this[EffectiveSchedulingPolicySnapshots.createdAt],
+)
+
+internal fun ResultRow.toSchedulingPolicyActivationCommandRecord() = SchedulingPolicyActivationCommandRecord(
+    id = this[SchedulingPolicyActivationCommands.id].value,
+    tenantGroupId = this[SchedulingPolicyActivationCommands.tenantGroupId],
+    scope = this[SchedulingPolicyActivationCommands.scope],
+    clinicId = this[SchedulingPolicyActivationCommands.clinicId],
+    clinicScopeKey = this[SchedulingPolicyActivationCommands.clinicScopeKey],
+    definitionId = this[SchedulingPolicyActivationCommands.definitionId],
+    expectedDraftRevision = this[SchedulingPolicyActivationCommands.expectedDraftRevision],
+    expectedActiveRevision = this[SchedulingPolicyActivationCommands.expectedActiveRevision],
+    idempotencyKeyHash = this[SchedulingPolicyActivationCommands.idempotencyKeyHash],
+    requestFingerprint = this[SchedulingPolicyActivationCommands.requestFingerprint],
+    status = this[SchedulingPolicyActivationCommands.status],
+    effectiveFrom = this[SchedulingPolicyActivationCommands.effectiveFrom],
+    nextAttemptAt = this[SchedulingPolicyActivationCommands.nextAttemptAt],
+    leaseOwner = this[SchedulingPolicyActivationCommands.leaseOwner],
+    leaseUntil = this[SchedulingPolicyActivationCommands.leaseUntil],
+    attempt = this[SchedulingPolicyActivationCommands.attempt],
+    resultTenantGeneration = this[SchedulingPolicyActivationCommands.resultTenantGeneration],
+    resultClinicGeneration = this[SchedulingPolicyActivationCommands.resultClinicGeneration],
+    eventId = this[SchedulingPolicyActivationCommands.eventId],
+    lastErrorCode = this[SchedulingPolicyActivationCommands.lastErrorCode],
+    createdAt = this[SchedulingPolicyActivationCommands.createdAt],
+    updatedAt = this[SchedulingPolicyActivationCommands.updatedAt],
+)
+
+internal fun ResultRow.toSchedulingPolicyPreviewJobRecord() = SchedulingPolicyPreviewJobRecord(
+    id = this[SchedulingPolicyPreviewJobs.id].value,
+    tenantGroupId = this[SchedulingPolicyPreviewJobs.tenantGroupId],
+    clinicId = this[SchedulingPolicyPreviewJobs.clinicId],
+    definitionId = this[SchedulingPolicyPreviewJobs.definitionId],
+    draftRevision = this[SchedulingPolicyPreviewJobs.draftRevision],
+    tenantGeneration = this[SchedulingPolicyPreviewJobs.tenantGeneration],
+    clinicGeneration = this[SchedulingPolicyPreviewJobs.clinicGeneration],
+    partitionCount = this[SchedulingPolicyPreviewJobs.partitionCount],
+    cursorPartition = this[SchedulingPolicyPreviewJobs.cursorPartition],
+    cursorLastAppointmentId = this[SchedulingPolicyPreviewJobs.cursorLastAppointmentId],
+    scannedCount = this[SchedulingPolicyPreviewJobs.scannedCount],
+    affectedCount = this[SchedulingPolicyPreviewJobs.affectedCount],
+    status = this[SchedulingPolicyPreviewJobs.status],
+    deadlineAt = this[SchedulingPolicyPreviewJobs.deadlineAt],
+    nextAttemptAt = this[SchedulingPolicyPreviewJobs.nextAttemptAt],
+    leaseOwner = this[SchedulingPolicyPreviewJobs.leaseOwner],
+    leaseUntil = this[SchedulingPolicyPreviewJobs.leaseUntil],
+    lastErrorCode = this[SchedulingPolicyPreviewJobs.lastErrorCode],
+    createdAt = this[SchedulingPolicyPreviewJobs.createdAt],
+    updatedAt = this[SchedulingPolicyPreviewJobs.updatedAt],
+)
