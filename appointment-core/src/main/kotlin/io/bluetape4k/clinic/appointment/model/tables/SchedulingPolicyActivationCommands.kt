@@ -49,6 +49,31 @@ object SchedulingPolicyActivationCommands : LongIdTable("scheduling_policy_activ
     /** activation CAS에서 기대하는 scope-head revision입니다. */
     val expectedActiveRevision = long("expected_active_revision")
 
+    /**
+     * schedule 또는 immediate activation 직전에 완료된 preview가 관측한 tenant generation입니다.
+     *
+     * worker 재시작 후에도 stale preview를 탐지할 수 있도록 command 자체에 고정합니다.
+     * `0`은 tenant 정책이 아직 한 번도 활성화되지 않은 초기 generation입니다.
+     */
+    val expectedTenantGeneration = long("expected_tenant_generation")
+
+    /**
+     * preview가 관측한 clinic override generation입니다.
+     *
+     * `0`은 활성 clinic override가 아직 없다는 sentinel입니다. worker는 이 값과 현재
+     * clinic generation을 비교하여 schedule 이후 변경을 조용히 덮어쓰지 않습니다.
+     */
+    val expectedClinicGeneration = long("expected_clinic_generation")
+
+    /**
+     * 완전히 완료된 durable preview 결과를 가리키는 opaque evidence token입니다.
+     *
+     * 원본 request, 환자·예약 정보, actor identity, credential, idempotency key를 포함하지
+     * 않아야 합니다. 실행 시 token이 가리키는 completed job의 definition revision과 두
+     * generation이 이 command의 고정값과 모두 일치해야 합니다.
+     */
+    val previewEvidenceToken = varchar("preview_evidence_token", 160)
+
     /** lowercase HMAC-SHA-256입니다. raw idempotency key는 저장하지 않습니다. */
     val idempotencyKeyHash = varchar("idempotency_key_hash", 64)
 

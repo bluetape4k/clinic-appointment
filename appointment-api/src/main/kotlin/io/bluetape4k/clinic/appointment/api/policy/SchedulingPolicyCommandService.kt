@@ -283,6 +283,9 @@ class SchedulingPolicyCommandService(
                             definitionId = scheduled.id!!,
                             expectedDraftRevision = scheduled.revision,
                             expectedActiveRevision = nextHead.revision,
+                            expectedTenantGeneration = command.preview.tenantGeneration,
+                            expectedClinicGeneration = command.preview.clinicGeneration,
+                            previewEvidenceToken = command.preview.evidenceId,
                             idempotencyKeyHash = keyHash,
                             requestFingerprint = fingerprint,
                             effectiveFrom = scheduled.effectiveFrom,
@@ -315,6 +318,71 @@ class SchedulingPolicyCommandService(
     }
 
     /**
+     * 영속 activation command 하나만으로 예약된 정책 활성화 입력을 복원하여 실행한다.
+     *
+     * 백그라운드 worker에는 HTTP 요청이나 Gateway [TenantContext]가 존재하지 않는다. 따라서
+     * 이 진입점은 숫자 command ID로 먼저 영속 행을 읽고, 그 행이 소유한 tenant/clinic
+     * 범위·definition·revision·generation·preview token만으로 [ActivateSchedulingPolicyCommand]를
+     * 재구성한다. 외부 payload나 worker 메모리가 scope를 덮어쓸 수 없다.
+     *
+     * [actor]는 애플리케이션이 구성한 `SYSTEM` workload identity여야 하며 service assurance와
+     * `policy:scheduled-activation` scope를 가져야 한다. human actor 또는 요청에서 전달된
+     * 임의 SYSTEM actor를 이 메서드에 연결하면 안 된다. 실제 activation transaction은 다시
+     * command 상태, due time, lease, 현재 definition revision, generation, 완료 preview token을
+     * 검증하므로 읽기와 실행 사이의 변경도 fail-closed로 끝난다.
+     *
+     * @param commandId 실행할 양수 durable activation command ID.
+     * @param owner 현재 command lease를 선점한 worker의 안정적인 소유자 식별자.
+     * @param actor 애플리케이션 내부에서 구성한 service workload 감사 주체.
+     * @param databaseNow claim 시점에 같은 DB authority에서 읽은 시각. due 및 lease fencing에 사용한다.
+     * @return 원자적으로 완료된 activation 결과 또는 같은 command의 idempotent 완료 결과.
+     */
+    fun executeClaimedScheduled(
+        commandId: Long,
+        owner: String,
+        actor: ActorContext,
+        databaseNow: Instant,
+    ): SchedulingPolicyActivationResult {
+        require(commandId > 0) { "commandId must be positive" }
+        require(owner.isNotBlank() && owner.length <= 160) {
+            "owner must contain 1..160 characters"
+        }
+        authorizeScheduledActor(actor, commandId)
+        val durable = transaction {
+            jobRepository.findActivation(commandId)
+        } ?: reject(
+            SchedulingPolicyErrorCode.POLICY_RESOURCE_NOT_FOUND,
+            "The scheduled activation command was not found.",
+        )
+        val scope = PolicyScopeRef(
+            tenantGroupId = durable.tenantGroupId,
+            scope = durable.scope,
+            clinicId = durable.clinicId,
+        )
+        return activateInternal(
+            ActivateSchedulingPolicyCommand(
+                scope = scope,
+                definitionId = durable.definitionId,
+                expectedDraftRevision = durable.expectedDraftRevision,
+                expectedActiveRevision = durable.expectedActiveRevision,
+                idempotencyKey = null,
+                preview = PolicyPreviewEvidence(
+                    definitionId = durable.definitionId,
+                    draftRevision = durable.expectedDraftRevision,
+                    tenantGeneration = durable.expectedTenantGeneration,
+                    clinicGeneration = durable.expectedClinicGeneration,
+                    evidenceId = durable.previewEvidenceToken,
+                ),
+                actor = actor,
+                scheduledCommandId = commandId,
+                replayOfCommandId = durable.replayOfCommandId,
+            ),
+            existingClaimOwner = owner,
+            now = databaseNow,
+        )
+    }
+
+    /**
      * draft, scheduled command, explicit replay 중 하나를 원자적으로 activate한다.
      *
      * outbox publisher는 현재 deterministic event ID를 반환하므로, durable command completion
@@ -328,6 +396,32 @@ class SchedulingPolicyCommandService(
      * authority, lease, missed-replay, idempotency intent conflict가 발생한 경우.
      */
     fun activate(command: ActivateSchedulingPolicyCommand): SchedulingPolicyActivationResult {
+        if (command.actor.actorType == ActorType.SYSTEM) {
+            reject(
+                SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
+                "A service actor must execute a previously claimed scheduled command.",
+            )
+        }
+        return activateInternal(
+            command = command,
+            existingClaimOwner = null,
+            now = Instant.now(clock),
+        )
+    }
+
+    /**
+     * human activation과 이미 선점된 scheduled activation이 공유하는 원자적 실행 본체다.
+     *
+     * [existingClaimOwner]가 없으면 이 transaction 안에서 immediate command를 선점한다.
+     * 값이 있으면 worker가 앞선 짧은 transaction에서 획득한 lease를 다시 확인하고, 절대
+     * 재선점하지 않는다. 이 분리는 본체 실패 시 claim이 rollback되지 않게 하여 worker가
+     * 같은 owner로 `RETRY_WAIT` 또는 `MISSED`를 기록할 수 있게 한다.
+     */
+    private fun activateInternal(
+        command: ActivateSchedulingPolicyCommand,
+        existingClaimOwner: String?,
+        now: Instant,
+    ): SchedulingPolicyActivationResult {
         authorizeActivation(command.actor, command.scope, command.scheduledCommandId)
         val keyHash =
             if (command.scheduledCommandId == null) {
@@ -351,7 +445,6 @@ class SchedulingPolicyCommandService(
             command.expectedActiveRevision,
             command.replayOfCommandId,
         )
-        val now = Instant.now(clock)
         return try {
             mapHeadConflict {
                 transaction {
@@ -360,11 +453,23 @@ class SchedulingPolicyCommandService(
                         return@transaction completedResult(durable, idempotentReplay = true)
                     }
                     val commandId = durable.id!!
-                    val owner = "policy-activation-$commandId"
-                    if (!jobRepository.claimDueActivation(commandId, owner, now, now.plus(activationLease))) {
+                    val owner =
+                        existingClaimOwner ?: "policy-activation-$commandId"
+                    if (existingClaimOwner == null) {
+                        if (!jobRepository.claimDueActivation(commandId, owner, now, now.plus(activationLease))) {
+                            reject(
+                                SchedulingPolicyErrorCode.POLICY_ACTIVATION_CONFLICT,
+                                "The activation command is not eligible for this worker.",
+                            )
+                        }
+                    } else if (
+                        durable.status != PolicyActivationCommandStatus.CLAIMED ||
+                        durable.leaseOwner != owner ||
+                        durable.leaseUntil?.let { it > now } != true
+                    ) {
                         reject(
                             SchedulingPolicyErrorCode.POLICY_ACTIVATION_CONFLICT,
-                            "The activation command is not eligible for this worker.",
+                            "The scheduled activation lease is no longer owned by this worker.",
                         )
                     }
                     val heads = lockHeads(command.scope)
@@ -504,6 +609,7 @@ class SchedulingPolicyCommandService(
                 )
             }
             requireSameIntent(existing, fingerprint)
+            requireSamePreviewEvidence(existing, command.preview)
             if (command.scheduledCommandId != null && existing.id != command.scheduledCommandId) {
                 reject(
                     SchedulingPolicyErrorCode.POLICY_IDEMPOTENCY_CONFLICT,
@@ -538,6 +644,9 @@ class SchedulingPolicyCommandService(
                     replayOfCommandId = command.replayOfCommandId,
                     expectedDraftRevision = command.expectedDraftRevision,
                     expectedActiveRevision = command.expectedActiveRevision,
+                    expectedTenantGeneration = command.preview.tenantGeneration,
+                    expectedClinicGeneration = command.preview.clinicGeneration,
+                    previewEvidenceToken = command.preview.evidenceId,
                     idempotencyKeyHash = requireNotNull(keyHash),
                     requestFingerprint = fingerprint,
                     effectiveFrom = definition.effectiveFrom,
@@ -636,7 +745,8 @@ class SchedulingPolicyCommandService(
                 evidence.tenantGeneration == generation.tenantGeneration &&
                 evidence.clinicGeneration == generation.clinicGeneration &&
                 evidence.evidenceId.isNotBlank() &&
-                evidence.evidenceId.length <= 160
+                evidence.evidenceId.length <= 160 &&
+                OPAQUE_PREVIEW_EVIDENCE_REGEX.matches(evidence.evidenceId)
         if (!structurallyCurrent || !previewVerifier.verify(evidence, definition, generation)) {
             reject(
                 SchedulingPolicyErrorCode.POLICY_PREVIEW_STALE,
@@ -697,30 +807,48 @@ class SchedulingPolicyCommandService(
         scope: PolicyScopeRef,
         scheduledCommandId: Long?,
     ) {
-        authorizeScope(actor, scope)
         when (actor.actorType) {
-            ActorType.ADMIN, ActorType.STAFF ->
+            ActorType.ADMIN, ActorType.STAFF -> {
+                authorizeScope(actor, scope)
                 if (POLICY_WRITE_SCOPE !in actor.scopes) {
                     reject(
                         SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
                         "The human actor does not have policy write authority.",
                     )
                 }
-            ActorType.SYSTEM ->
-                if (actor.assurance != AuthenticationAssurance.SERVICE ||
-                    scheduledCommandId == null ||
-                    POLICY_SCHEDULED_ACTIVATION_SCOPE !in actor.scopes
-                ) {
-                    reject(
-                        SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
-                        "A service actor requires scheduled-activation scope, service assurance, and command evidence.",
-                    )
-                }
+            }
+            ActorType.SYSTEM -> authorizeScheduledActor(actor, scheduledCommandId)
             else -> reject(
                 SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
                 "The actor type cannot activate scheduling policy.",
             )
         }
+    }
+
+    /**
+     * request tenant context가 아니라 workload identity와 durable command 증거만 검증한다.
+     *
+     * scope ownership은 이후 [resolveActivationCommand]가 command ID로 찾은 영속 행과
+     * 재구성 입력을 exact match하여 검증한다. 따라서 이 메서드는 human API 권한 우회로
+     * 사용되지 않으며, system execution에서만 Gateway request context 의존성을 제거한다.
+     */
+    private fun authorizeScheduledActor(
+        actor: ActorContext,
+        scheduledCommandId: Long?,
+    ) {
+        if (actor.actorType != ActorType.SYSTEM ||
+            ActorRole.SYSTEM !in actor.roles ||
+            actor.assurance != AuthenticationAssurance.SERVICE ||
+            scheduledCommandId == null ||
+            scheduledCommandId <= 0 ||
+            POLICY_SCHEDULED_ACTIVATION_SCOPE !in actor.scopes
+        ) {
+            reject(
+                SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
+                "A service actor requires scheduled-activation scope, service assurance, and command evidence.",
+            )
+        }
+        actor.auditRole()
     }
 
     private fun authorizeScope(actor: ActorContext, scope: PolicyScopeRef) {
@@ -822,6 +950,30 @@ class SchedulingPolicyCommandService(
         }
     }
 
+    /**
+     * durable command가 승인한 preview를 retry 입력이 교체하지 못하게 한다.
+     *
+     * activation fingerprint는 명령의 업무 의도를 식별하지만 preview token은 별도의
+     * 완료 증거이다. 따라서 같은 idempotency key 또는 scheduled command ID를 재사용할
+     * 때도 definition revision, 두 generation, token을 모두 영속 행과 exact match한다.
+     */
+    private fun requireSamePreviewEvidence(
+        existing: SchedulingPolicyActivationCommandRecord,
+        evidence: PolicyPreviewEvidence,
+    ) {
+        if (evidence.definitionId != existing.definitionId ||
+            evidence.draftRevision != existing.expectedDraftRevision ||
+            evidence.tenantGeneration != existing.expectedTenantGeneration ||
+            evidence.clinicGeneration != existing.expectedClinicGeneration ||
+            evidence.evidenceId != existing.previewEvidenceToken
+        ) {
+            reject(
+                SchedulingPolicyErrorCode.POLICY_IDEMPOTENCY_CONFLICT,
+                "The durable activation command was created with different preview evidence.",
+            )
+        }
+    }
+
     private fun hashKey(rawKey: String): String =
         try {
             jobRepository.hashIdempotencyKey(rawKey)
@@ -905,6 +1057,7 @@ class SchedulingPolicyCommandService(
         const val POLICY_SCHEDULED_ACTIVATION_SCOPE = "policy:scheduled-activation"
         const val POLICY_IDEMPOTENCY_CONSTRAINT = "uq_policy_activation_idempotency"
         val UNIQUE_VIOLATION_SQL_STATES = setOf("23000", "23505")
+        val OPAQUE_PREVIEW_EVIDENCE_REGEX = Regex("^[A-Za-z0-9._:-]+$")
 
         /**
          * sensitivity는 [isSensitive]의 exhaustive `when`에서 의도적으로 분류한다.

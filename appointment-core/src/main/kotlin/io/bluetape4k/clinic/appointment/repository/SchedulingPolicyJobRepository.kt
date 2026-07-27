@@ -16,7 +16,9 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
@@ -81,6 +83,9 @@ class SchedulingPolicyJobRepository(
             it[replayOfCommandId] = record.replayOfCommandId
             it[expectedDraftRevision] = record.expectedDraftRevision
             it[expectedActiveRevision] = record.expectedActiveRevision
+            it[expectedTenantGeneration] = record.expectedTenantGeneration
+            it[expectedClinicGeneration] = record.expectedClinicGeneration
+            it[previewEvidenceToken] = record.previewEvidenceToken
             it[idempotencyKeyHash] = record.idempotencyKeyHash
             it[requestFingerprint] = record.requestFingerprint
             it[status] = record.status
@@ -217,6 +222,47 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
+     * 현재 lease 소유자의 일시 실패를 재시도 대기 상태로 기록합니다.
+     *
+     * claim transaction과 실제 activation transaction이 분리되어 있으므로 activation
+     * rollback 이후에도 이 전이는 durable claim을 owner-fence할 수 있습니다. [errorCode]에는
+     * 예외 메시지나 SQL, actor, token을 넣지 않고 안정적인 분류 코드만 저장해야 합니다.
+     * [nextAttemptAt]은 [retryAt]보다 뒤여야 하며, 성공하면 lease를 해제해 다른 worker가
+     * 지정 시각 이후 다시 선점할 수 있게 합니다.
+     *
+     * @return 현재 유효한 lease owner가 정확히 한 행을 전이했으면 `true`.
+     */
+    fun markActivationRetry(
+        commandId: Long,
+        owner: String,
+        errorCode: String,
+        nextAttemptAt: Instant,
+        retryAt: Instant,
+    ): Boolean {
+        require(commandId > 0) { "commandId must be positive" }
+        require(owner.isNotBlank() && owner.length <= MAX_OWNER_LENGTH) {
+            "owner must contain 1..$MAX_OWNER_LENGTH characters"
+        }
+        require(STABLE_ERROR_CODE_REGEX.matches(errorCode)) {
+            "errorCode must contain 1..$MAX_ERROR_CODE_LENGTH uppercase safe characters"
+        }
+        require(nextAttemptAt > retryAt) { "nextAttemptAt must be later than retryAt" }
+        return SchedulingPolicyActivationCommands.update({
+            (SchedulingPolicyActivationCommands.id eq commandId) and
+                (SchedulingPolicyActivationCommands.status eq PolicyActivationCommandStatus.CLAIMED) and
+                (SchedulingPolicyActivationCommands.leaseOwner eq owner) and
+                (SchedulingPolicyActivationCommands.leaseUntil greater retryAt)
+        }) {
+            it[status] = PolicyActivationCommandStatus.RETRY_WAIT
+            it[SchedulingPolicyActivationCommands.nextAttemptAt] = nextAttemptAt
+            it[leaseOwner] = null
+            it[leaseUntil] = null
+            it[lastErrorCode] = errorCode
+            it[updatedAt] = retryAt
+        } == 1
+    }
+
+    /**
      * 현재 lease 소유자에게만 선점된 활성화 명령을 최종 누락 상태로 표시합니다.
      *
      * 오래되었거나 잘못된 소유자는 `false`를 받으며, 이미 완료된 결과를 지울 수 없습니다.
@@ -273,13 +319,20 @@ class SchedulingPolicyJobRepository(
             it[partitionCount] = record.partitionCount
             it[cursorPartition] = record.cursorPartition
             it[cursorLastAppointmentId] = record.cursorLastAppointmentId
+            it[cursorScheduledAt] = record.cursorScheduledAt
+            it[cursorAggregateType] = record.cursorAggregateType
+            it[cursorAggregateId] = record.cursorAggregateId
             it[scannedCount] = record.scannedCount
             it[affectedCount] = record.affectedCount
             it[status] = record.status
             it[deadlineAt] = record.deadlineAt
             it[nextAttemptAt] = record.nextAttemptAt
+            it[horizonFrom] = record.horizonFrom
+            it[horizonUntil] = record.horizonUntil
             it[leaseOwner] = record.leaseOwner
             it[leaseUntil] = record.leaseUntil
+            it[resultHash] = record.resultHash
+            it[activationEvidenceToken] = record.activationEvidenceToken
             it[lastErrorCode] = record.lastErrorCode
         }.value
         return requireNotNull(findPreviewJob(jobId))
@@ -300,15 +353,74 @@ class SchedulingPolicyJobRepository(
             ?.toSchedulingPolicyPreviewJobRecord()
 
     /**
+     * 한 병원 scope의 runnable preview queue가 설정 상한에 도달했는지 판단합니다.
+     *
+     * SaaS의 다른 병원 또는 tenant가 만든 작업은 이 capacity를 소비하지 않습니다. 전체
+     * `COUNT(*)` 대신 [capacity]개 ID까지만 materialize하며 `PENDING`과 `RUNNING`만 queue
+     * 자원을 점유합니다. 호출자는 같은 병원 scope의 admission을 직렬화하는 row lock을
+     * 보유한 트랜잭션 안에서 이 메서드와 [createPreviewJob]을 연속 실행해야 합니다.
+     *
+     * @param tenantGroupId queue를 소유하는 양수 tenant ID.
+     * @param clinicId queue를 소유하는 양수 clinic ID.
+     * @param capacity 한 병원이 보유할 수 있는 runnable preview 상한.
+     */
+    fun isPreviewQueueSaturated(
+        tenantGroupId: Long,
+        clinicId: Long,
+        capacity: Int,
+    ): Boolean {
+        require(tenantGroupId > 0) { "tenantGroupId must be positive" }
+        require(clinicId > 0) { "clinicId must be positive" }
+        require(capacity in 1..MAX_PREVIEW_QUEUE_CAPACITY) {
+            "capacity must be in 1..$MAX_PREVIEW_QUEUE_CAPACITY"
+        }
+        return SchedulingPolicyPreviewJobs
+            .select(SchedulingPolicyPreviewJobs.id)
+            .where {
+                (SchedulingPolicyPreviewJobs.tenantGroupId eq tenantGroupId) and
+                    (SchedulingPolicyPreviewJobs.clinicId eq clinicId) and
+                    (SchedulingPolicyPreviewJobs.status inList listOf(
+                        PolicyPreviewJobStatus.PENDING,
+                        PolicyPreviewJobStatus.RUNNING,
+                    ))
+            }
+            .limit(capacity)
+            .map { it[SchedulingPolicyPreviewJobs.id].value }
+            .size >= capacity
+    }
+
+    /**
+     * 완료 preview의 opaque activation token을 exact indexed equality로 조회합니다.
+     *
+     * token은 로그에 남기지 않으며 `COMPLETED` 행만 반환합니다. 호출자는 반환된 revision,
+     * generation, definition을 현재 activation 입력과 다시 비교해야 합니다.
+     */
+    fun findCompletedPreviewByToken(token: String): SchedulingPolicyPreviewJobRecord? {
+        require(token.isNotBlank() && token.length <= MAX_EVIDENCE_TOKEN_LENGTH && OPAQUE_TOKEN_REGEX.matches(token)) {
+            "token must contain bounded opaque safe characters"
+        }
+        return SchedulingPolicyPreviewJobs
+            .selectAll()
+            .where {
+                (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.COMPLETED) and
+                    (SchedulingPolicyPreviewJobs.activationEvidenceToken eq token)
+            }
+            .singleOrNull()
+            ?.toSchedulingPolicyPreviewJobRecord()
+    }
+
+    /**
      * 실행 가능한 미리보기 작업을 선점하거나 만료된 실행 lease를 재선점합니다.
      *
      * [leaseUntil]은 반드시 [now]보다 이후여야 합니다. 실행 가능한 행은
      * `nextAttemptAt <= now`인 `PENDING` 행 또는 기존 `leaseUntil <= now`인 `RUNNING`
-     * 행이며, 두 경우 모두 `deadlineAt > now`여야 합니다. 조건부 갱신에 성공하면 호출자
-     * 트랜잭션 안에서 `RUNNING`, [owner], [leaseUntil], 전이 시각을 기록합니다.
+     * 행입니다. hard deadline이 지난 행도 의도적으로 claim할 수 있습니다. worker가 현재
+     * owner 권한으로 `FAILED(PREVIEW_DEADLINE_EXCEEDED)`를 기록해야 runnable queue에서
+     * 제거되기 때문입니다. 조건부 갱신에 성공하면 호출자 트랜잭션 안에서 `RUNNING`,
+     * [owner], [leaseUntil], 전이 시각을 기록합니다.
      *
      * @return 이 호출자가 조건부 갱신에서 이긴 경우에만 `true`입니다. `false`는 행 부재,
-     * 아직 실행 시각 전, 유효한 lease 존재, deadline 경과, 종결 상태, 또는 동시 선점 패배를
+     * 아직 실행 시각 전, 유효한 lease 존재, 종결 상태, 또는 동시 선점 패배를
      * 의미합니다.
      */
     fun claimDuePreview(
@@ -321,13 +433,11 @@ class SchedulingPolicyJobRepository(
         val eligible =
             (
                 (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.PENDING) and
-                    (SchedulingPolicyPreviewJobs.nextAttemptAt lessEq now) and
-                    (SchedulingPolicyPreviewJobs.deadlineAt greater now)
+                    (SchedulingPolicyPreviewJobs.nextAttemptAt lessEq now)
                 ) or
                 (
                     (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.RUNNING) and
-                        (SchedulingPolicyPreviewJobs.leaseUntil lessEq now) and
-                        (SchedulingPolicyPreviewJobs.deadlineAt greater now)
+                        (SchedulingPolicyPreviewJobs.leaseUntil lessEq now)
                     )
         return SchedulingPolicyPreviewJobs.update({
             (SchedulingPolicyPreviewJobs.id eq jobId) and eligible
@@ -337,6 +447,74 @@ class SchedulingPolicyJobRepository(
             it[SchedulingPolicyPreviewJobs.leaseUntil] = leaseUntil
             it[updatedAt] = now
         } == 1
+    }
+
+    /**
+     * 현재 데이터베이스 시각까지 실행 가능한 activation command ID를 제한된 순서로 조회합니다.
+     *
+     * 조회 결과는 `nextAttemptAt`, `id` 오름차순이며 payload나 actor metadata를 읽지 않습니다.
+     * 아직 유효한 lease는 제외하고 만료된 `CLAIMED` 행만 회수 후보에 포함합니다. 반환된 ID는
+     * 실행 권한이 아니므로 worker는 각 ID를 별도 트랜잭션에서 [claimDueActivation]해야 합니다.
+     *
+     * @param now 동일 트랜잭션에서 얻은 데이터베이스 현재 시각입니다.
+     * @param limit 한 tick이 관찰할 수 있는 최대 ID 수입니다. `1..100`만 허용합니다.
+     */
+    fun findDueActivationCommandIds(now: Instant, limit: Int): List<Long> {
+        require(limit in 1..MAX_DUE_SELECTION_LIMIT) {
+            "limit must be in 1..$MAX_DUE_SELECTION_LIMIT"
+        }
+        val eligible =
+            (
+                (SchedulingPolicyActivationCommands.status inList ACTIVATION_READY_STATES) and
+                    (SchedulingPolicyActivationCommands.nextAttemptAt lessEq now)
+                ) or
+                (
+                    (SchedulingPolicyActivationCommands.status eq PolicyActivationCommandStatus.CLAIMED) and
+                        (SchedulingPolicyActivationCommands.leaseUntil lessEq now)
+                    )
+        return SchedulingPolicyActivationCommands
+            .select(SchedulingPolicyActivationCommands.id)
+            .where { eligible }
+            .orderBy(
+                SchedulingPolicyActivationCommands.nextAttemptAt to SortOrder.ASC,
+                SchedulingPolicyActivationCommands.id to SortOrder.ASC,
+            )
+            .limit(limit)
+            .map { it[SchedulingPolicyActivationCommands.id].value }
+    }
+
+    /**
+     * 현재 데이터베이스 시각까지 실행 가능한 preview job ID를 제한된 순서로 조회합니다.
+     *
+     * hard deadline이 지난 행도 선택합니다. 선택과 claim 자체는 activation evidence가
+     * 아니며, worker가 owner-fenced claim 후 서비스의 첫 page boundary에서
+     * `FAILED(PREVIEW_DEADLINE_EXCEEDED)`로 정리해야 queue capacity가 누수되지 않습니다.
+     *
+     * @param now 동일 트랜잭션에서 얻은 데이터베이스 현재 시각입니다.
+     * @param limit 한 tick이 관찰할 수 있는 최대 ID 수입니다. `1..100`만 허용합니다.
+     */
+    fun findDuePreviewJobIds(now: Instant, limit: Int): List<Long> {
+        require(limit in 1..MAX_DUE_SELECTION_LIMIT) {
+            "limit must be in 1..$MAX_DUE_SELECTION_LIMIT"
+        }
+        val eligible =
+            (
+                (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.PENDING) and
+                    (SchedulingPolicyPreviewJobs.nextAttemptAt lessEq now)
+                ) or
+                (
+                    (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.RUNNING) and
+                        (SchedulingPolicyPreviewJobs.leaseUntil lessEq now)
+                    )
+        return SchedulingPolicyPreviewJobs
+            .select(SchedulingPolicyPreviewJobs.id)
+            .where { eligible }
+            .orderBy(
+                SchedulingPolicyPreviewJobs.nextAttemptAt to SortOrder.ASC,
+                SchedulingPolicyPreviewJobs.id to SortOrder.ASC,
+            )
+            .limit(limit)
+            .map { it[SchedulingPolicyPreviewJobs.id].value }
     }
 
     /**
@@ -401,6 +579,251 @@ class SchedulingPolicyJobRepository(
         } == 1
     }
 
+    /**
+     * 복합 impact keyset cursor와 progress를 현재 lease에 fencing해 저장합니다.
+     *
+     * [checkpointedAt]이 lease 만료보다 앞선 경우에만 갱신합니다. aggregate partition,
+     * scheduled instant, aggregate ID 순서는 뒤로 이동할 수 없고, 모든 cursor 구성요소를
+     * 한 UPDATE에서 함께 저장해 재시작 시 혼합 cursor를 만들지 않습니다.
+     */
+    fun checkpointImpactPreview(
+        jobId: Long,
+        owner: String,
+        cursor: PolicyImpactCursor,
+        progress: PolicyPreviewProgress,
+        checkpointedAt: Instant,
+    ): Boolean {
+        val current = requireCurrentPreviewOwner(jobId, owner, progress, checkpointedAt) ?: return false
+        validateImpactCursorForward(current, cursor)
+        return SchedulingPolicyPreviewJobs.update({
+            (SchedulingPolicyPreviewJobs.id eq jobId) and
+                (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.RUNNING) and
+                (SchedulingPolicyPreviewJobs.leaseOwner eq owner) and
+                (SchedulingPolicyPreviewJobs.leaseUntil greater checkpointedAt)
+        }) {
+            it[cursorPartition] = cursor.aggregateType.ordinal
+            it[cursorLastAppointmentId] = cursor.aggregateId.toLong()
+            it[cursorScheduledAt] = cursor.scheduledAt
+            it[cursorAggregateType] = cursor.aggregateType.name
+            it[cursorAggregateId] = cursor.aggregateId
+            it[scannedCount] = progress.scannedCount
+            it[affectedCount] = progress.affectedCount
+            it[updatedAt] = checkpointedAt
+        } == 1
+    }
+
+    /**
+     * 동기 예산을 소진한 preview의 cursor를 저장하고 lease를 해제해 PENDING으로 되돌립니다.
+     *
+     * partial progress는 재개용일 뿐 activation evidence가 아니므로 result hash와 token은
+     * 반드시 `null`로 유지합니다. 만료된 owner는 defer할 수 없습니다.
+     */
+    fun deferPreview(
+        jobId: Long,
+        owner: String,
+        cursor: PolicyImpactCursor,
+        progress: PolicyPreviewProgress,
+        nextAttemptAt: Instant,
+        deferredAt: Instant,
+    ): Boolean {
+        val current = requireCurrentPreviewOwner(jobId, owner, progress, deferredAt) ?: return false
+        validateImpactCursorForward(current, cursor)
+        require(nextAttemptAt >= deferredAt) { "nextAttemptAt must not precede deferredAt" }
+        return SchedulingPolicyPreviewJobs.update({
+            (SchedulingPolicyPreviewJobs.id eq jobId) and
+                (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.RUNNING) and
+                (SchedulingPolicyPreviewJobs.leaseOwner eq owner) and
+                (SchedulingPolicyPreviewJobs.leaseUntil greater deferredAt)
+        }) {
+            it[status] = PolicyPreviewJobStatus.PENDING
+            it[cursorPartition] = cursor.aggregateType.ordinal
+            it[cursorLastAppointmentId] = cursor.aggregateId.toLong()
+            it[cursorScheduledAt] = cursor.scheduledAt
+            it[cursorAggregateType] = cursor.aggregateType.name
+            it[cursorAggregateId] = cursor.aggregateId
+            it[scannedCount] = progress.scannedCount
+            it[affectedCount] = progress.affectedCount
+            it[SchedulingPolicyPreviewJobs.nextAttemptAt] = nextAttemptAt
+            it[resultHash] = null
+            it[activationEvidenceToken] = null
+            it[leaseOwner] = null
+            it[leaseUntil] = null
+            it[lastErrorCode] = null
+            it[updatedAt] = deferredAt
+        } == 1
+    }
+
+    /**
+     * 현재 lease 소유자의 전체 preview 결과와 activation 증적을 원자적으로 확정합니다.
+     *
+     * 결과 hash와 token은 같은 revision·generation에 대한 전체 scan이 끝난 경우에만
+     * 기록합니다. lease가 만료됐거나 다른 owner가 먼저 종결한 경우 `false`를 반환하며,
+     * 기존 terminal evidence를 덮어쓰지 않습니다.
+     */
+    fun completePreview(
+        jobId: Long,
+        owner: String,
+        resultHash: String,
+        activationEvidenceToken: String,
+        progress: PolicyPreviewProgress? = null,
+        completedAt: Instant,
+    ): Boolean {
+        require(jobId > 0) { "jobId must be positive" }
+        require(owner.isNotBlank() && owner.length <= MAX_OWNER_LENGTH) {
+            "owner must contain 1..$MAX_OWNER_LENGTH characters"
+        }
+        require(SHA256_REGEX.matches(resultHash)) { "resultHash must be lowercase SHA-256" }
+        require(
+            activationEvidenceToken.isNotBlank() &&
+                activationEvidenceToken.length <= MAX_EVIDENCE_TOKEN_LENGTH &&
+                OPAQUE_TOKEN_REGEX.matches(activationEvidenceToken)
+        ) {
+            "activationEvidenceToken must contain bounded opaque safe characters"
+        }
+        progress?.let(::validateProgress)
+        return SchedulingPolicyPreviewJobs.update({
+            (SchedulingPolicyPreviewJobs.id eq jobId) and
+                (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.RUNNING) and
+                (SchedulingPolicyPreviewJobs.leaseOwner eq owner) and
+                (SchedulingPolicyPreviewJobs.leaseUntil greater completedAt)
+        }) {
+            it[status] = PolicyPreviewJobStatus.COMPLETED
+            progress?.let { completedProgress ->
+                it[scannedCount] = completedProgress.scannedCount
+                it[affectedCount] = completedProgress.affectedCount
+            }
+            it[SchedulingPolicyPreviewJobs.resultHash] = resultHash
+            it[SchedulingPolicyPreviewJobs.activationEvidenceToken] = activationEvidenceToken
+            it[leaseOwner] = null
+            it[leaseUntil] = null
+            it[lastErrorCode] = null
+            it[updatedAt] = completedAt
+        } == 1
+    }
+
+    private fun requireCurrentPreviewOwner(
+        jobId: Long,
+        owner: String,
+        progress: PolicyPreviewProgress,
+        at: Instant,
+    ): SchedulingPolicyPreviewJobRecord? {
+        require(jobId > 0) { "jobId must be positive" }
+        require(owner.isNotBlank() && owner.length <= MAX_OWNER_LENGTH) {
+            "owner must contain 1..$MAX_OWNER_LENGTH characters"
+        }
+        validateProgress(progress)
+        val current = findPreviewJob(jobId) ?: return null
+        if (current.status != PolicyPreviewJobStatus.RUNNING ||
+            current.leaseOwner != owner ||
+            current.leaseUntil?.let { it > at } != true
+        ) {
+            return null
+        }
+        require(progress.scannedCount >= current.scannedCount) { "scannedCount cannot decrease" }
+        require(progress.affectedCount >= current.affectedCount) { "affectedCount cannot decrease" }
+        return current
+    }
+
+    private fun validateProgress(progress: PolicyPreviewProgress) {
+        require(progress.scannedCount >= 0) { "scannedCount must be non-negative" }
+        require(progress.affectedCount in 0..progress.scannedCount) {
+            "affectedCount must be between zero and scannedCount"
+        }
+    }
+
+    private fun validateImpactCursorForward(
+        current: SchedulingPolicyPreviewJobRecord,
+        cursor: PolicyImpactCursor,
+    ) {
+        val cursorId = cursor.aggregateId.toLongOrNull()
+        require(cursorId != null && cursorId > 0) { "aggregateId must be a positive database identifier" }
+        val currentType = current.cursorAggregateType?.let(PolicyImpactAggregateType::valueOf)
+        if (currentType != null) {
+            val currentScheduledAt = requireNotNull(current.cursorScheduledAt)
+            val currentId = requireNotNull(current.cursorAggregateId).toLong()
+            val forward = when {
+                cursor.aggregateType.ordinal > currentType.ordinal -> true
+                cursor.aggregateType.ordinal < currentType.ordinal -> false
+                cursor.scheduledAt > currentScheduledAt -> true
+                cursor.scheduledAt < currentScheduledAt -> false
+                else -> cursorId >= currentId
+            }
+            require(forward) { "impact cursor cannot move backward" }
+        }
+    }
+
+    /**
+     * 현재 lease 소유자의 미완료 preview를 증적 없는 terminal 상태로 전이합니다.
+     *
+     * `STALE`, `FAILED`, `CANCELLED`만 허용하며 result hash와 activation token을 항상
+     * 지웁니다. 따라서 이전 checkpoint의 부분 count는 운영 진단에 남더라도 활성화 근거로
+     * 사용할 수 없습니다. 이미 terminal인 행과 만료된 owner는 변경하지 않습니다.
+     */
+    fun markPreviewTerminal(
+        jobId: Long,
+        owner: String,
+        status: PolicyPreviewJobStatus,
+        errorCode: String,
+        completedAt: Instant,
+    ): Boolean {
+        require(jobId > 0) { "jobId must be positive" }
+        require(owner.isNotBlank() && owner.length <= MAX_OWNER_LENGTH) {
+            "owner must contain 1..$MAX_OWNER_LENGTH characters"
+        }
+        require(status in PREVIEW_FAILURE_TERMINAL_STATES) {
+            "status must be STALE, FAILED, or CANCELLED"
+        }
+        require(STABLE_ERROR_CODE_REGEX.matches(errorCode)) {
+            "errorCode must contain bounded uppercase safe characters"
+        }
+        return SchedulingPolicyPreviewJobs.update({
+            (SchedulingPolicyPreviewJobs.id eq jobId) and
+                (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.RUNNING) and
+                (SchedulingPolicyPreviewJobs.leaseOwner eq owner) and
+                (SchedulingPolicyPreviewJobs.leaseUntil greater completedAt)
+        }) {
+            it[SchedulingPolicyPreviewJobs.status] = status
+            it[resultHash] = null
+            it[activationEvidenceToken] = null
+            it[leaseOwner] = null
+            it[leaseUntil] = null
+            it[lastErrorCode] = errorCode
+            it[updatedAt] = completedAt
+        } == 1
+    }
+
+    /**
+     * 아직 완료되지 않은 preview를 명시적으로 취소하고 모든 실행 권한을 회수합니다.
+     *
+     * `PENDING`과 `RUNNING`에서만 전이되며, 현재 lease owner와 무관하게 병원 운영자의
+     * 취소 결정을 우선합니다. 실행 중 runnable은 다음 page boundary의 current-row 확인에서
+     * `CANCELLED`를 관측하고 더 이상 checkpoint 또는 완료를 기록할 수 없습니다. partial
+     * hash와 activation token은 항상 제거합니다.
+     *
+     * @return 취소 가능한 행 하나를 전이했으면 `true`; terminal 또는 없는 행이면 `false`.
+     */
+    fun cancelPreview(
+        jobId: Long,
+        cancelledAt: Instant,
+    ): Boolean {
+        require(jobId > 0) { "jobId must be positive" }
+        return SchedulingPolicyPreviewJobs.update({
+            (SchedulingPolicyPreviewJobs.id eq jobId) and
+                (SchedulingPolicyPreviewJobs.status inList listOf(
+                    PolicyPreviewJobStatus.PENDING,
+                    PolicyPreviewJobStatus.RUNNING,
+                ))
+        }) {
+            it[status] = PolicyPreviewJobStatus.CANCELLED
+            it[resultHash] = null
+            it[activationEvidenceToken] = null
+            it[leaseOwner] = null
+            it[leaseUntil] = null
+            it[lastErrorCode] = PREVIEW_CANCELLED_CODE
+            it[updatedAt] = cancelledAt
+        } == 1
+    }
+
     private fun validateActivation(record: SchedulingPolicyActivationCommandRecord) {
         val scope = PolicyScopeRef(record.tenantGroupId, record.scope, record.clinicId)
         require(record.clinicScopeKey == scope.clinicScopeKey) {
@@ -428,6 +851,14 @@ class SchedulingPolicyJobRepository(
         }
         require(record.expectedDraftRevision > 0) { "expectedDraftRevision must be positive" }
         require(record.expectedActiveRevision >= 0) { "expectedActiveRevision must be non-negative" }
+        require(record.expectedTenantGeneration >= 0) { "expectedTenantGeneration must be non-negative" }
+        require(record.expectedClinicGeneration >= 0) { "expectedClinicGeneration must be non-negative" }
+        require(
+            record.previewEvidenceToken.isNotBlank() &&
+                record.previewEvidenceToken.length <= MAX_EVENT_ID_LENGTH
+        ) {
+            "previewEvidenceToken must contain 1..$MAX_EVENT_ID_LENGTH characters"
+        }
         require(SHA256_REGEX.matches(record.idempotencyKeyHash)) {
             "idempotencyKeyHash must be lowercase SHA-256"
         }
@@ -459,7 +890,7 @@ class SchedulingPolicyJobRepository(
         require(record.clinicId > 0) { "clinicId must be positive" }
         require(record.definitionId > 0) { "definitionId must be positive" }
         require(record.draftRevision > 0) { "draftRevision must be positive" }
-        require(record.tenantGeneration > 0) { "tenantGeneration must be positive" }
+        require(record.tenantGeneration >= 0) { "tenantGeneration must be non-negative" }
         require(record.clinicGeneration >= 0) { "clinicGeneration must be non-negative" }
         require(record.partitionCount > 0) { "partitionCount must be positive" }
         require(record.cursorPartition in 0 until record.partitionCount) {
@@ -472,6 +903,9 @@ class SchedulingPolicyJobRepository(
         require(record.deadlineAt > record.nextAttemptAt) {
             "deadlineAt must be later than nextAttemptAt"
         }
+        require(record.horizonUntil > record.horizonFrom) {
+            "horizonUntil must be later than horizonFrom"
+        }
         require(record.status == PolicyPreviewJobStatus.PENDING) {
             "new preview job must start in PENDING"
         }
@@ -481,8 +915,13 @@ class SchedulingPolicyJobRepository(
         require(
             record.cursorPartition == 0 &&
                 record.cursorLastAppointmentId == null &&
+                record.cursorScheduledAt == null &&
+                record.cursorAggregateType == null &&
+                record.cursorAggregateId == null &&
                 record.scannedCount == 0L &&
                 record.affectedCount == 0L &&
+                record.resultHash == null &&
+                record.activationEvidenceToken == null &&
                 record.lastErrorCode == null
         ) {
             "new preview job cannot contain checkpoint or terminal fields"
@@ -503,13 +942,23 @@ class SchedulingPolicyJobRepository(
         const val MIN_HASH_SECRET_BYTES = 16
         const val MAX_OWNER_LENGTH = 160
         const val MAX_EVENT_ID_LENGTH = 160
+        const val MAX_EVIDENCE_TOKEN_LENGTH = 192
+        const val MAX_DUE_SELECTION_LIMIT = 100
+        const val MAX_PREVIEW_QUEUE_CAPACITY = 100
         const val MAX_ERROR_CODE_LENGTH = 96
+        const val PREVIEW_CANCELLED_CODE = "PREVIEW_CANCELLED"
         val IDEMPOTENCY_KEY_REGEX = Regex("[A-Za-z0-9._:/-]{1,128}")
         val SHA256_REGEX = Regex("[0-9a-f]{64}")
         val STABLE_ERROR_CODE_REGEX = Regex("[A-Z][A-Z0-9_]{0,${MAX_ERROR_CODE_LENGTH - 1}}")
+        val OPAQUE_TOKEN_REGEX = Regex("[A-Za-z0-9._~:/+=-]{1,$MAX_EVIDENCE_TOKEN_LENGTH}")
         val ACTIVATION_READY_STATES = listOf(
             PolicyActivationCommandStatus.PENDING,
             PolicyActivationCommandStatus.RETRY_WAIT,
+        )
+        val PREVIEW_FAILURE_TERMINAL_STATES = setOf(
+            PolicyPreviewJobStatus.STALE,
+            PolicyPreviewJobStatus.FAILED,
+            PolicyPreviewJobStatus.CANCELLED,
         )
     }
 }

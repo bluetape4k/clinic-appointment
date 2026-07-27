@@ -144,7 +144,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
             repository.findActiveDefinitionAt(
                 tenantScope,
                 SchedulingPolicyKind.BOOKING_COMMITMENT,
-                until.minusNanos(1),
+                until.minusMillis(1),
             ).shouldNotBeNull().version shouldBeEqualTo 1L
             repository.findActiveDefinitionAt(
                 tenantScope,

@@ -3,10 +3,21 @@ package io.bluetape4k.clinic.appointment.api.config
 import io.bluetape4k.clinic.appointment.api.policy.PolicyActivationPublisher
 import io.bluetape4k.clinic.appointment.api.policy.EffectiveSchedulingPolicyService
 import io.bluetape4k.clinic.appointment.api.policy.ExposedEffectivePolicyStore
+import io.bluetape4k.clinic.appointment.api.policy.ExposedSchedulingPolicyPreviewStore
+import io.bluetape4k.clinic.appointment.api.policy.ExposedSchedulingPolicyWorkerStore
+import io.bluetape4k.clinic.appointment.api.policy.PersistedPolicyPreviewEvidenceVerifier
 import io.bluetape4k.clinic.appointment.api.policy.PolicyPreviewEvidenceVerifier
 import io.bluetape4k.clinic.appointment.api.policy.PolicyTenantBoundaryVerifier
+import io.bluetape4k.clinic.appointment.api.policy.ScheduledPolicyActivationExecutionOutcome
+import io.bluetape4k.clinic.appointment.api.policy.ScheduledPolicyActivationExecutor
 import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyCommandService
+import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyMetrics
+import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyPreviewService
+import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyWorker
 import io.bluetape4k.clinic.appointment.api.service.DashboardStatsService
+import io.bluetape4k.clinic.appointment.api.security.ActorContext
+import io.bluetape4k.clinic.appointment.api.security.ActorType
+import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContext
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.event.policy.SchedulingPolicyEventRepository
@@ -22,6 +33,7 @@ import io.bluetape4k.clinic.appointment.repository.EquipmentUnavailabilityReposi
 import io.bluetape4k.clinic.appointment.repository.HolidayRepository
 import io.bluetape4k.clinic.appointment.repository.ProductCatalogRepository
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
+import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyImpactRepository
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyJobRepository
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
@@ -36,6 +48,8 @@ import io.bluetape4k.clinic.appointment.service.SchedulingPolicyPayloadCodec
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentStateMachine
 import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
+import io.bluetape4k.clinic.appointment.model.policy.ActorRole
+import io.micrometer.core.instrument.MeterRegistry
 import io.bluetape4k.logging.KLogging
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
@@ -44,6 +58,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.core.env.Environment
 import java.util.Base64
+import java.time.Instant
 
 /**
  * 예약 API의 repository와 application service를 명시적으로 조립하는 Spring 설정이다.
@@ -55,7 +70,7 @@ import java.util.Base64
  * 조립한다.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(PlanFoundationProperties::class)
+@EnableConfigurationProperties(PlanFoundationProperties::class, SchedulingPolicyProperties::class)
 class ServiceConfig {
 
     companion object : KLogging()
@@ -103,6 +118,11 @@ class ServiceConfig {
 
     @Bean
     fun schedulingPolicyRepository(): SchedulingPolicyRepository = SchedulingPolicyRepository()
+
+    /** 미래 예약·미배정 시술 의무를 payload 없이 bounded keyset으로 읽는 저장소를 생성한다. */
+    @Bean
+    fun schedulingPolicyImpactRepository(): SchedulingPolicyImpactRepository =
+        SchedulingPolicyImpactRepository()
 
     /**
      * 안전 상한 기본값을 적용한 프로세스 로컬 유효 정책 캐시를 생성한다.
@@ -256,6 +276,7 @@ class ServiceConfig {
         schedulingPolicyRepository: SchedulingPolicyRepository,
         schedulingPolicyJobRepository: SchedulingPolicyJobRepository,
         schedulingPolicyEventRepository: SchedulingPolicyEventRepository,
+        tenantClinicAccessChecker: TenantClinicAccessChecker,
         previewVerifierProvider: ObjectProvider<PolicyPreviewEvidenceVerifier>,
     ): SchedulingPolicyCommandService {
         val previewVerifier = previewVerifierProvider.getIfAvailable {
@@ -263,9 +284,22 @@ class ServiceConfig {
         }
         val publisher = PolicyActivationPublisher(schedulingPolicyEventRepository::insertPolicyActivated)
         val tenantBoundaryVerifier = PolicyTenantBoundaryVerifier { scope, actor ->
-            TenantContext.current()?.let { tenant ->
-                tenant.id == scope.tenantGroupId && tenant.tenantCode in actor.allowedTenantCodes
-            } == true
+            val tenant = TenantContext.current() ?: return@PolicyTenantBoundaryVerifier false
+            if (tenant.id != scope.tenantGroupId || tenant.tenantCode !in actor.allowedTenantCodes) {
+                return@PolicyTenantBoundaryVerifier false
+            }
+            if (scope.scope == io.bluetape4k.clinic.appointment.model.policy.PolicyScope.CLINIC_OVERRIDE) {
+                try {
+                    tenantClinicAccessChecker.verifyClinic(
+                        tenant.tenantCode,
+                        requireNotNull(scope.clinicId),
+                    ).id == tenant.id
+                } catch (_: NoSuchElementException) {
+                    false
+                }
+            } else {
+                true
+            }
         }
         return SchedulingPolicyCommandService(
             schedulingPolicyRepository,
@@ -275,6 +309,110 @@ class ServiceConfig {
             publisher,
         )
     }
+
+    /**
+     * 정책 worker와 관리 API가 공유하는 low-cardinality metric facade를 생성한다.
+     *
+     * facade의 공개 입력은 닫힌 enum, policy kind, scope type뿐이므로 tenant/clinic/actor/token
+     * 값이 meter tag로 유입되지 않는다.
+     */
+    @Bean
+    fun schedulingPolicyMetrics(meterRegistry: MeterRegistry): SchedulingPolicyMetrics =
+        SchedulingPolicyMetrics(meterRegistry)
+
+    /** preview primitive마다 짧은 transaction을 소유하는 Exposed adapter를 생성한다. */
+    @Bean
+    @ConditionalOnProperty("scheduling.policy.idempotency-hash-secret")
+    fun schedulingPolicyPreviewStore(
+        jobRepository: SchedulingPolicyJobRepository,
+        impactRepository: SchedulingPolicyImpactRepository,
+        policyRepository: SchedulingPolicyRepository,
+    ): ExposedSchedulingPolicyPreviewStore =
+        ExposedSchedulingPolicyPreviewStore(jobRepository, impactRepository, policyRepository)
+
+    /** 동기 fast path와 one-page async path를 같은 durable evidence 계약으로 조립한다. */
+    @Bean
+    @ConditionalOnProperty("scheduling.policy.idempotency-hash-secret")
+    fun schedulingPolicyPreviewService(
+        store: ExposedSchedulingPolicyPreviewStore,
+        properties: SchedulingPolicyProperties,
+    ): SchedulingPolicyPreviewService =
+        SchedulingPolicyPreviewService(store, properties)
+
+    /**
+     * activation token을 completed preview row와 exact-match하는 로컬 검증기를 생성한다.
+     *
+     * command transaction 중 원격 호출을 수행하지 않으며 stale/partial/cancelled row는 조회
+     * 단계에서부터 증거가 될 수 없다.
+     */
+    @Bean
+    @ConditionalOnProperty("scheduling.policy.idempotency-hash-secret")
+    fun policyPreviewEvidenceVerifier(
+        jobRepository: SchedulingPolicyJobRepository,
+    ): PolicyPreviewEvidenceVerifier =
+        PersistedPolicyPreviewEvidenceVerifier(jobRepository)
+
+    /** DB-time due selection과 owner-fenced retry/missed primitive를 worker에 제공한다. */
+    @Bean
+    @ConditionalOnProperty("scheduling.policy.idempotency-hash-secret")
+    fun schedulingPolicyWorkerStore(
+        jobRepository: SchedulingPolicyJobRepository,
+        policyRepository: SchedulingPolicyRepository,
+    ): ExposedSchedulingPolicyWorkerStore =
+        ExposedSchedulingPolicyWorkerStore(jobRepository, policyRepository)
+
+    /**
+     * 이미 claim된 command를 durable scope와 preview snapshot으로 실행하는 adapter다.
+     *
+     * Gateway request [TenantContext]를 만들지 않고 command service의 SYSTEM 전용 경계를
+     * 사용한다.
+     */
+    @Bean
+    @ConditionalOnProperty("scheduling.policy.idempotency-hash-secret")
+    fun scheduledPolicyActivationExecutor(
+        commandService: SchedulingPolicyCommandService,
+    ): ScheduledPolicyActivationExecutor =
+        ScheduledPolicyActivationExecutor { commandId, owner, actor, databaseNow ->
+            val result = commandService.executeClaimedScheduled(commandId, owner, actor, databaseNow)
+            ScheduledPolicyActivationExecutionOutcome(result.idempotentReplay)
+        }
+
+    /**
+     * application 내부 scheduled worker identity와 bounded worker 본체를 생성한다.
+     *
+     * 이 identity는 HTTP request/JWT에서 오지 않으며 human 권한을 갖지 않는다. tenant와
+     * clinic 범위는 실행 시 durable command row에서만 복원된다.
+     */
+    @Bean
+    @ConditionalOnProperty("scheduling.policy.idempotency-hash-secret")
+    fun schedulingPolicyWorker(
+        store: ExposedSchedulingPolicyWorkerStore,
+        activationExecutor: ScheduledPolicyActivationExecutor,
+        previewService: SchedulingPolicyPreviewService,
+        properties: SchedulingPolicyProperties,
+        metrics: SchedulingPolicyMetrics,
+    ): SchedulingPolicyWorker =
+        SchedulingPolicyWorker(
+            store = store,
+            activationExecutor = activationExecutor,
+            previewProcessor = previewService,
+            properties = properties,
+            metrics = metrics,
+            systemActor = ActorContext(
+                actorId = "scheduling-policy-worker",
+                actorType = ActorType.SYSTEM,
+                roles = setOf(ActorRole.SYSTEM),
+                scopes = setOf("policy:scheduled-activation"),
+                allowedTenantCodes = emptySet(),
+                allowedClinicIds = emptySet(),
+                patientSubjectId = null,
+                assurance = AuthenticationAssurance.SERVICE,
+                issuer = "clinic-appointment",
+                tokenId = "internal-scheduling-policy-worker",
+                authenticatedAt = Instant.now(),
+                correlationId = "scheduled-policy-worker",
+            ),
+        )
 
     @Bean
     fun planFoundationPropertiesValidator(

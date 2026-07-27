@@ -1,9 +1,13 @@
 package io.bluetape4k.clinic.appointment.repository
 
+import io.bluetape4k.clinic.appointment.model.dto.PolicyScopeRef
 import io.bluetape4k.clinic.appointment.model.plan.AppointmentPlanStatus
+import io.bluetape4k.clinic.appointment.model.plan.PlannedTreatmentStatus
+import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlans
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
+import io.bluetape4k.clinic.appointment.model.tables.PlannedTreatments
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -11,31 +15,167 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import java.io.Serializable
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 
 /**
- * 정책 영향도 미리보기에서 사용하는 keyset 기반 조회 저장소입니다.
+ * 영향도 미리보기 key가 가리키는 미래 업무 aggregate 종류다.
  *
- * 모든 메서드는 호출자가 소유한 Exposed `transaction {}` 안에서 실행되어야 합니다.
- * 반환값은 데이터베이스 식별자만 포함하며, 정렬 순서는 항상 오름차순이고, 한 번에 최대
- * 1,000건까지만 읽습니다. 이 제한은 정책 미리보기가 테넌트 전체 데이터를 한 번에
- * 메모리로 적재하지 않도록 하는 안전장치입니다. 호출자는 정책을 평가하기 전에 반환된
- * 식별자를 테넌트/병원 범위가 검증되는 저장소를 통해 다시 읽어야 합니다.
+ * enum 선언 순서는 keyset scan 순서다. 예약을 먼저 끝까지 읽고 아직 예약되지 않은 시술
+ * 의무를 읽으므로 서로 다른 테이블을 SQL `UNION`으로 합쳐 `2 × limit`을 메모리에
+ * 물리화하지 않는다.
+ */
+enum class PolicyImpactAggregateType {
+    /** 가예약·확정·재예약 대기 등 아직 종결되지 않은 예약이다. */
+    APPOINTMENT,
+
+    /** 구매 계획에 남아 있는 예약 전 또는 예약 중 시술 의무다. */
+    PLANNED_TREATMENT,
+}
+
+/**
+ * 정책 영향도 계산에 필요한 최소 식별 projection이다.
+ *
+ * @property scheduledAt 정렬과 horizon 판정에 사용하는 UTC 시각이다.
+ * @property aggregateType payload를 다시 읽을 저장소 종류다.
+ * @property aggregateId 범위가 검증된 양수 database ID의 문자열 표현이다.
+ */
+data class PolicyImpactKey(
+    val scheduledAt: Instant,
+    val aggregateType: PolicyImpactAggregateType,
+    val aggregateId: String,
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
+
+/**
+ * 다음 bounded page를 시작하기 직전의 exclusive keyset 위치다.
+ *
+ * @property scheduledAt 마지막으로 반환한 aggregate의 UTC 시각이다.
+ * @property aggregateType 현재 scan 중인 table partition이다.
+ * @property aggregateId 마지막으로 반환한 양수 database ID다.
+ */
+data class PolicyImpactCursor(
+    val scheduledAt: Instant,
+    val aggregateType: PolicyImpactAggregateType,
+    val aggregateId: String,
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
+
+/**
+ * 한 트랜잭션에서 materialize할 수 있는 제한된 영향도 key page다.
+ *
+ * @property items 최대 요청 limit개의 작은 key projection이다.
+ * @property nextCursor page가 limit에 도달했을 때의 exclusive 재개 cursor다. `null`이면
+ * 현재 horizon의 두 aggregate partition을 모두 소진했다.
+ */
+data class PolicyImpactPage(
+    val items: List<PolicyImpactKey>,
+    val nextCursor: PolicyImpactCursor?,
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
+
+/**
+ * 정책 영향도 미리보기에서 사용하는 keyset 기반 조회 저장소다.
+ *
+ * 모든 메서드는 호출자가 소유한 Exposed `transaction {}` 안에서 실행되어야 한다.
+ * 반환값은 식별 projection만 포함하며, 한 호출에서 최대 5,000개만 materialize한다.
+ * 호출자는 실제 정책 평가 전에 각 식별자를 동일 tenant/clinic 경계를 검증하는 저장소를
+ * 통해 다시 읽어야 한다.
  */
 class SchedulingPolicyImpactRepository {
 
     /**
-     * 특정 테넌트와 병원의 미래 비종결 예약 식별자를 조회합니다.
+     * clinic scope의 미래 예약과 미이행 시술 의무를 bounded stream page로 조회한다.
      *
-     * @param tenantGroupId 양수 테넌트 경계입니다. `Clinics` 조인을 통해 예약이 해당
-     * 테넌트의 병원에 속하는지 확인합니다.
-     * @param clinicId 양수 병원 경계입니다.
-     * @param fromDate 병원 로컬 날짜 기준의 포함 시작일입니다.
-     * @param afterAppointmentId 제외 keyset 커서입니다. `0`이면 첫 페이지부터 조회합니다.
-     * @param limit 요청 페이지 크기입니다. 허용 범위는 `1..1000`입니다.
-     * @return [limit]을 초과하지 않는 예약 식별자 오름차순 목록입니다.
+     * 예약과 시술 의무 table을 순차 partition으로 읽어 한 시점에 [limit]보다 많은 key를
+     * 보유하지 않는다. 예약 local date/time은 저장된 병원 IANA timezone으로 UTC
+     * [Instant]로 변환한다. 시술 의무는 nullable `earliestStartAt`이 있는 행만 포함한다.
+     *
+     * @param scope 인가가 끝난 clinic override scope다. tenant-wide scan은 병원별 queue
+     * 공정성과 timezone 경계를 무너뜨리므로 거부한다.
+     * @param horizonFrom 포함 UTC 시작 시각이다.
+     * @param horizonUntil 제외 UTC 종료 시각이다.
+     * @param after 마지막으로 반환한 exclusive cursor다.
+     * @param limit `1..5000` 범위의 최대 materialized key 수다.
+     */
+    fun scanFutureWork(
+        scope: PolicyScopeRef,
+        horizonFrom: Instant,
+        horizonUntil: Instant,
+        after: PolicyImpactCursor?,
+        limit: Int,
+    ): PolicyImpactPage {
+        require(scope.scope == PolicyScope.CLINIC_OVERRIDE) {
+            "impact scan requires CLINIC_OVERRIDE scope"
+        }
+        require(horizonUntil > horizonFrom) { "horizonUntil must be later than horizonFrom" }
+        require(limit in 1..MAX_SCAN_LIMIT) { "limit must be in 1..$MAX_SCAN_LIMIT" }
+        after?.let(::validateCursor)
+
+        val clinicId = requireNotNull(scope.clinicId)
+        val timezone = Clinics
+            .select(Clinics.timezone)
+            .where {
+                (Clinics.id eq clinicId) and
+                    (Clinics.tenantGroupId eq scope.tenantGroupId)
+            }
+            .singleOrNull()
+            ?.get(Clinics.timezone)
+            ?.let(ZoneId::of)
+            ?: return PolicyImpactPage(emptyList(), null)
+
+        val items = ArrayList<PolicyImpactKey>(limit)
+        if (after == null || after.aggregateType == PolicyImpactAggregateType.APPOINTMENT) {
+            items += scanAppointments(
+                tenantGroupId = scope.tenantGroupId,
+                clinicId = clinicId,
+                timezone = timezone,
+                horizonFrom = horizonFrom,
+                horizonUntil = horizonUntil,
+                after = after?.takeIf { it.aggregateType == PolicyImpactAggregateType.APPOINTMENT },
+                limit = limit,
+            )
+        }
+        if (items.size < limit) {
+            items += scanPlannedTreatments(
+                tenantGroupId = scope.tenantGroupId,
+                clinicId = clinicId,
+                horizonFrom = horizonFrom,
+                horizonUntil = horizonUntil,
+                after = after?.takeIf { it.aggregateType == PolicyImpactAggregateType.PLANNED_TREATMENT },
+                limit = limit - items.size,
+            )
+        }
+        return PolicyImpactPage(
+            items = items,
+            nextCursor = items.lastOrNull()
+                ?.takeIf { items.size == limit }
+                ?.let { PolicyImpactCursor(it.scheduledAt, it.aggregateType, it.aggregateId) },
+        )
+    }
+
+    /**
+     * 특정 테넌트와 병원의 미래 비종결 예약 식별자를 조회한다.
+     *
+     * 이 호환 메서드는 기존 caller를 위한 날짜 기반 appointment 전용 scan이다. 새 preview
+     * 흐름은 UTC horizon과 복합 cursor를 보존하는 [scanFutureWork]를 사용해야 한다.
      */
     fun scanFutureAppointmentIds(
         tenantGroupId: Long,
@@ -60,13 +200,10 @@ class SchedulingPolicyImpactRepository {
     }
 
     /**
-     * 특정 범위의 활성 또는 부분 이행 구매 플랜 식별자를 조회합니다.
+     * 특정 범위의 활성 또는 부분 이행 구매 플랜 식별자를 조회한다.
      *
-     * @param tenantGroupId 양수 테넌트 경계입니다.
-     * @param clinicId 양수 병원 경계입니다.
-     * @param afterPlanId 제외 keyset 커서입니다. `0`이면 첫 페이지부터 조회합니다.
-     * @param limit 요청 페이지 크기입니다. 허용 범위는 `1..1000`입니다.
-     * @return [limit]을 초과하지 않는 플랜 식별자 오름차순 목록입니다.
+     * 이 호환 메서드는 기존 plan 단위 진단용이다. 새 preview 흐름은 시간 cursor가 있는
+     * [scanFutureWork]에서 미이행 시술 의무를 직접 조회한다.
      */
     fun scanActivePlanIds(
         tenantGroupId: Long,
@@ -88,6 +225,125 @@ class SchedulingPolicyImpactRepository {
             .map { it[AppointmentPlans.id].value }
     }
 
+    private fun scanAppointments(
+        tenantGroupId: Long,
+        clinicId: Long,
+        timezone: ZoneId,
+        horizonFrom: Instant,
+        horizonUntil: Instant,
+        after: PolicyImpactCursor?,
+        limit: Int,
+    ): List<PolicyImpactKey> {
+        if (limit == 0) return emptyList()
+        val localFrom = LocalDateTime.ofInstant(horizonFrom, timezone)
+        val localUntil = LocalDateTime.ofInstant(horizonUntil, timezone)
+        val lowerBound =
+            (Appointments.appointmentDate greater localFrom.toLocalDate()) or
+                (
+                    (Appointments.appointmentDate eq localFrom.toLocalDate()) and
+                        (Appointments.startTime greaterEq localFrom.toLocalTime())
+                    )
+        val upperBound =
+            (Appointments.appointmentDate less localUntil.toLocalDate()) or
+                (
+                    (Appointments.appointmentDate eq localUntil.toLocalDate()) and
+                        (Appointments.startTime less localUntil.toLocalTime())
+                    )
+        val cursorBound = after?.let { cursor ->
+            val cursorId = cursor.aggregateId.toLong()
+            val localCursor = LocalDateTime.ofInstant(cursor.scheduledAt, timezone)
+            (Appointments.appointmentDate greater localCursor.toLocalDate()) or
+                (
+                    (Appointments.appointmentDate eq localCursor.toLocalDate()) and
+                        (
+                            (Appointments.startTime greater localCursor.toLocalTime()) or
+                                (
+                                    (Appointments.startTime eq localCursor.toLocalTime()) and
+                                        (Appointments.id greater cursorId)
+                                    )
+                            )
+                    )
+        }
+        return (Appointments innerJoin Clinics)
+            .select(Appointments.id, Appointments.appointmentDate, Appointments.startTime)
+            .where {
+                var predicate =
+                    (Clinics.tenantGroupId eq tenantGroupId) and
+                        (Appointments.clinicId eq clinicId) and
+                        (Appointments.status inList IMPACT_APPOINTMENT_STATES) and
+                        lowerBound and upperBound
+                if (cursorBound != null) predicate = predicate and cursorBound
+                predicate
+            }
+            .orderBy(
+                Appointments.appointmentDate to SortOrder.ASC,
+                Appointments.startTime to SortOrder.ASC,
+                Appointments.id to SortOrder.ASC,
+            )
+            .limit(limit)
+            .map { row ->
+                val scheduledAt = LocalDateTime.of(
+                    row[Appointments.appointmentDate],
+                    row[Appointments.startTime],
+                ).atZone(timezone).toInstant()
+                PolicyImpactKey(
+                    scheduledAt = scheduledAt,
+                    aggregateType = PolicyImpactAggregateType.APPOINTMENT,
+                    aggregateId = row[Appointments.id].value.toString(),
+                )
+            }
+    }
+
+    private fun scanPlannedTreatments(
+        tenantGroupId: Long,
+        clinicId: Long,
+        horizonFrom: Instant,
+        horizonUntil: Instant,
+        after: PolicyImpactCursor?,
+        limit: Int,
+    ): List<PolicyImpactKey> {
+        if (limit == 0) return emptyList()
+        val cursorBound = after?.let { cursor ->
+            val cursorId = cursor.aggregateId.toLong()
+            (PlannedTreatments.earliestStartAt greater cursor.scheduledAt) or
+                (
+                    (PlannedTreatments.earliestStartAt eq cursor.scheduledAt) and
+                        (PlannedTreatments.id greater cursorId)
+                    )
+        }
+        return (PlannedTreatments innerJoin AppointmentPlans)
+            .select(PlannedTreatments.id, PlannedTreatments.earliestStartAt)
+            .where {
+                var predicate =
+                    (AppointmentPlans.tenantGroupId eq tenantGroupId) and
+                        (AppointmentPlans.clinicId eq clinicId) and
+                        PlannedTreatments.earliestStartAt.isNotNull() and
+                        (PlannedTreatments.earliestStartAt greaterEq horizonFrom) and
+                        (PlannedTreatments.earliestStartAt less horizonUntil) and
+                        (PlannedTreatments.status inList IMPACT_TREATMENT_STATES)
+                if (cursorBound != null) predicate = predicate and cursorBound
+                predicate
+            }
+            .orderBy(
+                PlannedTreatments.earliestStartAt to SortOrder.ASC,
+                PlannedTreatments.id to SortOrder.ASC,
+            )
+            .limit(limit)
+            .map { row ->
+                PolicyImpactKey(
+                    scheduledAt = requireNotNull(row[PlannedTreatments.earliestStartAt]),
+                    aggregateType = PolicyImpactAggregateType.PLANNED_TREATMENT,
+                    aggregateId = row[PlannedTreatments.id].value.toString(),
+                )
+            }
+    }
+
+    private fun validateCursor(cursor: PolicyImpactCursor) {
+        require(cursor.aggregateId.toLongOrNull()?.let { it > 0 } == true) {
+            "aggregateId must be a positive database identifier"
+        }
+    }
+
     private fun validateScan(
         tenantGroupId: Long,
         clinicId: Long,
@@ -101,7 +357,7 @@ class SchedulingPolicyImpactRepository {
     }
 
     private companion object {
-        const val MAX_SCAN_LIMIT = 1_000
+        const val MAX_SCAN_LIMIT = 5_000
         val IMPACT_APPOINTMENT_STATES = listOf(
             AppointmentState.PENDING,
             AppointmentState.REQUESTED,
@@ -111,6 +367,11 @@ class SchedulingPolicyImpactRepository {
         val IMPACT_PLAN_STATES = listOf(
             AppointmentPlanStatus.ACTIVE,
             AppointmentPlanStatus.PARTIALLY_FULFILLED,
+        )
+        val IMPACT_TREATMENT_STATES = listOf(
+            PlannedTreatmentStatus.PLANNED,
+            PlannedTreatmentStatus.SCHEDULED,
+            PlannedTreatmentStatus.BLOCKED_REVIEW,
         )
     }
 }

@@ -118,6 +118,9 @@ CREATE TABLE scheduling_policy_activation_commands (
     replay_of_command_id BIGINT,
     expected_draft_revision BIGINT NOT NULL,
     expected_active_revision BIGINT NOT NULL,
+    expected_tenant_generation BIGINT NOT NULL,
+    expected_clinic_generation BIGINT NOT NULL,
+    preview_evidence_token VARCHAR(160) NOT NULL,
     idempotency_key_hash VARCHAR(64) NOT NULL,
     request_fingerprint VARCHAR(64) NOT NULL,
     status VARCHAR(24) NOT NULL,
@@ -146,6 +149,8 @@ CREATE TABLE scheduling_policy_activation_commands (
         AND attempt >= 0
         AND expected_draft_revision > 0
         AND expected_active_revision >= 0
+        AND expected_tenant_generation >= 0
+        AND expected_clinic_generation >= 0
         AND next_attempt_at >= effective_from
         AND (
             (status = 'CLAIMED' AND lease_owner IS NOT NULL AND lease_until IS NOT NULL)
@@ -177,13 +182,20 @@ CREATE TABLE scheduling_policy_preview_jobs (
     partition_count INTEGER NOT NULL,
     cursor_partition INTEGER DEFAULT 0 NOT NULL,
     cursor_last_appointment_id BIGINT,
+    cursor_scheduled_at TIMESTAMP,
+    cursor_aggregate_type VARCHAR(32),
+    cursor_aggregate_id VARCHAR(64),
     scanned_count BIGINT DEFAULT 0 NOT NULL,
     affected_count BIGINT DEFAULT 0 NOT NULL,
     status VARCHAR(24) NOT NULL,
     deadline_at TIMESTAMP NOT NULL,
     next_attempt_at TIMESTAMP NOT NULL,
+    horizon_from TIMESTAMP NOT NULL,
+    horizon_until TIMESTAMP NOT NULL,
     lease_owner VARCHAR(160),
     lease_until TIMESTAMP,
+    result_hash VARCHAR(64),
+    activation_evidence_token VARCHAR(192),
     last_error_code VARCHAR(96),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -195,12 +207,25 @@ CREATE TABLE scheduling_policy_preview_jobs (
             (status <> 'RUNNING' AND lease_owner IS NULL AND lease_until IS NULL)
         )
         AND deadline_at > next_attempt_at
+        AND horizon_until > horizon_from
+        AND (
+            (status = 'COMPLETED'
+                AND result_hash IS NOT NULL AND activation_evidence_token IS NOT NULL)
+            OR
+            (status <> 'COMPLETED'
+                AND result_hash IS NULL AND activation_evidence_token IS NULL)
+        )
     ),
     CONSTRAINT ck_policy_preview_progress CHECK (
         tenant_group_id > 0 AND clinic_id > 0 AND definition_id > 0
-        AND draft_revision > 0 AND tenant_generation > 0 AND clinic_generation >= 0
+        AND draft_revision > 0 AND tenant_generation >= 0 AND clinic_generation >= 0
         AND partition_count > 0
         AND cursor_partition >= 0 AND cursor_partition < partition_count
+        AND (
+            (cursor_scheduled_at IS NULL AND cursor_aggregate_type IS NULL AND cursor_aggregate_id IS NULL)
+            OR
+            (cursor_scheduled_at IS NOT NULL AND cursor_aggregate_type IS NOT NULL AND cursor_aggregate_id IS NOT NULL)
+        )
         AND scanned_count >= 0 AND affected_count >= 0 AND affected_count <= scanned_count
     )
 );
@@ -209,6 +234,22 @@ CREATE INDEX idx_policy_preview_due
     ON scheduling_policy_preview_jobs(status, next_attempt_at, lease_until);
 CREATE INDEX idx_policy_preview_scope
     ON scheduling_policy_preview_jobs(tenant_group_id, clinic_id, id);
+CREATE UNIQUE INDEX uq_policy_preview_evidence_token
+    ON scheduling_policy_preview_jobs(activation_evidence_token);
+
+-- Keep Flyway's production schema converged with the Exposed appointment
+-- model. The policy-preview index follows the keyset scan predicate/order:
+-- clinic + active status, then appointment date/time/id.
+CREATE INDEX idx_appointments_doctor_date
+    ON scheduling_appointments(doctor_id, appointment_date);
+CREATE INDEX idx_appointments_clinic_date_status
+    ON scheduling_appointments(clinic_id, appointment_date, status);
+CREATE INDEX idx_appointments_equipment_date
+    ON scheduling_appointments(equipment_id, appointment_date);
+CREATE INDEX idx_appointments_date_status
+    ON scheduling_appointments(appointment_date, status);
+CREATE INDEX idx_appointments_policy_preview
+    ON scheduling_appointments(clinic_id, status, appointment_date, start_time, id);
 
 -- Rolling-safe generic outbox expansion. V9 keeps plan_id, clinic_id, and
 -- causation_event_id for old and new plan writers, but permits command-driven

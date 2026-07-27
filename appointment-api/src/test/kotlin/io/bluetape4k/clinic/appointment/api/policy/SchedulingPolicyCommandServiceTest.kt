@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.api.policy
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyApiException
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import io.bluetape4k.clinic.appointment.api.config.GlobalExceptionHandler
@@ -254,6 +256,30 @@ class SchedulingPolicyCommandServiceTest {
     }
 
     @Test
+    fun `malformed preview evidence fails with stable stale contract before repository lookup`() {
+        val service = service()
+        val admin = actor("admin", ActorType.ADMIN, ActorRole.ADMIN)
+        val draft = service.createDraft(createDraft(admin))
+        service.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin))
+
+        val error = assertFailsWith<SchedulingPolicyApiException> {
+            service.activate(
+                activationCommand(
+                    definitionId = draft.definition.id!!,
+                    actor = admin,
+                    expectedHeadRevision = 1L,
+                    idempotencyKey = "malformed-preview",
+                ).copy(
+                    preview = preview(draft.definition.id!!, tenantGeneration = 0L)
+                        .copy(evidenceId = "contains unsafe whitespace"),
+                )
+            )
+        }
+
+        error.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_PREVIEW_STALE
+    }
+
+    @Test
     fun `scheduled activation requires durable command evidence for service actor`() {
         val service = service()
         val admin = actor("admin", ActorType.ADMIN, ActorRole.ADMIN)
@@ -272,6 +298,9 @@ class SchedulingPolicyCommandServiceTest {
         )
         assertEquals(PolicyActivationCommandStatus.PENDING, scheduled.status)
         assertEquals(2L, scheduled.expectedActiveRevision)
+        assertEquals(0L, scheduled.expectedTenantGeneration)
+        assertEquals(0L, scheduled.expectedClinicGeneration)
+        assertEquals("preview-${draft.definition.id}-0", scheduled.previewEvidenceToken)
         assertEquals(
             jobRepository.hashIdempotencyKey(
                 "scheduled:${draft.definition.id}:${draft.definition.version}:${draft.definition.effectiveFrom.toEpochMilli()}"
@@ -297,15 +326,32 @@ class SchedulingPolicyCommandServiceTest {
         }
         assertEquals(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, missingServiceScope.errorCode)
 
-        val result = service.activate(
-            activationCommand(
-                definitionId = draft.definition.id!!,
-                actor = system,
-                expectedHeadRevision = 2L,
-                idempotencyKey = "unused-for-scheduled",
-            ).copy(idempotencyKey = null, scheduledCommandId = scheduled.id)
+        val missingSystemRole = assertThrows(SchedulingPolicyApiException::class.java) {
+            service.activate(
+                activationCommand(
+                    definitionId = draft.definition.id!!,
+                    actor = system.copy(roles = emptySet()),
+                    expectedHeadRevision = 2L,
+                    idempotencyKey = "unused-for-scheduled",
+                ).copy(idempotencyKey = null, scheduledCommandId = scheduled.id)
+            )
+        }
+        assertEquals(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, missingSystemRole.errorCode)
+
+        val publicSystemExecution = assertThrows(SchedulingPolicyApiException::class.java) {
+            service.activate(
+                activationCommand(
+                    definitionId = draft.definition.id!!,
+                    actor = system,
+                    expectedHeadRevision = 2L,
+                    idempotencyKey = "unused-for-scheduled",
+                ).copy(idempotencyKey = null, scheduledCommandId = scheduled.id)
+            )
+        }
+        assertEquals(
+            SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
+            publicSystemExecution.errorCode,
         )
-        assertEquals(PolicyLifecycle.ACTIVE, result.definition.lifecycle)
 
         val forbidden = assertThrows(SchedulingPolicyApiException::class.java) {
             service.activate(
@@ -318,6 +364,59 @@ class SchedulingPolicyCommandServiceTest {
             )
         }
         assertEquals(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, forbidden.errorCode)
+    }
+
+    @Test
+    fun `scheduled worker reconstructs command from durable evidence without request tenant context`() {
+        val setupService = service()
+        val admin = actor("admin", ActorType.ADMIN, ActorRole.ADMIN)
+        val draft = setupService.createDraft(createDraft(admin))
+        setupService.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin))
+        val scheduled = setupService.schedule(
+            ScheduleSchedulingPolicyCommand(
+                scope = scope,
+                definitionId = draft.definition.id!!,
+                expectedDraftRevision = 1L,
+                expectedActiveRevision = 1L,
+                preview = preview(draft.definition.id!!, tenantGeneration = 0L),
+                actor = admin,
+            )
+        )
+        val runnerService = SchedulingPolicyCommandService(
+            policyRepository,
+            jobRepository,
+            PolicyTenantBoundaryVerifier { _, _ -> false },
+            previewVerifier,
+            PolicyActivationPublisher(eventRepository::insertPolicyActivated),
+            Clock.fixed(now, ZoneOffset.UTC),
+        )
+
+        val commandId = scheduled.id!!
+        transaction {
+            jobRepository.claimDueActivation(
+                commandId,
+                "worker-1",
+                now,
+                now.plusSeconds(30),
+            )
+        }
+        val result = runnerService.executeClaimedScheduled(
+            commandId = commandId,
+            owner = "worker-1",
+            actor = actor(
+                "policy-runner",
+                ActorType.SYSTEM,
+                ActorRole.SYSTEM,
+                AuthenticationAssurance.SERVICE,
+            ).copy(
+                allowedTenantCodes = emptySet(),
+                allowedClinicIds = emptySet(),
+            ),
+            databaseNow = now,
+        )
+
+        assertEquals(PolicyLifecycle.ACTIVE, result.definition.lifecycle)
+        assertEquals(1L, result.generation.tenantGeneration)
     }
 
     @Test

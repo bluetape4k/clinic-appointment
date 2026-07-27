@@ -51,6 +51,9 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
             )
             command.id.shouldNotBeNull().shouldBeGreaterThan(0L)
             command.idempotencyKeyHash shouldBeEqualTo repository.hashIdempotencyKey(rawKey)
+            command.expectedTenantGeneration shouldBeEqualTo 5L
+            command.expectedClinicGeneration shouldBeEqualTo 2L
+            command.previewEvidenceToken shouldBeEqualTo "preview-token-7-3-5-2"
 
             val rowText = SchedulingPolicyActivationCommands
                 .selectAll()
@@ -162,6 +165,64 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
             completed.resultClinicGeneration shouldBeEqualTo 1L
             completed.eventId shouldBeEqualTo "event-current"
             completed.leaseOwner.shouldBeNull()
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `activation retry releases only the current lease and preserves sanitized failure evidence`(testDB: TestDB) {
+        withJobTables(testDB) {
+            val now = Instant.parse("2026-07-27T00:00:00Z")
+            val commandId = repository.createActivation(
+                activation(
+                    idempotencyKeyHash = repository.hashIdempotencyKey("activation-retry-1"),
+                    requestFingerprint = "a".repeat(64),
+                    nextAttemptAt = now,
+                )
+            ).id.shouldNotBeNull()
+            repository.claimDueActivation(commandId, "worker-a", now, now.plusSeconds(30)).shouldBeTrue()
+
+            repository.markActivationRetry(
+                commandId = commandId,
+                owner = "worker-b",
+                errorCode = "TRANSIENT_DATABASE",
+                nextAttemptAt = now.plusSeconds(5),
+                retryAt = now.plusSeconds(1),
+            ).shouldBeFalse()
+            repository.markActivationRetry(
+                commandId = commandId,
+                owner = "worker-a",
+                errorCode = "TRANSIENT_DATABASE",
+                nextAttemptAt = now.plusSeconds(5),
+                retryAt = now.plusSeconds(1),
+            ).shouldBeTrue()
+
+            val retried = repository.findActivation(commandId).shouldNotBeNull()
+            retried.status shouldBeEqualTo PolicyActivationCommandStatus.RETRY_WAIT
+            retried.nextAttemptAt shouldBeEqualTo now.plusSeconds(5)
+            retried.lastErrorCode shouldBeEqualTo "TRANSIENT_DATABASE"
+            retried.leaseOwner.shouldBeNull()
+            retried.leaseUntil.shouldBeNull()
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `preview cancellation clears lease and can no longer produce activation evidence`(testDB: TestDB) {
+        withJobTables(testDB) {
+            val now = Instant.parse("2026-07-27T00:00:00Z")
+            val jobId = repository.createPreviewJob(preview(now)).id.shouldNotBeNull()
+            repository.claimDuePreview(jobId, "worker-a", now, now.plusSeconds(30)).shouldBeTrue()
+
+            repository.cancelPreview(jobId, now.plusSeconds(1)).shouldBeTrue()
+
+            val cancelled = repository.findPreviewJob(jobId).shouldNotBeNull()
+            cancelled.status shouldBeEqualTo PolicyPreviewJobStatus.CANCELLED
+            cancelled.leaseOwner.shouldBeNull()
+            cancelled.leaseUntil.shouldBeNull()
+            cancelled.resultHash.shouldBeNull()
+            cancelled.activationEvidenceToken.shouldBeNull()
+            repository.claimDuePreview(jobId, "worker-b", now.plusSeconds(2), now.plusSeconds(32)).shouldBeFalse()
         }
     }
 
@@ -287,6 +348,170 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
         }
     }
 
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `completed preview alone exposes immutable result hash and activation evidence`(testDB: TestDB) {
+        withJobTables(testDB) {
+            val now = Instant.parse("2026-07-27T00:00:00Z")
+            val job = repository.createPreviewJob(
+                preview(now)
+            )
+            val jobId = job.id.shouldNotBeNull()
+
+            repository.claimDuePreview(jobId, "preview-a", now, now.plusSeconds(30)).shouldBeTrue()
+            repository.completePreview(
+                jobId = jobId,
+                owner = "preview-b",
+                resultHash = "a".repeat(64),
+                activationEvidenceToken = "evidence-token-for-current-revision",
+                completedAt = now.plusSeconds(10),
+            ).shouldBeFalse()
+            repository.completePreview(
+                jobId = jobId,
+                owner = "preview-a",
+                resultHash = "a".repeat(64),
+                activationEvidenceToken = "evidence-token-for-current-revision",
+                completedAt = now.plusSeconds(10),
+            ).shouldBeTrue()
+
+            val completed = repository.findPreviewJob(jobId).shouldNotBeNull()
+            completed.status shouldBeEqualTo PolicyPreviewJobStatus.COMPLETED
+            completed.resultHash shouldBeEqualTo "a".repeat(64)
+            completed.activationEvidenceToken shouldBeEqualTo "evidence-token-for-current-revision"
+            completed.leaseOwner.shouldBeNull()
+            completed.leaseUntil.shouldBeNull()
+            completed.lastErrorCode.shouldBeNull()
+
+            repository.claimDuePreview(
+                jobId,
+                "preview-c",
+                now.plusSeconds(31),
+                now.plusSeconds(61),
+            ).shouldBeFalse()
+            repository.markPreviewTerminal(
+                jobId = jobId,
+                owner = "preview-a",
+                status = PolicyPreviewJobStatus.STALE,
+                errorCode = "POLICY_PREVIEW_STALE",
+                completedAt = now.plusSeconds(11),
+            ).shouldBeFalse()
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `non completed preview terminal states discard partial evidence and lease ownership`(testDB: TestDB) {
+        withJobTables(testDB) {
+            val now = Instant.parse("2026-07-27T00:00:00Z")
+            val jobId = repository.createPreviewJob(preview(now)).id.shouldNotBeNull()
+            repository.claimDuePreview(jobId, "preview-a", now, now.plusSeconds(30)).shouldBeTrue()
+            repository.checkpointPreview(
+                jobId = jobId,
+                owner = "preview-a",
+                cursor = PolicyPreviewCursor(partition = 1, lastAppointmentId = 100L),
+                progress = PolicyPreviewProgress(scannedCount = 10L, affectedCount = 3L),
+            ).shouldBeTrue()
+
+            repository.markPreviewTerminal(
+                jobId = jobId,
+                owner = "preview-a",
+                status = PolicyPreviewJobStatus.STALE,
+                errorCode = "POLICY_PREVIEW_STALE",
+                completedAt = now.plusSeconds(10),
+            ).shouldBeTrue()
+
+            val stale = repository.findPreviewJob(jobId).shouldNotBeNull()
+            stale.status shouldBeEqualTo PolicyPreviewJobStatus.STALE
+            stale.resultHash.shouldBeNull()
+            stale.activationEvidenceToken.shouldBeNull()
+            stale.leaseOwner.shouldBeNull()
+            stale.leaseUntil.shouldBeNull()
+            stale.lastErrorCode shouldBeEqualTo "POLICY_PREVIEW_STALE"
+            repository.checkpointPreview(
+                jobId = jobId,
+                owner = "preview-a",
+                cursor = PolicyPreviewCursor(partition = 2, lastAppointmentId = 200L),
+                progress = PolicyPreviewProgress(scannedCount = 20L, affectedCount = 4L),
+            ).shouldBeFalse()
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `due job selection is time ordered and strictly bounded`(testDB: TestDB) {
+        withJobTables(testDB) {
+            val now = Instant.parse("2026-07-27T00:00:00Z")
+            val first = repository.createPreviewJob(preview(now)).id.shouldNotBeNull()
+            val second = repository.createPreviewJob(preview(now.plusSeconds(1))).id.shouldNotBeNull()
+            repository.createPreviewJob(preview(now.plusSeconds(60)))
+
+            repository.findDuePreviewJobIds(now.plusSeconds(1), limit = 1) shouldBeEqualTo listOf(first)
+            repository.findDuePreviewJobIds(now.plusSeconds(1), limit = 2) shouldBeEqualTo listOf(first, second)
+
+            val activationFirst = repository.createActivation(
+                activation(
+                    idempotencyKeyHash = repository.hashIdempotencyKey("due-activation-1"),
+                    requestFingerprint = "1".repeat(64),
+                    nextAttemptAt = now,
+                )
+            ).id.shouldNotBeNull()
+            val activationSecond = repository.createActivation(
+                activation(
+                    idempotencyKeyHash = repository.hashIdempotencyKey("due-activation-2"),
+                    requestFingerprint = "2".repeat(64),
+                    nextAttemptAt = now.plusSeconds(1),
+                )
+            ).id.shouldNotBeNull()
+
+            repository.findDueActivationCommandIds(now.plusSeconds(1), limit = 1) shouldBeEqualTo
+                listOf(activationFirst)
+            repository.findDueActivationCommandIds(now.plusSeconds(1), limit = 2) shouldBeEqualTo
+                listOf(activationFirst, activationSecond)
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `expired preview remains due so the worker can terminalize it`(testDB: TestDB) {
+        withJobTables(testDB) {
+            val now = Instant.parse("2026-07-27T00:00:00Z")
+            val expired = repository.createPreviewJob(
+                preview(now.minusSeconds(301))
+            ).id.shouldNotBeNull()
+
+            repository.findDuePreviewJobIds(now, limit = 10) shouldBeEqualTo listOf(expired)
+            repository.claimDuePreview(
+                expired,
+                "preview-expiry-cleaner",
+                now,
+                now.plusSeconds(30),
+            ).shouldBeTrue()
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `preview queue capacity is isolated by tenant and clinic`(testDB: TestDB) {
+        withJobTables(testDB) {
+            val now = Instant.parse("2026-07-27T00:00:00Z")
+            repository.createPreviewJob(preview(now))
+
+            repository.isPreviewQueueSaturated(1L, 41L, capacity = 1).shouldBeTrue()
+            repository.isPreviewQueueSaturated(1L, 42L, capacity = 1).shouldBeFalse()
+            repository.isPreviewQueueSaturated(2L, 41L, capacity = 1).shouldBeFalse()
+
+            repository.createPreviewJob(
+                preview(now).copy(
+                    tenantGroupId = 2L,
+                    clinicId = 41L,
+                )
+            )
+
+            repository.isPreviewQueueSaturated(2L, 41L, capacity = 1).shouldBeTrue()
+            repository.isPreviewQueueSaturated(1L, 42L, capacity = 1).shouldBeFalse()
+        }
+    }
+
     private fun withJobTables(
         testDB: TestDB,
         statement: org.jetbrains.exposed.v1.jdbc.JdbcTransaction.() -> Unit,
@@ -306,9 +531,24 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
         definitionId = 7L,
         expectedDraftRevision = 3L,
         expectedActiveRevision = 2L,
+        expectedTenantGeneration = 5L,
+        expectedClinicGeneration = 2L,
+        previewEvidenceToken = "preview-token-7-3-5-2",
         idempotencyKeyHash = idempotencyKeyHash,
         requestFingerprint = requestFingerprint,
         effectiveFrom = nextAttemptAt,
         nextAttemptAt = nextAttemptAt,
+    )
+
+    private fun preview(now: Instant) = SchedulingPolicyPreviewJobRecord(
+        tenantGroupId = 1L,
+        clinicId = 41L,
+        definitionId = 7L,
+        draftRevision = 3L,
+        tenantGeneration = 2L,
+        clinicGeneration = 1L,
+        partitionCount = 4,
+        deadlineAt = now.plusSeconds(300),
+        nextAttemptAt = now,
     )
 }
