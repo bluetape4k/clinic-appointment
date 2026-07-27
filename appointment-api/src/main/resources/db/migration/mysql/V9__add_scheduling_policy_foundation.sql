@@ -197,8 +197,9 @@ CREATE TABLE scheduling_policy_preview_jobs (
     INDEX idx_policy_preview_scope (tenant_group_id, clinic_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- MySQL requires MODIFY COLUMN to relax plan_id nullability. Backfill occurs
--- first so every legacy plan event remains fully dual-addressable.
+-- MySQL requires MODIFY COLUMN to relax legacy plan and clinic nullability.
+-- Backfill occurs first so every legacy plan event remains fully dual-addressable;
+-- tenant policy events may then omit plan_id and clinic_id.
 ALTER TABLE scheduling_outbox_events ADD COLUMN aggregate_type VARCHAR(64);
 ALTER TABLE scheduling_outbox_events ADD COLUMN aggregate_id VARCHAR(160);
 
@@ -209,6 +210,7 @@ UPDATE scheduling_outbox_events
    AND (aggregate_type IS NULL OR aggregate_id IS NULL);
 
 ALTER TABLE scheduling_outbox_events MODIFY COLUMN plan_id BIGINT NULL;
+ALTER TABLE scheduling_outbox_events MODIFY COLUMN clinic_id BIGINT NULL;
 
 CREATE INDEX idx_outbox_aggregate
     ON scheduling_outbox_events(aggregate_type, aggregate_id, created_at);

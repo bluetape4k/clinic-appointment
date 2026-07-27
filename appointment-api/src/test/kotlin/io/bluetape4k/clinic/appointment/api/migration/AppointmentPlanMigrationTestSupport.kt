@@ -309,6 +309,9 @@ internal object AppointmentPlanMigrationTestSupport {
         check(columnIsNullable(connection, "scheduling_outbox_events", "plan_id")) {
             "V9 plan_id must remain available but become nullable for non-plan aggregates"
         }
+        check(columnIsNullable(connection, "scheduling_outbox_events", "clinic_id")) {
+            "V9 clinic_id must become nullable for tenant-scope policy aggregates"
+        }
     }
 
     private fun foundationTables(connection: Connection): Set<String> =
