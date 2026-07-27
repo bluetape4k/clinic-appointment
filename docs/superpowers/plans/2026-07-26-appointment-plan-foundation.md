@@ -42,6 +42,12 @@
 
 이 순서는 원 설계의 동작을 바꾸지 않는다. 다만 예약 생성이 `EffectiveSchedulingPolicy`를 필요로 하므로 policy foundation을 visit/commitment보다 먼저 구현한다.
 
+후속 계획의 승인 전 handoff checklist는 다음을 명시적으로 인수한다:
+policy 값별 source/generation, consent bridge와 legacy reschedule
+`CONSENT_REQUIRED`, partial fulfillment의 완료/잔여/새 attempt 분리, 추가
+구매의 새 plan과 cross-plan join proposal/consent, disruption에서 원 확정 예약
+보호, 그리고 모든 caller 결과의 stable code/operator action/`retryable`.
+
 ## 2. File structure
 
 | Path | Responsibility |
@@ -59,7 +65,7 @@
 | `appointment-core/.../repository/ProductCatalogRepository.kt` | catalog aggregate save/read/version comparison |
 | `appointment-core/.../repository/AppointmentPlanRepository.kt` | plan aggregate save/read/source purchase uniqueness |
 | `appointment-core/.../service/CatalogDefinitionValidator.kt` | bounded field와 DAG 검증 |
-| `appointment-core/.../service/CatalogPayloadHasher.kt` | 정렬된 typed payload의 deterministic SHA-256 |
+| `appointment-core/.../service/CatalogPayloadHasher.kt` | BOM 순서와 order-insensitive 내부 목록을 구분하는 deterministic SHA-256 |
 | `appointment-core/.../service/CatalogSyncApplicationService.kt` | API/향후 consumer가 공유할 sync use case |
 | `appointment-core/.../service/AppointmentPlanFactory.kt` | BOM 횟수 전개와 dependency edge materialization |
 | `appointment-event/.../event/integration/SchedulingInboxEvents.kt` | consume dedupe/quarantine 상태 |
@@ -86,6 +92,7 @@
 | AC-16 duplicate/out-of-order convergence | catalog version 처리와 purchase inbox 범위만 Task 4, 5 |
 | AC-21 tenant/clinic 불일치 fail closed | Task 4, 5, 6 |
 | AC-23 additive migration 호환 | Task 3 |
+| AC-24 SLO·최대 fixture·EXPLAIN·복구 증거 | Task 5 Step 6, Task 6 Step 5, Task 7 Step 6 |
 | AC-25~30 scheduling policy | 후속 plan 2 |
 | catalog/purchase authority-qualified identity | Task 2, 3, 4, 5의 unique key, lookup, event contract, dialect race test |
 
@@ -151,7 +158,7 @@ round-trip, the status participates in the payload hash, and purchase plan
 creation rejects a `RETIRED` catalog while leaving the immutable projection
 readable.
 
-Pin one central bounds contract in tests: UTF-8 payload ≤ 256 KiB; product/BOM/event/purchase/correlation/producer IDs ≤ 128 characters using the documented safe identifier alphabet; display/treatment names ≤ 256; code and resource strings ≤ 128; at most 200 BOM items, 1,000 catalog dependencies, 100 repeats per item, 2,000 expanded treatments, 10,000 materialized treatment edges, and 64 values in each requirements list; duration ≤ 480 minutes; interval and initial-booking horizon ≤ 3,650 days. Reject blank values, duplicate normalized list entries, control characters, and bound overflow before hashing or persistence. Catalog validation computes the expansion upper bound before accepting a version so purchase handling never discovers an oversized plan after inbox claim.
+Pin one central bounds contract in tests: UTF-8 payload ≤ 256 KiB; product/BOM/event/purchase/correlation/producer IDs ≤ 128 characters using the documented safe identifier alphabet; display/treatment names ≤ 256; code and resource strings ≤ 128; at most 200 BOM items, 1,000 explicit catalog dependencies and persisted treatment edges, 100 repeats per item, 2,000 expanded treatments, 2,980 validation-graph edges including implicit repeat ordering, and 64 values in each requirements list; duration ≤ 480 minutes; interval and initial-booking horizon ≤ 3,650 days. Reject blank values, duplicate normalized list entries, control characters, and bound overflow before hashing or persistence. Catalog validation computes the expansion upper bound before accepting a version so purchase handling never discovers an oversized plan after inbox claim.
 
 - [ ] **Step 2: Run RED**
 
@@ -244,7 +251,7 @@ ciphertext, fingerprint, raw event data, or signing metadata.
 
 - [ ] **Step 4: Implement deterministic validation and hashing**
 
-`CatalogDefinitionValidator` validates known item references and runs Kahn topological sorting. A null predecessor sequence means the predecessor BOM item's last occurrence; a null successor sequence means the successor BOM item's first occurrence. Pairwise or non-boundary mappings require explicit dependency rows with sequence numbers. `CatalogPayloadHasher` sorts items by `bomItemId`, dependency edges by predecessor item/sequence then successor item/sequence, and list-valued fields lexicographically before hashing named fields with explicit null markers. Reuse the repository's existing SHA-256 field-framing pattern; do not hash raw JSON.
+`CatalogDefinitionValidator` validates known item references and runs Kahn topological sorting. A null predecessor sequence means the predecessor BOM item's last occurrence; a null successor sequence means the successor BOM item's first occurrence. Pairwise or non-boundary mappings require explicit dependency rows with sequence numbers. `CatalogPayloadHasher` preserves item and dependency order because BOM order is semantic, sorts only order-insensitive string lists inside each item, and hashes named fields with explicit null markers. Reuse the repository's existing SHA-256 field-framing pattern; do not hash raw JSON.
 
 - [ ] **Step 5: Run GREEN**
 
@@ -350,8 +357,6 @@ idx_treatment_dependency_plan:
   plan_id, predecessor_treatment_id, successor_treatment_id
 idx_plan_tenant_clinic_status:
   tenant_group_id, clinic_id, status
-idx_plan_scope_purchase:
-  tenant_group_id, clinic_id, source_purchase_authority, source_purchase_id
 idx_treatment_plan_status_window:
   plan_id, status, earliest_start_at, latest_start_at
 ```
@@ -462,18 +467,31 @@ Register the ten Exposed tables in dependency order in `SchemaInitConfig`.
 Inbox/outbox/quarantine/audit land in V8 before the handler uses them so a
 later task never rewrites an already-applied Flyway checksum.
 
-Pin the inbox convergence columns in all dialects: `event_id`, `event_type`, `producer`, `source_aggregate_id`, `source_aggregate_version`, `tenant_group_id`, `clinic_id`, `payload_hash`, `status`, `replay_after`, `failure_code`, `attempt_count`, `occurred_at`, `received_at`, and `processed_at`. Allowed statuses are `RECEIVED`, `WAITING_GAP`, `PROCESSED`, and `QUARANTINED`. Store no raw external envelope, raw event payload, raw patient reference, name, phone, or treatment detail in inbox/outbox; outbox payload contains only the versioned plan-created identifiers needed by downstream consumers.
+Pin the inbox convergence columns in all dialects: `event_id`, `event_type`, `producer`, `source_aggregate_id`, `source_aggregate_version`, `tenant_group_id`, `clinic_id`, `payload_hash`, `status`, `replay_after`, `failure_code`, `attempt_count`, `occurred_at`, `received_at`, and `processed_at`. Allowed statuses are `RECEIVED`, `WAITING_GAP`, `PROCESSED`, and `QUARANTINED`. Store no raw external envelope, raw event payload, raw patient reference, name, phone, or treatment detail in inbox/outbox. `AppointmentPlanCreated` uses its own scheduling-owned deterministic `event_id`, stores the inbound `causation_event_id` and preserved `correlation_id`, and carries only tenant/clinic, plan, and authority-qualified source purchase identifiers/version in its versioned payload.
 
 `scheduling_quarantine_events` is separate from inbox/DLQ state and stores
 `event_id`, `envelope_hash`, encrypted original envelope, encryption key ID,
 producer, source authority, schema/source aggregate version, tenant/clinic
 scope, allowlisted reason code, detected time, correlation ID, retention class,
-payload expiry, legal-hold flag, and status. It never stores plaintext payload
+payload expiry, legal-hold flag, and status. Allowed statuses are `OPEN`,
+`RELEASE_DENIED`, `RELEASE_APPROVED`, and terminal `PAYLOAD_EXPIRED`. Service
+transitions are `OPEN/RELEASE_DENIED -> RELEASE_APPROVED`,
+`OPEN/RELEASE_DENIED/RELEASE_APPROVED -> RELEASE_DENIED`,
+payload-retained states -> `PAYLOAD_EXPIRED`, and no transition exits
+`PAYLOAD_EXPIRED`. Write redrive is not a status transition: it requires
+`RELEASE_APPROVED` and appends `REDRIVE` with the recorded release approvals.
+It never stores plaintext payload
 or key material. `scheduling_quarantine_audit_events` is append-only and stores
 quarantine ID, action, privileged actor, reason, dry-run diff hash,
-before/after status, approval references, and timestamp. Tests prove payload
+before/after status, approval references, and timestamp. Migration tests reject
+an invalid quarantine status, and repository tests prove callers cannot bypass
+the service transition preconditions. Tests prove payload
 expiry removes ciphertext while preserving hash/reason/audit metadata, and
 legal hold blocks expiry.
+MySQL uses an `ENUM` for quarantine status and the supported deployment
+contract requires strict SQL mode (`STRICT_ALL_TABLES` or stricter); its
+migration test enables that session mode before proving invalid-status
+rejection. H2/PostgreSQL use named `CHECK` constraints.
 
 Require and assert these queue/read indexes before V8 is fixed:
 
@@ -482,6 +500,10 @@ idx_inbox_status_replay_after_received:
   status, replay_after, received_at
 idx_inbox_source_version:
   producer, source_aggregate_id, source_aggregate_version
+idx_treatment_dependency_successor:
+  successor_treatment_id
+idx_outbox_plan_id:
+  plan_id
 idx_outbox_status_created_at:
   status, created_at
 idx_outbox_status_next_attempt:
@@ -541,13 +563,24 @@ Commit V8 and schema-test parity together.
 
 - [ ] **Step 1: Write RED service tests**
 
-Prove `CREATED`, same-version/same-hash `UNCHANGED`, lower-version `STALE_IGNORED`, same-version/different-hash `VERSION_CONFLICT`, invalid DAG rejection, and no partial rows after a failed transaction.
+Prove `CREATED`, same-version/same-hash `UNCHANGED`, lower-version
+`STALE_IGNORED`, same-version/different-hash `VERSION_CONFLICT`, invalid DAG
+rejection, and no partial rows after a failed transaction. A barrier-based race
+must also prove that concurrent identical definitions converge to
+`CREATED`+`UNCHANGED`, concurrent same-version/different-hash definitions
+converge to `CREATED`+`VERSION_CONFLICT`, and neither race exposes a raw
+duplicate-key failure or partial children.
 
 - [ ] **Step 2: Run service RED**
 
 ```bash
 ./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.service.CatalogSyncApplicationServiceTest"
+./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.integration.CatalogSyncDialectIntegrationTest" -Dspring.profiles.active=test,test-postgresql
+./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.integration.CatalogSyncDialectIntegrationTest" -Dspring.profiles.active=test,test-mysql
 ```
+
+Run the container-backed dialect race commands sequentially with the shared
+singleton launchers; never use `@Testcontainers`.
 
 - [ ] **Step 3: Implement the sync transaction**
 
@@ -572,7 +605,7 @@ Validation and hashing stay outside the database transaction; only scoped versio
 
 - [ ] **Step 4: Write RED controller tests**
 
-For `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-products/{productId}/versions/{catalogVersion}`, assert:
+For `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}`, assert:
 
 - `201` + `CREATED`
 - `200` + `UNCHANGED`
@@ -582,7 +615,7 @@ For `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-products/{productId}/versi
 - `404` for a clinic outside the authenticated tenant, matching the existing existence-hiding contract
 - `404 FEATURE_DISABLED` while catalog sync is disabled
 - path/body tenant, clinic, product, and version mismatch rejection
-- sanitized `400/404/409/500` bodies containing only stable error code, safe message, and `correlationId`; never raw exception text, BOM, stored payload/hash, purchase ID, or patient reference
+- sanitized `400/401/403/404/409/413/500` five-field bodies containing only stable error code, safe message, and `correlationId`; never raw exception text, BOM, stored payload/hash, purchase ID, or patient reference
 
 In an `@ActiveProfiles("test", "integration-test")` security integration test, pin no token `401`, wrong tenant `403`, wrong clinic `404`, `PATIENT`/`DOCTOR` `403`, `STAFF` without catalog source authority `403`, and an allowed catalog source authority success.
 
@@ -652,7 +685,17 @@ New foundation errors use an additive envelope without changing existing `ApiRes
 }
 ```
 
-`SchedulingApiErrorResponse` pins exactly these five fields. Map validation to `400 VALIDATION_FAILED`, existence-hiding lookup to `404 RESOURCE_NOT_FOUND`, disabled endpoints to `404 FEATURE_DISABLED`, catalog conflicts to `409 CATALOG_VERSION_CONFLICT`, and unexpected failures to `500 INTERNAL_ERROR`. `error` is a fixed safe message per code; never copy an exception message. Existing APIs continue to use their current `ApiResponse` until a separate compatibility migration.
+`SchedulingApiErrorResponse` pins exactly these five fields. Map validation to
+`400 VALIDATION_FAILED`, authentication to `401 UNAUTHORIZED`, authorization
+or scope denial to `403 FORBIDDEN`, existence-hiding lookup to
+`404 RESOURCE_NOT_FOUND`, disabled endpoints to `404 FEATURE_DISABLED`,
+catalog conflicts to `409 CATALOG_VERSION_CONFLICT`, pre-deserialization body
+overflow to `413 PAYLOAD_TOO_LARGE`, and unexpected failures to
+`500 INTERNAL_ERROR`. `error` is a fixed safe message per code; never copy an
+exception message. Controller, Spring Security entry point/access-denied
+handler, body-size filter, and generated OpenAPI tests assert the same
+five-field envelope. Existing APIs continue to use their current `ApiResponse`
+until a separate compatibility migration.
 
 Create one typed configuration contract with these deployment controls:
 
@@ -660,24 +703,39 @@ Create one typed configuration contract with these deployment controls:
 appointment.plan-foundation.catalog-sync-enabled=false
 appointment.plan-foundation.plan-read-enabled=false
 appointment.plan-foundation.purchase-consumer-mode=OFF  # OFF | SHADOW | WRITE
+appointment.plan-foundation.scope-overrides[0].tenant-group-id=1
+appointment.plan-foundation.scope-overrides[0].clinic-id=10
+appointment.plan-foundation.scope-overrides[0].catalog-sync-enabled=true
+appointment.plan-foundation.scope-overrides[0].plan-read-enabled=true
+appointment.plan-foundation.scope-overrides[0].purchase-consumer-mode=SHADOW
 appointment.plan-foundation.consumer-max-attempts=5
 appointment.plan-foundation.consumer-initial-backoff=5s
 appointment.plan-foundation.consumer-max-backoff=5m
 appointment.plan-foundation.consumer-jitter=0.20
 appointment.plan-foundation.event-replay-window=15m
-appointment.plan-foundation.trust-verification-timeout=500ms
-appointment.plan-foundation.source-authority-timeout=2s
-appointment.plan-foundation.redrive-dry-run-timeout=10s
 ```
 
-While the catalog or plan-read flag is false, the endpoint remains visible in OpenAPI but returns the sanitized `404 FEATURE_DISABLED` contract. Later tasks reuse the same properties; do not add independent booleans with overlapping meaning. Startup validation rejects production `purchase-consumer-mode=WRITE` unless an `OutboxTransportCapability` bean is present; this foundation intentionally provides no such production bean, while tests may supply a fake capability.
+Global values are fail-safe defaults. Exact tenant/clinic overrides provide
+clinic-scoped canary and rollback without enabling another clinic. Duplicate
+or invalid scope overrides fail startup. `PlanFoundationFeatureControlResolverTest`
+must prove one enabled scope while same-tenant/other-clinic and
+other-tenant/same-clinic-shape remain disabled. Production changes additionally
+require an audited provider with actor/reason/previous/new value/expiry/
+correlation ID and effective-value readback; the local configuration resolver
+does not satisfy that production evidence by itself.
+
+While the effective catalog or plan-read flag is false, the endpoint remains visible in OpenAPI but returns the sanitized `404 FEATURE_DISABLED` contract. Later tasks reuse the same resolver; do not add independent booleans with overlapping meaning. Startup validation rejects production global or scoped `purchase-consumer-mode=WRITE` unless an `OutboxTransportCapability` bean is present; this foundation intentionally provides no such production bean, while tests may supply a fake capability.
+
+Trust verification, source-authority lookup, and redrive deadlines belong to
+the future transport/operator adapter that owns cancellation and executor
+lifecycle. This foundation exposes no inert timeout properties: the adapter
+must add and enforce its deadline configuration in the same executable change.
 
 `PlanFoundationPropertiesValidatorTest` proves production startup fails for
 `WRITE` without the capability, succeeds for `OFF/SHADOW`, and permits `WRITE`
 only with a test capability. It also rejects zero or negative attempt counts
-and timeouts, backoff values where `initial > max`, jitter outside `0.0..1.0`,
-and replay/redrive windows that are zero, negative, or shorter than their
-dependent timeout.
+and replay windows, backoff values where `initial > max`, jitter outside `0.0..1.0`,
+and an event replay window that is zero or negative.
 
 ```bash
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.controller.CatalogProductSyncControllerTest"
@@ -712,6 +770,7 @@ tests
 - Create: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/PurchaseCompletedEvent.kt`
 - Create: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/TrustedSchedulingEventEnvelope.kt`
 - Create: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingEventTrustVerifier.kt`
+- Create: `appointment-event/src/test/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingEventTrustVerifierTest.kt`
 - Create: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SourceAggregateVersionVerifier.kt`
 - Create: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SourceAuthorityVersionProof.kt`
 - Create: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/PatientReferenceProtector.kt`
@@ -756,18 +815,19 @@ persistence.
 
 Prove:
 
-1. one valid event creates one plan, its treatments/dependencies, one processed inbox row, and one pending `AppointmentPlanCreated` outbox row;
+1. one valid event creates one plan, its treatments/dependencies, one processed inbox row, and one pending `AppointmentPlanCreated` outbox row with a scheduling-owned event ID, inbound causation ID, preserved correlation ID, and authority-qualified source purchase identity/version;
 2. duplicate `eventId` is idempotent;
 3. a second event for the same `(tenantGroupId, clinicId,
    sourcePurchaseAuthority, sourcePurchaseId)` does not create another plan or
    change immutable payload, while the same authority-local purchase ID in
    another tenant/clinic creates an independent plan;
-4. tenant/clinic mismatch is quarantined and creates no plan/outbox;
+4. tenant/clinic mismatch is written to the FK-free terminal rejection store
+   before inbox insertion and creates no plan/outbox;
 5. unknown or retired catalog version is quarantined;
 6. a forced failure after plan insert rolls back inbox, plan children, and outbox together;
 7. current and immediately previous event schema versions normalize to the same typed command for one release window;
 8. lower/equal aggregate versions converge as stale/idempotent; a verified higher-than-expected version enters `WAITING_GAP` without plan/outbox, increments a bounded attempt count, and becomes `QUARANTINED` after exhaustion;
-9. invalid signature, disallowed algorithm, unknown or revoked `kid`, issuer/audience/key pin mismatch, disallowed `PurchaseCompleted` producer, or event outside the replay window is quarantined without plan/outbox;
+9. invalid signature, disallowed algorithm, unknown or revoked `kid`, issuer/audience/key pin mismatch, disallowed `PurchaseCompleted` producer, or event outside the replay window is quarantined without plan/outbox; verifier construction also rejects missing/empty producer, key ID, or algorithm allowlists without a permissive fallback;
 10. a replay that changes the patient reference for an existing source purchase is quarantined;
 11. identifier length/charset, list cardinality, and total serialized payload bounds are enforced before any database write;
 12. DB rows, outbox payload, structured logs, metric tags, and quarantine metadata omit patient name, phone, treatment detail, raw payload, and raw patient reference;
@@ -775,9 +835,21 @@ Prove:
 14. barrier-based concurrent races for the same `eventId` and for different event IDs carrying the same source purchase each produce one plan, no orphan outbox, and one classified terminal inbox decision per event;
 15. an injected `Clock` makes replay-window checks and `replayAfter` deterministic; attempts use 5-second exponential backoff capped at 5 minutes with 20% jitter and quarantine after attempt 5;
 16. external `kid` maps to internal `keyId` exactly once, while logs and outbox expose neither key material nor signatures;
-17. every quarantine decision atomically writes the inbox terminal state plus a separate immutable encrypted quarantine record with envelope hash, source metadata, reason, correlation, retention class, and detected time;
-18. retention expiry deletes only encrypted original content and preserves hash/reason/audit metadata; legal hold blocks expiry;
-19. quarantine inspection and dry-run redrive append privileged audit rows, trust-failed events cannot be released without source correction and trust revalidation, and refund/consent/safety release requires two approval references;
+17. a pre-trust or nonexistent-scope rejection writes bounded FK-free terminal
+    metadata plus envelope hash only; a trusted in-scope processing quarantine
+    atomically writes the inbox terminal state plus an immutable encrypted
+    quarantine record with source metadata, reason, correlation, retention
+    class, and detected time;
+18. retention expiry deletes only encrypted original content and preserves
+    hash/reason/audit metadata; a barrier hook after selection proves the final
+    conditional update rechecks legal hold/status/payload presence, so a
+    concurrent legal hold or earlier expiry wins without a stale audit row;
+    `PAYLOAD_EXPIRED` rejects dry-run/write redrive;
+19. quarantine inspection and dry-run redrive append privileged audit rows;
+    write redrive requires `RELEASE_APPROVED`, exact quarantine/event/source/
+    catalog identity, actor/reason, and approval references matching the release
+    audit; trust-failed terminal rejections are not releasable, and
+    refund/consent/safety release requires two approval references;
 20. source-authority timeout and circuit-open outcomes enter `WAITING_GAP` in
     a short transaction without opening the final plan-write transaction,
     record a bounded `replayAfter`, and never write a plan or outbox row;
@@ -795,6 +867,7 @@ data class TrustedSchedulingEventEnvelope<T>(
     val issuer: String,
     val audience: String,
     val keyId: String,
+    val algorithm: String,
     val schemaVersion: Int,
     val correlationId: String,
     val payloadHash: String,
@@ -819,31 +892,43 @@ data class PurchaseCompletedEvent(
 `PurchaseCompletedIngress.accept(rawEnvelope)` maps the external wire field
 `kid` to internal `keyId`, then calls `SchedulingEventTrustVerifier`. The
 verifier checks signature or authenticated mTLS metadata,
-key/issuer/audience, event-type producer allowlist, payload hash, and the
+key/algorithm/issuer/audience, event-type producer allowlist, payload hash, and the
 15-minute replay window using an injected `Clock`, then returns
 `TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>`. Only that verified
-type reaches `PurchaseCompletedHandler`.
+type reaches `PurchaseCompletedHandler`. Its typed configuration requires
+nonempty producer, key ID, and algorithm allowlists and fails
+construction/startup when any list is missing or empty.
+`SchedulingEventTrustVerifierTest` proves empty-list rejection as well as
+disallowed algorithm rejection.
 
-No external I/O may execute inside `transaction {}`. Trust verification, optional commerce authority lookup, and patient-reference encryption prepare bounded proofs outside the final transaction. When the local source watermark is insufficient, the source-authority adapter obtains a `SourceAuthorityVersionProof` with a 2-second timeout before any write transaction. A timeout or circuit-open result is staged as `WAITING_GAP` in its own short transaction.
+No external I/O may execute inside `transaction {}`. Trust verification, optional commerce authority lookup, and patient-reference encryption prepare bounded proofs outside the final transaction. When the local source watermark is insufficient, the source-authority adapter obtains a `SourceAuthorityVersionProof` bound to tenant, clinic, producer, source authority, aggregate ID, version, verification time, and expiry before any write transaction. A timeout or circuit-open result is staged as `WAITING_GAP` in its own short transaction.
 
 `PurchaseCompletedHandler.handle(verifiedEnvelope, versionProof,
 protectedPatientReference)` opens the final short transaction, rechecks the
 local watermark/proof freshness and full scoped purchase uniqueness, claims the
 inbox row, loads the catalog with `(tenantGroupId, clinicId,
 catalogSourceAuthority, productId, catalogVersion)`, expands/saves the plan,
-and inserts the outbox row atomically. Catch only classified duplicate-key
+and inserts the outbox row atomically. The outbound `AppointmentPlanCreated`
+contract creates a deterministic scheduling-owned event ID from event type,
+causation event, and plan identity; it never reuses the inbound event ID as the
+outbound identity. Persist inbound `causationEventId`, preserved
+`correlationId`, source purchase authority/ID/version, plan ID, tenant/clinic,
+and schema version. Duplicate/replay converges on one outbox row with the same
+outbound event ID, and the payload remains PHI-free. Catch only classified duplicate-key
 conflicts; other failures roll back. The commerce producer is authoritative
 for the purchase-to-patient relationship, but an existing scoped purchase
 fingerprint may never change. Outbox publishing transport is not added in this
 plan.
 
-`PurchaseCompletedEventAdapter` accepts only the current and immediately previous schema versions and normalizes both into the typed event above. `SourceAggregateVersionVerifier` combines the local watermark with the already-obtained proof; lower/equal versions converge, while a gap enters `WAITING_GAP` with `replayAfter` and bounded attempts. The external adapter contract owns timeout, bounded retry, jitter, and circuit breaking; this plan adds no external client or new dependency, and production `WRITE` is unavailable without the follow-up transport capability. `PurchaseEventRedriveService` accepts an operator-supplied original envelope plus exact `eventId` and `sourceAggregateVersion`; `dryRun=true` performs trust/scope/version/factory validation and returns a redacted diff without writes. Generic replay cannot re-drive a trust-failed event. Bounded retry exhaustion marks the inbox row `QUARANTINED` with an allowlisted reason code. This slice does not claim a broker DLQ or outbox delivery completion.
+`PurchaseCompletedEventAdapter` accepts only the current and immediately previous schema versions and normalizes both into the typed event above. `SourceAggregateVersionVerifier` combines the producer-qualified local watermark with the already-obtained producer-qualified proof; lower/equal versions converge, while a gap enters `WAITING_GAP` with `replayAfter` and bounded attempts. The external adapter contract owns timeout, bounded retry, jitter, and circuit breaking; this plan adds no external client or new dependency, and production `WRITE` is unavailable without the follow-up transport capability. `PurchaseEventRedriveService` accepts an operator-supplied original envelope plus exact quarantine, event, source purchase, and catalog identity. `dryRun=true` performs trust/scope/version/factory validation without plan writes and appends a redacted diff hash to the quarantine audit. Write redrive additionally requires `RELEASE_APPROVED`, actor/reason, and approval references already recorded by release approval, then appends a `REDRIVE` audit before invoking the atomic handler. Generic replay cannot re-drive a trust-failed terminal rejection. Bounded retry exhaustion marks the inbox row `QUARANTINED` with an allowlisted reason code. This slice does not claim a broker DLQ or outbox delivery completion.
 
-Every quarantine path calls `SchedulingQuarantineRepository` in the same
+Pre-trust and nonexistent-scope failures use the FK-free terminal rejection
+store and retain only bounded metadata plus the envelope hash. Trusted,
+in-scope quarantine paths call `SchedulingQuarantineRepository` in the same
 transaction as the inbox transition. The repository encrypts the bounded
 original envelope before the transaction, persists only ciphertext and
 allowlisted metadata, and appends a `DETECTED` audit action. Inspection,
-dry-run, release denial, retention expiry, and legal-hold changes append new
+dry-run, redrive, release denial, retention expiry, and legal-hold changes append new
 audit rows; prior audit rows are never updated or deleted.
 
 Operational contract:
@@ -886,7 +971,7 @@ retry/DLQ ownership, and alert wiring.
 
 `PurchasePlanPerformanceIntegrationTest` reuses only the singleton PostgreSQL
 and MySQL launchers and runs sequentially. It seeds a typical four-treatment
-plan and the exact maximum 2,000-treatment/10,000-edge plan, warms the
+plan and the exact maximum 2,000-treatment/1,000-persisted-edge plan, warms the
 JVM/database, then measures at least 10 independently committed purchase events
 per fixture. It records raw elapsed samples and asserts p95 is below the
 30-second purchase-to-plan SLO.
@@ -1004,9 +1089,12 @@ Keep the controller registered for stable OpenAPI discoverability, but short-cir
 - [ ] **Step 5: Write RED index-plan assertions, then prove PostgreSQL and MySQL**
 
 `AppointmentPlanReadExplainIntegrationTest` seeds 100,000 plan rows across at
-least 20 tenant/clinic partitions, 2,000 treatments and 10,000 dependencies for
-the largest plan, 100,000 inbox rows across retry states, and 100,000 outbox
-rows across pending/complete states. It executes and captures `EXPLAIN` for:
+least 20 tenant/clinic partitions, 20 dependency-bearing plans with 2,000
+treatments and 1,000 persisted dependencies each, 100,000 inbox rows across
+retry states, and 100,000 outbox rows across pending/complete states. Retry and
+pending rows use a one-percent distribution so the queue index proof models a
+healthy bounded backlog rather than a pathological majority backlog. It
+executes and captures `EXPLAIN` for:
 
 1. the authority-qualified scoped purchase lookup;
 2. dependency reads by `plan_id`;
@@ -1080,6 +1168,7 @@ block/quarantine action. Backlog/SLO and cardinality-high alerts use a
 ```bash
 ./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.service.CatalogDefinitionValidatorTest"
 ./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.service.CatalogPayloadHasherTest"
+./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.service.CatalogSyncApplicationServiceTest"
 ./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.service.BookingPreferenceNormalizerTest"
 ./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.repository.ProductCatalogRepositoryTest"
 ./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepositoryTest"
@@ -1095,8 +1184,13 @@ block/quarantine action. Backlog/SLO and cardinality-high alerts use a
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.security.CatalogProductSyncSecurityIntegrationTest"
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.security.AppointmentPlanReadSecurityIntegrationTest"
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.config.PlanFoundationPropertiesValidatorTest"
+./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.config.PlanFoundationFeatureControlResolverTest"
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.security.JwtTokenParserTest"
 ```
+
+The two controller tests fetch `/v3/api-docs` and assert the catalog request,
+plan response, authority-qualified purchase path, feature-disabled behavior,
+and all stable Foundation error responses, including `401`, `403`, and `413`.
 
 - [ ] **Step 3: Run multi-dialect migration proof sequentially**
 
@@ -1104,6 +1198,8 @@ block/quarantine action. Backlog/SLO and cardinality-high alerts use a
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.migration.FlywayMigrationTest"
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.migration.FlywayPostgreSQLMigrationTest" -Dspring.profiles.active=test,test-postgresql
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.migration.FlywayMySQLMigrationTest" -Dspring.profiles.active=test,test-mysql
+./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.integration.CatalogSyncDialectIntegrationTest" -Dspring.profiles.active=test,test-postgresql
+./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.integration.CatalogSyncDialectIntegrationTest" -Dspring.profiles.active=test,test-mysql
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.integration.PurchaseCompletedDialectIntegrationTest" -Dspring.profiles.active=test,test-postgresql
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.integration.PurchaseCompletedDialectIntegrationTest" -Dspring.profiles.active=test,test-mysql
 ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.integration.PurchasePlanPerformanceIntegrationTest" -Dspring.profiles.active=test,test-postgresql
@@ -1150,16 +1246,28 @@ delivery.
 
 - [ ] **Step 6: Rehearse rollout and capture release evidence**
 
+Evidence is split into two non-interchangeable gates. The Foundation local gate
+may complete schema, contract, concurrency, security, scoped configuration
+resolution, benchmark, and rollback-history proofs. The production `WRITE`
+gate remains **BLOCKED** until broker transport/ack/DLQ, real Micrometer alert
+wiring, audited feature-control provider/readback, backpressure, owner
+acknowledgement, and a production-like rollback rehearsal exist. A blocked
+production row is never counted as a completed Foundation check and a completed
+Foundation local gate never authorizes production `WRITE`.
+
 Populate the release-evidence document with command, timestamp, commit SHA, result, and artifact link for:
 
 1. schema dry-run on H2/PostgreSQL/MySQL and legacy row count/hash comparison;
 2. foundation backfill marked explicitly `N/A` because legacy plan/item projection is deferred until the item model exists;
 3. `OFF → SHADOW` consumer diff proving zero writes, then gated `WRITE` proof in test only;
 4. current/previous schema replay, duplicate, out-of-order, and aggregate version-gap cases;
-5. barrier-based duplicate race proof plus PostgreSQL/MySQL purchase-to-plan benchmarks for a typical plan and the maximum 2,000-treatment/10,000-edge plan, with p95 below the 30-second SLO before any `WRITE` gate;
+5. barrier-based duplicate race proof plus PostgreSQL/MySQL purchase-to-plan benchmarks for a typical plan and the maximum 2,000-treatment/1,000-persisted-edge plan, with p95 below the 30-second SLO before any `WRITE` gate;
 6. PostgreSQL/MySQL `EXPLAIN` or equivalent index-usage evidence for scoped purchase lookup, plan dependency read, inbox retry polling, and outbox backlog/oldest-age queries at representative row counts;
 7. redacted metric/log capture, metric-label allowlist rejection, 1,000-series cardinality budget, and alert smoke for trust failure, lag, 80% warning, and 95% high/backpressure thresholds;
-8. rollback rehearsal disabling catalog sync, plan read, and consumer write while proving generated plan/inbox/outbox history remains intact.
+8. rollback rehearsal disabling one exact tenant/clinic override for catalog
+   sync, plan read, and consumer write, proving another clinic's effective value
+   is unchanged and generated plan/inbox/outbox history remains intact; the
+   production gate additionally requires audited change/readback evidence.
 9. generated OpenAPI assertions for exact catalog request, plan response, stable error envelopes, feature-disabled responses, and the authority-qualified purchase lookup path;
 10. English/Korean README link and content-parity validation for root and all three touched modules.
 11. quarantine inspection, ciphertext retention expiry, legal hold, immutable audit, denied trust-failure release, and dual-approval evidence with security on-call acknowledgement;
@@ -1190,7 +1298,7 @@ The lesson records why plan state is separated from visit state, why policy foun
 | inbox만 기록되고 plan/outbox가 없음 | transaction failure injection | 한 Exposed transaction으로 원자화 | Task 5 rollback test |
 | tenant catalog로 다른 clinic plan 생성 | scope mismatch metric/quarantine | handler에서 event/catalog ownership 재검증 | Task 5 negative test |
 | V8이 legacy appointment를 손상 | migration row/hash diff | additive tables only, legacy row pre/post assertion | Task 3 migration tests |
-| JSON 요구사항 snapshot이 비결정적 | same typed payload, different list order | sorted canonical encoding and hash test | Task 1 hasher test |
+| JSON 요구사항 snapshot이 비결정적 | 같은 의미의 내부 set 순서가 달라지거나 BOM 순서가 바뀜 | BOM/dependency 순서는 보존하고 item 내부 set만 정렬하는 canonical encoding과 hash test | Task 1 hasher test |
 | 첫 단계가 예약까지 구현했다고 오해 | docs/API capability drift | read API와 README에 `plan only` 명시 | Task 7 docs review |
 | outbox enqueue를 전달 완료로 오해 | pending age/backlog 증가 | WRITE 금지 + transport 후속 계획 + ack-only completion 계약 | Task 5/7 evidence |
 

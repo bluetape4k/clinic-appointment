@@ -28,6 +28,9 @@ Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제�
 - **예약 플랜 기반** - 구매 상품 BOM을 불변 진료 의무로 스냅샷하고, 카탈로그 동기화와 신뢰된 구매 이벤트를 통해 방문 예약 이전 단계를 관리
 - **Angular 18 웹 UI** - 예약 조회/생성/상태 변경 인터페이스
 
+카탈로그 동기화 호출자는 [docs/api/catalog-payload-hash.md](docs/api/catalog-payload-hash.md)의
+canonical hash 계약과 fixture로 `payloadHash`를 재현할 수 있습니다.
+
 ### 예약 플랜 경계
 
 `AppointmentPlan`은 한 번의 구매로 병원이 제공해야 할 진료 의무를 기록합니다.

@@ -630,7 +630,8 @@
           <h3>Cross-plan visit</h3>
           <p>
             추가 구매는 언제나 새 plan이다. 다만 같은 환자·병원이고 임상적으로 호환되며 기간이 겹치면
-            서로 다른 plan의 item을 같은 방문에 넣을 수 있다. 관계가
+            고객 동의를 받은 join proposal로만 서로 다른 plan의 item을 같은 방문에 넣을 수 있다.
+            plan 자체와 과거 이력은 합치지 않는다. 관계가
             <code>Plan → PlannedTreatment ← AppointmentItem → Appointment</code>인 이유다.
           </p>
         </div>
@@ -1016,18 +1017,20 @@
           <p>
             모든 외부 event는 event ID, tenant, 원천 aggregate/version을 포함한다.
             consume은 inbox 또는 동등한 idempotency 저장소를, publish는 outbox를 사용한다.
+            <code>AppointmentPlanCreated</code>는 scheduling-owned event ID를 갖고 inbound
+            event는 <code>causationEventId</code>, 흐름 추적은 <code>correlationId</code>로 보존한다.
           </p>
         </div>
         <div class="grid two">
           <article class="card">
             <span class="tag">AUTHENTICITY</span>
             <h3>신뢰할 producer만</h3>
-            <p class="muted">mTLS 또는 서명 envelope, issuer/audience, event type별 허용 producer, tenant/clinic, replay window를 검증한다.</p>
+            <p class="muted">mTLS 또는 서명 envelope, issuer/audience, event type별 허용 producer, tenant/clinic, replay window를 검증한다. producer·key ID·algorithm allowlist가 비어 있으면 시작부터 fail closed한다.</p>
           </article>
           <article class="card">
             <span class="tag">CONVERGENCE</span>
             <h3>duplicate·stale·gap을 구분</h3>
-            <p class="muted">inbox와 side effect를 원자화하고 낮은 version은 무시한다. gap은 bounded retry 후 DLQ, 충돌은 quarantine, 운영 re-drive는 event ID와 aggregate version을 고정한다.</p>
+            <p class="muted">inbox와 side effect를 원자화하고 낮은 version은 무시한다. Foundation의 gap exhaustion은 inbox terminal <code>QUARANTINED</code>이며 broker DLQ 전달을 주장하지 않는다. trust/scope quarantine은 별도 store다. 운영 re-drive는 quarantine ID, 전체 source/catalog identity, actor, release 승인 참조를 고정하고 dry-run/write 감사 로그를 남긴다.</p>
           </article>
         </div>
       </section>
@@ -1039,7 +1042,7 @@
           <article class="card">
             <span class="tag">CATALOG API</span>
             <h3>버전 upsert</h3>
-            <p class="muted"><code>PUT /api/{tenant}/clinics/{clinicId}/catalog-products/{productId}/versions/{version}</code>. 새 version 201, 동일 hash 200, 동일 version 충돌 409, 낮은 version은 202 <code>STALE_IGNORED</code>.</p>
+            <p class="muted"><code>PUT /api/{tenant}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{version}</code>. 새 version 201, 동일 hash 200, 동일 version 충돌 409, 낮은 version은 202 <code>STALE_IGNORED</code>.</p>
           </article>
           <article class="card">
             <span class="tag">POLICY API</span>
@@ -1063,6 +1066,10 @@
               <tr><td><code>RESCHEDULED</code></td><td>원 방문 terminal history</td><td>새 방문은 별도 identity</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="callout">
+          <h3>Legacy reschedule consent bridge</h3>
+          <p>기존 confirm 요청은 proposal accept로 연결한다. consent가 없는 확정 예약은 그대로 보호하고 <code>409 CONSENT_REQUIRED</code>와 고객의 다음 동의 행동을 반환한다. clinic별 shadow → enforced 전환 동안 기존·신규 endpoint는 같은 stable code를 제공한다.</p>
         </div>
 
         <div class="grid three" style="margin-top: 20px">
@@ -1102,7 +1109,7 @@
           <article class="card">
             <span class="tag">ROLLOUT</span>
             <h3>shadow부터 clinic flag까지</h3>
-            <p class="muted">additive schema → backfill → tenant·clinic effective policy shadow diff → clinic read/write flag → consent/disruption → quota 0에서 overbooking 승인 순으로 진행한다.</p>
+            <p class="muted">additive schema → backfill → tenant·clinic effective policy shadow diff → 정확한 tenant/clinic override → consent/disruption → quota 0에서 overbooking 승인 순으로 진행한다. 다른 clinic의 effective value는 바뀌지 않아야 한다.</p>
           </article>
           <article class="card">
             <span class="tag">ROLLBACK</span>
@@ -1112,7 +1119,7 @@
         </div>
         <div class="callout">
           <h3>Release evidence</h3>
-          <p>schema dry-run, backfill count/hash, tenant·clinic effective policy shadow diff, event replay, hold/confirm 동시성 및 성능 benchmark, alert smoke test, rollback rehearsal 결과가 모두 있어야 rollout gate를 통과한다.</p>
+          <p>Foundation local gate와 production WRITE gate를 분리한다. schema·contract·benchmark가 통과해도 broker ack/DLQ, 실제 metric/alert, audited flag provider/readback, owner acknowledgement가 없으면 production WRITE는 계속 BLOCKED다.</p>
         </div>
       </section>
 

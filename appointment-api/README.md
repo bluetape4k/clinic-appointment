@@ -30,7 +30,7 @@ Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migr
 | Treatment types | `GET /api/{tenantCode}/clinics/{id}/treatment-types`, `/treatment-types/{id}` | Query treatment types. |
 | Equipment | `GET /api/{tenantCode}/clinics/{id}/equipments`, `/equipments/{id}` | Query equipment. |
 | Dashboard stats | `GET /api/{tenantCode}/admin/stats/{appointments,doctors,cancellations}` | Query admin dashboard aggregates. |
-| Catalog plan input | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-products/{productId}/versions/{catalogVersion}` | Synchronize one immutable catalog BOM version. |
+| Catalog plan input | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}` | Synchronize one immutable catalog BOM version. |
 | Appointment plans | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | Read one purchased treatment plan. |
 | Appointment plans | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{authority}/{purchaseId}` | Read by authority-qualified source purchase. |
 
@@ -42,9 +42,31 @@ Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migr
 | `appointment.plan-foundation.plan-read-enabled` | `false` | Enables clinic-operator plan reads. |
 | `appointment.plan-foundation.purchase-consumer-mode` | `OFF` | `OFF`, `SHADOW`, or gated `WRITE`; production `WRITE` requires an outbox transport capability. |
 
+`appointment.plan-foundation.scope-overrides[*]` can override those three
+values for one exact `(tenant-group-id, clinic-id)` pair. Nullable fields inherit
+the global value; a specified field wins only in that exact scope. This supports
+clinic-by-clinic canaries and rollback without changing sibling clinics.
+
+```yaml
+appointment:
+  plan-foundation:
+    scope-overrides:
+      - tenant-group-id: 7
+        clinic-id: 11
+        catalog-sync-enabled: false
+        plan-read-enabled: false
+        purchase-consumer-mode: OFF
+```
+
+The YAML form is for local Foundation proof. Production control must provide
+append-only actor/reason/old/new/expiry/correlation audit and effective-value
+readback; without that provider, production `WRITE` remains blocked.
+
 Plan reads require `ADMIN`, `STAFF`, or `DOCTOR`, a matching tenant claim, and
 an exact matching clinic claim. `PATIENT` access is deferred. Disabled routes
 remain visible in OpenAPI and return sanitized `404 FEATURE_DISABLED`.
+Catalog writers must compute `payloadHash` from the
+[canonical typed hash contract](../docs/api/catalog-payload-hash.md).
 
 Use `tenant-default` for the local seed tenant. JWTs must include the requested tenant in the `allowedTenants` claim.
 

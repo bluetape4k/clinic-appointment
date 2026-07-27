@@ -30,7 +30,7 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 | 진료유형 | `GET /api/{tenantCode}/clinics/{id}/treatment-types`, `/treatment-types/{id}` | 진료유형 조회 |
 | 장비 | `GET /api/{tenantCode}/clinics/{id}/equipments`, `/equipments/{id}` | 장비 조회 |
 | 대시보드 통계 | `GET /api/{tenantCode}/admin/stats/{appointments,doctors,cancellations}` | 관리자 집계 조회 |
-| 플랜용 카탈로그 입력 | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-products/{productId}/versions/{catalogVersion}` | 불변 상품 BOM 버전 동기화 |
+| 플랜용 카탈로그 입력 | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}` | 불변 상품 BOM 버전 동기화 |
 | 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | 구매 진료 플랜 한 건 조회 |
 | 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{authority}/{purchaseId}` | authority가 포함된 원천 구매로 조회 |
 
@@ -42,9 +42,31 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 | `appointment.plan-foundation.plan-read-enabled` | `false` | 병원 운영자용 플랜 조회 활성화 |
 | `appointment.plan-foundation.purchase-consumer-mode` | `OFF` | `OFF`, `SHADOW`, 제한된 `WRITE`; 운영 `WRITE`에는 outbox transport capability 필요 |
 
+`appointment.plan-foundation.scope-overrides[*]`는 정확한
+`(tenant-group-id, clinic-id)` 한 쌍에 대해 위 세 값을 덮어쓸 수 있습니다.
+nullable 필드는 전역 값을 상속하고, 지정한 필드만 해당 scope에서 우선합니다.
+따라서 다른 병원에 영향을 주지 않고 병원별 canary와 rollback을 수행할 수 있습니다.
+
+```yaml
+appointment:
+  plan-foundation:
+    scope-overrides:
+      - tenant-group-id: 7
+        clinic-id: 11
+        catalog-sync-enabled: false
+        plan-read-enabled: false
+        purchase-consumer-mode: OFF
+```
+
+이 YAML 형태는 로컬 Foundation 증명용입니다. 운영 control은 actor, reason,
+이전/새 값, expiry, correlation ID의 append-only audit와 effective-value
+readback을 제공해야 하며, 그 provider가 없으면 운영 `WRITE`는 계속 차단됩니다.
+
 플랜 조회는 `ADMIN`, `STAFF`, `DOCTOR` 역할, 일치하는 tenant claim, 정확히 일치하는
 clinic claim이 모두 필요합니다. `PATIENT` 조회는 보류했습니다. 비활성 경로도 OpenAPI에는
 남아 있으며 정제된 `404 FEATURE_DISABLED`를 반환합니다.
+카탈로그 writer는 [canonical typed hash 계약](../docs/api/catalog-payload-hash.md)에
+따라 `payloadHash`를 계산해야 합니다.
 
 로컬 seed tenant는 `tenant-default` 입니다. JWT의 `allowedTenants` claim에는 요청 URL의 `tenantCode`가 포함되어야 합니다.
 

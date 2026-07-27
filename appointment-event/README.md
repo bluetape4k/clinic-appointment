@@ -60,7 +60,7 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 | `AppointmentEventLogs` | Exposed table with event_type, appointment_id, payload_json, and occurred_at. |
 | `PurchaseCompletedIngress` | Trust, bounds, version-proof, and patient-reference protection boundary. |
 | `PurchaseCompletedHandler` | Atomic inbox/plan/outbox convergence with duplicate and gap classification. |
-| `PurchaseEventRedriveService` | Exact-event dry-run and named redrive without trust bypass. |
+| `PurchaseEventRedriveService` | Exact-quarantine dry-run and approved redrive with full identity confirmation, actor/reason, release approval references, and append-only audit. |
 
 ## Event Flow
 
