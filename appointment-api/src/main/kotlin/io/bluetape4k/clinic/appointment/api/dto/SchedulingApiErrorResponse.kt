@@ -13,12 +13,12 @@ import com.fasterxml.jackson.annotation.JsonInclude
  * @property correlationId Bounded request trace ID established before security
  * and controller processing.
  * @property retryable Whether retrying the same intent without modification may
- * succeed. `false` is the compatibility default and is omitted from JSON so
- * existing error contracts keep their exact five-field shape. A future error
- * that is explicitly retryable serializes this field as `true`.
- * @property action Optional stable customer/operator action identifier. `null`
- * is omitted from JSON; free-form internal instructions or exception details
- * must not be exposed through this property.
+ * succeed. `null` preserves legacy catalog/plan response shape; policy handlers
+ * always supply explicit `true` or `false` so policy callers can distinguish
+ * server-advised retry from a rejection requiring changed intent.
+ * @property action Optional stable customer/operator remediation text. `null`
+ * is omitted from JSON. It must be selected from a closed error registry and
+ * must not contain request values, internal instructions, or exception detail.
  */
 data class SchedulingApiErrorResponse(
     val success: Boolean = false,
@@ -26,8 +26,8 @@ data class SchedulingApiErrorResponse(
     val error: String,
     val errorCode: String,
     val correlationId: String,
-    @field:JsonInclude(JsonInclude.Include.NON_DEFAULT)
-    val retryable: Boolean = false,
+    @field:JsonInclude(JsonInclude.Include.NON_NULL)
+    val retryable: Boolean? = null,
     @field:JsonInclude(JsonInclude.Include.NON_NULL)
     val action: String? = null,
 )

@@ -75,9 +75,37 @@ internal object AppointmentPlanMigrationTestSupport {
                 uniqueIndexColumns(connection, table, constraint) shouldBeEqualTo expectedColumns
             }
 
+            verifyPolicyJsonCapacity(connection)
             verifyInvalidQuarantineStatusRejected(connection)
             verifyV8OutboxBackfill(connection)
             readLegacyAppointment(connection) shouldBeEqualTo before
+        }
+    }
+
+    /**
+     * Proves the repository's documented 256 KiB canonical JSON limit on every
+     * supported dialect. MySQL must use `MEDIUMTEXT`; plain `TEXT` reports only
+     * 65,535 bytes and would accept repository validation before failing SQL.
+     */
+    private fun verifyPolicyJsonCapacity(connection: Connection) {
+        listOf(
+            "scheduling_policy_definitions" to "payload_json",
+            "effective_scheduling_policy_snapshots" to "payload_json",
+        ).forEach { (table, column) ->
+            val candidates = listOf(table, table.uppercase())
+            val capacity = candidates.firstNotNullOfOrNull { tablePattern ->
+                connection.metaData.getColumns(null, null, tablePattern, "%").use { columns ->
+                    generateSequence { if (columns.next()) columns else null }
+                        .firstOrNull {
+                            it.getString("COLUMN_NAME").equals(column, ignoreCase = true)
+                        }
+                        ?.getLong("COLUMN_SIZE")
+                }
+            }
+            check(capacity != null) { "Missing V9 capacity column $table.$column" }
+            check(capacity >= POLICY_JSON_MAX_BYTES) {
+                "$table.$column capacity $capacity is below $POLICY_JSON_MAX_BYTES bytes"
+            }
         }
     }
 
@@ -486,6 +514,7 @@ internal object AppointmentPlanMigrationTestSupport {
         "idx_policy_definition_effective",
         "idx_effective_policy_generation",
         "idx_policy_activation_due",
+        "idx_policy_activation_replay_source",
         "idx_policy_preview_due",
         "idx_policy_preview_scope",
         "idx_outbox_aggregate",
@@ -507,6 +536,7 @@ internal object AppointmentPlanMigrationTestSupport {
         "uq_effective_policy_hash",
         "uq_policy_activation_idempotency",
     )
+    private const val POLICY_JSON_MAX_BYTES = 256L * 1024L
     private val EXPECTED_FOREIGN_KEYS = setOf(
         "fk_catalog_projection_tenant",
         "fk_catalog_projection_clinic",
@@ -602,6 +632,7 @@ internal object AppointmentPlanMigrationTestSupport {
         "scheduling_policy_activation_commands" to setOf(
             "idempotency_key_hash",
             "request_fingerprint",
+            "replay_of_command_id",
             "lease_owner",
             "lease_until",
             "result_tenant_generation",

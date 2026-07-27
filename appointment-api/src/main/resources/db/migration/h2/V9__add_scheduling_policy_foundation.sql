@@ -115,6 +115,7 @@ CREATE TABLE scheduling_policy_activation_commands (
     clinic_id BIGINT,
     clinic_scope_key BIGINT NOT NULL,
     definition_id BIGINT NOT NULL,
+    replay_of_command_id BIGINT,
     expected_draft_revision BIGINT NOT NULL,
     expected_active_revision BIGINT NOT NULL,
     idempotency_key_hash VARCHAR(64) NOT NULL,
@@ -162,6 +163,8 @@ CREATE TABLE scheduling_policy_activation_commands (
 
 CREATE INDEX idx_policy_activation_due
     ON scheduling_policy_activation_commands(status, next_attempt_at, lease_until);
+CREATE INDEX idx_policy_activation_replay_source
+    ON scheduling_policy_activation_commands(replay_of_command_id);
 
 CREATE TABLE scheduling_policy_preview_jobs (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

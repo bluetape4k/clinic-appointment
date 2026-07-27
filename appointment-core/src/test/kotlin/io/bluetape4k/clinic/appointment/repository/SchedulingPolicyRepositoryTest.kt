@@ -98,6 +98,97 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
 
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `draft version allocation and revision-only scope mutation are serialized`(testDB: TestDB) {
+        withPolicyTables(testDB) {
+            val scope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
+            repository.nextDefinitionVersion(
+                scope,
+                SchedulingPolicyKind.BOOKING_COMMITMENT,
+            ) shouldBeEqualTo 1L
+
+            repository.createDefinition(definition(version = 1L))
+            repository.nextDefinitionVersion(
+                scope,
+                SchedulingPolicyKind.BOOKING_COMMITMENT,
+            ) shouldBeEqualTo 2L
+
+            repository.lockScopeHead(scope)
+            val revised = repository.compareAndIncrementRevision(scope, expectedRevision = 0L)
+            revised.revision shouldBeEqualTo 1L
+            revised.generation shouldBeEqualTo 0L
+
+            assertFailsWith<PolicyScopeHeadConflictException> {
+                repository.compareAndIncrementRevision(scope, expectedRevision = 0L)
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `draft revision and lifecycle transitions use compare and set contracts`(testDB: TestDB) {
+        withPolicyTables(testDB) {
+            val draft = repository.createDefinition(definition())
+            val definitionId = draft.id.shouldNotBeNull()
+
+            val revised = repository.compareAndReviseDraft(
+                definitionId = definitionId,
+                expectedRevision = 1L,
+                schemaVersion = 1,
+                effectiveFrom = Instant.parse("2026-07-28T00:00:00Z"),
+                effectiveUntil = Instant.parse("2026-08-28T00:00:00Z"),
+                payloadHash = "c".repeat(64),
+                payloadJson = """{"schemaVersion":1,"revision":2}""",
+                changeReason = "Revise booking safeguards",
+            ).shouldNotBeNull()
+            revised.revision shouldBeEqualTo 2L
+            revised.lifecycle shouldBeEqualTo PolicyLifecycle.DRAFT
+            revised.payloadHash shouldBeEqualTo "c".repeat(64)
+
+            repository.compareAndReviseDraft(
+                definitionId = definitionId,
+                expectedRevision = 1L,
+                schemaVersion = 1,
+                effectiveFrom = revised.effectiveFrom,
+                effectiveUntil = revised.effectiveUntil,
+                payloadHash = revised.payloadHash,
+                payloadJson = revised.payloadJson,
+                changeReason = revised.changeReason,
+            ).shouldBeNull()
+
+            repository.compareAndTransitionLifecycle(
+                definitionId = definitionId,
+                expectedRevision = 2L,
+                expectedLifecycle = PolicyLifecycle.DRAFT,
+                targetLifecycle = PolicyLifecycle.SCHEDULED,
+            ).shouldNotBeNull().lifecycle shouldBeEqualTo PolicyLifecycle.SCHEDULED
+
+            repository.compareAndTransitionLifecycle(
+                definitionId = definitionId,
+                expectedRevision = 2L,
+                expectedLifecycle = PolicyLifecycle.DRAFT,
+                targetLifecycle = PolicyLifecycle.ACTIVE,
+            ).shouldBeNull()
+
+            repository.compareAndTransitionLifecycle(
+                definitionId = definitionId,
+                expectedRevision = 2L,
+                expectedLifecycle = PolicyLifecycle.SCHEDULED,
+                targetLifecycle = PolicyLifecycle.ACTIVE,
+            ).shouldNotBeNull().lifecycle shouldBeEqualTo PolicyLifecycle.ACTIVE
+
+            assertFailsWith<IllegalArgumentException> {
+                repository.compareAndTransitionLifecycle(
+                    definitionId = definitionId,
+                    expectedRevision = 2L,
+                    expectedLifecycle = PolicyLifecycle.ACTIVE,
+                    targetLifecycle = PolicyLifecycle.DRAFT,
+                )
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
     fun `published interval lookup and immutable snapshot identity are reproducible`(testDB: TestDB) {
         withPolicyTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")

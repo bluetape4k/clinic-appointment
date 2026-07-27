@@ -89,6 +89,133 @@ class SchedulingPolicyRepository {
             ?.toSchedulingPolicyDefinitionRecord()
 
     /**
+     * Returns the next positive definition version inside one scope and kind.
+     *
+     * This is a lock-dependent allocation helper, not a globally safe sequence.
+     * The caller must hold [lockScopeHead] for [scope] until the new definition
+     * and corresponding scope revision are committed. Without that lock, two
+     * creators may observe the same value and one will lose at the unique
+     * constraint.
+     *
+     * @return `1` when no definition exists, otherwise the greatest persisted
+     * version plus one. Retired definitions remain part of the sequence.
+     */
+    fun nextDefinitionVersion(
+        scope: PolicyScopeRef,
+        kind: SchedulingPolicyKind,
+    ): Long =
+        SchedulingPolicyDefinitions
+            .selectAll()
+            .where {
+                (SchedulingPolicyDefinitions.tenantGroupId eq scope.tenantGroupId) and
+                    (SchedulingPolicyDefinitions.scope eq scope.scope) and
+                    (SchedulingPolicyDefinitions.clinicScopeKey eq scope.clinicScopeKey) and
+                    (SchedulingPolicyDefinitions.policyKind eq kind)
+            }
+            .orderBy(SchedulingPolicyDefinitions.version, SortOrder.DESC)
+            .limit(1)
+            .singleOrNull()
+            ?.get(SchedulingPolicyDefinitions.version)
+            ?.plus(1L)
+            ?: 1L
+
+    /**
+     * Replaces editable draft content iff the caller still owns [expectedRevision].
+     *
+     * The definition identity, version, scope, kind, and creator audit remain
+     * immutable. A successful compare-and-set increments the revision exactly
+     * once, which makes approvals and preview evidence bound to the prior
+     * revision stale without deleting their audit rows. This method does not
+     * open or commit a transaction; callers own the surrounding Exposed
+     * `transaction {}` and all related validation or outbox work.
+     *
+     * @param definitionId Positive draft identity.
+     * @param expectedRevision Positive revision read by the caller.
+     * @param schemaVersion Positive closed payload schema version.
+     * @param effectiveFrom Inclusive UTC policy boundary.
+     * @param effectiveUntil Exclusive UTC boundary, or `null` for no upper end.
+     * @param payloadHash Lowercase SHA-256 of canonical payload bytes.
+     * @param payloadJson Canonical payload JSON, limited to 256 KiB UTF-8.
+     * @param changeReason Non-secret operator rationale of 1..1000 characters.
+     * @return The new draft revision, or `null` when the definition is absent,
+     * no longer `DRAFT`, or its revision is stale.
+     */
+    @Suppress("LongParameterList")
+    fun compareAndReviseDraft(
+        definitionId: Long,
+        expectedRevision: Long,
+        schemaVersion: Int,
+        effectiveFrom: Instant,
+        effectiveUntil: Instant?,
+        payloadHash: String,
+        payloadJson: String,
+        changeReason: String,
+    ): SchedulingPolicyDefinitionRecord? {
+        require(definitionId > 0) { "definitionId must be positive" }
+        require(expectedRevision > 0) { "expectedRevision must be positive" }
+        require(schemaVersion > 0) { "schemaVersion must be positive" }
+        require(effectiveUntil == null || effectiveUntil > effectiveFrom) {
+            "effectiveUntil must be later than effectiveFrom"
+        }
+        require(SHA256_REGEX.matches(payloadHash)) { "payloadHash must be lowercase SHA-256" }
+        require(payloadJson.toByteArray().size <= MAX_JSON_BYTES) {
+            "payloadJson exceeds $MAX_JSON_BYTES bytes"
+        }
+        require(changeReason.isNotBlank() && changeReason.length <= 1000) {
+            "changeReason must contain 1..1000 characters"
+        }
+        val affected = SchedulingPolicyDefinitions.update({
+            (SchedulingPolicyDefinitions.id eq definitionId) and
+                (SchedulingPolicyDefinitions.lifecycle eq PolicyLifecycle.DRAFT) and
+                (SchedulingPolicyDefinitions.revision eq expectedRevision)
+        }) {
+            it[SchedulingPolicyDefinitions.schemaVersion] = schemaVersion
+            it[SchedulingPolicyDefinitions.effectiveFrom] = effectiveFrom
+            it[SchedulingPolicyDefinitions.effectiveUntil] = effectiveUntil
+            it[SchedulingPolicyDefinitions.revision] = expectedRevision + 1
+            it[SchedulingPolicyDefinitions.payloadHash] = payloadHash
+            it[SchedulingPolicyDefinitions.payloadJson] = payloadJson
+            it[SchedulingPolicyDefinitions.changeReason] = changeReason
+        }
+        return if (affected == 1) findDefinition(definitionId) else null
+    }
+
+    /**
+     * Changes lifecycle iff revision and current state still match.
+     *
+     * Allowed transitions are `DRAFT -> SCHEDULED|ACTIVE|RETIRED`,
+     * `SCHEDULED -> ACTIVE|RETIRED`, and `ACTIVE -> RETIRED`. The retirement
+     * paths preserve definition, approval, command, snapshot, and outbox rows.
+     * Callers must hold the matching scope-head lock while publishing or
+     * replacing an active definition; this primitive intentionally does not
+     * acquire locks or increment generations on its own.
+     *
+     * @return The transitioned definition, or `null` for an absent row, stale
+     * revision, or state mismatch. Unsupported transition pairs are programming
+     * errors and fail before SQL execution.
+     */
+    fun compareAndTransitionLifecycle(
+        definitionId: Long,
+        expectedRevision: Long,
+        expectedLifecycle: PolicyLifecycle,
+        targetLifecycle: PolicyLifecycle,
+    ): SchedulingPolicyDefinitionRecord? {
+        require(definitionId > 0) { "definitionId must be positive" }
+        require(expectedRevision > 0) { "expectedRevision must be positive" }
+        require((expectedLifecycle to targetLifecycle) in ALLOWED_LIFECYCLE_TRANSITIONS) {
+            "Unsupported policy lifecycle transition: $expectedLifecycle -> $targetLifecycle"
+        }
+        val affected = SchedulingPolicyDefinitions.update({
+            (SchedulingPolicyDefinitions.id eq definitionId) and
+                (SchedulingPolicyDefinitions.revision eq expectedRevision) and
+                (SchedulingPolicyDefinitions.lifecycle eq expectedLifecycle)
+        }) {
+            it[lifecycle] = targetLifecycle
+        }
+        return if (affected == 1) findDefinition(definitionId) else null
+    }
+
+    /**
      * Appends approval evidence for exactly one draft revision and actor.
      *
      * Duplicate actor approval for the same revision is rejected by the
@@ -169,6 +296,39 @@ class SchedulingPolicyRepository {
             .distinct()
             .sortedWith(compareBy<PolicyScopeRef>({ it.scope != PolicyScope.TENANT_DEFAULT }, { it.clinicScopeKey }))
             .map(::lockScopeHead)
+
+    /**
+     * Advances the optimistic scope revision without changing effective generation.
+     *
+     * Draft creation and scheduling mutate administrative scope state but do
+     * not change the effective policy selected by schedulers. They therefore
+     * advance [SchedulingPolicyScopeHeadRecord.revision] exactly once while
+     * preserving [SchedulingPolicyScopeHeadRecord.generation]. The caller must
+     * already hold the matching scope-head lock through all related writes.
+     *
+     * @throws PolicyScopeHeadConflictException when [expectedRevision] is stale.
+     */
+    fun compareAndIncrementRevision(
+        scope: PolicyScopeRef,
+        expectedRevision: Long,
+    ): SchedulingPolicyScopeHeadRecord {
+        require(expectedRevision >= 0) { "expectedRevision must be non-negative" }
+        val current = lockScopeHead(scope)
+        if (current.revision != expectedRevision) {
+            throw PolicyScopeHeadConflictException(scope, expectedRevision, current.revision)
+        }
+        val affected = SchedulingPolicyScopeHeads.update({
+            scopeHeadPredicate(scope) and
+                (SchedulingPolicyScopeHeads.revision eq expectedRevision)
+        }) {
+            it[revision] = current.revision + 1
+            it.update(updatedAt, CurrentTimestamp)
+        }
+        if (affected != 1) {
+            throw PolicyScopeHeadConflictException(scope, expectedRevision, current.revision)
+        }
+        return lockScopeHead(scope)
+    }
 
     /**
      * Advances both revision and generation iff [expectedRevision] is current.
@@ -436,6 +596,14 @@ class SchedulingPolicyRepository {
     private companion object {
         const val MAX_JSON_BYTES = 256 * 1024
         val SHA256_REGEX = Regex("[0-9a-f]{64}")
+        val ALLOWED_LIFECYCLE_TRANSITIONS = setOf(
+            PolicyLifecycle.DRAFT to PolicyLifecycle.SCHEDULED,
+            PolicyLifecycle.DRAFT to PolicyLifecycle.ACTIVE,
+            PolicyLifecycle.DRAFT to PolicyLifecycle.RETIRED,
+            PolicyLifecycle.SCHEDULED to PolicyLifecycle.ACTIVE,
+            PolicyLifecycle.SCHEDULED to PolicyLifecycle.RETIRED,
+            PolicyLifecycle.ACTIVE to PolicyLifecycle.RETIRED,
+        )
     }
 }
 
