@@ -1,7 +1,12 @@
 package io.bluetape4k.clinic.appointment.api.test
 
 import io.bluetape4k.logging.KLogging
+import org.junit.jupiter.api.parallel.Execution
+import org.junit.jupiter.api.parallel.ExecutionMode
+import org.junit.jupiter.api.parallel.ResourceAccessMode
+import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.ActiveProfilesResolver
 import org.springframework.test.context.DynamicPropertyRegistry
@@ -35,9 +40,24 @@ class DatabaseProfileResolver : ActiveProfilesResolver {
  * ```
  * ./gradlew :appointment-api:test -Dspring.profiles.active=test,test-postgresql
  * ```
+ *
+ * 공유 Testcontainers launcher는 JVM shutdown hook에서 종료된다. Spring context를 같은
+ * JVM shutdown 단계까지 캐시하면 Redis container 종료와 near-cache `close()`가 경쟁해
+ * `CLIENT TRACKING OFF`가 기본 command timeout까지 대기할 수 있다. 각 통합 테스트 class
+ * 뒤에 context를 먼저 닫아 Redis client와 near-cache를 컨테이너가 살아 있는 동안
+ * 정리한다. 컨테이너 자체는 singleton으로 재사용하므로 raw container를 반복 생성하지 않는다.
+ *
+ * 이 기반 class의 subclass는 같은 Spring context cache와 singleton container를 공유한다.
+ * class 병렬 실행 중 한 subclass가 `AFTER_CLASS`로 context를 닫으면 다른 subclass가 이미
+ * 주입받은 web server·security chain을 잃을 수 있다. [ResourceLock]의 공통 write lock으로
+ * 모든 subclass를 서로 배타 실행하고, [ExecutionMode.SAME_THREAD]로 한 class 안의 method도
+ * 순차 실행한다. 독립 unit test의 class 병렬성은 유지한다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles(resolver = DatabaseProfileResolver::class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@Execution(ExecutionMode.SAME_THREAD)
+@ResourceLock(value = "clinic-api-spring-context", mode = ResourceAccessMode.READ_WRITE)
 abstract class AbstractApiIntegrationTest {
 
     companion object : KLogging() {

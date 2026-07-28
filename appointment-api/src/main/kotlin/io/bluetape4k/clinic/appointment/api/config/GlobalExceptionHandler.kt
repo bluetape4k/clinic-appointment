@@ -94,6 +94,9 @@ class GlobalExceptionHandler(
     ): ResponseEntity<SchedulingApiErrorResponse> {
         val correlationId = request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) as? String
             ?: UUID.randomUUID().toString()
+        log.warn {
+            "Scheduling policy request rejected: error_code=${errorCode.name}, correlation_id=$correlationId"
+        }
         val builder = ResponseEntity.status(errorCode.httpStatus)
         if (errorCode.retryable) {
             builder.header(

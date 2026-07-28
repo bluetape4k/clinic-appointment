@@ -22,6 +22,16 @@
 ciphertext, key ID, fingerprint는 영속성 경계 밖으로 나오지 않습니다. 플랜은 구매한
 진료 의무이며 방문 예약이나 자원 선점이 아닙니다.
 
+## 예약 정책 기반
+
+불변 tenant baseline과 partial clinic override를 버전 정책 definition으로 저장합니다.
+strict payload decoding, validation, canonical hashing, generation-fenced compilation,
+activation command, preview job은 이 모듈에 있고 HTTP와 worker orchestration은
+`appointment-api`에 있습니다.
+
+[예약 정책 도메인 모델](../docs/requirements/domain-model.md#scheduling-policy-모델)과
+[Scheduling Policy API 계약](../docs/api/scheduling-policy.md)을 참고하세요.
+
 ## 핵심 클래스
 
 ### 도메인 엔티티 (Record)

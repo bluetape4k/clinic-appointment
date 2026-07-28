@@ -357,7 +357,7 @@ class SchedulingPolicyWorker(
                         "result=missed, kind=${work.kind}, scope_type=${command.scope}"
                 }
             }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             val failedAt = store.databaseNow()
             if (command.attempt >= properties.activationMaxAttempts) {
                 if (store.markActivationMissed(
@@ -368,7 +368,7 @@ class SchedulingPolicyWorker(
                     )
                 ) {
                     metrics.recordActivation(PolicyActivationMetricResult.MISSED, work.kind, command.scope)
-                    log.warn {
+                    log.warn(error) {
                         "Scheduling policy activation exhausted retries: " +
                             "result=missed, kind=${work.kind}, scope_type=${command.scope}"
                     }
@@ -384,7 +384,7 @@ class SchedulingPolicyWorker(
                     )
                 ) {
                     metrics.recordActivation(PolicyActivationMetricResult.RETRY, work.kind, command.scope)
-                    log.warn {
+                    log.warn(error) {
                         "Scheduling policy activation scheduled a retry: " +
                             "result=retry, kind=${work.kind}, scope_type=${command.scope}"
                     }
@@ -400,7 +400,7 @@ class SchedulingPolicyWorker(
         val result =
             try {
                 previewProcessor.process(jobId, owner, store.databaseNow())
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 val failedAt = store.databaseNow()
                 if (store.markPreviewFailed(jobId, owner, PREVIEW_PROCESSING_FAILED, failedAt)) {
                     if (kind != null && scope != null) {
@@ -410,7 +410,7 @@ class SchedulingPolicyWorker(
                             scope,
                         )
                     }
-                    log.warn {
+                    log.warn(error) {
                         "Scheduling policy preview failed closed: " +
                             "result=failed, kind=${kind ?: "unknown"}, scope_type=${scope ?: "unknown"}"
                     }

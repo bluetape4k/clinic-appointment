@@ -33,6 +33,10 @@ Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migr
 | Catalog plan input | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}` | Synchronize one immutable catalog BOM version. |
 | Appointment plans | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | Read one purchased treatment plan. |
 | Appointment plans | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{authority}/{purchaseId}` | Read by authority-qualified source purchase. |
+| Scheduling policies | `/api/{tenantCode}/admin/**/scheduling-policies` | Manage tenant baselines and clinic overrides with preview and activation evidence. |
+
+The complete scheduling-policy request, lifecycle, effective-read, and error
+contract is documented in [Scheduling Policy API](../docs/api/scheduling-policy.md).
 
 ### Plan Foundation Flags
 

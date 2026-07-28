@@ -27,6 +27,7 @@ notifications, Spring Boot APIs, and an Angular frontend.
 - **High-availability notifications** - Uses Redis Leader Election to guarantee single-node delivery, with Resilience4j CircuitBreaker/Retry/Bulkhead.
 - **Tenant-scoped REST API** - Provides Spring Boot 4 MVC APIs under `/api/{tenantCode}/...` with JWT tenant authorization, Flyway migrations, and Swagger UI.
 - **Appointment plan foundation** - Snapshots a purchased product BOM into immutable treatment obligations through catalog sync and trusted purchase-event convergence, before any visit is scheduled.
+- **Scheduling policy foundation** - Version-controls tenant baselines and clinic overrides for provisional booking, consent, overbooking, reconfirmation, disruption recovery, and controlled operating-hour extension.
 - **Angular 18 web UI** - Provides appointment search, creation, and status-change workflows.
 
 Catalog sync callers can reproduce `payloadHash` from the canonical hash
@@ -42,6 +43,24 @@ edges, purchase inbox decisions, and a pending plan-created outbox event.
 It does **not** schedule visits, reserve resources, obtain customer consent,
 publish the outbox, or process treatment completion/refunds. Those capabilities
 remain separate workflows and services.
+
+### Scheduling Policy Boundary
+
+Scheduling policies define how future booking decisions should behave. They do
+not create appointments by themselves. The foundation stores immutable tenant
+policy versions, clinic overrides, scope heads, preview jobs, activation
+commands, effective snapshots, and privacy-safe metrics.
+
+All rollout flags are off by default and must be enabled in this order:
+
+1. `scheduling.policy.shadow-compile-enabled`
+2. `scheduling.policy.effective-read-enabled`
+3. `scheduling.policy.admin-write-enabled`
+4. `scheduling.policy.preview-worker-enabled`
+5. `scheduling.policy.scheduled-activation-enabled`
+
+There is no booking-consumer flag in this foundation. Confirmed appointments
+still require customer consent before policy-driven changes are applied.
 
 ## Architecture
 
@@ -117,6 +136,8 @@ Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seede
 | [Frontend](docs/requirements/frontend.md) | Angular structure and page design. |
 | [Appointment plan design](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | Interactive plan, provisional booking, disruption, and policy design. |
 | [Appointment plan recovery](docs/runbooks/appointment-plan-foundation-recovery.md) | Quarantine inspection, dry-run redrive, rollback, and authority ownership. |
+| [Scheduling policy API](docs/api/scheduling-policy.md) | Tenant/clinic policy endpoints, idempotency, preview polling, errors, and rollout flags. |
+| [Scheduling policy activation runbook](docs/runbooks/scheduling-policy-activation.md) | Worker alerts, 60s/5m activation handling, replay/retire recovery, and V10 readiness. |
 
 ### Change History
 

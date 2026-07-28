@@ -125,3 +125,59 @@ if (bluetape4kProjectsDir.exists()) {
 **이유**: ORM-agnostic DDL 문법 차이(자동 증가, 타입명 등)가 벤더별로 달라 단일 SQL로 모두 커버 불가.
 
 **결과**: `resources/db/migration/h2/`, `postgresql/`, `mysql/` 경로 분리. `FlywayMigrationTest`가 CI에서 3 벤더 모두 실행.
+
+---
+
+### ADR-10: Scheduling Policy Foundation — V9/V10 분리 배포
+
+**결정**: V9는 scheduling policy definition, scope head, effective snapshot,
+activation command, preview job, generic outbox 호환 컬럼을 먼저 추가한다. V10은
+legacy 예약/플랜 outbox column 제거 또는 aggregate-only 소비 전환을 별도 배포로
+다룬다.
+
+**이유**: 예약 정책은 향후 예약 생성, 운영 장애 복구, 재확인, overbooking, 고객
+신뢰도 signal에 영향을 준다. 한 번의 migration에서 writer, reader, worker, consumer를
+동시에 바꾸면 aggregate-null, dual-write 불일치, stale snapshot을 운영 중에 되돌리기
+어렵다.
+
+**결과**:
+
+| 단계 | 계약 |
+|------|------|
+| V9 | 새 테이블과 generic aggregate column 추가, legacy column 유지, writer dual-write |
+| V10 준비 | aggregate-null 0건, legacy/new parity, 모든 writer version dual-write 관측 |
+| V10 | aggregate-only 소비 또는 legacy 제거를 별도 검증 뒤 수행 |
+
+### ADR-11: Scheduling Policy Transaction Ownership
+
+**결정**: controller는 HTTP status/header와 path-derived scope만 구성한다. 정책 lifecycle,
+revision/generation CAS, approval separation, preview evidence, activation command
+claim은 application service와 repository transaction이 소유한다.
+
+**이유**: 정책 명령은 DB row lock, idempotency unique key, durable command lease,
+scope head revision이 동시에 맞아야 한다. HTTP 계층에서 부분 판단을 하면 multi-dialect
+동시성 계약을 유지하기 어렵다.
+
+**결과**:
+
+| 영역 | 소유자 |
+|------|------|
+| path tenant/clinic 검증 | controller + `TenantClinicAccessChecker` |
+| actor 해석 | `ActorContextResolver` |
+| lifecycle/CAS/승인 | `SchedulingPolicyCommandService` |
+| preview admission/polling | `SchedulingPolicyPreviewService` |
+| due activation claim | `SchedulingPolicyWorker` + repository lease |
+| metric cardinality 제한 | `SchedulingPolicyMetrics` |
+
+### ADR-12: Effective Read Double-Read and Fail-Closed
+
+**결정**: effective snapshot은 compile 전후로 권위 generation을 다시 읽는다. 두 generation이
+다르면 snapshot을 반환하지 않고 retryable conflict로 실패한다.
+
+**이유**: 정책이 activation되는 순간에 오래된 tenant baseline과 새 clinic override를 섞어
+예약 결정을 내리면, 호출자는 재현 가능한 snapshot hash를 신뢰할 수 없다.
+
+**결과**: `GET .../effective`는 generation conflict를
+`POLICY_EFFECTIVE_READ_CONFLICT`, 권위 저장소 장애를
+`POLICY_EFFECTIVE_READ_UNAVAILABLE`로 반환한다. 두 경우 모두 stale cache를 관대하게
+반환하지 않는 fail-closed 계약이다.

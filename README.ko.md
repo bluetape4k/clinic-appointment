@@ -26,6 +26,7 @@ Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제�
 - **고가용성 알림** - Redis Leader Election으로 단일 노드 전송 보장, Resilience4j CircuitBreaker/Retry/Bulkhead 적용
 - **테넌트 범위 REST API** - `/api/{tenantCode}/...` 경로, JWT tenant 인가, Flyway 마이그레이션, Swagger UI 제공
 - **예약 플랜 기반** - 구매 상품 BOM을 불변 진료 의무로 스냅샷하고, 카탈로그 동기화와 신뢰된 구매 이벤트를 통해 방문 예약 이전 단계를 관리
+- **예약 정책 기반** - 가예약, 동의, overbooking, 재확인, 운영 장애 복구, 통제된 진료 시간 연장에 대한 tenant baseline과 clinic override를 버전 관리
 - **Angular 18 웹 UI** - 예약 조회/생성/상태 변경 인터페이스
 
 카탈로그 동기화 호출자는 [docs/api/catalog-payload-hash.md](docs/api/catalog-payload-hash.md)의
@@ -40,6 +41,24 @@ canonical hash 계약과 fixture로 `payloadHash`를 재현할 수 있습니다.
 
 방문 일정 배정, 자원 선점, 고객 동의, outbox 발행, 시술 완료·환불 처리는 구현하지
 않았습니다. 이 기능들은 별도 워크플로와 서비스의 책임입니다.
+
+### 예약 정책 경계
+
+Scheduling policy는 앞으로의 예약 결정이 따라야 할 동작을 정의합니다. 이 기능은
+예약을 직접 생성하지 않습니다. 이번 기반 구현은 불변 tenant 정책 버전, clinic override,
+scope head, preview job, activation command, effective snapshot, privacy-safe metric을
+저장합니다.
+
+모든 rollout flag는 기본적으로 꺼져 있으며 다음 순서로만 켭니다.
+
+1. `scheduling.policy.shadow-compile-enabled`
+2. `scheduling.policy.effective-read-enabled`
+3. `scheduling.policy.admin-write-enabled`
+4. `scheduling.policy.preview-worker-enabled`
+5. `scheduling.policy.scheduled-activation-enabled`
+
+이 foundation에는 booking consumer flag가 없습니다. 확정 예약은 정책 기반 변경을
+적용하기 전에 여전히 고객 동의가 필요합니다.
 
 ## 아키텍처
 
@@ -115,6 +134,8 @@ canonical hash 계약과 fixture로 `payloadHash`를 재현할 수 있습니다.
 | [프론트엔드](docs/requirements/frontend.md) | Angular 구성, 페이지 구조 |
 | [예약 플랜 설계](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 가예약, 장애 재조정, 병원 정책을 다루는 대화형 설계 문서 |
 | [예약 플랜 복구 런북](docs/runbooks/appointment-plan-foundation-recovery.md) | 격리 확인, dry-run redrive, 롤백, 원천 서비스 책임 |
+| [예약 정책 API](docs/api/scheduling-policy.md) | tenant/clinic 정책 endpoint, idempotency, preview polling, 오류, rollout flag |
+| [예약 정책 활성화 런북](docs/runbooks/scheduling-policy-activation.md) | worker alert, 60초/5분 activation 처리, replay/retire 복구, V10 준비 조건 |
 
 ### 변경 이력
 

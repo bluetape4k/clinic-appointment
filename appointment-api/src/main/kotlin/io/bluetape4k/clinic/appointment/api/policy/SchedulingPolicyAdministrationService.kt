@@ -32,6 +32,8 @@ import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyJobRepository
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
 import io.bluetape4k.clinic.appointment.service.SchedulingPolicyHasher
 import io.bluetape4k.clinic.appointment.service.SchedulingPolicyPayloadCodec
+import io.bluetape4k.logging.KLogging
+import io.bluetape4k.logging.warn
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.KotlinModule
@@ -61,6 +63,7 @@ import java.util.concurrent.ConcurrentHashMap
  * @property jobRepository 완료 preview token과 MISSED activation command를 로컬 DB에서 복원한다.
  * @property tenantEffectiveService clinic sentinel 없는 tenant baseline 조회 서비스.
  * @property clinicEffectiveService clinic override까지 resolve하는 권위 snapshot 서비스.
+ * @property metrics 작업·결과·scope 종류만 기록하는 낮은 cardinality 관리 API 지표다.
  * @property properties 공개 순서, preview horizon, polling 간격을 정의하는 fail-closed 설정.
  * @property clock preview 입력과 HTTP 응답에서 사용할 UTC application clock.
  */
@@ -74,6 +77,7 @@ class SchedulingPolicyAdministrationService(
     private val jobRepository: SchedulingPolicyJobRepository,
     private val tenantEffectiveService: TenantEffectiveSchedulingPolicyService,
     private val clinicEffectiveService: EffectiveSchedulingPolicyService,
+    private val metrics: SchedulingPolicyMetrics,
     private val properties: SchedulingPolicyProperties,
     private val clock: Clock = Clock.systemUTC(),
     private val pollingLimiter: SchedulingPolicyPollingLimiter =
@@ -89,7 +93,10 @@ class SchedulingPolicyAdministrationService(
         scope: PolicyScopeRef,
         actor: ActorContext,
         request: CreateSchedulingPolicyDraftRequest,
-    ): SchedulingPolicyMutationResponse {
+    ): SchedulingPolicyMutationResponse = observe(
+        PolicyAdministrationMetricOperation.CREATE_DRAFT,
+        scope,
+    ) {
         requireAdminWrite(actor, scope)
         require(request.schemaVersion > 0) { "schemaVersion must be positive" }
         require(request.expectedScopeRevision >= 0) { "expectedScopeRevision must be non-negative" }
@@ -118,7 +125,7 @@ class SchedulingPolicyAdministrationService(
                 actor = actor,
             )
         )
-        return SchedulingPolicyMutationResponse.from(result, currentGeneration(scope), actor.correlationId)
+        SchedulingPolicyMutationResponse.from(result, currentGeneration(scope), actor.correlationId)
     }
 
     /** 현재 draft row가 path scope, revision, strict payload schema를 계속 만족하는지 확인한다. */
@@ -127,7 +134,10 @@ class SchedulingPolicyAdministrationService(
         actor: ActorContext,
         definitionId: Long,
         request: ValidateSchedulingPolicyRequest,
-    ): SchedulingPolicyMutationResponse {
+    ): SchedulingPolicyMutationResponse = observe(
+        PolicyAdministrationMetricOperation.VALIDATE,
+        scope,
+    ) {
         requireAdminRead(actor, scope)
         val definition = requireDraft(scope, definitionId, request.expectedDraftRevision)
         payloadCodec.decode(
@@ -137,7 +147,7 @@ class SchedulingPolicyAdministrationService(
             definition.payloadJson,
         )
         val head = requireScopeHead(scope)
-        return SchedulingPolicyMutationResponse.validated(
+        SchedulingPolicyMutationResponse.validated(
             definition = definition,
             generation = currentGeneration(scope),
             scopeRevision = head.revision,
@@ -151,7 +161,10 @@ class SchedulingPolicyAdministrationService(
         actor: ActorContext,
         definitionId: Long,
         request: PreviewSchedulingPolicyRequest,
-    ): SchedulingPolicyPreviewSubmission {
+    ): SchedulingPolicyPreviewSubmission = observe(
+        PolicyAdministrationMetricOperation.PREVIEW,
+        scope,
+    ) {
         requireAdminWrite(actor, scope)
         if (!properties.previewWorkerEnabled) notFound()
         requireDraft(scope, definitionId, request.expectedDraftRevision)
@@ -169,7 +182,7 @@ class SchedulingPolicyAdministrationService(
                 requestedAt = requestedAt,
             )
         )
-        return SchedulingPolicyPreviewSubmission(
+        SchedulingPolicyPreviewSubmission(
             response = SchedulingPolicyPreviewResponse.from(result.job, actor.correlationId),
             asynchronous = result.disposition == SchedulingPolicyPreviewDisposition.ACCEPTED_ASYNC,
         )
@@ -181,12 +194,15 @@ class SchedulingPolicyAdministrationService(
         actor: ActorContext,
         definitionId: Long,
         request: ApproveSchedulingPolicyRequest,
-    ): SchedulingPolicyApprovalResponse {
+    ): SchedulingPolicyApprovalResponse = observe(
+        PolicyAdministrationMetricOperation.APPROVE,
+        scope,
+    ) {
         requireAdminWrite(actor, scope)
         requireChangeReason(request.changeReason)
         val definition = requireDraft(scope, definitionId, request.expectedDraftRevision)
         requireCompletedEvidence(scope, definition, request.previewEvidenceToken)
-        return SchedulingPolicyApprovalResponse.from(
+        SchedulingPolicyApprovalResponse.from(
             commandService.approve(
                 ApproveSchedulingPolicyCommand(
                     scope = scope,
@@ -205,7 +221,10 @@ class SchedulingPolicyAdministrationService(
         actor: ActorContext,
         definitionId: Long,
         request: ScheduleSchedulingPolicyRequest,
-    ): SchedulingPolicyActivationResponse {
+    ): SchedulingPolicyActivationResponse = observe(
+        PolicyAdministrationMetricOperation.SCHEDULE,
+        scope,
+    ) {
         requireAdminWrite(actor, scope)
         requireChangeReason(request.changeReason)
         val definition = requireDraft(scope, definitionId, request.expectedDraftRevision)
@@ -213,7 +232,7 @@ class SchedulingPolicyAdministrationService(
             "effectiveFrom must match the immutable draft boundary"
         }
         val preview = request.previewEvidence(scope, definitionId)
-        return SchedulingPolicyActivationResponse.scheduled(
+        SchedulingPolicyActivationResponse.scheduled(
             commandService.schedule(
                 ScheduleSchedulingPolicyCommand(
                     scope = scope,
@@ -235,11 +254,14 @@ class SchedulingPolicyAdministrationService(
         definitionId: Long,
         idempotencyKey: String?,
         request: ActivateSchedulingPolicyRequest,
-    ): SchedulingPolicyActivationResponse {
+    ): SchedulingPolicyActivationResponse = observe(
+        PolicyAdministrationMetricOperation.ACTIVATE,
+        scope,
+    ) {
         requireAdminWrite(actor, scope)
         requireChangeReason(request.changeReason)
         val key = requireIdempotencyKey(idempotencyKey)
-        return SchedulingPolicyActivationResponse.activated(
+        SchedulingPolicyActivationResponse.activated(
             commandService.activate(
                 ActivateSchedulingPolicyCommand(
                     scope = scope,
@@ -261,7 +283,10 @@ class SchedulingPolicyAdministrationService(
         actor: ActorContext,
         definitionId: Long,
         request: RetireSchedulingPolicyRequest,
-    ): SchedulingPolicyMutationResponse {
+    ): SchedulingPolicyMutationResponse = observe(
+        PolicyAdministrationMetricOperation.RETIRE,
+        scope,
+    ) {
         requireAdminWrite(actor, scope)
         requireChangeReason(request.changeReason)
         requireCurrentGeneration(scope, request.expectedGeneration.requireMatches(scope))
@@ -275,7 +300,7 @@ class SchedulingPolicyAdministrationService(
                 actor = actor,
             )
         )
-        return SchedulingPolicyMutationResponse.from(result, currentGeneration(scope), actor.correlationId)
+        SchedulingPolicyMutationResponse.from(result, currentGeneration(scope), actor.correlationId)
     }
 
     /**
@@ -290,7 +315,10 @@ class SchedulingPolicyAdministrationService(
         commandId: Long,
         idempotencyKey: String?,
         request: ReplaySchedulingPolicyRequest,
-    ): SchedulingPolicyActivationResponse {
+    ): SchedulingPolicyActivationResponse = observe(
+        PolicyAdministrationMetricOperation.REPLAY,
+        scope,
+    ) {
         requireAdminWrite(actor, scope)
         requireChangeReason(request.changeReason)
         val generation = request.expectedGeneration.requireMatches(scope)
@@ -309,7 +337,7 @@ class SchedulingPolicyAdministrationService(
             )
         }
         val head = requireScopeHead(scope)
-        return SchedulingPolicyActivationResponse.activated(
+        SchedulingPolicyActivationResponse.activated(
             commandService.activate(
                 ActivateSchedulingPolicyCommand(
                     scope = scope,
@@ -337,12 +365,15 @@ class SchedulingPolicyAdministrationService(
         scope: PolicyScopeRef,
         actor: ActorContext,
         jobId: Long,
-    ): SchedulingPolicyPreviewResponse {
+    ): SchedulingPolicyPreviewResponse = observe(
+        PolicyAdministrationMetricOperation.PREVIEW_JOB,
+        scope,
+    ) {
         requireAdminRead(actor, scope)
         require(jobId > 0) { "jobId must be positive" }
         val job = previewStore.find(scope, jobId) ?: notFound()
         pollingLimiter.requireAllowed(scope, job)
-        return SchedulingPolicyPreviewResponse.from(job, actor.correlationId)
+        SchedulingPolicyPreviewResponse.from(job, actor.correlationId)
     }
 
     /** clinic sentinel 없이 tenant baseline effective projection을 반환한다. */
@@ -351,10 +382,13 @@ class SchedulingPolicyAdministrationService(
         actor: ActorContext,
         decisionAt: Instant,
         serviceAt: Instant,
-    ): EffectiveSchedulingPolicyResponse {
+    ): EffectiveSchedulingPolicyResponse = observe(
+        PolicyAdministrationMetricOperation.TENANT_EFFECTIVE,
+        scope,
+    ) {
         require(scope.scope == PolicyScope.TENANT_DEFAULT) { "tenant effective route requires tenant scope" }
         requireEffectiveRead(actor, scope)
-        return EffectiveSchedulingPolicyResponse.from(
+        EffectiveSchedulingPolicyResponse.from(
             tenantEffectiveService.getEffective(scope.tenantGroupId, decisionAt, serviceAt),
             actor.correlationId,
         )
@@ -366,10 +400,13 @@ class SchedulingPolicyAdministrationService(
         actor: ActorContext,
         decisionAt: Instant,
         serviceAt: Instant,
-    ): EffectiveSchedulingPolicyResponse {
+    ): EffectiveSchedulingPolicyResponse = observe(
+        PolicyAdministrationMetricOperation.CLINIC_EFFECTIVE,
+        scope,
+    ) {
         require(scope.scope == PolicyScope.CLINIC_OVERRIDE) { "clinic effective route requires clinic scope" }
         requireEffectiveRead(actor, scope)
-        return EffectiveSchedulingPolicyResponse.from(
+        EffectiveSchedulingPolicyResponse.from(
             clinicEffectiveService.getEffective(
                 scope.tenantGroupId,
                 requireNotNull(scope.clinicId),
@@ -378,6 +415,60 @@ class SchedulingPolicyAdministrationService(
             ),
             actor.correlationId,
         )
+    }
+
+    /**
+     * 관리 facade 결과를 성공/거부로 닫아 기록하고 원래 결과 또는 예외를 그대로 보존한다.
+     *
+     * 이 경계는 입력값이나 예외 상세를 meter에 전달하지 않는다. JVM [Error]는 업무 거부가
+     * 아니므로 포착하지 않으며, 모든 application 예외는 같은 원본 instance로 재전파한다.
+     */
+    internal fun <T> observe(
+        operation: PolicyAdministrationMetricOperation,
+        scope: PolicyScopeRef,
+        block: () -> T,
+    ): T =
+        try {
+            block().also {
+                recordAdministrationSafely(
+                    PolicyAdministrationMetricResult.SUCCEEDED,
+                    operation,
+                    scope.scope,
+                )
+            }
+        } catch (error: Exception) {
+            recordAdministrationSafely(
+                PolicyAdministrationMetricResult.REJECTED,
+                operation,
+                scope.scope,
+            )
+            throw error
+        }
+
+    /**
+     * meter registry 장애를 업무 결과와 격리한다.
+     *
+     * Micrometer registry는 동적 교체, backend 종료, custom registry 구현 오류로
+     * `register` 또는 `increment`에서 예외를 던질 수 있다. 관리 명령은 이 시점에 이미
+     * commit됐을 수 있으므로 관측 실패를 호출자에게 노출하면 성공한 명령의 재시도를
+     * 유발한다. 따라서 log message에는 닫힌 enum만 남기고 registry [Exception]의 class와
+     * stack은 로컬 진단용 throwable로만 첨부한다. JVM [Error]는 정상적인 복구 대상이
+     * 아니므로 포착하지 않는다.
+     */
+    private fun recordAdministrationSafely(
+        result: PolicyAdministrationMetricResult,
+        operation: PolicyAdministrationMetricOperation,
+        scope: PolicyScope,
+    ) {
+        try {
+            metrics.recordAdministration(result, operation, scope)
+        } catch (error: Exception) {
+            log.warn(error) {
+                "Scheduling policy administration metric failed: " +
+                    "result=${result.name.lowercase()}, operation=${operation.name.lowercase()}, " +
+                    "scope_type=${scope.name.lowercase()}"
+            }
+        }
     }
 
     private fun requireCompletedEvidence(
@@ -562,7 +653,7 @@ class SchedulingPolicyAdministrationService(
         detail: String,
     ): Nothing = throw SchedulingPolicyApiException(errorCode, detail)
 
-    private companion object {
+    private companion object : KLogging() {
         const val POLICY_WRITE_SCOPE = "policy:write"
     }
 }

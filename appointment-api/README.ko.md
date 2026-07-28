@@ -33,6 +33,10 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 | 플랜용 카탈로그 입력 | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}` | 불변 상품 BOM 버전 동기화 |
 | 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | 구매 진료 플랜 한 건 조회 |
 | 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{authority}/{purchaseId}` | authority가 포함된 원천 구매로 조회 |
+| 예약 정책 | `/api/{tenantCode}/admin/**/scheduling-policies` | preview와 활성화 증거를 사용해 tenant baseline과 clinic override 관리 |
+
+전체 예약 정책 요청, lifecycle, effective read, 오류 계약은
+[Scheduling Policy API](../docs/api/scheduling-policy.md)에 정리되어 있습니다.
 
 ### 플랜 기반 기능 플래그
 
