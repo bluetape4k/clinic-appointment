@@ -15,6 +15,7 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.inSubQuery
+import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.neq
@@ -40,7 +41,10 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
     override fun ResultRow.toEntity(): AppointmentRecord = toAppointmentRecord()
 
     /**
-     * Finds an appointment by ID only when the owning clinic belongs to [tenantGroupId].
+     * 병원이 [tenantGroupId]에 속하고 legacy DTO에 필요한 확정 projection이 완성된 예약을 조회합니다.
+     *
+     * 아직 proposal이 확정되지 않은 commitment v2 row는 방문 identity로는 존재하지만 기존
+     * [AppointmentRecord] 계약을 충족하지 않으므로 반환하지 않습니다.
      */
     fun findByIdAndTenant(appointmentId: Long, tenantGroupId: Long): AppointmentRecord? =
         Appointments
@@ -49,6 +53,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
                 (Appointments.id eq appointmentId) and
                     (Appointments.clinicId inSubQuery tenantClinicIds(tenantGroupId))
             }
+            .andWhere { completeAppointmentProjection() }
             .firstOrNull()
             ?.toAppointmentRecord()
 
@@ -124,6 +129,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .where { Appointments.clinicId eq clinicId }
             .andWhere { Appointments.appointmentDate eq date }
             .andWhere { Appointments.status inList activeStatuses }
+            .andWhere { completeAppointmentProjection() }
             .map { it.toAppointmentRecord() }
 
     /**
@@ -166,6 +172,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .selectAll()
             .where { Appointments.appointmentDate eq date }
             .andWhere { Appointments.status inList activeStatuses }
+            .andWhere { completeAppointmentProjection() }
             .map { it.toAppointmentRecord() }
 
     /**
@@ -232,6 +239,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .where { Appointments.equipmentId eq equipmentId }
             .andWhere { Appointments.status neq AppointmentState.CANCELLED }
             .andWhere { periodConditions }
+            .andWhere { completeAppointmentProjection() }
             .map { it.toAppointmentRecord() }
     }
 
@@ -252,5 +260,20 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .andWhere { Appointments.appointmentDate lessEq dateRange.endInclusive }
             .andWhere { Appointments.status neq AppointmentState.CANCELLED }
             .andWhere { Appointments.status neq AppointmentState.NO_SHOW }
+            .andWhere { completeAppointmentProjection() }
             .map { it.toAppointmentRecord() }
 }
+
+/**
+ * 기존 [AppointmentRecord]로 안전하게 읽을 수 있는 확정 일정 projection 조건입니다.
+ *
+ * SQL `IS NOT NULL` 조건을 mapper 앞에 적용하여 미확정 commitment v2 row가 legacy 조회에
+ * 섞이지 않도록 한다. Kotlin의 nullable column type은 SQL 조건으로 smart cast되지 않으므로
+ * mapper도 같은 불변조건을 명시적으로 검증한다.
+ */
+internal fun completeAppointmentProjection(): Op<Boolean> =
+    Appointments.doctorId.isNotNull() and
+        Appointments.treatmentTypeId.isNotNull() and
+        Appointments.appointmentDate.isNotNull() and
+        Appointments.startTime.isNotNull() and
+        Appointments.endTime.isNotNull()

@@ -124,7 +124,7 @@
 | Task | RED | GREEN | Refactor/검증 | 상태 |
 |---|---|---|---|---|
 | 1. 핵심 계약·순수 계산 | 누락 타입 compile 실패 및 상한 API 실패 확인 | 대상 19개 테스트 통과 | `:appointment-core:build`: 425 tests, 실패 0; `git diff --check`; `!!`/deprecated import 없음 | DONE |
-| 2. Exposed transaction primitive | PENDING | PENDING | PENDING | PENDING |
+| 2. Exposed transaction primitive | 저장소·table 부재 compile 실패와 v2 projection 계약 실패 확인 | 대상 12개 테스트 통과 | `:appointment-core:build`: 437 tests, 실패 0; caller transaction·KDoc·금지 패턴 점검 | DONE |
 | 3. Flyway V10 | PENDING | PENDING | PENDING | PENDING |
 | 4. 실행 BOM event ingest | PENDING | PENDING | PENDING | PENDING |
 | 5. bounded proposal | PENDING | PENDING | PENDING | PENDING |
@@ -134,7 +134,7 @@
 | 9. 운영·문서·KDoc | PENDING | PENDING | PENDING | PENDING |
 | 10. 세 DB·성능·회귀 | PENDING | PENDING | PENDING | PENDING |
 
-현재 집계: Required checks 10/22; N/A: 0; Blocked: 0.
+현재 집계: Required checks 11/22; N/A: 0; Blocked: 0.
 
 ### Task 1 상세 증거
 
@@ -158,3 +158,31 @@
 - **Trigger N/A:** Task 1은 순수 함수와 불변 모델만 추가해 Exposed transaction,
   Spring wiring, coroutine cancellation, Testcontainers, 자원 수명주기를 변경하지
   않았다.
+
+### Task 2 상세 증거
+
+- **RED 1:** 다섯 repository test를 production table·record·repository보다 먼저
+  작성했고 `AppointmentCommitments`, `ResourceAllocations`,
+  `AppointmentPlanRevisionRepository` 등 계약 부재로 `compileTestKotlin`이 실패했다.
+- **GREEN 1:** commitment/proposal/consent append와 version CAS, 실제
+  `TreatmentSpace`, actor-scope idempotency, Plan revision append/activate,
+  전담 자원 overlap 및 capacity bucket 상한, allocation 원자 교체를 구현했다.
+- **격리 복구:** `Appointments`가 참조하는 `Equipments`와
+  `ConsultationTopics`를 전용 H2 schema 정리 목록에 명시해 FK 잔존과 default
+  tenant 중복을 제거했다. 저장소 대상 테스트 11개가 통과했다.
+- **RED 2:** `COMMITMENT_V2` 미확정 row 생성과 legacy 조회 제외 테스트를 추가해
+  `AppointmentModelVersion`·`modelVersion` 부재 compile 실패를 확인했다.
+- **GREEN 2:** 기존 `Appointments` identity에 default `LEGACY` model version과
+  nullable 확정 projection을 추가했다. legacy mapper 앞에는 완성 projection
+  조건을 두고 mapper 자체도 bluetape4k `requireNotNull`로 불변조건을 검증한다.
+  대상 테스트는 최종 12개가 통과했다.
+- **transaction 경계:** 신규 repository는 내부에서 `transaction {}`를 열지 않는다.
+  transaction 밖 호출 실패, capacity/overlap 사전 검증 후 insert, 기존 allocation을
+  제외한 교체 집계와 성공 후 release를 테스트로 고정했다.
+- **회귀:** `./gradlew :appointment-core:build` 성공. H2, PostgreSQL, MySQL을
+  사용하는 기존 suite를 포함한 XML 집계는 `tests=437`, `failures=0`,
+  `errors=0`, `skipped=0`이다.
+- **Kotlin 점검:** 신규 record는 `Serializable`과 `serialVersionUID`를 제공하고,
+  table/record/public repository 및 핵심 속성은 한국어 KDoc을 제공한다.
+  신규 production `!!`, `println`, broad suspend `runCatching`,
+  deprecated `SqlExpressionBuilder.eq`는 없다.

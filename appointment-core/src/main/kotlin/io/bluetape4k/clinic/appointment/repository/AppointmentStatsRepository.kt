@@ -3,10 +3,12 @@ package io.bluetape4k.clinic.appointment.repository
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.logging.KLogging
+import io.bluetape4k.support.requireNotNull
 import org.jetbrains.exposed.v1.core.count
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.select
@@ -69,6 +71,7 @@ class AppointmentStatsRepository {
             .where { Appointments.clinicId eq clinicId }
             .andWhere { Appointments.appointmentDate greaterEq dateRange.start }
             .andWhere { Appointments.appointmentDate lessEq dateRange.endInclusive }
+            .andWhere { Appointments.appointmentDate.isNotNull() }
             .let { query ->
                 if (statuses != null) query.andWhere { Appointments.status inList statuses }
                 else query
@@ -76,7 +79,7 @@ class AppointmentStatsRepository {
             .groupBy(Appointments.appointmentDate, Appointments.status)
             .map { row ->
                 Triple(
-                    row[Appointments.appointmentDate],
+                    row[Appointments.appointmentDate].requireNotNull("appointmentDate"),
                     row[Appointments.status],
                     row[countExpr],
                 )
@@ -107,10 +110,11 @@ class AppointmentStatsRepository {
             .where { Appointments.clinicId eq clinicId }
             .andWhere { Appointments.appointmentDate greaterEq dateRange.start }
             .andWhere { Appointments.appointmentDate lessEq dateRange.endInclusive }
+            .andWhere { Appointments.doctorId.isNotNull() }
             .groupBy(Appointments.doctorId, Appointments.status)
             .map { row ->
                 DoctorStatusCount(
-                    doctorId = row[Appointments.doctorId].value,
+                    doctorId = row[Appointments.doctorId].requireNotNull("doctorId").value,
                     status = row[Appointments.status],
                     count = row[countExpr],
                 )

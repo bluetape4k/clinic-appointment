@@ -62,6 +62,7 @@ import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyPreviewJobs
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyScopeHeads
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentDependencies
 import org.jetbrains.exposed.v1.core.ResultRow
 import java.time.DayOfWeek
@@ -175,8 +176,8 @@ fun ResultRow.toHolidayRecord() = HolidayRecord(
 fun ResultRow.toAppointmentRecord() = AppointmentRecord(
     id = this[Appointments.id].value,
     clinicId = this[Appointments.clinicId].value,
-    doctorId = this[Appointments.doctorId].value,
-    treatmentTypeId = this[Appointments.treatmentTypeId].value,
+    doctorId = this[Appointments.doctorId].requireNotNull("doctorId").value,
+    treatmentTypeId = this[Appointments.treatmentTypeId].requireNotNull("treatmentTypeId").value,
     equipmentId = this[Appointments.equipmentId]?.value,
     consultationTopicId = this[Appointments.consultationTopicId]?.value,
     consultationMethod = this[Appointments.consultationMethod],
@@ -184,9 +185,9 @@ fun ResultRow.toAppointmentRecord() = AppointmentRecord(
     patientName = this[Appointments.patientName],
     patientPhone = this[Appointments.patientPhone],
     patientExternalId = this[Appointments.patientExternalId],
-    appointmentDate = this[Appointments.appointmentDate],
-    startTime = this[Appointments.startTime],
-    endTime = this[Appointments.endTime],
+    appointmentDate = this[Appointments.appointmentDate].requireNotNull("appointmentDate"),
+    startTime = this[Appointments.startTime].requireNotNull("startTime"),
+    endTime = this[Appointments.endTime].requireNotNull("endTime"),
     status = this[Appointments.status],
     createdAt = this[Appointments.createdAt],
     updatedAt = this[Appointments.updatedAt],
