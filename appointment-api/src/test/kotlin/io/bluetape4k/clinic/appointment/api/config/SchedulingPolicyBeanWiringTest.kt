@@ -5,9 +5,11 @@ import io.bluetape4k.clinic.appointment.api.policy.ExposedSchedulingPolicyPrevie
 import io.bluetape4k.clinic.appointment.api.policy.ExposedSchedulingPolicyWorkerStore
 import io.bluetape4k.clinic.appointment.api.policy.PolicyPreviewEvidenceVerifier
 import io.bluetape4k.clinic.appointment.api.policy.ScheduledPolicyActivationExecutor
+import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyAdministrationService
 import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyCommandService
 import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyPreviewService
 import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyWorker
+import io.bluetape4k.clinic.appointment.api.policy.TenantEffectiveSchedulingPolicyService
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyJobRepository
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
@@ -34,6 +36,7 @@ class SchedulingPolicyBeanWiringTest {
     @Test
     fun `policy write preview and worker graph remains absent without dedicated secret`() {
         contextRunner.run { context ->
+            assertBeanCount(context, TenantEffectiveSchedulingPolicyService::class.java, 1)
             assertBeanCount(context, SchedulingPolicyJobRepository::class.java, 0)
             assertBeanCount(context, SchedulingPolicyCommandService::class.java, 0)
             assertBeanCount(context, ExposedSchedulingPolicyPreviewStore::class.java, 0)
@@ -42,6 +45,7 @@ class SchedulingPolicyBeanWiringTest {
             assertBeanCount(context, ExposedSchedulingPolicyWorkerStore::class.java, 0)
             assertBeanCount(context, ScheduledPolicyActivationExecutor::class.java, 0)
             assertBeanCount(context, SchedulingPolicyWorker::class.java, 0)
+            assertBeanCount(context, SchedulingPolicyAdministrationService::class.java, 0)
         }
     }
 
@@ -60,6 +64,7 @@ class SchedulingPolicyBeanWiringTest {
                 assertBeanCount(context, ExposedSchedulingPolicyWorkerStore::class.java, 1)
                 assertBeanCount(context, ScheduledPolicyActivationExecutor::class.java, 1)
                 assertBeanCount(context, SchedulingPolicyWorker::class.java, 1)
+                assertBeanCount(context, SchedulingPolicyAdministrationService::class.java, 1)
             }
     }
 

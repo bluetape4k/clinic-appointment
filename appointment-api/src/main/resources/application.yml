@@ -40,6 +40,10 @@ scheduling:
         preview-sync-row-limit: 10000
         preview-sync-deadline: 2s
         preview-job-deadline: 5m
+        # caller가 scan 범위를 임의로 확장하지 못하도록 서버가 고정하는 미래 영향 범위다.
+        preview-horizon: 30d
+        # HTTP Retry-After와 process-local polling limiter가 공유하는 최소 조회 간격이다.
+        preview-poll-interval: 1s
         # 한 병원 scope가 보유할 수 있는 PENDING/RUNNING preview 상한이다.
         preview-queue-capacity: 100
         preview-tenant-concurrency: 2

@@ -358,6 +358,41 @@ class SchedulingPolicyJobRepository(
             ?.toSchedulingPolicyPreviewJobRecord()
 
     /**
+     * HTTP/API 경계에서 미리보기 작업 하나를 scope와 primary key로 함께 조회합니다.
+     *
+     * [jobId]는 전역 증가 database identity라서 그 값만으로 조회하면 같은 SaaS 인스턴스의
+     * 다른 tenant 또는 clinic preview row를 관찰할 수 있습니다. 이 overload는 routing,
+     * Gateway 인증정보, 병원 접근 검증을 거쳐 만든 [scope]와 row의
+     * `tenant_group_id`, `scope`, `clinic_scope_key`, `id`가 모두 일치할 때만 반환합니다.
+     * tenant baseline은 `clinic_scope_key = 0`, clinic override는 양수 clinic ID를 사용하므로
+     * PostgreSQL, MySQL, H2에서 null 비교 차이 없이 같은 fence를 적용합니다.
+     *
+     * 반환값 `null`은 해당 row가 없거나 호출자가 제공한 scope boundary와 일치하지 않는다는
+     * 뜻입니다. API 계층은 이를 동일하게 404로 처리해야 하며, 다른 tenant/scope에 존재하는지
+     * 여부를 응답, 로그, metric tag로 구분해서 노출하면 안 됩니다.
+     *
+     * @param scope 인증된 tenant baseline 또는 clinic override boundary입니다.
+     * @param jobId 양수 preview job database 식별자입니다.
+     * @return 같은 scope에 속한 preview job입니다. 없거나 scope가 다르면 `null`입니다.
+     */
+    fun findPreviewJob(
+        scope: PolicyScopeRef,
+        jobId: Long,
+    ): SchedulingPolicyPreviewJobRecord? {
+        require(jobId > 0) { "jobId must be positive" }
+        return SchedulingPolicyPreviewJobs
+            .selectAll()
+            .where {
+                (SchedulingPolicyPreviewJobs.tenantGroupId eq scope.tenantGroupId) and
+                    (SchedulingPolicyPreviewJobs.scope eq scope.scope) and
+                    (SchedulingPolicyPreviewJobs.clinicScopeKey eq scope.clinicScopeKey) and
+                    (SchedulingPolicyPreviewJobs.id eq jobId)
+            }
+            .singleOrNull()
+            ?.toSchedulingPolicyPreviewJobRecord()
+    }
+
+    /**
      * 한 정책 scope의 runnable preview queue가 설정 상한에 도달했는지 판단합니다.
      *
      * tenant baseline과 각 clinic override는 서로 다른 queue key를 사용합니다. 따라서
@@ -393,19 +428,36 @@ class SchedulingPolicyJobRepository(
     }
 
     /**
-     * 완료 preview의 opaque activation token을 exact indexed equality로 조회합니다.
+     * 완료 preview의 opaque activation token을 권위 policy scope 안에서 조회합니다.
+     *
+     * token만 먼저 조회한 뒤 tenant를 비교하면 애플리케이션 계층에 다른 tenant의 행이
+     * materialize됩니다. 이 메서드는 [scope]의 `tenant_group_id`, `scope`,
+     * `clinic_scope_key`를 token과 같은 SQL predicate에 넣어 그 경계를 저장소에서
+     * fail-closed로 적용합니다. tenant baseline은 `clinic_scope_key = 0`, clinic
+     * override는 양수 clinic ID를 사용하므로 지원 dialect에서 같은 equality 계약을
+     * 유지합니다.
      *
      * token은 로그에 남기지 않으며 `COMPLETED` 행만 반환합니다. 호출자는 반환된 revision,
-     * generation, definition을 현재 activation 입력과 다시 비교해야 합니다.
+     * generation, definition도 현재 activation 입력과 다시 비교해야 합니다.
+     *
+     * @param scope Gateway 경로와 tenant/clinic 소유권 검증으로 확정한 policy scope입니다.
+     * @param token 길이와 문자 집합이 제한된 opaque activation evidence token입니다.
+     * @return 같은 scope에 속한 완료 preview입니다. 없거나 다른 scope이면 `null`입니다.
      */
-    fun findCompletedPreviewByToken(token: String): SchedulingPolicyPreviewJobRecord? {
+    fun findCompletedPreviewByToken(
+        scope: PolicyScopeRef,
+        token: String,
+    ): SchedulingPolicyPreviewJobRecord? {
         require(token.isNotBlank() && token.length <= MAX_EVIDENCE_TOKEN_LENGTH && OPAQUE_TOKEN_REGEX.matches(token)) {
             "token must contain bounded opaque safe characters"
         }
         return SchedulingPolicyPreviewJobs
             .selectAll()
             .where {
-                (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.COMPLETED) and
+                (SchedulingPolicyPreviewJobs.tenantGroupId eq scope.tenantGroupId) and
+                    (SchedulingPolicyPreviewJobs.scope eq scope.scope) and
+                    (SchedulingPolicyPreviewJobs.clinicScopeKey eq scope.clinicScopeKey) and
+                    (SchedulingPolicyPreviewJobs.status eq PolicyPreviewJobStatus.COMPLETED) and
                     (SchedulingPolicyPreviewJobs.activationEvidenceToken eq token)
             }
             .singleOrNull()

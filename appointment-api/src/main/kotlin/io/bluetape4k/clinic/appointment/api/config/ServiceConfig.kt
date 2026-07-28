@@ -10,10 +10,12 @@ import io.bluetape4k.clinic.appointment.api.policy.PolicyPreviewEvidenceVerifier
 import io.bluetape4k.clinic.appointment.api.policy.PolicyTenantBoundaryVerifier
 import io.bluetape4k.clinic.appointment.api.policy.ScheduledPolicyActivationExecutionOutcome
 import io.bluetape4k.clinic.appointment.api.policy.ScheduledPolicyActivationExecutor
+import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyAdministrationService
 import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyCommandService
 import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyMetrics
 import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyPreviewService
 import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyWorker
+import io.bluetape4k.clinic.appointment.api.policy.TenantEffectiveSchedulingPolicyService
 import io.bluetape4k.clinic.appointment.api.service.DashboardStatsService
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
 import io.bluetape4k.clinic.appointment.api.security.ActorType
@@ -162,6 +164,19 @@ class ServiceConfig {
         effectivePolicyCache: EffectivePolicyCache,
     ): EffectiveSchedulingPolicyService =
         EffectiveSchedulingPolicyService(effectivePolicyStore, effectivePolicyCache)
+
+    /**
+     * clinic sentinel 없이 tenant baseline effective policy를 컴파일하는 관리 조회 서비스를 만든다.
+     *
+     * clinic-resolved cache에는 양수 clinic ID가 identity 일부로 들어가므로 tenant 조회가
+     * 그것을 재사용하지 않는다. 이 서비스는 tenant scope head와 tenant definition만
+     * double-read하고 별도 namespace의 deterministic hash를 반환한다.
+     */
+    @Bean
+    fun tenantEffectiveSchedulingPolicyService(
+        schedulingPolicyRepository: SchedulingPolicyRepository,
+    ): TenantEffectiveSchedulingPolicyService =
+        TenantEffectiveSchedulingPolicyService(schedulingPolicyRepository)
 
     @Bean
     fun schedulingPolicyEventRepository(): SchedulingPolicyEventRepository = SchedulingPolicyEventRepository()
@@ -352,6 +367,38 @@ class ServiceConfig {
         policyRepository: SchedulingPolicyRepository,
     ): PolicyPreviewEvidenceVerifier =
         PersistedPolicyPreviewEvidenceVerifier(jobRepository, policyRepository)
+
+    /**
+     * 정책 관리 HTTP 계약을 기존 명령·preview·effective 서비스에 연결한다.
+     *
+     * raw idempotency key를 digest로 영속화할 전용 secret이 설정된 경우에만 생성한다.
+     * 기능 flag가 꺼진 상태에서는 facade가 policy path를 404로 닫아 두므로 배포자가
+     * `shadow compile → effective read → admin write` 순서를 지키며 노출할 수 있다.
+     */
+    @Bean
+    @ConditionalOnProperty("scheduling.policy.idempotency-hash-secret")
+    fun schedulingPolicyAdministrationService(
+        commandService: SchedulingPolicyCommandService,
+        previewService: SchedulingPolicyPreviewService,
+        previewStore: ExposedSchedulingPolicyPreviewStore,
+        previewVerifier: PolicyPreviewEvidenceVerifier,
+        policyRepository: SchedulingPolicyRepository,
+        jobRepository: SchedulingPolicyJobRepository,
+        tenantEffectiveService: TenantEffectiveSchedulingPolicyService,
+        clinicEffectiveService: EffectiveSchedulingPolicyService,
+        properties: SchedulingPolicyProperties,
+    ): SchedulingPolicyAdministrationService =
+        SchedulingPolicyAdministrationService(
+            commandService = commandService,
+            previewService = previewService,
+            previewStore = previewStore,
+            previewVerifier = previewVerifier,
+            policyRepository = policyRepository,
+            jobRepository = jobRepository,
+            tenantEffectiveService = tenantEffectiveService,
+            clinicEffectiveService = clinicEffectiveService,
+            properties = properties,
+        )
 
     /** DB-time due selection과 owner-fenced retry/missed primitive를 worker에 제공한다. */
     @Bean

@@ -4,7 +4,14 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.test.Containers
+import io.bluetape4k.clinic.appointment.model.tables.Clinics
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import jakarta.servlet.FilterChain
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
@@ -25,15 +32,34 @@ import org.springframework.web.client.RestClient
  * 조작으로 행위자 역할과 소속을 확장할 수 없는지 확인한다. 오류 응답의 correlation ID는
  * 진단에 사용할 수 있어야 하지만 bearer token이나 전체 claim은 노출하지 않아야 한다.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = [
+        "scheduling.policy.shadow-compile-enabled=true",
+        "scheduling.policy.effective-read-enabled=true",
+        "scheduling.policy.admin-write-enabled=true",
+        "scheduling.policy.idempotency-hash-secret=BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+    ],
+)
 @ActiveProfiles("test", "integration-test")
 class SchedulingPolicySecurityIntegrationTest {
 
     companion object {
+        private const val TENANT_ID = 91L
+        private const val TENANT_CODE = "policy-security-tenant"
+
         @JvmStatic
         @DynamicPropertySource
         fun configureRedis(registry: DynamicPropertyRegistry) {
             registry.add("spring.data.redis.url") { Containers.Redis.url }
+            if ("test-postgresql" in System.getProperty("spring.profiles.active", "")) {
+                val postgres = Containers.Postgres
+                registry.add("spring.datasource.url") { postgres.jdbcUrl }
+                registry.add("spring.datasource.username") { postgres.username ?: "test" }
+                registry.add("spring.datasource.password") { postgres.password ?: "" }
+                registry.add("spring.datasource.driver-class-name") { "org.postgresql.Driver" }
+                registry.add("spring.flyway.enabled") { "true" }
+            }
         }
     }
 
@@ -42,10 +68,24 @@ class SchedulingPolicySecurityIntegrationTest {
 
     private val filter = CorrelationIdFilter()
     private lateinit var client: RestClient
+    private var clinicId: Long = 0
+    private var siblingClinicId: Long = 0
 
     @BeforeEach
     fun setUp() {
         client = RestClient.builder().baseUrl("http://localhost:$port").build()
+        transaction {
+            Clinics.deleteAll()
+            TenantGroups.deleteAll()
+            TenantGroups.insert {
+                it[id] = EntityID(TENANT_ID, TenantGroups)
+                it[tenantCode] = TENANT_CODE
+                it[displayName] = "Policy Tenant"
+                it[active] = true
+            }
+            clinicId = insertClinic("Policy Clinic")
+            siblingClinicId = insertClinic("Sibling Clinic")
+        }
     }
 
     @Test
@@ -112,6 +152,100 @@ class SchedulingPolicySecurityIntegrationTest {
         response.body.contains(attackerToken).shouldBeFalse()
         response.body.contains("raw-claim-secret").shouldBeFalse()
         response.body.contains("parser").shouldBeFalse()
+    }
+
+    @Test
+    fun `policy matcher requires operator role capability tenant and exact clinic membership`() {
+        policyRequest(
+            "/api/$TENANT_CODE/admin/scheduling-policies/effective",
+            token = null,
+        ).status shouldBeEqualTo HttpStatus.UNAUTHORIZED.value()
+
+        policyRequest(
+            "/api/$TENANT_CODE/admin/scheduling-policies/effective",
+            token = policyToken(scopes = emptySet()),
+        ).assertPolicyForbidden()
+
+        policyRequest(
+            "/api/$TENANT_CODE/admin/scheduling-policies/effective",
+            token = policyToken(
+                roles = listOf(SchedulingRole.DOCTOR),
+                actorType = ActorType.DOCTOR,
+            ),
+        ).assertPolicyForbidden()
+
+        policyRequest(
+            "/api/$TENANT_CODE/admin/scheduling-policies/effective",
+            token = policyToken(allowedTenants = listOf("other-tenant")),
+        ).assertPolicyForbidden()
+
+        // 권위 정책이 없는 503 controller 응답에 도달했다는 것은 broad ADMIN matcher보다
+        // 앞의 ADMIN|STAFF + policy:write matcher를 통과했다는 뜻이다.
+        val tenantAllowed = policyRequest(
+            "/api/$TENANT_CODE/admin/scheduling-policies/effective",
+            token = policyToken(),
+        )
+        tenantAllowed.status shouldBeEqualTo HttpStatus.SERVICE_UNAVAILABLE.value()
+        tenantAllowed.body.contains("\"errorCode\":\"POLICY_EFFECTIVE_READ_UNAVAILABLE\"").shouldBeTrue()
+
+        val clinicAllowed = policyRequest(
+            "/api/$TENANT_CODE/admin/clinics/$clinicId/scheduling-policies/effective",
+            token = policyToken(allowedClinicIds = setOf(clinicId)),
+        )
+        clinicAllowed.status shouldBeEqualTo HttpStatus.SERVICE_UNAVAILABLE.value()
+        clinicAllowed.body.contains("\"errorCode\":\"POLICY_EFFECTIVE_READ_UNAVAILABLE\"").shouldBeTrue()
+
+        policyRequest(
+            "/api/$TENANT_CODE/admin/clinics/$siblingClinicId/scheduling-policies/effective",
+            token = policyToken(allowedClinicIds = setOf(clinicId)),
+        ).assertPolicyForbidden()
+    }
+
+    private fun insertClinic(name: String): Long =
+        Clinics.insertAndGetId {
+            it[tenantGroupId] = EntityID(TENANT_ID, TenantGroups)
+            it[Clinics.name] = name
+        }.value
+
+    private fun policyRequest(path: String, token: String?): AuthenticationFailureResponse =
+        client.get()
+            .uri("$path?decisionAt=2026-07-28T00:00:00Z&serviceAt=2026-07-28T01:00:00Z")
+            .header(CorrelationIdFilter.HEADER_NAME, "policy-security")
+            .apply {
+                if (token != null) {
+                    header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                }
+            }
+            .exchange { _, serverResponse ->
+                AuthenticationFailureResponse(
+                    status = serverResponse.statusCode.value(),
+                    correlationId = serverResponse.headers.getFirst(CorrelationIdFilter.HEADER_NAME),
+                    body = serverResponse.bodyTo(String::class.java).orEmpty(),
+                )
+            }
+
+    private fun policyToken(
+        roles: List<String> = listOf(SchedulingRole.STAFF),
+        actorType: ActorType = ActorType.STAFF,
+        allowedTenants: List<String> = listOf(TENANT_CODE),
+        allowedClinicIds: Set<Long> = emptySet(),
+        scopes: Set<String> = setOf("policy:write"),
+    ): String =
+        TestJwtProvider.createToken(
+            userId = "policy-operator",
+            clinicId = allowedClinicIds.singleOrNull(),
+            roles = roles,
+            actorType = actorType,
+            allowedTenants = allowedTenants,
+            allowedClinicIds = allowedClinicIds,
+            scopes = scopes,
+        )
+
+    private fun AuthenticationFailureResponse.assertPolicyForbidden() {
+        status shouldBeEqualTo HttpStatus.FORBIDDEN.value()
+        body.contains("\"errorCode\":\"POLICY_ACTOR_FORBIDDEN\"").shouldBeTrue()
+        body.contains("\"retryable\":false").shouldBeTrue()
+        body.contains("\"correlationId\":\"policy-security\"").shouldBeTrue()
     }
 
     private data class AuthenticationFailureResponse(

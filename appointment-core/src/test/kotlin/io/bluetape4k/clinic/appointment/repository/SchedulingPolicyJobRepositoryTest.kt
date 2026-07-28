@@ -381,6 +381,23 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
             completed.leaseOwner.shouldBeNull()
             completed.leaseUntil.shouldBeNull()
             completed.lastErrorCode.shouldBeNull()
+            val clinicScope = PolicyScopeRef(1L, PolicyScope.CLINIC_OVERRIDE, 41L)
+            repository.findCompletedPreviewByToken(
+                clinicScope,
+                "evidence-token-for-current-revision",
+            ).shouldNotBeNull().id shouldBeEqualTo jobId
+            repository.findCompletedPreviewByToken(
+                clinicScope.copy(clinicId = 42L),
+                "evidence-token-for-current-revision",
+            ).shouldBeNull()
+            repository.findCompletedPreviewByToken(
+                PolicyScopeRef(2L, PolicyScope.CLINIC_OVERRIDE, 41L),
+                "evidence-token-for-current-revision",
+            ).shouldBeNull()
+            repository.findCompletedPreviewByToken(
+                PolicyScopeRef(1L, PolicyScope.TENANT_DEFAULT),
+                "evidence-token-for-current-revision",
+            ).shouldBeNull()
 
             repository.claimDuePreview(
                 jobId,
@@ -517,6 +534,51 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
 
             repository.isPreviewQueueSaturated(tenantBaseline, capacity = 1).shouldBeTrue()
             repository.isPreviewQueueSaturated(clinicTwo, capacity = 1).shouldBeFalse()
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `preview job primary key lookup is fenced by tenant and policy scope`(testDB: TestDB) {
+        withJobTables(testDB) {
+            val now = Instant.parse("2026-07-27T00:00:00Z")
+            val clinicScope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.CLINIC_OVERRIDE, clinicId = 41L)
+            val clinicJob = repository.createPreviewJob(preview(now))
+
+            repository.findPreviewJob(clinicScope, clinicJob.id.shouldNotBeNull())
+                .shouldNotBeNull()
+                .id shouldBeEqualTo clinicJob.id
+            repository.findPreviewJob(
+                clinicScope.copy(clinicId = 42L),
+                clinicJob.id.shouldNotBeNull(),
+            ).shouldBeNull()
+            repository.findPreviewJob(
+                PolicyScopeRef(tenantGroupId = 2L, scope = PolicyScope.CLINIC_OVERRIDE, clinicId = 41L),
+                clinicJob.id.shouldNotBeNull(),
+            ).shouldBeNull()
+            repository.findPreviewJob(
+                PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT),
+                clinicJob.id.shouldNotBeNull(),
+            ).shouldBeNull()
+
+            val tenantScope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
+            val tenantJob = repository.createPreviewJob(
+                preview(now.plusSeconds(1)).copy(
+                    scope = PolicyScope.TENANT_DEFAULT,
+                    clinicId = null,
+                    clinicScopeKey = 0L,
+                    clinicGeneration = 0L,
+                    clinicGenerationDigest = "0".repeat(64),
+                )
+            )
+
+            repository.findPreviewJob(tenantScope, tenantJob.id.shouldNotBeNull())
+                .shouldNotBeNull()
+                .id shouldBeEqualTo tenantJob.id
+            repository.findPreviewJob(
+                clinicScope,
+                tenantJob.id.shouldNotBeNull(),
+            ).shouldBeNull()
         }
     }
 

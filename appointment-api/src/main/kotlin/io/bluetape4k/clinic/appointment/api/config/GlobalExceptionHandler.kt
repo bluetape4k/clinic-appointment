@@ -32,7 +32,9 @@ import java.util.UUID
  * [io.bluetape4k.clinic.appointment.api.security.SecurityErrorResponseWriter]가 별도로 처리한다.
  */
 @RestControllerAdvice
-class GlobalExceptionHandler {
+class GlobalExceptionHandler(
+    private val schedulingPolicyProperties: SchedulingPolicyProperties = SchedulingPolicyProperties(),
+) {
 
     companion object : KLogging()
 
@@ -92,7 +94,14 @@ class GlobalExceptionHandler {
     ): ResponseEntity<SchedulingApiErrorResponse> {
         val correlationId = request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) as? String
             ?: UUID.randomUUID().toString()
-        return ResponseEntity.status(errorCode.httpStatus).body(
+        val builder = ResponseEntity.status(errorCode.httpStatus)
+        if (errorCode.retryable) {
+            builder.header(
+                org.springframework.http.HttpHeaders.RETRY_AFTER,
+                retryAfterSeconds(),
+            )
+        }
+        return builder.body(
             SchedulingApiErrorResponse(
                 error = errorCode.safeMessage,
                 errorCode = errorCode.name,
@@ -108,6 +117,10 @@ class GlobalExceptionHandler {
         ex: MethodArgumentNotValidException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isSchedulingPolicyRequest()) {
+            log.warn { "Scheduling policy request validation failed" }
+            return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
+        }
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request validation failed" }
             return foundationResponse(PlanFoundationError.VALIDATION_FAILED, request)
@@ -123,6 +136,10 @@ class GlobalExceptionHandler {
         ex: MethodArgumentTypeMismatchException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isSchedulingPolicyRequest()) {
+            log.warn { "Scheduling policy path parameter validation failed" }
+            return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
+        }
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation path parameter validation failed" }
             return foundationResponse(PlanFoundationError.VALIDATION_FAILED, request)
@@ -138,6 +155,10 @@ class GlobalExceptionHandler {
         ex: HttpMessageNotReadableException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isSchedulingPolicyRequest()) {
+            log.warn { "Scheduling policy request body could not be decoded" }
+            return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
+        }
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request body could not be decoded" }
             return foundationResponse(PlanFoundationError.VALIDATION_FAILED, request)
@@ -152,6 +173,10 @@ class GlobalExceptionHandler {
         ex: IllegalArgumentException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isSchedulingPolicyRequest()) {
+            log.warn { "Scheduling policy request failed domain validation" }
+            return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
+        }
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request failed domain validation" }
             return foundationResponse(PlanFoundationError.VALIDATION_FAILED, request)
@@ -166,6 +191,10 @@ class GlobalExceptionHandler {
         ex: NoSuchElementException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isSchedulingPolicyRequest()) {
+            log.warn { "Scheduling policy resource lookup was hidden" }
+            return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_RESOURCE_NOT_FOUND, request)
+        }
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation resource lookup was hidden" }
             return foundationResponse(PlanFoundationError.RESOURCE_NOT_FOUND, request)
@@ -198,7 +227,9 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException::class)
     fun handleAccessDenied(request: HttpServletRequest): ResponseEntity<*> =
-        if (request.isPlanFoundationRequest()) {
+        if (request.isSchedulingPolicyRequest()) {
+            schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, request)
+        } else if (request.isPlanFoundationRequest()) {
             foundationResponse(PlanFoundationError.FORBIDDEN, request)
         } else {
             ResponseEntity.status(HttpStatus.FORBIDDEN).build<Void>()
@@ -235,4 +266,13 @@ class GlobalExceptionHandler {
 
     private fun HttpServletRequest.isPlanFoundationRequest(): Boolean =
         requestURI.contains("/catalog-products/") || requestURI.contains("/appointment-plans/")
+
+    private fun HttpServletRequest.isSchedulingPolicyRequest(): Boolean =
+        isSchedulingPolicyRequestPath(requestURI)
+
+    /** retryable policy 오류가 요구하는 정수 초 backoff를 구성된 polling 간격에서 올림한다. */
+    private fun retryAfterSeconds(): String =
+        ((schedulingPolicyProperties.previewPollInterval.toMillis() + 999L) / 1_000L)
+            .coerceAtLeast(1L)
+            .toString()
 }
