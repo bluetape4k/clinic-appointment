@@ -35,6 +35,7 @@ import io.bluetape4k.clinic.appointment.model.tables.Holidays
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.PlannedTreatments
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionDependencies
+import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionGroupingConstraints
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependencies
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
@@ -122,6 +123,7 @@ class SchemaInitConfig {
                     AppointmentPlanRevisions,
                     PlanRevisionTreatments,
                     PlanRevisionDependencies,
+                    PlanRevisionGroupingConstraints,
                     AppointmentCommitments,
                     AppointmentProposals,
                     ConsentDecisions,

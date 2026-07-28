@@ -90,6 +90,16 @@ CREATE TABLE scheduling_plan_revision_treatments (
     component_product_version_id VARCHAR(128) NOT NULL,
     product_version_id VARCHAR(128) NOT NULL,
     treatment_status VARCHAR(16) NOT NULL,
+    source_bom_item_id VARCHAR(128) NOT NULL,
+    sequence_no INTEGER NOT NULL,
+    representative_treatment_name VARCHAR(256) NOT NULL,
+    detailed_treatment_codes_payload TEXT NOT NULL,
+    preparation_minutes INTEGER NOT NULL,
+    treatment_minutes INTEGER NOT NULL,
+    recovery_minutes INTEGER NOT NULL,
+    practitioner_qualifications_payload TEXT NOT NULL,
+    equipment_types_payload TEXT NOT NULL,
+    space_capabilities_payload TEXT NOT NULL,
     CONSTRAINT fk_revision_treatment_revision FOREIGN KEY (plan_revision_id)
         REFERENCES scheduling_appointment_plan_revisions(id) ON DELETE CASCADE,
     CONSTRAINT uq_plan_revision_treatment UNIQUE (plan_revision_id, treatment_key)
@@ -101,10 +111,26 @@ CREATE TABLE scheduling_plan_revision_dependencies (
     predecessor_treatment_key VARCHAR(128) NOT NULL,
     successor_treatment_key VARCHAR(128) NOT NULL,
     dependency_type VARCHAR(16) NOT NULL,
+    minimum_interval_days INTEGER NOT NULL,
+    preferred_interval_days INTEGER,
+    maximum_interval_days INTEGER,
     CONSTRAINT fk_revision_dependency_revision FOREIGN KEY (plan_revision_id)
         REFERENCES scheduling_appointment_plan_revisions(id) ON DELETE CASCADE,
     CONSTRAINT uq_plan_revision_dependency UNIQUE (
         plan_revision_id, predecessor_treatment_key, successor_treatment_key
+    )
+);
+
+CREATE TABLE scheduling_plan_revision_grouping_constraints (
+    id BIGSERIAL PRIMARY KEY,
+    plan_revision_id BIGINT NOT NULL,
+    first_treatment_key VARCHAR(128) NOT NULL,
+    second_treatment_key VARCHAR(128) NOT NULL,
+    grouping_type VARCHAR(32) NOT NULL,
+    CONSTRAINT fk_revision_grouping_revision FOREIGN KEY (plan_revision_id)
+        REFERENCES scheduling_appointment_plan_revisions(id) ON DELETE CASCADE,
+    CONSTRAINT uq_plan_revision_grouping UNIQUE (
+        plan_revision_id, first_treatment_key, second_treatment_key
     )
 );
 
