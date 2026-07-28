@@ -88,6 +88,43 @@ class SchedulingPolicyWorkerTest {
     }
 
     @Test
+    fun `broken lateness metric cannot prevent durable missed transition`() {
+        val commandId = 1L
+        val store = FakeWorkerStore(
+            now = now,
+            activationIds = listOf(commandId),
+            previewIds = emptyList(),
+            effectiveFrom = now.minusSeconds(301),
+        )
+
+        worker(store, metrics = brokenMetrics()).runActivationTick()
+
+        store.missedIds shouldBeEqualTo listOf(commandId)
+        store.retryIds shouldBeEqualTo emptyList()
+    }
+
+    @Test
+    fun `broken completion metric cannot turn successful activation into retry`() {
+        val commandId = 2L
+        val store = FakeWorkerStore(now, listOf(commandId), emptyList())
+        var completed = false
+        val worker = worker(
+            store = store,
+            executor = ScheduledPolicyActivationExecutor { _, _, _, _ ->
+                completed = true
+                ScheduledPolicyActivationExecutionOutcome(false)
+            },
+            metrics = brokenMetrics(),
+        )
+
+        worker.runActivationTick()
+
+        completed.shouldBeTrue()
+        store.retryIds shouldBeEqualTo emptyList()
+        store.missedIds shouldBeEqualTo emptyList()
+    }
+
+    @Test
     fun `transient failure records deterministic exponential retry using database time`() {
         val commandId = 7L
         val store = FakeWorkerStore(
@@ -201,6 +238,29 @@ class SchedulingPolicyWorkerTest {
     }
 
     @Test
+    fun `broken preview metric cannot alter completed durable result`() {
+        val jobId = 101L
+        val store = FakeWorkerStore(now, emptyList(), listOf(jobId))
+        var completed = false
+        val worker = worker(
+            store = store,
+            previewProcessor = ScheduledPolicyPreviewPageProcessor { _, _, _ ->
+                completed = true
+                SchedulingPolicyPreviewResult(
+                    SchedulingPolicyPreviewDisposition.COMPLETED,
+                    preview(jobId).copy(status = PolicyPreviewJobStatus.COMPLETED),
+                )
+            },
+            metrics = brokenMetrics(),
+        )
+
+        worker.runPreviewTick()
+
+        completed.shouldBeTrue()
+        store.failedPreviewIds shouldBeEqualTo emptyList()
+    }
+
+    @Test
     fun `shutdown observes already admitted work and waits until its bounded call returns`() {
         val store = FakeWorkerStore(now, emptyList(), listOf(101L))
         val processorEntered = CountDownLatch(1)
@@ -258,16 +318,25 @@ class SchedulingPolicyWorkerTest {
             },
         previewProcessor: ScheduledPolicyPreviewPageProcessor =
             ScheduledPolicyPreviewPageProcessor { _, _, _ -> null },
+        metrics: SchedulingPolicyMetrics = SchedulingPolicyMetrics(SimpleMeterRegistry()),
     ) = SchedulingPolicyWorker(
         store = store,
         activationExecutor = executor,
         previewProcessor = previewProcessor,
         properties = enabledProperties(),
-        metrics = SchedulingPolicyMetrics(SimpleMeterRegistry()),
+        metrics = metrics,
         systemActor = systemActor(),
         ownerFactory = { "worker-1" },
         jitterUnit = { _, _ -> 0.0 },
     )
+
+    private fun brokenMetrics(): SchedulingPolicyMetrics {
+        val registry = SimpleMeterRegistry()
+        registry.config().onMeterAdded {
+            throw IllegalStateException("simulated registry failure")
+        }
+        return SchedulingPolicyMetrics(registry)
+    }
 
     private fun enabledProperties() = SchedulingPolicyProperties(
         shadowCompileEnabled = true,

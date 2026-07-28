@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.policy
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyApiException
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyProperties
@@ -15,9 +16,13 @@ import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyJobRepository
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
 import io.mockk.mockk
+import io.mockk.every
 import io.mockk.verify
-import org.junit.jupiter.api.assertThrows
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.Assertions.assertSame
+import java.io.IOException
 import java.time.Instant
 
 /**
@@ -31,6 +36,7 @@ import java.time.Instant
 class SchedulingPolicyAdministrationServiceTest {
 
     private val previewService = mockk<SchedulingPolicyPreviewService>(relaxed = true)
+    private val registry = SimpleMeterRegistry()
     private val service = SchedulingPolicyAdministrationService(
         commandService = mockk(),
         previewService = previewService,
@@ -40,6 +46,7 @@ class SchedulingPolicyAdministrationServiceTest {
         jobRepository = mockk<SchedulingPolicyJobRepository>(),
         tenantEffectiveService = mockk(),
         clinicEffectiveService = mockk(),
+        metrics = SchedulingPolicyMetrics(registry),
         properties = SchedulingPolicyProperties(
             shadowCompileEnabled = true,
             effectiveReadEnabled = true,
@@ -50,7 +57,7 @@ class SchedulingPolicyAdministrationServiceTest {
 
     @Test
     fun `preview is hidden before worker rollout so no orphan async job can be created`() {
-        val failure = assertThrows<SchedulingPolicyApiException> {
+        val failure = assertFailsWith<SchedulingPolicyApiException> {
             service.preview(
                 scope = PolicyScopeRef(11L, PolicyScope.TENANT_DEFAULT),
                 actor = actor(),
@@ -64,7 +71,77 @@ class SchedulingPolicyAdministrationServiceTest {
 
         failure.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_RESOURCE_NOT_FOUND
         verify(exactly = 0) { previewService.submit(any()) }
+        registry
+            .get("clinic.scheduling.policy.administration")
+            .tags(
+                "result", "rejected",
+                "operation", "preview",
+                "scope_type", "tenant_default",
+            )
+            .counter()
+            .count() shouldBeEqualTo 1.0
     }
+
+    @Test
+    fun `metric failure never changes successful result or original application exception`() {
+        val brokenMetrics = mockk<SchedulingPolicyMetrics>()
+        every {
+            brokenMetrics.recordAdministration(any(), any(), any())
+        } throws IllegalStateException("meter registry unavailable")
+        val resilientService = serviceWith(brokenMetrics)
+        val scope = PolicyScopeRef(11L, PolicyScope.TENANT_DEFAULT)
+
+        resilientService.observe(
+            PolicyAdministrationMetricOperation.VALIDATE,
+            scope,
+        ) {
+            "committed"
+        } shouldBeEqualTo "committed"
+
+        val original = IOException("repository adapter failed")
+        val propagated = assertThrows<IOException> {
+            resilientService.observe(
+                PolicyAdministrationMetricOperation.VALIDATE,
+                scope,
+            ) {
+                throw original
+            }
+        }
+        assertSame(original, propagated)
+        verify(exactly = 1) {
+            brokenMetrics.recordAdministration(
+                PolicyAdministrationMetricResult.SUCCEEDED,
+                PolicyAdministrationMetricOperation.VALIDATE,
+                PolicyScope.TENANT_DEFAULT,
+            )
+        }
+        verify(exactly = 1) {
+            brokenMetrics.recordAdministration(
+                PolicyAdministrationMetricResult.REJECTED,
+                PolicyAdministrationMetricOperation.VALIDATE,
+                PolicyScope.TENANT_DEFAULT,
+            )
+        }
+    }
+
+    private fun serviceWith(metrics: SchedulingPolicyMetrics) =
+        SchedulingPolicyAdministrationService(
+            commandService = mockk(),
+            previewService = previewService,
+            previewStore = mockk(),
+            previewVerifier = mockk(),
+            policyRepository = mockk<SchedulingPolicyRepository>(),
+            jobRepository = mockk<SchedulingPolicyJobRepository>(),
+            tenantEffectiveService = mockk(),
+            clinicEffectiveService = mockk(),
+            metrics = metrics,
+            properties = SchedulingPolicyProperties(
+                shadowCompileEnabled = true,
+                effectiveReadEnabled = true,
+                adminWriteEnabled = true,
+                previewWorkerEnabled = false,
+            ),
+        )
 
     private fun actor() = ActorContext(
         actorId = "tenant-admin",

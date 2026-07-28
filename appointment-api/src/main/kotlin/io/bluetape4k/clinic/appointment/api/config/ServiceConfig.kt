@@ -386,6 +386,7 @@ class ServiceConfig {
         jobRepository: SchedulingPolicyJobRepository,
         tenantEffectiveService: TenantEffectiveSchedulingPolicyService,
         clinicEffectiveService: EffectiveSchedulingPolicyService,
+        metrics: SchedulingPolicyMetrics,
         properties: SchedulingPolicyProperties,
     ): SchedulingPolicyAdministrationService =
         SchedulingPolicyAdministrationService(
@@ -397,6 +398,7 @@ class ServiceConfig {
             jobRepository = jobRepository,
             tenantEffectiveService = tenantEffectiveService,
             clinicEffectiveService = clinicEffectiveService,
+            metrics = metrics,
             properties = properties,
         )
 

@@ -22,6 +22,16 @@ loads the aggregate in a caller-owned Exposed transaction.
 patient ciphertext, key IDs, and fingerprints remain inside the persistence
 boundary. A plan is a purchased obligation, not a visit or resource hold.
 
+## Scheduling Policy Foundation
+
+Immutable tenant baselines and partial clinic overrides are stored as versioned
+policy definitions. Strict payload decoding, validation, canonical hashing,
+generation-fenced compilation, activation commands, and preview jobs live in
+this module; HTTP and worker orchestration live in `appointment-api`.
+
+See the [scheduling-policy domain model](../docs/requirements/domain-model.md#scheduling-policy-모델)
+and [Scheduling Policy API contract](../docs/api/scheduling-policy.md).
+
 ## Core Classes
 
 ### Domain Entities (Record)

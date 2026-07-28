@@ -180,3 +180,78 @@ flowchart TD
 ![Solver data flow](assets/data-flow-06-solver-data.png)
 
 [SVG](assets/data-flow-06-solver-data.svg) · [Mermaid source](assets/data-flow-06-solver-data.mmd)
+
+## 7. Scheduling Policy 관리 흐름
+
+```mermaid
+flowchart TD
+    ADMIN["관리자"] -->|"POST /admin/.../scheduling-policies/drafts"| API["Tenant/Clinic SchedulingPolicyController"]
+    API -->|"path tenant/clinic 검증"| SCOPE["TenantClinicAccessChecker"]
+    API -->|"Gateway principal -> ActorContext"| ACTOR["ActorContextResolver"]
+    API --> APP["SchedulingPolicyAdministrationService"]
+    APP --> CMD["SchedulingPolicyCommandService"]
+    CMD -->|"transaction + revision/generation CAS"| DB[("PostgreSQL")]
+    CMD -->|"definition, approval, scope head"| DB
+
+    ADMIN -->|"POST /{id}/preview"| PREVIEW["SchedulingPolicyPreviewService"]
+    PREVIEW -->|"bounded scan + cursor"| IMPACT["SchedulingPolicyImpactRepository"]
+    IMPACT --> DB
+    PREVIEW -->|"200 completed or 202 durable job"| ADMIN
+    ADMIN -->|"GET /preview-jobs/{jobId}"| POLL["Preview polling"]
+    POLL --> DB
+
+    ADMIN -->|"approve + activate/schedule"| CMD
+    CMD -->|"durable activation command + idempotency"| DB
+    WORKER["SchedulingPolicyWorker"] -->|"claim due command with DB lease"| DB
+    WORKER -->|"activate, increment generation, outbox"| DB
+
+    style ADMIN fill:#E74C3C,color:#fff
+    style API fill:#7B68EE,color:#fff
+    style DB fill:#336791,color:#fff
+    style WORKER fill:#16A085,color:#fff
+```
+
+이 흐름은 예약 생성 경로를 직접 바꾸지 않는다. booking consumer flag는 foundation에
+없으며, 예약 생성 서비스가 effective snapshot을 소비하는 단계는 후속 변경이다.
+
+## 8. Scheduling Policy Effective Read 흐름
+
+```mermaid
+flowchart TD
+    CALLER["예약/운영 caller"] -->|"GET .../effective?decisionAt&serviceAt"| API["SchedulingPolicyController"]
+    API -->|"RFC 3339 instant 정규화"| TIME["decisionAt/serviceAt"]
+    API --> SERVICE["EffectiveSchedulingPolicyService"]
+    SERVICE -->|"generation read #1"| HEAD1["Scope heads"]
+    SERVICE -->|"active tenant + clinic definitions"| DEFINITIONS["Policy definitions"]
+    SERVICE -->|"compile + canonical hash"| SNAPSHOT["EffectiveSchedulingPolicy"]
+    SERVICE -->|"generation read #2"| HEAD2["Scope heads"]
+    HEAD1 --> CHECK{"same generation?"}
+    HEAD2 --> CHECK
+    CHECK -->|"yes"| RESPONSE["200 snapshotHash + payload"]
+    CHECK -->|"no"| CONFLICT["409 POLICY_EFFECTIVE_READ_CONFLICT"]
+
+    style CALLER fill:#4A90D9,color:#fff
+    style SERVICE fill:#27AE60,color:#fff
+    style CONFLICT fill:#C0392B,color:#fff
+```
+
+권위 저장소를 읽을 수 없으면 `503 POLICY_EFFECTIVE_READ_UNAVAILABLE`로 fail-closed 한다.
+stale cache나 암묵적 기본값을 반환하지 않는다.
+
+## 9. Scheduling Policy 운영 장애 재조정 흐름
+
+```mermaid
+flowchart TD
+    OPS["공휴일 변경 / 의사 휴진 / 장비 고장 / partial fulfillment"] --> POLICY["DisruptionRecoveryPolicy"]
+    POLICY -->|"automaticProposalEnabled"| PROPOSE["대체 일정 제안"]
+    PROPOSE --> CONSENT["고객 동의 대기"]
+    CONSENT -->|"동의"| APPLY["예약 변경 적용"]
+    CONSENT -->|"거절/무응답"| KEEP["기존 확정 예약 보존"]
+
+    style OPS fill:#E67E22,color:#fff
+    style CONSENT fill:#9B59B6,color:#fff
+    style KEEP fill:#27AE60,color:#fff
+```
+
+확정 예약 변경은 고객 동의 후 적용한다. 예약 서비스는 재예약 제안과 예약 상태만 다루며,
+환불·보상·민원 처리는 외부 서비스의 event로 수렴한다.

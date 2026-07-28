@@ -64,6 +64,51 @@ class SchedulingPolicyPropertiesTest {
     }
 
     @Test
+    fun `feature flags accept only the documented progressive rollout chain`() {
+        val rolloutStates = listOf(
+            SchedulingPolicyProperties(shadowCompileEnabled = true),
+            SchedulingPolicyProperties(
+                shadowCompileEnabled = true,
+                effectiveReadEnabled = true,
+            ),
+            SchedulingPolicyProperties(
+                shadowCompileEnabled = true,
+                effectiveReadEnabled = true,
+                adminWriteEnabled = true,
+            ),
+            SchedulingPolicyProperties(
+                shadowCompileEnabled = true,
+                effectiveReadEnabled = true,
+                adminWriteEnabled = true,
+                previewWorkerEnabled = true,
+            ),
+            SchedulingPolicyProperties(
+                shadowCompileEnabled = true,
+                effectiveReadEnabled = true,
+                adminWriteEnabled = true,
+                previewWorkerEnabled = true,
+                scheduledActivationEnabled = true,
+            ),
+        )
+
+        rolloutStates.map { properties ->
+            listOf(
+                properties.shadowCompileEnabled,
+                properties.effectiveReadEnabled,
+                properties.adminWriteEnabled,
+                properties.previewWorkerEnabled,
+                properties.scheduledActivationEnabled,
+            )
+        } shouldBeEqualTo listOf(
+            listOf(true, false, false, false, false),
+            listOf(true, true, false, false, false),
+            listOf(true, true, true, false, false),
+            listOf(true, true, true, true, false),
+            listOf(true, true, true, true, true),
+        )
+    }
+
+    @Test
     fun `worker resource and time limits reject unbounded or internally inconsistent values`() {
         assertFailsWith<IllegalArgumentException> {
             SchedulingPolicyProperties(previewPageSize = 5_001)

@@ -52,6 +52,11 @@ class SchedulingPolicyMetricsTest {
         metrics.recordOutbox(PolicyOutboxMetricResult.PENDING)
         metrics.recordAggregateNull(PolicyAggregateMetricKind.APPOINTMENT)
         metrics.recordDualWriteParity(PolicyDualWriteMetricResult.MATCHED)
+        metrics.recordAdministration(
+            result = PolicyAdministrationMetricResult.REJECTED,
+            operation = PolicyAdministrationMetricOperation.PREVIEW,
+            scope = PolicyScope.TENANT_DEFAULT,
+        )
 
         registry.meters.isNotEmpty().shouldBeTrue()
         registry.meters
@@ -64,9 +69,43 @@ class SchedulingPolicyMetricsTest {
             .tag("result", "completed")
             .counter()
             .count() shouldBeEqualTo 1.0
+        registry
+            .get("clinic.scheduling.policy.administration")
+            .tags(
+                "result", "rejected",
+                "operation", "preview",
+                "scope_type", "tenant_default",
+            )
+            .counter()
+            .count() shouldBeEqualTo 1.0
+    }
+
+    @Test
+    fun `registry failure is isolated from every worker control flow metric`() {
+        val registry = SimpleMeterRegistry()
+        registry.config().onMeterAdded {
+            throw IllegalStateException("simulated registry failure")
+        }
+        val metrics = SchedulingPolicyMetrics(registry)
+
+        metrics.recordActivationLateness(
+            Duration.ofMinutes(6),
+            SchedulingPolicyKind.BOOKING_COMMITMENT,
+            PolicyScope.TENANT_DEFAULT,
+        )
+        metrics.recordActivation(
+            PolicyActivationMetricResult.COMPLETED,
+            SchedulingPolicyKind.BOOKING_COMMITMENT,
+            PolicyScope.TENANT_DEFAULT,
+        )
+        metrics.recordPreview(
+            PolicyPreviewMetricResult.COMPLETED_ASYNC,
+            SchedulingPolicyKind.BOOKING_COMMITMENT,
+            PolicyScope.CLINIC_OVERRIDE,
+        )
     }
 
     private companion object {
-        val APPROVED_TAG_KEYS = setOf("result", "kind", "scope_type")
+        val APPROVED_TAG_KEYS = setOf("result", "kind", "operation", "scope_type")
     }
 }

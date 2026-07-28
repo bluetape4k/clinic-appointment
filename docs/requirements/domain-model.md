@@ -21,6 +21,12 @@
 | `ConsultationTopicRecord` | `ConsultationTopics` | 상담 주제 |
 | `RescheduleCandidateRecord` | `RescheduleCandidates` | 재배정 후보 |
 | `EquipmentUnavailabilityRecord` | `EquipmentUnavailabilities` | 장비 사용불가 구간 — startDate, endDate, recurrenceRule, exceptions |
+| `SchedulingPolicyDefinitionRecord` | `SchedulingPolicyDefinitions` | tenant/clinic scheduling policy immutable version |
+| `SchedulingPolicyScopeHeadRecord` | `SchedulingPolicyScopeHeads` | scope별 head revision과 effective generation |
+| `SchedulingPolicyApprovalRecord` | `SchedulingPolicyApprovals` | draft revision에 묶인 승인 증빙 |
+| `EffectiveSchedulingPolicySnapshotRecord` | `EffectiveSchedulingPolicySnapshots` | compiled policy snapshot hash와 source versions |
+| `SchedulingPolicyActivationCommandRecord` | `SchedulingPolicyActivationCommands` | due activation, idempotency, replay, lease 상태 |
+| `SchedulingPolicyPreviewJobRecord` | `SchedulingPolicyPreviewJobs` | bounded impact preview 진행률, cursor, evidence token |
 
 ## 예약 상태머신
 
@@ -115,3 +121,68 @@ DB에 직접 의존하지 않는 순수 value type.
 | `ConcurrencyResolver` | 동시 예약 요청 충돌 해결 |
 | `ClinicTimezoneService` | 병원 타임존 관리 |
 | `EquipmentUnavailabilityService` | 장비 사용불가 구간 CRUD + 반복 규칙(`UnavailabilityExpander`) 기반 기간 전개 |
+
+## Scheduling Policy 모델
+
+Scheduling policy는 예약 생성 자체를 수행하지 않고, 예약 결정자가 따라야 할 병원별
+정책 snapshot을 만든다. tenant baseline은 필수 기준이고 clinic override는 허용된 필드만
+좁히거나 대체할 수 있다.
+
+### Policy Scope
+
+| Scope | clinic ID | 의미 |
+|------|-----------|------|
+| `TENANT_DEFAULT` | `null` | tenant group 전체 baseline |
+| `CLINIC_OVERRIDE` | 양수 | 특정 clinic partial override |
+
+### Policy Kind
+
+| Kind | 담당 업무 규칙 |
+|------|----------------|
+| `BOOKING_COMMITMENT` | 관리자 직접 확정, 고객 기원 가예약, hold, 확정 변경 동의 |
+| `HOLD_AND_CONSENT` | hold 중 동의 증빙 요구사항 |
+| `CAPACITY_AND_OVERBOOKING` | 정상 수용량, 의도적 overbooking, hard ceiling |
+| `PRIORITY_AND_RELIABILITY` | no-show, 당일 취소 같은 객관 signal 기반 scheduling weight |
+| `RECONFIRMATION` | 방문 전 재확인 lead time과 retry ceiling |
+| `DISRUPTION_RECOVERY` | 공휴일 변경, 휴진, 장비 고장, partial fulfillment 이후 재예약 제안 |
+| `OPERATING_EXTENSION` | 정상 영업시간 초과 진료 허용 범위 |
+| `NOTIFICATION_AND_SLA` | 통지 channel과 운영 응답 SLA |
+
+### Lifecycle
+
+```text
+DRAFT -> SCHEDULED | ACTIVE | RETIRED
+SCHEDULED -> ACTIVE | RETIRED
+ACTIVE -> RETIRED
+```
+
+정책 payload는 immutable version이다. 발행된 row를 수정하지 않고 새 draft revision을
+만들어 preview, approval, activation을 다시 거친다.
+
+### 고객 동의와 확정 예약 보호
+
+`BookingCommitmentPolicy`는 고객이 직접 등록한 예약을
+`PROVISIONAL_APPROVAL_REQUIRED`로 표현한다. 병원 담당자가 승인하기 전까지는 가예약
+상태이며, 확정 예약 변경은 `NEW_PROPOSAL_AND_CUSTOMER_CONSENT`를 따른다.
+
+운영 장애나 하루에 모든 세부 진료를 완료하지 못한 경우에도 기존 확정 예약을 고객 동의
+없이 덮어쓰지 않는다. `DisruptionRecoveryPolicy`는 대체 일정 제안을 만들 수 있는지와
+얼마나 빨리 제안해야 하는지를 저장하지만, 환불·보상·민원 처리는 예약 서비스 밖의
+서비스가 다룬다.
+
+### Effective Snapshot
+
+`EffectiveSchedulingPolicy`는 다음 값을 묶어 hash한다.
+
+| 값 | 목적 |
+|----|------|
+| `decisionAt` | 현재 명령을 평가할 정책 시각 |
+| `serviceAt` | 실제 시술/진료일에 적용될 future-effective 정책 시각 |
+| `generation` | tenant/clinic 권위 세대 |
+| `sourceVersions` | kind별 tenant/clinic source version |
+| `sourceByPath` | leaf policy 값의 출처 |
+| `disabledFeatures` | 유효한 clinic override가 끈 선택 기능 |
+| `payload` | 완전히 해석된 `CompiledSchedulingPolicy` |
+
+컴파일은 generation double-read로 stale snapshot을 거절한다. 필요한 정책 kind가 없으면
+관대한 zero/default로 대체하지 않고 unavailable 상태로 취급한다.
