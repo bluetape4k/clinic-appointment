@@ -6,7 +6,10 @@
 >
 > 기준일: 2026-07-29
 >
-> 시각 자료: [상품 예약 운영 특성 분류 승인안](./2026-07-29-issue-184-product-scheduling-classification.html)
+> 시각 자료:
+> [상품 예약 운영 특성 분류 승인안](./2026-07-29-issue-184-product-scheduling-classification.html) ·
+> [패키지 상품 구성 그래프 승인안](./2026-07-29-issue-184-package-product-composition.html) ·
+> [상품 실행 BOM의 예약 전개 흐름](./2026-07-29-issue-184-product-bom-to-appointment-flow.html)
 
 ## 1. 문제
 
@@ -14,8 +17,12 @@
 관계를 충분히 설명하지 못한다.
 
 - 고객은 한 상품을 구매하고 여러 차례 방문한다.
+- 미백치료 5회권처럼 같은 상품을 반복하는 패키지가 있다.
+- 서로 다른 상품을 필수·선택·택일 조건과 선후행 관계로 묶는 패키지가 있다.
 - 한 번의 방문에서 여러 세부 진료를 함께 받을 수 있다.
 - 세부 진료마다 의료진, 장비, 진료 공간과 점유 시간이 다르다.
+- 패키지 구성 상품마다 진료·준비·회복 시간이 다르며, 같은 날 묶을 수 없는
+  항목도 있다.
 - 고객이 요청한 날짜는 병원이 승인하기 전까지 확정 예약이 아니다.
 - 병원이 제안한 일정은 고객이 동의하기 전까지 기존 확정 예약을 대체하지 못한다.
 - 상품 설정은 구매 당시 버전으로 고정되지만, 상품팀이 고객 동의를 얻어 기존
@@ -36,15 +43,17 @@
 5. Gateway가 제공한 인증 정보를 `ActorContext`로 정규화하고 업무 권한 판정과
    감사 기록에 사용한다.
 6. 예약 결정에 사용한 상품·정책·동의 스냅샷을 불변으로 보존한다.
-7. 상품 버전 전환은 상품팀이 소유한 동의 및 BOM 전환표로만 수행한다.
-8. H2, PostgreSQL, MySQL에서 같은 업무 의미와 동시성 안전성을 유지한다.
-9. 기존 예약 API와 과거 데이터를 파괴하지 않는 추가형 전환 경로를 제공한다.
+7. 반복형·복합형·선택형 패키지를 version이 고정된 구성 상품 그래프로 표현하고
+   구매 시 실행 BOM으로 전개한다.
+8. 상품 버전 전환은 상품팀이 소유한 동의 및 BOM 전환표로만 수행한다.
+9. H2, PostgreSQL, MySQL에서 같은 업무 의미와 동시성 안전성을 유지한다.
+10. 기존 예약 API와 과거 데이터를 파괴하지 않는 추가형 전환 경로를 제공한다.
 
 ## 3. 비목표와 서비스 경계
 
 | 관심사 | 원천 서비스 | 예약서비스의 책임 |
 |---|---|---|
-| 상품 정의, BOM, 상품 버전 | 상품관리서비스 | 검증된 버전 스냅샷을 저장하고 예약 판단에 사용 |
+| 상품 정의, 패키지 구성 그래프, BOM, 상품 버전 | 상품관리서비스 | 검증·전개된 실행 BOM과 구성 상품 version 출처를 저장하고 예약 판단에 사용 |
 | 구매 계약과 추가 구매 | 구매서비스 | 구매 이벤트마다 새 `AppointmentPlan` 생성 |
 | 상품 버전 전환 동의 | 상품관리서비스 | 권한과 동의 증빙이 있는 전환 이벤트만 소비 |
 | 실제 시술 완료 | 진료/시술서비스 | 완료 이벤트를 받아 항목 이력과 후속 예약 범위 계산 |
@@ -133,9 +142,87 @@ revision을 가리킨다.
 예약서비스는 상품의 가격, 마케팅 문구와 계약 상세를 알 필요가 없다. 검증된
 예약 운영 특성, 예상 소요시간, BOM과 자원 요구사항만 버전 스냅샷으로 받는다.
 
+구성 상품 version이 정한 임상 안전 조건, 필수 자원, 최소 준비·회복 시간과
+필수 선행 관계는 패키지가 완화할 수 없는 **강제 제약**이다. 반면 초과 예약,
+우선순위, 재확인·알림, 선점형·제안형 같은 **운영 정책**은 플랫폼 안전 상한
+안에서 병원 기본값을 상품 또는 패키지가 재정의할 수 있다.
+
 상품 예상 소요시간과 병원 자원의 수용량 계산 단위는 서로 다르다. 예를 들어
 30분 상품을 15분 단위 자원에 배정하면 연속 두 칸을 점유한다. 자원 계산 단위는
 병원 또는 자원별로 10분, 15분, 30분, 60분이나 별도 값이 될 수 있다.
+
+### 4.4 패키지는 version이 고정된 구성 상품 그래프다
+
+`PACKAGE` 특성만으로는 패키지의 실제 구성을 설명할 수 없다. 상품관리서비스는
+패키지 상품 version마다 구성 상품 node와 관계 edge를 가진 불변 그래프를
+발행한다.
+
+지원할 패키지 형태는 다음과 같다.
+
+| 형태 | 예 | 구성 |
+|---|---|---|
+| 반복형 | 미백치료 5회권 | 같은 구성 상품 version 하나와 `quantity=5` |
+| 복합형 | 진단 + 리프팅 + 진정 관리 | 서로 다른 구성 상품 version과 필수·선택·선후행 관계 |
+| 선택형 | 피부관리 3개 중 2개 | 선택군과 `selectCount=2` |
+
+구성 node는 정확한 `componentProductId`와 `componentProductVersionId`를
+참조한다. 발행된 패키지가 구성 상품의 “최신 version”을 동적으로 따라가지
+않는다.
+
+각 node는 다음 정보를 가진다.
+
+- `REQUIRED`, `OPTIONAL`, `CHOICE_GROUP` 구성 방식
+- 수량과 반복 횟수
+- 선택군 ID, 선택 가능한 수와 반드시 선택할 개수
+- 구성 상품 version의 회차별 진료·준비·회복 시간
+- 회차별 의료진, 장비, 공간과 수용량 사용량
+- 고객에게 표시할 구성 상품명과 원본 version 출처
+
+관계 edge는 두 종류의 독립된 제약을 표현한다.
+
+1. 실행 의존성: `BLOCKING`, `NON_BLOCKING`, 실제 완료 기준의 최소·권장·최대 간격
+2. 방문 묶음: `MUST_SAME_VISIT`, `MAY_SAME_VISIT`, `MUST_SEPARATE_VISIT`
+
+패키지 전체에 하나의 `durationMinutes`를 두지 않는다. 같은 방문으로 묶인 항목도
+각자의 시간 구간을 유지한다. 방문의 시작·종료는 순차 실행, 병렬 가능 여부,
+준비·전환·회복 시간을 반영해 계산한다. 서로 다른 날 진행할 항목의 시간을 합산해
+하나의 패키지 시간으로 표시하지 않는다.
+
+상품관리서비스는 저장·발행 전에 다음을 검증한다.
+
+- 구성 상품 version의 존재와 사용 가능 상태
+- 필수·선택·택일 조건의 충족 가능성
+- 조합 불가 상품과 자원 요구의 모순
+- 실행 의존성과 방문 묶음 관계의 cycle 또는 직접 충돌
+- `MUST_SAME_VISIT` 항목의 시간·자원 양립 가능성
+- 모든 선택 결과가 실행 가능한 BOM으로 전개되는지
+
+구매 시점에는 고객이 고른 선택지를 확정하고 반복 횟수를 실제 회차로 전개한다.
+상품관리 또는 구매서비스는 **전개된 실행 BOM**과 구성 상품 version provenance를
+이벤트에 담는다. 예약서비스는 패키지 그래프를 재귀 조회하거나 상품 의미를 다시
+해석하지 않는다.
+
+### 4.5 상품 실행 BOM을 예약 Plan과 방문으로 전개한다
+
+상품관리 또는 구매서비스가 발행한 `PackageExecutionSnapshot`은 구매 당시
+선택과 version이 고정된 불변 실행 계약이다. 예약서비스는 같은 event ID와
+구매·상품 version 조합을 멱등하게 소비하고 다음 순서로만 전개한다.
+
+1. 이벤트 출처, schema version, 구매·상품 version과 구성 node provenance를
+   검증한다.
+2. 실행 BOM을 새 `AppointmentPlan` revision의 입력 스냅샷으로 보존한다.
+3. 반복 횟수, 선택 결과와 선후행 관계를 `PlannedTreatment`로 전개한다.
+4. `MUST_SAME_VISIT`, `MAY_SAME_VISIT`, `MUST_SEPARATE_VISIT`와 항목별
+   시간·자원 제약을 사용해 방문 후보를 묶는다.
+5. 병원 정책과 고객 희망 일정을 적용해 하나 이상의
+   `AppointmentProposal`을 만든다.
+6. 필요한 병원 승인과 고객 동의를 받은 제안만 자원을 점유하고 확정한다.
+
+예약서비스는 패키지 구성 의미를 작성하거나 원본 BOM을 재귀 해석하지 않는다.
+완료·부분 이행·장비 고장·휴진 같은 후속 사실이 들어오면 이미 완료된
+`PlannedTreatment`와 확정 이력은 유지하고, 아직 수행하지 않은 항목만 새 Plan
+revision과 제안으로 재계산한다. 기존 확정 예약을 바꾸는 제안은 고객 동의 전까지
+기존 `confirmedProposalId`와 자원 점유를 대체하지 않는다.
 
 ## 5. 도메인 모델
 
@@ -219,6 +306,24 @@ revision을 가리킨다.
 
 고객이 새 일정을 거부해도 기존 확정 예약은 `CONFIRMED` 상태를 유지한다.
 
+### 5.7 `PackageExecutionSnapshot`
+
+구매 시 선택과 반복 전개가 끝난 패키지 실행 계약이다.
+
+| 속성 | 의미 |
+|---|---|
+| `packageProductId`, `packageProductVersionId` | 구매한 패키지의 불변 version |
+| `selectedComponentVersions` | 선택된 구성 상품 ID와 version |
+| `expandedTreatmentItems` | 반복과 선택을 반영한 실행 BOM |
+| `executionDependencies` | 실제 완료 기준의 `BLOCKING` / `NON_BLOCKING` 관계 |
+| `visitGroupingConstraints` | 같은 방문 필수·허용·분리 관계 |
+| `snapshotHash` | 위 전체를 포함한 정규 hash |
+
+`expandedTreatmentItems`의 각 항목은 자신의 진료·준비·회복 시간과 자원 요구를
+가진다. 패키지 표시용 합계 시간이 있더라도 예약 계산의 원본으로 사용하지 않는다.
+예약 Plan은 이 snapshot을 다시 전개하지 않고 그대로 `PlannedTreatment`로
+복사한다.
+
 ## 6. 행위자와 API 흐름
 
 ### 6.1 신뢰 경계
@@ -274,7 +379,7 @@ not-before, token ID, actor type, 역할, tenant/clinic 범위와 patient subjec
 예약 판단은 다음 입력을 합성한다.
 
 ```text
-구매에 고정된 상품 예약 특성
+구매에 고정된 단일 상품 또는 패키지 실행 BOM
   + tenant 기본 정책
   + clinic override
   + 실제 자원 capability와 가용량
@@ -291,6 +396,10 @@ not-before, token ID, actor type, 역할, tenant/clinic 범위와 patient subjec
 상품 설정은 기존 version을 수정하지 않고 새 `ProductVersion`으로 발행한다.
 구매와 `AppointmentPlan`은 구매 당시 `productVersionId`, 상품 스냅샷과 hash를
 영구 참조한다. 새 상품 version은 이후 구매부터 적용한다.
+
+패키지 구매는 패키지 상품 version뿐 아니라 선택된 모든 구성 상품 version과
+전개된 실행 BOM을 고정한다. 이후 구성 상품의 새 version이 발행되어도 기존
+패키지 구매를 자동으로 다시 전개하지 않는다.
 
 새로운 구매는 항상 새 `AppointmentPlan`을 만든다.
 
@@ -350,6 +459,7 @@ not-before, token ID, actor type, 역할, tenant/clinic 범위와 patient subjec
 - 완료된 항목은 `REPLACE`, `REMOVE`, `SPLIT`, `MERGE` 대상이 아니다.
 - 결과 의존 그래프에 cycle이 없다.
 - 새 항목의 자원 요구사항과 예약 특성이 새 상품 version에 존재한다.
+- 패키지 전환이면 선택 결과, 구성 상품 version과 방문 묶음 제약이 모두 설명된다.
 - 같은 event replay는 같은 결과를 반환한다.
 
 예외 전파는 상품 전체의 B/C 플래그가 아니라 versioned BOM edge에 기록한다.
@@ -476,6 +586,10 @@ Flyway가 운영 migration의 권위다. Exposed table 정의와 schema 검사 �
 - 확정 proposal 교체의 원자성
 - 동의 증빙과 proposal hash 일치
 - 상품 특성 조합 및 병원/자원 capability 검증
+- 반복형, 복합형, N-of-M 선택형 패키지의 실행 BOM 전개
+- 구성 상품별 진료·준비·회복 시간과 자원 provenance 보존
+- `MUST_SAME_VISIT`, `MAY_SAME_VISIT`, `MUST_SEPARATE_VISIT` 검증
+- 순차·병렬 항목과 준비·회복 시간을 반영한 방문 구간 계산
 - BOM `KEEP/REPLACE/SPLIT/MERGE/REMOVE/ADD`
 - `BLOCKING` 의존 경로 전파와 `NON_BLOCKING` 독립 진행
 - Plan Revision 활성화와 항목 provenance
@@ -515,6 +629,9 @@ bluetape4k singleton launcher를 사용하고 `@Testcontainers`를 추가하지 
 - `proposalHash`
 - `effectivePolicySnapshotId`
 - `productVersionId`
+- `packageProductVersionId`, `componentProductVersionId`
+- 선택군, 반복 횟수와 `PackageExecutionSnapshot`
+- 진료·준비·회복 시간과 방문 묶음 제약
 - `planRevisionId`
 - `evidenceAuthority`, `evidenceId`, `evidenceHash`
 - BOM mapping type과 `BLOCKING` edge
@@ -533,6 +650,12 @@ README와 OpenAPI에는 고객/관리자 흐름, Gateway 인증 경계, 가예�
 - [ ] 새 proposal 대기 중 기존 확정 예약과 자원 점유가 유지된다.
 - [ ] 새 proposal 수락이 자원 점유와 `confirmedProposalId`를 원자적으로 교체한다.
 - [ ] 모든 예약 결정이 상품, 정책, 동의 스냅샷을 조회 가능하게 보존한다.
+- [ ] 미백치료 5회권이 같은 구성 상품 version의 다섯 회차로 전개된다.
+- [ ] 복합 패키지가 구성 상품별 필수·선택·선후행 관계를 보존한다.
+- [ ] N-of-M 패키지가 구매 시 선택된 구성 상품만 실행 BOM에 포함한다.
+- [ ] 패키지 구성 상품별 진료·준비·회복 시간과 자원 요구가 개별 보존된다.
+- [ ] 방문 묶음 제약에 따라 같은 날 조합하거나 별도 방문으로 분리한다.
+- [ ] 패키지 전체 단일 시간이 개별 항목의 예약 시간을 덮어쓰지 않는다.
 - [ ] 구매는 상품 version에 고정되고 새 version이 기존 구매에 자동 적용되지 않는다.
 - [ ] 승인된 상품 version 전환만 동일 Plan의 새 Revision을 즉시 활성화한다.
 - [ ] 완료 항목은 구 version에 남고 미진행 항목만 BOM 전환표로 승계된다.

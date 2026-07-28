@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<!-- 승인된 Visual Companion을 영구 설계 문서로 보존한다. -->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
+  <title>상품 실행 BOM에서 확정 예약까지</title>
+  <style>
+    :root {
+      color-scheme:dark;
+      --bg:#07111f; --panel:#101d31; --panel2:#172740; --line:#2b4265;
+      --text:#eef5ff; --muted:#9fafc7; --blue:#64b2ff; --green:#50d6a1;
+      --amber:#ffbd69; --purple:#b39aff; --red:#ff7e8e; --teal:#61d7d1;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; color:var(--text);
+      font-family:Inter,Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:
+        radial-gradient(circle at 7% 0%,rgba(44,108,199,.25),transparent 30%),
+        radial-gradient(circle at 94% 4%,rgba(116,77,188,.17),transparent 25%),
+        var(--bg);
+    }
+    button { font:inherit; }
+    main { max-width:1500px; margin:auto; padding:28px; }
+    .eyebrow { color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.08em; }
+    h1 { margin:8px 0; font-size:30px; }
+    .lead { margin:0 0 18px; color:var(--muted); line-height:1.6; }
+    .boundary {
+      display:grid; grid-template-columns:1fr 180px 1.35fr; gap:12px; margin-bottom:15px;
+    }
+    .lane {
+      position:relative; padding:15px 16px; border:1px solid var(--line);
+      border-radius:14px; background:rgba(16,29,49,.95);
+    }
+    .lane.product { border-color:#6655a1; background:rgba(179,154,255,.08); }
+    .lane.event { display:flex; align-items:center; justify-content:center; text-align:center; border-style:dashed; }
+    .lane.appointment { border-color:#315f73; background:rgba(97,215,209,.06); }
+    .lane h2 { margin:0 0 5px; font-size:16px; }
+    .lane p { margin:0; color:var(--muted); font-size:11px; line-height:1.55; }
+    .owner { display:inline-block; margin-bottom:7px; padding:4px 7px; border-radius:6px; font-size:9px; font-weight:800; }
+    .owner.product { color:#d8ceff; background:#2a204b; }
+    .owner.event { color:var(--amber); background:#3c2a18; }
+    .owner.appointment { color:#bff2ee; background:#12373a; }
+    .pipeline {
+      display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:15px;
+    }
+    .step {
+      position:relative; min-height:128px; padding:13px; color:var(--text); text-align:left;
+      border:1px solid var(--line); border-radius:13px; background:rgba(16,29,49,.95);
+      cursor:pointer; transition:.16s;
+    }
+    .step:not(:last-child)::after {
+      content:"→"; position:absolute; z-index:3; right:-15px; top:48px;
+      width:20px; color:#6488ad; text-align:center; font-size:18px; pointer-events:none;
+    }
+    .step:hover { transform:translateY(-2px); border-color:#54759d; }
+    .step.active { border-color:var(--blue); box-shadow:0 0 0 2px rgba(100,178,255,.13); }
+    .step .number {
+      display:inline-flex; width:24px; height:24px; align-items:center; justify-content:center;
+      border-radius:7px; background:#193758; color:var(--blue); font-size:11px; font-weight:900;
+    }
+    .step strong { display:block; margin:9px 0 5px; font-size:13px; }
+    .step p { margin:0; color:var(--muted); font-size:10px; line-height:1.5; }
+    .step.product-step { border-top:3px solid var(--purple); }
+    .step.event-step { border-top:3px solid var(--amber); }
+    .step.appointment-step { border-top:3px solid var(--teal); }
+    .detail {
+      display:grid; grid-template-columns:.85fr 1.15fr; gap:12px; margin-bottom:15px;
+    }
+    .panel { padding:18px; border:1px solid var(--line); border-radius:16px; background:rgba(16,29,49,.95); }
+    .panel h2 { margin:0 0 5px; font-size:17px; }
+    .sub { margin:0; color:var(--muted); font-size:11px; line-height:1.55; }
+    .contract {
+      display:grid; grid-template-columns:1fr auto 1fr; align-items:stretch; gap:10px; margin-top:13px;
+    }
+    .contract-box { padding:13px; border:1px solid #345071; border-radius:11px; background:#111f34; }
+    .contract-box h3 { margin:0 0 7px; font-size:12px; }
+    .contract-box ul { margin:0; padding-left:16px; color:#bfd0e4; font-size:10px; line-height:1.65; }
+    .contract-arrow { align-self:center; color:var(--blue); font-size:22px; }
+    .invariant {
+      margin-top:12px; padding:10px 12px; border-left:3px solid var(--green);
+      border-radius:8px; background:rgba(80,214,161,.07); color:#cce9dc; font-size:10px; line-height:1.55;
+    }
+    .example {
+      display:grid; grid-template-columns:1fr 44px 1fr 44px 1.25fr; align-items:stretch; gap:8px; margin-top:13px;
+    }
+    .stage { padding:13px; border:1px solid #345071; border-radius:12px; background:#111f34; }
+    .stage h3 { margin:0 0 5px; font-size:12px; }
+    .stage-note { color:var(--muted); font-size:9px; line-height:1.45; }
+    .arrow { display:flex; align-items:center; justify-content:center; color:var(--blue); font-size:22px; }
+    .item {
+      display:flex; justify-content:space-between; gap:8px; margin-top:7px; padding:8px;
+      border:1px solid #2c4566; border-radius:8px; background:#15253b; font-size:10px;
+    }
+    .item span:last-child { color:var(--muted); }
+    .visit { margin-top:7px; padding:9px; border-radius:9px; border-left:3px solid var(--teal); background:#13283b; }
+    .visit strong { display:block; font-size:10px; }
+    .visit p { margin:4px 0 0; color:var(--muted); font-size:9px; line-height:1.4; }
+    .state-row { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+    .chip { padding:5px 7px; border-radius:7px; background:#102039; color:#bfd1e7; font-size:9px; }
+    .chip.proposed { color:var(--amber); }
+    .chip.confirmed { color:var(--green); }
+    .chip.locked { color:var(--purple); }
+    .future {
+      display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px;
+    }
+    .future-card { padding:13px; border:1px solid #304b6d; border-radius:11px; background:#111f34; }
+    .future-card h3 { margin:0 0 6px; font-size:12px; }
+    .future-card p { margin:0; color:var(--muted); font-size:10px; line-height:1.55; }
+    .future-card.complete { border-top:3px solid var(--green); }
+    .future-card.partial { border-top:3px solid var(--amber); }
+    .future-card.reschedule { border-top:3px solid var(--red); }
+    .footer-rule {
+      display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;
+    }
+    .rule { padding:11px; border-radius:10px; font-size:10px; line-height:1.55; }
+    .rule.keep { background:rgba(80,214,161,.07); border-left:3px solid var(--green); color:#cce9dc; }
+    .rule.never { background:rgba(255,126,142,.07); border-left:3px solid var(--red); color:#f0c9cf; }
+    @media(max-width:1120px) {
+      .boundary,.detail,.example { grid-template-columns:1fr; }
+      .pipeline { grid-template-columns:repeat(2,1fr); }
+      .step::after,.contract-arrow,.arrow { display:none; }
+      .future,.footer-rule { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Issue #184 · 예약서비스 흐름 화면 2/2</div>
+  <h1>상품 실행 BOM이 방문별 확정 예약으로 바뀌는 과정</h1>
+  <p class="lead">상품 구성 화면에서 발행한 예약 관련 계약을 예약서비스가 다시 해석하지 않고, Plan과 방문 일정으로 전개하는 흐름입니다. 각 단계를 눌러 입력·처리·출력을 확인하세요.</p>
+
+  <section class="boundary">
+    <div class="lane product">
+      <span class="owner product">상품관리서비스 소유</span>
+      <h2>상품 특성·패키지 구성·version</h2>
+      <p>필수/선택/택일, 반복 횟수, 구성 상품별 시간·자원, 의존성과 방문 묶음 규칙을 검증해 발행합니다.</p>
+    </div>
+    <div class="lane event">
+      <div>
+        <span class="owner event">EVENT CONTRACT</span>
+        <h2>불변 실행 BOM</h2>
+        <p>version · provenance<br>snapshotHash</p>
+      </div>
+    </div>
+    <div class="lane appointment">
+      <span class="owner appointment">예약서비스 소유</span>
+      <h2>Plan·방문·제안·동의·확정·자원 점유</h2>
+      <p>전달받은 진료 의무를 일정으로 배치하고, 가예약과 고객/관리자 승인 절차를 거쳐 확정합니다.</p>
+    </div>
+  </section>
+
+  <section class="pipeline" aria-label="예약 전개 단계">
+    <button class="step product-step active" data-step="publish" onclick="selectStep('publish')">
+      <span class="number">1</span><strong>실행 BOM 발행</strong>
+      <p>구매 선택과 반복 횟수를 실제 진료항목으로 전개</p>
+    </button>
+    <button class="step event-step" data-step="consume" onclick="selectStep('consume')">
+      <span class="number">2</span><strong>이벤트 검증·소비</strong>
+      <p>authority, version, hash, inbox로 멱등 처리</p>
+    </button>
+    <button class="step appointment-step" data-step="plan" onclick="selectStep('plan')">
+      <span class="number">3</span><strong>Plan Revision 생성</strong>
+      <p>항목별 provenance와 의존관계를 그대로 보존</p>
+    </button>
+    <button class="step appointment-step" data-step="group" onclick="selectStep('group')">
+      <span class="number">4</span><strong>방문 후보 구성</strong>
+      <p>묶음 제약, 병원 정책, 실제 자원으로 방문을 나눔</p>
+    </button>
+    <button class="step appointment-step" data-step="propose" onclick="selectStep('propose')">
+      <span class="number">5</span><strong>가예약·일정 제안</strong>
+      <p>고객 요청 또는 병원 제안으로 immutable proposal 생성</p>
+    </button>
+    <button class="step appointment-step" data-step="confirm" onclick="selectStep('confirm')">
+      <span class="number">6</span><strong>동의 후 확정</strong>
+      <p>합의된 proposal만 확정하고 자원을 원자적으로 점유</p>
+    </button>
+  </section>
+
+  <section class="detail">
+    <div class="panel">
+      <h2 id="step-title">1. 실행 BOM 발행</h2>
+      <p id="step-summary" class="sub">상품관리 또는 구매서비스가 구매 당시 선택과 반복 전개를 끝낸 불변 실행 계약을 발행합니다.</p>
+      <div class="contract">
+        <div class="contract-box">
+          <h3>입력</h3>
+          <ul id="step-input"></ul>
+        </div>
+        <div class="contract-arrow">→</div>
+        <div class="contract-box">
+          <h3>출력</h3>
+          <ul id="step-output"></ul>
+        </div>
+      </div>
+      <div id="step-invariant" class="invariant"></div>
+    </div>
+
+    <div class="panel">
+      <h2>예시 · 리프팅 집중관리 패키지</h2>
+      <p class="sub">하나의 패키지 구매가 4개 진료 의무와 3개의 방문 후보로 바뀝니다.</p>
+      <div class="example">
+        <div class="stage">
+          <h3>PackageExecutionSnapshot</h3>
+          <div class="stage-note">상품서비스가 전개 완료</div>
+          <div class="item"><span>사전 진단 v3</span><span>필수</span></div>
+          <div class="item"><span>리프팅 시술 v5</span><span>필수</span></div>
+          <div class="item"><span>진정 관리 v4</span><span>선택됨</span></div>
+          <div class="item"><span>사후 점검 v2</span><span>필수</span></div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="stage">
+          <h3>AppointmentPlan Revision 1</h3>
+          <div class="stage-note">예약서비스가 그대로 복사</div>
+          <div class="item"><span>PlannedTreatment</span><span>4개</span></div>
+          <div class="item"><span>BLOCKING edge</span><span>2개</span></div>
+          <div class="item"><span>MAY_SAME_VISIT</span><span>1개</span></div>
+          <div class="item"><span>MUST_SEPARATE</span><span>2개</span></div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="stage">
+          <h3>방문별 예약 후보</h3>
+          <div class="stage-note">정책·자원·희망일을 합성</div>
+          <div class="visit"><strong>방문 A · 사전 진단</strong><p>PROPOSED · 전문의 + 상담실</p></div>
+          <div class="visit"><strong>방문 B · 리프팅 + 진정</strong><p>같은 방문 · 장비 + 시술실 + 회복공간</p></div>
+          <div class="visit"><strong>방문 C · 사후 점검</strong><p>시술 완료 후 7일 · 별도 방문</p></div>
+          <div class="state-row"><span class="chip proposed">PROPOSED</span><span class="chip">HELD</span><span class="chip confirmed">CONFIRMED</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>진행 이후에는 미래 항목만 다시 계산합니다</h2>
+    <p class="sub">완료된 사실과 기존 확정 예약을 보호하면서, 영향받은 미진행 항목만 새 방문 또는 proposal로 전개합니다.</p>
+    <div class="future">
+      <div class="future-card complete">
+        <h3>완료된 진료항목</h3>
+        <p>기존 productVersionId와 planRevisionId에 고정합니다. 상품 version 전환이나 재조정으로 다시 쓰지 않습니다.</p>
+        <div class="state-row"><span class="chip confirmed">COMPLETED</span><span class="chip locked">IMMUTABLE</span></div>
+      </div>
+      <div class="future-card partial">
+        <h3>부분 이행·남은 진료</h3>
+        <p>완료된 item은 유지하고 남은 item attempt만 후속 방문의 새 AppointmentItem으로 생성합니다.</p>
+        <div class="state-row"><span class="chip">REMAINING ITEM</span><span class="chip proposed">NEW VISIT</span></div>
+      </div>
+      <div class="future-card reschedule">
+        <h3>장비 고장·휴진·일정 변경</h3>
+        <p>기존 확정 예약을 조용히 덮지 않습니다. 새 proposal과 고객 동의를 거쳐 영향받은 미래 예약만 교체합니다.</p>
+        <div class="state-row"><span class="chip">NEW PROPOSAL</span><span class="chip proposed">CONSENT</span><span class="chip confirmed">RECONFIRMED</span></div>
+      </div>
+    </div>
+    <div class="footer-rule">
+      <div class="rule keep"><strong>예약서비스가 판단하는 것</strong><br>언제, 어떤 방문으로, 어떤 실제 자원을 점유해 예약할지 판단합니다.</div>
+      <div class="rule never"><strong>예약서비스가 다시 판단하지 않는 것</strong><br>패키지의 상품 의미, 선택 가능 조합, 가격·환불, 임상 완료 여부를 재해석하지 않습니다.</div>
+    </div>
+  </section>
+</main>
+
+<script>
+  const steps = {
+    publish:{
+      title:'1. 실행 BOM 발행',
+      summary:'상품관리 또는 구매서비스가 구매 당시 선택과 반복 전개를 끝낸 불변 실행 계약을 발행합니다.',
+      input:['상품 version','구매자가 선택한 구성 상품','반복 횟수와 패키지 의존관계'],
+      output:['PackageExecutionSnapshot','expandedTreatmentItems','snapshotHash와 provenance'],
+      invariant:'예약서비스가 패키지 그래프를 재귀 조회하거나 상품 의미를 다시 전개하지 않도록, 실행 가능한 항목 단위까지 전개해 전달합니다.'
+    },
+    consume:{
+      title:'2. 이벤트 검증·소비',
+      summary:'예약서비스가 외부 이벤트의 권위와 순서를 확인하고 같은 사실을 정확히 한 번 반영합니다.',
+      input:['trusted event authority','source aggregate version','payload hash와 idempotency key'],
+      output:['inbox receipt','검증된 상품 스냅샷','격리 또는 다음 단계 진행'],
+      invariant:'같은 이벤트 replay는 같은 결과를 반환하고, version gap이나 동일 version의 다른 payload는 부분 적용하지 않고 격리합니다.'
+    },
+    plan:{
+      title:'3. AppointmentPlan Revision 생성',
+      summary:'구매 하나를 Plan 하나로 만들고, 전개된 진료 의무를 PlannedTreatment로 그대로 복사합니다.',
+      input:['검증된 PackageExecutionSnapshot','구매 ID와 환자 범위','구성 상품별 시간·자원 provenance'],
+      output:['AppointmentPlan','immutable Plan Revision','PlannedTreatment와 dependency edge'],
+      invariant:'새 구매는 새 Plan을 만들고, 승인된 상품 version 전환만 동일 Plan의 새 Revision을 만듭니다.'
+    },
+    group:{
+      title:'4. 방문 후보 구성',
+      summary:'진료항목을 한 번의 방문에서 함께 수행할 수 있는 묶음으로 나눕니다.',
+      input:['visitGroupingConstraints','병원 운영정책 snapshot','실제 자원 capability와 가용량'],
+      output:['방문별 AppointmentItem 후보','대표 진료명','필요 ResourceAllocation 후보'],
+      invariant:'한 Appointment는 한 번의 방문입니다. 여러 세부 진료가 같은 방문에 포함될 수 있지만 각 항목의 시간과 자원 구간은 유지합니다.'
+    },
+    propose:{
+      title:'5. 가예약·일정 제안',
+      summary:'고객 희망일 또는 병원 제안을 immutable proposal revision으로 기록하고 필요하면 자원을 hold합니다.',
+      input:['고객 희망일 또는 병원 제안','방문별 항목 후보','최신 유효 병원정책'],
+      output:['AppointmentProposal revision','PROPOSED 또는 HELD commitment','proposalHash와 만료시각'],
+      invariant:'고객 요청은 관리자 승인 전까지 확정이 아니며, 새 제안이 생겨도 기존 확정 예약을 즉시 대체하지 않습니다.'
+    },
+    confirm:{
+      title:'6. 고객 동의 후 확정',
+      summary:'날짜·항목·자원에 대한 동의와 권한을 검증한 뒤 합의된 proposal만 확정합니다.',
+      input:['accepted ConsentDecision','현재 proposal hash','expected aggregate version'],
+      output:['CONFIRMED Appointment','confirmedProposalId','원자적으로 생성된 ResourceAllocation'],
+      invariant:'확정 후 변경은 반드시 새 proposal과 별도 일정 변경 동의를 거칩니다. 기존 confirmed proposal은 감사 가능한 불변 기록으로 남습니다.'
+    }
+  };
+
+  function selectStep(key) {
+    const step=steps[key];
+    document.querySelectorAll('.step').forEach(node=>node.classList.toggle('active',node.dataset.step===key));
+    document.getElementById('step-title').textContent=step.title;
+    document.getElementById('step-summary').textContent=step.summary;
+    document.getElementById('step-input').innerHTML=step.input.map(value=>`<li>${value}</li>`).join('');
+    document.getElementById('step-output').innerHTML=step.output.map(value=>`<li>${value}</li>`).join('');
+    document.getElementById('step-invariant').textContent=step.invariant;
+    if(window.brainstorm) window.brainstorm.choice('appointment-flow-' + key, {step:key});
+  }
+
+  selectStep('publish');
+</script>
+</body>
+</html>
