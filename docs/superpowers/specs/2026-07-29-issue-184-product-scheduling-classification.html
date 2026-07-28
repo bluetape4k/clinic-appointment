@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Issue #184 상품 예약 운영 특성 분류 승인안">
+  <title>상품 예약 운영 설정</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#08111f; --panel:#111d30; --panel2:#172640; --line:#2a4062;
+      --text:#edf5ff; --muted:#9daec8; --blue:#62afff; --blue2:#2d76dc;
+      --green:#4dd6a2; --orange:#ffbc68; --red:#ff7787;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; color:var(--text);
+      font-family:Inter,Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:radial-gradient(circle at 8% 0%,rgba(40,104,194,.25),transparent 32%),var(--bg);
+    }
+    main { max-width:1420px; margin:auto; padding:32px; }
+    .eyebrow { color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.08em; }
+    .eyebrow a { color:inherit; text-decoration:none; }
+    .eyebrow a:hover { text-decoration:underline; }
+    h1 { margin:8px 0; font-size:30px; }
+    .lead { margin:0 0 24px; color:var(--muted); line-height:1.65; }
+    .layout { display:grid; grid-template-columns:minmax(600px,1.35fr) minmax(380px,.85fr); gap:16px; }
+    .panel { background:rgba(17,29,48,.95); border:1px solid var(--line); border-radius:18px; padding:22px; }
+    .panel h2 { font-size:19px; margin:0 0 6px; }
+    .sub { color:var(--muted); font-size:13px; line-height:1.55; margin:0 0 18px; }
+    .section { margin-top:20px; }
+    .section-title { display:flex; align-items:baseline; justify-content:space-between; font-size:14px; font-weight:800; margin-bottom:9px; }
+    .section-title small { color:var(--muted); font-weight:500; }
+    .checks { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .check {
+      display:flex; gap:9px; min-height:70px; padding:12px; border-radius:12px;
+      border:1px solid transparent; background:var(--panel2); cursor:pointer; transition:.15s;
+    }
+    .check:hover { border-color:#50709a; }
+    .check.active { border-color:var(--blue); background:rgba(98,175,255,.13); }
+    .check.disabled { opacity:.34; cursor:not-allowed; }
+    .check input { margin-top:3px; accent-color:var(--blue); }
+    .check strong { display:block; font-size:13px; line-height:1.35; }
+    .check span { display:block; margin-top:4px; color:var(--muted); font-size:11px; line-height:1.4; }
+    .code { color:#7890af!important; font-family:"SFMono-Regular",Consolas,monospace; font-size:9px!important; }
+    .time-card { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+    .setting { border:1px solid var(--line); border-radius:14px; padding:15px; background:#0d1829; }
+    .setting.product { border-color:var(--blue2); }
+    .setting h3 { margin:0 0 4px; font-size:14px; }
+    .owner { display:inline-block; margin-bottom:12px; color:var(--blue); font-size:10px; font-weight:800; letter-spacing:.06em; }
+    .owner.hospital { color:var(--green); }
+    .field { margin-top:10px; }
+    .field label { display:block; color:var(--muted); font-size:11px; margin-bottom:5px; }
+    select,input[type=number] {
+      width:100%; background:#15243a; border:1px solid #345074; color:var(--text);
+      border-radius:9px; padding:10px; font-size:13px;
+    }
+    select:disabled,input:disabled { color:#aab8cb; opacity:.72; }
+    .formula {
+      margin-top:12px; padding:13px; border-radius:11px;
+      background:rgba(77,214,162,.08); border-left:3px solid var(--green);
+      color:#ccecdf; font-size:12px; line-height:1.6;
+    }
+    .rule { padding:12px; margin-top:9px; border-radius:10px; background:rgba(255,188,104,.08); border-left:3px solid var(--orange); font-size:12px; line-height:1.55; }
+    .rule strong { color:var(--orange); }
+    .rule.good { background:rgba(77,214,162,.08); border-color:var(--green); }
+    .rule.good strong { color:var(--green); }
+    .snapshot { margin-top:14px; padding:14px; border-radius:12px; background:#081321; border:1px solid #293e5b; color:#bed3ed; font:11px/1.65 "SFMono-Regular",Consolas,monospace; white-space:pre-wrap; min-height:245px; }
+    .decision { margin-top:16px; padding:15px; border:1px solid var(--blue); border-radius:13px; background:rgba(98,175,255,.1); }
+    .decision strong { display:block; margin-bottom:5px; }
+    .decision span { color:#c8daef; font-size:12px; line-height:1.55; }
+    @media(max-width:1050px){.layout{grid-template-columns:1fr}.checks,.time-card{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow"><a href="./2026-07-29-issue-184-visit-commitment-design.md">Issue #184 · 설계 문서로 돌아가기</a></div>
+  <h1>이 상품은 병원에서 어떻게 예약받아야 하나요?</h1>
+  <p class="lead">상품기획자는 고객 경험과 운영 특성을 선택합니다. 시스템 용어는 작은 보조 설명으로만 표시합니다.</p>
+
+  <div class="layout">
+    <section class="panel">
+      <h2>상품 특성 선택</h2>
+      <p class="sub">해당하는 항목을 모두 선택하세요. 함께 사용할 수 없는 항목은 자동으로 비활성화됩니다.</p>
+
+      <div class="section">
+        <div class="section-title">방문과 시술 구성 <small>여러 개 선택 가능</small></div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" value="multiVisit"><div><strong>여러 번 방문해서 진행하는 상품이에요</strong><span>회차별로 예약을 나누어 관리합니다.</span><span class="code">MULTI_VISIT</span></div></label>
+          <label class="check"><input type="checkbox" value="package"><div><strong>여러 시술을 묶은 패키지예요</strong><span>방문마다 진행할 시술 구성이 달라질 수 있습니다.</span><span class="code">PACKAGE</span></div></label>
+          <label class="check"><input type="checkbox" value="dependent"><div><strong>앞 시술이 끝나야 다음 예약을 잡을 수 있어요</strong><span>완료일을 기준으로 다음 일정을 다시 계산합니다.</span><span class="code">PREDECESSOR_DEPENDENT</span></div></label>
+          <label class="check"><input type="checkbox" value="partial"><div><strong>남은 시술은 다른 날 이어서 할 수 있어요</strong><span>장비 고장 등으로 미완료된 항목을 분리 예약합니다.</span><span class="code">PARTIAL_FULFILLMENT</span></div></label>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">예약 운영 방식 <small>여러 개 선택 가능 · 조합 자동 검증</small></div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" value="massPromotion"><div><strong>짧은 시간에 많은 고객을 받는 상품이에요</strong><span>프로모션·공장형 시술처럼 처리량을 우선합니다.</span><span class="code">MASS_PROMOTION</span></div></label>
+          <label class="check"><input type="checkbox" value="capacityBucket"><div><strong>시간대별 최대 예약 인원을 관리해야 해요</strong><span>동시에 받을 수 있는 고객 수를 기준으로 예약합니다.</span><span class="code">CAPACITY_BUCKET</span></div></label>
+          <label class="check"><input type="checkbox" value="vipManaged"><div><strong>고객 한 명을 집중 관리하는 상품이에요</strong><span>전담 의료진과 충분한 여유시간을 확보합니다.</span><span class="code">VIP_MANAGED</span></div></label>
+          <label class="check"><input type="checkbox" value="exclusive"><div><strong>의료진·장비·공간을 전담 배정해야 해요</strong><span>예약 시간 동안 다른 고객과 공유하지 않습니다.</span><span class="code">EXCLUSIVE_RESOURCE</span></div></label>
+          <label class="check"><input type="checkbox" value="surgical"><div><strong>수술처럼 준비와 회복 시간이 필요해요</strong><span>수술 전 준비, 진행, 회복 시간을 함께 확보합니다.</span><span class="code">SURGICAL_COORDINATION</span></div></label>
+          <label class="check"><input type="checkbox" value="overbooking"><div><strong>병원 정책 범위에서 초과 예약을 허용해요</strong><span>노쇼 등을 고려한 허용 한도 안에서만 적용됩니다.</span><span class="code">OVERBOOKING_ALLOWED</span></div></label>
+        </div>
+      </div>
+
+      <div id="time-settings" class="section" style="display:none">
+        <div class="section-title">시간대별 예약 인원 설정 <small>상품 시간과 병원 수용량을 분리</small></div>
+        <div class="time-card">
+          <div class="setting product">
+            <span class="owner">상품기획에서 설정</span>
+            <h3>이 상품의 예약 소요시간</h3>
+            <div class="field">
+              <label for="duration">고객 한 명의 기본 예약시간</label>
+              <select id="duration">
+                <option value="15">15분</option>
+                <option value="30" selected>30분</option>
+                <option value="45">45분</option>
+                <option value="60">1시간</option>
+                <option value="90">1시간 30분</option>
+                <option value="120">2시간</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="seat-use">고객 한 명이 사용하는 예약 자리</label>
+              <input id="seat-use" type="number" min="1" max="10" value="1">
+            </div>
+          </div>
+
+          <div class="setting">
+            <span class="owner hospital">병원·자원 운영에서 설정</span>
+            <h3>실제 자원의 예약 수용 기준</h3>
+            <div class="field">
+              <label>예약 계산 단위</label>
+              <select id="unit" disabled>
+                <option value="10">10분 단위</option>
+                <option value="15" selected>15분 단위</option>
+                <option value="30">30분 단위</option>
+                <option value="60">1시간 단위</option>
+              </select>
+              <span class="code">병원·자원별로 10분, 15분, 30분, 1시간 또는 별도 단위를 설정할 수 있습니다.</span>
+            </div>
+            <div class="field">
+              <label>단위 시간에 동시에 받을 수 있는 고객</label>
+              <input id="capacity" type="number" value="3" disabled>
+            </div>
+          </div>
+        </div>
+        <div id="formula" class="formula"></div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <h2>조합 검증과 예약 전달 정보</h2>
+      <p class="sub">상품관리서비스가 작성 단계에서 검증하고, 예약서비스에는 검증 결과만 전달합니다.</p>
+      <div class="rule"><strong>대량 예약 상품</strong><br>집중 관리·전담 자원·수술형 상품과 함께 선택할 수 없습니다.</div>
+      <div class="rule"><strong>수술형 상품</strong><br>전담 자원이 자동으로 필요하며 초과 예약은 허용하지 않습니다.</div>
+      <div class="rule"><strong>선행 시술 의존</strong><br>여러 번 방문하는 상품으로 자동 설정됩니다.</div>
+      <div id="valid" class="rule good"><strong>현재 조합은 사용할 수 있습니다.</strong><br>저장 시 예약 운영 특성이 발행됩니다.</div>
+      <div id="snapshot" class="snapshot"></div>
+      <div class="decision" data-choice="product-language-v2-approved">
+        <strong>이번 화면에서 확인할 내용</strong>
+        <span>상품기획자는 상품 특성과 예상 소요시간을 정하고, 예약 계산 단위와 실제 동시 수용 인원은 병원·자원 운영 정책이 정하는 구분이 자연스러운지 확인해 주세요.</span>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<script>
+  const boxes=[...document.querySelectorAll('input[type=checkbox]')];
+  const get=v=>boxes.find(b=>b.value===v);
+  const names={
+    multiVisit:'여러 번 방문',package:'패키지',dependent:'앞 시술 완료 후 다음 예약',
+    partial:'남은 시술 분리 예약',massPromotion:'대량 예약 운영',capacityBucket:'시간대별 인원 관리',
+    vipManaged:'집중 관리',exclusive:'전담 자원',surgical:'수술형 조율',overbooking:'초과 예약 허용'
+  };
+  function disable(v,on,msg){
+    const b=get(v); b.disabled=on; b.closest('.check').classList.toggle('disabled',on);
+    b.closest('.check').title=on?msg:''; if(on&&b.checked)b.checked=false;
+  }
+  function refresh(){
+    let s=new Set(boxes.filter(b=>b.checked).map(b=>b.value));
+    const mass=s.has('massPromotion'), surgery=s.has('surgical'), vip=s.has('vipManaged');
+    disable('massPromotion',surgery||vip,'수술형·집중 관리 상품과 함께 선택할 수 없습니다.');
+    disable('vipManaged',mass,'대량 예약 상품과 함께 선택할 수 없습니다.');
+    disable('exclusive',mass,'대량 예약 상품과 함께 선택할 수 없습니다.');
+    disable('surgical',mass,'대량 예약 상품과 함께 선택할 수 없습니다.');
+    disable('overbooking',surgery,'수술형 상품에는 초과 예약을 허용하지 않습니다.');
+    if(surgery)get('exclusive').checked=true;
+    if(s.has('dependent'))get('multiVisit').checked=true;
+    boxes.forEach(b=>b.closest('.check').classList.toggle('active',b.checked));
+    s=new Set(boxes.filter(b=>b.checked).map(b=>b.value));
+    document.getElementById('time-settings').style.display=s.has('capacityBucket')?'block':'none';
+    const selected=[...s].map(v=>names[v]);
+    document.getElementById('snapshot').textContent=
+`예약서비스 전달 정보
+────────────────
+계약 버전: 1
+선택된 운영 특성:
+${selected.length?selected.map(v=>'• '+v).join('\n'):'• 아직 선택된 특성이 없습니다.'}
+
+상품 상세·가격·마케팅 정보:
+• 전달하지 않음`;
+    updateFormula();
+    if(window.brainstorm)window.brainstorm.choice('product-traits-v2',{values:[...s]});
+  }
+  function updateFormula(){
+    const duration=Number(document.getElementById('duration').value);
+    const use=Number(document.getElementById('seat-use').value);
+    const unit=15, capacity=3, blocks=Math.ceil(duration/unit);
+    document.getElementById('formula').innerHTML=
+      `<strong>예약 계산 예시</strong><br>${duration}분 상품은 병원의 ${unit}분 계산 단위를 연속 ${blocks}칸 사용합니다. `+
+      `각 시간 칸에서 고객 한 명이 ${use}자리, 장비는 총 ${capacity}자리를 제공하므로 같은 시각에 최대 ${Math.floor(capacity/use)}명까지 배정할 수 있습니다.`;
+  }
+  boxes.forEach(b=>b.addEventListener('change',refresh));
+  document.getElementById('duration').addEventListener('change',updateFormula);
+  document.getElementById('seat-use').addEventListener('input',updateFormula);
+  refresh();
+</script>
+</body>
+</html>
