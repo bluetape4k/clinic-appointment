@@ -292,23 +292,23 @@ data class PackageExecutionSnapshot(
 **의존성:** Task 2 table 계약
 **쓰기 범위:** 세 V10 SQL, migration test/support, `DatabaseConfig`
 
-- [ ] **RED:** 세 migration test에 신규 table, FK, unique key, 아래 조회별 index,
+- [x] **RED:** 세 migration test에 신규 table, FK, unique key, 아래 조회별 index,
   기존 row의 `model_version=LEGACY`, v2 nullable projection, Flyway checksum과
   Exposed column parity를 추가한다.
-- [ ] `V10__add_visit_commitment.sql`을 H2/PostgreSQL/MySQL 각각 작성한다.
+- [x] `V10__add_visit_commitment.sql`을 H2/PostgreSQL/MySQL 각각 작성한다.
   기존 `scheduling_*` 이름을 바꾸지 않고 nullable legacy FK와 추가형 table만
   도입한다. `scheduling_appointments`에는 default `LEGACY`인 `model_version`을
   추가하고 확정 projection column의 `NOT NULL`만 완화한다. 기존 row 값과
   legacy API의 non-null 입력 계약은 바꾸지 않는다. PostgreSQL 전용 최적화는
   공통 correctness를 대체하지 않는다.
-- [ ] Flyway를 운영 DDL 권위로 유지하고 `SchemaUtils`는 테스트의 누락 column
+- [x] Flyway를 운영 DDL 권위로 유지하고 `SchemaUtils`는 테스트의 누락 column
   탐지만 수행한다. 운영 시작 시 `SchemaUtils.create*`를 호출하지 않는다.
-- [ ] allocation overlap 조회는
-  `(tenant_group_id, clinic_id, resource_type, resource_id, status, start_at, end_at)`,
+- [x] allocation overlap 조회는
+  `(tenant_group_id, clinic_id, resource_type, resource_id, allocation_status, starts_at, ends_at)`,
   proposal current 조회는 `(commitment_id, revision DESC)`, audit 조회는
   `(tenant_group_id, clinic_id, aggregate_id, occurred_at DESC)` 순서를 기준으로
   dialect별 index DDL을 고정한다. migration test는 index column 순서를 단언한다.
-- [ ] Testcontainers는 기존 `Containers` singleton을 재사용하고 순차 실행한다.
+- [x] Testcontainers는 기존 `Containers` singleton을 재사용하고 순차 실행한다.
 
 ```bash
 ./gradlew :appointment-api:test --tests "*FlywayMigrationTest"
@@ -317,6 +317,10 @@ data class PackageExecutionSnapshot(
 ```
 
 **예상:** H2 후 PostgreSQL 후 MySQL 순으로 V1→V10 및 clean migration 성공.
+**검증:** H2, PostgreSQL, MySQL을 위 순서로 각각 실행해 기존 V9 row 보존,
+`LEGACY` backfill, nullable v2 projection, FK·unique·index 순서, Flyway checksum,
+Exposed 추가 DDL drift 없음과 빈 DB V1→V10 적용을 확인했다. 이어서
+`:appointment-api:build`에서 281개 테스트가 통과했다.
 **rollback:** table을 drop하지 않는다. feature flag를 끄고 legacy 경로로 복귀한다.
 **커밋:** `Expand the schema for versioned visit commitments`
 
