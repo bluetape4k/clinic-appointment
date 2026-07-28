@@ -243,6 +243,13 @@ class GlobalExceptionHandler(
         ex: Exception,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isSchedulingPolicyRequest()) {
+            log.warn {
+                "Scheduling policy request failed with an internal error: " +
+                    "exception_type=${ex::class.simpleName}"
+            }
+            return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_INTERNAL_ERROR, request)
+        }
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request failed with an internal error" }
             return foundationResponse(PlanFoundationError.INTERNAL_ERROR, request)

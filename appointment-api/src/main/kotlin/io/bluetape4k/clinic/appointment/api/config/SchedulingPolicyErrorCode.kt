@@ -100,4 +100,10 @@ enum class SchedulingPolicyErrorCode(
         "Authoritative scheduling policy read is unavailable.",
         "Retry after the authoritative policy store has recovered.",
     ),
+    POLICY_INTERNAL_ERROR(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        false,
+        "Scheduling policy request failed unexpectedly.",
+        "Contact the clinic operator with the correlation ID.",
+    ),
 }
