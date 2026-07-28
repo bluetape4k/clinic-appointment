@@ -111,6 +111,9 @@ interface SchedulingPolicyWorkerStore {
     /** preview job이 고정한 definition의 immutable kind를 읽는다. */
     fun findPreviewKind(jobId: Long): SchedulingPolicyKind?
 
+    /** 실패 종결 metric과 로그에 사용할 preview의 immutable policy scope를 읽는다. */
+    fun findPreviewScope(jobId: Long): PolicyScope?
+
     /** 현재 owner가 가진 RUNNING preview를 안정적 오류 코드로 실패 종결한다. */
     fun markPreviewFailed(
         jobId: Long,
@@ -191,6 +194,9 @@ class ExposedSchedulingPolicyWorkerStore(
             val definitionId = jobRepository.findPreviewJob(jobId)?.definitionId ?: return@transaction null
             policyRepository.findDefinition(definitionId)?.kind
         }
+
+    override fun findPreviewScope(jobId: Long): PolicyScope? =
+        transaction { jobRepository.findPreviewJob(jobId)?.scope }
 
     override fun markPreviewFailed(
         jobId: Long,
@@ -390,22 +396,23 @@ class SchedulingPolicyWorker(
     private fun processPreview(jobId: Long) {
         val owner = ownerFactory()
         val kind = store.findPreviewKind(jobId)
+        val scope = store.findPreviewScope(jobId)
         val result =
             try {
                 previewProcessor.process(jobId, owner, store.databaseNow())
             } catch (_: Exception) {
                 val failedAt = store.databaseNow()
                 if (store.markPreviewFailed(jobId, owner, PREVIEW_PROCESSING_FAILED, failedAt)) {
-                    kind?.let {
+                    if (kind != null && scope != null) {
                         metrics.recordPreview(
                             PolicyPreviewMetricResult.FAILED,
-                            it,
-                            PolicyScope.CLINIC_OVERRIDE,
+                            kind,
+                            scope,
                         )
                     }
                     log.warn {
                         "Scheduling policy preview failed closed: " +
-                            "result=failed, kind=${kind ?: "unknown"}, scope_type=${PolicyScope.CLINIC_OVERRIDE}"
+                            "result=failed, kind=${kind ?: "unknown"}, scope_type=${scope ?: "unknown"}"
                     }
                 }
                 return
@@ -423,7 +430,7 @@ class SchedulingPolicyWorker(
                     PolicyPreviewMetricResult.FAILED
                 }
         }
-        metrics.recordPreview(metricResult, observedKind, PolicyScope.CLINIC_OVERRIDE)
+        metrics.recordPreview(metricResult, observedKind, result.job.scope)
     }
 
     private fun retryDelay(

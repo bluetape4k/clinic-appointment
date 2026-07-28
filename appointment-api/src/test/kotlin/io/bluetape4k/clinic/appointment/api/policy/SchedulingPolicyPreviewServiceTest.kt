@@ -50,6 +50,25 @@ class SchedulingPolicyPreviewServiceTest {
     )
 
     @Test
+    fun `tenant default preview uses the same durable bounded execution contract`() {
+        val store = FakePreviewStore(
+            pages = ArrayDeque(listOf(page(size = 0, next = null)))
+        )
+        val service = service(store)
+        val tenantCommand = command.copy(
+            scope = PolicyScopeRef(1L, PolicyScope.TENANT_DEFAULT),
+            generation = PolicyGenerationVector(tenantGeneration = 2L, clinicGeneration = 0L),
+        )
+
+        val result = service.submit(tenantCommand)
+
+        result.disposition shouldBeEqualTo SchedulingPolicyPreviewDisposition.COMPLETED
+        result.job.status shouldBeEqualTo PolicyPreviewJobStatus.COMPLETED
+        result.job.clinicGeneration shouldBeEqualTo 0L
+        result.job.activationEvidenceToken shouldBeEqualTo "preview-token-1"
+    }
+
+    @Test
     fun `small preview completes synchronously with one persisted job and bounded pages`() {
         val store = FakePreviewStore(
             pages = ArrayDeque(
@@ -320,6 +339,7 @@ class SchedulingPolicyPreviewServiceTest {
     ) = PolicyImpactPage(
         items = (startId until startId + size).map { id ->
             PolicyImpactKey(
+                clinicId = 41L,
                 scheduledAt = now.plusSeconds(id.toLong()),
                 aggregateType = PolicyImpactAggregateType.APPOINTMENT,
                 aggregateId = id.toString(),
@@ -329,6 +349,7 @@ class SchedulingPolicyPreviewServiceTest {
     )
 
     private fun cursor(id: Int) = PolicyImpactCursor(
+        clinicId = 41L,
         scheduledAt = now.plusSeconds(id.toLong()),
         aggregateType = PolicyImpactAggregateType.APPOINTMENT,
         aggregateId = id.toString(),
@@ -376,7 +397,9 @@ class SchedulingPolicyPreviewServiceTest {
             return SchedulingPolicyPreviewJobRecord(
                 id = 1L,
                 tenantGroupId = command.scope.tenantGroupId,
-                clinicId = command.scope.clinicId!!,
+                scope = command.scope.scope,
+                clinicId = command.scope.clinicId,
+                clinicScopeKey = command.scope.clinicScopeKey,
                 definitionId = command.definitionId,
                 draftRevision = command.draftRevision,
                 tenantGeneration = command.generation.tenantGeneration,
@@ -532,7 +555,9 @@ class SchedulingPolicyPreviewServiceTest {
             val job = SchedulingPolicyPreviewJobRecord(
                 id = id,
                 tenantGroupId = command.scope.tenantGroupId,
-                clinicId = command.scope.clinicId!!,
+                scope = command.scope.scope,
+                clinicId = command.scope.clinicId,
+                clinicScopeKey = command.scope.clinicScopeKey,
                 definitionId = command.definitionId,
                 draftRevision = command.draftRevision,
                 tenantGeneration = command.generation.tenantGeneration,

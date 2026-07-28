@@ -8,6 +8,7 @@ import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyScopeHeadRecor
 import io.bluetape4k.clinic.appointment.model.policy.PolicyLifecycle
 import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
 import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyKind
+import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.EffectiveSchedulingPolicySnapshots
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyApprovals
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyDefinitions
@@ -31,6 +32,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
+import java.security.MessageDigest
 import java.time.Instant
 
 /**
@@ -305,6 +307,52 @@ class SchedulingPolicyRepository {
             .where { scopeHeadPredicate(scope) }
             .singleOrNull()
             ?.toSchedulingPolicyScopeHeadRecord()
+
+    /**
+     * 한 tenant의 모든 clinic override 세대를 안정적인 SHA-256으로 요약한다.
+     *
+     * tenant 기본 정책 preview는 모든 clinic의 미래 업무를 평가하므로 단일
+     * [io.bluetape4k.clinic.appointment.model.policy.PolicyGenerationVector.clinicGeneration]
+     * 값으로는 병원별 동시 변경을 표현할 수 없다. 이 digest는 clinic scope key 오름차순의
+     * tenant에 속한 모든 clinic ID와 각 clinic의 override generation 또는 `0` sentinel을
+     * 정규 인코딩한다. 따라서 병원 추가·제거, override head 생성, 세대 증가가 하나라도
+     * 발생하면 값이 달라지고 unrelated tenant의 변경에는 영향을 받지 않는다. 이 범위는
+     * tenant impact scan이 실제 순회하는 [Clinics] 집합과 동일하다.
+     *
+     * 모든 메서드와 마찬가지로 호출자가 소유한 Exposed transaction 안에서 사용해야 한다.
+     *
+     * @param tenantGroupId 요약할 양수 tenant 경계.
+     * @return 64자 lowercase SHA-256.
+     */
+    fun clinicGenerationDigest(tenantGroupId: Long): String {
+        require(tenantGroupId > 0) { "tenantGroupId must be positive" }
+        val digest = MessageDigest.getInstance("SHA-256")
+        val generationByClinic = SchedulingPolicyScopeHeads
+            .selectAll()
+            .where {
+                (SchedulingPolicyScopeHeads.tenantGroupId eq tenantGroupId) and
+                    (SchedulingPolicyScopeHeads.scope eq PolicyScope.CLINIC_OVERRIDE)
+            }
+            .associate { row ->
+                row[SchedulingPolicyScopeHeads.clinicScopeKey] to
+                    row[SchedulingPolicyScopeHeads.generation]
+            }
+        Clinics
+            .selectAll()
+            .where { Clinics.tenantGroupId eq tenantGroupId }
+            .orderBy(Clinics.id, SortOrder.ASC)
+            .forEach { row ->
+                val canonical = buildString {
+                    val clinicId = row[Clinics.id].value
+                    append(clinicId)
+                    append(':')
+                    append(generationByClinic[clinicId] ?: 0L)
+                    append('\n')
+                }
+                digest.update(canonical.toByteArray(Charsets.UTF_8))
+            }
+        return digest.digest().toHex()
+    }
 
     /**
      * 유효 정책 세대는 유지하면서 낙관적 스코프 revision만 증가시킨다.
@@ -648,6 +696,9 @@ class SchedulingPolicyRepository {
 
     private fun isH2Dialect(): Boolean =
         TransactionManager.current().db.dialect.name.equals("h2", ignoreCase = true)
+
+    private fun ByteArray.toHex(): String =
+        joinToString(separator = "") { byte -> "%02x".format(byte) }
 
     private fun validateDefinitionRecord(record: SchedulingPolicyDefinitionRecord) {
         val scope = PolicyScopeRef(record.tenantGroupId, record.scope, record.clinicId)
