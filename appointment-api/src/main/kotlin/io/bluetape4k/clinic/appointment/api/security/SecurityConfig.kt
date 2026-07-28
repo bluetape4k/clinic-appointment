@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.api.security
 
 import io.bluetape4k.clinic.appointment.api.config.PlanFoundationError
+import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
+import io.bluetape4k.clinic.appointment.api.config.isSchedulingPolicyRequestPath
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilter
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.logging.KLogging
@@ -121,12 +123,19 @@ class SecurityConfig {
                     } else {
                         HttpStatus.UNAUTHORIZED
                     }
-                    val error = if (status == HttpStatus.FORBIDDEN) {
-                        PlanFoundationError.FORBIDDEN
+                    if (status == HttpStatus.FORBIDDEN && request.isSchedulingPolicyRequest()) {
+                        SecurityErrorResponseWriter.write(
+                            response,
+                            SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
+                        )
                     } else {
-                        PlanFoundationError.UNAUTHORIZED
+                        val error = if (status == HttpStatus.FORBIDDEN) {
+                            PlanFoundationError.FORBIDDEN
+                        } else {
+                            PlanFoundationError.UNAUTHORIZED
+                        }
+                        SecurityErrorResponseWriter.write(response, error)
                     }
-                    SecurityErrorResponseWriter.write(response, error)
                 }
             }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
@@ -139,6 +148,14 @@ class SecurityConfig {
                         "/v3/api-docs/**",
                     )
                     .permitAll()
+                    .requestMatchers(
+                        "/api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/**",
+                    )
+                    .access(clinicPolicyAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        "/api/{tenantCode}/admin/scheduling-policies/**",
+                    )
+                    .access(tenantPolicyAccess(tenantAuthorizationManager))
                     .requestMatchers("/api/{tenantCode}/admin/**")
                     .access(adminTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(
@@ -172,6 +189,45 @@ class SecurityConfig {
         AuthorizationManagers.allOf(
             AuthorityAuthorizationManager.hasRole(SchedulingRole.ADMIN),
             tenantAuthorizationManager,
+        )
+
+    /**
+     * tenant policy transport boundary는 human operator role, explicit capability,
+     * tenant membership을 모두 요구한다. 세부 승인 수와 assurance는 domain command가
+     * exact draft evidence를 기준으로 다시 평가한다.
+     */
+    private fun tenantPolicyAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(
+                SchedulingRole.ADMIN,
+                SchedulingRole.STAFF,
+            ),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_policy:write"),
+            tenantAuthorizationManager,
+        )
+
+    /**
+     * clinic policy는 tenant policy 권한에 path clinic의 exact membership을 추가한다.
+     *
+     * 빈 clinic allow-list를 tenant 전체 권한으로 해석하지 않으며, 숫자로 해석할 수 없는
+     * path variable도 fail-closed로 거절한다.
+     */
+    private fun clinicPolicyAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            tenantPolicyAccess(tenantAuthorizationManager),
+            AuthorizationManager { authentication, context ->
+                val principal = authentication.get().principal as? SchedulingUserPrincipal
+                val requestedClinicId = context.variables["clinicId"]?.toLongOrNull()
+                AuthorizationDecision(
+                    requestedClinicId != null &&
+                        requestedClinicId > 0 &&
+                        requestedClinicId in principal?.allowedClinicIds.orEmpty()
+                )
+            },
         )
 
     private fun readTenantAccess(
@@ -215,6 +271,10 @@ class SecurityConfig {
             },
         )
 }
+
+/** security filter chain에서도 policy 전용 privacy-safe 오류 계약을 선택한다. */
+private fun jakarta.servlet.http.HttpServletRequest.isSchedulingPolicyRequest(): Boolean =
+    isSchedulingPolicyRequestPath(requestURI)
 
 /**
  * local dev/test에서 모든 요청을 허용하는 security configuration이다.

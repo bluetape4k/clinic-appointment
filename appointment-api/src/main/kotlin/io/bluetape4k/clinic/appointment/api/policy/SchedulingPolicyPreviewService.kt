@@ -142,6 +142,22 @@ interface SchedulingPolicyPreviewStore {
     /** page boundary에서 cancellation 또는 lease 상실을 확인할 현재 durable row를 읽는다. */
     fun find(jobId: Long): SchedulingPolicyPreviewJobRecord?
 
+    /**
+     * HTTP polling 경계에서 scope와 primary key를 한 번에 적용해 durable row를 읽는다.
+     *
+     * 기본 구현은 테스트 double 호환용이다. 운영 Exposed adapter는 반드시 SQL predicate
+     * 자체에 scope를 포함하도록 override하여 cross-tenant row를 먼저 읽지 않아야 한다.
+     */
+    fun find(
+        scope: PolicyScopeRef,
+        jobId: Long,
+    ): SchedulingPolicyPreviewJobRecord? =
+        find(jobId)?.takeIf {
+            it.tenantGroupId == scope.tenantGroupId &&
+                it.scope == scope.scope &&
+                it.clinicScopeKey == scope.clinicScopeKey
+        }
+
     /** 조건부 lease claim에 성공한 경우에만 RUNNING row를 반환한다. */
     fun claim(
         jobId: Long,
@@ -598,6 +614,12 @@ class ExposedSchedulingPolicyPreviewStore(
     override fun find(jobId: Long): SchedulingPolicyPreviewJobRecord? =
         transaction { jobRepository.findPreviewJob(jobId) }
 
+    override fun find(
+        scope: PolicyScopeRef,
+        jobId: Long,
+    ): SchedulingPolicyPreviewJobRecord? =
+        transaction { jobRepository.findPreviewJob(scope, jobId) }
+
     override fun claim(
         jobId: Long,
         owner: String,
@@ -752,7 +774,12 @@ class PersistedPolicyPreviewEvidenceVerifier(
     ): Boolean =
         try {
             transaction {
-                val job = jobRepository.findCompletedPreviewByToken(evidence.evidenceId)
+                val scope = PolicyScopeRef(
+                    tenantGroupId = definition.tenantGroupId,
+                    scope = definition.scope,
+                    clinicId = definition.clinicId,
+                )
+                val job = jobRepository.findCompletedPreviewByToken(scope, evidence.evidenceId)
                     ?: return@transaction false
                 job.definitionId == definition.id &&
                     job.definitionId == evidence.definitionId &&

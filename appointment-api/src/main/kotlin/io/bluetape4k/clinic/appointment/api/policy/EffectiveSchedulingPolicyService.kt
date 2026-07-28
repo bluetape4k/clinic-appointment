@@ -513,7 +513,7 @@ class EffectiveSchedulingPolicyService(
 
 }
 
-private fun SchedulingPolicyKind.evaluationInstant(
+internal fun SchedulingPolicyKind.evaluationInstant(
     decisionAt: Instant,
     serviceAt: Instant,
 ): Instant =
@@ -531,7 +531,7 @@ private fun SchedulingPolicyKind.evaluationInstant(
         -> serviceAt
     }
 
-private fun Map<SchedulingPolicyKind, SchedulingPolicyPayload>.toTenantPolicy() =
+internal fun Map<SchedulingPolicyKind, SchedulingPolicyPayload>.toTenantPolicy() =
     CompiledSchedulingPolicy(
         bookingCommitment = requiredPayload(
             SchedulingPolicyKind.BOOKING_COMMITMENT,

@@ -24,6 +24,9 @@ import java.time.Duration
  * @property previewSyncRowLimit 동기 요청이 완료될 수 있는 최대 누적 scan 행 수다.
  * @property previewSyncDeadline 동기 preview가 비동기 작업으로 전환되기 전 단조 시간 예산이다.
  * @property previewJobDeadline 동기·비동기를 포함한 durable preview 전체 hard deadline이다.
+ * @property previewHorizon 요청 시각부터 미래 예약·시술 의무를 영향도 scan에 포함하는 기간이다.
+ * request body에서 받지 않아 한 caller가 임의로 무제한 범위를 선택할 수 없게 한다.
+ * @property previewPollInterval 같은 tenant/scope/job의 비종결 polling을 다시 허용하는 최소 간격이다.
  * @property previewQueueCapacity 한 병원 scope가 보유할 수 있는 runnable preview 요청 수다.
  * @property previewTenantConcurrency 같은 테넌트에서 동시에 실행할 수 있는 preview 수다.
  * @property maxPreviewJobsPerTick 한 scheduled tick이 claim할 수 있는 preview job 상한이다.
@@ -49,6 +52,8 @@ data class SchedulingPolicyProperties(
     val previewSyncRowLimit: Int = MAX_SYNC_ROW_LIMIT,
     val previewSyncDeadline: Duration = Duration.ofSeconds(2),
     val previewJobDeadline: Duration = Duration.ofMinutes(5),
+    val previewHorizon: Duration = Duration.ofDays(30),
+    val previewPollInterval: Duration = Duration.ofSeconds(1),
     val previewQueueCapacity: Int = MAX_PREVIEW_QUEUE_CAPACITY,
     val previewTenantConcurrency: Int = MAX_TENANT_CONCURRENCY,
     val maxPreviewJobsPerTick: Int = 10,
@@ -87,6 +92,8 @@ data class SchedulingPolicyProperties(
         require(previewJobDeadline > previewSyncDeadline) {
             "previewJobDeadline must be later than previewSyncDeadline"
         }
+        requirePositiveBounded(previewHorizon, MAX_PREVIEW_HORIZON, "previewHorizon")
+        requirePositiveBounded(previewPollInterval, MAX_PREVIEW_POLL_INTERVAL, "previewPollInterval")
         require(previewQueueCapacity in 1..MAX_PREVIEW_QUEUE_CAPACITY) {
             "previewQueueCapacity must be in 1..$MAX_PREVIEW_QUEUE_CAPACITY"
         }
@@ -135,6 +142,8 @@ data class SchedulingPolicyProperties(
         const val MAX_ACTIVATION_JITTER = 0.50
         val MAX_SYNC_DEADLINE: Duration = Duration.ofSeconds(2)
         val MAX_PREVIEW_JOB_DEADLINE: Duration = Duration.ofMinutes(30)
+        val MAX_PREVIEW_HORIZON: Duration = Duration.ofDays(366)
+        val MAX_PREVIEW_POLL_INTERVAL: Duration = Duration.ofMinutes(1)
         val MAX_WORKER_POLL_INTERVAL: Duration = Duration.ofMinutes(1)
         val MAX_WORKER_LEASE: Duration = Duration.ofMinutes(2)
         val MAX_SHUTDOWN_GRACE: Duration = Duration.ofSeconds(30)

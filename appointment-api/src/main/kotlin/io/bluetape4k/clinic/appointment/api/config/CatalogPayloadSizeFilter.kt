@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.config
 
+import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.service.CatalogDefinitionValidator
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
@@ -26,46 +27,88 @@ import java.util.UUID
 class CatalogPayloadSizeFilter : OncePerRequestFilter() {
 
     companion object : KLogging() {
-        private const val READ_LIMIT_BYTES = CatalogDefinitionValidator.MAX_PAYLOAD_BYTES + 1
+        private const val POLICY_ENVELOPE_OVERHEAD_BYTES = 16 * 1_024
         private val catalogSyncPath = Regex(
             "^/api/[^/]+/clinics/[^/]+/catalog-sources/[^/]+/catalog-products/[^/]+/versions/[^/]+$"
         )
+        private val policyWritePath = Regex(
+            "^/api/[^/]+/admin/(?:clinics/[^/]+/)?scheduling-policies/(?:drafts|[^/]+/(?:validate|preview|approve|schedule|activate|retire)|activation-commands/[^/]+/replay)$"
+        )
     }
 
-    override fun shouldNotFilter(request: HttpServletRequest): Boolean =
-        request.method != HttpMethod.PUT.name() || !catalogSyncPath.matches(request.requestURI)
+    override fun shouldNotFilter(request: HttpServletRequest): Boolean {
+        val catalogRequest =
+            request.method == HttpMethod.PUT.name() && catalogSyncPath.matches(request.requestURI)
+        val policyRequest =
+            request.method == HttpMethod.POST.name() && policyWritePath.matches(request.requestURI)
+        return !catalogRequest && !policyRequest
+    }
 
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        if (request.contentLengthLong > CatalogDefinitionValidator.MAX_PAYLOAD_BYTES) {
-            rejectPayload(response)
+        val maximumBytes = request.maximumBodyBytes()
+        if (request.contentLengthLong > maximumBytes) {
+            rejectPayload(request, response)
             return
         }
 
-        val body = request.inputStream.readNBytes(READ_LIMIT_BYTES)
-        if (body.size > CatalogDefinitionValidator.MAX_PAYLOAD_BYTES) {
-            rejectPayload(response)
+        val body = request.inputStream.readNBytes(maximumBytes + 1)
+        if (body.size > maximumBytes) {
+            rejectPayload(request, response)
             return
         }
 
         filterChain.doFilter(CachedBodyRequest(request, body), response)
     }
 
-    private fun rejectPayload(response: HttpServletResponse) {
-        val error = PlanFoundationError.PAYLOAD_TOO_LARGE
-        val correlationId = UUID.randomUUID().toString()
-        log.warn { "Catalog sync payload exceeded ${CatalogDefinitionValidator.MAX_PAYLOAD_BYTES} bytes" }
-        response.status = error.status.value()
+    /**
+     * 정책 draft envelope는 payload 외 CAS/audit 필드를 포함하므로 제한된 overhead를 허용한다.
+     *
+     * strict payload codec이 내부 payload 자체의 256KiB 상한을 다시 검사한다. 이 filter의
+     * envelope 상한은 Jackson materialization 전에 과대 요청을 끊기 위한 transport 방어다.
+     */
+    private fun HttpServletRequest.maximumBodyBytes(): Int =
+        if (policyWritePath.matches(requestURI)) {
+            CatalogDefinitionValidator.MAX_PAYLOAD_BYTES + POLICY_ENVELOPE_OVERHEAD_BYTES
+        } else {
+            CatalogDefinitionValidator.MAX_PAYLOAD_BYTES
+        }
+
+    private fun rejectPayload(request: HttpServletRequest, response: HttpServletResponse) {
+        val correlationId = response.getHeader(CorrelationIdFilter.HEADER_NAME)
+            ?.takeIf { it.isNotBlank() }
+            ?: UUID.randomUUID().toString().also {
+                response.setHeader(CorrelationIdFilter.HEADER_NAME, it)
+            }
+        val policyRequest = policyWritePath.matches(request.requestURI)
+        log.warn {
+            if (policyRequest) {
+                "Scheduling policy request exceeded the bounded HTTP envelope"
+            } else {
+                "Catalog sync payload exceeded ${CatalogDefinitionValidator.MAX_PAYLOAD_BYTES} bytes"
+            }
+        }
+        response.status = if (policyRequest) {
+            SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID.httpStatus.value()
+        } else {
+            PlanFoundationError.PAYLOAD_TOO_LARGE.status.value()
+        }
         response.contentType = MediaType.APPLICATION_JSON_VALUE
         response.characterEncoding = StandardCharsets.UTF_8.name()
-        response.writer.write(
-            """
-            {"success":false,"data":null,"error":"${error.safeMessage}","errorCode":"${error.code}","correlationId":"$correlationId"}
-            """.trimIndent()
-        )
+        if (policyRequest) {
+            val error = SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID
+            response.writer.write(
+                """{"success":false,"data":null,"error":"${error.safeMessage}","errorCode":"${error.name}","correlationId":"$correlationId","retryable":false,"action":"${error.action}"}"""
+            )
+        } else {
+            val error = PlanFoundationError.PAYLOAD_TOO_LARGE
+            response.writer.write(
+                """{"success":false,"data":null,"error":"${error.safeMessage}","errorCode":"${error.code}","correlationId":"$correlationId"}"""
+            )
+        }
     }
 
     private class CachedBodyRequest(

@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.api.tenant
 
 import io.bluetape4k.clinic.appointment.api.config.PlanFoundationError
+import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
+import io.bluetape4k.clinic.appointment.api.config.isSchedulingPolicyRequestPath
 import io.bluetape4k.clinic.appointment.api.security.JwtTokenParser
 import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
 import io.bluetape4k.clinic.appointment.api.security.SecurityErrorResponseWriter
@@ -50,12 +52,26 @@ class TenantContextFilter(
         }
 
         if (tenantInfo == null) {
-            SecurityErrorResponseWriter.write(response, PlanFoundationError.RESOURCE_NOT_FOUND)
+            if (request.isSchedulingPolicyRequest()) {
+                SecurityErrorResponseWriter.write(
+                    response,
+                    SchedulingPolicyErrorCode.POLICY_RESOURCE_NOT_FOUND,
+                )
+            } else {
+                SecurityErrorResponseWriter.write(response, PlanFoundationError.RESOURCE_NOT_FOUND)
+            }
             return
         }
 
         if (tenantCode !in principal.allowedTenants) {
-            SecurityErrorResponseWriter.write(response, PlanFoundationError.FORBIDDEN)
+            if (request.isSchedulingPolicyRequest()) {
+                SecurityErrorResponseWriter.write(
+                    response,
+                    SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
+                )
+            } else {
+                SecurityErrorResponseWriter.write(response, PlanFoundationError.FORBIDDEN)
+            }
             return
         }
 
@@ -69,4 +85,8 @@ class TenantContextFilter(
         getHeader("Authorization")
             ?.takeIf { it.startsWith("Bearer ") }
             ?.substring("Bearer ".length)
+
+    /** tenant filter가 controller 전에도 policy 전용 안정 오류 계약을 선택하게 한다. */
+    private fun HttpServletRequest.isSchedulingPolicyRequest(): Boolean =
+        isSchedulingPolicyRequestPath(requestURI)
 }
