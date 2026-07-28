@@ -249,31 +249,31 @@ data class PackageExecutionSnapshot(
 **의존성:** Task 1
 **쓰기 범위:** 신규 core table/repository/record mapper와 repository tests
 
-- [ ] **RED:** `AppointmentCommitmentRepositoryTest`,
+- [x] **RED:** `AppointmentCommitmentRepositoryTest`,
   `ResourceAllocationRepositoryTest`, `TreatmentSpaceRepositoryTest`,
   `AppointmentPlanRevisionRepositoryTest`,
   `AppointmentCommandIdempotencyRepositoryTest`에 unique/FK/CAS/rollback 경계를 쓴다.
-- [ ] repository 메서드는 `transaction {}`를 열지 않고 caller transaction을
+- [x] repository 메서드는 `transaction {}`를 열지 않고 caller transaction을
   요구한다. insert/update receiver와 이름이 겹치는 값은 local 변수로 빼고
   deprecated `SqlExpressionBuilder.eq`를 사용하지 않는다.
-- [ ] 기존 `Appointments` row를 그대로 방문 identity로 사용하되 V10의
+- [x] 기존 `Appointments` row를 그대로 방문 identity로 사용하되 V10의
   `model_version=LEGACY|COMMITMENT_V2`로 경로를 분리한다. `COMMITMENT_V2`의
   미확정 row는 doctor/treatment/date/time projection이 `null`일 수 있고,
   확정 transaction만 정확한 proposal 값으로 채운다. legacy mapper와 date-range
   조회는 `LEGACY` 또는 완성된 v2 projection만 읽어 nullable 값을 강제 해제하지 않는다.
-- [ ] `ResourceAllocationRepository.replaceConfirmedAllocations(...)`는
+- [x] `ResourceAllocationRepository.replaceConfirmedAllocations(...)`는
   `tenant, clinic, resourceType, resourceId, bucketStartAt` 순으로 잠그고,
   교체 대상 allocation ID를 overlap 집계에서 제외한다.
-- [ ] `TreatmentSpaces`는 표시용 room type이 아니라 실제 점유 대상이다.
+- [x] `TreatmentSpaces`는 표시용 room type이 아니라 실제 점유 대상이다.
   `clinicId`, 안정적 space code, capability, nominal capacity,
   `bucketMinutes`를 저장하고 tenant/clinic 경계를 통과한 공간 참조를 거부한다.
-- [ ] command idempotency unique key는
+- [x] command idempotency unique key는
   `(tenant_group_id, clinic_id, actor_scope_hash, idempotency_key)`이고 같은 key의
   다른 command hash를 거부한다.
-- [ ] 모든 table/record/public repository와 복잡한 속성에 한국어 KDoc을 작성한다.
+- [x] 모든 table/record/public repository와 복잡한 속성에 한국어 KDoc을 작성한다.
   특히 `confirmedProposalId`, `proposalHash`, `planRevisionId`,
   `evidenceHash`, allocation status의 rollback 의미를 설명한다.
-- [ ] **GREEN:**
+- [x] **GREEN:**
 
 ```bash
 ./gradlew :appointment-core:test --tests "*AppointmentCommitmentRepositoryTest" \

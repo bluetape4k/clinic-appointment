@@ -55,6 +55,25 @@ enum class TestDB(
             defaultIsolationLevel = Connection.TRANSACTION_READ_COMMITTED
         }
     ),
+
+    /**
+     * 방문 commitment repository의 독립 schema 검증용 H2입니다.
+     *
+     * 기존 repository test가 공유하는 `regular-v2` DB의 잔존 table과 FK가 신규 table
+     * 생성·삭제 순서에 영향을 주지 않도록 별도 이름을 사용합니다.
+     */
+    H2_COMMITMENT(
+        connection = {
+            "jdbc:h2:mem:visit-commitment;MODE=PostgreSQL;" +
+                "DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;" +
+                "DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;"
+        },
+        driver = JdbcDrivers.DRIVER_CLASS_H2,
+        dbConfig = {
+            defaultIsolationLevel = Connection.TRANSACTION_READ_COMMITTED
+        },
+    ),
+
     H2_MYSQL(
         connection = {
             "jdbc:h2:mem:mysql;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;"
