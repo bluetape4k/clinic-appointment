@@ -166,14 +166,18 @@ CREATE TABLE scheduling_policy_activation_commands (
 CREATE TABLE scheduling_policy_preview_jobs (
     id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     tenant_group_id BIGINT NOT NULL,
-    clinic_id BIGINT NOT NULL,
+    scope VARCHAR(32) NOT NULL,
+    clinic_id BIGINT,
+    clinic_scope_key BIGINT NOT NULL,
     definition_id BIGINT NOT NULL,
     draft_revision BIGINT NOT NULL,
     tenant_generation BIGINT NOT NULL,
     clinic_generation BIGINT NOT NULL,
+    clinic_generation_digest VARCHAR(64),
     partition_count INTEGER NOT NULL,
     cursor_partition INTEGER DEFAULT 0 NOT NULL,
     cursor_last_appointment_id BIGINT,
+    cursor_clinic_id BIGINT,
     cursor_scheduled_at DATETIME(6),
     cursor_aggregate_type VARCHAR(32),
     cursor_aggregate_id VARCHAR(64),
@@ -209,19 +213,31 @@ CREATE TABLE scheduling_policy_preview_jobs (
         )
     ),
     CONSTRAINT ck_policy_preview_progress CHECK (
-        tenant_group_id > 0 AND clinic_id > 0 AND definition_id > 0
+        tenant_group_id > 0 AND definition_id > 0
+        AND (
+            (scope = 'TENANT_DEFAULT' AND clinic_id IS NULL
+                AND clinic_scope_key = 0 AND clinic_generation = 0
+                AND clinic_generation_digest IS NOT NULL)
+            OR
+            (scope = 'CLINIC_OVERRIDE' AND clinic_id IS NOT NULL
+                AND clinic_id > 0 AND clinic_scope_key = clinic_id
+                AND clinic_generation_digest IS NULL)
+        )
         AND draft_revision > 0 AND tenant_generation >= 0 AND clinic_generation >= 0
         AND partition_count > 0
         AND cursor_partition >= 0 AND cursor_partition < partition_count
         AND (
-            (cursor_scheduled_at IS NULL AND cursor_aggregate_type IS NULL AND cursor_aggregate_id IS NULL)
+            (cursor_clinic_id IS NULL AND cursor_scheduled_at IS NULL
+                AND cursor_aggregate_type IS NULL AND cursor_aggregate_id IS NULL)
             OR
-            (cursor_scheduled_at IS NOT NULL AND cursor_aggregate_type IS NOT NULL AND cursor_aggregate_id IS NOT NULL)
+            (cursor_clinic_id IS NOT NULL AND cursor_clinic_id > 0
+                AND cursor_scheduled_at IS NOT NULL
+                AND cursor_aggregate_type IS NOT NULL AND cursor_aggregate_id IS NOT NULL)
         )
         AND scanned_count >= 0 AND affected_count >= 0 AND affected_count <= scanned_count
     ),
     INDEX idx_policy_preview_due (status, next_attempt_at, lease_until),
-    INDEX idx_policy_preview_scope (tenant_group_id, clinic_id, id),
+    INDEX idx_policy_preview_scope (tenant_group_id, scope, clinic_scope_key, id),
     UNIQUE INDEX uq_policy_preview_evidence_token (activation_evidence_token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -349,8 +349,9 @@ class ServiceConfig {
     @ConditionalOnProperty("scheduling.policy.idempotency-hash-secret")
     fun policyPreviewEvidenceVerifier(
         jobRepository: SchedulingPolicyJobRepository,
+        policyRepository: SchedulingPolicyRepository,
     ): PolicyPreviewEvidenceVerifier =
-        PersistedPolicyPreviewEvidenceVerifier(jobRepository)
+        PersistedPolicyPreviewEvidenceVerifier(jobRepository, policyRepository)
 
     /** DB-time due selection과 owner-fenced retry/missed primitive를 worker에 제공한다. */
     @Bean

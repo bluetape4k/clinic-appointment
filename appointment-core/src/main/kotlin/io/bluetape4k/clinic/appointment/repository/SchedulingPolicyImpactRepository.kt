@@ -44,11 +44,14 @@ enum class PolicyImpactAggregateType {
 /**
  * 정책 영향도 계산에 필요한 최소 식별 projection이다.
  *
+ * @property clinicId aggregate를 소유한 양수 병원 ID다. tenant-wide preview가 병원별
+ * timezone과 재시작 순서를 보존하는 cursor를 만들 때 사용한다.
  * @property scheduledAt 정렬과 horizon 판정에 사용하는 UTC 시각이다.
  * @property aggregateType payload를 다시 읽을 저장소 종류다.
  * @property aggregateId 범위가 검증된 양수 database ID의 문자열 표현이다.
  */
 data class PolicyImpactKey(
+    val clinicId: Long,
     val scheduledAt: Instant,
     val aggregateType: PolicyImpactAggregateType,
     val aggregateId: String,
@@ -61,11 +64,14 @@ data class PolicyImpactKey(
 /**
  * 다음 bounded page를 시작하기 직전의 exclusive keyset 위치다.
  *
+ * @property clinicId 마지막으로 반환한 aggregate를 소유한 양수 병원 ID다. tenant
+ * preview는 병원 ID 오름차순으로 완전히 소진한 뒤 다음 병원으로 이동한다.
  * @property scheduledAt 마지막으로 반환한 aggregate의 UTC 시각이다.
  * @property aggregateType 현재 scan 중인 table partition이다.
  * @property aggregateId 마지막으로 반환한 양수 database ID다.
  */
 data class PolicyImpactCursor(
+    val clinicId: Long,
     val scheduledAt: Instant,
     val aggregateType: PolicyImpactAggregateType,
     val aggregateId: String,
@@ -80,7 +86,7 @@ data class PolicyImpactCursor(
  *
  * @property items 최대 요청 limit개의 작은 key projection이다.
  * @property nextCursor page가 limit에 도달했을 때의 exclusive 재개 cursor다. `null`이면
- * 현재 horizon의 두 aggregate partition을 모두 소진했다.
+ * clinic scope의 두 aggregate partition 또는 tenant scope의 모든 병원을 소진했다.
  */
 data class PolicyImpactPage(
     val items: List<PolicyImpactKey>,
@@ -96,20 +102,24 @@ data class PolicyImpactPage(
  *
  * 모든 메서드는 호출자가 소유한 Exposed `transaction {}` 안에서 실행되어야 한다.
  * 반환값은 식별 projection만 포함하며, 한 호출에서 최대 5,000개만 materialize한다.
- * 호출자는 실제 정책 평가 전에 각 식별자를 동일 tenant/clinic 경계를 검증하는 저장소를
- * 통해 다시 읽어야 한다.
+ * tenant scope는 병원 ID 오름차순으로 각 병원의 appointment/treatment partition을 완전히
+ * 소진한다. 따라서 서로 다른 IANA timezone을 억지로 하나의 SQL timestamp 정렬로 합치지
+ * 않으면서도 worker 재시작 후 정확한 exclusive 위치를 복원한다. 호출자는 실제 정책 평가
+ * 전에 각 식별자를 동일 tenant/clinic 경계를 검증하는 저장소를 통해 다시 읽어야 한다.
  */
 class SchedulingPolicyImpactRepository {
 
     /**
-     * clinic scope의 미래 예약과 미이행 시술 의무를 bounded stream page로 조회한다.
+     * tenant 또는 clinic scope의 미래 예약과 미이행 시술 의무를 bounded stream page로 조회한다.
      *
      * 예약과 시술 의무 table을 순차 partition으로 읽어 한 시점에 [limit]보다 많은 key를
      * 보유하지 않는다. 예약 local date/time은 저장된 병원 IANA timezone으로 UTC
      * [Instant]로 변환한다. 시술 의무는 nullable `earliestStartAt`이 있는 행만 포함한다.
      *
-     * @param scope 인가가 끝난 clinic override scope다. tenant-wide scan은 병원별 queue
-     * 공정성과 timezone 경계를 무너뜨리므로 거부한다.
+     * tenant scope는 병원 ID, aggregate partition, 병원 local schedule, aggregate ID
+     * 순서로 진행한다. clinic scope는 해당 병원의 두 aggregate partition만 처리한다.
+     *
+     * @param scope 인가가 끝난 tenant baseline 또는 clinic override scope다.
      * @param horizonFrom 포함 UTC 시작 시각이다.
      * @param horizonUntil 제외 UTC 종료 시각이다.
      * @param after 마지막으로 반환한 exclusive cursor다.
@@ -122,19 +132,101 @@ class SchedulingPolicyImpactRepository {
         after: PolicyImpactCursor?,
         limit: Int,
     ): PolicyImpactPage {
-        require(scope.scope == PolicyScope.CLINIC_OVERRIDE) {
-            "impact scan requires CLINIC_OVERRIDE scope"
-        }
         require(horizonUntil > horizonFrom) { "horizonUntil must be later than horizonFrom" }
         require(limit in 1..MAX_SCAN_LIMIT) { "limit must be in 1..$MAX_SCAN_LIMIT" }
         after?.let(::validateCursor)
 
-        val clinicId = requireNotNull(scope.clinicId)
+        return when (scope.scope) {
+            PolicyScope.TENANT_DEFAULT -> scanTenantFutureWork(
+                scope = scope,
+                horizonFrom = horizonFrom,
+                horizonUntil = horizonUntil,
+                after = after,
+                limit = limit,
+            )
+            PolicyScope.CLINIC_OVERRIDE -> {
+                val clinicId = requireNotNull(scope.clinicId)
+                require(after == null || after.clinicId == clinicId) {
+                    "clinic preview cursor must remain inside its clinic scope"
+                }
+                scanClinicFutureWork(
+                    tenantGroupId = scope.tenantGroupId,
+                    clinicId = clinicId,
+                    horizonFrom = horizonFrom,
+                    horizonUntil = horizonUntil,
+                    after = after,
+                    limit = limit,
+                )
+            }
+        }
+    }
+
+    private fun scanTenantFutureWork(
+        scope: PolicyScopeRef,
+        horizonFrom: Instant,
+        horizonUntil: Instant,
+        after: PolicyImpactCursor?,
+        limit: Int,
+    ): PolicyImpactPage {
+        val items = ArrayList<PolicyImpactKey>(limit)
+        var clinicId = after?.clinicId ?: findNextClinicId(scope.tenantGroupId, 0L) ?: return PolicyImpactPage(
+            emptyList(),
+            null,
+        )
+        var clinicCursor = after
+
+        while (items.size < limit) {
+            val page = scanClinicFutureWork(
+                tenantGroupId = scope.tenantGroupId,
+                clinicId = clinicId,
+                horizonFrom = horizonFrom,
+                horizonUntil = horizonUntil,
+                after = clinicCursor,
+                limit = limit - items.size,
+            )
+            items += page.items
+            if (items.size == limit) {
+                val last = items.last()
+                return PolicyImpactPage(
+                    items,
+                    PolicyImpactCursor(last.clinicId, last.scheduledAt, last.aggregateType, last.aggregateId),
+                )
+            }
+            clinicId = findNextClinicId(scope.tenantGroupId, clinicId) ?: break
+            clinicCursor = null
+        }
+        return PolicyImpactPage(items, null)
+    }
+
+    private fun findNextClinicId(
+        tenantGroupId: Long,
+        afterClinicId: Long,
+    ): Long? =
+        Clinics
+            .select(Clinics.id)
+            .where {
+                (Clinics.tenantGroupId eq tenantGroupId) and
+                    (Clinics.id greater afterClinicId)
+            }
+            .orderBy(Clinics.id, SortOrder.ASC)
+            .limit(1)
+            .singleOrNull()
+            ?.get(Clinics.id)
+            ?.value
+
+    private fun scanClinicFutureWork(
+        tenantGroupId: Long,
+        clinicId: Long,
+        horizonFrom: Instant,
+        horizonUntil: Instant,
+        after: PolicyImpactCursor?,
+        limit: Int,
+    ): PolicyImpactPage {
         val timezone = Clinics
             .select(Clinics.timezone)
             .where {
                 (Clinics.id eq clinicId) and
-                    (Clinics.tenantGroupId eq scope.tenantGroupId)
+                    (Clinics.tenantGroupId eq tenantGroupId)
             }
             .singleOrNull()
             ?.get(Clinics.timezone)
@@ -144,7 +236,7 @@ class SchedulingPolicyImpactRepository {
         val items = ArrayList<PolicyImpactKey>(limit)
         if (after == null || after.aggregateType == PolicyImpactAggregateType.APPOINTMENT) {
             items += scanAppointments(
-                tenantGroupId = scope.tenantGroupId,
+                tenantGroupId = tenantGroupId,
                 clinicId = clinicId,
                 timezone = timezone,
                 horizonFrom = horizonFrom,
@@ -155,7 +247,7 @@ class SchedulingPolicyImpactRepository {
         }
         if (items.size < limit) {
             items += scanPlannedTreatments(
-                tenantGroupId = scope.tenantGroupId,
+                tenantGroupId = tenantGroupId,
                 clinicId = clinicId,
                 horizonFrom = horizonFrom,
                 horizonUntil = horizonUntil,
@@ -167,7 +259,7 @@ class SchedulingPolicyImpactRepository {
             items = items,
             nextCursor = items.lastOrNull()
                 ?.takeIf { items.size == limit }
-                ?.let { PolicyImpactCursor(it.scheduledAt, it.aggregateType, it.aggregateId) },
+                ?.let { PolicyImpactCursor(it.clinicId, it.scheduledAt, it.aggregateType, it.aggregateId) },
         )
     }
 
@@ -287,6 +379,7 @@ class SchedulingPolicyImpactRepository {
                     row[Appointments.startTime],
                 ).atZone(timezone).toInstant()
                 PolicyImpactKey(
+                    clinicId = clinicId,
                     scheduledAt = scheduledAt,
                     aggregateType = PolicyImpactAggregateType.APPOINTMENT,
                     aggregateId = row[Appointments.id].value.toString(),
@@ -331,6 +424,7 @@ class SchedulingPolicyImpactRepository {
             .limit(limit)
             .map { row ->
                 PolicyImpactKey(
+                    clinicId = clinicId,
                     scheduledAt = requireNotNull(row[PlannedTreatments.earliestStartAt]),
                     aggregateType = PolicyImpactAggregateType.PLANNED_TREATMENT,
                     aggregateId = row[PlannedTreatments.id].value.toString(),
@@ -339,6 +433,7 @@ class SchedulingPolicyImpactRepository {
     }
 
     private fun validateCursor(cursor: PolicyImpactCursor) {
+        require(cursor.clinicId > 0) { "clinicId must be positive" }
         require(cursor.aggregateId.toLongOrNull()?.let { it > 0 } == true) {
             "aggregateId must be a positive database identifier"
         }

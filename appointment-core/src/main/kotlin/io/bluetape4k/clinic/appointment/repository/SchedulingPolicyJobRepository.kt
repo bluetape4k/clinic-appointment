@@ -8,6 +8,7 @@ import io.bluetape4k.clinic.appointment.model.dto.PolicyScopeRef
 import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyActivationCommandRecord
 import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyPreviewJobRecord
 import io.bluetape4k.clinic.appointment.model.policy.PolicyGenerationVector
+import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyActivationCommands
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyPreviewJobs
 import org.jetbrains.exposed.v1.core.and
@@ -311,14 +312,18 @@ class SchedulingPolicyJobRepository(
         validatePreview(record)
         val jobId = SchedulingPolicyPreviewJobs.insertAndGetId {
             it[tenantGroupId] = record.tenantGroupId
+            it[scope] = record.scope
             it[clinicId] = record.clinicId
+            it[clinicScopeKey] = record.clinicScopeKey
             it[definitionId] = record.definitionId
             it[draftRevision] = record.draftRevision
             it[tenantGeneration] = record.tenantGeneration
             it[clinicGeneration] = record.clinicGeneration
+            it[clinicGenerationDigest] = record.clinicGenerationDigest
             it[partitionCount] = record.partitionCount
             it[cursorPartition] = record.cursorPartition
             it[cursorLastAppointmentId] = record.cursorLastAppointmentId
+            it[cursorClinicId] = record.cursorClinicId
             it[cursorScheduledAt] = record.cursorScheduledAt
             it[cursorAggregateType] = record.cursorAggregateType
             it[cursorAggregateId] = record.cursorAggregateId
@@ -353,32 +358,30 @@ class SchedulingPolicyJobRepository(
             ?.toSchedulingPolicyPreviewJobRecord()
 
     /**
-     * 한 병원 scope의 runnable preview queue가 설정 상한에 도달했는지 판단합니다.
+     * 한 정책 scope의 runnable preview queue가 설정 상한에 도달했는지 판단합니다.
      *
+     * tenant baseline과 각 clinic override는 서로 다른 queue key를 사용합니다. 따라서
      * SaaS의 다른 병원 또는 tenant가 만든 작업은 이 capacity를 소비하지 않습니다. 전체
      * `COUNT(*)` 대신 [capacity]개 ID까지만 materialize하며 `PENDING`과 `RUNNING`만 queue
-     * 자원을 점유합니다. 호출자는 같은 병원 scope의 admission을 직렬화하는 row lock을
+     * 자원을 점유합니다. 호출자는 같은 policy scope의 admission을 직렬화하는 row lock을
      * 보유한 트랜잭션 안에서 이 메서드와 [createPreviewJob]을 연속 실행해야 합니다.
      *
-     * @param tenantGroupId queue를 소유하는 양수 tenant ID.
-     * @param clinicId queue를 소유하는 양수 clinic ID.
-     * @param capacity 한 병원이 보유할 수 있는 runnable preview 상한.
+     * @param scope queue를 소유하는 tenant baseline 또는 clinic override 경계.
+     * @param capacity 한 정책 scope가 보유할 수 있는 runnable preview 상한.
      */
     fun isPreviewQueueSaturated(
-        tenantGroupId: Long,
-        clinicId: Long,
+        scope: PolicyScopeRef,
         capacity: Int,
     ): Boolean {
-        require(tenantGroupId > 0) { "tenantGroupId must be positive" }
-        require(clinicId > 0) { "clinicId must be positive" }
         require(capacity in 1..MAX_PREVIEW_QUEUE_CAPACITY) {
             "capacity must be in 1..$MAX_PREVIEW_QUEUE_CAPACITY"
         }
         return SchedulingPolicyPreviewJobs
             .select(SchedulingPolicyPreviewJobs.id)
             .where {
-                (SchedulingPolicyPreviewJobs.tenantGroupId eq tenantGroupId) and
-                    (SchedulingPolicyPreviewJobs.clinicId eq clinicId) and
+                (SchedulingPolicyPreviewJobs.tenantGroupId eq scope.tenantGroupId) and
+                    (SchedulingPolicyPreviewJobs.scope eq scope.scope) and
+                    (SchedulingPolicyPreviewJobs.clinicScopeKey eq scope.clinicScopeKey) and
                     (SchedulingPolicyPreviewJobs.status inList listOf(
                         PolicyPreviewJobStatus.PENDING,
                         PolicyPreviewJobStatus.RUNNING,
@@ -603,6 +606,7 @@ class SchedulingPolicyJobRepository(
         }) {
             it[cursorPartition] = cursor.aggregateType.ordinal
             it[cursorLastAppointmentId] = cursor.aggregateId.toLong()
+            it[cursorClinicId] = cursor.clinicId
             it[cursorScheduledAt] = cursor.scheduledAt
             it[cursorAggregateType] = cursor.aggregateType.name
             it[cursorAggregateId] = cursor.aggregateId
@@ -638,6 +642,7 @@ class SchedulingPolicyJobRepository(
             it[status] = PolicyPreviewJobStatus.PENDING
             it[cursorPartition] = cursor.aggregateType.ordinal
             it[cursorLastAppointmentId] = cursor.aggregateId.toLong()
+            it[cursorClinicId] = cursor.clinicId
             it[cursorScheduledAt] = cursor.scheduledAt
             it[cursorAggregateType] = cursor.aggregateType.name
             it[cursorAggregateId] = cursor.aggregateId
@@ -739,9 +744,12 @@ class SchedulingPolicyJobRepository(
         require(cursorId != null && cursorId > 0) { "aggregateId must be a positive database identifier" }
         val currentType = current.cursorAggregateType?.let(PolicyImpactAggregateType::valueOf)
         if (currentType != null) {
+            val currentClinicId = requireNotNull(current.cursorClinicId)
             val currentScheduledAt = requireNotNull(current.cursorScheduledAt)
             val currentId = requireNotNull(current.cursorAggregateId).toLong()
             val forward = when {
+                cursor.clinicId > currentClinicId -> true
+                cursor.clinicId < currentClinicId -> false
                 cursor.aggregateType.ordinal > currentType.ordinal -> true
                 cursor.aggregateType.ordinal < currentType.ordinal -> false
                 cursor.scheduledAt > currentScheduledAt -> true
@@ -887,7 +895,30 @@ class SchedulingPolicyJobRepository(
 
     private fun validatePreview(record: SchedulingPolicyPreviewJobRecord) {
         require(record.tenantGroupId > 0) { "tenantGroupId must be positive" }
-        require(record.clinicId > 0) { "clinicId must be positive" }
+        when (record.scope) {
+            PolicyScope.TENANT_DEFAULT -> {
+                require(record.clinicId == null && record.clinicScopeKey == 0L) {
+                    "tenant preview requires null clinicId and clinicScopeKey zero"
+                }
+                require(record.clinicGeneration == 0L) {
+                    "tenant preview clinicGeneration must be zero"
+                }
+                require(record.clinicGenerationDigest?.let(SHA256_REGEX::matches) == true) {
+                    "tenant preview requires a lowercase clinic generation SHA-256"
+                }
+            }
+            PolicyScope.CLINIC_OVERRIDE -> {
+                require(record.clinicId != null && record.clinicId > 0L) {
+                    "clinic preview requires positive clinicId"
+                }
+                require(record.clinicScopeKey == record.clinicId) {
+                    "clinicScopeKey must match clinicId"
+                }
+                require(record.clinicGenerationDigest == null) {
+                    "clinic preview must not contain a tenant clinic generation digest"
+                }
+            }
+        }
         require(record.definitionId > 0) { "definitionId must be positive" }
         require(record.draftRevision > 0) { "draftRevision must be positive" }
         require(record.tenantGeneration >= 0) { "tenantGeneration must be non-negative" }
@@ -915,6 +946,7 @@ class SchedulingPolicyJobRepository(
         require(
             record.cursorPartition == 0 &&
                 record.cursorLastAppointmentId == null &&
+                record.cursorClinicId == null &&
                 record.cursorScheduledAt == null &&
                 record.cursorAggregateType == null &&
                 record.cursorAggregateId == null &&

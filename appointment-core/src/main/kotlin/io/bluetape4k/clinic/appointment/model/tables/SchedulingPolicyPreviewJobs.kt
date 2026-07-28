@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.model.tables
 
 import io.bluetape4k.clinic.appointment.model.dto.PolicyPreviewJobStatus
+import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.timestamp
@@ -12,8 +13,14 @@ object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs
     /** scan되는 모든 row의 양수 tenant boundary입니다. */
     val tenantGroupId = long("tenant_group_id")
 
-    /** scan되는 모든 row의 양수 clinic boundary입니다. */
-    val clinicId = long("clinic_id")
+    /** tenant baseline 전체 또는 clinic override인 preview 범위입니다. */
+    val scope = enumerationByName<PolicyScope>("scope", 32)
+
+    /** clinic override의 양수 병원 경계입니다. tenant baseline에서는 `null`입니다. */
+    val clinicId = long("clinic_id").nullable()
+
+    /** tenant `0`, clinic override 양수 ID인 방언 독립 queue/index key입니다. */
+    val clinicScopeKey = long("clinic_scope_key")
 
     /** preview 대상 draft definition입니다. */
     val definitionId = long("definition_id")
@@ -26,6 +33,13 @@ object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs
 
     /** resume마다 기대하는 clinic generation입니다. */
     val clinicGeneration = long("clinic_generation")
+
+    /**
+     * tenant preview가 고정한 전체 clinic override generation 집합의 정규 SHA-256입니다.
+     *
+     * clinic preview는 정확한 [clinicGeneration] 하나로 충분하므로 `null`입니다.
+     */
+    val clinicGenerationDigest = varchar("clinic_generation_digest", 64).nullable()
 
     /** deterministic resume을 위한 양수 fixed partition count입니다. */
     val partitionCount = integer("partition_count")
@@ -41,6 +55,9 @@ object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs
      * partition 시작부터 진행해야 합니다.
      */
     val cursorLastAppointmentId = long("cursor_last_appointment_id").nullable()
+
+    /** tenant 전체 scan을 재개할 때 마지막으로 처리한 양수 병원 ID입니다. */
+    val cursorClinicId = long("cursor_clinic_id").nullable()
 
     /** 복합 impact cursor의 마지막 UTC scheduled instant입니다. */
     val cursorScheduledAt = timestamp("cursor_scheduled_at").nullable()
@@ -120,7 +137,7 @@ object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs
 
     init {
         index("idx_policy_preview_due", false, status, nextAttemptAt, leaseUntil)
-        index("idx_policy_preview_scope", false, tenantGroupId, clinicId, id)
+        index("idx_policy_preview_scope", false, tenantGroupId, scope, clinicScopeKey, id)
         uniqueIndex("uq_policy_preview_evidence_token", activationEvidenceToken)
     }
 }

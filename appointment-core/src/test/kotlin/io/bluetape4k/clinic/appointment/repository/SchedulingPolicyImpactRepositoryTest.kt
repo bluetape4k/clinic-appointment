@@ -55,22 +55,23 @@ class SchedulingPolicyImpactRepositoryTest : AbstractExposedTest() {
 
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
-    fun `scan rejects tenant scope reversed horizon and page size above hard maximum`(testDB: TestDB) {
+    fun `tenant scope without clinics is empty while invalid horizon and page size are rejected`(testDB: TestDB) {
         withImpactTables(testDB) {
             val clinicScope = PolicyScopeRef(
                 tenantGroupId = 77L,
                 scope = PolicyScope.CLINIC_OVERRIDE,
                 clinicId = 41L,
             )
-            assertFailsWith<IllegalArgumentException> {
-                repository.scanFutureWork(
-                    scope = PolicyScopeRef(77L, PolicyScope.TENANT_DEFAULT),
-                    horizonFrom = Instant.parse("2026-07-27T00:00:00Z"),
-                    horizonUntil = Instant.parse("2026-08-27T00:00:00Z"),
-                    after = null,
-                    limit = 100,
-                )
-            }
+            val tenantPage = repository.scanFutureWork(
+                scope = PolicyScopeRef(77L, PolicyScope.TENANT_DEFAULT),
+                horizonFrom = Instant.parse("2026-07-27T00:00:00Z"),
+                horizonUntil = Instant.parse("2026-08-27T00:00:00Z"),
+                after = null,
+                limit = 100,
+            )
+            tenantPage.items shouldBeEqualTo emptyList()
+            tenantPage.nextCursor.shouldBeNull()
+
             assertFailsWith<IllegalArgumentException> {
                 repository.scanFutureWork(
                     scope = clinicScope,
@@ -170,6 +171,7 @@ class SchedulingPolicyImpactRepositoryTest : AbstractExposedTest() {
 
             val first = repository.scanFutureWork(scope, horizonFrom, horizonUntil, after = null, limit = 1)
             first.items.single() shouldBeEqualTo PolicyImpactKey(
+                clinicId = clinicId.value,
                 scheduledAt = Instant.parse("2026-07-28T00:00:00Z"),
                 aggregateType = PolicyImpactAggregateType.APPOINTMENT,
                 aggregateId = appointmentId.value.toString(),
@@ -183,6 +185,7 @@ class SchedulingPolicyImpactRepositoryTest : AbstractExposedTest() {
                 limit = 1,
             )
             second.items.single() shouldBeEqualTo PolicyImpactKey(
+                clinicId = clinicId.value,
                 scheduledAt = Instant.parse("2026-07-29T00:00:00Z"),
                 aggregateType = PolicyImpactAggregateType.PLANNED_TREATMENT,
                 aggregateId = treatmentId.value.toString(),
@@ -195,6 +198,74 @@ class SchedulingPolicyImpactRepositoryTest : AbstractExposedTest() {
                 after = second.nextCursor,
                 limit = 1,
             )
+            exhausted.items shouldBeEqualTo emptyList()
+            exhausted.nextCursor.shouldBeNull()
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `tenant preview resumes across clinics without flattening different timezones`(testDB: TestDB) {
+        withImpactTables(testDB) {
+            val firstClinicId = Clinics.insertAndGetId {
+                it[tenantGroupId] = EntityID(1L, TenantGroups)
+                it[name] = "Los Angeles Clinic"
+                it[timezone] = "America/Los_Angeles"
+            }
+            val secondClinicId = Clinics.insertAndGetId {
+                it[tenantGroupId] = EntityID(1L, TenantGroups)
+                it[name] = "Seoul Clinic"
+                it[timezone] = "Asia/Seoul"
+            }
+
+            fun insertAppointment(
+                clinicId: EntityID<Long>,
+                suffix: String,
+            ): Long {
+                val doctorId = Doctors.insertAndGetId {
+                    it[Doctors.clinicId] = clinicId
+                    it[name] = "Dr. $suffix"
+                }
+                val treatmentTypeId = TreatmentTypes.insertAndGetId {
+                    it[TreatmentTypes.clinicId] = clinicId
+                    it[name] = "Treatment $suffix"
+                    it[defaultDurationMinutes] = 30
+                }
+                return Appointments.insertAndGetId {
+                    it[Appointments.clinicId] = clinicId
+                    it[Appointments.doctorId] = doctorId
+                    it[Appointments.treatmentTypeId] = treatmentTypeId
+                    it[patientName] = "tenant-preview-$suffix"
+                    it[appointmentDate] = LocalDate.of(2026, 7, 28)
+                    it[startTime] = LocalTime.of(9, 0)
+                    it[endTime] = LocalTime.of(9, 30)
+                    it[status] = AppointmentState.CONFIRMED
+                }.value
+            }
+
+            val firstAppointmentId = insertAppointment(firstClinicId, "la")
+            val secondAppointmentId = insertAppointment(secondClinicId, "seoul")
+            val scope = PolicyScopeRef(1L, PolicyScope.TENANT_DEFAULT)
+            val horizonFrom = Instant.parse("2026-07-27T00:00:00Z")
+            val horizonUntil = Instant.parse("2026-07-29T00:00:00Z")
+
+            val first = repository.scanFutureWork(scope, horizonFrom, horizonUntil, after = null, limit = 1)
+            first.items.single() shouldBeEqualTo PolicyImpactKey(
+                clinicId = firstClinicId.value,
+                scheduledAt = Instant.parse("2026-07-28T16:00:00Z"),
+                aggregateType = PolicyImpactAggregateType.APPOINTMENT,
+                aggregateId = firstAppointmentId.toString(),
+            )
+
+            val second = repository.scanFutureWork(scope, horizonFrom, horizonUntil, first.nextCursor, limit = 1)
+            second.items.single() shouldBeEqualTo PolicyImpactKey(
+                clinicId = secondClinicId.value,
+                scheduledAt = Instant.parse("2026-07-28T00:00:00Z"),
+                aggregateType = PolicyImpactAggregateType.APPOINTMENT,
+                aggregateId = secondAppointmentId.toString(),
+            )
+
+            val exhausted = repository.scanFutureWork(scope, horizonFrom, horizonUntil, second.nextCursor, limit = 1)
             exhausted.items shouldBeEqualTo emptyList()
             exhausted.nextCursor.shouldBeNull()
         }

@@ -17,6 +17,8 @@ import java.sql.Connection
 import java.sql.Date
 import java.sql.SQLException
 import java.sql.Time
+import java.sql.Timestamp
+import java.time.Instant
 import javax.sql.DataSource
 
 internal object AppointmentPlanMigrationTestSupport {
@@ -87,6 +89,8 @@ internal object AppointmentPlanMigrationTestSupport {
             }
 
             verifyPolicyJsonCapacity(connection)
+            verifyEffectiveSnapshotRoundTrip(connection)
+            verifyPolicyPreviewScopeConstraints(connection)
             verifyInvalidQuarantineStatusRejected(connection)
             verifyV8OutboxBackfill(connection)
             readLegacyAppointment(connection) shouldBeEqualTo before
@@ -166,6 +170,62 @@ internal object AppointmentPlanMigrationTestSupport {
         }
     }
 
+    /**
+     * Flyway V9와 Exposed repository가 공유하는 effective snapshot 열 계약을 실제 DML로
+     * 검증한다.
+     *
+     * 이 검사는 모델에 없는 non-null 열이 migration에 섞여도 metadata 비교만으로 놓칠 수
+     * 있는 insert 실패를 잡는다. 동일 SQL을 H2, PostgreSQL, MySQL에 실행하고 불변 hash로
+     * 다시 읽어 tenant/clinic/generation 값까지 보존되는지 확인한다.
+     */
+    private fun verifyEffectiveSnapshotRoundTrip(connection: Connection) {
+        val decisionAt = Instant.parse("2026-07-28T00:00:00Z")
+        val serviceAt = decisionAt.plusSeconds(86_400)
+        val snapshotHash = "e".repeat(64)
+        connection.prepareStatement(
+            """
+            INSERT INTO effective_scheduling_policy_snapshots(
+                tenant_group_id, clinic_id, decision_at, service_at,
+                tenant_generation, clinic_generation, source_versions_json,
+                source_by_path_json, disabled_features_json, warnings_json,
+                payload_json, snapshot_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent()
+        ).use { statement ->
+            statement.setLong(1, 1L)
+            statement.setLong(2, 41L)
+            statement.setTimestamp(3, Timestamp.from(decisionAt))
+            statement.setTimestamp(4, Timestamp.from(serviceAt))
+            statement.setLong(5, 2L)
+            statement.setLong(6, 1L)
+            statement.setString(7, "{}")
+            statement.setString(8, "{}")
+            statement.setString(9, "[]")
+            statement.setString(10, "[]")
+            statement.setString(11, "{}")
+            statement.setString(12, snapshotHash)
+            statement.executeUpdate() shouldBeEqualTo 1
+        }
+
+        connection.prepareStatement(
+            """
+            SELECT tenant_group_id, clinic_id, tenant_generation, clinic_generation
+            FROM effective_scheduling_policy_snapshots
+            WHERE snapshot_hash = ?
+            """.trimIndent()
+        ).use { statement ->
+            statement.setString(1, snapshotHash)
+            statement.executeQuery().use { result ->
+                check(result.next()) { "V9 effective snapshot insert was not readable" }
+                result.getLong(1) shouldBeEqualTo 1L
+                result.getLong(2) shouldBeEqualTo 41L
+                result.getLong(3) shouldBeEqualTo 2L
+                result.getLong(4) shouldBeEqualTo 1L
+                check(!result.next()) { "V9 effective snapshot hash returned duplicate rows" }
+            }
+        }
+    }
+
     private fun verifyInvalidQuarantineStatusRejected(connection: Connection) {
         if (connection.metaData.databaseProductName.contains("MySQL", ignoreCase = true)) {
             connection.createStatement().use {
@@ -220,6 +280,81 @@ internal object AppointmentPlanMigrationTestSupport {
         check(failure != null && persisted == 0L) {
             "V8 must reject invalid quarantine status without persisting it; " +
                 "sqlState=${failure?.sqlState}, persisted=$persisted"
+        }
+    }
+
+    /**
+     * Flyway가 만든 preview table이 tenant baseline을 실제로 저장하면서 scope 불변식을
+     * 데이터베이스 권위로 강제하는지 검증한다.
+     *
+     * 이 검사는 운영 방언인 PostgreSQL과 지원 방언인 MySQL에서 동일한 SQL 입력을 실행한다.
+     * H2는 Flyway 구조·drift fast feedback까지만 담당한다. Flyway의 반복
+     * clean/migrate 뒤 CHECK expression을 실행하면 H2가 닫힌 이전 session을 참조하는
+     * `Check constraint invalid` 오류를 만들 수 있어 운영 의미 증명의 근거로 사용하지 않는다.
+     * 유효 tenant row는 `clinic_id = null`,
+     * `clinic_scope_key = 0`, `clinic_generation = 0`으로 저장되어야 하며, clinic scope에
+     * null clinic을 섞은 row는 애플리케이션 검증을 우회해도 CHECK constraint가 거부해야 한다.
+     */
+    private fun verifyPolicyPreviewScopeConstraints(connection: Connection) {
+        if (connection.metaData.databaseProductName.contains("H2", ignoreCase = true)) {
+            return
+        }
+        val now = Instant.parse("2026-07-28T00:00:00Z")
+        val insertSql =
+            """
+            INSERT INTO scheduling_policy_preview_jobs(
+                tenant_group_id, scope, clinic_id, clinic_scope_key,
+                definition_id, draft_revision, tenant_generation, clinic_generation,
+                clinic_generation_digest,
+                partition_count, status, deadline_at, next_attempt_at,
+                horizon_from, horizon_until
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent()
+
+        connection.prepareStatement(insertSql).use { statement ->
+            statement.setLong(1, 1L)
+            statement.setString(2, "TENANT_DEFAULT")
+            statement.setNull(3, java.sql.Types.BIGINT)
+            statement.setLong(4, 0L)
+            statement.setLong(5, 7L)
+            statement.setLong(6, 3L)
+            statement.setLong(7, 2L)
+            statement.setLong(8, 0L)
+            statement.setString(9, "0".repeat(64))
+            statement.setInt(10, 2)
+            statement.setString(11, "PENDING")
+            statement.setTimestamp(12, Timestamp.from(now.plusSeconds(300)))
+            statement.setTimestamp(13, Timestamp.from(now))
+            statement.setTimestamp(14, Timestamp.from(now))
+            statement.setTimestamp(15, Timestamp.from(now.plusSeconds(86_400)))
+            statement.executeUpdate() shouldBeEqualTo 1
+        }
+
+        val invalidFailure = try {
+            connection.prepareStatement(insertSql).use { statement ->
+                statement.setLong(1, 1L)
+                statement.setString(2, "CLINIC_OVERRIDE")
+                statement.setNull(3, java.sql.Types.BIGINT)
+                statement.setLong(4, 41L)
+                statement.setLong(5, 8L)
+                statement.setLong(6, 1L)
+                statement.setLong(7, 2L)
+                statement.setLong(8, 1L)
+                statement.setNull(9, java.sql.Types.VARCHAR)
+                statement.setInt(10, 2)
+                statement.setString(11, "PENDING")
+                statement.setTimestamp(12, Timestamp.from(now.plusSeconds(300)))
+                statement.setTimestamp(13, Timestamp.from(now))
+                statement.setTimestamp(14, Timestamp.from(now))
+                statement.setTimestamp(15, Timestamp.from(now.plusSeconds(86_400)))
+                statement.executeUpdate()
+            }
+            null
+        } catch (caught: SQLException) {
+            caught
+        }
+        check(invalidFailure != null) {
+            "V9 must reject a CLINIC_OVERRIDE preview without a positive clinic identity"
         }
     }
 
@@ -711,11 +846,19 @@ internal object AppointmentPlanMigrationTestSupport {
             "result_clinic_generation",
         ),
         "scheduling_policy_preview_jobs" to setOf(
+            "scope",
+            "clinic_id",
+            "clinic_scope_key",
             "draft_revision",
             "tenant_generation",
             "clinic_generation",
+            "clinic_generation_digest",
             "cursor_partition",
             "cursor_last_appointment_id",
+            "cursor_clinic_id",
+            "cursor_scheduled_at",
+            "cursor_aggregate_type",
+            "cursor_aggregate_id",
             "scanned_count",
             "affected_count",
         ),

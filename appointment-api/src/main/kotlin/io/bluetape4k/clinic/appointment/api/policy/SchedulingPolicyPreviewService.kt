@@ -28,7 +28,8 @@ import java.util.concurrent.Semaphore
 /**
  * preview 생성 시 immutable하게 고정되는 caller 입력이다.
  *
- * @property scope Gateway 인증과 tenant/clinic 재검증이 끝난 clinic scope다.
+ * @property scope Gateway 인증과 tenant/clinic 재검증이 끝난 tenant baseline 또는 clinic
+ * override scope다. tenant baseline은 tenant 안의 병원을 ID 순으로 bounded scan한다.
  * @property definitionId 영향을 평가할 양수 draft definition ID다.
  * @property draftRevision 요청자가 본 정확한 양수 draft revision이다.
  * @property generation scan 시작 시점의 tenant/clinic effective generation이다.
@@ -47,8 +48,10 @@ data class CreateSchedulingPolicyPreviewCommand(
     val requestedAt: Instant,
 ) {
     init {
-        require(scope.scope == PolicyScope.CLINIC_OVERRIDE) {
-            "preview requires CLINIC_OVERRIDE scope"
+        if (scope.scope == PolicyScope.TENANT_DEFAULT) {
+            require(generation.clinicGeneration == 0L) {
+                "TENANT_DEFAULT preview requires clinicGeneration zero"
+            }
         }
         require(definitionId > 0) { "definitionId must be positive" }
         require(draftRevision > 0) { "draftRevision must be positive" }
@@ -88,7 +91,7 @@ data class SchedulingPolicyPreviewResult(
 )
 
 /**
- * 병원별 queue admission 트랜잭션이 확정한 생성 결과다.
+ * 정책 scope별 queue admission 트랜잭션이 확정한 생성 결과다.
  *
  * @property acceptedAt DB가 판정한 요청 수락 시각이다. deadline, 최초 due 시각, 동기 claim
  * 시각은 모두 이 값에서 계산하여 API 서버와 DB 노드의 시계 편차가 실행 규칙에 섞이지 않게 한다.
@@ -123,7 +126,7 @@ fun interface ScheduledPolicyPreviewPageProcessor {
  */
 interface SchedulingPolicyPreviewStore {
     /**
-     * 병원별 runnable queue capacity 확인과 작업 생성을 하나의 직렬화 트랜잭션으로 수행한다.
+     * 정책 scope별 runnable queue capacity 확인과 작업 생성을 하나의 직렬화 트랜잭션으로 수행한다.
      *
      * @return capacity 여유가 있어 생성된 admission. 이미 포화되었으면 `null`이며 행을 만들지 않는다.
      */
@@ -234,7 +237,7 @@ class SchedulingPolicyPreviewService(
             jobDeadline = properties.previewJobDeadline,
         ) ?: throw SchedulingPolicyApiException(
                 SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED,
-                "The clinic preview queue reached its configured capacity.",
+                "The policy preview queue reached its configured capacity.",
         )
         val job = admission.job
         val permit = tenantPermit(command.scope.tenantGroupId)
@@ -491,6 +494,7 @@ class SchedulingPolicyPreviewService(
         val aggregateType = requireNotNull(cursorAggregateType)
         val aggregateId = requireNotNull(cursorAggregateId)
         return PolicyImpactCursor(
+            clinicId = requireNotNull(cursorClinicId),
             scheduledAt = scheduledAt,
             aggregateType = PolicyImpactAggregateType.valueOf(aggregateType),
             aggregateId = aggregateId,
@@ -514,11 +518,14 @@ class SchedulingPolicyPreviewService(
     ): String {
         val canonical = listOf(
             job.tenantGroupId,
+            job.scope,
             job.clinicId,
+            job.clinicScopeKey,
             job.definitionId,
             job.draftRevision,
             job.tenantGeneration,
             job.clinicGeneration,
+            job.clinicGenerationDigest,
             job.horizonFrom,
             job.horizonUntil,
             progress.scannedCount,
@@ -555,19 +562,26 @@ class ExposedSchedulingPolicyPreviewStore(
     ): SchedulingPolicyPreviewAdmission? =
         transaction {
             policyRepository.lockScopeHead(command.scope)
-            val clinicId = requireNotNull(command.scope.clinicId)
-            if (jobRepository.isPreviewQueueSaturated(command.scope.tenantGroupId, clinicId, capacity)) {
+            if (jobRepository.isPreviewQueueSaturated(command.scope, capacity)) {
                 return@transaction null
             }
             val acceptedAt = currentDatabaseInstant()
+            val clinicGenerationDigest = if (command.scope.scope == PolicyScope.TENANT_DEFAULT) {
+                policyRepository.clinicGenerationDigest(command.scope.tenantGroupId)
+            } else {
+                null
+            }
             val job = jobRepository.createPreviewJob(
                 SchedulingPolicyPreviewJobRecord(
                     tenantGroupId = command.scope.tenantGroupId,
-                    clinicId = clinicId,
+                    scope = command.scope.scope,
+                    clinicId = command.scope.clinicId,
+                    clinicScopeKey = command.scope.clinicScopeKey,
                     definitionId = command.definitionId,
                     draftRevision = command.draftRevision,
                     tenantGeneration = command.generation.tenantGeneration,
                     clinicGeneration = command.generation.clinicGeneration,
+                    clinicGenerationDigest = clinicGenerationDigest,
                     partitionCount = PolicyImpactAggregateType.entries.size,
                     deadlineAt = acceptedAt.plus(jobDeadline),
                     nextAttemptAt = acceptedAt,
@@ -602,6 +616,7 @@ class ExposedSchedulingPolicyPreviewStore(
         transaction {
             val definition = policyRepository.findDefinition(job.definitionId) ?: return@transaction false
             if (definition.tenantGroupId != job.tenantGroupId ||
+                definition.scope != job.scope ||
                 definition.clinicId != job.clinicId ||
                 definition.revision != job.draftRevision
             ) {
@@ -610,11 +625,21 @@ class ExposedSchedulingPolicyPreviewStore(
             val tenantHead = policyRepository.findScopeHead(
                 PolicyScopeRef(job.tenantGroupId, PolicyScope.TENANT_DEFAULT)
             ) ?: return@transaction false
-            val clinicHead = policyRepository.findScopeHead(
-                PolicyScopeRef(job.tenantGroupId, PolicyScope.CLINIC_OVERRIDE, job.clinicId)
-            )
-            tenantHead.generation == job.tenantGeneration &&
-                (clinicHead?.generation ?: 0L) == job.clinicGeneration
+            if (tenantHead.generation != job.tenantGeneration) {
+                return@transaction false
+            }
+            when (job.scope) {
+                PolicyScope.TENANT_DEFAULT ->
+                    job.clinicGeneration == 0L &&
+                        job.clinicGenerationDigest ==
+                        policyRepository.clinicGenerationDigest(job.tenantGroupId)
+                PolicyScope.CLINIC_OVERRIDE -> {
+                    val clinicHead = policyRepository.findScopeHead(
+                        PolicyScopeRef(job.tenantGroupId, PolicyScope.CLINIC_OVERRIDE, job.clinicId)
+                    )
+                    (clinicHead?.generation ?: 0L) == job.clinicGeneration
+                }
+            }
         }
 
     override fun scan(
@@ -626,7 +651,7 @@ class ExposedSchedulingPolicyPreviewStore(
             impactRepository.scanFutureWork(
                 scope = PolicyScopeRef(
                     job.tenantGroupId,
-                    PolicyScope.CLINIC_OVERRIDE,
+                    job.scope,
                     job.clinicId,
                 ),
                 horizonFrom = job.horizonFrom,
@@ -712,11 +737,13 @@ class ExposedSchedulingPolicyPreviewStore(
  * activation 명령이 제출한 opaque token을 로컬 durable preview evidence와 대조한다.
  *
  * 네트워크 호출 없이 exact unique-index 조회만 수행한다. `COMPLETED` 상태와 definition,
- * revision, tenant/clinic generation이 모두 일치해야 true다. token 자체는 로그나 예외
- * 메시지에 포함하지 않는다.
+ * revision, tenant/clinic generation이 모두 일치해야 true다. tenant preview는 추가로
+ * 모든 clinic override 세대의 정규 digest를 현재 권위 저장소와 비교한다. token 자체는
+ * 로그나 예외 메시지에 포함하지 않는다.
  */
 class PersistedPolicyPreviewEvidenceVerifier(
     private val jobRepository: SchedulingPolicyJobRepository,
+    private val policyRepository: SchedulingPolicyRepository,
 ) : PolicyPreviewEvidenceVerifier {
     override fun verify(
         evidence: PolicyPreviewEvidence,
@@ -729,12 +756,21 @@ class PersistedPolicyPreviewEvidenceVerifier(
                     ?: return@transaction false
                 job.definitionId == definition.id &&
                     job.definitionId == evidence.definitionId &&
+                    job.tenantGroupId == definition.tenantGroupId &&
+                    job.scope == definition.scope &&
+                    job.clinicId == definition.clinicId &&
                     job.draftRevision == definition.revision &&
                     job.draftRevision == evidence.draftRevision &&
                     job.tenantGeneration == generation.tenantGeneration &&
                     job.tenantGeneration == evidence.tenantGeneration &&
                     job.clinicGeneration == generation.clinicGeneration &&
-                    job.clinicGeneration == evidence.clinicGeneration
+                    job.clinicGeneration == evidence.clinicGeneration &&
+                    when (job.scope) {
+                        PolicyScope.TENANT_DEFAULT ->
+                            job.clinicGenerationDigest ==
+                                policyRepository.clinicGenerationDigest(job.tenantGroupId)
+                        PolicyScope.CLINIC_OVERRIDE -> job.clinicGenerationDigest == null
+                    }
             }
         } catch (_: IllegalArgumentException) {
             false

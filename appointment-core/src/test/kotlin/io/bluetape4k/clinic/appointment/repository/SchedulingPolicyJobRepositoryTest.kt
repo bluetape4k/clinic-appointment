@@ -491,24 +491,32 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
 
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
-    fun `preview queue capacity is isolated by tenant and clinic`(testDB: TestDB) {
+    fun `preview queue capacity is isolated by tenant baseline and clinic override scope`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
             repository.createPreviewJob(preview(now))
+            val clinicOne = PolicyScopeRef(1L, PolicyScope.CLINIC_OVERRIDE, 41L)
+            val clinicTwo = PolicyScopeRef(1L, PolicyScope.CLINIC_OVERRIDE, 42L)
+            val otherTenantClinic = PolicyScopeRef(2L, PolicyScope.CLINIC_OVERRIDE, 41L)
+            val tenantBaseline = PolicyScopeRef(1L, PolicyScope.TENANT_DEFAULT)
 
-            repository.isPreviewQueueSaturated(1L, 41L, capacity = 1).shouldBeTrue()
-            repository.isPreviewQueueSaturated(1L, 42L, capacity = 1).shouldBeFalse()
-            repository.isPreviewQueueSaturated(2L, 41L, capacity = 1).shouldBeFalse()
+            repository.isPreviewQueueSaturated(clinicOne, capacity = 1).shouldBeTrue()
+            repository.isPreviewQueueSaturated(clinicTwo, capacity = 1).shouldBeFalse()
+            repository.isPreviewQueueSaturated(otherTenantClinic, capacity = 1).shouldBeFalse()
+            repository.isPreviewQueueSaturated(tenantBaseline, capacity = 1).shouldBeFalse()
 
             repository.createPreviewJob(
                 preview(now).copy(
-                    tenantGroupId = 2L,
-                    clinicId = 41L,
+                    scope = PolicyScope.TENANT_DEFAULT,
+                    clinicId = null,
+                    clinicScopeKey = 0L,
+                    clinicGeneration = 0L,
+                    clinicGenerationDigest = "0".repeat(64),
                 )
             )
 
-            repository.isPreviewQueueSaturated(2L, 41L, capacity = 1).shouldBeTrue()
-            repository.isPreviewQueueSaturated(1L, 42L, capacity = 1).shouldBeFalse()
+            repository.isPreviewQueueSaturated(tenantBaseline, capacity = 1).shouldBeTrue()
+            repository.isPreviewQueueSaturated(clinicTwo, capacity = 1).shouldBeFalse()
         }
     }
 

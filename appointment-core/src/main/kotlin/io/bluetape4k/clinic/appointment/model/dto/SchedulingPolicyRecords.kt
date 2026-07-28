@@ -312,15 +312,26 @@ data class PolicyPreviewProgress(
  *
  * @property id database identity입니다. insertion 전에는 `null`입니다.
  * @property tenantGroupId scan 대상 모든 appointment의 tenant boundary입니다.
- * @property clinicId preview의 clinic boundary입니다.
+ * @property scope tenant baseline 전체 또는 단일 clinic override 중 preview가 평가하는 범위입니다.
+ * @property clinicId clinic override의 양수 병원 경계입니다. tenant baseline 전체를 평가할 때는
+ * `null`이며, worker는 [cursorClinicId]로 tenant 안의 병원을 순차 처리합니다.
+ * @property clinicScopeKey scope별 queue admission과 index를 방언 독립적으로 구성하는 non-null
+ * key입니다. tenant baseline은 `0`, clinic override는 [clinicId]와 같은 양수입니다.
  * @property definitionId 평가 중인 draft definition입니다.
  * @property draftRevision 정확한 draft revision입니다. mismatch가 있으면 job은 stale입니다.
  * @property tenantGeneration resume 때마다 기대하는 tenant generation입니다.
  * @property clinicGeneration resume 때마다 기대하는 clinic generation입니다.
+ * @property clinicGenerationDigest tenant baseline preview가 시작될 때 관찰한 모든 clinic
+ * override scope-head `(clinicId, generation)`의 정규 SHA-256입니다. tenant 기본값은 모든
+ * 병원에 영향을 주므로 어느 한 clinic override가 바뀌어도 이 값이 달라져 partial 결과와
+ * activation evidence를 stale 처리합니다. 단일 clinic preview에서는 `null`입니다.
  * @property partitionCount deterministic resume을 위한 양수 fixed partition count입니다.
  * @property cursorPartition 저장된 zero-based partition cursor입니다.
  * @property cursorLastAppointmentId partition 안에서 마지막으로 처리한 양수 appointment ID입니다.
  * [cursorPartition]이 증가한 직후를 포함해 해당 partition에서 아직 row를 처리하지 않았으면 `null`입니다.
+ * @property cursorClinicId 복합 impact cursor가 마지막으로 처리한 양수 병원 ID입니다. tenant
+ * preview를 재시작할 때 이전 병원으로 되돌아가거나 다음 병원을 건너뛰지 않게 한다. 복합
+ * cursor가 아직 없으면 `null`입니다.
  * @property cursorScheduledAt 복합 impact keyset의 마지막 UTC 시각입니다.
  * @property cursorAggregateType 마지막 aggregate type의 안정적인 enum 이름입니다.
  * @property cursorAggregateId 마지막 aggregate의 양수 database ID 문자열입니다. 세 값은 모두
@@ -350,14 +361,18 @@ data class PolicyPreviewProgress(
 data class SchedulingPolicyPreviewJobRecord(
     val id: Long? = null,
     val tenantGroupId: Long,
-    val clinicId: Long,
+    val scope: PolicyScope = PolicyScope.CLINIC_OVERRIDE,
+    val clinicId: Long?,
+    val clinicScopeKey: Long = if (scope == PolicyScope.TENANT_DEFAULT) 0L else requireNotNull(clinicId),
     val definitionId: Long,
     val draftRevision: Long,
     val tenantGeneration: Long,
     val clinicGeneration: Long,
+    val clinicGenerationDigest: String? = null,
     val partitionCount: Int,
     val cursorPartition: Int = 0,
     val cursorLastAppointmentId: Long? = null,
+    val cursorClinicId: Long? = null,
     val cursorScheduledAt: Instant? = null,
     val cursorAggregateType: String? = null,
     val cursorAggregateId: String? = null,

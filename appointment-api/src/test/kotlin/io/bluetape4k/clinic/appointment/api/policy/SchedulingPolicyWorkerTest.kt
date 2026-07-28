@@ -419,6 +419,9 @@ class SchedulingPolicyWorkerTest {
         override fun findPreviewKind(jobId: Long): SchedulingPolicyKind =
             SchedulingPolicyKind.BOOKING_COMMITMENT
 
+        override fun findPreviewScope(jobId: Long): PolicyScope =
+            PolicyScope.CLINIC_OVERRIDE
+
         override fun markPreviewFailed(
             jobId: Long,
             owner: String,
