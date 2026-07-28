@@ -2,7 +2,7 @@
 
 > Issue: [#184](https://github.com/bluetape4k/clinic-appointment/issues/184)
 >
-> 상태: 2-R 완료, Step 3 구현 계획 승인 대기
+> 상태: 2-R·3-R 완료, Step 3-P PASS, Step 4 구현 승인 대기
 >
 > 기준일: 2026-07-29
 >
