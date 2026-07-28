@@ -99,7 +99,25 @@ brainstorm 단계의 `.superpowers/brainstorm/<session>/` 파일은 선택지 �
 의존하지 않는다. 선택 UI가 필요하면 상태를 저장하지 않는 client-side
 interaction만 사용한다.
 
-### 5.3 공개 allowlist
+### 5.3 문서별 presentation profile
+
+Visual Companion의 설명 방식은 저장소 전체에서 하나를 선택하지 않는다. 각 설계
+문서가 독자의 핵심 질문에 따라 다음 profile 중 하나를 명시한다.
+
+| Mode | 핵심 질문 | 기본 구성 | 적합한 예 |
+|---|---|---|---|
+| `history` | 왜 이렇게 바뀌었는가? | Issue → 설계 → PR → API·runbook timeline | 예약 생성 idempotency |
+| `simulation` | 조건이 바뀌면 어떻게 동작하는가? | 행위자·정책·상태 입력과 판정 결과 비교 | 예약 상태 전이 |
+| `hybrid` | 어떻게 동작하며 왜 그렇게 결정됐는가? | simulation과 history의 상호 탐색 | Scheduling Policy |
+
+profile은 문서 작성자가 명시한다. validator는 mode별 필수 view와 허용값을
+검사하지만, 문서 내용에서 mode를 자동 추론하지 않는다. 같은 저장소의 설계마다
+다른 profile을 선택할 수 있다.
+
+`hybrid`는 모든 문서의 기본값이 아니다. 두 관점이 실제로 필요하고 서로 연결될
+때만 사용한다. 단순히 화면을 풍부하게 보이게 하려고 중복 내용을 추가하지 않는다.
+
+### 5.4 공개 allowlist
 
 저장소에 HTML이 존재한다는 사실만으로 공개 대상이 되지 않는다.
 
@@ -121,6 +139,11 @@ docs/visual-companions/
       "source": "docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.md",
       "html": "docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html",
       "locale": "ko",
+      "presentation": {
+        "mode": "hybrid",
+        "defaultView": "simulation",
+        "views": ["simulation", "history"]
+      },
       "status": "approved",
       "public": true
     }
@@ -131,7 +154,19 @@ docs/visual-companions/
 consumer는 repository glob으로 HTML을 수집하지 않고 manifest entry만 처리한다.
 manifest에 없는 HTML은 저장소 내부 문서이며 공개되지 않는다.
 
-### 5.4 중앙 문서 사이트가 publication을 소유
+presentation 계약:
+
+- `history`는 `defaultView == "history"`이고 `views`에 `history`만 둔다.
+- `simulation`은 `defaultView == "simulation"`이고 `views`에 `simulation`만 둔다.
+- `hybrid`는 `views`에 `history`와 `simulation`을 모두 포함한다.
+- `defaultView`는 반드시 `views`의 원소다.
+- `views`는 중복 없는 배열이며 mode가 허용한 값만 포함한다.
+- view 순서는 navigation의 기본 표시 순서를 결정한다.
+- `history` view는 `id="history"`, `simulation` view는 `id="simulation"`인
+  section을 가진다. `hybrid` 문서는 두 section과 양방향 navigation을 모두 가진다.
+- 알 수 없는 mode나 view는 fail closed한다.
+
+### 5.5 중앙 문서 사이트가 publication을 소유
 
 공개 렌더링은 `bluetape4k.github.io`가 소유한다. 중앙 사이트의 build가 pinned
 repository ref에서 manifest를 읽고, 열거된 HTML만 정적 asset으로 복사한다.
@@ -237,11 +272,13 @@ Visual Companion은 날짜별 snapshot이다. 과거 파일을 새 설계 의미
 1. manifest schema와 중복 `id`
 2. `source`와 `html` 경로가 저장소 안에 존재하는가
 3. 공개 entry가 허용된 문서 root 아래에 있는가
-4. Markdown이 HTML을 링크하고 HTML이 Markdown으로 역링크하는가
-5. HTML에 provenance 필수값과 `<html lang>`이 있는가
-6. 외부 script, analytics, form, network URL이 없는가
-7. locale pair가 선언된 경우 양쪽 entry와 route가 존재하는가
-8. manifest 밖의 HTML이 publication artifact에 섞이지 않는가
+4. `presentation.mode`, `defaultView`, `views` 조합이 profile 계약과 일치하는가
+5. mode별 필수 section anchor가 HTML에 존재하는가
+6. Markdown이 HTML을 링크하고 HTML이 Markdown으로 역링크하는가
+7. HTML에 provenance 필수값과 `<html lang>`이 있는가
+8. 외부 script, analytics, form, network URL이 없는가
+9. locale pair가 선언된 경우 양쪽 entry와 route가 존재하는가
+10. manifest 밖의 HTML이 publication artifact에 섞이지 않는가
 
 문서 변경의 최소 검증은 다음과 같다.
 
@@ -294,6 +331,8 @@ GitHub Actions 변경 시 `actionlint`를 추가한다. 중앙 사이트 consume
 
 - Markdown이 업무 규칙과 결정의 원본으로 명시되어 있다.
 - 임시 brainstorm 파일과 영구 HTML의 책임이 분리되어 있다.
+- 각 설계가 `history`, `simulation`, `hybrid` 중 적합한 profile을 명시한다.
+- profile 선택은 자동 추론되지 않으며 manifest 조합으로 검증할 수 있다.
 - 기존 HTML과 링크를 이동하지 않는 migration 경로가 있다.
 - 공개 대상은 manifest allowlist로만 선택된다.
 - 중앙 사이트와 서비스 저장소의 publication 책임이 분리되어 있다.
