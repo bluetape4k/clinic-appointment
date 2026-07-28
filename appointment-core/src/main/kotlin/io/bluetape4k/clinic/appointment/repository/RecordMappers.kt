@@ -496,6 +496,7 @@ internal fun ResultRow.toSchedulingPolicyScopeHeadRecord() = SchedulingPolicySco
     clinicScopeKey = this[SchedulingPolicyScopeHeads.clinicScopeKey],
     revision = this[SchedulingPolicyScopeHeads.revision],
     generation = this[SchedulingPolicyScopeHeads.generation],
+    clinicGenerationEpoch = this[SchedulingPolicyScopeHeads.clinicGenerationEpoch],
     updatedAt = this[SchedulingPolicyScopeHeads.updatedAt],
 )
 

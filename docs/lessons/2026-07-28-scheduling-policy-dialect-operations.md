@@ -45,6 +45,22 @@ index 폭에 따라 preview 전용 index 대신 기존 clinic/date/status index�
 테스트로 고정했다. 성능 요구가 업무 deadline이면 실행 환경의 우연보다 bounded work와
 결정적 시계가 더 강한 증거다.
 
+## 반복 freshness 검사는 집합 digest가 아니라 단조 epoch로 고정한다
+
+tenant preview page 자체를 100개 병원으로 제한해도, page 전후 freshness 검사가 tenant의
+모든 병원과 clinic scope head를 다시 읽으면 전체 작업은 여전히 병원 수에 비례한다.
+bounded page와 bounded validation은 별개의 계약이다.
+
+clinic override generation 변경 transaction에서 tenant head의 단조
+`clinic_generation_epoch`도 증가시키고, preview에는 tenant ID와 epoch의 hash만 저장했다.
+이렇게 하면 정책 변경 감지는 unique head 한 행 조회로 고정된다. 병원 목록과 appointment
+inventory는 정책 세대와 분리한다. 병원 생성만으로 정책이 바뀐 것처럼 preview를
+무효화하지 않고, 실제 clinic override generation이 증가할 때만 stale 처리한다.
+
+이 패턴의 핵심은 집계 counter를 별도 비동기 consumer가 갱신하는 것이 아니라 원본 clinic
+generation과 같은 transaction에서 갱신하는 것이다. 잠금은 항상 tenant→clinic 순서이며,
+둘 중 하나라도 실패하면 전체 transaction을 rollback해야 한다.
+
 ## 공유 container보다 Spring context를 먼저 닫는다
 
 공유 Redis Testcontainers launcher가 JVM shutdown hook에서 먼저 종료되면, 캐시 bean의
@@ -102,6 +118,9 @@ checked/application 예외 instance를 그대로 보존해 관측 코드가 업�
   채운 뒤, 양쪽 access path와 full table scan 부재를 함께 증명한다.
 - tenant-wide scan은 row page뿐 아니라 빈 partition 수에도 별도 상한을 둔다. 결과가 0건인
   page도 durable boundary cursor를 반환해야 다음 트랜잭션이 같은 빈 범위를 반복하지 않는다.
+- 매 page freshness 검사는 page 상한과 별도로 SQL 수와 조회 cardinality를 고정한다.
+  하위 scope 변경 집계가 필요하면 원본 변경 transaction의 단조 tenant epoch와 exact
+  head lookup을 사용하고, 모든 child row를 반복 materialize하지 않는다.
 - H2 성공 뒤 PostgreSQL Flyway constraint와 MySQL 지원 의미를 반드시 순차 확인한다.
 - 시간 기반 SLO는 가능한 한 monotonic/fake clock으로 검증하고 실제 시간은 관측값으로 남긴다.
 - singleton container를 사용하는 Spring 통합 테스트는 client/context 종료가 container보다

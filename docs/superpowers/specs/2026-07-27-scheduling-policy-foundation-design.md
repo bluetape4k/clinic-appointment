@@ -369,6 +369,14 @@ data class PolicyGenerationVector(
 caller에는 vector와 canonical opaque token을 함께 제공한다. optimistic command는
 token을 `expectedPolicyGeneration`으로 돌려보낸다.
 
+tenant 전체 preview는 별도의 `clinicGenerationEpoch`를 tenant scope head에 둔다.
+어느 clinic override generation이라도 증가하면 같은 transaction에서 tenant head를
+먼저 잠근 뒤 이 epoch도 증가시킨다. preview job은
+`SHA-256(tenantId:clinicGenerationEpoch)`를 고정하므로 매 page마다 병원 목록과 모든
+clinic head를 다시 읽지 않고 unique scope-head 한 행으로 freshness를 확인한다.
+병원·appointment inventory는 bounded impact scan의 시점별 입력이지 policy generation이
+아니므로 병원 추가·삭제만으로 preview를 stale 처리하지 않는다.
+
 compiler는 tenant head와 clinic head를 읽고 definition을 합성한 뒤 두 head를 다시
 읽는다. generation vector가 바뀌었으면 결과를 버리고 bounded retry한다. snapshot
 저장은 expected vector CAS를 다시 확인하므로 서로 다른 DB isolation level에서도
@@ -396,6 +404,11 @@ tenant default 또는 clinic override scope별 optimistic revision과 generation
 표현할 수 있다. 이 row가 scope 안의 모든 policy kind 활성화 CAS serialization
 point다. policy kind별 active/scheduled version과 interval은
 `scheduling_policy_definitions`에서 관리한다.
+
+tenant head의 `clinic_generation_epoch`는 하위 clinic override generation 증가를
+집계하며 clinic head에서는 항상 `0`이다. clinic generation 변경 transaction은
+tenant→clinic 순서로 두 head를 잠그고 clinic generation과 tenant epoch를 원자적으로
+증가시킨다.
 
 ### 10.4 `effective_scheduling_policy_snapshots`
 

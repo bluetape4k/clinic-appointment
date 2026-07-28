@@ -108,7 +108,7 @@ class ExposedSchedulingPolicyPreviewStoreTest {
     }
 
     @Test
-    fun `tenant preview becomes stale when a clinic without an override head is added`() {
+    fun `tenant preview remains current when clinic inventory changes without a policy generation change`() {
         val fixture = completedTenantPreviewFixture("clinic_added")
 
         fixture.store.isPinnedStateCurrent(fixture.job).shouldBeTrue()
@@ -125,10 +125,10 @@ class ExposedSchedulingPolicyPreviewStoreTest {
             }
         }
 
-        fixture.store.isPinnedStateCurrent(fixture.job).shouldBeFalse()
+        fixture.store.isPinnedStateCurrent(fixture.job).shouldBeTrue()
         fixture.verifier
             .verify(fixture.evidence, fixture.definition, fixture.command.generation)
-            .shouldBeFalse()
+            .shouldBeTrue()
     }
 
     @Test
