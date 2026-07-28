@@ -95,7 +95,7 @@ class SchedulingPolicyImpactRepositoryTest : AbstractExposedTest() {
 
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
-    fun `appointment and planned treatment partitions resume with an exclusive durable cursor`(testDB: TestDB) {
+    fun `appointment and active plan treatment partitions resume with an exclusive durable cursor`(testDB: TestDB) {
         withImpactTables(testDB) {
             val clinicId = Clinics.insertAndGetId {
                 it[tenantGroupId] = EntityID(1L, TenantGroups)
@@ -163,6 +163,38 @@ class SchedulingPolicyImpactRepositoryTest : AbstractExposedTest() {
                 it[equipmentTypesJson] = "[]"
                 it[roomTypesJson] = "[]"
                 it[earliestStartAt] = Instant.parse("2026-07-29T00:00:00Z")
+                it[status] = PlannedTreatmentStatus.PLANNED
+            }
+            val cancelledPlanId = AppointmentPlans.insertAndGetId {
+                it[tenantGroupId] = EntityID(1L, TenantGroups)
+                it[AppointmentPlans.clinicId] = clinicId
+                it[catalogProjectionId] = catalogId
+                it[sourcePurchaseAuthority] = "commerce"
+                it[sourcePurchaseId] = "purchase-cancelled-preview"
+                it[patientReferenceCiphertext] = "cancelled-ciphertext"
+                it[patientReferenceKeyId] = "key-cancelled-preview"
+                it[patientReferenceFingerprint] = "c".repeat(64)
+                it[catalogSourceAuthority] = "catalog"
+                it[productId] = "product-preview"
+                it[catalogVersion] = 1L
+                it[catalogPayloadHash] = "a".repeat(64)
+                it[productName] = "Cancelled Preview Product"
+                it[bookingPreferenceType] = "NONE"
+                it[bookingPreferencePayload] = "{}"
+                it[status] = AppointmentPlanStatus.CANCELLED
+            }
+            PlannedTreatments.insertAndGetId {
+                it[PlannedTreatments.planId] = cancelledPlanId
+                it[bomItemId] = "cancelled-care"
+                it[sequenceNo] = 1
+                it[bomOrder] = 0
+                it[representativeTreatmentName] = "Cancelled Care"
+                it[detailedTreatmentCodesJson] = "[\"cancelled-care\"]"
+                it[durationMinutes] = 30
+                it[practitionerQualificationsJson] = "[]"
+                it[equipmentTypesJson] = "[]"
+                it[roomTypesJson] = "[]"
+                it[earliestStartAt] = Instant.parse("2026-07-28T12:00:00Z")
                 it[status] = PlannedTreatmentStatus.PLANNED
             }
             val scope = PolicyScopeRef(1L, PolicyScope.CLINIC_OVERRIDE, clinicId.value)

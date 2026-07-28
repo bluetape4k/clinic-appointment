@@ -392,6 +392,7 @@ generation을 확인한다. 두 번의 권위 read가 달라지면 stale snapsho
 | `POLICY_PREVIEW_LIMITED` | `429` | `true` |
 | `POLICY_EFFECTIVE_READ_CONFLICT` | `409` | `true` |
 | `POLICY_EFFECTIVE_READ_UNAVAILABLE` | `503` | `true` |
+| `POLICY_INTERNAL_ERROR` | `500` | `false` |
 
 재시도 가능한 오류는 `Retry-After` 헤더를 포함한다. 공개 응답은 내부 예외 메시지,
 payload, actor claim, SQL, idempotency key를 반사하지 않는다.

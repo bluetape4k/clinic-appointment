@@ -410,6 +410,7 @@ class SchedulingPolicyImpactRepository {
                 var predicate =
                     (AppointmentPlans.tenantGroupId eq tenantGroupId) and
                         (AppointmentPlans.clinicId eq clinicId) and
+                        (AppointmentPlans.status inList IMPACT_PLAN_STATES) and
                         PlannedTreatments.earliestStartAt.isNotNull() and
                         (PlannedTreatments.earliestStartAt greaterEq horizonFrom) and
                         (PlannedTreatments.earliestStartAt less horizonUntil) and

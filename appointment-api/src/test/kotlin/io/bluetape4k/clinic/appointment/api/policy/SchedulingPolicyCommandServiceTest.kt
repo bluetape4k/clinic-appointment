@@ -3,9 +3,11 @@ package io.bluetape4k.clinic.appointment.api.policy
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldContain
+import io.bluetape4k.assertions.shouldNotContain
+import io.bluetape4k.clinic.appointment.api.config.GlobalExceptionHandler
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyApiException
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
-import io.bluetape4k.clinic.appointment.api.config.GlobalExceptionHandler
 import io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
 import io.bluetape4k.clinic.appointment.api.security.ActorType
@@ -43,6 +45,9 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.springframework.boot.test.system.CapturedOutput
+import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.mock.web.MockHttpServletRequest
 import java.time.Clock
 import java.time.Instant
@@ -56,6 +61,7 @@ import java.time.ZoneOffset
  * 트랜잭션 경계에서 연결되고, 동일 멱등 명령은 같은 결과를 재사용하지만 다른 payload는
  * 충돌하는지 증명한다.
  */
+@ExtendWith(OutputCaptureExtension::class)
 class SchedulingPolicyCommandServiceTest {
     private val now = Instant.parse("2026-07-27T00:00:00Z")
     private val scope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
@@ -98,6 +104,7 @@ class SchedulingPolicyCommandServiceTest {
             SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED to 429,
             SchedulingPolicyErrorCode.POLICY_EFFECTIVE_READ_CONFLICT to 409,
             SchedulingPolicyErrorCode.POLICY_EFFECTIVE_READ_UNAVAILABLE to 503,
+            SchedulingPolicyErrorCode.POLICY_INTERNAL_ERROR to 500,
         )
         val retryableErrors = setOf(
             SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED,
@@ -143,6 +150,31 @@ class SchedulingPolicyCommandServiceTest {
         assertEquals(SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED.action, response.body!!.action)
         assertEquals(SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED.safeMessage, response.body!!.error)
         assertFalse(response.body!!.error.contains("internal SQL detail"))
+    }
+
+    @Test
+    fun `unexpected policy failure keeps internal detail out of the stable error envelope`(output: CapturedOutput) {
+        val secretMarker = "secret-sql-marker"
+        val request = MockHttpServletRequest(
+            "POST",
+            "/api/tenant-one/admin/scheduling-policies/validate",
+        ).apply {
+            setAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE, "correlation-policy-internal")
+        }
+
+        val response = GlobalExceptionHandler().handleGeneral(
+            IllegalStateException(secretMarker),
+            request,
+        )
+        val body = response.body as SchedulingApiErrorResponse
+
+        response.statusCode.value() shouldBeEqualTo 500
+        body.errorCode shouldBeEqualTo "POLICY_INTERNAL_ERROR"
+        body.correlationId shouldBeEqualTo "correlation-policy-internal"
+        body.retryable shouldBeEqualTo false
+        body.error.contains(secretMarker) shouldBeEqualTo false
+        output.out.shouldContain("Scheduling policy request failed with an internal error")
+        output.out.shouldNotContain(secretMarker)
     }
 
     @Test

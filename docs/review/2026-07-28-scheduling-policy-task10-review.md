@@ -71,3 +71,28 @@ subclass의 공유 context를 닫을 수 있다. 실제 전체 실행에서 403 
 
 H2는 빠른 구조 피드백이다. PostgreSQL+Flyway 결과가 운영 의미의 권위 증거이며,
 MySQL 8 결과는 지원 다이얼렉트 동등성을 확인한다.
+
+## PR 후속 검토
+
+PR 생성 뒤 실제 diff를 다시 검토하면서 계획 진료 partition에 두 가지 증거 공백을
+발견했다.
+
+- 계획 진료 조회가 상위 예약 계획의 상태를 제한하지 않아, 이미 취소된 계획의 미완료
+  진료도 정책 영향 미리보기에 포함될 수 있었다. 조회 조건에 `ACTIVE`,
+  `PARTIALLY_FULFILLED` 계획만 허용하는 규칙을 추가하고 H2·PostgreSQL·MySQL 저장소
+  테스트로 취소 계획 제외를 고정했다.
+- 기존 10,000행 성능 fixture는 appointment 중심이어서 계획 진료와 상위 계획의 join
+  경로를 증명하지 못했다. 두 table에도 각각 10,000행을 주입하고, 최대 5,000행 page와
+  실제 선택 index, full table scan 부재를 세 지원 DB에서 확인했다. 새 index는 추가하지
+  않고 기존 계획·진료 index가 실제 query shape에서 선택됨을 증명했다.
+
+보안 검토에서는 예상하지 못한 정책 예외가 일반 handler로 흘러 원인 메시지를 로그에
+남길 수 있는 비차단 P2를 발견했다. 정책 전용 `POLICY_INTERNAL_ERROR` 응답과 correlation
+ID를 제공하고, 원인 메시지 대신 예외 종류만 기록하도록 변경했다. 회귀 테스트는 공개
+응답과 로그 모두에 내부 marker가 나타나지 않는지 확인한다.
+
+관리 facade 내부에서 tenant code를 다시 검사하자는 P3는 이번 범위에서는 보류했다.
+현재 HTTP 경계의 `TenantContextFilter`·`ActorContextResolver`와 command 경계의
+`PolicyTenantBoundaryVerifier`가 신뢰 tenant를 검증하며, facade의 숫자 tenant ID를
+tenant code로 독립 변환할 권위 mapping은 없다. 미래의 내부 호출 경로가 facade를 직접
+노출할 때 같은 verifier 계약을 함께 전달해야 한다.

@@ -76,6 +76,8 @@ checked/application 예외 instance를 그대로 보존해 관측 코드가 업�
 ## 다음 작업을 위한 guard
 
 - 다이얼렉트 성능 fixture는 query마다 양수 결과와 최대 반환 상한을 함께 검증한다.
+- parent-child join 성능은 child row만 늘리지 말고 parent와 child를 모두 운영 cardinality로
+  채운 뒤, 양쪽 access path와 full table scan 부재를 함께 증명한다.
 - H2 성공 뒤 PostgreSQL Flyway constraint와 MySQL 지원 의미를 반드시 순차 확인한다.
 - 시간 기반 SLO는 가능한 한 monotonic/fake clock으로 검증하고 실제 시간은 관측값으로 남긴다.
 - singleton container를 사용하는 Spring 통합 테스트는 client/context 종료가 container보다
