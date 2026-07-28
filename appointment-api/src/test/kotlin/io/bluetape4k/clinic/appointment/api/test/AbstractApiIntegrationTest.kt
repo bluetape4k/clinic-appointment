@@ -13,6 +13,16 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 
 /**
+ * API 통합 테스트가 공유하는 Spring context, Exposed 기본 DB, singleton container의
+ * JUnit resource 이름이다.
+ *
+ * [AbstractApiIntegrationTest]를 상속하지 않더라도 같은 `appointment-test` DB 또는
+ * [Containers]의 DB에 대해 schema/data lifecycle을 변경하는 Spring·Flyway 테스트는
+ * 반드시 이 resource의 write lock에 참여해야 한다.
+ */
+const val API_INTEGRATION_RESOURCE = "clinic-api-spring-context"
+
+/**
  * `spring.profiles.active` 시스템 프로퍼티에 따라 DB 프로파일을 동적으로 활성화한다.
  *
  * 기본은 `test` 프로파일(H2)이며, `test-postgresql` 또는 `test-mysql` 포함 시 해당 프로파일을 추가한다.
@@ -47,17 +57,18 @@ class DatabaseProfileResolver : ActiveProfilesResolver {
  * 뒤에 context를 먼저 닫아 Redis client와 near-cache를 컨테이너가 살아 있는 동안
  * 정리한다. 컨테이너 자체는 singleton으로 재사용하므로 raw container를 반복 생성하지 않는다.
  *
- * 이 기반 class의 subclass는 같은 Spring context cache와 singleton container를 공유한다.
- * class 병렬 실행 중 한 subclass가 `AFTER_CLASS`로 context를 닫으면 다른 subclass가 이미
- * 주입받은 web server·security chain을 잃을 수 있다. [ResourceLock]의 공통 write lock으로
- * 모든 subclass를 서로 배타 실행하고, [ExecutionMode.SAME_THREAD]로 한 class 안의 method도
- * 순차 실행한다. 독립 unit test의 class 병렬성은 유지한다.
+ * 이 기반 class의 subclass와 별도 `@SpringBootTest`/Flyway migration 검사는 같은 Spring
+ * context cache, Exposed 기본 DB, singleton container를 공유한다. class 병렬 실행 중 한
+ * 검사가 schema/data를 초기화하거나 `AFTER_CLASS`로 context를 닫으면 다른 검사가 이미
+ * 주입받은 datasource·web server·security chain을 잃을 수 있다. [ResourceLock]의 공통
+ * write lock으로 공유 자원 사용자를 서로 배타 실행하고, [ExecutionMode.SAME_THREAD]로 한
+ * class 안의 method도 순차 실행한다. 독립 unit test의 class 병렬성은 유지한다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles(resolver = DatabaseProfileResolver::class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Execution(ExecutionMode.SAME_THREAD)
-@ResourceLock(value = "clinic-api-spring-context", mode = ResourceAccessMode.READ_WRITE)
+@ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 abstract class AbstractApiIntegrationTest {
 
     companion object : KLogging() {

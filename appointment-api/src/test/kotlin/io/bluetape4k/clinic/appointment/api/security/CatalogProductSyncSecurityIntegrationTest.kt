@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.security
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.controller.execute
+import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
 import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
@@ -21,6 +22,8 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.ResourceAccessMode
+import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpHeaders
@@ -37,6 +40,7 @@ import java.time.Instant
     properties = ["appointment.plan-foundation.catalog-sync-enabled=true"],
 )
 @ActiveProfiles("test", "integration-test")
+@ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 class CatalogProductSyncSecurityIntegrationTest {
 
     companion object {

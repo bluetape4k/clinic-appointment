@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.repository
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeNull
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.model.dto.PolicyScopeRef
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogProjectionStatus
 import io.bluetape4k.clinic.appointment.model.plan.AppointmentPlanStatus
@@ -90,6 +91,47 @@ class SchedulingPolicyImpactRepositoryTest : AbstractExposedTest() {
                     limit = 5_001,
                 )
             }
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `sparse tenant scan checkpoints after a bounded clinic batch`(testDB: TestDB) {
+        withImpactTables(testDB) {
+            val clinicIds = (1..101).map { sequence ->
+                Clinics.insertAndGetId {
+                    it[tenantGroupId] = EntityID(1L, TenantGroups)
+                    it[name] = "Sparse Clinic $sequence"
+                    it[timezone] = "Asia/Seoul"
+                }.value
+            }
+            val scope = PolicyScopeRef(1L, PolicyScope.TENANT_DEFAULT)
+            val horizonFrom = Instant.parse("2026-07-27T00:00:00Z")
+            val horizonUntil = Instant.parse("2026-08-27T00:00:00Z")
+
+            val first = repository.scanFutureWork(
+                scope = scope,
+                horizonFrom = horizonFrom,
+                horizonUntil = horizonUntil,
+                after = null,
+                limit = 5_000,
+            )
+
+            first.items shouldBeEqualTo emptyList()
+            val boundary = first.nextCursor.shouldNotBeNull()
+            boundary.clinicId shouldBeEqualTo clinicIds[99]
+            boundary.isClinicBoundary shouldBeEqualTo true
+
+            val second = repository.scanFutureWork(
+                scope = scope,
+                horizonFrom = horizonFrom,
+                horizonUntil = horizonUntil,
+                after = boundary,
+                limit = 5_000,
+            )
+
+            second.items shouldBeEqualTo emptyList()
+            second.nextCursor.shouldBeNull()
         }
     }
 

@@ -3,17 +3,21 @@ package io.bluetape4k.clinic.appointment.api.security
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import jakarta.servlet.FilterChain
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
-import org.jetbrains.exposed.v1.jdbc.deleteAll
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.ResourceAccessMode
+import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpHeaders
@@ -42,6 +46,7 @@ import org.springframework.web.client.RestClient
     ],
 )
 @ActiveProfiles("test", "integration-test")
+@ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 class SchedulingPolicySecurityIntegrationTest {
 
     companion object {
@@ -75,8 +80,12 @@ class SchedulingPolicySecurityIntegrationTest {
     fun setUp() {
         client = RestClient.builder().baseUrl("http://localhost:$port").build()
         transaction {
-            Clinics.deleteAll()
-            TenantGroups.deleteAll()
+            Clinics.deleteWhere {
+                Clinics.tenantGroupId eq EntityID(TENANT_ID, TenantGroups)
+            }
+            TenantGroups.deleteWhere {
+                TenantGroups.id eq EntityID(TENANT_ID, TenantGroups)
+            }
             TenantGroups.insert {
                 it[id] = EntityID(TENANT_ID, TenantGroups)
                 it[tenantCode] = TENANT_CODE

@@ -12,8 +12,10 @@ import org.springframework.web.filter.OncePerRequestFilter
 /**
  * JWT 인증 필터.
  *
- * Authorization 헤더에서 Bearer 토큰을 추출하여 검증하고,
- * SecurityContext에 인증 정보를 설정합니다.
+ * 이 서비스의 stateless request authentication은 이 filter에서 검증한 bearer token만
+ * 권위로 사용한다. servlet thread에 남아 있거나 upstream에서 수립된 이전 authentication은
+ * 요청 시작 시 제거하며, token이 없거나 유효하지 않으면 anonymous 상태를 유지한다.
+ * 검증에 성공한 경우에만 [SecurityContextHolder]에 새 인증 정보를 설정한다.
  *
  * @param jwtTokenParser JWT 토큰 검증 및 Claims 파서
  */
@@ -31,6 +33,8 @@ class JwtAuthenticationFilter(
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
+        SecurityContextHolder.clearContext()
+
         val token = extractToken(request)
         if (token != null) {
             val principal = jwtTokenParser.parse(token)

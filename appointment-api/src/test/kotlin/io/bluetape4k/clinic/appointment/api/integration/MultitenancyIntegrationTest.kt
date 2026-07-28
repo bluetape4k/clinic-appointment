@@ -1,9 +1,11 @@
 package io.bluetape4k.clinic.appointment.api.integration
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.controller.execute
 import io.bluetape4k.clinic.appointment.api.security.TestJwtProvider
+import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.model.tables.ClinicDefaultBreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
@@ -12,6 +14,7 @@ import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import jakarta.servlet.ServletContext
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -19,6 +22,8 @@ import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.ResourceAccessMode
+import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
@@ -31,6 +36,7 @@ import org.springframework.web.client.RestClient
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test", "integration-test")
+@ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 class MultitenancyIntegrationTest @Autowired constructor() {
 
     companion object {
@@ -48,6 +54,9 @@ class MultitenancyIntegrationTest @Autowired constructor() {
 
     @LocalServerPort
     private var port: Int = 0
+
+    @Autowired
+    private lateinit var servletContext: ServletContext
 
     private lateinit var client: RestClient
     private var tenantAClinicId: Long = 0
@@ -103,6 +112,13 @@ class MultitenancyIntegrationTest @Autowired constructor() {
             .execute()
 
         response.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
+    }
+
+    @Test
+    fun `custom security filters are owned only by the security chain`() {
+        servletContext.getFilterRegistration("jwtAuthenticationFilter").shouldBeNull()
+        servletContext.getFilterRegistration("tenantContextFilter").shouldBeNull()
+        servletContext.getFilterRegistration("correlationIdFilter").shouldBeNull()
     }
 
     private fun RestClient.RequestHeadersSpec<*>.bearer(token: String): RestClient.RequestHeadersSpec<*> =

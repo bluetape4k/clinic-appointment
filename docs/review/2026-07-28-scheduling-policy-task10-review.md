@@ -23,7 +23,7 @@ README 영문·국문 discoverability를 함께 검증했다.
 | 4 | 운영자 | P0 0, P1 0, P2 0, P3 1 | 메트릭 장애 격리 회귀 테스트와 stable error code 로그; flag가 모두 꺼져도 scheduler wake-up하는 소량 overhead는 수용 |
 | 5 | 개발자/API | P0 0, P1 0, P2 0, P3 0 | 사람 `policy:write`와 내부 worker scope 분리, 상세 KDoc, rollout chain 실값 검증, README anchor 보정 |
 | 6 | 사용자/호출자 | P0 0, P1 0, P2 0, P3 1 | 문서 booking 예제를 production strict codec으로 decode; 나머지 7개 baseline kind의 copy-ready 예제는 후속 개선 |
-| 7 | 본 세션 통합 | P0 0, P1 0, P2 0, P3 0 | 전체 API 278개, 3개 DB 방언, 문서 parity, diff audit를 하나의 delivery 증거로 통합 |
+| 7 | 본 세션 통합 | P0 0, P1 0, P2 0, P3 0 | 전체 API H2 281개·PostgreSQL/MySQL 각 283개, 문서 parity, diff audit를 하나의 delivery 증거로 통합 |
 
 비차단 P2/P3은 현재 정책 정확성, tenant 격리, durable worker 결과를 바꾸지 않는다.
 다음 기능 변경에서 경보량과 나머지 7개 baseline fixture 문서를 보강할 수 있지만,
@@ -50,15 +50,44 @@ schedule, activate, retire, replay 요청 body와 idempotency header 조건도 �
 ### 통합 테스트 lifecycle
 
 `@DirtiesContext(AFTER_CLASS)`만 추가하면 Spring client가 singleton Redis container보다
-먼저 닫혀 timeout은 사라지지만, JUnit class 병렬 실행에서는 한 subclass가 다른
-subclass의 공유 context를 닫을 수 있다. 실제 전체 실행에서 403 네 건으로 재현했다.
-공통 `ResourceLock(READ_WRITE)`와 class 내부 `SAME_THREAD`를 함께 적용해 Spring 통합
-테스트만 배타화하고 독립 unit test의 병렬성은 유지했다.
+먼저 닫혀 timeout은 사라지지만, JUnit class 병렬 실행에서는 한 검사가 다른 검사의
+공유 context나 schema/data를 바꿀 수 있다. 실제 전체 실행에서 403이 4건, 재실행에서는
+30건으로 달라지며 재현됐다. 공통 `ResourceLock(READ_WRITE)`와 class 내부
+`SAME_THREAD`를 함께 적용해 Spring 통합 테스트만 배타화하고 독립 unit test의 병렬성은
+유지했다.
+
+기반 class 상속자만 잠그는 것으로는 부족했다. 별도 `@SpringBootTest`와 Flyway
+clean/migrate 검사도 `appointment-test` DB와 singleton PostgreSQL·MySQL container를
+공유하므로 모두 같은 `API_INTEGRATION_RESOURCE` write lock에 참여시켰다. 이 규칙은
+Spring context cache뿐 아니라 Exposed 기본 DB와 migration fixture의 lifecycle까지 하나의
+공유 자원으로 취급한다.
+
+### Security filter 단일 소유권
+
+`JwtAuthenticationFilter`, `TenantContextFilter`, `CorrelationIdFilter`는 Spring bean인
+동시에 `SecurityFilterChain`에 명시적으로 추가된다. Spring Boot의 servlet filter 자동
+등록까지 허용하면 같은 instance가 Security context 경계 밖에서 먼저 실행되고,
+`OncePerRequestFilter` 표식 때문에 chain 내부 실행이 생략될 수 있다. 실제 전체
+PostgreSQL 실행에서 tenant 요청 세 건이 간헐적으로 403을 반환했다.
+
+세 filter의 `FilterRegistrationBean`을 disabled 상태로 등록해 embedded servlet
+container의 독립 실행을 막고, Security chain의 순서만 권위로 유지했다. 회귀 테스트는
+servlet context에 세 filter registration이 없음을 확인하고, 서로 다른 tenant token의
+연속 요청이 올바른 clinic 경계를 유지하는지도 함께 검증한다.
+
+결합 module build에서 무인증 actuator 요청 하나가 간헐적으로 403을 반환해 남은
+fail-closed 공백도 확인했다. `JwtAuthenticationFilter`가 bearer token이 없는 요청에서
+thread-local의 이전 authentication을 명시적으로 제거하지 않았기 때문이다. stateless JWT가
+유일한 request authentication 권위라는 계약에 따라 매 요청 시작 시 context를 비우고,
+검증된 token이 있을 때만 새 principal을 설정한다. stale principal을 선행 주입한 단위
+테스트는 no-token 요청 뒤 authentication이 `null`인지 검증한다.
 
 ## 검증 증거
 
 - 정책 metric/worker/관리 facade/문서/properties 집중 테스트: 19개, 실패 0
-- 전체 `appointment-api` H2 실행: 278개, 실패 0, 환경 의존 2개 skip, 43초
+- 전체 `appointment-api` H2 격리 실행: 281개, 실패 0, 환경 의존 2개 skip, 42초
+- 전체 `appointment-api` PostgreSQL 격리 실행: 283개, 실패 0, 3분 19초
+- 전체 `appointment-api` MySQL 격리 실행: 283개, 실패 0, 1분 33초
 - 같은 전체 실행의 Redis 종료 오류 검색:
   `RedisCommandTimeoutException=0`, `ConnectionWatchdog=0`,
   `Cannot connect=0`, `CLIENT TRACKING OFF=0`
@@ -96,3 +125,24 @@ ID를 제공하고, 원인 메시지 대신 예외 종류만 기록하도록 변
 `PolicyTenantBoundaryVerifier`가 신뢰 tenant를 검증하며, facade의 숫자 tenant ID를
 tenant code로 독립 변환할 권위 mapping은 없다. 미래의 내부 호출 경로가 facade를 직접
 노출할 때 같은 verifier 계약을 함께 전달해야 한다.
+
+두 번째 독립 검토는 sparse tenant와 Spring 예외 선택 규칙에서 추가 P1을 발견했다.
+
+- tenant 전체 미리보기가 eligible aggregate가 없는 병원을 row page 크기만으로 순회하면,
+  한 트랜잭션이 병원 수만큼 SQL을 실행할 수 있었다. 한 scan이 최대 100개 병원만
+  확인하도록 별도 상한을 두고, aggregate가 0건이어도 병원 소진 cursor를 저장해 다음
+  트랜잭션에서 재개한다. 101개 빈 병원 회귀 테스트는 첫 scan이 정확히 100번째 병원에서
+  멈추고 두 번째 scan이 나머지를 완료하는지 H2·PostgreSQL·MySQL에서 검증한다.
+- Spring MVC는 일반 `Exception` handler보다 `IllegalStateException` handler를 먼저
+  선택한다. 정책 내부 불변식 오류가 일반 409 응답으로 빠지지 않도록 두 handler가 같은
+  정책 내부 오류 변환기를 사용하게 했다. 실제 MVC exception resolver 테스트는 500,
+  `POLICY_INTERNAL_ERROR`, correlation ID 보존, 로그 비노출을 함께 검증한다.
+
+첫 PR SHA의 PostgreSQL CI 실패도 같은 검토에서 재현했다.
+`MultitenancyMigrationTest`가 남긴 holiday가 있는 상태에서 정책 보안 테스트가 모든
+tenant를 삭제해 FK 오류를 일으켰고, 다른 병렬 API 테스트의 tenant까지 지워 연쇄 404를
+만들었다. 보안 테스트 정리를 고정 tenant ID 범위로 축소해 migration+security 조합
+5개가 PostgreSQL에서 통과하도록 했다.
+
+이후 전체 H2·PostgreSQL 실행에서 공유 lifecycle과 filter 이중 등록을 추가로 교정했다.
+최종 격리 검증은 H2 281개 통과·2개 skip, PostgreSQL과 MySQL 각 283개 통과로 수렴했다.

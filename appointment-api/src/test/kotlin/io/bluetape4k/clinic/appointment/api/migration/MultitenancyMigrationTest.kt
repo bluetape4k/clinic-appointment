@@ -2,13 +2,20 @@ package io.bluetape4k.clinic.appointment.api.migration
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import org.flywaydb.core.Flyway
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.ResourceAccessMode
+import org.junit.jupiter.api.parallel.ResourceLock
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
 
+/**
+ * 활성 dialect의 전체 tenant schema를 재생성하므로 API 통합 테스트와 같은 DB lock을 사용한다.
+ */
+@ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 class MultitenancyMigrationTest {
 
     @Test
