@@ -124,7 +124,11 @@ data class SchedulingPolicyApprovalRecord(
  * @property revision optimistic command revision입니다. 성공한 scope mutation마다 한 번 증가합니다.
  * @property generation freshness를 나타내는 단조 증가 counter입니다. 어떤 policy kind든
  * active가 되면 [revision]과 함께 증가합니다.
- * @property updatedAt 마지막 성공 mutation의 UTC instant입니다.
+ * @property clinicGenerationEpoch 같은 tenant에 속한 어느 clinic override generation이라도
+ * 증가할 때 tenant head에서 함께 증가하는 counter입니다. tenant preview는 이 값의 hash를
+ * 고정하여 하위 병원 정책 변경을 O(1) 권위 조회로 감지합니다. clinic head에서는 항상 `0`입니다.
+ * @property updatedAt 이 행의 revision, generation 또는 [clinicGenerationEpoch]가 마지막으로
+ * 바뀐 UTC instant입니다.
  */
 data class SchedulingPolicyScopeHeadRecord(
     val id: Long,
@@ -133,6 +137,7 @@ data class SchedulingPolicyScopeHeadRecord(
     val clinicScopeKey: Long,
     val revision: Long,
     val generation: Long,
+    val clinicGenerationEpoch: Long,
     val updatedAt: Instant,
 ) : Serializable
 
@@ -321,10 +326,11 @@ data class PolicyPreviewProgress(
  * @property draftRevision 정확한 draft revision입니다. mismatch가 있으면 job은 stale입니다.
  * @property tenantGeneration resume 때마다 기대하는 tenant generation입니다.
  * @property clinicGeneration resume 때마다 기대하는 clinic generation입니다.
- * @property clinicGenerationDigest tenant baseline preview가 시작될 때 관찰한 모든 clinic
- * override scope-head `(clinicId, generation)`의 정규 SHA-256입니다. tenant 기본값은 모든
- * 병원에 영향을 주므로 어느 한 clinic override가 바뀌어도 이 값이 달라져 partial 결과와
- * activation evidence를 stale 처리합니다. 단일 clinic preview에서는 `null`입니다.
+ * @property clinicGenerationDigest tenant baseline preview가 시작될 때 관찰한 tenant head의
+ * `clinicGenerationEpoch`를 tenant ID와 함께 정규화한 SHA-256입니다. 어느 clinic override
+ * generation이라도 바뀌면 epoch가 증가하므로 partial 결과와 activation evidence를 stale
+ * 처리합니다. 병원 목록과 appointment inventory 변화는 정책 세대가 아니며 이 digest를
+ * 바꾸지 않습니다. 단일 clinic preview에서는 `null`입니다.
  * @property partitionCount deterministic resume을 위한 양수 fixed partition count입니다.
  * @property cursorPartition 저장된 zero-based partition cursor입니다.
  * @property cursorLastAppointmentId partition 안에서 마지막으로 처리한 양수 appointment ID입니다.

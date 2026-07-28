@@ -12,14 +12,17 @@ import io.bluetape4k.clinic.appointment.model.policy.ActorRole
 import io.bluetape4k.clinic.appointment.model.policy.PolicyLifecycle
 import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
 import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyKind
+import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.EffectiveSchedulingPolicySnapshots
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyApprovals
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyDefinitions
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyScopeHeads
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
 import org.jetbrains.exposed.v1.core.Transaction
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.statements.StatementContext
 import org.jetbrains.exposed.v1.core.statements.StatementInterceptor
 import org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi
@@ -97,14 +100,57 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
             val initial = repository.lockScopeHead(tenantScope)
             initial.revision shouldBeEqualTo 0L
             initial.generation shouldBeEqualTo 0L
+            initial.clinicGenerationEpoch shouldBeEqualTo 0L
 
             val advanced = repository.compareAndIncrementGeneration(tenantScope, expectedRevision = 0L)
             advanced.revision shouldBeEqualTo 1L
             advanced.generation shouldBeEqualTo 1L
+            advanced.clinicGenerationEpoch shouldBeEqualTo 0L
+
+            val digestBeforeClinicChange = repository.clinicGenerationDigest(tenantScope.tenantGroupId)
+            val clinicAdvanced = repository.compareAndIncrementGeneration(clinicScope, expectedRevision = 0L)
+            clinicAdvanced.revision shouldBeEqualTo 1L
+            clinicAdvanced.generation shouldBeEqualTo 1L
+            repository.lockScopeHead(tenantScope).clinicGenerationEpoch shouldBeEqualTo 1L
+            (repository.clinicGenerationDigest(tenantScope.tenantGroupId) == digestBeforeClinicChange) shouldBeEqualTo false
 
             assertFailsWith<PolicyScopeHeadConflictException> {
                 repository.compareAndIncrementGeneration(tenantScope, expectedRevision = 0L)
             }
+            assertFailsWith<PolicyScopeHeadConflictException> {
+                repository.compareAndIncrementGeneration(clinicScope, expectedRevision = 0L)
+            }
+            repository.lockScopeHead(tenantScope).clinicGenerationEpoch shouldBeEqualTo 1L
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `tenant clinic digest is derived from one exact scope head lookup`(testDB: TestDB) {
+        withTables(
+            testDB,
+            TenantGroups,
+            Clinics,
+            SchedulingPolicyScopeHeads,
+        ) {
+            repeat(200) { offset ->
+                val clinicId = offset + 1L
+                Clinics.insert {
+                    it[id] = EntityID(clinicId, Clinics)
+                    it[tenantGroupId] = EntityID(1L, TenantGroups)
+                    it[name] = "Clinic $clinicId"
+                }
+            }
+            repository.lockScopeHead(PolicyScopeRef(1L, PolicyScope.TENANT_DEFAULT))
+            val capture = SqlStatementCapture()
+            registerInterceptor(capture)
+
+            repository.clinicGenerationDigest(1L).length shouldBeEqualTo 64
+
+            val digestReads = capture.statements.filter { it.startsWith("select") }
+            digestReads.size shouldBeEqualTo 1
+            digestReads.single().contains(SchedulingPolicyScopeHeads.tableName) shouldBeEqualTo true
+            digestReads.single().contains(Clinics.tableName) shouldBeEqualTo false
         }
     }
 

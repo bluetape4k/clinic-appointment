@@ -35,8 +35,10 @@ object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs
     val clinicGeneration = long("clinic_generation")
 
     /**
-     * tenant preview가 고정한 전체 clinic override generation 집합의 정규 SHA-256입니다.
+     * tenant preview가 고정한 tenant head `clinicGenerationEpoch`의 정규 SHA-256입니다.
      *
+     * clinic override 세대가 바뀌면 같은 트랜잭션에서 epoch가 증가합니다. 따라서 worker는
+     * 병원·scope-head 전체를 스캔하지 않고 tenant head 한 행만 읽어 freshness를 확인합니다.
      * clinic preview는 정확한 [clinicGeneration] 하나로 충분하므로 `null`입니다.
      */
     val clinicGenerationDigest = varchar("clinic_generation_digest", 64).nullable()

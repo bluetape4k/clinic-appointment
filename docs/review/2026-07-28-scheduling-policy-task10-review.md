@@ -23,7 +23,7 @@ README 영문·국문 discoverability를 함께 검증했다.
 | 4 | 운영자 | P0 0, P1 0, P2 0, P3 1 | 메트릭 장애 격리 회귀 테스트와 stable error code 로그; flag가 모두 꺼져도 scheduler wake-up하는 소량 overhead는 수용 |
 | 5 | 개발자/API | P0 0, P1 0, P2 0, P3 0 | 사람 `policy:write`와 내부 worker scope 분리, 상세 KDoc, rollout chain 실값 검증, README anchor 보정 |
 | 6 | 사용자/호출자 | P0 0, P1 0, P2 0, P3 1 | 문서 booking 예제를 production strict codec으로 decode; 나머지 7개 baseline kind의 copy-ready 예제는 후속 개선 |
-| 7 | 본 세션 통합 | P0 0, P1 0, P2 0, P3 0 | 전체 API H2 281개·PostgreSQL/MySQL 각 283개, 문서 parity, diff audit를 하나의 delivery 증거로 통합 |
+| 7 | 본 세션 통합 | P0 0, P1 0, P2 0, P3 0 | 전체 API H2 283개·PostgreSQL/MySQL 각 283개, 문서 parity, diff audit를 하나의 delivery 증거로 통합 |
 
 비차단 P2/P3은 현재 정책 정확성, tenant 격리, durable worker 결과를 바꾸지 않는다.
 다음 기능 변경에서 경보량과 나머지 7개 baseline fixture 문서를 보강할 수 있지만,
@@ -85,9 +85,9 @@ thread-local의 이전 authentication을 명시적으로 제거하지 않았기 
 ## 검증 증거
 
 - 정책 metric/worker/관리 facade/문서/properties 집중 테스트: 19개, 실패 0
-- 전체 `appointment-api` H2 격리 실행: 281개, 실패 0, 환경 의존 2개 skip, 42초
-- 전체 `appointment-api` PostgreSQL 격리 실행: 283개, 실패 0, 3분 19초
-- 전체 `appointment-api` MySQL 격리 실행: 283개, 실패 0, 1분 33초
+- 전체 `appointment-api` H2 격리 실행: 283개, 실패 0, 환경 의존 2개 skip, 37초
+- 전체 `appointment-api` PostgreSQL 격리 실행: 283개, 실패 0, 3분 8초
+- 전체 `appointment-api` MySQL 격리 실행: 283개, 실패 0, 1분 35초
 - 같은 전체 실행의 Redis 종료 오류 검색:
   `RedisCommandTimeoutException=0`, `ConnectionWatchdog=0`,
   `Cannot connect=0`, `CLIENT TRACKING OFF=0`
@@ -145,4 +145,20 @@ tenant를 삭제해 FK 오류를 일으켰고, 다른 병렬 API 테스트의 te
 5개가 PostgreSQL에서 통과하도록 했다.
 
 이후 전체 H2·PostgreSQL 실행에서 공유 lifecycle과 filter 이중 등록을 추가로 교정했다.
-최종 격리 검증은 H2 281개 통과·2개 skip, PostgreSQL과 MySQL 각 283개 통과로 수렴했다.
+최종 격리 검증은 H2 283개 통과·2개 skip, PostgreSQL과 MySQL 각 283개 통과로 수렴했다.
+
+세 번째 독립 성능 검토는 tenant sparse scan의 row 상한과 별개로, 각 page 전 freshness
+검사가 병원 수에 비례한다는 P1을 발견했다. 기존 clinic generation digest가 tenant의 모든
+병원과 모든 clinic scope head를 매번 materialize했기 때문이다.
+
+- tenant scope head에 `clinic_generation_epoch`를 추가했다. clinic override generation
+  증가 transaction은 tenant head를 먼저 잠그고 clinic head generation과 tenant epoch를
+  원자적으로 증가시킨다.
+- tenant preview digest는 `SHA-256(tenantId:epoch)`로 바꿨다. admission은 이미 잠근
+  tenant head로 추가 SQL 없이 계산하고, resume/evidence 검사는 unique
+  `(tenant_group_id, scope, clinic_scope_key)` 한 행만 조회한다.
+- 200개 병원 fixture에서도 digest 계산 SQL이 scope head 조회 정확히 1회이고
+  `scheduling_clinics`를 읽지 않는지 H2·PostgreSQL·MySQL에서 고정했다.
+- 병원·appointment inventory는 bounded impact scan의 입력이지 policy generation이
+  아니다. 따라서 policy generation이 그대로인 병원 추가만으로 완료 preview를 stale
+  처리하지 않으며, clinic override generation 변경은 즉시 stale 처리한다.

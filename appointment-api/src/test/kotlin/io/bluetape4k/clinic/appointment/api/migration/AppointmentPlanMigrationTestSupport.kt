@@ -845,6 +845,14 @@ internal object AppointmentPlanMigrationTestSupport {
             "result_tenant_generation",
             "result_clinic_generation",
         ),
+        "scheduling_policy_scope_heads" to setOf(
+            "tenant_group_id",
+            "scope",
+            "clinic_scope_key",
+            "revision",
+            "generation",
+            "clinic_generation_epoch",
+        ),
         "scheduling_policy_preview_jobs" to setOf(
             "scope",
             "clinic_id",

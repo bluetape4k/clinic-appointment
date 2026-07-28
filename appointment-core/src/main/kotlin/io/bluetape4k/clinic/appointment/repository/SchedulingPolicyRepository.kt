@@ -8,7 +8,6 @@ import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyScopeHeadRecor
 import io.bluetape4k.clinic.appointment.model.policy.PolicyLifecycle
 import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
 import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyKind
-import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.EffectiveSchedulingPolicySnapshots
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyApprovals
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyDefinitions
@@ -309,49 +308,39 @@ class SchedulingPolicyRepository {
             ?.toSchedulingPolicyScopeHeadRecord()
 
     /**
-     * 한 tenant의 모든 clinic override 세대를 안정적인 SHA-256으로 요약한다.
+     * 한 tenant의 clinic override 정책 세대를 단일 권위 행 조회로 요약한다.
      *
-     * tenant 기본 정책 preview는 모든 clinic의 미래 업무를 평가하므로 단일
-     * [io.bluetape4k.clinic.appointment.model.policy.PolicyGenerationVector.clinicGeneration]
-     * 값으로는 병원별 동시 변경을 표현할 수 없다. 이 digest는 clinic scope key 오름차순의
-     * tenant에 속한 모든 clinic ID와 각 clinic의 override generation 또는 `0` sentinel을
-     * 정규 인코딩한다. 따라서 병원 추가·제거, override head 생성, 세대 증가가 하나라도
-     * 발생하면 값이 달라지고 unrelated tenant의 변경에는 영향을 받지 않는다. 이 범위는
-     * tenant impact scan이 실제 순회하는 [Clinics] 집합과 동일하다.
+     * clinic override generation이 증가하는 트랜잭션은 tenant head의
+     * [SchedulingPolicyScopeHeadRecord.clinicGenerationEpoch]도 함께 증가시킨다. 따라서
+     * tenant preview의 매 page freshness 확인은 병원 수와 무관하게 tenant head 한 행만
+     * 조회하면 된다. 병원·appointment inventory는 impact scan의 입력이지 정책 세대가
+     * 아니므로 이 digest에 포함하지 않는다.
      *
-     * 모든 메서드와 마찬가지로 호출자가 소유한 Exposed transaction 안에서 사용해야 한다.
+     * tenant head가 아직 없으면 epoch `0`으로 계산하며 행을 생성하지 않는다. 모든 메서드와
+     * 마찬가지로 호출자가 소유한 Exposed transaction 안에서 사용해야 한다.
      *
      * @param tenantGroupId 요약할 양수 tenant 경계.
      * @return 64자 lowercase SHA-256.
      */
     fun clinicGenerationDigest(tenantGroupId: Long): String {
         require(tenantGroupId > 0) { "tenantGroupId must be positive" }
-        val digest = MessageDigest.getInstance("SHA-256")
-        val generationByClinic = SchedulingPolicyScopeHeads
-            .selectAll()
-            .where {
-                (SchedulingPolicyScopeHeads.tenantGroupId eq tenantGroupId) and
-                    (SchedulingPolicyScopeHeads.scope eq PolicyScope.CLINIC_OVERRIDE)
-            }
-            .associate { row ->
-                row[SchedulingPolicyScopeHeads.clinicScopeKey] to
-                    row[SchedulingPolicyScopeHeads.generation]
-            }
-        Clinics
-            .selectAll()
-            .where { Clinics.tenantGroupId eq tenantGroupId }
-            .orderBy(Clinics.id, SortOrder.ASC)
-            .forEach { row ->
-                val canonical = buildString {
-                    val clinicId = row[Clinics.id].value
-                    append(clinicId)
-                    append(':')
-                    append(generationByClinic[clinicId] ?: 0L)
-                    append('\n')
-                }
-                digest.update(canonical.toByteArray(Charsets.UTF_8))
-            }
-        return digest.digest().toHex()
+        val tenantHead = findScopeHead(PolicyScopeRef(tenantGroupId, PolicyScope.TENANT_DEFAULT))
+        return clinicGenerationDigest(tenantGroupId, tenantHead?.clinicGenerationEpoch ?: 0L)
+    }
+
+    /**
+     * 이미 잠그거나 읽은 tenant head로 추가 SQL 없이 clinic generation digest를 계산한다.
+     *
+     * @throws IllegalArgumentException tenant head가 아니거나 tenant 경계가 유효하지 않을 때.
+     */
+    fun clinicGenerationDigest(tenantHead: SchedulingPolicyScopeHeadRecord): String {
+        require(tenantHead.scope == PolicyScope.TENANT_DEFAULT) {
+            "clinic generation digest requires a tenant scope head"
+        }
+        require(tenantHead.clinicScopeKey == 0L) {
+            "tenant scope head clinicScopeKey must be zero"
+        }
+        return clinicGenerationDigest(tenantHead.tenantGroupId, tenantHead.clinicGenerationEpoch)
     }
 
     /**
@@ -397,7 +386,16 @@ class SchedulingPolicyRepository {
         expectedRevision: Long,
     ): SchedulingPolicyScopeHeadRecord {
         require(expectedRevision >= 0) { "expectedRevision must be non-negative" }
-        val current = lockScopeHead(scope)
+        val tenantScope = PolicyScopeRef(scope.tenantGroupId, PolicyScope.TENANT_DEFAULT)
+        val lockedHeads = if (scope.scope == PolicyScope.CLINIC_OVERRIDE) {
+            lockScopeHeads(tenantScope, scope)
+        } else {
+            listOf(lockScopeHead(scope))
+        }
+        val tenantHead = lockedHeads.first { it.scope == PolicyScope.TENANT_DEFAULT }
+        val current = lockedHeads.first {
+            it.scope == scope.scope && it.clinicScopeKey == scope.clinicScopeKey
+        }
         if (current.revision != expectedRevision) {
             throw PolicyScopeHeadConflictException(scope, expectedRevision, current.revision)
         }
@@ -411,6 +409,18 @@ class SchedulingPolicyRepository {
         }
         if (affected != 1) {
             throw PolicyScopeHeadConflictException(scope, expectedRevision, current.revision)
+        }
+        if (scope.scope == PolicyScope.CLINIC_OVERRIDE) {
+            val tenantAffected = SchedulingPolicyScopeHeads.update({
+                scopeHeadPredicate(tenantScope) and
+                    (SchedulingPolicyScopeHeads.clinicGenerationEpoch eq tenantHead.clinicGenerationEpoch)
+            }) {
+                it[clinicGenerationEpoch] = tenantHead.clinicGenerationEpoch + 1
+                it.update(updatedAt, CurrentTimestamp)
+            }
+            check(tenantAffected == 1) {
+                "tenant clinic generation epoch update must affect exactly one scope head"
+            }
         }
         return lockScopeHead(scope)
     }
@@ -630,6 +640,7 @@ class SchedulingPolicyRepository {
             it[clinicScopeKey] = scope.clinicScopeKey
             it[revision] = 0L
             it[generation] = 0L
+            it[clinicGenerationEpoch] = 0L
         }
         if (isH2Dialect()) {
             val exists = SchedulingPolicyScopeHeads.selectAll()
@@ -650,6 +661,18 @@ class SchedulingPolicyRepository {
         } else {
             SchedulingPolicyScopeHeads.insertIgnore(insertBody)
         }
+    }
+
+    private fun clinicGenerationDigest(
+        tenantGroupId: Long,
+        clinicGenerationEpoch: Long,
+    ): String {
+        require(tenantGroupId > 0) { "tenantGroupId must be positive" }
+        require(clinicGenerationEpoch >= 0) { "clinicGenerationEpoch must be non-negative" }
+        val canonical = "$tenantGroupId:$clinicGenerationEpoch"
+        return MessageDigest.getInstance("SHA-256")
+            .digest(canonical.toByteArray(Charsets.UTF_8))
+            .toHex()
     }
 
     @Suppress("LongParameterList")

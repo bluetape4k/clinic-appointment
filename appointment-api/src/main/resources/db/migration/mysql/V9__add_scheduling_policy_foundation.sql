@@ -67,6 +67,7 @@ CREATE TABLE scheduling_policy_scope_heads (
     clinic_scope_key BIGINT NOT NULL,
     revision BIGINT DEFAULT 0 NOT NULL,
     generation BIGINT DEFAULT 0 NOT NULL,
+    clinic_generation_epoch BIGINT DEFAULT 0 NOT NULL,
     updated_at DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) NOT NULL,
     CONSTRAINT uq_policy_scope_head UNIQUE (tenant_group_id, scope, clinic_scope_key),
     CONSTRAINT ck_policy_scope_head_scope CHECK (
@@ -74,7 +75,9 @@ CREATE TABLE scheduling_policy_scope_heads (
         OR
         (scope = 'CLINIC_OVERRIDE' AND clinic_scope_key > 0)
     ),
-    CONSTRAINT ck_policy_scope_head_counters CHECK (revision >= 0 AND generation >= 0)
+    CONSTRAINT ck_policy_scope_head_counters CHECK (
+        revision >= 0 AND generation >= 0 AND clinic_generation_epoch >= 0
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE effective_scheduling_policy_snapshots (

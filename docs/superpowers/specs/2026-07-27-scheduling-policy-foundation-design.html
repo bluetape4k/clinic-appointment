@@ -368,6 +368,10 @@
           <p><code>{tenantGeneration, clinicGeneration}</code>으로 clinic 변경이 tenant 전체 cache를 불필요하게 무효화하지 않게 한다.</p>
         </article>
       </div>
+      <div class="callout">
+        <strong>Tenant preview의 O(1) 세대 검증</strong>
+        <p>clinic override generation이 증가하면 같은 transaction에서 tenant head의 <code>clinicGenerationEpoch</code>도 증가한다. preview는 <code>SHA-256(tenantId:epoch)</code>를 고정하고 매 page마다 unique scope-head 한 행만 읽는다. 병원·예약 목록은 impact scan 입력이며 policy generation에는 포함하지 않는다.</p>
+      </div>
       <div class="callout warn">
         <strong>시간 경계</strong>
         <p>cache bucket은 effective interval, scheduled activation, emergency expiration, clinic timezone의 DST gap/overlap 경계를 넘지 않는다.</p>
@@ -409,7 +413,7 @@
           <tbody>
           <tr><td><code>scheduling_policy_definitions</code></td><td>공통 envelope와 typed canonical payload</td><td>scope/version 유일성, 불변 published payload</td></tr>
           <tr><td><code>scheduling_policy_approvals</code></td><td>draft revision별 승인 evidence</td><td>stale revision과 동일 actor 이중 승인 거절</td></tr>
-          <tr><td><code>scheduling_policy_scope_heads</code></td><td>scope-wide revision과 generation</td><td>모든 policy kind 활성화 CAS serialization point</td></tr>
+          <tr><td><code>scheduling_policy_scope_heads</code></td><td>scope-wide revision·generation과 tenant clinic epoch</td><td>tenant→clinic 잠금 순서, clinic generation과 tenant epoch의 원자적 증가</td></tr>
           <tr><td><code>effective_scheduling_policy_snapshots</code></td><td>compiled payload와 source map</td><td>불변 hash와 tenant/clinic 경계</td></tr>
           <tr><td><code>scheduling_policy_activation_commands</code></td><td>keyed idempotency hash·due runner lease·retry</td><td>동일 hash+fingerprint 재현, raw key 비보존, crash catch-up, MISSED 가시성</td></tr>
           <tr><td><code>scheduling_policy_preview_jobs</code></td><td>bounded async preview</td><td>cursor·revision·generation·deadline checkpoint</td></tr>

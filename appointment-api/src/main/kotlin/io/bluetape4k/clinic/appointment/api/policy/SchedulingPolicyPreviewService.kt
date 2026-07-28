@@ -577,13 +577,13 @@ class ExposedSchedulingPolicyPreviewStore(
         jobDeadline: Duration,
     ): SchedulingPolicyPreviewAdmission? =
         transaction {
-            policyRepository.lockScopeHead(command.scope)
+            val scopeHead = policyRepository.lockScopeHead(command.scope)
             if (jobRepository.isPreviewQueueSaturated(command.scope, capacity)) {
                 return@transaction null
             }
             val acceptedAt = currentDatabaseInstant()
             val clinicGenerationDigest = if (command.scope.scope == PolicyScope.TENANT_DEFAULT) {
-                policyRepository.clinicGenerationDigest(command.scope.tenantGroupId)
+                policyRepository.clinicGenerationDigest(scopeHead)
             } else {
                 null
             }
@@ -654,7 +654,7 @@ class ExposedSchedulingPolicyPreviewStore(
                 PolicyScope.TENANT_DEFAULT ->
                     job.clinicGeneration == 0L &&
                         job.clinicGenerationDigest ==
-                        policyRepository.clinicGenerationDigest(job.tenantGroupId)
+                        policyRepository.clinicGenerationDigest(tenantHead)
                 PolicyScope.CLINIC_OVERRIDE -> {
                     val clinicHead = policyRepository.findScopeHead(
                         PolicyScopeRef(job.tenantGroupId, PolicyScope.CLINIC_OVERRIDE, job.clinicId)
@@ -760,8 +760,9 @@ class ExposedSchedulingPolicyPreviewStore(
  *
  * 네트워크 호출 없이 exact unique-index 조회만 수행한다. `COMPLETED` 상태와 definition,
  * revision, tenant/clinic generation이 모두 일치해야 true다. tenant preview는 추가로
- * 모든 clinic override 세대의 정규 digest를 현재 권위 저장소와 비교한다. token 자체는
- * 로그나 예외 메시지에 포함하지 않는다.
+ * tenant head의 clinic-generation epoch digest를 현재 권위 저장소와 비교한다. 이 조회는
+ * 병원 수와 무관한 exact unique-index lookup이다. token 자체는 로그나 예외 메시지에
+ * 포함하지 않는다.
  */
 class PersistedPolicyPreviewEvidenceVerifier(
     private val jobRepository: SchedulingPolicyJobRepository,
