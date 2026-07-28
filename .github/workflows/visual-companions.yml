@@ -1,0 +1,56 @@
+name: Visual Companions
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'docs/visual-companions/**'
+      - 'docs/superpowers/specs/**'
+      - 'scripts/visual-companions/**'
+      - 'scripts/validate-visual-companions.mjs'
+      - 'tests/visual-companions/**'
+      - 'README.md'
+      - 'README.ko.md'
+      - 'docs/superpowers/INDEX.md'
+      - '.github/workflows/visual-companions.yml'
+  pull_request:
+    branches: [develop]
+    paths:
+      - 'docs/visual-companions/**'
+      - 'docs/superpowers/specs/**'
+      - 'scripts/visual-companions/**'
+      - 'scripts/validate-visual-companions.mjs'
+      - 'tests/visual-companions/**'
+      - 'README.md'
+      - 'README.ko.md'
+      - 'docs/superpowers/INDEX.md'
+      - '.github/workflows/visual-companions.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate visual companion contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '26'
+
+      - name: Run contract tests
+        run: node --test tests/visual-companions/*.test.mjs
+
+      - name: Validate repository publication
+        run: node scripts/validate-visual-companions.mjs
+
+      - name: Check branch diff
+        run: git diff --check origin/develop...HEAD

@@ -134,7 +134,8 @@ Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seede
 | [AI Scheduler](docs/requirements/solver.md) | Timefold Solver constraint design. |
 | [Notification Module](docs/requirements/notification.md) | Notification channels, HA configuration, and Resilience4j. |
 | [Frontend](docs/requirements/frontend.md) | Angular structure and page design. |
-| [Appointment plan design](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | Interactive plan, provisional booking, disruption, and policy design. |
+| [Appointment plan visual companion](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.en.html) | English simulation and decision history for plans, booking commitments, disruption, and capacity. |
+| [Scheduling policy visual companion](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.en.html) | English simulation and decision history for policy compilation, approval, activation, and recovery. |
 | [Appointment plan recovery](docs/runbooks/appointment-plan-foundation-recovery.md) | Quarantine inspection, dry-run redrive, rollback, and authority ownership. |
 | [Scheduling policy API](docs/api/scheduling-policy.md) | Tenant/clinic policy endpoints, idempotency, preview polling, errors, and rollout flags. |
 | [Scheduling policy activation runbook](docs/runbooks/scheduling-policy-activation.md) | Worker alerts, 60s/5m activation handling, replay/retire recovery, and V10 readiness. |

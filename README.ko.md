@@ -132,7 +132,8 @@ scope head, preview job, activation command, effective snapshot, privacy-safe me
 | [AI 스케줄러](docs/requirements/solver.md) | Timefold Solver 제약조건 설계 |
 | [알림 모듈](docs/requirements/notification.md) | 알림 채널, HA 구성, Resilience4j |
 | [프론트엔드](docs/requirements/frontend.md) | Angular 구성, 페이지 구조 |
-| [예약 플랜 설계](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 가예약, 장애 재조정, 병원 정책을 다루는 대화형 설계 문서 |
+| [예약 플랜 시각 companion](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 예약 약속, 장애 재조정, 수용량의 시뮬레이션과 결정 이력 |
+| [예약 정책 시각 companion](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html) | 정책 compile, 승인, 활성화, 복구의 시뮬레이션과 결정 이력 |
 | [예약 플랜 복구 런북](docs/runbooks/appointment-plan-foundation-recovery.md) | 격리 확인, dry-run redrive, 롤백, 원천 서비스 책임 |
 | [예약 정책 API](docs/api/scheduling-policy.md) | tenant/clinic 정책 endpoint, idempotency, preview polling, 오류, rollout flag |
 | [예약 정책 활성화 런북](docs/runbooks/scheduling-policy-activation.md) | worker alert, 60초/5분 activation 처리, replay/retire 복구, V10 준비 조건 |

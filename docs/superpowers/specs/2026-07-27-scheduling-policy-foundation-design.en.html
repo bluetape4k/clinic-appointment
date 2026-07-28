@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <title>Scheduling Policy Foundation Design</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: #0d1d31;
+      --line: rgba(157, 185, 219, .22);
+      --text: #edf6ff;
+      --muted: #a6b8cc;
+      --cyan: #5bd9e8;
+      --blue: #72aaff;
+      --green: #74dfad;
+      --amber: #ffd078;
+      --red: #ff8798;
+      --shadow: 0 24px 64px rgba(0, 0, 0, .28);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% -10%, rgba(91, 217, 232, .18), transparent 34rem),
+        radial-gradient(circle at 92% 8%, rgba(179, 149, 255, .15), transparent 30rem),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+    a { color: var(--cyan); text-underline-offset: 3px; }
+    a:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+    code {
+      padding: .12rem .38rem;
+      border: 1px solid rgba(114, 170, 255, .24);
+      border-radius: 7px;
+      color: #d6e8ff;
+      background: rgba(48, 84, 126, .28);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+    .skip {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 10;
+      padding: 8px 12px;
+      color: #07111f;
+      background: var(--amber);
+      transform: translateY(-180%);
+    }
+    .skip:focus { transform: translateY(0); }
+    .shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
+    nav {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      padding: 28px 20px;
+      border-right: 1px solid var(--line);
+      background: rgba(5, 14, 26, .83);
+      overflow: auto;
+    }
+    .brand { margin-bottom: 24px; font-weight: 800; }
+    .brand span { display: block; margin-top: 5px; color: var(--cyan); font-size: 11px; letter-spacing: .12em; }
+    nav a {
+      display: block;
+      padding: 8px 10px;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+    }
+    nav a:hover { border-color: var(--cyan); color: var(--text); background: rgba(91, 217, 232, .06); }
+    main { width: min(1120px, 100%); min-width: 0; padding: 50px 52px 100px; margin: 0 auto; }
+    .hero {
+      padding: 54px;
+      border: 1px solid rgba(114, 170, 255, .28);
+      border-radius: 30px;
+      background: linear-gradient(135deg, rgba(35, 81, 118, .64), rgba(34, 38, 77, .5)), var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .eyebrow { margin: 0 0 10px; color: var(--cyan); font-size: 12px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    h1, h2, h3 { line-height: 1.22; letter-spacing: -.03em; }
+    h1 { max-width: 800px; margin: 0; font-size: clamp(36px, 6vw, 64px); }
+    h2 { margin: 0 0 20px; font-size: clamp(27px, 4vw, 40px); }
+    h3 { margin: 0 0 10px; font-size: 19px; }
+    p { margin: 0 0 14px; }
+    .lead { max-width: 850px; margin-top: 22px; color: #ccdaeb; font-size: 18px; }
+    .meta, .view-switch { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 24px; }
+    .pill, .view-switch a {
+      padding: 7px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: #c9d8e9;
+      background: rgba(7, 20, 36, .58);
+      font-size: 12px;
+      text-decoration: none;
+    }
+    .provenance {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+      padding: 16px;
+      border: 1px solid rgba(116, 223, 173, .3);
+      border-radius: 16px;
+      background: rgba(7, 24, 32, .72);
+    }
+    .provenance strong { display: block; color: var(--green); font-size: 12px; }
+    .provenance span, .provenance a { overflow-wrap: anywhere; font-size: 13px; }
+    section { padding-top: 82px; scroll-margin-top: 20px; }
+    .section-lead { max-width: 850px; color: var(--muted); font-size: 16px; }
+    .grid { display: grid; gap: 16px; margin-top: 22px; }
+    .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card, .decision-lane article, .timeline article {
+      min-width: 0;
+      padding: 21px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: rgba(13, 29, 49, .88);
+    }
+    .card p:last-child, .decision-lane p:last-child, .timeline p:last-child { margin-bottom: 0; }
+    .tag { display: inline-block; margin-bottom: 10px; color: var(--cyan); font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+    .decision-lane { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+    .decision-lane article { position: relative; padding: 18px; }
+    .decision-lane article:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: -19px;
+      z-index: 2;
+      color: var(--cyan);
+      font-size: 21px;
+      transform: translateY(-50%);
+    }
+    .timeline { display: grid; gap: 14px; margin-top: 22px; padding-left: 18px; border-left: 2px solid rgba(114, 170, 255, .4); }
+    .timeline article { position: relative; }
+    .timeline article::before {
+      content: "";
+      position: absolute;
+      top: 24px;
+      left: -26px;
+      width: 12px;
+      height: 12px;
+      border: 3px solid var(--bg);
+      border-radius: 50%;
+      background: var(--blue);
+    }
+    .callout { margin-top: 20px; padding: 20px 22px; border: 1px solid rgba(91, 217, 232, .28); border-left: 4px solid var(--cyan); border-radius: 14px; background: rgba(12, 39, 56, .6); }
+    .warn { border-color: rgba(255, 208, 120, .3); border-left-color: var(--amber); background: rgba(69, 48, 18, .28); }
+    .table-wrap { margin-top: 22px; overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; }
+    table { width: 100%; border-collapse: collapse; background: rgba(11, 26, 44, .86); }
+    th, td { padding: 14px 16px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    th { color: #d9eaff; background: rgba(42, 74, 110, .36); font-size: 13px; }
+    tbody tr:last-child td { border-bottom: 0; }
+    ul { padding-left: 22px; }
+    li + li { margin-top: 6px; }
+    footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    @media (max-width: 1000px) {
+      .shell { display: block; }
+      nav { position: static; width: 100%; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+      nav a { display: inline-block; border-left: 0; }
+      main { padding: 30px 22px 80px; }
+      .decision-lane { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .decision-lane article::after { display: none; }
+    }
+    @media (max-width: 660px) {
+      .hero { padding: 32px 24px; }
+      .provenance, .decision-lane, .two, .three { grid-template-columns: 1fr; }
+      section { padding-top: 58px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    @media print {
+      :root { --bg: white; --text: #172235; --muted: #526075; --panel: white; --line: #ccd4df; }
+      body { color: #172235; background: white; }
+      .shell { display: block; }
+      nav, .skip { display: none; }
+      main { width: 100%; padding: 0; }
+      .hero, .provenance, .card, .decision-lane article, .timeline article, table { background: white !important; box-shadow: none; }
+      section { break-inside: avoid; }
+      a { color: #155ca8; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="shell">
+    <nav aria-label="Document contents">
+      <div class="brand">Scheduling Policy Foundation<span>ISSUE #182 · DECISION COMPANION</span></div>
+      <a href="#simulation">Simulation</a>
+      <a href="#history">Decision history</a>
+      <a href="#problem">Problem and choice</a>
+      <a href="#model">Policy model</a>
+      <a href="#activation">Activation safety</a>
+      <a href="#storage">Storage contract</a>
+      <a href="#errors">Failure semantics</a>
+      <a href="#operations">Operations</a>
+      <a href="#scope">Delivery scope</a>
+    </nav>
+    <main id="content">
+      <header class="hero">
+        <p class="eyebrow">Clinic appointment · policy foundation</p>
+        <h1>Turn clinic-specific booking rules into reproducible policy</h1>
+        <p class="lead">
+          Combine tenant defaults and clinic overrides as typed policy, bind every command to a trusted actor,
+          and preserve the effective snapshot used by each consequential scheduling decision.
+        </p>
+        <div class="meta">
+          <span class="pill">FUTURE_ONLY</span>
+          <span class="pill">Immutable snapshot</span>
+          <span class="pill">CAS + idempotency</span>
+          <span class="pill">Authoritative generation</span>
+        </div>
+        <div class="provenance"
+             data-status="approved"
+             data-source="2026-07-27-scheduling-policy-foundation-design.md"
+             data-baseline="9008d3e">
+          <div><strong>Normative source</strong><a href="2026-07-27-scheduling-policy-foundation-design.md">Korean Markdown design</a></div>
+          <div><strong>Visual baseline</strong><span>Started at commit <code>9008d3e</code></span></div>
+          <div><strong>Presentation</strong><span>Hybrid · simulation is the default view</span></div>
+          <div><strong>Related change</strong><a href="https://github.com/bluetape4k/clinic-appointment/pull/185">PR #185</a></div>
+        </div>
+      </header>
+
+      <section id="simulation">
+        <p class="eyebrow">Simulation · Default view</p>
+        <h2>A policy change travels from draft to reproducible snapshot</h2>
+        <p class="section-lead">
+          An operator never writes a clinic override directly into live configuration. Compilation and preview explain
+          its effect; approvals and compare-and-set protect the immutable snapshot used by new decisions.
+        </p>
+        <div class="decision-lane" aria-label="Journey from policy draft to active snapshot">
+          <article><span class="tag">01 · DRAFT</span><h3>Edit in scope</h3><p>Author a clinic override relative to its tenant baseline.</p></article>
+          <article><span class="tag">02 · COMPILE</span><h3>Enforce ceilings</h3><p>Merge typed payloads and reject attempts to relax non-negotiable safety rules.</p></article>
+          <article><span class="tag">03 · PREVIEW</span><h3>Explain impact</h3><p>Show affected decisions, constraint changes, a bounded sample, and metrics.</p></article>
+          <article><span class="tag">04 · APPROVE</span><h3>Bind authority</h3><p>Require the right assurances and reject stale revisions or out-of-scope actors.</p></article>
+          <article><span class="tag">05 · ACTIVATE</span><h3>Advance the head</h3><p>Use CAS to advance generation and write the immutable snapshot plus outbox atomically.</p></article>
+        </div>
+        <div class="grid three">
+          <article class="card"><span class="tag">NEW DECISION</span><h3>Use the new generation</h3><p>Read the authoritative scope head and record snapshot version and hash.</p></article>
+          <article class="card"><span class="tag">VALID HOLD</span><h3>Keep the held promise</h3><p>The previous snapshot remains valid through explicit expiry.</p></article>
+          <article class="card"><span class="tag">CONFIRMED</span><h3>Protect the customer promise</h3><p>Activation never silently cancels or rewrites an existing confirmation.</p></article>
+        </div>
+        <div class="callout warn"><strong>A stale cache is more dangerous than a cache miss.</strong> Activation events optimize eviction. Every effective read checks the database scope-head generation and fails closed instead of returning a stale snapshot when authority is unavailable.</div>
+        <div class="view-switch"><a href="#history">See the policy decision history →</a><a href="#model">Read the detailed contract</a></div>
+      </section>
+
+      <section id="history">
+        <p class="eyebrow">History · Decision provenance</p>
+        <h2>Preserve why a rule was approved and activated</h2>
+        <p class="section-lead">This visual companion supports understanding. The Markdown design remains normative for detailed contracts and acceptance criteria.</p>
+        <div class="timeline">
+          <article><h3>2026-07-27 · Issue #182 defines the foundation</h3><p><a href="https://github.com/bluetape4k/clinic-appointment/issues/182">Issue #182</a> records the need for reproducible clinic-specific scheduling policy.</p></article>
+          <article><h3>2026-07-27 · Typed envelope and immutable snapshot approved</h3><p>The <a href="2026-07-27-scheduling-policy-foundation-design.md">normative design</a> defines lifecycle, compiler, approval, generation, cache correctness, and failure semantics.</p></article>
+          <article><h3>2026-07-29 · Bilingual visual history becomes verifiable</h3><p>The <a href="2026-07-29-visual-companion-history-design.md">companion design</a> and <a href="../plans/2026-07-29-visual-companion-history-plan.md">delivery plan</a> add provenance and fail-closed publication rules.</p></article>
+        </div>
+        <div class="view-switch"><a href="#simulation">← Return to the activation simulation</a><a href="https://github.com/bluetape4k/clinic-appointment/commit/9008d3e2f108d541b868fb1d718f40916351df71">Inspect the baseline commit</a></div>
+      </section>
+
+      <section id="problem">
+        <p class="eyebrow">Problem and selected approach</p>
+        <h2>Configuration values alone cannot reproduce a past decision</h2>
+        <div class="grid three">
+          <article class="card"><span class="tag">REJECTED</span><h3>One normalized table per policy</h3><p>Strong SQL constraints, but migrations and compiler branches multiply with every policy kind.</p></article>
+          <article class="card"><span class="tag">REJECTED</span><h3>One untyped JSON document</h3><p>Easy to extend, but lifecycle, revision, interval uniqueness, and typed validation become weak.</p></article>
+          <article class="card"><span class="tag">SELECTED</span><h3>Envelope + typed payload</h3><p>Normalize lifecycle, concurrency, and audit fields while validating payloads as Kotlin sealed types.</p></article>
+        </div>
+      </section>
+
+      <section id="model">
+        <p class="eyebrow">Policy model</p>
+        <h2>Compile baseline and override into an immutable effective snapshot</h2>
+        <div class="grid two">
+          <article class="card"><h3>Tenant baseline</h3><p>Defines defaults and hard ceilings that clinic policy cannot relax.</p></article>
+          <article class="card"><h3>Clinic override</h3><p>Changes only allowed typed fields within the clinic and actor scope.</p></article>
+          <article class="card"><h3>Effective snapshot</h3><p>Stores compiler version, canonical payload, source revisions, hash, generation, and activation interval.</p></article>
+          <article class="card"><h3>Actor context</h3><p>Derives tenant, clinic, subject, assurance, and permissions from trusted gateway identity rather than request payload.</p></article>
+        </div>
+      </section>
+
+      <section id="activation">
+        <p class="eyebrow">Activation safety</p>
+        <h2>One transaction owns the state transition</h2>
+        <div class="grid three">
+          <article class="card"><h3>Revision and preview</h3><p>Reject stale drafts and previews whose revision or generation no longer matches.</p></article>
+          <article class="card"><h3>Approval assurance</h3><p>Require policy-specific approval count and actor assurance before activation.</p></article>
+          <article class="card"><h3>CAS + outbox</h3><p>Advance the scope head, persist the snapshot, and emit the activation event atomically and idempotently.</p></article>
+        </div>
+      </section>
+
+      <section id="storage">
+        <p class="eyebrow">Storage contract</p>
+        <h2>Schema names and immutable evidence are stable</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Surface</th><th>Responsibility</th><th>Invariant</th></tr></thead>
+            <tbody>
+              <tr><td><code>scheduling_policy_set</code></td><td>Scope and lifecycle envelope</td><td>Tenant/clinic ownership never comes from caller-controlled payload.</td></tr>
+              <tr><td><code>scheduling_policy_version</code></td><td>Typed draft and revision history</td><td>Accepted revisions are append-oriented and auditable.</td></tr>
+              <tr><td><code>scheduling_policy_snapshot</code></td><td>Compiled effective policy</td><td>Payload, hash, compiler version, and source revisions are immutable.</td></tr>
+              <tr><td><code>scheduling_policy_scope_head</code></td><td>Authoritative generation pointer</td><td>CAS prevents concurrent activation from silently winning.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">The existing <code>scheduling_*</code> Flyway schema names are a compatibility contract and are not renamed by this design.</div>
+      </section>
+
+      <section id="errors">
+        <p class="eyebrow">Failure semantics</p>
+        <h2>Stable codes tell callers what action is safe</h2>
+        <div class="grid two">
+          <article class="card"><h3>Correct the command</h3><p><code>POLICY_PAYLOAD_INVALID</code>, <code>POLICY_OVERRIDE_FORBIDDEN</code>, and <code>POLICY_ACTOR_FORBIDDEN</code> require payload, scope, or authority correction.</p></article>
+          <article class="card"><h3>Refresh decision context</h3><p><code>POLICY_DRAFT_STALE</code>, <code>POLICY_PREVIEW_STALE</code>, and <code>POLICY_ACTIVATION_CONFLICT</code> require a fresh read or preview.</p></article>
+          <article class="card"><h3>Do not replay a different intent</h3><p><code>POLICY_IDEMPOTENCY_CONFLICT</code> means the same key was used for a different command.</p></article>
+          <article class="card"><h3>Bound automatic retry</h3><p>Only <code>POLICY_PREVIEW_LIMITED</code> is automatically retryable, and callers honor <code>Retry-After</code>.</p></article>
+        </div>
+      </section>
+
+      <section id="operations">
+        <p class="eyebrow">Operations</p>
+        <h2>Roll out evidence before consumers</h2>
+        <div class="grid three">
+          <article class="card"><h3>Shadow compile</h3><p>Start behind a disabled flag, compile without effect, and compare results before activating reads.</p></article>
+          <article class="card"><h3>Observe authority</h3><p>Measure activation lateness, compile latency, generation reads, stale rejection, preview deadlines, and outbox state.</p></article>
+          <article class="card"><h3>Forward repair</h3><p>Activate a previous compatible version as a new snapshot. Never mutate old evidence or rely on destructive down migration.</p></article>
+        </div>
+      </section>
+
+      <section id="scope">
+        <p class="eyebrow">Delivery boundary</p>
+        <h2>This issue delivers policy infrastructure, not the booking state machine</h2>
+        <div class="grid two">
+          <article class="card"><span class="tag">THIS FOUNDATION</span><h3>Policy lifecycle</h3><p>Typed policy, actor context, compiler, snapshot, approval, generation, preview, cache, generic outbox, and admin API.</p></article>
+          <article class="card"><span class="tag">FOLLOW-UP</span><h3>Appointment commitment</h3><p>PROPOSED, HELD, CONFIRMED, customer consent, allocation, waitlist, disruption, and overbooking.</p></article>
+        </div>
+      </section>
+
+      <footer>
+        Normative source: <a href="2026-07-27-scheduling-policy-foundation-design.md">2026-07-27-scheduling-policy-foundation-design.md</a>
+        · <a href="2026-07-27-scheduling-policy-foundation-design.html">한국어 companion</a>
+        · Issue <a href="https://github.com/bluetape4k/clinic-appointment/issues/182">#182</a>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

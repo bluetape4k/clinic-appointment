@@ -35,6 +35,18 @@
       line-height: 1.65;
     }
     a { color: var(--cyan); text-underline-offset: 3px; }
+    a:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+    .skip {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 10;
+      padding: 8px 12px;
+      color: #07111f;
+      background: var(--amber);
+      transform: translateY(-180%);
+    }
+    .skip:focus { transform: translateY(0); }
     code {
       padding: .12rem .38rem;
       border: 1px solid rgba(114, 170, 255, .24);
@@ -100,6 +112,53 @@
     .lead { max-width: 850px; margin-top: 22px; color: #ccdaeb; font-size: 18px; }
     .meta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 25px; }
     .pill { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: #c9d8e9; background: rgba(7, 20, 36, .58); font-size: 12px; }
+    .provenance {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+      padding: 16px;
+      border: 1px solid rgba(116, 223, 173, .3);
+      border-radius: 16px;
+      background: rgba(7, 24, 32, .72);
+    }
+    .provenance strong { display: block; color: var(--green); font-size: 12px; }
+    .provenance span, .provenance a { overflow-wrap: anywhere; font-size: 13px; }
+    .view-switch { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 22px; }
+    .view-switch a { padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; background: rgba(13, 29, 49, .76); text-decoration: none; font-size: 13px; }
+    .decision-lane { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+    .decision-lane article {
+      position: relative;
+      min-width: 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(13, 29, 49, .86);
+    }
+    .decision-lane article:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: -19px;
+      z-index: 2;
+      color: var(--cyan);
+      font-size: 21px;
+      transform: translateY(-50%);
+    }
+    .decision-lane .step { display: block; margin-bottom: 8px; color: var(--cyan); font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+    .timeline { display: grid; gap: 14px; margin-top: 22px; padding-left: 18px; border-left: 2px solid rgba(114, 170, 255, .4); }
+    .timeline article { position: relative; padding: 18px 20px; border: 1px solid var(--line); border-radius: 15px; background: rgba(13, 29, 49, .76); }
+    .timeline article::before {
+      content: "";
+      position: absolute;
+      top: 24px;
+      left: -26px;
+      width: 12px;
+      height: 12px;
+      border: 3px solid var(--bg);
+      border-radius: 50%;
+      background: var(--blue);
+    }
     section { padding-top: 82px; scroll-margin-top: 20px; }
     .section-lead { max-width: 850px; color: var(--muted); font-size: 16px; }
     .grid { display: grid; gap: 16px; }
@@ -193,15 +252,33 @@
       .hero { padding: 34px 26px; }
       .two, .three { grid-template-columns: 1fr; }
       .flow { grid-template-columns: 1fr; }
+      .decision-lane { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .decision-lane article::after { display: none; }
       .node:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -24px; transform: translateX(50%); }
       .branch-row { grid-template-columns: 1fr; }
+      .provenance { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 620px) { .decision-lane { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    @media print {
+      :root { --bg: white; --text: #172235; --muted: #526075; --panel: white; --panel-2: white; --line: #ccd4df; }
+      body { color: #172235; background: white; }
+      .shell { display: block; }
+      nav, .skip { display: none; }
+      main { width: 100%; padding: 0; }
+      .hero, .provenance, .card, .node, .decision-lane article, .timeline article, table { background: white !important; box-shadow: none; }
+      section { break-inside: avoid; }
+      a { color: #155ca8; }
     }
   </style>
 </head>
 <body>
+<a class="skip" href="#content">본문으로 건너뛰기</a>
 <div class="shell">
   <nav>
     <div class="brand">Scheduling Policy Foundation<span>ISSUE #182 · TYPE A</span></div>
+    <a href="#simulation">시뮬레이션</a>
+    <a href="#history">결정 이력</a>
     <a href="#problem">01 · 문제와 결정</a>
     <a href="#trust">02 · 인증 경계</a>
     <a href="#booking">03 · 관리자·고객 예약</a>
@@ -214,7 +291,7 @@
     <a href="#scope">10 · 범위와 후속 작업</a>
   </nav>
 
-  <main>
+  <main id="content">
     <header class="hero">
       <p class="eyebrow">CLINIC APPOINTMENT · POLICY FOUNDATION</p>
       <h1>병원마다 다른 예약 규칙을<br>재현 가능한 정책으로</h1>
@@ -230,7 +307,51 @@
         <span class="pill">H2 · PostgreSQL · MySQL</span>
         <span class="pill">PLAN APPROVED · STEP 3-P PASS</span>
       </div>
+      <div class="provenance"
+           data-status="approved"
+           data-source="2026-07-27-scheduling-policy-foundation-design.md"
+           data-baseline="9008d3e">
+        <div><strong>규범 문서</strong><a href="2026-07-27-scheduling-policy-foundation-design.md">Markdown 설계</a></div>
+        <div><strong>기준 커밋</strong><span><code>9008d3e</code>에서 시각 이력 시작</span></div>
+        <div><strong>표현 방식</strong><span>Hybrid · 기본 화면은 시뮬레이션</span></div>
+        <div><strong>Related change</strong><a href="https://github.com/bluetape4k/clinic-appointment/pull/185">PR #185</a></div>
+      </div>
     </header>
+
+    <section id="simulation">
+      <p class="eyebrow">SIMULATION · DEFAULT VIEW</p>
+      <h2>정책 변경은 초안에서 재현 가능한 snapshot까지 이동한다</h2>
+      <p class="section-lead">
+        병원 운영자는 override를 바로 활성 설정으로 쓰지 않는다. compiler와 preview로 영향 범위를 확인하고,
+        승인과 CAS를 통과한 immutable snapshot만 새 예약 의사결정에 사용한다.
+      </p>
+      <div class="decision-lane" aria-label="정책 초안에서 활성 snapshot까지의 흐름">
+        <article><span class="step">01 · DRAFT</span><h3>범위 내 편집</h3><p>tenant baseline을 기준으로 clinic override를 작성한다.</p></article>
+        <article><span class="step">02 · COMPILE</span><h3>hard ceiling 검증</h3><p>typed payload를 병합하고 완화할 수 없는 안전 규칙을 확인한다.</p></article>
+        <article><span class="step">03 · PREVIEW</span><h3>영향 설명</h3><p>대상 예약과 제약 변화를 bounded sample과 지표로 보여준다.</p></article>
+        <article><span class="step">04 · APPROVE</span><h3>권한과 revision 고정</h3><p>필요한 승인 수와 actor scope를 만족하고 stale draft를 거절한다.</p></article>
+        <article><span class="step">05 · ACTIVATE</span><h3>snapshot·head 전환</h3><p>CAS로 generation을 올리고 immutable effective snapshot과 outbox를 함께 기록한다.</p></article>
+      </div>
+      <div class="grid three">
+        <article class="card"><span class="tag">NEW DECISION</span><h3>새 예약 판단</h3><p>항상 authoritative scope head의 최신 generation과 hash를 사용한다.</p></article>
+        <article class="card"><span class="tag">EXISTING HOLD</span><h3>유효 hold</h3><p>만료까지 기존 정책 snapshot을 보호한다.</p></article>
+        <article class="card"><span class="tag">CONFIRMED</span><h3>확정 약속</h3><p>정책 활성화가 기존 고객 약속을 조용히 취소하거나 재작성하지 않는다.</p></article>
+      </div>
+      <div class="callout warn"><strong>Cache miss보다 stale cache가 위험하다.</strong><p>activation event는 eviction 최적화일 뿐이다. effective read는 DB scope-head generation을 확인하며 DB 장애 시 오래된 snapshot을 성공처럼 반환하지 않는다.</p></div>
+      <div class="view-switch"><a href="#history">이 정책 설계의 결정 이력 보기 →</a><a href="#model">상세 정책 모델 읽기</a></div>
+    </section>
+
+    <section id="history">
+      <p class="eyebrow">HISTORY · DECISION PROVENANCE</p>
+      <h2>정책 값뿐 아니라 승인과 활성화 이유를 보존한다</h2>
+      <p class="section-lead">이 HTML은 이해를 돕는 시각 companion이며, 상세 계약과 인수 기준은 Markdown이 규범이다.</p>
+      <div class="timeline">
+        <article><h3>2026-07-27 · Issue #182에서 정책 foundation 범위 결정</h3><p><a href="https://github.com/bluetape4k/clinic-appointment/issues/182">Issue #182</a>가 병원별 예약 정책을 재현 가능하게 만들 요구를 고정했다.</p></article>
+        <article><h3>2026-07-27 · typed envelope + immutable snapshot 승인</h3><p><a href="2026-07-27-scheduling-policy-foundation-design.md">규범 Markdown</a>이 lifecycle, approval, compiler, generation, cache, 오류 의미론을 정의했다.</p></article>
+        <article><h3>2026-07-29 · 한·영 시각 이력과 fail-closed 검증 추가</h3><p><a href="2026-07-29-visual-companion-history-design.md">시각 companion 설계</a>와 <a href="../plans/2026-07-29-visual-companion-history-plan.md">구현 계획</a>이 provenance와 게시 계약을 고정했다.</p></article>
+      </div>
+      <div class="view-switch"><a href="#simulation">← 정책 활성화 시뮬레이션으로 돌아가기</a><a href="https://github.com/bluetape4k/clinic-appointment/commit/9008d3e2f108d541b868fb1d718f40916351df71">기준 커밋 보기</a></div>
+    </section>
 
     <section id="problem">
       <h2>01 · 문제와 결정</h2>

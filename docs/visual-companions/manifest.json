@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "repository": "bluetape4k/clinic-appointment",
+  "documents": [
+    {
+      "id": "appointment-plan-and-capacity",
+      "source": "docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.md",
+      "status": "approved",
+      "public": true,
+      "presentation": {
+        "mode": "hybrid",
+        "defaultView": "simulation",
+        "views": [
+          "simulation",
+          "history"
+        ]
+      },
+      "locales": {
+        "en": {
+          "title": "Appointment Plan and Capacity",
+          "html": "docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.en.html"
+        },
+        "ko": {
+          "title": "예약 계획과 수용량",
+          "html": "docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html"
+        }
+      }
+    },
+    {
+      "id": "scheduling-policy-foundation",
+      "source": "docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.md",
+      "status": "approved",
+      "public": true,
+      "presentation": {
+        "mode": "hybrid",
+        "defaultView": "simulation",
+        "views": [
+          "simulation",
+          "history"
+        ]
+      },
+      "locales": {
+        "en": {
+          "title": "Scheduling Policy Foundation",
+          "html": "docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.en.html"
+        },
+        "ko": {
+          "title": "Scheduling Policy 기반",
+          "html": "docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html"
+        }
+      }
+    }
+  ]
+}

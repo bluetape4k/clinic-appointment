@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <title>Appointment Plan, Booking, and Capacity Design</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: #0d1c30;
+      --line: rgba(154, 184, 220, .22);
+      --text: #edf5ff;
+      --muted: #a7bad0;
+      --cyan: #55d6e6;
+      --blue: #6da5ff;
+      --green: #70dfac;
+      --amber: #ffc96b;
+      --red: #ff8292;
+      --shadow: 0 22px 60px rgba(0, 0, 0, .28);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% -10%, rgba(85, 214, 230, .18), transparent 34rem),
+        radial-gradient(circle at 88% 10%, rgba(173, 140, 255, .15), transparent 32rem),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+    a { color: var(--cyan); text-underline-offset: 3px; }
+    a:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+    code {
+      padding: .12rem .38rem;
+      border: 1px solid rgba(109, 165, 255, .24);
+      border-radius: 7px;
+      color: #cae3ff;
+      background: rgba(49, 85, 127, .27);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+    .skip {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 10;
+      padding: 8px 12px;
+      color: #07111f;
+      background: var(--amber);
+      transform: translateY(-180%);
+    }
+    .skip:focus { transform: translateY(0); }
+    .shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
+    nav {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      padding: 28px 20px;
+      border-right: 1px solid var(--line);
+      background: rgba(5, 14, 26, .82);
+      overflow: auto;
+    }
+    .brand { margin-bottom: 24px; font-weight: 800; }
+    .brand span { display: block; margin-top: 6px; color: var(--cyan); font-size: 11px; letter-spacing: .12em; }
+    nav a {
+      display: block;
+      padding: 8px 10px;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+    }
+    nav a:hover { border-color: var(--cyan); color: var(--text); background: rgba(85, 214, 230, .06); }
+    main { width: min(1120px, 100%); min-width: 0; padding: 52px 52px 100px; margin: 0 auto; }
+    .hero {
+      padding: 54px;
+      border: 1px solid rgba(109, 165, 255, .28);
+      border-radius: 30px;
+      background: linear-gradient(135deg, rgba(33, 78, 112, .64), rgba(27, 38, 73, .5)), var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .eyebrow { margin: 0 0 10px; color: var(--cyan); font-size: 12px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    h1, h2, h3 { line-height: 1.22; letter-spacing: -.03em; }
+    h1 { max-width: 820px; margin: 0; font-size: clamp(38px, 6vw, 66px); }
+    h2 { margin: 0 0 20px; font-size: clamp(28px, 4vw, 40px); }
+    h3 { margin: 0 0 10px; font-size: 19px; }
+    p { margin: 0 0 15px; }
+    .lead { max-width: 850px; margin-top: 22px; color: #ccdaeb; font-size: 18px; }
+    .meta, .view-switch { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 24px; }
+    .pill, .view-switch a {
+      padding: 7px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: #c9d8e9;
+      background: rgba(7, 20, 36, .58);
+      font-size: 12px;
+      text-decoration: none;
+    }
+    .provenance {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+      padding: 16px;
+      border: 1px solid rgba(112, 223, 172, .28);
+      border-radius: 16px;
+      background: rgba(7, 24, 32, .72);
+    }
+    .provenance strong { display: block; color: var(--green); font-size: 12px; }
+    .provenance span, .provenance a { overflow-wrap: anywhere; font-size: 13px; }
+    section { padding-top: 82px; scroll-margin-top: 20px; }
+    .section-lead { max-width: 850px; color: var(--muted); font-size: 16px; }
+    .grid { display: grid; gap: 16px; margin-top: 22px; }
+    .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card, .journey article, .timeline article {
+      min-width: 0;
+      padding: 21px;
+      border: 1px solid var(--line);
+      border-radius: 17px;
+      background: rgba(13, 28, 48, .86);
+    }
+    .card p:last-child, .journey p:last-child, .timeline p:last-child { margin-bottom: 0; }
+    .tag { display: inline-block; margin-bottom: 10px; color: var(--cyan); font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+    .journey { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+    .journey article { position: relative; }
+    .journey article:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: -20px;
+      z-index: 2;
+      color: var(--cyan);
+      font-size: 22px;
+      transform: translateY(-50%);
+    }
+    .timeline { display: grid; gap: 14px; margin-top: 24px; padding-left: 18px; border-left: 2px solid rgba(109, 165, 255, .4); }
+    .timeline article { position: relative; }
+    .timeline article::before {
+      content: "";
+      position: absolute;
+      top: 25px;
+      left: -26px;
+      width: 12px;
+      height: 12px;
+      border: 3px solid var(--bg);
+      border-radius: 50%;
+      background: var(--blue);
+    }
+    .callout { margin-top: 20px; padding: 20px 22px; border: 1px solid rgba(255, 201, 107, .3); border-left: 4px solid var(--amber); border-radius: 14px; background: rgba(70, 49, 18, .3); }
+    .state-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 22px; }
+    .state-row .card:nth-child(1) { border-top: 4px solid var(--blue); }
+    .state-row .card:nth-child(2) { border-top: 4px solid var(--amber); }
+    .state-row .card:nth-child(3) { border-top: 4px solid var(--green); }
+    ul { padding-left: 22px; }
+    li + li { margin-top: 6px; }
+    footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    @media (max-width: 980px) {
+      .shell { display: block; }
+      nav { position: static; width: 100%; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+      nav a { display: inline-block; border-left: 0; }
+      main { padding: 34px 24px 80px; }
+      .journey { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .journey article::after { display: none; }
+    }
+    @media (max-width: 680px) {
+      .hero { padding: 32px 24px; }
+      .provenance, .journey, .two, .three, .state-row { grid-template-columns: 1fr; }
+      section { padding-top: 58px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    @media print {
+      :root { --bg: white; --text: #172235; --muted: #526075; --panel: white; --line: #ccd4df; }
+      body { color: #172235; background: white; }
+      .shell { display: block; }
+      nav, .skip { display: none; }
+      main { width: 100%; padding: 0; }
+      .hero, .provenance, .card, .journey article, .timeline article { background: white !important; box-shadow: none; }
+      section { break-inside: avoid; }
+      a { color: #155ca8; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <div class="shell">
+    <nav aria-label="Document contents">
+      <div class="brand">Clinic Appointment<span>DOMAIN DECISION COMPANION</span></div>
+      <a href="#simulation">Simulation</a>
+      <a href="#history">Decision history</a>
+      <a href="#boundaries">Service boundaries</a>
+      <a href="#states">Promise states</a>
+      <a href="#rules">Capacity rules</a>
+      <a href="#recovery">Recovery</a>
+      <a href="#scope">Delivery boundary</a>
+    </nav>
+    <main id="content">
+      <header class="hero">
+        <p class="eyebrow">Design specification · 2026-07-26</p>
+        <h1>Appointment plans, booking promises, and capacity</h1>
+        <p class="lead">
+          A durable model for packages, repeated treatments, partial completion, equipment disruption,
+          rescheduling, controlled overbooking, and extended clinic hours.
+        </p>
+        <div class="meta">
+          <span class="pill">Purchase snapshot</span>
+          <span class="pill">Tenant policy</span>
+          <span class="pill">Item-level fulfillment</span>
+          <span class="pill">Customer consent</span>
+        </div>
+        <div class="provenance"
+             data-status="approved"
+             data-source="2026-07-26-appointment-plan-and-capacity-design.md"
+             data-baseline="e3ae0ce">
+          <div><strong>Normative source</strong><a href="2026-07-26-appointment-plan-and-capacity-design.md">Korean Markdown design</a></div>
+          <div><strong>Visual baseline</strong><span>Started at commit <code>e3ae0ce</code></span></div>
+          <div><strong>Presentation</strong><span>Hybrid · simulation is the default view</span></div>
+          <div><strong>Related change</strong><a href="https://github.com/bluetape4k/clinic-appointment/pull/185">PR #185</a></div>
+        </div>
+      </header>
+
+      <section id="simulation">
+        <p class="eyebrow">Simulation · Default view</p>
+        <h2>How a purchase obligation becomes a safe booking promise</h2>
+        <p class="section-lead">
+          The key operational question is when capacity is consumed. A purchase creates treatment obligations;
+          resources are consumed only by a HELD promise and protected with customer consent at CONFIRMED.
+        </p>
+        <div class="journey" aria-label="Journey from purchase to confirmation">
+          <article><span class="tag">01 · PURCHASE</span><h3>Freeze the product snapshot</h3><p>Build treatment obligations and dependencies from the purchased BOM and scheduling rules.</p></article>
+          <article><span class="tag">02 · PROPOSED</span><h3>Calculate candidates</h3><p>Explain feasible slots without consuming capacity.</p></article>
+          <article><span class="tag">03 · HELD</span><h3>Reserve with expiry</h3><p>Protect the required staff, room, and equipment for a bounded time.</p></article>
+          <article><span class="tag">04 · CONFIRMED</span><h3>Protect the consented promise</h3><p>Persist the decision snapshot; later policy changes do not silently rewrite it.</p></article>
+        </div>
+        <div class="grid three">
+          <article class="card"><span class="tag">FIXED_SLOT</span><h3>Exact time</h3><p>Commit one start time where staff, room, and equipment all fit.</p></article>
+          <article class="card"><span class="tag">ARRIVAL_WINDOW</span><h3>Arrival range</h3><p>Promise an arrival interval while the clinic controls the actual service order.</p></article>
+          <article class="card"><span class="tag">DATE_QUEUE</span><h3>Date queue</h3><p>Promise a date and priority rather than an exact start time.</p></article>
+        </div>
+        <div class="callout"><strong>When policy changes:</strong> new proposals use the new policy, valid holds survive until expiry, and confirmed appointments retain their original snapshot. A changed promise requires a new proposal and new consent.</div>
+        <div class="view-switch"><a href="#history">See why these decisions were made →</a><a href="#boundaries">Read the detailed design map</a></div>
+      </section>
+
+      <section id="history">
+        <p class="eyebrow">History · Decision provenance</p>
+        <h2>Trace the decision, not just the polished screen</h2>
+        <p class="section-lead">This companion explains the design; it does not replace its normative Markdown source.</p>
+        <div class="timeline">
+          <article><h3>2026-07-26 · Long-horizon domain design approved</h3><p>The <a href="2026-07-26-appointment-plan-and-capacity-design.md">normative design</a> fixed service ownership, promise states, capacity semantics, policy snapshots, and recovery invariants.</p></article>
+          <article><h3>2026-07-26 · Current delivery narrowed to the foundation</h3><p>The <a href="../plans/2026-07-26-appointment-plan-foundation.html">implementation-plan visual</a> limits present execution to catalog projection and purchase-to-plan convergence.</p></article>
+          <article><h3>2026-07-29 · Visual history made durable</h3><p>The <a href="2026-07-29-visual-companion-history-design.md">companion design</a> and <a href="../plans/2026-07-29-visual-companion-history-plan.md">delivery plan</a> define locale, provenance, validation, and publication rules.</p></article>
+        </div>
+        <div class="view-switch"><a href="#simulation">← Return to the simulation</a><a href="https://github.com/bluetape4k/clinic-appointment/commit/e3ae0ce58fb3d0c00b2110f0a7eeefdca72a771c">Inspect the baseline commit</a></div>
+      </section>
+
+      <section id="boundaries">
+        <p class="eyebrow">Design map · Ownership</p>
+        <h2>The appointment service owns future scheduling facts</h2>
+        <div class="grid three">
+          <article class="card"><span class="tag">UPSTREAM</span><h3>Product and purchase</h3><p>Product management owns the BOM and booking rules. Purchasing owns contracts and additional purchases.</p></article>
+          <article class="card"><span class="tag">THIS SERVICE</span><h3>Plans, visits, resources, policy</h3><p>Creates obligations from snapshots and owns proposals, holds, confirmations, reassignment, and capacity occupancy.</p></article>
+          <article class="card"><span class="tag">DOWNSTREAM</span><h3>Treatment, refund, support</h3><p>Source-of-truth completion, refund decisions, complaints, and compensation remain with specialist services.</p></article>
+        </div>
+        <div class="callout"><strong>Selected model:</strong> <code>AppointmentPlan → PlannedTreatment ← AppointmentItem → Appointment</code>. The plan represents the purchased promise, items split fulfillment, and appointments group work into visits.</div>
+      </section>
+
+      <section id="states">
+        <p class="eyebrow">Promise lifecycle</p>
+        <h2>State names carry capacity and consent semantics</h2>
+        <div class="state-row">
+          <article class="card"><h3>PROPOSED</h3><p>No capacity is consumed. Candidates may disappear before selection.</p></article>
+          <article class="card"><h3>HELD</h3><p>Capacity is consumed until an explicit expiry. The effective policy snapshot is recorded.</p></article>
+          <article class="card"><h3>CONFIRMED</h3><p>Capacity and customer consent are both present. The promise cannot be silently rewritten.</p></article>
+        </div>
+      </section>
+
+      <section id="rules">
+        <p class="eyebrow">Policy and capacity</p>
+        <h2>Tenant defaults may be narrowed by clinic policy</h2>
+        <div class="grid two">
+          <article class="card"><h3>Effective policy</h3><p>Compile tenant baseline plus clinic override into an immutable, versioned snapshot. Store the version and hash with every consequential decision.</p></article>
+          <article class="card"><h3>Controlled overbooking</h3><p>Hard safety ceilings are never relaxed. Optional risk capacity requires explicit policy, explainable scoring, monitoring, and an operator recovery path.</p></article>
+          <article class="card"><h3>Dependencies</h3><p>Repeated and staged treatments preserve sequence and minimum/maximum interval rules without merging purchase truth into appointment state.</p></article>
+          <article class="card"><h3>Minimum change</h3><p>When disruption forces replanning, keep unaffected visits and resources stable before optimizing convenience.</p></article>
+        </div>
+      </section>
+
+      <section id="recovery">
+        <p class="eyebrow">Disruption and recovery</p>
+        <h2>A safety violation triggers workflow, not silent mutation</h2>
+        <div class="grid three">
+          <article class="card"><h3>Detect</h3><p>Equipment outage, staff absence, capacity breach, or changed clinical constraint identifies affected promises.</p></article>
+          <article class="card"><h3>Contain</h3><p>Stop unsafe new proposals and preserve unaffected confirmed work.</p></article>
+          <article class="card"><h3>Re-propose</h3><p>Produce explainable alternatives, obtain consent again, and retain the previous decision history.</p></article>
+        </div>
+      </section>
+
+      <section id="scope">
+        <p class="eyebrow">Current executable slice</p>
+        <h2>Appointment Plan Foundation stops before booking commitment</h2>
+        <div class="grid two">
+          <article class="card"><span class="tag">IN SCOPE NOW</span><h3>Projection and convergence</h3><ul><li>Tenant, clinic, and source-authority catalog snapshots</li><li>Purchase identity to plan, obligations, and dependencies</li><li>Atomic inbox, plan, and outbox convergence</li><li>Scope-safe operator reads</li></ul></article>
+          <article class="card"><span class="tag">ROADMAP</span><h3>Commitment and operations</h3><ul><li>Appointment items, resources, and slot search</li><li>PROPOSED, HELD, CONFIRMED, and consent</li><li>Partial fulfillment, refund, and disruption</li><li>Solver, overbooking, and extended hours</li></ul></article>
+        </div>
+        <div class="callout">Foundation is neither booking confirmation nor proof that an outbox message was delivered. The Markdown acceptance commands and current implementation plan remain authoritative.</div>
+      </section>
+
+      <footer>
+        Normative source: <a href="2026-07-26-appointment-plan-and-capacity-design.md">2026-07-26-appointment-plan-and-capacity-design.md</a>
+        · <a href="2026-07-26-appointment-plan-and-capacity-design.html">한국어 companion</a>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

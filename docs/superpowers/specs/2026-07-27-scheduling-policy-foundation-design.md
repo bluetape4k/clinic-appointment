@@ -4,6 +4,8 @@
 >
 > 상태: Step 2/2-R 승인 완료, Step 3-R P0=0/P1=0, 최종 구현 계획 승인 및 Step 3-P PASS. 생산 코드 미착수.
 > 기준일: 2026-07-27
+>
+> 시각 문서: [한국어 HTML](./2026-07-27-scheduling-policy-foundation-design.html) · [English HTML](./2026-07-27-scheduling-policy-foundation-design.en.html)
 
 ## 1. 문제
 
