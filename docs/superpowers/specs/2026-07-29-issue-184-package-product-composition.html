@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<!-- 승인된 Visual Companion을 영구 설계 문서로 보존한다. -->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
+  <title>패키지 상품 구성 · 유형별 편집</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#07111f; --panel:#101d31; --panel2:#172740; --line:#2b4265;
+      --text:#eef5ff; --muted:#9fafc7; --blue:#64b2ff; --green:#50d6a1;
+      --orange:#ffbd69; --purple:#b39aff; --red:#ff7e8e;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; color:var(--text);
+      font-family:Inter,Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:
+        radial-gradient(circle at 8% 0%,rgba(44,108,199,.26),transparent 30%),
+        radial-gradient(circle at 93% 4%,rgba(116,77,188,.16),transparent 25%),
+        var(--bg);
+    }
+    button,input,select { font:inherit; }
+    main { max-width:1480px; margin:auto; padding:28px; }
+    .eyebrow { color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.08em; }
+    h1 { margin:8px 0; font-size:30px; }
+    .lead { margin:0 0 18px; color:var(--muted); line-height:1.6; }
+    .type-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
+    .type-card {
+      padding:14px; text-align:left; color:var(--text); cursor:pointer;
+      border:1px solid var(--line); border-radius:13px; background:rgba(16,29,49,.93);
+      transition:.15s;
+    }
+    .type-card:hover { transform:translateY(-1px); border-color:#5276a2; }
+    .type-card.active { border-color:var(--blue); box-shadow:0 0 0 2px rgba(100,178,255,.13); }
+    .type-card .num {
+      display:inline-flex; width:24px; height:24px; align-items:center; justify-content:center;
+      margin-right:7px; border-radius:7px; background:#193758; color:var(--blue); font-weight:900;
+    }
+    .type-card strong { font-size:14px; }
+    .type-card p { margin:7px 0 0; color:var(--muted); font-size:11px; line-height:1.5; }
+    .package-bar {
+      display:grid; grid-template-columns:1.25fr 1fr; gap:14px; padding:16px; margin-bottom:14px;
+      border:1px solid #6655a1; border-radius:15px; background:rgba(179,154,255,.08);
+    }
+    .package-bar h2 { margin:0 0 5px; font-size:18px; }
+    .package-bar p { margin:0; color:#b9add8; font-size:11px; line-height:1.5; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+    .chip { padding:5px 8px; border-radius:8px; background:#102039; color:#bfd1e7; font-size:10px; }
+    .chip.required { color:var(--green); }
+    .chip.optional { color:var(--orange); }
+    .chip.choice { color:var(--purple); }
+    .chip.time { color:var(--blue); }
+    .layout { display:grid; grid-template-columns:minmax(570px,1.05fr) minmax(500px,.95fr); gap:14px; }
+    .panel { padding:19px; border:1px solid var(--line); border-radius:17px; background:rgba(16,29,49,.95); }
+    .panel h2 { margin:0 0 4px; font-size:18px; }
+    .sub { margin:0 0 12px; color:var(--muted); font-size:12px; line-height:1.5; }
+    .node {
+      display:grid; grid-template-columns:28px 1fr auto; gap:10px; align-items:start;
+      padding:13px; margin:9px 0; border:1px solid #355176; border-radius:12px;
+      background:var(--panel2); cursor:pointer; transition:.15s;
+    }
+    .node:hover { border-color:#5a7aa5; }
+    .node.active { border-color:var(--blue); box-shadow:0 0 0 2px rgba(100,178,255,.12); }
+    .node.excluded { opacity:.48; border-style:dashed; }
+    .node input[type=checkbox] { width:18px; height:18px; margin:2px 0; accent-color:var(--blue); }
+    .node h3 { margin:0 0 4px; font-size:14px; }
+    .node p { margin:0; color:var(--muted); font-size:11px; }
+    .node-side { min-width:100px; text-align:right; }
+    .duration { color:var(--blue); font-size:12px; font-weight:800; }
+    .mode { margin-top:6px; color:var(--muted); font-size:10px; }
+    .edge {
+      display:grid; grid-template-columns:90px 1fr 105px; align-items:center; gap:8px;
+      margin:6px 0 6px 50px; color:#91a7c3; font-size:10px;
+    }
+    .edge::before { content:""; height:1px; background:#345276; }
+    .edge::after { content:"→"; color:var(--blue); font-size:18px; }
+    .edge span { text-align:center; }
+    .detail { position:relative; min-height:510px; }
+    .detail.disabled fieldset { opacity:.25; filter:grayscale(.6); }
+    .detail fieldset { padding:0; margin:0; border:0; }
+    .disabled-cover {
+      display:none; position:absolute; inset:74px 18px 18px; z-index:3;
+      align-items:center; justify-content:center; text-align:center;
+      border:1px dashed #6e7f96; border-radius:13px; background:rgba(7,17,31,.78);
+      color:#d3dceb; font-size:13px; line-height:1.7; backdrop-filter:blur(2px);
+    }
+    .detail.disabled .disabled-cover { display:flex; }
+    .detail-head { display:flex; justify-content:space-between; gap:12px; padding-bottom:12px; border-bottom:1px solid #263c5c; }
+    .version { color:#93a7c2; font:10px/1.5 "SFMono-Regular",Consolas,monospace; }
+    .section { margin-top:15px; }
+    .section-title { display:flex; justify-content:space-between; margin-bottom:8px; font-size:12px; font-weight:800; }
+    .section-title small { color:var(--muted); font-weight:500; }
+    .checks { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+    .check { display:flex; gap:7px; min-height:52px; padding:9px; border:1px solid #2b4264; border-radius:9px; background:#111f34; font-size:11px; line-height:1.4; }
+    .check input { margin-top:2px; accent-color:var(--blue); }
+    .check span { color:var(--muted); display:block; font-size:9px; margin-top:2px; }
+    .fields { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .field { padding:9px; border-radius:9px; background:#0c192b; border:1px solid #293f60; }
+    .field label { display:block; color:var(--muted); font-size:9px; margin-bottom:5px; }
+    .field input { width:100%; padding:8px; border:1px solid #38577e; border-radius:7px; background:#162740; color:var(--text); font-size:11px; }
+    .resources { display:flex; flex-wrap:wrap; gap:6px; }
+    .resource { padding:7px 9px; border-radius:8px; background:#10233c; color:#bfd2e9; font-size:10px; }
+    .rule {
+      margin-top:14px; padding:11px; border-left:3px solid var(--green); border-radius:9px;
+      background:rgba(80,214,161,.07); color:#cce9dc; font-size:11px; line-height:1.55;
+    }
+    .cart { margin-top:14px; padding:19px; border:1px solid #4a6283; border-radius:17px; background:rgba(12,25,43,.96); }
+    .cart-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+    .cart h2 { margin:0 0 4px; font-size:18px; }
+    .cart-status { padding:7px 10px; border-radius:9px; color:var(--green); background:rgba(80,214,161,.1); font-size:11px; font-weight:800; }
+    .cart-status.invalid { color:var(--red); background:rgba(255,126,142,.1); }
+    table { width:100%; margin-top:12px; border-collapse:collapse; font-size:11px; }
+    th { padding:8px; text-align:left; color:var(--muted); border-bottom:1px solid #36506f; }
+    td { padding:10px 8px; border-bottom:1px solid #213651; }
+    .cart-foot { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:12px; }
+    .metric { padding:10px; border:1px solid #2b4363; border-radius:10px; background:#111f34; }
+    .metric span { display:block; color:var(--muted); font-size:9px; }
+    .metric strong { display:block; margin-top:4px; color:var(--blue); font-size:14px; }
+    .toast { position:fixed; right:24px; bottom:22px; z-index:10; padding:10px 14px; border-radius:10px; background:#e8f3ff; color:#13243c; font-size:11px; font-weight:800; opacity:0; transform:translateY(8px); transition:.2s; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    @media(max-width:1100px) {
+      .layout,.package-bar,.type-grid { grid-template-columns:1fr; }
+      .checks { grid-template-columns:1fr; }
+      .cart-foot { grid-template-columns:1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Issue #184 · 패키지 상품 기획 화면 v3</div>
+  <h1>패키지 유형을 고르고, 구성 결과를 한눈에 확인합니다</h1>
+  <p class="lead">세 유형을 눌러 비교해 보세요. 선택을 해제하면 해당 상품의 상세 설정이 비활성화되고, 하단 구성 요약도 즉시 바뀝니다.</p>
+
+  <section class="type-grid" aria-label="패키지 유형">
+    <button class="type-card" data-type="repeated" onclick="switchType('repeated')">
+      <span class="num">1</span><strong>동일 상품 반복형</strong>
+      <p>미백 5회권처럼 같은 상품을 정해진 횟수만큼 반복합니다.</p>
+    </button>
+    <button class="type-card active" data-type="composite" onclick="switchType('composite')">
+      <span class="num">2</span><strong>복합 구성형</strong>
+      <p>서로 다른 상품을 필수·선택 및 선후행 관계로 조합합니다.</p>
+    </button>
+    <button class="type-card" data-type="choice" onclick="switchType('choice')">
+      <span class="num">3</span><strong>N개 중 M개 선택형</strong>
+      <p>후보 상품 중 약정된 개수만 선택하도록 구성합니다.</p>
+    </button>
+  </section>
+
+  <section class="package-bar">
+    <div>
+      <h2 id="package-name">리프팅 집중관리 패키지 v7</h2>
+      <p id="package-desc">서로 다른 진료·시술을 필수와 선택 항목으로 조합하는 복합 구성형입니다.</p>
+    </div>
+    <div>
+      <div id="package-chips" class="chips"></div>
+      <p style="margin-top:7px">임상 안전·필수 자원·최소 준비/회복·필수 선행조건은 구성 상품 version을 따릅니다.</p>
+    </div>
+  </section>
+
+  <div class="layout">
+    <section class="panel">
+      <h2>구성 상품</h2>
+      <p id="composition-help" class="sub">선택 항목을 포함하거나 제외해 보세요.</p>
+      <div id="nodes"></div>
+      <div class="rule">
+        <strong>패키지가 소유하는 것</strong><br>
+        필수/선택/택일, 수량, 선후행 간격, 같은 방문 가능 여부를 정의합니다.
+      </div>
+    </section>
+
+    <section id="detail" class="panel detail">
+      <div class="detail-head">
+        <div>
+          <h2 id="detail-name">사전 진단</h2>
+          <div id="detail-version" class="version"></div>
+        </div>
+        <span id="detail-duration" class="chip time"></span>
+      </div>
+      <div class="disabled-cover">
+        <div><strong>패키지 구성에서 제외된 상품입니다.</strong><br>왼쪽 체크박스를 선택하면 상세 설정이 활성화됩니다.</div>
+      </div>
+      <fieldset id="detail-fields">
+        <div class="section">
+          <div class="section-title">이 상품의 예약 운영 특성 <small>구성 상품 version이 소유</small></div>
+          <div class="checks">
+            <label class="check"><input id="multiVisit" type="checkbox"><div>여러 번 방문<span>MULTI_VISIT</span></div></label>
+            <label class="check"><input id="dependent" type="checkbox"><div>앞 시술 완료 후 진행<span>PREDECESSOR_DEPENDENT</span></div></label>
+            <label class="check"><input id="partial" type="checkbox"><div>남은 시술 분리 예약<span>PARTIAL_FULFILLMENT</span></div></label>
+            <label class="check"><input id="exclusive" type="checkbox"><div>의료진·장비·공간 전담<span>EXCLUSIVE_RESOURCE</span></div></label>
+            <label class="check"><input id="surgical" type="checkbox"><div>준비·회복 시간 필요<span>SURGICAL_COORDINATION</span></div></label>
+            <label class="check"><input id="overbooking" type="checkbox"><div>초과 예약 허용<span>OVERBOOKING_ALLOWED</span></div></label>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">회차별 시간 <small>패키지 총시간으로 뭉개지 않음</small></div>
+          <div class="fields">
+            <div class="field"><label>진료·시술</label><input id="treatmentMin" type="number"></div>
+            <div class="field"><label>사전 준비</label><input id="prepMin" type="number"></div>
+            <div class="field"><label>회복</label><input id="recoveryMin" type="number"></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">필요 자원 <small>상품 version에서 상속</small></div>
+          <div id="resources" class="resources"></div>
+        </div>
+        <div class="rule">
+          <strong>패키지에서 재정의 가능한 운영 정책</strong><br>
+          초과예약, 우선순위, 알림·재확인, 선점형/제안형 같은 운영 전략은 패키지 특성에 맞게 조정할 수 있습니다.
+        </div>
+      </fieldset>
+    </section>
+  </div>
+
+  <section class="cart">
+    <div class="cart-head">
+      <div>
+        <h2>패키지 구성 요약</h2>
+        <p class="sub" style="margin:0">상품 기획자가 발행 전에 보는 장바구니형 실행 BOM 미리보기입니다.</p>
+      </div>
+      <div id="cart-status" class="cart-status">구성 조건 충족</div>
+    </div>
+    <table>
+      <thead><tr><th>구성 상품</th><th>구성 방식</th><th>수량</th><th>방문 관계</th><th>회차 시간</th></tr></thead>
+      <tbody id="cart-body"></tbody>
+    </table>
+    <div class="cart-foot">
+      <div class="metric"><span>선택된 구성 상품</span><strong id="metric-products">0개</strong></div>
+      <div class="metric"><span>총 실행 회차</span><strong id="metric-sessions">0회</strong></div>
+      <div class="metric"><span>최소 방문 수</span><strong id="metric-visits">0회</strong></div>
+      <div class="metric"><span>순수 진료·준비·회복 합계</span><strong id="metric-time">0분</strong></div>
+    </div>
+  </section>
+</main>
+<div id="toast" class="toast"></div>
+
+<script>
+  const packages = {
+    repeated: {
+      name:'프리미엄 미백 5회권 v4',
+      desc:'같은 상품 version을 반복하고 회차 간격 규칙을 적용하는 동일 상품 반복형입니다.',
+      chips:['동일 상품 반복','5회','회차 간 7~14일'],
+      choiceTarget:null,
+      items:[
+        {id:'whitening',name:'미백 치료',version:6,mode:'필수 반복',qty:5,selected:true,locked:true,relation:'회차 간 7~14일',treatment:35,prep:10,recovery:5,visits:5,traits:['multiVisit'],resources:['치과의사','미백 장비','진료실']}
+      ]
+    },
+    composite: {
+      name:'리프팅 집중관리 패키지 v7',
+      desc:'서로 다른 진료·시술을 필수와 선택 항목으로 조합하는 복합 구성형입니다.',
+      chips:['복합 구성','필수+선택','선후행 의존성'],
+      choiceTarget:null,
+      items:[
+        {id:'diagnosis',name:'사전 진단',version:3,mode:'필수',qty:1,selected:true,locked:true,relation:'첫 방문 · 별도',treatment:20,prep:0,recovery:0,visits:1,traits:[],resources:['성형외과 전문의','상담실']},
+        {id:'lifting',name:'리프팅 시술',version:5,mode:'필수',qty:1,selected:true,locked:true,relation:'진단 완료 후 3~14일',treatment:60,prep:15,recovery:30,visits:1,traits:['dependent','exclusive','surgical'],resources:['시술 전문의','리프팅 장비','전용 시술실','회복 공간']},
+        {id:'soothing',name:'진정 관리',version:4,mode:'선택',qty:1,selected:true,locked:false,relation:'시술과 같은 방문 가능',treatment:30,prep:5,recovery:0,visits:0,traits:['partial'],resources:['피부관리사','진정 장비','관리실']},
+        {id:'followup',name:'사후 점검',version:2,mode:'필수',qty:1,selected:true,locked:true,relation:'시술 7일 뒤 · 별도',treatment:15,prep:0,recovery:0,visits:1,traits:['dependent'],resources:['담당 의사','진료실']}
+      ]
+    },
+    choice: {
+      name:'맞춤 피부관리 2종 선택권 v3',
+      desc:'3개 후보 중 고객이 2개를 선택하는 N개 중 M개 선택형입니다.',
+      chips:['3개 중 2개','고객 선택','선택 수 검증'],
+      choiceTarget:2,
+      items:[
+        {id:'skinDiagnosis',name:'피부 진단',version:2,mode:'필수',qty:1,selected:true,locked:true,relation:'첫 방문 · 별도',treatment:20,prep:0,recovery:0,visits:1,traits:[],resources:['피부과 전문의','진단 장비']},
+        {id:'laserTone',name:'레이저 토닝',version:8,mode:'택일 후보',qty:1,selected:true,locked:false,relation:'진단 후 3일 이상',treatment:25,prep:10,recovery:10,visits:1,traits:['dependent','exclusive'],resources:['레이저 장비','시술실']},
+        {id:'hydration',name:'수분 집중관리',version:5,mode:'택일 후보',qty:1,selected:true,locked:false,relation:'같은 방문 가능',treatment:35,prep:5,recovery:0,visits:0,traits:['partial'],resources:['피부관리사','관리실']},
+        {id:'soothingMask',name:'진정 마스크 관리',version:4,mode:'택일 후보',qty:1,selected:false,locked:false,relation:'별도 또는 같은 방문',treatment:25,prep:5,recovery:0,visits:0,traits:[],resources:['피부관리사','관리실']}
+      ]
+    }
+  };
+
+  let currentType='composite';
+  let activeId='diagnosis';
+  const traitIds=['multiVisit','dependent','partial','exclusive','surgical','overbooking'];
+
+  function currentPackage() { return packages[currentType]; }
+  function currentItem() { return currentPackage().items.find(item=>item.id===activeId) || currentPackage().items[0]; }
+  function badgeClass(mode) { return mode.includes('필수') ? 'required' : mode.includes('택일') ? 'choice' : 'optional'; }
+
+  function switchType(type) {
+    currentType=type;
+    activeId=packages[type].items[0].id;
+    document.querySelectorAll('.type-card').forEach(card=>card.classList.toggle('active',card.dataset.type===type));
+    render();
+    notify(`${packages[type].name} 구성으로 전환했습니다.`);
+    if(window.brainstorm) window.brainstorm.choice('package-type-' + type, {type});
+  }
+
+  function toggleItem(id,event) {
+    event.stopPropagation();
+    const item=currentPackage().items.find(value=>value.id===id);
+    if(item.locked) return;
+    item.selected=!item.selected;
+    activeId=id;
+    render();
+    notify(`${item.name}: ${item.selected ? '구성에 포함' : '구성에서 제외'}`);
+    if(window.brainstorm) window.brainstorm.choice('component-toggle-' + id, {selected:item.selected});
+  }
+
+  function selectItem(id) {
+    activeId=id;
+    renderNodes();
+    renderDetail();
+    const item=currentItem();
+    if(window.brainstorm) window.brainstorm.choice('component-product-' + id, {product:id,version:item.version,selected:item.selected});
+  }
+
+  function render() {
+    const pack=currentPackage();
+    document.getElementById('package-name').textContent=pack.name;
+    document.getElementById('package-desc').textContent=pack.desc;
+    document.getElementById('package-chips').innerHTML=pack.chips.map(value=>`<span class="chip choice">${value}</span>`).join('');
+    document.getElementById('composition-help').textContent=pack.choiceTarget
+      ? `택일 후보 ${pack.items.filter(item=>item.mode==='택일 후보' && item.selected).length}/${pack.choiceTarget}개 선택됨`
+      : currentType==='repeated' ? '반복 상품의 횟수와 회차 간격을 확인하세요.' : '선택 항목을 포함하거나 제외해 보세요.';
+    renderNodes();
+    renderDetail();
+    renderCart();
+  }
+
+  function renderNodes() {
+    const items=currentPackage().items;
+    document.getElementById('nodes').innerHTML=items.map((item,index)=>{
+      const edge=index===0 ? '' : `<div class="edge"><span>${item.relation}</span></div>`;
+      return `${edge}<article class="node ${activeId===item.id?'active':''} ${item.selected?'':'excluded'}" onclick="selectItem('${item.id}')">
+        <input type="checkbox" ${item.selected?'checked':''} ${item.locked?'disabled':''} aria-label="${item.name} 구성 포함" onclick="toggleItem('${item.id}',event)">
+        <div>
+          <h3>${index+1}. ${item.name} v${item.version}</h3>
+          <p>${item.selected ? '패키지 구성에 포함됨' : '패키지 구성에서 제외됨'}</p>
+          <div class="chips"><span class="chip ${badgeClass(item.mode)}">${item.mode}</span><span class="chip">${item.relation}</span></div>
+        </div>
+        <div class="node-side"><div class="duration">${item.treatment+item.prep+item.recovery}분 × ${item.qty}</div><div class="mode">${item.locked?'제외 불가':'선택 가능'}</div></div>
+      </article>`;
+    }).join('');
+  }
+
+  function renderDetail() {
+    const item=currentItem();
+    const detail=document.getElementById('detail');
+    detail.classList.toggle('disabled',!item.selected);
+    document.getElementById('detail-fields').disabled=!item.selected;
+    document.getElementById('detail-name').textContent=item.name;
+    document.getElementById('detail-version').textContent=`product=${item.id} · version=${item.version} · ${item.mode}`;
+    document.getElementById('detail-duration').textContent=`회차당 ${item.treatment+item.prep+item.recovery}분`;
+    document.getElementById('treatmentMin').value=item.treatment;
+    document.getElementById('prepMin').value=item.prep;
+    document.getElementById('recoveryMin').value=item.recovery;
+    traitIds.forEach(id=>document.getElementById(id).checked=item.traits.includes(id));
+    document.getElementById('resources').innerHTML=item.resources.map(value=>`<span class="resource">${value}</span>`).join('');
+  }
+
+  function renderCart() {
+    const pack=currentPackage();
+    const selected=pack.items.filter(item=>item.selected);
+    document.getElementById('cart-body').innerHTML=selected.map(item=>`
+      <tr><td><strong>${item.name}</strong> <span class="version">v${item.version}</span></td><td><span class="chip ${badgeClass(item.mode)}">${item.mode}</span></td><td>${item.qty}회</td><td>${item.relation}</td><td>${item.treatment+item.prep+item.recovery}분</td></tr>
+    `).join('');
+    const candidateSelected=pack.items.filter(item=>item.mode==='택일 후보' && item.selected).length;
+    const valid=!pack.choiceTarget || candidateSelected===pack.choiceTarget;
+    const status=document.getElementById('cart-status');
+    status.className=`cart-status ${valid?'':'invalid'}`;
+    status.textContent=valid ? '구성 조건 충족' : `택일 조건 미충족 · ${pack.choiceTarget}개를 선택하세요`;
+    document.getElementById('metric-products').textContent=`${selected.length}개`;
+    document.getElementById('metric-sessions').textContent=`${selected.reduce((sum,item)=>sum+item.qty,0)}회`;
+    document.getElementById('metric-visits').textContent=`${selected.reduce((sum,item)=>sum+item.visits,0)}회`;
+    document.getElementById('metric-time').textContent=`${selected.reduce((sum,item)=>sum+(item.treatment+item.prep+item.recovery)*item.qty,0)}분`;
+  }
+
+  let toastTimer;
+  function notify(message) {
+    const toast=document.getElementById('toast');
+    toast.textContent=message;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>toast.classList.remove('show'),1400);
+  }
+
+  render();
+</script>
+</body>
+</html>
