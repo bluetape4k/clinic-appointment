@@ -7,13 +7,17 @@ import java.sql.Driver
 class FlywayMigrationTest {
 
     @Test
-    fun `V9 adds policy persistence and expands legacy outbox rows`() {
+    fun `V9 contract remains valid and V10 adds versioned visit commitment schema`() {
         val driver = Class.forName("org.h2.Driver").getDeclaredConstructor().newInstance() as Driver
         val dataSource = SimpleDriverDataSource(
             driver,
             "jdbc:h2:mem:flyway_plan_${System.nanoTime()};DB_CLOSE_DELAY=-1",
         )
         AppointmentPlanMigrationTestSupport.verifyV9Migration(
+            dataSource = dataSource,
+            location = "classpath:db/migration/h2",
+        )
+        VisitCommitmentMigrationTestSupport.verifyV10Migration(
             dataSource = dataSource,
             location = "classpath:db/migration/h2",
         )

@@ -15,7 +15,7 @@ import java.sql.Driver
 class FlywayPostgreSQLMigrationTest {
 
     @Test
-    fun `V9 adds policy persistence and expands legacy outbox rows on PostgreSQL`() {
+    fun `V9 contract remains valid and V10 adds versioned visit commitment schema on PostgreSQL`() {
         val postgres = Containers.Postgres
         val driver = Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance() as Driver
         val dataSource = SimpleDriverDataSource(
@@ -26,6 +26,10 @@ class FlywayPostgreSQLMigrationTest {
         )
 
         AppointmentPlanMigrationTestSupport.verifyV9Migration(
+            dataSource = dataSource,
+            location = "classpath:db/migration/postgresql",
+        )
+        VisitCommitmentMigrationTestSupport.verifyV10Migration(
             dataSource = dataSource,
             location = "classpath:db/migration/postgresql",
         )

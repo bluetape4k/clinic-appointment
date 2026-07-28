@@ -54,6 +54,7 @@ internal object AppointmentPlanMigrationTestSupport {
         val result = Flyway.configure()
             .dataSource(dataSource)
             .locations(location)
+            .target("9")
             .load()
             .migrate()
 
