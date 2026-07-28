@@ -4,9 +4,11 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentPlanRevisionAggrega
 import io.bluetape4k.clinic.appointment.model.dto.PersistedAppointmentPlanRevisionAggregateRecord
 import io.bluetape4k.clinic.appointment.model.dto.PersistedAppointmentPlanRevisionRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionDependencyRecord
+import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionGroupingConstraintRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionTreatmentRecord
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlanRevisions
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionDependencies
+import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionGroupingConstraints
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
 import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -43,6 +45,33 @@ class AppointmentPlanRevisionRepository {
         ) {
             "revision dependency must reference treatments in the same revision"
         }
+        val normalizedGroupingConstraints = aggregate.groupingConstraints.map { constraint ->
+            require(constraint.firstTreatmentKey != constraint.secondTreatmentKey) {
+                "revision grouping constraint must connect different treatments"
+            }
+            require(
+                constraint.firstTreatmentKey in knownTreatmentKeys &&
+                    constraint.secondTreatmentKey in knownTreatmentKeys,
+            ) {
+                "revision grouping constraint must reference treatments in the same revision"
+            }
+            if (constraint.firstTreatmentKey <= constraint.secondTreatmentKey) {
+                constraint
+            } else {
+                constraint.copy(
+                    firstTreatmentKey = constraint.secondTreatmentKey,
+                    secondTreatmentKey = constraint.firstTreatmentKey,
+                )
+            }
+        }
+        require(
+            normalizedGroupingConstraints
+                .map { it.firstTreatmentKey to it.secondTreatmentKey }
+                .distinct()
+                .size == normalizedGroupingConstraints.size,
+        ) {
+            "revision grouping constraint pairs must be unique"
+        }
         if (revision.active) {
             require(
                 AppointmentPlanRevisions.selectAll().where {
@@ -68,6 +97,19 @@ class AppointmentPlanRevisionRepository {
             this[PlanRevisionTreatments.componentProductVersionId] = treatment.componentProductVersionId
             this[PlanRevisionTreatments.productVersionId] = treatment.productVersionId
             this[PlanRevisionTreatments.status] = treatment.status
+            this[PlanRevisionTreatments.sourceBomItemId] = treatment.sourceBomItemId
+            this[PlanRevisionTreatments.sequence] = treatment.sequence
+            this[PlanRevisionTreatments.representativeTreatmentName] = treatment.representativeTreatmentName
+            this[PlanRevisionTreatments.detailedTreatmentCodesPayload] =
+                encodeStringList(treatment.detailedTreatmentCodes)
+            this[PlanRevisionTreatments.preparationMinutes] = treatment.preparationMinutes
+            this[PlanRevisionTreatments.treatmentMinutes] = treatment.treatmentMinutes
+            this[PlanRevisionTreatments.recoveryMinutes] = treatment.recoveryMinutes
+            this[PlanRevisionTreatments.practitionerQualificationsPayload] =
+                encodeStringList(treatment.practitionerQualifications)
+            this[PlanRevisionTreatments.equipmentTypesPayload] = encodeStringList(treatment.equipmentTypes)
+            this[PlanRevisionTreatments.spaceCapabilitiesPayload] =
+                encodeStringList(treatment.spaceCapabilities)
         }
         PlanRevisionDependencies.batchInsert(
             aggregate.dependencies,
@@ -77,6 +119,18 @@ class AppointmentPlanRevisionRepository {
             this[PlanRevisionDependencies.predecessorTreatmentKey] = dependency.predecessorTreatmentKey
             this[PlanRevisionDependencies.successorTreatmentKey] = dependency.successorTreatmentKey
             this[PlanRevisionDependencies.type] = dependency.type
+            this[PlanRevisionDependencies.minimumIntervalDays] = dependency.minimumIntervalDays
+            this[PlanRevisionDependencies.preferredIntervalDays] = dependency.preferredIntervalDays
+            this[PlanRevisionDependencies.maximumIntervalDays] = dependency.maximumIntervalDays
+        }
+        PlanRevisionGroupingConstraints.batchInsert(
+            normalizedGroupingConstraints,
+            shouldReturnGeneratedValues = false,
+        ) { constraint ->
+            this[PlanRevisionGroupingConstraints.planRevisionId] = revisionId
+            this[PlanRevisionGroupingConstraints.firstTreatmentKey] = constraint.firstTreatmentKey
+            this[PlanRevisionGroupingConstraints.secondTreatmentKey] = constraint.secondTreatmentKey
+            this[PlanRevisionGroupingConstraints.type] = constraint.type
         }
         return requireNotNull(findById(revisionId))
     }
@@ -167,6 +221,19 @@ class AppointmentPlanRevisionRepository {
                             componentProductVersionId = it[PlanRevisionTreatments.componentProductVersionId],
                             productVersionId = it[PlanRevisionTreatments.productVersionId],
                             status = it[PlanRevisionTreatments.status],
+                            sourceBomItemId = it[PlanRevisionTreatments.sourceBomItemId],
+                            sequence = it[PlanRevisionTreatments.sequence],
+                            representativeTreatmentName = it[PlanRevisionTreatments.representativeTreatmentName],
+                            detailedTreatmentCodes =
+                                decodeStringList(it[PlanRevisionTreatments.detailedTreatmentCodesPayload]),
+                            preparationMinutes = it[PlanRevisionTreatments.preparationMinutes],
+                            treatmentMinutes = it[PlanRevisionTreatments.treatmentMinutes],
+                            recoveryMinutes = it[PlanRevisionTreatments.recoveryMinutes],
+                            practitionerQualifications =
+                                decodeStringList(it[PlanRevisionTreatments.practitionerQualificationsPayload]),
+                            equipmentTypes = decodeStringList(it[PlanRevisionTreatments.equipmentTypesPayload]),
+                            spaceCapabilities =
+                                decodeStringList(it[PlanRevisionTreatments.spaceCapabilitiesPayload]),
                         )
                     }
                 val dependencies = PlanRevisionDependencies
@@ -178,6 +245,23 @@ class AppointmentPlanRevisionRepository {
                             predecessorTreatmentKey = it[PlanRevisionDependencies.predecessorTreatmentKey],
                             successorTreatmentKey = it[PlanRevisionDependencies.successorTreatmentKey],
                             type = it[PlanRevisionDependencies.type],
+                            minimumIntervalDays = it[PlanRevisionDependencies.minimumIntervalDays],
+                            preferredIntervalDays = it[PlanRevisionDependencies.preferredIntervalDays],
+                            maximumIntervalDays = it[PlanRevisionDependencies.maximumIntervalDays],
+                        )
+                    }
+                val groupingConstraints = PlanRevisionGroupingConstraints
+                    .selectAll()
+                    .where { PlanRevisionGroupingConstraints.planRevisionId eq revisionId }
+                    .orderBy(
+                        PlanRevisionGroupingConstraints.firstTreatmentKey to SortOrder.ASC,
+                        PlanRevisionGroupingConstraints.secondTreatmentKey to SortOrder.ASC,
+                    )
+                    .map {
+                        PlanRevisionGroupingConstraintRecord(
+                            firstTreatmentKey = it[PlanRevisionGroupingConstraints.firstTreatmentKey],
+                            secondTreatmentKey = it[PlanRevisionGroupingConstraints.secondTreatmentKey],
+                            type = it[PlanRevisionGroupingConstraints.type],
                         )
                     }
                 PersistedAppointmentPlanRevisionAggregateRecord(
@@ -191,6 +275,7 @@ class AppointmentPlanRevisionRepository {
                     ),
                     treatments = treatments,
                     dependencies = dependencies,
+                    groupingConstraints = groupingConstraints,
                 )
             }
 }

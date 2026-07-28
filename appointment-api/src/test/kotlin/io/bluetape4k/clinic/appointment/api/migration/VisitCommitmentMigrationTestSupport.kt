@@ -11,6 +11,7 @@ import io.bluetape4k.clinic.appointment.model.tables.AppointmentProposals
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.ConsentDecisions
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionDependencies
+import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionGroupingConstraints
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
 import io.bluetape4k.clinic.appointment.model.tables.ResourceAllocations
 import io.bluetape4k.clinic.appointment.model.tables.ResourceCapacityBuckets
@@ -402,6 +403,7 @@ internal object VisitCommitmentMigrationTestSupport {
         "scheduling_appointment_plan_revisions",
         "scheduling_plan_revision_treatments",
         "scheduling_plan_revision_dependencies",
+        "scheduling_plan_revision_grouping_constraints",
         "scheduling_appointment_items",
         "scheduling_treatment_spaces",
         "scheduling_resource_capacity_buckets",
@@ -417,6 +419,7 @@ internal object VisitCommitmentMigrationTestSupport {
         "scheduling_consent_decisions.commitment_id->scheduling_appointment_commitments",
         "scheduling_appointment_plan_revisions.plan_id->scheduling_appointment_plans",
         "scheduling_appointment_items.plan_revision_id->scheduling_appointment_plan_revisions",
+        "scheduling_plan_revision_grouping_constraints.plan_revision_id->scheduling_appointment_plan_revisions",
         "scheduling_resource_allocations.proposal_id->scheduling_appointment_proposals",
         "scheduling_treatment_spaces.tenant_group_id->scheduling_tenant_groups",
         "scheduling_appointment_audit_events.clinic_id->scheduling_clinics",
@@ -427,6 +430,8 @@ internal object VisitCommitmentMigrationTestSupport {
         "scheduling_appointment_proposals" to listOf("commitment_id", "revision"),
         "scheduling_consent_decisions" to listOf("evidence_authority", "evidence_id"),
         "scheduling_appointment_plan_revisions" to listOf("plan_id", "revision"),
+        "scheduling_plan_revision_grouping_constraints" to
+            listOf("plan_revision_id", "first_treatment_key", "second_treatment_key"),
         "scheduling_appointment_command_idempotencies" to
             listOf("tenant_group_id", "clinic_id", "actor_scope_hash", "idempotency_key"),
         "scheduling_treatment_spaces" to listOf("tenant_group_id", "clinic_id", "space_code"),
@@ -439,6 +444,7 @@ internal object VisitCommitmentMigrationTestSupport {
         AppointmentPlanRevisions,
         PlanRevisionTreatments,
         PlanRevisionDependencies,
+        PlanRevisionGroupingConstraints,
         AppointmentCommitments,
         AppointmentProposals,
         ConsentDecisions,

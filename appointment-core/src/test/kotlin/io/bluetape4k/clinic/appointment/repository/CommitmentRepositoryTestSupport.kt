@@ -16,6 +16,7 @@ import io.bluetape4k.clinic.appointment.model.tables.ConsentDecisions
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionDependencies
+import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionGroupingConstraints
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
 import io.bluetape4k.clinic.appointment.model.tables.ResourceAllocations
@@ -51,6 +52,7 @@ internal fun withCommitmentTables(
     AppointmentPlanRevisions,
     PlanRevisionTreatments,
     PlanRevisionDependencies,
+    PlanRevisionGroupingConstraints,
     AppointmentCommitments,
     AppointmentProposals,
     ConsentDecisions,
