@@ -36,6 +36,17 @@
     }
     a { color: var(--cyan); text-underline-offset: 3px; }
     a:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+    .skip {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 10;
+      padding: 8px 12px;
+      color: #07111f;
+      background: var(--amber);
+      transform: translateY(-180%);
+    }
+    .skip:focus { transform: translateY(0); }
     code {
       padding: .12rem .38rem;
       border: 1px solid rgba(114, 170, 255, .24);
@@ -253,7 +264,7 @@
       :root { --bg: white; --text: #172235; --muted: #526075; --panel: white; --panel-2: white; --line: #ccd4df; }
       body { color: #172235; background: white; }
       .shell { display: block; }
-      nav { display: none; }
+      nav, .skip { display: none; }
       main { width: 100%; padding: 0; }
       .hero, .provenance, .card, .node, .decision-lane article, .timeline article, table { background: white !important; box-shadow: none; }
       section { break-inside: avoid; }
@@ -262,6 +273,7 @@
   </style>
 </head>
 <body>
+<a class="skip" href="#content">본문으로 건너뛰기</a>
 <div class="shell">
   <nav>
     <div class="brand">Scheduling Policy Foundation<span>ISSUE #182 · TYPE A</span></div>
@@ -279,7 +291,7 @@
     <a href="#scope">10 · 범위와 후속 작업</a>
   </nav>
 
-  <main>
+  <main id="content">
     <header class="hero">
       <p class="eyebrow">CLINIC APPOINTMENT · POLICY FOUNDATION</p>
       <h1>병원마다 다른 예약 규칙을<br>재현 가능한 정책으로</h1>

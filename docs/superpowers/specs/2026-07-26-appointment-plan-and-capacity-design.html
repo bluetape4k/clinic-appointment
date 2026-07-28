@@ -44,6 +44,17 @@
       outline-offset: 3px;
       border-radius: 4px;
     }
+    .skip {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 10;
+      padding: 8px 12px;
+      color: #07111f;
+      background: var(--amber);
+      transform: translateY(-180%);
+    }
+    .skip:focus { transform: translateY(0); }
     code {
       padding: .12rem .38rem;
       border: 1px solid rgba(109, 165, 255, .24);
@@ -535,11 +546,13 @@
       .provenance, .journey { grid-template-columns: 1fr; }
     }
 
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
     @media print {
       :root { --bg: white; --text: #172235; --muted: #526075; --panel: white; --line: #ccd4df; }
       body { background: white; color: #172235; }
       .shell { display: block; }
-      nav { display: none; }
+      nav, .skip { display: none; }
       main { width: 100%; padding: 0; }
       .hero, .card, .node, .box, .layer, .numbered li, .provenance, .journey article, .timeline article, table { background: white !important; box-shadow: none; }
       section { break-inside: avoid; }
@@ -548,6 +561,7 @@
   </style>
 </head>
 <body>
+  <a class="skip" href="#content">본문으로 건너뛰기</a>
   <div class="shell">
     <nav aria-label="문서 목차">
       <div class="nav-brand">
@@ -575,7 +589,7 @@
       </div>
     </nav>
 
-    <main>
+    <main id="content">
       <header class="hero">
         <p class="eyebrow">Design Specification · 2026-07-26</p>
         <h1>진료 계획·예약·수용량 관리</h1>
