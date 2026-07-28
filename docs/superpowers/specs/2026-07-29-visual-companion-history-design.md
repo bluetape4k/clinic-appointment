@@ -1,7 +1,7 @@
 # 예약 서비스 Visual Companion 이력 설계
 
 - **날짜**: 2026-07-29
-- **상태**: 설계 검토 대기
+- **상태**: 승인됨
 - **작업 유형**: Type E - Maintenance
 - **대상**: 설계·구현 계획·운영 문서의 이해를 돕는 독립 실행형 HTML
 - **기준 저장소**: `clinic-appointment`
@@ -38,7 +38,10 @@
 - HTML을 새로운 업무 규칙의 원본으로 만들지 않는다.
 - 실제 예약 API나 production 동작을 변경하지 않는다.
 - `clinic-appointment` 저장소 전체 `docs/`를 공개하지 않는다.
-- 이번 작업에서 GitHub Pages 설정, workflow dispatch, 중앙 사이트 배포를 수행하지 않는다.
+- 이 설계 문서만으로 GitHub Pages 설정, workflow dispatch, 중앙 사이트 배포 권한을 만들지 않는다.
+- 승인된 delivery 범위는
+  [구현 계획](../plans/2026-07-29-visual-companion-history-plan.md)이 관리하며,
+  `clinic-appointment`와 `bluetape4k.github.io`의 PR·merge gate를 각각 통과한다.
 - 임시 `.superpowers/brainstorm/` session 파일을 Git에 그대로 추가하지 않는다.
 
 ## 4. 현재 근거
@@ -137,15 +140,23 @@ docs/visual-companions/
     {
       "id": "appointment-plan-and-capacity",
       "source": "docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.md",
-      "html": "docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html",
-      "locale": "ko",
+      "status": "approved",
+      "public": true,
       "presentation": {
         "mode": "hybrid",
         "defaultView": "simulation",
         "views": ["simulation", "history"]
       },
-      "status": "approved",
-      "public": true
+      "locales": {
+        "en": {
+          "title": "Appointment Plan and Capacity",
+          "html": "docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.en.html"
+        },
+        "ko": {
+          "title": "예약 계획과 수용량",
+          "html": "docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html"
+        }
+      }
     }
   ]
 }
@@ -241,14 +252,15 @@ commit이 아직 정해지지 않은 draft에서는 commit 항목을 생략한�
 ## 7. Locale 계약
 
 work document의 기본 설명은 한국어로 작성한다. 공개 HTML을 영문 README와
-한글 README 양쪽에서 독자용 자산으로 제공할 때는 다음 중 하나를 선택한다.
+한글 README 양쪽에서 독자용 자산으로 제공할 때는 locale별 source-equivalent
+파일을 만든다.
 
-1. source-equivalent `*.html`과 `*.ko.html` 두 파일
-2. 하나의 self-contained HTML 안에서 source-equivalent locale 전환
+신규 문서는 영문 `*.html`과 한국어 `*.ko.html`을 기본 경로로 사용한다. 다만
+이미 한국어 unsuffixed `*.html`이 공개된 legacy 문서는 기존 경로를 유지하고,
+영문 동등본을 `*.en.html`로 추가한다. 이번에 공개하는 두 설계가 이 예외에 해당한다.
 
-새 문서는 두 파일 방식을 기본으로 한다. technical identifier, API, command,
-Issue/PR URL은 locale 간 동일하게 유지한다. 기존 한국어 단일 HTML은 경로를
-보존하고, 중앙 사이트에 처음 공개할 때 영문 동등본을 추가한다.
+technical identifier, API, command, Issue/PR URL은 locale 간 동일하게 유지한다.
+하나의 HTML 안에서 locale을 전환하는 새 문서는 만들지 않는다.
 
 ## 8. 이력 모델
 
@@ -339,4 +351,5 @@ GitHub Actions 변경 시 `actionlint`를 추가한다. 중앙 사이트 consume
 - provenance, locale, accessibility, security, history 계약이 정의되어 있다.
 - validator가 검사할 항목과 최소 명령이 구체적이다.
 - production 코드, API, DB, 예약 동작은 변경되지 않는다.
-- GitHub Pages 공개나 외부 workflow 실행은 별도 승인 없이는 수행되지 않는다.
+- GitHub Pages 공개와 외부 workflow 실행은 승인된 구현 계획의 저장소별
+  PR·merge gate를 통과해야 한다.
