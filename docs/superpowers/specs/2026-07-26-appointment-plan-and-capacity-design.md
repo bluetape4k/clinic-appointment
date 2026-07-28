@@ -3,7 +3,7 @@
 - **날짜**: 2026-07-26
 - **상태**: 설계 승인 후 문서화
 - **대상 모듈**: `appointment-core`, `appointment-event`, `appointment-solver`, `appointment-notification`, `appointment-api`
-- **시각 문서**: [독립 실행형 HTML](./2026-07-26-appointment-plan-and-capacity-design.html)
+- **시각 문서**: [한국어 HTML](./2026-07-26-appointment-plan-and-capacity-design.html) · [English HTML](./2026-07-26-appointment-plan-and-capacity-design.en.html)
 
 ### 현재 실행 단위: Appointment Plan Foundation
 
