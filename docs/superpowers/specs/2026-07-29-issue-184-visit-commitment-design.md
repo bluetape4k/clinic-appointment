@@ -2,7 +2,7 @@
 
 > Issue: [#184](https://github.com/bluetape4k/clinic-appointment/issues/184)
 >
-> 상태: 대화형 설계 승인 후 문서화, 2-R 검토 전
+> 상태: 2-R 완료, Step 3 구현 계획 승인 대기
 >
 > 기준일: 2026-07-29
 >
@@ -10,6 +10,9 @@
 > [상품 예약 운영 특성 분류 승인안](./2026-07-29-issue-184-product-scheduling-classification.html) ·
 > [패키지 상품 구성 그래프 승인안](./2026-07-29-issue-184-package-product-composition.html) ·
 > [상품 실행 BOM의 예약 전개 흐름](./2026-07-29-issue-184-product-bom-to-appointment-flow.html)
+>
+> 상품 예약 운영 특성 분류 승인안은 선행 설계 커밋 `d86f34a`에 포함되어 있으며,
+> 나머지 두 자료와 함께 2-R 검토 범위에 포함한다.
 
 ## 1. 문제
 
@@ -224,6 +227,41 @@ revision을 가리킨다.
 revision과 제안으로 재계산한다. 기존 확정 예약을 바꾸는 제안은 고객 동의 전까지
 기존 `confirmedProposalId`와 자원 점유를 대체하지 않는다.
 
+### 4.6 계획 계산에는 명시적인 안전 상한과 성능 예산을 둔다
+
+하나의 구매 Plan을 동기식으로 전개할 때 적용하는 초기 platform safety ceiling은
+다음과 같다. 병원이나 상품 설정은 이 값을 완화할 수 없다.
+
+| 항목 | 상한 |
+|---|---:|
+| 전개된 `PlannedTreatment` | 500개 |
+| 실행·방문 묶음 edge 합계 | 4,000개 |
+| 단일 구성 상품 반복 횟수 | 100회 |
+| 최초 탐색 기간 | 365일 |
+| 평가할 candidate slot | 2,000개 |
+| 한 요청에서 반환할 proposal | 20개 |
+
+상한을 넘는 event나 command는 부분 처리하지 않고 stable reason code로 거부하거나
+격리한다. 일반 Plan 기준은 50개 이하 항목, 200개 이하 edge, 90일 이하 탐색
+기간이며 proposal 생성과 미래 항목 재계산의 목표는 p95 1초, p99 3초 이하다.
+최대 허용 범위의 목표는 p95 5초 이하다. 이 기준을 만족하지 못하면 구현 계획에서
+동기식 범위를 줄이거나 별도 비동기 planning 작업을 설계하고 다시 승인받는다.
+
+후속 사실에 대한 재계산은 전체 Plan을 무조건 탐색하지 않는다. 변경된
+`PlannedTreatment`, 전이적으로 연결된 `BLOCKING` 경로, 영향받은 자원과 시간
+구간만 dirty set으로 만들고, 그 집합과 아직 수행하지 않은 항목만 다시 계산한다.
+
+### 4.7 검토한 대안과 기각 사유
+
+| 대안 | 기각 사유 |
+|---|---|
+| 기존 `Appointment` 하나에 모든 회차와 상품 상태를 추가 | 방문, 계약 이행, 일정 합의 상태가 섞여 부분 이행과 재예약을 안전하게 표현할 수 없다. |
+| 패키지 전체에 하나의 소요시간과 자원 요구를 저장 | 구성 상품별 준비·회복·병렬 실행과 별도 방문을 잃어 실제 자원 충돌 계산이 틀린다. |
+| 예약서비스가 상품 BOM을 조회해 매번 다시 해석 | 상품 version 권위를 복제하고 기존 구매의 고정 계약을 깨뜨린다. |
+| 상품 version 전환 때 새 Plan 생성 | 동일 구매의 이력과 완료·미완료 항목 연결이 끊긴다. |
+| 새 일정 제안 전에 기존 확정 예약을 취소 | 고객 거부나 새 자원 점유 실패 때 유효한 약속을 복구하기 어렵다. |
+| PostgreSQL 전용 exclusion constraint만 사용 | 운영 기준 DB에는 유용하지만 H2·MySQL과 공통인 업무 정합성 계약이 사라진다. |
+
 ## 5. 도메인 모델
 
 ### 5.1 `AppointmentCommitment`
@@ -290,6 +328,12 @@ revision과 제안으로 재계산한다. 기존 확정 예약을 바꾸는 제�
 | `decidedAt` | 고객 결정 시각 |
 | `actorRef` | 고객 또는 적법한 대리인 |
 
+허용되는 `subjectType`은 `APPOINTMENT_PROPOSAL`과
+`PRODUCT_VERSION_MIGRATION`이다. proposal 동의는 `proposalId`,
+`proposalRevision`, `proposalHash`에, 상품 전환 동의는 `migrationId`,
+`fromProductVersionId`, `toProductVersionId`, 전환표 hash에 결합한다. 다른
+subject type이나 hash/version 불일치는 동의로 인정하지 않는다.
+
 고객이 직접 요청한 날짜와 구성이 병원 승인 과정에서 바뀌지 않았다면 원 요청을
 동의 증빙으로 사용할 수 있다. 날짜, 항목이나 중요한 조건이 달라지면 새 동의가
 필요하다.
@@ -334,6 +378,11 @@ API Gateway가 서명한 인증 정보에서 `ActorContext`를 만든다. reques
 필수 검증 항목은 issuer, audience, algorithm allowlist, signature, expiration,
 not-before, token ID, actor type, 역할, tenant/clinic 범위와 patient subject다.
 일반 `X-User-*` 헤더는 신뢰하지 않는다.
+
+예약 API는 외부에서 직접 접근할 수 없고 Gateway와 private network 또는 mTLS로
+연결한다. Gateway는 외부 요청의 identity header를 제거한 뒤 검증된 token
+envelope만 전달한다. 예약서비스는 Gateway 인증 envelope가 없거나 서비스 간
+신원이 허용 목록과 다르면 요청을 거부한다.
 
 ### 6.2 고객 요청
 
@@ -487,10 +536,29 @@ not-before, token ID, actor type, 역할, tenant/clinic 범위와 patient subjec
 정책 범위에서 초과 예약을 허용할 수 있지만 platform safety ceiling과 전담·수술
 자원 제한을 넘을 수 없다.
 
+공통 DB correctness를 위해
+`tenantId + clinicId + resourceId + bucketStartAt + bucketMinutes`를 키로 갖는
+capacity bucket row를 두고 row lock 또는 version CAS로 사용량을 직렬화한다.
+시간 구간 점유는 `tenant/clinic/resource/startAt/endAt/status` covering index와
+활성 allocation만 대상으로 하는 조회를 사용한다. 확정 예약 교체 시 충돌 계산은
+교체 대상 appointment의 기존 allocation ID 집합을 제외해 자기 충돌과 이중
+계산을 막는다. transaction rollback 시 기존 allocation은 그대로 활성 상태로
+돌아온다.
+
+자원 잠금 키는 tenant, clinic, resource type, resource ID, bucket start 순으로
+정렬한다. DB deadlock이나 serialization failure만 최대 3회 지수 backoff와
+jitter로 재시도하며, expected version 충돌은 자동 재시도하지 않고 stable conflict
+응답을 반환한다. Gatling 검증은 동일 인기 자원 100개 동시 확정에서 중복 점유
+0건, deadlock 미복구 0건, p95 2초 이하를 목표로 한다.
+
 ## 11. 일관성, 멱등성과 이벤트
 
 모든 상태 변경 command는 `tenant + clinic + actor scope + idempotency key`로
 멱등성을 판정한다. 같은 key와 다른 command hash는 충돌이다.
+
+command 시작 시 위 복합키를 unique key로 선점한다. 같은 hash의 동시 요청은 첫
+처리의 완료 결과를 기다리거나 `IN_PROGRESS`와 retry-after를 반환하고, 완료 후에는
+저장된 status와 response hash를 재생한다. 다른 hash는 즉시 conflict로 거부한다.
 
 다음 변경은 하나의 DB transaction에서 처리한다.
 
@@ -517,6 +585,44 @@ not-before, token ID, actor type, 역할, tenant/clinic 범위와 patient subjec
 외부 event consumer는 inbox, source aggregate version과 payload hash를 사용한다.
 version gap은 대기시키고, 같은 version의 다른 payload와 권한 불일치는 격리한다.
 
+모든 외부 event는 공통 envelope의 `eventId`, `eventType`, `schemaVersion`,
+`sourceAuthority`, `sourceAggregateId`, `sourceAggregateVersion`, `occurredAt`,
+`tenantId`, `clinicId`, `payloadHash`, `correlationId`를 먼저 검증한다. event
+type과 schema version별 DTO allowlist만 역직렬화하며 class name 기반 타입,
+default polymorphic typing과 임의 subtype을 허용하지 않는다. payload는 최대
+1 MiB, JSON nesting depth는 32로 제한하고, unknown field 정책은 schema version별
+명시적 거부를 기본값으로 한다. 검증 실패 payload는 domain mapping 전에
+격리하므로 예약 transaction을 시작하지 않는다.
+
+### 11.1 격리와 재처리
+
+격리 record는 envelope, 암호화된 원 payload 참조, reason code, 최초·최근 실패
+시각, retry count, next retry 시각, owner service와 처리 상태를 보존한다.
+version gap은 1분부터 최대 1시간까지 backoff하고 24시간을 넘기면 alert와
+`MANUAL_REVIEW`로 전환한다. 누락 event를 authority의 replay API 또는 보존 topic에서
+복원한 뒤 연속 version과 payload hash를 다시 검증해야 consumer를 재개한다.
+
+수동 redrive는 예약 운영 관리자 권한을 가진 내부 API/CLI만 수행한다. 원
+`eventId`와 inbox key를 유지해 재처리도 멱등하게 만들고, 실행자·사유·이전/이후
+상태를 append-only 감사 기록에 남긴다. 같은 payload가 5회 실패하면 poison
+message로 고정해 자동 재시도를 중단한다.
+
+상품 version 전환 event가 격리되면 활성 Plan Revision은 바꾸지 않고
+`ProductVersionMigrationRejected`를 발행한다. 상품팀은 `migrationId`,
+reason code와 quarantine ID로 원인을 조회하고 수정된 새 event version을
+발행하거나 권한 있는 redrive를 요청한다. 고객에게는 기존 확정 예약과 활성 Plan이
+유지된다는 상태만 노출하며 내부 payload와 격리 상세를 노출하지 않는다.
+
+### 11.2 보존과 조회 분리
+
+proposal, consent, 상태 이력과 Plan Revision은 법적·병원별 보존 정책의 적용
+대상이므로 임의 삭제하지 않고 월 단위 시간 partition과
+`tenant/clinic/aggregateId/occurredAt` index로 active 조회와 audit 조회를
+분리한다. 운영성 record는 성공적으로 전달·종결되고 replay 안전 기간이 지난 뒤
+정리한다. 초기 기준은 완료 inbox와 command idempotency 30일, 전달 완료 outbox
+7일, 해결된 quarantine 90일이다. 미전달 outbox, 미해결 quarantine과 법적 보존
+hold가 있는 기록은 정리 대상에서 제외한다.
+
 ## 12. 호환성과 데이터베이스 전환
 
 ### 12.1 추가형 V10
@@ -540,27 +646,50 @@ Flyway가 운영 migration의 권위다. Exposed table 정의와 schema 검사 �
 ### 12.2 기존 예약 호환
 
 - companion aggregate가 없는 기존 appointment는 legacy 경로로 조회한다.
-- 기존 `POST /appointments` 계약은 명시적인 compatibility/shadow 경로로 유지한다.
+- 기존 `POST /appointments` 계약은 legacy row만 생성하는 명시적인 compatibility
+  경로로 유지하며 commitment, proposal 또는 allocation을 생성하지 않는다.
 - 새 API로 생성한 예약만 commitment와 item 모델을 필수로 사용한다.
 - legacy 필드는 확정 proposal의 projection으로만 갱신한다.
+- `AppointmentCommitment`가 존재하는 row에 legacy update/status API가 접근하면
+  `NEW_APPOINTMENT_API_REQUIRED`로 거부한다.
+- 새 API의 확정 transaction만 legacy projection을 갱신하며, legacy repository가
+  해당 필드를 직접 수정하지 못하게 application service 경계를 분리한다.
 - 기존 row를 일괄 역채움하지 않는다.
 - cutover와 기존 API 제거는 별도 승인된 작업으로 다룬다.
 
+### 12.3 전개와 rollback
+
+1. 세 DB에 expand-only V10을 적용하고 기존 API만 켠 상태로 schema 동등성을
+   확인한다.
+2. 새 event consumer를 ingest-only shadow mode로 켜 payload 검증, 격리와
+   projection 차이를 측정하되 예약 row를 변경하지 않는다.
+3. clinic allowlist feature flag로 새 고객 요청과 관리자 API를 순차 활성화한다.
+4. outbox lag, 격리율, projection diff, 충돌률과 latency가 기준을 만족하면 범위를
+   확대한다.
+5. legacy write 차단과 제거는 별도 승인·migration에서 수행한다.
+
+V10 DDL은 추가형이므로 rollback 때 table을 삭제하지 않는다. 새 API와 consumer
+feature flag를 끄고 legacy 경로로 되돌리되, 이미 생성된 commitment 예약은 새
+API로만 조회·변경한다. 부분 활성화 중 생성된 새 모델 row를 legacy row로 변환하지
+않는다. 배포 전 PostgreSQL snapshot/backup, rollback drill과 shadow diff 0건을
+cutover 조건으로 둔다.
+
 ## 13. 실패 처리
 
-| 실패 | 처리 |
-|---|---|
-| 고객 요청의 tenant/clinic/patient 범위 불일치 | command 전체 거부, 자원 점유 없음 |
-| 관리자 직접 확정에 동의 증빙 없음 | `CONSENT_REQUIRED` |
-| proposal 만료 후 수락 | 만료된 revision 거부, 새 proposal 요구 |
-| 새 제안 자원 충돌 | 기존 확정 예약 유지 |
-| 같은 idempotency key의 다른 내용 | stable conflict 응답 |
-| 상품 migration의 from-version 불일치 | event 격리, Plan 불변 |
-| BOM 전환표 누락·중복·cycle | event 전체 격리, 부분 적용 없음 |
-| 고객이 실제 일정 변경 거부 | 기존 확정 예약 유지, `OperationalException` 생성 |
-| 상담서비스 일시 장애 | outbox 재시도, 예약 transaction은 이미 완료 |
-| `BLOCKING` 선행 항목 미해결 | 해당 항목과 전이적 차단 경로만 보류 |
-| 알 수 없는 상품 또는 정책 schema version | 조기 거부, 이전 유효 snapshot 유지 |
+| 실패 | `reasonCode` | 처리 |
+|---|---|---|
+| 고객 요청의 tenant/clinic/patient 범위 불일치 | `SCOPE_MISMATCH` | command 전체 거부, 자원 점유 없음 |
+| 관리자 직접 확정에 동의 증빙 없음 | `CONSENT_REQUIRED` | 확정 거부, 현재 proposal 유지 |
+| proposal 만료 후 수락 | `PROPOSAL_EXPIRED` | 만료된 revision 거부, 새 proposal 요구 |
+| 새 제안 자원 충돌 | `RESOURCE_CONFLICT` | 기존 확정 예약 유지 |
+| 같은 idempotency key의 다른 내용 | `IDEMPOTENCY_KEY_REUSED` | stable conflict 응답 |
+| 상품 migration의 from-version 불일치 | `PRODUCT_VERSION_MISMATCH` | event 격리, Plan 불변 |
+| BOM 전환표 누락·중복·cycle | `BOM_MAPPING_INVALID` | event 전체 격리, 부분 적용 없음 |
+| 고객이 실제 일정 변경 거부 | `CUSTOMER_DECLINED_RESCHEDULE` | 기존 확정 예약 유지, `OperationalException` 생성 |
+| 상담서비스 일시 장애 | `CONSULTATION_DELIVERY_DELAYED` | outbox 재시도, 예약 transaction은 이미 완료 |
+| `BLOCKING` 선행 항목 미해결 | `PREDECESSOR_NOT_COMPLETED` | 해당 항목과 전이적 차단 경로만 보류 |
+| 알 수 없는 상품 또는 정책 schema version | `SCHEMA_VERSION_UNSUPPORTED` | 조기 거부, 이전 유효 snapshot 유지 |
+| payload 크기·깊이 또는 subtype 위반 | `EVENT_PAYLOAD_REJECTED` | domain mapping 전 격리 |
 
 오류 응답과 event는 stable reason code를 사용한다. JWT 원문, 동의 문서 원문,
 민감한 환자 정보와 parser 내부 오류는 로그나 응답에 노출하지 않는다.
@@ -573,10 +702,30 @@ Flyway가 운영 migration의 권위다. Exposed table 정의와 schema 검사 �
 - 병원 관리자: 직접 제안, 승인, 정책 허용 시 직접 확정, 변경 제안
 - 시스템 consumer: 상품 version 전환, 상담 결과, 환불과 진료 완료 event
 
-모든 mutation API는 idempotency key와 expected version을 받는다. 인증 범위는
-`ActorContext`에서 가져오며 body에 actor ID, tenant 또는 clinic을 중복 입력하지
-않는다. OpenAPI는 각 endpoint의 허용 actor, 가예약 여부, 필요한 동의, 충돌과
-만료 응답을 설명한다.
+모든 mutation API는 idempotency key를 받는다. 새 aggregate 생성은
+`If-None-Match: *`, 기존 aggregate mutation은 현재 version을 담은 `If-Match`를
+받는다. 인증 범위는 `ActorContext`에서 가져오며 body에 actor ID, tenant 또는
+clinic을 중복 입력하지 않는다. OpenAPI는 각 endpoint의 허용 actor, 가예약 여부,
+필요한 동의, 충돌과 만료 응답을 설명한다.
+
+`Idempotency-Key`와 조건부 version은 HTTP header로 통일한다. 주요 계약은 다음과
+같다.
+
+| Actor | Method / path | Request → response | 성공 | 주요 오류 |
+|---|---|---|---:|---|
+| 고객 | `POST /api/v2/appointment-requests` | `CreateAppointmentRequest` → `AppointmentProposalResponse` | 202 | `POLICY_REJECTED`, `PLAN_LIMIT_EXCEEDED` |
+| 관리자 | `POST /api/v2/admin/appointments` | `DirectCreateAppointmentRequest` → `AppointmentCommitmentResponse` | 201 | `DIRECT_CONFIRM_NOT_ALLOWED`, `CONSENT_REQUIRED`, `RESOURCE_CONFLICT` |
+| 관리자 | `POST /api/v2/appointments/{id}/approve` | `ApproveProposalRequest` → `AppointmentCommitmentResponse` | 200 | `CONSENT_REQUIRED`, `RESOURCE_CONFLICT` |
+| 고객 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/accept` | `AcceptProposalRequest` → `AppointmentCommitmentResponse` | 200 | `PROPOSAL_EXPIRED`, `VERSION_CONFLICT` |
+| 고객 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/decline` | `DeclineProposalRequest` → `AppointmentCommitmentResponse` | 200 | `PROPOSAL_NOT_CURRENT` |
+| 관리자 | `POST /api/v2/appointments/{id}/confirm` | `DirectConfirmRequest` → `AppointmentCommitmentResponse` | 200 | `DIRECT_CONFIRM_NOT_ALLOWED`, `CONSENT_REQUIRED` |
+| 관리자 | `POST /api/v2/appointments/{id}/change-proposals` | `CreateChangeProposalRequest` → `AppointmentProposalResponse` | 202 | `RESOURCE_CONFLICT`, `VERSION_CONFLICT` |
+| 고객·관리자 | `GET /api/v2/appointments/{id}/commitment` | 없음 → `AppointmentCommitmentResponse` | 200 | `APPOINTMENT_NOT_FOUND`, `SCOPE_FORBIDDEN` |
+
+시스템 event는 public controller로 받지 않고 인증된 broker consumer 또는 내부
+ingress adapter로만 처리한다. 모든 response는 aggregate version, 현재 proposal,
+commitment status와 stable reason code를 포함하며, 허용 actor와 상태 전이는
+OpenAPI에 enum과 예제로 고정한다.
 
 ## 15. 테스트 전략
 
@@ -604,6 +753,8 @@ Flyway가 운영 migration의 권위다. Exposed table 정의와 schema 검사 �
 - capacity bucket 경계와 초과 예약 ceiling
 - event replay, version gap과 same-version/different-payload
 - outbox 원자성과 재시도
+- capacity bucket row의 동시 CAS와 확정 예약 교체의 자기 allocation 제외
+- 같은 idempotency key의 동시 요청 대기·재생과 다른 hash 충돌
 
 ### 15.3 데이터베이스 순차 검증
 
@@ -619,6 +770,24 @@ bluetape4k singleton launcher를 사용하고 `@Testcontainers`를 추가하지 
 - 관리자 직접 확정의 정책과 동의 요구
 - 확정 예약 변경에 새 동의가 필요함
 - 안정적인 오류 코드와 개인정보 비노출
+- schema allowlist, payload 크기·깊이 제한과 unsafe polymorphic payload 거부
+
+### 15.5 운영·성능 검증
+
+- 일반/최대 Plan proposal 생성과 미래 항목 증분 재계산의 p95/p99
+- 동일 인기 자원 100개 동시 확정의 충돌·deadlock·retry 결과
+- outbox lag, quarantine count/age, proposal expiry, allocation conflict,
+  migration rejection metric과 correlation ID
+- version gap 24시간, poison message 5회, redrive 성공·실패 alert
+- V10 expand, shadow mode, feature flag rollback과 PostgreSQL backup 복구 drill
+
+대시보드는 위 metric을 tenant/clinic 저카디널리티 tag로 집계한다. outbox lag
+5분, 가장 오래된 quarantine 24시간, 격리율 1%, allocation conflict 기준선의
+3배, migration rejection 1건 이상을 초기 alert 조건으로 두고 운영에서 조정한다.
+예약서비스는 예약·자원·inbox/outbox를, 상품관리와 구매서비스는 원 event replay를,
+CRM은 `OperationalException` 접수와 해결 SLA를 소유한다. `OPEN` 후 15분 안에
+CRM이 `ACKNOWLEDGED`하지 않으면 alert하고, 원인이 해소되면 `RESOLVED`, 새 예외로
+대체되면 `SUPERSEDED`로 전이한다.
 
 ## 16. KDoc과 문서화
 
@@ -664,6 +833,10 @@ README와 OpenAPI에는 고객/관리자 흐름, Gateway 인증 경계, 가예�
 - [ ] `BLOCKING` 경로만 보류되고 독립·`NON_BLOCKING` 항목은 계속 진행한다.
 - [ ] 중복 command와 event가 상태, 자원과 outbox를 중복 생성하지 않는다.
 - [ ] 동시 확정과 자원 점유가 충돌 예약을 만들지 않는다.
+- [ ] 계획 계산 상한과 일반/최대 Plan latency 목표를 충족한다.
+- [ ] 격리 event의 gap 복구, poison message 중단과 권한 있는 redrive가 검증된다.
+- [ ] V10 shadow rollout과 feature flag rollback drill이 통과한다.
+- [ ] 운영 metric, alert, dashboard와 서비스별 owner가 문서화된다.
 - [ ] H2, PostgreSQL, MySQL에서 V10과 저장소 의미가 일치한다.
 - [ ] 기존 예약 API와 row가 compatibility 경로로 유지된다.
 - [ ] 복잡한 업무 속성과 public 계약에 상세한 한국어 KDoc이 있다.

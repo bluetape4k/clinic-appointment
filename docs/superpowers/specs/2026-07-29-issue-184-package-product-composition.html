@@ -184,13 +184,18 @@
       </div>
       <fieldset id="detail-fields">
         <div class="section">
-          <div class="section-title">이 상품의 예약 운영 특성 <small>구성 상품 version이 소유</small></div>
+          <div class="section-title">구성 상품에서 상속한 강제 제약 <small>읽기 전용 · 패키지에서 완화 불가</small></div>
           <div class="checks">
-            <label class="check"><input id="multiVisit" type="checkbox"><div>여러 번 방문<span>MULTI_VISIT</span></div></label>
-            <label class="check"><input id="dependent" type="checkbox"><div>앞 시술 완료 후 진행<span>PREDECESSOR_DEPENDENT</span></div></label>
-            <label class="check"><input id="partial" type="checkbox"><div>남은 시술 분리 예약<span>PARTIAL_FULFILLMENT</span></div></label>
-            <label class="check"><input id="exclusive" type="checkbox"><div>의료진·장비·공간 전담<span>EXCLUSIVE_RESOURCE</span></div></label>
-            <label class="check"><input id="surgical" type="checkbox"><div>준비·회복 시간 필요<span>SURGICAL_COORDINATION</span></div></label>
+            <label class="check"><input id="multiVisit" type="checkbox" disabled><div>여러 번 방문<span>MULTI_VISIT</span></div></label>
+            <label class="check"><input id="dependent" type="checkbox" disabled><div>앞 시술 완료 후 진행<span>PREDECESSOR_DEPENDENT</span></div></label>
+            <label class="check"><input id="partial" type="checkbox" disabled><div>남은 시술 분리 예약<span>PARTIAL_FULFILLMENT</span></div></label>
+            <label class="check"><input id="exclusive" type="checkbox" disabled><div>의료진·장비·공간 전담<span>EXCLUSIVE_RESOURCE</span></div></label>
+            <label class="check"><input id="surgical" type="checkbox" disabled><div>준비·회복 시간 필요<span>SURGICAL_COORDINATION</span></div></label>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">패키지에서 재정의 가능한 운영 정책 <small>플랫폼 안전 상한 안에서 변경</small></div>
+          <div class="checks">
             <label class="check"><input id="overbooking" type="checkbox"><div>초과 예약 허용<span>OVERBOOKING_ALLOWED</span></div></label>
           </div>
         </div>
@@ -207,8 +212,8 @@
           <div id="resources" class="resources"></div>
         </div>
         <div class="rule">
-          <strong>패키지에서 재정의 가능한 운영 정책</strong><br>
-          초과예약, 우선순위, 알림·재확인, 선점형/제안형 같은 운영 전략은 패키지 특성에 맞게 조정할 수 있습니다.
+          <strong>충돌 시 저장 불가</strong><br>
+          패키지 운영 정책이 상속된 강제 제약이나 플랫폼 안전 상한과 충돌하면 상품관리서비스가 발행 전에 거부합니다.
         </div>
       </fieldset>
     </section>
