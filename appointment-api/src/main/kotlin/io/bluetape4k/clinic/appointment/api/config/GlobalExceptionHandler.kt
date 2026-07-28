@@ -212,6 +212,9 @@ class GlobalExceptionHandler(
         ex: IllegalStateException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isSchedulingPolicyRequest()) {
+            return schedulingPolicyInternalError(ex, request)
+        }
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request failed unexpectedly" }
             return foundationResponse(PlanFoundationError.INTERNAL_ERROR, request)
@@ -244,11 +247,7 @@ class GlobalExceptionHandler(
         request: HttpServletRequest,
     ): ResponseEntity<*> {
         if (request.isSchedulingPolicyRequest()) {
-            log.warn {
-                "Scheduling policy request failed with an internal error: " +
-                    "exception_type=${ex::class.simpleName}"
-            }
-            return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_INTERNAL_ERROR, request)
+            return schedulingPolicyInternalError(ex, request)
         }
         if (request.isPlanFoundationRequest()) {
             log.warn { "Plan foundation request failed with an internal error" }
@@ -257,6 +256,23 @@ class GlobalExceptionHandler(
         log.warn(ex) { "Internal server error: ${ex.message}" }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(ApiResponse.error<Nothing>("Internal server error"))
+    }
+
+    /**
+     * 예상하지 못한 정책 내부 예외를 원인 detail이 없는 안정적인 공개 계약으로 변환한다.
+     *
+     * Spring MVC가 더 구체적인 `IllegalStateException` handler를 선택하는 경우와 일반
+     * `Exception` handler를 선택하는 경우가 동일한 응답·로그 규칙을 사용해야 한다.
+     */
+    private fun schedulingPolicyInternalError(
+        ex: Exception,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        log.warn {
+            "Scheduling policy request failed with an internal error: " +
+                "exception_type=${ex::class.simpleName}"
+        }
+        return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_INTERNAL_ERROR, request)
     }
 
     private fun foundationResponse(

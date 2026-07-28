@@ -7,7 +7,9 @@ import io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilter
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
+import jakarta.servlet.Filter
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
@@ -74,6 +76,35 @@ class SecurityConfig {
     /** authentication 또는 controller 실패 전에 correlation을 수립한다. */
     @Bean
     fun correlationIdFilter(): CorrelationIdFilter = CorrelationIdFilter()
+
+    /**
+     * Security chain이 소유하는 JWT filter를 embedded servlet container에 다시 등록하지 않는다.
+     *
+     * Spring Boot는 모든 [Filter] bean을 기본적으로 전체 request path의 servlet filter로 자동 등록한다.
+     * 같은 instance를 [securityFilterChain]에도 추가한 채 자동 등록을 허용하면 Security의
+     * context 생성·정리 경계 밖에서 filter가 먼저 실행될 수 있다. 그 결과 이전 요청의
+     * authentication이 재사용되거나 chain 내부 실행이 `OncePerRequestFilter` 표식 때문에
+     * 건너뛰어질 수 있으므로 servlet 등록은 끄고 Security chain 순서만 권위로 사용한다.
+     */
+    @Bean
+    fun jwtAuthenticationFilterRegistration(
+        filter: JwtAuthenticationFilter,
+    ): FilterRegistrationBean<JwtAuthenticationFilter> =
+        securityChainOnlyRegistration(filter)
+
+    /** tenant context는 JWT 검증 뒤 Security chain 안에서만 수립하고 반드시 같은 요청에서 복구한다. */
+    @Bean
+    fun tenantContextFilterRegistration(
+        filter: TenantContextFilter,
+    ): FilterRegistrationBean<TenantContextFilter> =
+        securityChainOnlyRegistration(filter)
+
+    /** correlation ID도 Security exception boundary의 첫 단계에서 정확히 한 번만 생성한다. */
+    @Bean
+    fun correlationIdFilterRegistration(
+        filter: CorrelationIdFilter,
+    ): FilterRegistrationBean<CorrelationIdFilter> =
+        securityChainOnlyRegistration(filter)
 
     /**
      * controller 진입 전에 tenant/clinic routing을 scheduling data ownership과 맞추는
@@ -270,6 +301,14 @@ class SecurityConfig {
                 AuthorizationDecision(requestedClinicId != null && requestedClinicId in principal?.allowedClinicIds.orEmpty())
             },
         )
+
+    /**
+     * Spring bean lifecycle은 유지하면서 embedded container의 독립 servlet filter 등록만 끈다.
+     */
+    private fun <T : Filter> securityChainOnlyRegistration(filter: T): FilterRegistrationBean<T> =
+        FilterRegistrationBean(filter).apply {
+            isEnabled = false
+        }
 }
 
 /** security filter chain에서도 policy 전용 privacy-safe 오류 계약을 선택한다. */

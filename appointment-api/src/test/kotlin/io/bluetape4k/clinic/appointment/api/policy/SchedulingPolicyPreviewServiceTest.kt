@@ -69,6 +69,38 @@ class SchedulingPolicyPreviewServiceTest {
     }
 
     @Test
+    fun `sparse tenant clinic boundary defers without inventing scanned aggregates`() {
+        val tenantCommand = command.copy(
+            scope = PolicyScopeRef(1L, PolicyScope.TENANT_DEFAULT),
+            generation = PolicyGenerationVector(tenantGeneration = 2L, clinicGeneration = 0L),
+        )
+        val boundary = PolicyImpactCursor(
+            clinicId = 100L,
+            scheduledAt = tenantCommand.horizonUntil,
+            aggregateType = PolicyImpactAggregateType.PLANNED_TREATMENT,
+            aggregateId = PolicyImpactCursor.CLINIC_BOUNDARY_AGGREGATE_ID,
+        )
+        val store = FakePreviewStore(
+            pages = ArrayDeque(listOf(page(size = 0, next = boundary)))
+        )
+        val service = service(store)
+        val pending = store.seed(tenantCommand, now.plusSeconds(300))
+        val pendingId = pending.id.shouldNotBeNull()
+        val claimed = store.claim(pendingId, "worker-1", now, now.plusSeconds(30)).shouldNotBeNull()
+
+        val result = service.processClaimedPage(claimed, "worker-1")
+
+        result.disposition shouldBeEqualTo SchedulingPolicyPreviewDisposition.ACCEPTED_ASYNC
+        result.job.status shouldBeEqualTo PolicyPreviewJobStatus.PENDING
+        result.job.scannedCount shouldBeEqualTo 0L
+        result.job.affectedCount shouldBeEqualTo 0L
+        result.job.cursorClinicId shouldBeEqualTo 100L
+        result.job.cursorAggregateId shouldBeEqualTo PolicyImpactCursor.CLINIC_BOUNDARY_AGGREGATE_ID
+        result.job.resultHash.shouldBeNull()
+        result.job.activationEvidenceToken.shouldBeNull()
+    }
+
+    @Test
     fun `small preview completes synchronously with one persisted job and bounded pages`() {
         val store = FakePreviewStore(
             pages = ArrayDeque(
@@ -461,6 +493,7 @@ class SchedulingPolicyPreviewServiceTest {
             record?.copy(
                 cursorPartition = cursor.aggregateType.ordinal,
                 cursorLastAppointmentId = cursor.aggregateId.toLong(),
+                cursorClinicId = cursor.clinicId,
                 cursorScheduledAt = cursor.scheduledAt,
                 cursorAggregateType = cursor.aggregateType.name,
                 cursorAggregateId = cursor.aggregateId,
@@ -480,6 +513,7 @@ class SchedulingPolicyPreviewServiceTest {
                 status = PolicyPreviewJobStatus.PENDING,
                 cursorPartition = cursor.aggregateType.ordinal,
                 cursorLastAppointmentId = cursor.aggregateId.toLong(),
+                cursorClinicId = cursor.clinicId,
                 cursorScheduledAt = cursor.scheduledAt,
                 cursorAggregateType = cursor.aggregateType.name,
                 cursorAggregateId = cursor.aggregateId,

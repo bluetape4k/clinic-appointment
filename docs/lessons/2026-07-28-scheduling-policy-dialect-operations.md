@@ -57,10 +57,32 @@ Redis container가 살아 있을 때 먼저 닫았다. container singleton 재�
 생산 코드처럼 소유권과 종료 순서를 명시해야 한다.
 
 그러나 `AFTER_CLASS`만으로는 충분하지 않았다. JUnit class 병렬 실행에서 한 통합 테스트가
-공유 context를 닫는 동안 다른 테스트가 같은 security chain을 사용해 `403`을 반환하는
-경합이 전체 API 실행에서 재현됐다. `SAME_THREAD`는 한 class 안의 method 순서만 고정하므로,
-모든 Spring 통합 테스트 subclass가 같은 `ResourceLock(READ_WRITE)`를 상속하게 해야
-형제 class도 배타화된다. unit test 병렬성은 그대로 두고 공유 context 소유자만 직렬화한다.
+공유 context를 닫거나 schema/data를 초기화하는 동안 다른 테스트가 같은 datasource와
+security chain을 사용해 `403`을 반환하는 경합이 전체 API 실행에서 재현됐다.
+`SAME_THREAD`는 한 class 안의 method 순서만 고정한다. 따라서 기반 class 상속자뿐 아니라
+별도 `@SpringBootTest`, Flyway clean/migrate 검사처럼 같은 `appointment-test` DB 또는
+singleton container를 쓰는 모든 class가 동일한 `ResourceLock(READ_WRITE)`에 참여해야
+한다. unit test 병렬성은 그대로 두고 공유 context·DB 소유자만 직렬화한다.
+
+## Security filter bean의 실행 소유자는 하나여야 한다
+
+Spring Boot는 `Filter` bean을 embedded servlet container에 자동 등록한다. 같은 filter를
+`SecurityFilterChain`에도 직접 추가하면 filter instance가 container와 Security chain
+양쪽에서 실행될 수 있다. 특히 `OncePerRequestFilter`는 먼저 실행된 표식을 남기므로,
+Security context 생성·정리 경계 밖의 실행 때문에 chain 내부 인증 또는 tenant context
+수립이 생략될 수 있다.
+
+custom security filter의 bean lifecycle은 유지하되 `FilterRegistrationBean`을 disabled로
+등록해 servlet container의 독립 실행을 막았다. 요청 보안 filter는
+`SecurityFilterChain`만 소유하고, 테스트는 servlet registration 부재와 tenant가 다른
+연속 요청의 격리를 함께 확인해야 한다.
+
+이중 등록을 끈 뒤에도 stateless JWT filter가 bearer token이 없는 요청에서 기존
+`SecurityContext`를 그대로 두면, 재사용 thread에 남은 principal을 새 요청의 권한처럼
+해석할 수 있다. 실제 결합 build에서 무인증 actuator 요청이 401 대신 간헐적으로 403을
+반환했다. JWT가 유일한 request authentication 권위인 서비스는 filter 시작 시 context를
+비우고, 검증된 token이 있을 때만 principal을 새로 설정해야 한다. stale principal을 먼저
+주입하는 단위 테스트가 이 fail-closed 계약을 직접 증명한다.
 
 ## 관리 API metric은 닫힌 분류만 사용한다
 
@@ -78,12 +100,21 @@ checked/application 예외 instance를 그대로 보존해 관측 코드가 업�
 - 다이얼렉트 성능 fixture는 query마다 양수 결과와 최대 반환 상한을 함께 검증한다.
 - parent-child join 성능은 child row만 늘리지 말고 parent와 child를 모두 운영 cardinality로
   채운 뒤, 양쪽 access path와 full table scan 부재를 함께 증명한다.
+- tenant-wide scan은 row page뿐 아니라 빈 partition 수에도 별도 상한을 둔다. 결과가 0건인
+  page도 durable boundary cursor를 반환해야 다음 트랜잭션이 같은 빈 범위를 반복하지 않는다.
 - H2 성공 뒤 PostgreSQL Flyway constraint와 MySQL 지원 의미를 반드시 순차 확인한다.
 - 시간 기반 SLO는 가능한 한 monotonic/fake clock으로 검증하고 실제 시간은 관측값으로 남긴다.
 - singleton container를 사용하는 Spring 통합 테스트는 client/context 종료가 container보다
   먼저 일어나는지 확인한다.
 - class 단위 context 종료와 JUnit 병렬 실행을 함께 쓸 때는 공통 resource lock으로
-  context 공유자를 배타화한다.
+  context·DB·singleton container 공유자를 모두 배타화한다. 기반 class 상속 여부로
+  공유 자원 사용자를 추정하지 않는다.
+- custom security `Filter` bean을 `SecurityFilterChain`에 직접 추가했다면 servlet
+  auto-registration을 끄고, container registration 부재를 회귀 테스트로 고정한다.
+- stateless JWT filter는 no-token/invalid-token 요청에서 이전 `SecurityContext`를
+  재사용하지 않는지 stale principal 회귀 테스트로 증명한다.
 - metric tag에는 닫힌 enum만 사용하고 tenant·actor·payload·예외 상세를 넣지 않는다.
+- 공유 DB 통합 테스트의 정리는 전역 `deleteAll()`보다 테스트가 소유한 tenant 범위로
+  제한한다. migration fixture 잔여 데이터와 병렬 class의 tenant를 삭제하지 않아야 한다.
 - V10 축소 전에는 aggregate null, legacy/new parity, 모든 writer의 dual-write window를
   운영 query와 runbook으로 먼저 증명한다.

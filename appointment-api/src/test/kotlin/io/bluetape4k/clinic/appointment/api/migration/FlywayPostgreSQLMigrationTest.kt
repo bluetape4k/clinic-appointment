@@ -1,13 +1,17 @@
 package io.bluetape4k.clinic.appointment.api.migration
 
+import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.ResourceAccessMode
+import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.jdbc.datasource.SimpleDriverDataSource
 import java.sql.Driver
 
 /**
  * 공유 PostgreSQL 컨테이너에서 Flyway 마이그레이션을 검증한다.
  */
+@ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 class FlywayPostgreSQLMigrationTest {
 
     @Test
