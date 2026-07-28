@@ -5,7 +5,7 @@
 > 모든 Kotlin 변경에는 `bluetape-kotlin-patterns`, 모든 동작 변경에는
 > `test-driven-development`를 적용한다.
 >
-> 상태: Step 3-R `P0=0/P1=0`, Step 3-P PASS. Step 4 구현 승인 대기.
+> 상태: Step 3-R `P0=0/P1=0`, Step 3-P PASS. Step 4 구현 진행 중.
 
 **목표:** 구매 당시 고정된 단일 상품 또는 패키지 실행 BOM을 여러 방문과 세부
 진료로 전개하고, 고객 가예약·병원 승인·고객 동의·자원 점유를 원자적으로 결합한
@@ -196,12 +196,12 @@ head의 CI와 7-R을 확인한 뒤 별도 승인을 받는다.
 **쓰기 범위:** `appointment-core/model/{commitment,plan,operation}`,
 `appointment-core/service`의 순수 함수와 단위 테스트
 
-- [ ] **RED:** `AppointmentCommitmentModelTest`,
+- [x] **RED:** `AppointmentCommitmentModelTest`,
   `PackageExecutionPlannerTest`, `VisitGroupingPlannerTest`,
   `ProductVersionMigrationPlannerTest`, `PlanDirtySetResolverTest`를 먼저 작성한다.
   반복 100회/전체 500개/edge 4,000개/slot 2,000개/proposal 20개 상한,
   cycle, N-of-M 부족, same/separate 충돌, 완료 항목 mapping 변경을 각각 실패시킨다.
-- [ ] 다음 최소 계약을 구현한다.
+- [x] 다음 최소 계약을 구현한다.
 
 ```kotlin
 data class AppointmentProposalDraft(
@@ -226,12 +226,12 @@ data class PackageExecutionSnapshot(
 ) : Serializable
 ```
 
-- [ ] `VisitGroupingPlanner`는 항목별 준비·진료·회복 구간을 보존하고,
+- [x] `VisitGroupingPlanner`는 항목별 준비·진료·회복 구간을 보존하고,
   `MUST_SAME_VISIT` 연결요소를 먼저 묶은 뒤 `MUST_SEPARATE_VISIT`와 자원
   양립성을 검증한다. `MAY_SAME_VISIT`는 의미를 바꾸지 않는 최적화로만 사용한다.
-- [ ] `ProductVersionMigrationPlanner`는 모든 미완료 source가 정확히 한 번
+- [x] `ProductVersionMigrationPlanner`는 모든 미완료 source가 정확히 한 번
   설명되는지 검증하고 완료 항목은 구 revision에 유지한다.
-- [ ] **GREEN:** 아래 명령의 대상 테스트가 모두 통과한다.
+- [x] **GREEN:** 아래 명령의 대상 테스트가 모두 통과한다.
 
 ```bash
 ./gradlew :appointment-core:test --tests "*PackageExecutionPlannerTest" \
