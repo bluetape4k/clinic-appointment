@@ -183,6 +183,42 @@ class AppointmentProposalServiceTest {
     }
 
     @Test
+    fun `방문 capacity bucket의 소비량과 상한을 proposal과 동의 hash에 함께 고정한다`() {
+        fun generate(maximumCapacity: Int): GeneratedAppointmentProposal =
+            service.generate(
+                request(
+                    slots =
+                        listOf(
+                            slot(
+                                start = "2026-08-02T01:00:00Z",
+                                visitCapacityBuckets =
+                                    listOf(
+                                        AvailableProposalResource(
+                                            resourceType = ResourceType.CAPACITY_BUCKET,
+                                            resourceId = "clinic-throughput-30m",
+                                            capabilities = emptySet(),
+                                            allocationMode = ResourceAllocationMode.CAPACITY_BUCKET,
+                                            capacityUnits = 1,
+                                            maximumCapacity = maximumCapacity,
+                                        ),
+                                    ),
+                            ),
+                        ),
+                ),
+            ).proposals.single()
+
+        val capacityThree = generate(maximumCapacity = 3)
+        val bucketRequest = capacityThree.resourceRequests.single()
+
+        bucketRequest.allocation.resourceId shouldBeEqualTo "clinic-throughput-30m"
+        bucketRequest.allocation.appointmentItemKey shouldBeEqualTo null
+        bucketRequest.allocation.capacityUnits shouldBeEqualTo 1
+        bucketRequest.maximumCapacity shouldBeEqualTo 3
+        capacityThree.proposal.allocations.single().maximumCapacity shouldBeEqualTo 3
+        capacityThree.proposalHash shouldNotBeEqualTo generate(maximumCapacity = 4).proposalHash
+    }
+
+    @Test
     fun `겹치는 capability에 같은 exclusive 자원을 중복 배정하지 않는다`() {
         val result =
             service.generate(
@@ -429,6 +465,7 @@ class AppointmentProposalServiceTest {
     private fun slot(
         start: String,
         resources: List<AvailableProposalResource> = emptyList(),
+        visitCapacityBuckets: List<AvailableProposalResource> = emptyList(),
         clinicId: Long = 10L,
     ): ProposalCandidateSlot =
         ProposalCandidateSlot(
@@ -436,6 +473,7 @@ class AppointmentProposalServiceTest {
             clinicId = clinicId,
             startsAt = Instant.parse(start),
             availableResources = resources,
+            visitCapacityBuckets = visitCapacityBuckets,
         )
 
     private fun resource(

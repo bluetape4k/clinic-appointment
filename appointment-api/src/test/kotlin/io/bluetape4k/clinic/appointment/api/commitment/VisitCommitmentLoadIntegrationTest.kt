@@ -111,14 +111,25 @@ internal class VisitCommitmentLoadIntegrationTest : VisitCommitmentCommandTestSu
             .addAll(commands)
             .run()
 
-        results.mapNotNull(Result<AppointmentCommitmentCommandResult>::getOrNull) shouldHaveSize 1
+        val successfulConfirmations =
+            results.mapNotNull(Result<AppointmentCommitmentCommandResult>::getOrNull)
+        successfulConfirmations shouldHaveSize 1
         val failures = results.mapNotNull(Result<AppointmentCommitmentCommandResult>::exceptionOrNull)
         failures shouldHaveSize CONCURRENT_CONFIRMATIONS - 1
-        failures.filterIsInstance<AppointmentCommitmentCommandException>()
-            .all { it.code == AppointmentCommitmentCommandError.RESOURCE_CONFLICT }
-            .shouldBeTrue()
+        val commandFailures = failures.filterIsInstance<AppointmentCommitmentCommandException>()
+        commandFailures shouldHaveSize failures.size
+        val resourceConflicts =
+            commandFailures.count { it.code == AppointmentCommitmentCommandError.RESOURCE_CONFLICT }
+        resourceConflicts shouldBeEqualTo failures.size
+        val unexpectedFailures = failures.size - resourceConflicts
+        unexpectedFailures shouldBeEqualTo 0
         val p95Millis = elapsedMillis.percentile(95)
-        writePerformanceEvidence(p95Millis)
+        writePerformanceEvidence(
+            successfulConfirmations = successfulConfirmations.size,
+            resourceConflicts = resourceConflicts,
+            unexpectedFailures = unexpectedFailures,
+            p95Millis = p95Millis,
+        )
         (p95Millis <= CONCURRENCY_P95_BUDGET_MILLIS) shouldBeEqualTo true
         transaction(database) {
             ResourceAllocations
@@ -158,7 +169,12 @@ internal class VisitCommitmentLoadIntegrationTest : VisitCommitmentCommandTestSu
     }
 
     /** 동시성 acceptance 수치와 결과 분포를 검토 가능한 build report로 보존합니다. */
-    private fun writePerformanceEvidence(p95Millis: Long) {
+    private fun writePerformanceEvidence(
+        successfulConfirmations: Int,
+        resourceConflicts: Int,
+        unexpectedFailures: Int,
+        p95Millis: Long,
+    ) {
         val report = Path.of("build/reports/performance/visit-commitment-concurrency.md")
         Files.createDirectories(report.parent)
         Files.writeString(
@@ -168,10 +184,10 @@ internal class VisitCommitmentLoadIntegrationTest : VisitCommitmentCommandTestSu
 
             - Backend: PostgreSQL
             - Concurrent confirmations: $CONCURRENT_CONFIRMATIONS
-            - Successful confirmations: 1
-            - Stable resource conflicts: ${CONCURRENT_CONFIRMATIONS - 1}
+            - Successful confirmations: $successfulConfirmations
+            - Stable resource conflicts: $resourceConflicts
             - Active allocations after completion: 1
-            - Non-resource-conflict failures observed: 0
+            - Non-resource-conflict failures observed: $unexpectedFailures
             - Command latency p95: ${p95Millis} ms
             - Command latency budget: ${CONCURRENCY_P95_BUDGET_MILLIS} ms
             """.trimIndent(),

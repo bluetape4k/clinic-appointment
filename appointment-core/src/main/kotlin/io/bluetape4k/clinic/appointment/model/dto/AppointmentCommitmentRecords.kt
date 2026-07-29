@@ -72,17 +72,18 @@ data class AppointmentProposalRecord(
  *
  * @property allocation 점유 대상과 시간 구간입니다.
  * @property maximumCapacity `CAPACITY_BUCKET`의 같은 bucket에서 허용하는 양수 합계입니다.
- * 전담·공유 자원에서는 1이어야 합니다.
+ * [ResourceAllocationDraft.maximumCapacity]와 반드시 같아야 하며 확정 단계에서 제안
+ * snapshot과 다른 값으로 바꿀 수 없습니다.
  */
 class ResourceAllocationRequest(
     val allocation: ResourceAllocationDraft,
-    maximumCapacity: Int,
+    maximumCapacity: Int = allocation.maximumCapacity,
 ) : Serializable {
     val maximumCapacity = maximumCapacity.requirePositiveNumber("maximumCapacity")
 
     init {
-        require(allocation.capacityUnits <= this.maximumCapacity) {
-            "allocation capacityUnits must not exceed maximumCapacity"
+        require(allocation.maximumCapacity == this.maximumCapacity) {
+            "maximumCapacity must match the consent-bound allocation snapshot"
         }
     }
 

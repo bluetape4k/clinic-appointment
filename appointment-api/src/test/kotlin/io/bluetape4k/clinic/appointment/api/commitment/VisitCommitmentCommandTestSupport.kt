@@ -235,6 +235,7 @@ internal abstract class VisitCommitmentCommandTestSupport {
                                     startsAt = startsAt,
                                     endsAt = endsAt,
                                     capacityUnits = capacityUnits,
+                                    maximumCapacity = maximumCapacity,
                                     allocationMode = allocationMode,
                                     appointmentItemKey = treatmentKey,
                                 ),

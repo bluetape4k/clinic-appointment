@@ -331,6 +331,7 @@ class ResourceAllocationRepositoryTest {
                 startsAt = startsAt,
                 endsAt = endsAt,
                 capacityUnits = units,
+                maximumCapacity = maximum,
                 allocationMode = mode,
                 appointmentItemKey = null,
             ),

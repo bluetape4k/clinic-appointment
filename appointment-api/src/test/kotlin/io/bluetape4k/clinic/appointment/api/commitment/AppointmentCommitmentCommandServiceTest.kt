@@ -278,6 +278,7 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
                                     startsAt = sourceAllocation.startsAt,
                                     endsAt = sourceAllocation.endsAt,
                                     capacityUnits = sourceAllocation.capacityUnits,
+                                    maximumCapacity = sourceAllocation.maximumCapacity,
                                     allocationMode = sourceAllocation.allocationMode,
                                     appointmentItemKey = "missing-treatment",
                                 ),

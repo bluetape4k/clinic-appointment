@@ -350,8 +350,10 @@ class AppointmentProposalServicePerformanceTest {
             }
         val distractors =
             List(RESOURCE_RICH_RESOURCES - 3) { index ->
+                val resourceType =
+                    ResourceType.entries[index % (ResourceType.entries.size - 1)]
                 AvailableProposalResource(
-                    resourceType = ResourceType.entries[index % ResourceType.entries.size],
+                    resourceType = resourceType,
                     resourceId = "distractor-$index",
                     capabilities = setOf("UNMATCHED-$index"),
                     allocationMode = ResourceAllocationMode.EXCLUSIVE,

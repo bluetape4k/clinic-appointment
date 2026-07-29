@@ -15,6 +15,8 @@ import java.time.Instant
  * @property endsAt [startsAt]보다 뒤인 UTC 종료 시각입니다.
  * @property capacityUnits 이 구간에서 소비하는 양수 수용량 단위입니다. 전담 자원은
  * 일반적으로 1이며 bucket 자원은 같은 계산 단위의 합계가 정책 상한을 넘지 않아야 합니다.
+ * @property maximumCapacity 이 제안이 고정한 동일 bucket의 양수 수용량 상한입니다.
+ * 구매·정책 snapshot의 일부이므로 확정 요청에서 별도 값으로 바꿀 수 없습니다.
  * @property allocationMode 공유 가능 여부와 capacity 계산 방식을 나타냅니다.
  * @property appointmentItemKey 이 점유의 원인이 된 세부 진료 키입니다. 방문 전체 점유는
  * `null`일 수 있으나 item별 준비·회복 구간을 잃어서는 안 됩니다.
@@ -25,15 +27,20 @@ class ResourceAllocationDraft(
     val startsAt: Instant,
     val endsAt: Instant,
     capacityUnits: Int,
+    maximumCapacity: Int = capacityUnits,
     val allocationMode: ResourceAllocationMode,
     appointmentItemKey: String?,
 ) : Serializable {
     val resourceId = resourceId.requireNotBlank("resourceId")
     val capacityUnits = capacityUnits.requirePositiveNumber("capacityUnits")
+    val maximumCapacity = maximumCapacity.requirePositiveNumber("maximumCapacity")
     val appointmentItemKey = appointmentItemKey?.requireNotBlank("appointmentItemKey")
 
     init {
         require(startsAt < endsAt) { "startsAt must be before endsAt" }
+        require(this.capacityUnits <= this.maximumCapacity) {
+            "capacityUnits must not exceed maximumCapacity"
+        }
         require(allocationMode == ResourceAllocationMode.CAPACITY_BUCKET || this.capacityUnits == 1) {
             "exclusive and shared resources must consume exactly one capacity unit"
         }
