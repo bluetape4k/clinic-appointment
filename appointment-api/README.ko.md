@@ -40,6 +40,10 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 
 ### 예약 Commitment v2
 
+전체 상태·인증·오류 계약은 [예약 Commitment v2 API](../docs/api/visit-commitment.md),
+점진 배포·경보·retention·rollback은
+[운영 런북](../docs/runbooks/visit-commitment-operations.md)에 정리되어 있습니다.
+
 | 행위자 | 메서드와 경로 | 결과 |
 |------|------|------|
 | 고객 | `POST /api/v2/appointment-requests` | `PROPOSED` 가예약 생성 (`202`) |
@@ -73,12 +77,16 @@ reference여야 합니다. 같은 ID를 다른 결정에 재사용하면 안정�
 |------|------|------|
 | `appointment.commitment.api-enabled` | `false` | Task 9 wiring 전 bootstrap용 전체 v2 경로 gate |
 | `appointment.commitment.ingress-enabled` | `true` | 신규 고객 가예약과 관리자 직접 생성만 허용 |
+| `appointment.commitment.mode` | `OFF` | 신규 계산·쓰기를 차단하는 `OFF`, 비교만 하는 `SHADOW`, allowlist 기반 `WRITE` |
+| `appointment.commitment.clinic-allowlist` | 비어 있음 | `WRITE`를 허용할 병원 ID |
+| `appointment.commitment.proposal-ttl` | `30m` | proposal 승인 대기 만료 |
+| `appointment.commitment.retry.max-attempts` | `3` | 최초 시도를 포함한 제한 재시도 |
 
 `api-enabled=false`는 아직 v2 commitment가 한 건도 없는 bootstrap 단계에서만
 사용합니다. 이미 생성된 commitment가 있다면 rollback은
 `ingress-enabled=false`로 신규 유입만 막아야 합니다. 조회, 승인, 확정, proposal
-수락·거절, 변경 제안은 계속 열려 있어 기존 고객을 고립시키지 않습니다. Task 9에서는
-이 단순 gate를 병원별 `OFF/SHADOW/WRITE`와 allowlist 운영 제어로 확장합니다.
+수락·거절, 변경 제안은 계속 열려 있어 기존 고객을 고립시키지 않습니다.
+`WRITE`는 mode와 clinic allowlist가 모두 일치할 때만 신규 row를 허용합니다.
 
 #### 안정 오류 계약
 

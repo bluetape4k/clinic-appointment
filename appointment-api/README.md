@@ -40,6 +40,11 @@ contract is documented in [Scheduling Policy API](../docs/api/scheduling-policy.
 
 ### Appointment Commitment v2
 
+See [Appointment Commitment v2 API](../docs/api/visit-commitment.md) for the
+complete state, authentication, and error contract, and the
+[operations runbook](../docs/runbooks/visit-commitment-operations.md) for
+rollout, alerts, retention, and rollback.
+
 | Actor | Method and path | Result |
 |------|------|------|
 | Patient | `POST /api/v2/appointment-requests` | Creates a `PROPOSED` provisional appointment (`202`). |
@@ -75,13 +80,16 @@ Reusing the same ID for another decision returns a stable `409`.
 |------|------|------|
 | `appointment.commitment.api-enabled` | `false` | Bootstrap gate for all v2 routes before Task 9 wiring |
 | `appointment.commitment.ingress-enabled` | `true` | Allows only new patient requests and administrator direct creation |
+| `appointment.commitment.mode` | `OFF` | `OFF` blocks new computation/writes, `SHADOW` compares, and `WRITE` uses the allowlist. |
+| `appointment.commitment.clinic-allowlist` | Empty | Clinic IDs eligible for `WRITE`. |
+| `appointment.commitment.proposal-ttl` | `30m` | Proposal approval expiry. |
+| `appointment.commitment.retry.max-attempts` | `3` | Bounded attempts including the initial try. |
 
 Use `api-enabled=false` only during bootstrap, before any v2 commitment exists.
 After commitments exist, rollback must set `ingress-enabled=false` to stop new
 intake only. Reads, approval, confirmation, proposal acceptance or decline, and
-change proposals remain available so existing patients are not stranded. Task
-9 extends this simple gate with clinic-scoped `OFF/SHADOW/WRITE` modes and
-allowlist operations.
+change proposals remain available so existing patients are not stranded.
+`WRITE` permits new rows only when both the mode and clinic allowlist match.
 
 #### Stable error contract
 

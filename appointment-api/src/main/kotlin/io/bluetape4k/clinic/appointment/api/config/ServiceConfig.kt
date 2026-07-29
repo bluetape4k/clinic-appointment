@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.config
 
+import io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentMetrics
 import io.bluetape4k.clinic.appointment.api.policy.PolicyActivationPublisher
 import io.bluetape4k.clinic.appointment.api.policy.EffectiveSchedulingPolicyService
 import io.bluetape4k.clinic.appointment.api.policy.ExposedEffectivePolicyStore
@@ -72,7 +73,11 @@ import java.time.Instant
  * 조립한다.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(PlanFoundationProperties::class, SchedulingPolicyProperties::class)
+@EnableConfigurationProperties(
+    PlanFoundationProperties::class,
+    SchedulingPolicyProperties::class,
+    AppointmentCommitmentProperties::class,
+)
 class ServiceConfig {
 
     companion object : KLogging()
@@ -334,6 +339,13 @@ class ServiceConfig {
     @Bean
     fun schedulingPolicyMetrics(meterRegistry: MeterRegistry): SchedulingPolicyMetrics =
         SchedulingPolicyMetrics(meterRegistry)
+
+    /**
+     * commitment proposal·allocation·격리·운영 예외의 저카디널리티 metric facade를 생성한다.
+     */
+    @Bean
+    fun appointmentCommitmentMetrics(meterRegistry: MeterRegistry): AppointmentCommitmentMetrics =
+        AppointmentCommitmentMetrics(meterRegistry)
 
     /** preview primitive마다 짧은 transaction을 소유하는 Exposed adapter를 생성한다. */
     @Bean

@@ -128,6 +128,13 @@ class PurchaseEventRedriveServiceTest {
         assertFailsWith<IllegalArgumentException> {
             service.redrive(envelope, confirmation(envelope).copy(sourceAggregateVersion = 2L), dryRun = true)
         }
+        assertFailsWith<IllegalArgumentException> {
+            service.redrive(
+                envelope,
+                confirmation(envelope).copy(operatorRole = RedriveOperatorRole.SOURCE_REPLAY_AUTHORITY),
+                dryRun = true,
+            )
+        }
         listOf(
             confirmation(envelope).copy(tenantGroupId = 2L),
             confirmation(envelope).copy(clinicId = clinicId + 1),
@@ -447,6 +454,7 @@ class PurchaseEventRedriveServiceTest {
         }
         return PurchaseRedriveConfirmation(
             quarantineId = quarantineId,
+            operatorRole = RedriveOperatorRole.RESERVATION_OPERATIONS_ADMIN,
             actor = "scheduling-operator",
             reason = "redrive after source correction",
             approvalReferences = listOf("approval-1"),
