@@ -23,6 +23,7 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentCommandIdempotency
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentItemRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
+import io.bluetape4k.clinic.appointment.repository.LockedResourceAvailability
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationConflictException
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationRepository
 import io.bluetape4k.clinic.appointment.service.ProposalHasher
@@ -66,6 +67,8 @@ import java.util.concurrent.ThreadLocalRandom
  *
  * @param database command transaction을 실행할 Exposed database입니다.
  * @param clock proposal 만료, 감사, allocation 해제 시각의 권위 있는 UTC clock입니다.
+ * @param maxTransactionAttempts 최초 실행을 포함한 일시적 DB 오류 최대 시도 횟수입니다.
+ * @param initialRetryDelayMillis 첫 재시도 전 대기 시간입니다. 이후 시도는 지수 backoff를 적용합니다.
  * @param retryDelay 재시도 backoff를 수행합니다. 테스트에서는 실제 대기 없이 주입할 수 있습니다.
  * @param retryJitterMillis 재시도 횟수별 jitter를 반환합니다. 기본 구현은 0~24ms입니다.
  * @param appointmentRepository commitment v2 방문 identity와 확정 projection 저장소입니다.
@@ -77,6 +80,8 @@ import java.util.concurrent.ThreadLocalRandom
 internal class AppointmentCommitmentCommandService(
     private val database: Database,
     private val clock: Clock = Clock.systemUTC(),
+    private val maxTransactionAttempts: Int = DEFAULT_MAX_TRANSACTION_ATTEMPTS,
+    private val initialRetryDelayMillis: Long = DEFAULT_INITIAL_RETRY_DELAY_MILLIS,
     private val retryDelay: (Long) -> Unit = Thread::sleep,
     private val retryJitterMillis: (Int) -> Long = {
         ThreadLocalRandom.current().nextLong(MAX_JITTER_MILLIS + 1)
@@ -88,6 +93,15 @@ internal class AppointmentCommitmentCommandService(
     private val idempotencyRepository: AppointmentCommandIdempotencyRepository =
         AppointmentCommandIdempotencyRepository(),
 ) {
+    init {
+        require(maxTransactionAttempts in 1..3) {
+            "maxTransactionAttempts must be between 1 and 3"
+        }
+        require(initialRetryDelayMillis in 1..1_000) {
+            "initialRetryDelayMillis must be between 1 and 1000"
+        }
+    }
+
     /**
      * 고객이 선택·동의한 첫 proposal을 관리자 승인 전 `PROPOSED` 가예약으로 생성합니다.
      *
@@ -151,6 +165,15 @@ internal class AppointmentCommitmentCommandService(
                     "admin approval only confirms the initial customer proposal",
                 )
             }
+            command.consent?.let { appendConsent(commitment, proposal, it) }
+            command.policyDecision?.let { policy ->
+                requireDirectConfirmationPolicy(
+                    proposal = proposal,
+                    consent = requireNotNull(command.consent),
+                    policy = policy,
+                    now = now,
+                )
+            }
             requireAcceptedConsent(commitment, proposal)
             val confirmed =
                 confirmProposal(
@@ -184,6 +207,12 @@ internal class AppointmentCommitmentCommandService(
             requireClinicScope(command.context)
             requireProposalActive(command.expiresAt, now)
             requireDirectConfirmationPolicy(command, now)
+            val availabilityLock = allocationRepository.lockAndValidateAvailability(
+                tenantGroupId = command.context.tenantGroupId,
+                clinicId = command.context.clinicId,
+                replacingProposalId = null,
+                requests = command.proposal.resourceRequests,
+            )
             val created =
                 createInitialProposal(
                     context = command.context,
@@ -202,6 +231,7 @@ internal class AppointmentCommitmentCommandService(
                     resourceRequests = command.proposal.resourceRequests,
                     projectionTarget = command.projectionTarget,
                     now = now,
+                    availabilityLock = availabilityLock,
                 )
             writeDecision(
                 context = command.context,
@@ -521,7 +551,7 @@ internal class AppointmentCommitmentCommandService(
                 if (!exception.isRetryableTransactionFailure()) {
                     throw exception
                 }
-                if (attempt >= MAX_TRANSACTION_ATTEMPTS) {
+                if (attempt >= maxTransactionAttempts) {
                     log.warn(exception) {
                         "Appointment commitment command failed after bounded retry: " +
                             "operation=$operation, attempts=$attempt"
@@ -533,7 +563,7 @@ internal class AppointmentCommitmentCommandService(
                     )
                 }
                 val delayMillis =
-                    BASE_RETRY_DELAY_MILLIS * (1L shl (attempt - 1)) +
+                    initialRetryDelayMillis * (1L shl (attempt - 1)) +
                         retryJitterMillis(attempt).coerceAtLeast(0)
                 log.warn(exception) {
                     "Retrying appointment commitment transaction: " +
@@ -653,6 +683,7 @@ internal class AppointmentCommitmentCommandService(
         resourceRequests: List<ResourceAllocationRequest>,
         projectionTarget: ConfirmedAppointmentProjectionTarget,
         now: Instant,
+        availabilityLock: LockedResourceAvailability? = null,
     ): AppointmentCommitmentRecord {
         requireResourceItemReferences(proposal.id, resourceRequests)
         val projection =
@@ -669,6 +700,7 @@ internal class AppointmentCommitmentCommandService(
             proposalId = proposal.id,
             replacingProposalId = previousProposalId,
             requests = resourceRequests,
+            availabilityLock = availabilityLock,
         )
         if (
             !commitmentRepository.confirmByVersion(
@@ -1000,10 +1032,41 @@ internal class AppointmentCommitmentCommandService(
     private fun requireDirectConfirmationPolicy(
         command: DirectAppointmentConfirmationCommand,
         now: Instant,
+    ) =
+        requireDirectConfirmationPolicy(
+            proposalPolicySnapshotId = command.proposal.policySnapshotId,
+            consent = command.consent,
+            policy = command.policyDecision,
+            now = now,
+        )
+
+    /**
+     * 영속 proposal에 대한 직접 확정 정책을 같은 transaction 안에서 검증한다.
+     *
+     * application service가 검증한 현재 정책을 command에 포함해도 proposal은 그 사이
+     * 변경될 수 있으므로, 확정 CAS 직전에 영속 row의 정책 snapshot과 다시 비교한다.
+     */
+    private fun requireDirectConfirmationPolicy(
+        proposal: AppointmentProposalRecord,
+        consent: ProposalConsentEvidence,
+        policy: DirectConfirmationPolicyDecision,
+        now: Instant,
+    ) =
+        requireDirectConfirmationPolicy(
+            proposalPolicySnapshotId = proposal.policySnapshotId,
+            consent = consent,
+            policy = policy,
+            now = now,
+        )
+
+    private fun requireDirectConfirmationPolicy(
+        proposalPolicySnapshotId: Long?,
+        consent: ProposalConsentEvidence,
+        policy: DirectConfirmationPolicyDecision,
+        now: Instant,
     ) {
-        val policy = command.policyDecision
         if (
-            policy.policySnapshotId != command.proposal.policySnapshotId ||
+            policy.policySnapshotId != proposalPolicySnapshotId ||
             policy.adminBookingMode != AdminBookingMode.DIRECT_CONFIRM_WITH_CONSENT_EVIDENCE
         ) {
             reject(
@@ -1011,7 +1074,6 @@ internal class AppointmentCommitmentCommandService(
                 "effective booking policy does not allow direct confirmation",
             )
         }
-        val consent = command.consent
         val evidenceAge = Duration.between(consent.decidedAt, now)
         if (
             consent.evidenceType !in policy.allowedEvidenceTypes ||
@@ -1313,8 +1375,8 @@ internal class AppointmentCommitmentCommandService(
         const val INITIAL_COMMITMENT_VERSION = 1L
         const val INITIAL_PROPOSAL_REVISION = 1L
         const val OUTBOX_SCHEMA_VERSION = 1
-        const val MAX_TRANSACTION_ATTEMPTS = 3
-        const val BASE_RETRY_DELAY_MILLIS = 25L
+        const val DEFAULT_MAX_TRANSACTION_ATTEMPTS = 3
+        const val DEFAULT_INITIAL_RETRY_DELAY_MILLIS = 25L
         const val MAX_JITTER_MILLIS = 24L
 
         const val COMMITMENT_AGGREGATE_TYPE = "APPOINTMENT_COMMITMENT"

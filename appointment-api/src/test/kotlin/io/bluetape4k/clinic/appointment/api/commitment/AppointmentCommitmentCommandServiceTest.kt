@@ -24,6 +24,7 @@ import io.bluetape4k.clinic.appointment.repository.ResourceAllocationRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -119,6 +120,102 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
                 .selectAll()
                 .where { SchedulingOutboxEvents.eventType eq "APPOINTMENT_CONFIRMED" }
                 .count() shouldBeEqualTo 1L
+        }
+    }
+
+    @Test
+    fun `관리자 직접 확정은 영속 proposal과 다른 현재 정책 snapshot을 transaction 안에서 거부한다`() {
+        val service = commandService()
+        val proposal = proposalInput(revision = 1L, resourceId = "doctor-policy-race")
+        val requested =
+            service.requestCustomerAppointment(
+                CustomerAppointmentRequestCommand(
+                    context = commandContext("policy-race-request"),
+                    identity = appointmentIdentity("policy-race-request"),
+                    proposal = proposal,
+                    expiresAt = ACTIVE_EXPIRY,
+                    representativeTreatmentName = "정책 경합 검증",
+                    consent = acceptedConsent("policy-race-request"),
+                ),
+            )
+
+        val failure =
+            assertFailsWith<AppointmentCommitmentCommandException> {
+                service.approveCustomerProposal(
+                    ConfirmAppointmentProposalCommand(
+                        context = commandContext("policy-race-direct-confirm"),
+                        appointmentId = requested.commitment.appointmentId,
+                        proposalId = requested.proposal.id,
+                        expectedVersion = requested.commitment.version,
+                        proposal = proposal,
+                        expectedProposalHash = requested.proposal.proposalHash,
+                        projectionTarget = confirmedProjectionTarget("doctor-policy-race"),
+                        consent = acceptedConsent("policy-race-direct-confirm"),
+                        policyDecision = directConfirmationPolicyDecision(policySnapshotId = 8L),
+                    ),
+                )
+            }
+
+        failure.code shouldBeEqualTo AppointmentCommitmentCommandError.DIRECT_CONFIRM_NOT_ALLOWED
+        transaction(database) {
+            ConsentDecisions.selectAll().count() shouldBeEqualTo 1L
+            ResourceAllocationRepository().findByProposal(requested.proposal.id) shouldHaveSize 0
+            AppointmentAuditEvents
+                .selectAll()
+                .where { AppointmentAuditEvents.eventType eq "APPOINTMENT_CONFIRMED" }
+                .count() shouldBeEqualTo 0L
+        }
+    }
+
+    @Test
+    fun `관리자 승인은 이미 점유된 고객 proposal을 확정하지 않는다`() {
+        // Given: 다른 확정 예약이 이미 점유한 자원으로 고객 가예약을 생성함
+        val service = commandService()
+        val occupiedResource = "doctor-admin-approval-conflict"
+        confirmDirect(service, "approval-owner", occupiedResource)
+        val proposal = proposalInput(revision = 1L, resourceId = occupiedResource)
+        val requested =
+            service.requestCustomerAppointment(
+                CustomerAppointmentRequestCommand(
+                    context = commandContext("approval-conflict-request"),
+                    identity = appointmentIdentity("approval-conflict-request"),
+                    proposal = proposal,
+                    expiresAt = ACTIVE_EXPIRY,
+                    representativeTreatmentName = "충돌 가예약",
+                    consent = acceptedConsent("approval-conflict-request"),
+                ),
+            )
+
+        // When: 관리자가 충돌하는 고객 proposal을 승인하려고 함
+        val failure =
+            assertFailsWith<AppointmentCommitmentCommandException> {
+                service.approveCustomerProposal(
+                    ConfirmAppointmentProposalCommand(
+                        context = commandContext("approval-conflict-admin"),
+                        appointmentId = requested.commitment.appointmentId,
+                        proposalId = requested.proposal.id,
+                        expectedVersion = requested.commitment.version,
+                        proposal = proposal,
+                        expectedProposalHash = requested.proposal.proposalHash,
+                        projectionTarget = confirmedProjectionTarget(occupiedResource),
+                    ),
+                )
+            }
+
+        // Then: 안정적인 자원 충돌만 반환하고 가예약과 side effect는 그대로 보존됨
+        failure.code shouldBeEqualTo AppointmentCommitmentCommandError.RESOURCE_CONFLICT
+        transaction(database) {
+            ResourceAllocationRepository().findByProposal(requested.proposal.id) shouldHaveSize 0
+            AppointmentCommitmentRepository()
+                .findByAppointmentId(requested.commitment.appointmentId)!!
+                .status shouldBeEqualTo AppointmentCommitmentStatus.PROPOSED
+            AppointmentAuditEvents
+                .selectAll()
+                .where {
+                    (AppointmentAuditEvents.aggregateId eq requested.commitment.id.toString()) and
+                        (AppointmentAuditEvents.eventType eq "APPOINTMENT_CONFIRMED")
+                }
+                .count() shouldBeEqualTo 0L
         }
     }
 
@@ -1169,6 +1266,48 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
         failure.code shouldBeEqualTo AppointmentCommitmentCommandError.RETRY_EXHAUSTED
         delays shouldBeEqualTo listOf(25L, 50L)
         verify(exactly = 3) {
+            idempotencyRepository.claim(any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `배포 retry 설정은 최대 시도 횟수와 첫 backoff를 실제 command에 적용한다`() {
+        // Given: 운영 설정과 같은 생성자 경계로 2회·70ms 정책을 주입
+        val idempotencyRepository = mockk<AppointmentCommandIdempotencyRepository>()
+        every {
+            idempotencyRepository.claim(any(), any(), any(), any(), any())
+        } throws SQLException("serialization failure", "40001")
+        val delays = mutableListOf<Long>()
+        val service =
+            AppointmentCommitmentCommandService(
+                database = database,
+                clock = CLOCK,
+                maxTransactionAttempts = 2,
+                initialRetryDelayMillis = 70L,
+                retryDelay = delays::add,
+                retryJitterMillis = { 0L },
+                idempotencyRepository = idempotencyRepository,
+            )
+
+        // When: 두 transaction이 모두 일시적 오류로 실패
+        val failure =
+            assertFailsWith<AppointmentCommitmentCommandException> {
+                service.requestCustomerAppointment(
+                    CustomerAppointmentRequestCommand(
+                        context = commandContext("configured-retry"),
+                        identity = appointmentIdentity("configured-retry"),
+                        proposal = proposalInput(revision = 1L, resourceId = "doctor-configured-retry"),
+                        expiresAt = ACTIVE_EXPIRY,
+                        representativeTreatmentName = "설정 기반 재시도",
+                        consent = acceptedConsent("configured-retry"),
+                    ),
+                )
+            }
+
+        // Then: 첫 실패 뒤 설정된 70ms만 대기하고 세 번째 시도는 하지 않음
+        failure.code shouldBeEqualTo AppointmentCommitmentCommandError.RETRY_EXHAUSTED
+        delays shouldBeEqualTo listOf(70L)
+        verify(exactly = 2) {
             idempotencyRepository.claim(any(), any(), any(), any(), any())
         }
     }

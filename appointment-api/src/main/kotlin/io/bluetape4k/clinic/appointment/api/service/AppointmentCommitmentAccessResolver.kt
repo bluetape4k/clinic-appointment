@@ -80,6 +80,7 @@ internal class AppointmentCommitmentAccessResolver(
                 tenantGroupId = scope.tenantGroupId,
                 clinicId = scope.clinicId,
                 appointmentId = appointmentId,
+                patientReferenceFingerprint = appointmentFingerprint,
             )
         }
     }
@@ -164,6 +165,24 @@ internal fun interface PatientSubjectFingerprintResolver {
     ): String
 }
 
+/**
+ * 구매 Plan ingress와 같은 HMAC fingerprint adapter가 연결되지 않은 환경의 보수적 기본값이다.
+ *
+ * Gateway subject를 일반 SHA-256으로 임의 변환하면 구매 ingress의 HMAC fingerprint와
+ * 일치할 수 없고 배포자가 이를 정상 구성으로 오인할 수 있다. 따라서 patient actor의
+ * 예약 접근만 명시적으로 거부하고 관리자 actor의 tenant·clinic 접근은 영향을 받지 않는다.
+ */
+internal class FailClosedPatientSubjectFingerprintResolver : PatientSubjectFingerprintResolver {
+    override fun fingerprint(
+        tenantGroupId: Long,
+        patientSubjectId: String,
+    ): String =
+        throw AppointmentCommitmentApiException(
+            AppointmentCommitmentApiError.SCOPE_FORBIDDEN,
+            "patient subject fingerprint resolver is not configured",
+        )
+}
+
 /** Plan command 조립에 사용할 검증 완료 tenant·clinic·Plan 묶음이다. */
 internal data class ResolvedAppointmentPlanAccess(
     val tenantGroupId: Long,
@@ -176,6 +195,7 @@ internal data class ResolvedAppointmentAccess(
     val tenantGroupId: Long,
     val clinicId: Long,
     val appointmentId: Long,
+    val patientReferenceFingerprint: String,
 )
 
 private data class ResolvedActorScope(

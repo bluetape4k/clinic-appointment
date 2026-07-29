@@ -6,6 +6,8 @@ import io.bluetape4k.clinic.appointment.api.commitment.AppointmentProposalReques
 import io.bluetape4k.clinic.appointment.api.commitment.AppointmentProposalService
 import io.bluetape4k.clinic.appointment.api.commitment.CurrentPolicySnapshot
 import io.bluetape4k.clinic.appointment.api.commitment.ProposalCandidateSlot
+import io.bluetape4k.clinic.appointment.api.commitment.VisitCommitmentGatlingFixture
+import io.bluetape4k.clinic.appointment.api.commitment.VisitCommitmentProbeResult
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionDependencyRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionGroupingConstraintRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionTreatmentRecord
@@ -33,6 +35,8 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.Executors
+import java.util.logging.Level
+import java.util.logging.Logger
 import kotlin.random.Random
 
 /**
@@ -51,14 +55,20 @@ import kotlin.random.Random
  * `./gradlew :appointment-api:gatlingRun --simulation
  * io.bluetape4k.clinic.appointment.api.VisitCommitmentProposalSimulation`
  */
-class VisitCommitmentProposalSimulation : Simulation() {
+open class VisitCommitmentProposalSimulation(
+    private val includeCommitmentLoad: Boolean = false,
+) : Simulation() {
     private val datasets = readDatasets()
     private val service = AppointmentProposalService()
     private val requests = datasets.associate { it.name to proposalRequest(it) }
+    private val commitmentFixture = VisitCommitmentGatlingFixture().takeIf { includeCommitmentLoad }
     private val executor = Executors.newVirtualThreadPerTaskExecutor()
     private val server =
         HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0).apply {
             createContext("/proposal", ::handleProposal)
+            if (commitmentFixture != null) {
+                createContext("/commitment", ::handleCommitment)
+            }
             this.executor = this@VisitCommitmentProposalSimulation.executor
         }
     private val baseUrl = "http://${InetAddress.getLoopbackAddress().hostAddress}:${server.address.port}"
@@ -84,17 +94,58 @@ class VisitCommitmentProposalSimulation : Simulation() {
                     )
             }
 
-        setUp(
-            scenario("Visit commitment bounded proposal")
-                .exec(chain)
-                .injectOpen(atOnceUsers(1)),
-        ).protocols(http.baseUrl(baseUrl))
-            .assertions(
+        val mixedChain =
+            commitmentFixture
+                ?.let {
+                    VISIT_COMMITMENT_CASES.fold(chain) { current, caseName ->
+                        current
+                            .repeat(COMMITMENT_WARMUP_COUNT)
+                            .on(
+                                exec(
+                                    http("$caseName warmup")
+                                        .post("/commitment/$caseName")
+                                        .check(status().`is`(HTTP_OK)),
+                                ),
+                            ).repeat(COMMITMENT_MEASUREMENT_COUNT)
+                            .on(
+                                exec(
+                                    http("$caseName commitment")
+                                        .post("/commitment/$caseName")
+                                        .check(status().`is`(HTTP_OK)),
+                                ),
+                            )
+                    }
+                } ?: chain
+
+        val population =
+            scenario(
+                if (includeCommitmentLoad) {
+                    "Visit commitment mixed proposal and command"
+                } else {
+                    "Visit commitment bounded proposal"
+                },
+            ).exec(mixedChain)
+                .injectOpen(atOnceUsers(1))
+        val setup = setUp(population).protocols(http.baseUrl(baseUrl))
+        if (includeCommitmentLoad) {
+            setup.assertions(
+                global().failedRequests().count().`is`(0),
+                details("normal proposal").responseTime().percentile3().lte(NORMAL_P95_BUDGET_MILLIS),
+                details("normal proposal").responseTime().percentile4().lte(NORMAL_P99_BUDGET_MILLIS),
+                details("maximum proposal").responseTime().percentile3().lte(MAXIMUM_P95_BUDGET_MILLIS),
+                details("exclusive-overlap commitment").failedRequests().count().`is`(0),
+                details("capacity-exhaustion commitment").failedRequests().count().`is`(0),
+                details("multi-lock commitment").failedRequests().count().`is`(0),
+                details("idempotency-replay commitment").failedRequests().count().`is`(0),
+            )
+        } else {
+            setup.assertions(
                 global().failedRequests().count().`is`(0),
                 details("normal proposal").responseTime().percentile3().lte(NORMAL_P95_BUDGET_MILLIS),
                 details("normal proposal").responseTime().percentile4().lte(NORMAL_P99_BUDGET_MILLIS),
                 details("maximum proposal").responseTime().percentile3().lte(MAXIMUM_P95_BUDGET_MILLIS),
             )
+        }
     }
 
     override fun before() {
@@ -128,6 +179,34 @@ class VisitCommitmentProposalSimulation : Simulation() {
                 .toByteArray(StandardCharsets.UTF_8)
         exchange.responseHeaders.add("Content-Type", "application/json")
         exchange.sendResponseHeaders(statusCode, body.size.toLong())
+        exchange.responseBody.use { it.write(body) }
+    }
+
+    private fun handleCommitment(exchange: HttpExchange) {
+        val caseName = exchange.requestURI.path.substringAfterLast("/")
+        val fixture = commitmentFixture
+        if (exchange.requestMethod != "POST" || fixture == null || caseName !in VISIT_COMMITMENT_CASES) {
+            exchange.sendResponseHeaders(HTTP_NOT_FOUND, -1)
+            exchange.close()
+            return
+        }
+
+        val result =
+            runCatching {
+                fixture.run(caseName)
+            }.getOrElse { failure ->
+                log.log(Level.WARNING, "Visit commitment Gatling probe failed: case=$caseName", failure)
+                VisitCommitmentProbeResult(
+                    caseName = caseName,
+                    verified = false,
+                    evidence = "${failure.javaClass.simpleName}:${failure.message}".replace('"', '\''),
+                )
+            }
+        val body =
+            """{"case":"${result.caseName}","verified":${result.verified},"evidence":"${result.evidence}"}"""
+                .toByteArray(StandardCharsets.UTF_8)
+        exchange.responseHeaders.add("Content-Type", "application/json")
+        exchange.sendResponseHeaders(if (result.verified) HTTP_OK else HTTP_INTERNAL_ERROR, body.size.toLong())
         exchange.responseBody.use { it.write(body) }
     }
 
@@ -295,9 +374,19 @@ class VisitCommitmentProposalSimulation : Simulation() {
         const val NORMAL_P99_BUDGET_MILLIS = 3_000
         const val MAXIMUM_P95_BUDGET_MILLIS = 5_000
         const val DATASET_COLUMN_COUNT = 12
+        const val COMMITMENT_WARMUP_COUNT = 1
+        const val COMMITMENT_MEASUREMENT_COUNT = 5
         const val POLICY_SNAPSHOT_ID = 41L
 
         val DATASET_PATH: Path = Path.of("src/gatling/resources/visit-commitment/proposal-datasets.csv")
         val BASE_INSTANT: Instant = Instant.parse("2026-08-01T00:00:00Z")
+        val log: Logger = Logger.getLogger(VisitCommitmentProposalSimulation::class.java.name)
+        val VISIT_COMMITMENT_CASES: List<String> =
+            listOf(
+                "exclusive-overlap",
+                "capacity-exhaustion",
+                "multi-lock",
+                "idempotency-replay",
+            )
     }
 }

@@ -101,6 +101,7 @@ class AdminAppointmentV2Controller(
         ApiResponse(responseCode = "409", description = "Consent, proposal, or resource conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "410", description = "Proposal or consent expired", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "412", description = "ETag does not match current version", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        ApiResponse(responseCode = "422", description = "Consent evidence required or invalid", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "428", description = "Mutation precondition missing", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "500", description = "Internal scheduling error", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
     )
@@ -138,6 +139,7 @@ class AdminAppointmentV2Controller(
         ApiResponse(responseCode = "409", description = "Policy, proposal, or resource conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "410", description = "Proposal expired", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "412", description = "ETag does not match current version", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        ApiResponse(responseCode = "422", description = "Consent evidence required or invalid", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "428", description = "Mutation precondition missing", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "500", description = "Internal scheduling error", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
     )

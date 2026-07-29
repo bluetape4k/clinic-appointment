@@ -27,6 +27,8 @@ class AppointmentCommitmentPropertiesTest {
         properties.ceiling.repeatCount shouldBeEqualTo 100
         properties.ceiling.searchDays shouldBeEqualTo 365
         properties.ceiling.candidateSlots shouldBeEqualTo 2_000
+        properties.ceiling.resourcesPerSlot shouldBeEqualTo 200
+        properties.ceiling.candidateResourceEntries shouldBeEqualTo 10_000
         properties.ceiling.returnedProposals shouldBeEqualTo 20
     }
 
@@ -57,6 +59,11 @@ class AppointmentCommitmentPropertiesTest {
         assertFailsWith<IllegalArgumentException> {
             AppointmentCommitmentProperties(
                 ceiling = AppointmentCommitmentCeilingProperties(plannedTreatments = 501),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AppointmentCommitmentProperties(
+                ceiling = AppointmentCommitmentCeilingProperties(resourcesPerSlot = 201),
             )
         }
     }

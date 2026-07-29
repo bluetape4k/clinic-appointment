@@ -25,7 +25,10 @@ import tools.jackson.databind.json.JsonMapper
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["appointment.commitment.api-enabled=true"],
+    properties = [
+        "appointment.commitment.api-enabled=true",
+        "appointment.commitment.idempotency-hash-secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+    ],
 )
 @ActiveProfiles("test", "integration-test")
 @ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)

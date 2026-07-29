@@ -18,12 +18,15 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRevisionRepository
 import io.bluetape4k.clinic.appointment.service.PackageExecutionPlanner
 import io.bluetape4k.clinic.appointment.service.ProductVersionMigrationPlanner
+import io.bluetape4k.junit5.concurrency.MultithreadingTester
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.ZoneOffset
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 
 class ProductVersionMigrationHandlerTest {
 
@@ -189,6 +192,30 @@ class ProductVersionMigrationHandlerTest {
     }
 
     @Test
+    fun `동일 migration event 동시 insert race는 하나의 revision과 duplicate 결과로 수렴한다`() {
+        val handler = handler()
+        val events = listOf(envelope(), envelope())
+        val eventIndex = AtomicInteger()
+        val results = ConcurrentLinkedQueue<PurchaseHandleResult>()
+
+        MultithreadingTester()
+            .workers(2)
+            .rounds(1)
+            .add {
+                results += handler.handle(events[eventIndex.getAndIncrement()], protectedEnvelope())
+            }
+            .run()
+
+        results.map(PurchaseHandleResult::status).toSet() shouldBeEqualTo
+            setOf(PurchaseHandleStatus.CREATED, PurchaseHandleStatus.DUPLICATE)
+        transaction {
+            AppointmentPlanRevisions.selectAll().count() shouldBeEqualTo 2L
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 1L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
+        }
+    }
+
+    @Test
     fun `고객이 전환 후 일정 변경을 거부하면 기존 예약을 유지할 운영 예외와 CRM outbox를 추가한다`() {
         val decline = TrustedSchedulingEventEnvelope(
             eventId = "migration-decline-1",
@@ -241,6 +268,34 @@ class ProductVersionMigrationHandlerTest {
             outbox[SchedulingOutboxEvents.payloadJson] shouldContain "CUSTOMER_DECLINED_RESCHEDULE"
             SchedulingQuarantineEvents.selectAll().single()[SchedulingQuarantineEvents.reasonCode] shouldBeEqualTo
                 "SOURCE_VERSION_HASH_CONFLICT"
+        }
+    }
+
+    @Test
+    fun `동일 일정 거부 event 동시 insert race는 운영 예외 하나와 duplicate 결과로 수렴한다`() {
+        val decline = declineEnvelope("migration-decline-race")
+        val handler = handler()
+        val eventIndex = AtomicInteger()
+        val events = listOf(decline, decline)
+        val results = ConcurrentLinkedQueue<PurchaseHandleResult>()
+
+        MultithreadingTester()
+            .workers(2)
+            .rounds(1)
+            .add {
+                results += handler.handleRescheduleDeclined(
+                    events[eventIndex.getAndIncrement()],
+                    protectedEnvelope(),
+                )
+            }
+            .run()
+
+        results.map(PurchaseHandleResult::status).toSet() shouldBeEqualTo
+            setOf(PurchaseHandleStatus.CREATED, PurchaseHandleStatus.DUPLICATE)
+        transaction {
+            AppointmentOperationalExceptions.selectAll().count() shouldBeEqualTo 1L
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 1L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
         }
     }
 
@@ -300,6 +355,36 @@ class ProductVersionMigrationHandlerTest {
             ),
             clock = Clock.fixed(fixture.now, ZoneOffset.UTC),
             maxGapAttempts = maxGapAttempts,
+        )
+
+    private fun declineEnvelope(
+        eventId: String,
+        sourceAggregateVersion: Long = 1L,
+    ): TrustedSchedulingEventEnvelope<ProductVersionMigrationRescheduleDeclinedEvent> =
+        TrustedSchedulingEventEnvelope(
+            eventId = eventId,
+            eventType = "ProductVersionMigrationRescheduleDeclined",
+            occurredAt = fixture.now,
+            receivedAt = fixture.now,
+            producer = "appointment-api",
+            issuer = "appointment-api",
+            audience = "appointment-event",
+            keyId = "internal-key",
+            algorithm = "EdDSA",
+            schemaVersion = 1,
+            correlationId = "correlation-decline",
+            payloadHash = "d".repeat(64),
+            payload = ProductVersionMigrationRescheduleDeclinedEvent(
+                sourceAggregateId = "migration-1",
+                sourceAggregateVersion = sourceAggregateVersion,
+                tenantGroupId = fixture.tenantGroupId,
+                clinicId = fixture.clinicId,
+                sourcePurchaseAuthority = "purchase-service",
+                sourcePurchaseId = "purchase-100",
+                migrationId = "migration-1",
+                appointmentId = null,
+                reasonCode = "CUSTOMER_DECLINED_RESCHEDULE",
+            ),
         )
 
     private fun envelope(

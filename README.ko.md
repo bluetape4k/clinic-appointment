@@ -78,7 +78,7 @@ scope head, preview job, activation command, effective snapshot, privacy-safe me
 
 | 모듈 | 역할 | 개발자 문서 |
 |------|------|-----------|
-| `appointment-core` | 도메인 모델(16개 엔티티), Exposed ORM 테이블, 리포지토리, 예약 상태머신, 슬롯 계산 서비스 | [README](appointment-core/README.md) |
+| `appointment-core` | 예약, 구매 시술 플랜, 스케줄 정책, 방문 commitment 도메인과 Exposed ORM 리포지토리, 상태머신, 슬롯 계산 서비스 | [README](appointment-core/README.md) |
 | `appointment-event` | Spring ApplicationEvent 기반 도메인 이벤트 발행/구독, 이벤트 로그 저장 | [README](appointment-event/README.md) |
 | `appointment-solver` | Timefold Solver AI 최적화 - 12개 Hard + 6개 Soft 제약으로 대량 예약 최적 배치 | [README](appointment-solver/README.md) |
 | `appointment-notification` | Redis Leader Election + Resilience4j 기반 HA 알림 스케줄러, 리마인더 발송 | [README](appointment-notification/README.md) |

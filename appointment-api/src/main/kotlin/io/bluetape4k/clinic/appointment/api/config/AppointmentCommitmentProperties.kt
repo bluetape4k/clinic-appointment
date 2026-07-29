@@ -94,6 +94,15 @@ data class AppointmentCommitmentRetryProperties(
  *
  * 각 값은 설계 승인값보다 작게 조정할 수는 있지만 크게 설정할 수 없습니다. 작은 값은
  * 특정 배포에서 부하를 더 보수적으로 제한할 때 사용합니다.
+ *
+ * @property plannedTreatments 한 Plan Revision에서 허용할 세부 진료 항목 수입니다.
+ * @property relationshipEdges 선행·병행·분리 관계 edge 총수입니다.
+ * @property repeatCount 같은 상품 구성 요소를 반복 전개할 최대 횟수입니다.
+ * @property searchDays 고객 희망일 또는 최초 예약 기준으로 탐색할 최대 일수입니다.
+ * @property candidateSlots inventory adapter가 한 계산에 제공할 후보 slot 수입니다.
+ * @property resourcesPerSlot 한 후보 slot에 포함할 의료진·장비·공간 자원 수입니다.
+ * @property candidateResourceEntries 한 요청의 모든 후보 slot에 포함할 자원 entry 합계입니다.
+ * @property returnedProposals caller에게 반환할 정렬된 proposal 최대 수입니다.
  */
 data class AppointmentCommitmentCeilingProperties(
     val plannedTreatments: Int = 500,
@@ -101,6 +110,8 @@ data class AppointmentCommitmentCeilingProperties(
     val repeatCount: Int = 100,
     val searchDays: Int = 365,
     val candidateSlots: Int = 2_000,
+    val resourcesPerSlot: Int = 200,
+    val candidateResourceEntries: Int = 10_000,
     val returnedProposals: Int = 20,
 ) : Serializable {
 
@@ -110,6 +121,10 @@ data class AppointmentCommitmentCeilingProperties(
         require(repeatCount in 1..100) { "repeatCount must be between 1 and 100" }
         require(searchDays in 1..365) { "searchDays must be between 1 and 365" }
         require(candidateSlots in 1..2_000) { "candidateSlots must be between 1 and 2000" }
+        require(resourcesPerSlot in 1..200) { "resourcesPerSlot must be between 1 and 200" }
+        require(candidateResourceEntries in 1..10_000) {
+            "candidateResourceEntries must be between 1 and 10000"
+        }
         require(returnedProposals in 1..20) { "returnedProposals must be between 1 and 20" }
     }
 

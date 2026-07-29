@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentMetrics
+import io.bluetape4k.clinic.appointment.api.commitment.AppointmentProposalService
 import io.bluetape4k.clinic.appointment.api.policy.PolicyActivationPublisher
 import io.bluetape4k.clinic.appointment.api.policy.EffectiveSchedulingPolicyService
 import io.bluetape4k.clinic.appointment.api.policy.ExposedEffectivePolicyStore
@@ -18,6 +19,17 @@ import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyPreviewServic
 import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyWorker
 import io.bluetape4k.clinic.appointment.api.policy.TenantEffectiveSchedulingPolicyService
 import io.bluetape4k.clinic.appointment.api.service.DashboardStatsService
+import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentPlanningResolver
+import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentPolicySnapshotResolver
+import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentApplicationService
+import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentConsentEvidenceVerifier
+import io.bluetape4k.clinic.appointment.api.service.DefaultAppointmentCommitmentApplicationService
+import io.bluetape4k.clinic.appointment.api.service.EffectiveAppointmentCommitmentPolicySnapshotResolver
+import io.bluetape4k.clinic.appointment.api.service.FailClosedAppointmentCommitmentConsentEvidenceVerifier
+import io.bluetape4k.clinic.appointment.api.service.FailClosedAppointmentCommitmentPlanningResolver
+import io.bluetape4k.clinic.appointment.api.service.FailClosedPatientSubjectFingerprintResolver
+import io.bluetape4k.clinic.appointment.api.service.HmacAppointmentCommitmentIdempotencyKeyHasher
+import io.bluetape4k.clinic.appointment.api.service.PatientSubjectFingerprintResolver
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
 import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
@@ -43,6 +55,7 @@ import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.bluetape4k.clinic.appointment.service.AppointmentPlanQueryService
+import io.bluetape4k.clinic.appointment.service.PackageExecutionLimits
 import io.bluetape4k.clinic.appointment.service.CatalogSyncApplicationService
 import io.bluetape4k.clinic.appointment.service.EquipmentUnavailabilityService
 import io.bluetape4k.clinic.appointment.service.EffectivePolicyCache
@@ -54,14 +67,20 @@ import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
 import io.bluetape4k.clinic.appointment.model.policy.ActorRole
 import io.micrometer.core.instrument.MeterRegistry
 import io.bluetape4k.logging.KLogging
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.core.env.Environment
+import javax.sql.DataSource
 import java.util.Base64
 import java.time.Instant
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * 예약 API의 repository와 application service를 명시적으로 조립하는 Spring 설정이다.
@@ -80,7 +99,9 @@ import java.time.Instant
 )
 class ServiceConfig {
 
-    companion object : KLogging()
+    companion object : KLogging() {
+        private val commitmentDatabaseRegistrationLock = ReentrantLock()
+    }
 
     // --- Repository 빈 ---
 
@@ -346,6 +367,187 @@ class ServiceConfig {
     @Bean
     fun appointmentCommitmentMetrics(meterRegistry: MeterRegistry): AppointmentCommitmentMetrics =
         AppointmentCommitmentMetrics(meterRegistry)
+
+    /**
+     * v2 application transaction이 Spring 관리 [DataSource]와 같은 pool을 사용하도록
+     * 명시적인 Exposed database handle을 생성한다.
+     *
+     * controller/OpenAPI slice가 [AppointmentCommitmentApplicationService]를 mock으로
+     * 대체한 경우에는 불필요한 database 조립을 생략한다. [Database.connect]는 새 handle을
+     * 전역 기본 database로 등록하므로, 기존 기본값을 즉시 복원해 Spring test context 사이의
+     * 전역 상태 오염과 legacy `transaction {}` 호출의 database 전환을 막는다.
+     */
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "appointment.commitment",
+        name = ["api-enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnMissingBean(
+        value = [
+            Database::class,
+            AppointmentCommitmentApplicationService::class,
+        ],
+    )
+    internal fun appointmentCommitmentDatabase(dataSource: DataSource): Database =
+        commitmentDatabaseRegistrationLock.withLock {
+            val previousDefaultDatabase = TransactionManager.defaultDatabase
+            try {
+                Database.connect(dataSource)
+            } finally {
+                TransactionManager.defaultDatabase = previousDefaultDatabase
+            }
+        }
+
+    /**
+     * effective-policy service가 만든 snapshot과 command FK용 row ID를 결합한다.
+     */
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "appointment.commitment",
+        name = ["api-enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnMissingBean(AppointmentCommitmentApplicationService::class)
+    internal fun appointmentCommitmentPolicySnapshotResolver(
+        database: Database,
+        effectiveSchedulingPolicyService: EffectiveSchedulingPolicyService,
+        schedulingPolicyRepository: SchedulingPolicyRepository,
+    ): AppointmentCommitmentPolicySnapshotResolver =
+        EffectiveAppointmentCommitmentPolicySnapshotResolver(
+            database = database,
+            effectiveSchedulingPolicyService = effectiveSchedulingPolicyService,
+            schedulingPolicyRepository = schedulingPolicyRepository,
+        )
+
+    /**
+     * customer identity와 실제 resource inventory adapter가 없는 기본 배포를 fail-closed로 둔다.
+     */
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "appointment.commitment",
+        name = ["api-enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnMissingBean(
+        value = [
+            AppointmentCommitmentPlanningResolver::class,
+            AppointmentCommitmentApplicationService::class,
+        ],
+    )
+    internal fun appointmentCommitmentPlanningResolver(): AppointmentCommitmentPlanningResolver =
+        FailClosedAppointmentCommitmentPlanningResolver()
+
+    /**
+     * 외부 동의 projection adapter가 아직 연결되지 않은 환경에서 commitment 동의 결정을 닫힌 실패로 둔다.
+     *
+     * 예약 API는 request body의 opaque evidence ID를 권위로 취급하지 않는다. 병원별 동의
+     * 서비스 adapter가 이 bean을 대체하고 tenant·clinic·환자·proposal·정책·약관 metadata를
+     * 반환하기 전에는 신규 예약, 직접 확정, 변경 수락이 모두 `CONSENT_REQUIRED`로 차단된다.
+     */
+    @Bean
+    @ConditionalOnMissingBean(AppointmentCommitmentConsentEvidenceVerifier::class)
+    internal fun appointmentCommitmentConsentEvidenceVerifier(): AppointmentCommitmentConsentEvidenceVerifier =
+        FailClosedAppointmentCommitmentConsentEvidenceVerifier
+
+    /**
+     * v2 HTTP controller가 사용하는 실제 application boundary를 command/query 서비스에 연결한다.
+     *
+     * controller 노출은 `appointment.commitment.api-enabled`가 계속 제어하지만 bean 자체는 항상
+     * 생성해 startup 시 production wiring 누락을 먼저 드러낸다.
+     * 기본 patient fingerprint resolver는 fail-closed이며, 구매 Plan ingress와 같은
+     * HMAC key·algorithm·domain separation을 구현한 bean을 운영 배포에서 제공해야 한다.
+     * raw `Idempotency-Key`는 JWT·정책 command와 분리된
+     * `appointment.commitment.idempotency-hash-secret`으로 HMAC-SHA-256 처리한다.
+     */
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "appointment.commitment",
+        name = ["api-enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnMissingBean(AppointmentCommitmentApplicationService::class)
+    internal fun appointmentCommitmentApplicationService(
+        database: Database,
+        properties: AppointmentCommitmentProperties,
+        metrics: AppointmentCommitmentMetrics,
+        policySnapshotResolver: AppointmentCommitmentPolicySnapshotResolver,
+        planningResolver: AppointmentCommitmentPlanningResolver,
+        consentEvidenceVerifier: AppointmentCommitmentConsentEvidenceVerifier,
+        patientSubjectFingerprintResolver: PatientSubjectFingerprintResolver,
+        tenantGroupRepository: TenantGroupRepository,
+        appointmentPlanRepository: AppointmentPlanRepository,
+        appointmentRepository: AppointmentRepository,
+        environment: Environment,
+    ): AppointmentCommitmentApplicationService =
+        DefaultAppointmentCommitmentApplicationService(
+            database = database,
+            properties = properties,
+            accessResolver =
+                io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentAccessResolver(
+                    database = database,
+                    patientSubjectFingerprintResolver = patientSubjectFingerprintResolver,
+                    tenantGroupRepository = tenantGroupRepository,
+                    appointmentPlanRepository = appointmentPlanRepository,
+                    appointmentRepository = appointmentRepository,
+                ),
+            commandService =
+                io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentCommandService(
+                    database = database,
+                    maxTransactionAttempts = properties.retry.maxAttempts,
+                    initialRetryDelayMillis = properties.retry.initialBackoff.toMillis(),
+                ),
+            policySnapshotResolver = policySnapshotResolver,
+            planningResolver = planningResolver,
+            consentEvidenceVerifier = consentEvidenceVerifier,
+            metrics = metrics,
+            proposalService =
+                AppointmentProposalService(
+                    limits =
+                        PackageExecutionLimits(
+                            maximumRepeatCount = properties.ceiling.repeatCount,
+                            maximumTreatmentCount = properties.ceiling.plannedTreatments,
+                            maximumEdgeCount = properties.ceiling.relationshipEdges,
+                            maximumCandidateSlotCount = properties.ceiling.candidateSlots,
+                            maximumResourcesPerSlot = properties.ceiling.resourcesPerSlot,
+                            maximumCandidateResourceCount = properties.ceiling.candidateResourceEntries,
+                            maximumProposalCount = properties.ceiling.returnedProposals,
+                        ),
+                ),
+            idempotencyKeyHasher =
+                HmacAppointmentCommitmentIdempotencyKeyHasher(
+                    decodeAppointmentCommitmentIdempotencySecret(environment),
+                ),
+        )
+
+    /**
+     * 구매 Plan ingress와 동일한 patient fingerprint adapter가 없으면 patient 접근을 거부한다.
+     *
+     * 운영 배포는 구매 서비스의 보호된 환자 참조와 정확히 비교할 수 있는
+     * [PatientSubjectFingerprintResolver] bean을 반드시 제공해야 한다.
+     */
+    @Bean
+    @ConditionalOnMissingBean(PatientSubjectFingerprintResolver::class)
+    internal fun patientSubjectFingerprintResolver(): PatientSubjectFingerprintResolver =
+        FailClosedPatientSubjectFingerprintResolver()
+
+    /**
+     * 예약 command 전용 Base64 HMAC 비밀값을 검증하고 방어적으로 반환한다.
+     *
+     * secret이 없거나 Base64가 아니거나 256 bit보다 짧으면 v2 API startup을 실패시켜
+     * raw idempotency key가 비키드 digest로 저장되는 구성을 허용하지 않는다.
+     */
+    private fun decodeAppointmentCommitmentIdempotencySecret(environment: Environment): ByteArray {
+        val propertyName = "appointment.commitment.idempotency-hash-secret"
+        val encoded = environment.getRequiredProperty(propertyName)
+        val decoded = try {
+            Base64.getDecoder().decode(encoded)
+        } catch (failure: IllegalArgumentException) {
+            throw IllegalStateException("$propertyName must be valid Base64", failure)
+        }
+        check(decoded.size >= 32) { "$propertyName must decode to at least 32 bytes" }
+        return decoded
+    }
 
     /** preview primitive마다 짧은 transaction을 소유하는 Exposed adapter를 생성한다. */
     @Bean

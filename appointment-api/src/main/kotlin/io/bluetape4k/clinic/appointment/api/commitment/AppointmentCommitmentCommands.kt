@@ -297,7 +297,22 @@ internal class CustomerAppointmentRequestCommand(
     }
 }
 
-/** 고객 요청 proposal을 병원 승인을 거쳐 확정하는 command입니다. */
+/**
+ * 고객 요청 proposal을 병원 승인을 거쳐 확정하는 command입니다.
+ *
+ * @property context Gateway actor scope와 멱등성 digest를 포함한 command 문맥.
+ * @property appointmentId 확정할 commitment가 소유한 방문 예약 식별자.
+ * @property proposalId 확정 대상인 영속 proposal 식별자.
+ * @property expectedVersion `If-Match`에서 해석한 commitment 낙관적 version.
+ * @property proposal 서버가 영속 proposal과 Plan snapshot으로 재구성한 정확한 일정 입력.
+ * @property expectedProposalHash 영속 proposal 내용에 결합된 canonical SHA-256.
+ * @property projectionTarget 확정 후 legacy 예약 projection에 반영할 서버 해석 결과.
+ * @property consent 관리자 직접 확정 요청에서 검증한 고객 동의 증빙. 일반 승인에서는
+ * 고객 최초 요청에 이미 저장된 동의를 사용하므로 `null`이다.
+ * @property policyDecision 관리자 직접 확정 시 현재 유효 정책에서 계산한 서버 측 판단이다.
+ * command service가 영속 proposal의 정책 snapshot과 같은 transaction에서 다시 검증한다.
+ * 일반 병원 승인에서는 고객 요청 당시 동의만 확인하므로 `null`이다.
+ */
 internal class ConfirmAppointmentProposalCommand(
     val context: CommitmentCommandContext,
     appointmentId: Long,
@@ -306,6 +321,8 @@ internal class ConfirmAppointmentProposalCommand(
     val proposal: VisitProposalInput,
     expectedProposalHash: String,
     val projectionTarget: ConfirmedAppointmentProjectionTarget,
+    val consent: ProposalConsentEvidence? = null,
+    val policyDecision: DirectConfirmationPolicyDecision? = null,
 ) : Serializable {
     val appointmentId = appointmentId.requirePositiveNumber("appointmentId")
     val proposalId = proposalId.requirePositiveNumber("proposalId")
@@ -315,6 +332,12 @@ internal class ConfirmAppointmentProposalCommand(
     init {
         require(this.expectedProposalHash.matches(SHA256)) {
             "expectedProposalHash must be a lowercase SHA-256 value"
+        }
+        require(consent == null || consent.decision == ConsentDecisionType.ACCEPTED) {
+            "direct confirmation consent must be accepted"
+        }
+        require((consent == null) == (policyDecision == null)) {
+            "direct confirmation consent and policy decision must be provided together"
         }
     }
 

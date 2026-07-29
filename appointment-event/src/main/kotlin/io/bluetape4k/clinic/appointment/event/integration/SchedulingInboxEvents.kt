@@ -31,6 +31,15 @@ object SchedulingInboxEvents : LongIdTable("scheduling_inbox_events") {
         uniqueIndex("uq_inbox_event_id", eventId)
         index("idx_inbox_status_replay_after_received", false, status, replayAfter, receivedAt)
         index(
+            "idx_inbox_retention",
+            false,
+            tenantGroupId,
+            clinicId,
+            status,
+            receivedAt,
+            id,
+        )
+        index(
             "idx_inbox_source_version",
             false,
             tenantGroupId,

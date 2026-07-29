@@ -21,7 +21,10 @@ import java.time.Instant
 import java.util.Base64
 
 /**
- * Immutable quarantine metadata plus encrypted original content for rejected inbound scheduling events.
+ * 거부된 inbound 일정 event의 격리 metadata와 암호화 원문을 저장합니다.
+ *
+ * [resolvedAt]은 release 승인·거절 또는 payload 만료처럼 운영상 해결된 시각만 기록합니다.
+ * 기존 row를 추정 backfill하지 않으므로 `null`은 아직 해결 시각이 없다는 뜻입니다.
  */
 object SchedulingQuarantineEvents : LongIdTable("scheduling_quarantine_events") {
     val eventId = varchar("event_id", 128).uniqueIndex("uq_quarantine_event_id")
@@ -38,6 +41,7 @@ object SchedulingQuarantineEvents : LongIdTable("scheduling_quarantine_events") 
     val clinicId = reference("clinic_id", Clinics, onDelete = ReferenceOption.RESTRICT)
     val reasonCode = varchar("reason_code", 128)
     val detectedAt = timestamp("detected_at")
+    val resolvedAt = timestamp("resolved_at").nullable()
     val correlationId = varchar("correlation_id", 128)
     val retentionClass = enumerationByName<QuarantineRetentionClass>("retention_class", 32)
     val payloadExpiresAt = timestamp("payload_expires_at")
@@ -46,6 +50,7 @@ object SchedulingQuarantineEvents : LongIdTable("scheduling_quarantine_events") 
 
     init {
         index("idx_quarantine_status_expiry", false, legalHold, status, payloadExpiresAt, id)
+        index("idx_quarantine_resolved_retention", false, tenantGroupId, clinicId, legalHold, status, resolvedAt, id)
         index("idx_quarantine_scope_reason", false, tenantGroupId, clinicId, reasonCode, detectedAt)
     }
 }
@@ -81,11 +86,20 @@ enum class QuarantineStatus {
     PAYLOAD_EXPIRED,
 }
 
+/**
+ * 격리 row에 append-only로 남기는 운영 행위입니다.
+ *
+ * [REDRIVE_ATTEMPT]는 handler 실행 전 의도이고 [REDRIVE]는 handler와 성공 audit이 모두
+ * 끝난 상태입니다. [REDRIVE_FAILED]는 handler 자체 실패에만 사용하며, 성공 audit 저장
+ * 실패는 `REDRIVE_ATTEMPT`로 남겨 reconciliation 대상으로 구분합니다.
+ */
 enum class QuarantineAuditAction {
     DETECTED,
     INSPECTED,
     DRY_RUN,
+    REDRIVE_ATTEMPT,
     REDRIVE,
+    REDRIVE_FAILED,
     RELEASE_DENIED,
     RELEASE_APPROVED,
     PAYLOAD_EXPIRED,
@@ -111,6 +125,12 @@ data class QuarantineDetection(
     val payloadExpiresAt: Instant,
 ) : Serializable
 
+/**
+ * 격리 상세 조회에 반환하는 최소 운영 projection입니다.
+ *
+ * @property resolvedAt release/retention lifecycle이 해결된 UTC 시각입니다. 아직 open이거나
+ * V11 이전 미해결 row이면 `null`입니다.
+ */
 data class QuarantineRecord(
     val id: Long,
     val eventId: String,
@@ -118,6 +138,7 @@ data class QuarantineRecord(
     val encryptedOriginalEnvelope: String?,
     val encryptionKeyId: String,
     val reasonCode: String,
+    val resolvedAt: Instant?,
     val payloadExpiresAt: Instant,
     val legalHold: Boolean,
     val status: QuarantineStatus,
@@ -144,8 +165,8 @@ data class QuarantineReleaseEvidence(
 
 fun interface QuarantineExpiryObserver {
     /**
-     * Transaction-local test/diagnostic hook invoked after selection and before
-     * the conditional payload-expiry update.
+     * 만료 후보 조회 뒤 조건부 payload 만료 update 전에 실행되는 transaction-local
+     * 테스트·진단 hook입니다.
      */
     fun beforeExpireCandidate(quarantineId: Long)
 
@@ -156,8 +177,8 @@ fun interface QuarantineExpiryObserver {
 
 fun interface QuarantineTransitionObserver {
     /**
-     * Transaction-local test/diagnostic hook invoked after the transition
-     * snapshot is read and before its compare-and-set update.
+     * 전이 snapshot 조회 뒤 compare-and-set update 전에 실행되는 transaction-local
+     * 테스트·진단 hook입니다.
      */
     fun beforeTransition(quarantineId: Long, nextStatus: QuarantineStatus)
 
@@ -167,7 +188,11 @@ fun interface QuarantineTransitionObserver {
 }
 
 /**
- * Caller-transaction repository for quarantine records and append-only audit rows.
+ * 격리 row와 append-only audit row를 caller transaction 안에서 조작합니다.
+ *
+ * 이 저장소는 transaction을 열지 않습니다. 상태 전이는 읽은 snapshot과 현재 상태를
+ * compare-and-set으로 비교하며, redrive는 정확한 event ID·envelope hash·승인 참조를
+ * 다시 확인합니다.
  */
 class SchedulingQuarantineRepository(
     private val clock: Clock = Clock.systemUTC(),
@@ -192,6 +217,7 @@ class SchedulingQuarantineRepository(
             it[clinicId] = detection.clinicId
             it[reasonCode] = detection.reasonCode
             it[detectedAt] = detection.detectedAt
+            it[resolvedAt] = null
             it[correlationId] = detection.correlationId
             it[retentionClass] = detection.retentionClass
             it[payloadExpiresAt] = detection.payloadExpiresAt
@@ -225,6 +251,7 @@ class SchedulingQuarantineRepository(
                     encryptedOriginalEnvelope = it[SchedulingQuarantineEvents.encryptedOriginalEnvelope],
                     encryptionKeyId = it[SchedulingQuarantineEvents.encryptionKeyId],
                     reasonCode = it[SchedulingQuarantineEvents.reasonCode],
+                    resolvedAt = it[SchedulingQuarantineEvents.resolvedAt],
                     payloadExpiresAt = it[SchedulingQuarantineEvents.payloadExpiresAt],
                     legalHold = it[SchedulingQuarantineEvents.legalHold],
                     status = it[SchedulingQuarantineEvents.status],
@@ -251,6 +278,7 @@ class SchedulingQuarantineRepository(
                     encryptedOriginalEnvelope = it[SchedulingQuarantineEvents.encryptedOriginalEnvelope],
                     encryptionKeyId = it[SchedulingQuarantineEvents.encryptionKeyId],
                     reasonCode = it[SchedulingQuarantineEvents.reasonCode],
+                    resolvedAt = it[SchedulingQuarantineEvents.resolvedAt],
                     payloadExpiresAt = it[SchedulingQuarantineEvents.payloadExpiresAt],
                     legalHold = it[SchedulingQuarantineEvents.legalHold],
                     status = it[SchedulingQuarantineEvents.status],
@@ -307,15 +335,28 @@ class SchedulingQuarantineRepository(
         )
     }
 
-    fun recordRedrive(
+    /**
+     * 승인된 한 격리 envelope에 대한 redrive 시도를 실행 전에 기록합니다.
+     *
+     * [expectedEnvelopeHash]까지 영속 격리 row와 일치해야 하므로 event ID와 상품 식별자가
+     * 같더라도 다른 환자·선호 일정 payload를 재처리할 수 없습니다. 이 audit은 실행
+     * 성공을 뜻하지 않으며, 호출자는 handler 종료 뒤 반드시 [recordRedriveSucceeded]
+     * 또는 [recordRedriveFailed]를 별도 transaction에서 기록해야 합니다.
+     */
+    fun recordRedriveAttempt(
         quarantineId: Long,
         expectedEventId: String,
+        expectedEnvelopeHash: String,
         actor: String,
         reason: String,
         approvalReferences: List<String>,
     ) {
         val current = requireRecord(quarantineId)
         require(current.eventId == expectedEventId) { "quarantine eventId does not match redrive confirmation" }
+        require(expectedEnvelopeHash.matches(sha256)) { "expectedEnvelopeHash must be lowercase SHA-256" }
+        require(current.envelopeHash == expectedEnvelopeHash) {
+            "quarantine envelopeHash does not match redrive confirmation"
+        }
         require(current.status == QuarantineStatus.RELEASE_APPROVED) {
             "redrive requires RELEASE_APPROVED quarantine status"
         }
@@ -333,12 +374,56 @@ class SchedulingQuarantineRepository(
         }
         appendAudit(
             quarantineId = quarantineId,
-            action = QuarantineAuditAction.REDRIVE,
+            action = QuarantineAuditAction.REDRIVE_ATTEMPT,
             actor = actor,
             reason = reason,
             beforeStatus = current.status,
             afterStatus = current.status,
             approvalReferences = approvalReferences.distinct().joinToString(","),
+        )
+    }
+
+    /**
+     * handler가 정상 종료한 뒤에만 redrive 성공을 append-only audit에 기록합니다.
+     */
+    fun recordRedriveSucceeded(
+        quarantineId: Long,
+        expectedEventId: String,
+        expectedEnvelopeHash: String,
+        actor: String,
+        reason: String,
+        approvalReferences: List<String>,
+    ) {
+        appendRedriveOutcome(
+            quarantineId = quarantineId,
+            expectedEventId = expectedEventId,
+            expectedEnvelopeHash = expectedEnvelopeHash,
+            actor = actor,
+            reason = reason,
+            approvalReferences = approvalReferences,
+            action = QuarantineAuditAction.REDRIVE,
+        )
+    }
+
+    /**
+     * handler 예외 뒤 실패 사실만 기록합니다. 원 예외 message나 payload는 audit에
+     * 복제하지 않아 개인정보·운영 내부정보가 reason column으로 유출되지 않습니다.
+     */
+    fun recordRedriveFailed(
+        quarantineId: Long,
+        expectedEventId: String,
+        expectedEnvelopeHash: String,
+        actor: String,
+        approvalReferences: List<String>,
+    ) {
+        appendRedriveOutcome(
+            quarantineId = quarantineId,
+            expectedEventId = expectedEventId,
+            expectedEnvelopeHash = expectedEnvelopeHash,
+            actor = actor,
+            reason = "redrive handler failed",
+            approvalReferences = approvalReferences,
+            action = QuarantineAuditAction.REDRIVE_FAILED,
         )
     }
 
@@ -483,9 +568,50 @@ class SchedulingQuarantineRepository(
                 SchedulingQuarantineEvents.encryptedOriginalEnvelope.isNotNull()
         }) {
             it[status] = nextStatus
+            it[resolvedAt] = clock.instant()
         }
         check(updated == 1) { "quarantine changed concurrently before status transition" }
         appendAudit(quarantineId, action, actor, reason, current.status, nextStatus, approvalReferences = approvalReferences)
+    }
+
+    private fun appendRedriveOutcome(
+        quarantineId: Long,
+        expectedEventId: String,
+        expectedEnvelopeHash: String,
+        actor: String,
+        reason: String,
+        approvalReferences: List<String>,
+        action: QuarantineAuditAction,
+    ) {
+        val current = requireRecord(quarantineId)
+        require(current.eventId == expectedEventId) { "quarantine eventId does not match redrive outcome" }
+        require(expectedEnvelopeHash.matches(sha256)) { "expectedEnvelopeHash must be lowercase SHA-256" }
+        require(current.envelopeHash == expectedEnvelopeHash) {
+            "quarantine envelopeHash does not match redrive outcome"
+        }
+        require(current.status == QuarantineStatus.RELEASE_APPROVED) {
+            "redrive outcome requires RELEASE_APPROVED quarantine status"
+        }
+        val lastRedriveAudit = auditTrail(quarantineId)
+            .lastOrNull {
+                it.action in setOf(
+                    QuarantineAuditAction.REDRIVE_ATTEMPT,
+                    QuarantineAuditAction.REDRIVE,
+                    QuarantineAuditAction.REDRIVE_FAILED,
+                )
+            }
+        require(lastRedriveAudit?.action == QuarantineAuditAction.REDRIVE_ATTEMPT) {
+            "redrive outcome requires a pending redrive attempt"
+        }
+        appendAudit(
+            quarantineId = quarantineId,
+            action = action,
+            actor = actor,
+            reason = reason,
+            beforeStatus = current.status,
+            afterStatus = current.status,
+            approvalReferences = approvalReferences.distinct().joinToString(","),
+        )
     }
 
     private fun requireRecord(quarantineId: Long): QuarantineRecord =
@@ -535,7 +661,7 @@ class SchedulingQuarantineRepository(
         require(detection.tenantGroupId > 0) { "tenantGroupId must be positive" }
         require(detection.clinicId > 0) { "clinicId must be positive" }
         validateReasonCode(detection.reasonCode)
-        validateEncryptedEnvelope(detection.protectedEnvelope.ciphertext)
+        detection.protectedEnvelope.ciphertext?.let(::validateEncryptedEnvelope)
         require(detection.payloadExpiresAt >= detection.detectedAt) { "payload expiry must not precede detection" }
     }
 

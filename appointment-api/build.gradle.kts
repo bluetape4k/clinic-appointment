@@ -74,8 +74,10 @@ dependencies {
 
     // Gatling
     gatling(project(":appointment-core"))
+    gatling(project(":appointment-event"))
     gatling(libs.gatling.charts.highcharts)
     gatling(libs.gatling.http.java)
+    gatlingRuntimeOnly(libs.h2.v2)
 }
 
 // spring.profiles.active 시스템 프로퍼티를 테스트 JVM에 전달 (multi-DB 테스트 지원)

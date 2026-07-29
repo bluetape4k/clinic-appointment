@@ -5,7 +5,7 @@
 > 모든 Kotlin 변경에는 `bluetape-kotlin-patterns`, 모든 동작 변경에는
 > `test-driven-development`를 적용한다.
 >
-> 상태: Task 8 구현·전체 회귀·Step 6-R 완료. Task 9 대기.
+> 상태: Task 9 완료. Task 10 세 DB·성능·전체 회귀 검증 진행.
 
 **목표:** 구매 당시 고정된 단일 상품 또는 패키지 실행 BOM을 여러 방문과 세부
 진료로 전개하고, 고객 가예약·병원 승인·고객 동의·자원 점유를 원자적으로 결합한
@@ -626,7 +626,8 @@ git diff --check
 ./gradlew :appointment-api:test
 ./gradlew :appointment-core:compileKotlin :appointment-event:compileKotlin :appointment-api:compileKotlin
 ./gradlew :appointment-api:test --tests "*VisitCommitmentDialectIntegrationTest"
-./gradlew :appointment-api:gatlingRun-io.bluetape4k.clinic.appointment.api.VisitCommitmentSimulation
+./gradlew :appointment-api:gatlingRun \
+  --simulation io.bluetape4k.clinic.appointment.api.VisitCommitmentSimulation
 ./gradlew :appointment-core:build :appointment-event:build :appointment-api:build
 git diff --check
 ```

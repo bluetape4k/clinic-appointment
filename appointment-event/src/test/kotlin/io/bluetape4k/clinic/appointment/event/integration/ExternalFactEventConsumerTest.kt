@@ -15,6 +15,7 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRevisionReposi
 import io.bluetape4k.clinic.appointment.service.PackageExecutionPlanner
 import io.bluetape4k.clinic.appointment.service.PlanDirtySetResolver
 import io.bluetape4k.clinic.appointment.service.ProductVersionMigrationPlanner
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Duration
 import java.time.ZoneOffset
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * Task 8 외부 fact의 production mutation 경계를 검증합니다.
@@ -262,7 +264,7 @@ class ExternalFactEventConsumerTest {
     }
 
     @Test
-    fun `ingress 상한을 한 byte 넘긴 원문도 보호한 뒤 PAYLOAD_TOO_LARGE로 격리한다`() {
+    fun `ingress 상한을 넘긴 원문은 암호화하지 않고 hash 증거만 남긴다`() {
         val migration = migrationEvent()
 
         val result = consumer(migration).acceptProductVersionMigration(
@@ -281,8 +283,122 @@ class ExternalFactEventConsumerTest {
             AppointmentPlanRevisions.selectAll().count() shouldBeEqualTo 1L
             val quarantine = SchedulingQuarantineEvents.selectAll().single()
             quarantine[SchedulingQuarantineEvents.reasonCode] shouldBeEqualTo "PAYLOAD_TOO_LARGE"
-            checkNotNull(quarantine[SchedulingQuarantineEvents.encryptedOriginalEnvelope])
-                .length shouldBeLessOrEqualTo 1_500_000
+            quarantine[SchedulingQuarantineEvents.encryptedOriginalEnvelope] shouldBeEqualTo null
+            quarantine[SchedulingQuarantineEvents.envelopeHash].length shouldBeEqualTo 64
+        }
+    }
+
+    @Test
+    fun `source authority proof 장애는 handler 실행 전에 WAITING_GAP으로 staging하고 reason metric을 남긴다`() {
+        val migration = migrationEvent().copy(sourceAggregateVersion = 4)
+        val decline = declineEvent().copy(sourceAggregateVersion = 4)
+        val fulfillment = fulfillmentEvent().copy(sourceAggregateVersion = 4)
+        val metrics = ConcurrentLinkedQueue<Pair<String, String?>>()
+        val consumer = consumer(
+            migration = migration,
+            decline = decline,
+            fulfillment = fulfillment,
+            migrationProofProvider = ProductVersionMigrationProofProvider { _, _ ->
+                throw SourceAuthorityUnavailableException(SourceAuthorityFailureReason.TIMEOUT)
+            },
+            declineProofProvider = MigrationDeclineProofProvider { _, _ ->
+                throw SourceAuthorityUnavailableException(SourceAuthorityFailureReason.CIRCUIT_OPEN)
+            },
+            fulfillmentProofProvider = TreatmentFulfillmentProofProvider { _, _ ->
+                throw SourceAuthorityUnavailableException(SourceAuthorityFailureReason.TIMEOUT)
+            },
+            metrics = ExternalFactMetrics { result, reason -> metrics += result to reason },
+        )
+
+        val results = listOf(
+            consumer.acceptProductVersionMigration(
+                rawEnvelope(
+                    eventId = "migration-authority-timeout",
+                    eventType = "ProductVersionMigrationApproved",
+                    producer = "product-service",
+                    payloadHash = ProductVersionMigrationPayloadHasher.hash(migration),
+                ),
+                RAW_JSON,
+                routing(migration),
+            ),
+            consumer.acceptMigrationRescheduleDeclined(
+                rawEnvelope(
+                    eventId = "decline-authority-circuit-open",
+                    eventType = "ProductVersionMigrationRescheduleDeclined",
+                    producer = "product-service",
+                    payloadHash = ProductVersionMigrationRescheduleDeclinedPayloadHasher.hash(decline),
+                ),
+                RAW_JSON,
+                routing(decline),
+            ),
+            consumer.acceptTreatmentFulfillment(
+                rawEnvelope(
+                    eventId = "fulfillment-authority-timeout",
+                    eventType = "TreatmentFulfillmentRecorded",
+                    producer = "clinical-service",
+                    payloadHash = TreatmentFulfillmentPayloadHasher.hash(fulfillment),
+                ),
+                RAW_JSON,
+                routing(fulfillment),
+            ),
+        )
+
+        results.map(PurchaseHandleResult::status) shouldBeEqualTo
+            listOf(
+                PurchaseHandleStatus.WAITING_GAP,
+                PurchaseHandleStatus.WAITING_GAP,
+                PurchaseHandleStatus.WAITING_GAP,
+            )
+        results.map(PurchaseHandleResult::reasonCode) shouldBeEqualTo
+            listOf(
+                "SOURCE_AUTHORITY_TIMEOUT",
+                "SOURCE_AUTHORITY_CIRCUIT_OPEN",
+                "SOURCE_AUTHORITY_TIMEOUT",
+            )
+        metrics.toList() shouldBeEqualTo
+            listOf(
+                "WAITING_GAP" to "SOURCE_AUTHORITY_TIMEOUT",
+                "WAITING_GAP" to "SOURCE_AUTHORITY_CIRCUIT_OPEN",
+                "WAITING_GAP" to "SOURCE_AUTHORITY_TIMEOUT",
+            )
+        transaction {
+            AppointmentPlanRevisions.selectAll().count() shouldBeEqualTo 1L
+            SchedulingInboxEvents.selectAll()
+                .map { it[SchedulingInboxEvents.failureCode] }
+                .toSet() shouldBeEqualTo
+                setOf("SOURCE_AUTHORITY_TIMEOUT", "SOURCE_AUTHORITY_CIRCUIT_OPEN")
+            SchedulingQuarantineEvents.selectAll().count() shouldBeEqualTo 0L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
+        }
+    }
+
+    @Test
+    fun `metric failure does not replace the durable external fact result`() {
+        val migration = migrationEvent()
+        val consumer =
+            consumer(
+                migration = migration,
+                metrics = ExternalFactMetrics { _, _ -> error("registry unavailable") },
+            )
+
+        val result =
+            consumer.acceptProductVersionMigration(
+                rawEnvelope(
+                    eventId = "migration-metric-failure",
+                    eventType = "ProductVersionMigrationApproved",
+                    producer = "product-service",
+                    payloadHash = ProductVersionMigrationPayloadHasher.hash(migration),
+                ),
+                RAW_JSON,
+                routing(migration),
+            )
+
+        result.status shouldBeEqualTo PurchaseHandleStatus.CREATED
+        transaction {
+            SchedulingInboxEvents
+                .selectAll()
+                .where { SchedulingInboxEvents.eventId eq "migration-metric-failure" }
+                .count() shouldBeEqualTo 1L
         }
     }
 
@@ -290,6 +406,12 @@ class ExternalFactEventConsumerTest {
         migration: ProductVersionMigrationApprovedEvent = migrationEvent(),
         decline: ProductVersionMigrationRescheduleDeclinedEvent = declineEvent(),
         fulfillment: TreatmentFulfillmentEvent = fulfillmentEvent(),
+        migrationProofProvider: ProductVersionMigrationProofProvider = ProductVersionMigrationProofProvider { _, _ ->
+            null
+        },
+        declineProofProvider: MigrationDeclineProofProvider = MigrationDeclineProofProvider { _, _ -> null },
+        fulfillmentProofProvider: TreatmentFulfillmentProofProvider = TreatmentFulfillmentProofProvider { _, _ -> null },
+        metrics: ExternalFactMetrics = ExternalFactMetrics.NOOP,
     ): ExternalFactEventConsumer {
         val fixedClock = Clock.fixed(fixture.now, ZoneOffset.UTC)
         val quarantineRepository = SchedulingQuarantineRepository(fixedClock)
@@ -323,9 +445,9 @@ class ExternalFactEventConsumerTest {
             ),
             quarantineRepository = quarantineRepository,
             rejectionRepository = UntrustedSchedulingEventRejectionRepository(),
-            migrationProofProvider = ProductVersionMigrationProofProvider { _, _ -> null },
-            declineProofProvider = MigrationDeclineProofProvider { _, _ -> null },
-            fulfillmentProofProvider = TreatmentFulfillmentProofProvider { _, _ -> null },
+            migrationProofProvider = migrationProofProvider,
+            declineProofProvider = declineProofProvider,
+            fulfillmentProofProvider = fulfillmentProofProvider,
             migrationHandler = ProductVersionMigrationHandler(
                 eventRepository = eventRepository,
                 quarantineRepository = quarantineRepository,
@@ -348,6 +470,7 @@ class ExternalFactEventConsumerTest {
                 clock = fixedClock,
             ),
             clock = fixedClock,
+            metrics = metrics,
         )
     }
 

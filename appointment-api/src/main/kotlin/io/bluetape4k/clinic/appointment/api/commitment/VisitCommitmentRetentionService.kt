@@ -44,17 +44,27 @@ import java.time.Instant
  * @property database cleanup transaction을 실행할 Exposed database입니다.
  * @property clock 모든 retention cutoff와 audit 시각의 단일 UTC 기준입니다.
  * @property batchSizePerTenant 한 호출에서 종류별로 처리할 최대 row 수입니다.
+ * @property mutationObserver 후보 조회와 조건부 update 사이 경쟁을 재현하는 테스트·진단 hook입니다.
  */
 class VisitCommitmentRetentionService(
     private val database: Database,
     private val clock: Clock = Clock.systemUTC(),
     private val batchSizePerTenant: Int = 500,
+    private val mutationObserver: VisitCommitmentRetentionMutationObserver =
+        VisitCommitmentRetentionMutationObserver.NOOP,
 ) {
 
     init {
         require(batchSizePerTenant in 1..5_000) { "batchSizePerTenant must be between 1 and 5000" }
     }
 
+    /**
+     * 한 tenant·clinic의 보존 기한을 현재 [Clock] 기준으로 한 batch만 적용합니다.
+     *
+     * 양수 scope만 허용하며, 삭제·payload 만료·감사 기록은 하나의 transaction에서
+     * 원자적으로 처리합니다. 반환 ID는 운영 로그용이 아니라 테스트와 호출자가 실제
+     * 변경 건수를 계산하기 위한 값입니다.
+     */
     fun cleanupTenant(
         tenantGroupId: Long,
         clinicId: Long,
@@ -78,26 +88,35 @@ class VisitCommitmentRetentionService(
             if (outboxIds.isNotEmpty()) {
                 SchedulingOutboxEvents.deleteWhere { SchedulingOutboxEvents.id inList outboxIds }
             }
-            quarantineIds.forEach { quarantineId ->
-                SchedulingQuarantineEvents.update({
-                    (SchedulingQuarantineEvents.id eq quarantineId) and
-                        (SchedulingQuarantineEvents.legalHold eq false) and
-                        SchedulingQuarantineEvents.encryptedOriginalEnvelope.isNotNull()
-                }) {
-                    it[encryptedOriginalEnvelope] = null
-                    it[status] = QuarantineStatus.PAYLOAD_EXPIRED
-                }
-                SchedulingQuarantineAuditEvents.insert {
-                    it[SchedulingQuarantineAuditEvents.quarantineId] = quarantineId
-                    it[action] = QuarantineAuditAction.PAYLOAD_EXPIRED
-                    it[actor] = RETENTION_ACTOR
-                    it[reason] = RETENTION_REASON
-                    it[beforeStatus] = null
-                    it[afterStatus] = QuarantineStatus.PAYLOAD_EXPIRED
-                    it[createdAt] = now
+            val expiredQuarantineIds = buildList {
+                quarantineIds.forEach { quarantineId ->
+                    mutationObserver.beforeExpireQuarantine(quarantineId)
+                    val updated = SchedulingQuarantineEvents.update({
+                        (SchedulingQuarantineEvents.id eq quarantineId) and
+                            (SchedulingQuarantineEvents.legalHold eq false) and
+                            (SchedulingQuarantineEvents.status inList RESOLVED_QUARANTINE_STATUSES) and
+                            SchedulingQuarantineEvents.resolvedAt.isNotNull() and
+                            (SchedulingQuarantineEvents.resolvedAt less now.minus(QUARANTINE_RETENTION)) and
+                            SchedulingQuarantineEvents.encryptedOriginalEnvelope.isNotNull()
+                    }) {
+                        it[encryptedOriginalEnvelope] = null
+                        it[status] = QuarantineStatus.PAYLOAD_EXPIRED
+                    }
+                    if (updated == 1) {
+                        SchedulingQuarantineAuditEvents.insert {
+                            it[SchedulingQuarantineAuditEvents.quarantineId] = quarantineId
+                            it[action] = QuarantineAuditAction.PAYLOAD_EXPIRED
+                            it[actor] = RETENTION_ACTOR
+                            it[reason] = RETENTION_REASON
+                            it[beforeStatus] = null
+                            it[afterStatus] = QuarantineStatus.PAYLOAD_EXPIRED
+                            it[createdAt] = now
+                        }
+                        add(quarantineId)
+                    }
                 }
             }
-            VisitCommitmentRetentionResult(idempotencyIds, inboxIds, outboxIds, quarantineIds)
+            VisitCommitmentRetentionResult(idempotencyIds, inboxIds, outboxIds, expiredQuarantineIds)
         }
     }
 
@@ -144,10 +163,11 @@ class VisitCommitmentRetentionService(
                     (SchedulingQuarantineEvents.legalHold eq false) and
                     (SchedulingQuarantineEvents.status inList RESOLVED_QUARANTINE_STATUSES) and
                     SchedulingQuarantineEvents.encryptedOriginalEnvelope.isNotNull() and
-                    (SchedulingQuarantineEvents.detectedAt less cutoff)
+                    SchedulingQuarantineEvents.resolvedAt.isNotNull() and
+                    (SchedulingQuarantineEvents.resolvedAt less cutoff)
             }
             .orderBy(
-                SchedulingQuarantineEvents.detectedAt to SortOrder.ASC,
+                SchedulingQuarantineEvents.resolvedAt to SortOrder.ASC,
                 SchedulingQuarantineEvents.id to SortOrder.ASC,
             )
             .limit(batchSizePerTenant)
@@ -165,9 +185,29 @@ class VisitCommitmentRetentionService(
 }
 
 /**
+ * retention 후보 선택과 조건부 update 사이의 경쟁을 재현하는 진단 hook입니다.
+ *
+ * production 기본값은 no-op입니다. 테스트는 이 지점에서 legal hold나 상태를 변경해
+ * compare-and-set이 audit 없이 안전하게 0건 처리하는지 검증할 수 있습니다.
+ */
+fun interface VisitCommitmentRetentionMutationObserver {
+    /** quarantine payload 조건부 만료 직전에 호출되는 테스트 진단 지점입니다. */
+    fun beforeExpireQuarantine(quarantineId: Long)
+
+    companion object {
+        val NOOP = VisitCommitmentRetentionMutationObserver { }
+    }
+}
+
+/**
  * 한 tenant·clinic cleanup 실행에서 실제로 변경된 row ID입니다.
  *
  * quarantine ID는 metadata row 삭제가 아니라 암호화 payload 만료를 의미합니다.
+ *
+ * @property deletedIdempotencyIds 보존 기한을 지난 command idempotency row ID입니다.
+ * @property deletedInboxIds 처리 완료 후 보존 기한을 지난 inbox row ID입니다.
+ * @property deletedOutboxIds 전달 완료 후 보존 기한을 지난 outbox row ID입니다.
+ * @property expiredQuarantinePayloadIds metadata는 유지하고 암호화 payload만 만료한 quarantine ID입니다.
  */
 data class VisitCommitmentRetentionResult(
     val deletedIdempotencyIds: List<Long>,

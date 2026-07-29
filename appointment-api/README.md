@@ -63,6 +63,28 @@ principals fail closed. Every mutation requires `Idempotency-Key`; creation
 also requires `If-None-Match: *`, and existing-aggregate mutations require the
 latest `ETag` in `If-Match`.
 
+The Gateway must issue bounded claims that satisfy one actor invariant set.
+For example, an administrator token for clinic `101` contains:
+
+```json
+{
+  "sub": "admin-operator-01",
+  "jti": "token_01J1M6Y6XRK8N0W2M3P4Q5R6S7",
+  "auth_time": 1785373200,
+  "allowedTenants": ["tenant-default"],
+  "allowedClinicIds": [101],
+  "clinicId": 101,
+  "actorType": "ADMIN",
+  "roles": ["ADMIN"],
+  "assurance": "MFA"
+}
+```
+
+A patient token uses `actorType: "PATIENT"`, includes the matching `PATIENT`
+role and a stable `patientSubject`, and cannot carry an administrator role.
+`clinicId`, when present, must be a member of `allowedClinicIds`; the v2
+application still resolves the actual Plan/appointment scope from storage.
+
 | Request kind | Required headers | Example |
 |------|------|------|
 | New provisional or administrator direct creation | `Idempotency-Key`, `If-None-Match` | `request_01J1M6Y6XRK8N0W2M3P4Q5R6S7`, `*` |
@@ -78,18 +100,34 @@ Reusing the same ID for another decision returns a stable `409`.
 
 | Property | Default | Operational meaning |
 |------|------|------|
-| `appointment.commitment.api-enabled` | `false` | Bootstrap gate for all v2 routes before Task 9 wiring |
+| `appointment.commitment.api-enabled` | `false` | Bootstrap gate for all v2 routes; enable only after the production adapters and readiness evidence pass |
 | `appointment.commitment.ingress-enabled` | `true` | Allows only new patient requests and administrator direct creation |
 | `appointment.commitment.mode` | `OFF` | `OFF` blocks new computation/writes, `SHADOW` compares, and `WRITE` uses the allowlist. |
 | `appointment.commitment.clinic-allowlist` | Empty | Clinic IDs eligible for `WRITE`. |
 | `appointment.commitment.proposal-ttl` | `30m` | Proposal approval expiry. |
 | `appointment.commitment.retry.max-attempts` | `3` | Bounded attempts including the initial try. |
+| `appointment.commitment.ceiling.resources-per-slot` | `200` | Maximum practitioner, equipment, and space resource entries in one candidate slot. |
+| `appointment.commitment.ceiling.candidate-resource-entries` | `10,000` | Maximum resource entries across one proposal computation request. |
+| `appointment.commitment.idempotency-hash-secret` | None | Required Base64 secret of at least 32 decoded bytes when the v2 API is enabled; never reuse the JWT or policy-command secret. |
+| `appointment.commitment.retention-enabled` | `false` | Enables the in-process retention owner; keep one owner per deployment. |
+| `appointment.commitment.retention-interval` | `PT1H` | Fixed delay between bounded retention runs. |
 
 Use `api-enabled=false` only during bootstrap, before any v2 commitment exists.
 After commitments exist, rollback must set `ingress-enabled=false` to stop new
 intake only. Reads, approval, confirmation, proposal acceptance or decline, and
 change proposals remain available so existing patients are not stranded.
 `WRITE` permits new rows only when both the mode and clinic allowlist match.
+The API refuses to start without its dedicated idempotency HMAC secret when
+`api-enabled=true`.
+
+Production enablement also requires an `AppointmentCommitmentPlanningResolver`
+adapter that supplies the authoritative patient identity, candidate inventory
+slots, stored-proposal resource mappings, and confirmed projection target.
+The built-in resolver rejects every planning request, so enabling the route
+without that adapter never fabricates customer or resource data.
+Provide a `PatientSubjectFingerprintResolver` that uses the same HMAC key,
+algorithm, and domain separation as the purchase Plan ingress. The built-in
+resolver does not guess with plain SHA-256; it fails closed for patient access.
 
 #### Stable error contract
 

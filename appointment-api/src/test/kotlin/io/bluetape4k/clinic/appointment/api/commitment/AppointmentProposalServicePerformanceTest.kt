@@ -6,6 +6,8 @@ import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionDependencyRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionGroupingConstraintRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionTreatmentRecord
+import io.bluetape4k.clinic.appointment.model.commitment.ResourceAllocationMode
+import io.bluetape4k.clinic.appointment.model.commitment.ResourceType
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
 import io.bluetape4k.clinic.appointment.model.plan.ExecutionDependency
 import io.bluetape4k.clinic.appointment.model.plan.ExecutionDependencyType
@@ -51,6 +53,39 @@ class AppointmentProposalServicePerformanceTest {
         }
         (Files.size(reportDirectory.resolve("unit-timing.tsv")) > 0L).shouldBeTrue()
         (Files.size(reportDirectory.resolve("percentiles.md")) > 0L).shouldBeTrue()
+    }
+
+    @Test
+    fun `자원 cardinality 상한 fixture의 실제 매칭 비용이 별도 percentile 예산 안에 있다`() {
+        val request = resourceRichRequest()
+        val service = AppointmentProposalService()
+        repeat(30) {
+            service.generate(request)
+        }
+        val samples =
+            List(100) {
+                measureNanoTime {
+                    service.generate(request)
+                }.toMillis()
+            }
+        val p95 = samples.percentile(95)
+        val p99 = samples.percentile(99)
+
+        (p95 <= RESOURCE_RICH_P95_MILLIS).shouldBeTrue()
+        (p99 <= RESOURCE_RICH_P99_MILLIS).shouldBeTrue()
+
+        val reportDirectory = Path.of("build/reports/gatling/visit-commitment")
+        Files.createDirectories(reportDirectory)
+        Files.writeString(
+            reportDirectory.resolve("resource-rich-percentiles.md"),
+            """
+            | Dataset | Treatments | Resources per slot | Samples | Proposal p95 ms | Proposal p99 ms |
+            |---|---:|---:|---:|---:|---:|
+            | resource-rich | $RESOURCE_RICH_TREATMENTS | $RESOURCE_RICH_RESOURCES | ${samples.size} | $p95 | $p99 |
+            """.trimIndent(),
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+        )
     }
 
     private fun measure(dataset: PerformanceDataset): PerformanceResult {
@@ -292,6 +327,92 @@ class AppointmentProposalServicePerformanceTest {
         spaceCapabilities = emptyList(),
     )
 
+    /**
+     * 자원 상한의 실제 비용을 측정하기 위해 각 항목이 의료진·장비·공간을 요구하고,
+     * 일치 자원은 200개 목록 끝에 배치한 한 방문 fixture를 만든다.
+     */
+    private fun resourceRichRequest(): AppointmentProposalRequest {
+        val treatments =
+            List(RESOURCE_RICH_TREATMENTS) { index ->
+                treatment(index, completed = false).copy(
+                    practitionerQualifications = listOf("DERM"),
+                    equipmentTypes = listOf("LASER_X"),
+                    spaceCapabilities = listOf("LASER_SAFE"),
+                )
+            }
+        val grouping =
+            treatments.drop(1).map { treatment ->
+                PlanRevisionGroupingConstraintRecord(
+                    firstTreatmentKey = treatments.first().treatmentKey,
+                    secondTreatmentKey = treatment.treatmentKey,
+                    type = VisitGroupingType.MUST_SAME_VISIT,
+                )
+            }
+        val distractors =
+            List(RESOURCE_RICH_RESOURCES - 3) { index ->
+                AvailableProposalResource(
+                    resourceType = ResourceType.entries[index % ResourceType.entries.size],
+                    resourceId = "distractor-$index",
+                    capabilities = setOf("UNMATCHED-$index"),
+                    allocationMode = ResourceAllocationMode.EXCLUSIVE,
+                    capacityUnits = 1,
+                )
+            }
+        val resources =
+            distractors +
+                listOf(
+                    resource(ResourceType.PRACTITIONER, "doctor-resource-rich", "DERM"),
+                    resource(ResourceType.EQUIPMENT, "laser-resource-rich", "LASER_X"),
+                    resource(ResourceType.TREATMENT_SPACE, "room-resource-rich", "LASER_SAFE"),
+                )
+        return AppointmentProposalRequest(
+            tenantGroupId = 1L,
+            clinicId = 10L,
+            appointmentIdSeed = 100L,
+            proposalRevision = 1L,
+            planRevisionId = 7L,
+            treatments = treatments,
+            dependencies = emptyList(),
+            groupingConstraints = grouping,
+            bookingPreference =
+                BookingPreferenceSnapshot.ExactDateTime(
+                    originalLocalDateTime = BASE_INSTANT.atOffset(java.time.ZoneOffset.UTC).toLocalDateTime(),
+                    originalOffset = java.time.ZoneOffset.UTC,
+                    zoneId = java.time.ZoneOffset.UTC,
+                    normalizedInstant = BASE_INSTANT,
+                ),
+            purchasedAt = BASE_INSTANT,
+            initialBookingRule = null,
+            completedAtByTreatmentKey = emptyMap(),
+            attemptNumberByTreatmentKey = emptyMap(),
+            changedTreatmentKeys = emptySet(),
+            confirmedTreatmentKeys = emptySet(),
+            candidateSlots =
+                listOf(
+                    ProposalCandidateSlot(
+                        tenantGroupId = 1L,
+                        clinicId = 10L,
+                        startsAt = BASE_INSTANT,
+                        availableResources = resources,
+                    ),
+                ),
+            searchDays = 1,
+            policySnapshot = CurrentPolicySnapshot(41L, effectivePolicy()),
+        )
+    }
+
+    private fun resource(
+        type: ResourceType,
+        id: String,
+        capability: String,
+    ) = AvailableProposalResource(
+        resourceType = type,
+        resourceId = id,
+        capabilities = setOf(capability),
+        allocationMode = ResourceAllocationMode.EXCLUSIVE,
+        capacityUnits = 1,
+    )
+
     private fun effectivePolicy() =
         EffectiveSchedulingPolicy(
             id = "policy-hash",
@@ -344,6 +465,10 @@ class AppointmentProposalServicePerformanceTest {
     private companion object {
         val DATASET_PATH: Path = Path.of("src/gatling/resources/visit-commitment/proposal-datasets.csv")
         val BASE_INSTANT: Instant = Instant.parse("2026-08-01T00:00:00Z")
+        const val RESOURCE_RICH_TREATMENTS = 40
+        const val RESOURCE_RICH_RESOURCES = 200
+        const val RESOURCE_RICH_P95_MILLIS = 50.0
+        const val RESOURCE_RICH_P99_MILLIS = 100.0
     }
 }
 

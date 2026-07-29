@@ -175,6 +175,8 @@ class PackageExecutionPlanner(
  * @property maximumTreatmentCount 완전히 전개된 전체 진료 항목 상한입니다.
  * @property maximumEdgeCount 실행 의존성과 방문 묶음 관계를 합한 상한입니다.
  * @property maximumCandidateSlotCount 한 동기식 요청에서 평가할 candidate slot 상한입니다.
+ * @property maximumResourcesPerSlot 한 candidate slot이 제공할 실제 병원 자원 상한입니다.
+ * @property maximumCandidateResourceCount 한 요청의 모든 slot에 포함할 자원 entry 합계 상한입니다.
  * @property maximumProposalCount 한 요청에서 반환할 proposal 상한입니다.
  */
 data class PackageExecutionLimits(
@@ -182,6 +184,8 @@ data class PackageExecutionLimits(
     val maximumTreatmentCount: Int = 500,
     val maximumEdgeCount: Int = 4_000,
     val maximumCandidateSlotCount: Int = 2_000,
+    val maximumResourcesPerSlot: Int = 200,
+    val maximumCandidateResourceCount: Int = 10_000,
     val maximumProposalCount: Int = 20,
 ) : Serializable {
 
@@ -190,6 +194,8 @@ data class PackageExecutionLimits(
         maximumTreatmentCount.requirePositiveNumber("maximumTreatmentCount")
         maximumEdgeCount.requirePositiveNumber("maximumEdgeCount")
         maximumCandidateSlotCount.requirePositiveNumber("maximumCandidateSlotCount")
+        maximumResourcesPerSlot.requirePositiveNumber("maximumResourcesPerSlot")
+        maximumCandidateResourceCount.requirePositiveNumber("maximumCandidateResourceCount")
         maximumProposalCount.requirePositiveNumber("maximumProposalCount")
     }
 
