@@ -12,6 +12,10 @@ import java.security.MessageDigest
  * 날짜만 hash하지 않고 항목별 Plan provenance와 준비·진료·회복 시간, 실제 자원 점유,
  * 정책 스냅샷, 대체 대상까지 포함합니다. 따라서 고객이 동의한 뒤 중요한 조건이
  * 달라지면 새 proposal revision과 새 동의가 필요합니다.
+ *
+ * DB가 생성하는 appointment/proposal ID는 hash에서 제외합니다. 최초 예약은 ID 생성
+ * 전에 외부 동의 서비스가 같은 의미의 proposal을 검증해야 하며, 영속화 뒤에는
+ * commitment·proposal 소유권과 전역 unique evidence가 ID 재사용을 별도로 차단합니다.
  */
 object ProposalHasher {
 
@@ -28,7 +32,6 @@ object ProposalHasher {
             .joinToString("") { byte -> "%02x".format(byte) }
 
     private fun MessageDigest.updateProposal(proposal: AppointmentProposalDraft) {
-        updateField("appointmentId", proposal.appointmentId)
         updateField("revision", proposal.revision)
         updateField("startsAt", proposal.startsAt)
         updateField("endsAt", proposal.endsAt)

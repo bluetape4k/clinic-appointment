@@ -461,6 +461,35 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
     }
 
     /**
+     * commitment v2 방문 projection을 tenant·clinic 범위 안에서 취소합니다.
+     *
+     * commitment CAS, allocation 해제, outbox 기록과 같은 transaction에서 호출해야
+     * legacy projection과 commitment 상태가 분리되지 않습니다.
+     */
+    fun cancelCommitmentProjection(
+        appointmentId: Long,
+        tenantGroupId: Long,
+        clinicId: Long,
+        updatedAt: Instant,
+    ): Boolean {
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
+        val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
+        val validClinicId = clinicId.requirePositiveNumber("clinicId")
+        return Appointments.update(
+            where = {
+                (Appointments.id eq validAppointmentId) and
+                    (Appointments.clinicId eq validClinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(validTenantGroupId)) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.COMMITMENT_V2) and
+                    (Appointments.status neq AppointmentState.CANCELLED)
+            },
+        ) {
+            it[status] = AppointmentState.CANCELLED
+            it[Appointments.updatedAt] = updatedAt
+        } == 1
+    }
+
+    /**
      * 예약의 상태를 변경합니다.
      *
      * @param appointmentId 예약 ID

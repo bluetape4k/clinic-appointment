@@ -99,6 +99,10 @@ runner는 clinic ID keyset으로 활성 scope를 500개씩 조회하므로 전�
 메모리에 올리지 않는다. 각 scope의 record 종류별 삭제·payload 만료도 최대 500건으로
 제한한다. 실행 시간이 다음 주기와 겹치면 새 owner를 추가하지 말고 interval과 database
 부하를 먼저 조정한다.
+scope discovery 단계의 DB 오류는 아직 안전한 tenant·clinic을 알 수 없으므로
+per-scope metric을 만들지 않는다. runner는 고정된 `commitment retention scope
+discovery failed` 메시지만 남기고 예외를 다시 전달한다. process scheduler의 error
+log 또는 외부 CronJob 실패 상태를 반드시 alert source로 연결한다.
 
 | Record | 보존 기간 | 삭제·만료 조건 | 반드시 보존 |
 |---|---:|---|---|
@@ -109,6 +113,31 @@ runner는 clinic ID keyset으로 활성 scope를 500개씩 조회하므로 전�
 
 Quarantine은 metadata row를 삭제하지 않고 암호화 payload만 만료하며
 `PAYLOAD_EXPIRED` audit을 추가한다.
+
+## 환불 사실과 예약 취소 handoff
+
+환불 승인·금액·정산은 결제서비스가 소유한다. 예약서비스의
+`TreatmentFulfillmentHandler`는 신뢰된 `REFUNDED` 사실을 받아 해당 Plan Revision의
+미진행 항목과 `BLOCKING` 후속 항목을 `CANCELLED`로 투영하며, 완료 항목과 기존
+진료 이력은 변경하지 않는다.
+
+확정 방문의 활성 allocation 해제는 별도의 예약 취소 command가 소유한다. 외부
+transport/consumer가 배포되기 전에는 예약 운영 관리자가 환불 사실의
+`tenant/clinic/plan/treatment` 범위와 취소할 appointment를 확인하고
+`POST /api/v2/appointments/{id}/cancel`을 `reasonCode=REFUND`로 실행한다. command는
+멱등성 key와 최신 `If-Match`를 요구하고, 활성 allocation 해제·legacy projection
+취소·`APPOINTMENT_CANCELLED` outbox를 같은 transaction에서 처리한다.
+
+운영 `WRITE` 전에 자동 handoff를 도입한다면 다음 증거가 모두 필요하다.
+
+- 환불 outbox에서 예약 취소 command로 이어지는 consumer/transport 계약
+- 동일 환불과 동일 appointment replay를 막는 멱등성 key 규칙
+- stale version, 이미 취소됨, 일부 완료, allocation conflict의 retry/DLQ 정책
+- 실패 alert와 수동 취소 전환 runbook
+- 환불 사실부터 allocation 해제와 `APPOINTMENT_CANCELLED` 발행까지의 통합 테스트
+
+이 증거가 없으면 환불 사실만으로 확정 예약이 자동 취소된다고 운영자나 호출자에게
+보장하지 않는다.
 
 ## Rollback
 

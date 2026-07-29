@@ -63,17 +63,31 @@ class AppointmentCommitmentOpenApiTest {
         val create = root.at("/paths/${pointer("/api/v2/appointment-requests")}/post")
         create.isMissingNode.shouldBeFalse()
         create.path("responses").has("202").shouldBeTrue()
-        listOf("400", "401", "403", "409", "422", "428", "500").forEach { code ->
+        listOf("400", "401", "403", "409", "422", "428", "500", "503").forEach { code ->
             create.path("responses").has(code).shouldBeTrue()
         }
         val createHeaders = create.path("parameters").associateBy { it.path("name").stringValue() }
         createHeaders["Idempotency-Key"]?.path("required")?.asBoolean() shouldBeEqualTo true
         createHeaders[HttpHeaders.IF_NONE_MATCH]?.path("required")?.asBoolean() shouldBeEqualTo true
 
+        val directCreate = root.at("/paths/${pointer("/api/v2/admin/appointments")}/post")
+        directCreate.isMissingNode.shouldBeFalse()
+        directCreate.path("responses").has("201").shouldBeTrue()
+        directCreate.path("responses").has("503").shouldBeTrue()
+
+        val query = root.at("/paths/${pointer("/api/v2/appointments/{id}/commitment")}/get")
+        query.isMissingNode.shouldBeFalse()
+        val querySuccess = query.path("responses").path("200")
+        querySuccess.path("headers").has(HttpHeaders.ETAG).shouldBeTrue()
+        querySuccess.at("/content/application~1json/schema/\$ref").stringValue()
+            .endsWith("/AppointmentCommitmentResponse").shouldBeTrue()
+
         listOf(
             "/api/v2/appointments/{id}/approve",
             "/api/v2/appointments/{id}/confirm",
             "/api/v2/appointments/{id}/change-proposals",
+            "/api/v2/appointments/{id}/cancel",
+            "/api/v2/appointments/{id}/proposals/{proposalId}/expire",
             "/api/v2/appointments/{id}/proposals/{proposalId}/accept",
             "/api/v2/appointments/{id}/proposals/{proposalId}/decline",
         ).forEach { path ->
@@ -83,6 +97,17 @@ class AppointmentCommitmentOpenApiTest {
             headers["Idempotency-Key"]?.path("required")?.asBoolean() shouldBeEqualTo true
             headers[HttpHeaders.IF_MATCH]?.path("required")?.asBoolean() shouldBeEqualTo true
         }
+
+        val createSchema = root.at("/components/schemas/CreateAppointmentRequestV2")
+        createSchema.path("required").toList().map { it.stringValue() }.toSet() shouldBeEqualTo
+            setOf("appointmentPlanId", "preferredStartAt", "preferredEndAt", "evidence")
+        val evidenceSchema = root.at("/components/schemas/ConsentEvidenceRequest")
+        evidenceSchema.path("required").toList().map { it.stringValue() }.toSet() shouldBeEqualTo
+            setOf("evidenceAuthority", "evidenceId")
+        root.at("/components/schemas/AppointmentProposalSummary/properties/policySnapshot/\$ref")
+            .stringValue()
+            .endsWith("/AppointmentPolicySnapshotSummary")
+            .shouldBeTrue()
     }
 
     /** RFC 6901 JSON pointer segment escaping을 적용한다. */

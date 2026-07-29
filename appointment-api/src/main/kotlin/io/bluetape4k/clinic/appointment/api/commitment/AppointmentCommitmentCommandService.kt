@@ -121,7 +121,23 @@ internal class AppointmentCommitmentCommandService(
                     expiresAt = command.expiresAt,
                     representativeTreatmentName = command.representativeTreatmentName,
                     origin = AppointmentOrigin.PATIENT,
+                    status =
+                        if (command.holdResources) {
+                            AppointmentCommitmentStatus.HELD
+                        } else {
+                            AppointmentCommitmentStatus.PROPOSED
+                        },
                 )
+            if (command.holdResources) {
+                requireResourceItemReferences(created.proposal.id, command.proposal.resourceRequests)
+                allocationRepository.createConfirmedAllocations(
+                    tenantGroupId = command.context.tenantGroupId,
+                    clinicId = command.context.clinicId,
+                    proposalId = created.proposal.id,
+                    replacingProposalId = null,
+                    requests = command.proposal.resourceRequests,
+                )
+            }
             appendConsent(created.commitment, created.proposal, command.consent)
             writeDecision(
                 context = command.context,
@@ -221,6 +237,7 @@ internal class AppointmentCommitmentCommandService(
                     expiresAt = command.expiresAt,
                     representativeTreatmentName = command.representativeTreatmentName,
                     origin = AppointmentOrigin.CLINIC,
+                    status = AppointmentCommitmentStatus.PROPOSED,
                 )
             appendConsent(created.commitment, created.proposal, command.consent)
             val confirmed =
@@ -468,6 +485,9 @@ internal class AppointmentCommitmentCommandService(
                             "commitment version changed before proposal expiry",
                         )
                     }
+                    if (commitment.status == AppointmentCommitmentStatus.HELD) {
+                        allocationRepository.releaseActiveAllocations(proposal.id, now)
+                    }
                     requireCommitment(command.context, command.appointmentId)
                 }
             val expiredProposal =
@@ -482,6 +502,92 @@ internal class AppointmentCommitmentCommandService(
             )
             persistCommandResult(command.context, afterExpiry, expiredProposal)
             AppointmentCommitmentCommandResult(afterExpiry, expiredProposal, idempotentReplay = false)
+        }
+
+    /**
+     * 현재 가예약 또는 확정 예약을 취소하고 활성 allocation을 원자적으로 해제합니다.
+     *
+     * 확정 예약에 변경 proposal이 대기 중이어도 확정 포인터를 취소 대상으로 사용합니다.
+     * [CancelAppointmentCommand.reasonCode]는 등록 code만 허용하며 outbox에 자유 텍스트나
+     * 고객 민감정보를 포함하지 않습니다.
+     */
+    fun cancelAppointment(command: CancelAppointmentCommand): AppointmentCommitmentCommandResult =
+        executeCommand(command.context, OPERATION_CANCEL_APPOINTMENT) {
+            val now = Instant.now(clock)
+            val initialCommitment = requireCommitment(command.context, command.appointmentId)
+            val lockedProposal = requireLockedProposal(initialCommitment, command.proposalId)
+            val commitment = requireCommitment(command.context, command.appointmentId)
+            requireExpectedVersion(commitment, command.expectedVersion)
+            val proposal =
+                requireProposalHash(
+                    proposal = lockedProposal,
+                    expectedProposalHash = command.expectedProposalHash,
+                )
+            when (commitment.status) {
+                AppointmentCommitmentStatus.EXPIRED,
+                AppointmentCommitmentStatus.CANCELLED,
+                -> reject(
+                    AppointmentCommitmentCommandError.INVALID_TRANSITION,
+                    "expired or cancelled appointment cannot be cancelled",
+                )
+
+                AppointmentCommitmentStatus.CONFIRMED -> {
+                    if (proposal.id != commitment.confirmedProposalId) {
+                        reject(
+                            AppointmentCommitmentCommandError.PROPOSAL_NOT_CURRENT,
+                            "cancellation must target the confirmed proposal",
+                        )
+                    }
+                }
+
+                AppointmentCommitmentStatus.PROPOSED,
+                AppointmentCommitmentStatus.HELD,
+                -> {
+                    if (commitment.confirmedProposalId != null || proposal.supersedesProposalId != null) {
+                        reject(
+                            AppointmentCommitmentCommandError.PROPOSAL_NOT_CURRENT,
+                            "unconfirmed cancellation must target the initial proposal",
+                        )
+                    }
+                }
+            }
+            if (
+                !commitmentRepository.cancelByVersion(
+                    commitmentId = commitment.id,
+                    expectedVersion = commitment.version,
+                    updatedAt = now,
+                )
+            ) {
+                reject(
+                    AppointmentCommitmentCommandError.VERSION_CONFLICT,
+                    "commitment version changed before cancellation",
+                )
+            }
+            allocationRepository.releaseActiveAllocations(
+                commitment.confirmedProposalId ?: proposal.id,
+                now,
+            )
+            check(
+                appointmentRepository.cancelCommitmentProjection(
+                    appointmentId = commitment.appointmentId,
+                    tenantGroupId = command.context.tenantGroupId,
+                    clinicId = command.context.clinicId,
+                    updatedAt = now,
+                ),
+            ) {
+                "cancelled appointment projection target must exist"
+            }
+            val cancelled = requireCommitment(command.context, command.appointmentId)
+            writeDecision(
+                context = command.context,
+                eventType = EVENT_APPOINTMENT_CANCELLED,
+                commitment = cancelled,
+                proposal = proposal,
+                occurredAt = now,
+                reasonCode = command.reasonCode,
+            )
+            persistCommandResult(command.context, cancelled, proposal)
+            AppointmentCommitmentCommandResult(cancelled, proposal, idempotentReplay = false)
         }
 
     /**
@@ -592,6 +698,7 @@ internal class AppointmentCommitmentCommandService(
         expiresAt: Instant,
         representativeTreatmentName: String,
         origin: AppointmentOrigin,
+        status: AppointmentCommitmentStatus,
     ): InitialProposal {
         requireInitialProposalRevision(proposalInput.revision)
         val appointmentId =
@@ -604,7 +711,7 @@ internal class AppointmentCommitmentCommandService(
             commitmentRepository.create(
                 AppointmentCommitment(
                     appointmentId = appointmentId,
-                    status = AppointmentCommitmentStatus.PROPOSED,
+                    status = status,
                     origin = origin,
                     confirmedProposalId = null,
                     effectivePolicySnapshotId = proposalInput.policySnapshotId,
@@ -694,14 +801,18 @@ internal class AppointmentCommitmentCommandService(
                 target = projectionTarget,
             )
         val previousProposalId = commitment.confirmedProposalId
-        allocationRepository.createConfirmedAllocations(
-            tenantGroupId = context.tenantGroupId,
-            clinicId = context.clinicId,
-            proposalId = proposal.id,
-            replacingProposalId = previousProposalId,
-            requests = resourceRequests,
-            availabilityLock = availabilityLock,
-        )
+        if (commitment.status == AppointmentCommitmentStatus.HELD) {
+            requireHeldAllocations(proposal.id, resourceRequests)
+        } else {
+            allocationRepository.createConfirmedAllocations(
+                tenantGroupId = context.tenantGroupId,
+                clinicId = context.clinicId,
+                proposalId = proposal.id,
+                replacingProposalId = previousProposalId,
+                requests = resourceRequests,
+                availabilityLock = availabilityLock,
+            )
+        }
         if (
             !commitmentRepository.confirmByVersion(
                 commitmentId = commitment.id,
@@ -729,6 +840,52 @@ internal class AppointmentCommitmentCommandService(
         }
         return checkNotNull(commitmentRepository.findById(commitment.id)) {
             "confirmed commitment must remain readable"
+        }
+    }
+
+    /** HELD 상태가 proposal의 정확한 자원 요청을 이미 active allocation으로 보유하는지 확인합니다. */
+    private fun requireHeldAllocations(
+        proposalId: Long,
+        resourceRequests: List<ResourceAllocationRequest>,
+    ) {
+        val actual =
+            allocationRepository.findByProposal(proposalId)
+                .filter { it.status == io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationStatus.ACTIVE }
+                .map {
+                    val allocation = it.allocation
+                    listOf(
+                        allocation.resourceType.name,
+                        allocation.resourceId,
+                        allocation.startsAt.toString(),
+                        allocation.endsAt.toString(),
+                        allocation.capacityUnits.toString(),
+                        it.maximumCapacity.toString(),
+                        allocation.allocationMode.name,
+                        allocation.appointmentItemKey,
+                    )
+                }
+                .sortedBy { it.joinToString(separator = "|") }
+        val expected =
+            resourceRequests
+                .map {
+                    val allocation = it.allocation
+                    listOf(
+                        allocation.resourceType.name,
+                        allocation.resourceId,
+                        allocation.startsAt.toString(),
+                        allocation.endsAt.toString(),
+                        allocation.capacityUnits.toString(),
+                        it.maximumCapacity.toString(),
+                        allocation.allocationMode.name,
+                        allocation.appointmentItemKey,
+                    )
+                }
+                .sortedBy { it.joinToString(separator = "|") }
+        if (actual != expected) {
+            reject(
+                AppointmentCommitmentCommandError.RESOURCE_CONFLICT,
+                "held allocations do not match the proposal resource snapshot",
+            )
         }
     }
 
@@ -973,7 +1130,8 @@ internal class AppointmentCommitmentCommandService(
     /** 고객 가예약의 최초 proposal만 관리자 승인 경로로 확정할 수 있게 제한합니다. */
     private fun requireInitialCustomerApproval(commitment: AppointmentCommitmentRecord) {
         if (
-            commitment.status != AppointmentCommitmentStatus.PROPOSED ||
+            commitment.status !in
+            setOf(AppointmentCommitmentStatus.PROPOSED, AppointmentCommitmentStatus.HELD) ||
             commitment.origin != AppointmentOrigin.PATIENT ||
             commitment.confirmedProposalId != null
         ) {
@@ -1150,6 +1308,7 @@ internal class AppointmentCommitmentCommandService(
         commitment: AppointmentCommitmentRecord,
         proposal: AppointmentProposalRecord,
         occurredAt: Instant,
+        reasonCode: String? = null,
     ) {
         AppointmentAuditEvents.insert {
             it[tenantGroupId] = context.tenantGroupId
@@ -1179,7 +1338,14 @@ internal class AppointmentCommitmentCommandService(
             it[aggregateId] = commitment.id.toString()
             it[schemaVersion] = OUTBOX_SCHEMA_VERSION
             it[payloadJson] =
-                """{"appointmentId":${commitment.appointmentId},"commitmentId":${commitment.id},"proposalId":${proposal.id},"commitmentVersion":${commitment.version}}"""
+                buildString {
+                    append("{\"appointmentId\":${commitment.appointmentId}")
+                    append(",\"commitmentId\":${commitment.id}")
+                    append(",\"proposalId\":${proposal.id}")
+                    append(",\"commitmentVersion\":${commitment.version}")
+                    reasonCode?.let { append(",\"reasonCode\":\"$it\"") }
+                    append('}')
+                }
             it[status] = SchedulingOutboxStatus.PENDING
             it[attemptCount] = 0
         }
@@ -1389,6 +1555,7 @@ internal class AppointmentCommitmentCommandService(
         const val OPERATION_ACCEPT_CHANGE = "accept-change"
         const val OPERATION_DECLINE_PROPOSAL = "decline-proposal"
         const val OPERATION_EXPIRE_PROPOSAL = "expire-proposal"
+        const val OPERATION_CANCEL_APPOINTMENT = "cancel-appointment"
 
         const val EVENT_APPOINTMENT_REQUESTED = "APPOINTMENT_REQUESTED"
         const val EVENT_APPOINTMENT_CONFIRMED = "APPOINTMENT_CONFIRMED"
@@ -1396,6 +1563,7 @@ internal class AppointmentCommitmentCommandService(
         const val EVENT_APPOINTMENT_CONFIRMATION_CHANGED = "APPOINTMENT_CONFIRMATION_CHANGED"
         const val EVENT_APPOINTMENT_PROPOSAL_DECLINED = "APPOINTMENT_PROPOSAL_DECLINED"
         const val EVENT_APPOINTMENT_PROPOSAL_EXPIRED = "APPOINTMENT_PROPOSAL_EXPIRED"
+        const val EVENT_APPOINTMENT_CANCELLED = "APPOINTMENT_CANCELLED"
 
         val RETRYABLE_SQL_STATES = setOf("40001", "40P01")
         val UNIQUE_VIOLATION_SQL_STATES = setOf("23505", "23000")

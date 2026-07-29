@@ -3,7 +3,9 @@ package io.bluetape4k.clinic.appointment.api.controller
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentCommitmentResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentProposalResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentProposalSummary
+import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentPolicySnapshotSummary
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ApproveProposalRequest
+import io.bluetape4k.clinic.appointment.api.dto.commitment.CancelAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateAppointmentRequestV2
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateChangeProposalRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DeclineProposalRequest
@@ -108,6 +110,28 @@ internal open class FakeAppointmentCommitmentApplicationService : AppointmentCom
         return commitmentResponse
     }
 
+    override fun expireProposal(
+        actor: ActorContext,
+        appointmentId: Long,
+        proposalId: Long,
+        expectedVersion: Long,
+        idempotencyKey: String,
+    ): AppointmentCommitmentResponse {
+        capture(actor, idempotencyKey, expectedVersion)
+        return commitmentResponse
+    }
+
+    override fun cancelAppointment(
+        actor: ActorContext,
+        appointmentId: Long,
+        expectedVersion: Long,
+        idempotencyKey: String,
+        request: CancelAppointmentRequest,
+    ): AppointmentCommitmentResponse {
+        capture(actor, idempotencyKey, expectedVersion)
+        return commitmentResponse
+    }
+
     private fun capture(
         actor: ActorContext,
         idempotencyKey: String? = null,
@@ -119,6 +143,15 @@ internal open class FakeAppointmentCommitmentApplicationService : AppointmentCom
     }
 
     companion object {
+        private val policySnapshot =
+            AppointmentPolicySnapshotSummary(
+                snapshotId = 41L,
+                snapshotHash = "a".repeat(64),
+                tenantGeneration = 1L,
+                clinicGeneration = 0L,
+                sourceVersions = emptyMap(),
+            )
+
         val proposalResponse = AppointmentProposalResponse(
             appointmentId = 11L,
             commitmentId = 21L,
@@ -126,6 +159,7 @@ internal open class FakeAppointmentCommitmentApplicationService : AppointmentCom
             status = AppointmentCommitmentStatus.PROPOSED,
             version = 1L,
             expiresAt = Instant.parse("2026-08-01T00:00:00Z"),
+            policySnapshot = policySnapshot,
         )
 
         val commitmentResponse = AppointmentCommitmentResponse(
@@ -141,8 +175,11 @@ internal open class FakeAppointmentCommitmentApplicationService : AppointmentCom
                 expiresAt = Instant.parse("2026-08-01T00:00:00Z"),
                 expired = false,
                 representativeTreatmentName = "Laser treatment",
+                policySnapshot = policySnapshot,
             ),
             confirmedProposalId = 31L,
+            effectivePolicySnapshotId = 41L,
         )
+
     }
 }

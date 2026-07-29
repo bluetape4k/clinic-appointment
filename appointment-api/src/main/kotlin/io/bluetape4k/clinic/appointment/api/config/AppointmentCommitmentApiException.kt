@@ -84,9 +84,9 @@ enum class AppointmentCommitmentApiError(
     ),
     PLAN_LIMIT_EXCEEDED(
         HttpStatus.UNPROCESSABLE_CONTENT,
-        "The appointment exceeds the remaining plan allowance.",
+        "The appointment exceeds a scheduling limit for this plan.",
         false,
-        "Review the plan balance before creating another appointment.",
+        "Review the plan size, dependency, and scheduling constraints.",
     ),
     PREDECESSOR_NOT_COMPLETED(
         HttpStatus.CONFLICT,
@@ -138,10 +138,10 @@ class AppointmentCommitmentApiException(
 ) : RuntimeException(detail ?: error.name, cause)
 
 private val APPOINTMENT_COMMITMENT_ITEM_PATH = Regex(
-    "^/api/v2/appointments/[^/]+/(?:commitment|approve|confirm|change-proposals)$"
+    "^/api/v2/appointments/[^/]+/(?:commitment|approve|confirm|change-proposals|cancel)$"
 )
 private val APPOINTMENT_COMMITMENT_PROPOSAL_DECISION_PATH = Regex(
-    "^/api/v2/appointments/[^/]+/proposals/[^/]+/(?:accept|decline)$"
+    "^/api/v2/appointments/[^/]+/proposals/[^/]+/(?:accept|decline|expire)$"
 )
 
 /**

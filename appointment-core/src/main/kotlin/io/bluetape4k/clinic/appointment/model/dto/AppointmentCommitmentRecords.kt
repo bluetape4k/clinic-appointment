@@ -116,7 +116,7 @@ data class ResourceAllocationRecord(
  * 자원 점유 수명주기입니다.
  */
 enum class ResourceAllocationStatus {
-    /** 현재 확정 proposal을 위해 충돌·capacity 계산에 포함되는 점유입니다. */
+    /** HELD 또는 확정 proposal을 위해 충돌·capacity 계산에 포함되는 점유입니다. */
     ACTIVE,
 
     /** proposal 교체 또는 취소로 더 이상 capacity를 사용하지 않는 감사 row입니다. */

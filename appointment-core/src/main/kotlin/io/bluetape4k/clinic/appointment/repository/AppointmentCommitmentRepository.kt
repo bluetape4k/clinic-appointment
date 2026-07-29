@@ -329,6 +329,14 @@ class AppointmentCommitmentRepository {
         ) {
             "proposal must belong to commitment"
         }
+        val policySnapshotId =
+            AppointmentProposals
+                .select(AppointmentProposals.policySnapshotId)
+                .where {
+                    (AppointmentProposals.id eq validProposalId) and
+                        (AppointmentProposals.commitmentId eq validCommitmentId)
+                }
+                .single()[AppointmentProposals.policySnapshotId]
         return AppointmentCommitments.update(
             where = {
                 (AppointmentCommitments.id eq validCommitmentId) and
@@ -339,6 +347,7 @@ class AppointmentCommitmentRepository {
         ) {
             it[status] = AppointmentCommitmentStatus.CONFIRMED
             it[confirmedProposalId] = validProposalId
+            it[effectivePolicySnapshotId] = policySnapshotId
             it[version] = validExpectedVersion + 1
             it[AppointmentCommitments.updatedAt] = updatedAt
         } == 1
@@ -397,6 +406,34 @@ class AppointmentCommitmentRepository {
                     (AppointmentCommitments.confirmedProposalId eq validConfirmedProposalId)
             },
         ) {
+            it[version] = validExpectedVersion + 1
+            it[AppointmentCommitments.updatedAt] = updatedAt
+        } == 1
+    }
+
+    /**
+     * 현재 commitment를 version CAS로 취소 상태로 전환합니다.
+     *
+     * proposal과 allocation의 종결은 caller transaction에서 함께 수행합니다. 이미
+     * 만료되거나 취소된 commitment에는 성공하지 않으며 확정 포인터는 취소 이력 조회를
+     * 위해 보존합니다.
+     */
+    fun cancelByVersion(
+        commitmentId: Long,
+        expectedVersion: Long,
+        updatedAt: Instant,
+    ): Boolean {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val validExpectedVersion = expectedVersion.requirePositiveNumber("expectedVersion")
+        return AppointmentCommitments.update(
+            where = {
+                (AppointmentCommitments.id eq validCommitmentId) and
+                    (AppointmentCommitments.version eq validExpectedVersion) and
+                    (AppointmentCommitments.status neq AppointmentCommitmentStatus.EXPIRED) and
+                    (AppointmentCommitments.status neq AppointmentCommitmentStatus.CANCELLED)
+            },
+        ) {
+            it[status] = AppointmentCommitmentStatus.CANCELLED
             it[version] = validExpectedVersion + 1
             it[AppointmentCommitments.updatedAt] = updatedAt
         } == 1

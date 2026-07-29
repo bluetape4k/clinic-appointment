@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.controller
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentCommitmentResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentProposalResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ApproveProposalRequest
+import io.bluetape4k.clinic.appointment.api.dto.commitment.CancelAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateChangeProposalRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DirectConfirmRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DirectCreateAppointmentRequest
@@ -64,6 +65,7 @@ class AdminAppointmentV2Controller(
         ApiResponse(responseCode = "422", description = "No feasible proposal or plan limit exceeded", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "428", description = "Creation precondition missing", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "500", description = "Internal scheduling error", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        ApiResponse(responseCode = "503", description = "New appointment intake is disabled", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
     )
     @PostMapping("/admin/appointments")
     fun directCreate(
@@ -159,6 +161,83 @@ class AdminAppointmentV2Controller(
         val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
             .requireAdminActor()
         return service.directConfirm(
+            actor,
+            id,
+            requireExpectedVersion(ifMatch),
+            requireIdempotencyKey(idempotencyKey),
+            request,
+        ).okResponse()
+    }
+
+    @Operation(
+        summary = "Expire a proposal that reached its server-side deadline",
+        description = "Releases a held initial proposal or preserves the current confirmation for an expired change proposal.",
+    )
+    @ApiResponses(
+        ApiResponse(responseCode = "200", description = "Proposal expiry recorded"),
+        ApiResponse(responseCode = "401", description = "Missing or invalid Gateway identity"),
+        ApiResponse(responseCode = "403", description = "Administrator or clinic scope rejected"),
+        ApiResponse(responseCode = "404", description = "Commitment or proposal not found"),
+        ApiResponse(responseCode = "409", description = "Proposal is not current or already expired"),
+        ApiResponse(responseCode = "412", description = "ETag does not match current version"),
+        ApiResponse(responseCode = "428", description = "Mutation precondition missing"),
+        ApiResponse(responseCode = "500", description = "Internal scheduling error"),
+    )
+    @PostMapping("/appointments/{id}/proposals/{proposalId}/expire")
+    fun expireProposal(
+        authentication: Authentication?,
+        servletRequest: HttpServletRequest,
+        @PathVariable id: Long,
+        @PathVariable proposalId: Long,
+        @Parameter(required = true)
+        @RequestHeader("Idempotency-Key", required = false)
+        idempotencyKey: String?,
+        @Parameter(required = true)
+        @RequestHeader(HttpHeaders.IF_MATCH, required = false)
+        ifMatch: String?,
+    ): ResponseEntity<AppointmentCommitmentResponse> {
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+            .requireAdminActor()
+        return service.expireProposal(
+            actor,
+            id,
+            proposalId,
+            requireExpectedVersion(ifMatch),
+            requireIdempotencyKey(idempotencyKey),
+        ).okResponse()
+    }
+
+    @Operation(
+        summary = "Cancel a proposed, held, or confirmed appointment",
+        description = "Releases active allocations and records only a registered cancellation reason code.",
+    )
+    @ApiResponses(
+        ApiResponse(responseCode = "200", description = "Appointment cancelled"),
+        ApiResponse(responseCode = "400", description = "Invalid cancellation reason"),
+        ApiResponse(responseCode = "401", description = "Missing or invalid Gateway identity"),
+        ApiResponse(responseCode = "403", description = "Administrator or clinic scope rejected"),
+        ApiResponse(responseCode = "404", description = "Commitment not found"),
+        ApiResponse(responseCode = "409", description = "Appointment cannot be cancelled from its current state"),
+        ApiResponse(responseCode = "412", description = "ETag does not match current version"),
+        ApiResponse(responseCode = "428", description = "Mutation precondition missing"),
+        ApiResponse(responseCode = "500", description = "Internal scheduling error"),
+    )
+    @PostMapping("/appointments/{id}/cancel")
+    fun cancelAppointment(
+        authentication: Authentication?,
+        servletRequest: HttpServletRequest,
+        @PathVariable id: Long,
+        @Parameter(required = true)
+        @RequestHeader("Idempotency-Key", required = false)
+        idempotencyKey: String?,
+        @Parameter(required = true)
+        @RequestHeader(HttpHeaders.IF_MATCH, required = false)
+        ifMatch: String?,
+        @Valid @RequestBody request: CancelAppointmentRequest,
+    ): ResponseEntity<AppointmentCommitmentResponse> {
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+            .requireAdminActor()
+        return service.cancelAppointment(
             actor,
             id,
             requireExpectedVersion(ifMatch),

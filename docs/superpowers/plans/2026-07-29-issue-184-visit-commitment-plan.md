@@ -5,7 +5,7 @@
 > 모든 Kotlin 변경에는 `bluetape-kotlin-patterns`, 모든 동작 변경에는
 > `test-driven-development`를 적용한다.
 >
-> 상태: Task 9 완료. Task 10 세 DB·성능·전체 회귀 검증 진행.
+> 상태: Task 1~10 구현·검증 완료. PR 7-R·CI·merge 승인 gate 진행.
 
 **목표:** 구매 당시 고정된 단일 상품 또는 패키지 실행 BOM을 여러 방문과 세부
 진료로 전개하고, 고객 가예약·병원 승인·고객 동의·자원 점유를 원자적으로 결합한
@@ -574,31 +574,31 @@ source version gap은 bounded `WAITING_GAP` 뒤 암호화 격리하며, 완료 �
 **의존성:** Task 3~8
 **쓰기 범위:** properties/wiring/metrics/cleanup/docs/README
 
-- [ ] `AppointmentCommitmentProperties`에 `OFF/SHADOW/WRITE`, clinic allowlist,
+- [x] `AppointmentCommitmentProperties`에 `OFF/SHADOW/WRITE`, clinic allowlist,
   ceiling, proposal TTL, retry를 immutable 설정으로 두고 기본은 `OFF`로 한다.
-- [ ] low-cardinality metric을 구현한다: proposal latency/expiry, allocation
+- [x] low-cardinality metric을 구현한다: proposal latency/expiry, allocation
   conflict, outbox lag, quarantine count/age, migration rejection, operational
   exception ack latency. patient/product/event ID는 tag로 쓰지 않는다.
-- [ ] inbox/idempotency 30일, delivered outbox 7일, resolved quarantine 90일
+- [x] inbox/idempotency 30일, delivered outbox 7일, resolved quarantine 90일
   정리를 구현하되 미전달·미해결·legal hold는 제외한다.
-- [ ] fake `Clock`을 사용하는 `VisitCommitmentRetentionServiceTest`로 경계 직전/직후,
+- [x] fake `Clock`을 사용하는 `VisitCommitmentRetentionServiceTest`로 경계 직전/직후,
   legal hold, 미전달 outbox, 미해결 quarantine, poison record와 tenant별 batch
   상한을 검증한다. 삭제된 ID와 보존된 ID를 각각 단언한다.
-- [ ] runbook에 shadow diff, allowlist 확대, alert 임계값, gap 복원,
+- [x] runbook에 shadow diff, allowlist 확대, alert 임계값, gap 복원,
   5회 poison 중단, 권한 있는 redrive, PostgreSQL backup/복구와 feature flag
   rollback을 적는다.
-- [ ] runbook의 rollback 분기를 명확히 고정한다. `WRITE` 중 생성된
+- [x] runbook의 rollback 분기를 명확히 고정한다. `WRITE` 중 생성된
   `COMMITMENT_V2` row는 legacy row로 변환하거나 legacy API로 변경하지 않고,
   신규 유입만 `OFF`로 차단한 뒤 v2 query/mutation 경로를 유지한다. `SHADOW`
   consumer는 필요하면 유지해 gap을 관찰하고, schema/table은 삭제하지 않는다.
-- [ ] 운영 소유권과 alert route를 표로 고정한다. 예약팀은 API/allocation/inbox/
+- [x] 운영 소유권과 alert route를 표로 고정한다. 예약팀은 API/allocation/inbox/
   outbox 및 on-call, 상품·구매팀은 replay authority, CRM은 운영 예외 접수와
   15분 ACK SLA를 소유한다. outbox lag 5분, oldest quarantine 24시간,
   quarantine rate 1%, allocation conflict 기준선 3배, migration rejection 1건,
   CRM ACK 15분을 alert rule로 만들고 dashboard/runbook 링크를 테스트한다.
   redrive는 예약 운영 관리자만 승인하며 actor, reason, before/after status,
   original event/inbox key를 append-only audit에 남긴다.
-- [ ] 신규 public/업무 규칙형 internal 선언의 한국어 KDoc을 전수 점검한다.
+- [x] 신규 public/업무 규칙형 internal 선언의 한국어 KDoc을 전수 점검한다.
   `README.md`/`README.ko.md`, OpenAPI, `docs/api/visit-commitment.md`의 계약을 맞춘다.
 
 ```bash
@@ -618,7 +618,7 @@ git diff --check
 **의존성:** Task 1~9
 **쓰기 범위:** 테스트/성능 시나리오와 검증 문서만
 
-- [ ] 작은 단위→module→다중 DB 순으로 실행한다. container 명령은 병렬화하지 않는다.
+- [x] 작은 단위→module→다중 DB 순으로 실행한다. container 명령은 병렬화하지 않는다.
 
 ```bash
 ./gradlew :appointment-core:test
@@ -632,19 +632,19 @@ git diff --check
 git diff --check
 ```
 
-- [ ] PostgreSQL 기준으로 인기 자원 100개 동시 확정에서 중복 점유 0,
+- [x] PostgreSQL 기준으로 인기 자원 100개 동시 확정에서 중복 점유 0,
   미복구 deadlock 0, p95 2초 이하를 증명한다.
-- [ ] 일반 Plan/최대 Plan proposal과 dirty-set 재계산의 p95/p99를 기록한다.
+- [x] 일반 Plan/최대 Plan proposal과 dirty-set 재계산의 p95/p99를 기록한다.
   목표를 못 맞추면 동기 범위를 임의 완화하지 말고 비동기 planning 설계로
   Step 2에 되돌아간다.
-- [ ] PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)`에서 allocation overlap,
+- [x] PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)`에서 allocation overlap,
   current proposal, Plan dirty-set 대표 조회가 의도한 index를 사용하고,
   10만 allocation seed에서 accidental full scan이 없는지 결과를
   `docs/review/2026-07-29-issue-184-performance-evidence.md`에 남긴다.
-- [ ] Gatling은 전담 resource overlap, capacity bucket 사용량, 의료진+장비+공간
+- [x] Gatling은 전담 resource overlap, capacity bucket 사용량, 의료진+장비+공간
   다중 잠금, 같은 idempotency key replay를 한 혼합 부하에 포함한다.
-- [ ] H2 성공만으로 완료를 주장하지 않고 PostgreSQL/MySQL 결과를 별도 기록한다.
-- [ ] Kover는 module test 이후 report-only로 생성하고 누락 artifact를 성공으로
+- [x] H2 성공만으로 완료를 주장하지 않고 PostgreSQL/MySQL 결과를 별도 기록한다.
+- [x] Kover는 module test 이후 report-only로 생성하고 누락 artifact를 성공으로
   처리하지 않는다.
 
 **예상:** 세 DB 의미 동등, 전체 build 성공, known error 0.
@@ -686,12 +686,12 @@ git diff --check
 
 ## 6. 최종 DoD
 
-- [ ] 설계 인수 기준 29개가 Task와 자동화 증거에 모두 연결됨
-- [ ] 단위·repository·API·보안·event·동시성·성능 테스트 통과
-- [ ] H2→PostgreSQL→MySQL 순차 검증과 PostgreSQL 별도 증거
-- [ ] migration expand/shadow/allowlist/rollback drill 통과
-- [ ] 신규 Kotlin KDoc, README locale parity, OpenAPI, runbook 일치
-- [ ] `git diff --check`, Kotlin diagnostics, module build 통과
-- [ ] 구현 후 6-R P0=0/P1=0
+- [x] 설계 인수 기준 29개가 Task와 자동화 증거에 모두 연결됨
+- [x] 단위·repository·API·보안·event·동시성·성능 테스트 통과
+- [x] H2→PostgreSQL→MySQL 순차 검증과 PostgreSQL 별도 증거
+- [x] migration expand/shadow/allowlist/rollback drill 통과
+- [x] 신규 Kotlin KDoc, README locale parity, OpenAPI, runbook 일치
+- [x] `git diff --check`, Kotlin diagnostics, module build 통과
+- [x] 구현 후 6-R P0=0/P1=0
 - [ ] PR 후 7-R, CI, live review thread 통과
 - [ ] merge 직전 최신 head에 대한 별도 사용자 승인

@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.policy
 
+import io.bluetape4k.clinic.appointment.api.service.EffectiveAppointmentCommitmentPolicySnapshotResolver
 import io.bluetape4k.clinic.appointment.model.policy.*
 import io.bluetape4k.clinic.appointment.model.dto.PolicyScopeRef
 import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyDefinitionRecord
@@ -313,10 +314,11 @@ class ExposedEffectivePolicyStoreTest {
     private val repository = SchedulingPolicyRepository()
     private val store = ExposedEffectivePolicyStore(repository)
     private val tenantScope = PolicyScopeRef(1L, PolicyScope.TENANT_DEFAULT)
+    private lateinit var database: Database
 
     @BeforeEach
     fun setup() {
-        Database.connect(
+        database = Database.connect(
             "jdbc:h2:mem:effective_policy_${System.nanoTime()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
             driver = "org.h2.Driver",
         )
@@ -371,7 +373,32 @@ class ExposedEffectivePolicyStoreTest {
             repository.findSnapshot(1L, 41L, snapshot.snapshotHash)
         }
         persisted.shouldNotBeNull()
-        persisted?.snapshotHash shouldBeEqualTo snapshot.snapshotHash
+        persisted.snapshotHash shouldBeEqualTo snapshot.snapshotHash
+    }
+
+    @Test
+    fun `commitment resolver restores the complete persisted policy without current policy recalculation`() {
+        val service = EffectiveSchedulingPolicyService(
+            store = store,
+            cache = EffectivePolicyCache(EffectivePolicyCacheLimits()),
+        )
+        val snapshot = service.getEffective(1L, 41L, decisionAt, serviceAt)
+        val snapshotId = transaction {
+            repository.findSnapshot(1L, 41L, snapshot.snapshotHash)
+        }.shouldNotBeNull().id
+        val resolver =
+            EffectiveAppointmentCommitmentPolicySnapshotResolver(
+                database = database,
+                effectiveSchedulingPolicyService = service,
+                schedulingPolicyRepository = repository,
+            )
+
+        val restored = resolver.resolvePersisted(1L, 41L, snapshotId)
+
+        restored.id shouldBeEqualTo snapshotId
+        restored.snapshotHash shouldBeEqualTo snapshot.snapshotHash
+        restored.sourceVersions shouldBeEqualTo snapshot.sourceVersions
+        restored.payload shouldBeEqualTo snapshot.payload
     }
 
     @Test

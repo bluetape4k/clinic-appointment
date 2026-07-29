@@ -6,7 +6,7 @@ CREATE INDEX idx_quarantine_resolved_retention
         tenant_group_id,
         clinic_id,
         legal_hold,
-        status,
         resolved_at,
-        id
+        id,
+        status
     );

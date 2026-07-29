@@ -406,6 +406,9 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
             reused.id shouldBeEqualTo first.id
             reused.payloadJson shouldBeEqualTo first.payloadJson
             repository.findSnapshot(1L, 41L, "a".repeat(64)).shouldNotBeNull()
+            repository.findSnapshot(1L, 41L, first.id).shouldNotBeNull()
+            repository.findSnapshot(2L, 41L, first.id).shouldBeNull()
+            repository.findSnapshot(1L, 42L, first.id).shouldBeNull()
 
             assertFailsWith<ExposedSQLException> {
                 EffectiveSchedulingPolicySnapshots.insert {

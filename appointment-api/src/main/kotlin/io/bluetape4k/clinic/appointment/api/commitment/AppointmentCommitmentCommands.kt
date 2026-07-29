@@ -139,9 +139,11 @@ internal class VisitProposalInput(
 /**
  * 원본 동의 서비스가 검증한 증빙 metadata입니다.
  *
- * proposal ID/revision/hash는 caller가 제공하지 않습니다. command service가 영속 proposal에
- * 맞춰 [io.bluetape4k.clinic.appointment.model.commitment.ProposalConsentSubject]를 생성해
- * 다른 proposal에 대한 동의 재사용을 차단합니다.
+ * proposal ID/revision/hash는 caller가 제공하지 않습니다. 최초 생성 전 검증은 DB 생성
+ * ID를 제외한 안정적인 proposal hash에 결합되고, command service는 영속 proposal이
+ * 생긴 뒤 실제 ID/revision과 같은 hash로
+ * [io.bluetape4k.clinic.appointment.model.commitment.ProposalConsentSubject]를 생성합니다.
+ * 전역 unique evidence와 proposal 소유권 검증이 다른 proposal 재사용을 차단합니다.
  */
 internal class ProposalConsentEvidence(
     val decision: ConsentDecisionType,
@@ -277,6 +279,7 @@ internal class CustomerAppointmentRequestCommand(
     val expiresAt: Instant,
     representativeTreatmentName: String,
     val consent: ProposalConsentEvidence,
+    val holdResources: Boolean = false,
 ) : Serializable {
     val representativeTreatmentName =
         representativeTreatmentName.requireNotBlank("representativeTreatmentName")
@@ -487,6 +490,45 @@ internal class ExpireAppointmentProposalCommand(
 
     companion object {
         private val SHA256 = Regex("[0-9a-f]{64}")
+        private const val serialVersionUID = 1L
+    }
+}
+
+/**
+ * 현재 예약 commitment를 취소하고 보유 중인 자원 점유를 해제하는 command입니다.
+ *
+ * @property appointmentId 취소할 commitment가 소유한 방문 식별자입니다.
+ * @property proposalId 취소 판단과 감사 event에 결합할 현재 proposal 식별자입니다.
+ * @property expectedVersion `If-Match`에서 파생한 현재 commitment version입니다.
+ * @property expectedProposalHash caller가 조회한 현재 proposal의 canonical hash입니다.
+ * @property reasonCode 자유 텍스트를 대신하는 등록된 대문자 업무 사유 code입니다.
+ */
+internal class CancelAppointmentCommand(
+    val context: CommitmentCommandContext,
+    appointmentId: Long,
+    proposalId: Long,
+    expectedVersion: Long,
+    expectedProposalHash: String,
+    reasonCode: String,
+) : Serializable {
+    val appointmentId = appointmentId.requirePositiveNumber("appointmentId")
+    val proposalId = proposalId.requirePositiveNumber("proposalId")
+    val expectedVersion = expectedVersion.requirePositiveNumber("expectedVersion")
+    val expectedProposalHash = expectedProposalHash.requireNotBlank("expectedProposalHash")
+    val reasonCode = reasonCode.requireNotBlank("reasonCode")
+
+    init {
+        require(this.expectedProposalHash.matches(SHA256)) {
+            "expectedProposalHash must be a lowercase SHA-256 value"
+        }
+        require(REASON_CODE.matches(this.reasonCode)) {
+            "reasonCode must be a registered uppercase business code"
+        }
+    }
+
+    companion object {
+        private val SHA256 = Regex("[0-9a-f]{64}")
+        private val REASON_CODE = Regex("[A-Z][A-Z0-9_]{0,63}")
         private const val serialVersionUID = 1L
     }
 }

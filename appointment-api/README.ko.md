@@ -46,13 +46,15 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 
 | 행위자 | 메서드와 경로 | 결과 |
 |------|------|------|
-| 고객 | `POST /api/v2/appointment-requests` | `PROPOSED` 가예약 생성 (`202`) |
+| 고객 | `POST /api/v2/appointment-requests` | 정책에 따라 `PROPOSED` 또는 자원을 선점한 `HELD` 가예약 생성 (`202`) |
 | 관리자 | `POST /api/v2/admin/appointments` | 정책이 허용한 확정 예약 생성 (`201`) |
 | 관리자 | `POST /api/v2/appointments/{id}/approve` | 고객이 동의한 정확한 proposal 승인 (`200`) |
 | 고객 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/accept` | 현재 변경 proposal 수락 (`200`) |
 | 고객 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/decline` | 기존 확정을 유지하며 proposal 거절 (`200`) |
 | 관리자 | `POST /api/v2/appointments/{id}/confirm` | 유효 정책과 동의가 허용한 proposal 확정 (`200`) |
 | 관리자 | `POST /api/v2/appointments/{id}/change-proposals` | 기존 확정을 취소하지 않고 대체 proposal 생성 (`202`) |
+| 관리자 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/expire` | 만료 시각에 도달한 proposal을 종결하고 최초 선점 해제 (`200`) |
+| 관리자 | `POST /api/v2/appointments/{id}/cancel` | 예약을 취소하고 활성 allocation 해제 (`200`) |
 | 고객 또는 관리자 | `GET /api/v2/appointments/{id}/commitment` | commitment 전용 projection 조회 (`200`) |
 
 이 경로의 request body는 actor, tenant, clinic, patient subject, 정책 mode,
@@ -60,6 +62,10 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 tenant와 clinic을 도출하며 다중 scope나 서비스 principal은 fail-closed로 거절합니다.
 모든 mutation은 `Idempotency-Key`가 필요하고, 생성은 `If-None-Match: *`, 기존
 aggregate 변경은 최신 `ETag`를 담은 `If-Match`가 추가로 필요합니다.
+
+proposal과 commitment 응답은 판단에 고정된 불변 정책 snapshot ID, hash, 세대,
+원본 version을 제공한다. 이후 정책이 바뀌어도 기존 proposal을 새 정책으로 재해석하지
+않습니다.
 
 Gateway는 하나의 actor invariant를 충족하는 길이 제한 claim을 발행해야 합니다.
 예를 들어 clinic `101`의 관리자 token은 다음 claim을 포함합니다.
@@ -142,8 +148,8 @@ resolver는 일반 SHA-256으로 추정하지 않고 patient 접근을 fail-clos
 | legacy 경로로 v2 변경 시도 | `409 NEW_APPOINTMENT_API_REQUIRED` | commitment v2 endpoint 사용 |
 | 예상하지 못한 내부 장애 | `500 INTERNAL_ERROR` | `Retry-After: 5` 뒤 같은 멱등키로 재시도 |
 
-`PREDECESSOR_NOT_COMPLETED`는 Task 8이 외부 완료 event를 연결할 때 사용하기 위해
-예약된 공개 code입니다. Task 7의 예약 API만으로는 시술 완료 여부를 판정하지 않습니다.
+`PREDECESSOR_NOT_COMPLETED`는 권위 있는 외부 이행 event가 선행 진료의 완료를 아직
+증명하지 못했을 때 반환합니다. 예약 API는 예약 상태만으로 임상 완료를 추론하지 않습니다.
 
 ### 플랜 기반 기능 플래그
 

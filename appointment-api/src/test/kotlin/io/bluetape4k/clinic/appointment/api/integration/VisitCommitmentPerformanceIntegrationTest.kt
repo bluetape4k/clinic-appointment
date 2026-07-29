@@ -123,21 +123,23 @@ class VisitCommitmentPerformanceIntegrationTest {
                     LIMIT 100
                     """.trimIndent(),
                 )
-
-            overlap.usesAny("idx_resource_allocation_overlap").shouldBeTrue()
-            currentProposal.usesAny("idx_proposal_current", "uq_proposal_commitment_revision").shouldBeTrue()
-            dirtySet.usesAny("uq_plan_revision_dependency").shouldBeTrue()
-            idempotencyRetention.usesAny("idx_appointment_idempotency_retention").shouldBeTrue()
-            inboxRetention.usesAny("idx_inbox_retention").shouldBeTrue()
-            outboxRetention.usesAny("idx_outbox_retention").shouldBeTrue()
-            listOf(
-                overlap,
-                currentProposal,
-                dirtySet,
-                idempotencyRetention,
-                inboxRetention,
-                outboxRetention,
-            ).none { "Seq Scan on" in it }.shouldBeTrue()
+            val quarantineRetention =
+                explain(
+                    connection,
+                    """
+                    SELECT id
+                    FROM scheduling_quarantine_events
+                    WHERE tenant_group_id = 1
+                      AND clinic_id = 91001
+                      AND legal_hold = FALSE
+                      AND status IN ('RELEASE_APPROVED', 'RELEASE_DENIED')
+                      AND encrypted_original_envelope IS NOT NULL
+                      AND resolved_at IS NOT NULL
+                      AND resolved_at < TIMESTAMP '2026-07-01 00:00:00'
+                    ORDER BY resolved_at, id
+                    LIMIT 100
+                    """.trimIndent(),
+                )
 
             val report = Path.of("build/reports/performance/visit-commitment-postgresql-explain.txt")
             Files.createDirectories(report.parent)
@@ -161,8 +163,28 @@ class VisitCommitmentPerformanceIntegrationTest {
 
                 # outbox retention
                 $outboxRetention
+
+                # quarantine retention
+                $quarantineRetention
                 """.trimIndent(),
             )
+
+            overlap.usesAny("idx_resource_allocation_overlap").shouldBeTrue()
+            currentProposal.usesAny("idx_proposal_current", "uq_proposal_commitment_revision").shouldBeTrue()
+            dirtySet.usesAny("uq_plan_revision_dependency").shouldBeTrue()
+            idempotencyRetention.usesAny("idx_appointment_idempotency_retention").shouldBeTrue()
+            inboxRetention.usesAny("idx_inbox_retention").shouldBeTrue()
+            outboxRetention.usesAny("idx_outbox_retention").shouldBeTrue()
+            quarantineRetention.usesAny("idx_quarantine_resolved_retention").shouldBeTrue()
+            listOf(
+                overlap,
+                currentProposal,
+                dirtySet,
+                idempotencyRetention,
+                inboxRetention,
+                outboxRetention,
+                quarantineRetention,
+            ).none { "Seq Scan on" in it }.shouldBeTrue()
         }
     }
 
@@ -311,12 +333,33 @@ class VisitCommitmentPerformanceIntegrationTest {
                 FROM generate_series(1, 20000) AS n
                 """.trimIndent(),
             )
+            statement.executeUpdate(
+                """
+                INSERT INTO scheduling_quarantine_events(
+                    event_id, event_type, envelope_hash, encrypted_original_envelope,
+                    encryption_key_id, producer, source_authority, schema_version,
+                    source_aggregate_id, source_aggregate_version, tenant_group_id,
+                    clinic_id, reason_code, detected_at, correlation_id, retention_class,
+                    payload_expires_at, legal_hold, status, resolved_at
+                )
+                SELECT 'retention-quarantine-' || n, 'TEST',
+                       md5('envelope-' || n) || md5('envelope-' || n),
+                       'encrypted-' || n, 'key', 'performance', 'catalog', 1,
+                       'aggregate-' || n, n, 1, 91001 + (n % 100), 'TEST_REASON',
+                       TIMESTAMP '2026-05-01 00:00:00', 'correlation-' || n,
+                       'STANDARD', TIMESTAMP '2026-09-01 00:00:00', FALSE,
+                       CASE WHEN n % 2 = 0 THEN 'RELEASE_APPROVED' ELSE 'RELEASE_DENIED' END,
+                       TIMESTAMP '2026-06-01 00:00:00' + (n % 1000) * INTERVAL '1 second'
+                FROM generate_series(1, 20000) AS n
+                """.trimIndent(),
+            )
             statement.execute("ANALYZE scheduling_resource_allocations")
             statement.execute("ANALYZE scheduling_appointment_proposals")
             statement.execute("ANALYZE scheduling_plan_revision_dependencies")
             statement.execute("ANALYZE scheduling_appointment_command_idempotencies")
             statement.execute("ANALYZE scheduling_inbox_events")
             statement.execute("ANALYZE scheduling_outbox_events")
+            statement.execute("ANALYZE scheduling_quarantine_events")
         }
     }
 

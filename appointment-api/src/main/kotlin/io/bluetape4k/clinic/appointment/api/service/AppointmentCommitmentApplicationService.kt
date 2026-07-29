@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.service
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentCommitmentResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentProposalResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ApproveProposalRequest
+import io.bluetape4k.clinic.appointment.api.dto.commitment.CancelAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateAppointmentRequestV2
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateChangeProposalRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DeclineProposalRequest
@@ -127,6 +128,34 @@ interface AppointmentCommitmentApplicationService {
         idempotencyKey: String,
         request: CreateChangeProposalRequest,
     ): AppointmentProposalResponse
+
+    /**
+     * 만료 시각에 도달한 proposal을 idempotent하게 종결한다.
+     *
+     * HELD 최초 proposal이면 allocation을 해제하고 commitment를 `EXPIRED`로 전환한다.
+     * 확정 예약의 변경 proposal이면 기존 확정 포인터와 allocation을 보존한다.
+     */
+    fun expireProposal(
+        actor: ActorContext,
+        appointmentId: Long,
+        proposalId: Long,
+        expectedVersion: Long,
+        idempotencyKey: String,
+    ): AppointmentCommitmentResponse
+
+    /**
+     * 현재 가예약 또는 확정 예약을 취소하고 보유한 자원 allocation을 해제한다.
+     *
+     * 결제·환불 자체는 다른 서비스의 책임이며 [request]에는 예약 취소 사유 code만
+     * 전달한다. 구현체는 현재 확정 proposal 또는 최초 미확정 proposal에 명령을 결합한다.
+     */
+    fun cancelAppointment(
+        actor: ActorContext,
+        appointmentId: Long,
+        expectedVersion: Long,
+        idempotencyKey: String,
+        request: CancelAppointmentRequest,
+    ): AppointmentCommitmentResponse
 
     /**
      * actor scope와 환자 소유권을 검증한 commitment 전용 read model을 반환한다.

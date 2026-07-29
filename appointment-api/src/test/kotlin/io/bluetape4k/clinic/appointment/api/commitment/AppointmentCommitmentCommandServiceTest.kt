@@ -21,11 +21,13 @@ import io.bluetape4k.clinic.appointment.model.tables.ConsentDecisions
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommandIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentRepository
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationRepository
+import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
@@ -704,6 +706,97 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
         replay.proposal.expiredAt shouldBeEqualTo ACTIVE_EXPIRY
         transaction(database) {
             ResourceAllocationRepository().findByProposal(requested.proposal.id) shouldHaveSize 0
+        }
+    }
+
+    @Test
+    fun `hard hold customer request reserves once and approval reuses the same allocations`() {
+        val service = commandService()
+        val proposal = proposalInput(revision = 1L, resourceId = "doctor-hard-hold")
+        val held =
+            service.requestCustomerAppointment(
+                CustomerAppointmentRequestCommand(
+                    context = commandContext("hard-hold-request"),
+                    identity = appointmentIdentity("hard-hold-request"),
+                    proposal = proposal,
+                    expiresAt = ACTIVE_EXPIRY,
+                    representativeTreatmentName = "선점형 가예약",
+                    consent = acceptedConsent("hard-hold-request"),
+                    holdResources = true,
+                ),
+            )
+
+        held.commitment.status shouldBeEqualTo AppointmentCommitmentStatus.HELD
+        transaction(database) {
+            ResourceAllocationRepository().findByProposal(held.proposal.id) shouldHaveSize
+                proposal.resourceRequests.size
+        }
+
+        val confirmed =
+            service.approveCustomerProposal(
+                ConfirmAppointmentProposalCommand(
+                    context = commandContext("hard-hold-approve"),
+                    appointmentId = held.commitment.appointmentId,
+                    proposalId = held.proposal.id,
+                    expectedVersion = held.commitment.version,
+                    proposal = proposal,
+                    expectedProposalHash = held.proposal.proposalHash,
+                    projectionTarget = confirmedProjectionTarget("doctor-hard-hold"),
+                ),
+            )
+
+        confirmed.commitment.status shouldBeEqualTo AppointmentCommitmentStatus.CONFIRMED
+        transaction(database) {
+            ResourceAllocationRepository().findByProposal(held.proposal.id) shouldHaveSize
+                proposal.resourceRequests.size
+        }
+    }
+
+    @Test
+    fun `held appointment cancellation releases allocations and replays the durable result`() {
+        val service = commandService()
+        val proposal = proposalInput(revision = 1L, resourceId = "doctor-held-cancel")
+        val held =
+            service.requestCustomerAppointment(
+                CustomerAppointmentRequestCommand(
+                    context = commandContext("held-cancel-request"),
+                    identity = appointmentIdentity("held-cancel-request"),
+                    proposal = proposal,
+                    expiresAt = ACTIVE_EXPIRY,
+                    representativeTreatmentName = "취소할 선점형 가예약",
+                    consent = acceptedConsent("held-cancel-request"),
+                    holdResources = true,
+                ),
+            )
+        val command =
+            CancelAppointmentCommand(
+                context = commandContext("held-cancel"),
+                appointmentId = held.commitment.appointmentId,
+                proposalId = held.proposal.id,
+                expectedVersion = held.commitment.version,
+                expectedProposalHash = held.proposal.proposalHash,
+                reasonCode = "REFUND",
+            )
+
+        val cancelled = service.cancelAppointment(command)
+        val replay = service.cancelAppointment(command)
+
+        cancelled.commitment.status shouldBeEqualTo AppointmentCommitmentStatus.CANCELLED
+        replay.idempotentReplay.shouldBeTrue()
+        transaction(database) {
+            ResourceAllocationRepository()
+                .findByProposal(held.proposal.id)
+                .single()
+                .status shouldBeEqualTo ResourceAllocationStatus.RELEASED
+            Appointments
+                .select(Appointments.status)
+                .where { Appointments.id eq held.commitment.appointmentId }
+                .single()[Appointments.status] shouldBeEqualTo AppointmentState.CANCELLED
+            SchedulingOutboxEvents
+                .select(SchedulingOutboxEvents.payloadJson)
+                .where { SchedulingOutboxEvents.eventType eq "APPOINTMENT_CANCELLED" }
+                .single()[SchedulingOutboxEvents.payloadJson] shouldBeEqualTo
+                """{"appointmentId":${held.commitment.appointmentId},"commitmentId":${held.commitment.id},"proposalId":${held.proposal.id},"commitmentVersion":${held.commitment.version + 1},"reasonCode":"REFUND"}"""
         }
     }
 

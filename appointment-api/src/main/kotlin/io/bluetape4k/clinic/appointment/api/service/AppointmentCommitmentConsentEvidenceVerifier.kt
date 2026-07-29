@@ -49,10 +49,12 @@ internal object FailClosedAppointmentCommitmentConsentEvidenceVerifier :
  * @property clinicId Gateway actor가 선택했고 Plan/appointment가 실제 속한 clinic ID이다.
  * @property patientReferenceFingerprint 구매 이벤트에서 전달된 보호 환자 fingerprint이다.
  * @property appointmentPlanId 신규 예약이면 구매 Plan ID이고 기존 예약 결정이면 `null`이다.
- * @property appointmentId 기존 예약 proposal 결정이면 appointment ID이고 신규 예약이면 `null`이다.
- * @property proposalId 영속 proposal이면 proposal ID이고 신규 예약 생성 전 proposal이면 `null`이다.
- * @property proposalHash 영속 proposal의 canonical hash 또는 생성 전 proposal의 서버 계산
- * 참조 hash이다. 외부 동의 서비스는 이 값과 정확히 같은 proposal에 대한 동의만 반환해야 한다.
+ * @property appointmentId 기존 예약 proposal 결정이면 appointment ID이고 신규 예약이면
+ * DB 식별자가 아직 없으므로 `null`이다.
+ * @property proposalId 영속 proposal이면 proposal ID이고 신규 예약 생성 전이면 `null`이다.
+ * @property proposalHash DB 생성 ID를 제외한 proposal 의미의 canonical hash이다. 신규
+ * 예약 생성 전·후에 값이 같으며 외부 동의 서비스는 이 값과 정확히 같은 일정·항목·자원·
+ * 정책에 대한 동의만 반환해야 한다.
  * @property policySnapshotId proposal 계산에 사용한 유효 정책 snapshot ID이다.
  * @property policySnapshotHash 유효 정책 payload의 canonical SHA-256이다.
  * @property decision 기록할 고객 동의 결정이다.

@@ -12,9 +12,15 @@ import io.bluetape4k.clinic.appointment.model.commitment.AppointmentItemDraft
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentProposalRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
+import io.bluetape4k.clinic.appointment.model.policy.CompiledSchedulingPolicy
+import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyKind
+import io.bluetape4k.clinic.appointment.model.policy.SourceVersion
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import tools.jackson.core.type.TypeReference
+import tools.jackson.databind.json.JsonMapper
+import tools.jackson.module.kotlin.KotlinModule
 import java.time.Instant
 
 /**
@@ -24,14 +30,43 @@ import java.time.Instant
  * [EffectiveSchedulingPolicyService]로 현재 정책을 영속화한 뒤 [SchedulingPolicyRepository]에서
  * 같은 hash의 snapshot row를 다시 읽어 command 입력에 사용할 양수 row ID를 결합한다.
  */
-internal fun interface AppointmentCommitmentPolicySnapshotResolver {
+internal interface AppointmentCommitmentPolicySnapshotResolver {
     fun resolve(
         tenantGroupId: Long,
         clinicId: Long,
         decisionAt: Instant,
         serviceAt: Instant,
     ): CurrentPolicySnapshot
+
+    /**
+     * 과거 proposal에 고정된 snapshot ID를 현재 정책 재계산 없이 조회한다.
+     *
+     * @return 정확한 tenant·clinic 범위의 불변 snapshot 참조. 행이 없거나 범위가 다르면
+     * 구현체는 fail-closed 오류를 반환해야 한다.
+     */
+    fun resolvePersisted(
+        tenantGroupId: Long,
+        clinicId: Long,
+        snapshotId: Long,
+    ): PersistedPolicySnapshotReference
 }
+
+/**
+ * 이미 발행된 proposal의 동의 검증에 필요한 최소 불변 정책 참조이다.
+ *
+ * @property id proposal row에 고정된 양수 snapshot 식별자.
+ * @property snapshotHash 영속 snapshot 전체 계약의 lowercase SHA-256.
+ * @property payload proposal을 만들 때 적용한 완전한 컴파일 정책. 현재 활성 정책으로
+ * 다시 계산하지 않고 승인·동의 조건을 동일하게 재검증하는 데 사용한다.
+ */
+internal data class PersistedPolicySnapshotReference(
+    val id: Long,
+    val snapshotHash: String,
+    val tenantGeneration: Long,
+    val clinicGeneration: Long,
+    val sourceVersions: Map<SchedulingPolicyKind, SourceVersion>,
+    val payload: CompiledSchedulingPolicy,
+)
 
 /**
  * 유효 정책 서비스와 snapshot repository를 결합하는 production 정책 resolver이다.
@@ -61,6 +96,36 @@ internal class EffectiveAppointmentCommitmentPolicySnapshotResolver(
                 "effective policy snapshot row is not readable",
             )
         return CurrentPolicySnapshot(snapshot.id, policy)
+    }
+
+    override fun resolvePersisted(
+        tenantGroupId: Long,
+        clinicId: Long,
+        snapshotId: Long,
+    ): PersistedPolicySnapshotReference {
+        val snapshot =
+            transaction(database) {
+                schedulingPolicyRepository.findSnapshot(tenantGroupId, clinicId, snapshotId)
+            } ?: throw AppointmentCommitmentApiException(
+                AppointmentCommitmentApiError.INTERNAL_ERROR,
+                "persisted policy snapshot row is not readable in appointment scope",
+            )
+        return PersistedPolicySnapshotReference(
+            id = snapshot.id,
+            snapshotHash = snapshot.snapshotHash,
+            tenantGeneration = snapshot.tenantGeneration,
+            clinicGeneration = snapshot.clinicGeneration,
+            sourceVersions = SNAPSHOT_MAPPER.readValue(snapshot.sourceVersionsJson, SOURCE_VERSIONS_TYPE),
+            payload = SNAPSHOT_MAPPER.readValue(snapshot.payloadJson, CompiledSchedulingPolicy::class.java),
+        )
+    }
+
+    private companion object {
+        val SNAPSHOT_MAPPER: JsonMapper =
+            JsonMapper.builder()
+                .addModule(KotlinModule.Builder().build())
+                .build()
+        val SOURCE_VERSIONS_TYPE = object : TypeReference<Map<SchedulingPolicyKind, SourceVersion>>() {}
     }
 }
 
