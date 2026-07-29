@@ -37,8 +37,15 @@ function manifest() {
 function html(locale) {
   return `<!doctype html>
 <html lang="${locale}">
-<head><meta charset="utf-8"><title>Design</title><style>body { color: #111; }</style></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light dark">
+  <title>Design</title>
+  <script>localStorage.getItem("starlight-theme"); document.documentElement.dataset.theme = "light";</script>
+  <style>:root[data-theme="light"] { color: #111; }</style>
+</head>
 <body>
+  <button class="theme-toggle" aria-label="Switch theme">Theme</button>
   <header>
     <dl class="provenance"
         data-status="approved"
@@ -60,6 +67,7 @@ function html(locale) {
       <a href="https://github.com/bluetape4k/clinic-appointment/issues/182">Issue</a>
     </section>
   </main>
+  <script>localStorage.setItem("starlight-theme", "light");</script>
 </body>
 </html>`;
 }
@@ -156,6 +164,20 @@ test('requires status, source, and baseline provenance metadata', async (t) => {
   await assert.rejects(
     () => validateRepository(root),
     /design\.locales\.en.*data-baseline/,
+  );
+});
+
+test('requires the shared light and dark theme contract', async (t) => {
+  const root = await createFixture(t);
+  await replace(
+    root,
+    EN_HTML,
+    '<meta name="color-scheme" content="light dark">',
+    '<meta name="color-scheme" content="dark">',
+  );
+  await assert.rejects(
+    () => validateRepository(root),
+    /design\.locales\.en.*color-scheme="light dark"/,
   );
 });
 

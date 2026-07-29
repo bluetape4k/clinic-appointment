@@ -3,7 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="light dark">
+  <script>
+    (() => {
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      let preference = "auto";
+      try {
+        const stored = localStorage.getItem("starlight-theme");
+        if (stored === "light" || stored === "dark" || stored === "auto") preference = stored;
+      } catch {}
+      const theme = preference === "auto" ? (media.matches ? "dark" : "light") : preference;
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    })();
+  </script>
   <link rel="icon" href="data:,">
   <title>Scheduling Policy Foundation 설계</title>
   <style>
@@ -270,6 +283,117 @@
       section { break-inside: avoid; }
       a { color: #155ca8; }
     }
+    .theme-toggle {
+      display: inline-grid;
+      width: 40px;
+      height: 40px;
+      margin: 0 0 18px;
+      padding: 0;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--text);
+      background: var(--panel);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, .16);
+      cursor: pointer;
+    }
+    .theme-toggle:hover { border-color: var(--cyan); color: var(--cyan); }
+    .theme-toggle:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
+    .theme-toggle svg { width: 20px; height: 20px; stroke: currentColor; }
+    .theme-icon-sun, [data-theme="light"] .theme-icon-moon { display: none; }
+    [data-theme="light"] .theme-icon-sun { display: block; }
+
+    :root[data-theme="light"] {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --panel-strong: #f7faff;
+      --panel-2: #f7faff;
+      --line: rgba(31, 61, 93, .2);
+      --text: #18263a;
+      --muted: #52657a;
+      --cyan: #087b88;
+      --blue: #245fae;
+      --violet: #7553b7;
+      --green: #14764d;
+      --amber: #965900;
+      --red: #b4233c;
+      --shadow: 0 20px 52px rgba(47, 73, 103, .14);
+    }
+    [data-theme="light"] body {
+      background:
+        radial-gradient(circle at 12% -10%, rgba(8, 123, 136, .12), transparent 34rem),
+        radial-gradient(circle at 88% 10%, rgba(117, 83, 183, .1), transparent 32rem),
+        var(--bg);
+    }
+    [data-theme="light"] nav { background: rgba(248, 251, 255, .92); }
+    [data-theme="light"] code {
+      border-color: rgba(36, 95, 174, .24);
+      color: #174a77;
+      background: #eaf2fb;
+    }
+    [data-theme="light"] .logo {
+      border-color: rgba(8, 123, 136, .36);
+      background: linear-gradient(145deg, rgba(8, 123, 136, .14), rgba(36, 95, 174, .05));
+    }
+    [data-theme="light"] .hero {
+      border-color: rgba(36, 95, 174, .22);
+      background:
+        linear-gradient(135deg, rgba(210, 235, 244, .82), rgba(232, 226, 249, .68)),
+        var(--panel);
+    }
+    [data-theme="light"] .hero::after { border-color: rgba(8, 123, 136, .08); }
+    [data-theme="light"] .hero-lead,
+    [data-theme="light"] .lead { color: #40546c; }
+    [data-theme="light"] .pill {
+      color: #40546c;
+      background: rgba(255, 255, 255, .7);
+    }
+    [data-theme="light"] .provenance {
+      border-color: rgba(20, 118, 77, .24);
+      background: #edf8f2;
+    }
+    [data-theme="light"] .view-switch a { background: #f7faff; }
+    [data-theme="light"] .journey article,
+    [data-theme="light"] .timeline article,
+    [data-theme="light"] .decision-lane article,
+    [data-theme="light"] .card,
+    [data-theme="light"] .flow .node,
+    [data-theme="light"] .node,
+    [data-theme="light"] .relation .box,
+    [data-theme="light"] .layer,
+    [data-theme="light"] .numbered li,
+    [data-theme="light"] .branch-row {
+      color: var(--text);
+      background: rgba(255, 255, 255, .92);
+    }
+    [data-theme="light"] .card strong { color: var(--text); }
+    [data-theme="light"] .tag { background: rgba(8, 123, 136, .1); }
+    [data-theme="light"] .callout {
+      background: linear-gradient(90deg, rgba(8, 123, 136, .1), rgba(255, 255, 255, .8));
+    }
+    [data-theme="light"] .callout.warning,
+    [data-theme="light"] .callout.warn,
+    [data-theme="light"] .warn {
+      background: linear-gradient(90deg, rgba(150, 89, 0, .1), rgba(255, 255, 255, .82));
+    }
+    [data-theme="light"] .callout.danger {
+      background: linear-gradient(90deg, rgba(180, 35, 60, .09), rgba(255, 255, 255, .82));
+    }
+    [data-theme="light"] table { background: #ffffff; }
+    [data-theme="light"] th { color: #203b5d; background: #e9f0f8; }
+    [data-theme="light"] tbody tr:hover { background: rgba(8, 123, 136, .05); }
+    [data-theme="light"] .state { background: rgba(36, 95, 174, .08); }
+    [data-theme="light"] .formula { color: #155d40; background: #e9f7ef; }
+    [data-theme="light"] .list,
+    [data-theme="light"] .numbered li { color: #344a62; }
+    [data-theme="light"] .theme-toggle {
+      background: rgba(255, 255, 255, .88);
+      box-shadow: 0 8px 22px rgba(47, 73, 103, .12);
+    }
+    @media print {
+      .theme-toggle { display: none; }
+      :root[data-theme] { --bg: white; --text: #172235; --muted: #526075; --panel: white; --panel-2: white; --line: #ccd4df; }
+    }
   </style>
 </head>
 <body>
@@ -277,6 +401,19 @@
 <div class="shell">
   <nav>
     <div class="brand">Scheduling Policy Foundation<span>ISSUE #182 · TYPE A</span></div>
+    <button class="theme-toggle" type="button" aria-label="라이트 테마로 전환" title="라이트 테마로 전환">
+      <span class="theme-icon-sun" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+        </svg>
+      </span>
+      <span class="theme-icon-moon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </span>
+    </button>
     <a href="#simulation">시뮬레이션</a>
     <a href="#history">결정 이력</a>
     <a href="#problem">01 · 문제와 결정</a>
@@ -626,5 +763,51 @@
     </footer>
   </main>
 </div>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const button = document.querySelector(".theme-toggle");
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      const korean = root.lang === "ko";
+
+      function readPreference() {
+        try {
+          const value = localStorage.getItem("starlight-theme");
+          if (value === "light" || value === "dark" || value === "auto") return value;
+        } catch {}
+        return "auto";
+      }
+
+      function updateButton(theme) {
+        const nextTheme = theme === "dark" ? "light" : "dark";
+        const label = korean
+          ? `${nextTheme === "light" ? "라이트" : "다크"} 테마로 전환`
+          : `Switch to ${nextTheme} theme`;
+        button.setAttribute("aria-label", label);
+        button.title = label;
+      }
+
+      function applyTheme(preference, persist = false) {
+        const theme = preference === "auto" ? (media.matches ? "dark" : "light") : preference;
+        root.dataset.theme = theme;
+        root.style.colorScheme = theme;
+        updateButton(theme);
+        if (persist) {
+          try { localStorage.setItem("starlight-theme", preference); } catch {}
+        }
+      }
+
+      button.addEventListener("click", () => {
+        applyTheme(root.dataset.theme === "dark" ? "light" : "dark", true);
+      });
+      media.addEventListener("change", () => {
+        if (readPreference() === "auto") applyTheme("auto");
+      });
+      window.addEventListener("storage", (event) => {
+        if (event.key === "starlight-theme") applyTheme(readPreference());
+      });
+      applyTheme(readPreference());
+    })();
+  </script>
 </body>
 </html>
