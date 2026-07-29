@@ -75,6 +75,7 @@ object ProposalHasher {
         updateField("$prefix.startsAt", allocation.startsAt)
         updateField("$prefix.endsAt", allocation.endsAt)
         updateField("$prefix.capacityUnits", allocation.capacityUnits)
+        updateField("$prefix.maximumCapacity", allocation.maximumCapacity)
         updateField("$prefix.allocationMode", allocation.allocationMode)
         updateField("$prefix.appointmentItemKey", allocation.appointmentItemKey)
     }

@@ -29,8 +29,8 @@ metric adapter, retention 단일 실행자, 환불 fact에서 예약 취소 comm
 | 2. 아키텍처·MSA | 상품·구매·환불·시술 판정은 외부 소유, 예약은 불변 Plan/BOM과 검증된 fact만 소비 | 통과 |
 | 3. 데이터·트랜잭션 | caller-owned Exposed transaction, CAS, canonical resource lock, outbox·audit·idempotency 원자성 | 통과 |
 | 4. API·보안 | Gateway actor만 신뢰, body identity 위조 차단, `ETag`/멱등성/OpenAPI 계약 | 통과 |
-| 5. 테스트·호환성 | core 452, event 116, API 408 중 406 통과·2 pending, 세 dialect와 동시성 검증 | 통과 |
-| 6. 성능·운영 | 100 caller 중복 점유 0, p95 724 ms, bounded index, rollout/retention runbook | merge 통과, production `WRITE` 보류 |
+| 5. 테스트·호환성 | core 452, event 116, API 409 통과·2 pending, 세 dialect와 동시성 검증 | 통과 |
+| 6. 성능·운영 | 100 caller 중복 점유 0, p95 709 ms, bounded index, rollout/retention runbook | merge 통과, production `WRITE` 보류 |
 | 7. 사용자·문서 | 정책 snapshot과 상태 전이 응답, README locale parity, 한국어 KDoc·API 문서 | 통과 |
 
 ## 리뷰에서 발견해 수정한 항목
@@ -65,17 +65,34 @@ legacy projection, audit, outbox, idempotency 결과를 한 transaction에서 �
 OpenAPI 회귀 테스트는 query `ETag`, response schema, 필수 request field와 중첩
 policy snapshot을 검증한다.
 
+### P1: 생성 proposal의 capacity bucket 상한 유실
+
+가용성 계산기가 `capacityUnits=1`, `maximumCapacity=3`인 방문 bucket을 반환해도
+초기 구현은 proposal allocation에 소비량만 남겨 확정 단계에서 상한을 1로 축소했다.
+`ResourceAllocationDraft`와 canonical proposal hash에 상한을 포함하고,
+`ProposalCandidateSlot.visitCapacityBuckets`가 방문 전체 점유 bucket을 명시하도록
+수정했다. 생성 경로로 상한 3까지 서로 다른 예약을 확정하고 네 번째를
+`RESOURCE_CONFLICT`로 거부하는 회귀 테스트가 실제 영속 상한까지 확인한다.
+
+### P2: 약관 hash 기대값의 자기참조 검증
+
+외부 동의 검증기가 반환한 `termsHash`를 다시 command의 기대값으로 사용하던
+자기참조 비교를 제거했다. 구매 당시 Plan에 보관한 불변 상품
+`catalogPayloadHash`를 서버 소유 기대값으로 사용하고 외부 검증 결과를 constant-time으로
+대조한다. 현재 카탈로그 버전이나 값이 존재하지만 다른 약관 hash인 증빙도 command
+실행 전에 `CONSENT_REQUIRED`로 거부한다.
+
 ## 검증 증거
 
 - `:appointment-core:build :appointment-event:build :appointment-api:build`
   성공
-- core 452, event 116, API 408 테스트에서 실패·오류 0, API pending 2
+- core 452, event 116, API 409 테스트에서 실패·오류 0, API pending 2
 - 동시성·성능·retention·dialect 대상 19개 테스트 통과
 - PostgreSQL 100 caller: 성공 1, 안정 충돌 99, active allocation 1,
-  미복구 deadlock 0, p95 724 ms
+  미복구 deadlock 0, p95 709 ms
 - PostgreSQL allocation 10만 건과 retention 각 2만 건 fixture에서 핵심 7개
   query 모두 의도한 index 사용, `Seq Scan on` 0
-- Gatling 264/264 성공, 전체 p95 54 ms, p99 285 ms, max 360 ms
+- Gatling 264/264 성공, 전체 p95 38 ms, p99 68 ms, max 325 ms
 - Kover XML report 생성 확인
 - `git diff --check` 통과
 

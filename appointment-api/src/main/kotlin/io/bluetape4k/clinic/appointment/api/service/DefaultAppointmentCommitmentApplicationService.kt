@@ -49,6 +49,7 @@ import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentItems
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentProposals
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentRepository
+import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRevisionRepository
 import io.bluetape4k.clinic.appointment.service.ProposalHasher
 import io.bluetape4k.logging.KLogging
@@ -146,6 +147,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
     private val clock: Clock = Clock.systemUTC(),
     private val proposalService: AppointmentProposalService = AppointmentProposalService(),
     private val commitmentRepository: AppointmentCommitmentRepository = AppointmentCommitmentRepository(),
+    private val planRepository: AppointmentPlanRepository = AppointmentPlanRepository(),
     private val planRevisionRepository: AppointmentPlanRevisionRepository = AppointmentPlanRevisionRepository(),
 ) : AppointmentCommitmentApplicationService {
 
@@ -243,6 +245,11 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     allowedEvidenceTypes = consentRequirement.allowedEvidenceTypes,
                     maximumEvidenceAge = consentRequirement.maximumAge,
                     termsHashRequired = consentRequirement.termsHashRequired,
+                    requiredTermsHash =
+                        requiredConsentTermsHash(
+                            consentRequirement.termsHashRequired,
+                            planAccess.plan.catalogPayloadHash,
+                        ),
                 ),
         )
         return runCommand(actor, planAccess.tenantGroupId, planAccess.clinicId) {
@@ -254,7 +261,11 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     expiresAt = proposalExpiry(proposal.startsAt),
                     representativeTreatmentName = representativeTreatmentName(planRevision),
                     projectionTarget = planningResolver.resolveProjectionTarget(planAccess.clinicId, proposal),
-                    policyDecision = directPolicyDecision(policySnapshot, consent.termsHash),
+                    policyDecision =
+                        directPolicyDecision(
+                            policySnapshot,
+                            planAccess.plan.catalogPayloadHash,
+                        ),
                     consent = consent,
                 ),
             ).let { commitmentResponse(planAccess.tenantGroupId, planAccess.clinicId, it.commitment, it.proposal) }
@@ -376,6 +387,12 @@ internal class DefaultAppointmentCommitmentApplicationService(
             )
         val booking = bookingCommitment(policySnapshot)
         val consentRequirement = booking.adminConsentEvidence
+        val catalogPayloadHash =
+            catalogPayloadHashByProposal(
+                tenantGroupId = access.tenantGroupId,
+                clinicId = access.clinicId,
+                proposalId = request.proposalId,
+            )
         val verifiedConsent =
             verifyConsentEvidence(
                 request = request.evidence,
@@ -391,8 +408,13 @@ internal class DefaultAppointmentCommitmentApplicationService(
                 allowedEvidenceTypes = consentRequirement.allowedEvidenceTypes,
                 maximumEvidenceAge = consentRequirement.maximumAge,
                 termsHashRequired = consentRequirement.termsHashRequired,
+                requiredTermsHash =
+                    requiredConsentTermsHash(
+                        consentRequirement.termsHashRequired,
+                        catalogPayloadHash,
+                    ),
             )
-        val policyDecision = directPolicyDecision(policySnapshot, verifiedConsent.termsHash)
+        val policyDecision = directPolicyDecision(policySnapshot, catalogPayloadHash)
         val consent = acceptedConsent(actor, verifiedConsent)
         return runCommand(actor, access.tenantGroupId, access.clinicId) {
             commandService.approveCustomerProposal(
@@ -594,6 +616,40 @@ internal class DefaultAppointmentCommitmentApplicationService(
                 ?.let(planRevisionRepository::findActive)
         } ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.COMMITMENT_NOT_FOUND)
 
+    /**
+     * proposal item provenance로 구매 당시 상품 payload hash를 정확한 scope 안에서 찾습니다.
+     *
+     * 약관 hash 검증은 현재 카탈로그나 외부 검증 결과가 아니라 proposal이 참조한 Plan의
+     * 불변 구매 snapshot을 사용해야 합니다.
+     */
+    private fun catalogPayloadHashByProposal(
+        tenantGroupId: Long,
+        clinicId: Long,
+        proposalId: Long,
+    ): String =
+        transaction(database) {
+            val planId =
+                AppointmentItems
+                    .select(AppointmentItems.planRevisionId)
+                    .where { AppointmentItems.proposalId eq proposalId }
+                    .limit(1)
+                    .singleOrNull()
+                    ?.get(AppointmentItems.planRevisionId)
+                    ?.value
+                    ?.let(planRevisionRepository::findById)
+                    ?.revision
+                    ?.planId
+            planId
+                ?.let {
+                    planRepository.findPlanByIdAndTenantClinic(
+                        id = it,
+                        tenantGroupId = tenantGroupId,
+                        clinicId = clinicId,
+                    )
+                }
+                ?.catalogPayloadHash
+        } ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.COMMITMENT_NOT_FOUND)
+
     private fun persistedProposalInput(
         clinicId: Long,
         appointmentId: Long,
@@ -689,9 +745,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
             startsAt = proposal.startsAt,
             endsAt = proposal.endsAt,
             items = proposal.items,
-            resourceRequests = proposal.allocations.map {
-                ResourceAllocationRequest(it, it.capacityUnits)
-            },
+            resourceRequests = generated.resourceRequests,
             policySnapshotId = proposal.policySnapshotId,
             supersedesProposalId = supersedesProposalId,
         )
@@ -768,19 +822,10 @@ internal class DefaultAppointmentCommitmentApplicationService(
 
     private fun directPolicyDecision(
         policySnapshot: CurrentPolicySnapshot,
-        verifiedTermsHash: String?,
+        catalogPayloadHash: String,
     ): DirectConfirmationPolicyDecision {
         val booking = bookingCommitment(policySnapshot)
         val consentRequirement = booking.adminConsentEvidence
-        val requiredTermsHash =
-            if (consentRequirement.termsHashRequired) {
-                verifiedTermsHash ?: throw AppointmentCommitmentApiException(
-                    AppointmentCommitmentApiError.CONSENT_REQUIRED,
-                    "direct confirmation evidence terms hash is required",
-                )
-            } else {
-                null
-            }
         if (
             booking.adminBookingMode !=
             io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode.DIRECT_CONFIRM_WITH_CONSENT_EVIDENCE
@@ -797,25 +842,20 @@ internal class DefaultAppointmentCommitmentApplicationService(
             allowedEvidenceTypes = consentRequirement.allowedEvidenceTypes,
             maximumEvidenceAge = consentRequirement.maximumAge,
             termsHashRequired = consentRequirement.termsHashRequired,
-            requiredTermsHash = requiredTermsHash,
+            requiredTermsHash =
+                requiredConsentTermsHash(
+                    consentRequirement.termsHashRequired,
+                    catalogPayloadHash,
+                ),
         )
     }
 
     private fun directPolicyDecision(
         policySnapshot: PersistedPolicySnapshotReference,
-        verifiedTermsHash: String?,
+        catalogPayloadHash: String,
     ): DirectConfirmationPolicyDecision {
         val booking = bookingCommitment(policySnapshot)
         val consentRequirement = booking.adminConsentEvidence
-        val requiredTermsHash =
-            if (consentRequirement.termsHashRequired) {
-                verifiedTermsHash ?: throw AppointmentCommitmentApiException(
-                    AppointmentCommitmentApiError.CONSENT_REQUIRED,
-                    "direct confirmation evidence terms hash is required",
-                )
-            } else {
-                null
-            }
         if (
             booking.adminBookingMode !=
             io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode.DIRECT_CONFIRM_WITH_CONSENT_EVIDENCE
@@ -832,9 +872,33 @@ internal class DefaultAppointmentCommitmentApplicationService(
             allowedEvidenceTypes = consentRequirement.allowedEvidenceTypes,
             maximumEvidenceAge = consentRequirement.maximumAge,
             termsHashRequired = consentRequirement.termsHashRequired,
-            requiredTermsHash = requiredTermsHash,
+            requiredTermsHash =
+                requiredConsentTermsHash(
+                    consentRequirement.termsHashRequired,
+                    catalogPayloadHash,
+                ),
         )
     }
+
+    /**
+     * 약관 hash가 필요한 직접 확정은 구매 당시 고정한 상품 payload hash와 대조합니다.
+     *
+     * 외부 검증기가 반환한 값을 다시 기대값으로 사용하지 않습니다. 상품서비스가 발행한
+     * canonical payload hash를 Plan에 보존하고 있으므로 새 카탈로그 버전이나 임의의
+     * non-null hash가 과거 구매·proposal의 동의 범위를 대신할 수 없습니다.
+     */
+    private fun requiredConsentTermsHash(
+        termsHashRequired: Boolean,
+        catalogPayloadHash: String,
+    ): String? =
+        if (termsHashRequired) {
+            require(catalogPayloadHash.matches(SHA256)) {
+                "catalogPayloadHash must be a lowercase SHA-256 value"
+            }
+            catalogPayloadHash
+        } else {
+            null
+        }
 
     private fun exactPreference(startsAt: Instant): BookingPreferenceSnapshot =
         BookingPreferenceSnapshot.ExactDateTime(
@@ -897,6 +961,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
         allowedEvidenceTypes: Set<String>? = null,
         maximumEvidenceAge: Duration? = null,
         termsHashRequired: Boolean = false,
+        requiredTermsHash: String? = null,
     ): VerifiedAppointmentCommitmentConsentEvidence =
         verifyConsentEvidenceReference(
             request = request,
@@ -913,6 +978,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
             allowedEvidenceTypes = allowedEvidenceTypes,
             maximumEvidenceAge = maximumEvidenceAge,
             termsHashRequired = termsHashRequired,
+            requiredTermsHash = requiredTermsHash,
         )
 
     private fun verifyConsentEvidence(
@@ -929,6 +995,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
         allowedEvidenceTypes: Set<String>? = null,
         maximumEvidenceAge: Duration? = null,
         termsHashRequired: Boolean = false,
+        requiredTermsHash: String? = null,
     ): VerifiedAppointmentCommitmentConsentEvidence =
         verifyConsentEvidenceReference(
             request = request,
@@ -945,6 +1012,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
             allowedEvidenceTypes = allowedEvidenceTypes,
             maximumEvidenceAge = maximumEvidenceAge,
             termsHashRequired = termsHashRequired,
+            requiredTermsHash = requiredTermsHash,
         )
 
     private fun verifyConsentEvidenceReference(
@@ -962,6 +1030,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
         allowedEvidenceTypes: Set<String>? = null,
         maximumEvidenceAge: Duration? = null,
         termsHashRequired: Boolean = false,
+        requiredTermsHash: String? = null,
     ): VerifiedAppointmentCommitmentConsentEvidence {
         val verificationRequest =
             AppointmentCommitmentConsentEvidenceVerificationRequest(
@@ -979,6 +1048,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
                 allowedEvidenceTypes = allowedEvidenceTypes,
                 maximumEvidenceAge = maximumEvidenceAge,
                 termsHashRequired = termsHashRequired,
+                requiredTermsHash = requiredTermsHash,
                 verifiedAt = Instant.now(clock),
             )
         val verified = consentEvidenceVerifier.verify(verificationRequest)
@@ -1008,7 +1078,13 @@ internal class DefaultAppointmentCommitmentApplicationService(
                 (expected.allowedEvidenceTypes == null || actual.evidenceType in expected.allowedEvidenceTypes) &&
                 !age.isNegative &&
                 (expected.maximumEvidenceAge == null || age <= expected.maximumEvidenceAge) &&
-                (!expected.termsHashRequired || actual.termsHash != null)
+                (!expected.termsHashRequired || actual.termsHash != null) &&
+                (
+                    expected.requiredTermsHash == null ||
+                        actual.termsHash?.let {
+                            constantTimeEquals(expected.requiredTermsHash, it)
+                        } == true
+                    )
         if (!matches) {
             throw AppointmentCommitmentApiException(
                 AppointmentCommitmentApiError.CONSENT_REQUIRED,

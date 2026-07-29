@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.model.commitment.ResourceType
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionDependencyRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionGroupingConstraintRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionTreatmentRecord
+import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
 import io.bluetape4k.clinic.appointment.model.plan.ExecutionDependency
 import io.bluetape4k.clinic.appointment.model.plan.ExecutionDependencyType
@@ -125,8 +126,9 @@ class AppointmentProposalService(
             "candidate slot scope must match proposal request scope"
         }
         if (
-            request.candidateSlots.any { it.availableResources.size > limits.maximumResourcesPerSlot } ||
-            request.candidateSlots.sumOf { it.availableResources.size } > limits.maximumCandidateResourceCount
+            request.candidateSlots.any { it.resourceCount > limits.maximumResourcesPerSlot } ||
+            request.candidateSlots.sumOf(ProposalCandidateSlot::resourceCount) >
+            limits.maximumCandidateResourceCount
         ) {
             throw planLimitExceeded()
         }
@@ -244,7 +246,7 @@ class AppointmentProposalService(
         treatments: List<ExecutionTreatment>,
         slot: ProposalCandidateSlot,
     ): GeneratedAppointmentProposal? {
-        val allocationResult = allocateResources(treatments, slot) ?: return null
+        val resourceRequests = allocateResources(treatments, slot) ?: return null
         val items =
             treatments.map { treatment ->
                 AppointmentItemDraft(
@@ -258,29 +260,50 @@ class AppointmentProposalService(
                     attemptNumber = request.attemptNumberByTreatmentKey[treatment.treatmentKey] ?: 1,
                 )
             }
+        val proposalEndsAt =
+            slot.startsAt.plus(
+                treatments.sumOf(ExecutionTreatment::totalDurationMinutes).toLong(),
+                ChronoUnit.MINUTES,
+            )
+        val visitCapacityRequests =
+            slot.visitCapacityBuckets.map { resource ->
+                ResourceAllocationRequest(
+                    ResourceAllocationDraft(
+                        resourceType = resource.resourceType,
+                        resourceId = resource.resourceId,
+                        startsAt = slot.startsAt,
+                        endsAt = proposalEndsAt,
+                        capacityUnits = resource.capacityUnits,
+                        maximumCapacity = resource.maximumCapacity,
+                        allocationMode = resource.allocationMode,
+                        appointmentItemKey = null,
+                    ),
+                )
+            }
+        val allResourceRequests = resourceRequests + visitCapacityRequests
         val proposal =
             AppointmentProposalDraft(
                 appointmentId = request.appointmentIdSeed + visitIndex,
                 revision = request.proposalRevision,
                 startsAt = slot.startsAt,
-                endsAt =
-                    slot.startsAt.plus(
-                        treatments.sumOf(ExecutionTreatment::totalDurationMinutes).toLong(),
-                        ChronoUnit.MINUTES,
-                    ),
+                endsAt = proposalEndsAt,
                 items = items,
-                allocations = allocationResult,
+                allocations = allResourceRequests.map(ResourceAllocationRequest::allocation),
                 policySnapshotId = request.policySnapshot.id,
                 supersedesProposalId = null,
             )
-        return GeneratedAppointmentProposal(proposal, ProposalHasher.hash(proposal))
+        return GeneratedAppointmentProposal(
+            proposal = proposal,
+            proposalHash = ProposalHasher.hash(proposal),
+            resourceRequests = allResourceRequests,
+        )
     }
 
     private fun allocateResources(
         treatments: List<ExecutionTreatment>,
         slot: ProposalCandidateSlot,
-    ): List<ResourceAllocationDraft>? {
-        val allocations = mutableListOf<ResourceAllocationDraft>()
+    ): List<ResourceAllocationRequest>? {
+        val allocations = mutableListOf<ResourceAllocationRequest>()
         var itemStartsAt = slot.startsAt
         for (treatment in treatments) {
             val itemEndsAt = itemStartsAt.plus(treatment.totalDurationMinutes.toLong(), ChronoUnit.MINUTES)
@@ -295,7 +318,8 @@ class AppointmentProposalService(
                     slot.availableResources.firstOrNull {
                         it.resourceType == resourceType &&
                             capability in it.capabilities &&
-                            allocations.none { allocation ->
+                            allocations.none { request ->
+                                val allocation = request.allocation
                                 allocation.resourceType == it.resourceType &&
                                     allocation.resourceId == it.resourceId &&
                                     allocation.startsAt < itemEndsAt &&
@@ -307,14 +331,17 @@ class AppointmentProposalService(
                             }
                     } ?: return null
                 allocations +=
-                    ResourceAllocationDraft(
-                        resourceType = resource.resourceType,
-                        resourceId = resource.resourceId,
-                        startsAt = itemStartsAt,
-                        endsAt = itemEndsAt,
-                        capacityUnits = resource.capacityUnits,
-                        allocationMode = resource.allocationMode,
-                        appointmentItemKey = treatment.treatmentKey,
+                    ResourceAllocationRequest(
+                        ResourceAllocationDraft(
+                            resourceType = resource.resourceType,
+                            resourceId = resource.resourceId,
+                            startsAt = itemStartsAt,
+                            endsAt = itemEndsAt,
+                            capacityUnits = resource.capacityUnits,
+                            maximumCapacity = resource.maximumCapacity,
+                            allocationMode = resource.allocationMode,
+                            appointmentItemKey = treatment.treatmentKey,
+                        ),
                     )
             }
             itemStartsAt = itemEndsAt
@@ -424,17 +451,31 @@ data class AppointmentProposalRequest(
  * 충돌 잠금에 사용할 실제 자원 ID와 capability를 함께 제공합니다. [availableResources]는
  * 단순히 [startsAt] 순간만 비어 있다는 뜻이 아니라, 이 후보가 만드는 전체 방문과 각
  * 항목 interval에 실제로 배정할 수 있음을 upstream availability 계산기가 보증해야 합니다.
+ * [visitCapacityBuckets]는 상품·병원 정책이 이 방문 전체에 요구하는 capacity bucket만
+ * 담습니다. 검색 결과에 보였다는 이유로 임의의 bucket을 모두 점유해서는 안 됩니다.
  */
 data class ProposalCandidateSlot(
     val tenantGroupId: Long,
     val clinicId: Long,
     val startsAt: Instant,
     val availableResources: List<AvailableProposalResource>,
+    val visitCapacityBuckets: List<AvailableProposalResource> = emptyList(),
 ) : Serializable {
     init {
         tenantGroupId.requirePositiveNumber("tenantGroupId")
         clinicId.requirePositiveNumber("clinicId")
+        require(
+            visitCapacityBuckets.all {
+                it.resourceType == ResourceType.CAPACITY_BUCKET &&
+                    it.allocationMode == ResourceAllocationMode.CAPACITY_BUCKET
+            },
+        ) {
+            "visitCapacityBuckets must contain only capacity bucket resources"
+        }
     }
+
+    internal val resourceCount: Int
+        get() = availableResources.size + visitCapacityBuckets.size
 
     companion object {
         private const val serialVersionUID = 1L
@@ -446,6 +487,8 @@ data class ProposalCandidateSlot(
  *
  * @property capabilities 자원 종류별 qualification, equipment type 또는 공간 capability
  * 코드입니다. 요구 코드 하나도 포함하지 않는 자원을 표시명만으로 선택하지 않습니다.
+ * @property capacityUnits 제안이 소비하는 양수 단위입니다.
+ * @property maximumCapacity 구매·정책 snapshot에 고정된 동일 bucket의 양수 상한입니다.
  */
 data class AvailableProposalResource(
     val resourceType: ResourceType,
@@ -453,10 +496,18 @@ data class AvailableProposalResource(
     val capabilities: Set<String>,
     val allocationMode: ResourceAllocationMode,
     val capacityUnits: Int,
+    val maximumCapacity: Int = capacityUnits,
 ) : Serializable {
     init {
         resourceId.requireNotBlank("resourceId")
         capacityUnits.requirePositiveNumber("capacityUnits")
+        maximumCapacity.requirePositiveNumber("maximumCapacity")
+        require(capacityUnits <= maximumCapacity) {
+            "capacityUnits must not exceed maximumCapacity"
+        }
+        require(allocationMode == ResourceAllocationMode.CAPACITY_BUCKET || capacityUnits == 1) {
+            "exclusive and shared resources must consume exactly one capacity unit"
+        }
     }
 
     companion object {
@@ -468,6 +519,7 @@ data class AvailableProposalResource(
 data class GeneratedAppointmentProposal(
     val proposal: AppointmentProposalDraft,
     val proposalHash: String,
+    val resourceRequests: List<ResourceAllocationRequest>,
 ) : Serializable {
     companion object {
         private const val serialVersionUID = 1L

@@ -48,10 +48,12 @@ import io.bluetape4k.clinic.appointment.model.tables.ConsentDecisions
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionDependencies
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionGroupingConstraints
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
+import io.bluetape4k.clinic.appointment.model.tables.ResourceAllocations
 import io.bluetape4k.clinic.appointment.model.plan.PlanTreatmentStatus
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -219,6 +221,74 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
     }
 
     @Test
+    fun `생성된 방문 capacity bucket은 snapshot 상한까지 허용하고 다음 확정을 거부한다`() {
+        fun candidateSlot(practitionerIndex: Int) =
+            ProposalCandidateSlot(
+                tenantGroupId = TENANT_ID,
+                clinicId = clinic.clinicId,
+                startsAt = PROPOSAL_START,
+                availableResources =
+                    listOf(
+                        AvailableProposalResource(
+                            resourceType = ResourceType.PRACTITIONER,
+                            resourceId = "doctor-capacity-$practitionerIndex",
+                            capabilities = setOf("DOCTOR"),
+                            allocationMode = ResourceAllocationMode.EXCLUSIVE,
+                            capacityUnits = 1,
+                        ),
+                    ),
+                visitCapacityBuckets =
+                    listOf(
+                        AvailableProposalResource(
+                            resourceType = ResourceType.CAPACITY_BUCKET,
+                            resourceId = "clinic-throughput-30m",
+                            capabilities = emptySet(),
+                            allocationMode = ResourceAllocationMode.CAPACITY_BUCKET,
+                            capacityUnits = 1,
+                            maximumCapacity = 3,
+                        ),
+                    ),
+            )
+
+        val confirmed =
+            (1..3).map { index ->
+                writableApplicationService(
+                    planningResolver = FakePlanningResolver(listOf(candidateSlot(index))),
+                ).directCreate(
+                    adminActor(),
+                    "direct-generated-capacity-$index",
+                    true,
+                    directCreateRequest("generated-capacity-$index"),
+                )
+            }
+
+        val persistedMaximums =
+            transaction(database) {
+                ResourceAllocations
+                    .selectAll()
+                    .where {
+                        ResourceAllocations.proposalId inList
+                            confirmed.map { it.currentProposal.proposalId }
+                    }
+                    .filter { it[ResourceAllocations.resourceType] == ResourceType.CAPACITY_BUCKET }
+                    .map { it[ResourceAllocations.maximumCapacity] }
+            }
+        persistedMaximums shouldBeEqualTo listOf(3, 3, 3)
+
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            writableApplicationService(
+                planningResolver = FakePlanningResolver(listOf(candidateSlot(4))),
+            ).directCreate(
+                adminActor(),
+                "direct-generated-capacity-4",
+                true,
+                directCreateRequest("generated-capacity-4"),
+            )
+        }
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.RESOURCE_CONFLICT
+    }
+
+    @Test
     fun `policy snapshot scope mismatch fails closed before command execution`() {
         val service = writableApplicationService(
             policySnapshot =
@@ -310,6 +380,25 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
 
         val exception = assertFailsWith<AppointmentCommitmentApiException> {
             service.directCreate(adminActor(), "direct-missing-terms-01", true, directCreateRequest("missing-terms"))
+        }
+
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.CONSENT_REQUIRED
+    }
+
+    @Test
+    fun `terms hash required policy rejects a different non-null authoritative terms hash`() {
+        val service =
+            writableApplicationService(
+                policySnapshot =
+                    CurrentPolicySnapshot(
+                        43L,
+                        effectivePolicy(termsHashRequired = true),
+                    ),
+                consentMutation = ConsentEvidenceMutation.WRONG_TERMS,
+            )
+
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            service.directCreate(adminActor(), "direct-wrong-terms-01", true, directCreateRequest("wrong-terms"))
         }
 
         exception.error shouldBeEqualTo AppointmentCommitmentApiError.CONSENT_REQUIRED
@@ -753,6 +842,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
         OTHER_PROPOSAL,
         EXPIRED,
         MISSING_TERMS,
+        WRONG_TERMS,
     }
 
     private inner class FakeConsentEvidenceVerifier(
@@ -778,10 +868,10 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
                         NOW
                     },
                 termsHash =
-                    if (request.termsHashRequired && mutation != ConsentEvidenceMutation.MISSING_TERMS) {
-                        "d".repeat(64)
-                    } else {
-                        null
+                    when {
+                        !request.termsHashRequired || mutation == ConsentEvidenceMutation.MISSING_TERMS -> null
+                        mutation == ConsentEvidenceMutation.WRONG_TERMS -> "e".repeat(64)
+                        else -> request.requiredTermsHash
                     },
                 tenantGroupId = request.tenantGroupId,
                 clinicId = request.clinicId,

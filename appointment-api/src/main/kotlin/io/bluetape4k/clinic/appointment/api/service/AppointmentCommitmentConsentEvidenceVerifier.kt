@@ -63,6 +63,7 @@ internal object FailClosedAppointmentCommitmentConsentEvidenceVerifier :
  * @property maximumEvidenceAge 현재 정책이 허용하는 증빙 최대 연령이다. `null`이면 신선도
  * 상한을 이 경계에서 강제하지 않는다.
  * @property termsHashRequired 약관 hash가 반드시 있어야 하는 정책인지 나타낸다.
+ * @property requiredTermsHash 구매 당시 Plan에 고정한 정확한 상품 payload SHA-256이다.
  * @property verifiedAt 증빙 신선도와 미래 시각 조작을 판단할 권위 UTC 시각이다.
  */
 internal data class AppointmentCommitmentConsentEvidenceVerificationRequest(
@@ -80,6 +81,7 @@ internal data class AppointmentCommitmentConsentEvidenceVerificationRequest(
     val allowedEvidenceTypes: Set<String>? = null,
     val maximumEvidenceAge: Duration? = null,
     val termsHashRequired: Boolean = false,
+    val requiredTermsHash: String? = null,
     val verifiedAt: Instant,
 ) : Serializable
 

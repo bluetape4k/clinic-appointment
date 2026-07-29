@@ -9,7 +9,7 @@ H2·PostgreSQL·MySQL 호환성 기준을 모두 충족했다.
 |---|---:|---:|---|
 | 인기 전담 자원 동시 확정 | 100 caller, 중복 점유 0 | 성공 1, 안정 충돌 99, active allocation 1 | 통과 |
 | 미복구 deadlock | 0 | 0 | 통과 |
-| 동시 확정 command p95 | 2,000 ms 이하 | 724 ms | 통과 |
+| 동시 확정 command p95 | 2,000 ms 이하 | 709 ms | 통과 |
 | 일반 Plan proposal p95 / p99 | 1,000 / 3,000 ms 이하 | 0.974 / 1.294 ms | 통과 |
 | 최대 Plan proposal p95 | 5,000 ms 이하 | 5.611 ms | 통과 |
 | 최대 Plan dirty-set p95 / p99 | dataset 예산 이하 | 0.239 / 0.252 ms | 통과 |
@@ -43,11 +43,16 @@ confirmation을 동시에 보냈다. resource mutex는 `NOWAIT`로 잠그고 los
 
 - 성공: 1
 - `RESOURCE_CONFLICT`: 99
+- 기타 예외 또는 비정상 결과: 0
 - 종료 후 active allocation: 1
 - 중복 점유: 0
 - 미복구 deadlock: 0
-- p95: 724 ms
+- p95: 709 ms
 - budget: 2,000 ms
+
+테스트는 단순 실패 개수만 세지 않고 99개 loser가 모두
+`AppointmentCommitmentCommandException(RESOURCE_CONFLICT)`인지 단언한다. 예상하지
+않은 예외, 다른 오류 코드, 누락된 결과는 별도 `unexpected`로 집계해 즉시 실패한다.
 
 별도의 `VisitCommitmentConcurrencyTest`는 전담 resource overlap, capacity bucket
 상한, 서로 다른 proposal의 수락 경합을 실제 PostgreSQL transaction으로 검증한다.
@@ -77,8 +82,8 @@ dataset과 실제 Exposed command fixture를 loopback HTTP transport까지 포�
 264회 실행했다.
 
 - 실패 요청: 0
-- 전체 p95 / p99 / max: 54 / 285 / 360 ms
-- normal proposal p95 / p99: 1 / 2 ms
+- 전체 p95 / p99 / max: 38 / 68 / 325 ms
+- normal proposal p95 / p99: 2 / 2 ms
 - maximum proposal p95: 6 ms
 - 전담 자원 overlap, capacity 소진, 의료진·장비·공간 다중 잠금,
   멱등성 replay: 각 5회, 실패 0
@@ -122,6 +127,9 @@ quarantine resolution 시각과 clean install을 검증했다.
 
 MySQL command 의미 검증은 동일 command replay가 같은 commitment/proposal을
 반환하고, 겹치는 신규 확정이 `RESOURCE_CONFLICT`로 rollback되는지 별도로 단언한다.
+실행 계획과 accidental full scan 부재는 PostgreSQL에서만 측정했으며, MySQL을
+production 성능 대상으로 활성화하기 전에는 대표 분포의 MySQL `EXPLAIN` 증거를
+별도 확보해야 한다.
 
 ## 재현 명령
 

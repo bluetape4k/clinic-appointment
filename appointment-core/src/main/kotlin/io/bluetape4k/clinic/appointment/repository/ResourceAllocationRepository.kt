@@ -444,6 +444,7 @@ class ResourceAllocationRepository {
                     startsAt = row[ResourceAllocations.startsAt],
                     endsAt = row[ResourceAllocations.endsAt],
                     capacityUnits = row[ResourceAllocations.capacityUnits],
+                    maximumCapacity = row[ResourceAllocations.maximumCapacity],
                     allocationMode = row[ResourceAllocations.allocationMode],
                     appointmentItemKey = row[ResourceAllocations.appointmentItemKey],
                 ),

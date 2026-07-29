@@ -532,6 +532,7 @@ private class VisitCommitmentCommandInvoker(
                                 startsAt = PROPOSAL_START,
                                 endsAt = PROPOSAL_START.plusSeconds(3_600),
                                 capacityUnits = capacityUnits,
+                                maximumCapacity = maximumCapacity,
                                 allocationMode = allocationMode,
                                 appointmentItemKey = "whitening",
                             ),

@@ -145,6 +145,11 @@ GET /api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/preview-jobs/
 ```
 <!-- booking-draft-example:end -->
 
+`termsHashRequired=true`이면 외부 동의 증빙의 `termsHash`는 구매 당시 Plan에 고정한
+상품 `catalogPayloadHash`와 정확히 같아야 한다. 예약서비스는 검증기가 반환한 값을
+다시 기대값으로 사용하지 않으므로 임의의 64자리 hash나 현재 카탈로그 버전으로 과거
+구매·proposal의 동의 범위를 대신할 수 없다.
+
 ### Admin 예약 정책 예시
 
 관리자가 고객 대신 예약을 바로 확정하려면 정책상
