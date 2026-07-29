@@ -16,7 +16,6 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -59,8 +58,7 @@ internal class VisitCommitmentLoadIntegrationTest : VisitCommitmentCommandTestSu
         return Database.connect(dataSource)
     }
 
-    @AfterEach
-    fun closePool() {
+    override fun afterDatabaseCleanup() {
         dataSource.close()
     }
 
