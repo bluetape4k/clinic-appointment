@@ -131,11 +131,11 @@
 | 5. bounded proposal | 희망일·선행 완료·부분 이행·scope·상한 계약 실패 확인 | 대상 13개 테스트 통과 | `:appointment-api:build`: 294 passing, 2 pending; 실제 Gatling 240/240; ktlint·detekt·Kover 통과 | DONE |
 | 6. commitment command | command/service/repository 부재 compile 실패와 업무 오류 RED 확인 | 대상 command 22개·core 저장소 13개·PostgreSQL 동시성 5개 통과 | 세 dialect migration, 전체 API build, ktlint, 7-Tier 재검토 통과 | DONE |
 | 7. actor 기반 API | 위조 가능한 body 권한·누락 header·legacy v2 혼입·불안정 오류 RED 확인 | Gateway actor 전용 API·stable error·legacy guard 통과 | API 358개·core 451개·100 item statement-count·7-Tier 통과 | DONE |
-| 8. version 전환·외부 사실 | PENDING | PENDING | PENDING | PENDING |
+| 8. version 전환·외부 사실 | DTO/handler 부재 compile 실패와 외부 사실 계약 RED 확인 | 전환·부분 이행·장비 장애·환불·거부·replay·gap·격리 통과 | event 107개·core 452개·API compile·독립 7-Tier 통과 | DONE |
 | 9. 운영·문서·KDoc | PENDING | PENDING | PENDING | PENDING |
 | 10. 세 DB·성능·회귀 | PENDING | PENDING | PENDING | PENDING |
 
-현재 집계: Required checks 16/22; N/A: 0; Blocked: 0.
+현재 집계: Required checks 17/22; N/A: 0; Blocked: 0.
 
 ### Task 1 상세 증거
 
@@ -320,3 +320,52 @@
   `docs/review/2026-07-29-issue-184-task7-step-6r-code-review.md`에 보존한다.
   최종 집계는 P0=0/P1=0이며 Task 8의 외부 완료·부분 이행·환불 사실 처리는
   아직 시작하지 않았다.
+
+### Task 8 상세 증거
+
+- **RED:** 상품 version 전환·동의·mapping·부분 이행·자원 장애·환불 event와
+  handler가 없는 상태에서 표적 테스트가 compile 실패하는 것을 확인했다.
+  완료 항목 변경 금지, 동일 Plan의 새 revision, 확정 예약 불변, source replay,
+  `BLOCKING/NON_BLOCKING` 전파를 테스트 계약으로 먼저 고정했다.
+- **상품 version 전환:** 상품서비스의 승인 event는 현재 활성 product version,
+  canonical mapping hash, 실행 BOM, migration subject와 고객 동의 증거를 함께
+  검증한다. 성공하면 동일 구매 Plan에 미래 의무만 새 immutable revision으로
+  append·activate한다. migration ID, mapping hash, 비가역 동의 reference hash를
+  outbox에 남겨 revision 생성 근거를 추적할 수 있다.
+- **완료·부분 이행·장비 장애·환불:** 예약서비스가 임상 결과나 환불 가능 여부를
+  추론하지 않고 권위 서비스의 fact를 투영한다. 부분 이행은 실제 완료된 세부 진료와
+  별도 예약할 잔여 실행 항목을 분리한다. 환불은 직접 대상과 전이적 `BLOCKING`
+  후속만 취소하고 `NON_BLOCKING` 항목은 `PENDING`으로 유지한다.
+- **재계산 사실:** 완료·부분 이행·환불의 실제 발생 시각과 변경 시작점의
+  `BLOCKING` 후속 폐포를 privacy-safe outbox에 기록한다. 따라서 후속 interval과
+  proposal 계산은 과거 완료 provenance를 수정하지 않고 증분 dirty-set만 사용한다.
+- **고객 일정 거부:** `CUSTOMER_DECLINED_RESCHEDULE`만 허용한다. 기존 확정 예약과
+  활성 revision은 유지하고 운영 예외와 CRM outbox만 만든다. 같은 source version의
+  replay는 중복 예외를 만들지 않고 다른 hash는 격리한다.
+- **신뢰·순서·격리:** raw payload는 1 MiB, JSON depth 32, 고정 type/schema,
+  strict decoder, metadata, producer/key/issuer/audience/algorithm, replay window,
+  canonical payload hash와 signature를 모두 통과해야 trusted envelope가 된다.
+  production consumer는 exact raw bytes와 bounded metadata evidence를 검증 전에
+  AES-GCM으로 보호한다. trust·decode·routing 실패는 항상 FK 없는 terminal
+  rejection에 관측 routing과 evidence hash를 기록한다. tenant·clinic 존재가
+  확인되거나 trusted payload scope가 있으면 encrypted quarantine과 append-only
+  감사 row도 같은 transaction에 추가한다. handler mutation 메서드는
+  module-internal로 제한해 이 경계를 외부 broker/controller wiring이 우회하지 못한다.
+  source version은 연속 version 또는 유효한 authority proof만 처리한다. gap은
+  bounded backoff로 대기하고 초과, hash conflict, invalid fact는 암호화 원문과
+  append-only 감사 row를 함께 격리한다.
+- **SaaS 경계:** Plan root를 tenant/clinic/source purchase 범위로 잠그고, 파생
+  Plan status CAS도 `planId + tenantGroupId + clinicId + expectedStatus`를 모두
+  조건으로 사용한다.
+- **표적 검증:** `ProductVersionMigrationHandlerTest`,
+  `TreatmentFulfillmentHandlerTest`, `ExternalFactEventIngressTest`,
+  `ExternalFactEventConsumerTest` 합계 29개와 `PlanDirtySetResolverTest`
+  3개가 통과했다.
+- **전체 회귀:** `:appointment-event:build --no-daemon`은 107개,
+  `:appointment-core:build --no-daemon`은 452개 테스트를 모두 통과했다.
+  `:appointment-api:compileKotlin :appointment-api:compileTestKotlin`과
+  `git diff --check`도 성공했다.
+- **6-R:** 최초 독립 검토의 trust ingress, source gap, fulfillment quarantine,
+  완료시각·dirty-set P1을 모두 보정하고 fresh architecture/security/comprehensive
+  재검토를 수행했다. 최종 집계는 `P0=0/P1=0/P2=0/P3=0`이며 Tier별 판정은
+  `docs/review/2026-07-29-issue-184-task8-step-6r-code-review.md`에 보존한다.
