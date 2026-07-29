@@ -73,6 +73,8 @@ function sectionContent(html, id) {
 function validateHtml(document, locale, html, errors) {
   const field = `${document.id}.locales.${locale}`;
   const sourceName = path.posix.basename(document.source);
+  const firstStyle = html.search(/<style\b/i);
+  const themeBootstrap = html.indexOf('localStorage.getItem("starlight-theme")');
 
   if (!/^\s*<!doctype html>/i.test(html)) {
     errors.push(`${field} must start with <!doctype html>`);
@@ -106,6 +108,31 @@ function validateHtml(document, locale, html, errors) {
   }
   if (!/data-baseline=["'][0-9a-f]{7,40}["']/i.test(html)) {
     errors.push(`${field} must declare data-baseline with a Git commit`);
+  }
+  if (
+    !/<meta\b[^>]*name=["']color-scheme["'][^>]*content=["']light dark["'][^>]*>/i.test(
+      html,
+    )
+  ) {
+    errors.push(`${field} must declare color-scheme="light dark"`);
+  }
+  if (themeBootstrap < 0 || firstStyle < 0 || themeBootstrap > firstStyle) {
+    errors.push(
+      `${field} must resolve starlight-theme before the first style block`,
+    );
+  }
+  if (!/:root\[data-theme=["']light["']\]/i.test(html)) {
+    errors.push(`${field} must define light-theme tokens`);
+  }
+  if (
+    !/<button\b[^>]*class=["'][^"']*\btheme-toggle\b[^"']*["'][^>]*aria-label=["'][^"']+["']/i.test(
+      html,
+    )
+  ) {
+    errors.push(`${field} must contain an accessible theme toggle`);
+  }
+  if (!html.includes('localStorage.setItem("starlight-theme"')) {
+    errors.push(`${field} must persist the selected starlight-theme`);
   }
   if (
     !new RegExp(
