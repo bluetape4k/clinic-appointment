@@ -19,6 +19,7 @@ import io.bluetape4k.clinic.appointment.model.plan.VisitGroupingType
 import io.bluetape4k.clinic.appointment.model.policy.CompiledSchedulingPolicy
 import io.bluetape4k.clinic.appointment.model.policy.EffectiveSchedulingPolicy
 import io.bluetape4k.clinic.appointment.model.policy.PolicyGenerationVector
+import io.bluetape4k.clinic.appointment.service.PackageExecutionLimits
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.LocalDateTime
@@ -251,6 +252,42 @@ class AppointmentProposalServiceTest {
             }
 
         failure.message shouldBeEqualTo "candidate slot scope must match proposal request scope"
+    }
+
+    @Test
+    fun `후보 slot과 전체 요청의 자원 cardinality 상한을 계산 전에 거부한다`() {
+        val boundedService =
+            AppointmentProposalService(
+                limits =
+                    PackageExecutionLimits(
+                        maximumResourcesPerSlot = 2,
+                        maximumCandidateResourceCount = 3,
+                    ),
+            )
+        val resources =
+            listOf(
+                resource(ResourceType.PRACTITIONER, "doctor-1", setOf("DERM")),
+                resource(ResourceType.EQUIPMENT, "laser-1", setOf("LASER_X")),
+                resource(ResourceType.TREATMENT_SPACE, "room-1", setOf("LASER_SAFE")),
+            )
+
+        val perSlotFailure = assertFailsWith<ProposalGenerationException> {
+            boundedService.generate(request(slots = listOf(slot("2026-08-02T01:00:00Z", resources = resources))))
+        }
+        val totalFailure = assertFailsWith<ProposalGenerationException> {
+            boundedService.generate(
+                request(
+                    slots =
+                        listOf(
+                            slot("2026-08-02T01:00:00Z", resources = resources.take(2)),
+                            slot("2026-08-03T01:00:00Z", resources = resources.take(2)),
+                        ),
+                ),
+            )
+        }
+
+        perSlotFailure.code shouldBeEqualTo ProposalFailureCode.PLAN_LIMIT_EXCEEDED
+        totalFailure.code shouldBeEqualTo ProposalFailureCode.PLAN_LIMIT_EXCEEDED
     }
 
     @Test

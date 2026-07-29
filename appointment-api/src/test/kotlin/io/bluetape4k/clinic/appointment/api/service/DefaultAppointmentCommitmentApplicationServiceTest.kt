@@ -1,0 +1,652 @@
+package io.bluetape4k.clinic.appointment.api.service
+
+import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldNotBeEqualTo
+import io.bluetape4k.clinic.appointment.api.commitment.AvailableProposalResource
+import io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentCommandMetrics
+import io.bluetape4k.clinic.appointment.api.commitment.CommitmentConflictReason
+import io.bluetape4k.clinic.appointment.api.commitment.CommitmentMetricResult
+import io.bluetape4k.clinic.appointment.api.commitment.ConfirmedAppointmentProjectionTarget
+import io.bluetape4k.clinic.appointment.api.commitment.CurrentPolicySnapshot
+import io.bluetape4k.clinic.appointment.api.commitment.ProposalCandidateSlot
+import io.bluetape4k.clinic.appointment.api.commitment.VisitProposalInput
+import io.bluetape4k.clinic.appointment.api.commitment.VisitCommitmentCommandTestSupport
+import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
+import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiException
+import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentMode
+import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentProperties
+import io.bluetape4k.clinic.appointment.api.dto.commitment.ConsentEvidenceRequest
+import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateAppointmentRequestV2
+import io.bluetape4k.clinic.appointment.api.dto.commitment.DirectConfirmRequest
+import io.bluetape4k.clinic.appointment.api.dto.commitment.DirectCreateAppointmentRequest
+import io.bluetape4k.clinic.appointment.api.security.ActorContext
+import io.bluetape4k.clinic.appointment.api.security.ActorType
+import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
+import io.bluetape4k.clinic.appointment.model.commitment.AppointmentItemDraft
+import io.bluetape4k.clinic.appointment.model.commitment.ResourceAllocationMode
+import io.bluetape4k.clinic.appointment.model.commitment.ResourceAllocationDraft
+import io.bluetape4k.clinic.appointment.model.commitment.ResourceType
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentProposalRecord
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
+import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
+import io.bluetape4k.clinic.appointment.model.policy.ActorRole
+import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
+import io.bluetape4k.clinic.appointment.model.policy.BookingCommitmentPolicy
+import io.bluetape4k.clinic.appointment.model.policy.CompiledSchedulingPolicy
+import io.bluetape4k.clinic.appointment.model.policy.ConfirmedChangeMode
+import io.bluetape4k.clinic.appointment.model.policy.ConsentEvidenceRequirement
+import io.bluetape4k.clinic.appointment.model.policy.EffectiveSchedulingPolicy
+import io.bluetape4k.clinic.appointment.model.policy.PatientBookingMode
+import io.bluetape4k.clinic.appointment.model.policy.PolicyGenerationVector
+import io.bluetape4k.clinic.appointment.model.policy.ProvisionalCapacityMode
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentItems
+import io.bluetape4k.clinic.appointment.model.tables.ConsentDecisions
+import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionDependencies
+import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionGroupingConstraints
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.Test
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.time.Duration
+
+/**
+ * 실제 application service가 Gateway actor·DTO를 command 입력으로 변환하고 rollout metric을
+ * 기록하는지 검증한다.
+ */
+internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitmentCommandTestSupport() {
+
+    @Test
+    fun `idempotency key uses a secret scoped HMAC digest`() {
+        val first =
+            HmacAppointmentCommitmentIdempotencyKeyHasher("a".repeat(32).toByteArray())
+                .hash("caller-visible-key")
+        val second =
+            HmacAppointmentCommitmentIdempotencyKeyHasher("b".repeat(32).toByteArray())
+                .hash("caller-visible-key")
+
+        first.length shouldBeEqualTo 64
+        first shouldNotBeEqualTo "caller-visible-key"
+        first shouldNotBeEqualTo second
+        assertFailsWith<IllegalArgumentException> {
+            HmacAppointmentCommitmentIdempotencyKeyHasher("short".toByteArray())
+        }
+    }
+
+    @Test
+    fun `new writes require WRITE mode and clinic allowlist`() {
+        val service = applicationService(AppointmentCommitmentProperties(mode = AppointmentCommitmentMode.OFF))
+
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            service.directCreate(adminActor(), "direct-disabled-01", true, directCreateRequest())
+        }
+
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.INGRESS_DISABLED
+    }
+
+    @Test
+    fun `queries remain available when new ingress write is disabled`() {
+        val created = confirmDirect(commandService(CLOCK), "existing-query")
+        val service = applicationService(AppointmentCommitmentProperties(mode = AppointmentCommitmentMode.OFF))
+
+        val response = service.query(adminActor(), created.commitment.appointmentId)
+
+        response.appointmentId shouldBeEqualTo created.commitment.appointmentId
+        response.commitmentId shouldBeEqualTo created.commitment.id
+    }
+
+    @Test
+    fun `records proposal latency and allocation conflict metrics on command paths`() {
+        val registry = SimpleMeterRegistry()
+        val service = applicationService(
+            properties =
+                AppointmentCommitmentProperties(
+                    mode = AppointmentCommitmentMode.WRITE,
+                    clinicAllowlist = setOf(clinic.clinicId),
+                ),
+            registry = registry,
+        )
+
+        service.directCreate(adminActor(), "direct-metric-01", true, directCreateRequest("metric-01"))
+        assertFailsWith<AppointmentCommitmentApiException> {
+            service.directCreate(adminActor(), "direct-metric-02", true, directCreateRequest("metric-02"))
+        }
+
+        registry
+            .timer(
+                "appointment.commitment.proposal.latency",
+                "tenant",
+                "tenant-task6",
+                "clinic",
+                "clinic-${clinic.clinicId}",
+                "result",
+                "SUCCESS",
+            ).count() shouldBeEqualTo 1L
+        registry
+            .counter(
+                "appointment.commitment.allocation.conflict",
+                "tenant",
+                "tenant-task6",
+                "clinic",
+                "clinic-${clinic.clinicId}",
+                "reason",
+                "OVERLAP",
+            ).count() shouldBeEqualTo 1.0
+    }
+
+    @Test
+    fun `metric failure does not replace a committed command result or domain error`() {
+        val failingMetrics =
+            object : AppointmentCommitmentCommandMetrics {
+                override fun recordProposalLatency(
+                    tenant: String,
+                    clinic: String,
+                    result: CommitmentMetricResult,
+                    latency: Duration,
+                ) = error("registry unavailable")
+
+                override fun recordAllocationConflict(
+                    tenant: String,
+                    clinic: String,
+                    reason: CommitmentConflictReason,
+                ) = error("registry unavailable")
+            }
+        val service =
+            applicationService(
+                properties =
+                    AppointmentCommitmentProperties(
+                        mode = AppointmentCommitmentMode.WRITE,
+                        clinicAllowlist = setOf(clinic.clinicId),
+                    ),
+                metrics = failingMetrics,
+            )
+
+        val committed =
+            service.directCreate(
+                adminActor(),
+                "direct-metric-failure-01",
+                true,
+                directCreateRequest("metric-failure"),
+            )
+        val conflict = assertFailsWith<AppointmentCommitmentApiException> {
+            service.directCreate(
+                adminActor(),
+                "direct-metric-failure-02",
+                true,
+                directCreateRequest("metric-failure-conflict"),
+            )
+        }
+
+        committed.confirmedProposalId shouldBeEqualTo committed.currentProposal.proposalId
+        conflict.error shouldBeEqualTo AppointmentCommitmentApiError.RESOURCE_CONFLICT
+    }
+
+    @Test
+    fun `decline evidence identity is scoped by appointment and proposal`() {
+        appointmentDeclineEvidenceId(1L, 11L, "SCHEDULE_REJECTED") shouldNotBeEqualTo
+            appointmentDeclineEvidenceId(2L, 11L, "SCHEDULE_REJECTED")
+        appointmentDeclineEvidenceId(1L, 11L, "SCHEDULE_REJECTED") shouldNotBeEqualTo
+            appointmentDeclineEvidenceId(1L, 12L, "SCHEDULE_REJECTED")
+    }
+
+    @Test
+    fun `direct create schedules only the next valid separated package visit`() {
+        val service = writableApplicationService()
+
+        val response = service.directCreate(adminActor(), "direct-package-01", true, directCreateRequest())
+
+        val treatmentKeys =
+            transaction(database) {
+                AppointmentItems
+                    .selectAll()
+                    .where { AppointmentItems.proposalId eq response.currentProposal.proposalId }
+                    .map { it[AppointmentItems.treatmentKey] }
+            }
+        treatmentKeys shouldBeEqualTo listOf("whitening")
+    }
+
+    @Test
+    fun `policy snapshot scope mismatch fails closed before command execution`() {
+        val service = writableApplicationService(
+            policySnapshot =
+                CurrentPolicySnapshot(
+                    id = 99L,
+                    policy = effectivePolicy(tenantGroupId = TENANT_ID + 1L),
+                ),
+        )
+
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            service.directCreate(adminActor(), "direct-policy-mismatch-01", true, directCreateRequest())
+        }
+
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.SCOPE_FORBIDDEN
+    }
+
+    @Test
+    fun `no compatible inventory fails closed without fabricating a resource`() {
+        val service = writableApplicationService(planningResolver = FakePlanningResolver(candidateSlots = emptyList()))
+
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            service.directCreate(adminActor(), "direct-no-inventory-01", true, directCreateRequest())
+        }
+
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.RESOURCE_CONFLICT
+    }
+
+    @Test
+    fun `fake consent evidence fails closed before command execution`() {
+        val service = writableApplicationService(consentMutation = ConsentEvidenceMutation.FAKE_HASH)
+
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            service.directCreate(adminActor(), "direct-fake-consent-01", true, directCreateRequest("fake-consent"))
+        }
+
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.CONSENT_REQUIRED
+    }
+
+    @Test
+    fun `cross tenant and prefix lookalike consent authorities fail before verifier lookup`() {
+        val service = writableApplicationService()
+
+        listOf("other-tenant:consent-service", "tenant-task60:consent-service").forEachIndexed { index, authority ->
+            val exception = assertFailsWith<AppointmentCommitmentApiException> {
+                service.directCreate(
+                    adminActor(),
+                    "direct-cross-tenant-$index",
+                    true,
+                    directCreateRequest("cross-tenant-$index", evidenceAuthority = authority),
+                )
+            }
+
+            exception.error shouldBeEqualTo AppointmentCommitmentApiError.SCOPE_FORBIDDEN
+        }
+    }
+
+    @Test
+    fun `consent evidence bound to another proposal fails exact proposal validation`() {
+        val service = writableApplicationService(consentMutation = ConsentEvidenceMutation.OTHER_PROPOSAL)
+
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            service.directCreate(adminActor(), "direct-other-proposal-01", true, directCreateRequest("other-proposal"))
+        }
+
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.CONSENT_REQUIRED
+    }
+
+    @Test
+    fun `expired consent evidence fails direct confirmation policy freshness`() {
+        val service = writableApplicationService(consentMutation = ConsentEvidenceMutation.EXPIRED)
+
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            service.directCreate(adminActor(), "direct-expired-consent-01", true, directCreateRequest("expired-consent"))
+        }
+
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.CONSENT_REQUIRED
+    }
+
+    @Test
+    fun `terms hash required policy rejects evidence without authoritative terms`() {
+        val service = writableApplicationService(
+            policySnapshot =
+                CurrentPolicySnapshot(
+                    42L,
+                    effectivePolicy(termsHashRequired = true),
+                ),
+            consentMutation = ConsentEvidenceMutation.MISSING_TERMS,
+        )
+
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            service.directCreate(adminActor(), "direct-missing-terms-01", true, directCreateRequest("missing-terms"))
+        }
+
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.CONSENT_REQUIRED
+    }
+
+    @Test
+    fun `accepted consent evidence cannot be reused for another commitment decision`() {
+        val service = writableApplicationService()
+        val request = createAppointmentRequest("reused-consent")
+
+        service.requestAppointment(patientActor(), "request-reused-consent-01", true, request)
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            service.requestAppointment(patientActor(), "request-reused-consent-02", true, request)
+        }
+
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.CONSENT_EVIDENCE_REUSED
+    }
+
+    @Test
+    fun `direct confirm validates current consent evidence before approving customer proposal`() {
+        val service = writableApplicationService()
+        val requested =
+            service.requestAppointment(patientActor(), "request-direct-confirm-01", true, createAppointmentRequest("direct-confirm"))
+
+        val confirmed =
+            service.directConfirm(
+                adminActor(),
+                requested.appointmentId,
+                requested.version,
+                "direct-confirm-01",
+                DirectConfirmRequest(
+                    proposalId = requested.proposalId,
+                    evidence = consentEvidence("direct-confirm-admin"),
+                ),
+            )
+
+        confirmed.confirmedProposalId shouldBeEqualTo requested.proposalId
+        transaction(database) {
+            ConsentDecisions
+                .selectAll()
+                .where { ConsentDecisions.commitmentId eq confirmed.commitmentId }
+                .count() shouldBeEqualTo 2L
+            ConsentDecisions
+                .selectAll()
+                .where {
+                    (ConsentDecisions.commitmentId eq confirmed.commitmentId) and
+                        (ConsentDecisions.evidenceId eq consentEvidence("direct-confirm-admin").evidenceId)
+                }
+                .count() shouldBeEqualTo 1L
+        }
+    }
+
+    private fun writableApplicationService(
+        policySnapshot: CurrentPolicySnapshot = CurrentPolicySnapshot(42L, effectivePolicy()),
+        planningResolver: AppointmentCommitmentPlanningResolver = FakePlanningResolver(),
+        consentMutation: ConsentEvidenceMutation = ConsentEvidenceMutation.NONE,
+    ) = applicationService(
+        properties =
+            AppointmentCommitmentProperties(
+                mode = AppointmentCommitmentMode.WRITE,
+                clinicAllowlist = setOf(clinic.clinicId),
+            ),
+        policySnapshot = policySnapshot,
+        planningResolver = planningResolver,
+        consentMutation = consentMutation,
+    )
+
+    private fun applicationService(
+        properties: AppointmentCommitmentProperties,
+        registry: SimpleMeterRegistry = SimpleMeterRegistry(),
+        metrics: AppointmentCommitmentCommandMetrics =
+            io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentMetrics(registry),
+        policySnapshot: CurrentPolicySnapshot = CurrentPolicySnapshot(42L, effectivePolicy()),
+        planningResolver: AppointmentCommitmentPlanningResolver = FakePlanningResolver(),
+        consentMutation: ConsentEvidenceMutation = ConsentEvidenceMutation.NONE,
+    ) = DefaultAppointmentCommitmentApplicationService(
+        database = database,
+        properties = properties,
+        accessResolver =
+            AppointmentCommitmentAccessResolver(
+                database = database,
+                patientSubjectFingerprintResolver =
+                    PatientSubjectFingerprintResolver { _, patientSubjectId ->
+                        if (patientSubjectId == "patient-subject-ok") {
+                            clinic.patientReferenceFingerprint
+                        } else {
+                            "0".repeat(64)
+                        }
+                    },
+            ),
+        commandService = commandService(CLOCK),
+        policySnapshotResolver = AppointmentCommitmentPolicySnapshotResolver { _, _, _, _ -> policySnapshot },
+        planningResolver = planningResolver,
+        consentEvidenceVerifier = FakeConsentEvidenceVerifier(consentMutation),
+        metrics = metrics,
+        idempotencyKeyHasher =
+            HmacAppointmentCommitmentIdempotencyKeyHasher(
+                "test-appointment-commitment-key".padEnd(32, '!').toByteArray(),
+            ),
+        clock = CLOCK,
+    ).also {
+        ensurePlanRevisionAggregateTables()
+    }
+
+    private fun ensurePlanRevisionAggregateTables() {
+        transaction(database) {
+            SchemaUtils.createMissingTablesAndColumns(
+                PlanRevisionDependencies,
+                PlanRevisionGroupingConstraints,
+            )
+        }
+    }
+
+    private fun directCreateRequest(
+        suffix: String = "default",
+        evidenceAuthority: String = "tenant-task6:consent-service",
+    ) =
+        DirectCreateAppointmentRequest(
+            appointmentPlanId = clinic.planId,
+            preferredStartAt = PROPOSAL_START,
+            preferredEndAt = PROPOSAL_START.plusSeconds(3_600),
+            evidence = consentEvidence(suffix, evidenceAuthority),
+        )
+
+    private fun createAppointmentRequest(suffix: String = "default") =
+        CreateAppointmentRequestV2(
+            appointmentPlanId = clinic.planId,
+            preferredStartAt = PROPOSAL_START,
+            preferredEndAt = PROPOSAL_START.plusSeconds(3_600),
+            evidence = consentEvidence(suffix),
+        )
+
+    private fun consentEvidence(
+        suffix: String,
+        evidenceAuthority: String = "tenant-task6:consent-service",
+    ) = ConsentEvidenceRequest(
+        evidenceAuthority = evidenceAuthority,
+        evidenceId = "ev_${suffix.replace("-", "_").padEnd(20, '0')}",
+    )
+
+    private fun adminActor() =
+        ActorContext(
+            actorId = "actor-admin",
+            actorType = ActorType.ADMIN,
+            roles = setOf(ActorRole.ADMIN),
+            scopes = emptySet(),
+            allowedTenantCodes = setOf("tenant-task6"),
+            allowedClinicIds = setOf(clinic.clinicId),
+            patientSubjectId = null,
+            assurance = AuthenticationAssurance.MFA,
+            issuer = "appointment-auth-service",
+            tokenId = "token-admin",
+            authenticatedAt = NOW,
+            correlationId = "correlation-admin",
+            selectedClinicId = clinic.clinicId,
+        )
+
+    private fun patientActor() =
+        ActorContext(
+            actorId = "actor-patient",
+            actorType = ActorType.PATIENT,
+            roles = setOf(ActorRole.PATIENT),
+            scopes = emptySet(),
+            allowedTenantCodes = setOf("tenant-task6"),
+            allowedClinicIds = setOf(clinic.clinicId),
+            patientSubjectId = "patient-subject-ok",
+            assurance = AuthenticationAssurance.MFA,
+            issuer = "appointment-auth-service",
+            tokenId = "token-patient",
+            authenticatedAt = NOW,
+            correlationId = "correlation-patient",
+            selectedClinicId = clinic.clinicId,
+        )
+
+    private fun effectivePolicy(
+        tenantGroupId: Long = TENANT_ID,
+        clinicId: Long = clinic.clinicId,
+        termsHashRequired: Boolean = false,
+    ): EffectiveSchedulingPolicy =
+        EffectiveSchedulingPolicy(
+            id = "a".repeat(64),
+            tenantGroupId = tenantGroupId,
+            clinicId = clinicId,
+            decisionAt = NOW,
+            serviceAt = PROPOSAL_START,
+            generation = PolicyGenerationVector(1L, 0L),
+            sourceVersions = emptyMap(),
+            sourceByPath = emptyMap(),
+            disabledFeatures = emptySet(),
+            warnings = emptyList(),
+            payload =
+                CompiledSchedulingPolicy(
+                    bookingCommitment =
+                        BookingCommitmentPolicy(
+                            adminBookingMode = AdminBookingMode.DIRECT_CONFIRM_WITH_CONSENT_EVIDENCE,
+                            patientBookingMode = PatientBookingMode.PROVISIONAL_APPROVAL_REQUIRED,
+                            provisionalCapacityMode = ProvisionalCapacityMode.NO_HOLD,
+                            provisionalRequestTtl = Duration.ofMinutes(30),
+                            resourceHoldTtl = null,
+                            approvalRoles = setOf(ActorRole.ADMIN),
+                            adminConsentEvidence =
+                                ConsentEvidenceRequirement(
+                                    allowedEvidenceTypes = setOf("OPAQUE_REFERENCE"),
+                                    maximumAge = Duration.ofDays(365),
+                                    termsHashRequired = termsHashRequired,
+                                ),
+                            confirmedChangeMode = ConfirmedChangeMode.NEW_PROPOSAL_AND_CUSTOMER_CONSENT,
+                        ),
+                ),
+            snapshotHash = "a".repeat(64),
+        )
+
+    private enum class ConsentEvidenceMutation {
+        NONE,
+        FAKE_HASH,
+        OTHER_PROPOSAL,
+        EXPIRED,
+        MISSING_TERMS,
+    }
+
+    private inner class FakeConsentEvidenceVerifier(
+        private val mutation: ConsentEvidenceMutation,
+    ) : AppointmentCommitmentConsentEvidenceVerifier {
+        override fun verify(
+            request: AppointmentCommitmentConsentEvidenceVerificationRequest,
+        ): VerifiedAppointmentCommitmentConsentEvidence =
+            VerifiedAppointmentCommitmentConsentEvidence(
+                evidenceAuthority = request.evidence.evidenceAuthority,
+                evidenceId = request.evidence.evidenceId,
+                evidenceType = "OPAQUE_REFERENCE",
+                evidenceHash =
+                    if (mutation == ConsentEvidenceMutation.FAKE_HASH) {
+                        "x".repeat(64)
+                    } else {
+                        sha256("${request.evidence.evidenceAuthority}|${request.evidence.evidenceId}|${request.proposalHash}")
+                    },
+                decidedAt =
+                    if (mutation == ConsentEvidenceMutation.EXPIRED) {
+                        NOW.minus(Duration.ofDays(366).plusSeconds(1))
+                    } else {
+                        NOW
+                    },
+                termsHash =
+                    if (request.termsHashRequired && mutation != ConsentEvidenceMutation.MISSING_TERMS) {
+                        "d".repeat(64)
+                    } else {
+                        null
+                    },
+                tenantGroupId = request.tenantGroupId,
+                clinicId = request.clinicId,
+                patientReferenceFingerprint = request.patientReferenceFingerprint,
+                appointmentPlanId = request.appointmentPlanId,
+                appointmentId = request.appointmentId,
+                proposalId = request.proposalId,
+                proposalHash =
+                    if (mutation == ConsentEvidenceMutation.OTHER_PROPOSAL) {
+                        "9".repeat(64)
+                    } else {
+                        request.proposalHash
+                    },
+                policySnapshotId = request.policySnapshotId,
+                policySnapshotHash = request.policySnapshotHash,
+            )
+    }
+
+    private fun sha256(value: String): String =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest(value.toByteArray(StandardCharsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+
+    private inner class FakePlanningResolver(
+        private val candidateSlots: List<ProposalCandidateSlot> = listOf(defaultCandidateSlot()),
+    ) : AppointmentCommitmentPlanningResolver {
+        override fun resolveIdentity(
+            actor: ActorContext,
+            access: ResolvedAppointmentPlanAccess,
+        ): AppointmentVisitIdentityDraft =
+            AppointmentVisitIdentityDraft(
+                patientName = "홍길동",
+                patientPhone = "010-1234-5678",
+                patientExternalId = "patient-external-01",
+                patientReferenceFingerprint = access.plan.patientReferenceFingerprint,
+            )
+
+        override fun resolveCandidateSlots(request: AppointmentCommitmentCandidateSlotRequest): List<ProposalCandidateSlot> =
+            candidateSlots
+
+        override fun resolveStoredProposalResourceRequests(
+            clinicId: Long,
+            proposal: AppointmentProposalRecord,
+            items: List<AppointmentItemDraft>,
+        ): List<ResourceAllocationRequest> =
+            listOf(
+                ResourceAllocationRequest(
+                    ResourceAllocationDraft(
+                        resourceType = ResourceType.PRACTITIONER,
+                        resourceId = "doctor-${this@DefaultAppointmentCommitmentApplicationServiceTest.clinic.doctorId}",
+                        startsAt = proposal.proposedStartAt,
+                        endsAt = proposal.proposedEndAt,
+                        capacityUnits = 1,
+                        allocationMode = ResourceAllocationMode.EXCLUSIVE,
+                        appointmentItemKey = items.first().treatmentKey,
+                    ),
+                    1,
+                ),
+            )
+
+        override fun resolveProjectionTarget(
+            clinicId: Long,
+            proposal: VisitProposalInput,
+        ): ConfirmedAppointmentProjectionTarget {
+            val practitioner =
+                proposal.resourceRequests
+                    .map(ResourceAllocationRequest::allocation)
+                    .single { it.resourceType == ResourceType.PRACTITIONER }
+            return ConfirmedAppointmentProjectionTarget(
+                doctorId = clinic.doctorId,
+                treatmentTypeId = clinic.treatmentTypeId,
+                practitionerResourceId = practitioner.resourceId,
+            )
+        }
+    }
+
+    private fun defaultCandidateSlot(): ProposalCandidateSlot =
+        ProposalCandidateSlot(
+            tenantGroupId = TENANT_ID,
+            clinicId = clinic.clinicId,
+            startsAt = PROPOSAL_START,
+            availableResources =
+                listOf(
+                    AvailableProposalResource(
+                        resourceType = ResourceType.PRACTITIONER,
+                        resourceId = "doctor-${clinic.doctorId}",
+                        capabilities = setOf("DOCTOR"),
+                        allocationMode = ResourceAllocationMode.EXCLUSIVE,
+                        capacityUnits = 1,
+                    ),
+                    AvailableProposalResource(
+                        resourceType = ResourceType.EQUIPMENT,
+                        resourceId = "equipment-consultation",
+                        capabilities = setOf("CONSULTATION_DEVICE"),
+                        allocationMode = ResourceAllocationMode.EXCLUSIVE,
+                        capacityUnits = 1,
+                    ),
+                ),
+        )
+}

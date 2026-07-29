@@ -19,8 +19,28 @@ outbox row in the same transaction.
 
 Duplicate event IDs and source purchases converge. Aggregate-version gaps retry
 with bounded backoff and end in quarantine after attempt 5. `SHADOW` evaluates
-without writes. Production `WRITE` remains prohibited until a follow-up
-transport owns outbox publish, acknowledgement, retry/DLQ, and alerts.
+without writes. Production `WRITE` remains prohibited until an external
+transport deployment owns outbox publish, acknowledgement, retry/DLQ, and
+alerts. The visit commitment runbook defines a pre-production drill and the
+evidence required before that prohibition can be lifted; it does not authorize
+`WRITE` by itself.
+
+## External Scheduling Facts
+
+The reservation service consumes facts without taking ownership of commerce or
+clinical fulfillment:
+
+- `VisitPlanningEventIngress` and `VisitPlanningEventHandler` validate an
+  immutable package execution BOM and create or revise only future plan work.
+- `ProductVersionMigrationHandler` applies an authority-approved product
+  version mapping while preserving completed treatment provenance.
+- `ProductVersionMigrationDeclinedHandler` preserves the current version and
+  records the customer-declined operational exception.
+- `TreatmentFulfillmentHandler` marks exact items completed or partially
+  fulfilled and dirties only blocking future dependants.
+- `ExternalFactEventConsumer` routes the closed event-type allowlist and
+  quarantines bounded, redacted failures. Product, purchase, consent, refund,
+  and fulfillment ownership remain in their source services.
 
 ## Event Types
 
@@ -61,6 +81,12 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 | `PurchaseCompletedIngress` | Trust, bounds, version-proof, and patient-reference protection boundary. |
 | `PurchaseCompletedHandler` | Atomic inbox/plan/outbox convergence with duplicate and gap classification. |
 | `PurchaseEventRedriveService` | Exact-quarantine dry-run and approved redrive with full identity confirmation, actor/reason, release approval references, and append-only audit. |
+| `VisitPlanningEventIngress` | Strict package execution payload decoding, bounds, and trust verification. |
+| `VisitPlanningEventHandler` | Immutable execution-plan creation and future-only revision. |
+| `ProductVersionMigrationHandler` | Authority- and consent-bound product-version migration. |
+| `ProductVersionMigrationDeclinedHandler` | Declined migration convergence without changing the active version. |
+| `TreatmentFulfillmentHandler` | Exact fulfillment facts, partial completion, and blocking dirty-set propagation. |
+| `ExternalFactEventConsumer` | Closed routing boundary for migration, decline, and fulfillment facts. |
 
 ## Event Flow
 

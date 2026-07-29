@@ -15,11 +15,14 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.neq
+import org.jetbrains.exposed.v1.core.vendors.ForUpdateOption
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.io.Serializable
 import java.time.Instant
 
@@ -70,6 +73,11 @@ class ResourceAllocationRepository {
      * 성공한 뒤 commitment `confirmedProposalId` CAS를 먼저 수행하고, CAS 성공 뒤에만
      * [releaseActiveAllocations]를 호출해야 합니다. CAS 실패 예외로 transaction이
      * rollback되면 여기서 만든 새 row도 함께 사라집니다.
+     *
+     * [availabilityLock]은 같은 transaction에서 동일 scope·교체 대상·요청으로
+     * [lockAndValidateAvailability]를 호출해 받은 불투명 증표만 허용합니다. 임의 boolean로
+     * 검증을 건너뛸 수 없으며, 다른 transaction이나 다른 요청에 증표를 재사용하면
+     * fail-closed로 거부합니다.
      */
     fun createConfirmedAllocations(
         tenantGroupId: Long,
@@ -77,6 +85,7 @@ class ResourceAllocationRepository {
         proposalId: Long,
         replacingProposalId: Long?,
         requests: List<ResourceAllocationRequest>,
+        availabilityLock: LockedResourceAvailability? = null,
     ): List<ResourceAllocationRecord> {
         val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
         val validClinicId = clinicId.requirePositiveNumber("clinicId")
@@ -87,28 +96,21 @@ class ResourceAllocationRepository {
         require(validReplacingProposalId != validProposalId) {
             "proposalId and replacingProposalId must be different"
         }
-        val resourceGroups =
-            requests.groupBy { request ->
-                ResourceMutexKey(
-                    tenantGroupId = validTenantGroupId,
-                    clinicId = validClinicId,
-                    resourceType = request.allocation.resourceType,
-                    resourceId = request.allocation.resourceId,
-                )
-            }
-        resourceGroups.entries
-            .sortedBy(Map.Entry<ResourceMutexKey, List<ResourceAllocationRequest>>::key)
-            .forEach { (key, _) ->
-                lockResourceMutex(key)
-            }
-
-        validateInternalConflicts(requests)
-        validateExistingConflicts(
-            tenantGroupId = validTenantGroupId,
-            clinicId = validClinicId,
-            replacingProposalId = validReplacingProposalId,
-            resourceGroups = resourceGroups,
-        )
+        if (availabilityLock == null) {
+            lockAndValidateAvailability(
+                tenantGroupId = validTenantGroupId,
+                clinicId = validClinicId,
+                replacingProposalId = validReplacingProposalId,
+                requests = requests,
+            )
+        } else {
+            availabilityLock.requireMatches(
+                tenantGroupId = validTenantGroupId,
+                clinicId = validClinicId,
+                replacingProposalId = validReplacingProposalId,
+                requests = requests,
+            )
+        }
 
         val insertedRows =
             ResourceAllocations.batchInsert(requests) { request ->
@@ -127,6 +129,53 @@ class ResourceAllocationRepository {
                 this[ResourceAllocations.status] = ResourceAllocationStatus.ACTIVE
             }
         return insertedRows.map(::mapAllocation)
+    }
+
+    /**
+     * 영속 proposal을 만들기 전에 자원 mutex를 잡고 현재 availability를 재검증합니다.
+     *
+     * 인기 자원에 다수의 신규 확정이 동시에 들어오면 loser가 appointment, commitment,
+     * proposal, consent를 모두 쓴 뒤 충돌하는 비용이 커집니다. direct-confirm 경로는
+     * 이 preflight를 먼저 호출해 winner가 mutex를 보유한 동안 loser를 안정 충돌로
+     * 즉시 거절합니다. 반환된 [LockedResourceAvailability]를 같은 transaction의
+     * [createConfirmedAllocations]에 전달하면 mutex를 다시 잠그지 않고 insert합니다.
+     */
+    fun lockAndValidateAvailability(
+        tenantGroupId: Long,
+        clinicId: Long,
+        replacingProposalId: Long?,
+        requests: List<ResourceAllocationRequest>,
+    ): LockedResourceAvailability {
+        val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
+        val validClinicId = clinicId.requirePositiveNumber("clinicId")
+        val validReplacingProposalId = replacingProposalId?.requirePositiveNumber("replacingProposalId")
+        require(requests.isNotEmpty()) { "resource allocation requests must not be empty" }
+        val resourceGroups =
+            requests.groupBy { request ->
+                ResourceMutexKey(
+                    tenantGroupId = validTenantGroupId,
+                    clinicId = validClinicId,
+                    resourceType = request.allocation.resourceType,
+                    resourceId = request.allocation.resourceId,
+                )
+            }
+        resourceGroups.entries
+            .sortedBy(Map.Entry<ResourceMutexKey, List<ResourceAllocationRequest>>::key)
+            .forEach { (key, _) -> lockResourceMutex(key) }
+        validateInternalConflicts(requests)
+        validateExistingConflicts(
+            tenantGroupId = validTenantGroupId,
+            clinicId = validClinicId,
+            replacingProposalId = validReplacingProposalId,
+            resourceGroups = resourceGroups,
+        )
+        return LockedResourceAvailability.create(
+            transactionIdentity = System.identityHashCode(TransactionManager.current()),
+            tenantGroupId = validTenantGroupId,
+            clinicId = validClinicId,
+            replacingProposalId = validReplacingProposalId,
+            requests = requests.toAvailabilityKeys(),
+        )
     }
 
     /**
@@ -177,7 +226,8 @@ class ResourceAllocationRepository {
             it[bucketStartAt] = RESOURCE_MUTEX_INSTANT
             it[ResourceCapacityBuckets.maximumCapacity] = RESOURCE_MUTEX_CAPACITY
         }
-        ResourceCapacityBuckets
+        val query =
+            ResourceCapacityBuckets
             .selectAll()
             .where {
                 (ResourceCapacityBuckets.tenantGroupId eq key.tenantGroupId) and
@@ -185,8 +235,23 @@ class ResourceAllocationRepository {
                     (ResourceCapacityBuckets.resourceType eq key.resourceType) and
                     (ResourceCapacityBuckets.resourceId eq key.resourceId) and
                     (ResourceCapacityBuckets.bucketStartAt eq RESOURCE_MUTEX_INSTANT)
-            }.forUpdate()
-            .single()
+            }
+        val lockOption =
+            when (TransactionManager.current().db.dialect.name.lowercase()) {
+                "postgresql" ->
+                    ForUpdateOption.PostgreSQL.ForUpdate(ForUpdateOption.PostgreSQL.MODE.NO_WAIT)
+                "mysql" ->
+                    ForUpdateOption.MySQL.ForUpdate(ForUpdateOption.MySQL.MODE.NO_WAIT)
+                else -> ForUpdateOption.ForUpdate
+            }
+        try {
+            query.forUpdate(lockOption).single()
+        } catch (failure: ExposedSQLException) {
+            if (failure.sqlState == POSTGRES_LOCK_UNAVAILABLE || failure.errorCode == MYSQL_LOCK_NOWAIT) {
+                throw ResourceAllocationConflictException("resource confirmation is already in progress")
+            }
+            throw failure
+        }
     }
 
     private fun validateInternalConflicts(requests: List<ResourceAllocationRequest>) {
@@ -245,7 +310,14 @@ class ResourceAllocationRepository {
             replacingProposalId?.let { oldProposalId ->
                 query.andWhere { ResourceAllocations.proposalId neq oldProposalId }
             }
-            val existing = query.toList()
+            /*
+             * MySQL의 기본 REPEATABLE READ에서는 command 앞부분의 scope 조회가 만든
+             * snapshot이 mutex 대기 뒤에도 유지될 수 있다. locking read는 현재
+             * committed row를 읽으므로 직전 winner의 allocation을 놓치지 않는다.
+             * mutex를 canonical 순서로 먼저 잡았기 때문에 이 row lock도 같은 자원
+             * 순서를 유지한다.
+             */
+            val existing = query.forUpdate().toList()
             groupedRequests.forEach { request ->
                 validateExistingOverlap(request, existing)
             }
@@ -404,8 +476,87 @@ class ResourceAllocationRepository {
     private companion object {
         val RESOURCE_MUTEX_INSTANT: Instant = Instant.parse("2000-01-01T00:00:00Z")
         const val RESOURCE_MUTEX_CAPACITY = 1
+        const val POSTGRES_LOCK_UNAVAILABLE = "55P03"
+        const val MYSQL_LOCK_NOWAIT = 3_572
     }
 }
+
+/**
+ * 한 Exposed transaction에서 완료된 자원 availability 검증을 증명하는 불투명 증표입니다.
+ *
+ * 생성자는 repository module 밖에서 호출할 수 없습니다. 이 증표는 직렬화·캐시·영속화
+ * 대상이 아니며, 생성 transaction과 동일한 scope·교체 proposal·자원 요청에 한해서만
+ * allocation insert의 중복 잠금을 생략합니다.
+ */
+class LockedResourceAvailability private constructor(
+    private val transactionIdentity: Int,
+    private val tenantGroupId: Long,
+    private val clinicId: Long,
+    private val replacingProposalId: Long?,
+    private val requests: List<ResourceAvailabilityKey>,
+) {
+    internal fun requireMatches(
+        tenantGroupId: Long,
+        clinicId: Long,
+        replacingProposalId: Long?,
+        requests: List<ResourceAllocationRequest>,
+    ) {
+        require(transactionIdentity == System.identityHashCode(TransactionManager.current())) {
+            "availability lock belongs to a different transaction"
+        }
+        require(
+            this.tenantGroupId == tenantGroupId &&
+                this.clinicId == clinicId &&
+                this.replacingProposalId == replacingProposalId &&
+                this.requests == requests.toAvailabilityKeys()
+        ) {
+            "availability lock does not match allocation request"
+        }
+    }
+
+    internal companion object {
+        fun create(
+            transactionIdentity: Int,
+            tenantGroupId: Long,
+            clinicId: Long,
+            replacingProposalId: Long?,
+            requests: List<ResourceAvailabilityKey>,
+        ): LockedResourceAvailability =
+            LockedResourceAvailability(
+                transactionIdentity = transactionIdentity,
+                tenantGroupId = tenantGroupId,
+                clinicId = clinicId,
+                replacingProposalId = replacingProposalId,
+                requests = requests,
+            )
+    }
+}
+
+internal data class ResourceAvailabilityKey(
+    val appointmentItemKey: String?,
+    val resourceType: ResourceType,
+    val resourceId: String,
+    val startsAt: Instant,
+    val endsAt: Instant,
+    val capacityUnits: Int,
+    val maximumCapacity: Int,
+    val allocationMode: ResourceAllocationMode,
+)
+
+private fun List<ResourceAllocationRequest>.toAvailabilityKeys(): List<ResourceAvailabilityKey> =
+    map { request ->
+        val allocation = request.allocation
+        ResourceAvailabilityKey(
+            appointmentItemKey = allocation.appointmentItemKey,
+            resourceType = allocation.resourceType,
+            resourceId = allocation.resourceId,
+            startsAt = allocation.startsAt,
+            endsAt = allocation.endsAt,
+            capacityUnits = allocation.capacityUnits,
+            maximumCapacity = request.maximumCapacity,
+            allocationMode = allocation.allocationMode,
+        )
+    }
 
 /**
  * 자원 점유 또는 capacity 상한 충돌로 확정 transaction을 진행할 수 없음을 나타냅니다.

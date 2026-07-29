@@ -80,6 +80,26 @@ class VisitPlanningEventIngressTest {
     }
 
     @Test
+    fun `실행 BOM collection 상한은 canonical hash 계산 전에 거부한다`() {
+        val oversized = packageEvent().let { event ->
+            event.copy(
+                executionSnapshot = event.executionSnapshot.copy(
+                    selectedComponentVersions = List(1_001) {
+                        ComponentVersionRef("laser", "laser-v1", quantity = 1)
+                    },
+                ),
+            )
+        }
+
+        assertFailsWith<SchedulingTrustException> {
+            ingress(oversized).verify(
+                envelope(payload = oversized, payloadHash = "0".repeat(64)),
+                VALID_RAW_PAYLOAD,
+            )
+        }.reasonCode shouldBeEqualTo "PAYLOAD_CONTRACT_INVALID"
+    }
+
+    @Test
     fun `unknown field를 거부한 decoder 실패는 원문 없이 stable reason으로 수렴한다`() {
         val ingress = ingress {
             throw IllegalArgumentException("unknown field must remain private")

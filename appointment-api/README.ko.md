@@ -61,6 +61,28 @@ tenant와 clinic을 도출하며 다중 scope나 서비스 principal은 fail-clo
 모든 mutation은 `Idempotency-Key`가 필요하고, 생성은 `If-None-Match: *`, 기존
 aggregate 변경은 최신 `ETag`를 담은 `If-Match`가 추가로 필요합니다.
 
+Gateway는 하나의 actor invariant를 충족하는 길이 제한 claim을 발행해야 합니다.
+예를 들어 clinic `101`의 관리자 token은 다음 claim을 포함합니다.
+
+```json
+{
+  "sub": "admin-operator-01",
+  "jti": "token_01J1M6Y6XRK8N0W2M3P4Q5R6S7",
+  "auth_time": 1785373200,
+  "allowedTenants": ["tenant-default"],
+  "allowedClinicIds": [101],
+  "clinicId": 101,
+  "actorType": "ADMIN",
+  "roles": ["ADMIN"],
+  "assurance": "MFA"
+}
+```
+
+고객 token은 `actorType: "PATIENT"`와 `PATIENT` role, 안정적인
+`patientSubject`를 함께 가지며 관리자 role을 포함할 수 없습니다. `clinicId`가
+있다면 반드시 `allowedClinicIds`에 포함되어야 합니다. v2 application은 이 claim을
+신뢰해 body의 scope를 받지 않되, 실제 Plan·예약 scope는 저장소에서 다시 확인합니다.
+
 | 요청 종류 | 필수 헤더 | 예 |
 |------|------|------|
 | 신규 가예약·관리자 직접 생성 | `Idempotency-Key`, `If-None-Match` | `request_01J1M6Y6XRK8N0W2M3P4Q5R6S7`, `*` |
@@ -75,18 +97,33 @@ reference여야 합니다. 같은 ID를 다른 결정에 재사용하면 안정�
 
 | 설정 | 기본값 | 운영 의미 |
 |------|------|------|
-| `appointment.commitment.api-enabled` | `false` | Task 9 wiring 전 bootstrap용 전체 v2 경로 gate |
+| `appointment.commitment.api-enabled` | `false` | production adapter와 준비 증거가 통과한 뒤에만 여는 전체 v2 경로 bootstrap gate |
 | `appointment.commitment.ingress-enabled` | `true` | 신규 고객 가예약과 관리자 직접 생성만 허용 |
 | `appointment.commitment.mode` | `OFF` | 신규 계산·쓰기를 차단하는 `OFF`, 비교만 하는 `SHADOW`, allowlist 기반 `WRITE` |
 | `appointment.commitment.clinic-allowlist` | 비어 있음 | `WRITE`를 허용할 병원 ID |
 | `appointment.commitment.proposal-ttl` | `30m` | proposal 승인 대기 만료 |
 | `appointment.commitment.retry.max-attempts` | `3` | 최초 시도를 포함한 제한 재시도 |
+| `appointment.commitment.ceiling.resources-per-slot` | `200` | 한 후보 slot의 의료진·장비·공간 자원 entry 상한 |
+| `appointment.commitment.ceiling.candidate-resource-entries` | `10,000` | 한 proposal 계산 요청 전체의 자원 entry 합계 상한 |
+| `appointment.commitment.idempotency-hash-secret` | 없음 | v2 API 활성화 시 필요한 Base64 비밀값. 디코딩 후 32바이트 이상이어야 하며 JWT·정책 command 비밀값을 재사용하면 안 됨 |
+| `appointment.commitment.retention-enabled` | `false` | process 내부 retention owner 활성화; 배포당 한 owner에서만 사용 |
+| `appointment.commitment.retention-interval` | `PT1H` | bounded retention 실행 사이의 고정 지연 |
 
 `api-enabled=false`는 아직 v2 commitment가 한 건도 없는 bootstrap 단계에서만
 사용합니다. 이미 생성된 commitment가 있다면 rollback은
 `ingress-enabled=false`로 신규 유입만 막아야 합니다. 조회, 승인, 확정, proposal
 수락·거절, 변경 제안은 계속 열려 있어 기존 고객을 고립시키지 않습니다.
 `WRITE`는 mode와 clinic allowlist가 모두 일치할 때만 신규 row를 허용합니다.
+`api-enabled=true`인데 예약 전용 idempotency HMAC 비밀값이 없으면 API는 시작을
+거부합니다.
+
+운영 활성화 전에는 권위 있는 환자 identity, 후보 inventory slot, 저장된 proposal의
+자원 mapping, 확정 projection 대상을 제공하는 `AppointmentCommitmentPlanningResolver`
+adapter도 연결해야 합니다. 기본 resolver는 모든 계획 요청을 거절하므로 adapter 없이
+route를 열어도 고객이나 자원 정보를 임의로 만들지 않습니다.
+Gateway patient subject는 구매 Plan ingress와 같은 HMAC key·algorithm·domain으로
+fingerprint하는 `PatientSubjectFingerprintResolver`를 별도 제공해야 합니다. 기본
+resolver는 일반 SHA-256으로 추정하지 않고 patient 접근을 fail-closed로 거절합니다.
 
 #### 안정 오류 계약
 

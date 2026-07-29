@@ -14,12 +14,15 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentOperationalExcepti
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRevisionRepository
 import io.bluetape4k.clinic.appointment.service.PlanDirtySetResolver
+import io.bluetape4k.junit5.concurrency.MultithreadingTester
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.ZoneOffset
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 
 class TreatmentFulfillmentHandlerTest {
 
@@ -167,6 +170,34 @@ class TreatmentFulfillmentHandlerTest {
             AppointmentPlanRevisions.selectAll().count() shouldBeEqualTo 2L
             SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
             SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 2L
+        }
+    }
+
+    @Test
+    fun `동일 fulfillment event 동시 insert race는 revision 하나와 duplicate 결과로 수렴한다`() {
+        val fulfillment = envelope(
+            eventId = "fulfillment-race",
+            facts = listOf(TreatmentFulfillmentFact.completed("future-old", fixture.now)),
+        )
+        val handler = handler()
+        val events = listOf(fulfillment, fulfillment)
+        val eventIndex = AtomicInteger()
+        val results = ConcurrentLinkedQueue<PurchaseHandleResult>()
+
+        MultithreadingTester()
+            .workers(2)
+            .rounds(1)
+            .add {
+                results += handler.handle(events[eventIndex.getAndIncrement()], protectedEnvelope())
+            }
+            .run()
+
+        results.map(PurchaseHandleResult::status).toSet() shouldBeEqualTo
+            setOf(PurchaseHandleStatus.CREATED, PurchaseHandleStatus.DUPLICATE)
+        transaction {
+            AppointmentPlanRevisions.selectAll().count() shouldBeEqualTo 2L
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 1L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
         }
     }
 

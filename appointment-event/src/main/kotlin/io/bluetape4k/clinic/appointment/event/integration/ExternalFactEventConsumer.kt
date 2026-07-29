@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.event.integration
 
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
+import io.bluetape4k.logging.KLogging
+import io.bluetape4k.logging.error
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
@@ -55,8 +57,19 @@ data class ExternalFactRoutingMetadata(
  * @param rawPayload strict decode 전의 정확한 UTF-8 JSON bytes입니다.
  * @param routing broker header에서 관측한 source·tenant·clinic routing입니다.
  */
-fun interface RawExternalFactEnvelopeProtector {
+interface RawExternalFactEnvelopeProtector {
     fun protect(
+        envelope: UntrustedSchedulingEventEnvelope<*>,
+        rawPayload: ByteArray,
+        routing: ExternalFactRoutingMetadata,
+    ): ProtectedQuarantineEnvelope
+
+    /**
+     * transport 상한을 초과한 원문을 암호화·보관하지 않고 전체 원문 hash만 계산합니다.
+     *
+     * 구현은 원문 크기에 비례하는 추가 배열을 만들지 않아야 합니다.
+     */
+    fun hashOnly(
         envelope: UntrustedSchedulingEventEnvelope<*>,
         rawPayload: ByteArray,
         routing: ExternalFactRoutingMetadata,
@@ -92,10 +105,50 @@ class AesGcmRawExternalFactEnvelopeProtector(
         rawPayload: ByteArray,
         routing: ExternalFactRoutingMetadata,
     ): ProtectedQuarantineEnvelope {
-        require(rawPayload.size <= MAX_PROTECTABLE_RAW_PAYLOAD_BYTES) {
-            "raw external fact payload is too large to protect"
+        require(rawPayload.size <= MAX_EXTERNAL_FACT_PAYLOAD_BYTES) {
+            "raw external fact payload exceeds the encryptable transport limit"
         }
-        val metadata = CanonicalFrameWriter().apply {
+        val metadata = canonicalMetadata(envelope, rawPayload.size, routing)
+        val plaintext = metadata + rawPayload
+        val envelopeHash = evidenceHash(metadata, rawPayload)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, encryptionKey)
+        cipher.updateAAD(
+            "appointment-external-fact\u0000${aadComponent(envelope.eventId)}\u0000${
+                aadComponent(envelope.eventType)
+            }"
+                .toByteArray(StandardCharsets.UTF_8),
+        )
+        val encrypted = cipher.doFinal(plaintext)
+        return ProtectedQuarantineEnvelope(
+            ciphertext = Base64.getEncoder().encodeToString(cipher.iv + encrypted),
+            keyId = keyId,
+            envelopeHash = envelopeHash,
+        )
+    }
+
+    override fun hashOnly(
+        envelope: UntrustedSchedulingEventEnvelope<*>,
+        rawPayload: ByteArray,
+        routing: ExternalFactRoutingMetadata,
+    ): ProtectedQuarantineEnvelope {
+        require(rawPayload.size > MAX_EXTERNAL_FACT_PAYLOAD_BYTES) {
+            "hash-only evidence is reserved for oversized external fact payloads"
+        }
+        val metadata = canonicalMetadata(envelope, rawPayload.size, routing)
+        return ProtectedQuarantineEnvelope(
+            ciphertext = null,
+            keyId = keyId,
+            envelopeHash = evidenceHash(metadata, rawPayload),
+        )
+    }
+
+    private fun canonicalMetadata(
+        envelope: UntrustedSchedulingEventEnvelope<*>,
+        rawPayloadSize: Int,
+        routing: ExternalFactRoutingMetadata,
+    ): ByteArray =
+        CanonicalFrameWriter().apply {
             boundedString("eventId", envelope.eventId, MAX_IDENTIFIER_LENGTH)
             boundedString("eventType", envelope.eventType, MAX_IDENTIFIER_LENGTH)
             instant("occurredAt", envelope.occurredAt)
@@ -114,27 +167,17 @@ class AesGcmRawExternalFactEnvelopeProtector(
             long("routing.sourceAggregateVersion", routing.sourceAggregateVersion)
             long("routing.tenantGroupId", routing.tenantGroupId)
             long("routing.clinicId", routing.clinicId)
-            int("rawPayload.size", rawPayload.size)
+            int("rawPayload.size", rawPayloadSize)
         }.toByteArray()
-        val plaintext = metadata + rawPayload
-        val envelopeHash = MessageDigest.getInstance("SHA-256")
-            .digest(plaintext)
+
+    private fun evidenceHash(metadata: ByteArray, rawPayload: ByteArray): String =
+        MessageDigest.getInstance("SHA-256")
+            .apply {
+                update(metadata)
+                update(rawPayload)
+            }
+            .digest()
             .joinToString("") { byte -> "%02x".format(byte) }
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, encryptionKey)
-        cipher.updateAAD(
-            "appointment-external-fact\u0000${aadComponent(envelope.eventId)}\u0000${
-                aadComponent(envelope.eventType)
-            }"
-                .toByteArray(StandardCharsets.UTF_8),
-        )
-        val encrypted = cipher.doFinal(plaintext)
-        return ProtectedQuarantineEnvelope(
-            ciphertext = Base64.getEncoder().encodeToString(cipher.iv + encrypted),
-            keyId = keyId,
-            envelopeHash = envelopeHash,
-        )
-    }
 
     /**
      * 허용 상한을 넘은 metadata는 전체 길이와 SHA-256만 암호화 frame에 넣습니다.
@@ -176,8 +219,6 @@ class AesGcmRawExternalFactEnvelopeProtector(
     }
 
     private companion object {
-        // ingress 상한을 조금 넘긴 payload도 PAYLOAD_TOO_LARGE 증거로 암호화할 수 있습니다.
-        const val MAX_PROTECTABLE_RAW_PAYLOAD_BYTES = 1_100_000
         const val MAX_IDENTIFIER_LENGTH = 128
         const val MAX_SHA256_LENGTH = 64
         const val MAX_SIGNATURE_LENGTH = 1_024
@@ -220,6 +261,20 @@ fun interface TreatmentFulfillmentProofProvider {
 }
 
 /**
+ * 외부 fact consumer 경계에서 최종 수렴 상태와 reason code를 기록합니다.
+ *
+ * handler 내부 metric과 별도로 proof 조회 실패처럼 handler mutation 전에 끝나는
+ * 경로도 같은 cardinality의 `(result, reason)` label로 관측하기 위한 port입니다.
+ */
+fun interface ExternalFactMetrics {
+    fun record(result: String, reason: String?)
+
+    companion object {
+        val NOOP = ExternalFactMetrics { _, _ -> }
+    }
+}
+
+/**
  * 외부 fact consumer의 유일한 production mutation 진입점입니다.
  *
  * 한 호출에서 raw 원문 보호, strict decoding, trust 검증, transport routing 대조,
@@ -242,6 +297,7 @@ class ExternalFactEventConsumer(
     private val fulfillmentHandler: TreatmentFulfillmentHandler,
     private val clock: Clock,
     private val quarantineRetention: Duration = Duration.ofDays(30),
+    private val metrics: ExternalFactMetrics = ExternalFactMetrics.NOOP,
 ) {
     /**
      * 고객 동의가 증명된 상품 version 전환을 동일 Plan의 새 revision으로 반영합니다.
@@ -259,6 +315,7 @@ class ExternalFactEventConsumer(
             routing,
             ingress::verifyProductVersionMigration,
             migrationProofProvider::obtain,
+            migrationHandler::stageAuthorityUnavailable,
         ) { trusted, protected, proof ->
             migrationHandler.handle(trusted, protected, proof)
         }
@@ -279,6 +336,7 @@ class ExternalFactEventConsumer(
             routing,
             ingress::verifyMigrationRescheduleDeclined,
             declineProofProvider::obtain,
+            migrationHandler::stageDeclineAuthorityUnavailable,
         ) { trusted, protected, proof ->
             migrationHandler.handleRescheduleDeclined(trusted, protected, proof)
         }
@@ -299,6 +357,7 @@ class ExternalFactEventConsumer(
             routing,
             ingress::verifyTreatmentFulfillment,
             fulfillmentProofProvider::obtain,
+            fulfillmentHandler::stageAuthorityUnavailable,
         ) { trusted, protected, proof ->
             fulfillmentHandler.handle(trusted, protected, proof)
         }
@@ -309,29 +368,58 @@ class ExternalFactEventConsumer(
         routing: ExternalFactRoutingMetadata,
         verify: (UntrustedSchedulingEventEnvelope<*>, ByteArray) -> TrustedSchedulingEventEnvelope<T>,
         proofProvider: (String, T) -> SourceAuthorityVersionProof?,
+        stageAuthorityUnavailable: (
+            TrustedSchedulingEventEnvelope<T>,
+            SourceAuthorityFailureReason,
+            ProtectedQuarantineEnvelope,
+        ) -> PurchaseHandleResult,
         handle: (
             TrustedSchedulingEventEnvelope<T>,
             ProtectedQuarantineEnvelope,
             SourceAuthorityVersionProof?,
         ) -> PurchaseHandleResult,
     ): PurchaseHandleResult {
-        val protected = rawEnvelopeProtector.protect(rawEnvelope, rawPayload, routing)
+        val protected =
+            if (rawPayload.size > MAX_EXTERNAL_FACT_PAYLOAD_BYTES) {
+                rawEnvelopeProtector.hashOnly(rawEnvelope, rawPayload, routing)
+            } else {
+                rawEnvelopeProtector.protect(rawEnvelope, rawPayload, routing)
+            }
         val trusted = try {
             verify(rawEnvelope, rawPayload)
         } catch (failure: SchedulingTrustException) {
-            return reject(rawEnvelope, routing, protected, failure.reasonCode)
+            return record(reject(rawEnvelope, routing, protected, failure.reasonCode))
         }
         if (!routing.matches(trusted.payload)) {
-            return reject(
+            return record(reject(
                 rawEnvelope = rawEnvelope,
                 observedRouting = routing,
                 protected = protected,
                 reasonCode = "ROUTING_METADATA_MISMATCH",
                 quarantineRouting = trusted.payload.routingMetadata(),
+            ))
+        }
+        val proof = try {
+            proofProvider(trusted.producer, trusted.payload)
+        } catch (failure: SourceAuthorityUnavailableException) {
+            return record(
+                stageAuthorityUnavailable(
+                    trusted,
+                    failure.failureReason,
+                    protected,
+                )
             )
         }
-        val proof = proofProvider(trusted.producer, trusted.payload)
-        return handle(trusted, protected, proof)
+        return record(handle(trusted, protected, proof))
+    }
+
+    private fun record(result: PurchaseHandleResult): PurchaseHandleResult {
+        try {
+            metrics.record(result.status.name, result.reasonCode)
+        } catch (failure: Exception) {
+            log.error(failure) { "External fact metric recording failed" }
+        }
+        return result
     }
 
     private fun reject(
@@ -535,7 +623,7 @@ class ExternalFactEventConsumer(
             this.tenantGroupId == tenantGroupId &&
             this.clinicId == clinicId
 
-    private companion object {
+    private companion object : KLogging() {
         const val MAX_IDENTIFIER_SAMPLE_LENGTH = 256
         val SAFE_IDENTIFIER = Regex("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
     }

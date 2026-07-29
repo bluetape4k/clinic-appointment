@@ -52,5 +52,13 @@ object AppointmentCommandIdempotencies : LongIdTable("scheduling_appointment_com
             actorScopeHash,
             idempotencyKeyHash,
         )
+        index(
+            "idx_appointment_idempotency_retention",
+            false,
+            tenantGroupId,
+            clinicId,
+            createdAt,
+            id,
+        )
     }
 }

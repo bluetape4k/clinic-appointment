@@ -25,9 +25,10 @@ class QuarantineEnvelopeProtectorTest {
         first.keyId shouldBeEqualTo "quarantine-key-1"
         first.envelopeHash shouldBeEqualTo second.envelopeHash
         first.envelopeHash.matches(Regex("[0-9a-f]{64}")).shouldBeTrue()
-        first.ciphertext.equals(second.ciphertext).shouldBeFalse()
-        first.ciphertext.contains("patient-token").shouldBeFalse()
-        Base64.getDecoder().decode(first.ciphertext).size.let { it >= 29 }.shouldBeTrue()
+        val firstCiphertext = checkNotNull(first.ciphertext)
+        firstCiphertext.equals(second.ciphertext).shouldBeFalse()
+        firstCiphertext.contains("patient-token").shouldBeFalse()
+        Base64.getDecoder().decode(firstCiphertext).size.let { it >= 29 }.shouldBeTrue()
         protector.protect(envelope.copy(algorithm = "ES256")).envelopeHash
             .equals(first.envelopeHash)
             .shouldBeFalse()

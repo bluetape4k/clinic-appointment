@@ -32,7 +32,10 @@ import tools.jackson.databind.json.JsonMapper
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["appointment.commitment.api-enabled=true"],
+    properties = [
+        "appointment.commitment.api-enabled=true",
+        "appointment.commitment.idempotency-hash-secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+    ],
 )
 @ActiveProfiles("test", "integration-test")
 @ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
@@ -202,13 +205,13 @@ class AppointmentCommitmentSecurityIntegrationTest {
             root,
             "/api/v2/appointments/{id}/approve",
             successCode = "200",
-            expectedErrorCodes = listOf("400", "401", "403", "404", "409", "410", "412", "428", "500"),
+            expectedErrorCodes = listOf("400", "401", "403", "404", "409", "410", "412", "422", "428", "500"),
         )
         assertErrorResponses(
             root,
             "/api/v2/appointments/{id}/confirm",
             successCode = "200",
-            expectedErrorCodes = listOf("400", "401", "403", "404", "409", "410", "412", "428", "500"),
+            expectedErrorCodes = listOf("400", "401", "403", "404", "409", "410", "412", "422", "428", "500"),
         )
         assertErrorResponses(
             root,
@@ -220,7 +223,7 @@ class AppointmentCommitmentSecurityIntegrationTest {
             root,
             "/api/v2/appointments/{id}/proposals/{proposalId}/accept",
             successCode = "200",
-            expectedErrorCodes = listOf("400", "401", "403", "404", "409", "410", "412", "428", "500"),
+            expectedErrorCodes = listOf("400", "401", "403", "404", "409", "410", "412", "422", "428", "500"),
         )
         assertErrorResponses(
             root,

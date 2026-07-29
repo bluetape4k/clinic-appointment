@@ -7,8 +7,18 @@ import javax.crypto.Cipher
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
 
+/**
+ * 격리 저장소에 보관할 암호화 envelope와 무결성 증거입니다.
+ *
+ * @property ciphertext bounded 원문의 AES-GCM 암호문입니다. transport 상한을 초과해
+ * 재처리할 수 없는 원문은 저장 비용 증폭을 막기 위해 `null`입니다.
+ * @property keyId 복호화 key rotation에 사용하는 불투명 key 식별자입니다. key 원문이나
+ * secret을 포함하면 안 됩니다.
+ * @property envelopeHash canonical metadata와 원문 전체를 결합한 소문자 SHA-256입니다.
+ * 운영자가 승인한 정확한 envelope와 redrive 입력을 결합하는 데 사용합니다.
+ */
 data class ProtectedQuarantineEnvelope(
-    val ciphertext: String,
+    val ciphertext: String?,
     val keyId: String,
     val envelopeHash: String,
 )

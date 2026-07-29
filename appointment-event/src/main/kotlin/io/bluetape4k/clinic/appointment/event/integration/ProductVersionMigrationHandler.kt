@@ -23,6 +23,7 @@ import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Clock
@@ -56,6 +57,7 @@ class ProductVersionMigrationHandler(
     private val maxGapAttempts: Int = 5,
     private val initialGapBackoff: Duration = Duration.ofMinutes(1),
     private val maxGapBackoff: Duration = Duration.ofHours(1),
+    private val inboxInsertObserver: InboxInsertObserver = InboxInsertObserver.NOOP,
 ) {
     init {
         require(maxGapAttempts > 0) { "maxGapAttempts must be positive" }
@@ -83,7 +85,8 @@ class ProductVersionMigrationHandler(
         protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
         versionProof: SourceAuthorityVersionProof? = null,
     ): PurchaseHandleResult {
-        val result = transaction {
+        val result = try {
+            transaction {
             val payload = envelope.payload
             val plan = findPlanAndLock(
                 payload.tenantGroupId,
@@ -98,7 +101,10 @@ class ProductVersionMigrationHandler(
                     "EVENT_ALREADY_TERMINAL",
                 )
             }
-            val inboxId = existing?.id ?: eventRepository.insertReceivedProductVersionMigration(envelope)
+            val inboxId = existing?.id ?: run {
+                inboxInsertObserver.beforeInsert(envelope.eventId)
+                eventRepository.insertReceivedProductVersionMigration(envelope)
+            }
             if (plan == null) {
                 quarantine(
                     inboxId,
@@ -236,7 +242,11 @@ class ProductVersionMigrationHandler(
                 evidenceReferenceHash = payload.consent.evidenceReferenceHash,
             )
             eventRepository.markProcessed(inboxId, clock.instant())
-            PurchaseHandleResult(PurchaseHandleStatus.CREATED, planId = planId)
+                PurchaseHandleResult(PurchaseHandleStatus.CREATED, planId = planId)
+            }
+        } catch (failure: ExposedSQLException) {
+            if (!failure.isConstraintConflict()) throw failure
+            reconcileInboxConstraintRace(envelope.eventId)
         }
         log.info {
             "Product version migration handled: eventId=${envelope.eventId}, " +
@@ -254,7 +264,8 @@ class ProductVersionMigrationHandler(
         protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
         versionProof: SourceAuthorityVersionProof? = null,
     ): PurchaseHandleResult {
-        val result = transaction {
+        val result = try {
+            transaction {
             val payload = envelope.payload
             val plan = findPlanAndLock(
                 payload.tenantGroupId,
@@ -269,7 +280,10 @@ class ProductVersionMigrationHandler(
                     "EVENT_ALREADY_TERMINAL",
                 )
             }
-            val inboxId = existing?.id ?: eventRepository.insertReceivedMigrationDecline(envelope)
+            val inboxId = existing?.id ?: run {
+                inboxInsertObserver.beforeInsert(envelope.eventId)
+                eventRepository.insertReceivedMigrationDecline(envelope)
+            }
             if (plan == null) {
                 quarantineDecline(
                     inboxId,
@@ -369,7 +383,11 @@ class ProductVersionMigrationHandler(
                 reasonCode = payload.reasonCode,
             )
             eventRepository.markProcessed(inboxId, clock.instant())
-            PurchaseHandleResult(PurchaseHandleStatus.CREATED, planId = planId)
+                PurchaseHandleResult(PurchaseHandleStatus.CREATED, planId = planId)
+            }
+        } catch (failure: ExposedSQLException) {
+            if (!failure.isConstraintConflict()) throw failure
+            reconcileInboxConstraintRace(envelope.eventId)
         }
         log.info {
             "Migration reschedule decline handled: eventId=${envelope.eventId}, " +
@@ -378,6 +396,55 @@ class ProductVersionMigrationHandler(
         }
         return result
     }
+
+    /**
+     * 상품 version 전환 proof adapter가 실패한 event를 durable retry state로 남깁니다.
+     *
+     * 이 경로는 Plan root를 잠그거나 revision을 읽지 않습니다. source authority가
+     * 실제 최신 version을 증명하지 못한 동안에는 예약 의무를 변경하지 않고, 같은
+     * event ID로 들어오는 동시 요청은 하나의 `WAITING_GAP` inbox row와 reason-code
+     * metric으로 수렴합니다.
+     */
+    internal fun stageAuthorityUnavailable(
+        envelope: TrustedSchedulingEventEnvelope<ProductVersionMigrationApprovedEvent>,
+        failureReason: SourceAuthorityFailureReason,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
+    ): PurchaseHandleResult =
+        stageAuthorityUnavailableForExternalFact(
+            eventId = envelope.eventId,
+            insertReceived = { eventRepository.insertReceivedProductVersionMigration(envelope) },
+        ) { inboxId, existing ->
+            waitForMigrationGap(
+                inboxId = inboxId,
+                existingInbox = existing,
+                envelope = envelope,
+                protectedQuarantineEnvelope = protectedQuarantineEnvelope,
+                waitingReason = failureReason.reasonCode,
+                exhaustedReason = "${failureReason.reasonCode}_EXHAUSTED",
+            )
+        }
+
+    /**
+     * 일정 거부 proof adapter 실패도 고객 예약 변경 없이 durable retry state로 남깁니다.
+     */
+    internal fun stageDeclineAuthorityUnavailable(
+        envelope: TrustedSchedulingEventEnvelope<ProductVersionMigrationRescheduleDeclinedEvent>,
+        failureReason: SourceAuthorityFailureReason,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
+    ): PurchaseHandleResult =
+        stageAuthorityUnavailableForExternalFact(
+            eventId = envelope.eventId,
+            insertReceived = { eventRepository.insertReceivedMigrationDecline(envelope) },
+        ) { inboxId, existing ->
+            waitForDeclineGap(
+                inboxId = inboxId,
+                existingInbox = existing,
+                envelope = envelope,
+                protectedQuarantineEnvelope = protectedQuarantineEnvelope,
+                waitingReason = failureReason.reasonCode,
+                exhaustedReason = "${failureReason.reasonCode}_EXHAUSTED",
+            )
+        }
 
     private fun validateAndPlan(
         payload: ProductVersionMigrationApprovedEvent,
@@ -484,6 +551,8 @@ class ProductVersionMigrationHandler(
         existingInbox: SchedulingInboxRecord?,
         envelope: TrustedSchedulingEventEnvelope<ProductVersionMigrationApprovedEvent>,
         protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
+        waitingReason: String = "SOURCE_VERSION_GAP",
+        exhaustedReason: String = "SOURCE_VERSION_GAP_EXHAUSTED",
     ): PurchaseHandleResult {
         val attempt = (existingInbox?.attemptCount ?: 0) + 1
         if (attempt >= maxGapAttempts) {
@@ -491,20 +560,20 @@ class ProductVersionMigrationHandler(
                 inboxId,
                 envelope,
                 protectedQuarantineEnvelope,
-                "SOURCE_VERSION_GAP_EXHAUSTED",
+                exhaustedReason,
                 null,
                 attempt,
             )
             return PurchaseHandleResult(
                 PurchaseHandleStatus.QUARANTINED,
-                "SOURCE_VERSION_GAP_EXHAUSTED",
+                exhaustedReason,
             )
         }
         val replayAfter = clock.instant().plus(gapBackoff(attempt))
-        eventRepository.markWaitingGap(inboxId, attempt, replayAfter)
+        eventRepository.markWaitingGap(inboxId, attempt, replayAfter, waitingReason)
         return PurchaseHandleResult(
             PurchaseHandleStatus.WAITING_GAP,
-            "SOURCE_VERSION_GAP",
+            waitingReason,
             replayAfter = replayAfter,
         )
     }
@@ -514,6 +583,8 @@ class ProductVersionMigrationHandler(
         existingInbox: SchedulingInboxRecord?,
         envelope: TrustedSchedulingEventEnvelope<ProductVersionMigrationRescheduleDeclinedEvent>,
         protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
+        waitingReason: String = "SOURCE_VERSION_GAP",
+        exhaustedReason: String = "SOURCE_VERSION_GAP_EXHAUSTED",
     ): PurchaseHandleResult {
         val attempt = (existingInbox?.attemptCount ?: 0) + 1
         if (attempt >= maxGapAttempts) {
@@ -521,19 +592,19 @@ class ProductVersionMigrationHandler(
                 inboxId,
                 envelope,
                 protectedQuarantineEnvelope,
-                "SOURCE_VERSION_GAP_EXHAUSTED",
+                exhaustedReason,
                 attempt,
             )
             return PurchaseHandleResult(
                 PurchaseHandleStatus.QUARANTINED,
-                "SOURCE_VERSION_GAP_EXHAUSTED",
+                exhaustedReason,
             )
         }
         val replayAfter = clock.instant().plus(gapBackoff(attempt))
-        eventRepository.markWaitingGap(inboxId, attempt, replayAfter)
+        eventRepository.markWaitingGap(inboxId, attempt, replayAfter, waitingReason)
         return PurchaseHandleResult(
             PurchaseHandleStatus.WAITING_GAP,
-            "SOURCE_VERSION_GAP",
+            waitingReason,
             replayAfter = replayAfter,
         )
     }
@@ -543,6 +614,47 @@ class ProductVersionMigrationHandler(
         val candidate = initialGapBackoff.multipliedBy(multiplier)
         return minOf(candidate, maxGapBackoff)
     }
+
+    private fun stageAuthorityUnavailableForExternalFact(
+        eventId: String,
+        insertReceived: () -> Long,
+        wait: (Long, SchedulingInboxRecord?) -> PurchaseHandleResult,
+    ): PurchaseHandleResult =
+        try {
+            transaction {
+                val existing = eventRepository.findInbox(eventId)
+                if (existing != null && existing.status != SchedulingInboxStatus.WAITING_GAP) {
+                    return@transaction PurchaseHandleResult(
+                        PurchaseHandleStatus.DUPLICATE,
+                        "EVENT_ALREADY_TERMINAL",
+                    )
+                }
+                val inboxId = existing?.id ?: run {
+                    inboxInsertObserver.beforeInsert(eventId)
+                    insertReceived()
+                }
+                wait(inboxId, existing)
+            }
+        } catch (failure: ExposedSQLException) {
+            if (!failure.isConstraintConflict()) throw failure
+            reconcileInboxConstraintRace(eventId)
+        }
+
+    private fun reconcileInboxConstraintRace(eventId: String): PurchaseHandleResult =
+        transaction {
+            val existing = checkNotNull(eventRepository.findInbox(eventId)) {
+                "external fact inbox constraint conflict could not be classified: $eventId"
+            }
+            if (existing.status == SchedulingInboxStatus.WAITING_GAP) {
+                PurchaseHandleResult(
+                    status = PurchaseHandleStatus.WAITING_GAP,
+                    reasonCode = existing.failureCode,
+                    replayAfter = existing.replayAfter,
+                )
+            } else {
+                PurchaseHandleResult(PurchaseHandleStatus.DUPLICATE, "EVENT_RACE_CONVERGED")
+            }
+        }
 
     /**
      * 고객 일정 거부 사실도 migration과 같은 암호화 원문·감사 기록으로 격리합니다.
@@ -661,4 +773,7 @@ class ProductVersionMigrationHandler(
                 )
             },
         )
+
+    private fun ExposedSQLException.isConstraintConflict(): Boolean =
+        sqlState.startsWith("23")
 }

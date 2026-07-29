@@ -117,6 +117,7 @@ object PackageExecutionPayloadHasher {
 internal object PackageExecutionEventBounds {
     private const val MAX_IDENTIFIER_LENGTH = 128
     private const val MAX_TREATMENT_NAME_LENGTH = 256
+    private const val MAX_COLLECTION_SIZE = 1_000
     private val identifier = Regex("[A-Za-z0-9][A-Za-z0-9._:-]*")
     private val sha256 = Regex("[0-9a-f]{64}")
 
@@ -185,13 +186,22 @@ internal object PackageExecutionEventBounds {
         boundedIdentifier(snapshot.packageProductId)
         boundedIdentifier(snapshot.packageProductVersionId)
         require(snapshot.snapshotHash.matches(sha256)) { "snapshotHash must be lowercase SHA-256" }
+        require(snapshot.selectedComponentVersions.size <= MAX_COLLECTION_SIZE) {
+            "too many selected component versions"
+        }
         snapshot.selectedComponentVersions.forEach { component ->
             boundedIdentifier(component.componentProductId)
             boundedIdentifier(component.componentProductVersionId)
             component.selectionGroupId?.let(::boundedIdentifier)
         }
+        require(snapshot.componentSelections.size <= MAX_COLLECTION_SIZE) {
+            "too many component selections"
+        }
         snapshot.componentSelections.forEach { selection ->
             boundedIdentifier(selection.selectionGroupId)
+        }
+        require(snapshot.expandedTreatmentItems.size in 1..MAX_COLLECTION_SIZE) {
+            "expandedTreatmentItems size is invalid"
         }
         snapshot.expandedTreatmentItems.forEach { treatment ->
             boundedIdentifier(treatment.treatmentKey)
@@ -201,10 +211,32 @@ internal object PackageExecutionEventBounds {
             require(treatment.representativeTreatmentName.length in 1..MAX_TREATMENT_NAME_LENGTH) {
                 "representativeTreatmentName is invalid"
             }
+            require(treatment.detailedTreatmentCodes.size <= MAX_COLLECTION_SIZE) {
+                "too many detailed treatment codes"
+            }
+            treatment.detailedTreatmentCodes.forEach(::boundedIdentifier)
+            require(treatment.practitionerQualifications.size <= MAX_COLLECTION_SIZE) {
+                "too many practitioner qualifications"
+            }
+            treatment.practitionerQualifications.forEach(::boundedIdentifier)
+            require(treatment.equipmentTypes.size <= MAX_COLLECTION_SIZE) {
+                "too many equipment types"
+            }
+            treatment.equipmentTypes.forEach(::boundedIdentifier)
+            require(treatment.spaceCapabilities.size <= MAX_COLLECTION_SIZE) {
+                "too many space capabilities"
+            }
+            treatment.spaceCapabilities.forEach(::boundedIdentifier)
+        }
+        require(snapshot.executionDependencies.size <= MAX_COLLECTION_SIZE) {
+            "too many execution dependencies"
         }
         snapshot.executionDependencies.forEach { dependency ->
             boundedIdentifier(dependency.predecessorTreatmentKey)
             boundedIdentifier(dependency.successorTreatmentKey)
+        }
+        require(snapshot.visitGroupingConstraints.size <= MAX_COLLECTION_SIZE) {
+            "too many visit grouping constraints"
         }
         snapshot.visitGroupingConstraints.forEach { grouping ->
             boundedIdentifier(grouping.firstTreatmentKey)

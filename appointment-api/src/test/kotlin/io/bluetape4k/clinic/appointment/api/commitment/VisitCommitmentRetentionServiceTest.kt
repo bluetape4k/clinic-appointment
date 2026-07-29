@@ -12,6 +12,7 @@ import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommandIdempoten
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -19,6 +20,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -105,6 +107,56 @@ class VisitCommitmentRetentionServiceTest {
         retainedQuarantineIds() shouldBeEqualTo listOf(openQuarantine, heldQuarantine) + releasable.drop(2)
     }
 
+    @Test
+    fun `uses resolution time instead of detection time for the quarantine retention window`() {
+        val recentlyResolved = insertQuarantine(
+            eventId = "recently-resolved",
+            status = QuarantineStatus.RELEASE_APPROVED,
+            legalHold = false,
+            resolvedAt = now.minusSeconds(DAYS_90),
+        )
+        val oldResolved = insertQuarantine(
+            eventId = "old-resolved",
+            status = QuarantineStatus.RELEASE_DENIED,
+            legalHold = false,
+            resolvedAt = now.minusSeconds(DAYS_90 + 1),
+        )
+
+        val result = service.cleanupTenant(tenantGroupId = 1L, clinicId = 7L)
+
+        result.expiredQuarantinePayloadIds shouldBeEqualTo listOf(oldResolved)
+        retainedQuarantineIds() shouldBeEqualTo listOf(recentlyResolved)
+    }
+
+    @Test
+    fun `concurrent legal hold prevents payload expiry audit and result`() {
+        val protected = insertQuarantine(
+            eventId = "concurrent-hold",
+            status = QuarantineStatus.RELEASE_APPROVED,
+            legalHold = false,
+        )
+        val raceAware = VisitCommitmentRetentionService(
+            database = database,
+            clock = clock,
+            batchSizePerTenant = 2,
+            mutationObserver = VisitCommitmentRetentionMutationObserver { quarantineId ->
+                SchedulingQuarantineEvents.update({
+                    SchedulingQuarantineEvents.id eq quarantineId
+                }) {
+                    it[legalHold] = true
+                }
+            },
+        )
+
+        val result = raceAware.cleanupTenant(tenantGroupId = 1L, clinicId = 7L)
+
+        result.expiredQuarantinePayloadIds shouldBeEqualTo emptyList()
+        retainedQuarantineIds() shouldBeEqualTo listOf(protected)
+        transaction(database) {
+            SchedulingQuarantineAuditEvents.selectAll().count() shouldBeEqualTo 0L
+        }
+    }
+
     private fun seedClinic() {
         TenantGroups.insert {
             it[id] = EntityID(1L, TenantGroups)
@@ -167,7 +219,17 @@ class VisitCommitmentRetentionServiceTest {
             }.value
         }
 
-    private fun insertQuarantine(eventId: String, status: QuarantineStatus, legalHold: Boolean): Long =
+    private fun insertQuarantine(
+        eventId: String,
+        status: QuarantineStatus,
+        legalHold: Boolean,
+        resolvedAt: Instant? =
+            if (status in setOf(QuarantineStatus.RELEASE_APPROVED, QuarantineStatus.RELEASE_DENIED)) {
+                now.minusSeconds(DAYS_90 + 1)
+            } else {
+                null
+            },
+    ): Long =
         transaction(database) {
             SchedulingQuarantineEvents.insertAndGetId {
                 it[SchedulingQuarantineEvents.eventId] = eventId
@@ -184,6 +246,7 @@ class VisitCommitmentRetentionServiceTest {
                 it[clinicId] = EntityID(7L, Clinics)
                 it[reasonCode] = "TEST"
                 it[detectedAt] = now.minusSeconds(DAYS_90 + 1)
+                it[SchedulingQuarantineEvents.resolvedAt] = resolvedAt
                 it[correlationId] = eventId
                 it[retentionClass] = io.bluetape4k.clinic.appointment.event.integration.QuarantineRetentionClass.STANDARD
                 it[payloadExpiresAt] = now.minusSeconds(DAYS_90 + 1)

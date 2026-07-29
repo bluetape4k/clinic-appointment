@@ -22,6 +22,7 @@ import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Clock
@@ -50,6 +51,7 @@ class TreatmentFulfillmentHandler(
     private val maxGapAttempts: Int = 5,
     private val initialGapBackoff: Duration = Duration.ofMinutes(1),
     private val maxGapBackoff: Duration = Duration.ofHours(1),
+    private val inboxInsertObserver: InboxInsertObserver = InboxInsertObserver.NOOP,
 ) {
     init {
         require(maxGapAttempts > 0) { "maxGapAttempts must be positive" }
@@ -71,7 +73,8 @@ class TreatmentFulfillmentHandler(
         protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
         versionProof: SourceAuthorityVersionProof? = null,
     ): PurchaseHandleResult {
-        val result = transaction {
+        val result = try {
+            transaction {
             val payload = envelope.payload
             val plan = findPlanAndLock(payload)
             val existing = eventRepository.findInbox(envelope.eventId)
@@ -81,7 +84,10 @@ class TreatmentFulfillmentHandler(
                     "EVENT_ALREADY_TERMINAL",
                 )
             }
-            val inboxId = existing?.id ?: eventRepository.insertReceivedTreatmentFulfillment(envelope)
+            val inboxId = existing?.id ?: run {
+                inboxInsertObserver.beforeInsert(envelope.eventId)
+                eventRepository.insertReceivedTreatmentFulfillment(envelope)
+            }
             if (plan == null) {
                 quarantine(
                     inboxId,
@@ -258,7 +264,11 @@ class TreatmentFulfillmentHandler(
                 effectiveAtByTreatmentKey = projection.effectiveAtByTreatmentKey,
             )
             eventRepository.markProcessed(inboxId, clock.instant())
-            PurchaseHandleResult(PurchaseHandleStatus.CREATED, planId = planId)
+                PurchaseHandleResult(PurchaseHandleStatus.CREATED, planId = planId)
+            }
+        } catch (failure: ExposedSQLException) {
+            if (!failure.isConstraintConflict()) throw failure
+            reconcileInboxConstraintRace(envelope.eventId)
         }
         log.info {
             "Treatment fulfillment handled: eventId=${envelope.eventId}, " +
@@ -267,6 +277,46 @@ class TreatmentFulfillmentHandler(
         }
         return result
     }
+
+    /**
+     * 임상·환불 source authority proof 조회 실패를 Plan 변경 없이 staging합니다.
+     *
+     * 진료 완료·부분 이행·환불 사실은 선행 version 누락 여부가 확정되기 전까지
+     * 새 revision을 만들 수 없습니다. 이 경로는 같은 event ID 동시 요청을 하나의
+     * `WAITING_GAP` inbox row로 수렴시키고, adapter 장애 reason code를 그대로
+     * replay/metric 기준으로 남깁니다.
+     */
+    internal fun stageAuthorityUnavailable(
+        envelope: TrustedSchedulingEventEnvelope<TreatmentFulfillmentEvent>,
+        failureReason: SourceAuthorityFailureReason,
+        protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
+    ): PurchaseHandleResult =
+        try {
+            transaction {
+                val existing = eventRepository.findInbox(envelope.eventId)
+                if (existing != null && existing.status != SchedulingInboxStatus.WAITING_GAP) {
+                    return@transaction PurchaseHandleResult(
+                        PurchaseHandleStatus.DUPLICATE,
+                        "EVENT_ALREADY_TERMINAL",
+                    )
+                }
+                val inboxId = existing?.id ?: run {
+                    inboxInsertObserver.beforeInsert(envelope.eventId)
+                    eventRepository.insertReceivedTreatmentFulfillment(envelope)
+                }
+                waitForGap(
+                    inboxId = inboxId,
+                    existingInbox = existing,
+                    envelope = envelope,
+                    protectedQuarantineEnvelope = protectedQuarantineEnvelope,
+                    waitingReason = failureReason.reasonCode,
+                    exhaustedReason = "${failureReason.reasonCode}_EXHAUSTED",
+                )
+            }
+        } catch (failure: ExposedSQLException) {
+            if (!failure.isConstraintConflict()) throw failure
+            reconcileInboxConstraintRace(envelope.eventId)
+        }
 
     private fun projectFacts(
         treatments: List<PlanRevisionTreatmentRecord>,
@@ -412,6 +462,8 @@ class TreatmentFulfillmentHandler(
         existingInbox: SchedulingInboxRecord?,
         envelope: TrustedSchedulingEventEnvelope<TreatmentFulfillmentEvent>,
         protectedQuarantineEnvelope: ProtectedQuarantineEnvelope,
+        waitingReason: String = "SOURCE_VERSION_GAP",
+        exhaustedReason: String = "SOURCE_VERSION_GAP_EXHAUSTED",
     ): PurchaseHandleResult {
         val attempt = (existingInbox?.attemptCount ?: 0) + 1
         if (attempt >= maxGapAttempts) {
@@ -419,24 +471,40 @@ class TreatmentFulfillmentHandler(
                 inboxId,
                 envelope,
                 protectedQuarantineEnvelope,
-                "SOURCE_VERSION_GAP_EXHAUSTED",
+                exhaustedReason,
                 attempt,
             )
             return PurchaseHandleResult(
                 PurchaseHandleStatus.QUARANTINED,
-                "SOURCE_VERSION_GAP_EXHAUSTED",
+                exhaustedReason,
             )
         }
         val multiplier = 1L shl minOf(attempt - 1, 20)
         val delay = minOf(initialGapBackoff.multipliedBy(multiplier), maxGapBackoff)
         val replayAfter = clock.instant().plus(delay)
-        eventRepository.markWaitingGap(inboxId, attempt, replayAfter)
+        eventRepository.markWaitingGap(inboxId, attempt, replayAfter, waitingReason)
         return PurchaseHandleResult(
             PurchaseHandleStatus.WAITING_GAP,
-            "SOURCE_VERSION_GAP",
+            waitingReason,
             replayAfter = replayAfter,
         )
     }
+
+    private fun reconcileInboxConstraintRace(eventId: String): PurchaseHandleResult =
+        transaction {
+            val existing = checkNotNull(eventRepository.findInbox(eventId)) {
+                "fulfillment inbox constraint conflict could not be classified: $eventId"
+            }
+            if (existing.status == SchedulingInboxStatus.WAITING_GAP) {
+                PurchaseHandleResult(
+                    status = PurchaseHandleStatus.WAITING_GAP,
+                    reasonCode = existing.failureCode,
+                    replayAfter = existing.replayAfter,
+                )
+            } else {
+                PurchaseHandleResult(PurchaseHandleStatus.DUPLICATE, "EVENT_RACE_CONVERGED")
+            }
+        }
 
     /**
      * 잘못되거나 순서가 복구되지 않은 임상·환불 사실의 암호화 원문과 감사 기록을
@@ -526,4 +594,7 @@ class TreatmentFulfillmentHandler(
         val effectiveAtByTreatmentKey: Map<String, Instant>,
         val resourceDisruptions: List<TreatmentFulfillmentFact>,
     )
+
+    private fun ExposedSQLException.isConstraintConflict(): Boolean =
+        sqlState.startsWith("23")
 }

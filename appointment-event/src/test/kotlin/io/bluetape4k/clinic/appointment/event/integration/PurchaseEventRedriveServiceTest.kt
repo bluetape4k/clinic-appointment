@@ -113,8 +113,80 @@ class PurchaseEventRedriveServiceTest {
             SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
             quarantineRepository.auditTrail(confirmation(envelope).quarantineId)
                 .map { it.action }
-                .contains(QuarantineAuditAction.REDRIVE)
+                .takeLast(2) shouldBeEqualTo
+                listOf(QuarantineAuditAction.REDRIVE_ATTEMPT, QuarantineAuditAction.REDRIVE)
+        }
+    }
+
+    @Test
+    fun `redrive confirmation is bound to the exact quarantined envelope hash`() {
+        val envelope = raw()
+        val mismatched = confirmation(envelope).copy(envelopeHash = "c".repeat(64))
+
+        assertFailsWith<IllegalArgumentException> {
+            redriveService().redrive(envelope, mismatched, dryRun = false)
+        }
+
+        transaction {
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 0L
+            AppointmentPlans.selectAll().count() shouldBeEqualTo 0L
+            quarantineRepository.auditTrail(mismatched.quarantineId)
+                .none { it.action == QuarantineAuditAction.REDRIVE_ATTEMPT }
                 .shouldBeTrue()
+        }
+    }
+
+    @Test
+    fun `failed handler records failure but never records redrive success`() {
+        val envelope = raw()
+        val confirmation = confirmation(envelope)
+        val service = redriveService(
+            observer = AtomicPlanWriteObserver {
+                throw IllegalStateException("sensitive implementation detail")
+            },
+        )
+
+        assertFailsWith<IllegalStateException> {
+            service.redrive(envelope, confirmation, dryRun = false)
+        }
+
+        transaction {
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 0L
+            AppointmentPlans.selectAll().count() shouldBeEqualTo 0L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
+            val trail = quarantineRepository.auditTrail(confirmation.quarantineId)
+            trail.map { it.action }.takeLast(2) shouldBeEqualTo
+                listOf(QuarantineAuditAction.REDRIVE_ATTEMPT, QuarantineAuditAction.REDRIVE_FAILED)
+            trail.last().reason shouldBeEqualTo "redrive handler failed"
+        }
+    }
+
+    @Test
+    fun `handler commit 뒤 성공 audit 실패는 업무 실패로 오기록하지 않는다`() {
+        val envelope = raw(eventId = "success-audit-failure")
+        val confirmation = confirmation(envelope)
+        val service =
+            redriveService(
+                successAuditRecorder =
+                    RedriveSuccessAuditRecorder {
+                        throw IllegalStateException("audit store unavailable")
+                    },
+            )
+
+        val failure =
+            assertFailsWith<RedriveAuditReconciliationRequiredException> {
+                service.redrive(envelope, confirmation, dryRun = false)
+            }
+
+        failure.quarantineId shouldBeEqualTo confirmation.quarantineId
+        failure.eventId shouldBeEqualTo confirmation.eventId
+        transaction {
+            SchedulingInboxEvents.selectAll().count() shouldBeEqualTo 1L
+            AppointmentPlans.selectAll().count() shouldBeEqualTo 1L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
+            quarantineRepository.auditTrail(confirmation.quarantineId)
+                .map { it.action }
+                .takeLast(1) shouldBeEqualTo listOf(QuarantineAuditAction.REDRIVE_ATTEMPT)
         }
     }
 
@@ -342,14 +414,30 @@ class PurchaseEventRedriveServiceTest {
         handler = handler(PurchaseHandlingMode.WRITE, observer),
     )
 
-    private fun redriveService() = PurchaseEventRedriveService(
+    private fun redriveService(
+        observer: AtomicPlanWriteObserver = AtomicPlanWriteObserver.NOOP,
+        successAuditRecorder: RedriveSuccessAuditRecorder =
+            RedriveSuccessAuditRecorder { confirmation ->
+                transaction {
+                    quarantineRepository.recordRedriveSucceeded(
+                        quarantineId = confirmation.quarantineId,
+                        expectedEventId = confirmation.eventId,
+                        expectedEnvelopeHash = confirmation.envelopeHash,
+                        actor = confirmation.actor,
+                        reason = confirmation.reason,
+                        approvalReferences = confirmation.approvalReferences,
+                    )
+                }
+            },
+    ) = PurchaseEventRedriveService(
         trustVerifier = trustVerifier(),
         eventAdapter = PurchaseCompletedEventAdapter(),
         versionProofProvider = SourceAuthorityVersionProofProvider { _, _ -> null },
         patientReferenceProtector = PatientReferenceProtector { _, _ -> protected() },
         quarantineEnvelopeProtector = QuarantineEnvelopeProtector { protectedQuarantineEnvelope() },
         quarantineRepository = quarantineRepository,
-        writeHandler = handler(PurchaseHandlingMode.WRITE),
+        writeHandler = handler(PurchaseHandlingMode.WRITE, observer),
+        successAuditRecorder = successAuditRecorder,
     )
 
     private fun trustVerifier() = SchedulingEventTrustVerifier(
@@ -459,6 +547,7 @@ class PurchaseEventRedriveServiceTest {
             reason = "redrive after source correction",
             approvalReferences = listOf("approval-1"),
             eventId = envelope.eventId,
+            envelopeHash = protectedQuarantineEnvelope().envelopeHash,
             sourceAggregateVersion = payload.sourceAggregateVersion,
             tenantGroupId = payload.tenantGroupId,
             clinicId = payload.clinicId,

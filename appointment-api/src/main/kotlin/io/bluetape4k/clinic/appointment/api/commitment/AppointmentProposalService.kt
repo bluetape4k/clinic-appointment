@@ -124,6 +124,12 @@ class AppointmentProposalService(
         ) {
             "candidate slot scope must match proposal request scope"
         }
+        if (
+            request.candidateSlots.any { it.availableResources.size > limits.maximumResourcesPerSlot } ||
+            request.candidateSlots.sumOf { it.availableResources.size } > limits.maximumCandidateResourceCount
+        ) {
+            throw planLimitExceeded()
+        }
         validateBounds(request.candidateSlots.size, 0)
     }
 

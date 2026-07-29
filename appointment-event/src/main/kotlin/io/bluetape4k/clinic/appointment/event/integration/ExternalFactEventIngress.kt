@@ -3,6 +3,14 @@ package io.bluetape4k.clinic.appointment.event.integration
 import io.bluetape4k.clinic.appointment.service.StrictJsonPayloadDecoder
 
 /**
+ * 외부 fact raw JSON 하나에 허용하는 최대 transport 크기입니다.
+ *
+ * consumer와 ingress가 같은 상한을 공유해야 초과 payload를 decode 또는 암호화하지
+ * 않고 hash-only terminal rejection으로 수렴시킬 수 있습니다.
+ */
+internal const val MAX_EXTERNAL_FACT_PAYLOAD_BYTES = 1_048_576
+
+/**
  * 상품 version 전환 승인 JSON payload만 역직렬화합니다.
  *
  * 구현체는 class name 기반 subtype, default polymorphic typing, unknown field를
@@ -160,7 +168,7 @@ class ExternalFactEventIngress(
         decoder: (ByteArray) -> T,
         trust: (UntrustedSchedulingEventEnvelope<T>) -> TrustedSchedulingEventEnvelope<T>,
     ): TrustedSchedulingEventEnvelope<T> {
-        trust(rawPayload.size <= MAX_PAYLOAD_BYTES, "PAYLOAD_TOO_LARGE")
+        trust(rawPayload.size <= MAX_EXTERNAL_FACT_PAYLOAD_BYTES, "PAYLOAD_TOO_LARGE")
         trust(maxJsonDepth(rawPayload) <= MAX_JSON_DEPTH, "PAYLOAD_DEPTH_EXCEEDED")
         trust(rawEnvelope.eventType == expectedEventType, "EVENT_TYPE_NOT_ALLOWED")
         trust(rawEnvelope.schemaVersion == expectedSchemaVersion, "SCHEMA_VERSION_NOT_ALLOWED")
@@ -248,7 +256,6 @@ class ExternalFactEventIngress(
         const val PRODUCT_VERSION_MIGRATION_DECLINED_EVENT_TYPE = "ProductVersionMigrationRescheduleDeclined"
         const val TREATMENT_FULFILLMENT_RECORDED_EVENT_TYPE = "TreatmentFulfillmentRecorded"
         const val SCHEMA_VERSION = 1
-        const val MAX_PAYLOAD_BYTES = 1_048_576
         const val MAX_JSON_DEPTH = 32
         const val MAX_IDENTIFIER_LENGTH = 128
         const val MAX_SIGNATURE_LENGTH = 1_024

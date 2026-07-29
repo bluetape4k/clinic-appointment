@@ -104,6 +104,15 @@ object SchedulingOutboxEvents : LongIdTable("scheduling_outbox_events") {
         index("idx_outbox_plan_id", false, planId)
         index("idx_outbox_status_created_at", false, status, createdAt)
         index("idx_outbox_status_next_attempt", false, status, nextAttemptAt)
+        index(
+            "idx_outbox_retention",
+            false,
+            tenantGroupId,
+            clinicId,
+            status,
+            publishedAt,
+            id,
+        )
         index("idx_outbox_aggregate", false, aggregateType, aggregateId, createdAt)
     }
 }

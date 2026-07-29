@@ -15,7 +15,7 @@ import java.sql.Driver
 class FlywayPostgreSQLMigrationTest {
 
     @Test
-    fun `V9 contract remains valid and V10 adds versioned visit commitment schema on PostgreSQL`() {
+    fun `V9 contract remains valid and V10 through V12 add visit commitment schema on PostgreSQL`() {
         val postgres = Containers.Postgres
         val driver = Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance() as Driver
         val dataSource = SimpleDriverDataSource(
@@ -29,7 +29,7 @@ class FlywayPostgreSQLMigrationTest {
             dataSource = dataSource,
             location = "classpath:db/migration/postgresql",
         )
-        VisitCommitmentMigrationTestSupport.verifyV10Migration(
+        VisitCommitmentMigrationTestSupport.verifyVisitCommitmentMigrations(
             dataSource = dataSource,
             location = "classpath:db/migration/postgresql",
         )

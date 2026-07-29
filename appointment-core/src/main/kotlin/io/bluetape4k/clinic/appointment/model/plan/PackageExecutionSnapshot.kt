@@ -267,6 +267,7 @@ enum class VisitGroupingType {
 /**
  * 방향이 없는 두 treatment key의 canonical 쌍입니다.
  */
+@ConsistentCopyVisibility
 data class TreatmentPair private constructor(
     val firstTreatmentKey: String,
     val secondTreatmentKey: String,

@@ -266,9 +266,10 @@ class SchedulingQuarantineRepositoryTest {
             { repository.denyRelease(record.id, "ops-user", "late denial") },
             { repository.recordDryRun(record.id, record.eventId, "ops-user", "late preview", "diff-hash") },
             {
-                repository.recordRedrive(
+                repository.recordRedriveAttempt(
                     record.id,
                     record.eventId,
+                    record.envelopeHash,
                     "ops-user",
                     "late redrive",
                     listOf("catalog-owner-1"),

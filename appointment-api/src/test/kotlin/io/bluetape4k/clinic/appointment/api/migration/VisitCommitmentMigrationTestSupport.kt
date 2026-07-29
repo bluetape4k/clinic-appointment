@@ -16,6 +16,7 @@ import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
 import io.bluetape4k.clinic.appointment.model.tables.ResourceAllocations
 import io.bluetape4k.clinic.appointment.model.tables.ResourceCapacityBuckets
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentSpaces
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingQuarantineEvents
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -28,18 +29,18 @@ import java.sql.Time
 import javax.sql.DataSource
 
 /**
- * Flyway V10의 방문 commitment 스키마를 세 dialect에서 동일하게 검증하는 지원 객체입니다.
+ * Flyway V10·V11·V12의 방문 commitment 스키마를 세 dialect에서 동일하게 검증하는 지원 객체입니다.
  *
- * V9까지 기존 예약을 먼저 저장한 다음 V10을 한 단계만 적용한다. 이 순서로 기존 row의
- * `LEGACY` backfill과 확정 projection 완화가 데이터 손실 없이 수행되는지 검증하며,
- * metadata 조회는 어떤 DDL도 실행하지 않는다.
+ * V9까지 기존 예약을 먼저 저장한 다음 V10·V11·V12를 순서대로 적용한다. 이 순서로 기존
+ * row의 `LEGACY` backfill, 확정 projection 완화, quarantine 해결 시각 추가가 데이터
+ * 손실 없이 수행되는지 검증하며 metadata 조회는 어떤 DDL도 실행하지 않는다.
  */
 internal object VisitCommitmentMigrationTestSupport {
 
     /**
-     * [dataSource]를 clean한 뒤 V1→V9와 V10을 분리 적용하고 신규 계약을 검증합니다.
+     * [dataSource]를 clean한 뒤 V1→V9와 V10·V11·V12를 분리 적용하고 신규 계약을 검증합니다.
      */
-    fun verifyV10Migration(
+    fun verifyVisitCommitmentMigrations(
         dataSource: DataSource,
         location: String,
     ) {
@@ -66,7 +67,7 @@ internal object VisitCommitmentMigrationTestSupport {
             .migrate()
 
         result.success shouldBeEqualTo true
-        result.migrationsExecuted shouldBeEqualTo 1
+        result.migrationsExecuted shouldBeEqualTo 3
 
         dataSource.connection.use { connection ->
             val tables = tableNames(connection)
@@ -74,7 +75,9 @@ internal object VisitCommitmentMigrationTestSupport {
                 "Missing V10 tables: ${EXPECTED_TABLES - tables}"
             }
             verifyAppointmentExpansion(connection)
+            verifyQuarantineResolutionExpansion(connection)
             verifyIndexOrder(connection)
+            verifyRetentionIndexes(connection)
             verifyForeignKeys(connection)
             verifyUniqueConstraints(connection)
             verifyIncompleteCommitmentProjection(connection)
@@ -88,12 +91,28 @@ internal object VisitCommitmentMigrationTestSupport {
             .applied()
             .single { it.version?.version == "10" }
         check(appliedV10.checksum != null) { "Applied V10 checksum must be recorded" }
+        val appliedV11 = Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .load()
+            .info()
+            .applied()
+            .single { it.version?.version == "11" }
+        check(appliedV11.checksum != null) { "Applied V11 checksum must be recorded" }
+        val appliedV12 = Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .load()
+            .info()
+            .applied()
+            .single { it.version?.version == "12" }
+        check(appliedV12.checksum != null) { "Applied V12 checksum must be recorded" }
         verifyExposedModelHasNoAdditiveDrift(dataSource)
         verifyCleanMigration(dataSource, location)
     }
 
     /**
-     * 운영 신규 설치와 같은 빈 database에서 V1부터 V10까지 한 번에 적용되는지 검증합니다.
+     * 운영 신규 설치와 같은 빈 database에서 V1부터 V12까지 한 번에 적용되는지 검증합니다.
      *
      * 앞선 검사는 기존 V9 데이터의 보존을 책임지고, 이 검사는 신규 tenant 환경의 bootstrap을
      * 책임진다. 두 경로를 분리해 검증해야 upgrade 성공이 clean install 성공으로 오인되지 않는다.
@@ -112,13 +131,77 @@ internal object VisitCommitmentMigrationTestSupport {
         val result = flyway.migrate()
 
         result.success shouldBeEqualTo true
-        result.migrationsExecuted shouldBeEqualTo 10
+        result.migrationsExecuted shouldBeEqualTo 12
         dataSource.connection.use { connection ->
             val tables = tableNames(connection)
             check(EXPECTED_TABLES.all(tables::contains)) {
-                "Clean V1→V10 migration is missing tables: ${EXPECTED_TABLES - tables}"
+                "Clean V1→V12 migration is missing tables: ${EXPECTED_TABLES - tables}"
             }
+            verifyQuarantineResolutionExpansion(connection)
+            verifyRetentionIndexes(connection)
         }
+    }
+
+    /**
+     * tenant·clinic별 보존 삭제가 오래된 row를 정렬할 때 full scan을 요구하지 않도록
+     * V12의 predicate/order 복합 index 열 순서를 검증합니다.
+     */
+    private fun verifyRetentionIndexes(connection: Connection) {
+        indexDefinition(
+            connection,
+            "scheduling_appointment_command_idempotencies",
+            "idx_appointment_idempotency_retention",
+        ) shouldBeEqualTo listOf(
+            "tenant_group_id:A",
+            "clinic_id:A",
+            "created_at:A",
+            "id:A",
+        )
+        indexDefinition(
+            connection,
+            "scheduling_inbox_events",
+            "idx_inbox_retention",
+        ) shouldBeEqualTo listOf(
+            "tenant_group_id:A",
+            "clinic_id:A",
+            "status:A",
+            "received_at:A",
+            "id:A",
+        )
+        indexDefinition(
+            connection,
+            "scheduling_outbox_events",
+            "idx_outbox_retention",
+        ) shouldBeEqualTo listOf(
+            "tenant_group_id:A",
+            "clinic_id:A",
+            "status:A",
+            "published_at:A",
+            "id:A",
+        )
+    }
+
+    /**
+     * V11이 해결 시각을 nullable로 추가하고 tenant·clinic별 retention index를 구성했는지 검증합니다.
+     *
+     * 기존 quarantine은 해결 시점을 추정해 backfill하지 않는다. `null`은 안전하게 보존하는
+     * 의미이며 이후 release 승인·거절 전이만 권위 있는 `resolved_at`을 기록합니다.
+     */
+    private fun verifyQuarantineResolutionExpansion(connection: Connection) {
+        val quarantineColumns = columns(connection, "scheduling_quarantine_events")
+        quarantineColumns.getValue("resolved_at").nullable shouldBeEqualTo true
+        indexDefinition(
+            connection,
+            "scheduling_quarantine_events",
+            "idx_quarantine_resolved_retention",
+        ) shouldBeEqualTo listOf(
+            "tenant_group_id:A",
+            "clinic_id:A",
+            "legal_hold:A",
+            "status:A",
+            "resolved_at:A",
+            "id:A",
+        )
     }
 
     /**
@@ -274,7 +357,7 @@ internal object VisitCommitmentMigrationTestSupport {
             ).filter(::isAdditiveSchemaChange)
         }
         check(additiveDrift.isEmpty()) {
-            "Flyway V10 is missing additive DDL required by Exposed:\n" +
+            "Flyway V10/V11/V12 is missing additive DDL required by Exposed:\n" +
                 additiveDrift.joinToString(separator = "\n")
         }
     }
@@ -455,5 +538,6 @@ internal object VisitCommitmentMigrationTestSupport {
         AppointmentOperationalExceptions,
         AppointmentCommandIdempotencies,
         AppointmentAuditEvents,
+        SchedulingQuarantineEvents,
     )
 }

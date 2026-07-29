@@ -65,6 +65,11 @@ data class CreateAppointmentRequestV2(
  *
  * 직접 확정 가능 여부, 동의 유형, 약관, 자원 mapping은 유효 정책 snapshot과 병원
  * inventory에서 서버가 결정한다.
+ *
+ * @property appointmentPlanId 구매 시점 상품 BOM을 고정한 예약 Plan 식별자.
+ * @property preferredStartAt 병원 관리자가 고객과 합의한 방문 시작 UTC 시각.
+ * @property preferredEndAt [preferredStartAt]보다 뒤인 방문 종료 UTC 시각.
+ * @property evidence 외부 동의 권위가 발행하고 현재 Plan·일정에 결합한 opaque 증빙 참조.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 data class DirectCreateAppointmentRequest(
@@ -90,6 +95,8 @@ data class DirectCreateAppointmentRequest(
  * 고객 최초 proposal을 병원이 승인할 때 지정하는 불변 proposal 식별자이다.
  *
  * version과 멱등성 키는 각각 `If-Match`, `Idempotency-Key` header로만 받는다.
+ *
+ * @property proposalId 고객 최초 요청에서 생성되어 동의 증빙이 이미 결합된 proposal 식별자.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 data class ApproveProposalRequest(
@@ -106,6 +113,9 @@ data class ApproveProposalRequest(
  *
  * proposal ID는 path, version은 `If-Match`에서 얻으며 body가 다른 proposal이나
  * commitment version을 선택할 수 없다.
+ *
+ * @property evidence path의 정확한 proposal·현재 정책 snapshot·고객에게 제시된 약관에
+ * 외부 동의 서비스가 결합한 opaque 증빙 참조.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 data class ProposalDecisionRequest(
@@ -122,6 +132,9 @@ data class ProposalDecisionRequest(
  *
  * 자유 텍스트 대신 운영 시스템과 합의한 code를 사용해 개인정보·민감정보가 감사
  * 이벤트나 로그로 흘러가지 않게 한다.
+ *
+ * @property reasonCode 고객 거절 원인을 나타내는 최대 64자의 등록된 대문자 업무 code.
+ * 실제 거절 증빙 식별자는 예약·proposal과 함께 서버에서 만들어 다른 예약과 충돌하지 않는다.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 data class DeclineProposalRequest(
@@ -146,6 +159,10 @@ data class DeclineProposalRequest(
  * 관리자가 기존 확정 예약을 다시 확정할 때 선택하는 proposal 식별자이다.
  *
  * 동의 허용 범위와 projection 대상은 서버 정책·inventory가 결정한다.
+ *
+ * @property proposalId 현재 commitment에 속하며 확정할 영속 proposal 식별자.
+ * @property evidence 외부 동의 서비스가 정확한 예약·proposal·정책·약관에 결합해 발행한
+ * opaque 증빙 참조. 검증 후 확정 transaction 안에서 consent decision으로 저장된다.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 data class DirectConfirmRequest(
@@ -164,6 +181,9 @@ data class DirectConfirmRequest(
  *
  * 자원·담당자 식별자를 직접 받지 않고 희망 시간만 받는다. application resolver가 현재
  * Plan revision과 병원 inventory로 proposal item과 allocation을 계산한다.
+ *
+ * @property preferredStartAt 기존 확정 예약을 유지한 채 새로 제안할 방문 시작 UTC 시각.
+ * @property preferredEndAt [preferredStartAt]보다 뒤인 새 제안의 방문 종료 UTC 시각.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 data class CreateChangeProposalRequest(

@@ -80,7 +80,7 @@ The full requirements diagram catalog is maintained in [docs/requirements](docs/
 
 | Module | Role | Developer Docs |
 |------|------|-----------|
-| `appointment-core` | Domain model with 16 entities, Exposed ORM tables, repositories, appointment state machine, and slot calculation services. | [README](appointment-core/README.md) |
+| `appointment-core` | Domain model for appointments, purchased treatment plans, scheduling policies, visit commitments, Exposed ORM repositories, state machines, and slot calculation. | [README](appointment-core/README.md) |
 | `appointment-event` | Domain event publishing/subscription and event log persistence based on Spring ApplicationEvent. | [README](appointment-event/README.md) |
 | `appointment-solver` | Timefold Solver AI optimization for bulk appointment placement using 12 hard and 6 soft constraints. | [README](appointment-solver/README.md) |
 | `appointment-notification` | HA notification scheduler and reminder delivery using Redis Leader Election and Resilience4j. | [README](appointment-notification/README.md) |
