@@ -4,7 +4,7 @@
 
 **Goal:** Angular 22와 TypeScript 6.0의 peer 계약을 만족시켜 프런트엔드 설치 및 CI를 복구한다.
 
-**Architecture:** 앱 동작이나 예약 도메인을 변경하지 않는다. `package.json`에서 Angular 런타임·도구·CDK/Material·TypeScript를 호환 버전으로 선언하고 npm이 `package-lock.json`을 재생성하게 한다. 최신 `develop` 기준선과 후보를 동일 명령으로 비교한다.
+**Architecture:** 앱 동작이나 예약 도메인을 변경하지 않는다. `package.json`에서 Angular 런타임·도구·CDK/Material·TypeScript를 호환 버전으로 선언하고 npm이 `package-lock.json`을 재생성하게 한다. Gradle이 내려받는 Node도 Angular 22 engine 하한 이상으로 맞춰 npm과 Gradle 경로가 같은 지원 계약을 사용하게 한다. 최신 `develop` 기준선과 후보를 동일 명령으로 비교한다.
 
 **Tech Stack:** Angular 22.0.8, Angular CDK/Material 22.0.6, TypeScript 6.0.3, npm 11, Node 26, Vitest.
 
@@ -48,41 +48,39 @@ Expected: build가 Angular 22와 TypeScript 6.0을 요구하고 CDK/Material의 
 
 - Modify: `frontend/appointment-frontend/package.json`
 - Modify: `frontend/appointment-frontend/package-lock.json`
+- Modify: `frontend/appointment-frontend/build.gradle.kts`
 
-- [ ] **Step 1: Angular 런타임과 UI 패키지를 22 호환선으로 설치한다**
+- [ ] **Step 1: manifest 전체를 Angular 22 호환선으로 갱신한다**
 
-Run from `frontend/appointment-frontend`:
+Update the existing dependency declarations before any installation so npm never
+sees a mixed Angular 21/22 manifest:
 
 ```bash
-npm install \
-  @angular/animations@22.0.8 \
-  @angular/common@22.0.8 \
-  @angular/compiler@22.0.8 \
-  @angular/core@22.0.8 \
-  @angular/forms@22.0.8 \
-  @angular/platform-browser@22.0.8 \
-  @angular/router@22.0.8 \
-  @angular/cdk@22.0.6 \
-  @angular/material@22.0.6
+package.json dependencies: Angular runtime `22.0.8`; CDK/Material `22.0.6`.
+package.json devDependencies: Angular build/CLI/compiler-cli `22.0.8`; TypeScript `~6.0.3`.
 ```
 
 Expected: `package.json`과 lockfile이 같은 Angular 22 호환선으로 갱신되고 peer dependency 오류가 없다.
 
-- [ ] **Step 2: Angular 도구와 TypeScript를 22 호환선으로 설치한다**
+- [ ] **Step 2: Gradle 관리 Node를 Angular 22 지원 범위로 갱신한다**
+
+Update `node.version` to `22.22.3`, the minimum supported Node 22 release for
+the selected Angular 22 packages.
+
+Expected: Gradle frontend tasks do not use a Node release outside Angular 22's
+declared engine contract.
+
+- [ ] **Step 3: 갱신된 manifest를 한 번에 해석한다**
 
 Run:
 
 ```bash
-npm install --save-dev \
-  @angular/build@22.0.8 \
-  @angular/cli@22.0.8 \
-  @angular/compiler-cli@22.0.8 \
-  typescript@~6.0.3
+npm install
 ```
 
 Expected: `@angular/build`가 요구하는 Angular 22 및 TypeScript 6.0 peer 계약을 충족한다.
 
-- [ ] **Step 3: lockfile diff를 제한한다**
+- [ ] **Step 4: lockfile diff를 제한한다**
 
 Run:
 
@@ -91,7 +89,7 @@ git diff --check
 git diff -- frontend/appointment-frontend/package.json frontend/appointment-frontend/package-lock.json
 ```
 
-Expected: 프런트엔드 의존성 선언과 lockfile 외의 변경은 없다. 컴파일러가 실제 오류를 낼 때만 오류 위치의 최소 앱/설정 파일을 추가한다.
+Expected: 프런트엔드 의존성 선언, Gradle Node runtime, lockfile 외의 변경은 없다. 컴파일러가 실제 오류를 낼 때만 오류 위치의 최소 앱/설정 파일을 추가한다.
 
 ### Task 3: 프런트엔드 호환성 검증
 
@@ -118,9 +116,20 @@ Run:
 ```bash
 npm run build
 npm test -- --watch=false
+./gradlew :frontend:appointment-frontend:build
+./gradlew :frontend:appointment-frontend:test
 ```
 
 Expected: 빌드는 성공한다. 테스트 결과를 Task 1 기준선과 비교해 새 실패가 없음을 증명한다. 새 실패가 있으면 오류를 재현하고 해당 소스/설정만 수정한 뒤 이 단계 전체를 다시 실행한다.
+
+- [ ] **Step 3: CI frontend toolchain을 고정한다**
+
+Update the frontend jobs in `ci.yml`, `frontend-ci.yml`, and `nightly.yml` to
+use Node `22.22.3`, install npm `11.12.0`, and print both versions before
+`npm ci`.
+
+Expected: local Gradle and exact-head CI use the same declared Node/npm
+contract, and CI logs make the resolved versions auditable.
 
 ### Task 4: 전달 준비
 
@@ -129,6 +138,10 @@ Expected: 빌드는 성공한다. 테스트 결과를 Task 1 기준선과 비교
 - Create: `docs/lessons/2026-07-29-angular-peer-family-upgrade.md`
 - Modify: `frontend/appointment-frontend/package.json`
 - Modify: `frontend/appointment-frontend/package-lock.json`
+- Modify: `frontend/appointment-frontend/build.gradle.kts`
+- Modify: `.github/workflows/ci.yml`
+- Modify: `.github/workflows/frontend-ci.yml`
+- Modify: `.github/workflows/nightly.yml`
 
 - [ ] **Step 1: 재사용 가능한 교훈을 기록한다**
 
@@ -139,7 +152,7 @@ Document that Angular build, compiler, compiler-cli, runtime, and TypeScript mus
 Run:
 
 ```bash
-git add frontend/appointment-frontend/package.json frontend/appointment-frontend/package-lock.json docs/lessons/2026-07-29-angular-peer-family-upgrade.md
+git add frontend/appointment-frontend/package.json frontend/appointment-frontend/package-lock.json frontend/appointment-frontend/build.gradle.kts docs/lessons/2026-07-29-angular-peer-family-upgrade.md
 git commit
 ```
 
