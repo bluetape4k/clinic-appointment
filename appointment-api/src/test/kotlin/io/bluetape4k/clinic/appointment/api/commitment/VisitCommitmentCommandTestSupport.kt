@@ -81,13 +81,33 @@ internal abstract class VisitCommitmentCommandTestSupport {
      *
      * 개별 H2 테스트에서는 database 자체가 격리되어 있지만 동일 계약을 적용해
      * database 종류에 따라 테스트 수명주기가 달라지지 않게 합니다.
+     *
+     * fixture 정리와 하위 클래스의 연결 자원 해제를 하나의 lifecycle callback에서
+     * 순서대로 실행합니다. JUnit은 하위 클래스의 [AfterEach]를 상위 클래스보다 먼저
+     * 호출하므로 각 클래스가 독립 callback을 가지면 connection pool이 먼저 닫힐 수
+     * 있습니다. 따라서 반드시 database 정리를 마친 뒤 [afterDatabaseCleanup]으로
+     * 하위 클래스 자원을 해제합니다.
      */
     @AfterEach
     fun tearDownCommitmentCommandDatabase() {
-        transaction(database) {
-            TABLES.reversed().forEach(Table::deleteAll)
+        try {
+            transaction(database) {
+                TABLES.reversed().forEach(Table::deleteAll)
+            }
+        } finally {
+            afterDatabaseCleanup()
         }
     }
+
+    /**
+     * 모든 commitment fixture를 정리한 뒤 하위 테스트가 소유한 database 연결 자원을
+     * 해제합니다.
+     *
+     * HikariCP처럼 [createDatabase]에서 생성한 자원이 있다면 이 hook에서 닫아야
+     * 합니다. 별도의 [AfterEach]를 선언하면 JUnit 상속 실행 순서 때문에 fixture
+     * 정리보다 먼저 자원이 닫힐 수 있습니다.
+     */
+    protected open fun afterDatabaseCleanup() = Unit
 
     /** 테스트 종류에 맞는 database 연결을 반환합니다. */
     protected open fun createDatabase(): Database =
