@@ -8,7 +8,7 @@ import java.time.Clock
 import java.time.Duration
 
 fun interface SchedulingEventSignatureVerifier {
-    fun verify(envelope: UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent>): Boolean
+    fun verify(envelope: UntrustedSchedulingEventEnvelope<*>): Boolean
 }
 
 class SchedulingTrustException(
@@ -46,6 +46,36 @@ class SchedulingEventTrustVerifier(
         trust(!envelope.occurredAt.isBefore(now.minus(replayWindow)), "REPLAY_WINDOW_EXCEEDED")
         trust(!envelope.occurredAt.isAfter(now.plusSeconds(30)), "EVENT_FROM_FUTURE")
         trust(envelope.payloadHash == PurchaseCompletedPayloadHasher.hash(envelope.payload), "PAYLOAD_HASH_MISMATCH")
+        trust(signatureVerifier.verify(envelope), "SIGNATURE_INVALID")
+        return envelope.trusted()
+    }
+
+    /**
+     * 고정 allowlist의 실행 BOM event만 trusted envelope로 승격합니다.
+     *
+     * @param envelope raw payload에서 strict decoding한 schema version 1 envelope입니다.
+     * @return metadata, replay window, canonical hash, 서명을 모두 통과한 envelope입니다.
+     * @throws SchedulingTrustException 허용된 신뢰 계약 중 하나라도 실패하면 발생합니다.
+     */
+    fun verifyPackageExecution(
+        envelope: UntrustedSchedulingEventEnvelope<PackageExecutionEvent>,
+    ): TrustedSchedulingEventEnvelope<PackageExecutionEvent> {
+        try {
+            PackageExecutionEventBounds.validate(envelope)
+        } catch (_: IllegalArgumentException) {
+            throw SchedulingTrustException("PAYLOAD_CONTRACT_INVALID")
+        }
+        trust(envelope.eventType == "PackageExecutionPlanned", "EVENT_TYPE_NOT_ALLOWED")
+        trust(envelope.schemaVersion == 1, "SCHEMA_VERSION_NOT_ALLOWED")
+        trust(envelope.producer in allowedProducers, "PRODUCER_NOT_ALLOWED")
+        trust(envelope.keyId in allowedKeyIds, "KEY_NOT_ALLOWED")
+        trust(envelope.algorithm in allowedAlgorithms, "ALGORITHM_NOT_ALLOWED")
+        trust(envelope.issuer == expectedIssuer, "ISSUER_NOT_ALLOWED")
+        trust(envelope.audience == expectedAudience, "AUDIENCE_NOT_ALLOWED")
+        val now = clock.instant()
+        trust(!envelope.occurredAt.isBefore(now.minus(replayWindow)), "REPLAY_WINDOW_EXCEEDED")
+        trust(!envelope.occurredAt.isAfter(now.plusSeconds(30)), "EVENT_FROM_FUTURE")
+        trust(envelope.payloadHash == PackageExecutionPayloadHasher.hash(envelope.payload), "PAYLOAD_HASH_MISMATCH")
         trust(signatureVerifier.verify(envelope), "SIGNATURE_INVALID")
         return envelope.trusted()
     }

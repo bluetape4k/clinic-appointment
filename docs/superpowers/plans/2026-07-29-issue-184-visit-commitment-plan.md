@@ -87,8 +87,9 @@ head의 CI와 7-R을 확인한 뒤 별도 승인을 받는다.
 | `model/tables/TreatmentSpaces.kt` | 실제 진료실·수술실 식별자, capability, 수용량과 계산 단위 |
 | `model/tables/ConsentDecisions.kt` | append-only consent evidence |
 | `model/tables/AppointmentPlanRevisions.kt` | Plan revision header와 snapshot hash |
-| `model/tables/PlanRevisionTreatments.kt` | revision별 미진행 treatment provenance |
-| `model/tables/PlanRevisionDependencies.kt` | `BLOCKING/NON_BLOCKING`과 방문 묶음 edge |
+| `model/tables/PlanRevisionTreatments.kt` | revision별 treatment provenance, 시간과 자원 요구 |
+| `model/tables/PlanRevisionDependencies.kt` | `BLOCKING/NON_BLOCKING` 실행 edge와 완료 기준 간격 |
+| `model/tables/PlanRevisionGroupingConstraints.kt` | 방향 없는 같은 방문 필수·허용·분리 edge |
 | `model/tables/AppointmentOperationalExceptions.kt` | 운영 예외 상태·원인·외부 결과 |
 | `model/tables/AppointmentCommandIdempotencies.kt` | actor scope별 command 선점·결과 재생 |
 | `repository/AppointmentCommitmentRepository.kt` | commitment/proposal/consent/item transaction primitive |
@@ -331,17 +332,17 @@ Exposed 추가 DDL drift 없음과 빈 DB V1→V10 적용을 확인했다. 이�
 **쓰기 범위:** `appointment-event` 신규 event/ingress/handler/tests,
 기존 purchase handler의 호환 확장
 
-- [ ] **RED:** 반복형 5회권, 복합형, N-of-M, provenance 불일치, payload 1 MiB,
+- [x] **RED:** 반복형 5회권, 복합형, N-of-M, provenance 불일치, payload 1 MiB,
   depth 32 초과, unknown schema/type, replay, version gap, same-version 다른 hash를
   검증한다.
-- [ ] 기존 `TrustedSchedulingEventEnvelope`, `SchedulingEventTrustVerifier`,
+- [x] 기존 `TrustedSchedulingEventEnvelope`, `SchedulingEventTrustVerifier`,
   `SchedulingInboxEvents`, `SchedulingQuarantineRepository`를 재사용한다.
   class-name polymorphism과 default typing은 허용하지 않는다.
-- [ ] 단일 상품은 quantity 1 실행 snapshot으로 정규화해 패키지/단일 상품의
+- [x] 단일 상품은 quantity 1 실행 snapshot으로 정규화해 패키지/단일 상품의
   이후 경로를 통합한다.
-- [ ] inbox, 최초 Plan Revision, treatment/dependency, outbox, idempotency 결과를
+- [x] inbox, 최초 Plan Revision, treatment/dependency, outbox, idempotency 결과를
   한 transaction에 저장한다. `SHADOW`는 결과 차이만 측정하고 domain row를 쓰지 않는다.
-- [ ] event 로그에 payload·patient reference·동의 원문을 남기지 않는다.
+- [x] event 로그에 payload·patient reference·동의 원문을 남기지 않는다.
 
 ```bash
 ./gradlew :appointment-event:test --tests "*VisitPlanningEventIngressTest" \
@@ -349,6 +350,10 @@ Exposed 추가 DDL drift 없음과 빈 DB V1→V10 적용을 확인했다. 이�
 ```
 
 **예상:** 신뢰 실패는 domain transaction 0회, replay는 row/outbox 증가 0건.
+**검증:** ingress/handler 표적 테스트 17개, `:appointment-event:build`의 전체
+77개 테스트와 Kover, core planner/revision repository 회귀 8개, H2 Flyway
+회귀 1개가 통과했다. 전체 diff와 Kotlin 최종 체크리스트를 점검해 P0=0,
+P1=0을 확인했고 `git diff --check`도 통과했다.
 **커밋:** `Ingest immutable package execution snapshots safely`
 
 ### Task 5: bounded proposal 생성과 방문 후보 계산
