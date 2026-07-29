@@ -73,6 +73,7 @@ dependencies {
     testImplementation(libs.testcontainers.mysql)
 
     // Gatling
+    gatling(project(":appointment-core"))
     gatling(libs.gatling.charts.highcharts)
     gatling(libs.gatling.http.java)
 }

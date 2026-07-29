@@ -1,0 +1,3 @@
+name,seed,treatmentCount,edgeCount,proposalCount,searchDays,warmupCount,measurementCount,proposalP95Millis,proposalP99Millis,dirtySetP95Millis,dirtySetP99Millis
+normal,184,50,200,10,90,20,100,1000,3000,1000,3000
+maximum,184,500,4000,20,365,20,100,5000,5000,5000,5000

@@ -125,16 +125,16 @@
 |---|---|---|---|---|
 | 1. 핵심 계약·순수 계산 | 누락 타입 compile 실패 및 상한 API 실패 확인 | 대상 19개 테스트 통과 | `:appointment-core:build`: 425 tests, 실패 0; `git diff --check`; `!!`/deprecated import 없음 | DONE |
 | 2. Exposed transaction primitive | 저장소·table 부재 compile 실패와 v2 projection 계약 실패 확인 | 대상 12개 테스트 통과 | `:appointment-core:build`: 437 tests, 실패 0; caller transaction·KDoc·금지 패턴 점검 | DONE |
-| 3. Flyway V10 | PENDING | PENDING | PENDING | PENDING |
-| 4. 실행 BOM event ingest | PENDING | PENDING | PENDING | PENDING |
-| 5. bounded proposal | PENDING | PENDING | PENDING | PENDING |
+| 3. Flyway V10 | 세 dialect에서 V10 schema 계약 실패 확인 | H2→PostgreSQL→MySQL migration 통과 | `:appointment-api:build`: 281 tests, 실패 0; checksum·Exposed drift 점검 | DONE |
+| 4. 실행 BOM event ingest | 신뢰·상한·replay·gap 계약 실패 확인 | 대상 17개 테스트 통과 | `:appointment-event:build`: 77 tests, 실패 0; core/Flyway 회귀 통과 | DONE |
+| 5. bounded proposal | 희망일·선행 완료·부분 이행·scope·상한 계약 실패 확인 | 대상 13개 테스트 통과 | `:appointment-api:build`: 294 passing, 2 pending; 실제 Gatling 240/240; ktlint·detekt·Kover 통과 | DONE |
 | 6. commitment command | PENDING | PENDING | PENDING | PENDING |
 | 7. actor 기반 API | PENDING | PENDING | PENDING | PENDING |
 | 8. version 전환·외부 사실 | PENDING | PENDING | PENDING | PENDING |
 | 9. 운영·문서·KDoc | PENDING | PENDING | PENDING | PENDING |
 | 10. 세 DB·성능·회귀 | PENDING | PENDING | PENDING | PENDING |
 
-현재 집계: Required checks 11/22; N/A: 0; Blocked: 0.
+현재 집계: Required checks 14/22; N/A: 0; Blocked: 0.
 
 ### Task 1 상세 증거
 
@@ -186,3 +186,57 @@
   table/record/public repository 및 핵심 속성은 한국어 KDoc을 제공한다.
   신규 production `!!`, `println`, broad suspend `runCatching`,
   deprecated `SqlExpressionBuilder.eq`는 없다.
+
+### Task 3·4 상세 증거
+
+- **Task 3:** H2→PostgreSQL→MySQL 순서로 V1→V10과 clean migration을
+  검증했다. V9 row 보존, `LEGACY` backfill, nullable v2 projection,
+  FK·unique·조회별 index, Flyway checksum, Exposed 추가 DDL drift 없음이
+  통과했다. `:appointment-api:build`의 281개 테스트도 통과했으며 commit은
+  `dd60a56`이다.
+- **Task 4 RED:** 반복형 5회권, 복합형, N-of-M, provenance 불일치,
+  payload 1 MiB와 depth 32 초과, unknown schema/type, replay, version gap,
+  same-version different hash를 production handler 전에 고정했다.
+- **Task 4 GREEN:** 신뢰된 실행 BOM을 단일·패키지 공통 snapshot으로 정규화하고,
+  inbox·최초 Plan Revision·treatment/dependency·outbox·idempotency를 한
+  transaction에 저장했다. 대상 17개, `:appointment-event:build` 77개,
+  core planner/repository 회귀 8개, H2 Flyway 회귀 1개가 통과했다.
+  commits는 `8a2b272`, `216d579`이다.
+
+### Task 5 상세 증거
+
+- **RED:** nullable 상품 최초 예약 규칙의 compile mismatch, clinic scope가 다른
+  후보, 전개 항목 500개·관계 4,000개 초과, 같은 방문의 양수 간격 의존,
+  겹치는 capability의 exclusive 자원 중복, 선행 완료 기준 후속 회차,
+  부분 이행 dirty-set 보호를 실패 테스트로 확인했다.
+- **GREEN:** `AppointmentProposalService`가 고객 희망일을 우선하고 없을 때만
+  상품 규칙을 사용한다. 둘 다 없으면 자동 가예약을 만들지 않는다. 완료·확정·
+  영향 없는 미래 항목은 보존하고, clinic scope와 plan 상한을 계산 전에
+  검증하며, 제안마다 현재 policy snapshot id와 canonical hash를 고정한다.
+- **표적 검증:** `--no-build-cache --rerun-tasks`로
+  `AppointmentProposalServiceTest`와 `AppointmentProposalServicePerformanceTest`
+  13개가 통과했다.
+- **성능:** 고정 seed normal 50 item/200 edge/90일과 maximum
+  500 item/4,000 edge/365일을 각각 warm-up 20회 뒤 100회 측정했다. 완료된
+  선행 항목에서 미래 방문으로 향하는 `BLOCKING` 간격 검사와 `BLOCKING`
+  dirty-set closure를 모두 포함한다. 순수 계산은 normal p95 0.876 ms/
+  p99 0.910 ms, maximum p95 5.631 ms였다.
+- **실제 Gatling:** loopback HTTP가 동일한 production service를 호출하는
+  시뮬레이션에서 240/240 요청이 성공하고 KO는 0이었다. assertion actual은
+  normal p95 2 ms, p99 3 ms, maximum p95 6 ms다. raw `simulation.log`,
+  400개 sample의 `unit-timing.tsv`, `percentiles.md`를
+  `appointment-api/build/reports/gatling/visit-commitment/`에 남겼다.
+- **전체 회귀:** `./gradlew :appointment-api:build --no-build-cache
+  --rerun-tasks`는 294 passing, 기존 2 pending으로 성공했고 Kover verify도
+  통과했다. Task 5 production class coverage는 covered/missed 기준
+  instruction 967/108, branch 76/34, line 192/10, method 14/0이다.
+- **정적 점검:** 네 Kotlin 파일 모두 ktlint와 detekt를 통과했다. public 및
+  복잡한 internal 계약은 업무 불변식, 범위, 실패 의미를 포함한 한국어 KDoc을
+  제공한다.
+- **7-Tier 재검토:** 개발자·API 사용자, 성능·안정성, 보안·운영의 독립 관점과
+  본 세션 통합 검토에서 P0=0/P1=0을 확인했다. 이전 P1/P2인 synthetic Gatling,
+  clinic scope 누락, plan 상한 누락, 같은 방문 양수 간격, exclusive 자원 중복은
+  모두 닫혔다.
+- **후속 경계:** 자원별 tenant/clinic provenance와 capacity bucket의 DB-backed
+  검증은 Task 6, 장기 회귀용 추가 성능 matrix는 Task 10에서 검증한다. Task 5의
+  순수 proposal 계산이 repository/API 계약을 선점하지 않는다.

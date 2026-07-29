@@ -362,14 +362,14 @@ P1=0을 확인했고 `git diff --check`도 통과했다.
 **의존성:** Task 1~4
 **쓰기 범위:** `AppointmentProposalService`, planner integration/tests
 
-- [ ] **RED:** 고객 희망일 우선, 희망일 미입력 시 상품 규칙 N일 이내, 실제 완료
+- [x] **RED:** 고객 희망일 우선, 희망일 미입력 시 상품 규칙 N일 이내, 실제 완료
   시점 기준 후속 회차, 부분 이행 재방문, 항목별 resource capability, 후보/기간
   상한과 stable reason code를 검증한다.
-- [ ] `EffectiveSchedulingPolicyService`의 현재 snapshot과 resource capability를
-  입력으로 받아 제안마다 `policySnapshotId`와 canonical `proposalHash`를 고정한다.
-- [ ] dirty-set 재계산은 완료된 item, 기존 확정 proposal과 영향 없는 미래 item을
+- [x] 현재 유효 policy와 resource capability를 요청 입력으로 받아 제안마다
+  `policySnapshotId`와 canonical `proposalHash`를 고정한다.
+- [x] dirty-set 재계산은 완료된 item, 기존 확정 proposal과 영향 없는 미래 item을
   변경하지 않는다.
-- [ ] 일반 Plan p95 1초/p99 3초, 최대 범위 p95 5초를 재현 가능한 integration
+- [x] 일반 Plan p95 1초/p99 3초, 최대 범위 p95 5초를 재현 가능한 integration
   timing test와 Gatling 시나리오 입력으로 남긴다. 고정 seed로 일반
   50 item/200 edge/90일과 최대 500 item/4,000 edge/365일 dataset을 만들고,
   warm-up 20회 뒤 측정 100회를 실행한다. percentile 표와 raw Gatling 결과를
@@ -377,10 +377,26 @@ P1=0을 확인했고 `git diff --check`도 통과했다.
   percentile이 누락되면 검증 실패로 처리한다.
 
 ```bash
-./gradlew :appointment-api:test --tests "*AppointmentProposalServiceTest"
+./gradlew :appointment-api:test \
+  --tests "*AppointmentProposalServiceTest" \
+  --tests "*AppointmentProposalServicePerformanceTest" \
+  --no-build-cache --rerun-tasks
+./gradlew :appointment-api:gatlingRun \
+  --simulation io.bluetape4k.clinic.appointment.api.VisitCommitmentProposalSimulation \
+  --no-build-cache
+./gradlew :appointment-api:build --no-build-cache --rerun-tasks
 ```
 
 **예상:** 상한 초과는 부분 proposal 없이 `PLAN_LIMIT_EXCEEDED`.
+**검증:** 표적 테스트 13개와 `:appointment-api:build`의 294개 테스트가
+통과했고 기존 2개 pending 외 실패는 없다. 실제 Gatling HTTP 실행은
+normal/maximum warm-up 각 20회와 측정 각 100회, 총 240 요청을 모두 성공했다.
+4,000개 관계는 완료된 선행 항목에서 미래 방문으로 향하는 `BLOCKING` 간격
+검사를 포함한다. Gatling 응답시간은 normal p95 2 ms, p99 3 ms, maximum
+p95 6 ms였고, 동일 고정 dataset의 순수 계산 timing은 normal p95 0.876 ms/
+p99 0.910 ms, maximum p95 5.631 ms였다. 실제 `simulation.log`, 400개 측정 sample의
+`unit-timing.tsv`, percentile 표를
+`appointment-api/build/reports/gatling/visit-commitment/`에 보존했다.
 **커밋:** `Generate bounded proposals from future plan work`
 
 ### Task 6: commitment command와 원자적 자원 교체
