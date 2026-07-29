@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.security
 
 import io.bluetape4k.clinic.appointment.api.config.PlanFoundationError
+import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import jakarta.servlet.http.HttpServletResponse
 import java.util.UUID
@@ -51,6 +52,27 @@ object SecurityErrorResponseWriter {
      * capability, tenant 또는 clinic membership 실패만 이 overload로 전달한다.
      */
     fun write(response: HttpServletResponse, error: SchedulingPolicyErrorCode) {
+        val correlationId = response.getHeader(CorrelationIdFilter.HEADER_NAME)
+            ?.takeIf { it.isNotBlank() }
+            ?: UUID.randomUUID().toString().also {
+                response.setHeader(CorrelationIdFilter.HEADER_NAME, it)
+            }
+
+        response.status = error.httpStatus.value()
+        response.contentType = "application/json"
+        response.characterEncoding = Charsets.UTF_8.name()
+        response.writer.write(
+            """{"success":false,"data":null,"error":"${escapeJson(error.safeMessage)}","errorCode":"${error.name}","correlationId":"${escapeJson(correlationId)}","retryable":${error.retryable},"action":"${escapeJson(error.action)}"}"""
+        )
+    }
+
+    /**
+     * commitment v2 route의 인증·인가 실패를 같은 privacy-safe 오류 envelope로 쓴다.
+     *
+     * Security filter 단계에는 controller 예외 handler가 개입하지 않으므로 공개 가능한
+     * 닫힌 오류 registry만 직접 직렬화한다.
+     */
+    fun write(response: HttpServletResponse, error: AppointmentCommitmentApiError) {
         val correlationId = response.getHeader(CorrelationIdFilter.HEADER_NAME)
             ?.takeIf { it.isNotBlank() }
             ?: UUID.randomUUID().toString().also {

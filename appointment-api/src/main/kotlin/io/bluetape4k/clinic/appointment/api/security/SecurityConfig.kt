@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.api.security
 
 import io.bluetape4k.clinic.appointment.api.config.PlanFoundationError
+import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
+import io.bluetape4k.clinic.appointment.api.config.isAppointmentCommitmentRequestPath
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import io.bluetape4k.clinic.appointment.api.config.isSchedulingPolicyRequestPath
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilter
@@ -154,7 +156,12 @@ class SecurityConfig {
                     } else {
                         HttpStatus.UNAUTHORIZED
                     }
-                    if (status == HttpStatus.FORBIDDEN && request.isSchedulingPolicyRequest()) {
+                    if (status == HttpStatus.FORBIDDEN && request.isAppointmentCommitmentRequest()) {
+                        SecurityErrorResponseWriter.write(
+                            response,
+                            AppointmentCommitmentApiError.SCOPE_FORBIDDEN,
+                        )
+                    } else if (status == HttpStatus.FORBIDDEN && request.isSchedulingPolicyRequest()) {
                         SecurityErrorResponseWriter.write(
                             response,
                             SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
@@ -179,6 +186,20 @@ class SecurityConfig {
                         "/v3/api-docs/**",
                     )
                     .permitAll()
+                    .requestMatchers("/api/v2/admin/**")
+                    .hasRole(SchedulingRole.ADMIN)
+                    .requestMatchers(HttpMethod.POST, "/api/v2/appointment-requests")
+                    .hasRole(SchedulingRole.PATIENT)
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v2/appointments/*/proposals/*/accept",
+                        "/api/v2/appointments/*/proposals/*/decline",
+                    )
+                    .hasRole(SchedulingRole.PATIENT)
+                    .requestMatchers(HttpMethod.GET, "/api/v2/appointments/*/commitment")
+                    .hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.PATIENT)
+                    .requestMatchers("/api/v2/**")
+                    .hasRole(SchedulingRole.ADMIN)
                     .requestMatchers(
                         "/api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/**",
                     )
@@ -314,6 +335,10 @@ class SecurityConfig {
 /** security filter chain에서도 policy 전용 privacy-safe 오류 계약을 선택한다. */
 private fun jakarta.servlet.http.HttpServletRequest.isSchedulingPolicyRequest(): Boolean =
     isSchedulingPolicyRequestPath(requestURI)
+
+/** commitment v2 Security 실패가 기존 foundation 오류로 축약되지 않게 path를 구분한다. */
+private fun jakarta.servlet.http.HttpServletRequest.isAppointmentCommitmentRequest(): Boolean =
+    isAppointmentCommitmentRequestPath(requestURI)
 
 /**
  * local dev/test에서 모든 요청을 허용하는 security configuration이다.

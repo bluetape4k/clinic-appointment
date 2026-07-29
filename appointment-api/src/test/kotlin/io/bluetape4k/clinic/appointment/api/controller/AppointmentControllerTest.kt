@@ -21,6 +21,7 @@ import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.assertions.shouldBeEmpty
@@ -30,6 +31,7 @@ import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeEmpty
 import io.bluetape4k.assertions.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -172,6 +174,37 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         response.jsonPath<String>("$.data.status") shouldBeEqualTo "REQUESTED"
         response.jsonPath<String>("$.data.timezone") shouldBeEqualTo "Asia/Seoul"
         response.jsonPath<String>("$.data.locale") shouldBeEqualTo "ko-KR"
+    }
+
+    @Test
+    fun `legacy status endpoint rejects commitment v2 appointment`() {
+        val appointmentId = transaction {
+            Appointments.insertAndGetId {
+                it[Appointments.clinicId] = this@AppointmentControllerTest.clinicId
+                it[Appointments.doctorId] = this@AppointmentControllerTest.doctorId
+                it[Appointments.treatmentTypeId] = this@AppointmentControllerTest.treatmentTypeId
+                it[modelVersion] = AppointmentModelVersion.COMMITMENT_V2
+                it[patientName] = "Commitment patient"
+                it[appointmentDate] = futureDate
+                it[startTime] = LocalTime.of(11, 0)
+                it[endTime] = LocalTime.of(11, 30)
+                it[status] = AppointmentState.CONFIRMED
+            }.value
+        }
+
+        val response = client.patch()
+            .uri("$BASE_URL/$appointmentId/status")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body("""{"status":"COMPLETED","reason":"completed"}""")
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.CONFLICT
+        response.jsonPath<String>("$.errorCode") shouldBeEqualTo "NEW_APPOINTMENT_API_REQUIRED"
+        transaction {
+            Appointments.selectAll()
+                .where { Appointments.id eq appointmentId }
+                .single()[Appointments.status] shouldBeEqualTo AppointmentState.CONFIRMED
+        }
     }
 
     @Test

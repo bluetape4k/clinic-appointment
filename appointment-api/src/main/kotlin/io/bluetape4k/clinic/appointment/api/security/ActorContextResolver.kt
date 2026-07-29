@@ -26,6 +26,8 @@ import java.time.Instant
  * @property tokenId 검증된 non-blank JWT `jti`. idempotency key가 아니다.
  * @property authenticatedAt JWT `auth_time`의 UTC instant.
  * @property correlationId 길이가 제한된 request trace ID. causation event ID가 아니다.
+ * @property selectedClinicId 이번 command에서 Gateway/path가 선택하고 [allowedClinicIds]로
+ * 재검증한 병원이다. tenant-wide command이면 `null`이다.
  */
 data class ActorContext(
     val actorId: String,
@@ -40,6 +42,7 @@ data class ActorContext(
     val tokenId: String,
     val authenticatedAt: Instant,
     val correlationId: String,
+    val selectedClinicId: Long? = null,
 ) : Serializable {
     private companion object {
         const val serialVersionUID = 1L
@@ -97,6 +100,7 @@ class ActorContextResolver {
             tokenId = principal.tokenId,
             authenticatedAt = principal.authenticatedAt,
             correlationId = correlationId,
+            selectedClinicId = clinicId,
         )
     }
 }

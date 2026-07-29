@@ -1,14 +1,17 @@
 package io.bluetape4k.clinic.appointment.api.config
 
-import io.bluetape4k.logging.KLogging
-import io.bluetape4k.logging.warn
+import io.bluetape4k.clinic.appointment.api.commitment.ProposalFailureCode
+import io.bluetape4k.clinic.appointment.api.commitment.ProposalGenerationException
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse
 import io.bluetape4k.clinic.appointment.api.policy.EffectivePolicyGenerationConflictException
 import io.bluetape4k.clinic.appointment.api.policy.EffectivePolicyReadUnavailableException
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.service.IdempotencyKeyConflictException
+import io.bluetape4k.logging.KLogging
+import io.bluetape4k.logging.warn
 import jakarta.servlet.http.HttpServletRequest
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -17,6 +20,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+import org.springframework.web.servlet.resource.NoResourceFoundException
 import java.util.UUID
 
 /**
@@ -36,7 +40,22 @@ class GlobalExceptionHandler(
     private val schedulingPolicyProperties: SchedulingPolicyProperties = SchedulingPolicyProperties(),
 ) {
 
-    companion object : KLogging()
+    companion object : KLogging() {
+        private const val APPOINTMENT_COMMITMENT_RETRY_AFTER_SECONDS = "5"
+    }
+
+    /**
+     * commitment v2 application 오류를 닫힌 public registry로 직렬화한다.
+     *
+     * 예외 메시지는 내부 command, 정책, 증빙, 자원 정보를 포함할 수 있으므로 응답과
+     * warning log에는 registry code와 correlation ID만 기록한다.
+     */
+    @ExceptionHandler(AppointmentCommitmentApiException::class)
+    fun handleAppointmentCommitment(
+        ex: AppointmentCommitmentApiException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> =
+        appointmentCommitmentResponse(ex.error, request)
 
     @ExceptionHandler(PlanFoundationApiException::class)
     fun handlePlanFoundation(
@@ -120,6 +139,9 @@ class GlobalExceptionHandler(
         ex: MethodArgumentNotValidException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isAppointmentCommitmentRequest()) {
+            return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
+        }
         if (request.isSchedulingPolicyRequest()) {
             log.warn { "Scheduling policy request validation failed" }
             return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
@@ -139,6 +161,9 @@ class GlobalExceptionHandler(
         ex: MethodArgumentTypeMismatchException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isAppointmentCommitmentRequest()) {
+            return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
+        }
         if (request.isSchedulingPolicyRequest()) {
             log.warn { "Scheduling policy path parameter validation failed" }
             return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
@@ -158,6 +183,9 @@ class GlobalExceptionHandler(
         ex: HttpMessageNotReadableException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isAppointmentCommitmentRequest()) {
+            return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
+        }
         if (request.isSchedulingPolicyRequest()) {
             log.warn { "Scheduling policy request body could not be decoded" }
             return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
@@ -171,11 +199,33 @@ class GlobalExceptionHandler(
             .body(ApiResponse.error<Nothing>("Invalid request body"))
     }
 
+    /**
+     * 제안 계산의 안정 실패 코드를 일반 payload 오류로 축약하지 않고 caller action이
+     * 포함된 commitment registry로 변환한다.
+     */
+    @ExceptionHandler(ProposalGenerationException::class)
+    fun handleProposalGeneration(
+        ex: ProposalGenerationException,
+        request: HttpServletRequest,
+    ): ResponseEntity<*> {
+        if (!request.isAppointmentCommitmentRequest()) {
+            return handleIllegalArgument(ex, request)
+        }
+        val error = when (ex.code) {
+            ProposalFailureCode.PLAN_LIMIT_EXCEEDED -> AppointmentCommitmentApiError.PLAN_LIMIT_EXCEEDED
+            ProposalFailureCode.NO_FEASIBLE_SLOT -> AppointmentCommitmentApiError.RESOURCE_CONFLICT
+        }
+        return appointmentCommitmentResponse(error, request)
+    }
+
     @ExceptionHandler(IllegalArgumentException::class)
     fun handleIllegalArgument(
         ex: IllegalArgumentException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isAppointmentCommitmentRequest()) {
+            return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
+        }
         if (request.isSchedulingPolicyRequest()) {
             log.warn { "Scheduling policy request failed domain validation" }
             return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
@@ -194,6 +244,9 @@ class GlobalExceptionHandler(
         ex: NoSuchElementException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isAppointmentCommitmentRequest()) {
+            return appointmentCommitmentResponse(AppointmentCommitmentApiError.COMMITMENT_NOT_FOUND, request)
+        }
         if (request.isSchedulingPolicyRequest()) {
             log.warn { "Scheduling policy resource lookup was hidden" }
             return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_RESOURCE_NOT_FOUND, request)
@@ -207,11 +260,30 @@ class GlobalExceptionHandler(
             .body(ApiResponse.error<Nothing>("Not found"))
     }
 
+    /**
+     * 비활성 endpoint가 static-resource fallback으로 해석되어도 일반 `500`으로 승격하지 않는다.
+     */
+    @ExceptionHandler(NoResourceFoundException::class)
+    fun handleNoResource(
+        ex: NoResourceFoundException,
+        request: HttpServletRequest,
+    ): ResponseEntity<*> {
+        if (request.isAppointmentCommitmentRequest()) {
+            return appointmentCommitmentResponse(AppointmentCommitmentApiError.COMMITMENT_NOT_FOUND, request)
+        }
+        log.warn { "Request path was not mapped: exception_type=${ex::class.simpleName}" }
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(ApiResponse.error<Nothing>("Not found"))
+    }
+
     @ExceptionHandler(IllegalStateException::class)
     fun handleConflict(
         ex: IllegalStateException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isAppointmentCommitmentRequest()) {
+            return appointmentCommitmentInternalError(ex, request)
+        }
         if (request.isSchedulingPolicyRequest()) {
             return schedulingPolicyInternalError(ex, request)
         }
@@ -233,7 +305,9 @@ class GlobalExceptionHandler(
 
     @ExceptionHandler(AccessDeniedException::class)
     fun handleAccessDenied(request: HttpServletRequest): ResponseEntity<*> =
-        if (request.isSchedulingPolicyRequest()) {
+        if (request.isAppointmentCommitmentRequest()) {
+            appointmentCommitmentResponse(AppointmentCommitmentApiError.SCOPE_FORBIDDEN, request)
+        } else if (request.isSchedulingPolicyRequest()) {
             schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, request)
         } else if (request.isPlanFoundationRequest()) {
             foundationResponse(PlanFoundationError.FORBIDDEN, request)
@@ -246,6 +320,9 @@ class GlobalExceptionHandler(
         ex: Exception,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isAppointmentCommitmentRequest()) {
+            return appointmentCommitmentInternalError(ex, request)
+        }
         if (request.isSchedulingPolicyRequest()) {
             return schedulingPolicyInternalError(ex, request)
         }
@@ -290,15 +367,65 @@ class GlobalExceptionHandler(
         )
     }
 
+    private fun appointmentCommitmentResponse(
+        error: AppointmentCommitmentApiError,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.correlationId()
+        log.warn {
+            "Appointment commitment request rejected: error_code=${error.name}, correlation_id=$correlationId"
+        }
+        val builder = ResponseEntity.status(error.httpStatus)
+        if (error.retryable) {
+            builder.header(HttpHeaders.RETRY_AFTER, APPOINTMENT_COMMITMENT_RETRY_AFTER_SECONDS)
+        }
+        return builder.body(
+            SchedulingApiErrorResponse(
+                error = error.safeMessage,
+                errorCode = error.name,
+                correlationId = correlationId,
+                retryable = error.retryable,
+                action = error.action,
+            )
+        )
+    }
+
+    /**
+     * 예상하지 못한 commitment 구현 예외를 내부 detail 없이 correlation 가능한 오류로 축약한다.
+     *
+     * 예외 message와 stack trace는 patient, resource, SQL 정보를 포함할 수 있으므로 기록하지
+     * 않고 type만 남긴다. caller에는 같은 correlation ID와 제한된 retry backoff를 반환한다.
+     */
+    private fun appointmentCommitmentInternalError(
+        ex: Exception,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.correlationId()
+        log.warn {
+            "Appointment commitment request failed with an internal error: " +
+                "exception_type=${ex::class.simpleName}, correlation_id=$correlationId"
+        }
+        request.setAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE, correlationId)
+        return appointmentCommitmentResponse(AppointmentCommitmentApiError.INTERNAL_ERROR, request)
+    }
+
     private fun HttpServletRequest.isPlanFoundationRequest(): Boolean =
         requestURI.contains("/catalog-products/") || requestURI.contains("/appointment-plans/")
 
     private fun HttpServletRequest.isSchedulingPolicyRequest(): Boolean =
         isSchedulingPolicyRequestPath(requestURI)
 
+    private fun HttpServletRequest.isAppointmentCommitmentRequest(): Boolean =
+        isAppointmentCommitmentRequestPath(requestURI)
+
+    private fun HttpServletRequest.correlationId(): String =
+        getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) as? String
+            ?: UUID.randomUUID().toString()
+
     /** retryable policy 오류가 요구하는 정수 초 backoff를 구성된 polling 간격에서 올림한다. */
     private fun retryAfterSeconds(): String =
         ((schedulingPolicyProperties.previewPollInterval.toMillis() + 999L) / 1_000L)
             .coerceAtLeast(1L)
             .toString()
+
 }

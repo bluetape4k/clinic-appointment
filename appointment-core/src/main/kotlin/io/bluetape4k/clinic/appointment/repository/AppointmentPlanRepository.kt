@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.repository
 
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentPlanAggregateRecord
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentPlanRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlannedTreatmentKey
 import io.bluetape4k.clinic.appointment.model.dto.PlannedTreatmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentDependencyRecord
@@ -26,6 +27,28 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
  * caller가 전달해야 하며, 식별자 하나만으로 cross-tenant 조회를 허용하지 않습니다.
  */
 class AppointmentPlanRepository {
+
+    /**
+     * command authorization에 필요한 Plan root만 정확한 tenant·clinic scope로 조회합니다.
+     *
+     * 시술 BOM aggregate를 조립하지 않으므로 환자 소유권과 scope를 먼저 확인하는
+     * application 경계에서 사용합니다. 정책·revision·시술 조립은 검증 이후 별도
+     * repository에서 수행해야 합니다.
+     */
+    fun findPlanByIdAndTenantClinic(
+        id: Long,
+        tenantGroupId: Long,
+        clinicId: Long,
+    ): AppointmentPlanRecord? =
+        AppointmentPlans
+            .selectAll()
+            .where {
+                (AppointmentPlans.id eq id) and
+                    (AppointmentPlans.tenantGroupId eq tenantGroupId) and
+                    (AppointmentPlans.clinicId eq clinicId)
+            }
+            .singleOrNull()
+            ?.toAppointmentPlanRecord()
 
     /**
      * 계획, 시술 의무, 물리화된 dependency edge를 atomic하게 insert합니다.

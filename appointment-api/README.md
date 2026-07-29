@@ -38,6 +38,72 @@ Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migr
 The complete scheduling-policy request, lifecycle, effective-read, and error
 contract is documented in [Scheduling Policy API](../docs/api/scheduling-policy.md).
 
+### Appointment Commitment v2
+
+| Actor | Method and path | Result |
+|------|------|------|
+| Patient | `POST /api/v2/appointment-requests` | Creates a `PROPOSED` provisional appointment (`202`). |
+| Administrator | `POST /api/v2/admin/appointments` | Creates a policy-authorized confirmed appointment (`201`). |
+| Administrator | `POST /api/v2/appointments/{id}/approve` | Approves the exact customer proposal (`200`). |
+| Patient | `POST /api/v2/appointments/{id}/proposals/{proposalId}/accept` | Accepts a current change proposal (`200`). |
+| Patient | `POST /api/v2/appointments/{id}/proposals/{proposalId}/decline` | Declines a proposal while preserving the confirmed booking (`200`). |
+| Administrator | `POST /api/v2/appointments/{id}/confirm` | Confirms a proposal when effective policy and consent permit it (`200`). |
+| Administrator | `POST /api/v2/appointments/{id}/change-proposals` | Creates a replacement proposal without cancelling the current booking (`202`). |
+| Patient or administrator | `GET /api/v2/appointments/{id}/commitment` | Reads the commitment-native projection (`200`). |
+
+These routes never accept actor, tenant, clinic, patient subject, policy mode,
+terms hash, or resource mapping in the request body. They derive one exact
+tenant and clinic from the verified Gateway principal; ambiguous or service
+principals fail closed. Every mutation requires `Idempotency-Key`; creation
+also requires `If-None-Match: *`, and existing-aggregate mutations require the
+latest `ETag` in `If-Match`.
+
+| Request kind | Required headers | Example |
+|------|------|------|
+| New provisional or administrator direct creation | `Idempotency-Key`, `If-None-Match` | `request_01J1M6Y6XRK8N0W2M3P4Q5R6S7`, `*` |
+| Existing commitment mutation | `Idempotency-Key`, `If-Match` | `approve_01J1M6Y6XRK8N0W2M3P4Q5R6S7`, `"3"` |
+
+Consent-bearing requests send only `evidenceAuthority` and `evidenceId`. The
+authority must start with the current tenant namespace, such as
+`tenant-default:consent-service`. The evidence ID must be an unguessable
+20-to-128-character opaque reference, never consent text or personal data.
+Reusing the same ID for another decision returns a stable `409`.
+
+#### Enablement and rollback
+
+| Property | Default | Operational meaning |
+|------|------|------|
+| `appointment.commitment.api-enabled` | `false` | Bootstrap gate for all v2 routes before Task 9 wiring |
+| `appointment.commitment.ingress-enabled` | `true` | Allows only new patient requests and administrator direct creation |
+
+Use `api-enabled=false` only during bootstrap, before any v2 commitment exists.
+After commitments exist, rollback must set `ingress-enabled=false` to stop new
+intake only. Reads, approval, confirmation, proposal acceptance or decline, and
+change proposals remain available so existing patients are not stranded. Task
+9 extends this simple gate with clinic-scoped `OFF/SHADOW/WRITE` modes and
+allowlist operations.
+
+#### Stable error contract
+
+| Condition | HTTP / `errorCode` | Caller action |
+|------|------|------|
+| Invalid body or path value | `400 PAYLOAD_INVALID` | Correct the request using the published schema. |
+| Actor, tenant, or clinic scope mismatch | `403 SCOPE_MISMATCH` or `SCOPE_FORBIDDEN` | Use an exact clinic-scoped Gateway token. |
+| Remaining plan allowance exceeded | `422 PLAN_LIMIT_EXCEEDED` | Check the remaining allowance before retrying. |
+| Missing or invalid current consent | `422 CONSENT_REQUIRED` | Use evidence issued by the current authority. |
+| Expired proposal | `410 PROPOSAL_EXPIRED` | Request a new proposal. |
+| Reused idempotency key or consent evidence | `409 IDEMPOTENCY_KEY_REUSED` or `CONSENT_EVIDENCE_REUSED` | Replay the original request or obtain a new reference. |
+| Resource or current-proposal conflict | `409 RESOURCE_CONFLICT` or `PROPOSAL_NOT_CURRENT` | Reload the commitment and request a new proposal. |
+| Stale `If-Match` | `412 VERSION_CONFLICT` | Retry with the latest `ETag`. |
+| Missing required precondition header | `428 PRECONDITION_REQUIRED` | Send `*` for creation or the latest `ETag` for mutation. |
+| New intake disabled | `503 INGRESS_DISABLED` | Preserve existing bookings and defer only the new request. |
+| v2 mutation attempted through a legacy route | `409 NEW_APPOINTMENT_API_REQUIRED` | Use the commitment v2 endpoint. |
+| Unexpected internal failure | `500 INTERNAL_ERROR` | Retry with the same idempotency key after `Retry-After: 5`. |
+
+`PREDECESSOR_NOT_COMPLETED` is a reserved public code for Task 8, when external
+completion events become available. Task 7 does not infer treatment completion
+inside the reservation API.
+
 ### Plan Foundation Flags
 
 | Property | Default | Meaning |
@@ -111,6 +177,9 @@ Flyway migration scripts live under `src/main/resources/db/migration/V*.sql`.
 | Class | Role |
 |--------|------|
 | `AppointmentController` | Appointment CRUD and status changes. |
+| `CustomerAppointmentV2Controller` | Patient provisional requests and proposal decisions. |
+| `AdminAppointmentV2Controller` | Administrator creation, approval, confirmation, and change proposals. |
+| `AppointmentCommitmentQueryController` | Actor-scoped commitment-native reads. |
 | `SlotController` | Available slot lookup. |
 | `RescheduleController` | Temporary clinic closure rescheduling. |
 | `EquipmentUnavailabilityController` | Equipment unavailability CRUD and conflict detection. |

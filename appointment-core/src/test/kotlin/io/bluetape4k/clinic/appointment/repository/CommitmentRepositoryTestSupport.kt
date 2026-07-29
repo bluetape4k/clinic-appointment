@@ -30,6 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.TimeZone
 
 internal data class CommitmentSeed(
     val clinicId: Long,
@@ -37,7 +38,15 @@ internal data class CommitmentSeed(
     val planId: Long,
 )
 
-internal fun withCommitmentTables(statement: JdbcTransaction.(CommitmentSeed) -> Unit) =
+/**
+ * Commitment 전용 H2를 최초로 여는 테스트 순서와 무관하게 날짜 경계를 UTC로 고정한다.
+ *
+ * H2 engine은 첫 database 초기화 시 JVM 기본 timezone을 포착한다. 이 fixture가
+ * [io.bluetape4k.clinic.appointment.test.AbstractExposedTest]보다 먼저 실행되면 이후
+ * `DATE` 조회가 하루씩 이동할 수 있으므로 연결 생성 전에 공통 테스트 timezone을 맞춘다.
+ */
+internal fun withCommitmentTables(statement: JdbcTransaction.(CommitmentSeed) -> Unit) {
+    TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
     withTables(
         TestDB.H2_COMMITMENT,
         Clinics,
@@ -129,3 +138,4 @@ internal fun withCommitmentTables(statement: JdbcTransaction.(CommitmentSeed) ->
                 }.value
         statement(CommitmentSeed(clinicId, appointmentId, planId))
     }
+}

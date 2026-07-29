@@ -30,4 +30,12 @@ class TenantPathResolverTest {
 
         TenantPathResolver.resolve(request).shouldBeNull()
     }
+
+    @Test
+    fun `return null for actor scoped versioned API without tenant path`() {
+        val request = MockHttpServletRequest("POST", "/api/v2/appointment-requests")
+        request.servletPath = "/api/v2/appointment-requests"
+
+        TenantPathResolver.resolve(request).shouldBeNull()
+    }
 }

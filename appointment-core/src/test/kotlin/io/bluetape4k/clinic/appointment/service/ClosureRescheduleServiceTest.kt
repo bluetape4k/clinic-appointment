@@ -18,6 +18,7 @@ import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
 import io.bluetape4k.clinic.appointment.test.TestDB
@@ -332,6 +333,81 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
                     TenantGroups.DEFAULT_TENANT_GROUP_ID,
                 )
             }
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `9 - 병원 휴진 legacy 일괄 재조정은 commitment v2 예약을 변경하지 않는다`(testDB: TestDB) {
+        withTables(testDB, *allTables) {
+            val (clinicId, doctorId, treatmentTypeId) = insertDataWithAppointment()
+            val commitmentAppointmentId = Appointments.insertAndGetId {
+                it[Appointments.clinicId] = clinicId
+                it[Appointments.doctorId] = doctorId
+                it[Appointments.treatmentTypeId] = treatmentTypeId
+                it[patientName] = "가명 고객"
+                it[patientPhone] = "010-0000-0000"
+                it[appointmentDate] = MONDAY
+                it[startTime] = LocalTime.of(10, 0)
+                it[endTime] = LocalTime.of(10, 30)
+                it[status] = AppointmentState.CONFIRMED
+                it[modelVersion] = AppointmentModelVersion.COMMITMENT_V2
+                it[patientReferenceFingerprint] = "f".repeat(64)
+            }.value
+
+            val result = rescheduleService.processClosureReschedule(clinicId, MONDAY)
+
+            result shouldHaveSize 1
+            val protectedAppointment = Appointments.selectAll()
+                .where { Appointments.id eq commitmentAppointmentId }
+                .single()
+            protectedAppointment[Appointments.status] shouldBeEqualTo AppointmentState.CONFIRMED
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `10 - 남아 있는 legacy 후보도 commitment v2 예약을 재조정하지 못한다`(testDB: TestDB) {
+        withTables(testDB, *allTables) {
+            val (clinicId, doctorId, treatmentTypeId) = insertDataWithAppointment()
+            val commitmentAppointmentId = Appointments.insertAndGetId {
+                it[Appointments.clinicId] = clinicId
+                it[Appointments.doctorId] = doctorId
+                it[Appointments.treatmentTypeId] = treatmentTypeId
+                it[patientName] = "가명 고객"
+                it[appointmentDate] = MONDAY
+                it[startTime] = LocalTime.of(10, 0)
+                it[endTime] = LocalTime.of(10, 30)
+                it[status] = AppointmentState.CONFIRMED
+                it[modelVersion] = AppointmentModelVersion.COMMITMENT_V2
+                it[patientReferenceFingerprint] = "f".repeat(64)
+            }.value
+            val staleCandidateId = RescheduleCandidates.insertAndGetId {
+                it[originalAppointmentId] = commitmentAppointmentId
+                it[candidateDate] = TUESDAY
+                it[startTime] = LocalTime.of(10, 0)
+                it[endTime] = LocalTime.of(10, 30)
+                it[RescheduleCandidates.doctorId] = doctorId
+                it[priority] = 0
+            }.value
+
+            assertFailsWith<IllegalArgumentException> {
+                rescheduleService.confirmReschedule(
+                    staleCandidateId,
+                    commitmentAppointmentId,
+                    TenantGroups.DEFAULT_TENANT_GROUP_ID,
+                )
+            }
+            assertFailsWith<IllegalArgumentException> {
+                rescheduleService.autoReschedule(
+                    commitmentAppointmentId,
+                    TenantGroups.DEFAULT_TENANT_GROUP_ID,
+                )
+            }
+
+            Appointments.selectAll()
+                .where { Appointments.id eq commitmentAppointmentId }
+                .single()[Appointments.status] shouldBeEqualTo AppointmentState.CONFIRMED
         }
     }
 }

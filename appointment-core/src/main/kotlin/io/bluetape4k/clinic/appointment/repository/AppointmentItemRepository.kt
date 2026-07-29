@@ -13,8 +13,10 @@ import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
@@ -27,7 +29,20 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
  */
 class AppointmentItemRepository {
     /**
-     * proposal에 포함된 item row를 append하고 저장된 순서대로 반환합니다.
+     * proposal에 포함된 item row를 bulk 검증·append하고 입력 순서대로 반환합니다.
+     *
+     * 패키지 상품은 하나의 방문 proposal에 수백 개의 세부 진료를 포함할 수 있습니다.
+     * 따라서 Plan revision treatment를 item마다 조회하지 않고 `(revision, treatmentKey)`
+     * composite key 전체를 한 번에 조회하며, 검증을 모두 통과한 뒤 하나의 batch insert로
+     * 저장합니다. 검증 실패 시에는 어떤 item도 저장하지 않습니다.
+     *
+     * @param scope proposal, appointment, tenant, clinic, patient가 공유해야 하는 저장 경계입니다.
+     * @param items 구매 당시 고정된 Plan revision treatment snapshot과 일치해야 하는 item입니다.
+     * @return 생성된 식별자가 채워진 item을 caller 입력 순서대로 반환합니다.
+     * @throws IllegalArgumentException item이 비어 있거나 중복되거나 scope 또는 immutable
+     * treatment snapshot과 일치하지 않을 때 발생합니다.
+     * @throws IllegalStateException JDBC driver가 batch insert 결과를 모두 반환하지 않을 때
+     * 발생합니다.
      */
     fun appendValidated(
         scope: AppointmentItemAppendScope,
@@ -43,25 +58,26 @@ class AppointmentItemRepository {
             "appointment item attempts must be unique within proposal"
         }
         requireProposalScope(scope)
-        items.forEach { item -> requirePlanTreatmentScope(scope, item) }
+        requirePlanTreatmentScope(scope, items)
 
-        return items.map { item ->
-            val insertedId =
-                AppointmentItems
-                    .insertAndGetId {
-                        it[appointmentId] = scope.appointmentId
-                        it[proposalId] = scope.proposalId
-                        it[planRevisionId] = item.planRevisionId
-                        it[treatmentKey] = item.treatmentKey
-                        it[representativeTreatmentName] = item.representativeTreatmentName
-                        it[detailedTreatmentCodesPayload] = encodeStringList(item.detailedTreatmentCodes)
-                        it[preparationMinutes] = item.preparationMinutes
-                        it[treatmentMinutes] = item.treatmentMinutes
-                        it[recoveryMinutes] = item.recoveryMinutes
-                        it[attemptNumber] = item.attemptNumber
-                    }.value
+        val insertedRows = AppointmentItems.batchInsert(items) { item ->
+            this[AppointmentItems.appointmentId] = scope.appointmentId
+            this[AppointmentItems.proposalId] = scope.proposalId
+            this[AppointmentItems.planRevisionId] = item.planRevisionId
+            this[AppointmentItems.treatmentKey] = item.treatmentKey
+            this[AppointmentItems.representativeTreatmentName] = item.representativeTreatmentName
+            this[AppointmentItems.detailedTreatmentCodesPayload] = encodeStringList(item.detailedTreatmentCodes)
+            this[AppointmentItems.preparationMinutes] = item.preparationMinutes
+            this[AppointmentItems.treatmentMinutes] = item.treatmentMinutes
+            this[AppointmentItems.recoveryMinutes] = item.recoveryMinutes
+            this[AppointmentItems.attemptNumber] = item.attemptNumber
+        }
+        check(insertedRows.size == items.size) {
+            "batch insert did not return every appointment item"
+        }
+        return items.zip(insertedRows).map { (item, insertedRow) ->
             AppointmentItemRecord(
-                id = insertedId,
+                id = insertedRow[AppointmentItems.id].value,
                 appointmentId = scope.appointmentId,
                 proposalId = scope.proposalId,
                 planRevisionId = item.planRevisionId,
@@ -127,21 +143,34 @@ class AppointmentItemRepository {
 
     private fun requirePlanTreatmentScope(
         scope: AppointmentItemAppendScope,
-        item: AppointmentItemDraft,
+        items: List<AppointmentItemDraft>,
     ) {
-        val row =
+        val treatmentKeys =
+            items.map { item ->
+                EntityID(item.planRevisionId, AppointmentPlanRevisions) to item.treatmentKey
+            }
+        val rowsByTreatmentKey =
             (PlanRevisionTreatments innerJoin AppointmentPlanRevisions innerJoin AppointmentPlans)
                 .selectAll()
                 .where {
-                    (PlanRevisionTreatments.planRevisionId eq item.planRevisionId) and
-                        (PlanRevisionTreatments.treatmentKey eq item.treatmentKey) and
+                    ((PlanRevisionTreatments.planRevisionId to PlanRevisionTreatments.treatmentKey) inList
+                        treatmentKeys) and
                         (AppointmentPlans.tenantGroupId eq scope.tenantGroupId) and
                         (AppointmentPlans.clinicId eq scope.clinicId) and
                         (AppointmentPlans.patientReferenceFingerprint eq scope.patientReferenceFingerprint)
-                }.singleOrNull()
-        requireNotNull(row) { "appointment item must reference treatment in same scoped plan revision" }
-        require(item.matches(row)) {
-            "appointment item must match immutable plan revision treatment"
+                }
+                .associateBy { row ->
+                    row[PlanRevisionTreatments.planRevisionId].value to row[PlanRevisionTreatments.treatmentKey]
+                }
+
+        items.forEach { item ->
+            val row = rowsByTreatmentKey[item.planRevisionId to item.treatmentKey]
+            requireNotNull(row) {
+                "appointment item must reference treatment in same scoped plan revision"
+            }
+            require(item.matches(row)) {
+                "appointment item must match immutable plan revision treatment"
+            }
         }
     }
 

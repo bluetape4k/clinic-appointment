@@ -36,6 +36,42 @@ import java.time.ZoneOffset
 
 internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandTestSupport() {
     @Test
+    fun `이미 사용한 전역 동의 증빙은 raw unique 오류 대신 안정 오류로 거절한다`() {
+        val service = commandService()
+        val proposal = proposalInput(revision = 1L, resourceId = "doctor-${clinic.doctorId}")
+
+        service.requestCustomerAppointment(
+            CustomerAppointmentRequestCommand(
+                context = commandContext("consent-owner"),
+                identity = appointmentIdentity("consent-owner"),
+                proposal = proposal,
+                expiresAt = ACTIVE_EXPIRY,
+                representativeTreatmentName = "첫 예약",
+                consent = acceptedConsent("shared-evidence"),
+            ),
+        )
+
+        val failure = assertFailsWith<AppointmentCommitmentCommandException> {
+            service.requestCustomerAppointment(
+                CustomerAppointmentRequestCommand(
+                    context = commandContext("consent-reuse"),
+                    identity = appointmentIdentity("consent-reuse"),
+                    proposal = proposal,
+                    expiresAt = ACTIVE_EXPIRY,
+                    representativeTreatmentName = "두 번째 예약",
+                    consent = acceptedConsent("shared-evidence"),
+                ),
+            )
+        }
+
+        failure.code shouldBeEqualTo AppointmentCommitmentCommandError.CONSENT_EVIDENCE_REUSED
+        transaction(database) {
+            ConsentDecisions.selectAll().count() shouldBeEqualTo 1L
+            Appointments.selectAll().count() shouldBeEqualTo 1L
+        }
+    }
+
+    @Test
     fun `고객 요청은 가예약으로 생성되고 관리자 승인은 정확한 동의 proposal만 확정한다`() {
         // Given: 고객이 직접 선택하고 동의한 정확한 방문 제안
         val service = commandService()

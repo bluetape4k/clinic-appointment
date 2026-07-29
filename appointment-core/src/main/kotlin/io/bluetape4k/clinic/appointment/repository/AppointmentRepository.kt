@@ -53,10 +53,10 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
     override fun ResultRow.toEntity(): AppointmentRecord = toAppointmentRecord()
 
     /**
-     * 병원이 [tenantGroupId]에 속하고 legacy DTO에 필요한 확정 projection이 완성된 예약을 조회합니다.
+     * 병원이 [tenantGroupId]에 속하고 legacy DTO에 필요한 projection이 완성된 legacy 예약을 조회합니다.
      *
-     * 아직 proposal이 확정되지 않은 commitment v2 row는 방문 identity로는 존재하지만 기존
-     * [AppointmentRecord] 계약을 충족하지 않으므로 반환하지 않습니다.
+     * commitment v2 row는 projection 완성 여부와 무관하게 commitment query model로만
+     * 읽어야 하므로 기존 [AppointmentRecord] 계약으로 반환하지 않습니다.
      */
     fun findByIdAndTenant(
         appointmentId: Long,
@@ -67,9 +67,48 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .where {
                 (Appointments.id eq appointmentId) and
                     (Appointments.clinicId inSubQuery tenantClinicIds(tenantGroupId))
+            }.andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
+            .andWhere { completeAppointmentProjection() }
+            .firstOrNull()
+            ?.toAppointmentRecord()
+
+    /**
+     * 내부 legacy workflow가 사용할 projection 완성 legacy 예약을 ID로 조회합니다.
+     *
+     * tenant가 없는 오래된 내부 호출을 위한 호환 경계이며 commitment v2 row는 절대
+     * [AppointmentRecord]로 반환하지 않습니다. 외부 API는 [findByIdAndTenant]를 사용해야 합니다.
+     */
+    fun findLegacyById(appointmentId: Long): AppointmentRecord? =
+        Appointments
+            .selectAll()
+            .where {
+                (Appointments.id eq appointmentId.requirePositiveNumber("appointmentId")) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.LEGACY)
             }.andWhere { completeAppointmentProjection() }
             .firstOrNull()
             ?.toAppointmentRecord()
+
+    /**
+     * 지정 예약이 tenant 경계 안의 commitment v2 row인지 확인한다.
+     *
+     * legacy controller는 확정 projection이 완성된 v2 row를 조회할 수 있지만 상태 변경은
+     * commitment version, 동의, allocation을 함께 보존해야 하므로 이 판별 결과가 `true`이면
+     * 반드시 새 API로 위임해야 한다. caller가 소유한 Exposed transaction 안에서 호출한다.
+     */
+    fun isCommitmentV2(
+        appointmentId: Long,
+        tenantGroupId: Long,
+    ): Boolean {
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
+        val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
+        return Appointments
+            .select(Appointments.modelVersion)
+            .where {
+                (Appointments.id eq validAppointmentId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(validTenantGroupId)) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.COMMITMENT_V2)
+            }.count() == 1L
+    }
 
     /**
      * 신뢰된 command scope의 병원이 tenant에 실제로 속하는지 검증합니다.
@@ -225,7 +264,11 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .toInt()
 
     /**
-     * 병원의 특정 날짜 활성 예약을 조회합니다.
+     * 병원의 특정 날짜 legacy 활성 예약을 조회합니다.
+     *
+     * commitment v2 예약은 확정 projection이 완성되어도 이 조회에 포함하지 않습니다.
+     * 휴진 일괄 재조정은 legacy 상태만 바꾸므로 v2 row를 포함하면 commitment version,
+     * proposal, allocation, outbox와 상태가 분리될 수 있습니다.
      *
      * @param clinicId 병원 ID
      * @param date 조회 날짜
@@ -242,11 +285,15 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .where { Appointments.clinicId eq clinicId }
             .andWhere { Appointments.appointmentDate eq date }
             .andWhere { Appointments.status inList activeStatuses }
+            .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
             .andWhere { completeAppointmentProjection() }
             .map { it.toAppointmentRecord() }
 
     /**
-     * 병원의 특정 날짜 예약 상태를 일괄 변경합니다.
+     * 병원의 특정 날짜 legacy 예약 상태를 일괄 변경합니다.
+     *
+     * commitment v2 예약의 운영 재조정은 새 proposal과 고객 동의 절차를 사용해야 하므로
+     * 이 bulk update는 [AppointmentModelVersion.LEGACY]만 변경합니다.
      *
      * @param clinicId 병원 ID
      * @param date 대상 날짜
@@ -264,7 +311,8 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             where = {
                 (Appointments.clinicId eq clinicId) and
                     (Appointments.appointmentDate eq date) and
-                    (Appointments.status inList fromStatuses)
+                    (Appointments.status inList fromStatuses) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.LEGACY)
             },
         ) {
             it[status] = toStatus
@@ -285,6 +333,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .selectAll()
             .where { Appointments.appointmentDate eq date }
             .andWhere { Appointments.status inList activeStatuses }
+            .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
             .andWhere { completeAppointmentProjection() }
             .map { it.toAppointmentRecord() }
 
@@ -363,7 +412,8 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .where {
                 (Appointments.id eq validAppointmentId) and
                     (Appointments.clinicId eq validClinicId) and
-                    (Appointments.clinicId inSubQuery tenantClinicIds(validTenantGroupId))
+                    (Appointments.clinicId inSubQuery tenantClinicIds(validTenantGroupId)) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.COMMITMENT_V2)
             }.singleOrNull()
             ?.get(Appointments.patientReferenceFingerprint)
     }
@@ -426,9 +476,11 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         }
 
     /**
-     * 특정 장비의 사용불가 기간과 겹치는 예약을 조회합니다.
+     * 특정 장비의 사용불가 기간과 겹치는 legacy 예약을 조회합니다.
      *
-     * 취소 상태 예약은 제외합니다.
+     * 취소 상태와 commitment v2 예약은 제외합니다. commitment v2는 환자·proposal·자원
+     * projection을 전용 query model로만 공개해야 하므로 patient name을 포함하는 기존
+     * 장비 충돌 DTO로 반환하지 않습니다.
      *
      * @param equipmentId 장비 ID
      * @param periods 사용불가 기간 목록
@@ -451,6 +503,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         return Appointments
             .selectAll()
             .where { Appointments.equipmentId eq equipmentId }
+            .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
             .andWhere { Appointments.status neq AppointmentState.CANCELLED }
             .andWhere { periodConditions }
             .andWhere { completeAppointmentProjection() }
@@ -477,6 +530,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .andWhere { Appointments.appointmentDate lessEq dateRange.endInclusive }
             .andWhere { Appointments.status neq AppointmentState.CANCELLED }
             .andWhere { Appointments.status neq AppointmentState.NO_SHOW }
+            .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
             .andWhere { completeAppointmentProjection() }
             .map { it.toAppointmentRecord() }
 }
