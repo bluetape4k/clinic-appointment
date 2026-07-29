@@ -17,11 +17,16 @@ data class PurchaseRedriveResult(
 }
 
 /**
- * Full operator confirmation required to preview or execute one quarantined
- * purchase event without broad selectors.
+ * 하나의 격리 구매 event를 광범위 selector 없이 미리보기·재처리하기 위한 운영자 확인입니다.
+ *
+ * @property operatorRole 예약 운영 redrive 권한입니다. 상품·구매팀은 원 event replay
+ * authority를 제공하지만 예약 DB 격리 row의 실행 승인은
+ * [RedriveOperatorRole.RESERVATION_OPERATIONS_ADMIN]만 할 수 있습니다.
+ * @property eventId quarantine 원 event ID이자 처리 성공 후 inbox key입니다.
  */
 data class PurchaseRedriveConfirmation(
     val quarantineId: Long,
+    val operatorRole: RedriveOperatorRole,
     val actor: String,
     val reason: String,
     val approvalReferences: List<String>,
@@ -41,8 +46,11 @@ data class PurchaseRedriveConfirmation(
 }
 
 /**
- * Re-drives one operator-supplied original envelope after exact identity
- * confirmation. Trust failures are never bypassed.
+ * 운영자가 제공한 원 envelope의 identity와 승인 권한을 모두 확인한 뒤 한 건만 재처리합니다.
+ *
+ * trust 검증 실패를 우회하지 않으며 dry-run과 실제 실행 모두 예약 운영 관리자 권한을
+ * 요구합니다. append-only audit은 quarantine ID로 원 [PurchaseRedriveConfirmation.eventId]를
+ * 복원하고, 성공한 consumer inbox도 같은 event ID를 key로 사용합니다.
  */
 class PurchaseEventRedriveService(
     private val trustVerifier: SchedulingEventTrustVerifier,
@@ -59,6 +67,9 @@ class PurchaseEventRedriveService(
         dryRun: Boolean,
     ): PurchaseRedriveResult {
         require(confirmation.quarantineId > 0) { "quarantineId must be positive" }
+        require(confirmation.operatorRole == RedriveOperatorRole.RESERVATION_OPERATIONS_ADMIN) {
+            "redrive requires reservation operations administrator authority"
+        }
         val payload = originalEnvelope.payload
         require(originalEnvelope.eventId == confirmation.eventId) { "eventId confirmation does not match" }
         require(payload.sourceAggregateVersion == confirmation.sourceAggregateVersion) {
@@ -128,4 +139,15 @@ class PurchaseEventRedriveService(
         MessageDigest.getInstance("SHA-256")
             .digest("$dryRun|${status.name}|${reasonCode.orEmpty()}|${planId ?: 0L}".toByteArray(StandardCharsets.UTF_8))
             .joinToString("") { byte -> "%02x".format(byte) }
+}
+
+/**
+ * 격리 event를 실행할 수 있는 예약서비스 내부 운영 권한입니다.
+ */
+enum class RedriveOperatorRole {
+    /** dry-run과 승인된 단건 redrive를 실행할 수 있는 유일한 역할입니다. */
+    RESERVATION_OPERATIONS_ADMIN,
+
+    /** 원 event replay authority를 제공하지만 예약 격리 row를 실행할 수 없습니다. */
+    SOURCE_REPLAY_AUTHORITY,
 }

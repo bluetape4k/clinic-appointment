@@ -137,6 +137,8 @@ scope head, preview job, activation command, effective snapshot, privacy-safe me
 | [예약 플랜 복구 런북](docs/runbooks/appointment-plan-foundation-recovery.md) | 격리 확인, dry-run redrive, 롤백, 원천 서비스 책임 |
 | [예약 정책 API](docs/api/scheduling-policy.md) | tenant/clinic 정책 endpoint, idempotency, preview polling, 오류, rollout flag |
 | [예약 정책 활성화 런북](docs/runbooks/scheduling-policy-activation.md) | worker alert, 60초/5분 activation 처리, replay/retire 복구, V10 준비 조건 |
+| [예약 Commitment v2 API](docs/api/visit-commitment.md) | Gateway 인증, 가예약·승인·확정, 멱등성, 오류와 배포 설정 |
+| [예약 Commitment v2 운영 런북](docs/runbooks/visit-commitment-operations.md) | shadow/allowlist, 경보, retention, redrive, PostgreSQL rollback |
 
 ### 변경 이력
 

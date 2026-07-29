@@ -139,6 +139,8 @@ Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seede
 | [Appointment plan recovery](docs/runbooks/appointment-plan-foundation-recovery.md) | Quarantine inspection, dry-run redrive, rollback, and authority ownership. |
 | [Scheduling policy API](docs/api/scheduling-policy.md) | Tenant/clinic policy endpoints, idempotency, preview polling, errors, and rollout flags. |
 | [Scheduling policy activation runbook](docs/runbooks/scheduling-policy-activation.md) | Worker alerts, 60s/5m activation handling, replay/retire recovery, and V10 readiness. |
+| [Appointment Commitment v2 API](docs/api/visit-commitment.md) | Gateway identity, provisional/approval/confirmation flow, idempotency, errors, and rollout settings. |
+| [Appointment Commitment v2 operations](docs/runbooks/visit-commitment-operations.md) | Shadow/allowlist rollout, alerts, retention, redrive, and PostgreSQL rollback. |
 
 ### Change History
 
