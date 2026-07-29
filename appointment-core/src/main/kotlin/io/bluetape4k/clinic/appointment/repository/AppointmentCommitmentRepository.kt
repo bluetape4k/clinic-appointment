@@ -4,19 +4,25 @@ import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitment
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentProposalDraft
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecision
+import io.bluetape4k.clinic.appointment.model.commitment.ConsentSubjectType
 import io.bluetape4k.clinic.appointment.model.commitment.ProductVersionMigrationConsentSubject
 import io.bluetape4k.clinic.appointment.model.commitment.ProposalConsentSubject
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentCommitmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentProposalRecord
+import io.bluetape4k.clinic.appointment.model.dto.ProposalConsentDecisionRecord
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentProposals
 import io.bluetape4k.clinic.appointment.model.tables.ConsentDecisions
 import io.bluetape4k.support.requireNotBlank
 import io.bluetape4k.support.requirePositiveNumber
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import java.time.Instant
@@ -29,17 +35,18 @@ import java.time.Instant
  * `confirmedProposalId`와 allocation 교체가 원자적으로 보입니다.
  */
 class AppointmentCommitmentRepository {
-
     /** 방문 예약 하나에 commitment를 생성합니다. */
     fun create(commitment: AppointmentCommitment): AppointmentCommitmentRecord {
-        val id = AppointmentCommitments.insertAndGetId {
-            it[appointmentId] = commitment.appointmentId
-            it[status] = commitment.status
-            it[origin] = commitment.origin
-            it[confirmedProposalId] = commitment.confirmedProposalId
-            it[effectivePolicySnapshotId] = commitment.effectivePolicySnapshotId
-            it[version] = commitment.version
-        }.value
+        val id =
+            AppointmentCommitments
+                .insertAndGetId {
+                    it[appointmentId] = commitment.appointmentId
+                    it[status] = commitment.status
+                    it[origin] = commitment.origin
+                    it[confirmedProposalId] = commitment.confirmedProposalId
+                    it[effectivePolicySnapshotId] = commitment.effectivePolicySnapshotId
+                    it[version] = commitment.version
+                }.value
         return AppointmentCommitmentRecord(
             id = id,
             appointmentId = commitment.appointmentId,
@@ -53,20 +60,128 @@ class AppointmentCommitmentRepository {
 
     /** 정확한 방문 예약의 commitment를 반환합니다. */
     fun findByAppointmentId(appointmentId: Long): AppointmentCommitmentRecord? {
-        appointmentId.requirePositiveNumber("appointmentId")
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
         return AppointmentCommitments
             .selectAll()
-            .where { AppointmentCommitments.appointmentId eq appointmentId }
+            .where { AppointmentCommitments.appointmentId eq validAppointmentId }
+            .singleOrNull()
+            ?.let(::mapCommitment)
+    }
+
+    /** 양수 commitment 식별자로 현재 row를 반환합니다. */
+    fun findById(commitmentId: Long): AppointmentCommitmentRecord? {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        return AppointmentCommitments
+            .selectAll()
+            .where { AppointmentCommitments.id eq validCommitmentId }
+            .singleOrNull()
+            ?.let(::mapCommitment)
+    }
+
+    /**
+     * [commitmentId]에 실제로 속한 정확한 proposal을 반환합니다.
+     *
+     * 다른 commitment의 proposal ID를 command가 재사용해도 이 경계를 통과할 수 없습니다.
+     */
+    fun findProposal(
+        commitmentId: Long,
+        proposalId: Long,
+    ): AppointmentProposalRecord? {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val validProposalId = proposalId.requirePositiveNumber("proposalId")
+        return AppointmentProposals
+            .selectAll()
+            .where {
+                (AppointmentProposals.id eq validProposalId) and
+                    (AppointmentProposals.commitmentId eq validCommitmentId)
+            }.singleOrNull()
+            ?.let(::mapProposal)
+    }
+
+    /**
+     * 종결 command가 같은 proposal을 동시에 수락·거부·만료하지 못하도록 row를 잠급니다.
+     *
+     * 이 함수는 caller가 연 Exposed transaction 안에서만 사용해야 합니다. 잠금 뒤
+     * commitment를 다시 읽고 version을 검증해야 잠금 대기 중 선행 command가 만든
+     * 확정 포인터와 version 변경을 현재 command가 관찰할 수 있습니다.
+     */
+    fun findProposalForUpdate(
+        commitmentId: Long,
+        proposalId: Long,
+    ): AppointmentProposalRecord? {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val validProposalId = proposalId.requirePositiveNumber("proposalId")
+        return AppointmentProposals
+            .selectAll()
+            .where {
+                (AppointmentProposals.id eq validProposalId) and
+                    (AppointmentProposals.commitmentId eq validCommitmentId)
+            }.forUpdate()
+            .singleOrNull()
+            ?.let(::mapProposal)
+    }
+
+    /**
+     * 멱등 command 결과가 가리키는 양수 proposal 식별자로 정확한 row를 반환합니다.
+     *
+     * 이 조회는 멱등 결과 재생에만 사용합니다. 일반 mutation command는 다른 commitment의
+     * proposal을 사용할 수 없도록 [findProposal]로 소유권을 함께 검증해야 합니다.
+     */
+    fun findProposalById(proposalId: Long): AppointmentProposalRecord? {
+        val validProposalId = proposalId.requirePositiveNumber("proposalId")
+        return AppointmentProposals
+            .selectAll()
+            .where { AppointmentProposals.id eq validProposalId }
+            .singleOrNull()
+            ?.let(::mapProposal)
+    }
+
+    /** commitment에 append된 가장 큰 proposal revision을 반환합니다. */
+    fun findLatestProposalRevision(commitmentId: Long): Long? {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        return AppointmentProposals
+            .select(AppointmentProposals.revision)
+            .where { AppointmentProposals.commitmentId eq validCommitmentId }
+            .orderBy(AppointmentProposals.revision, SortOrder.DESC)
+            .limit(1)
+            .singleOrNull()
+            ?.get(AppointmentProposals.revision)
+    }
+
+    /**
+     * proposal ID/revision/hash에 정확히 결합된 가장 최근 고객 결정을 반환합니다.
+     *
+     * append-only 이력에서 뒤의 결정이 앞의 결정을 대체합니다. `subjectType`만 같거나
+     * hash가 다른 동의는 현재 proposal의 증빙으로 인정하지 않습니다.
+     */
+    fun findLatestProposalDecision(
+        commitmentId: Long,
+        proposalId: Long,
+        proposalRevision: Long,
+        proposalHash: String,
+    ): ProposalConsentDecisionRecord? {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val validProposalId = proposalId.requirePositiveNumber("proposalId")
+        val validRevision = proposalRevision.requirePositiveNumber("proposalRevision")
+        val validHash = proposalHash.requireNotBlank("proposalHash")
+        val subjectPayload = "$validProposalId|$validRevision|$validHash"
+        return ConsentDecisions
+            .selectAll()
+            .where {
+                (ConsentDecisions.commitmentId eq validCommitmentId) and
+                    (ConsentDecisions.subjectType eq ConsentSubjectType.APPOINTMENT_PROPOSAL) and
+                    (ConsentDecisions.subjectPayload eq subjectPayload)
+            }.orderBy(ConsentDecisions.id, SortOrder.DESC)
+            .limit(1)
             .singleOrNull()
             ?.let { row ->
-                AppointmentCommitmentRecord(
-                    id = row[AppointmentCommitments.id].value,
-                    appointmentId = row[AppointmentCommitments.appointmentId].value,
-                    status = row[AppointmentCommitments.status],
-                    origin = row[AppointmentCommitments.origin],
-                    confirmedProposalId = row[AppointmentCommitments.confirmedProposalId],
-                    effectivePolicySnapshotId = row[AppointmentCommitments.effectivePolicySnapshotId],
-                    version = row[AppointmentCommitments.version],
+                ProposalConsentDecisionRecord(
+                    proposalId = validProposalId,
+                    proposalRevision = validRevision,
+                    proposalHash = validHash,
+                    decision = row[ConsentDecisions.decision],
+                    evidenceType = row[ConsentDecisions.evidenceType],
+                    termsHash = row[ConsentDecisions.termsHash],
                 )
             }
     }
@@ -85,46 +200,72 @@ class AppointmentCommitmentRepository {
         representativeTreatmentName: String,
         createdByActor: String,
     ): AppointmentProposalRecord {
-        commitmentId.requirePositiveNumber("commitmentId")
-        proposalHash.requireNotBlank("proposalHash")
-        representativeTreatmentName.requireNotBlank("representativeTreatmentName")
-        createdByActor.requireNotBlank("createdByActor")
-        require(proposalHash.length == 64) { "proposalHash must be a 64-character SHA-256 hex value" }
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val validProposalHash = proposalHash.requireNotBlank("proposalHash")
+        val validTreatmentName = representativeTreatmentName.requireNotBlank("representativeTreatmentName")
+        val validCreatedByActor = createdByActor.requireNotBlank("createdByActor")
+        require(validProposalHash.length == 64) { "proposalHash must be a 64-character SHA-256 hex value" }
         require(expiresAt <= draft.endsAt) { "expiresAt must not be after proposed end" }
-        val owner = AppointmentCommitments
-            .selectAll()
-            .where { AppointmentCommitments.id eq commitmentId }
-            .singleOrNull()
+        val owner =
+            AppointmentCommitments
+                .selectAll()
+                .where { AppointmentCommitments.id eq validCommitmentId }
+                .singleOrNull()
         requireNotNull(owner) { "commitment does not exist" }
         require(owner[AppointmentCommitments.appointmentId].value == draft.appointmentId) {
             "proposal appointmentId must match commitment appointmentId"
         }
 
-        val proposalId = AppointmentProposals.insertAndGetId {
-            it[AppointmentProposals.commitmentId] = commitmentId
-            it[revision] = draft.revision
-            it[proposedStartAt] = draft.startsAt
-            it[proposedEndAt] = draft.endsAt
-            it[AppointmentProposals.expiresAt] = expiresAt
-            it[AppointmentProposals.representativeTreatmentName] = representativeTreatmentName
-            it[AppointmentProposals.proposalHash] = proposalHash
-            it[policySnapshotId] = draft.policySnapshotId
-            it[supersedesProposalId] = draft.supersedesProposalId
-            it[AppointmentProposals.createdByActor] = createdByActor
-        }.value
+        val proposalId =
+            AppointmentProposals
+                .insertAndGetId {
+                    it[AppointmentProposals.commitmentId] = validCommitmentId
+                    it[revision] = draft.revision
+                    it[proposedStartAt] = draft.startsAt
+                    it[proposedEndAt] = draft.endsAt
+                    it[AppointmentProposals.expiresAt] = expiresAt
+                    it[expiredAt] = null
+                    it[AppointmentProposals.representativeTreatmentName] = validTreatmentName
+                    it[AppointmentProposals.proposalHash] = validProposalHash
+                    it[policySnapshotId] = draft.policySnapshotId
+                    it[supersedesProposalId] = draft.supersedesProposalId
+                    it[AppointmentProposals.createdByActor] = validCreatedByActor
+                }.value
         return AppointmentProposalRecord(
             id = proposalId,
-            commitmentId = commitmentId,
+            commitmentId = validCommitmentId,
             revision = draft.revision,
             proposedStartAt = draft.startsAt,
             proposedEndAt = draft.endsAt,
             expiresAt = expiresAt,
-            representativeTreatmentName = representativeTreatmentName,
-            proposalHash = proposalHash,
+            expiredAt = null,
+            representativeTreatmentName = validTreatmentName,
+            proposalHash = validProposalHash,
             policySnapshotId = draft.policySnapshotId,
             supersedesProposalId = draft.supersedesProposalId,
-            createdByActor = createdByActor,
+            createdByActor = validCreatedByActor,
         )
+    }
+
+    /**
+     * 아직 만료되지 않은 proposal에 권위 있는 만료 시각을 한 번만 기록합니다.
+     *
+     * 같은 proposal을 다른 idempotency key로 다시 만료하려는 command는 `false`를 받아
+     * 감사·outbox unique 제약에 도달하기 전에 안정적인 업무 결과로 변환할 수 있습니다.
+     */
+    fun markProposalExpired(
+        proposalId: Long,
+        expiredAt: Instant,
+    ): Boolean {
+        val validProposalId = proposalId.requirePositiveNumber("proposalId")
+        return AppointmentProposals.update(
+            where = {
+                (AppointmentProposals.id eq validProposalId) and
+                    AppointmentProposals.expiredAt.isNull()
+            },
+        ) {
+            it[AppointmentProposals.expiredAt] = expiredAt
+        } == 1
     }
 
     /** 동의 증빙을 수정 없이 append하고 생성된 양수 식별자를 반환합니다. */
@@ -132,28 +273,36 @@ class AppointmentCommitmentRepository {
         commitmentId: Long,
         decision: ConsentDecision,
     ): Long {
-        commitmentId.requirePositiveNumber("commitmentId")
-        val subjectPayload = when (val subject = decision.subject) {
-            is ProposalConsentSubject ->
-                "${subject.proposalId}|${subject.proposalRevision}|${subject.proposalHash}"
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val subjectPayload =
+            when (val subject = decision.subject) {
+                is ProposalConsentSubject -> {
+                    "${subject.proposalId}|${subject.proposalRevision}|${subject.proposalHash}"
+                }
 
-            is ProductVersionMigrationConsentSubject ->
-                "${subject.migrationId}|${subject.fromProductVersionId}|" +
-                    "${subject.toProductVersionId}|${subject.mappingHash}"
+                is ProductVersionMigrationConsentSubject -> {
+                    "${subject.migrationId}|${subject.fromProductVersionId}|" +
+                        "${subject.toProductVersionId}|${subject.mappingHash}"
+                }
 
-            else -> throw IllegalArgumentException("unsupported consent subject")
-        }
-        return ConsentDecisions.insertAndGetId {
-            it[ConsentDecisions.commitmentId] = commitmentId
-            it[subjectType] = decision.subject.type
-            it[ConsentDecisions.subjectPayload] = subjectPayload
-            it[ConsentDecisions.decision] = decision.decision
-            it[evidenceAuthority] = decision.evidenceAuthority
-            it[evidenceId] = decision.evidenceId
-            it[evidenceHash] = decision.evidenceHash
-            it[decidedAt] = decision.decidedAt
-            it[actorRef] = decision.actorRef
-        }.value
+                else -> {
+                    throw IllegalArgumentException("unsupported consent subject")
+                }
+            }
+        return ConsentDecisions
+            .insertAndGetId {
+                it[ConsentDecisions.commitmentId] = validCommitmentId
+                it[subjectType] = decision.subject.type
+                it[ConsentDecisions.subjectPayload] = subjectPayload
+                it[ConsentDecisions.decision] = decision.decision
+                it[evidenceAuthority] = decision.evidenceAuthority
+                it[evidenceId] = decision.evidenceId
+                it[evidenceHash] = decision.evidenceHash
+                it[evidenceType] = decision.evidenceType
+                it[termsHash] = decision.termsHash
+                it[decidedAt] = decision.decidedAt
+                it[actorRef] = decision.actorRef
+            }.value
     }
 
     /**
@@ -165,29 +314,118 @@ class AppointmentCommitmentRepository {
         commitmentId: Long,
         expectedVersion: Long,
         proposalId: Long,
+        updatedAt: Instant = Instant.now(),
     ): Boolean {
-        commitmentId.requirePositiveNumber("commitmentId")
-        expectedVersion.requirePositiveNumber("expectedVersion")
-        proposalId.requirePositiveNumber("proposalId")
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val validExpectedVersion = expectedVersion.requirePositiveNumber("expectedVersion")
+        val validProposalId = proposalId.requirePositiveNumber("proposalId")
         require(
-            AppointmentProposals.selectAll().where {
-                (AppointmentProposals.id eq proposalId) and
-                    (AppointmentProposals.commitmentId eq commitmentId)
-            }.count() == 1L,
+            AppointmentProposals
+                .selectAll()
+                .where {
+                    (AppointmentProposals.id eq validProposalId) and
+                        (AppointmentProposals.commitmentId eq validCommitmentId)
+                }.count() == 1L,
         ) {
             "proposal must belong to commitment"
         }
         return AppointmentCommitments.update(
             where = {
-                (AppointmentCommitments.id eq commitmentId) and
-                    (AppointmentCommitments.version eq expectedVersion) and
-                    (AppointmentCommitments.status neq AppointmentCommitmentStatus.CONFIRMED)
+                (AppointmentCommitments.id eq validCommitmentId) and
+                    (AppointmentCommitments.version eq validExpectedVersion) and
+                    (AppointmentCommitments.status neq AppointmentCommitmentStatus.EXPIRED) and
+                    (AppointmentCommitments.status neq AppointmentCommitmentStatus.CANCELLED)
             },
         ) {
             it[status] = AppointmentCommitmentStatus.CONFIRMED
-            it[confirmedProposalId] = proposalId
-            it[version] = expectedVersion + 1
-            it[updatedAt] = Instant.now()
+            it[confirmedProposalId] = validProposalId
+            it[version] = validExpectedVersion + 1
+            it[AppointmentCommitments.updatedAt] = updatedAt
         } == 1
     }
+
+    /**
+     * 아직 확정되지 않은 commitment를 version CAS로 만료 상태로 전환합니다.
+     *
+     * 이미 확정된 commitment의 변경 proposal은 이 함수를 사용하지 않습니다.
+     * application service가 [advanceConfirmedVersion]으로 확정 포인터를 보존한 채
+     * version을 소비해 수락·거부·만료 중 하나만 성공하도록 직렬화해야 합니다.
+     */
+    fun expireUnconfirmedByVersion(
+        commitmentId: Long,
+        expectedVersion: Long,
+        updatedAt: Instant,
+    ): Boolean {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val validExpectedVersion = expectedVersion.requirePositiveNumber("expectedVersion")
+        return AppointmentCommitments.update(
+            where = {
+                (AppointmentCommitments.id eq validCommitmentId) and
+                    (AppointmentCommitments.version eq validExpectedVersion) and
+                    (AppointmentCommitments.status neq AppointmentCommitmentStatus.CONFIRMED) and
+                    (AppointmentCommitments.status neq AppointmentCommitmentStatus.EXPIRED) and
+                    (AppointmentCommitments.status neq AppointmentCommitmentStatus.CANCELLED)
+            },
+        ) {
+            it[status] = AppointmentCommitmentStatus.EXPIRED
+            it[version] = validExpectedVersion + 1
+            it[AppointmentCommitments.updatedAt] = updatedAt
+        } == 1
+    }
+
+    /**
+     * 확정 포인터와 상태를 보존하면서 변경 proposal 종결 사실을 version에 반영합니다.
+     *
+     * 고객 수락의 [confirmByVersion]과 같은 CAS 경계를 사용하므로 거부·만료·수락 중
+     * 정확히 하나만 [expectedVersion]을 소비합니다. 실패 시 caller는 현재 transaction의
+     * consent 또는 proposal 만료 표식을 rollback하고 안정적인 version 충돌을 반환해야 합니다.
+     */
+    fun advanceConfirmedVersion(
+        commitmentId: Long,
+        expectedVersion: Long,
+        confirmedProposalId: Long,
+        updatedAt: Instant,
+    ): Boolean {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val validExpectedVersion = expectedVersion.requirePositiveNumber("expectedVersion")
+        val validConfirmedProposalId = confirmedProposalId.requirePositiveNumber("confirmedProposalId")
+        return AppointmentCommitments.update(
+            where = {
+                (AppointmentCommitments.id eq validCommitmentId) and
+                    (AppointmentCommitments.version eq validExpectedVersion) and
+                    (AppointmentCommitments.status eq AppointmentCommitmentStatus.CONFIRMED) and
+                    (AppointmentCommitments.confirmedProposalId eq validConfirmedProposalId)
+            },
+        ) {
+            it[version] = validExpectedVersion + 1
+            it[AppointmentCommitments.updatedAt] = updatedAt
+        } == 1
+    }
+
+    private fun mapCommitment(row: ResultRow) =
+        AppointmentCommitmentRecord(
+            id = row[AppointmentCommitments.id].value,
+            appointmentId = row[AppointmentCommitments.appointmentId].value,
+            status = row[AppointmentCommitments.status],
+            origin = row[AppointmentCommitments.origin],
+            confirmedProposalId = row[AppointmentCommitments.confirmedProposalId],
+            effectivePolicySnapshotId = row[AppointmentCommitments.effectivePolicySnapshotId],
+            version = row[AppointmentCommitments.version],
+        )
+
+    private fun mapProposal(row: ResultRow) =
+        AppointmentProposalRecord(
+            id = row[AppointmentProposals.id].value,
+            commitmentId = row[AppointmentProposals.commitmentId].value,
+            revision = row[AppointmentProposals.revision],
+            proposedStartAt = row[AppointmentProposals.proposedStartAt],
+            proposedEndAt = row[AppointmentProposals.proposedEndAt],
+            expiresAt = row[AppointmentProposals.expiresAt],
+            expiredAt = row[AppointmentProposals.expiredAt],
+            representativeTreatmentName = row[AppointmentProposals.representativeTreatmentName],
+            proposalHash = row[AppointmentProposals.proposalHash],
+            policySnapshotId = row[AppointmentProposals.policySnapshotId],
+            supersedesProposalId = row[AppointmentProposals.supersedesProposalId],
+            createdByActor = row[AppointmentProposals.createdByActor],
+        )
 }

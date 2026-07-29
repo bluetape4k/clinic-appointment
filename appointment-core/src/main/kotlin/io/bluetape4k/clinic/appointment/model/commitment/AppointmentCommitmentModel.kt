@@ -26,21 +26,26 @@ import java.time.Instant
  * @property version repository의 compare-and-set에 사용하는 양수 낙관적 잠금
  * version입니다. 업무 revision이나 proposal revision과 혼용하지 않습니다.
  */
-data class AppointmentCommitment(
-    val appointmentId: Long,
+class AppointmentCommitment(
+    appointmentId: Long,
     val status: AppointmentCommitmentStatus,
     val origin: AppointmentOrigin,
-    val confirmedProposalId: Long?,
-    val effectivePolicySnapshotId: Long,
-    val version: Long,
+    confirmedProposalId: Long?,
+    effectivePolicySnapshotId: Long,
+    version: Long,
 ) : Serializable {
+    val appointmentId = appointmentId.requirePositiveNumber("appointmentId")
+    val confirmedProposalId =
+        confirmedProposalId?.requirePositiveNumber("confirmedProposalId")
+    val effectivePolicySnapshotId =
+        effectivePolicySnapshotId.requirePositiveNumber("effectivePolicySnapshotId")
+    val version = version.requirePositiveNumber("version")
 
     init {
-        appointmentId.requirePositiveNumber("appointmentId")
-        effectivePolicySnapshotId.requirePositiveNumber("effectivePolicySnapshotId")
-        version.requirePositiveNumber("version")
-        confirmedProposalId?.requirePositiveNumber("confirmedProposalId")
-        require((status == AppointmentCommitmentStatus.CONFIRMED) == (confirmedProposalId != null)) {
+        require(
+            (status == AppointmentCommitmentStatus.CONFIRMED) ==
+                (this.confirmedProposalId != null),
+        ) {
             "confirmedProposalId must exist exactly when status is CONFIRMED"
         }
     }
@@ -71,9 +76,12 @@ data class AppointmentCommitment(
         require(consent.acceptsProposal(proposalId, proposal.revision, proposalHash)) {
             "accepted consent must match the exact proposal id, revision, and hash"
         }
-        return copy(
+        return AppointmentCommitment(
+            appointmentId = appointmentId,
             status = AppointmentCommitmentStatus.CONFIRMED,
+            origin = origin,
             confirmedProposalId = proposalId,
+            effectivePolicySnapshotId = effectivePolicySnapshotId,
             version = version + 1,
         )
     }
@@ -132,22 +140,25 @@ enum class AppointmentOrigin {
  * @property supersedesProposalId 이 제안이 대체하려는 이전 제안 식별자입니다. 이 값이
  * 있어도 이전 확정 제안과 allocation은 새 제안 확정 전까지 해제하지 않습니다.
  */
-data class AppointmentProposalDraft(
-    val appointmentId: Long,
-    val revision: Long,
+class AppointmentProposalDraft(
+    appointmentId: Long,
+    revision: Long,
     val startsAt: Instant,
     val endsAt: Instant,
-    val items: List<AppointmentItemDraft>,
-    val allocations: List<ResourceAllocationDraft>,
-    val policySnapshotId: Long,
-    val supersedesProposalId: Long?,
+    items: List<AppointmentItemDraft>,
+    allocations: List<ResourceAllocationDraft>,
+    policySnapshotId: Long,
+    supersedesProposalId: Long?,
 ) : Serializable {
+    val appointmentId = appointmentId.requirePositiveNumber("appointmentId")
+    val revision = revision.requirePositiveNumber("revision")
+    val items = items.toList()
+    val allocations = allocations.toList()
+    val policySnapshotId = policySnapshotId.requirePositiveNumber("policySnapshotId")
+    val supersedesProposalId =
+        supersedesProposalId?.requirePositiveNumber("supersedesProposalId")
 
     init {
-        appointmentId.requirePositiveNumber("appointmentId")
-        revision.requirePositiveNumber("revision")
-        policySnapshotId.requirePositiveNumber("policySnapshotId")
-        supersedesProposalId?.requirePositiveNumber("supersedesProposalId")
         require(startsAt < endsAt) { "startsAt must be before endsAt" }
     }
 

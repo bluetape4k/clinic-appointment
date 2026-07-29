@@ -35,19 +35,15 @@ enum class ConsentSubjectType {
  * @property proposalHash 방문 시각, 항목, 자원, 정책 스냅샷을 모두 포함한 canonical
  * hash입니다. 같은 ID라도 hash가 다르면 원본 계약 위반으로 취급합니다.
  */
-data class ProposalConsentSubject(
-    val proposalId: Long,
-    val proposalRevision: Long,
-    val proposalHash: String,
+class ProposalConsentSubject(
+    proposalId: Long,
+    proposalRevision: Long,
+    proposalHash: String,
 ) : ConsentSubject {
-
     override val type: ConsentSubjectType = ConsentSubjectType.APPOINTMENT_PROPOSAL
-
-    init {
-        proposalId.requirePositiveNumber("proposalId")
-        proposalRevision.requirePositiveNumber("proposalRevision")
-        proposalHash.requireNotBlank("proposalHash")
-    }
+    val proposalId = proposalId.requirePositiveNumber("proposalId")
+    val proposalRevision = proposalRevision.requirePositiveNumber("proposalRevision")
+    val proposalHash = proposalHash.requireNotBlank("proposalHash")
 
     companion object {
         private const val serialVersionUID = 1L
@@ -63,21 +59,18 @@ data class ProposalConsentSubject(
  * @property mappingHash `KEEP/REPLACE/SPLIT/MERGE/REMOVE/ADD` 전환표 전체의 canonical
  * hash입니다. 실제 일정 변경 동의를 대신하지 않습니다.
  */
-data class ProductVersionMigrationConsentSubject(
-    val migrationId: String,
-    val fromProductVersionId: String,
-    val toProductVersionId: String,
-    val mappingHash: String,
+class ProductVersionMigrationConsentSubject(
+    migrationId: String,
+    fromProductVersionId: String,
+    toProductVersionId: String,
+    mappingHash: String,
 ) : ConsentSubject {
-
     override val type: ConsentSubjectType = ConsentSubjectType.PRODUCT_VERSION_MIGRATION
-
-    init {
-        migrationId.requireNotBlank("migrationId")
+    val migrationId = migrationId.requireNotBlank("migrationId")
+    val fromProductVersionId =
         fromProductVersionId.requireNotBlank("fromProductVersionId")
-        toProductVersionId.requireNotBlank("toProductVersionId")
-        mappingHash.requireNotBlank("mappingHash")
-    }
+    val toProductVersionId = toProductVersionId.requireNotBlank("toProductVersionId")
+    val mappingHash = mappingHash.requireNotBlank("mappingHash")
 
     companion object {
         private const val serialVersionUID = 1L
@@ -95,22 +88,36 @@ data class ProductVersionMigrationConsentSubject(
  * 개인정보나 동의 원문을 로그에 남기는 용도로 사용하지 않습니다.
  * @property decidedAt 원본 권위가 기록한 UTC 결정 시각입니다.
  * @property actorRef 고객 또는 적법한 대리인을 나타내는 비민감 감사 참조입니다.
+ * @property evidenceType 서명 문서, 녹취 등 정책이 허용한 증빙 종류입니다. 상품 전환처럼
+ * 종류를 사용하지 않는 기존 동의는 `null`일 수 있습니다.
+ * @property termsHash 고객이 실제로 동의한 약관 원문의 canonical SHA-256입니다. 약관
+ * 결합이 필요 없는 동의는 `null`이며 원문 자체를 저장하지 않습니다.
  */
-data class ConsentDecision(
+class ConsentDecision(
     val subject: ConsentSubject,
     val decision: ConsentDecisionType,
-    val evidenceAuthority: String,
-    val evidenceId: String,
-    val evidenceHash: String,
+    evidenceAuthority: String,
+    evidenceId: String,
+    evidenceHash: String,
     val decidedAt: Instant,
-    val actorRef: String,
+    actorRef: String,
+    evidenceType: String? = null,
+    termsHash: String? = null,
 ) : Serializable {
+    val evidenceAuthority = evidenceAuthority.requireNotBlank("evidenceAuthority")
+    val evidenceId = evidenceId.requireNotBlank("evidenceId")
+    val evidenceHash = evidenceHash.requireNotBlank("evidenceHash")
+    val actorRef = actorRef.requireNotBlank("actorRef")
+    val evidenceType = evidenceType?.requireNotBlank("evidenceType")
+    val termsHash = termsHash?.requireNotBlank("termsHash")
 
     init {
-        evidenceAuthority.requireNotBlank("evidenceAuthority")
-        evidenceId.requireNotBlank("evidenceId")
-        evidenceHash.requireNotBlank("evidenceHash")
-        actorRef.requireNotBlank("actorRef")
+        require(this.evidenceType == null || this.evidenceType.length <= 64) {
+            "evidenceType must not exceed 64 characters"
+        }
+        require(this.termsHash == null || SHA256.matches(this.termsHash)) {
+            "termsHash must be a lowercase SHA-256 value"
+        }
     }
 
     /**
@@ -129,6 +136,7 @@ data class ConsentDecision(
     }
 
     companion object {
+        private val SHA256 = Regex("[0-9a-f]{64}")
         private const val serialVersionUID = 1L
     }
 }

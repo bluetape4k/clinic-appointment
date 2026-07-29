@@ -129,13 +129,13 @@
 | 3. Flyway V10 | 세 dialect에서 V10 schema 계약 실패 확인 | H2→PostgreSQL→MySQL migration 통과 | `:appointment-api:build`: 281 tests, 실패 0; checksum·Exposed drift 점검 | DONE |
 | 4. 실행 BOM event ingest | 신뢰·상한·replay·gap 계약 실패 확인 | 대상 17개 테스트 통과 | `:appointment-event:build`: 77 tests, 실패 0; core/Flyway 회귀 통과 | DONE |
 | 5. bounded proposal | 희망일·선행 완료·부분 이행·scope·상한 계약 실패 확인 | 대상 13개 테스트 통과 | `:appointment-api:build`: 294 passing, 2 pending; 실제 Gatling 240/240; ktlint·detekt·Kover 통과 | DONE |
-| 6. commitment command | PENDING | PENDING | PENDING | PENDING |
+| 6. commitment command | command/service/repository 부재 compile 실패와 업무 오류 RED 확인 | 대상 command 22개·core 저장소 13개·PostgreSQL 동시성 5개 통과 | 세 dialect migration, 전체 API build, ktlint, 7-Tier 재검토 통과 | DONE |
 | 7. actor 기반 API | PENDING | PENDING | PENDING | PENDING |
 | 8. version 전환·외부 사실 | PENDING | PENDING | PENDING | PENDING |
 | 9. 운영·문서·KDoc | PENDING | PENDING | PENDING | PENDING |
 | 10. 세 DB·성능·회귀 | PENDING | PENDING | PENDING | PENDING |
 
-현재 집계: Required checks 14/22; N/A: 0; Blocked: 0.
+현재 집계: Required checks 15/22; N/A: 0; Blocked: 0.
 
 ### Task 1 상세 증거
 
@@ -241,3 +241,38 @@
 - **후속 경계:** 자원별 tenant/clinic provenance와 capacity bucket의 DB-backed
   검증은 Task 6, 장기 회귀용 추가 성능 matrix는 Task 10에서 검증한다. Task 5의
   순수 proposal 계산이 repository/API 계약을 선점하지 않는다.
+
+### Task 6 상세 증거
+
+- **RED:** 고객 가예약·관리자 승인·직접 확정·변경 제안·수락·거부·만료,
+  idempotency replay, revision gap, 서로 충돌하는 proposal accept, allocation
+  실패 rollback, Plan item 위조와 자원 item 참조 위조를 production service보다
+  먼저 또는 보정 회귀 테스트로 고정했다.
+- **GREEN:** `AppointmentCommitmentCommandService`가 하나의 Exposed transaction에서
+  actor-scope idempotency 선점, exact proposal·동의 재검증, 저장된 Plan item 검증,
+  정렬된 자원 잠금, 새 allocation 생성, commitment version CAS, 기존 allocation
+  해제, legacy projection, 감사·outbox, immutable idempotency 결과를 순서대로
+  수행한다.
+- **기존 예약 보호:** 변경 proposal 생성·거부·만료는 현재 확정 포인터와 자원 점유를
+  바꾸지 않는다. 수락·거부·만료는 같은 proposal row lock과 commitment version을
+  공유해 정확히 한 종결 결정만 성공한다. 새 자원 충돌이나 CAS 실패는 transaction
+  rollback으로 새 row와 부수 효과를 제거한다.
+- **Kotlin 계약 보정:** 생성자 검증을 가진 값은 helper 반환값을 실제 속성에 저장하고,
+  `data class.copy()`로 불변조건을 우회할 수 있는 command/domain 값은 일반 불변
+  class로 전환했다. production `!!`, `println`, broad `runCatching`,
+  `synchronized` 추가는 없고 Task 6 변경 Kotlin 전체가 `ktlint`를 통과했다.
+- **감사·패키지 정합성:** 직접확정에서 검증한 `evidenceType`과 정확한 `termsHash`를
+  세 dialect V10 schema와 repository read model에 보존한다. proposal 안에서
+  `treatmentKey`를 유일하게 만들고 모든 non-null `appointmentItemKey`가 같은
+  proposal의 영속 item을 가리키는지 allocation 전 재검증한다.
+- **표적 검증:** command service 22개, core commitment/item/allocation repository
+  13개, PostgreSQL 동시성 5개가 실패·오류 없이 통과했다.
+- **세 DB 검증:** H2→PostgreSQL→MySQL 순서로 migration test를 실행해 각 1개가
+  통과했다. nullable 동의 감사 필드와 Exposed table 정의의 drift는 없다.
+- **전체 회귀:** `./gradlew :appointment-api:build --no-build-cache
+  --rerun-tasks`가 323개 테스트, 실패 0, 오류 0, 기존 skipped 2개로 성공했다.
+- **6-R:** 독립 성능·안정성·보안·운영·개발자/API·사용자/호출자 관점과 본 세션
+  통합 검토는
+  `docs/review/2026-07-29-issue-184-task6-step-6r-code-review.md`에 보존한다.
+  P0/P1은 모두 닫았고 public Gateway adapter 신뢰 경계와 package-scale 성능은
+  Task 7·10의 명시적 후속 gate로 유지한다.

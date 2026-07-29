@@ -33,6 +33,7 @@ object Appointments : LongIdTable("scheduling_appointments") {
     val patientName = varchar("patient_name", 255)
     val patientPhone = varchar("patient_phone", 50).nullable()
     val patientExternalId = varchar("patient_external_id", 255).nullable()
+    val patientReferenceFingerprint = varchar("patient_reference_fingerprint", 128).nullable()
     val appointmentDate = date("appointment_date").nullable()
     val startTime = time("start_time").nullable()
     val endTime = time("end_time").nullable()

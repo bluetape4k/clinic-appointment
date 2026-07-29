@@ -23,25 +23,30 @@ import java.io.Serializable
  * 명시적으로 포함 또는 제외할 근거가 됩니다.
  * @property attemptNumber 같은 계획 의무를 여러 방문에서 시도할 때 1부터 증가하는 번호입니다.
  */
-data class AppointmentItemDraft(
-    val planRevisionId: Long,
-    val treatmentKey: String,
-    val representativeTreatmentName: String,
-    val detailedTreatmentCodes: List<String>,
-    val preparationMinutes: Int,
-    val treatmentMinutes: Int,
-    val recoveryMinutes: Int,
-    val attemptNumber: Int = 1,
+class AppointmentItemDraft(
+    planRevisionId: Long,
+    treatmentKey: String,
+    representativeTreatmentName: String,
+    detailedTreatmentCodes: List<String>,
+    preparationMinutes: Int,
+    treatmentMinutes: Int,
+    recoveryMinutes: Int,
+    attemptNumber: Int = 1,
 ) : Serializable {
+    val planRevisionId = planRevisionId.requirePositiveNumber("planRevisionId")
+    val treatmentKey = treatmentKey.requireNotBlank("treatmentKey")
+    val representativeTreatmentName =
+        representativeTreatmentName.requireNotBlank("representativeTreatmentName")
+    val detailedTreatmentCodes = detailedTreatmentCodes.toList()
+    val preparationMinutes = preparationMinutes.requireNonNegative("preparationMinutes")
+    val treatmentMinutes = treatmentMinutes.requirePositiveNumber("treatmentMinutes")
+    val recoveryMinutes = recoveryMinutes.requireNonNegative("recoveryMinutes")
+    val attemptNumber = attemptNumber.requirePositiveNumber("attemptNumber")
 
     init {
-        planRevisionId.requirePositiveNumber("planRevisionId")
-        treatmentKey.requireNotBlank("treatmentKey")
-        representativeTreatmentName.requireNotBlank("representativeTreatmentName")
-        preparationMinutes.requireNonNegative("preparationMinutes")
-        treatmentMinutes.requirePositiveNumber("treatmentMinutes")
-        recoveryMinutes.requireNonNegative("recoveryMinutes")
-        attemptNumber.requirePositiveNumber("attemptNumber")
+        require(this.detailedTreatmentCodes.all(String::isNotBlank)) {
+            "detailedTreatmentCodes must not contain blank values"
+        }
     }
 
     /** 준비·진료·회복을 모두 포함한 이 항목의 전체 방문 소요시간입니다. */
@@ -53,6 +58,7 @@ data class AppointmentItemDraft(
     }
 }
 
-private fun Int.requireNonNegative(name: String) {
+private fun Int.requireNonNegative(name: String): Int {
     require(this >= 0) { "$name must be greater than or equal to zero" }
+    return this
 }

@@ -13,6 +13,8 @@ import org.jetbrains.exposed.v1.javatime.timestamp
  *
  * [status]가 `ACTIVE`인 row만 overlap과 capacity 집계에 포함됩니다. proposal 교체 시
  * 기존 row를 삭제하지 않고 `RELEASED`로 바꿔 rollback과 감사 의미를 보존합니다.
+ * [maximumCapacity]는 구매 당시 proposal에 고정된 상한이며 서로 다른 상품 버전의
+ * allocation이 겹치면 repository가 활성 구간 중 가장 작은 상한을 적용합니다.
  */
 object ResourceAllocations : LongIdTable("scheduling_resource_allocations") {
     val tenantGroupId = reference("tenant_group_id", TenantGroups, onDelete = ReferenceOption.RESTRICT)
@@ -24,6 +26,7 @@ object ResourceAllocations : LongIdTable("scheduling_resource_allocations") {
     val startsAt = timestamp("starts_at")
     val endsAt = timestamp("ends_at")
     val capacityUnits = integer("capacity_units")
+    val maximumCapacity = integer("maximum_capacity")
     val allocationMode = enumerationByName<ResourceAllocationMode>("allocation_mode", 32)
     val status = enumerationByName<ResourceAllocationStatus>("allocation_status", 16)
     val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
