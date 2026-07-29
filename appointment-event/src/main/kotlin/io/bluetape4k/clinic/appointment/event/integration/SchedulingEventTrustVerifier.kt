@@ -1,6 +1,9 @@
 package io.bluetape4k.clinic.appointment.event.integration
 
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
+import io.bluetape4k.clinic.appointment.model.plan.ExecutionTreatment
+import io.bluetape4k.clinic.appointment.model.plan.MigrationMapping
+import io.bluetape4k.clinic.appointment.model.plan.PackageExecutionSnapshot
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -80,9 +83,126 @@ class SchedulingEventTrustVerifier(
         return envelope.trusted()
     }
 
+    /**
+     * 상품 version 전환 승인 fact를 trusted envelope로 승격합니다.
+     *
+     * 상품서비스가 발행한 최신 정의를 예약서비스가 그대로 실행하려면 raw transport에서
+     * 받은 event type, schema, producer, key, issuer/audience, replay window, canonical
+     * hash, signature가 모두 맞아야 합니다. 이 검증을 통과하지 못한 payload는 Plan
+     * revision 계산에 절대 들어가면 안 됩니다.
+     */
+    fun verifyProductVersionMigration(
+        envelope: UntrustedSchedulingEventEnvelope<ProductVersionMigrationApprovedEvent>,
+    ): TrustedSchedulingEventEnvelope<ProductVersionMigrationApprovedEvent> {
+        try {
+            ExternalFactEventBounds.validateProductVersionMigration(envelope)
+        } catch (_: IllegalArgumentException) {
+            throw SchedulingTrustException("PAYLOAD_CONTRACT_INVALID")
+        }
+        verifyCommonEnvelope(envelope, eventType = "ProductVersionMigrationApproved", schemaVersion = 1)
+        trust(
+            envelope.payloadHash == ProductVersionMigrationPayloadHasher.hash(envelope.payload),
+            "PAYLOAD_HASH_MISMATCH",
+        )
+        trust(signatureVerifier.verify(envelope), "SIGNATURE_INVALID")
+        return envelope.trusted()
+    }
+
+    /**
+     * 고객 일정 변경 거부 fact를 trusted envelope로 승격합니다.
+     *
+     * 이 fact는 확정 예약을 직접 바꾸는 command가 아니라 CRM handoff와 운영 예외 생성의
+     * 근거입니다. 그래서 상품 전환 승인과 동일한 transport 신뢰 검증을 적용하고,
+     * payload subject와 reason code도 allowlist로 제한합니다.
+     */
+    fun verifyMigrationRescheduleDeclined(
+        envelope: UntrustedSchedulingEventEnvelope<ProductVersionMigrationRescheduleDeclinedEvent>,
+    ): TrustedSchedulingEventEnvelope<ProductVersionMigrationRescheduleDeclinedEvent> {
+        try {
+            ExternalFactEventBounds.validateMigrationRescheduleDeclined(envelope)
+        } catch (_: IllegalArgumentException) {
+            throw SchedulingTrustException("PAYLOAD_CONTRACT_INVALID")
+        }
+        verifyCommonEnvelope(envelope, eventType = "ProductVersionMigrationRescheduleDeclined", schemaVersion = 1)
+        trust(
+            envelope.payloadHash == ProductVersionMigrationRescheduleDeclinedPayloadHasher.hash(envelope.payload),
+            "PAYLOAD_HASH_MISMATCH",
+        )
+        trust(signatureVerifier.verify(envelope), "SIGNATURE_INVALID")
+        return envelope.trusted()
+    }
+
+    /**
+     * 임상·환불 소유 서비스의 진료 이행 fact를 trusted envelope로 승격합니다.
+     *
+     * 부분 이행, 장비 장애, 환불은 예약 Plan의 미래 의무를 크게 바꾸므로 handler 앞에서
+     * producer와 canonical payload를 고정합니다. 완료·잔여 진료 정의의 길이와 identifier
+     * 경계도 여기서 먼저 확인해 DB나 planner 계층으로 오염된 값을 넘기지 않습니다.
+     */
+    fun verifyTreatmentFulfillment(
+        envelope: UntrustedSchedulingEventEnvelope<TreatmentFulfillmentEvent>,
+    ): TrustedSchedulingEventEnvelope<TreatmentFulfillmentEvent> {
+        try {
+            ExternalFactEventBounds.validateTreatmentFulfillment(envelope)
+        } catch (_: IllegalArgumentException) {
+            throw SchedulingTrustException("PAYLOAD_CONTRACT_INVALID")
+        }
+        verifyCommonEnvelope(envelope, eventType = "TreatmentFulfillmentRecorded", schemaVersion = 1)
+        val earliestAcceptedFactAt = clock.instant().minus(replayWindow)
+        envelope.payload.facts.forEach { fact ->
+            trust(!fact.occurredAt.isBefore(earliestAcceptedFactAt), "FACT_REPLAY_WINDOW_EXCEEDED")
+            trust(!fact.occurredAt.isAfter(envelope.occurredAt), "FACT_FROM_FUTURE")
+        }
+        trust(envelope.payloadHash == TreatmentFulfillmentPayloadHasher.hash(envelope.payload), "PAYLOAD_HASH_MISMATCH")
+        trust(signatureVerifier.verify(envelope), "SIGNATURE_INVALID")
+        return envelope.trusted()
+    }
+
+    private fun verifyCommonEnvelope(
+        envelope: UntrustedSchedulingEventEnvelope<*>,
+        eventType: String,
+        schemaVersion: Int,
+    ) {
+        trust(envelope.eventType == eventType, "EVENT_TYPE_NOT_ALLOWED")
+        trust(envelope.schemaVersion == schemaVersion, "SCHEMA_VERSION_NOT_ALLOWED")
+        trust(envelope.producer in allowedProducers, "PRODUCER_NOT_ALLOWED")
+        trust(envelope.keyId in allowedKeyIds, "KEY_NOT_ALLOWED")
+        trust(envelope.algorithm in allowedAlgorithms, "ALGORITHM_NOT_ALLOWED")
+        trust(envelope.issuer == expectedIssuer, "ISSUER_NOT_ALLOWED")
+        trust(envelope.audience == expectedAudience, "AUDIENCE_NOT_ALLOWED")
+        val now = clock.instant()
+        trust(!envelope.occurredAt.isBefore(now.minus(replayWindow)), "REPLAY_WINDOW_EXCEEDED")
+        trust(!envelope.occurredAt.isAfter(now.plusSeconds(30)), "EVENT_FROM_FUTURE")
+    }
+
     private fun trust(condition: Boolean, reasonCode: String) {
         if (!condition) throw SchedulingTrustException(reasonCode)
     }
+}
+
+/**
+ * 고객 일정 변경 거부 payload의 canonical SHA-256입니다.
+ *
+ * serializer field 순서나 DTO `toString()`에 의존하지 않고 replay/hash conflict를
+ * 구분하기 위해 length-framed 값을 사용합니다.
+ */
+internal object ProductVersionMigrationRescheduleDeclinedPayloadHasher {
+    fun hash(event: ProductVersionMigrationRescheduleDeclinedEvent): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(
+                CanonicalFrameWriter().apply {
+                    string("sourceAggregateId", event.sourceAggregateId)
+                    long("sourceAggregateVersion", event.sourceAggregateVersion)
+                    long("tenantGroupId", event.tenantGroupId)
+                    long("clinicId", event.clinicId)
+                    string("sourcePurchaseAuthority", event.sourcePurchaseAuthority)
+                    string("sourcePurchaseId", event.sourcePurchaseId)
+                    string("migrationId", event.migrationId)
+                    string("appointmentId", event.appointmentId?.toString())
+                    string("reasonCode", event.reasonCode)
+                }.toByteArray(),
+            )
+            .joinToString("") { byte -> "%02x".format(byte) }
 }
 
 object PurchaseCompletedPayloadHasher {
@@ -304,4 +424,213 @@ internal object PurchaseEventBounds {
         require(value.length in 1..MAX_IDENTIFIER_LENGTH) { "identifier length is invalid" }
         require(identifier.matches(value)) { "identifier contains unsafe characters" }
     }
+}
+
+/**
+ * 외부 fact event 3종이 trusted handler에 도달하기 전 지켜야 하는 공통 구조 경계입니다.
+ *
+ * 이 검증은 JSON transport 크기와 깊이를 다루는 [ExternalFactEventIngress] 이후,
+ * canonical hash와 signature 검증 직전에 실행됩니다. 목적은 예약서비스가 소유하지 않는
+ * 상품·임상·환불 사실을 처리하더라도 inbox, quarantine, Plan revision column 경계를
+ * 넘는 값이나 의미 없는 식별자를 내부 도메인으로 흘려보내지 않는 것입니다.
+ */
+internal object ExternalFactEventBounds {
+    private const val MAX_IDENTIFIER_LENGTH = 128
+    private const val MAX_SIGNATURE_LENGTH = 1_024
+    private const val MAX_FACTS = 1_000
+    private const val MAX_MAPPINGS = 1_000
+    private const val MAX_TREATMENTS = 1_000
+    private const val MAX_TREATMENT_NAME_LENGTH = 256
+    private const val MAX_REASON_LENGTH = 128
+    private const val MAX_CANONICAL_PAYLOAD_BYTES = 256 * 1_024
+    private val identifier = Regex("[A-Za-z0-9][A-Za-z0-9._:-]*")
+    private val sha256 = Regex("[0-9a-f]{64}")
+
+    fun validateProductVersionMigration(
+        envelope: UntrustedSchedulingEventEnvelope<ProductVersionMigrationApprovedEvent>,
+    ) {
+        validateMetadata(envelope)
+        val payload = envelope.payload
+        validateSourceScope(
+            sourceAggregateId = payload.sourceAggregateId,
+            sourceAggregateVersion = payload.sourceAggregateVersion,
+            tenantGroupId = payload.tenantGroupId,
+            clinicId = payload.clinicId,
+            sourcePurchaseAuthority = payload.sourcePurchaseAuthority,
+            sourcePurchaseId = payload.sourcePurchaseId,
+        )
+        boundedIdentifier(payload.migrationId)
+        boundedIdentifier(payload.fromProductVersionId)
+        boundedIdentifier(payload.toProductVersionId)
+        require(payload.fromProductVersionId != payload.toProductVersionId) {
+            "product migration must change the product version"
+        }
+        require(payload.mappings.size in 1..MAX_MAPPINGS) { "mappings size is invalid" }
+        payload.mappings.forEach(::validateMapping)
+        require(payload.mappingHash.matches(sha256)) { "mappingHash must be lowercase SHA-256" }
+        require(payload.mappingHash == ProductVersionMigrationPayloadHasher.mappingHash(payload.mappings)) {
+            "mappingHash does not match mappings"
+        }
+        validateConsent(payload)
+        validateSnapshot(payload.targetExecutionSnapshot)
+        require(ProductVersionMigrationPayloadHasher.hash(payload).length == 64) {
+            "migration payload hash is invalid"
+        }
+    }
+
+    fun validateMigrationRescheduleDeclined(
+        envelope: UntrustedSchedulingEventEnvelope<ProductVersionMigrationRescheduleDeclinedEvent>,
+    ) {
+        validateMetadata(envelope)
+        val payload = envelope.payload
+        validateSourceScope(
+            sourceAggregateId = payload.sourceAggregateId,
+            sourceAggregateVersion = payload.sourceAggregateVersion,
+            tenantGroupId = payload.tenantGroupId,
+            clinicId = payload.clinicId,
+            sourcePurchaseAuthority = payload.sourcePurchaseAuthority,
+            sourcePurchaseId = payload.sourcePurchaseId,
+        )
+        boundedIdentifier(payload.migrationId)
+        payload.appointmentId?.let { require(it > 0) { "appointmentId must be positive" } }
+        require(payload.reasonCode == "CUSTOMER_DECLINED_RESCHEDULE") {
+            "reasonCode is not allowed"
+        }
+        require(ProductVersionMigrationRescheduleDeclinedPayloadHasher.hash(payload).length == 64) {
+            "decline payload hash is invalid"
+        }
+    }
+
+    fun validateTreatmentFulfillment(
+        envelope: UntrustedSchedulingEventEnvelope<TreatmentFulfillmentEvent>,
+    ) {
+        validateMetadata(envelope)
+        val payload = envelope.payload
+        validateSourceScope(
+            sourceAggregateId = payload.sourceAggregateId,
+            sourceAggregateVersion = payload.sourceAggregateVersion,
+            tenantGroupId = payload.tenantGroupId,
+            clinicId = payload.clinicId,
+            sourcePurchaseAuthority = payload.sourcePurchaseAuthority,
+            sourcePurchaseId = payload.sourcePurchaseId,
+        )
+        require(payload.facts.size in 1..MAX_FACTS) { "facts size is invalid" }
+        require(payload.facts.map { it.treatmentKey }.distinct().size == payload.facts.size) {
+            "facts must contain unique treatmentKey values"
+        }
+        payload.facts.forEach { fact ->
+            boundedIdentifier(fact.treatmentKey)
+            fact.reasonCode?.let {
+                require(it.length in 1..MAX_REASON_LENGTH && identifier.matches(it)) {
+                    "reasonCode is invalid"
+                }
+            }
+            fact.completedTreatment?.let(::validateTreatment)
+            fact.remainingTreatment?.let(::validateTreatment)
+        }
+        require(TreatmentFulfillmentPayloadHasher.canonicalBytes(payload).size <= MAX_CANONICAL_PAYLOAD_BYTES) {
+            "fulfillment payload is too large"
+        }
+    }
+
+    private fun validateMetadata(envelope: UntrustedSchedulingEventEnvelope<*>) {
+        listOf(
+            envelope.eventId,
+            envelope.eventType,
+            envelope.producer,
+            envelope.issuer,
+            envelope.audience,
+            envelope.keyId,
+            envelope.algorithm,
+            envelope.correlationId,
+        ).forEach(::boundedIdentifier)
+        require(envelope.payloadHash.matches(sha256)) { "payloadHash must be lowercase SHA-256" }
+        require(envelope.schemaVersion > 0) { "schemaVersion must be positive" }
+        require(envelope.signature.length in 1..MAX_SIGNATURE_LENGTH) { "signature length is invalid" }
+    }
+
+    private fun validateSourceScope(
+        sourceAggregateId: String,
+        sourceAggregateVersion: Long,
+        tenantGroupId: Long,
+        clinicId: Long,
+        sourcePurchaseAuthority: String,
+        sourcePurchaseId: String,
+    ) {
+        boundedIdentifier(sourceAggregateId)
+        require(sourceAggregateVersion > 0) { "sourceAggregateVersion must be positive" }
+        require(tenantGroupId > 0) { "tenantGroupId must be positive" }
+        require(clinicId > 0) { "clinicId must be positive" }
+        boundedIdentifier(sourcePurchaseAuthority)
+        boundedIdentifier(sourcePurchaseId)
+    }
+
+    private fun validateMapping(mapping: MigrationMapping) {
+        require(mapping.sourceTreatmentKeys.size <= MAX_TREATMENTS) { "too many source treatments" }
+        mapping.sourceTreatmentKeys.forEach(::boundedIdentifier)
+        require(mapping.targets.size <= MAX_TREATMENTS) { "too many target treatments" }
+        mapping.targets.forEach { target -> boundedIdentifier(target.treatmentKey) }
+    }
+
+    private fun validateConsent(payload: ProductVersionMigrationApprovedEvent) {
+        val consent = payload.consent
+        require(consent.migrationId == payload.migrationId) { "consent migrationId mismatch" }
+        require(consent.fromProductVersionId == payload.fromProductVersionId) {
+            "consent fromProductVersionId mismatch"
+        }
+        require(consent.toProductVersionId == payload.toProductVersionId) { "consent toProductVersionId mismatch" }
+        require(consent.mappingHash == payload.mappingHash) { "consent mappingHash mismatch" }
+        require(consent.evidenceReferenceHash.matches(sha256)) {
+            "consent evidenceReferenceHash must be lowercase SHA-256"
+        }
+    }
+
+    private fun validateSnapshot(snapshot: PackageExecutionSnapshot) {
+        boundedIdentifier(snapshot.packageProductId)
+        boundedIdentifier(snapshot.packageProductVersionId)
+        require(snapshot.snapshotHash.matches(sha256)) { "snapshotHash must be lowercase SHA-256" }
+        require(snapshot.selectedComponentVersions.size <= MAX_TREATMENTS) { "too many component versions" }
+        snapshot.selectedComponentVersions.forEach { component ->
+            boundedIdentifier(component.componentProductId)
+            boundedIdentifier(component.componentProductVersionId)
+            component.selectionGroupId?.let(::boundedIdentifier)
+        }
+        require(snapshot.expandedTreatmentItems.size in 1..MAX_TREATMENTS) {
+            "expandedTreatmentItems size is invalid"
+        }
+        snapshot.expandedTreatmentItems.forEach(::validateTreatment)
+        snapshot.executionDependencies.forEach { dependency ->
+            boundedIdentifier(dependency.predecessorTreatmentKey)
+            boundedIdentifier(dependency.successorTreatmentKey)
+        }
+        snapshot.visitGroupingConstraints.forEach { grouping ->
+            boundedIdentifier(grouping.firstTreatmentKey)
+            boundedIdentifier(grouping.secondTreatmentKey)
+        }
+    }
+
+    private fun validateTreatment(treatment: ExecutionTreatment) {
+        boundedIdentifier(treatment.treatmentKey)
+        boundedIdentifier(treatment.componentProductId)
+        boundedIdentifier(treatment.componentProductVersionId)
+        boundedIdentifier(treatment.sourceBomItemId)
+        require(treatment.representativeTreatmentName.length in 1..MAX_TREATMENT_NAME_LENGTH) {
+            "representativeTreatmentName is invalid"
+        }
+        require(treatment.detailedTreatmentCodes.size <= MAX_TREATMENTS) { "too many detailed treatment codes" }
+        treatment.detailedTreatmentCodes.forEach(::boundedIdentifier)
+        require(treatment.practitionerQualifications.size <= MAX_TREATMENTS) { "too many practitioner qualifications" }
+        treatment.practitionerQualifications.forEach(::boundedIdentifier)
+        require(treatment.equipmentTypes.size <= MAX_TREATMENTS) { "too many equipment types" }
+        treatment.equipmentTypes.forEach(::boundedIdentifier)
+        require(treatment.spaceCapabilities.size <= MAX_TREATMENTS) { "too many space capabilities" }
+        treatment.spaceCapabilities.forEach(::boundedIdentifier)
+    }
+
+    private fun boundedIdentifier(value: String) {
+        require(value.length in 1..MAX_IDENTIFIER_LENGTH && identifier.matches(value)) {
+            "identifier is invalid"
+        }
+    }
+
 }

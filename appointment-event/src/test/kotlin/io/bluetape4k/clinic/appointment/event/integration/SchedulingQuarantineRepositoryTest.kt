@@ -164,6 +164,35 @@ class SchedulingQuarantineRepositoryTest {
     }
 
     @Test
+    fun `외부 fact 구조와 routing 실패도 source correction과 trust 재검증 없이는 release할 수 없다`() {
+        listOf(
+            "SCHEMA_VERSION_NOT_ALLOWED",
+            "PAYLOAD_CONTRACT_INVALID",
+            "ROUTING_METADATA_MISMATCH",
+        ).forEachIndexed { index, reasonCode ->
+            val record = transaction {
+                repository.recordDetected(
+                    detection(
+                        eventId = "external-fact-release-$index",
+                        reasonCode = reasonCode,
+                    ),
+                )
+            }
+
+            assertFailsWith<IllegalArgumentException> {
+                transaction {
+                    repository.approveRelease(
+                        record.id,
+                        "ops-user",
+                        "missing source correction",
+                        QuarantineReleaseEvidence(listOf("security-1")),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun `non sensitive release requires one approval reference`() {
         val record = transaction {
             repository.recordDetected(detection(reasonCode = "UNKNOWN_CATALOG"))
@@ -284,6 +313,7 @@ class SchedulingQuarantineRepositoryTest {
     }
 
     private fun detection(
+        eventId: String = "event-1",
         reasonCode: String = "TRUST_FAILED",
         protectedEnvelope: ProtectedQuarantineEnvelope = ProtectedQuarantineEnvelope(
             ciphertext = encryptedEnvelope("ciphertext-v1"),
@@ -292,7 +322,7 @@ class SchedulingQuarantineRepositoryTest {
         ),
         payloadExpiresAt: Instant = Instant.parse("2026-08-25T05:10:00Z"),
     ) = QuarantineDetection(
-        eventId = "event-1",
+        eventId = eventId,
         eventType = "PurchaseCompleted",
         protectedEnvelope = protectedEnvelope,
         producer = "commerce-service",

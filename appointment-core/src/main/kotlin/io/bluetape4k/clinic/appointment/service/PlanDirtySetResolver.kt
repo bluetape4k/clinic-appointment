@@ -43,4 +43,22 @@ class PlanDirtySetResolver {
         }
         return dirty
     }
+
+    /**
+     * 환불로 직접 취소된 항목과 함께 취소해야 하는 후속 의무를 반환합니다.
+     *
+     * `BLOCKING`은 선행 의무가 사라지면 후속 의무를 임상적으로 시작할 수 없다는
+     * 계약이므로 전이적으로 취소합니다. `NON_BLOCKING` 후속 의무는 독립적으로
+     * 수행할 수 있으므로 결과에 포함하지 않습니다. 이 메서드는 환불 금액이나 환불
+     * 가능 여부를 판단하지 않으며, 외부 환불 서비스가 확정한 사실을 예약 Plan에
+     * 반영할 범위만 계산합니다.
+     *
+     * @param refundedTreatmentKeys 환불 서비스가 취소를 확정한 Plan treatment key입니다.
+     * @param dependencies 현재 활성 Plan revision의 실행 의존성입니다.
+     * @return 직접 환불된 항목과 `BLOCKING` 후속 경로의 폐포입니다.
+     */
+    fun resolveCancellationSet(
+        refundedTreatmentKeys: Set<String>,
+        dependencies: List<ExecutionDependency>,
+    ): Set<String> = resolve(refundedTreatmentKeys, dependencies)
 }

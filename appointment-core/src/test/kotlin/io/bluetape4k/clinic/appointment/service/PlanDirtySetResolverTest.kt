@@ -32,4 +32,19 @@ class PlanDirtySetResolverTest {
 
         resolver.resolve(setOf("a", "x"), dependencies) shouldBeEqualTo setOf("a", "b", "x", "y")
     }
+
+    @Test
+    fun `환불된 항목은 BLOCKING 후속 의무만 취소하고 NON_BLOCKING 의무는 예약 가능하게 남긴다`() {
+        val dependencies = listOf(
+            ExecutionDependency("refunded", "blocked-next", ExecutionDependencyType.BLOCKING),
+            ExecutionDependency("blocked-next", "blocked-last", ExecutionDependencyType.BLOCKING),
+            ExecutionDependency("refunded", "independent", ExecutionDependencyType.NON_BLOCKING),
+            ExecutionDependency("independent", "independent-next", ExecutionDependencyType.BLOCKING),
+        )
+
+        resolver.resolveCancellationSet(
+            refundedTreatmentKeys = setOf("refunded"),
+            dependencies = dependencies,
+        ) shouldBeEqualTo setOf("refunded", "blocked-next", "blocked-last")
+    }
 }

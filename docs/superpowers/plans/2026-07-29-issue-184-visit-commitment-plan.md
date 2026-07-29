@@ -5,7 +5,7 @@
 > 모든 Kotlin 변경에는 `bluetape-kotlin-patterns`, 모든 동작 변경에는
 > `test-driven-development`를 적용한다.
 >
-> 상태: Task 7 Step 6-R `P0=0/P1=0` 완료. Task 8 구현 대기.
+> 상태: Task 8 구현·전체 회귀·Step 6-R 완료. Task 9 대기.
 
 **목표:** 구매 당시 고정된 단일 상품 또는 패키지 실행 BOM을 여러 방문과 세부
 진료로 전개하고, 고객 가예약·병원 승인·고객 동의·자원 점유를 원자적으로 결합한
@@ -541,14 +541,14 @@ statement-count 테스트 4개가 통과했다. `:appointment-api:build`는 전�
 **의존성:** Task 4, 6
 **쓰기 범위:** 외부 event DTO/handler, migration/dirty-set/exception tests
 
-- [ ] **RED:** 유효 전환, 동의 hash 불일치, from-version 불일치, mapping
+- [x] **RED:** 유효 전환, 동의 hash 불일치, from-version 불일치, mapping
   누락/중복/cycle, 완료 항목 변경 시도, replay, 부분 이행, 장비 고장 잔여 item,
   환불 취소와 `BLOCKING/NON_BLOCKING` 전파를 검증한다.
-- [ ] 유효 전환은 동일 Plan에 새 immutable revision을 추가해 즉시 활성화하되
+- [x] 유효 전환은 동일 Plan에 새 immutable revision을 추가해 즉시 활성화하되
   확정 appointment는 바꾸지 않는다. 일정 변경은 별도 proposal을 만든다.
-- [ ] 고객이 새 일정을 거부하면 기존 예약을 유지하고
+- [x] 고객이 새 일정을 거부하면 기존 예약을 유지하고
   `CUSTOMER_DECLINED_RESCHEDULE` 운영 예외와 CRM outbox를 추가한다.
-- [ ] 격리된 migration은 활성 revision을 바꾸지 않고 redacted
+- [x] 격리된 migration은 활성 revision을 바꾸지 않고 redacted
   `ProductVersionMigrationRejected`를 발행한다.
 
 ```bash
@@ -557,7 +557,15 @@ statement-count 테스트 4개가 통과했다. `:appointment-api:build`는 전�
 ./gradlew :appointment-core:test --tests "*PlanDirtySetResolverTest"
 ```
 
-**예상:** 완료 항목 provenance 변경 0건, 독립 미래 항목은 계속 예약 가능.
+**검증:** 외부 fact handler·strict ingress·production consumer 표적 테스트
+29개와 dirty-set 테스트 3개가 통과했다. `:appointment-event:build`는 107개,
+`:appointment-core:build`는
+452개 테스트를 모두 통과했고 API main/test Kotlin compilation도 성공했다.
+source version gap은 bounded `WAITING_GAP` 뒤 암호화 격리하며, 완료 실제 시각과
+`BLOCKING` 후속 dirty-set은 privacy-safe outbox에 보존한다. 완료 항목 provenance
+변경은 0건이고 `NON_BLOCKING` 독립 미래 항목은 예약 가능하게 유지된다.
+독립 architecture/security/comprehensive 재검토는 최종 코드와 검증 증거를
+기준으로 `P0=0/P1=0/P2=0/P3=0`으로 통과했다.
 **커밋:** `Revise only future work from authoritative external facts`
 
 ### Task 9: 운영 제어·보존·문서·KDoc 완성

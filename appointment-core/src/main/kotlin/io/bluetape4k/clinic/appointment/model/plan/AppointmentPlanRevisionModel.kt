@@ -70,7 +70,10 @@ data class VisitCandidate(
  * @property planId 같은 구매를 대표하는 양수 Plan 식별자입니다.
  * @property revision 1부터 단조 증가하는 업무 revision입니다.
  * @property productVersionId 이 revision이 고정한 상품 version입니다.
- * @property snapshotHash 이 revision의 실행 항목과 관계 전체를 검증하는 canonical hash입니다.
+ * @property snapshotHash 이 revision의 실행 항목·관계와 revision을 만든 권위 사실을
+ * 검증하는 canonical hash입니다. 최초 실행 BOM revision은 실행 snapshot hash를,
+ * 상품 전환·완료 사실 revision은 실행 결과와 승인·동의 provenance까지 결합한
+ * trusted event payload hash를 사용합니다.
  * @property active 새 제안 계산에 사용하는 활성 revision인지 나타냅니다. 과거 revision은
  * 감사와 완료 항목 provenance를 위해 계속 남습니다.
  */

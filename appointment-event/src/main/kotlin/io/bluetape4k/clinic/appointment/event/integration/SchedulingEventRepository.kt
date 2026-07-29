@@ -196,6 +196,75 @@ class SchedulingEventRepository {
         }.value
 
     /**
+     * 상품 version 전환 event의 민감하지 않은 routing metadata와 payload hash만 저장합니다.
+     */
+    fun insertReceivedProductVersionMigration(
+        envelope: TrustedSchedulingEventEnvelope<ProductVersionMigrationApprovedEvent>,
+    ): Long =
+        insertReceivedExternalFact(
+            envelope = envelope,
+            sourceAuthority = envelope.payload.sourcePurchaseAuthority,
+            sourceAggregateId = envelope.payload.sourceAggregateId,
+            sourceAggregateVersion = envelope.payload.sourceAggregateVersion,
+            tenantGroupId = envelope.payload.tenantGroupId,
+            clinicId = envelope.payload.clinicId,
+        )
+
+    /**
+     * 임상 완료·부분 이행·환불 event의 routing metadata와 payload hash만 저장합니다.
+     */
+    fun insertReceivedTreatmentFulfillment(
+        envelope: TrustedSchedulingEventEnvelope<TreatmentFulfillmentEvent>,
+    ): Long =
+        insertReceivedExternalFact(
+            envelope = envelope,
+            sourceAuthority = envelope.payload.sourcePurchaseAuthority,
+            sourceAggregateId = envelope.payload.sourceAggregateId,
+            sourceAggregateVersion = envelope.payload.sourceAggregateVersion,
+            tenantGroupId = envelope.payload.tenantGroupId,
+            clinicId = envelope.payload.clinicId,
+        )
+
+    /**
+     * 고객 일정 변경 거부 event의 routing metadata와 payload hash만 저장합니다.
+     */
+    fun insertReceivedMigrationDecline(
+        envelope: TrustedSchedulingEventEnvelope<ProductVersionMigrationRescheduleDeclinedEvent>,
+    ): Long =
+        insertReceivedExternalFact(
+            envelope = envelope,
+            sourceAuthority = envelope.payload.sourcePurchaseAuthority,
+            sourceAggregateId = envelope.payload.sourceAggregateId,
+            sourceAggregateVersion = envelope.payload.sourceAggregateVersion,
+            tenantGroupId = envelope.payload.tenantGroupId,
+            clinicId = envelope.payload.clinicId,
+        )
+
+    private fun <T> insertReceivedExternalFact(
+        envelope: TrustedSchedulingEventEnvelope<T>,
+        sourceAuthority: String,
+        sourceAggregateId: String,
+        sourceAggregateVersion: Long,
+        tenantGroupId: Long,
+        clinicId: Long,
+    ): Long =
+        SchedulingInboxEvents.insertAndGetId {
+            it[eventId] = envelope.eventId
+            it[eventType] = envelope.eventType
+            it[producer] = envelope.producer
+            it[SchedulingInboxEvents.sourceAuthority] = sourceAuthority
+            it[SchedulingInboxEvents.sourceAggregateId] = sourceAggregateId
+            it[SchedulingInboxEvents.sourceAggregateVersion] = sourceAggregateVersion
+            it[SchedulingInboxEvents.tenantGroupId] = tenantGroupId
+            it[SchedulingInboxEvents.clinicId] = clinicId
+            it[payloadHash] = envelope.payloadHash
+            it[status] = SchedulingInboxStatus.RECEIVED
+            it[attemptCount] = 0
+            it[occurredAt] = envelope.occurredAt
+            it[receivedAt] = envelope.receivedAt
+        }.value
+
+    /**
      * source aggregate의 정확한 version과 요청 hash의 관계를 bounded query로 분류한다.
      *
      * 동일 version의 같은 hash replay가 여러 event ID로 processed돼도 최대 한 row만
@@ -393,6 +462,106 @@ class SchedulingEventRepository {
     }
 
     /**
+     * 외부 사실 처리 결과를 privacy-safe generic Plan outbox로 추가합니다.
+     *
+     * [reasonCode]와 [changedTreatmentKeys]는 안정적인 code/key만 허용합니다. 진료명,
+     * 환자 참조, 임상 상세, 환불 금액은 payload에 포함하지 않습니다.
+     * [dirtyTreatmentKeys]는 증분 재계산할 `BLOCKING` 후속 폐포이고,
+     * [effectiveAtByTreatmentKey]는 해당 dirty-set의 기준이 되는 외부 사실 시각입니다.
+     * 상품 전환의 [sourceFactReference], [sourceFactHash], [evidenceReferenceHash]는
+     * 불변 revision이 어떤 승인·전환표·동의 증거로 생성됐는지 감사할 수 있게 하는
+     * 비민감 식별자와 SHA-256만 허용합니다.
+     */
+    fun insertExternalPlanFactOutbox(
+        inboundEventId: String,
+        correlationId: String,
+        eventType: String,
+        tenantGroupId: Long,
+        clinicId: Long,
+        planId: Long,
+        revisionId: Long?,
+        reasonCode: String?,
+        changedTreatmentKeys: Set<String> = emptySet(),
+        dirtyTreatmentKeys: Set<String> = emptySet(),
+        effectiveAtByTreatmentKey: Map<String, Instant> = emptyMap(),
+        sourceFactReference: String? = null,
+        sourceFactHash: String? = null,
+        evidenceReferenceHash: String? = null,
+    ) {
+        require(planId > 0) { "planId must be positive" }
+        revisionId?.let { require(it > 0) { "revisionId must be positive" } }
+        sourceFactReference?.let {
+            require(it.matches(SAFE_EXTERNAL_REFERENCE)) {
+                "sourceFactReference must be a safe external identifier"
+            }
+        }
+        listOfNotNull(sourceFactHash, evidenceReferenceHash).forEach {
+            require(it.matches(LOWERCASE_SHA_256)) { "external fact hashes must be lowercase SHA-256" }
+        }
+        require(effectiveAtByTreatmentKey.keys.all { it in dirtyTreatmentKeys }) {
+            "effective fact timestamps must belong to the dirty treatment set"
+        }
+        val outboxEventId = UUID.nameUUIDFromBytes(
+            "$eventType:$inboundEventId:$planId:${revisionId ?: "none"}"
+                .toByteArray(StandardCharsets.UTF_8),
+        ).toString()
+        val payload = buildString {
+            append('{')
+            append("\"eventId\":").appendJsonString(outboxEventId)
+            append(",\"causationEventId\":").appendJsonString(inboundEventId)
+            append(",\"correlationId\":").appendJsonString(correlationId)
+            append(",\"planId\":").append(planId)
+            revisionId?.let { append(",\"revisionId\":").append(it) }
+            reasonCode?.let {
+                append(",\"reasonCode\":").appendJsonString(it)
+            }
+            append(",\"changedTreatmentKeys\":[")
+            changedTreatmentKeys.sorted().forEachIndexed { index, key ->
+                if (index > 0) append(',')
+                appendJsonString(key)
+            }
+            append("],\"dirtyTreatmentKeys\":[")
+            dirtyTreatmentKeys.sorted().forEachIndexed { index, key ->
+                if (index > 0) append(',')
+                appendJsonString(key)
+            }
+            append("],\"effectiveAtByTreatmentKey\":{")
+            effectiveAtByTreatmentKey.toSortedMap().entries.forEachIndexed { index, (key, instant) ->
+                if (index > 0) append(',')
+                appendJsonString(key)
+                append(':')
+                appendJsonString(instant.toString())
+            }
+            append('}')
+            sourceFactReference?.let {
+                append(",\"sourceFactReference\":").appendJsonString(it)
+            }
+            sourceFactHash?.let {
+                append(",\"sourceFactHash\":").appendJsonString(it)
+            }
+            evidenceReferenceHash?.let {
+                append(",\"evidenceReferenceHash\":").appendJsonString(it)
+            }
+            append('}')
+        }
+        SchedulingOutboxEvents.insertAndGetId {
+            it[eventId] = outboxEventId
+            it[causationEventId] = inboundEventId
+            it[SchedulingOutboxEvents.correlationId] = correlationId
+            it[SchedulingOutboxEvents.eventType] = eventType
+            it[SchedulingOutboxEvents.tenantGroupId] = tenantGroupId
+            it[SchedulingOutboxEvents.clinicId] = clinicId
+            it[SchedulingOutboxEvents.planId] = planId
+            it[aggregateType] = APPOINTMENT_PLAN_AGGREGATE_TYPE
+            it[aggregateId] = planId.toString()
+            it[schemaVersion] = 1
+            it[payloadJson] = payload
+            it[status] = SchedulingOutboxStatus.PENDING
+            it[attemptCount] = 0
+        }
+    }
+
+    /**
      * 명시적인 privacy-safe allow-list에서 안정적인 plan-event JSON을 생성한다.
      *
      * 이미 trusted envelope에서 온 metadata를 포함해 모든 문자열을 JSON escape한다.
@@ -516,5 +685,7 @@ class SchedulingEventRepository {
     private companion object {
         const val APPOINTMENT_PLAN_AGGREGATE_TYPE = "APPOINTMENT_PLAN"
         const val APPOINTMENT_PLAN_REVISION_AGGREGATE_TYPE = "APPOINTMENT_PLAN_REVISION"
+        val SAFE_EXTERNAL_REFERENCE = Regex("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+        val LOWERCASE_SHA_256 = Regex("[0-9a-f]{64}")
     }
 }

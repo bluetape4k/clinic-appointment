@@ -231,6 +231,33 @@ class SchedulingQuarantineRepository(
                 )
             }
 
+    /**
+     * 같은 broker event가 이미 종결 격리되었는지 확인합니다.
+     *
+     * 외부 fact consumer는 inbox를 만들기 전 trust/decode 단계에서도 실패할 수 있으므로
+     * quarantine 자체의 unique event id를 idempotency 기준으로 사용합니다.
+     */
+    fun findByEventId(eventId: String): QuarantineRecord? {
+        validateIdentifier(eventId, "eventId")
+        return SchedulingQuarantineEvents
+            .selectAll()
+            .where { SchedulingQuarantineEvents.eventId eq eventId }
+            .singleOrNull()
+            ?.let {
+                QuarantineRecord(
+                    id = it[SchedulingQuarantineEvents.id].value,
+                    eventId = it[SchedulingQuarantineEvents.eventId],
+                    envelopeHash = it[SchedulingQuarantineEvents.envelopeHash],
+                    encryptedOriginalEnvelope = it[SchedulingQuarantineEvents.encryptedOriginalEnvelope],
+                    encryptionKeyId = it[SchedulingQuarantineEvents.encryptionKeyId],
+                    reasonCode = it[SchedulingQuarantineEvents.reasonCode],
+                    payloadExpiresAt = it[SchedulingQuarantineEvents.payloadExpiresAt],
+                    legalHold = it[SchedulingQuarantineEvents.legalHold],
+                    status = it[SchedulingQuarantineEvents.status],
+                )
+            }
+    }
+
     fun auditTrail(quarantineId: Long): List<QuarantineAuditRecord> =
         SchedulingQuarantineAuditEvents
             .selectAll()
@@ -542,7 +569,8 @@ class SchedulingQuarantineRepository(
     }
 
     private companion object {
-        const val MAX_ENCRYPTED_ENVELOPE_LENGTH = 262_144
+        // 1 MiB raw JSON, canonical metadata, GCM tag/IV를 Base64로 보관할 수 있는 상한입니다.
+        const val MAX_ENCRYPTED_ENVELOPE_LENGTH = 1_500_000
         const val MIN_ENCODED_ENVELOPE_LENGTH = 40
         const val MIN_ENCRYPTED_ENVELOPE_BYTES = 29
         val identifier = Regex("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
@@ -558,12 +586,25 @@ class SchedulingQuarantineRepository(
             "EVENT_TYPE_NOT_ALLOWED",
             "PRODUCER_NOT_ALLOWED",
             "KEY_NOT_ALLOWED",
+            "ALGORITHM_NOT_ALLOWED",
             "ISSUER_NOT_ALLOWED",
             "AUDIENCE_NOT_ALLOWED",
             "REPLAY_WINDOW_EXCEEDED",
             "EVENT_FROM_FUTURE",
+            "FACT_REPLAY_WINDOW_EXCEEDED",
+            "FACT_FROM_FUTURE",
             "PAYLOAD_HASH_MISMATCH",
             "SIGNATURE_INVALID",
+            "SCHEMA_VERSION_NOT_ALLOWED",
+            "ENVELOPE_METADATA_INVALID",
+            "PAYLOAD_TOO_LARGE",
+            "PAYLOAD_DEPTH_EXCEEDED",
+            "PAYLOAD_STRUCTURE_INVALID",
+            "PRODUCT_MIGRATION_MAPPING_FAILED",
+            "PRODUCT_MIGRATION_DECLINE_MAPPING_FAILED",
+            "TREATMENT_FULFILLMENT_MAPPING_FAILED",
+            "PAYLOAD_CONTRACT_INVALID",
+            "ROUTING_METADATA_MISMATCH",
         )
         val allowedReasonCodes = setOf(
             "TRUST_FAILED",
@@ -576,18 +617,36 @@ class SchedulingQuarantineRepository(
             "APPOINTMENT_PLAN_NOT_FOUND",
             "PACKAGE_EXECUTION_INVALID",
             "PACKAGE_EXECUTION_PRODUCT_MISMATCH",
+            "ACTIVE_PLAN_REVISION_NOT_FOUND",
+            "FULFILLMENT_FACT_INVALID",
+            "PRODUCT_VERSION_MISMATCH",
+            "CONSENT_SUBJECT_MISMATCH",
+            "BOM_MAPPING_INVALID",
             "SOURCE_VERSION_HASH_CONFLICT",
             "STALE_SOURCE_VERSION",
             "SOURCE_VERSION_GAP_EXHAUSTED",
             "SOURCE_AUTHORITY_TIMEOUT_EXHAUSTED",
             "SOURCE_AUTHORITY_CIRCUIT_OPEN_EXHAUSTED",
             "EVENT_TYPE_NOT_ALLOWED",
+            "SCHEMA_VERSION_NOT_ALLOWED",
+            "ENVELOPE_METADATA_INVALID",
+            "PAYLOAD_TOO_LARGE",
+            "PAYLOAD_DEPTH_EXCEEDED",
+            "PAYLOAD_STRUCTURE_INVALID",
+            "PRODUCT_MIGRATION_MAPPING_FAILED",
+            "PRODUCT_MIGRATION_DECLINE_MAPPING_FAILED",
+            "TREATMENT_FULFILLMENT_MAPPING_FAILED",
+            "PAYLOAD_CONTRACT_INVALID",
+            "ROUTING_METADATA_MISMATCH",
             "PRODUCER_NOT_ALLOWED",
             "KEY_NOT_ALLOWED",
+            "ALGORITHM_NOT_ALLOWED",
             "ISSUER_NOT_ALLOWED",
             "AUDIENCE_NOT_ALLOWED",
             "REPLAY_WINDOW_EXCEEDED",
             "EVENT_FROM_FUTURE",
+            "FACT_REPLAY_WINDOW_EXCEEDED",
+            "FACT_FROM_FUTURE",
             "PAYLOAD_HASH_MISMATCH",
             "SIGNATURE_INVALID",
             "REFUND_REVIEW",

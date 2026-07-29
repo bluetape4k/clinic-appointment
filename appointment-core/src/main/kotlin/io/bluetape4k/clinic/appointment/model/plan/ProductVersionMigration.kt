@@ -36,6 +36,14 @@ enum class PlanTreatmentStatus {
 
     /** 권위 있는 완료 사실이 확정되어 구 revision과 version에 영구히 남습니다. */
     COMPLETED,
+
+    /**
+     * 권위 있는 환불·취소 사실로 미래 시술 의무가 소멸했습니다.
+     *
+     * 완료 이력을 되돌리는 상태가 아니며, `BLOCKING` 의존성 때문에 함께 수행할 수
+     * 없게 된 후속 의무에도 적용할 수 있습니다.
+     */
+    CANCELLED,
 }
 
 /**

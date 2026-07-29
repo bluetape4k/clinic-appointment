@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentPlanRecord
 import io.bluetape4k.clinic.appointment.model.dto.PlannedTreatmentKey
 import io.bluetape4k.clinic.appointment.model.dto.PlannedTreatmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentDependencyRecord
+import io.bluetape4k.clinic.appointment.model.plan.AppointmentPlanStatus
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlans
 import io.bluetape4k.clinic.appointment.model.tables.PlannedTreatments
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
@@ -15,6 +16,8 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.update
+import java.time.Instant
 
 /**
  * caller가 소유한 transaction 안에서 완전한 예약 계획 aggregate를 저장하고 읽습니다.
@@ -227,6 +230,39 @@ class AppointmentPlanRepository {
             }
             .singleOrNull()
             ?.let(::mapAggregate)
+
+    /**
+     * 외부 완료·환불 사실을 반영한 파생 Plan 상태를 compare-and-set으로 갱신합니다.
+     *
+     * 환불 가능 여부나 임상 완료 여부를 판단하지 않습니다. caller가 같은 transaction
+     * 안에서 새 불변 revision을 append한 뒤, 읽었던 [expectedStatus]가 여전히 유지될
+     * 때만 aggregate 상태를 [newStatus]로 바꿉니다. [tenantGroupId]와 [clinicId]는
+     * 이미 잠근 Plan ID가 다른 SaaS scope에서 재사용·오용되더라도 update predicate가
+     * tenant 경계를 다시 강제하는 방어 조건입니다.
+     */
+    fun updateStatus(
+        planId: Long,
+        tenantGroupId: Long,
+        clinicId: Long,
+        expectedStatus: AppointmentPlanStatus,
+        newStatus: AppointmentPlanStatus,
+        updatedAt: Instant,
+    ): Boolean {
+        require(planId > 0) { "planId must be positive" }
+        require(tenantGroupId > 0) { "tenantGroupId must be positive" }
+        require(clinicId > 0) { "clinicId must be positive" }
+        return AppointmentPlans.update(
+            where = {
+                (AppointmentPlans.id eq planId) and
+                    (AppointmentPlans.tenantGroupId eq tenantGroupId) and
+                    (AppointmentPlans.clinicId eq clinicId) and
+                    (AppointmentPlans.status eq expectedStatus)
+            },
+        ) {
+            it[status] = newStatus
+            it[AppointmentPlans.updatedAt] = updatedAt
+        } == 1
+    }
 
     /**
      * 현재 transaction 안에서 root row 하나를 완전한 aggregate로 재구성합니다.

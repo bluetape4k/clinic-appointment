@@ -149,6 +149,17 @@ class AppointmentPlanRevisionRepository {
     }
 
     /**
+     * 특정 불변 revision과 모든 child를 identity로 조회합니다.
+     *
+     * 이 조회는 과거 완료 provenance가 새 revision 생성 뒤에도 바뀌지 않았는지
+     * 검증하거나, outbox consumer가 정확한 revision을 재구성할 때 사용합니다.
+     */
+    fun findById(revisionId: Long): PersistedAppointmentPlanRevisionAggregateRecord? {
+        revisionId.requirePositiveNumber("revisionId")
+        return findAggregateById(revisionId)
+    }
+
+    /**
      * 현재 활성 row를 잠그고 expected ID가 일치할 때만 새 revision을 활성화합니다.
      */
     fun activate(
@@ -204,7 +215,7 @@ class AppointmentPlanRevisionRepository {
         return true
     }
 
-    private fun findById(revisionId: Long): PersistedAppointmentPlanRevisionAggregateRecord? =
+    private fun findAggregateById(revisionId: Long): PersistedAppointmentPlanRevisionAggregateRecord? =
         AppointmentPlanRevisions
             .selectAll()
             .where { AppointmentPlanRevisions.id eq revisionId }
