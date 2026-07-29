@@ -4,6 +4,8 @@ import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.clinic.appointment.api.dto.CreateAppointmentRequest
+import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
+import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiException
 import io.bluetape4k.clinic.appointment.event.AppointmentDomainEvent
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentIdempotencyRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
@@ -213,7 +215,10 @@ class AppointmentService(
 
     suspend fun updateStatus(id: Long, tenantGroupId: Long, targetStatus: String, reason: String?): AppointmentRecord {
         log.debug { "updateStatus: id=$id, tenantGroupId=$tenantGroupId, target=$targetStatus" }
-        val record = transaction { appointmentRepository.findByIdAndTenant(id, tenantGroupId) }
+        val record = transaction {
+            rejectCommitmentV2Mutation(id, tenantGroupId)
+            appointmentRepository.findByIdAndTenant(id, tenantGroupId)
+        }
             ?: throw NoSuchElementException("Appointment not found: $id")
 
         val currentState = record.status
@@ -299,7 +304,10 @@ class AppointmentService(
 
     suspend fun cancel(id: Long, tenantGroupId: Long, reason: String? = null): AppointmentRecord {
         log.debug { "cancel: id=$id, tenantGroupId=$tenantGroupId, reason=$reason" }
-        val record = transaction { appointmentRepository.findByIdAndTenant(id, tenantGroupId) }
+        val record = transaction {
+            rejectCommitmentV2Mutation(id, tenantGroupId)
+            appointmentRepository.findByIdAndTenant(id, tenantGroupId)
+        }
             ?: throw NoSuchElementException("Appointment not found: $id")
 
         val effectiveReason = reason ?: "Cancelled by user"
@@ -328,6 +336,23 @@ class AppointmentService(
 
         return transaction { appointmentRepository.findByIdAndTenant(id, tenantGroupId) }
             ?: throw NoSuchElementException("Appointment not found after cancel: $id")
+    }
+
+    /**
+     * commitment v2 row가 legacy 상태 변경 경로로 우회하지 못하게 한다.
+     *
+     * v2 변경은 ETag CAS, 동의, 자원 allocation, outbox를 하나의 transaction으로 처리한다.
+     * projection이 완성됐다는 이유로 legacy 상태 머신만 실행하면 이 불변식이 깨진다.
+     */
+    private fun rejectCommitmentV2Mutation(
+        appointmentId: Long,
+        tenantGroupId: Long,
+    ) {
+        if (appointmentRepository.isCommitmentV2(appointmentId, tenantGroupId)) {
+            throw AppointmentCommitmentApiException(
+                AppointmentCommitmentApiError.NEW_APPOINTMENT_API_REQUIRED,
+            )
+        }
     }
 }
 

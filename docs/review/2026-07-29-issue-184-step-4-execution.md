@@ -130,12 +130,12 @@
 | 4. 실행 BOM event ingest | 신뢰·상한·replay·gap 계약 실패 확인 | 대상 17개 테스트 통과 | `:appointment-event:build`: 77 tests, 실패 0; core/Flyway 회귀 통과 | DONE |
 | 5. bounded proposal | 희망일·선행 완료·부분 이행·scope·상한 계약 실패 확인 | 대상 13개 테스트 통과 | `:appointment-api:build`: 294 passing, 2 pending; 실제 Gatling 240/240; ktlint·detekt·Kover 통과 | DONE |
 | 6. commitment command | command/service/repository 부재 compile 실패와 업무 오류 RED 확인 | 대상 command 22개·core 저장소 13개·PostgreSQL 동시성 5개 통과 | 세 dialect migration, 전체 API build, ktlint, 7-Tier 재검토 통과 | DONE |
-| 7. actor 기반 API | PENDING | PENDING | PENDING | PENDING |
+| 7. actor 기반 API | 위조 가능한 body 권한·누락 header·legacy v2 혼입·불안정 오류 RED 확인 | Gateway actor 전용 API·stable error·legacy guard 통과 | API 358개·core 451개·100 item statement-count·7-Tier 통과 | DONE |
 | 8. version 전환·외부 사실 | PENDING | PENDING | PENDING | PENDING |
 | 9. 운영·문서·KDoc | PENDING | PENDING | PENDING | PENDING |
 | 10. 세 DB·성능·회귀 | PENDING | PENDING | PENDING | PENDING |
 
-현재 집계: Required checks 15/22; N/A: 0; Blocked: 0.
+현재 집계: Required checks 16/22; N/A: 0; Blocked: 0.
 
 ### Task 1 상세 증거
 
@@ -276,3 +276,47 @@
   `docs/review/2026-07-29-issue-184-task6-step-6r-code-review.md`에 보존한다.
   P0/P1은 모두 닫았고 public Gateway adapter 신뢰 경계와 package-scale 성능은
   Task 7·10의 명시적 후속 gate로 유지한다.
+
+### Task 7 상세 증거
+
+- **RED:** 고객·관리자 API가 없던 상태에서 actor/tenant/clinic/patient 위조,
+  Gateway envelope 누락, 서비스 principal 접근, 필수 HTTP precondition 누락,
+  commitment v2 row의 legacy 조회·변경 유입을 실패 테스트로 고정했다.
+- **Gateway 신뢰 경계:** controller는 `ActorContextResolver`가 만든
+  `ActorContext`만 사용한다. body에는 actor, scope, 정책 mode, 동의 허용 유형,
+  약관 hash, 담당자·자원 mapping을 두지 않으며 application resolver가 tenant와
+  clinic 안에서 정책·환자 fingerprint·opaque 동의 namespace를 조립한다.
+- **가예약과 확정:** 고객 생성은 `202 PROPOSED`, 관리자 직접 생성은 정책이
+  허용할 때 `201 CONFIRMED`다. 고객 수락·거부와 관리자 승인·직접확정·변경제안은
+  `Idempotency-Key`와 strong `If-Match`를 사용하고 응답 version을 strong
+  `ETag`로 돌려준다. 생성은 `If-None-Match: *`를 요구한다.
+- **오류·OpenAPI:** commitment 전용 stable error registry가 scope, consent,
+  proposal 만료·경합, resource·version·idempotency conflict, plan limit,
+  predecessor, legacy API 거부를 고정 status/retry/action으로 변환한다. 모든 v2
+  operation은 오류 status와 `SchedulingApiErrorResponse` schema를 OpenAPI에
+  게시하며 통합 테스트가 실제 `/v3/api-docs` JSON을 검증한다.
+- **legacy 보호:** legacy repository의 단건·기간 조회와 update는
+  `modelVersion == LEGACY`와 완전한 projection을 요구한다. legacy status 변경,
+  휴진 재예약, 장비 장애 영향 조회도 commitment v2 row를 처리하지 않는다.
+- **부분 rollback:** `appointment.commitment.api-enabled=false`는 v2 handler와
+  OpenAPI 자체를 숨긴다. 별도 `ingress-enabled=false`는 신규 고객 요청과 관리자
+  직접 생성만 막고, 이미 존재하는 commitment의 승인·수락·거부·변경제안은 유지한다.
+- **패키지 성능 보정:** 7-Tier 성능 검토에서 item별 treatment SELECT와 INSERT가
+  대형 패키지에 선형 round-trip을 만드는 P2를 발견했다. `(planRevisionId,
+  treatmentKey)` composite bulk 조회와 Exposed `batchInsert`로 바꾸고 100개
+  item에서 treatment SELECT 1회, item INSERT 1회를 회귀 테스트로 고정했다.
+- **H2 순서 독립성:** commitment repository와 closure reschedule 테스트를 함께
+  실행할 때 H2 engine이 UTC 설정 전에 초기화될 수 있던 날짜 이동을 발견했다.
+  공용 test support가 schema 생성 전에 UTC를 설정하도록 보정했고, H2,
+  PostgreSQL, MySQL 순차 회귀를 다시 통과했다.
+- **표적 검증:** 고객·관리자·보안·오류·legacy API 대상 95개, 오류 해석 5개,
+  core commitment·closure 34개, item repository 4개가 통과했다.
+- **전체 회귀:** `:appointment-core:build --no-build-cache --rerun-tasks`는
+  451개 전부 통과했고 `:appointment-api:build --no-build-cache --rerun-tasks`는
+  전체 358개 중 356개 통과·기존 2개 skipped로 성공했다. 두 build 모두
+  Kover verify까지 통과했다.
+- **6-R:** 독립 사용자·호출자, 개발자·API, 성능, 안정성, 보안, 운영·SRE와
+  본 세션 통합 검토는
+  `docs/review/2026-07-29-issue-184-task7-step-6r-code-review.md`에 보존한다.
+  최종 집계는 P0=0/P1=0이며 Task 8의 외부 완료·부분 이행·환불 사실 처리는
+  아직 시작하지 않았다.

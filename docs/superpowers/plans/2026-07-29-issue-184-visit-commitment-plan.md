@@ -5,7 +5,7 @@
 > 모든 Kotlin 변경에는 `bluetape-kotlin-patterns`, 모든 동작 변경에는
 > `test-driven-development`를 적용한다.
 >
-> 상태: Task 6 Step 6-R `P0=0/P1=0` 완료. Task 7 구현 대기.
+> 상태: Task 7 Step 6-R `P0=0/P1=0` 완료. Task 8 구현 대기.
 
 **목표:** 구매 당시 고정된 단일 상품 또는 패키지 실행 BOM을 여러 방문과 세부
 진료로 전개하고, 고객 가예약·병원 승인·고객 동의·자원 점유를 원자적으로 결합한
@@ -440,21 +440,21 @@ skipped 2개로 성공했다. Step 6-R의 독립 7-Tier 결과와 후속 경계�
 **의존성:** Task 6
 **쓰기 범위:** v2 controller/DTO/error/security/OpenAPI tests, legacy guard
 
-- [ ] **RED:** body의 actor/tenant/clinic/patient 위조 필드 부재, patient subject
+- [x] **RED:** body의 actor/tenant/clinic/patient 위조 필드 부재, patient subject
   일치, 관리자 clinic 범위, Gateway envelope 없음, 서비스 principal 불일치를 검증한다.
-- [ ] controller는 `ActorContextResolver`로만 actor를 얻는다. 고객과 관리자
+- [x] controller는 `ActorContextResolver`로만 actor를 얻는다. 고객과 관리자
   controller를 분리하고 `Idempotency-Key`, `If-None-Match: *`, `If-Match`를
   command에 전달한다.
-- [ ] `CommitmentCommandContext`, `DirectConfirmationPolicyDecision`,
+- [x] `CommitmentCommandContext`, `DirectConfirmationPolicyDecision`,
   `ConfirmedAppointmentProjectionTarget`은 request body에서 받지 않는다. Gateway
   principal과 tenant·clinic 범위의 유효 정책 snapshot 및 자원 inventory를
   server-side resolver로 조회해 조립하고, body가 정책 방식·허용 증빙·약관 hash·
   담당자 mapping을 위조할 수 없음을 negative test로 고정한다.
-- [ ] `actorAuditRef`, 동의 `actorRef/evidenceAuthority/evidenceId`는 원문 개인정보나
+- [x] `actorAuditRef`, 동의 `actorRef/evidenceAuthority/evidenceId`는 원문 개인정보나
   token이 아닌 제한된 opaque reference만 허용한다. 전역 증빙 ID를 유지한다면 원본
   authority가 tenant namespace를 포함한 추측 불가능 ID를 발행하도록 검증하고,
   중복은 raw unique violation이 아닌 안정적인 application 오류로 변환한다.
-- [ ] 다음 endpoint와 status를 그대로 구현한다.
+- [x] 다음 endpoint와 status를 그대로 구현한다.
 
 | Actor | Method / path | 성공 |
 |---|---|---:|
@@ -467,7 +467,7 @@ skipped 2개로 성공했다. Step 6-R의 독립 7-Tier 결과와 후속 경계�
 | 관리자 | `POST /api/v2/appointments/{id}/change-proposals` | 202 |
 | 고객·관리자 | `GET /api/v2/appointments/{id}/commitment` | 200 |
 
-- [ ] controller와 application service 경계를 다음 signature로 고정한다.
+- [x] controller와 application service 경계를 다음 signature로 고정한다.
   `expectedVersion`은 `If-Match`, 생성 조건은 `If-None-Match`, 멱등성은
   `Idempotency-Key`에서만 만들며 request body에 복제하지 않는다.
 
@@ -506,19 +506,19 @@ fun decideProposal(
   `decideProposal`은 고객 accept에 사용한다. 각 mutation response의 `version`을
   `ETag`로 내보내고 다음 mutation의 `If-Match` 예제를 OpenAPI에 포함한다.
 
-- [ ] `AppointmentCommitmentApiException`은 최소
+- [x] `AppointmentCommitmentApiException`은 최소
   `SCOPE_MISMATCH`, `SCOPE_FORBIDDEN`, `CONSENT_REQUIRED`,
   `PROPOSAL_EXPIRED`, `PROPOSAL_NOT_CURRENT`, `RESOURCE_CONFLICT`,
   `VERSION_CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `DIRECT_CONFIRM_NOT_ALLOWED`,
   `PLAN_LIMIT_EXCEEDED`, `PREDECESSOR_NOT_COMPLETED`,
   `NEW_APPOINTMENT_API_REQUIRED`를 고정 HTTP status/retryability/caller action에
   매핑한다. event 전용 code는 public parser 상세 없이 redacted 상태로만 노출한다.
-- [ ] 기존 `POST /appointments`는 legacy row만 만들며 commitment가 있는 row의
+- [x] 기존 `POST /appointments`는 legacy row만 만들며 commitment가 있는 row의
   legacy update/status는 `NEW_APPOINTMENT_API_REQUIRED`로 거부한다.
-- [ ] legacy repository의 단건·기간 조회는 `model_version`과 projection 완성
+- [x] legacy repository의 단건·기간 조회는 `model_version`과 projection 완성
   조건을 적용해 미확정 v2 row를 legacy `AppointmentRecord`로 mapping하지 않는다.
   v2 조회는 commitment query model을 사용하고 기존 nullable column을 직접 노출하지 않는다.
-- [ ] OpenAPI에 actor, 가예약, 승인, 동의, 만료, 충돌 예제를 고정한다.
+- [x] OpenAPI에 actor, 가예약, 승인, 동의, 만료, 충돌 예제를 고정한다.
 
 ```bash
 ./gradlew :appointment-api:test --tests "*AppointmentRequestV2Test" \
@@ -527,7 +527,12 @@ fun decideProposal(
   --tests "*AppointmentControllerTest"
 ```
 
-**예상:** 고객 요청 202/PROPOSED, 권한 없는 scope 403, legacy regression 0건.
+**검증:** 고객·관리자·보안·오류·legacy 표적 API 테스트 95개, 오류 해석
+테스트 5개, core commitment·closure 표적 테스트 34개, 대형 패키지 item
+statement-count 테스트 4개가 통과했다. `:appointment-api:build`는 전체 358개
+중 356개 통과·기존 2개 skipped, `:appointment-core:build`는 451개 전부
+통과했다. Step 6-R의 최종 7-Tier는
+`docs/review/2026-07-29-issue-184-task7-step-6r-code-review.md`에 기록한다.
 **커밋:** `Expose actor-scoped provisional and confirmation APIs`
 
 ### Task 8: 상품 version 전환·완료·부분 이행·환불 event

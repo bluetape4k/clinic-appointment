@@ -14,8 +14,10 @@ import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecision
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecisionType
 import io.bluetape4k.clinic.appointment.model.commitment.ProposalConsentSubject
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.time.LocalDate
@@ -92,7 +94,7 @@ class AppointmentCommitmentRepositoryTest {
     }
 
     @Test
-    fun `미확정 commitment v2 projection은 legacy 조회에서 제외한다`() {
+    fun `commitment v2 예약은 projection 완성 여부와 무관하게 legacy 조회에서 제외한다`() {
         withCommitmentTables { seed ->
             val incompleteAppointmentId =
                 Appointments
@@ -101,9 +103,29 @@ class AppointmentCommitmentRepositoryTest {
                         it[modelVersion] = AppointmentModelVersion.COMMITMENT_V2
                         it[patientName] = "Pending Patient"
                     }.value
+            val seedRow = Appointments.selectAll()
+                .where { Appointments.id eq seed.appointmentId }
+                .single()
+            val confirmedAppointmentId =
+                Appointments
+                    .insertAndGetId {
+                        it[clinicId] = seed.clinicId
+                        it[doctorId] = seedRow[Appointments.doctorId]
+                        it[treatmentTypeId] = seedRow[Appointments.treatmentTypeId]
+                        it[modelVersion] = AppointmentModelVersion.COMMITMENT_V2
+                        it[patientName] = "Confirmed Patient"
+                        it[patientReferenceFingerprint] = "c".repeat(64)
+                        it[appointmentDate] = LocalDate.of(2026, 8, 10)
+                        it[startTime] = java.time.LocalTime.of(11, 0)
+                        it[endTime] = java.time.LocalTime.of(11, 30)
+                    }.value
             val appointmentRepository = AppointmentRepository()
 
             appointmentRepository.findByIdAndTenant(incompleteAppointmentId, 1L) shouldBeEqualTo null
+            appointmentRepository.findByIdAndTenant(confirmedAppointmentId, 1L) shouldBeEqualTo null
+            appointmentRepository.isCommitmentV2(incompleteAppointmentId, 1L).shouldBeTrue()
+            appointmentRepository.isCommitmentV2(confirmedAppointmentId, 1L).shouldBeTrue()
+            appointmentRepository.isCommitmentV2(seed.appointmentId, 1L).shouldBeFalse()
             appointmentRepository
                 .findByClinicAndDateRange(
                     clinicId = seed.clinicId,

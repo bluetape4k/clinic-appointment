@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
+import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -20,6 +21,7 @@ import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.assertions.shouldBeEmpty
@@ -388,6 +390,68 @@ class EquipmentUnavailabilityControllerTest @Autowired constructor() : AbstractA
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
         response.jsonPath<Int>("$.data.conflictCount").shouldNotBeNull()
+    }
+
+    @Test
+    fun `legacy 장비 충돌 API는 commitment v2 환자 projection을 노출하지 않는다`() {
+        transaction {
+            val doctorId = Doctors.insertAndGetId {
+                it[Doctors.clinicId] = this@EquipmentUnavailabilityControllerTest.clinicId
+                it[name] = "Commitment Doctor"
+            }.value
+            val treatmentTypeId = TreatmentTypes.insertAndGetId {
+                it[TreatmentTypes.clinicId] = this@EquipmentUnavailabilityControllerTest.clinicId
+                it[name] = "Commitment Treatment"
+                it[defaultDurationMinutes] = 60
+            }.value
+            Appointments.insertAndGetId {
+                it[Appointments.clinicId] = this@EquipmentUnavailabilityControllerTest.clinicId
+                it[Appointments.doctorId] = doctorId
+                it[Appointments.treatmentTypeId] = treatmentTypeId
+                it[Appointments.equipmentId] = this@EquipmentUnavailabilityControllerTest.equipmentId
+                it[patientName] = "legacy 응답에 노출되면 안 되는 고객"
+                it[patientPhone] = "010-0000-0000"
+                it[patientReferenceFingerprint] = "f".repeat(64)
+                it[modelVersion] = AppointmentModelVersion.COMMITMENT_V2
+                it[appointmentDate] = LocalDate.of(2026, 4, 10)
+                it[startTime] = LocalTime.of(9, 30)
+                it[endTime] = LocalTime.of(10, 30)
+                it[status] = AppointmentState.CONFIRMED
+            }
+        }
+        val unavailabilityId = createTestUnavailability()
+        val previewBody = """
+            {
+                "unavailableDate": "2026-04-10",
+                "isRecurring": false,
+                "effectiveFrom": "2026-04-10",
+                "startTime": "09:00",
+                "endTime": "12:00"
+            }
+        """.trimIndent()
+
+        val persisted = client.get()
+            .uri(
+                "$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}/conflicts",
+                clinicId,
+                equipmentId,
+                unavailabilityId,
+            )
+            .execute()
+        val preview = client.post()
+            .uri(
+                "$CLINICS_BASE_URL/{clinicId}/equipments/{equipmentId}/unavailabilities/preview-conflicts",
+                clinicId,
+                equipmentId,
+            )
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(previewBody)
+            .execute()
+
+        persisted.statusCode shouldBeEqualTo HttpStatus.OK
+        persisted.jsonPath<Int>("$.data.conflictCount") shouldBeEqualTo 0
+        preview.statusCode shouldBeEqualTo HttpStatus.OK
+        preview.jsonPath<Int>("$.data.conflictCount") shouldBeEqualTo 0
     }
 
     private fun createTestUnavailability(): Long =

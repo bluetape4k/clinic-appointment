@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.commitment
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
@@ -8,6 +9,8 @@ import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.model.commitment.ResourceAllocationMode
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationStatus
+import io.bluetape4k.clinic.appointment.model.tables.Appointments
+import io.bluetape4k.clinic.appointment.model.tables.ConsentDecisions
 import io.bluetape4k.clinic.appointment.model.tables.ResourceAllocations
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentRepository
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationRepository
@@ -43,6 +46,41 @@ internal class VisitCommitmentConcurrencyTest : VisitCommitmentCommandTestSuppor
             user = postgres.username ?: "test",
             password = postgres.password ?: "",
         )
+    }
+
+    @Test
+    fun `PostgreSQL도 중복 동의 증빙을 안정 오류로 변환하고 transaction을 rollback한다`() {
+        val service = commandService()
+        val proposal = proposalInput(revision = 1L, resourceId = "doctor-${clinic.doctorId}")
+        service.requestCustomerAppointment(
+            CustomerAppointmentRequestCommand(
+                context = commandContext("postgres-consent-owner"),
+                identity = appointmentIdentity("postgres-consent-owner"),
+                proposal = proposal,
+                expiresAt = ACTIVE_EXPIRY,
+                representativeTreatmentName = "첫 예약",
+                consent = acceptedConsent("postgres-shared-evidence"),
+            ),
+        )
+
+        val failure = assertFailsWith<AppointmentCommitmentCommandException> {
+            service.requestCustomerAppointment(
+                CustomerAppointmentRequestCommand(
+                    context = commandContext("postgres-consent-reuse"),
+                    identity = appointmentIdentity("postgres-consent-reuse"),
+                    proposal = proposal,
+                    expiresAt = ACTIVE_EXPIRY,
+                    representativeTreatmentName = "두 번째 예약",
+                    consent = acceptedConsent("postgres-shared-evidence"),
+                ),
+            )
+        }
+
+        failure.code shouldBeEqualTo AppointmentCommitmentCommandError.CONSENT_EVIDENCE_REUSED
+        transaction(database) {
+            ConsentDecisions.selectAll().count() shouldBeEqualTo 1L
+            Appointments.selectAll().count() shouldBeEqualTo 1L
+        }
     }
 
     @Test

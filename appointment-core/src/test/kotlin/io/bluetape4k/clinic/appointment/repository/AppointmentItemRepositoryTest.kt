@@ -13,12 +13,19 @@ import io.bluetape4k.clinic.appointment.model.dto.PlanRevisionTreatmentRecord
 import io.bluetape4k.clinic.appointment.model.plan.AppointmentPlanRevision
 import io.bluetape4k.clinic.appointment.model.plan.AppointmentPlanStatus
 import io.bluetape4k.clinic.appointment.model.plan.PlanTreatmentStatus
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentItems
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlans
+import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
+import org.jetbrains.exposed.v1.core.Transaction
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.statements.StatementContext
+import org.jetbrains.exposed.v1.core.statements.StatementInterceptor
+import org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.junit.jupiter.api.Test
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
 
 class AppointmentItemRepositoryTest {
     private val itemRepository = AppointmentItemRepository()
@@ -43,6 +50,26 @@ class AppointmentItemRepositoryTest {
             saved.first().preparationMinutes shouldBeEqualTo 10
             saved.first().treatmentMinutes shouldBeEqualTo 30
             saved.first().recoveryMinutes shouldBeEqualTo 20
+        }
+    }
+
+    @Test
+    fun `대형 패키지 item도 treatment scope를 한 번 조회하고 한 번에 저장한다`() {
+        withCommitmentTables { seed ->
+            val revision = revisionRepository.append(largeRevisionAggregate(seed.planId, treatmentCount = 100))
+            val proposalId = appendProposal(seed.appointmentId)
+            val counter = AppointmentItemStatementCounter()
+            registerInterceptor(counter)
+
+            val saved =
+                itemRepository.appendValidated(
+                    scope = scope(seed, proposalId),
+                    items = revision.treatments.map { it.toDraft(revision.revision.id) },
+                )
+
+            saved.size shouldBeEqualTo 100
+            counter.treatmentScopeSelectStatements.get() shouldBeEqualTo 1
+            counter.itemInsertStatements.get() shouldBeEqualTo 1
         }
     }
 
@@ -214,6 +241,32 @@ class AppointmentItemRepositoryTest {
             groupingConstraints = emptyList(),
         )
 
+    private fun largeRevisionAggregate(
+        planId: Long,
+        treatmentCount: Int,
+    ) = revisionAggregate(planId).copy(
+        treatments =
+            (1..treatmentCount).map { sequence ->
+                PlanRevisionTreatmentRecord(
+                    treatmentKey = "care-$sequence",
+                    componentProductId = "component-$sequence",
+                    componentProductVersionId = "v1",
+                    productVersionId = "v1",
+                    status = PlanTreatmentStatus.PENDING,
+                    sourceBomItemId = "bom-care-$sequence",
+                    sequence = sequence,
+                    representativeTreatmentName = "패키지 진료 $sequence",
+                    detailedTreatmentCodes = listOf("CARE_$sequence"),
+                    preparationMinutes = 5,
+                    treatmentMinutes = 20,
+                    recoveryMinutes = 10,
+                    practitionerQualifications = listOf("DOCTOR"),
+                    equipmentTypes = listOf("LASER"),
+                    spaceCapabilities = listOf("LASER_ROOM"),
+                )
+            },
+    )
+
     private fun PlanRevisionTreatmentRecord.toDraft(planRevisionId: Long) =
         AppointmentItemDraft(
             planRevisionId = planRevisionId,
@@ -224,4 +277,27 @@ class AppointmentItemRepositoryTest {
             treatmentMinutes = treatmentMinutes,
             recoveryMinutes = recoveryMinutes,
         )
+
+    /**
+     * item 수가 증가해도 immutable treatment 검증과 insert SQL 실행 횟수가 증가하지
+     * 않는다는 repository 성능 계약을 관찰합니다.
+     */
+    private class AppointmentItemStatementCounter : StatementInterceptor {
+        val treatmentScopeSelectStatements = AtomicInteger(0)
+        val itemInsertStatements = AtomicInteger(0)
+
+        override fun afterExecution(
+            transaction: Transaction,
+            contexts: List<StatementContext>,
+            executedStatement: PreparedStatementApi,
+        ) {
+            val sql = contexts.firstOrNull()?.sql(transaction)?.lowercase() ?: return
+            when {
+                sql.startsWith("select") && PlanRevisionTreatments.tableName in sql ->
+                    treatmentScopeSelectStatements.incrementAndGet()
+                sql.startsWith("insert") && AppointmentItems.tableName in sql ->
+                    itemInsertStatements.incrementAndGet()
+            }
+        }
+    }
 }

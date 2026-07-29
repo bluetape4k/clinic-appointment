@@ -494,6 +494,7 @@ internal abstract class VisitCommitmentCommandTestSupport {
             clinicId = clinicId,
             doctorId = doctorId,
             treatmentTypeId = treatmentTypeId,
+            planId = planId,
             planRevisionId = planRevisionId,
             patientReferenceFingerprint = patientReferenceFingerprint,
         )
@@ -541,6 +542,7 @@ internal class ClinicFixture(
     val clinicId: Long,
     val doctorId: Long,
     val treatmentTypeId: Long,
+    val planId: Long,
     val planRevisionId: Long,
     val patientReferenceFingerprint: String,
 )

@@ -511,6 +511,13 @@ internal class AppointmentCommitmentCommandService(
                 }
                 throw exception
             } catch (exception: Throwable) {
+                if (exception.isConsentEvidenceReuse()) {
+                    reject(
+                        AppointmentCommitmentCommandError.CONSENT_EVIDENCE_REUSED,
+                        "consent evidence is already bound to another decision",
+                        exception,
+                    )
+                }
                 if (!exception.isRetryableTransactionFailure()) {
                     throw exception
                 }
@@ -1264,6 +1271,31 @@ internal class AppointmentCommitmentCommandService(
         return false
     }
 
+    /**
+     * 전역 consent evidence unique 제약 위반을 공개 가능한 업무 오류로 식별한다.
+     *
+     * SQL message 전체는 외부에 노출하지 않고 제약 이름과 표준 unique SQL state를 함께
+     * 확인한다. 같은 SQL state의 다른 제약 위반을 consent 재사용으로 오분류하지 않는다.
+     */
+    private fun Throwable.isConsentEvidenceReuse(): Boolean {
+        var current: Throwable? = this
+        var uniqueViolation = false
+        var consentConstraint = false
+        while (current != null) {
+            if (current is SQLException && current.sqlState in UNIQUE_VIOLATION_SQL_STATES) {
+                uniqueViolation = true
+            }
+            if (current is ExposedSQLException && current.sqlState in UNIQUE_VIOLATION_SQL_STATES) {
+                uniqueViolation = true
+            }
+            if (current.message.orEmpty().contains(CONSENT_EVIDENCE_CONSTRAINT, ignoreCase = true)) {
+                consentConstraint = true
+            }
+            current = current.cause
+        }
+        return uniqueViolation && consentConstraint
+    }
+
     /** 안정적인 업무 오류를 던지고 표현식 위치에서 호출할 수 있게 `Nothing`을 반환합니다. */
     private fun reject(
         code: AppointmentCommitmentCommandError,
@@ -1304,5 +1336,7 @@ internal class AppointmentCommitmentCommandService(
         const val EVENT_APPOINTMENT_PROPOSAL_EXPIRED = "APPOINTMENT_PROPOSAL_EXPIRED"
 
         val RETRYABLE_SQL_STATES = setOf("40001", "40P01")
+        val UNIQUE_VIOLATION_SQL_STATES = setOf("23505", "23000")
+        const val CONSENT_EVIDENCE_CONSTRAINT = "uq_consent_evidence"
     }
 }

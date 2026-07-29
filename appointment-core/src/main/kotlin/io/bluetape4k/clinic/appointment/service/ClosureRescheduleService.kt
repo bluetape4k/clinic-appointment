@@ -243,7 +243,7 @@ class ClosureRescheduleService(
         }
 
         val original = if (tenantGroupId == null) {
-            appointmentRepository.findByIdOrNull(candidate.originalAppointmentId)
+            appointmentRepository.findLegacyById(candidate.originalAppointmentId)
         } else {
             appointmentRepository.findByIdAndTenant(candidate.originalAppointmentId, tenantGroupId)
         }
