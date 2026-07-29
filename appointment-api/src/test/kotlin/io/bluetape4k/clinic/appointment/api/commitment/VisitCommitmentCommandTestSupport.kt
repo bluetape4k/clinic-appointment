@@ -44,6 +44,7 @@ import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -70,6 +71,21 @@ internal abstract class VisitCommitmentCommandTestSupport {
             SchemaUtils.createMissingTablesAndColumns(*TABLES)
             TABLES.reversed().forEach(Table::deleteAll)
             clinic = seedClinic()
+        }
+    }
+
+    /**
+     * singleton PostgreSQL·MySQL을 사용하는 하위 테스트가 다음 테스트 클래스에 Plan과
+     * 상품 projection FK를 남기지 않도록 모든 commitment fixture를 역의존 순서로
+     * 정리합니다.
+     *
+     * 개별 H2 테스트에서는 database 자체가 격리되어 있지만 동일 계약을 적용해
+     * database 종류에 따라 테스트 수명주기가 달라지지 않게 합니다.
+     */
+    @AfterEach
+    fun tearDownCommitmentCommandDatabase() {
+        transaction(database) {
+            TABLES.reversed().forEach(Table::deleteAll)
         }
     }
 
