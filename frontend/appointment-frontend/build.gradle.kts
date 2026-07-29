@@ -3,7 +3,7 @@ plugins {
 }
 
 node {
-    version.set("22.14.0")
+    version.set("22.22.3")
     npmVersion.set("11.12.0")
     npmInstallCommand.set("ci")
     download.set(true)
