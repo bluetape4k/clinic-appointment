@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.dto.commitment
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonAnySetter
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
@@ -41,6 +42,7 @@ abstract class StrictAppointmentCommitmentBody : Serializable {
  * @property evidence 외부 동의 권위가 발행한 opaque 증빙 참조.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
+@Schema(requiredProperties = ["appointmentPlanId", "preferredStartAt", "preferredEndAt", "evidence"])
 data class CreateAppointmentRequestV2(
     @field:Positive
     val appointmentPlanId: Long,
@@ -138,6 +140,34 @@ data class ProposalDecisionRequest(
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 data class DeclineProposalRequest(
+    @field:NotBlank
+    @field:Size(max = 64)
+    @field:Pattern(regexp = "[A-Z][A-Z0-9_]{0,63}")
+    val reasonCode: String,
+) : StrictAppointmentCommitmentBody() {
+    init {
+        require(REASON_CODE.matches(reasonCode)) {
+            "reasonCode must be a registered uppercase business code"
+        }
+    }
+
+    private companion object {
+        val REASON_CODE = Regex("[A-Z][A-Z0-9_]{0,63}")
+        const val serialVersionUID = 1L
+    }
+}
+
+/**
+ * 병원 운영자가 가예약 또는 확정 예약을 취소할 때 기록할 업무 사유이다.
+ *
+ * 환불, 고객 요청, 병원 사정 같은 원인은 예약서비스가 해석하지 않고 등록 code로만
+ * 보존한다. 자유 텍스트나 의료·결제 상세를 전달하면 안 된다.
+ *
+ * @property reasonCode 최대 64자의 등록된 대문자 업무 code. 예: `REFUND`,
+ * `CUSTOMER_REQUEST`, `EQUIPMENT_FAILURE`.
+ */
+@JsonIgnoreProperties(ignoreUnknown = false)
+data class CancelAppointmentRequest(
     @field:NotBlank
     @field:Size(max = 64)
     @field:Pattern(regexp = "[A-Z][A-Z0-9_]{0,63}")

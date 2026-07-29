@@ -126,6 +126,8 @@ class AppointmentCommitmentModelTest {
         val proposal = proposal()
 
         ProposalHasher.hash(proposal) shouldBeEqualTo ProposalHasher.hash(proposal())
+        ProposalHasher.hash(proposal(appointmentId = 999L)) shouldBeEqualTo
+            ProposalHasher.hash(proposal)
         val changed =
             AppointmentProposalDraft(
                 appointmentId = proposal.appointmentId,
@@ -141,9 +143,9 @@ class AppointmentCommitmentModelTest {
             false
     }
 
-    private fun proposal(): AppointmentProposalDraft =
+    private fun proposal(appointmentId: Long = 10L): AppointmentProposalDraft =
         AppointmentProposalDraft(
-            appointmentId = 10L,
+            appointmentId = appointmentId,
             revision = 3L,
             startsAt = Instant.parse("2026-08-10T01:00:00Z"),
             endsAt = Instant.parse("2026-08-10T02:00:00Z"),

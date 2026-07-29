@@ -183,6 +183,8 @@ class AppointmentCommitmentSecurityIntegrationTest {
             "/api/v2/appointments/{id}/approve",
             "/api/v2/appointments/{id}/confirm",
             "/api/v2/appointments/{id}/change-proposals",
+            "/api/v2/appointments/{id}/cancel",
+            "/api/v2/appointments/{id}/proposals/{proposalId}/expire",
             "/api/v2/appointments/{id}/proposals/{proposalId}/accept",
             "/api/v2/appointments/{id}/proposals/{proposalId}/decline",
         ).forEach { path ->

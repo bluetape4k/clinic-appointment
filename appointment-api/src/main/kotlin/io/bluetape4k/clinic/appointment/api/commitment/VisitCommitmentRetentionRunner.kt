@@ -54,7 +54,7 @@ class VisitCommitmentRetentionRunner(
         var affectedRecords = 0
         var afterClinicId = 0L
         while (true) {
-            val scopes = activeScopes(afterClinicId)
+            val scopes = loadActiveScopes(afterClinicId)
             if (scopes.isEmpty()) break
             scopes.forEach { scope ->
                 totalScopes += 1
@@ -95,6 +95,22 @@ class VisitCommitmentRetentionRunner(
             }
         }
     }
+
+    /**
+     * scope discovery 자체가 실패하면 tenant·clinic tag를 추정하지 않고 고정 메시지로 기록한다.
+     *
+     * 이 단계에서는 안전한 scope를 아직 알 수 없어 per-scope 실패 metric을 만들 수 없다.
+     * 예외는 scheduler error handler와 외부 job 실패 상태가 감지하도록 다시 전달한다.
+     */
+    private fun loadActiveScopes(afterClinicId: Long): List<RetentionScope> =
+        try {
+            activeScopes(afterClinicId)
+        } catch (failure: Exception) {
+            log.error(failure) {
+                "commitment retention scope discovery failed"
+            }
+            throw failure
+        }
 
     private fun activeScopes(afterClinicId: Long): List<RetentionScope> =
         transaction(database) {

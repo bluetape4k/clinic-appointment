@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.api.security.ActorContextResolver
 import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentApplicationService
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.headers.Header
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -41,7 +42,23 @@ class AppointmentCommitmentQueryController(
 
     @Operation(summary = "Read the current appointment commitment")
     @ApiResponses(
-        ApiResponse(responseCode = "200", description = "Commitment found"),
+        ApiResponse(
+            responseCode = "200",
+            description = "Commitment found",
+            headers = [
+                Header(
+                    name = "ETag",
+                    description = "Strong aggregate version required by the next mutation",
+                    schema = Schema(type = "string", example = "\"3\""),
+                ),
+            ],
+            content = [
+                Content(
+                    mediaType = "application/json",
+                    schema = Schema(implementation = AppointmentCommitmentResponse::class),
+                ),
+            ],
+        ),
         ApiResponse(
             responseCode = "400",
             description = "Invalid appointment identifier",

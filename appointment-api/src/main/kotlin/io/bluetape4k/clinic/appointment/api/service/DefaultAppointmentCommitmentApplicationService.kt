@@ -7,6 +7,7 @@ import io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentComm
 import io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentCommandService
 import io.bluetape4k.clinic.appointment.api.commitment.AppointmentProposalRequest
 import io.bluetape4k.clinic.appointment.api.commitment.AppointmentProposalService
+import io.bluetape4k.clinic.appointment.api.commitment.CancelAppointmentCommand
 import io.bluetape4k.clinic.appointment.api.commitment.ChangeAppointmentProposalCommand
 import io.bluetape4k.clinic.appointment.api.commitment.CommitmentConflictReason
 import io.bluetape4k.clinic.appointment.api.commitment.CommitmentMetricResult
@@ -17,6 +18,7 @@ import io.bluetape4k.clinic.appointment.api.commitment.CustomerAppointmentReques
 import io.bluetape4k.clinic.appointment.api.commitment.DeclineAppointmentProposalCommand
 import io.bluetape4k.clinic.appointment.api.commitment.DirectAppointmentConfirmationCommand
 import io.bluetape4k.clinic.appointment.api.commitment.DirectConfirmationPolicyDecision
+import io.bluetape4k.clinic.appointment.api.commitment.ExpireAppointmentProposalCommand
 import io.bluetape4k.clinic.appointment.api.commitment.ProposalConsentEvidence
 import io.bluetape4k.clinic.appointment.api.commitment.VisitProposalInput
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
@@ -26,6 +28,7 @@ import io.bluetape4k.clinic.appointment.api.config.toApiException
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentCommitmentResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentProposalResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ApproveProposalRequest
+import io.bluetape4k.clinic.appointment.api.dto.commitment.CancelAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ConsentEvidenceRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateAppointmentRequestV2
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateChangeProposalRequest
@@ -178,7 +181,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     appointmentPlanId = request.appointmentPlanId,
                     appointmentId = null,
                     proposalId = null,
-                    proposalHash = transientProposalHash(proposal),
+                    proposalHash = initialProposalConsentHash(proposal),
                     policySnapshot = policySnapshot,
                     decision = ConsentDecisionType.ACCEPTED,
                 ),
@@ -192,8 +195,11 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     expiresAt = proposalExpiry(proposal.startsAt),
                     representativeTreatmentName = representativeTreatmentName(planRevision),
                     consent = consent,
+                    holdResources =
+                        bookingCommitment(policySnapshot).provisionalCapacityMode ==
+                            io.bluetape4k.clinic.appointment.model.policy.ProvisionalCapacityMode.HARD_HOLD,
                 ),
-            ).let { it.commitment.toProposalResponse(it.proposal) }
+            ).let { proposalResponse(planAccess.tenantGroupId, planAccess.clinicId, it.commitment, it.proposal) }
         }
     }
 
@@ -231,7 +237,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     appointmentPlanId = request.appointmentPlanId,
                     appointmentId = null,
                     proposalId = null,
-                    proposalHash = transientProposalHash(proposal),
+                    proposalHash = initialProposalConsentHash(proposal),
                     policySnapshot = policySnapshot,
                     decision = ConsentDecisionType.ACCEPTED,
                     allowedEvidenceTypes = consentRequirement.allowedEvidenceTypes,
@@ -251,7 +257,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     policyDecision = directPolicyDecision(policySnapshot, consent.termsHash),
                     consent = consent,
                 ),
-            ).let { it.commitment.toResponse(it.proposal) }
+            ).let { commitmentResponse(planAccess.tenantGroupId, planAccess.clinicId, it.commitment, it.proposal) }
         }
     }
 
@@ -275,7 +281,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     expectedProposalHash = persisted.proposal.proposalHash,
                     projectionTarget = planningResolver.resolveProjectionTarget(access.clinicId, persisted.input),
                 ),
-            ).let { it.commitment.toResponse(it.proposal) }
+            ).let { commitmentResponse(access.tenantGroupId, access.clinicId, it.commitment, it.proposal) }
         }
     }
 
@@ -290,7 +296,12 @@ internal class DefaultAppointmentCommitmentApplicationService(
         val access = accessResolver.requireAppointmentAccess(actor, appointmentId)
         accessResolver.requireConsentAuthority(actor, request.evidence.evidenceAuthority)
         val persisted = persistedProposalInput(access.clinicId, appointmentId, proposalId)
-        val policySnapshot = currentPolicySnapshot(access.tenantGroupId, access.clinicId, persisted.input.startsAt)
+        val policySnapshot =
+            policySnapshotResolver.resolvePersisted(
+                tenantGroupId = access.tenantGroupId,
+                clinicId = access.clinicId,
+                snapshotId = persisted.input.policySnapshotId,
+            )
         val consent = acceptedConsent(
             actor = actor,
             evidence =
@@ -319,7 +330,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     projectionTarget = planningResolver.resolveProjectionTarget(access.clinicId, persisted.input),
                     consent = consent,
                 ),
-            ).let { it.commitment.toResponse(it.proposal) }
+            ).let { commitmentResponse(access.tenantGroupId, access.clinicId, it.commitment, it.proposal) }
         }
     }
 
@@ -343,7 +354,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     expectedProposalHash = persisted.proposal.proposalHash,
                     consent = declinedConsent(actor, appointmentId, proposalId, request.reasonCode),
                 ),
-            ).let { it.commitment.toResponse(it.proposal) }
+            ).let { commitmentResponse(access.tenantGroupId, access.clinicId, it.commitment, it.proposal) }
         }
     }
 
@@ -357,7 +368,12 @@ internal class DefaultAppointmentCommitmentApplicationService(
         val access = accessResolver.requireAppointmentAccess(actor, appointmentId)
         accessResolver.requireConsentAuthority(actor, request.evidence.evidenceAuthority)
         val persisted = persistedProposalInput(access.clinicId, appointmentId, request.proposalId)
-        val policySnapshot = currentPolicySnapshot(access.tenantGroupId, access.clinicId, persisted.input.startsAt)
+        val policySnapshot =
+            policySnapshotResolver.resolvePersisted(
+                tenantGroupId = access.tenantGroupId,
+                clinicId = access.clinicId,
+                snapshotId = persisted.input.policySnapshotId,
+            )
         val booking = bookingCommitment(policySnapshot)
         val consentRequirement = booking.adminConsentEvidence
         val verifiedConsent =
@@ -403,7 +419,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     consent = consent,
                     policyDecision = policyDecision,
                 ),
-            ).let { it.commitment.toResponse(it.proposal) }
+            ).let { commitmentResponse(access.tenantGroupId, access.clinicId, it.commitment, it.proposal) }
         }
     }
 
@@ -416,7 +432,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
     ): AppointmentProposalResponse {
         val access = accessResolver.requireAppointmentAccess(actor, appointmentId)
         val current = readCommitmentWithCurrentProposal(appointmentId)
-        val planRevision = activeRevisionByAppointmentProposal(current.proposal.id)
+        val planRevision = activePlanRevisionByAppointmentProposal(current.proposal.id)
         val proposal = proposalInput(
             tenantGroupId = access.tenantGroupId,
             clinicId = access.clinicId,
@@ -437,7 +453,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     expiresAt = proposalExpiry(proposal.startsAt),
                     representativeTreatmentName = representativeTreatmentName(planRevision),
                 ),
-            ).let { it.commitment.toProposalResponse(it.proposal) }
+            ).let { proposalResponse(access.tenantGroupId, access.clinicId, it.commitment, it.proposal) }
         }
     }
 
@@ -445,10 +461,103 @@ internal class DefaultAppointmentCommitmentApplicationService(
         actor: ActorContext,
         appointmentId: Long,
     ): AppointmentCommitmentResponse {
-        accessResolver.requireAppointmentAccess(actor, appointmentId)
+        val access = accessResolver.requireAppointmentAccess(actor, appointmentId)
         val current = readCommitmentWithCurrentProposal(appointmentId)
-        return current.commitment.toResponse(current.proposal)
+        return commitmentResponse(
+            access.tenantGroupId,
+            access.clinicId,
+            current.commitment,
+            current.proposal,
+        )
     }
+
+    override fun expireProposal(
+        actor: ActorContext,
+        appointmentId: Long,
+        proposalId: Long,
+        expectedVersion: Long,
+        idempotencyKey: String,
+    ): AppointmentCommitmentResponse {
+        val access = accessResolver.requireAppointmentAccess(actor, appointmentId)
+        val persisted = persistedProposalInput(access.clinicId, appointmentId, proposalId)
+        return runCommand(actor, access.tenantGroupId, access.clinicId) {
+            commandService.expireProposal(
+                ExpireAppointmentProposalCommand(
+                    context =
+                        commandContext(
+                            actor,
+                            access.tenantGroupId,
+                            access.clinicId,
+                            idempotencyKey,
+                            "expire",
+                            appointmentId,
+                            proposalId,
+                            expectedVersion,
+                        ),
+                    appointmentId = appointmentId,
+                    proposalId = proposalId,
+                    expectedVersion = expectedVersion,
+                    expectedProposalHash = persisted.proposal.proposalHash,
+                ),
+            ).let { commitmentResponse(access.tenantGroupId, access.clinicId, it.commitment, it.proposal) }
+        }
+    }
+
+    override fun cancelAppointment(
+        actor: ActorContext,
+        appointmentId: Long,
+        expectedVersion: Long,
+        idempotencyKey: String,
+        request: CancelAppointmentRequest,
+    ): AppointmentCommitmentResponse {
+        val access = accessResolver.requireAppointmentAccess(actor, appointmentId)
+        val current = readCommitmentWithCurrentProposal(appointmentId)
+        return runCommand(actor, access.tenantGroupId, access.clinicId) {
+            commandService.cancelAppointment(
+                CancelAppointmentCommand(
+                    context =
+                        commandContext(
+                            actor,
+                            access.tenantGroupId,
+                            access.clinicId,
+                            idempotencyKey,
+                            "cancel",
+                            appointmentId,
+                            current.proposal.id,
+                            expectedVersion,
+                            request.reasonCode,
+                        ),
+                    appointmentId = appointmentId,
+                    proposalId = current.proposal.id,
+                    expectedVersion = expectedVersion,
+                    expectedProposalHash = current.proposal.proposalHash,
+                    reasonCode = request.reasonCode,
+                ),
+            ).let { commitmentResponse(access.tenantGroupId, access.clinicId, it.commitment, it.proposal) }
+        }
+    }
+
+    private fun proposalResponse(
+        tenantGroupId: Long,
+        clinicId: Long,
+        commitment: AppointmentCommitmentRecord,
+        proposal: AppointmentProposalRecord,
+    ): AppointmentProposalResponse =
+        commitment.toProposalResponse(
+            proposal,
+            policySnapshotResolver.resolvePersisted(tenantGroupId, clinicId, proposal.policySnapshotId),
+        )
+
+    private fun commitmentResponse(
+        tenantGroupId: Long,
+        clinicId: Long,
+        commitment: AppointmentCommitmentRecord,
+        proposal: AppointmentProposalRecord,
+    ): AppointmentCommitmentResponse =
+        commitment.toResponse(
+            proposal,
+            policySnapshotResolver.resolvePersisted(tenantGroupId, clinicId, proposal.policySnapshotId),
+        )
 
     private fun requireNewCommitmentWrite(clinicId: Long) {
         if (!properties.isWriteEnabled(clinicId)) {
@@ -461,16 +570,28 @@ internal class DefaultAppointmentCommitmentApplicationService(
             planRevisionRepository.findActive(planId)
         } ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.COMMITMENT_NOT_FOUND)
 
-    private fun activeRevisionByAppointmentProposal(proposalId: Long): PersistedAppointmentPlanRevisionAggregateRecord =
+    /**
+     * 기존 proposal의 Plan을 찾되 새 변경안은 그 Plan의 현재 활성 revision으로 계산합니다.
+     *
+     * proposal item에 고정된 과거 revision을 그대로 반환하면 상품 version 전환, 완료,
+     * 부분 이행, 환불 event가 만든 최신 미래 작업을 되돌릴 수 있습니다.
+     */
+    private fun activePlanRevisionByAppointmentProposal(
+        proposalId: Long,
+    ): PersistedAppointmentPlanRevisionAggregateRecord =
         transaction(database) {
-            val revisionId = AppointmentItems
+            val historicalRevisionId = AppointmentItems
                 .select(AppointmentItems.planRevisionId)
                 .where { AppointmentItems.proposalId eq proposalId }
                 .limit(1)
                 .singleOrNull()
                 ?.get(AppointmentItems.planRevisionId)
                 ?.value
-            revisionId?.let(planRevisionRepository::findById)
+            historicalRevisionId
+                ?.let(planRevisionRepository::findById)
+                ?.revision
+                ?.planId
+                ?.let(planRevisionRepository::findActive)
         } ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.COMMITMENT_NOT_FOUND)
 
     private fun persistedProposalInput(
@@ -638,6 +759,13 @@ internal class DefaultAppointmentCommitmentApplicationService(
                 "effective booking commitment policy is unavailable",
             )
 
+    private fun bookingCommitment(policySnapshot: PersistedPolicySnapshotReference) =
+        policySnapshot.payload.bookingCommitment
+            ?: throw AppointmentCommitmentApiException(
+                AppointmentCommitmentApiError.DIRECT_CONFIRM_NOT_ALLOWED,
+                "persisted booking commitment policy is unavailable",
+            )
+
     private fun directPolicyDecision(
         policySnapshot: CurrentPolicySnapshot,
         verifiedTermsHash: String?,
@@ -665,6 +793,41 @@ internal class DefaultAppointmentCommitmentApplicationService(
         return DirectConfirmationPolicyDecision(
             policySnapshotId = policySnapshot.id,
             policySnapshotHash = policySnapshot.policy.snapshotHash,
+            adminBookingMode = booking.adminBookingMode,
+            allowedEvidenceTypes = consentRequirement.allowedEvidenceTypes,
+            maximumEvidenceAge = consentRequirement.maximumAge,
+            termsHashRequired = consentRequirement.termsHashRequired,
+            requiredTermsHash = requiredTermsHash,
+        )
+    }
+
+    private fun directPolicyDecision(
+        policySnapshot: PersistedPolicySnapshotReference,
+        verifiedTermsHash: String?,
+    ): DirectConfirmationPolicyDecision {
+        val booking = bookingCommitment(policySnapshot)
+        val consentRequirement = booking.adminConsentEvidence
+        val requiredTermsHash =
+            if (consentRequirement.termsHashRequired) {
+                verifiedTermsHash ?: throw AppointmentCommitmentApiException(
+                    AppointmentCommitmentApiError.CONSENT_REQUIRED,
+                    "direct confirmation evidence terms hash is required",
+                )
+            } else {
+                null
+            }
+        if (
+            booking.adminBookingMode !=
+            io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode.DIRECT_CONFIRM_WITH_CONSENT_EVIDENCE
+        ) {
+            throw AppointmentCommitmentApiException(
+                AppointmentCommitmentApiError.DIRECT_CONFIRM_NOT_ALLOWED,
+                "persisted booking policy does not allow direct confirmation",
+            )
+        }
+        return DirectConfirmationPolicyDecision(
+            policySnapshotId = policySnapshot.id,
+            policySnapshotHash = policySnapshot.snapshotHash,
             adminBookingMode = booking.adminBookingMode,
             allowedEvidenceTypes = consentRequirement.allowedEvidenceTypes,
             maximumEvidenceAge = consentRequirement.maximumAge,
@@ -734,6 +897,71 @@ internal class DefaultAppointmentCommitmentApplicationService(
         allowedEvidenceTypes: Set<String>? = null,
         maximumEvidenceAge: Duration? = null,
         termsHashRequired: Boolean = false,
+    ): VerifiedAppointmentCommitmentConsentEvidence =
+        verifyConsentEvidenceReference(
+            request = request,
+            tenantGroupId = tenantGroupId,
+            clinicId = clinicId,
+            patientReferenceFingerprint = patientReferenceFingerprint,
+            appointmentPlanId = appointmentPlanId,
+            appointmentId = appointmentId,
+            proposalId = proposalId,
+            proposalHash = proposalHash,
+            policySnapshotId = policySnapshot.id,
+            policySnapshotHash = policySnapshot.policy.snapshotHash,
+            decision = decision,
+            allowedEvidenceTypes = allowedEvidenceTypes,
+            maximumEvidenceAge = maximumEvidenceAge,
+            termsHashRequired = termsHashRequired,
+        )
+
+    private fun verifyConsentEvidence(
+        request: ConsentEvidenceRequest,
+        tenantGroupId: Long,
+        clinicId: Long,
+        patientReferenceFingerprint: String,
+        appointmentPlanId: Long?,
+        appointmentId: Long?,
+        proposalId: Long?,
+        proposalHash: String,
+        policySnapshot: PersistedPolicySnapshotReference,
+        decision: ConsentDecisionType,
+        allowedEvidenceTypes: Set<String>? = null,
+        maximumEvidenceAge: Duration? = null,
+        termsHashRequired: Boolean = false,
+    ): VerifiedAppointmentCommitmentConsentEvidence =
+        verifyConsentEvidenceReference(
+            request = request,
+            tenantGroupId = tenantGroupId,
+            clinicId = clinicId,
+            patientReferenceFingerprint = patientReferenceFingerprint,
+            appointmentPlanId = appointmentPlanId,
+            appointmentId = appointmentId,
+            proposalId = proposalId,
+            proposalHash = proposalHash,
+            policySnapshotId = policySnapshot.id,
+            policySnapshotHash = policySnapshot.snapshotHash,
+            decision = decision,
+            allowedEvidenceTypes = allowedEvidenceTypes,
+            maximumEvidenceAge = maximumEvidenceAge,
+            termsHashRequired = termsHashRequired,
+        )
+
+    private fun verifyConsentEvidenceReference(
+        request: ConsentEvidenceRequest,
+        tenantGroupId: Long,
+        clinicId: Long,
+        patientReferenceFingerprint: String,
+        appointmentPlanId: Long?,
+        appointmentId: Long?,
+        proposalId: Long?,
+        proposalHash: String,
+        policySnapshotId: Long,
+        policySnapshotHash: String,
+        decision: ConsentDecisionType,
+        allowedEvidenceTypes: Set<String>? = null,
+        maximumEvidenceAge: Duration? = null,
+        termsHashRequired: Boolean = false,
     ): VerifiedAppointmentCommitmentConsentEvidence {
         val verificationRequest =
             AppointmentCommitmentConsentEvidenceVerificationRequest(
@@ -745,8 +973,8 @@ internal class DefaultAppointmentCommitmentApplicationService(
                 appointmentId = appointmentId,
                 proposalId = proposalId,
                 proposalHash = proposalHash,
-                policySnapshotId = policySnapshot.id,
-                policySnapshotHash = policySnapshot.policy.snapshotHash,
+                policySnapshotId = policySnapshotId,
+                policySnapshotHash = policySnapshotHash,
                 decision = decision,
                 allowedEvidenceTypes = allowedEvidenceTypes,
                 maximumEvidenceAge = maximumEvidenceAge,
@@ -789,8 +1017,14 @@ internal class DefaultAppointmentCommitmentApplicationService(
         }
     }
 
-    private fun transientProposalHash(proposal: VisitProposalInput): String =
-        ProposalHasher.hash(proposal.toDraft(TRANSIENT_CONSENT_APPOINTMENT_ID))
+    /**
+     * DB 식별자 생성 전에도 영속 proposal과 동일한 동의 대상 hash를 계산합니다.
+     *
+     * [ProposalHasher]는 생성 ID를 의도적으로 제외하므로 placeholder 값은 hash 결과에
+     * 영향을 주지 않습니다.
+     */
+    private fun initialProposalConsentHash(proposal: VisitProposalInput): String =
+        ProposalHasher.hash(proposal.toDraft(CONSENT_HASH_PLACEHOLDER_APPOINTMENT_ID))
 
     private fun commandContext(
         actor: ActorContext,
@@ -954,7 +1188,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
 
     private companion object : KLogging() {
         const val INITIAL_PROPOSAL_REVISION = 1L
-        const val TRANSIENT_CONSENT_APPOINTMENT_ID = 1L
+        const val CONSENT_HASH_PLACEHOLDER_APPOINTMENT_ID = 1L
         const val EVIDENCE_TYPE = "OPAQUE_REFERENCE"
         val SHA256 = Regex("[0-9a-f]{64}")
         val LIST_MAPPER: JsonMapper = JsonMapper.builder().build()

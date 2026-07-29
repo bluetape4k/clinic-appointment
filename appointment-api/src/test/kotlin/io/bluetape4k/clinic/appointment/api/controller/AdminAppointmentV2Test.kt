@@ -7,6 +7,7 @@ import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiException
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ApproveProposalRequest
+import io.bluetape4k.clinic.appointment.api.dto.commitment.CancelAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ConsentEvidenceRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DirectCreateAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.security.ActorContextResolver
@@ -76,6 +77,25 @@ class AdminAppointmentV2Test {
         response.headers.getFirst(HttpHeaders.ETAG) shouldBeEqualTo "\"2\""
         service.lastExpectedVersion shouldBeEqualTo 1L
         service.lastActor.shouldNotBeNull().allowedClinicIds shouldContain 7L
+    }
+
+    @Test
+    fun `admin cancellation forwards registered reason with mutation preconditions`() {
+        val service = FakeAppointmentCommitmentApplicationService()
+        val controller = AdminAppointmentV2Controller(service, ActorContextResolver())
+
+        val response = controller.cancelAppointment(
+            authentication = authentication(adminPrincipal()),
+            servletRequest = MockHttpServletRequest(),
+            id = 11L,
+            idempotencyKey = "cancel_01J1M6Y6XRK8N0W2M3P4Q5R6S7",
+            ifMatch = "\"1\"",
+            request = CancelAppointmentRequest("EQUIPMENT_FAILURE"),
+        )
+
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        response.headers.getFirst(HttpHeaders.ETAG) shouldBeEqualTo "\"2\""
+        service.lastExpectedVersion shouldBeEqualTo 1L
     }
 
     @Test

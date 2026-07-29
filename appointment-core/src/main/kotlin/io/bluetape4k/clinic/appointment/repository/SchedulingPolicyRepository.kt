@@ -628,6 +628,37 @@ class SchedulingPolicyRepository {
             .singleOrNull()
             ?.toEffectiveSchedulingPolicySnapshotRecord()
 
+    /**
+     * proposal에 고정된 양수 snapshot ID를 정확한 tenant·clinic 범위에서 조회한다.
+     *
+     * 현재 유효 정책을 다시 계산하지 않고 과거 proposal이 참조한 불변 정책 hash를 검증할
+     * 때 사용한다. 다른 tenant 또는 clinic의 같은 ID는 보이지 않아야 하므로 식별자만으로
+     * 조회하지 않는다.
+     *
+     * @param tenantGroupId proposal commitment가 속한 양수 tenant 경계.
+     * @param clinicId proposal commitment가 속한 양수 clinic 경계.
+     * @param snapshotId proposal에 영속화된 양수 정책 snapshot 식별자.
+     * @return 정확한 세 필드가 모두 일치하는 불변 snapshot 또는 `null`.
+     */
+    fun findSnapshot(
+        tenantGroupId: Long,
+        clinicId: Long,
+        snapshotId: Long,
+    ): EffectiveSchedulingPolicySnapshotRecord? {
+        require(tenantGroupId > 0) { "tenantGroupId must be positive" }
+        require(clinicId > 0) { "clinicId must be positive" }
+        require(snapshotId > 0) { "snapshotId must be positive" }
+        return EffectiveSchedulingPolicySnapshots
+            .selectAll()
+            .where {
+                (EffectiveSchedulingPolicySnapshots.id eq snapshotId) and
+                    (EffectiveSchedulingPolicySnapshots.tenantGroupId eq tenantGroupId) and
+                    (EffectiveSchedulingPolicySnapshots.clinicId eq clinicId)
+            }
+            .singleOrNull()
+            ?.toEffectiveSchedulingPolicySnapshotRecord()
+    }
+
     private fun scopeHeadPredicate(scope: PolicyScopeRef): Op<Boolean> =
         (SchedulingPolicyScopeHeads.tenantGroupId eq scope.tenantGroupId) and
             (SchedulingPolicyScopeHeads.scope eq scope.scope) and

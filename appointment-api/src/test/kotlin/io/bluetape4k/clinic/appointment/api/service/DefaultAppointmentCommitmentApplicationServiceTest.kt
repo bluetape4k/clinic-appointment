@@ -18,8 +18,10 @@ import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentMode
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentProperties
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ConsentEvidenceRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateAppointmentRequestV2
+import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateChangeProposalRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DirectConfirmRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DirectCreateAppointmentRequest
+import io.bluetape4k.clinic.appointment.api.dto.commitment.ProposalDecisionRequest
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
 import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
@@ -41,15 +43,21 @@ import io.bluetape4k.clinic.appointment.model.policy.PatientBookingMode
 import io.bluetape4k.clinic.appointment.model.policy.PolicyGenerationVector
 import io.bluetape4k.clinic.appointment.model.policy.ProvisionalCapacityMode
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentItems
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlanRevisions
 import io.bluetape4k.clinic.appointment.model.tables.ConsentDecisions
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionDependencies
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionGroupingConstraints
+import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
+import io.bluetape4k.clinic.appointment.model.plan.PlanTreatmentStatus
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.Test
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -354,8 +362,210 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
         }
     }
 
+    @Test
+    fun `direct confirm keeps the policy snapshot pinned when the proposal was created`() {
+        val original = CurrentPolicySnapshot(42L, effectivePolicy())
+        val newer = CurrentPolicySnapshot(
+            43L,
+            effectivePolicy().copy(id = "b".repeat(64), snapshotHash = "b".repeat(64)),
+        )
+        var current = original
+        val snapshots = mapOf(original.id to original, newer.id to newer)
+        val resolver =
+            object : AppointmentCommitmentPolicySnapshotResolver {
+                override fun resolve(
+                    tenantGroupId: Long,
+                    clinicId: Long,
+                    decisionAt: java.time.Instant,
+                    serviceAt: java.time.Instant,
+                ): CurrentPolicySnapshot = current
+
+                override fun resolvePersisted(
+                    tenantGroupId: Long,
+                    clinicId: Long,
+                    snapshotId: Long,
+                ): PersistedPolicySnapshotReference {
+                    val persisted = requireNotNull(snapshots[snapshotId])
+                    return PersistedPolicySnapshotReference(
+                        id = persisted.id,
+                        snapshotHash = persisted.policy.snapshotHash,
+                        tenantGeneration = persisted.policy.generation.tenantGeneration,
+                        clinicGeneration = persisted.policy.generation.clinicGeneration,
+                        sourceVersions = persisted.policy.sourceVersions,
+                        payload = persisted.policy.payload,
+                    )
+                }
+            }
+        val service = writableApplicationService(policySnapshotResolver = resolver)
+        val requested =
+            service.requestAppointment(
+                patientActor(),
+                "request-direct-policy-pin-01",
+                true,
+                createAppointmentRequest("direct-policy-pin"),
+            )
+        current = newer
+
+        val confirmed =
+            service.directConfirm(
+                adminActor(),
+                requested.appointmentId,
+                requested.version,
+                "direct-policy-pin-01",
+                DirectConfirmRequest(
+                    proposalId = requested.proposalId,
+                    evidence = consentEvidence("direct-policy-pin-admin"),
+                ),
+            )
+
+        confirmed.confirmedProposalId shouldBeEqualTo requested.proposalId
+        confirmed.effectivePolicySnapshotId shouldBeEqualTo original.id
+        confirmed.currentProposal.policySnapshot.snapshotHash shouldBeEqualTo original.policy.snapshotHash
+    }
+
+    @Test
+    fun `customer accepts a change proposal with the policy snapshot pinned when it was created`() {
+        val original = CurrentPolicySnapshot(42L, effectivePolicy())
+        val change = CurrentPolicySnapshot(
+            43L,
+            effectivePolicy().copy(id = "b".repeat(64), snapshotHash = "b".repeat(64)),
+        )
+        val newer = CurrentPolicySnapshot(
+            44L,
+            effectivePolicy().copy(id = "c".repeat(64), snapshotHash = "c".repeat(64)),
+        )
+        var current = original
+        val pinned = mutableMapOf(
+            original.id to original.policy.snapshotHash,
+            change.id to change.policy.snapshotHash,
+        )
+        val resolver =
+            object : AppointmentCommitmentPolicySnapshotResolver {
+                override fun resolve(
+                    tenantGroupId: Long,
+                    clinicId: Long,
+                    decisionAt: java.time.Instant,
+                    serviceAt: java.time.Instant,
+                ): CurrentPolicySnapshot = current
+
+                override fun resolvePersisted(
+                    tenantGroupId: Long,
+                    clinicId: Long,
+                    snapshotId: Long,
+                ): PersistedPolicySnapshotReference =
+                    PersistedPolicySnapshotReference(
+                        id = snapshotId,
+                        snapshotHash = requireNotNull(pinned[snapshotId]),
+                        tenantGeneration = 1L,
+                        clinicGeneration = 0L,
+                        sourceVersions = emptyMap(),
+                        payload = if (snapshotId == original.id) original.policy.payload else change.policy.payload,
+                    )
+            }
+        val service = writableApplicationService(policySnapshotResolver = resolver)
+        val confirmed =
+            service.directCreate(adminActor(), "direct-policy-pin-01", true, directCreateRequest("policy-pin"))
+        current = change
+        val proposal =
+            service.createChangeProposal(
+                adminActor(),
+                confirmed.appointmentId,
+                confirmed.version,
+                "change-policy-pin-01",
+                CreateChangeProposalRequest(
+                    preferredStartAt = PROPOSAL_START,
+                    preferredEndAt = PROPOSAL_START.plusSeconds(3_600),
+                ),
+            )
+        current = newer
+
+        val accepted =
+            service.decideProposal(
+                patientActor(),
+                proposal.appointmentId,
+                proposal.proposalId,
+                proposal.version,
+                "accept-policy-pin-01",
+                ProposalDecisionRequest(consentEvidence("accept-policy-pin")),
+            )
+
+        accepted.confirmedProposalId shouldBeEqualTo proposal.proposalId
+        accepted.effectivePolicySnapshotId shouldBeEqualTo change.id
+    }
+
+    @Test
+    fun `change proposal uses the current active plan revision after external facts`() {
+        val service = writableApplicationService()
+        val confirmed =
+            service.directCreate(
+                adminActor(),
+                "direct-active-revision-01",
+                true,
+                directCreateRequest("active-revision"),
+            )
+        val activeRevisionId =
+            transaction(database) {
+                AppointmentPlanRevisions.update(
+                    where = { AppointmentPlanRevisions.id eq clinic.planRevisionId },
+                ) {
+                    it[active] = false
+                }
+                val newRevisionId =
+                    AppointmentPlanRevisions
+                        .insertAndGetId {
+                            it[planId] = clinic.planId
+                            it[revision] = 2L
+                            it[productVersionId] = "whitening-v2"
+                            it[snapshotHash] = "e".repeat(64)
+                            it[active] = true
+                        }.value
+                PlanRevisionTreatments.insert {
+                    it[planRevisionId] = newRevisionId
+                    it[treatmentKey] = "migrated-whitening"
+                    it[componentProductId] = "whitening-component"
+                    it[componentProductVersionId] = "whitening-component-v2"
+                    it[productVersionId] = "whitening-v2"
+                    it[status] = PlanTreatmentStatus.PENDING
+                    it[sourceBomItemId] = "bom-whitening-v2"
+                    it[sequence] = 1
+                    it[representativeTreatmentName] = "전환된 미백 치료"
+                    it[detailedTreatmentCodesPayload] = "[\"WHITENING_V2\"]"
+                    it[preparationMinutes] = 10
+                    it[treatmentMinutes] = 40
+                    it[recoveryMinutes] = 10
+                    it[practitionerQualificationsPayload] = "[\"DOCTOR\"]"
+                    it[equipmentTypesPayload] = "[]"
+                    it[spaceCapabilitiesPayload] = "[]"
+                }
+                newRevisionId
+            }
+
+        val changed =
+            service.createChangeProposal(
+                adminActor(),
+                confirmed.appointmentId,
+                confirmed.version,
+                "change-active-revision-01",
+                CreateChangeProposalRequest(
+                    preferredStartAt = PROPOSAL_START,
+                    preferredEndAt = PROPOSAL_START.plusSeconds(3_600),
+                ),
+            )
+
+        transaction(database) {
+            val item =
+                AppointmentItems
+                    .selectAll()
+                    .where { AppointmentItems.proposalId eq changed.proposalId }
+                    .single()
+            item[AppointmentItems.planRevisionId].value shouldBeEqualTo activeRevisionId
+            item[AppointmentItems.treatmentKey] shouldBeEqualTo "migrated-whitening"
+        }
+    }
+
     private fun writableApplicationService(
         policySnapshot: CurrentPolicySnapshot = CurrentPolicySnapshot(42L, effectivePolicy()),
+        policySnapshotResolver: AppointmentCommitmentPolicySnapshotResolver? = null,
         planningResolver: AppointmentCommitmentPlanningResolver = FakePlanningResolver(),
         consentMutation: ConsentEvidenceMutation = ConsentEvidenceMutation.NONE,
     ) = applicationService(
@@ -363,8 +573,9 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
             AppointmentCommitmentProperties(
                 mode = AppointmentCommitmentMode.WRITE,
                 clinicAllowlist = setOf(clinic.clinicId),
-            ),
+        ),
         policySnapshot = policySnapshot,
+        policySnapshotResolver = policySnapshotResolver,
         planningResolver = planningResolver,
         consentMutation = consentMutation,
     )
@@ -375,6 +586,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
         metrics: AppointmentCommitmentCommandMetrics =
             io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentMetrics(registry),
         policySnapshot: CurrentPolicySnapshot = CurrentPolicySnapshot(42L, effectivePolicy()),
+        policySnapshotResolver: AppointmentCommitmentPolicySnapshotResolver? = null,
         planningResolver: AppointmentCommitmentPlanningResolver = FakePlanningResolver(),
         consentMutation: ConsentEvidenceMutation = ConsentEvidenceMutation.NONE,
     ) = DefaultAppointmentCommitmentApplicationService(
@@ -393,7 +605,28 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
                     },
             ),
         commandService = commandService(CLOCK),
-        policySnapshotResolver = AppointmentCommitmentPolicySnapshotResolver { _, _, _, _ -> policySnapshot },
+        policySnapshotResolver = policySnapshotResolver ?: object : AppointmentCommitmentPolicySnapshotResolver {
+                override fun resolve(
+                    tenantGroupId: Long,
+                    clinicId: Long,
+                    decisionAt: java.time.Instant,
+                    serviceAt: java.time.Instant,
+                ): CurrentPolicySnapshot = policySnapshot
+
+                override fun resolvePersisted(
+                    tenantGroupId: Long,
+                    clinicId: Long,
+                    snapshotId: Long,
+                ): PersistedPolicySnapshotReference =
+                    PersistedPolicySnapshotReference(
+                        id = snapshotId,
+                        snapshotHash = policySnapshot.policy.snapshotHash,
+                        tenantGeneration = policySnapshot.policy.generation.tenantGeneration,
+                        clinicGeneration = policySnapshot.policy.generation.clinicGeneration,
+                        sourceVersions = policySnapshot.policy.sourceVersions,
+                        payload = policySnapshot.policy.payload,
+                    )
+            },
         planningResolver = planningResolver,
         consentEvidenceVerifier = FakeConsentEvidenceVerifier(consentMutation),
         metrics = metrics,

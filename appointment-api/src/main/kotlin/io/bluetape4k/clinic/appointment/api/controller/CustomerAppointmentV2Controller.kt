@@ -52,7 +52,7 @@ class CustomerAppointmentV2Controller(
 
     @Operation(
         summary = "Request a provisional appointment",
-        description = "Creates a PROPOSED appointment from the authenticated patient subject. " +
+        description = "Creates a policy-authorized PROPOSED or HELD appointment from the authenticated patient subject. " +
             "Send If-None-Match: * and reuse Idempotency-Key for safe retries.",
     )
     @ApiResponses(
@@ -64,6 +64,7 @@ class CustomerAppointmentV2Controller(
         ApiResponse(responseCode = "422", description = "No feasible proposal or plan limit exceeded", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "428", description = "Creation precondition missing", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "500", description = "Internal scheduling error", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        ApiResponse(responseCode = "503", description = "New appointment intake is disabled", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
     )
     @PostMapping("/appointment-requests")
     fun requestAppointment(

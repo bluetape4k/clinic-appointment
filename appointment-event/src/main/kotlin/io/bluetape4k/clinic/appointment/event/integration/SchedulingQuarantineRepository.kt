@@ -50,7 +50,7 @@ object SchedulingQuarantineEvents : LongIdTable("scheduling_quarantine_events") 
 
     init {
         index("idx_quarantine_status_expiry", false, legalHold, status, payloadExpiresAt, id)
-        index("idx_quarantine_resolved_retention", false, tenantGroupId, clinicId, legalHold, status, resolvedAt, id)
+        index("idx_quarantine_resolved_retention", false, tenantGroupId, clinicId, legalHold, resolvedAt, id, status)
         index("idx_quarantine_scope_reason", false, tenantGroupId, clinicId, reasonCode, detectedAt)
     }
 }

@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.config
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldContain
 import io.bluetape4k.assertions.shouldNotContain
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.commitment.ProposalFailureCode
 import io.bluetape4k.clinic.appointment.api.commitment.ProposalGenerationException
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
@@ -81,7 +82,7 @@ class AppointmentCommitmentExceptionResolutionTest {
             .andExpect(jsonPath("$.errorCode").value("PLAN_LIMIT_EXCEEDED"))
             .andExpect(jsonPath("$.correlationId").value("commitment-limit-7"))
             .andExpect(jsonPath("$.retryable").value(false))
-            .andExpect(jsonPath("$.action").value("Review the plan balance before creating another appointment."))
+            .andExpect(jsonPath("$.action").value("Review the plan size, dependency, and scheduling constraints."))
     }
 
     @Test
@@ -101,6 +102,18 @@ class AppointmentCommitmentExceptionResolutionTest {
     @Test
     fun `unrelated v2 path does not inherit the commitment error registry`() {
         isAppointmentCommitmentRequestPath("/api/v2/other").shouldBeFalse()
+    }
+
+    @Test
+    fun `all public cancellation and proposal lifecycle paths use the commitment error registry`() {
+        listOf(
+            "/api/v2/appointments/11/cancel",
+            "/api/v2/appointments/11/proposals/31/expire",
+            "/api/v2/appointments/11/proposals/31/accept",
+            "/api/v2/appointments/11/proposals/31/decline",
+        ).forEach { path ->
+            isAppointmentCommitmentRequestPath(path).shouldBeTrue()
+        }
     }
 
     @RestController

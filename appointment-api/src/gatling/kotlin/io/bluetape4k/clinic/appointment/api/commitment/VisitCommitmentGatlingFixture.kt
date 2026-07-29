@@ -376,10 +376,12 @@ private class VisitCommitmentCommandInvoker(
     private val service =
         serviceClass
             .constructors
-            .single { it.parameterCount == 9 }
+            .single { it.parameterCount == 11 }
             .newInstance(
                 database,
                 CLOCK,
+                3,
+                25L,
                 { _: Long -> Unit },
                 { _: Int -> 0L },
                 AppointmentRepository(),

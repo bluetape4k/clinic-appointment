@@ -198,9 +198,9 @@ internal object VisitCommitmentMigrationTestSupport {
             "tenant_group_id:A",
             "clinic_id:A",
             "legal_hold:A",
-            "status:A",
             "resolved_at:A",
             "id:A",
+            "status:A",
         )
     }
 

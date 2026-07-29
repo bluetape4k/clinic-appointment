@@ -52,13 +52,15 @@ scope 검사를 대체하지 않는다. scope가 다중이거나 모호하면 co
 
 | Actor | Method / path | 성공 | 업무 결과 |
 |---|---|---:|---|
-| 고객 | `POST /api/v2/appointment-requests` | 202 | `PROPOSED` 가예약과 proposal 생성 |
+| 고객 | `POST /api/v2/appointment-requests` | 202 | 정책에 따라 `PROPOSED` 또는 자원을 선점한 `HELD` 가예약 생성 |
 | 관리자 | `POST /api/v2/admin/appointments` | 201 | 정책이 허용하면 직접 확정 |
 | 관리자 | `POST /api/v2/appointments/{id}/approve` | 200 | 고객이 동의한 정확한 proposal 승인 |
 | 고객 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/accept` | 200 | 현재 proposal 수락 |
 | 고객 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/decline` | 200 | 기존 확정을 보존하며 proposal 거절 |
 | 관리자 | `POST /api/v2/appointments/{id}/confirm` | 200 | 정책·동의 확인 후 확정 |
 | 관리자 | `POST /api/v2/appointments/{id}/change-proposals` | 202 | 기존 확정을 보존한 대체 proposal 생성 |
+| 관리자 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/expire` | 200 | 만료 proposal 종결, 최초 `HELD` allocation 해제 |
+| 관리자 | `POST /api/v2/appointments/{id}/cancel` | 200 | 가예약·확정 예약 취소와 활성 allocation 해제 |
 | 고객·관리자 | `GET /api/v2/appointments/{id}/commitment` | 200 | actor 범위 commitment projection 조회 |
 
 모든 mutation은 `Idempotency-Key`를 요구한다. 신규 생성은
@@ -132,6 +134,16 @@ Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 �
 }
 ```
 
+관리자 취소 `POST /api/v2/appointments/{id}/cancel`:
+
+```json
+{ "reasonCode": "REFUND" }
+```
+
+환불 금액·승인·정산은 결제서비스가 소유한다. 예약서비스는 `REFUND`,
+`CUSTOMER_REQUEST`, `EQUIPMENT_FAILURE` 같은 등록 code를 취소 event에 남기고
+현재 활성 allocation만 해제한다.
+
 ## 배포 설정
 
 `AppointmentCommitmentProperties`의 기본 mode는 `OFF`다.
@@ -152,6 +164,10 @@ Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 �
 동기 계획 상한은 treatment 500개, 관계 edge 4,000개, 반복 100회, 탐색 365일,
 candidate slot 2,000개, slot당 자원 200개, 요청당 자원 entry 10,000개, 반환
 proposal 20개다. 설정으로 승인값보다 낮출 수는 있지만 높일 수 없다.
+
+proposal과 commitment 응답의 `policySnapshot`은 snapshot ID/hash, tenant·clinic
+세대, 정책 종류별 원본 version을 함께 제공한다. 고객 수락·관리자 승인·조회는
+현재 상품 카탈로그나 현재 정책을 다시 해석하지 않고 이 영속 snapshot을 사용한다.
 
 `api-enabled`는 v2 row가 전혀 없는 bootstrap에서만 전체 route 노출을 제어한다.
 활성화 시 전용 idempotency secret이 없거나 짧거나 Base64가 아니면 startup을

@@ -47,13 +47,15 @@ rollout, alerts, retention, and rollback.
 
 | Actor | Method and path | Result |
 |------|------|------|
-| Patient | `POST /api/v2/appointment-requests` | Creates a `PROPOSED` provisional appointment (`202`). |
+| Patient | `POST /api/v2/appointment-requests` | Creates a policy-authorized `PROPOSED` or resource-backed `HELD` provisional appointment (`202`). |
 | Administrator | `POST /api/v2/admin/appointments` | Creates a policy-authorized confirmed appointment (`201`). |
 | Administrator | `POST /api/v2/appointments/{id}/approve` | Approves the exact customer proposal (`200`). |
 | Patient | `POST /api/v2/appointments/{id}/proposals/{proposalId}/accept` | Accepts a current change proposal (`200`). |
 | Patient | `POST /api/v2/appointments/{id}/proposals/{proposalId}/decline` | Declines a proposal while preserving the confirmed booking (`200`). |
 | Administrator | `POST /api/v2/appointments/{id}/confirm` | Confirms a proposal when effective policy and consent permit it (`200`). |
 | Administrator | `POST /api/v2/appointments/{id}/change-proposals` | Creates a replacement proposal without cancelling the current booking (`202`). |
+| Administrator | `POST /api/v2/appointments/{id}/proposals/{proposalId}/expire` | Expires a due proposal and releases an initial hold (`200`). |
+| Administrator | `POST /api/v2/appointments/{id}/cancel` | Cancels the appointment and releases active allocations (`200`). |
 | Patient or administrator | `GET /api/v2/appointments/{id}/commitment` | Reads the commitment-native projection (`200`). |
 
 These routes never accept actor, tenant, clinic, patient subject, policy mode,
@@ -62,6 +64,10 @@ tenant and clinic from the verified Gateway principal; ambiguous or service
 principals fail closed. Every mutation requires `Idempotency-Key`; creation
 also requires `If-None-Match: *`, and existing-aggregate mutations require the
 latest `ETag` in `If-Match`.
+
+Proposal and commitment responses expose the immutable policy snapshot ID,
+hash, generation, and source versions used for the decision. Later policy
+changes do not reinterpret an existing proposal.
 
 The Gateway must issue bounded claims that satisfy one actor invariant set.
 For example, an administrator token for clinic `101` contains:
@@ -146,9 +152,9 @@ resolver does not guess with plain SHA-256; it fails closed for patient access.
 | v2 mutation attempted through a legacy route | `409 NEW_APPOINTMENT_API_REQUIRED` | Use the commitment v2 endpoint. |
 | Unexpected internal failure | `500 INTERNAL_ERROR` | Retry with the same idempotency key after `Retry-After: 5`. |
 
-`PREDECESSOR_NOT_COMPLETED` is a reserved public code for Task 8, when external
-completion events become available. Task 7 does not infer treatment completion
-inside the reservation API.
+`PREDECESSOR_NOT_COMPLETED` is returned when an authoritative external
+fulfillment event has not yet proved completion of a blocking predecessor.
+The reservation API never infers clinical completion from appointment state.
 
 ### Plan Foundation Flags
 
