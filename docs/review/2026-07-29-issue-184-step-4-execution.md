@@ -30,8 +30,9 @@
   - **Failure:** 없음.
 - [x] **CG-03 — 사용자 작업과 변경 경계 보호**
   - **Action:** feature worktree와 untracked 시각 검토 산출물을 분리했다.
-  - **Evidence:** `.playwright-cli/`, `.superpowers/`, `output/playwright/issue-184-*`
-    는 기존 untracked 사용자/도구 산출물이며 stage·수정·삭제하지 않는다.
+  - **Evidence:** `.superpowers/`의 HTML 초안은 tracked 최종 spec으로 대체됐고,
+    `.playwright-cli/` 상태와 `output/playwright/issue-184-*` 화면 캡처는 어떤
+    문서에서도 참조하지 않는 중간 검토 산출물임을 확인해 Task 5 완료 뒤 정리했다.
   - **Failure:** 없음.
 - [x] **CG-04 — 정책과 언어 경계 적용**
   - **Action:** 한국어 KDoc/업무 문서, English public GitHub artifact,
