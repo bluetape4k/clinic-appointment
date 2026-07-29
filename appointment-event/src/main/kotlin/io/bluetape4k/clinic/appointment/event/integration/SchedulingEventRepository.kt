@@ -33,6 +33,23 @@ data class SchedulingInboxRecord(
 )
 
 /**
+ * 같은 source aggregate version으로 처리된 event와 요청 hash의 관계이다.
+ *
+ * raw payload를 읽거나 같은 version의 replay row 전체를 materialize하지 않고 bounded
+ * existence query로 replay와 immutable version conflict를 구분한다.
+ */
+enum class SchedulingSourceVersionMatch {
+    /** 같은 source version의 processed event가 없다. */
+    NOT_FOUND,
+
+    /** 같은 source version과 canonical hash가 이미 처리됐다. */
+    SAME_HASH,
+
+    /** 같은 source version은 처리됐지만 요청 canonical hash와 다르다. */
+    DIFFERENT_HASH,
+}
+
+/**
  * 데이터베이스가 계산한 V9 outbox dual-write convergence evidence이다.
  *
  * @property aggregateIdentityMissingCount `aggregate_type` 또는 `aggregate_id`가 없는 row 수.
@@ -152,6 +169,88 @@ class SchedulingEventRepository {
         }.value
 
     /**
+     * trusted 실행 BOM envelope에서 redacted `RECEIVED` inbox row를 삽입한다.
+     *
+     * execution snapshot 본문은 저장하지 않고 source identity와 canonical hash만 남긴다.
+     *
+     * @param envelope 서명·schema·hash 검증을 통과한 실행 BOM envelope이다.
+     * @return 생성된 inbox row의 양수 database identity이다.
+     */
+    fun insertReceivedPackageExecution(
+        envelope: TrustedSchedulingEventEnvelope<PackageExecutionEvent>,
+    ): Long =
+        SchedulingInboxEvents.insertAndGetId {
+            it[eventId] = envelope.eventId
+            it[eventType] = envelope.eventType
+            it[producer] = envelope.producer
+            it[sourceAuthority] = envelope.payload.sourcePurchaseAuthority
+            it[sourceAggregateId] = envelope.payload.sourceAggregateId
+            it[sourceAggregateVersion] = envelope.payload.sourceAggregateVersion
+            it[tenantGroupId] = envelope.payload.tenantGroupId
+            it[clinicId] = envelope.payload.clinicId
+            it[payloadHash] = envelope.payloadHash
+            it[status] = SchedulingInboxStatus.RECEIVED
+            it[attemptCount] = 0
+            it[occurredAt] = envelope.occurredAt
+            it[receivedAt] = envelope.receivedAt
+        }.value
+
+    /**
+     * source aggregate의 정확한 version과 요청 hash의 관계를 bounded query로 분류한다.
+     *
+     * 동일 version의 같은 hash replay가 여러 event ID로 processed돼도 최대 한 row만
+     * 확인합니다. 요청 hash 일치 여부를 먼저 확인하고, 없을 때 같은 version 존재 여부만
+     * 조회해 replay history 크기에 비례한 materialization을 피합니다.
+     *
+     * @param payloadHash 현재 요청의 canonical SHA-256 hash이다.
+     * @return 미처리, 같은 hash replay, 다른 hash conflict 중 하나이다.
+     */
+    fun classifyProcessedSourceVersion(
+        tenantGroupId: Long,
+        clinicId: Long,
+        producer: String,
+        sourceAuthority: String,
+        sourceAggregateId: String,
+        sourceAggregateVersion: Long,
+        payloadHash: String,
+    ): SchedulingSourceVersionMatch {
+        val sameHashExists = SchedulingInboxEvents
+            .selectAll()
+            .where {
+                (SchedulingInboxEvents.tenantGroupId eq tenantGroupId) and
+                    (SchedulingInboxEvents.clinicId eq clinicId) and
+                    (SchedulingInboxEvents.producer eq producer) and
+                    (SchedulingInboxEvents.sourceAuthority eq sourceAuthority) and
+                    (SchedulingInboxEvents.sourceAggregateId eq sourceAggregateId) and
+                    (SchedulingInboxEvents.sourceAggregateVersion eq sourceAggregateVersion) and
+                    (SchedulingInboxEvents.status eq SchedulingInboxStatus.PROCESSED) and
+                    (SchedulingInboxEvents.payloadHash eq payloadHash)
+            }
+            .limit(1)
+            .any()
+        if (sameHashExists) return SchedulingSourceVersionMatch.SAME_HASH
+
+        val versionExists = SchedulingInboxEvents
+            .selectAll()
+            .where {
+                (SchedulingInboxEvents.tenantGroupId eq tenantGroupId) and
+                    (SchedulingInboxEvents.clinicId eq clinicId) and
+                    (SchedulingInboxEvents.producer eq producer) and
+                    (SchedulingInboxEvents.sourceAuthority eq sourceAuthority) and
+                    (SchedulingInboxEvents.sourceAggregateId eq sourceAggregateId) and
+                    (SchedulingInboxEvents.sourceAggregateVersion eq sourceAggregateVersion) and
+                    (SchedulingInboxEvents.status eq SchedulingInboxStatus.PROCESSED)
+            }
+            .limit(1)
+            .any()
+        return if (versionExists) {
+            SchedulingSourceVersionMatch.DIFFERENT_HASH
+        } else {
+            SchedulingSourceVersionMatch.NOT_FOUND
+        }
+    }
+
+    /**
      * inbox row 하나를 주어진 UTC instant에 processed로 표시한다.
      *
      * [reasonCode]는 선택적인 정제된 convergence code이며, 원본 exception text 또는
@@ -252,6 +351,48 @@ class SchedulingEventRepository {
     }
 
     /**
+     * 실행 BOM에서 생성된 Plan revision publication event를 redacted JSON으로 추가한다.
+     *
+     * outbox는 legacy plan foreign key와 generic revision aggregate identity를 함께 쓴다.
+     * payload에는 treatment name, code, resource detail 같은 실행 본문을 넣지 않는다.
+     *
+     * @param envelope revision 생성 원인이 된 trusted 실행 BOM event이다.
+     * @param planId 기존 구매 Plan의 양수 identity이다.
+     * @param revisionId 같은 transaction에서 append한 불변 revision identity이다.
+     * @param revision Plan 안에서 1부터 증가하는 revision 번호이다.
+     */
+    fun insertPlanRevisionCreatedOutbox(
+        envelope: TrustedSchedulingEventEnvelope<PackageExecutionEvent>,
+        planId: Long,
+        revisionId: Long,
+        revision: Long,
+    ) {
+        require(planId > 0) { "planId must be positive" }
+        require(revisionId > 0) { "revisionId must be positive" }
+        require(revision > 0) { "revision must be positive" }
+        val outboxEventId = UUID.nameUUIDFromBytes(
+            "AppointmentPlanRevisionCreated:${envelope.eventId}:$revisionId"
+                .toByteArray(StandardCharsets.UTF_8)
+        ).toString()
+        val payload = envelope.payload
+        SchedulingOutboxEvents.insertAndGetId {
+            it[eventId] = outboxEventId
+            it[causationEventId] = envelope.eventId
+            it[correlationId] = envelope.correlationId
+            it[eventType] = "AppointmentPlanRevisionCreated"
+            it[tenantGroupId] = payload.tenantGroupId
+            it[SchedulingOutboxEvents.clinicId] = payload.clinicId
+            it[SchedulingOutboxEvents.planId] = planId
+            it[aggregateType] = APPOINTMENT_PLAN_REVISION_AGGREGATE_TYPE
+            it[aggregateId] = revisionId.toString()
+            it[schemaVersion] = 1
+            it[payloadJson] = planRevisionCreatedPayloadJson(outboxEventId, envelope, planId, revisionId, revision)
+            it[status] = SchedulingOutboxStatus.PENDING
+            it[attemptCount] = 0
+        }
+    }
+
+    /**
      * 명시적인 privacy-safe allow-list에서 안정적인 plan-event JSON을 생성한다.
      *
      * 이미 trusted envelope에서 온 metadata를 포함해 모든 문자열을 JSON escape한다.
@@ -301,6 +442,32 @@ class SchedulingEventRepository {
         append('"')
     }
 
+    private fun planRevisionCreatedPayloadJson(
+        outboxEventId: String,
+        envelope: TrustedSchedulingEventEnvelope<PackageExecutionEvent>,
+        planId: Long,
+        revisionId: Long,
+        revision: Long,
+    ): String {
+        val payload = envelope.payload
+        return buildString {
+            append('{')
+            append("\"eventId\":").appendJsonString(outboxEventId)
+            append(",\"causationEventId\":").appendJsonString(envelope.eventId)
+            append(",\"correlationId\":").appendJsonString(envelope.correlationId)
+            append(",\"planId\":").append(planId)
+            append(",\"revisionId\":").append(revisionId)
+            append(",\"revision\":").append(revision)
+            append(",\"tenantGroupId\":").append(payload.tenantGroupId)
+            append(",\"clinicId\":").append(payload.clinicId)
+            append(",\"sourcePurchaseAuthority\":").appendJsonString(payload.sourcePurchaseAuthority)
+            append(",\"sourcePurchaseId\":").appendJsonString(payload.sourcePurchaseId)
+            append(",\"sourceAggregateVersion\":").append(payload.sourceAggregateVersion)
+            append(",\"sourceSnapshotHash\":").appendJsonString(payload.executionSnapshot.snapshotHash)
+            append('}')
+        }
+    }
+
     /**
      * 모든 V9 outbox writer가 dual-write하고 있음을 보여주는 데이터베이스 계산 evidence를 읽는다.
      *
@@ -348,5 +515,6 @@ class SchedulingEventRepository {
 
     private companion object {
         const val APPOINTMENT_PLAN_AGGREGATE_TYPE = "APPOINTMENT_PLAN"
+        const val APPOINTMENT_PLAN_REVISION_AGGREGATE_TYPE = "APPOINTMENT_PLAN_REVISION"
     }
 }
