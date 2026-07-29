@@ -11,11 +11,13 @@ import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
  */
 object AppointmentItems : LongIdTable("scheduling_appointment_items") {
     val appointmentId = reference("appointment_id", Appointments, onDelete = ReferenceOption.CASCADE)
-    val planRevisionId = reference(
-        "plan_revision_id",
-        AppointmentPlanRevisions,
-        onDelete = ReferenceOption.RESTRICT,
-    )
+    val proposalId = reference("proposal_id", AppointmentProposals, onDelete = ReferenceOption.CASCADE)
+    val planRevisionId =
+        reference(
+            "plan_revision_id",
+            AppointmentPlanRevisions,
+            onDelete = ReferenceOption.RESTRICT,
+        )
     val treatmentKey = varchar("treatment_key", 128)
     val representativeTreatmentName = varchar("representative_treatment_name", 256)
     val detailedTreatmentCodesPayload = text("detailed_treatment_codes_payload")
@@ -27,11 +29,12 @@ object AppointmentItems : LongIdTable("scheduling_appointment_items") {
     init {
         uniqueIndex(
             "uq_appointment_item_attempt",
-            appointmentId,
+            proposalId,
             planRevisionId,
             treatmentKey,
             attemptNumber,
         )
+        index("idx_appointment_item_proposal", false, proposalId)
         index("idx_appointment_item_treatment", false, planRevisionId, treatmentKey)
     }
 }

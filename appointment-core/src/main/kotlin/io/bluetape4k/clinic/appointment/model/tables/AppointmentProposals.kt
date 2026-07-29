@@ -10,6 +10,7 @@ import org.jetbrains.exposed.v1.javatime.timestamp
  *
  * 날짜·항목·자원·정책이 달라지면 기존 row를 수정하지 않고 새 [revision]을 추가합니다.
  * [proposalHash]는 고객 동의가 실제 제안 전체에 결합됐는지 검증하는 값입니다.
+ * [expiredAt]은 만료 command가 정확히 한 번 기록한 시각이며 제안 본문을 수정하지 않습니다.
  */
 object AppointmentProposals : LongIdTable("scheduling_appointment_proposals") {
     val commitmentId = reference("commitment_id", AppointmentCommitments, onDelete = ReferenceOption.CASCADE)
@@ -17,6 +18,7 @@ object AppointmentProposals : LongIdTable("scheduling_appointment_proposals") {
     val proposedStartAt = timestamp("proposed_start_at")
     val proposedEndAt = timestamp("proposed_end_at")
     val expiresAt = timestamp("expires_at")
+    val expiredAt = timestamp("expired_at").nullable()
     val representativeTreatmentName = varchar("representative_treatment_name", 256)
     val proposalHash = varchar("proposal_hash", 64)
     val policySnapshotId = long("policy_snapshot_id")

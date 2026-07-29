@@ -3,6 +3,8 @@
 
 ALTER TABLE scheduling_appointments
     ADD COLUMN model_version VARCHAR(24) DEFAULT 'LEGACY' NOT NULL;
+ALTER TABLE scheduling_appointments
+    ADD COLUMN patient_reference_fingerprint VARCHAR(128);
 ALTER TABLE scheduling_appointments ALTER COLUMN doctor_id DROP NOT NULL;
 ALTER TABLE scheduling_appointments ALTER COLUMN treatment_type_id DROP NOT NULL;
 ALTER TABLE scheduling_appointments ALTER COLUMN appointment_date DROP NOT NULL;
@@ -33,6 +35,7 @@ CREATE TABLE scheduling_appointment_proposals (
     proposed_start_at TIMESTAMP NOT NULL,
     proposed_end_at TIMESTAMP NOT NULL,
     expires_at TIMESTAMP NOT NULL,
+    expired_at TIMESTAMP,
     representative_treatment_name VARCHAR(256) NOT NULL,
     proposal_hash VARCHAR(64) NOT NULL,
     policy_snapshot_id BIGINT NOT NULL,
@@ -57,6 +60,8 @@ CREATE TABLE scheduling_consent_decisions (
     evidence_authority VARCHAR(128) NOT NULL,
     evidence_id VARCHAR(128) NOT NULL,
     evidence_hash VARCHAR(64) NOT NULL,
+    evidence_type VARCHAR(64),
+    terms_hash VARCHAR(64),
     decided_at TIMESTAMP NOT NULL,
     actor_ref VARCHAR(128) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -137,6 +142,7 @@ CREATE TABLE scheduling_plan_revision_grouping_constraints (
 CREATE TABLE scheduling_appointment_items (
     id BIGSERIAL PRIMARY KEY,
     appointment_id BIGINT NOT NULL,
+    proposal_id BIGINT NOT NULL,
     plan_revision_id BIGINT NOT NULL,
     treatment_key VARCHAR(128) NOT NULL,
     representative_treatment_name VARCHAR(256) NOT NULL,
@@ -147,12 +153,16 @@ CREATE TABLE scheduling_appointment_items (
     attempt_number INTEGER NOT NULL,
     CONSTRAINT fk_appointment_item_appointment FOREIGN KEY (appointment_id)
         REFERENCES scheduling_appointments(id) ON DELETE CASCADE,
+    CONSTRAINT fk_appointment_item_proposal FOREIGN KEY (proposal_id)
+        REFERENCES scheduling_appointment_proposals(id) ON DELETE CASCADE,
     CONSTRAINT fk_appointment_item_revision FOREIGN KEY (plan_revision_id)
         REFERENCES scheduling_appointment_plan_revisions(id) ON DELETE RESTRICT,
     CONSTRAINT uq_appointment_item_attempt UNIQUE (
-        appointment_id, plan_revision_id, treatment_key, attempt_number
+        proposal_id, plan_revision_id, treatment_key, attempt_number
     )
 );
+CREATE INDEX idx_appointment_item_proposal
+    ON scheduling_appointment_items(proposal_id);
 CREATE INDEX idx_appointment_item_treatment
     ON scheduling_appointment_items(plan_revision_id, treatment_key);
 
@@ -204,6 +214,7 @@ CREATE TABLE scheduling_resource_allocations (
     starts_at TIMESTAMP NOT NULL,
     ends_at TIMESTAMP NOT NULL,
     capacity_units INTEGER NOT NULL,
+    maximum_capacity INTEGER NOT NULL,
     allocation_mode VARCHAR(32) NOT NULL,
     allocation_status VARCHAR(16) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -251,6 +262,24 @@ CREATE TABLE scheduling_appointment_command_idempotencies (
     command_hash VARCHAR(64) NOT NULL,
     result_type VARCHAR(64),
     result_id BIGINT,
+    result_commitment_id BIGINT,
+    result_appointment_id BIGINT,
+    result_commitment_status VARCHAR(32),
+    result_origin VARCHAR(16),
+    result_confirmed_proposal_id BIGINT,
+    result_effective_policy_snapshot_id BIGINT,
+    result_commitment_version BIGINT,
+    result_proposal_revision BIGINT,
+    result_proposed_start_at TIMESTAMP,
+    result_proposed_end_at TIMESTAMP,
+    result_proposal_expires_at TIMESTAMP,
+    result_proposal_expired_at TIMESTAMP,
+    result_representative_treatment_name VARCHAR(256),
+    result_proposal_hash VARCHAR(64),
+    result_policy_snapshot_id BIGINT,
+    result_supersedes_proposal_id BIGINT,
+    result_created_by_actor VARCHAR(128),
+    response_hash VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT fk_command_idempotency_tenant FOREIGN KEY (tenant_group_id)
         REFERENCES scheduling_tenant_groups(id) ON DELETE RESTRICT,

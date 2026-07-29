@@ -19,22 +19,22 @@ import java.time.Instant
  * @property appointmentItemKey 이 점유의 원인이 된 세부 진료 키입니다. 방문 전체 점유는
  * `null`일 수 있으나 item별 준비·회복 구간을 잃어서는 안 됩니다.
  */
-data class ResourceAllocationDraft(
+class ResourceAllocationDraft(
     val resourceType: ResourceType,
-    val resourceId: String,
+    resourceId: String,
     val startsAt: Instant,
     val endsAt: Instant,
-    val capacityUnits: Int,
+    capacityUnits: Int,
     val allocationMode: ResourceAllocationMode,
-    val appointmentItemKey: String?,
+    appointmentItemKey: String?,
 ) : Serializable {
+    val resourceId = resourceId.requireNotBlank("resourceId")
+    val capacityUnits = capacityUnits.requirePositiveNumber("capacityUnits")
+    val appointmentItemKey = appointmentItemKey?.requireNotBlank("appointmentItemKey")
 
     init {
-        resourceId.requireNotBlank("resourceId")
-        capacityUnits.requirePositiveNumber("capacityUnits")
-        appointmentItemKey?.requireNotBlank("appointmentItemKey")
         require(startsAt < endsAt) { "startsAt must be before endsAt" }
-        require(allocationMode == ResourceAllocationMode.CAPACITY_BUCKET || capacityUnits == 1) {
+        require(allocationMode == ResourceAllocationMode.CAPACITY_BUCKET || this.capacityUnits == 1) {
             "exclusive and shared resources must consume exactly one capacity unit"
         }
     }

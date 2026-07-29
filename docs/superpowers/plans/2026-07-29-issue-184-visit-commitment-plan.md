@@ -5,7 +5,7 @@
 > 모든 Kotlin 변경에는 `bluetape-kotlin-patterns`, 모든 동작 변경에는
 > `test-driven-development`를 적용한다.
 >
-> 상태: Step 3-R `P0=0/P1=0`, Step 3-P PASS. Step 4 구현 진행 중.
+> 상태: Task 6 Step 6-R `P0=0/P1=0` 완료. Task 7 구현 대기.
 
 **목표:** 구매 당시 고정된 단일 상품 또는 패키지 실행 BOM을 여러 방문과 세부
 진료로 전개하고, 고객 가예약·병원 승인·고객 동의·자원 점유를 원자적으로 결합한
@@ -72,7 +72,7 @@ head의 CI와 7-R을 확인한 뒤 별도 승인을 받는다.
 |---|---|
 | `model/commitment/AppointmentCommitmentModel.kt` | commitment/proposal lifecycle, origin, immutable read model |
 | `model/commitment/ConsentDecisionModel.kt` | proposal·상품 전환 동의 subject와 증빙 결합 |
-| `model/commitment/AppointmentItemModel.kt` | Plan treatment를 실제 방문에서 시도하는 item |
+| `model/commitment/AppointmentItemDraft.kt` | Plan treatment를 실제 방문에서 시도하는 item |
 | `model/commitment/ResourceAllocationModel.kt` | practitioner/equipment/space 점유와 capacity 사용량 |
 | `model/plan/AppointmentPlanRevisionModel.kt` | 동일 구매 Plan의 불변 revision과 활성 revision |
 | `model/plan/PackageExecutionSnapshot.kt` | 전개된 BOM, provenance, dependency/grouping snapshot |
@@ -405,9 +405,9 @@ p99 0.910 ms, maximum p95 5.631 ms였다. 실제 `simulation.log`, 400개 측정
 **의존성:** Task 2, 5
 **쓰기 범위:** API commitment command service/core repository integration/tests
 
-- [ ] **RED:** 고객 요청, 관리자 승인, 직접 확정, accept/decline, 변경 제안,
+- [x] **RED:** 고객 요청, 관리자 승인, 직접 확정, accept/decline, 변경 제안,
   만료, 중복 confirm, 서로 다른 proposal 동시 accept, 새 allocation 실패를 쓴다.
-- [ ] 하나의 transaction 안에서 다음 순서를 지킨다.
+- [x] 하나의 transaction 안에서 다음 순서를 지킨다.
 
 ```text
 idempotency 선점 → expected version 검증 → proposal/동의 재검증
@@ -416,9 +416,9 @@ idempotency 선점 → expected version 검증 → proposal/동의 재검증
 → legacy projection 갱신 → 이력/outbox → idempotency 결과
 ```
 
-- [ ] DB deadlock/serialization failure만 최대 3회 backoff+jitter로 재시도하고
+- [x] DB deadlock/serialization failure만 최대 3회 backoff+jitter로 재시도하고
   expected version 충돌은 `VERSION_CONFLICT`로 즉시 반환한다.
-- [ ] 새 점유 실패, 고객 거부, proposal 만료 시 기존 confirmed proposal과
+- [x] 새 점유 실패, 고객 거부, proposal 만료 시 기존 confirmed proposal과
   allocation이 그대로 남는지 DB row로 단언한다.
 
 ```bash
@@ -427,6 +427,11 @@ idempotency 선점 → expected version 검증 → proposal/동의 재검증
 ```
 
 **예상:** 충돌하는 두 확정 중 최대 하나만 성공, 기존 예약 손실 0건.
+**검증:** command service 22개, PostgreSQL 동시성 5개, core repository 대상
+13개가 실패 없이 통과했다. H2→PostgreSQL→MySQL Flyway 검증은 각 1개씩
+통과했고 `:appointment-api:build`는 323개 테스트, 실패 0, 오류 0, 기존
+skipped 2개로 성공했다. Step 6-R의 독립 7-Tier 결과와 후속 경계는
+`docs/review/2026-07-29-issue-184-task6-step-6r-code-review.md`에 기록한다.
 **커밋:** `Confirm exact proposals without sacrificing existing bookings`
 
 ### Task 7: Gateway actor 기반 고객·관리자 API와 legacy 보호
@@ -440,6 +445,15 @@ idempotency 선점 → expected version 검증 → proposal/동의 재검증
 - [ ] controller는 `ActorContextResolver`로만 actor를 얻는다. 고객과 관리자
   controller를 분리하고 `Idempotency-Key`, `If-None-Match: *`, `If-Match`를
   command에 전달한다.
+- [ ] `CommitmentCommandContext`, `DirectConfirmationPolicyDecision`,
+  `ConfirmedAppointmentProjectionTarget`은 request body에서 받지 않는다. Gateway
+  principal과 tenant·clinic 범위의 유효 정책 snapshot 및 자원 inventory를
+  server-side resolver로 조회해 조립하고, body가 정책 방식·허용 증빙·약관 hash·
+  담당자 mapping을 위조할 수 없음을 negative test로 고정한다.
+- [ ] `actorAuditRef`, 동의 `actorRef/evidenceAuthority/evidenceId`는 원문 개인정보나
+  token이 아닌 제한된 opaque reference만 허용한다. 전역 증빙 ID를 유지한다면 원본
+  authority가 tenant namespace를 포함한 추측 불가능 ID를 발행하도록 검증하고,
+  중복은 raw unique violation이 아닌 안정적인 application 오류로 변환한다.
 - [ ] 다음 endpoint와 status를 그대로 구현한다.
 
 | Actor | Method / path | 성공 |

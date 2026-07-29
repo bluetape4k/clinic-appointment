@@ -6,6 +6,12 @@ import java.time.Duration
 /** 인증된 관리자가 고객 대신 예약을 생성할 때 허용되는 확정 방식입니다. */
 enum class AdminBookingMode {
     /**
+     * 관리자는 가예약 제안만 만들 수 있고 고객이 그 정확한 제안을 수락한 뒤에만
+     * 확정합니다. 직접 확정 command는 이 정책에서 허용되지 않습니다.
+     */
+    PROPOSAL_REQUIRES_CUSTOMER_ACCEPTANCE,
+
+    /**
      * 감사 가능한 고객 동의 증빙이 관리 명령과 함께 제공된 경우에만
      * 확정 예약을 바로 생성합니다.
      */
