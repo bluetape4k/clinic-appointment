@@ -259,6 +259,10 @@ rollback은 새 mutation을 멈추는 절차다. 이미 정상적으로 끝난 �
    audit row를 보존한다. V13 schema를 내리거나 실패 작업을 삭제하지 않는다.
 6. 가장 작은 병원 허용 목록과 `DRY_RUN`으로 재개한다.
 
+`mutation-mode=DISABLED`이면 dispatcher는 자동 redrive나 작업 선점 전에
+반환한다. 따라서 queue가 비워지는 동안 rollback 때문에 새 redrive 계보가
+생기지 않는다.
+
 ```sql
 SELECT commitment_status, COUNT(*) AS outcome_count
 FROM scheduling_appointment_commitments
