@@ -387,16 +387,38 @@ class ProfileReevaluationRepository(
     fun findOutcome(
         jobId: Long,
         appointmentId: Long,
+    ): ProfileReevaluationOutcomeRecord? =
+        findOutcome(jobId, appointmentId, forUpdate = false)
+
+    /**
+     * 최신 revision fencing 뒤 같은 작업·예약의 완료 결과를 잠금 조회합니다.
+     *
+     * MySQL `REPEATABLE READ`에서도 잠금 대기 전에 만든 consistent-read snapshot으로
+     * 돌아가지 않고 앞선 worker가 커밋한 결과를 확인합니다.
+     */
+    fun findOutcomeForUpdate(
+        jobId: Long,
+        appointmentId: Long,
+    ): ProfileReevaluationOutcomeRecord? =
+        findOutcome(jobId, appointmentId, forUpdate = true)
+
+    private fun findOutcome(
+        jobId: Long,
+        appointmentId: Long,
+        forUpdate: Boolean,
     ): ProfileReevaluationOutcomeRecord? {
         require(jobId > 0 && appointmentId > 0) {
             "jobId and appointmentId must be positive"
         }
-        return ProfileReevaluationOutcomes
+        val query =
+            ProfileReevaluationOutcomes
             .selectAll()
             .where {
                 (ProfileReevaluationOutcomes.jobId eq EntityID(jobId, ProfileReevaluationJobs)) and
                     (ProfileReevaluationOutcomes.appointmentId eq appointmentId)
-            }.singleOrNull()
+            }
+        return (if (forUpdate) query.forUpdate() else query)
+            .singleOrNull()
             ?.toOutcomeRecord()
     }
 

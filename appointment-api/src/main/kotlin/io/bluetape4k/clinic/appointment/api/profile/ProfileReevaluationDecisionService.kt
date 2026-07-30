@@ -102,15 +102,17 @@ class ProfileReevaluationDecisionService(
         decision: ProfileReevaluationDecision,
     ): ProfileReevaluationDecisionResult =
         transaction(database) {
-            reevaluationRepository.findOutcome(command.jobId, command.appointmentId)?.let { completed ->
-                return@transaction completedResult(loadCurrent(command), completed.outcomeType)
-            }
             requireJobMatches(command)
             require(
                 reevaluationRepository.lockCurrentRevision(command.jobId, command.targetRevision),
             ) {
                 "profile reevaluation job is not the current revision"
             }
+            reevaluationRepository
+                .findOutcomeForUpdate(command.jobId, command.appointmentId)
+                ?.let { completed ->
+                    return@transaction completedResult(loadCurrent(command), completed.outcomeType)
+                }
             requireAppointmentScope(command)
             val currentCommitment =
                 requireNotNull(commitmentRepository.findByIdForUpdate(command.commitmentId)) {
