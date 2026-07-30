@@ -1,10 +1,12 @@
 package io.bluetape4k.clinic.appointment.repository
 
+import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.ConfirmedAppointmentProjection
 import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
@@ -16,6 +18,7 @@ import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
@@ -38,13 +41,32 @@ import java.time.LocalTime
 import java.time.ZoneId
 
 /**
+ * 프로필 변경 재평가 worker가 한 keyset 페이지에서 처리할 최소 예약 식별 정보입니다.
+ *
+ * CRM 평가 내용이나 환자 식별값을 반환하지 않습니다. worker는 이 식별자와 version으로
+ * commitment를 다시 잠그고 최신 상태를 검증해야 합니다.
+ */
+data class ProfileReevaluationAppointmentCandidate(
+    val appointmentId: Long,
+    val commitmentId: Long,
+    val commitmentStatus: AppointmentCommitmentStatus,
+    val commitmentVersion: Long,
+    val effectivePolicySnapshotId: Long,
+)
+
+/**
  * 예약 정보 저장소.
  *
  * Exposed JDBC를 사용하여 예약 조회, 생성, 상태 업데이트를 처리합니다.
  * 동시 예약 수 및 장비 사용량 검증, 기간별/상태별 조회 등을 지원합니다.
  */
 class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
-    companion object : KLogging()
+    companion object : KLogging() {
+        private const val MAX_PROFILE_REEVALUATION_PAGE_SIZE = 100
+        private val PROFILE_FINGERPRINT = Regex("[0-9a-f]{64}")
+        private val PROFILE_REEVALUATION_STATUSES =
+            listOf(AppointmentCommitmentStatus.PROPOSED, AppointmentCommitmentStatus.HELD)
+    }
 
     override val table = Appointments
 
@@ -184,6 +206,58 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
                 ?.get(Clinics.timezone)
                 ?: return null
         return ZoneId.of(timezone)
+    }
+
+    /**
+     * 프로필 변경으로 다시 평가할 가예약을 ID keyset 페이지로 조회합니다.
+     *
+     * tenant·clinic·환자 지문·commitment 상태·cursor 조건을 모두 SQL에 적용합니다.
+     * `CONFIRMED`를 비롯한 비대상 상태는 반환하지 않으며 offset을 사용하지 않습니다.
+     * caller가 소유한 Exposed transaction 안에서 호출합니다.
+     */
+    fun findProfileReevaluationCandidates(
+        tenantGroupId: Long,
+        clinicId: Long,
+        patientReferenceFingerprint: String,
+        afterAppointmentId: Long,
+        limit: Int,
+    ): List<ProfileReevaluationAppointmentCandidate> {
+        val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
+        val validClinicId = clinicId.requirePositiveNumber("clinicId")
+        require(PROFILE_FINGERPRINT.matches(patientReferenceFingerprint)) {
+            "patientReferenceFingerprint must be lowercase SHA-256"
+        }
+        require(afterAppointmentId >= 0L) { "afterAppointmentId must not be negative" }
+        require(limit in 1..MAX_PROFILE_REEVALUATION_PAGE_SIZE) {
+            "limit must be in 1..$MAX_PROFILE_REEVALUATION_PAGE_SIZE"
+        }
+
+        return Appointments
+            .innerJoin(Clinics)
+            .innerJoin(AppointmentCommitments)
+            .select(
+                Appointments.id,
+                AppointmentCommitments.id,
+                AppointmentCommitments.status,
+                AppointmentCommitments.version,
+                AppointmentCommitments.effectivePolicySnapshotId,
+            ).where {
+                (Clinics.tenantGroupId eq validTenantGroupId) and
+                    (Appointments.clinicId eq validClinicId) and
+                    (Appointments.patientReferenceFingerprint eq patientReferenceFingerprint) and
+                    (AppointmentCommitments.status inList PROFILE_REEVALUATION_STATUSES) and
+                    (Appointments.id greater afterAppointmentId)
+            }.orderBy(Appointments.id, SortOrder.ASC)
+            .limit(limit)
+            .map { row ->
+                ProfileReevaluationAppointmentCandidate(
+                    appointmentId = row[Appointments.id].value,
+                    commitmentId = row[AppointmentCommitments.id].value,
+                    commitmentStatus = row[AppointmentCommitments.status],
+                    commitmentVersion = row[AppointmentCommitments.version],
+                    effectivePolicySnapshotId = row[AppointmentCommitments.effectivePolicySnapshotId],
+                )
+            }
     }
 
     /**
