@@ -63,6 +63,7 @@ internal object VisitCommitmentMigrationTestSupport {
         val result = Flyway.configure()
             .dataSource(dataSource)
             .locations(location)
+            .target("12")
             .load()
             .migrate()
 
@@ -124,6 +125,7 @@ internal object VisitCommitmentMigrationTestSupport {
         val flyway = Flyway.configure()
             .dataSource(dataSource)
             .locations(location)
+            .target("12")
             .cleanDisabled(false)
             .load()
         flyway.clean()
@@ -354,7 +356,9 @@ internal object VisitCommitmentMigrationTestSupport {
             MigrationUtils.statementsRequiredForDatabaseMigration(
                 *EXPOSED_VISIT_MIGRATION_TABLES,
                 withLogs = false,
-            ).filter(::isAdditiveSchemaChange)
+            )
+                .filter(::isAdditiveSchemaChange)
+                .filterNot(::isLaterMigrationIndex)
         }
         check(additiveDrift.isEmpty()) {
             "Flyway V10/V11/V12 is missing additive DDL required by Exposed:\n" +
@@ -372,6 +376,13 @@ internal object VisitCommitmentMigrationTestSupport {
             normalized.startsWith("CREATE UNIQUE INDEX ") ||
             (normalized.startsWith("ALTER TABLE ") && normalized.contains(" ADD COLUMN "))
     }
+
+    /**
+     * V12 검사 시점 이후 버전이 소유하는 재평가 조회 index는 V13 전용 검사가 검증합니다.
+     */
+    private fun isLaterMigrationIndex(statement: String): Boolean =
+        statement.contains("idx_appointment_profile_reevaluation", ignoreCase = true) ||
+            statement.contains("idx_commitment_profile_reevaluation", ignoreCase = true)
 
     private fun tableNames(connection: Connection): Set<String> =
         connection.metaData.getTables(null, null, "%", arrayOf("TABLE")).use { result ->

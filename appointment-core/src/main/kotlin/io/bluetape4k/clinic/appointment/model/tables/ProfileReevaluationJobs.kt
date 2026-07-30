@@ -2,7 +2,9 @@ package io.bluetape4k.clinic.appointment.model.tables
 
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationPriorityClass
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationJobStatus
+import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.timestamp
 
@@ -10,7 +12,11 @@ import org.jetbrains.exposed.v1.javatime.timestamp
  * latest revision 하나를 처리하는 owner-fenced durable 재평가 작업입니다.
  */
 object ProfileReevaluationJobs : LongIdTable("scheduling_profile_reevaluation_jobs") {
-    val headId = long("head_id")
+    val headId = reference(
+        "head_id",
+        ProfileReevaluationHeads,
+        onDelete = ReferenceOption.CASCADE,
+    )
     val tenantGroupId = long("tenant_group_id")
     val clinicId = long("clinic_id")
     val patientReferenceFingerprint = varchar("patient_reference_fingerprint", 64)
@@ -19,6 +25,9 @@ object ProfileReevaluationJobs : LongIdTable("scheduling_profile_reevaluation_jo
     val assessmentRef = varchar("assessment_ref", 512)
     val assessmentHash = varchar("assessment_hash", 64)
     val status = enumerationByName<ProfileReevaluationJobStatus>("status", 24)
+        .check("ck_profile_reevaluation_job_status") {
+            it inList ProfileReevaluationJobStatus.entries
+        }
     val occurredAt = timestamp("occurred_at")
     val dueAt = timestamp("due_at")
     val targetDurationSeconds = long("target_duration_seconds")
@@ -36,6 +45,9 @@ object ProfileReevaluationJobs : LongIdTable("scheduling_profile_reevaluation_jo
     val redriveOfJobId = long("redrive_of_job_id").nullable()
     val redriveGeneration = integer("redrive_generation").default(0)
     val priorityClass = enumerationByName<ProfileReevaluationPriorityClass>("priority_class", 24)
+        .check("ck_profile_reevaluation_priority_class") {
+            it inList ProfileReevaluationPriorityClass.entries
+        }
     val heldCursorAppointmentId = long("held_cursor_appointment_id").nullable()
     val proposedCursorAppointmentId = long("proposed_cursor_appointment_id").nullable()
     val scannedCount = long("scanned_count").default(0L)
@@ -50,7 +62,8 @@ object ProfileReevaluationJobs : LongIdTable("scheduling_profile_reevaluation_jo
     val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
 
     init {
-        index("idx_profile_reevaluation_due", false, status, nextAttemptAt, dueAt, leaseExpiresAt)
+        index("idx_profile_reevaluation_due", false, status, nextAttemptAt, clinicId, id)
+        index("idx_profile_reevaluation_lease", false, status, leaseExpiresAt, clinicId, id)
         index("idx_profile_reevaluation_clinic", false, tenantGroupId, clinicId, status, dueAt)
         uniqueIndex(
             "uq_profile_reevaluation_job_lineage",
@@ -60,4 +73,3 @@ object ProfileReevaluationJobs : LongIdTable("scheduling_profile_reevaluation_jo
         )
     }
 }
-

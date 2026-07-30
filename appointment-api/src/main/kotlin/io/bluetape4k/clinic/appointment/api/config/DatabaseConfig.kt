@@ -40,6 +40,9 @@ import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomDependencies
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogBomItems
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
+import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationHeads
+import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationJobs
+import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationOutcomes
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.ResourceAllocations
 import io.bluetape4k.clinic.appointment.model.tables.ResourceCapacityBuckets
@@ -145,6 +148,9 @@ class SchemaInitConfig {
                     EffectiveSchedulingPolicySnapshots,
                     SchedulingPolicyActivationCommands,
                     SchedulingPolicyPreviewJobs,
+                    ProfileReevaluationHeads,
+                    ProfileReevaluationJobs,
+                    ProfileReevaluationOutcomes,
                 )
             }
         }

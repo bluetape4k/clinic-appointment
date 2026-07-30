@@ -63,5 +63,13 @@ object Appointments : LongIdTable("scheduling_appointments") {
             startTime,
             id,
         )
+        // 프로필 재평가 대상의 환자 범위 keyset scan
+        index(
+            "idx_appointment_profile_reevaluation",
+            false,
+            clinicId,
+            patientReferenceFingerprint,
+            id,
+        )
     }
 }

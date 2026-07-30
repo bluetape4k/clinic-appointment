@@ -43,6 +43,9 @@ class TableSchemaTest : AbstractExposedTest() {
         EffectiveSchedulingPolicySnapshots,
         SchedulingPolicyActivationCommands,
         SchedulingPolicyPreviewJobs,
+        ProfileReevaluationHeads,
+        ProfileReevaluationJobs,
+        ProfileReevaluationOutcomes,
     )
 
     @ParameterizedTest
