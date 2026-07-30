@@ -221,6 +221,49 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         patientReferenceFingerprint: String,
         afterAppointmentId: Long,
         limit: Int,
+    ): List<ProfileReevaluationAppointmentCandidate> =
+        findProfileReevaluationCandidates(
+            tenantGroupId = tenantGroupId,
+            clinicId = clinicId,
+            patientReferenceFingerprint = patientReferenceFingerprint,
+            statuses = PROFILE_REEVALUATION_STATUSES,
+            afterAppointmentId = afterAppointmentId,
+            limit = limit,
+        )
+
+    /**
+     * 상태별 resume cursor를 독립적으로 전진시키기 위한 keyset 페이지를 조회합니다.
+     *
+     * [status]는 재평가 범위인 `HELD` 또는 `PROPOSED`만 허용합니다.
+     */
+    fun findProfileReevaluationCandidates(
+        tenantGroupId: Long,
+        clinicId: Long,
+        patientReferenceFingerprint: String,
+        status: AppointmentCommitmentStatus,
+        afterAppointmentId: Long,
+        limit: Int,
+    ): List<ProfileReevaluationAppointmentCandidate> {
+        require(status in PROFILE_REEVALUATION_STATUSES) {
+            "status must be HELD or PROPOSED"
+        }
+        return findProfileReevaluationCandidates(
+            tenantGroupId = tenantGroupId,
+            clinicId = clinicId,
+            patientReferenceFingerprint = patientReferenceFingerprint,
+            statuses = listOf(status),
+            afterAppointmentId = afterAppointmentId,
+            limit = limit,
+        )
+    }
+
+    private fun findProfileReevaluationCandidates(
+        tenantGroupId: Long,
+        clinicId: Long,
+        patientReferenceFingerprint: String,
+        statuses: List<AppointmentCommitmentStatus>,
+        afterAppointmentId: Long,
+        limit: Int,
     ): List<ProfileReevaluationAppointmentCandidate> {
         val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
         val validClinicId = clinicId.requirePositiveNumber("clinicId")
@@ -245,7 +288,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
                 (Clinics.tenantGroupId eq validTenantGroupId) and
                     (Appointments.clinicId eq validClinicId) and
                     (Appointments.patientReferenceFingerprint eq patientReferenceFingerprint) and
-                    (AppointmentCommitments.status inList PROFILE_REEVALUATION_STATUSES) and
+                    (AppointmentCommitments.status inList statuses) and
                     (Appointments.id greater afterAppointmentId)
             }.orderBy(Appointments.id, SortOrder.ASC)
             .limit(limit)

@@ -66,6 +66,18 @@ class ProfileReevaluationAppointmentQueryTest {
                 )
 
             secondPage.map { it.appointmentId } shouldBeEqualTo listOf(103L)
+
+            val heldPage =
+                repository.findProfileReevaluationCandidates(
+                    tenantGroupId = 1L,
+                    clinicId = 10L,
+                    patientReferenceFingerprint = fingerprint,
+                    status = AppointmentCommitmentStatus.HELD,
+                    afterAppointmentId = 100L,
+                    limit = 2,
+                )
+
+            heldPage.map { it.appointmentId } shouldBeEqualTo listOf(102L, 103L)
         }
     }
 

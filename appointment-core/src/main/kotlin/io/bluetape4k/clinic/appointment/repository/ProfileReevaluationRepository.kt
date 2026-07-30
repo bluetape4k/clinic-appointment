@@ -109,8 +109,9 @@ class ProfileReevaluationRepository(
             it[assessmentHash] = command.assessmentHash
             it[status] = ProfileReevaluationJobStatus.PENDING
             it[occurredAt] = command.occurredAt
-            it[dueAt] = command.occurredAt.plus(command.heldTarget)
-            it[targetDurationSeconds] = command.heldTarget.seconds
+            val earliestTarget = minOf(command.heldTarget, command.proposedTarget)
+            it[dueAt] = command.occurredAt.plus(earliestTarget)
+            it[targetDurationSeconds] = earliestTarget.seconds
             it[heldTargetSeconds] = command.heldTarget.seconds
             it[proposedTargetSeconds] = command.proposedTarget.seconds
             it[targetPolicyRef] = command.targetPolicyRef
@@ -149,16 +150,18 @@ class ProfileReevaluationRepository(
             .limit(MAX_CLAIM_CANDIDATES)
             .toList()
 
+        val fairCandidates = fairClaimOrder(candidates, command.perClinicLimit)
         val claimed = ArrayList<ProfileReevaluationJobRecord>(command.limit)
-        val clinicCounts = HashMap<Pair<Long, Long>, Int>()
-        for (candidate in candidates) {
+        for (candidate in fairCandidates) {
             if (claimed.size >= command.limit) break
-            val clinicKey = candidate[ProfileReevaluationJobs.tenantGroupId] to
-                candidate[ProfileReevaluationJobs.clinicId]
-            if (clinicCounts.getOrDefault(clinicKey, 0) >= command.perClinicLimit) continue
-            val job = claimCandidate(candidate, command.leaseOwner, dbNow) ?: continue
+            val job =
+                claimCandidate(
+                    candidate = candidate.row,
+                    owner = command.leaseOwner,
+                    dbNow = dbNow,
+                    priority = candidate.priority,
+                ) ?: continue
             claimed += job
-            clinicCounts[clinicKey] = clinicCounts.getOrDefault(clinicKey, 0) + 1
         }
         return claimed
     }
@@ -223,16 +226,19 @@ class ProfileReevaluationRepository(
         revision: Long,
         leaseOwner: String,
         failureCode: String,
+        delay: Duration = retryDelay,
+        terminal: Boolean = false,
     ): Boolean {
         validateTransitionIdentity(jobId, revision, leaseOwner)
         require(FAILURE_CODE_REGEX.matches(failureCode)) {
             "failureCode must contain 1..96 uppercase identifier characters"
         }
+        require(!delay.isNegative) { "delay must be non-negative" }
         val dbNow = dbCurrentTimestamp()
         if (!matchesCurrentRevision(jobId, revision)) return false
         val row = findJobRow(jobId, forUpdate = true) ?: return false
         if (!hasActiveLease(row, revision, leaseOwner, dbNow)) return false
-        val exhausted = row[ProfileReevaluationJobs.attemptCount] >= maxAttempts
+        val exhausted = terminal || row[ProfileReevaluationJobs.attemptCount] >= maxAttempts
 
         return ProfileReevaluationJobs.update({
             activeLeasePredicate(jobId, revision, leaseOwner, dbNow)
@@ -242,7 +248,7 @@ class ProfileReevaluationRepository(
             } else {
                 ProfileReevaluationJobStatus.RETRY_WAIT
             }
-            it[nextAttemptAt] = dbNow.plus(retryDelay)
+            it[nextAttemptAt] = dbNow.plus(delay)
             it[ProfileReevaluationJobs.leaseOwner] = null
             it[leaseExpiresAt] = null
             it[lastFailureCode] = failureCode
@@ -303,6 +309,7 @@ class ProfileReevaluationRepository(
         if (original[ProfileReevaluationJobs.status] != ProfileReevaluationJobStatus.FAILED) return null
         if (original[ProfileReevaluationJobs.updatedAt].plus(command.cooldown) > dbNow) return null
         val currentRedriveCount = original[ProfileReevaluationJobs.redriveCount]
+        if (currentRedriveCount > 0) return null
         if (command.expectedRedriveCount != null && command.expectedRedriveCount != currentRedriveCount) {
             return null
         }
@@ -320,6 +327,7 @@ class ProfileReevaluationRepository(
         if (updated != 1) return null
 
         val rootId = requireNotNull(original[ProfileReevaluationJobs.rootJobId])
+        val nextGeneration = original[ProfileReevaluationJobs.redriveGeneration] + 1
         val newId = ProfileReevaluationJobs.insertAndGetId {
             it[headId] = original[ProfileReevaluationJobs.headId]
             it[tenantGroupId] = original[ProfileReevaluationJobs.tenantGroupId]
@@ -340,7 +348,7 @@ class ProfileReevaluationRepository(
             it[nextAttemptAt] = dbNow
             it[rootJobId] = rootId
             it[redriveOfJobId] = command.jobId
-            it[redriveGeneration] = currentRedriveCount + 1
+            it[redriveGeneration] = nextGeneration
             it[priorityClass] = original[ProfileReevaluationJobs.priorityClass]
         }.value
         return findJob(newId)
@@ -426,6 +434,22 @@ class ProfileReevaluationRepository(
     fun findJob(jobId: Long): ProfileReevaluationJobRecord? =
         findJobRow(jobId, forUpdate = false)?.toJobRecord()
 
+    /** 자동 redrive 검토 대상을 오래된 최종 실패부터 제한된 개수로 반환합니다. */
+    fun findFailedJobs(limit: Int): List<ProfileReevaluationJobRecord> {
+        require(limit in 1..MAX_FAILED_JOB_PAGE_SIZE) {
+            "limit must be in 1..$MAX_FAILED_JOB_PAGE_SIZE"
+        }
+        return ProfileReevaluationJobs
+            .selectAll()
+            .where { ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.FAILED }
+            .orderBy(
+                ProfileReevaluationJobs.updatedAt to SortOrder.ASC,
+                ProfileReevaluationJobs.id to SortOrder.ASC,
+            )
+            .limit(limit)
+            .map { it.toJobRecord() }
+    }
+
     fun findJobs(scope: ProfileReevaluationScope): List<ProfileReevaluationJobRecord> =
         ProfileReevaluationJobs
             .selectAll()
@@ -447,6 +471,7 @@ class ProfileReevaluationRepository(
         candidate: ResultRow,
         owner: String,
         dbNow: Instant,
+        priority: ProfileReevaluationPriorityClass,
     ): ProfileReevaluationJobRecord? {
         val jobId = candidate[ProfileReevaluationJobs.id].value
         val revision = candidate[ProfileReevaluationJobs.targetRevision]
@@ -464,17 +489,6 @@ class ProfileReevaluationRepository(
             return null
         }
 
-        val priority = if (candidate[ProfileReevaluationJobs.priorityClass] ==
-            ProfileReevaluationPriorityClass.UNCLASSIFIED
-        ) {
-            if (hasHeldAppointments(candidate.toScope())) {
-                ProfileReevaluationPriorityClass.HELD_PRESENT
-            } else {
-                ProfileReevaluationPriorityClass.PROPOSED_ONLY
-            }
-        } else {
-            candidate[ProfileReevaluationJobs.priorityClass]
-        }
         val targetSeconds = if (priority == ProfileReevaluationPriorityClass.PROPOSED_ONLY) {
             candidate[ProfileReevaluationJobs.proposedTargetSeconds]
         } else {
@@ -510,6 +524,95 @@ class ProfileReevaluationRepository(
         }
         return if (updated == 1) findJob(jobId) else null
     }
+
+    /**
+     * 제한된 후보 집합을 병원별 queue로 나눈 뒤 한 병원에서 한 건씩 순환합니다.
+     *
+     * queue 내부에서는 처리 목표 시각이 오래된 작업을 먼저 선택하고, 같은 시각이면
+     * 선점 예약이 있는 작업을 우선합니다. 이 순서는 큰 병원 하나가 선점 batch를
+     * 독점하지 못하게 하면서도 제안 작업의 처리 목표를 aging 기준으로 보장합니다.
+     */
+    private fun fairClaimOrder(
+        candidates: List<ResultRow>,
+        perClinicLimit: Int,
+    ): List<FairClaimCandidate> {
+        val prepared =
+            candidates.map { row ->
+                val priority =
+                    when (val current = row[ProfileReevaluationJobs.priorityClass]) {
+                        ProfileReevaluationPriorityClass.UNCLASSIFIED ->
+                            if (hasHeldAppointments(row.toScope())) {
+                                ProfileReevaluationPriorityClass.HELD_PRESENT
+                            } else {
+                                ProfileReevaluationPriorityClass.PROPOSED_ONLY
+                            }
+                        else -> current
+                    }
+                val targetSeconds =
+                    if (priority == ProfileReevaluationPriorityClass.PROPOSED_ONLY) {
+                        row[ProfileReevaluationJobs.proposedTargetSeconds]
+                    } else {
+                        row[ProfileReevaluationJobs.heldTargetSeconds]
+                    }
+                FairClaimCandidate(
+                    row = row,
+                    clinicKey =
+                        ClinicKey(
+                            row[ProfileReevaluationJobs.tenantGroupId],
+                            row[ProfileReevaluationJobs.clinicId],
+                        ),
+                    priority = priority,
+                    effectiveDueAt =
+                        minOf(
+                            row[ProfileReevaluationJobs.dueAt],
+                            row[ProfileReevaluationJobs.occurredAt].plusSeconds(targetSeconds),
+                        ),
+                    jobId = row[ProfileReevaluationJobs.id].value,
+                )
+            }
+
+        val comparator =
+            compareBy<FairClaimCandidate>(
+                { it.effectiveDueAt },
+                { it.priority.claimRank },
+                { it.jobId },
+            )
+        val queues =
+            prepared
+                .groupBy(FairClaimCandidate::clinicKey)
+                .mapValues { (_, jobs) -> ArrayDeque(jobs.sortedWith(comparator).take(perClinicLimit)) }
+                .toList()
+                .sortedWith(
+                    compareBy<Pair<ClinicKey, ArrayDeque<FairClaimCandidate>>>(
+                        { it.second.first().effectiveDueAt },
+                        { it.second.first().priority.claimRank },
+                        { it.first.tenantGroupId },
+                        { it.first.clinicId },
+                    ),
+                )
+                .map { it.second }
+
+        return buildList {
+            var remaining = true
+            while (remaining) {
+                remaining = false
+                for (queue in queues) {
+                    if (queue.isNotEmpty()) {
+                        add(queue.removeFirst())
+                        remaining = true
+                    }
+                }
+            }
+        }
+    }
+
+    private val ProfileReevaluationPriorityClass.claimRank: Int
+        get() =
+            when (this) {
+                ProfileReevaluationPriorityClass.HELD_PRESENT -> 0
+                ProfileReevaluationPriorityClass.UNCLASSIFIED -> 1
+                ProfileReevaluationPriorityClass.PROPOSED_ONLY -> 2
+            }
 
     private fun matchesCurrentRevision(jobId: Long, revision: Long): Boolean {
         val job = findJobRow(jobId, forUpdate = true) ?: return false
@@ -688,6 +791,19 @@ class ProfileReevaluationRepository(
         skippedUnchanged = addBounded(left.skippedUnchanged, right.skippedUnchanged),
     )
 
+    private data class ClinicKey(
+        val tenantGroupId: Long,
+        val clinicId: Long,
+    )
+
+    private data class FairClaimCandidate(
+        val row: ResultRow,
+        val clinicKey: ClinicKey,
+        val priority: ProfileReevaluationPriorityClass,
+        val effectiveDueAt: Instant,
+        val jobId: Long,
+    )
+
     private companion object {
         val READY_STATES = listOf(
             ProfileReevaluationJobStatus.PENDING,
@@ -695,6 +811,7 @@ class ProfileReevaluationRepository(
         )
         val NON_TERMINAL_STATES = READY_STATES + ProfileReevaluationJobStatus.RUNNING
         const val MAX_CLAIM_CANDIDATES = 10_000
+        const val MAX_FAILED_JOB_PAGE_SIZE = 1_000
         val FAILURE_CODE_REGEX = Regex("^[A-Z][A-Z0-9_]{0,95}$")
     }
 }

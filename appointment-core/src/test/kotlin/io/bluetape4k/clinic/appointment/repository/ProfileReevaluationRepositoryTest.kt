@@ -122,16 +122,72 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
                     scope,
                     revision = 1L,
                     eventId = "evt-proposed",
-                    heldTarget = Duration.ofMinutes(2),
-                    proposedTarget = Duration.ofMinutes(30),
+                    heldTarget = Duration.ofMinutes(15),
+                    proposedTarget = Duration.ofMinutes(5),
                 )
             )
 
             val before = repository.findRunnableJobs(scope).single()
+            before.dueAt shouldBeEqualTo before.occurredAt.plus(Duration.ofMinutes(5))
             val claimed = repository.claimFairJobs(claim("worker-a")).single()
 
             claimed.priorityClass shouldBeEqualTo ProfileReevaluationPriorityClass.PROPOSED_ONLY
             claimed.dueAt shouldBeEqualTo before.dueAt
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `공정 선점은 큰 병원 하나보다 서로 다른 병원을 먼저 선택한다`(testDB: TestDB) {
+        withProfileReevaluationTables(testDB) {
+            val repository = ProfileReevaluationRepository(hasHeldAppointments = { true })
+            (1L..8L).forEach { clinicId ->
+                (1L..2L).forEach { patient ->
+                    val scope =
+                        ProfileReevaluationScope(
+                            tenantGroupId = 1L,
+                            clinicId = clinicId,
+                            patientReferenceFingerprint =
+                                (clinicId * 100L + patient).toString().padStart(64, '0'),
+                        )
+                    repository.upsertEvent(change(scope, revision = 1L, eventId = "evt-$clinicId-$patient"))
+                }
+            }
+
+            val claimed =
+                repository.claimFairJobs(
+                    ClaimProfileReevaluationJobs(
+                        leaseOwner = "worker-a",
+                        limit = 8,
+                        perClinicLimit = 2,
+                    ),
+                )
+
+            claimed shouldHaveSize 8
+            claimed.map { it.scope.clinicId }.toSet() shouldHaveSize 8
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `terminal retry는 남은 attempt와 관계없이 즉시 최종 실패로 전이한다`(testDB: TestDB) {
+        withProfileReevaluationTables(testDB) {
+            val repository = ProfileReevaluationRepository(maxAttempts = 5)
+            val scope = scope()
+            repository.upsertEvent(change(scope, revision = 1L, eventId = "evt-terminal"))
+            val claimed = repository.claimFairJobs(claim("worker-a")).single()
+
+            repository.scheduleRetry(
+                jobId = claimed.id,
+                revision = claimed.targetRevision,
+                leaseOwner = "worker-a",
+                failureCode = "TERMINAL_CONTRACT",
+                delay = Duration.ZERO,
+                terminal = true,
+            ).shouldBeTrue()
+
+            repository.findJob(claimed.id).shouldNotBeNull().status shouldBeEqualTo
+                ProfileReevaluationJobStatus.FAILED
         }
     }
 
@@ -170,9 +226,28 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
                 )
             ).shouldBeNull()
 
+            val claimedRedrive = repository.claimFairJobs(claim("worker-b")).single()
+            claimedRedrive.id shouldBeEqualTo redrive.id
+            repository.scheduleRetry(
+                claimedRedrive.id,
+                claimedRedrive.targetRevision,
+                "worker-b",
+                "REDRIVE_FAILED",
+            ).shouldBeTrue()
+            val secondRedrive =
+                repository.redriveFailed(
+                    RedriveProfileReevaluationJob(
+                        jobId = claimedRedrive.id,
+                        cooldown = Duration.ZERO,
+                        expectedRedriveCount = 0,
+                    ),
+                ).shouldNotBeNull()
+            secondRedrive.redriveGeneration shouldBeEqualTo 2
+            secondRedrive.rootJobId shouldBeEqualTo failed.id
+
             repository.findJob(failed.id).shouldNotBeNull().status shouldBeEqualTo
                 ProfileReevaluationJobStatus.FAILED
-            repository.findJobs(scope) shouldHaveSize 2
+            repository.findJobs(scope) shouldHaveSize 3
         }
     }
 
