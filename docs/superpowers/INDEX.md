@@ -7,8 +7,9 @@
 | 3 | 2026-07-26 | 예약 플랜과 수용량 기반 구현 | ✅ 완료 | [spec](specs/2026-07-26-appointment-plan-and-capacity-design.md) / [plan](plans/2026-07-26-appointment-plan-foundation.md) |
 | 4 | 2026-07-27 | 예약 정책 기반 구현 | ✅ 완료 | [spec](specs/2026-07-27-scheduling-policy-foundation-design.md) / [plan](plans/2026-07-27-scheduling-policy-foundation-plan.md) / [API](../api/scheduling-policy.md) / [runbook](../runbooks/scheduling-policy-activation.md) / [review](../review/2026-07-28-scheduling-policy-task10-review.md) |
 | 5 | 2026-07-29 | 설계 시각 동반 문서 이력 | 🚧 clinic 공개 준비 | [spec](specs/2026-07-29-visual-companion-history-design.md) / [plan](plans/2026-07-29-visual-companion-history-plan.md) |
+| 6 | 2026-07-30 | 프로필 변경 기반 진행 중 예약 재평가 | 📝 구현 계획 완료 | [spec](specs/2026-07-30-profile-change-reservation-reevaluation-design.md) / [plan](plans/2026-07-30-profile-change-reservation-reevaluation-plan.md) |
 
-✅ 완료: 4  🚧 진행 중: 1
+✅ 완료: 4  📝 계획 완료: 1  🚧 진행 중: 1
 
 ## 공개 시각 동반 문서
 
