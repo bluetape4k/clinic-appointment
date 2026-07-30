@@ -807,12 +807,24 @@ class SchedulingPolicyPerformanceIntegrationTest @Autowired constructor(
             .joinToString(" ") { it.trim() }
 
     private fun QueryEvidence.assertBounded() {
+        // MySQL InnoDB는 ANALYZE TABLE에서 표본 통계를 갱신하므로, 같은 인덱스 실행 계획도
+        // CI 실행마다 정확한 예상 행 수 경계를 넘을 수 있다.
+        val estimatedRowCeiling =
+            if (dialect == Dialect.MYSQL) {
+                maxEstimatedRows + maxOf(
+                    maxEstimatedRows * MYSQL_ESTIMATE_TOLERANCE_PERCENT / 100,
+                    MYSQL_MINIMUM_ESTIMATE_TOLERANCE,
+                )
+            } else {
+                maxEstimatedRows
+            }
         println(
             "SCHEDULING_POLICY_QUERY expectedIndexes=$expectedIndexNames estimatedRows=$estimatedRows " +
-                "actualRows=$actualRows elapsedMs=$elapsedMillis plan=$planText"
+                "estimatedRowCeiling=$estimatedRowCeiling actualRows=$actualRows " +
+                "elapsedMs=$elapsedMillis plan=$planText"
         )
         expectedIndexNames.any { planText.contains(it, ignoreCase = true) }.shouldBeTrue()
-        (estimatedRows == null || estimatedRows in 0..maxEstimatedRows).shouldBeTrue()
+        (estimatedRows == null || estimatedRows in 0..estimatedRowCeiling).shouldBeTrue()
         (actualRows in 1..maxActualRows).shouldBeTrue()
         (!fullTableScan).shouldBeTrue()
     }
@@ -875,6 +887,8 @@ class SchedulingPolicyPerformanceIntegrationTest @Autowired constructor(
         private const val PLAN_NOISE_PARTITION = 0
         private const val DUE_ROW_INTERVAL = 100
         private const val INSERT_BATCH_SIZE = 500
+        private const val MYSQL_ESTIMATE_TOLERANCE_PERCENT = 50
+        private const val MYSQL_MINIMUM_ESTIMATE_TOLERANCE = 25L
         private val NOW = Instant.parse("2026-07-28T03:00:00Z")
         private val BASE_DATE = LocalDate.of(2026, 8, 1)
         private val BASE_TIME = LocalTime.of(8, 0)
