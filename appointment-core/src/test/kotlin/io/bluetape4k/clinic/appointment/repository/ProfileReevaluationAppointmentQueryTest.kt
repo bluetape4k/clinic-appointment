@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentOrigin
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
@@ -78,6 +79,27 @@ class ProfileReevaluationAppointmentQueryTest {
                 )
 
             heldPage.map { it.appointmentId } shouldBeEqualTo listOf(102L, 103L)
+        }
+    }
+
+    @Test
+    fun `HELD 존재 여부는 tenant clinic 환자 범위 안에서만 판별한다`() {
+        withProfileReevaluationAppointmentTables {
+            insertClinic(10L, tenantGroupId = 1L)
+            insertClinic(11L, tenantGroupId = 1L)
+            insertCandidate(101L, 10L, fingerprint, AppointmentCommitmentStatus.PROPOSED)
+            insertCandidate(102L, 10L, fingerprint, AppointmentCommitmentStatus.HELD)
+            insertCandidate(103L, 11L, fingerprint, AppointmentCommitmentStatus.HELD)
+
+            repository.hasHeldProfileReevaluationAppointments(
+                ProfileReevaluationScope(1L, 10L, fingerprint),
+            ) shouldBeEqualTo true
+            repository.hasHeldProfileReevaluationAppointments(
+                ProfileReevaluationScope(1L, 10L, "b".repeat(64)),
+            ) shouldBeEqualTo false
+            repository.hasHeldProfileReevaluationAppointments(
+                ProfileReevaluationScope(1L, 11L, fingerprint),
+            ) shouldBeEqualTo true
         }
     }
 

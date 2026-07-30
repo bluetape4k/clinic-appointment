@@ -10,12 +10,37 @@ import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationEndpoint
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationHealthIndicator
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationRuntimeGate
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationWorker
+import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
+import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
+import io.bluetape4k.clinic.appointment.model.commitment.AppointmentOrigin
+import io.bluetape4k.clinic.appointment.model.dto.ClaimProfileReevaluationJobs
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationPriorityClass
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
+import io.bluetape4k.clinic.appointment.model.dto.UpsertProfileChange
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
+import io.bluetape4k.clinic.appointment.model.tables.Appointments
+import io.bluetape4k.clinic.appointment.model.tables.Clinics
+import io.bluetape4k.clinic.appointment.model.tables.ConsultationTopics
+import io.bluetape4k.clinic.appointment.model.tables.Doctors
+import io.bluetape4k.clinic.appointment.model.tables.Equipments
+import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationHeads
+import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationJobs
+import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationOutcomes
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
+import io.bluetape4k.clinic.appointment.repository.ProfileReevaluationRepository
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import java.time.Duration
+import java.time.Instant
 import java.util.function.Supplier
 
 class ProfileReevaluationWiringTest {
@@ -85,5 +110,81 @@ class ProfileReevaluationWiringTest {
             .run { context ->
                 context.startupFailure.shouldNotBeNull()
             }
+    }
+
+    @Test
+    fun `운영 repository는 실제 예약 상태로 PROPOSED 전용 작업을 분류한다`() {
+        runner.run { context ->
+            context.startupFailure shouldBeEqualTo null
+            val database = context.getBean(Database::class.java)
+            val repository = context.getBean(ProfileReevaluationRepository::class.java)
+            val fingerprint = "a".repeat(64)
+            val scope = ProfileReevaluationScope(1L, 11L, fingerprint)
+
+            val claimed =
+                transaction(database) {
+                    SchemaUtils.createMissingTablesAndColumns(
+                        TenantGroups,
+                        Clinics,
+                        Doctors,
+                        TreatmentTypes,
+                        Equipments,
+                        ConsultationTopics,
+                        Appointments,
+                        AppointmentCommitments,
+                        ProfileReevaluationHeads,
+                        ProfileReevaluationJobs,
+                        ProfileReevaluationOutcomes,
+                    )
+                    TenantGroups.insert {
+                        it[id] = EntityID(1L, TenantGroups)
+                        it[tenantCode] = "tenant-a"
+                        it[displayName] = "Tenant A"
+                    }
+                    Clinics.insert {
+                        it[id] = EntityID(11L, Clinics)
+                        it[tenantGroupId] = EntityID(1L, TenantGroups)
+                        it[name] = "Clinic 11"
+                    }
+                    Appointments.insert {
+                        it[id] = EntityID(101L, Appointments)
+                        it[clinicId] = EntityID(11L, Clinics)
+                        it[modelVersion] = AppointmentModelVersion.COMMITMENT_V2
+                        it[patientName] = "not persisted by reevaluation"
+                        it[patientReferenceFingerprint] = fingerprint
+                    }
+                    AppointmentCommitments.insert {
+                        it[id] = EntityID(1_101L, AppointmentCommitments)
+                        it[appointmentId] = EntityID(101L, Appointments)
+                        it[status] = AppointmentCommitmentStatus.PROPOSED
+                        it[origin] = AppointmentOrigin.SYSTEM
+                        it[effectivePolicySnapshotId] = 1L
+                        it[version] = 1L
+                    }
+                    repository.upsertEvent(
+                        UpsertProfileChange(
+                            scope = scope,
+                            revision = 1L,
+                            eventId = "profile-event-1",
+                            assessmentRef = "assessment/1",
+                            assessmentHash = "1".repeat(64),
+                            occurredAt = Instant.now().minusSeconds(1),
+                            heldTarget = Duration.ofMinutes(5),
+                            proposedTarget = Duration.ofMinutes(30),
+                            targetPolicyRef = "policy/profile-reevaluation",
+                            targetPolicyGeneration = 1L,
+                        ),
+                    )
+                    repository.claimFairJobs(
+                        ClaimProfileReevaluationJobs(
+                            leaseOwner = "wiring-test",
+                            limit = 1,
+                            perClinicLimit = 1,
+                        ),
+                    ).single()
+                }
+
+            claimed.priorityClass shouldBeEqualTo ProfileReevaluationPriorityClass.PROPOSED_ONLY
+        }
     }
 }

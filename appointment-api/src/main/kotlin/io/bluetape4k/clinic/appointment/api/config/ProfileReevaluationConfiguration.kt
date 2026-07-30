@@ -68,11 +68,13 @@ class ProfileReevaluationConfiguration {
     @ConditionalOnMissingBean
     fun profileReevaluationRepository(
         properties: ProfileReevaluationProperties,
+        appointmentRepository: AppointmentRepository,
     ): ProfileReevaluationRepository =
         ProfileReevaluationRepository(
             leaseDuration = properties.leaseDuration,
             retryDelay = properties.retryInitialBackoff,
             maxAttempts = properties.retryMaxAttempts,
+            hasHeldAppointments = appointmentRepository::hasHeldProfileReevaluationAppointments,
         )
 
     @Bean
