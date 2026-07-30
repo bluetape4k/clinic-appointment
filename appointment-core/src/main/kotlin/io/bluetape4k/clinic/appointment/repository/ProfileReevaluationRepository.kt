@@ -1,0 +1,670 @@
+package io.bluetape4k.clinic.appointment.repository
+
+import io.bluetape4k.clinic.appointment.model.dto.ClaimProfileReevaluationJobs
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationCursor
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationHeadRecord
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationJobRecord
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationOutcomeCounts
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationOutcomeRecord
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationPriorityClass
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
+import io.bluetape4k.clinic.appointment.model.dto.RedriveProfileReevaluationJob
+import io.bluetape4k.clinic.appointment.model.dto.UpsertProfileChange
+import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationJobStatus
+import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationOutcomeType
+import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationHeads
+import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationJobs
+import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationOutcomes
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
+import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.insertIgnore
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.update
+import java.sql.Timestamp
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
+
+/**
+ * 프로필 변경을 latest revision 작업으로 병합하고 worker lease를 fencing하는 저장소입니다.
+ *
+ * 모든 메서드는 호출자가 소유한 Exposed `transaction {}` 안에서 실행합니다. 저장소는
+ * 중첩 transaction을 열지 않습니다. claim과 이후의 모든 전이는 데이터베이스
+ * `CURRENT_TIMESTAMP`를 기준으로 하며, head 행 잠금과 lease owner 조건을 함께 사용해
+ * 오래된 revision 또는 오래된 worker의 쓰기를 거부합니다.
+ *
+ * @param hasHeldAppointments 첫 claim에서 해당 환자 범위에 `HELD` 예약이 존재하는지
+ * indexed existence query로 확인하는 함수입니다. 호출자의 현재 transaction 안에서 실행됩니다.
+ */
+class ProfileReevaluationRepository(
+    private val leaseDuration: Duration = Duration.ofSeconds(30),
+    private val retryDelay: Duration = Duration.ofSeconds(5),
+    private val maxAttempts: Int = 5,
+    private val hasHeldAppointments: (ProfileReevaluationScope) -> Boolean = { true },
+) {
+    init {
+        require(!leaseDuration.isNegative && !leaseDuration.isZero) { "leaseDuration must be positive" }
+        require(!retryDelay.isNegative) { "retryDelay must be non-negative" }
+        require(maxAttempts > 0) { "maxAttempts must be positive" }
+    }
+
+    /**
+     * 더 최신 revision만 head와 runnable 작업으로 반영합니다.
+     *
+     * 같은 revision, 같은 event 재수신, 이전 revision 지연 도착은 저장 상태를 변경하지 않습니다.
+     */
+    fun upsertEvent(command: UpsertProfileChange): ProfileReevaluationHeadRecord {
+        bootstrapHead(command.scope)
+        val head = findHeadRow(command.scope, forUpdate = true)
+            ?: error("profile reevaluation head bootstrap failed")
+        if (command.revision <= head[ProfileReevaluationHeads.latestRevision]) {
+            return head.toHeadRecord()
+        }
+
+        val dbNow = dbCurrentTimestamp()
+        val headId = head[ProfileReevaluationHeads.id].value
+        ProfileReevaluationHeads.update({ ProfileReevaluationHeads.id eq headId }) {
+            it[latestRevision] = command.revision
+            it[latestEventId] = command.eventId
+            it[assessmentRef] = command.assessmentRef
+            it[assessmentHash] = command.assessmentHash
+            it[occurredAt] = command.occurredAt
+            it[updatedAt] = dbNow
+        }
+        ProfileReevaluationJobs.update({
+            (ProfileReevaluationJobs.headId eq headId) and
+                (ProfileReevaluationJobs.targetRevision lessEq command.revision - 1L) and
+                (ProfileReevaluationJobs.status inList READY_STATES)
+        }) {
+            it[status] = ProfileReevaluationJobStatus.STALE
+            it[leaseOwner] = null
+            it[leaseExpiresAt] = null
+            it[updatedAt] = dbNow
+        }
+
+        val jobId = ProfileReevaluationJobs.insertAndGetId {
+            it[ProfileReevaluationJobs.headId] = headId
+            it[tenantGroupId] = command.scope.tenantGroupId
+            it[clinicId] = command.scope.clinicId
+            it[patientReferenceFingerprint] = command.scope.patientReferenceFingerprint
+            it[targetRevision] = command.revision
+            it[eventId] = command.eventId
+            it[assessmentRef] = command.assessmentRef
+            it[assessmentHash] = command.assessmentHash
+            it[status] = ProfileReevaluationJobStatus.PENDING
+            it[occurredAt] = command.occurredAt
+            it[dueAt] = command.occurredAt.plus(command.heldTarget)
+            it[targetDurationSeconds] = command.heldTarget.seconds
+            it[heldTargetSeconds] = command.heldTarget.seconds
+            it[proposedTargetSeconds] = command.proposedTarget.seconds
+            it[targetPolicyRef] = command.targetPolicyRef
+            it[targetPolicyGeneration] = command.targetPolicyGeneration
+            it[nextAttemptAt] = command.occurredAt
+            it[priorityClass] = ProfileReevaluationPriorityClass.UNCLASSIFIED
+        }.value
+        ProfileReevaluationJobs.update({ ProfileReevaluationJobs.id eq jobId }) {
+            it[rootJobId] = jobId
+        }
+        return requireNotNull(findHead(command.scope))
+    }
+
+    /**
+     * 실행 가능한 작업을 due 순서로 읽되 병원별 개수를 제한하여 선점합니다.
+     */
+    fun claimFairJobs(command: ClaimProfileReevaluationJobs): List<ProfileReevaluationJobRecord> {
+        val dbNow = dbCurrentTimestamp()
+        val candidates = ProfileReevaluationJobs
+            .selectAll()
+            .where {
+                (
+                    (ProfileReevaluationJobs.status inList READY_STATES) and
+                        (ProfileReevaluationJobs.nextAttemptAt lessEq dbNow) and
+                        (ProfileReevaluationJobs.dueAt lessEq dbNow)
+                    ) or
+                    (
+                        (ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.RUNNING) and
+                            (ProfileReevaluationJobs.leaseExpiresAt lessEq dbNow)
+                        )
+            }
+            .orderBy(
+                ProfileReevaluationJobs.dueAt to SortOrder.ASC,
+                ProfileReevaluationJobs.id to SortOrder.ASC,
+            )
+            .limit(MAX_CLAIM_CANDIDATES)
+            .toList()
+
+        val claimed = ArrayList<ProfileReevaluationJobRecord>(command.limit)
+        val clinicCounts = HashMap<Pair<Long, Long>, Int>()
+        for (candidate in candidates) {
+            if (claimed.size >= command.limit) break
+            val clinicKey = candidate[ProfileReevaluationJobs.tenantGroupId] to
+                candidate[ProfileReevaluationJobs.clinicId]
+            if (clinicCounts.getOrDefault(clinicKey, 0) >= command.perClinicLimit) continue
+            val job = claimCandidate(candidate, command.leaseOwner, dbNow) ?: continue
+            claimed += job
+            clinicCounts[clinicKey] = clinicCounts.getOrDefault(clinicKey, 0) + 1
+        }
+        return claimed
+    }
+
+    /**
+     * 최신 revision의 현재 worker에게만 lease 연장을 허용합니다.
+     */
+    fun renewLease(jobId: Long, revision: Long, leaseOwner: String): Boolean {
+        validateTransitionIdentity(jobId, revision, leaseOwner)
+        val dbNow = dbCurrentTimestamp()
+        if (!isCurrentRevision(jobId, revision)) return false
+        return ProfileReevaluationJobs.update({
+            activeLeasePredicate(jobId, revision, leaseOwner, dbNow)
+        }) {
+            it[leaseExpiresAt] = dbNow.plus(leaseDuration)
+            it[updatedAt] = dbNow
+        } == 1
+    }
+
+    /**
+     * 최신 revision의 현재 worker에게만 단조 증가 cursor와 bounded count 저장을 허용합니다.
+     */
+    fun advanceCursor(
+        jobId: Long,
+        revision: Long,
+        leaseOwner: String,
+        cursor: ProfileReevaluationCursor,
+    ): Boolean {
+        validateTransitionIdentity(jobId, revision, leaseOwner)
+        val dbNow = dbCurrentTimestamp()
+        if (!isCurrentRevision(jobId, revision)) return false
+        val row = findJobRow(jobId, forUpdate = true) ?: return false
+        if (!hasActiveLease(row, revision, leaseOwner, dbNow)) return false
+        if (!cursorIsMonotonic(row, cursor)) return false
+
+        val scanned = addBounded(row[ProfileReevaluationJobs.scannedCount], cursor.scannedDelta)
+        val currentCounts = row.toOutcomeCounts()
+        val nextCounts = addBounded(currentCounts, cursor.outcomeDeltas)
+        if (nextCounts.values().sum() > scanned) return false
+
+        return ProfileReevaluationJobs.update({
+            activeLeasePredicate(jobId, revision, leaseOwner, dbNow)
+        }) {
+            cursor.heldCursorAppointmentId?.let { value -> it[heldCursorAppointmentId] = value }
+            cursor.proposedCursorAppointmentId?.let { value -> it[proposedCursorAppointmentId] = value }
+            it[scannedCount] = scanned
+            it[proposalSupersededCount] = nextCounts.proposalSuperseded
+            it[holdKeptCount] = nextCounts.holdKept
+            it[holdReplacedCount] = nextCounts.holdReplaced
+            it[fallbackToProposedCount] = nextCounts.fallbackToProposed
+            it[skippedIneligibleCount] = nextCounts.skippedIneligible
+            it[skippedUnchangedCount] = nextCounts.skippedUnchanged
+            it[updatedAt] = dbNow
+        } == 1
+    }
+
+    /**
+     * 현재 worker의 실패를 재시도 대기 또는 최종 실패로 전이합니다.
+     */
+    fun scheduleRetry(
+        jobId: Long,
+        revision: Long,
+        leaseOwner: String,
+        failureCode: String,
+    ): Boolean {
+        validateTransitionIdentity(jobId, revision, leaseOwner)
+        require(FAILURE_CODE_REGEX.matches(failureCode)) {
+            "failureCode must contain 1..96 uppercase identifier characters"
+        }
+        val dbNow = dbCurrentTimestamp()
+        if (!isCurrentRevision(jobId, revision)) return false
+        val row = findJobRow(jobId, forUpdate = true) ?: return false
+        if (!hasActiveLease(row, revision, leaseOwner, dbNow)) return false
+        val exhausted = row[ProfileReevaluationJobs.attemptCount] >= maxAttempts
+
+        return ProfileReevaluationJobs.update({
+            activeLeasePredicate(jobId, revision, leaseOwner, dbNow)
+        }) {
+            it[status] = if (exhausted) {
+                ProfileReevaluationJobStatus.FAILED
+            } else {
+                ProfileReevaluationJobStatus.RETRY_WAIT
+            }
+            it[nextAttemptAt] = dbNow.plus(retryDelay)
+            it[ProfileReevaluationJobs.leaseOwner] = null
+            it[leaseExpiresAt] = null
+            it[lastFailureCode] = failureCode
+            it[updatedAt] = dbNow
+        } == 1
+    }
+
+    /**
+     * 최신 revision의 현재 worker만 작업을 완료할 수 있습니다.
+     */
+    fun complete(jobId: Long, revision: Long, leaseOwner: String): Boolean {
+        validateTransitionIdentity(jobId, revision, leaseOwner)
+        val dbNow = dbCurrentTimestamp()
+        if (!isCurrentRevision(jobId, revision)) return false
+        return ProfileReevaluationJobs.update({
+            activeLeasePredicate(jobId, revision, leaseOwner, dbNow)
+        }) {
+            it[status] = ProfileReevaluationJobStatus.COMPLETED
+            it[ProfileReevaluationJobs.leaseOwner] = null
+            it[leaseExpiresAt] = null
+            it[lastFailureCode] = null
+            it[updatedAt] = dbNow
+        } == 1
+    }
+
+    /**
+     * worker가 관찰한 더 최신 head revision과 일치할 때만 실행 중 작업을 stale로 닫습니다.
+     */
+    fun markStale(jobId: Long, observedRevision: Long, leaseOwner: String): Boolean {
+        require(observedRevision > 0) { "observedRevision must be positive" }
+        require(leaseOwner.isNotBlank() && leaseOwner.length <= 160) {
+            "leaseOwner must contain 1..160 characters"
+        }
+        val dbNow = dbCurrentTimestamp()
+        val row = findJobRow(jobId, forUpdate = true) ?: return false
+        val targetRevision = row[ProfileReevaluationJobs.targetRevision]
+        if (observedRevision <= targetRevision) return false
+        val head = findHeadRow(row.toScope(), forUpdate = true) ?: return false
+        if (head[ProfileReevaluationHeads.latestRevision] != observedRevision) return false
+        if (!hasActiveLease(row, targetRevision, leaseOwner, dbNow)) return false
+
+        return ProfileReevaluationJobs.update({
+            activeLeasePredicate(jobId, targetRevision, leaseOwner, dbNow)
+        }) {
+            it[status] = ProfileReevaluationJobStatus.STALE
+            it[ProfileReevaluationJobs.leaseOwner] = null
+            it[leaseExpiresAt] = null
+            it[updatedAt] = dbNow
+        } == 1
+    }
+
+    /**
+     * 실패 원본을 유지하고 lineage generation이 증가한 새 작업을 만듭니다.
+     */
+    fun redriveFailed(command: RedriveProfileReevaluationJob): ProfileReevaluationJobRecord? {
+        val dbNow = dbCurrentTimestamp()
+        val original = findJobRow(command.jobId, forUpdate = true) ?: return null
+        if (original[ProfileReevaluationJobs.status] != ProfileReevaluationJobStatus.FAILED) return null
+        if (original[ProfileReevaluationJobs.updatedAt].plus(command.cooldown) > dbNow) return null
+        val currentRedriveCount = original[ProfileReevaluationJobs.redriveCount]
+        if (command.expectedRedriveCount != null && command.expectedRedriveCount != currentRedriveCount) {
+            return null
+        }
+        val revision = original[ProfileReevaluationJobs.targetRevision]
+        if (!isCurrentRevision(command.jobId, revision)) return null
+
+        val updated = ProfileReevaluationJobs.update({
+            (ProfileReevaluationJobs.id eq command.jobId) and
+                (ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.FAILED) and
+                (ProfileReevaluationJobs.redriveCount eq currentRedriveCount)
+        }) {
+            it[redriveCount] = currentRedriveCount + 1
+            it[updatedAt] = dbNow
+        }
+        if (updated != 1) return null
+
+        val rootId = requireNotNull(original[ProfileReevaluationJobs.rootJobId])
+        val newId = ProfileReevaluationJobs.insertAndGetId {
+            it[headId] = original[ProfileReevaluationJobs.headId]
+            it[tenantGroupId] = original[ProfileReevaluationJobs.tenantGroupId]
+            it[clinicId] = original[ProfileReevaluationJobs.clinicId]
+            it[patientReferenceFingerprint] = original[ProfileReevaluationJobs.patientReferenceFingerprint]
+            it[targetRevision] = revision
+            it[eventId] = original[ProfileReevaluationJobs.eventId]
+            it[assessmentRef] = original[ProfileReevaluationJobs.assessmentRef]
+            it[assessmentHash] = original[ProfileReevaluationJobs.assessmentHash]
+            it[status] = ProfileReevaluationJobStatus.PENDING
+            it[occurredAt] = original[ProfileReevaluationJobs.occurredAt]
+            it[dueAt] = dbNow
+            it[targetDurationSeconds] = original[ProfileReevaluationJobs.targetDurationSeconds]
+            it[heldTargetSeconds] = original[ProfileReevaluationJobs.heldTargetSeconds]
+            it[proposedTargetSeconds] = original[ProfileReevaluationJobs.proposedTargetSeconds]
+            it[targetPolicyRef] = original[ProfileReevaluationJobs.targetPolicyRef]
+            it[targetPolicyGeneration] = original[ProfileReevaluationJobs.targetPolicyGeneration]
+            it[nextAttemptAt] = dbNow
+            it[rootJobId] = rootId
+            it[redriveOfJobId] = command.jobId
+            it[redriveGeneration] = currentRedriveCount + 1
+            it[priorityClass] = original[ProfileReevaluationJobs.priorityClass]
+        }.value
+        return findJob(newId)
+    }
+
+    /**
+     * 같은 작업·revision·예약의 결과를 한 번만 기록합니다.
+     */
+    fun recordOutcome(
+        jobId: Long,
+        revision: Long,
+        appointmentId: Long,
+        outcomeType: ProfileReevaluationOutcomeType,
+    ): ProfileReevaluationOutcomeRecord {
+        require(jobId > 0 && revision > 0 && appointmentId > 0) {
+            "jobId, revision and appointmentId must be positive"
+        }
+        ProfileReevaluationOutcomes.insertIgnore {
+            it[ProfileReevaluationOutcomes.jobId] = jobId
+            it[targetRevision] = revision
+            it[ProfileReevaluationOutcomes.appointmentId] = appointmentId
+            it[ProfileReevaluationOutcomes.outcomeType] = outcomeType
+        }
+        return ProfileReevaluationOutcomes
+            .selectAll()
+            .where {
+                (ProfileReevaluationOutcomes.jobId eq jobId) and
+                    (ProfileReevaluationOutcomes.targetRevision eq revision) and
+                    (ProfileReevaluationOutcomes.appointmentId eq appointmentId)
+            }
+            .single()
+            .toOutcomeRecord()
+    }
+
+    fun findHead(scope: ProfileReevaluationScope): ProfileReevaluationHeadRecord? =
+        findHeadRow(scope, forUpdate = false)?.toHeadRecord()
+
+    fun findJob(jobId: Long): ProfileReevaluationJobRecord? =
+        findJobRow(jobId, forUpdate = false)?.toJobRecord()
+
+    fun findJobs(scope: ProfileReevaluationScope): List<ProfileReevaluationJobRecord> =
+        ProfileReevaluationJobs
+            .selectAll()
+            .where { jobScopePredicate(scope) }
+            .orderBy(ProfileReevaluationJobs.id to SortOrder.ASC)
+            .map { it.toJobRecord() }
+
+    fun findRunnableJobs(scope: ProfileReevaluationScope): List<ProfileReevaluationJobRecord> =
+        ProfileReevaluationJobs
+            .selectAll()
+            .where {
+                jobScopePredicate(scope) and
+                    (ProfileReevaluationJobs.status inList READY_STATES)
+            }
+            .orderBy(ProfileReevaluationJobs.id to SortOrder.ASC)
+            .map { it.toJobRecord() }
+
+    private fun claimCandidate(
+        candidate: ResultRow,
+        owner: String,
+        dbNow: Instant,
+    ): ProfileReevaluationJobRecord? {
+        val jobId = candidate[ProfileReevaluationJobs.id].value
+        val revision = candidate[ProfileReevaluationJobs.targetRevision]
+        val head = findHeadRow(candidate.toScope(), forUpdate = true) ?: return null
+        if (head[ProfileReevaluationHeads.latestRevision] != revision) {
+            ProfileReevaluationJobs.update({
+                (ProfileReevaluationJobs.id eq jobId) and
+                    (ProfileReevaluationJobs.status inList NON_TERMINAL_STATES)
+            }) {
+                it[status] = ProfileReevaluationJobStatus.STALE
+                it[leaseOwner] = null
+                it[leaseExpiresAt] = null
+                it[updatedAt] = dbNow
+            }
+            return null
+        }
+
+        val priority = if (candidate[ProfileReevaluationJobs.priorityClass] ==
+            ProfileReevaluationPriorityClass.UNCLASSIFIED
+        ) {
+            if (hasHeldAppointments(candidate.toScope())) {
+                ProfileReevaluationPriorityClass.HELD_PRESENT
+            } else {
+                ProfileReevaluationPriorityClass.PROPOSED_ONLY
+            }
+        } else {
+            candidate[ProfileReevaluationJobs.priorityClass]
+        }
+        val targetSeconds = if (priority == ProfileReevaluationPriorityClass.PROPOSED_ONLY) {
+            candidate[ProfileReevaluationJobs.proposedTargetSeconds]
+        } else {
+            candidate[ProfileReevaluationJobs.heldTargetSeconds]
+        }
+        val targetDueAt = candidate[ProfileReevaluationJobs.occurredAt].plusSeconds(targetSeconds)
+        val pinnedDueAt = minOf(candidate[ProfileReevaluationJobs.dueAt], targetDueAt)
+        val eligible =
+            (
+                (ProfileReevaluationJobs.status inList READY_STATES) and
+                    (ProfileReevaluationJobs.nextAttemptAt lessEq dbNow) and
+                    (ProfileReevaluationJobs.dueAt lessEq dbNow)
+                ) or
+                (
+                    (ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.RUNNING) and
+                        (ProfileReevaluationJobs.leaseExpiresAt lessEq dbNow)
+                    )
+        val updated = ProfileReevaluationJobs.update({
+            (ProfileReevaluationJobs.id eq jobId) and
+                (ProfileReevaluationJobs.targetRevision eq revision) and eligible
+        }) {
+            it[status] = ProfileReevaluationJobStatus.RUNNING
+            it[leaseOwner] = owner
+            it[leaseExpiresAt] = dbNow.plus(leaseDuration)
+            it[attemptCount] = candidate[ProfileReevaluationJobs.attemptCount] + 1
+            if (candidate[ProfileReevaluationJobs.firstAttemptAt] == null) {
+                it[firstAttemptAt] = dbNow
+            }
+            it[priorityClass] = priority
+            it[dueAt] = pinnedDueAt
+            it[targetDurationSeconds] = targetSeconds
+            it[updatedAt] = dbNow
+        }
+        return if (updated == 1) findJob(jobId) else null
+    }
+
+    private fun isCurrentRevision(jobId: Long, revision: Long): Boolean {
+        val job = findJobRow(jobId, forUpdate = true) ?: return false
+        if (job[ProfileReevaluationJobs.targetRevision] != revision) return false
+        val head = findHeadRow(job.toScope(), forUpdate = true) ?: return false
+        return head[ProfileReevaluationHeads.latestRevision] == revision
+    }
+
+    private fun bootstrapHead(scope: ProfileReevaluationScope) {
+        val insertBody: ProfileReevaluationHeads.(UpdateBuilder<*>) -> Unit = {
+            it[tenantGroupId] = scope.tenantGroupId
+            it[clinicId] = scope.clinicId
+            it[patientReferenceFingerprint] = scope.patientReferenceFingerprint
+            it[latestRevision] = 0L
+            it[latestEventId] = "bootstrap"
+            it[assessmentRef] = "bootstrap"
+            it[assessmentHash] = "0".repeat(64)
+            it[occurredAt] = Instant.EPOCH
+        }
+        if (TransactionManager.current().db.dialect.name.equals("h2", ignoreCase = true)) {
+            val exists = findHeadRow(scope, forUpdate = false) != null
+            if (!exists) {
+                try {
+                    ProfileReevaluationHeads.insert(insertBody)
+                } catch (error: ExposedSQLException) {
+                    if (findHeadRow(scope, forUpdate = false) == null) throw error
+                }
+            }
+        } else {
+            ProfileReevaluationHeads.insertIgnore(insertBody)
+        }
+    }
+
+    private fun findHeadRow(scope: ProfileReevaluationScope, forUpdate: Boolean): ResultRow? {
+        val query = ProfileReevaluationHeads.selectAll().where { headScopePredicate(scope) }
+        return if (forUpdate) query.forUpdate().singleOrNull() else query.singleOrNull()
+    }
+
+    private fun findJobRow(jobId: Long, forUpdate: Boolean): ResultRow? {
+        val query = ProfileReevaluationJobs.selectAll().where { ProfileReevaluationJobs.id eq jobId }
+        return if (forUpdate) query.forUpdate().singleOrNull() else query.singleOrNull()
+    }
+
+    private fun headScopePredicate(scope: ProfileReevaluationScope) =
+        (ProfileReevaluationHeads.tenantGroupId eq scope.tenantGroupId) and
+            (ProfileReevaluationHeads.clinicId eq scope.clinicId) and
+            (ProfileReevaluationHeads.patientReferenceFingerprint eq scope.patientReferenceFingerprint)
+
+    private fun jobScopePredicate(scope: ProfileReevaluationScope) =
+        (ProfileReevaluationJobs.tenantGroupId eq scope.tenantGroupId) and
+            (ProfileReevaluationJobs.clinicId eq scope.clinicId) and
+            (ProfileReevaluationJobs.patientReferenceFingerprint eq scope.patientReferenceFingerprint)
+
+    private fun activeLeasePredicate(jobId: Long, revision: Long, owner: String, dbNow: Instant) =
+        (ProfileReevaluationJobs.id eq jobId) and
+            (ProfileReevaluationJobs.targetRevision eq revision) and
+            (ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.RUNNING) and
+            (ProfileReevaluationJobs.leaseOwner eq owner) and
+            (ProfileReevaluationJobs.leaseExpiresAt greater dbNow)
+
+    private fun hasActiveLease(row: ResultRow, revision: Long, owner: String, dbNow: Instant): Boolean =
+        row[ProfileReevaluationJobs.targetRevision] == revision &&
+            row[ProfileReevaluationJobs.status] == ProfileReevaluationJobStatus.RUNNING &&
+            row[ProfileReevaluationJobs.leaseOwner] == owner &&
+            requireNotNull(row[ProfileReevaluationJobs.leaseExpiresAt]) > dbNow
+
+    private fun cursorIsMonotonic(row: ResultRow, cursor: ProfileReevaluationCursor): Boolean =
+        (cursor.heldCursorAppointmentId == null ||
+            cursor.heldCursorAppointmentId >= (row[ProfileReevaluationJobs.heldCursorAppointmentId] ?: 0L)) &&
+            (cursor.proposedCursorAppointmentId == null ||
+                cursor.proposedCursorAppointmentId >=
+                (row[ProfileReevaluationJobs.proposedCursorAppointmentId] ?: 0L))
+
+    private fun validateTransitionIdentity(jobId: Long, revision: Long, owner: String) {
+        require(jobId > 0) { "jobId must be positive" }
+        require(revision > 0) { "revision must be positive" }
+        require(owner.isNotBlank() && owner.length <= 160) {
+            "leaseOwner must contain 1..160 characters"
+        }
+    }
+
+    private fun dbCurrentTimestamp(): Instant =
+        TransactionManager.current().dbCurrentTimestamp()
+
+    private fun ResultRow.toHeadRecord() = ProfileReevaluationHeadRecord(
+        id = this[ProfileReevaluationHeads.id].value,
+        scope = ProfileReevaluationScope(
+            tenantGroupId = this[ProfileReevaluationHeads.tenantGroupId],
+            clinicId = this[ProfileReevaluationHeads.clinicId],
+            patientReferenceFingerprint = this[ProfileReevaluationHeads.patientReferenceFingerprint],
+        ),
+        latestRevision = this[ProfileReevaluationHeads.latestRevision],
+        latestEventId = this[ProfileReevaluationHeads.latestEventId],
+        assessmentRef = this[ProfileReevaluationHeads.assessmentRef],
+        assessmentHash = this[ProfileReevaluationHeads.assessmentHash],
+        occurredAt = this[ProfileReevaluationHeads.occurredAt],
+        createdAt = this[ProfileReevaluationHeads.createdAt],
+        updatedAt = this[ProfileReevaluationHeads.updatedAt],
+    )
+
+    private fun ResultRow.toJobRecord() = ProfileReevaluationJobRecord(
+        id = this[ProfileReevaluationJobs.id].value,
+        headId = this[ProfileReevaluationJobs.headId],
+        scope = toScope(),
+        targetRevision = this[ProfileReevaluationJobs.targetRevision],
+        eventId = this[ProfileReevaluationJobs.eventId],
+        assessmentRef = this[ProfileReevaluationJobs.assessmentRef],
+        assessmentHash = this[ProfileReevaluationJobs.assessmentHash],
+        status = this[ProfileReevaluationJobs.status],
+        occurredAt = this[ProfileReevaluationJobs.occurredAt],
+        dueAt = this[ProfileReevaluationJobs.dueAt],
+        targetDuration = Duration.ofSeconds(this[ProfileReevaluationJobs.targetDurationSeconds]),
+        heldTarget = Duration.ofSeconds(this[ProfileReevaluationJobs.heldTargetSeconds]),
+        proposedTarget = Duration.ofSeconds(this[ProfileReevaluationJobs.proposedTargetSeconds]),
+        targetPolicyRef = this[ProfileReevaluationJobs.targetPolicyRef],
+        targetPolicyGeneration = this[ProfileReevaluationJobs.targetPolicyGeneration],
+        nextAttemptAt = this[ProfileReevaluationJobs.nextAttemptAt],
+        leaseOwner = this[ProfileReevaluationJobs.leaseOwner],
+        leaseExpiresAt = this[ProfileReevaluationJobs.leaseExpiresAt],
+        attemptCount = this[ProfileReevaluationJobs.attemptCount],
+        firstAttemptAt = this[ProfileReevaluationJobs.firstAttemptAt],
+        redriveCount = this[ProfileReevaluationJobs.redriveCount],
+        rootJobId = requireNotNull(this[ProfileReevaluationJobs.rootJobId]),
+        redriveOfJobId = this[ProfileReevaluationJobs.redriveOfJobId],
+        redriveGeneration = this[ProfileReevaluationJobs.redriveGeneration],
+        priorityClass = this[ProfileReevaluationJobs.priorityClass],
+        heldCursorAppointmentId = this[ProfileReevaluationJobs.heldCursorAppointmentId],
+        proposedCursorAppointmentId = this[ProfileReevaluationJobs.proposedCursorAppointmentId],
+        scannedCount = this[ProfileReevaluationJobs.scannedCount],
+        outcomeCounts = toOutcomeCounts(),
+        lastFailureCode = this[ProfileReevaluationJobs.lastFailureCode],
+        createdAt = this[ProfileReevaluationJobs.createdAt],
+        updatedAt = this[ProfileReevaluationJobs.updatedAt],
+    )
+
+    private fun ResultRow.toScope() = ProfileReevaluationScope(
+        tenantGroupId = this[ProfileReevaluationJobs.tenantGroupId],
+        clinicId = this[ProfileReevaluationJobs.clinicId],
+        patientReferenceFingerprint = this[ProfileReevaluationJobs.patientReferenceFingerprint],
+    )
+
+    private fun ResultRow.toOutcomeCounts() = ProfileReevaluationOutcomeCounts(
+        proposalSuperseded = this[ProfileReevaluationJobs.proposalSupersededCount],
+        holdKept = this[ProfileReevaluationJobs.holdKeptCount],
+        holdReplaced = this[ProfileReevaluationJobs.holdReplacedCount],
+        fallbackToProposed = this[ProfileReevaluationJobs.fallbackToProposedCount],
+        skippedIneligible = this[ProfileReevaluationJobs.skippedIneligibleCount],
+        skippedUnchanged = this[ProfileReevaluationJobs.skippedUnchangedCount],
+    )
+
+    private fun ResultRow.toOutcomeRecord() = ProfileReevaluationOutcomeRecord(
+        id = this[ProfileReevaluationOutcomes.id].value,
+        jobId = this[ProfileReevaluationOutcomes.jobId],
+        targetRevision = this[ProfileReevaluationOutcomes.targetRevision],
+        appointmentId = this[ProfileReevaluationOutcomes.appointmentId],
+        outcomeType = this[ProfileReevaluationOutcomes.outcomeType],
+        createdAt = this[ProfileReevaluationOutcomes.createdAt],
+    )
+
+    private fun addBounded(left: Long, right: Long): Long =
+        try {
+            Math.addExact(left, right)
+        } catch (_: ArithmeticException) {
+            error("profile reevaluation progress counter overflow")
+        }
+
+    private fun addBounded(
+        left: ProfileReevaluationOutcomeCounts,
+        right: ProfileReevaluationOutcomeCounts,
+    ) = ProfileReevaluationOutcomeCounts(
+        proposalSuperseded = addBounded(left.proposalSuperseded, right.proposalSuperseded),
+        holdKept = addBounded(left.holdKept, right.holdKept),
+        holdReplaced = addBounded(left.holdReplaced, right.holdReplaced),
+        fallbackToProposed = addBounded(left.fallbackToProposed, right.fallbackToProposed),
+        skippedIneligible = addBounded(left.skippedIneligible, right.skippedIneligible),
+        skippedUnchanged = addBounded(left.skippedUnchanged, right.skippedUnchanged),
+    )
+
+    private companion object {
+        val READY_STATES = listOf(
+            ProfileReevaluationJobStatus.PENDING,
+            ProfileReevaluationJobStatus.RETRY_WAIT,
+        )
+        val NON_TERMINAL_STATES = READY_STATES + ProfileReevaluationJobStatus.RUNNING
+        const val MAX_CLAIM_CANDIDATES = 10_000
+        val FAILURE_CODE_REGEX = Regex("^[A-Z][A-Z0-9_]{0,95}$")
+    }
+}
+
+private fun JdbcTransaction.dbCurrentTimestamp(): Instant =
+    exec("SELECT CURRENT_TIMESTAMP") { resultSet ->
+        if (!resultSet.next()) error("SELECT CURRENT_TIMESTAMP returned no rows")
+        resultSet.getObject(1).toInstant()
+    } ?: error("SELECT CURRENT_TIMESTAMP returned no result set")
+
+private fun Any?.toInstant(): Instant =
+    when (this) {
+        is Instant -> this
+        is Timestamp -> toInstant()
+        is OffsetDateTime -> toInstant()
+        is ZonedDateTime -> toInstant()
+        is LocalDateTime -> toInstant(ZoneOffset.UTC)
+        else -> error("Unsupported CURRENT_TIMESTAMP value: ${this?.javaClass?.name ?: "null"}")
+    }
