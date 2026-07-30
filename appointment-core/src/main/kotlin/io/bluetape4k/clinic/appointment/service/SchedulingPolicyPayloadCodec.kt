@@ -217,6 +217,10 @@ class SchedulingPolicyPayloadCodec(
     private data class NotificationAndSlaOverrideWire(
         val notificationChannels: OverrideWire<Set<String>>,
         val disruptionNoticeSeconds: OverrideWire<Long>,
+        val profileReevaluationHeldTargetSeconds: OverrideWire<Long> =
+            OverrideWire(OverrideMode.INHERIT),
+        val profileReevaluationProposedTargetSeconds: OverrideWire<Long> =
+            OverrideWire(OverrideMode.INHERIT),
     )
 
     private fun BookingCommitmentWire.toPolicy() = BookingCommitmentPolicy(
@@ -295,6 +299,14 @@ class SchedulingPolicyPayloadCodec(
     private fun NotificationAndSlaOverrideWire.toPolicy() = NotificationAndSlaOverride(
         notificationChannels = notificationChannels.toDomain("notificationChannels"),
         disruptionNoticeSeconds = disruptionNoticeSeconds.toDomain("disruptionNoticeSeconds"),
+        profileReevaluationHeldTargetSeconds =
+            profileReevaluationHeldTargetSeconds.toDomain(
+                "profileReevaluationHeldTargetSeconds",
+            ),
+        profileReevaluationProposedTargetSeconds =
+            profileReevaluationProposedTargetSeconds.toDomain(
+                "profileReevaluationProposedTargetSeconds",
+            ),
     )
 
     private fun <T, R> OverrideValue<T>.mapSet(transform: (T) -> R): OverrideValue<R> =

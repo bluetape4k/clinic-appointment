@@ -122,13 +122,52 @@ class SchedulingPolicyCompilerTest {
         result.payload.capacityAndOverbooking?.automaticReductionEnabled shouldBeEqualTo false
         result.payload.reconfirmation?.maximumAttempts shouldBeEqualTo 2
         result.payload.operatingExtension?.maximumExtensionMinutes shouldBeEqualTo 30
-        result.sourceByPath.size shouldBeEqualTo 30
+        result.sourceByPath.size shouldBeEqualTo 32
         result.sourceByPath["bookingCommitment.confirmedChangeMode"] shouldBeEqualTo
             PolicyValueSource.TENANT
         result.sourceByPath["reconfirmation.maximumAttempts"] shouldBeEqualTo
             PolicyValueSource.CLINIC
+        result.sourceByPath["notificationAndSla.profileReevaluationHeldTargetSeconds"] shouldBeEqualTo
+            PolicyValueSource.PLATFORM
+        result.sourceByPath["notificationAndSla.profileReevaluationProposedTargetSeconds"] shouldBeEqualTo
+            PolicyValueSource.PLATFORM
         result.disabledFeatures shouldBeEqualTo
             setOf("capacityAndOverbooking.automaticReductionEnabled")
+    }
+
+    @Test
+    fun `compiles profile reevaluation targets from tenant and clinic sources`() {
+        val tenantNotification = NotificationAndSlaPolicy(
+            notificationChannels = setOf("SMS"),
+            disruptionNoticeSeconds = 900L,
+            mandatoryResponseSeconds = 3_600L,
+            profileReevaluationHeldTargetSeconds = 240L,
+            profileReevaluationProposedTargetSeconds = 1_800L,
+        )
+        val clinicNotification = NotificationAndSlaOverride(
+            notificationChannels = OverrideValue.Inherit,
+            disruptionNoticeSeconds = OverrideValue.Inherit,
+            profileReevaluationHeldTargetSeconds = OverrideValue.Set(120L),
+            profileReevaluationProposedTargetSeconds = OverrideValue.Inherit,
+        )
+
+        val result = SchedulingPolicyCompiler.compile(
+            tenantGroupId = 1L,
+            clinicId = 2L,
+            decisionAt = Instant.parse("2026-08-01T00:00:00Z"),
+            serviceAt = Instant.parse("2026-08-20T00:00:00Z"),
+            generation = PolicyGenerationVector(7L, 3L),
+            sourceVersions = sourceVersions(SchedulingPolicyKind.NOTIFICATION_AND_SLA),
+            tenant = fullTenantPolicy().copy(notificationAndSla = tenantNotification),
+            clinic = ClinicSchedulingPolicyOverrides(notificationAndSla = clinicNotification),
+        )
+
+        result.payload.notificationAndSla?.profileReevaluationHeldTargetSeconds shouldBeEqualTo 120L
+        result.payload.notificationAndSla?.profileReevaluationProposedTargetSeconds shouldBeEqualTo 1_800L
+        result.sourceByPath["notificationAndSla.profileReevaluationHeldTargetSeconds"] shouldBeEqualTo
+            PolicyValueSource.CLINIC
+        result.sourceByPath["notificationAndSla.profileReevaluationProposedTargetSeconds"] shouldBeEqualTo
+            PolicyValueSource.TENANT
     }
 
     @Test

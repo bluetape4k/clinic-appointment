@@ -240,6 +240,18 @@ object SchedulingPolicyCompiler {
                 sourceByPath["notificationAndSla.mandatoryResponseSeconds"] =
                     PolicyValueSource.TENANT
             },
+            profileReevaluationHeldTargetSeconds = resolvePlatformBackedOptional(
+                "notificationAndSla.profileReevaluationHeldTargetSeconds",
+                tenantNotification.profileReevaluationHeldTargetSeconds,
+                notificationOverride?.profileReevaluationHeldTargetSeconds,
+                sourceByPath,
+            ),
+            profileReevaluationProposedTargetSeconds = resolvePlatformBackedOptional(
+                "notificationAndSla.profileReevaluationProposedTargetSeconds",
+                tenantNotification.profileReevaluationProposedTargetSeconds,
+                notificationOverride?.profileReevaluationProposedTargetSeconds,
+                sourceByPath,
+            ),
         ).validatedTenant()
 
         val payload = CompiledSchedulingPolicy(
@@ -486,6 +498,26 @@ object SchedulingPolicyCompiler {
         val resolved = resolveRequired(path, tenantValue, override, sourceByPath)
         require(resolved <= tenantValue) { "$path cannot exceed the tenant ceiling($tenantValue)" }
         return resolved
+    }
+
+    private fun <T> resolvePlatformBackedOptional(
+        path: String,
+        tenantValue: T?,
+        override: OverrideValue<T>?,
+        sourceByPath: MutableMap<String, PolicyValueSource>,
+    ): T? = when (override) {
+        is OverrideValue.Set ->
+            override.value.also { sourceByPath[path] = PolicyValueSource.CLINIC }
+        OverrideValue.Disable -> throw IllegalArgumentException("$path cannot be disabled")
+        null,
+        OverrideValue.Inherit,
+        -> if (tenantValue != null) {
+            sourceByPath[path] = PolicyValueSource.TENANT
+            tenantValue
+        } else {
+            sourceByPath[path] = PolicyValueSource.PLATFORM
+            null
+        }
     }
 
     private fun resolveOptionalBoolean(

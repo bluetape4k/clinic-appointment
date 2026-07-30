@@ -316,6 +316,14 @@ object SchedulingPolicyHasher {
         sortedValues("$prefix.notificationChannels", policy.notificationChannels)
         field("$prefix.disruptionNoticeSeconds", policy.disruptionNoticeSeconds)
         field("$prefix.mandatoryResponseSeconds", policy.mandatoryResponseSeconds)
+        field(
+            "$prefix.profileReevaluationHeldTargetSeconds",
+            policy.profileReevaluationHeldTargetSeconds,
+        )
+        field(
+            "$prefix.profileReevaluationProposedTargetSeconds",
+            policy.profileReevaluationProposedTargetSeconds,
+        )
     }
 
     private fun CanonicalDigest.updateNotificationOverride(
@@ -328,6 +336,16 @@ object SchedulingPolicyHasher {
         updateOverride(
             "$prefix.disruptionNoticeSeconds",
             policy.disruptionNoticeSeconds,
+            { name, value -> field(name, value) },
+        )
+        updateOverride(
+            "$prefix.profileReevaluationHeldTargetSeconds",
+            policy.profileReevaluationHeldTargetSeconds,
+            { name, value -> field(name, value) },
+        )
+        updateOverride(
+            "$prefix.profileReevaluationProposedTargetSeconds",
+            policy.profileReevaluationProposedTargetSeconds,
             { name, value -> field(name, value) },
         )
     }
