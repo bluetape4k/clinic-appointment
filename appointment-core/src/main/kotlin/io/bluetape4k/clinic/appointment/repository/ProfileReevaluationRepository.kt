@@ -135,8 +135,7 @@ class ProfileReevaluationRepository(
             .where {
                 (
                     (ProfileReevaluationJobs.status inList READY_STATES) and
-                        (ProfileReevaluationJobs.nextAttemptAt lessEq dbNow) and
-                        (ProfileReevaluationJobs.dueAt lessEq dbNow)
+                        (ProfileReevaluationJobs.nextAttemptAt lessEq dbNow)
                     ) or
                     (
                         (ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.RUNNING) and
@@ -644,8 +643,7 @@ class ProfileReevaluationRepository(
         val eligible =
             (
                 (ProfileReevaluationJobs.status inList READY_STATES) and
-                    (ProfileReevaluationJobs.nextAttemptAt lessEq dbNow) and
-                    (ProfileReevaluationJobs.dueAt lessEq dbNow)
+                    (ProfileReevaluationJobs.nextAttemptAt lessEq dbNow)
                 ) or
                 (
                     (ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.RUNNING) and

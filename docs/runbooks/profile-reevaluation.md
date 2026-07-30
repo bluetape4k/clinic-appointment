@@ -85,11 +85,15 @@ Evaluate `HELD` and `PROPOSED` separately with
 ```promql
 histogram_quantile(
   0.95,
-  sum by (le) (rate(clinic_profile_reevaluation_fair_wait_seconds_bucket[10m]))
+  sum by (le) (
+    rate(clinic_profile_reevaluation_fair_wait_seconds_bucket{priority_class="held_present"}[10m])
+  )
 )
 ```
 
-Continue when p95 is below the effective target and no clinic is starved.
+The histogram records event-to-first-claim wait once per job and uses only the
+closed `priority_class` tag. Continue when p95 is below the effective target
+and no clinic is starved.
 At 80% target consumption for 10 minutes, pause allowlist expansion. At 100%
 for 10 minutes, return to `DRY_RUN`, preserve jobs, and inspect database,
 worker, and assessment latency before resuming.
@@ -100,6 +104,11 @@ worker, and assessment latency before resuming.
 The health endpoint reports `oldestBacklogAgeSeconds`. Use the database query
 to identify bounded operational scope; do not copy fingerprints or assessment
 references into tickets.
+
+The `health_profile_reevaluation_oldest_backlog_age_seconds` series used by the
+default alert contract is not a native application meter. Install that rule
+only when the deployment converts the aggregate
+`/actuator/health/profileReevaluation` detail into the named series.
 
 ```sql
 SELECT id, tenant_group_id, clinic_id, target_revision, status,

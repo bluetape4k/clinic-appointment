@@ -138,6 +138,28 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
 
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `새 작업은 목표 마감 시각을 기다리지 않고 즉시 선점한다`(testDB: TestDB) {
+        withProfileReevaluationTables(testDB) {
+            val repository = ProfileReevaluationRepository()
+            val scope = scope()
+            repository.upsertEvent(
+                change(
+                    scope = scope,
+                    revision = 1L,
+                    eventId = "evt-ready-before-due",
+                    occurredAt = Instant.now().minusSeconds(10),
+                ),
+            )
+
+            val pending = repository.findRunnableJobs(scope).single()
+            pending.dueAt.isAfter(Instant.now()).shouldBeTrue()
+
+            repository.claimFairJobs(claim("worker-a")).single().id shouldBeEqualTo pending.id
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
     fun `짧아진 목표는 기존 due를 앞당기고 길어진 목표는 다시 늦추지 않는다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository()
@@ -308,13 +330,14 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
         eventId: String,
         heldTarget: Duration = Duration.ofMinutes(5),
         proposedTarget: Duration = Duration.ofMinutes(30),
+        occurredAt: Instant = Instant.EPOCH.plusSeconds(revision),
     ) = UpsertProfileChange(
         scope = scope,
         revision = revision,
         eventId = eventId,
         assessmentRef = "assessment/$revision",
         assessmentHash = revision.toString().padStart(64, '0'),
-        occurredAt = Instant.EPOCH.plusSeconds(revision),
+        occurredAt = occurredAt,
         heldTarget = heldTarget,
         proposedTarget = proposedTarget,
         targetPolicyRef = "policy/profile-reevaluation",

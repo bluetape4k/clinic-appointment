@@ -8,6 +8,7 @@ import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationPriorityCla
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
 import io.bluetape4k.clinic.appointment.model.dto.RedriveProfileReevaluationJob
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationJobStatus
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -132,6 +133,42 @@ internal class ProfileReevaluationDispatcherTest {
 
             redriveCommand?.jobId shouldBeEqualTo failed.id
             redriveCommand?.expectedRedriveCount shouldBeEqualTo 0
+        }
+    }
+
+    @Test
+    fun `첫 선점 대기 시간은 우선순위별로 한 번만 기록한다`() {
+        runBlocking {
+            val now = Instant.parse("2026-08-01T00:10:00Z")
+            val registry = SimpleMeterRegistry()
+            val jobs =
+                mutableListOf(
+                    workerJob(1L, 1L, ProfileReevaluationPriorityClass.HELD_PRESENT),
+                    workerJob(2L, 2L, ProfileReevaluationPriorityClass.PROPOSED_ONLY),
+                    workerJob(3L, 3L, ProfileReevaluationPriorityClass.HELD_PRESENT)
+                        .copy(attemptCount = 2),
+                )
+            val dispatcher =
+                ProfileReevaluationDispatcher(
+                    store = QueueWorkStore(jobs),
+                    worker = ProfileReevaluationJobWorker { ProfileReevaluationWorkerResult.COMPLETED },
+                    leaseOwner = "dispatcher-a",
+                    globalConcurrency = 3,
+                    perClinicConcurrency = 1,
+                    metrics = ProfileReevaluationMetrics(registry),
+                    clock = Clock.fixed(now, ZoneOffset.UTC),
+                )
+
+            dispatcher.dispatchOnce()
+
+            registry.get(ProfileReevaluationMetrics.FAIR_WAIT)
+                .tag("priority_class", "held_present")
+                .timer()
+                .count() shouldBeEqualTo 1L
+            registry.get(ProfileReevaluationMetrics.FAIR_WAIT)
+                .tag("priority_class", "proposed_only")
+                .timer()
+                .count() shouldBeEqualTo 1L
         }
     }
 

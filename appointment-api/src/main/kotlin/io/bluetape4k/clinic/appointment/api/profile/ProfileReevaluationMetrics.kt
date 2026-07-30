@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.profile
 
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationPriorityClass
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationJobStatus
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationOutcomeType
 import io.micrometer.core.instrument.Counter
@@ -47,9 +48,13 @@ class ProfileReevaluationMetrics(
             .record(duration)
     }
 
-    fun recordFairWait(duration: Duration) =
+    fun recordFairWait(
+        priorityClass: ProfileReevaluationPriorityClass,
+        duration: Duration,
+    ) =
         Timer.builder(FAIR_WAIT)
             .publishPercentileHistogram()
+            .tag("priority_class", priorityClass.name.lowercase())
             .register(registry)
             .record(duration)
 

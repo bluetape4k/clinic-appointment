@@ -82,12 +82,16 @@ critical alert가 발생하거나 개인정보 노출이 의심되거나 설명�
 ```promql
 histogram_quantile(
   0.95,
-  sum by (le) (rate(clinic_profile_reevaluation_fair_wait_seconds_bucket[10m]))
+  sum by (le) (
+    rate(clinic_profile_reevaluation_fair_wait_seconds_bucket{priority_class="held_present"}[10m])
+  )
 )
 ```
 
-p95가 유효 목표보다 낮고 대기만 하는 병원이 없을 때만 진행한다. 10분 동안 목표
-시간의 80%를 쓰면 허용 목록 확대를 멈춘다. 10분 동안 100%를 넘으면
+이 histogram은 이벤트 발생부터 최초 선점까지의 대기 시간을 작업당 한 번
+기록하며, 닫힌 값인 `priority_class` tag만 사용한다. p95가 유효 목표보다 낮고
+대기만 하는 병원이 없을 때만 진행한다. 10분 동안 목표 시간의 80%를 쓰면 허용
+목록 확대를 멈춘다. 10분 동안 100%를 넘으면
 `DRY_RUN`으로 내리고 작업은 보존한 채 DB, worker, assessment 지연을 확인한다.
 
 <a id="oldest-job"></a>
@@ -96,6 +100,12 @@ p95가 유효 목표보다 낮고 대기만 하는 병원이 없을 때만 진�
 health endpoint의 `oldestBacklogAgeSeconds`로 전체 상태를 본다. 아래 DB 조회는
 제한된 운영 범위를 찾을 때만 사용한다. fingerprint나 assessment reference를
 티켓에 옮기지 않는다.
+
+기본 alert 계약에서 사용하는
+`health_profile_reevaluation_oldest_backlog_age_seconds`는 애플리케이션이 직접
+내보내는 meter가 아니다. 배포 환경에서
+`/actuator/health/profileReevaluation`의 집계 detail을 해당 시계열로 변환하는
+adapter를 구성한 경우에만 이 규칙을 설치한다.
 
 ```sql
 SELECT id, tenant_group_id, clinic_id, target_revision, status,

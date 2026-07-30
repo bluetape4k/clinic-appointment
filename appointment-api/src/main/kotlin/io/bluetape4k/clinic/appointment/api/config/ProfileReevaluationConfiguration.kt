@@ -189,6 +189,7 @@ class ProfileReevaluationConfiguration {
     fun profileReevaluationDispatcher(
         store: ProfileReevaluationWorkStore,
         worker: ProfileReevaluationWorker,
+        metrics: ProfileReevaluationMetrics,
         properties: ProfileReevaluationProperties,
     ): ProfileReevaluationDispatcher =
         ProfileReevaluationDispatcher(
@@ -202,6 +203,7 @@ class ProfileReevaluationConfiguration {
                 cooldown = properties.autoRedriveCooldown,
             ),
             autoRedriveLimit = maxOf(1, properties.autoRedriveMax),
+            metrics = metrics,
         )
 
     @Bean
