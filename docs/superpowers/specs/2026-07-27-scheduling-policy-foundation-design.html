@@ -434,7 +434,7 @@
       <h1>병원마다 다른 예약 규칙을<br>재현 가능한 정책으로</h1>
       <p class="lead">
         tenant 기본값과 clinic override를 typed policy로 관리하고, Gateway 인증정보를
-        ActorContext로 고정하며, 의사결정 당시의 effective snapshot을 영구 보존한다.
+        ActorContext로 고정하며, 의사결정 당시의 유효 스냅숏을 영구 보존한다.
       </p>
       <div class="meta">
         <span class="pill">FUTURE_ONLY</span>
@@ -457,35 +457,35 @@
 
     <section id="simulation">
       <p class="eyebrow">SIMULATION · DEFAULT VIEW</p>
-      <h2>정책 변경은 초안에서 재현 가능한 snapshot까지 이동한다</h2>
+      <h2>정책 변경은 초안에서 재현 가능한 스냅숏까지 이동한다</h2>
       <p class="section-lead">
         병원 운영자는 override를 바로 활성 설정으로 쓰지 않는다. compiler와 preview로 영향 범위를 확인하고,
-        승인과 CAS를 통과한 immutable snapshot만 새 예약 의사결정에 사용한다.
+        승인과 CAS를 통과한 수정불가 스냅숏만 새 예약 의사결정에 사용한다.
       </p>
-      <div class="decision-lane" aria-label="정책 초안에서 활성 snapshot까지의 흐름">
+      <div class="decision-lane" aria-label="정책 초안에서 활성 스냅숏까지의 흐름">
         <article><span class="step">01 · DRAFT</span><h3>범위 내 편집</h3><p>tenant baseline을 기준으로 clinic override를 작성한다.</p></article>
         <article><span class="step">02 · COMPILE</span><h3>hard ceiling 검증</h3><p>typed payload를 병합하고 완화할 수 없는 안전 규칙을 확인한다.</p></article>
-        <article><span class="step">03 · PREVIEW</span><h3>영향 설명</h3><p>대상 예약과 제약 변화를 bounded sample과 지표로 보여준다.</p></article>
+        <article><span class="step">03 · PREVIEW</span><h3>영향 설명</h3><p>대상 예약과 제약 변화를 범위 제한 sample과 지표로 보여준다.</p></article>
         <article><span class="step">04 · APPROVE</span><h3>권한과 revision 고정</h3><p>필요한 승인 수와 actor scope를 만족하고 stale draft를 거절한다.</p></article>
-        <article><span class="step">05 · ACTIVATE</span><h3>snapshot·head 전환</h3><p>CAS로 generation을 올리고 immutable effective snapshot과 outbox를 함께 기록한다.</p></article>
+        <article><span class="step">05 · ACTIVATE</span><h3>스냅숏·head 전환</h3><p>CAS로 generation을 올리고 수정불가한 유효 스냅숏과 outbox를 함께 기록한다.</p></article>
       </div>
       <div class="grid three">
-        <article class="card"><span class="tag">NEW DECISION</span><h3>새 예약 판단</h3><p>항상 authoritative scope head의 최신 generation과 hash를 사용한다.</p></article>
-        <article class="card"><span class="tag">EXISTING HOLD</span><h3>유효 hold</h3><p>만료까지 기존 정책 snapshot을 보호한다.</p></article>
+        <article class="card"><span class="tag">NEW DECISION</span><h3>새 예약 판단</h3><p>항상 신뢰된 scope head의 최신 generation과 hash를 사용한다.</p></article>
+        <article class="card"><span class="tag">EXISTING HOLD</span><h3>유효 hold</h3><p>만료까지 기존 정책 스냅숏을 보호한다.</p></article>
         <article class="card"><span class="tag">CONFIRMED</span><h3>확정 약속</h3><p>정책 활성화가 기존 고객 약속을 조용히 취소하거나 재작성하지 않는다.</p></article>
       </div>
-      <div class="callout warn"><strong>Cache miss보다 stale cache가 위험하다.</strong><p>activation event는 eviction 최적화일 뿐이다. effective read는 DB scope-head generation을 확인하며 DB 장애 시 오래된 snapshot을 성공처럼 반환하지 않는다.</p></div>
+      <div class="callout warn"><strong>Cache miss보다 stale cache가 위험하다.</strong><p>activation event는 eviction 최적화일 뿐이다. effective read는 DB scope-head generation을 확인하며 DB 장애 시 오래된 스냅숏을 성공처럼 반환하지 않는다.</p></div>
       <div class="view-switch"><a href="#history">이 정책 설계의 결정 이력 보기 →</a><a href="#model">상세 정책 모델 읽기</a></div>
     </section>
 
     <section id="history">
       <p class="eyebrow">HISTORY · DECISION PROVENANCE</p>
       <h2>정책 값뿐 아니라 승인과 활성화 이유를 보존한다</h2>
-      <p class="section-lead">이 HTML은 이해를 돕는 시각 companion이며, 상세 계약과 인수 기준은 Markdown이 규범이다.</p>
+      <p class="section-lead">이 HTML은 이해를 돕는 시각 동반 문서이며, 상세 계약과 인수 기준은 Markdown이 규범이다.</p>
       <div class="timeline">
-        <article><h3>2026-07-27 · Issue #182에서 정책 foundation 범위 결정</h3><p><a href="https://github.com/bluetape4k/clinic-appointment/issues/182">Issue #182</a>가 병원별 예약 정책을 재현 가능하게 만들 요구를 고정했다.</p></article>
-        <article><h3>2026-07-27 · typed envelope + immutable snapshot 승인</h3><p><a href="2026-07-27-scheduling-policy-foundation-design.md">규범 Markdown</a>이 lifecycle, approval, compiler, generation, cache, 오류 의미론을 정의했다.</p></article>
-        <article><h3>2026-07-29 · 한·영 시각 이력과 fail-closed 검증 추가</h3><p><a href="2026-07-29-visual-companion-history-design.md">시각 companion 설계</a>와 <a href="../plans/2026-07-29-visual-companion-history-plan.md">구현 계획</a>이 provenance와 게시 계약을 고정했다.</p></article>
+        <article><h3>2026-07-27 · Issue #182에서 정책 기반 구현 범위 결정</h3><p><a href="https://github.com/bluetape4k/clinic-appointment/issues/182">Issue #182</a>가 병원별 예약 정책을 재현 가능하게 만들 요구를 고정했다.</p></article>
+        <article><h3>2026-07-27 · typed envelope + 수정불가 스냅숏 승인</h3><p><a href="2026-07-27-scheduling-policy-foundation-design.md">규범 Markdown</a>이 생명주기, approval, compiler, generation, cache, 오류 의미론을 정의했다.</p></article>
+        <article><h3>2026-07-29 · 한·영 시각 이력과 fail-closed 검증 추가</h3><p><a href="2026-07-29-visual-companion-history-design.md">시각 동반 문서 설계</a>와 <a href="../plans/2026-07-29-visual-companion-history-plan.md">구현 계획</a>이 provenance와 게시 계약을 고정했다.</p></article>
       </div>
       <div class="view-switch"><a href="#simulation">← 정책 활성화 시뮬레이션으로 돌아가기</a><a href="https://github.com/bluetape4k/clinic-appointment/commit/9008d3e2f108d541b868fb1d718f40916351df71">기준 커밋 보기</a></div>
     </section>
@@ -566,11 +566,11 @@
         </div>
         <div class="branch-row">
           <strong>승인 중 조건 변경</strong>
-          <span>관리자가 시간·시술 조건을 바꾸면 바로 확정하지 않고 새 proposal과 고객 동의를 요구한다.</span>
+          <span>관리자가 시간·시술 조건을 바꾸면 바로 확정하지 않고 새 제안과 고객 동의를 요구한다.</span>
         </div>
         <div class="branch-row">
           <strong>확정 후 조건 변경</strong>
-          <span>기존 확정은 유지하고 새 proposal을 만든다. 고객이 새 조건에 동의한 뒤에만 변경을 확정한다.</span>
+          <span>기존 확정은 유지하고 새 제안을 만든다. 고객이 새 조건에 동의한 뒤에만 변경을 확정한다.</span>
         </div>
       </div>
       <h3 style="margin-top:28px">가예약 자원 보장 정책</h3>
@@ -613,7 +613,7 @@
     <section id="compile">
       <h2>05 · Compile과 generation</h2>
       <p class="section-lead">
-        동일 logical input은 map 순서와 관계없이 같은 snapshot hash를 만든다.
+        동일 logical input은 map 순서와 관계없이 같은 스냅숏 hash를 만든다.
         각 값의 출처와 policy version을 함께 보존한다.
       </p>
       <div class="grid two">
@@ -652,14 +652,14 @@
       <ul>
         <li>validation과 canonical hash는 transaction 전에 수행한다.</li>
         <li>head CAS, previous retirement, generation 증가, activation result, outbox insert는 한 transaction이다.</li>
-        <li>bounded idempotency key는 keyed hash만 저장한다. 같은 hash와 fingerprint는 기존 결과를 반환하며 raw key는 저장·로그·응답하지 않는다.</li>
+        <li>범위 제한 idempotency key는 keyed hash만 저장한다. 같은 hash와 fingerprint는 기존 결과를 반환하며 raw key는 저장·로그·응답하지 않는다.</li>
         <li>다른 fingerprint, stale preview, interval overlap은 서로 다른 stable code로 거절한다.</li>
-        <li>민감 정책은 approve와 activate authority를 분리하고 작성자·승인자·활성자 직무분리를 검증한다.</li>
+        <li>민감 정책은 approve와 activate 책임을 분리하고 작성자·승인자·활성자 직무분리를 검증한다.</li>
         <li>interval overlap은 세 DB 모두 scope head lock 안에서 검사해 같은 conflict code로 매핑한다.</li>
       </ul>
       <div class="callout warn">
         <strong>Scheduled activation 복구</strong>
-        <p>DB time due scan, lease CAS, deterministic idempotency key, bounded retry와 startup catch-up을 사용한다. 60초 지연은 warning, 5분 지연은 MISSED critical이며 이전 active를 유지한 채 manual replay 또는 retire한다.</p>
+        <p>DB time due scan, lease CAS, deterministic idempotency key, 범위 제한 retry와 startup catch-up을 사용한다. 60초 지연은 warning, 5분 지연은 MISSED critical이며 이전 active를 유지한 채 manual replay 또는 retire한다.</p>
       </div>
     </section>
 
@@ -709,7 +709,7 @@
       <div class="grid two">
         <article class="card">
           <h3>운영 증거</h3>
-          <p>activation 결과·lateness·missed, compile latency, authoritative generation read, stale cache rejection, preview deadline, outbox 상태를 metric과 structured log로 남긴다.</p>
+          <p>activation 결과·lateness·missed, compile latency, 신뢰된 generation read, stale cache rejection, preview deadline, outbox 상태를 metric과 structured log로 남긴다.</p>
         </article>
         <article class="card">
           <h3>안전한 rollout</h3>
@@ -719,16 +719,16 @@
       <div class="grid two">
         <article class="card">
           <h3>Cache correctness</h3>
-          <p>activation event는 eviction 최적화다. 모든 effective read는 DB scope head generation을 확인하며 DB 장애 시 stale snapshot을 반환하지 않는다.</p>
+          <p>activation event는 eviction 최적화다. 모든 effective read는 DB scope head generation을 확인하며 DB 장애 시 stale 스냅숏을 반환하지 않는다.</p>
         </article>
         <article class="card">
           <h3>Rollback과 forward repair</h3>
-          <p>이전 compatible version을 새 activation으로 복구하고 snapshot은 수정하지 않는다. destructive down migration과 DB 직접 수정은 금지한다.</p>
+          <p>이전 compatible version을 새 activation으로 복구하고 스냅숏은 수정하지 않는다. destructive down migration과 DB 직접 수정은 금지한다.</p>
         </article>
       </div>
       <div class="callout warn">
         <strong>기본 경보</strong>
-        <p>scheduled lateness 60초/5분, outbox pending 60초·failed 지속, preview stale/deadline 5%, activation conflict 5%, authoritative generation read failure 1%를 warning/critical 기준으로 삼고 tenant별 조정한다.</p>
+        <p>scheduled lateness 60초/5분, outbox pending 60초·failed 지속, preview stale/deadline 5%, activation conflict 5%, 신뢰된 generation read failure 1%를 warning/critical 기준으로 삼고 tenant별 조정한다.</p>
       </div>
       <div class="callout">
         <strong>코드 설명 원칙</strong>
@@ -741,8 +741,8 @@
       <div class="grid two">
         <article class="card">
           <span class="tag">THIS ISSUE</span>
-          <h3>정책 foundation</h3>
-          <p>typed policy, ActorContext, compiler, snapshot, lifecycle, approval, generation, preview, cache, generic outbox, admin API.</p>
+          <h3>정책 기반 구현</h3>
+          <p>typed policy, ActorContext, compiler, 스냅숏, 생명주기, approval, generation, preview, cache, generic outbox, admin API.</p>
         </article>
         <article class="card">
           <span class="tag">FOLLOW-UP</span>

@@ -45,7 +45,7 @@
 4. 확정 예약 변경 중에도 기존 예약을 보호한다.
 5. Gateway가 제공한 인증 정보를 `ActorContext`로 정규화하고 업무 권한 판정과
    감사 기록에 사용한다.
-6. 예약 결정에 사용한 상품·정책·동의 스냅샷을 불변으로 보존한다.
+6. 예약 결정에 사용한 상품·정책·동의 스냅숏을 불변으로 보존한다.
 7. 반복형·복합형·선택형 패키지를 version이 고정된 구성 상품 그래프로 표현하고
    구매 시 실행 BOM으로 전개한다.
 8. 상품 버전 전환은 상품팀이 소유한 동의 및 BOM 전환표로만 수행한다.
@@ -143,7 +143,7 @@ revision을 가리킨다.
 | 병원 정책 범위에서 초과 예약 허용 | `OVERBOOKING_ALLOWED` |
 
 예약서비스는 상품의 가격, 마케팅 문구와 계약 상세를 알 필요가 없다. 검증된
-예약 운영 특성, 예상 소요시간, BOM과 자원 요구사항만 버전 스냅샷으로 받는다.
+예약 운영 특성, 예상 소요시간, BOM과 자원 요구사항만 버전 스냅숏으로 받는다.
 
 구성 상품 version이 정한 임상 안전 조건, 필수 자원, 최소 준비·회복 시간과
 필수 선행 관계는 패키지가 완화할 수 없는 **강제 제약**이다. 반면 초과 예약,
@@ -213,7 +213,7 @@ revision을 가리킨다.
 
 1. 이벤트 출처, schema version, 구매·상품 version과 구성 node provenance를
    검증한다.
-2. 실행 BOM을 새 `AppointmentPlan` revision의 입력 스냅샷으로 보존한다.
+2. 실행 BOM을 새 `AppointmentPlan` revision의 입력 스냅숏으로 보존한다.
 3. 반복 횟수, 선택 결과와 선후행 관계를 `PlannedTreatment`로 전개한다.
 4. `MUST_SAME_VISIT`, `MAY_SAME_VISIT`, `MUST_SEPARATE_VISIT`와 항목별
    시간·자원 제약을 사용해 방문 후보를 묶는다.
@@ -239,11 +239,11 @@ revision과 제안으로 재계산한다. 기존 확정 예약을 바꾸는 제�
 | 단일 구성 상품 반복 횟수 | 100회 |
 | 최초 탐색 기간 | 365일 |
 | 평가할 candidate slot | 2,000개 |
-| 한 요청에서 반환할 proposal | 20개 |
+| 한 요청에서 반환할 제안 | 20개 |
 
 상한을 넘는 event나 command는 부분 처리하지 않고 stable reason code로 거부하거나
 격리한다. 일반 Plan 기준은 50개 이하 항목, 200개 이하 edge, 90일 이하 탐색
-기간이며 proposal 생성과 미래 항목 재계산의 목표는 p95 1초, p99 3초 이하다.
+기간이며 제안 생성과 미래 항목 재계산의 목표는 p95 1초, p99 3초 이하다.
 최대 허용 범위의 목표는 p95 5초 이하다. 이 기준을 만족하지 못하면 구현 계획에서
 동기식 범위를 줄이거나 별도 비동기 planning 작업을 설계하고 다시 승인받는다.
 
@@ -272,7 +272,7 @@ revision과 제안으로 재계산한다. 기존 확정 예약을 바꾸는 제�
 | `status` | `PROPOSED`, `HELD`, `CONFIRMED`, `EXPIRED`, `CANCELLED` |
 | `origin` | `PATIENT`, `CLINIC`, `SYSTEM` |
 | `confirmedProposalId` | 현재 합의된 제안 revision |
-| `effectivePolicySnapshotId` | 이 결정에 사용한 병원 정책 스냅샷 |
+| `effectivePolicySnapshotId` | 이 결정에 사용한 병원 정책 스냅숏 |
 | `version` | 낙관적 동시성 제어 값 |
 
 `CommitmentStatus`는 기존 `AppointmentState`와 분리한다. 방문의 접수·진행·완료
@@ -282,7 +282,7 @@ revision과 제안으로 재계산한다. 기존 확정 예약을 바꾸는 제�
 
 | 속성 | 의미 |
 |---|---|
-| `revision` | commitment 안에서 단조 증가하는 번호 |
+| `revision` | 확정 약속 안에서 단조 증가하는 번호 |
 | `proposedStartAt`, `proposedEndAt` | 제안된 방문 시간 |
 | `expiresAt` | 제안 또는 hold 만료 시각 |
 | `representativeTreatmentName` | 방문 대표 진료명 |
@@ -291,7 +291,7 @@ revision과 제안으로 재계산한다. 기존 확정 예약을 바꾸는 제�
 | `supersedesProposalId` | 이전 제안 |
 | `createdByActor` | 제안 행위자 감사 정보 |
 
-이미 발행된 proposal은 수정하지 않는다. 날짜, 항목, 자원이나 정책이 달라지면
+이미 발행된 제안은 수정하지 않는다. 날짜, 항목, 자원이나 정책이 달라지면
 새 revision을 만든다.
 
 ### 5.3 `AppointmentItem`
@@ -321,15 +321,15 @@ revision과 제안으로 재계산한다. 기존 확정 예약을 바꾸는 제�
 
 | 속성 | 의미 |
 |---|---|
-| `subjectType`, `subjectId` | 상품 버전 전환 또는 예약 proposal |
+| `subjectType`, `subjectId` | 상품 버전 전환 또는 예약 제안 |
 | `decision` | `ACCEPTED`, `DECLINED`, `REVOKED` |
 | `evidenceAuthority`, `evidenceId` | 동의 증빙의 원천과 식별자 |
-| `evidenceHash` | 검증된 증빙 스냅샷 hash |
+| `evidenceHash` | 검증된 증빙 스냅숏 hash |
 | `decidedAt` | 고객 결정 시각 |
 | `actorRef` | 고객 또는 적법한 대리인 |
 
 허용되는 `subjectType`은 `APPOINTMENT_PROPOSAL`과
-`PRODUCT_VERSION_MIGRATION`이다. proposal 동의는 `proposalId`,
+`PRODUCT_VERSION_MIGRATION`이다. 제안 동의는 `proposalId`,
 `proposalRevision`, `proposalHash`에, 상품 전환 동의는 `migrationId`,
 `fromProductVersionId`, `toProductVersionId`, 전환표 hash에 결합한다. 다른
 subject type이나 hash/version 불일치는 동의로 인정하지 않는다.
@@ -365,7 +365,7 @@ subject type이나 hash/version 불일치는 동의로 인정하지 않는다.
 
 `expandedTreatmentItems`의 각 항목은 자신의 진료·준비·회복 시간과 자원 요구를
 가진다. 패키지 표시용 합계 시간이 있더라도 예약 계산의 원본으로 사용하지 않는다.
-예약 Plan은 이 snapshot을 다시 전개하지 않고 그대로 `PlannedTreatment`로
+예약 Plan은 이 스냅숏을 다시 전개하지 않고 그대로 `PlannedTreatment`로
 복사한다.
 
 ## 6. 행위자와 API 흐름
@@ -375,7 +375,7 @@ subject type이나 hash/version 불일치는 동의로 인정하지 않는다.
 API Gateway가 서명한 인증 정보에서 `ActorContext`를 만든다. request body의
 사용자, tenant, clinic, patient, origin 값은 권한 판정에 사용하지 않는다.
 
-필수 검증 항목은 issuer, audience, algorithm allowlist, signature, expiration,
+필수 검증 항목은 issuer, audience, 알고리즘 허용목록, signature, expiration,
 not-before, token ID, actor type, 역할, tenant/clinic 범위와 patient subject다.
 일반 `X-User-*` 헤더는 신뢰하지 않는다.
 
@@ -392,7 +392,7 @@ envelope만 전달한다. 예약서비스는 Gateway 인증 envelope가 없거�
   → 정책에 따라 자원 hold
   → 병원 검토
       ├─ 동일 조건 승인 → CONFIRMED
-      └─ 조건 변경 → 새 proposal → 고객 동의 → CONFIRMED
+      └─ 조건 변경 → 새 제안 → 고객 동의 → CONFIRMED
 ```
 
 고객 요청은 항상 가예약으로 시작한다. 고객에게 희망일을 받지 않은 상품만 상품
@@ -405,24 +405,24 @@ envelope만 전달한다. 예약서비스는 Gateway 인증 envelope가 없거�
 모두 충족해야 한다.
 
 - 유효 병원 정책이 직접 확정을 허용한다.
-- 정확한 proposal에 대한 고객 동의 증빙이 있다.
+- 정확한 제안에 대한 고객 동의 증빙이 있다.
 - 자원 충돌 검증과 점유가 성공한다.
 - 행위자의 tenant/clinic 권한이 확인된다.
 
 ### 6.4 확정 예약 변경
 
-확정 예약을 바꾸는 요청은 기존 예약을 먼저 취소하지 않는다. 새 proposal을 만들고
+확정 예약을 바꾸는 요청은 기존 예약을 먼저 취소하지 않는다. 새 제안을 만들고
 고객 동의를 기다린다. 거부하거나 만료되면 기존 예약을 유지한다.
 
-## 7. 병원 정책과 상품 스냅샷
+## 7. 병원 정책과 상품 스냅숏
 
 상품 계약과 병원 운영정책은 수명이 다르다.
 
 - 상품 버전은 구매 시 고정한다.
-- 상품 스냅샷은 Plan과 진료항목의 계약 출처다.
-- 병원 운영정책은 proposal 또는 확정 판단 시점마다 스냅샷을 만든다.
+- 상품 스냅숏은 Plan과 진료항목의 계약 출처다.
+- 병원 운영정책은 제안 또는 확정 판단 시점마다 스냅숏을 만든다.
 - 가예약을 다시 계산할 때는 최신 유효 병원 정책을 사용할 수 있다.
-- 확정 예약은 당시 proposal과 정책 스냅샷을 유지한다.
+- 확정 예약은 당시 제안과 정책 스냅숏을 유지한다.
 - 정책 변경만으로 확정 예약을 조용히 바꾸지 않는다.
 
 예약 판단은 다음 입력을 합성한다.
@@ -432,7 +432,7 @@ envelope만 전달한다. 예약서비스는 Gateway 인증 envelope가 없거�
   + tenant 기본 정책
   + clinic override
   + 실제 자원 capability와 가용량
-  = proposal에 고정할 Effective Scheduling Decision
+  = 제안에 고정할 Effective Scheduling Decision
 ```
 
 상품 특성이 병원 정책이나 자원 capability와 양립하지 않으면 자동으로 약화하지
@@ -443,7 +443,7 @@ envelope만 전달한다. 예약서비스는 Gateway 인증 envelope가 없거�
 ### 8.1 기본 원칙
 
 상품 설정은 기존 version을 수정하지 않고 새 `ProductVersion`으로 발행한다.
-구매와 `AppointmentPlan`은 구매 당시 `productVersionId`, 상품 스냅샷과 hash를
+구매와 `AppointmentPlan`은 구매 당시 `productVersionId`, 상품 스냅숏과 hash를
 영구 참조한다. 새 상품 version은 이후 구매부터 적용한다.
 
 패키지 구매는 패키지 상품 version뿐 아니라 선택된 모든 구성 상품 version과
@@ -467,7 +467,7 @@ envelope만 전달한다. 예약서비스는 Gateway 인증 envelope가 없거�
 - 적용 시각과 source aggregate version
 - 버전 간 BOM 전환표
 
-예약서비스는 상품 동의 절차를 수행하지 않는다. 신뢰된 상품 authority, event
+예약서비스는 상품 동의 절차를 수행하지 않는다. 검증된 상품 데이터 발행 주체, event
 순서, 현재 version, 동의 증빙과 전환표를 검증한다. 불완전하거나 모순된 event는
 부분 적용하지 않고 격리한다.
 
@@ -480,8 +480,8 @@ envelope만 전달한다. 예약서비스는 Gateway 인증 envelope가 없거�
 - 미진행 항목만 새 revision으로 승계한다.
 - 각 항목은 자신이 만들어진 `productVersionId`와 `planRevisionId`를 유지한다.
 - 전환 event 처리가 성공하면 새 Plan Revision을 즉시 활성화한다.
-- 이미 확정된 appointment는 기존 proposal 스냅샷에 고정된다.
-- 새 version 때문에 실제 일정 변경이 필요하면 별도의 proposal과 일정 변경
+- 이미 확정된 appointment는 기존 제안 스냅숏에 고정된다.
+- 새 version 때문에 실제 일정 변경이 필요하면 별도의 제안과 일정 변경
   동의를 받는다.
 
 고객이 일정 변경을 거부해도 Plan Revision 전체를 롤백하지 않는다. 기존 확정
@@ -529,7 +529,7 @@ envelope만 전달한다. 예약서비스는 Gateway 인증 envelope가 없거�
 - aggregate version을 사용한 compare-and-set
 - 정렬된 자원 잠금 순서
 - 동일 자원·시간 구간의 재검증
-- transaction 안의 allocation 생성
+- transaction 안의 자원 점유 생성
 - 충돌 시 전체 command rollback
 
 `CAPACITY_BUCKET` 상품과 자원은 단위 시간별 사용량 합계로 판정한다. 병원은
@@ -540,9 +540,9 @@ envelope만 전달한다. 예약서비스는 Gateway 인증 envelope가 없거�
 `tenantId + clinicId + resourceId + bucketStartAt + bucketMinutes`를 키로 갖는
 capacity bucket row를 두고 row lock 또는 version CAS로 사용량을 직렬화한다.
 시간 구간 점유는 `tenant/clinic/resource/startAt/endAt/status` covering index와
-활성 allocation만 대상으로 하는 조회를 사용한다. 확정 예약 교체 시 충돌 계산은
+활성 자원 점유만 대상으로 하는 조회를 사용한다. 확정 예약 교체 시 충돌 계산은
 교체 대상 appointment의 기존 allocation ID 집합을 제외해 자기 충돌과 이중
-계산을 막는다. transaction rollback 시 기존 allocation은 그대로 활성 상태로
+계산을 막는다. transaction rollback 시 기존 자원 점유는 그대로 활성 상태로
 돌아온다.
 
 자원 잠금 키는 tenant, clinic, resource type, resource ID, bucket start 순으로
@@ -563,7 +563,7 @@ command 시작 시 위 복합키를 unique key로 선점한다. 같은 hash의 �
 다음 변경은 하나의 DB transaction에서 처리한다.
 
 1. 현재 aggregate와 expected version 검증
-2. proposal, commitment, consent 또는 Plan Revision 저장
+2. 제안, 확정 약속, 동의 또는 Plan Revision 저장
 3. 자원 점유 생성·교체·해제
 4. 상태 및 운영 예외 이력 추가
 5. transactional outbox event 추가
@@ -588,7 +588,7 @@ version gap은 대기시키고, 같은 version의 다른 payload와 권한 불�
 모든 외부 event는 공통 envelope의 `eventId`, `eventType`, `schemaVersion`,
 `sourceAuthority`, `sourceAggregateId`, `sourceAggregateVersion`, `occurredAt`,
 `tenantId`, `clinicId`, `payloadHash`, `correlationId`를 먼저 검증한다. event
-type과 schema version별 DTO allowlist만 역직렬화하며 class name 기반 타입,
+type과 schema version별 DTO 허용목록만 역직렬화하며 class name 기반 타입,
 default polymorphic typing과 임의 subtype을 허용하지 않는다. payload는 최대
 1 MiB, JSON nesting depth는 32로 제한하고, unknown field 정책은 schema version별
 명시적 거부를 기본값으로 한다. 검증 실패 payload는 domain mapping 전에
@@ -615,7 +615,7 @@ reason code와 quarantine ID로 원인을 조회하고 수정된 새 event versi
 
 ### 11.2 보존과 조회 분리
 
-proposal, consent, 상태 이력과 Plan Revision은 법적·병원별 보존 정책의 적용
+제안, 동의, 상태 이력과 Plan Revision은 법적·병원별 보존 정책의 적용
 대상이므로 임의 삭제하지 않고 월 단위 시간 partition과
 `tenant/clinic/aggregateId/occurredAt` index로 active 조회와 audit 조회를
 분리한다. 운영성 record는 성공적으로 전달·종결되고 replay 안전 기간이 지난 뒤
@@ -647,9 +647,9 @@ Flyway가 운영 migration의 권위다. Exposed table 정의와 schema 검사 �
 
 - companion aggregate가 없는 기존 appointment는 legacy 경로로 조회한다.
 - 기존 `POST /appointments` 계약은 legacy row만 생성하는 명시적인 compatibility
-  경로로 유지하며 commitment, proposal 또는 allocation을 생성하지 않는다.
-- 새 API로 생성한 예약만 commitment와 item 모델을 필수로 사용한다.
-- legacy 필드는 확정 proposal의 projection으로만 갱신한다.
+  경로로 유지하며 확정 약속, 제안 또는 자원 점유를 생성하지 않는다.
+- 새 API로 생성한 예약만 확정 약속과 item 모델을 필수로 사용한다.
+- legacy 필드는 확정 제안의 projection으로만 갱신한다.
 - `AppointmentCommitment`가 존재하는 row에 legacy update/status API가 접근하면
   `NEW_APPOINTMENT_API_REQUIRED`로 거부한다.
 - 새 API의 확정 transaction만 legacy projection을 갱신하며, legacy repository가
@@ -663,13 +663,13 @@ Flyway가 운영 migration의 권위다. Exposed table 정의와 schema 검사 �
    확인한다.
 2. 새 event consumer를 ingest-only shadow mode로 켜 payload 검증, 격리와
    projection 차이를 측정하되 예약 row를 변경하지 않는다.
-3. clinic allowlist feature flag로 새 고객 요청과 관리자 API를 순차 활성화한다.
+3. clinic 허용목록 feature flag로 새 고객 요청과 관리자 API를 순차 활성화한다.
 4. outbox lag, 격리율, projection diff, 충돌률과 latency가 기준을 만족하면 범위를
    확대한다.
 5. legacy write 차단과 제거는 별도 승인·migration에서 수행한다.
 
 V10 DDL은 추가형이므로 rollback 때 table을 삭제하지 않는다. 새 API와 consumer
-feature flag를 끄고 legacy 경로로 되돌리되, 이미 생성된 commitment 예약은 새
+feature flag를 끄고 legacy 경로로 되돌리되, 이미 생성된 확정 약속 예약은 새
 API로만 조회·변경한다. 부분 활성화 중 생성된 새 모델 row를 legacy row로 변환하지
 않는다. 배포 전 PostgreSQL snapshot/backup, rollback drill과 shadow diff 0건을
 cutover 조건으로 둔다.
@@ -679,8 +679,8 @@ cutover 조건으로 둔다.
 | 실패 | `reasonCode` | 처리 |
 |---|---|---|
 | 고객 요청의 tenant/clinic/patient 범위 불일치 | `SCOPE_MISMATCH` | command 전체 거부, 자원 점유 없음 |
-| 관리자 직접 확정에 동의 증빙 없음 | `CONSENT_REQUIRED` | 확정 거부, 현재 proposal 유지 |
-| proposal 만료 후 수락 | `PROPOSAL_EXPIRED` | 만료된 revision 거부, 새 proposal 요구 |
+| 관리자 직접 확정에 동의 증빙 없음 | `CONSENT_REQUIRED` | 확정 거부, 현재 제안 유지 |
+| 제안 만료 후 수락 | `PROPOSAL_EXPIRED` | 만료된 revision 거부, 새 제안 요구 |
 | 새 제안 자원 충돌 | `RESOURCE_CONFLICT` | 기존 확정 예약 유지 |
 | 같은 idempotency key의 다른 내용 | `IDEMPOTENCY_KEY_REUSED` | stable conflict 응답 |
 | 상품 migration의 from-version 불일치 | `PRODUCT_VERSION_MISMATCH` | event 격리, Plan 불변 |
@@ -688,7 +688,7 @@ cutover 조건으로 둔다.
 | 고객이 실제 일정 변경 거부 | `CUSTOMER_DECLINED_RESCHEDULE` | 기존 확정 예약 유지, `OperationalException` 생성 |
 | 상담서비스 일시 장애 | `CONSULTATION_DELIVERY_DELAYED` | outbox 재시도, 예약 transaction은 이미 완료 |
 | `BLOCKING` 선행 항목 미해결 | `PREDECESSOR_NOT_COMPLETED` | 해당 항목과 전이적 차단 경로만 보류 |
-| 알 수 없는 상품 또는 정책 schema version | `SCHEMA_VERSION_UNSUPPORTED` | 조기 거부, 이전 유효 snapshot 유지 |
+| 알 수 없는 상품 또는 정책 schema version | `SCHEMA_VERSION_UNSUPPORTED` | 조기 거부, 이전 유효 스냅숏 유지 |
 | payload 크기·깊이 또는 subtype 위반 | `EVENT_PAYLOAD_REJECTED` | domain mapping 전 격리 |
 
 오류 응답과 event는 stable reason code를 사용한다. JWT 원문, 동의 문서 원문,
@@ -698,7 +698,7 @@ cutover 조건으로 둔다.
 
 행위자별 controller를 분리하고 동일 application command service를 호출한다.
 
-- 고객: 예약 요청, proposal 조회, 수락과 거부
+- 고객: 예약 요청, 제안 조회, 수락과 거부
 - 병원 관리자: 직접 제안, 승인, 정책 허용 시 직접 확정, 변경 제안
 - 시스템 consumer: 상품 version 전환, 상담 결과, 환불과 진료 완료 event
 
@@ -723,7 +723,7 @@ clinic을 중복 입력하지 않는다. OpenAPI는 각 endpoint의 허용 actor
 | 고객·관리자 | `GET /api/v2/appointments/{id}/commitment` | 없음 → `AppointmentCommitmentResponse` | 200 | `APPOINTMENT_NOT_FOUND`, `SCOPE_FORBIDDEN` |
 
 시스템 event는 public controller로 받지 않고 인증된 broker consumer 또는 내부
-ingress adapter로만 처리한다. 모든 response는 aggregate version, 현재 proposal,
+ingress adapter로만 처리한다. 모든 response는 aggregate version, 현재 제안,
 commitment status와 stable reason code를 포함하며, 허용 actor와 상태 전이는
 OpenAPI에 enum과 예제로 고정한다.
 
@@ -731,8 +731,8 @@ OpenAPI에 enum과 예제로 고정한다.
 
 ### 15.1 단위 테스트
 
-- commitment와 proposal 상태 전이
-- 확정 proposal 교체의 원자성
+- 확정 약속과 제안 상태 전이
+- 확정 제안 교체의 원자성
 - 동의 증빙과 proposal hash 일치
 - 상품 특성 조합 및 병원/자원 capability 검증
 - 반복형, 복합형, N-of-M 선택형 패키지의 실행 BOM 전개
@@ -747,8 +747,8 @@ OpenAPI에 enum과 예제로 고정한다.
 ### 15.2 저장소와 동시성 테스트
 
 - Exposed 작업은 모두 caller-owned `transaction {}` 안에서 수행
-- 같은 proposal의 중복 confirm
-- 서로 다른 proposal의 동시 accept
+- 같은 제안의 중복 confirm
+- 서로 다른 제안의 동시 accept
 - 같은 자원 구간의 동시 점유
 - capacity bucket 경계와 초과 예약 ceiling
 - event replay, version gap과 same-version/different-payload
@@ -770,11 +770,11 @@ bluetape4k singleton launcher를 사용하고 `@Testcontainers`를 추가하지 
 - 관리자 직접 확정의 정책과 동의 요구
 - 확정 예약 변경에 새 동의가 필요함
 - 안정적인 오류 코드와 개인정보 비노출
-- schema allowlist, payload 크기·깊이 제한과 unsafe polymorphic payload 거부
+- 스키마 허용목록, payload 크기·깊이 제한과 unsafe polymorphic payload 거부
 
 ### 15.5 운영·성능 검증
 
-- 일반/최대 Plan proposal 생성과 미래 항목 증분 재계산의 p95/p99
+- 일반/최대 Plan 제안 생성과 미래 항목 증분 재계산의 p95/p99
 - 동일 인기 자원 100개 동시 확정의 충돌·deadlock·retry 결과
 - outbox lag, quarantine count/age, proposal expiry, allocation conflict,
   migration rejection metric과 correlation ID
@@ -816,9 +816,9 @@ README와 OpenAPI에는 고객/관리자 흐름, Gateway 인증 경계, 가예�
 - [x] 항목별 의료진, 장비와 진료 공간을 점유한다.
 - [x] 고객 요청은 병원 승인 전까지 확정되지 않는다.
 - [x] 관리자 직접 확정은 유효 정책과 동의 증빙이 있을 때만 가능하다.
-- [x] 새 proposal 대기 중 기존 확정 예약과 자원 점유가 유지된다.
-- [x] 새 proposal 수락이 자원 점유와 `confirmedProposalId`를 원자적으로 교체한다.
-- [x] 모든 예약 결정이 상품, 정책, 동의 스냅샷을 조회 가능하게 보존한다.
+- [x] 새 제안 대기 중 기존 확정 예약과 자원 점유가 유지된다.
+- [x] 새 제안 수락이 자원 점유와 `confirmedProposalId`를 원자적으로 교체한다.
+- [x] 모든 예약 결정이 상품, 정책, 동의 스냅숏을 조회 가능하게 보존한다.
 - [x] 미백치료 5회권이 같은 구성 상품 version의 다섯 회차로 전개된다.
 - [x] 복합 패키지가 구성 상품별 필수·선택·선후행 관계를 보존한다.
 - [x] N-of-M 패키지가 구매 시 선택된 구성 상품만 실행 BOM에 포함한다.
@@ -860,4 +860,4 @@ README와 OpenAPI에는 고객/관리자 흐름, Gateway 인증 경계, 가예�
 승인된 HTML은 현재 저장소의 `docs/superpowers/specs/`에 보존한다. GitHub Pages
 workflow나 publication manifest는 이번 범위에서 만들지 않는다. 개발 완료 시점에
 별도 Pages 작업이 실제로 병합되어 있고 공개 계약이 저장소에 존재하면, 그
-allowlist와 presentation profile을 따라 이 HTML의 공개 항목을 추가한다.
+허용목록과 presentation profile을 따라 이 HTML의 공개 항목을 추가한다.

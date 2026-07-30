@@ -17,9 +17,9 @@ audience, payload hash, replay window, payload 제한을 검증합니다. `WRITE
 생성하고, 대기 상태의 `AppointmentPlanCreated` outbox 한 건을 기록합니다.
 
 중복 event ID와 동일 구매는 하나로 수렴합니다. aggregate version gap은 제한된
-backoff로 재시도하고 5회째 격리됩니다. `SHADOW`는 쓰기 없이 평가합니다. outbox
-발행·ack·retry/DLQ·alert 책임을 가진 외부 transport 배포가 완성되기 전에는 운영
-`WRITE`를 허용하지 않습니다. 방문 commitment 런북은 이 금지를 해제하기 전에 필요한
+백오프로 재시도하고 5회째 격리됩니다. `SHADOW`는 쓰기 없이 평가합니다. outbox
+발행·ack·retry/DLQ·alert 책임을 가진 외부 전송 배포가 완성되기 전에는 운영
+`WRITE`를 허용하지 않습니다. 방문 확정 약속 런북은 이 금지를 해제하기 전에 필요한
 사전 운영 훈련과 증거를 정의할 뿐, 그 문서만으로 `WRITE`를 승인하지 않습니다.
 
 ## 외부 예약 사실
@@ -28,14 +28,14 @@ backoff로 재시도하고 5회째 격리됩니다. `SHADOW`는 쓰기 없이 �
 
 - `VisitPlanningEventIngress`와 `VisitPlanningEventHandler`는 불변 패키지 실행 BOM을
   검증하고 아직 진행하지 않은 미래 Plan 작업만 생성·개정합니다.
-- `ProductVersionMigrationHandler`는 권위 있는 상품 version mapping과 고객 동의를
+- `ProductVersionMigrationHandler`는 신뢰된 상품 version mapping과 고객 동의를
   확인하고 완료 시술 provenance를 보존합니다.
 - `ProductVersionMigrationDeclinedHandler`는 현재 version을 유지한 채 고객 거부 운영
   예외를 기록합니다.
 - `TreatmentFulfillmentHandler`는 정확한 item의 완료·부분 이행을 반영하고
   `BLOCKING` 미래 의존 항목만 dirty-set으로 만듭니다.
-- `ExternalFactEventConsumer`는 닫힌 event type allowlist만 routing하고 제한된
-  redacted 실패를 격리합니다. 상품·구매·동의·환불·이행의 권위는 원천 서비스에
+- `ExternalFactEventConsumer`는 닫힌 event type 허용목록만 routing하고 제한된
+  redacted 실패를 격리합니다. 상품·구매·동의·환불·이행의 상태 변경 책임은 원천 서비스에
   그대로 남습니다.
 
 ## 이벤트 타입
@@ -74,7 +74,7 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 | `PurchaseEventRedriveService` | 전체 identity 확인, 행위자/사유, release 승인 참조, append-only audit를 강제하는 exact-quarantine dry-run·승인 redrive |
 | `VisitPlanningEventIngress` | 엄격한 패키지 실행 payload decoding, 상한, 신뢰 검증 |
 | `VisitPlanningEventHandler` | 불변 실행 Plan 생성과 미래 작업만 대상으로 하는 revision |
-| `ProductVersionMigrationHandler` | 권위·동의에 결합된 상품 version 전환 |
+| `ProductVersionMigrationHandler` | 신뢰된 원천과 동의에 결합된 상품 version 전환 |
 | `ProductVersionMigrationDeclinedHandler` | 활성 version을 바꾸지 않는 전환 거부 수렴 |
 | `TreatmentFulfillmentHandler` | 정확한 이행 사실, 부분 완료, `BLOCKING` dirty-set 전파 |
 | `ExternalFactEventConsumer` | 전환·거부·이행 사실의 닫힌 routing 경계 |

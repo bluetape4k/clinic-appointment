@@ -1,4 +1,4 @@
-# 예약 정책 유효 스냅샷 조회 — Task 7 검토 기록
+# 예약 정책 유효 스냅숏 조회 — Task 7 검토 기록
 
 ## 결과
 
@@ -10,7 +10,7 @@ Task 7은 예약 생성·변경·재조정이 참조할 불변 `EffectiveSchedul
 ## 내부 호출 계약
 
 `EffectiveSchedulingPolicyService.getEffective`의 호출자는 API Gateway가 전달한
-인증정보를 검증한 뒤 확정된 양수 `tenantGroupId`, 해당 테넌트 소속임을 확인한
+인증정보를 검증한 뒤 확정된 양의 정수 `tenantGroupId`, 해당 테넌트 소속임을 확인한
 `clinicId`, 정확한 UTC `decisionAt`과 `serviceAt`을 전달한다. 로컬 시각의 DST
 gap/overlap 해석은 이 서비스에 들어오기 전에 끝나야 한다.
 
@@ -33,7 +33,7 @@ val policy = effectiveSchedulingPolicyService.getEffective(
 2. 그 세대와 두 UTC 시각이 모두 일치하는 항목만 캐시에서 찾는다.
 3. tenant 기본 정책과 clinic override를 한 번에 읽어 컴파일한다.
 4. 데이터베이스 세대를 다시 읽고 변경되었으면 결과를 폐기한다.
-5. 두 scope head를 고정된 순서로 잠그고 세대를 재검사한 뒤 불변 스냅샷을
+5. 두 scope head를 고정된 순서로 잠그고 세대를 재검사한 뒤 불변 스냅숏을
    삽입하거나 같은 canonical bytes를 가진 기존 행을 재사용한다.
 6. 영속화가 끝난 뒤에만 프로세스 로컬 캐시에 보관한다.
 
@@ -51,7 +51,7 @@ stale cache 반환을 막으므로 정확성 조건으로 사용하지 않는다
 두 응답은 공용 `SchedulingApiErrorResponse`로 정규화한다. 원인 예외 메시지,
 SQL, JWT claim, 정책 payload, tenant/clinic 식별자는 공개 응답에 포함하지 않는다.
 크기 추정기나 로컬 캐시 보관 실패는 경고로 기록하되 이미 커밋된 권위
-스냅샷의 성공 응답을 뒤집지 않는다.
+스냅숏의 성공 응답을 뒤집지 않는다.
 
 ## 6-R 독립 검토 요약
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 승인된 Visual Companion을 영구 설계 문서로 보존한다. -->
+<!-- 승인된 시각 동반 문서를 영구 설계 문서로 보존한다. -->
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -159,7 +159,7 @@
     </button>
     <button class="step event-step" data-step="consume" onclick="selectStep('consume')">
       <span class="number">2</span><strong>이벤트 검증·소비</strong>
-      <p>authority, version, hash, inbox로 멱등 처리</p>
+      <p>신뢰된 원천, version, hash, inbox로 멱등 처리</p>
     </button>
     <button class="step appointment-step" data-step="plan" onclick="selectStep('plan')">
       <span class="number">3</span><strong>Plan Revision 생성</strong>
@@ -171,11 +171,11 @@
     </button>
     <button class="step appointment-step" data-step="propose" onclick="selectStep('propose')">
       <span class="number">5</span><strong>가예약·일정 제안</strong>
-      <p>고객 요청 또는 병원 제안으로 immutable proposal 생성</p>
+      <p>고객 요청 또는 병원 제안으로 수정불가한 제안 생성</p>
     </button>
     <button class="step appointment-step" data-step="confirm" onclick="selectStep('confirm')">
       <span class="number">6</span><strong>동의 후 확정</strong>
-      <p>합의된 proposal만 확정하고 자원을 원자적으로 점유</p>
+      <p>합의된 제안만 확정하고 자원을 원자적으로 점유</p>
     </button>
   </section>
 
@@ -225,7 +225,7 @@
           <div class="visit"><strong>방문 A · 사전 진단</strong><p>PROPOSED · 전문의 + 상담실</p></div>
           <div class="visit"><strong>방문 B · 리프팅 + 진정</strong><p>같은 방문 · 장비 + 시술실 + 회복공간</p></div>
           <div class="visit"><strong>방문 C · 사후 점검</strong><p>시술 완료 후 7일 · 별도 방문</p></div>
-          <div class="stage-note">proposal lifecycle 예시</div>
+          <div class="stage-note">제안 생명주기 예시</div>
           <div class="state-row"><span class="chip proposed">PROPOSED</span><span>→</span><span class="chip">HELD</span><span>→ 고객 동의</span><span class="chip confirmed">CONFIRMED</span></div>
         </div>
       </div>
@@ -234,7 +234,7 @@
 
   <section class="panel">
     <h2>진행 이후에는 미래 항목만 다시 계산합니다</h2>
-    <p class="sub">완료된 사실과 기존 확정 예약을 보호하면서, 영향받은 미진행 항목만 새 방문 또는 proposal로 전개합니다.</p>
+    <p class="sub">완료된 사실과 기존 확정 예약을 보호하면서, 영향받은 미진행 항목만 새 방문 또는 제안으로 전개합니다.</p>
     <div class="future">
       <div class="future-card complete">
         <h3>완료된 진료항목</h3>
@@ -248,7 +248,7 @@
       </div>
       <div class="future-card reschedule">
         <h3>장비 고장·휴진·일정 변경</h3>
-        <p>기존 확정 예약을 조용히 덮지 않습니다. 새 proposal과 고객 동의를 거쳐 영향받은 미래 예약만 교체합니다.</p>
+        <p>기존 확정 예약을 조용히 덮지 않습니다. 새 제안과 고객 동의를 거쳐 영향받은 미래 예약만 교체합니다.</p>
         <div class="state-row"><span class="chip">NEW PROPOSAL</span><span class="chip proposed">CONSENT</span><span class="chip confirmed">RECONFIRMED</span></div>
       </div>
     </div>
@@ -271,8 +271,8 @@
     consume:{
       title:'2. 이벤트 검증·소비',
       summary:'예약서비스가 외부 이벤트의 권위와 순서를 확인하고 같은 사실을 정확히 한 번 반영합니다.',
-      input:['trusted event authority','source aggregate version','payload hash와 idempotency key'],
-      output:['inbox receipt','검증된 상품 스냅샷','격리 또는 다음 단계 진행'],
+      input:['신뢰된 event authority','source aggregate version','payload hash와 idempotency key'],
+      output:['inbox receipt','검증된 상품 스냅숏','격리 또는 다음 단계 진행'],
       invariant:'같은 이벤트 replay는 같은 결과를 반환하고, version gap이나 동일 version의 다른 payload는 부분 적용하지 않고 격리합니다.'
     },
     plan:{
@@ -285,23 +285,23 @@
     group:{
       title:'4. 방문 후보 구성',
       summary:'진료항목을 한 번의 방문에서 함께 수행할 수 있는 묶음으로 나눕니다.',
-      input:['visitGroupingConstraints','병원 운영정책 snapshot','실제 자원 capability와 가용량'],
+      input:['visitGroupingConstraints','병원 운영정책 스냅숏','실제 자원 capability와 가용량'],
       output:['방문별 AppointmentItem 후보','대표 진료명','필요 ResourceAllocation 후보'],
       invariant:'한 Appointment는 한 번의 방문입니다. 여러 세부 진료가 같은 방문에 포함될 수 있지만 각 항목의 시간과 자원 구간은 유지합니다.'
     },
     propose:{
       title:'5. 가예약·일정 제안',
-      summary:'고객 희망일 또는 병원 제안을 immutable proposal revision으로 기록하고 필요하면 자원을 hold합니다.',
+      summary:'고객 희망일 또는 병원 제안을 수정불가한 제안 revision으로 기록하고 필요하면 자원을 hold합니다.',
       input:['고객 희망일 또는 병원 제안','방문별 항목 후보','최신 유효 병원정책'],
-      output:['AppointmentProposal revision','PROPOSED 또는 HELD commitment','proposalHash와 만료시각'],
+      output:['AppointmentProposal revision','PROPOSED 또는 HELD 확정 약속','proposalHash와 만료시각'],
       invariant:'고객 요청은 관리자 승인 전까지 확정이 아니며, 새 제안이 생겨도 기존 확정 예약을 즉시 대체하지 않습니다.'
     },
     confirm:{
       title:'6. 고객 동의 후 확정',
-      summary:'날짜·항목·자원에 대한 동의와 권한을 검증한 뒤 합의된 proposal만 확정합니다.',
+      summary:'날짜·항목·자원에 대한 동의와 권한을 검증한 뒤 합의된 제안만 확정합니다.',
       input:['accepted ConsentDecision','현재 proposal hash','expected aggregate version'],
       output:['CONFIRMED Appointment','confirmedProposalId','원자적으로 생성된 ResourceAllocation'],
-      invariant:'확정 후 변경은 반드시 새 proposal과 별도 일정 변경 동의를 거칩니다. 기존 confirmed proposal은 감사 가능한 불변 기록으로 남습니다.'
+      invariant:'확정 후 변경은 반드시 새 제안과 별도 일정 변경 동의를 거칩니다. 기존 confirmed proposal은 감사 가능한 불변 기록으로 남습니다.'
     }
   };
 

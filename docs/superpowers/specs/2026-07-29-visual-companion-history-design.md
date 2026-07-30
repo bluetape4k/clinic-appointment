@@ -1,4 +1,4 @@
-# 예약 서비스 Visual Companion 이력 설계
+# 예약 서비스 시각 동반 문서 이력 설계
 
 - **날짜**: 2026-07-29
 - **상태**: 승인됨
@@ -15,11 +15,11 @@
 - 환자 예약과 관리자 직접 예약이 어디에서 갈라지는가
 - 가예약, 확정, 취소, 재조정이 어떤 조건으로 전이되는가
 - tenant 기본 정책과 clinic override가 어떤 결과를 만드는가
-- 정책 version과 snapshot이 과거 예약 결정에 어떻게 연결되는가
+- 정책 version과 스냅숏이 과거 예약 결정에 어떻게 연결되는가
 - 설계, 구현 계획, 실제 구현, 운영 복구가 어느 Issue와 PR에서 바뀌었는가
 
-설계 중 사용하는 browser visual companion은 대화를 돕는 임시 화면이다. 이를
-그대로 장기 문서로 취급하면 기준 문서, 공개 범위, locale, 변경 이력과 검증
+설계 중 사용하는 브라우저 시각 동반 문서는 대화를 돕는 임시 화면이다. 이를
+그대로 장기 문서로 취급하면 기준 문서, 공개 범위, 로케일, 변경 이력과 검증
 책임이 불명확해진다.
 
 ## 2. 목표
@@ -59,11 +59,11 @@ URL을 바꾸지 않고, 현재 선례에 공개·검증 계약을 추가해야 
 
 workspace의 공식 웹 문서는 별도 `bluetape4k.github.io` 저장소가 Astro와
 Starlight 기반 GitHub Pages를 소유한다. 서비스 저장소마다 별도 Pages를
-운영하면 navigation, locale, 보안 검토, 링크 검증이 중복된다.
+운영하면 navigation, 로케일, 보안 검토, 링크 검증이 중복된다.
 
 ## 5. 결정
 
-### 5.1 Markdown 원본 + HTML companion
+### 5.1 Markdown 원본 + HTML 시각 동반 문서
 
 동일 주제의 문서는 가능한 한 같은 basename을 사용한다.
 
@@ -83,33 +83,33 @@ Markdown은 다음 내용을 소유한다.
 
 HTML은 다음 내용만 시각적으로 재구성한다.
 
-- 역할별 journey
+- 역할별 여정
 - 상태 전이와 분기
-- 정책 합성과 data flow
+- 정책 합성과 데이터 흐름
 - 실패·복구 시나리오
 - 설계에서 구현·운영 문서로 이어지는 이력 지도
 
 HTML에만 존재하는 업무 규칙은 허용하지 않는다. HTML에서 설명하는 규칙은
 대응 Markdown section이나 별도 API/runbook 문서로 역링크한다.
 
-### 5.2 임시 companion과 영구 companion 분리
+### 5.2 임시 시각 동반 문서와 영구 시각 동반 문서 분리
 
 brainstorm 단계의 `.superpowers/brainstorm/<session>/` 파일은 선택지 비교와
 피드백 수집에 사용한다. 설계가 승인되면 필요한 화면을 다시 편집해
 `docs/superpowers/specs/` 또는 `docs/superpowers/plans/`의 독립 HTML로 만든다.
 
-영구 companion은 임시 session의 helper script, event endpoint, local server에
+영구 시각 동반 문서는 임시 session의 helper script, event endpoint, local server에
 의존하지 않는다. 선택 UI가 필요하면 상태를 저장하지 않는 client-side
 interaction만 사용한다.
 
-### 5.3 문서별 presentation profile
+### 5.3 문서별 표현 profile
 
-Visual Companion의 설명 방식은 저장소 전체에서 하나를 선택하지 않는다. 각 설계
+시각 동반 문서의 설명 방식은 저장소 전체에서 하나를 선택하지 않는다. 각 설계
 문서가 독자의 핵심 질문에 따라 다음 profile 중 하나를 명시한다.
 
 | Mode | 핵심 질문 | 기본 구성 | 적합한 예 |
 |---|---|---|---|
-| `history` | 왜 이렇게 바뀌었는가? | Issue → 설계 → PR → API·runbook timeline | 예약 생성 idempotency |
+| `history` | 왜 이렇게 바뀌었는가? | Issue → 설계 → PR → API·runbook timeline | 예약 생성 멱등성 |
 | `simulation` | 조건이 바뀌면 어떻게 동작하는가? | 행위자·정책·상태 입력과 판정 결과 비교 | 예약 상태 전이 |
 | `hybrid` | 어떻게 동작하며 왜 그렇게 결정됐는가? | simulation과 history의 상호 탐색 | Scheduling Policy |
 
@@ -120,7 +120,7 @@ profile은 문서 작성자가 명시한다. validator는 mode별 필수 view와
 `hybrid`는 모든 문서의 기본값이 아니다. 두 관점이 실제로 필요하고 서로 연결될
 때만 사용한다. 단순히 화면을 풍부하게 보이게 하려고 중복 내용을 추가하지 않는다.
 
-### 5.4 공개 allowlist
+### 5.4 공개 허용목록
 
 저장소에 HTML이 존재한다는 사실만으로 공개 대상이 되지 않는다.
 
@@ -200,7 +200,7 @@ GitHub file view 또는 로컬 파일 열기 경로로 동작한다.
 
 ## 6. HTML 문서 계약
 
-모든 영구 companion은 다음 조건을 만족한다.
+모든 영구 시각 동반 문서는 다음 조건을 만족한다.
 
 ### 6.1 자체 완결성
 
@@ -229,7 +229,7 @@ commit이 아직 정해지지 않은 draft에서는 commit 항목을 생략한�
 - heading과 section anchor를 안정적으로 유지한다.
 - keyboard만으로 navigation과 interaction을 사용할 수 있게 한다.
 - 색상만으로 상태나 성공·실패를 구분하지 않는다.
-- 좁은 viewport에서 가로 overflow 없이 핵심 flow를 읽을 수 있게 한다.
+- 좁은 viewport에서 가로 overflow 없이 핵심 흐름을 읽을 수 있게 한다.
 - animation은 설명에 필요한 경우에만 사용하고 reduced-motion을 존중한다.
 - print 시 본문과 provenance가 남고 navigation 장식은 제거된다.
 
@@ -249,22 +249,22 @@ commit이 아직 정해지지 않은 draft에서는 commit 항목을 생략한�
 - 저장소나 server 상태를 변경하는 동작
 - HTML 내부에만 남는 승인 또는 업무 결정
 
-## 7. Locale 계약
+## 7. 로케일 계약
 
-work document의 기본 설명은 한국어로 작성한다. 공개 HTML을 영문 README와
-한글 README 양쪽에서 독자용 자산으로 제공할 때는 locale별 source-equivalent
+작업 문서의 기본 설명은 한국어로 작성한다. 공개 HTML을 영문 README와
+한글 README 양쪽에서 독자용 자산으로 제공할 때는 로케일별 source-equivalent
 파일을 만든다.
 
 신규 문서는 영문 `*.html`과 한국어 `*.ko.html`을 기본 경로로 사용한다. 다만
 이미 한국어 unsuffixed `*.html`이 공개된 legacy 문서는 기존 경로를 유지하고,
 영문 동등본을 `*.en.html`로 추가한다. 이번에 공개하는 두 설계가 이 예외에 해당한다.
 
-technical identifier, API, command, Issue/PR URL은 locale 간 동일하게 유지한다.
-하나의 HTML 안에서 locale을 전환하는 새 문서는 만들지 않는다.
+technical identifier, API, command, Issue/PR URL은 로케일 간 동일하게 유지한다.
+하나의 HTML 안에서 로케일을 전환하는 새 문서는 만들지 않는다.
 
 ## 8. 이력 모델
 
-Visual Companion은 날짜별 snapshot이다. 과거 파일을 새 설계 의미로 덮어쓰지
+시각 동반 문서는 날짜별 스냅숏이다. 과거 파일을 새 설계 의미로 덮어쓰지
 않는다.
 
 | 상태 | 의미 | 허용 변경 |
@@ -289,7 +289,7 @@ Visual Companion은 날짜별 snapshot이다. 과거 파일을 새 설계 의미
 6. Markdown이 HTML을 링크하고 HTML이 Markdown으로 역링크하는가
 7. HTML에 provenance 필수값과 `<html lang>`이 있는가
 8. 외부 script, analytics, form, network URL이 없는가
-9. locale pair가 선언된 경우 양쪽 entry와 route가 존재하는가
+9. 로케일 쌍이 선언된 경우 양쪽 entry와 route가 존재하는가
 10. manifest 밖의 HTML이 publication artifact에 섞이지 않는가
 
 문서 변경의 최소 검증은 다음과 같다.
@@ -300,14 +300,14 @@ node scripts/validate-visual-companions.mjs
 ```
 
 GitHub Actions 변경 시 `actionlint`를 추가한다. 중앙 사이트 consumer를 구현할
-때는 allowlisted file count와 생성 route를 build 결과에서 다시 확인한다.
+때는 허용목록 file count와 생성 route를 build 결과에서 다시 확인한다.
 
 시각 검토는 validator를 통과한 뒤 실제 browser에서 desktop과 narrow viewport를
 확인한다. HTML parse 성공만으로 시각 검토를 대신하지 않는다.
 
 ## 10. 보안과 공개 경계
 
-- manifest는 opt-in allowlist다. 자동 탐색이나 전체 `docs/` 복사를 금지한다.
+- manifest는 opt-in 허용목록이다. 자동 탐색이나 전체 `docs/` 복사를 금지한다.
 - 실제 tenant, clinic, patient 식별자와 production URL을 넣지 않는다.
 - JWT, header, credential, 내부 운영 secret을 예제에 포함하지 않는다.
 - 외부 link는 문서 navigation일 뿐 build-time fetch 대상이 아니다.
@@ -327,12 +327,12 @@ GitHub Actions 변경 시 `actionlint`를 추가한다. 중앙 사이트 consume
 
 - 기존 HTML에 Markdown 역링크와 provenance를 추가한다.
 - 기존 한국어 문서의 영문 동등본을 만든다.
-- `docs/superpowers/INDEX.md`에서 Markdown 원본과 HTML companion을 구분한다.
+- `docs/superpowers/INDEX.md`에서 Markdown 원본과 HTML 시각 동반 문서를 구분한다.
 
 ### 단계 3: 중앙 사이트 publication
 
 - `bluetape4k.github.io`에 pinned manifest consumer를 추가한다.
-- allowlisted file만 asset으로 복사한다.
+- 허용목록 file만 asset으로 복사한다.
 - 영문·한글 route와 navigation을 연결한다.
 - Pages build와 실제 route를 검증한다.
 
@@ -346,7 +346,7 @@ GitHub Actions 변경 시 `actionlint`를 추가한다. 중앙 사이트 consume
 - 각 설계가 `history`, `simulation`, `hybrid` 중 적합한 profile을 명시한다.
 - profile 선택은 자동 추론되지 않으며 manifest 조합으로 검증할 수 있다.
 - 기존 HTML과 링크를 이동하지 않는 migration 경로가 있다.
-- 공개 대상은 manifest allowlist로만 선택된다.
+- 공개 대상은 manifest 허용목록으로만 선택된다.
 - 중앙 사이트와 서비스 저장소의 publication 책임이 분리되어 있다.
 - provenance, locale, accessibility, security, history 계약이 정의되어 있다.
 - validator가 검사할 항목과 최소 명령이 구체적이다.

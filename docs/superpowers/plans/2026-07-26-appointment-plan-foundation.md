@@ -10,7 +10,7 @@
 
 **Source Design:** [`2026-07-26-appointment-plan-and-capacity-design.md`](../specs/2026-07-26-appointment-plan-and-capacity-design.md)
 
-**Visual Companion:** [`2026-07-26-appointment-plan-foundation.html`](./2026-07-26-appointment-plan-foundation.html)
+**시각 동반 문서:** [`2026-07-26-appointment-plan-foundation.html`](./2026-07-26-appointment-plan-foundation.html)
 
 ---
 

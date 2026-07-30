@@ -1,4 +1,4 @@
-# Visual Companion History Implementation Plan
+# 시각 동반 문서 이력 구현 계획
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -64,7 +64,7 @@
 | `public/ko/visual-companions/clinic-appointment/*/index.html` | 한국어 공개 HTML snapshot |
 | `src/content/docs/visual-companions/clinic-appointment.mdx` | 영문 landing page |
 | `src/content/docs/ko/visual-companions/clinic-appointment.mdx` | 한국어 landing page |
-| `scripts/manual/lib/sidebar.mjs` | locale별 Visual Companions navigation entry |
+| `scripts/manual/lib/sidebar.mjs` | 로케일별 `Visual Companions` 탐색 항목 |
 | `package.json` | sync와 snapshot validation 명령 |
 | `.github/workflows/deploy.yml` | snapshot validation을 Pages build의 선행 gate로 실행 |
 
@@ -614,7 +614,7 @@ node --test --test-name-pattern="visual companion repository" \
 
 Expected: missing module로 non-zero exit.
 
-- [ ] GREEN: manual publication의 registry/path-containment 관례를 재사용하되 visual companion 전용 module로 구현한다.
+- [ ] GREEN: manual publication의 registry/path-containment 관례를 재사용하되 시각 동반 문서 전용 module로 구현한다.
 - [ ] registry에 Task 9에서 출력한 `CLINIC_SOURCE_REF` 값과 `docs/visual-companions/manifest.json`을 기록한다.
 - [ ] test를 통과시킨다.
 
@@ -679,7 +679,7 @@ Expected: non-zero exit.
 - [ ] GREEN: `sync.mjs`가 `--source-root`와 `--source-ref`를 필수로 받고 registry SHA와 local Git HEAD를 모두 검증하게 한다.
 - [ ] manifest projection에서 중앙 사이트가 이해하는 field만 snapshot에 기록하고 unknown source metadata는 통과시키지 않는다.
 - [ ] 각 copied byte의 SHA-256, source path, locale, public route를 snapshot에 기록한다.
-- [ ] sync 전 visual companion destination만 bounded cleanup하고, allowlist 밖 `public/` 파일은 절대 건드리지 않는다.
+- [ ] sync 전 시각 동반 문서 destination만 bounded cleanup하고, allowlist 밖 `public/` 파일은 절대 건드리지 않는다.
 - [ ] `validate-snapshot.mjs`는 network나 clinic checkout 없이 committed JSON과 public file만 검증한다.
 - [ ] fixture test를 통과시킨다.
 - [ ] 실제 merged clinic source로 snapshot을 생성한다.
@@ -724,7 +724,7 @@ Not-tested: Astro navigation and full site build are added next"
 
 - [ ] 영문 landing page에 두 design의 설명, `hybrid` 의미, 영문 공개 route, Markdown source repository link를 추가한다.
 - [ ] 한국어 page에 source-equivalent 설명과 한국어 route를 추가한다.
-- [ ] static sidebar builder에 locale별 `Visual Companions`/`시각 자료` section을 추가하고 각 landing page를 연결한다.
+- [ ] 정적 사이드바 생성기에 로케일별 `Visual Companions`/`시각 자료` 섹션을 추가하고 각 랜딩 페이지를 연결한다.
 - [ ] 기존 Start/Ecosystem/Manuals/Blog navigation 순서와 locale prefix를 깨지 않는다.
 - [ ] content와 sidebar 관련 기존 test를 실행한다.
 

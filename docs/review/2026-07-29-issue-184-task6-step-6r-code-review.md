@@ -64,11 +64,11 @@ proposal SELECT FOR UPDATE
 포인터를 보존하면서 같은 version을 소비한다. 따라서 한 command만 성공하며 loser의
 consent, 만료 표식, allocation, outbox, idempotency claim은 transaction rollback된다.
 
-### 만료 응답 스냅샷
+### 만료 응답 스냅숏
 
 초기 안정성 검토에서는 DB의 `expired_at`을 갱신한 뒤 갱신 전 proposal 객체를
 응답과 idempotency 결과에 저장하는 P2도 발견했다. 만료 update 뒤 proposal을
-재조회하도록 수정해 최초 응답과 replay가 모두 실제 권위 있는 `expiredAt`을
+재조회하도록 수정해 최초 응답과 replay가 모두 DB에 확정된 `expiredAt`을
 반환한다.
 
 ## 후속 Task 경계
