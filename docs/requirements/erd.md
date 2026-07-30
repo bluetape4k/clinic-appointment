@@ -173,9 +173,9 @@ erDiagram
     Appointments ||--o{ RescheduleCandidates : "generates"
 ```
 
-![Table relationship ERD](assets/erd-01-table-relationships.png)
+![테이블 관계 ERD](assets/erd-01-table-relationships-ko.png)
 
-[SVG](assets/erd-01-table-relationships.svg) · [Mermaid source](assets/erd-01-table-relationships.mmd)
+[SVG](assets/erd-01-table-relationships-ko.svg) · [Mermaid source](assets/erd-01-table-relationships.mmd)
 
 ## 핵심 관계 요약
 

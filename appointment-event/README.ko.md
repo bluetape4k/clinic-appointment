@@ -81,7 +81,7 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 
 ## 이벤트 발행/구독 흐름
 
-![예약 이벤트 아키텍처 다이어그램](../docs/images/readme-diagrams/appointment-event-architecture-01.png)
+![예약 이벤트 아키텍처 다이어그램](../docs/images/readme-diagrams/appointment-event-architecture-01-ko.png)
 
 ## 의존성
 

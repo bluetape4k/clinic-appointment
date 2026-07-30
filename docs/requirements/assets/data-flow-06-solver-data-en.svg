@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1030" viewBox="0 0 2000 1030" role="img" aria-label="Solver Data Flow">
+<defs>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#27415f" flood-opacity="0.12"/></filter>
+  <marker id="arrow-blue" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#4f77c9" stroke="#4f77c9"/></marker>
+<marker id="arrow-cyan" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#4aa6b5" stroke="#4aa6b5"/></marker>
+<marker id="arrow-teal" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#2f9f93" stroke="#2f9f93"/></marker>
+<marker id="arrow-green" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#3c987e" stroke="#3c987e"/></marker>
+<marker id="arrow-amber" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d28a28" stroke="#d28a28"/></marker>
+<marker id="arrow-orange" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d9823b" stroke="#d9823b"/></marker>
+<marker id="arrow-pink" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d85f8d" stroke="#d85f8d"/></marker>
+<marker id="arrow-purple" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#8a65d8" stroke="#8a65d8"/></marker>
+<marker id="arrow-red" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#ca5f66" stroke="#ca5f66"/></marker>
+<marker id="arrow-slate" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#718096" stroke="#718096"/></marker>
+  <style>
+    svg{font-family:"Comic Mono","Comic Sans MS",ui-sans-serif,system-ui,sans-serif}
+    .canvas{fill:#f6f9fc}.frame{fill:#ffffff;stroke:#c4d5e8;stroke-width:3;filter:url(#shadow)}
+    .title,.panel-title,.card-title,.state-title{font-family:"Architects Daughter","Comic Sans MS",cursive;fill:#263a57}
+    .title{font-size:46px}.subtitle{font-size:17px;fill:#526276}.panel-title{font-size:27px}.card-title{font-size:24px}.state-title{font-size:22px}
+    .detail,.small,.pill-text,.route-label,.footer{font-family:"Comic Mono","Comic Sans MS",ui-sans-serif,system-ui,sans-serif;fill:#526276}
+    .detail{font-size:14px}.small{font-size:12px}.pill-text{font-size:13px}.route-label{font-size:13px}.footer{font-size:14px}
+    .panel{stroke-width:2}.card{stroke-width:2.4;filter:url(#shadow)}.pill{stroke-width:1.8}.route{fill:none;stroke-linecap:round;stroke-linejoin:round}
+    .lifeline{stroke:#b7c8dc;stroke-width:2;stroke-dasharray:8 8}.message{fill:none;stroke-width:3;stroke-linecap:round}.note{fill:#fffdf7;stroke:#d7b970;stroke-width:2}
+    .table{stroke-width:2.2;filter:url(#shadow)}.table-head{font-family:"Architects Daughter";font-size:21px;fill:#263a57}.row{font-size:12.5px;fill:#526276}
+  </style>
+</defs>
+<rect class="canvas" width="2000" height="1030"/>
+<rect class="frame" x="48" y="42" width="1904" height="946" rx="34"/>
+<text class="title" x="1000" y="104" text-anchor="middle">Solver Data Flow</text>
+<text class="subtitle" x="1000" y="138" text-anchor="middle">SolverService loads current records, builds a planning solution, solves, and returns assignments.</text>
+<g id="repos"><rect class="card" x="130" y="350" width="330" height="150" rx="16" fill="#fff" stroke="#3c987e"/><g transform="translate(148 368)"><rect width="44" height="44" rx="10" fill="#3c987e"/><g fill="none" stroke="#fff" stroke-width="2.3"><ellipse cx="22" cy="13" rx="12" ry="5"/><path d="M10 13v18c0 3 5 5 12 5s12-2 12-5V13"/><path d="M10 22c0 3 5 5 12 5s12-2 12-5"/></g></g><text class="card-title" x="206" y="390">Core repositories</text><text class="detail" x="154" y="424" text-anchor="start"><tspan x="154" dy="0">Clinic, doctors, appointments,</tspan><tspan x="154" dy="19">treatments, equipment, holidays</tspan></text></g>
+<g id="converter"><rect class="card" x="590" y="315" width="360" height="180" rx="16" fill="#fff" stroke="#4aa6b5"/><g transform="translate(608 333)"><rect width="44" height="44" rx="10" fill="#4aa6b5"/><g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 14h12l6 8-6 8H16l-6-8z"/><path d="M17 22h10"/></g></g><text class="card-title" x="666" y="355">SolutionConverter</text><text class="detail" x="614" y="389" text-anchor="start"><tspan x="614" dy="0">DB records become facts, planning</tspan><tspan x="614" dy="19">entities, date range, and time slots</tspan></text></g>
+<g id="facts"><rect class="card" x="1080" y="245" width="330" height="140" rx="16" fill="#fff" stroke="#4f77c9"/><g transform="translate(1098 263)"><rect width="44" height="44" rx="10" fill="#4f77c9"/><g fill="none" stroke="#fff" stroke-width="2.3"><ellipse cx="22" cy="13" rx="12" ry="5"/><path d="M10 13v18c0 3 5 5 12 5s12-2 12-5V13"/><path d="M10 22c0 3 5 5 12 5s12-2 12-5"/></g></g><text class="card-title" x="1156" y="285">Problem facts</text><text class="detail" x="1104" y="319" text-anchor="start"><tspan x="1104" dy="0">Clinic, Doctor, Treatment,</tspan><tspan x="1104" dy="19">Equipment, schedules, absences</tspan></text></g>
+<g id="planning"><rect class="card" x="1080" y="430" width="330" height="140" rx="16" fill="#fff" stroke="#8a65d8"/><g transform="translate(1098 448)"><rect width="44" height="44" rx="10" fill="#8a65d8"/><g fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M16 28c-4-2-5-9 1-12 2-7 13-5 13 3 5 2 4 11-2 12"/><path d="M19 18v12M25 17v14"/></g></g><text class="card-title" x="1156" y="470">AppointmentPlanning</text><text class="detail" x="1104" y="504" text-anchor="start"><tspan x="1104" dy="0">doctorId, appointmentDate,</tspan><tspan x="1104" dy="19">startTime are planning variables</tspan></text></g>
+<g id="timefold"><rect class="card" x="1530" y="360" width="310" height="155" rx="16" fill="#fff" stroke="#d9823b"/><g transform="translate(1548 378)"><rect width="44" height="44" rx="10" fill="#d9823b"/><g fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M16 28c-4-2-5-9 1-12 2-7 13-5 13 3 5 2 4 11-2 12"/><path d="M19 18v12M25 17v14"/></g></g><text class="card-title" x="1606" y="400">Timefold Solver</text><text class="detail" x="1554" y="434" text-anchor="start"><tspan x="1554" dy="0">12 hard and 6 soft constraints</tspan><tspan x="1554" dy="19">choose feasible placement</tspan></text></g>
+<g id="result"><rect class="card" x="820" y="710" width="360" height="125" rx="16" fill="#fff" stroke="#3c987e"/><g transform="translate(838 728)"><rect width="44" height="44" rx="10" fill="#3c987e"/><g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 14h12l6 8-6 8H16l-6-8z"/><path d="M17 22h10"/></g></g><text class="card-title" x="896" y="750">SolverResult</text><text class="detail" x="844" y="784" text-anchor="start"><tspan x="844" dy="0">Only movable appointments are returned</tspan><tspan x="844" dy="19">to the caller for persistence</tspan></text></g>
+<path class="route" d="M460 425 L590 425" stroke="#3c987e" stroke-width="3.2" marker-end="url(#arrow-green)"/>
+<path class="route" d="M950 340 L1080 340" stroke="#4f77c9" stroke-width="3.2" marker-end="url(#arrow-blue)"/>
+<path class="route" d="M950 455 L1080 455" stroke="#8a65d8" stroke-width="3.2" marker-end="url(#arrow-purple)"/>
+<path class="route" d="M1410 375 L1530 375" stroke="#4f77c9" stroke-width="3.2" marker-end="url(#arrow-blue)"/>
+<path class="route" d="M1410 505 L1530 505" stroke="#8a65d8" stroke-width="3.2" marker-end="url(#arrow-purple)"/>
+<path class="route" d="M1685 515 L1685.0 759.0 Q1685 773 1671.0 773.0 L1180 773" stroke="#d9823b" stroke-width="3.2" marker-end="url(#arrow-orange)"/>
+<path class="route" d="M820 773 L309.0 773.0 Q295 773 295.0 759.0 L295 500" stroke="#3c987e" stroke-width="2.6" stroke-dasharray="9 7" marker-end="url(#arrow-green)"/>
+<rect class="note" x="260" y="890" width="1480" height="58" rx="16"/><text class="footer" x="1000" y="926" text-anchor="middle">Source note: AppointmentConstraintProvider currently registers 12 hard constraints and 6 soft constraints; README prose was corrected to match code.</text>
+</svg>

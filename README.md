@@ -64,15 +64,15 @@ still require customer consent before policy-driven changes are applied.
 
 ## Architecture
 
-![Clinic Appointment Architecture](docs/images/readme-diagrams/clinic-appointment-architecture-01.png)
+![Clinic Appointment Architecture](docs/images/readme-diagrams/clinic-appointment-architecture-01-en.png)
 
 ## Module Overview
 
-![Module Overview](docs/images/readme-diagrams/root-readme-overview-01.png)
+![Module Overview](docs/images/readme-diagrams/root-readme-overview-01-en.png)
 
 ## Representative Requirement Flow
 
-![Appointment creation requirement flow](docs/requirements/assets/data-flow-01-appointment-create.png)
+![Appointment creation requirement flow](docs/requirements/assets/data-flow-01-appointment-create-en.png)
 
 The full requirements diagram catalog is maintained in [docs/requirements](docs/requirements/README.md).
 

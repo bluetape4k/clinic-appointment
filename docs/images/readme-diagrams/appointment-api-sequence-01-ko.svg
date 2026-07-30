@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="900" viewBox="0 0 1080 900">
+<defs>
+  <filter id="sh"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#1f2937" flood-opacity="0.10"/></filter>
+  <marker id="seqArrow" markerWidth="16" markerHeight="16" viewBox="0 0 10 10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+    <path d="M 0 0 L 10 5 L 0 10 Z" fill="#758297"/>
+  </marker>
+  <marker id="seqArrowGreen" markerWidth="16" markerHeight="16" viewBox="0 0 10 10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+    <path d="M 0 0 L 10 5 L 0 10 Z" fill="#58A978"/>
+  </marker>
+  <marker id="seqArrowPurple" markerWidth="16" markerHeight="16" viewBox="0 0 10 10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+    <path d="M 0 0 L 10 5 L 0 10 Z" fill="#8A72D6"/>
+  </marker>
+  <marker id="seqArrowRed" markerWidth="16" markerHeight="16" viewBox="0 0 10 10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+    <path d="M 0 0 L 10 5 L 0 10 Z" fill="#DC6B82"/>
+  </marker>
+  <style>
+    text { font-family: "goorm Sans","Courier New",monospace; }
+    .title { font-family: "goorm Sans","Comic Sans MS",cursive; font-size:38px; fill:#102033; }
+    .sub   { font-family: "goorm Sans","Courier New",monospace; font-size:12px; fill:#536273; }
+    .hdr   { font-family: "goorm Sans","Courier New",monospace; font-size:11px; }
+    .msg   { font-family: "goorm Sans","Courier New",monospace; font-size:10px; fill:#536273; }
+  </style>
+</defs>
+<rect width="1080" height="900" fill="#F7F9FC"/>
+<rect class="frame" x="24" y="20" width="1032" height="860" rx="20" fill="#FFFFFF" stroke="#D0D8E4" stroke-width="1.5"/>
+<text class="title" x="56" y="72">예약 생성 흐름</text>
+<text class="sub subtitle" x="60" y="96">POST /api/{tenantCode}/appointments | JWT 인증 | Exposed transaction | 이벤트 발행</text>
+<rect class="header participant" x="41" y="112" width="78" height="40" rx="7" fill="#F1ECFF" stroke="#8A72D6" stroke-width="2" filter="url(#sh)"/>
+<text class="hdr participant" x="80" y="135" text-anchor="middle" dominant-baseline="middle" fill="#2A1A5C">Frontend</text>
+<line class="lifeline" x1="80" y1="156" x2="80" y2="850" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect class="activation" x="75" y="208" width="10" height="76" rx="4" fill="#F1ECFF" stroke="#8A72D6" stroke-width="1" opacity="0.72"/>
+<rect class="header participant" x="154.5" y="112" width="123" height="40" rx="7" fill="#EAF7EF" stroke="#58A978" stroke-width="2" filter="url(#sh)"/>
+<text class="hdr participant" x="216" y="135" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26">SecurityFilter</text>
+<line class="lifeline" x1="216" y1="156" x2="216" y2="850" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect class="activation" x="211" y="208" width="10" height="76" rx="4" fill="#EAF7EF" stroke="#58A978" stroke-width="1" opacity="0.72"/>
+<rect class="header participant" x="280.25" y="112" width="175.5" height="40" rx="7" fill="#EAF7EF" stroke="#58A978" stroke-width="2" filter="url(#sh)"/>
+<text class="hdr participant" x="368" y="135" text-anchor="middle" dominant-baseline="middle" fill="#1A3A26">AppointmentController</text>
+<line class="lifeline" x1="368" y1="156" x2="368" y2="850" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect class="activation" x="363" y="208" width="10" height="76" rx="4" fill="#EAF7EF" stroke="#58A978" stroke-width="1" opacity="0.72"/>
+<rect class="header participant" x="447.5" y="112" width="153" height="40" rx="7" fill="#E9F7F6" stroke="#45A7A1" stroke-width="2" filter="url(#sh)"/>
+<text class="hdr participant" x="524" y="135" text-anchor="middle" dominant-baseline="middle" fill="#0E3533">AppointmentService</text>
+<line class="lifeline" x1="524" y1="156" x2="524" y2="850" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect class="activation" x="519" y="208" width="10" height="76" rx="4" fill="#E9F7F6" stroke="#45A7A1" stroke-width="1" opacity="0.72"/>
+<rect class="header participant" x="592.25" y="112" width="175.5" height="40" rx="7" fill="#E9F7F6" stroke="#45A7A1" stroke-width="2" filter="url(#sh)"/>
+<text class="hdr participant" x="680" y="135" text-anchor="middle" dominant-baseline="middle" fill="#0E3533">AppointmentRepository</text>
+<line class="lifeline" x1="680" y1="156" x2="680" y2="850" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect class="activation" x="675" y="208" width="10" height="76" rx="4" fill="#E9F7F6" stroke="#45A7A1" stroke-width="1" opacity="0.72"/>
+<rect class="header participant" x="774.5" y="112" width="123" height="40" rx="7" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="2" filter="url(#sh)"/>
+<text class="hdr participant" x="836" y="135" text-anchor="middle" dominant-baseline="middle" fill="#1A3A5C">EventPublisher</text>
+<line class="lifeline" x1="836" y1="156" x2="836" y2="850" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect class="activation" x="831" y="208" width="10" height="76" rx="4" fill="#E8F3FF" stroke="#5B8DEF" stroke-width="1" opacity="0.72"/>
+<rect class="header participant" x="943.5" y="112" width="93" height="40" rx="7" fill="#F2F5F9" stroke="#9AA8B8" stroke-width="2" filter="url(#sh)"/>
+<text class="hdr participant" x="990" y="135" text-anchor="middle" dominant-baseline="middle" fill="#2A3340">PostgreSQL</text>
+<line class="lifeline" x1="990" y1="156" x2="990" y2="850" stroke="#C8D4E0" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect class="activation" x="985" y="208" width="10" height="76" rx="4" fill="#F2F5F9" stroke="#9AA8B8" stroke-width="1" opacity="0.72"/>
+<path class="seq call" d="M80 182 L216 182" stroke="#8A72D6" stroke-width="1.8"  fill="none" marker-end="url(#seqArrowPurple)"/>
+<rect class="label pill" x="84.48" y="161" width="17" height="17" rx="8.5" fill="white" stroke="#8A72D6" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="92.98" y="173.8" text-anchor="middle">1</text>
+<rect x="102.48" y="164" width="97.92" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="105.48" y="175">POST /api/{tenantCode}/appointments</text>
+<rect class="alt branch" x="50" y="218" width="980" height="96" rx="5" fill="#EAF7EF" fill-opacity="0.12" stroke="#58A978" stroke-width="1"/>
+<rect x="50" y="218" width="40" height="16" rx="3" fill="#58A978" opacity="0.65"/>
+<text class="msg" x="70" y="228" text-anchor="middle" dominant-baseline="middle" fill="white">alt</text>
+<path class="seq ret" d="M216 228 L80 228" stroke="#DC6B82" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#seqArrowRed)"/>
+<rect class="label pill" x="84.48" y="207" width="17" height="17" rx="8.5" fill="white" stroke="#DC6B82" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="92.98" y="219.8" text-anchor="middle">2</text>
+<rect x="102.48" y="210" width="97.92" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="105.48" y="221">401 Unauthorized (유효하지 않은 JWT)</text>
+<path class="seq call" d="M216 274 L368 274" stroke="#58A978" stroke-width="1.8"  fill="none" marker-end="url(#seqArrowGreen)"/>
+<rect class="label pill" x="223.36" y="253" width="17" height="17" rx="8.5" fill="white" stroke="#58A978" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="231.86" y="265.8" text-anchor="middle">3</text>
+<rect x="241.36" y="256" width="109.44" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="244.36" y="267">SchedulingUserPrincipal (tenantCode 검증 완료)</text>
+<path class="seq call" d="M368 320 L524 320" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#seqArrow)"/>
+<rect class="label pill" x="376.08" y="299" width="17" height="17" rx="8.5" fill="white" stroke="#758297" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="384.58" y="311.8" text-anchor="middle">4</text>
+<rect x="394.08" y="302" width="112.32" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="397.08" y="313">validateAndCreate(CreateAppointmentRequest)</text>
+<path class="seq call" d="M524 366 L680 366" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#seqArrow)"/>
+<rect class="label pill" x="532.08" y="345" width="17" height="17" rx="8.5" fill="white" stroke="#758297" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="540.58" y="357.8" text-anchor="middle">5</text>
+<rect x="550.08" y="348" width="112.32" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="553.08" y="359">findSlotConflicts(clinicId, doctorId, date, time)</text>
+<path class="seq call" d="M680 412 L990 412" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#seqArrow)"/>
+<rect class="label pill" x="715.8" y="391" width="17" height="17" rx="8.5" fill="white" stroke="#758297" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="724.3" y="403.8" text-anchor="middle">6</text>
+<rect x="733.8" y="394" width="223.2" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="736.8" y="405">SELECT appointments WHERE doctor + date overlap</text>
+<path class="seq ret" d="M990 458 L680 458" stroke="#758297" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#seqArrow)"/>
+<rect class="label pill" x="715.8" y="437" width="17" height="17" rx="8.5" fill="white" stroke="#758297" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="724.3" y="449.8" text-anchor="middle">7</text>
+<rect x="733.8" y="440" width="223.2" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="736.8" y="451">conflicting: List&lt;AppointmentRecord&gt;</text>
+<rect class="alt branch" x="50" y="494" width="980" height="96" rx="5" fill="#FDECEF" fill-opacity="0.12" stroke="#DC6B82" stroke-width="1"/>
+<rect x="50" y="494" width="40" height="16" rx="3" fill="#DC6B82" opacity="0.65"/>
+<text class="msg" x="70" y="504" text-anchor="middle" dominant-baseline="middle" fill="white">alt</text>
+<path class="seq ret" d="M680 504 L524 504" stroke="#DC6B82" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#seqArrowRed)"/>
+<rect class="label pill" x="532.08" y="483" width="17" height="17" rx="8.5" fill="white" stroke="#DC6B82" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="540.58" y="495.8" text-anchor="middle">8</text>
+<rect x="550.08" y="486" width="112.32" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="553.08" y="497">ConflictDetectedException (409 Conflict)</text>
+<path class="seq ret" d="M680 550 L524 550" stroke="#58A978" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#seqArrowGreen)"/>
+<rect class="label pill" x="532.08" y="529" width="17" height="17" rx="8.5" fill="white" stroke="#58A978" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="540.58" y="541.8" text-anchor="middle">9</text>
+<rect x="550.08" y="532" width="72" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="553.08" y="543">OK (충돌 없음)</text>
+<path class="seq call" d="M524 596 L680 596" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#seqArrow)"/>
+<rect class="label pill" x="532.08" y="575" width="17" height="17" rx="8.5" fill="white" stroke="#758297" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="540.58" y="587.8" text-anchor="middle">10</text>
+<rect x="550.08" y="578" width="112.32" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="553.08" y="589">save(AppointmentRecord)</text>
+<path class="seq call" d="M680 642 L990 642" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#seqArrow)"/>
+<rect class="label pill" x="715.8" y="621" width="17" height="17" rx="8.5" fill="white" stroke="#758297" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="724.3" y="633.8" text-anchor="middle">11</text>
+<rect x="733.8" y="624" width="196" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="736.8" y="635">INSERT scheduling_appointments</text>
+<path class="seq ret" d="M990 688 L680 688" stroke="#758297" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#seqArrow)"/>
+<rect class="label pill" x="715.8" y="667" width="17" height="17" rx="8.5" fill="white" stroke="#758297" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="724.3" y="679.8" text-anchor="middle">12</text>
+<rect x="733.8" y="670" width="183.6" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="736.8" y="681">id: Long (new appointmentId)</text>
+<path class="seq call" d="M524 734 L836 734" stroke="#758297" stroke-width="1.8"  fill="none" marker-end="url(#seqArrow)"/>
+<rect class="label pill" x="560.16" y="713" width="17" height="17" rx="8.5" fill="white" stroke="#758297" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="568.66" y="725.8" text-anchor="middle">13</text>
+<rect x="578.16" y="716" width="224.64" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="581.16" y="727">publishEvent(AppointmentDomainEvent.Created)</text>
+<path class="seq ret" d="M836 780 L368 780" stroke="#58A978" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#seqArrowGreen)"/>
+<rect class="label pill" x="432.24" y="759" width="17" height="17" rx="8.5" fill="white" stroke="#58A978" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="440.74" y="771.8" text-anchor="middle">14</text>
+<rect x="450.24" y="762" width="326.2" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="453.24" y="773">AppointmentResponse(id, status=REQUESTED, timezone)</text>
+<path class="seq ret" d="M368 826 L80 826" stroke="#58A978" stroke-width="1.6" stroke-dasharray="6 4" fill="none" marker-end="url(#seqArrowGreen)"/>
+<rect class="label pill" x="111.84" y="805" width="17" height="17" rx="8.5" fill="white" stroke="#58A978" stroke-width="1.1" opacity="0.95"/>
+<text class="badge" x="120.34" y="817.8" text-anchor="middle">15</text>
+<rect x="129.84" y="808" width="207.35999999999999" height="14" rx="3" fill="white" stroke="#D0D8E4" stroke-width="0.8" opacity="0.92"/>
+<text class="msg" x="132.84" y="819">201 Created {id, appointmentDate, startTime, timezone}</text>
+<text class="msg" x="540" y="875" text-anchor="middle">appointment-api · github.com/bluetape4k/clinic-appointment</text>
+</svg>

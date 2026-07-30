@@ -8,6 +8,17 @@ plus curated `.svg` and `.png` files. The rendered assets are maintained as
 direct SVG diagrams following the bluetape4k diagram style and Fireworks graph
 layout rules; the Mermaid files are not the final visual source of truth.
 
+Reader-facing diagrams use explicit locale suffixes:
+
+- `*-en.svg` and `*-en.png` contain the English text.
+- `*-ko.svg` and `*-ko.png` contain source-equivalent Korean text.
+- Both locale variants must preserve the same identifiers, topology, relative
+  layout, connector semantics, colors, and technical names. Locale font
+  metrics may change the exact text bounds and canvas dimensions.
+- The unsuffixed `.mmd`, `.svg`, and `.png` files remain historical semantic
+  sketches and visual sources. Reader-facing requirements documents use the
+  matching locale-suffixed assets.
+
 | Source | Diagram | Assets |
 |---|---|---|
 | `architecture.md` | Module dependency graph | `architecture-01-module-dependency.{mmd,svg,png}` |
@@ -25,9 +36,16 @@ layout rules; the Mermaid files are not the final visual source of truth.
 | `user-scenarios.md` | Equipment unavailability sequence | `user-scenarios-04-equipment-unavailability.{mmd,svg,png}` |
 | `user-scenarios.md` | HA reminder sequence | `user-scenarios-05-ha-reminder.{mmd,svg,png}` |
 
-Render PNG files from SVG with the project-standard CairoSVG CLI:
+Render each locale PNG from its matching SVG with the project-standard
+CairoSVG CLI:
 
 ```bash
-~/.local/bin/cairosvg docs/requirements/assets/<diagram>.svg \
-  -o docs/requirements/assets/<diagram>.png -s 2
+~/.local/bin/cairosvg docs/requirements/assets/<diagram>-en.svg \
+  -o docs/requirements/assets/<diagram>-en.png -s 2
+~/.local/bin/cairosvg docs/requirements/assets/<diagram>-ko.svg \
+  -o docs/requirements/assets/<diagram>-ko.png -s 2
 ```
+
+After rendering, validate both SVG files with `xmllint` and inspect both PNG
+files at full size. A locale pair is incomplete if only the README reference,
+SVG source, or PNG render was updated.

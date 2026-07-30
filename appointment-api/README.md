@@ -196,17 +196,17 @@ Use `tenant-default` for the local seed tenant. JWTs must include the requested 
 
 ## Appointment Creation Flow
 
-![Appointment API write path sequence diagram](../docs/images/readme-diagrams/appointment-api-sequence-01.png)
+![Appointment API write path sequence diagram](../docs/images/readme-diagrams/appointment-api-sequence-01-en.png)
 
-![Appointment creation data flow](../docs/requirements/assets/data-flow-01-appointment-create.png)
+![Appointment creation data flow](../docs/requirements/assets/data-flow-01-appointment-create-en.png)
 
 Full data flow: [data-flow.md](../docs/requirements/data-flow.md)
 
 ## User Scenario Coverage
 
-![Patient booking scenario sequence](../docs/requirements/assets/user-scenarios-01-patient-booking.png)
+![Patient booking scenario sequence](../docs/requirements/assets/user-scenarios-01-patient-booking-en.png)
 
-![Appointment status lifecycle scenario](../docs/requirements/assets/user-scenarios-02-status-lifecycle.png)
+![Appointment status lifecycle scenario](../docs/requirements/assets/user-scenarios-02-status-lifecycle-en.png)
 
 ## Authentication
 

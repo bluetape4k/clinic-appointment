@@ -52,11 +52,11 @@ Full details: [solver.md](../docs/requirements/solver.md)
 
 ## Solver Data Flow
 
-![Solver data flow diagram](../docs/images/readme-diagrams/appointment-solver-architecture-01.png)
+![Solver data flow diagram](../docs/images/readme-diagrams/appointment-solver-architecture-01-en.png)
 
-![Solver requirements data flow](../docs/requirements/assets/data-flow-06-solver-data.png)
+![Solver requirements data flow](../docs/requirements/assets/data-flow-06-solver-data-en.png)
 
-![Closure reschedule solver scenario](../docs/requirements/assets/user-scenarios-03-closure-reschedule-solver.png)
+![Closure reschedule solver scenario](../docs/requirements/assets/user-scenarios-03-closure-reschedule-solver-en.png)
 
 Full flow: [data-flow.md](../docs/requirements/data-flow.md#6-solver-데이터-흐름)
 
