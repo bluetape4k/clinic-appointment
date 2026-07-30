@@ -11,6 +11,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.time.Clock
+import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -24,6 +25,7 @@ class ProfileReevaluationDispatcher(
     private val perClinicConcurrency: Int,
     private val redrivePolicy: ProfileReevaluationRedrivePolicy = ProfileReevaluationRedrivePolicy(),
     private val autoRedriveLimit: Int = globalConcurrency,
+    private val metrics: ProfileReevaluationMetrics? = null,
     private val clock: Clock = Clock.systemUTC(),
 ) {
     private val globalPermits: Semaphore
@@ -51,6 +53,7 @@ class ProfileReevaluationDispatcher(
                     perClinicLimit = perClinicConcurrency,
                 ),
             )
+        recordFirstClaimWait(jobs)
         return coroutineScope {
             jobs.map { job ->
                 async {
@@ -62,6 +65,19 @@ class ProfileReevaluationDispatcher(
                 }
             }.awaitAll()
         }
+    }
+
+    private fun recordFirstClaimWait(jobs: List<ProfileReevaluationJobRecord>) {
+        val claimedAt = clock.instant()
+        jobs.asSequence()
+            .filter { it.attemptCount == 1 }
+            .forEach { job ->
+                val elapsed = Duration.between(job.occurredAt, claimedAt)
+                metrics?.recordFairWait(
+                    priorityClass = job.priorityClass,
+                    duration = if (elapsed.isNegative) Duration.ZERO else elapsed,
+                )
+            }
     }
 
     private suspend fun redriveEligibleFailures() {

@@ -4,7 +4,8 @@ groups:
       - alert: ProfileReevaluationSloBurn
         expr: >-
           histogram_quantile(0.95,
-          sum by (le) (rate(clinic_profile_reevaluation_fair_wait_seconds_bucket[10m])))
+          sum by (le)
+          (rate(clinic_profile_reevaluation_fair_wait_seconds_bucket{priority_class="held_present"}[10m])))
           > 240
         for: 10m
         labels:
