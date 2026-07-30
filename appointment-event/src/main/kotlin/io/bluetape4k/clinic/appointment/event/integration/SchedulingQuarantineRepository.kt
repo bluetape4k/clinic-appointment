@@ -775,6 +775,7 @@ class SchedulingQuarantineRepository(
             "FACT_FROM_FUTURE",
             "PAYLOAD_HASH_MISMATCH",
             "SIGNATURE_INVALID",
+            "PROFILE_REFERENCE_FINGERPRINT_INVALID",
             "REFUND_REVIEW",
             "CONSENT_REQUIRED",
             "SAFETY_REVIEW",
