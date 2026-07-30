@@ -121,6 +121,44 @@ class SchedulingPolicyRequestContractTest {
     }
 
     @Test
+    fun `notification SLA payload는 재평가 목표 필드를 선택적으로 전달한다`() {
+        val withTargets = mapper.readValue(
+            """
+            {
+              "kind":"NOTIFICATION_AND_SLA",
+              "schemaVersion":1,
+              "effectiveFrom":"2026-07-30T00:00:00Z",
+              "effectiveUntil":null,
+              "payload":{
+                "profileReevaluationHeldTargetSeconds":120,
+                "profileReevaluationProposedTargetSeconds":600
+              },
+              "expectedScopeRevision":0,
+              "changeReason":"병원 처리 목표 적용"
+            }
+            """.trimIndent(),
+            CreateSchedulingPolicyDraftRequest::class.java,
+        )
+        val withoutTargets = mapper.readValue(
+            """
+            {
+              "kind":"NOTIFICATION_AND_SLA",
+              "schemaVersion":1,
+              "effectiveFrom":"2026-07-30T00:00:00Z",
+              "effectiveUntil":null,
+              "payload":{},
+              "expectedScopeRevision":0,
+              "changeReason":"기존 계약 유지"
+            }
+            """.trimIndent(),
+            CreateSchedulingPolicyDraftRequest::class.java,
+        )
+
+        withTargets.payload.has("profileReevaluationHeldTargetSeconds").shouldBeTrue()
+        withoutTargets.payload.has("profileReevaluationHeldTargetSeconds").shouldBeFalse()
+    }
+
+    @Test
     fun `policy validation and retryable errors use stable sanitized envelope`() {
         val request = MockHttpServletRequest(
             "POST",

@@ -28,6 +28,8 @@ import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest
+import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationEndpoint
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
@@ -179,6 +181,8 @@ class SecurityConfig {
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
+                    .requestMatchers(EndpointRequest.to(ProfileReevaluationEndpoint::class.java))
+                    .hasRole(SchedulingRole.ADMIN)
                     // OpenAPI / Swagger remain public; operational endpoints
                     // stay authenticated unless a deployment adds an explicit policy.
                     .requestMatchers(

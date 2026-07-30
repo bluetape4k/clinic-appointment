@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.policy
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyApiException
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyProperties
+import io.bluetape4k.clinic.appointment.api.config.ProfileReevaluationProperties
 import io.bluetape4k.clinic.appointment.api.dto.ActivateSchedulingPolicyRequest
 import io.bluetape4k.clinic.appointment.api.dto.ApproveSchedulingPolicyRequest
 import io.bluetape4k.clinic.appointment.api.dto.CreateSchedulingPolicyDraftRequest
@@ -79,6 +80,8 @@ class SchedulingPolicyAdministrationService(
     private val clinicEffectiveService: EffectiveSchedulingPolicyService,
     private val metrics: SchedulingPolicyMetrics,
     private val properties: SchedulingPolicyProperties,
+    private val profileReevaluationProperties: ProfileReevaluationProperties =
+        ProfileReevaluationProperties(),
     private val clock: Clock = Clock.systemUTC(),
     private val pollingLimiter: SchedulingPolicyPollingLimiter =
         SchedulingPolicyPollingLimiter(properties),
@@ -391,6 +394,7 @@ class SchedulingPolicyAdministrationService(
         EffectiveSchedulingPolicyResponse.from(
             tenantEffectiveService.getEffective(scope.tenantGroupId, decisionAt, serviceAt),
             actor.correlationId,
+            profileReevaluationProperties.platformTargets(),
         )
     }
 
@@ -414,6 +418,7 @@ class SchedulingPolicyAdministrationService(
                 serviceAt,
             ),
             actor.correlationId,
+            profileReevaluationProperties.platformTargets(),
         )
     }
 

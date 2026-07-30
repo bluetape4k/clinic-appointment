@@ -61,6 +61,10 @@ data class CreateSchedulingPolicyDraftRequest(
     val schemaVersion: Int,
     val effectiveFrom: Instant,
     val effectiveUntil: Instant?,
+    @field:Schema(
+        description = "Strict kind-specific payload. NOTIFICATION_AND_SLA accepts optional " +
+            "profileReevaluationHeldTargetSeconds and profileReevaluationProposedTargetSeconds.",
+    )
     val payload: JsonNode,
     val expectedScopeRevision: Long,
     val changeReason: String,

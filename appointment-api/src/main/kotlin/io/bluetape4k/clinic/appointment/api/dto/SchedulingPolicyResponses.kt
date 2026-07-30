@@ -12,6 +12,8 @@ import io.bluetape4k.clinic.appointment.model.policy.CompiledSchedulingPolicy
 import io.bluetape4k.clinic.appointment.model.policy.EffectiveSchedulingPolicy
 import io.bluetape4k.clinic.appointment.model.policy.PolicyLifecycle
 import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
+import io.bluetape4k.clinic.appointment.model.policy.PolicyValueSource
+import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationTargets
 import io.bluetape4k.clinic.appointment.model.policy.SourceVersion
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.Instant
@@ -88,7 +90,7 @@ data class SchedulingPolicyMutationResponse(
  *
  * @property definitionId 승인한 정책 정의의 양수 database ID.
  * @property draftRevision 승인 증거가 고정된 양수 immutable revision.
- * @property approvedAt 권위 데이터베이스에 승인이 기록된 UTC 시각.
+ * @property approvedAt 기준 데이터베이스에 승인이 기록된 UTC 시각.
  * @property correlationId 승인 HTTP 요청의 privacy-safe 추적 ID.
  */
 @Schema(description = "Recorded scheduling-policy approval evidence")
@@ -289,7 +291,7 @@ data class SchedulingPolicySourceVersionResponse(
  * @property clinicId clinic-resolved 결과의 양수 clinic ID. tenant baseline이면 `null`.
  * @property decisionAt 의사결정 기준 정책을 선택한 정규화 UTC 시각.
  * @property serviceAt 시술 시점 기준 정책을 선택한 정규화 UTC 시각.
- * @property generation compile 전후에 일치함을 확인한 권위 generation vector.
+ * @property generation compile 전후 일치가 확인된 generation vector.
  * @property sourceVersions kind 이름별로 실제 선택된 tenant/clinic definition version.
  * @property payload 모든 정책 kind가 채워진 완전한 typed effective policy.
  * @property snapshotHash scope, 두 시각, generation, source version, payload를 묶은 SHA-256.
@@ -303,6 +305,7 @@ data class EffectiveSchedulingPolicyResponse(
     val serviceAt: Instant,
     val generation: PolicyGenerationResponse,
     val sourceVersions: Map<String, SchedulingPolicySourceVersionResponse>,
+    val profileReevaluationTargets: EffectiveProfileReevaluationTargetsResponse,
     val payload: CompiledSchedulingPolicy,
     val snapshotHash: String,
     val correlationId: String,
@@ -311,6 +314,7 @@ data class EffectiveSchedulingPolicyResponse(
         fun from(
             effective: TenantEffectiveSchedulingPolicy,
             correlationId: String,
+            platformTargets: ProfileReevaluationTargets,
         ): EffectiveSchedulingPolicyResponse =
             EffectiveSchedulingPolicyResponse(
                 scope = PolicyScope.TENANT_DEFAULT,
@@ -325,6 +329,12 @@ data class EffectiveSchedulingPolicyResponse(
                     .toSortedMap(compareBy { it.name })
                     .mapKeys { it.key.name }
                     .mapValues { SchedulingPolicySourceVersionResponse.from(it.value) },
+                profileReevaluationTargets =
+                    EffectiveProfileReevaluationTargetsResponse.from(
+                        effective.payload,
+                        platformTargets,
+                        sourceByPath = null,
+                    ),
                 payload = effective.payload,
                 snapshotHash = effective.snapshotHash,
                 correlationId = correlationId,
@@ -333,6 +343,7 @@ data class EffectiveSchedulingPolicyResponse(
         fun from(
             effective: EffectiveSchedulingPolicy,
             correlationId: String,
+            platformTargets: ProfileReevaluationTargets,
         ): EffectiveSchedulingPolicyResponse =
             EffectiveSchedulingPolicyResponse(
                 scope = PolicyScope.CLINIC_OVERRIDE,
@@ -347,10 +358,67 @@ data class EffectiveSchedulingPolicyResponse(
                     .toSortedMap(compareBy { it.name })
                     .mapKeys { it.key.name }
                     .mapValues { SchedulingPolicySourceVersionResponse.from(it.value) },
+                profileReevaluationTargets =
+                    EffectiveProfileReevaluationTargetsResponse.from(
+                        effective.payload,
+                        platformTargets,
+                        effective.sourceByPath,
+                    ),
                 payload = effective.payload,
                 snapshotHash = effective.snapshotHash,
                 correlationId = correlationId,
             )
+    }
+}
+
+/**
+ * 프로필 재평가 처리 목표의 실제 적용값과 조직별 출처를 함께 반환합니다.
+ */
+data class EffectiveProfileReevaluationTargetsResponse(
+    val heldTargetSeconds: Long,
+    val heldSource: PolicyValueSource,
+    val proposedTargetSeconds: Long,
+    val proposedSource: PolicyValueSource,
+) {
+    companion object {
+        private const val HELD_PATH =
+            "notificationAndSla.profileReevaluationHeldTargetSeconds"
+        private const val PROPOSED_PATH =
+            "notificationAndSla.profileReevaluationProposedTargetSeconds"
+
+        fun from(
+            payload: CompiledSchedulingPolicy,
+            platformTargets: ProfileReevaluationTargets,
+            sourceByPath: Map<String, PolicyValueSource>?,
+        ): EffectiveProfileReevaluationTargetsResponse {
+            val notification = requireNotNull(payload.notificationAndSla) {
+                "notificationAndSla policy is required"
+            }
+            val heldSource =
+                sourceByPath?.get(HELD_PATH)
+                    ?: if (notification.profileReevaluationHeldTargetSeconds == null) {
+                        PolicyValueSource.PLATFORM
+                    } else {
+                        PolicyValueSource.TENANT
+                    }
+            val proposedSource =
+                sourceByPath?.get(PROPOSED_PATH)
+                    ?: if (notification.profileReevaluationProposedTargetSeconds == null) {
+                        PolicyValueSource.PLATFORM
+                    } else {
+                        PolicyValueSource.TENANT
+                    }
+            return EffectiveProfileReevaluationTargetsResponse(
+                heldTargetSeconds =
+                    notification.profileReevaluationHeldTargetSeconds
+                        ?: requireNotNull(platformTargets.heldTarget).seconds,
+                heldSource = heldSource,
+                proposedTargetSeconds =
+                    notification.profileReevaluationProposedTargetSeconds
+                        ?: requireNotNull(platformTargets.proposedTarget).seconds,
+                proposedSource = proposedSource,
+            )
+        }
     }
 }
 

@@ -19,6 +19,7 @@ import java.net.UnknownHostException
 import java.net.http.HttpClient
 import java.net.http.HttpTimeoutException
 import java.time.Duration
+import java.time.Clock
 import java.util.Locale
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicInteger
@@ -96,6 +97,8 @@ class RestClientProfileAssessmentClient internal constructor(
     meterRegistry: MeterRegistry,
     private val addressResolver: ProfileAssessmentAddressResolver,
     private val allowUnsafeTestEndpoint: Boolean,
+    private val reevaluationMetrics: ProfileReevaluationMetrics? = null,
+    private val clock: Clock = Clock.systemUTC(),
     private val decoder: StrictJsonPayloadDecoder = StrictJsonPayloadDecoder(),
 ) : ProfileAssessmentClient {
     private val endpointPolicy = ProfileAssessmentEndpointPolicy(
@@ -142,6 +145,7 @@ class RestClientProfileAssessmentClient internal constructor(
         maxConcurrency: Int,
         meterRegistry: MeterRegistry,
         addressResolver: ProfileAssessmentAddressResolver = ProfileAssessmentAddressResolver.DNS,
+        reevaluationMetrics: ProfileReevaluationMetrics? = null,
     ) : this(
         baseUrl = baseUrl,
         allowedHosts = allowedHosts,
@@ -152,11 +156,17 @@ class RestClientProfileAssessmentClient internal constructor(
         meterRegistry = meterRegistry,
         addressResolver = addressResolver,
         allowUnsafeTestEndpoint = false,
+        reevaluationMetrics = reevaluationMetrics,
     )
 
     override fun fetch(request: FetchProfileAssessment): ProfileSchedulingAssessment {
+        val startedAt = clock.instant()
         if (!permits.tryAcquire()) {
             metrics.record(ProfileAssessmentMetricResult.SATURATED)
+            reevaluationMetrics?.recordAssessment(
+                ProfileAssessmentMetricResult.SATURATED,
+                Duration.between(startedAt, clock.instant()),
+            )
             throw ProfileAssessmentException(ProfileAssessmentFailureCode.CONCURRENCY_SATURATED)
         }
         metrics.acquired()
@@ -166,9 +176,17 @@ class RestClientProfileAssessmentClient internal constructor(
             val assessment = exchange(assessmentUri, request)
             verifyIdentity(request, assessment)
             metrics.record(ProfileAssessmentMetricResult.SUCCESS)
+            reevaluationMetrics?.recordAssessment(
+                ProfileAssessmentMetricResult.SUCCESS,
+                Duration.between(startedAt, clock.instant()),
+            )
             assessment
         } catch (failure: ProfileAssessmentException) {
             metrics.record(failure.code.metricResult())
+            reevaluationMetrics?.recordAssessment(
+                failure.code.metricResult(),
+                Duration.between(startedAt, clock.instant()),
+            )
             throw failure
         } catch (failure: ResourceAccessException) {
             val code = if (failure.hasTimeoutCause()) {
@@ -177,9 +195,17 @@ class RestClientProfileAssessmentClient internal constructor(
                 ProfileAssessmentFailureCode.UPSTREAM_UNAVAILABLE
             }
             metrics.record(code.metricResult())
+            reevaluationMetrics?.recordAssessment(
+                code.metricResult(),
+                Duration.between(startedAt, clock.instant()),
+            )
             throw ProfileAssessmentException(code)
         } catch (_: IOException) {
             metrics.record(ProfileAssessmentMetricResult.UPSTREAM)
+            reevaluationMetrics?.recordAssessment(
+                ProfileAssessmentMetricResult.UPSTREAM,
+                Duration.between(startedAt, clock.instant()),
+            )
             throw ProfileAssessmentException(ProfileAssessmentFailureCode.UPSTREAM_UNAVAILABLE)
         } finally {
             metrics.released()
