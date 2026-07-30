@@ -25,8 +25,8 @@ Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제�
 - **AI 최적 스케줄링** - Timefold Solver로 의사, 장비, 영업시간을 포함한 12개 Hard + 6개 Soft 제약을 만족하는 최적 배치
 - **고가용성 알림** - Redis Leader Election으로 단일 노드 전송 보장, Resilience4j CircuitBreaker/Retry/Bulkhead 적용
 - **테넌트 범위 REST API** - `/api/{tenantCode}/...` 경로, JWT tenant 인가, Flyway 마이그레이션, Swagger UI 제공
-- **예약 플랜 기반** - 구매 상품 BOM을 불변 진료 의무로 스냅샷하고, 카탈로그 동기화와 신뢰된 구매 이벤트를 통해 방문 예약 이전 단계를 관리
-- **예약 정책 기반** - 가예약, 동의, overbooking, 재확인, 운영 장애 복구, 통제된 진료 시간 연장에 대한 tenant baseline과 clinic override를 버전 관리
+- **예약 플랜 기반** - 구매 상품 BOM을 불변 진료 의무로 스냅숏하고, 카탈로그 동기화와 신뢰된 구매 이벤트를 통해 방문 예약 이전 단계를 관리
+- **예약 정책 기반** - 가예약, 동의, 오버부킹, 재확인, 운영 장애 복구, 통제된 진료 시간 연장에 대한 테넌트 기준 정책과 병원별 재정의를 버전 관리
 - **Angular 18 웹 UI** - 예약 조회/생성/상태 변경 인터페이스
 
 카탈로그 동기화 호출자는 [docs/api/catalog-payload-hash.md](docs/api/catalog-payload-hash.md)의
@@ -36,7 +36,7 @@ canonical hash 계약과 fixture로 `payloadHash`를 재현할 수 있습니다.
 
 `AppointmentPlan`은 한 번의 구매로 병원이 제공해야 할 진료 의무를 기록합니다.
 방문 예약은 그중 어떤 진료를 언제 진행할지 기록합니다. 이번 기반 구현은 카탈로그
-스냅샷, 진료 회차, 의존관계, 구매 inbox 판정, 대기 중인 plan-created outbox 이벤트를
+스냅숏, 진료 회차, 의존관계, 구매 inbox 판정, 대기 중인 plan-created outbox 이벤트를
 저장합니다.
 
 방문 일정 배정, 자원 선점, 고객 동의, outbox 발행, 시술 완료·환불 처리는 구현하지
@@ -45,11 +45,11 @@ canonical hash 계약과 fixture로 `payloadHash`를 재현할 수 있습니다.
 ### 예약 정책 경계
 
 Scheduling policy는 앞으로의 예약 결정이 따라야 할 동작을 정의합니다. 이 기능은
-예약을 직접 생성하지 않습니다. 이번 기반 구현은 불변 tenant 정책 버전, clinic override,
-scope head, preview job, activation command, effective snapshot, privacy-safe metric을
+예약을 직접 생성하지 않습니다. 이번 기반 구현은 불변 테넌트 정책 버전, 병원별 재정의,
+범위별 활성 헤드, 미리보기 작업, 활성화 명령, 유효 정책 스냅숏, 개인정보 안전 메트릭을
 저장합니다.
 
-모든 rollout flag는 기본적으로 꺼져 있으며 다음 순서로만 켭니다.
+모든 롤아웃 플래그는 기본적으로 꺼져 있으며 다음 순서로만 켭니다.
 
 1. `scheduling.policy.shadow-compile-enabled`
 2. `scheduling.policy.effective-read-enabled`
@@ -57,7 +57,7 @@ scope head, preview job, activation command, effective snapshot, privacy-safe me
 4. `scheduling.policy.preview-worker-enabled`
 5. `scheduling.policy.scheduled-activation-enabled`
 
-이 foundation에는 booking consumer flag가 없습니다. 확정 예약은 정책 기반 변경을
+이 기반 구현에는 예약 생성 경로의 정책 소비 플래그가 없습니다. 확정 예약은 정책 기반 변경을
 적용하기 전에 여전히 고객 동의가 필요합니다.
 
 ## 아키텍처
@@ -78,12 +78,12 @@ scope head, preview job, activation command, effective snapshot, privacy-safe me
 
 | 모듈 | 역할 | 개발자 문서 |
 |------|------|-----------|
-| `appointment-core` | 예약, 구매 시술 플랜, 스케줄 정책, 방문 commitment 도메인과 Exposed ORM 리포지토리, 상태머신, 슬롯 계산 서비스 | [README](appointment-core/README.md) |
-| `appointment-event` | Spring ApplicationEvent 기반 도메인 이벤트 발행/구독, 이벤트 로그 저장 | [README](appointment-event/README.md) |
-| `appointment-solver` | Timefold Solver AI 최적화 - 12개 Hard + 6개 Soft 제약으로 대량 예약 최적 배치 | [README](appointment-solver/README.md) |
-| `appointment-notification` | Redis Leader Election + Resilience4j 기반 HA 알림 스케줄러, 리마인더 발송 | [README](appointment-notification/README.md) |
-| `appointment-api` | Spring Boot 4 REST API - 예약 CRUD, 슬롯 조회, 재배정, JWT 인증, Swagger | [README](appointment-api/README.md) |
-| `frontend/appointment-frontend` | Angular 18 웹 UI - 예약 관리 인터페이스 | [README](frontend/appointment-frontend/README.md) |
+| `appointment-core` | 예약, 구매 시술 플랜, 스케줄 정책, 방문 확정 약속 도메인과 Exposed ORM 리포지토리, 상태머신, 슬롯 계산 서비스 | [README](appointment-core/README.ko.md) |
+| `appointment-event` | Spring ApplicationEvent 기반 도메인 이벤트 발행/구독, 이벤트 로그 저장 | [README](appointment-event/README.ko.md) |
+| `appointment-solver` | Timefold Solver AI 최적화 - 12개 Hard + 6개 Soft 제약으로 대량 예약 최적 배치 | [README](appointment-solver/README.ko.md) |
+| `appointment-notification` | Redis Leader Election + Resilience4j 기반 HA 알림 스케줄러, 리마인더 발송 | [README](appointment-notification/README.ko.md) |
+| `appointment-api` | Spring Boot 4 REST API - 예약 CRUD, 슬롯 조회, 재배정, JWT 인증, Swagger | [README](appointment-api/README.ko.md) |
+| `frontend/appointment-frontend` | Angular 18 웹 UI - 예약 관리 인터페이스 | [README](frontend/appointment-frontend/README.ko.md) |
 
 ## 빠른 시작
 
@@ -132,13 +132,13 @@ scope head, preview job, activation command, effective snapshot, privacy-safe me
 | [AI 스케줄러](docs/requirements/solver.md) | Timefold Solver 제약조건 설계 |
 | [알림 모듈](docs/requirements/notification.md) | 알림 채널, HA 구성, Resilience4j |
 | [프론트엔드](docs/requirements/frontend.md) | Angular 구성, 페이지 구조 |
-| [예약 플랜 시각 companion](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 예약 약속, 장애 재조정, 수용량의 시뮬레이션과 결정 이력 |
-| [예약 정책 시각 companion](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html) | 정책 compile, 승인, 활성화, 복구의 시뮬레이션과 결정 이력 |
-| [예약 플랜 복구 런북](docs/runbooks/appointment-plan-foundation-recovery.md) | 격리 확인, dry-run redrive, 롤백, 원천 서비스 책임 |
-| [예약 정책 API](docs/api/scheduling-policy.md) | tenant/clinic 정책 endpoint, idempotency, preview polling, 오류, rollout flag |
-| [예약 정책 활성화 런북](docs/runbooks/scheduling-policy-activation.md) | worker alert, 60초/5분 activation 처리, replay/retire 복구, V10 준비 조건 |
-| [예약 Commitment v2 API](docs/api/visit-commitment.md) | Gateway 인증, 가예약·승인·확정, 멱등성, 오류와 배포 설정 |
-| [예약 Commitment v2 운영 런북](docs/runbooks/visit-commitment-operations.md) | shadow/allowlist, 경보, retention, redrive, PostgreSQL rollback |
+| [예약 플랜 시각 동반 문서](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 예약 약속, 장애 재조정, 수용량의 시뮬레이션과 결정 이력 |
+| [예약 정책 시각 동반 문서](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html) | 정책 컴파일, 승인, 활성화, 복구의 시뮬레이션과 결정 이력 |
+| [예약 플랜 복구 런북](docs/runbooks/appointment-plan-foundation-recovery.md) | 격리 확인, 드라이런 재처리, 롤백, 원천 서비스 책임 |
+| [예약 정책 API](docs/api/scheduling-policy.md) | 테넌트/병원 정책 엔드포인트, 멱등성, 미리보기 폴링, 오류, 롤아웃 플래그 |
+| [예약 정책 활성화 런북](docs/runbooks/scheduling-policy-activation.md) | 작업자 경보, 60초/5분 활성화 처리, 재생/폐기 복구, V10 준비 조건 |
+| [방문 확정 약속 v2 API](docs/api/visit-commitment.md) | Gateway 인증, 가예약·승인·확정, 멱등성, 오류와 배포 설정 |
+| [방문 확정 약속 v2 운영 런북](docs/runbooks/visit-commitment-operations.md) | shadow/허용목록, 경보, 보존, 재처리, PostgreSQL 롤백 |
 
 ### 변경 이력
 

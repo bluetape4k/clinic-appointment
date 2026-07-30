@@ -13,9 +13,9 @@
 ## 예약 플랜 기반
 
 `ProductCatalogProjection`은 tenant/clinic 범위의 불변 상품 버전과 정규 payload hash를
-저장합니다. `AppointmentPlanFactory`는 날짜나 ID를 배정하지 않고 이 스냅샷을 순서가
+저장합니다. `AppointmentPlanFactory`는 날짜나 ID를 배정하지 않고 이 스냅숏을 순서가
 있는 `PlannedTreatment` 회차와 구체화된 의존관계로 확장합니다.
-`AppointmentPlanRepository`는 호출자가 연 Exposed transaction 안에서 전체 aggregate를
+`AppointmentPlanRepository`는 호출자가 `Exposed` transaction 안에서 전체 aggregate를
 저장하고 조회합니다.
 
 `AppointmentPlanQueryService`는 정제된 `AppointmentPlanView`만 노출합니다. 환자 참조

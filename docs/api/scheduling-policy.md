@@ -1,13 +1,13 @@
-# Scheduling Policy API
+# 예약 정책 API
 
-이 문서는 병원 예약 정책 foundation의 HTTP 계약을 정리한다. 정책 API는 상품,
-구매, 시술 완료, 환불을 직접 처리하지 않는다. 예약 결정에 필요한 tenant baseline
-정책과 clinic override 정책을 버전 관리하고, 영향도 미리보기와 활성화 증거를 남긴다.
+이 문서는 병원 예약 정책 기반 구현의 HTTP 계약을 정리한다. 정책 API는 상품,
+구매, 시술 완료, 환불을 직접 처리하지 않는다. 예약 결정에 필요한 테넌트 기준
+정책과 병원별 재정의 정책을 버전 관리하고, 영향도 미리보기와 활성화 증거를 남긴다.
 
 ## 신뢰 경계
 
 모든 경로는 `/api/{tenantCode}/...` 아래에 있다. `tenantCode`와 `clinicId`는
-request body가 아니라 path와 권위 데이터베이스에서 확인한다.
+request body가 아니라 path와 기준 데이터베이스에서 확인한다.
 
 actor 정보도 request body에서 받지 않는다. API Gateway가 검증한 JWT principal을
 `ActorContextResolver`가 `ActorContext`로 바꾼다. 정책 명령은 다음 값을 신뢰된
@@ -35,35 +35,35 @@ principal에서만 사용한다.
 service assurance와 함께 사용하는 전용 capability다. 외부 JWT에 이 scope를
 부여해도 관리 API 호출 권한을 대신하지 않는다.
 
-## Feature Flags
+## 기능 플래그
 
 모든 scheduling-policy 기능은 기본값이 `false`다. 운영자는 아래 순서를 지켜야 한다.
-후행 flag가 선행 flag 없이 켜지면 애플리케이션 시작이 실패한다.
+후행 플래그가 선행 플래그 없이 켜지면 애플리케이션 시작이 실패한다.
 
 | 순서 | Property | 노출되는 기능 |
 |---:|---|---|
 | 1 | `scheduling.policy.shadow-compile-enabled` | 활성 예약에는 적용하지 않고 컴파일만 검증 |
-| 2 | `scheduling.policy.effective-read-enabled` | tenant/clinic effective snapshot 조회 |
+| 2 | `scheduling.policy.effective-read-enabled` | tenant/clinic 유효 정책 스냅숏 조회 |
 | 3 | `scheduling.policy.admin-write-enabled` | draft, validate, approve, activate 관리 명령 |
-| 4 | `scheduling.policy.preview-worker-enabled` | durable 영향도 preview worker |
-| 5 | `scheduling.policy.scheduled-activation-enabled` | due activation command worker |
+| 4 | `scheduling.policy.preview-worker-enabled` | durable 영향도 미리보기 작업자 |
+| 5 | `scheduling.policy.scheduled-activation-enabled` | 기한이 된 활성화 명령 작업자 |
 
-이 foundation에는 booking consumer flag가 없다. 예약 생성 경로가 새 정책을 소비하는
+이 기반 구현에는 예약 생성 경로의 정책 소비 플래그가 없다. 예약 생성 경로가 새 정책을 소비하는
 단계는 별도 변경으로 추가해야 한다.
 
-## Policy Scopes
+## 정책 범위
 
-| Scope | Base path | 의미 |
+| 범위 | Base path | 의미 |
 |---|---|---|
-| Tenant baseline | `/api/{tenantCode}/admin/scheduling-policies` | tenant group 전체가 공유하는 baseline |
-| Clinic override | `/api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies` | 특정 clinic의 partial override |
+| Tenant baseline | `/api/{tenantCode}/admin/scheduling-policies` | tenant group 전체가 공유하는 기준 정책 |
+| Clinic override | `/api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies` | 특정 clinic의 부분 재정의 |
 
 clinic route는 path의 `clinicId`가 tenant에 속하는지 데이터베이스로 검증하고, 같은
-clinic이 Gateway principal allow-list에 있는지도 다시 확인한다.
+clinic이 Gateway principal 허용목록에 있는지도 다시 확인한다.
 
-## Lifecycle
+## 생명주기
 
-정책 definition payload는 immutable이다. 변경은 기존 row를 수정하지 않고 새 draft
+정책 definition payload는 수정불가하다. 변경은 기존 row를 수정하지 않고 새 draft
 revision과 activation으로 표현한다. 허용 전이는 단일 선형 경로가 아니라 다음 집합이다.
 
 ```text
@@ -76,9 +76,9 @@ ACTIVE -> RETIRED
 
 1. draft 생성
 2. draft 검증
-3. 영향도 preview 제출
-4. preview 완료 polling
-5. preview evidence로 승인
+3. 영향도 미리보기 제출
+4. 미리보기 완료 폴링
+5. 미리보기 증거로 승인
 6. 즉시 활성화 또는 미래 활성화 예약
 7. 필요하면 retire 또는 missed command replay
 
@@ -88,14 +88,14 @@ ACTIVE -> RETIRED
 |---|---|---|---|
 | `POST` | `/drafts` | `201` | tenant baseline draft 생성 |
 | `POST` | `/{id}/validate` | `200` | 현재 draft revision 검증 |
-| `POST` | `/{id}/preview` | `200` 또는 `202` | bounded 영향도 preview 제출 |
-| `POST` | `/{id}/approve` | `200` | 완료 preview evidence로 승인 |
-| `POST` | `/{id}/schedule` | `202` | future activation command 생성 |
-| `POST` | `/{id}/activate` | `200` | 즉시 activation 실행 |
-| `POST` | `/{id}/retire` | `200` | definition 이력 보존 retire |
-| `POST` | `/activation-commands/{commandId}/replay` | `200` | `MISSED` command 수동 replay |
-| `GET` | `/effective?decisionAt=...&serviceAt=...` | `200` | tenant baseline effective snapshot 조회 |
-| `GET` | `/preview-jobs/{jobId}` | `200` | tenant preview job polling |
+| `POST` | `/{id}/preview` | `200` 또는 `202` | 범위 제한 영향도 미리보기 제출 |
+| `POST` | `/{id}/approve` | `200` | 완료된 미리보기 증거로 승인 |
+| `POST` | `/{id}/schedule` | `202` | 미래 활성화 명령 생성 |
+| `POST` | `/{id}/activate` | `200` | 즉시 활성화 실행 |
+| `POST` | `/{id}/retire` | `200` | definition 이력 보존 후 폐기 |
+| `POST` | `/activation-commands/{commandId}/replay` | `200` | `MISSED` command 수동 재생 |
+| `GET` | `/effective?decisionAt=...&serviceAt=...` | `200` | tenant baseline 유효 정책 스냅숏 조회 |
+| `GET` | `/preview-jobs/{jobId}` | `200` | tenant 미리보기 작업 폴링 |
 
 ## Clinic Endpoints
 
@@ -105,7 +105,7 @@ clinic endpoint는 tenant endpoint와 같은 동사를 사용하지만 base path
 /api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies
 ```
 
-preview job polling도 clinic scope를 path에 포함한다.
+미리보기 작업 폴링도 clinic scope를 path에 포함한다.
 
 ```text
 GET /api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/preview-jobs/{jobId}
