@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.profile
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
 import io.bluetape4k.clinic.appointment.api.security.SchedulingRole
@@ -29,8 +30,9 @@ class ProfileReevaluationEndpointTest {
                 clinicId = null,
                 roles = setOf(SchedulingRole.ADMIN),
                 allowedTenants = setOf("clinic-a"),
+                scopes = setOf(PROFILE_REEVALUATION_OPERATE_SCOPE),
                 actorType = ActorType.ADMIN,
-                allowedClinicIds = emptySet(),
+                allowedClinicIds = setOf(41L),
                 assurance = AuthenticationAssurance.MFA,
                 issuer = "https://gateway.example.test",
                 tokenId = "token-123",
@@ -51,6 +53,8 @@ class ProfileReevaluationEndpointTest {
             action = ProfileReevaluationAdminAction.PREVIEW,
             reason = "CRM 복구 확인 후 재처리 대상 점검",
             idempotencyKey = "redrive-20260731-0001",
+            tenantGroupId = 1L,
+            clinicId = 41L,
         )
 
         auditEvents.single().actor shouldBeEqualTo principal.userId
@@ -66,6 +70,49 @@ class ProfileReevaluationEndpointTest {
                 Int::class.javaPrimitiveType!!,
             )
             .parameterCount shouldBeEqualTo 7
+    }
+
+    @Test
+    fun `redrive 범위는 인증된 principal의 clinic membership으로 제한한다`() {
+        val principal =
+            SchedulingUserPrincipal(
+                userId = "trusted-profile-ops",
+                clinicId = null,
+                roles = setOf(SchedulingRole.ADMIN),
+                allowedTenants = setOf("clinic-a"),
+                scopes = setOf(PROFILE_REEVALUATION_OPERATE_SCOPE),
+                actorType = ActorType.ADMIN,
+                allowedClinicIds = setOf(41L),
+                assurance = AuthenticationAssurance.MFA,
+                issuer = "https://gateway.example.test",
+                tokenId = "token-456",
+                authenticatedAt = Instant.parse("2026-07-31T00:00:00Z"),
+            )
+        SecurityContextHolder.getContext().authentication =
+            UsernamePasswordAuthenticationToken(principal, null, principal.authorities)
+        val endpoint =
+            ProfileReevaluationEndpoint(
+                ProfileReevaluationAdminService(
+                    store = EmptyAdminStore,
+                    redriveCooldown = Duration.ZERO,
+                ),
+            )
+
+        listOf(
+            null to null,
+            1L to null,
+            1L to 42L,
+        ).forEach { (tenantGroupId, clinicId) ->
+            assertFailsWith<org.springframework.security.access.AccessDeniedException> {
+                endpoint.redrive(
+                    action = ProfileReevaluationAdminAction.PREVIEW,
+                    reason = "CRM 복구 확인 후 재처리 대상 점검",
+                    idempotencyKey = "redrive-20260731-0002",
+                    tenantGroupId = tenantGroupId,
+                    clinicId = clinicId,
+                )
+            }
+        }
     }
 
     private object EmptyAdminStore : ProfileReevaluationAdminStore {

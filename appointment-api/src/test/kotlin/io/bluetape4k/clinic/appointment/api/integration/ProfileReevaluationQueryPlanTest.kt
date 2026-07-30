@@ -245,6 +245,34 @@ class ProfileReevaluationQueryPlanTest {
                         """.trimIndent(),
                     parameters = listOf(Timestamp.from(NOW)),
                 )
+            val failedRedrive =
+                explain(
+                    connection = connection,
+                    dialect = dialect,
+                    sql =
+                        """
+                        SELECT id
+                        FROM scheduling_profile_reevaluation_jobs
+                        WHERE status = 'FAILED'
+                        ORDER BY updated_at, id
+                        LIMIT 100
+                        """.trimIndent(),
+                    parameters = emptyList(),
+                )
+            val oldestBacklog =
+                explain(
+                    connection = connection,
+                    dialect = dialect,
+                    sql =
+                        """
+                        SELECT due_at
+                        FROM scheduling_profile_reevaluation_jobs
+                        WHERE status IN ('PENDING', 'RUNNING', 'RETRY_WAIT')
+                        ORDER BY due_at, id
+                        LIMIT 1
+                        """.trimIndent(),
+                    parameters = emptyList(),
+                )
 
             val report =
                 Path.of(
@@ -277,6 +305,12 @@ class ProfileReevaluationQueryPlanTest {
 
                     # lease recovery
                     ${leaseRecovery.text}
+
+                    # failed redrive
+                    ${failedRedrive.text}
+
+                    # oldest backlog
+                    ${oldestBacklog.text}
                     """.trimIndent(),
             )
 
@@ -291,6 +325,8 @@ class ProfileReevaluationQueryPlanTest {
             retryWaitClinicCandidates.uses("idx_profile_reevaluation_clinic_ready").shouldBeTrue()
             expiredLeaseClinicCandidates.uses("idx_profile_reevaluation_clinic_lease").shouldBeTrue()
             leaseRecovery.uses("idx_profile_reevaluation_lease").shouldBeTrue()
+            failedRedrive.uses("idx_profile_reevaluation_failed").shouldBeTrue()
+            oldestBacklog.uses("idx_profile_reevaluation_backlog").shouldBeTrue()
             listOf(
                 heldExistence,
                 appointmentPage,
@@ -300,6 +336,8 @@ class ProfileReevaluationQueryPlanTest {
                 retryWaitClinicCandidates,
                 expiredLeaseClinicCandidates,
                 leaseRecovery,
+                failedRedrive,
+                oldestBacklog,
             )
                 .none(QueryPlan::fullTableScan)
                 .shouldBeTrue()

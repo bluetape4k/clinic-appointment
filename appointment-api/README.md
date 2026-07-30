@@ -54,11 +54,13 @@ Enabling the feature also requires a production
 processor is missing, so profile events cannot accumulate behind a worker graph
 that was silently omitted.
 
-`GET` and `POST /actuator/profileReevaluation` require `ADMIN`. The read
-operation reports backlog, leases, failures, and drain state; the write
-operation supports bounded `PREVIEW` and idempotent `EXECUTE` redrive. Its audit
-actor always comes from the authenticated scheduling token, never from the
-request body. See the
+`GET` and `POST /actuator/profileReevaluation` require both `ADMIN` and
+`SCOPE_profile-reevaluation:operate`. The read operation reports backlog,
+leases, failures, and drain state. The write operation supports bounded
+`PREVIEW` and idempotent `EXECUTE` redrive only when both `tenantGroupId` and
+`clinicId` are present and the authenticated principal is allowed to access
+that clinic. Its audit actor always comes from the authenticated scheduling
+token, never from the request body. See the
 [workflow](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html),
 [reference design](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
 and [operations runbook](../docs/runbooks/profile-reevaluation.md).

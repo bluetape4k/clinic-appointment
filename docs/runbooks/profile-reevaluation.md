@@ -18,8 +18,11 @@ fingerprints, hashes, queue state, outcome classes, and minimal audit data.
 | Privacy incident | Security and privacy on-call | Stop consumption, preserve evidence, restrict access, coordinate investigation |
 
 The operator endpoint is `/actuator/profileReevaluation`. `SecurityConfig`
-restricts it to the `ADMIN` role. It is not a general appointment API and must
-not be exposed through `/api/v2/**`.
+requires both the `ADMIN` role and the
+`SCOPE_profile-reevaluation:operate` capability. It is not a general
+appointment API and must not be exposed through `/api/v2/**`. Every write
+request must include `tenantGroupId` and `clinicId`; the clinic must be in the
+authenticated principal's allowlist.
 
 <a id="rollout"></a>
 ## Rollout: disabled to full option B
@@ -147,6 +150,12 @@ transient CRM or database failure may be redriven only after the dependency is
 healthy, the cooldown has elapsed, and preview returns the intended bounded
 scope.
 
+Worker failures retain bounded diagnostic codes. `PROCESSING_DATABASE_FAILED`
+is retryable. `PROCESSING_CONTRACT_FAILED`, `PROCESSING_STATE_FAILED`, and
+`PROCESSING_UNEXPECTED_FAILED` are terminal and require code or data-contract
+investigation. Logs include only job ID, revision, failure code, and exception
+type; they must not include exception messages or profile data.
+
 <a id="lease-expiry"></a>
 ## Lease expiry
 
@@ -179,10 +188,16 @@ compare producer, signature, issuer, audience, payload hash, schema version,
 replay window, and tenant/clinic scope. Do not release quarantined profile
 events through the failed-job redrive endpoint.
 
+An envelope that exceeds the metadata or payload contract is rejected before
+canonicalization and encryption to prevent resource amplification. It is not
+written to quarantine; investigate the producer from bounded ingress metrics
+and transport logs instead of retaining the oversized body.
+
 <a id="redrive"></a>
 ## Bounded failed-job redrive
 
-Preview first with an exact tenant/clinic/revision whenever possible:
+Preview first with the mandatory tenant and clinic scope. Add a revision when
+the recovery approval targets one exact profile revision:
 
 ```bash
 curl --fail-with-body -X POST \
@@ -203,7 +218,8 @@ curl --fail-with-body -X POST \
 ```
 
 The audit actor is derived from the authenticated admin token. The request body
-cannot override it.
+cannot override it. A tenant-wide or cross-clinic redrive is not supported by
+this endpoint.
 
 The service creates a new lineage attempt; it does not rewrite the failed row.
 The same idempotency key is replay-safe only for the same request. Automatic

@@ -53,10 +53,12 @@ assessment는 실제 처리할 때 CRM에서 조회합니다. 배포는 병원 �
 합니다. processor가 없으면 시작 단계에서 실패하므로, worker가 빠진 상태로 프로필
 이벤트만 계속 쌓이는 상황을 막습니다.
 
-`GET`·`POST /actuator/profileReevaluation`은 `ADMIN`만 호출할 수 있습니다. 조회는
-backlog, lease, 실패와 drain 상태를 제공하고, 쓰기는 범위가 제한된 `PREVIEW`와
-멱등 `EXECUTE` redrive만 지원합니다. 감사 주체는 요청 본문이 아니라 인증된
-스케줄링 token에서 가져옵니다. 자세한 내용은
+`GET`·`POST /actuator/profileReevaluation`은 `ADMIN` 역할과
+`SCOPE_profile-reevaluation:operate` 권한을 모두 가진 주체만 호출할 수 있습니다.
+조회는 backlog, lease, 실패와 drain 상태를 제공합니다. 쓰기는 `tenantGroupId`와
+`clinicId`를 모두 지정하고, 인증 주체가 해당 병원에 접근할 수 있을 때만 범위가 제한된
+`PREVIEW`와 멱등 `EXECUTE` redrive를 수행합니다. 감사 주체는 요청 본문이 아니라
+인증된 스케줄링 token에서 가져옵니다. 자세한 내용은
 [업무 흐름](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html),
 [기준 설계](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
 [운영 런북](../docs/runbooks/profile-reevaluation.ko.md)에 있습니다.

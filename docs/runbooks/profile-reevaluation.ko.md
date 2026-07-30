@@ -18,7 +18,10 @@ CRM이 관리한다. 예약서비스에는 opaque reference, fingerprint, hash, 
 | 개인정보 사고 | 보안·개인정보 당직자 | 소비 중단, 증거 보존, 접근 제한, 조사 조율 |
 
 운영 endpoint는 `/actuator/profileReevaluation`이다. `SecurityConfig`에서
-`ADMIN` role로 제한한다. 일반 예약 API가 아니며 `/api/v2/**`로 노출하면 안 된다.
+`ADMIN` 역할과 `SCOPE_profile-reevaluation:operate` 권한을 모두 요구한다. 일반
+예약 API가 아니며 `/api/v2/**`로 노출하면 안 된다. 쓰기 요청에는
+`tenantGroupId`와 `clinicId`가 반드시 있어야 하며, 해당 병원은 인증 주체의 허용
+목록에 포함되어야 한다.
 
 <a id="rollout"></a>
 ## 단계적 적용: 비활성에서 선택안 B까지
@@ -143,6 +146,12 @@ redrive 전에 실패 유형을 정한다. 인증, 신뢰, tenant/clinic 범위,
 오류는 의존 시스템이 정상이고 cooldown이 지났으며 preview가 승인한 범위와
 일치할 때만 redrive한다.
 
+worker 실패는 길이가 제한된 진단 코드로 남긴다. `PROCESSING_DATABASE_FAILED`는
+재시도할 수 있다. `PROCESSING_CONTRACT_FAILED`, `PROCESSING_STATE_FAILED`,
+`PROCESSING_UNEXPECTED_FAILED`는 최종 실패이므로 코드나 데이터 계약을 조사해야
+한다. 로그에는 job ID, revision, 실패 코드, 예외 타입만 남기며 예외 메시지나
+프로필 데이터는 기록하지 않는다.
+
 <a id="lease-expiry"></a>
 ## Lease 만료
 
@@ -174,10 +183,15 @@ client는 HTTPS, 고정 host allowlist, public address, redirect 금지, 응답 
 issuer, audience, payload hash, schema version, replay window, tenant/clinic
 범위를 확인한다. 격리된 프로필 이벤트를 실패 작업 redrive endpoint로 풀지 않는다.
 
+metadata 또는 payload 계약 상한을 넘은 envelope는 자원 증폭을 막기 위해 canonical
+변환과 암호화 전에 거절하며 quarantine에 저장하지 않는다. 원문을 보존하지 말고 길이가
+제한된 유입 metric과 transport log로 producer를 조사한다.
+
 <a id="redrive"></a>
 ## 제한된 실패 작업 redrive
 
-가능한 한 tenant, clinic, revision을 정확히 지정해 먼저 preview한다.
+tenant와 clinic 범위는 반드시 지정해 먼저 preview한다. 복구 승인이 특정 profile
+revision만 대상으로 한다면 revision도 함께 지정한다.
 
 ```bash
 curl --fail-with-body -X POST \
@@ -198,6 +212,8 @@ curl --fail-with-body -X POST \
 ```
 
 감사 주체는 인증된 관리자 token에서 가져오며 요청 본문으로 바꿀 수 없다.
+tenant 전체 또는 여러 병원을 한 번에 redrive하는 기능은 이 endpoint에서 지원하지
+않는다.
 
 서비스는 실패 row를 고치지 않고 lineage가 이어지는 새 attempt를 만든다. 같은
 idempotency key는 같은 요청에만 재사용할 수 있다. 자동 redrive는

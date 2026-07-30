@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationEndpoint
+import io.bluetape4k.clinic.appointment.api.profile.PROFILE_REEVALUATION_OPERATE_SCOPE
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
@@ -54,6 +55,14 @@ class ProfileReevaluationEndpointSecurityTest {
         status(
             "/actuator/profileReevaluation",
             token(SchedulingRole.ADMIN, ActorType.ADMIN),
+        ) shouldBeEqualTo HttpStatus.FORBIDDEN
+        status(
+            "/actuator/profileReevaluation",
+            token(
+                SchedulingRole.ADMIN,
+                ActorType.ADMIN,
+                scopes = setOf(PROFILE_REEVALUATION_OPERATE_SCOPE),
+            ),
         ) shouldBeEqualTo HttpStatus.OK
         status(
             "/api/v2/profileReevaluation",
@@ -72,13 +81,17 @@ class ProfileReevaluationEndpointSecurityTest {
             }
             .exchange { _, response -> HttpStatus.valueOf(response.statusCode.value()) }
 
-    private fun token(role: String, actorType: ActorType): String =
+    private fun token(
+        role: String,
+        actorType: ActorType,
+        scopes: Set<String> = emptySet(),
+    ): String =
         TestJwtProvider.createToken(
             userId = "profile-ops",
             clinicId = null,
             roles = listOf(role),
             actorType = actorType,
             allowedClinicIds = emptySet(),
-            scopes = emptySet(),
+            scopes = scopes,
         )
 }

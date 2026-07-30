@@ -5,6 +5,7 @@ import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldHaveSize
 import io.bluetape4k.clinic.appointment.event.integration.AesGcmQuarantineEnvelopeProtector
 import io.bluetape4k.clinic.appointment.event.integration.QuarantineRetentionClass
+import io.bluetape4k.clinic.appointment.event.integration.QuarantineEnvelopeProtector
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingEventRepository
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingEventSignatureVerifier
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingEventTrustVerifier
@@ -183,22 +184,64 @@ class ProfileReevaluationEventServiceTest {
         service.accept(rejected[1]).status shouldBeEqualTo ProfileReevaluationEventStatus.DUPLICATE
 
         transaction {
-            SchedulingQuarantineEvents.selectAll().toList().shouldHaveSize(rejected.size)
-            SchedulingQuarantineAuditEvents.selectAll().toList().shouldHaveSize(rejected.size)
+            SchedulingQuarantineEvents.selectAll().toList().shouldHaveSize(rejected.size - 1)
+            SchedulingQuarantineAuditEvents.selectAll().toList().shouldHaveSize(rejected.size - 1)
             SchedulingInboxEvents.selectAll().toList().shouldHaveSize(0)
             ProfileReevaluationHeads.selectAll().toList().shouldHaveSize(0)
             ProfileReevaluationJobs.selectAll().toList().shouldHaveSize(0)
 
             val quarantined = SchedulingQuarantineEvents.selectAll()
-                .where { SchedulingQuarantineEvents.eventId eq "bad-fingerprint" }
+                .where { SchedulingQuarantineEvents.eventId eq "bad-schema" }
                 .single()
             val ciphertext = quarantined[SchedulingQuarantineEvents.encryptedOriginalEnvelope]!!
             ciphertext.contains("A".repeat(64)).shouldBeFalse()
             ciphertext.contains("assessment:7").shouldBeFalse()
+            SchedulingQuarantineEvents.selectAll()
+                .where { SchedulingQuarantineEvents.eventId eq "bad-fingerprint" }
+                .toList()
+                .shouldHaveSize(0)
         }
     }
 
-    private fun service() = ProfileReevaluationEventService(
+    @Test
+    fun `계약 상한을 넘는 프로필 이벤트는 암호화 전에 닫힌 실패로 거절한다`() {
+        var protectCalls = 0
+        val service =
+            service(
+                protector =
+                    QuarantineEnvelopeProtector {
+                        protectCalls++
+                        error("unbounded envelope must not reach encryption")
+                    },
+            )
+
+        val result =
+            service.accept(
+                envelope(
+                    eventId = "oversized-profile-event",
+                    assessmentRef = "x".repeat(513),
+                ),
+            )
+
+        result shouldBeEqualTo
+            ProfileReevaluationEventResult(
+                ProfileReevaluationEventStatus.QUARANTINED,
+                "PAYLOAD_CONTRACT_INVALID",
+            )
+        protectCalls shouldBeEqualTo 0
+        transaction {
+            SchedulingQuarantineEvents.selectAll().toList().shouldHaveSize(0)
+            SchedulingInboxEvents.selectAll().toList().shouldHaveSize(0)
+        }
+    }
+
+    private fun service(
+        protector: QuarantineEnvelopeProtector =
+            AesGcmQuarantineEnvelopeProtector(
+                encryptionKey = ByteArray(32) { index -> index.toByte() },
+                keyId = "quarantine-key-1",
+            ),
+    ) = ProfileReevaluationEventService(
         trustVerifier = SchedulingEventTrustVerifier(
             signatureVerifier = SchedulingEventSignatureVerifier { it.signature == "valid" },
             allowedProducers = setOf("crm-service"),
@@ -211,10 +254,7 @@ class ProfileReevaluationEventServiceTest {
         ),
         eventRepository = SchedulingEventRepository(),
         reevaluationRepository = ProfileReevaluationRepository(),
-        quarantineEnvelopeProtector = AesGcmQuarantineEnvelopeProtector(
-            encryptionKey = ByteArray(32) { index -> index.toByte() },
-            keyId = "quarantine-key-1",
-        ),
+        quarantineEnvelopeProtector = protector,
         quarantineRepository = SchedulingQuarantineRepository(clock),
         clock = clock,
         quarantineRetention = Duration.ofDays(30),
@@ -232,6 +272,7 @@ class ProfileReevaluationEventServiceTest {
         clinicId: Long = 41L,
         fingerprint: String = this.fingerprint,
         materialChange: Boolean = true,
+        assessmentRef: String = "assessment:$revision",
     ): UntrustedSchedulingEventEnvelope<PatientSchedulingAssessmentChanged> {
         val occurredAt = now.minusSeconds(10)
         val payload = PatientSchedulingAssessmentChanged(
@@ -241,7 +282,7 @@ class ProfileReevaluationEventServiceTest {
             patientReferenceFingerprint = fingerprint,
             profileRevision = revision,
             materialChange = materialChange,
-            assessmentRef = "assessment:$revision",
+            assessmentRef = assessmentRef,
             assessmentHash = assessmentHash,
             occurredAt = occurredAt,
         )
