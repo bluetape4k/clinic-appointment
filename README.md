@@ -62,6 +62,26 @@ All rollout flags are off by default and must be enabled in this order:
 There is no booking-consumer flag in this foundation. Confirmed appointments
 still require customer consent before policy-driven changes are applied.
 
+<a id="profile-reevaluation"></a>
+### Profile Change Reevaluation Boundary
+
+When the CRM reports a material profile change, the reservation service
+reevaluates only `PROPOSED` and `HELD` reservations. `CONFIRMED` reservations
+remain unchanged. The event carries a scope-limited fingerprint, revision, and
+opaque assessment reference instead of the profile, derived features, scores,
+or explanations.
+
+<a href="docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.en.dark.png">
+    <img src="docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.en.light.png" alt="Workflow from a minimal CRM profile-change event through fair dispatch and state-safe reservation reevaluation">
+  </picture>
+</a>
+
+Open the [interactive workflow](docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html),
+the [reference design](docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
+or the [operations runbook](docs/runbooks/profile-reevaluation.md).
+
 ## Architecture
 
 ![Clinic Appointment Architecture](docs/images/readme-diagrams/clinic-appointment-architecture-01-en.png)
@@ -136,11 +156,13 @@ Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seede
 | [Frontend](docs/requirements/frontend.md) | Angular structure and page design. |
 | [Appointment plan visual companion](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.en.html) | English simulation and decision history for plans, booking commitments, disruption, and capacity. |
 | [Scheduling policy visual companion](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.en.html) | English simulation and decision history for policy compilation, approval, activation, and recovery. |
+| [Profile change reevaluation workflow](docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html) | English light/dark workflow for minimal CRM events, fair dispatch, state decisions, and privacy-safe recovery. |
 | [Appointment plan recovery](docs/runbooks/appointment-plan-foundation-recovery.md) | Quarantine inspection, dry-run redrive, rollback, and authority ownership. |
 | [Scheduling policy API](docs/api/scheduling-policy.md) | Tenant/clinic policy endpoints, idempotency, preview polling, errors, and rollout flags. |
 | [Scheduling policy activation runbook](docs/runbooks/scheduling-policy-activation.md) | Worker alerts, 60s/5m activation handling, replay/retire recovery, and V10 readiness. |
 | [Appointment Commitment v2 API](docs/api/visit-commitment.md) | Gateway identity, provisional/approval/confirmation flow, idempotency, errors, and rollout settings. |
 | [Appointment Commitment v2 operations](docs/runbooks/visit-commitment-operations.md) | Shadow/allowlist rollout, alerts, retention, redrive, and PostgreSQL rollback. |
+| [Profile change reevaluation operations](docs/runbooks/profile-reevaluation.md) | Disabled-to-dry-run rollout, clinic allowlists, SLO alerts, bounded redrive, privacy response, and rollback. |
 
 ### Change History
 

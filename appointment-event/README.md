@@ -25,6 +25,30 @@ alerts. The visit commitment runbook defines a pre-production drill and the
 evidence required before that prohibition can be lifted; it does not authorize
 `WRITE` by itself.
 
+<a id="profile-reevaluation"></a>
+## Profile Change Reevaluation Event
+
+`PatientSchedulingAssessmentChanged` is the only accepted profile-change
+schema. Its fields are `eventId`, `tenantGroupId`, `clinicId`,
+`patientReferenceFingerprint`, `profileRevision`, `materialChange`,
+`assessmentRef`, `assessmentHash`, and `occurredAt`. It does not carry the
+patient identifier, profile body, derived feature, score, explanation, or
+correction detail.
+
+`ProfileReevaluationEventService` verifies producer, signature, issuer,
+audience, payload hash, schema, replay window, fingerprint shape, and
+tenant/clinic membership before writing the inbox and latest-revision job in
+one transaction. Duplicate events converge, a non-material change ends at the
+inbox, and a newer revision makes older ready work stale. Untrusted input is
+stored only as a bounded encrypted quarantine envelope in a separate
+transaction.
+
+The event module emits work; it does not decide the reservation mutation.
+The API worker reevaluates `PROPOSED` and `HELD`, while `CONFIRMED` is always
+skipped. See the
+[workflow](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html)
+and [operations runbook](../docs/runbooks/profile-reevaluation.md).
+
 ## External Scheduling Facts
 
 The reservation service consumes facts without taking ownership of commerce or

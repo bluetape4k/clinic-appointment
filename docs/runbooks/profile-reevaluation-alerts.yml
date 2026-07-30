@@ -1,0 +1,64 @@
+groups:
+  - name: profile-reevaluation
+    rules:
+      - alert: ProfileReevaluationSloBurn
+        expr: >-
+          histogram_quantile(0.95,
+          sum by (le) (rate(clinic_profile_reevaluation_fair_wait_seconds_bucket[10m])))
+          > 240
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Profile reevaluation p95 consumed at least 80 percent of the HELD target
+          runbook_url: profile-reevaluation.md#slo-burn
+      - alert: ProfileReevaluationOldestJob
+        expr: >-
+          health_profile_reevaluation_oldest_backlog_age_seconds
+          > 1800
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The oldest profile reevaluation job exceeded the default PROPOSED target
+          runbook_url: profile-reevaluation.md#oldest-job
+      - alert: ProfileReevaluationFailedJobs
+        expr: >-
+          increase(clinic_profile_reevaluation_jobs_total{status="failed"}[10m])
+          > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Profile reevaluation jobs are becoming terminal failures
+          runbook_url: profile-reevaluation.md#failed-jobs
+      - alert: ProfileReevaluationLeaseExpiry
+        expr: >-
+          increase(clinic_profile_reevaluation_operational_total{result="lease_lost"}[10m])
+          > 3
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Profile reevaluation lease loss is above the safe operating threshold
+          runbook_url: profile-reevaluation.md#lease-expiry
+      - alert: ProfileReevaluationAssessmentSaturation
+        expr: >-
+          sum(rate(clinic_profile_assessment_requests_total{result="saturated"}[5m]))
+          > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: CRM assessment concurrency is saturated
+          runbook_url: profile-reevaluation.md#assessment-saturation
+      - alert: ProfileReevaluationQuarantineRepeated
+        expr: >-
+          increase(clinic_profile_reevaluation_events_total{result="rejected"}[10m])
+          > 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Profile change events are repeatedly failing trust or schema validation
+          runbook_url: profile-reevaluation.md#quarantine

@@ -49,6 +49,29 @@
           "html": "docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html"
         }
       }
+    },
+    {
+      "id": "profile-change-reservation-reevaluation",
+      "source": "docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md",
+      "status": "approved",
+      "public": true,
+      "presentation": {
+        "mode": "simulation",
+        "defaultView": "simulation",
+        "views": [
+          "simulation"
+        ]
+      },
+      "locales": {
+        "en": {
+          "title": "Profile Change Reservation Reevaluation",
+          "html": "docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html"
+        },
+        "ko": {
+          "title": "프로필 변경 예약 재평가",
+          "html": "docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html"
+        }
+      }
     }
   ]
 }

@@ -38,6 +38,24 @@ Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migr
 The complete scheduling-policy request, lifecycle, effective-read, and error
 contract is documented in [Scheduling Policy API](../docs/api/scheduling-policy.md).
 
+<a id="profile-reevaluation"></a>
+### Profile Change Reevaluation
+
+Profile change handling is an internal worker and actuator workflow, not a
+patient-facing endpoint. It reevaluates `PROPOSED` and `HELD`, skips
+`CONFIRMED`, and fetches the current minimal assessment from CRM only at
+processing time. Rollout is fail-closed:
+
+`DISABLED` → `DRY_RUN` → `APPLY_PROPOSED` →
+`APPLY_PROPOSED_AND_HELD`, with an explicit clinic allowlist.
+
+`GET` and `POST /actuator/profileReevaluation` require `ADMIN`. The read
+operation reports backlog, leases, failures, and drain state; the write
+operation supports bounded `PREVIEW` and idempotent `EXECUTE` redrive. See the
+[workflow](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html),
+[reference design](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
+and [operations runbook](../docs/runbooks/profile-reevaluation.md).
+
 ### Appointment Commitment v2
 
 See [Appointment Commitment v2 API](../docs/api/visit-commitment.md) for the

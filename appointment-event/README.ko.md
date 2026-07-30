@@ -22,6 +22,27 @@ audience, payload hash, replay window, payload 제한을 검증합니다. `WRITE
 `WRITE`를 허용하지 않습니다. 방문 확정 약속 런북은 이 금지를 해제하기 전에 필요한
 사전 운영 훈련과 증거를 정의할 뿐, 그 문서만으로 `WRITE`를 승인하지 않습니다.
 
+<a id="profile-reevaluation"></a>
+## 프로필 변경 재평가 이벤트
+
+프로필 변경에는 `PatientSchedulingAssessmentChanged` schema만 허용합니다. 필드는
+`eventId`, `tenantGroupId`, `clinicId`, `patientReferenceFingerprint`,
+`profileRevision`, `materialChange`, `assessmentRef`, `assessmentHash`,
+`occurredAt`입니다. 환자 식별자, 프로필 본문, 파생 특징, 점수, 설명, 보정 상세는
+담지 않습니다.
+
+`ProfileReevaluationEventService`는 inbox와 최신 revision 작업을 한 transaction에
+기록하기 전에 producer, signature, issuer, audience, payload hash, schema,
+replay window, fingerprint 형식, tenant/clinic 소속을 검증합니다. 중복 이벤트는
+하나로 수렴하고 중요하지 않은 변경은 inbox 처리로 끝냅니다. 더 최신 revision이
+오면 이전 대기 작업은 stale이 됩니다. 신뢰할 수 없는 입력은 별도 transaction에서
+크기가 제한된 암호화 quarantine envelope로만 보존합니다.
+
+event module은 작업을 만들 뿐 예약 변경을 판단하지 않습니다. API worker가
+`PROPOSED`와 `HELD`를 다시 평가하며 `CONFIRMED`는 항상 건너뜁니다. 자세한 흐름은
+[업무 흐름](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html)과
+[운영 런북](../docs/runbooks/profile-reevaluation.ko.md)을 참고합니다.
+
 ## 외부 예약 사실
 
 예약서비스는 상품·구매·시술 이행의 소유권을 가져오지 않고 다음 사실만 수신합니다.
