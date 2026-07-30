@@ -60,6 +60,8 @@ internal class ProfileReevaluationWorkerTest {
             store.checkpoints.size shouldBeEqualTo 3
             store.checkpoints.last().heldCursorAppointmentId shouldBeEqualTo 2L
             store.checkpoints.last().proposedCursorAppointmentId shouldBeEqualTo 3L
+            store.deferReasonCode shouldBeEqualTo "TICK_BUDGET_EXHAUSTED"
+            store.retryFailureCode shouldBeEqualTo null
             store.completed.shouldBeFalse()
         }
     }
@@ -151,7 +153,8 @@ internal class ProfileReevaluationWorkerTest {
 
             paused shouldBeEqualTo ProfileReevaluationWorkerResult.PAUSED
             gateMutations shouldBeEqualTo 1
-            gateStore.retryFailureCode shouldBeEqualTo "RUNTIME_GATE_DISABLED"
+            gateStore.deferReasonCode shouldBeEqualTo "RUNTIME_GATE_DISABLED"
+            gateStore.retryFailureCode shouldBeEqualTo null
         }
     }
 
@@ -223,7 +226,8 @@ internal class ProfileReevaluationWorkerTest {
                     1L to ProfileReevaluationMutationMode.APPLY_PROPOSED_AND_HELD,
                     3L to ProfileReevaluationMutationMode.APPLY_PROPOSED,
                 )
-            store.retryFailureCode shouldBeEqualTo "RUNTIME_MODE_EXCLUDES_HELD"
+            store.deferReasonCode shouldBeEqualTo "RUNTIME_MODE_EXCLUDES_HELD"
+            store.retryFailureCode shouldBeEqualTo null
         }
     }
 
@@ -430,6 +434,7 @@ private class FakeWorkStore(
     var completed = false
     var markedStaleRevision: Long? = null
     var retryFailureCode: String? = null
+    var deferReasonCode: String? = null
 
     override suspend fun claim(command: ClaimProfileReevaluationJobs): List<ProfileReevaluationJobRecord> =
         emptyList()
@@ -482,6 +487,15 @@ private class FakeWorkStore(
         terminal: Boolean,
     ): Boolean {
         retryFailureCode = failureCode
+        return true
+    }
+
+    override suspend fun defer(
+        job: ProfileReevaluationJobRecord,
+        reasonCode: String,
+        delay: Duration,
+    ): Boolean {
+        deferReasonCode = reasonCode
         return true
     }
 

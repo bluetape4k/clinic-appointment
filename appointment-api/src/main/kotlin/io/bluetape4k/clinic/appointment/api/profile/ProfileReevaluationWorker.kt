@@ -169,11 +169,10 @@ class ProfileReevaluationWorker(
                     processed++
                     if (processed >= maxAppointmentsPerTick) {
                         return if (
-                            store.retry(
+                            store.defer(
                                 job,
-                                FAILURE_TICK_BUDGET_EXHAUSTED,
-                                Duration.ZERO,
-                                terminal = false,
+                                reasonCode = FAILURE_TICK_BUDGET_EXHAUSTED,
+                                delay = Duration.ZERO,
                             )
                         ) {
                             ProfileReevaluationWorkerResult.BOUNDED
@@ -200,7 +199,7 @@ class ProfileReevaluationWorker(
         job: ProfileReevaluationJobRecord,
         failureCode: String,
     ): ProfileReevaluationWorkerResult =
-        if (store.retry(job, failureCode, RUNTIME_GATE_RECHECK_DELAY, terminal = false)) {
+        if (store.defer(job, failureCode, RUNTIME_GATE_RECHECK_DELAY)) {
             ProfileReevaluationWorkerResult.PAUSED
         } else {
             ProfileReevaluationWorkerResult.LEASE_LOST
@@ -367,6 +366,12 @@ interface ProfileReevaluationWorkStore {
         observedRevision: Long,
     ): Boolean
 
+    suspend fun defer(
+        job: ProfileReevaluationJobRecord,
+        reasonCode: String,
+        delay: Duration,
+    ): Boolean
+
     suspend fun retry(
         job: ProfileReevaluationJobRecord,
         failureCode: String,
@@ -466,6 +471,25 @@ class ExposedProfileReevaluationWorkStore(
             )
         }.also { stale ->
             if (stale) metrics?.recordJob(ProfileReevaluationJobStatus.STALE)
+        }
+
+    override suspend fun defer(
+        job: ProfileReevaluationJobRecord,
+        reasonCode: String,
+        delay: Duration,
+    ): Boolean =
+        io {
+            profileRepository.defer(
+                jobId = job.id,
+                revision = job.targetRevision,
+                leaseOwner = job.requireLeaseOwner(),
+                reasonCode = reasonCode,
+                delay = delay,
+            )
+        }.also { deferred ->
+            if (deferred) {
+                metrics?.recordOperational(ProfileReevaluationOperationalMetric.DEFER)
+            }
         }
 
     override suspend fun retry(

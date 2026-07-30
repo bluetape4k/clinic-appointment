@@ -35,6 +35,24 @@ class ProfileReevaluationMetricsTest {
     }
 
     @Test
+    fun `운영상 지연은 기술 실패 재시도와 다른 metric으로 기록한다`() {
+        val registry = SimpleMeterRegistry()
+        val metrics = ProfileReevaluationMetrics(registry)
+
+        metrics.recordOperational(ProfileReevaluationOperationalMetric.DEFER)
+        metrics.recordOperational(ProfileReevaluationOperationalMetric.RETRY)
+
+        registry.get(ProfileReevaluationMetrics.OPERATIONAL)
+            .tag("result", "defer")
+            .counter()
+            .count() shouldBeEqualTo 1.0
+        registry.get(ProfileReevaluationMetrics.OPERATIONAL)
+            .tag("result", "retry")
+            .counter()
+            .count() shouldBeEqualTo 1.0
+    }
+
+    @Test
     fun `health는 집계값만 제공하고 식별자 detail을 만들지 않는다`() {
         val indicator = ProfileReevaluationHealthIndicator(
             source = ProfileReevaluationHealthSource {

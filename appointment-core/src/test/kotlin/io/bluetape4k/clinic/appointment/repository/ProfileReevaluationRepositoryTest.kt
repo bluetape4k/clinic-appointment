@@ -7,6 +7,7 @@ import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldHaveSize
 import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.model.dto.ClaimProfileReevaluationJobs
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationClinicCursor
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationCursor
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationPriorityClass
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
@@ -19,8 +20,11 @@ import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationOutcomes
 import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.batchInsert
 import org.jetbrains.exposed.v1.jdbc.update
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import java.time.Duration
@@ -223,6 +227,122 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
 
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `동일 due 병원이 전역 한도보다 많아도 clinic cursor가 다음 병원으로 순환한다`(
+        testDB: TestDB,
+    ) {
+        withProfileReevaluationTables(testDB) {
+            val repository = ProfileReevaluationRepository(hasHeldAppointments = { true })
+            (1L..6L).forEach { clinicId ->
+                (1L..2L).forEach { patient ->
+                    val clinicScope =
+                        ProfileReevaluationScope(
+                            tenantGroupId = 1L,
+                            clinicId = clinicId,
+                            patientReferenceFingerprint =
+                                (clinicId * 100L + patient).toString().padStart(64, '0'),
+                        )
+                    repository.upsertEvent(
+                        change(
+                            scope = clinicScope,
+                            revision = 1L,
+                            eventId = "evt-$clinicId-$patient",
+                            occurredAt = Instant.EPOCH,
+                        ),
+                    )
+                }
+            }
+
+            fun claimAfter(cursor: ProfileReevaluationClinicCursor?) =
+                repository.claimFairJobs(
+                    ClaimProfileReevaluationJobs(
+                        leaseOwner = "worker-${cursor?.clinicId ?: 0L}",
+                        limit = 2,
+                        perClinicLimit = 1,
+                        afterClinic = cursor,
+                    ),
+                )
+
+            claimAfter(null).map { it.scope.clinicId } shouldBeEqualTo listOf(1L, 2L)
+            claimAfter(ProfileReevaluationClinicCursor(1L, 2L))
+                .map { it.scope.clinicId } shouldBeEqualTo listOf(3L, 4L)
+            claimAfter(ProfileReevaluationClinicCursor(1L, 4L))
+                .map { it.scope.clinicId } shouldBeEqualTo listOf(5L, 6L)
+            claimAfter(ProfileReevaluationClinicCursor(1L, 6L))
+                .map { it.scope.clinicId } shouldBeEqualTo listOf(1L, 2L)
+        }
+    }
+
+    @Test
+    fun `전역 후보 한도를 넘는 대형 병원 적체에서도 다른 병원을 굶기지 않는다`() {
+        withProfileReevaluationTables(TestDB.H2_COMMITMENT) {
+            val repository = ProfileReevaluationRepository(hasHeldAppointments = { true })
+            val largeClinic = scope()
+            val otherClinic =
+                ProfileReevaluationScope(
+                    tenantGroupId = 1L,
+                    clinicId = 42L,
+                    patientReferenceFingerprint = "b".repeat(64),
+                )
+            val occurredAt = Instant.EPOCH
+            repository.upsertEvent(
+                change(
+                    scope = largeClinic,
+                    revision = 1L,
+                    eventId = "evt-large-1",
+                    occurredAt = occurredAt,
+                ),
+            )
+            val head = repository.findHead(largeClinic).shouldNotBeNull()
+            ProfileReevaluationJobs.batchInsert(
+                data = 2L..10_000L,
+                shouldReturnGeneratedValues = false,
+            ) { sequence ->
+                this[ProfileReevaluationJobs.headId] = EntityID(head.id, ProfileReevaluationHeads)
+                this[ProfileReevaluationJobs.tenantGroupId] = largeClinic.tenantGroupId
+                this[ProfileReevaluationJobs.clinicId] = largeClinic.clinicId
+                this[ProfileReevaluationJobs.patientReferenceFingerprint] =
+                    largeClinic.patientReferenceFingerprint
+                this[ProfileReevaluationJobs.targetRevision] = 1L
+                this[ProfileReevaluationJobs.eventId] = "evt-large-$sequence"
+                this[ProfileReevaluationJobs.assessmentRef] = "assessment/1"
+                this[ProfileReevaluationJobs.assessmentHash] = "1".padStart(64, '0')
+                this[ProfileReevaluationJobs.status] = ProfileReevaluationJobStatus.PENDING
+                this[ProfileReevaluationJobs.occurredAt] = occurredAt
+                this[ProfileReevaluationJobs.dueAt] = occurredAt.plus(Duration.ofMinutes(5))
+                this[ProfileReevaluationJobs.targetDurationSeconds] = Duration.ofMinutes(5).seconds
+                this[ProfileReevaluationJobs.heldTargetSeconds] = Duration.ofMinutes(5).seconds
+                this[ProfileReevaluationJobs.proposedTargetSeconds] = Duration.ofMinutes(30).seconds
+                this[ProfileReevaluationJobs.targetPolicyRef] = "policy/profile-reevaluation"
+                this[ProfileReevaluationJobs.targetPolicyGeneration] = 11L
+                this[ProfileReevaluationJobs.nextAttemptAt] = occurredAt
+                this[ProfileReevaluationJobs.priorityClass] =
+                    ProfileReevaluationPriorityClass.UNCLASSIFIED
+            }
+            repository.upsertEvent(
+                change(
+                    scope = otherClinic,
+                    revision = 1L,
+                    eventId = "evt-other",
+                    occurredAt = occurredAt.plusSeconds(1),
+                ),
+            )
+
+            val claimed =
+                repository.claimFairJobs(
+                    ClaimProfileReevaluationJobs(
+                        leaseOwner = "worker-a",
+                        limit = 2,
+                        perClinicLimit = 1,
+                    ),
+                )
+
+            claimed shouldHaveSize 2
+            claimed.map { it.scope.clinicId }.toSet() shouldBeEqualTo setOf(41L, 42L)
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
     fun `terminal retry는 남은 attempt와 관계없이 즉시 최종 실패로 전이한다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository(maxAttempts = 5)
@@ -240,6 +360,44 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
             ).shouldBeTrue()
 
             repository.findJob(claimed.id).shouldNotBeNull().status shouldBeEqualTo
+                ProfileReevaluationJobStatus.FAILED
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `운영상 대기는 현재 claim을 재시도 예산에서 제외한다`(testDB: TestDB) {
+        withProfileReevaluationTables(testDB) {
+            val repository = ProfileReevaluationRepository(maxAttempts = 1)
+            val scope = scope()
+            repository.upsertEvent(change(scope, revision = 1L, eventId = "evt-deferred"))
+
+            repeat(3) { index ->
+                val claimed = repository.claimFairJobs(claim("worker-$index")).single()
+                claimed.attemptCount shouldBeEqualTo 1
+                repository.defer(
+                    jobId = claimed.id,
+                    revision = claimed.targetRevision,
+                    leaseOwner = "worker-$index",
+                    reasonCode = "RUNTIME_MODE_EXCLUDES_HELD",
+                    delay = Duration.ZERO,
+                ).shouldBeTrue()
+
+                val deferred = repository.findJob(claimed.id).shouldNotBeNull()
+                deferred.status shouldBeEqualTo ProfileReevaluationJobStatus.RETRY_WAIT
+                deferred.attemptCount shouldBeEqualTo 0
+                deferred.firstAttemptAt.shouldBeNull()
+            }
+
+            val failedClaim = repository.claimFairJobs(claim("worker-failure")).single()
+            repository.scheduleRetry(
+                jobId = failedClaim.id,
+                revision = failedClaim.targetRevision,
+                leaseOwner = "worker-failure",
+                failureCode = "PROCESSING_FAILED",
+                delay = Duration.ZERO,
+            ).shouldBeTrue()
+            repository.findJob(failedClaim.id).shouldNotBeNull().status shouldBeEqualTo
                 ProfileReevaluationJobStatus.FAILED
         }
     }

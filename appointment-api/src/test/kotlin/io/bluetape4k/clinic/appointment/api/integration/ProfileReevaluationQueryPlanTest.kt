@@ -136,6 +136,100 @@ class ProfileReevaluationQueryPlanTest {
                         """.trimIndent(),
                     parameters = listOf(Timestamp.from(NOW)),
                 )
+            val nextClinic =
+                explain(
+                    connection = connection,
+                    dialect = dialect,
+                    sql =
+                        """
+                        SELECT tenant_group_id, clinic_id
+                        FROM scheduling_profile_reevaluation_jobs
+                        WHERE (
+                            (status IN ('PENDING', 'RETRY_WAIT') AND next_attempt_at <= ?)
+                            OR (status = 'RUNNING' AND lease_expires_at <= ?)
+                        )
+                          AND (
+                            tenant_group_id > ?
+                            OR (tenant_group_id = ? AND clinic_id > ?)
+                          )
+                        ORDER BY tenant_group_id, clinic_id
+                        LIMIT 1
+                        """.trimIndent(),
+                    parameters =
+                        listOf(
+                            Timestamp.from(NOW),
+                            Timestamp.from(NOW),
+                            1L,
+                            1L,
+                            TARGET_CLINIC_ID - 1L,
+                        ),
+                )
+            val pendingClinicCandidates =
+                explain(
+                    connection = connection,
+                    dialect = dialect,
+                    sql =
+                        """
+                        SELECT id, due_at
+                        FROM scheduling_profile_reevaluation_jobs
+                        WHERE status = 'PENDING'
+                          AND next_attempt_at <= ?
+                          AND tenant_group_id = ?
+                          AND clinic_id = ?
+                        ORDER BY next_attempt_at, due_at, id
+                        LIMIT 2
+                        """.trimIndent(),
+                    parameters =
+                        listOf(
+                            Timestamp.from(NOW),
+                            1L,
+                            TARGET_CLINIC_ID,
+                        ),
+                )
+            val retryWaitClinicCandidates =
+                explain(
+                    connection = connection,
+                    dialect = dialect,
+                    sql =
+                        """
+                        SELECT id, due_at
+                        FROM scheduling_profile_reevaluation_jobs
+                        WHERE status = 'RETRY_WAIT'
+                          AND next_attempt_at <= ?
+                          AND tenant_group_id = ?
+                          AND clinic_id = ?
+                        ORDER BY next_attempt_at, due_at, id
+                        LIMIT 2
+                        """.trimIndent(),
+                    parameters =
+                        listOf(
+                            Timestamp.from(NOW),
+                            1L,
+                            TARGET_CLINIC_ID,
+                        ),
+                )
+            val expiredLeaseClinicCandidates =
+                explain(
+                    connection = connection,
+                    dialect = dialect,
+                    sql =
+                        """
+                        SELECT id, due_at
+                        FROM scheduling_profile_reevaluation_jobs
+                        WHERE status = 'RUNNING'
+                          AND lease_expires_at <= ?
+                          AND tenant_group_id = ?
+                          AND clinic_id = ?
+                        ORDER BY lease_expires_at, due_at, id
+                        LIMIT 2
+                        """.trimIndent(),
+                    parameters =
+                        listOf(
+                            Timestamp.from(NOW),
+                            1L,
+                            TARGET_CLINIC_ID,
+                        ),
+                )
             val leaseRecovery =
                 explain(
                     connection = connection,
@@ -169,6 +263,18 @@ class ProfileReevaluationQueryPlanTest {
                 # due claim
                 ${dueClaim.text}
 
+                # next clinic keyset
+                ${nextClinic.text}
+
+                # pending clinic candidates
+                ${pendingClinicCandidates.text}
+
+                # retry wait clinic candidates
+                ${retryWaitClinicCandidates.text}
+
+                # expired lease clinic candidates
+                ${expiredLeaseClinicCandidates.text}
+
                     # lease recovery
                     ${leaseRecovery.text}
                     """.trimIndent(),
@@ -178,8 +284,23 @@ class ProfileReevaluationQueryPlanTest {
             appointmentPage.uses("idx_appointment_profile_reevaluation").shouldBeTrue()
             appointmentPage.usesAny("uq_commitment_appointment", "idx_commitment_profile_reevaluation").shouldBeTrue()
             dueClaim.uses("idx_profile_reevaluation_due").shouldBeTrue()
+            nextClinic
+                .usesAny("idx_profile_reevaluation_clinic_ready", "idx_profile_reevaluation_clinic_lease")
+                .shouldBeTrue()
+            pendingClinicCandidates.uses("idx_profile_reevaluation_clinic_ready").shouldBeTrue()
+            retryWaitClinicCandidates.uses("idx_profile_reevaluation_clinic_ready").shouldBeTrue()
+            expiredLeaseClinicCandidates.uses("idx_profile_reevaluation_clinic_lease").shouldBeTrue()
             leaseRecovery.uses("idx_profile_reevaluation_lease").shouldBeTrue()
-            listOf(heldExistence, appointmentPage, dueClaim, leaseRecovery)
+            listOf(
+                heldExistence,
+                appointmentPage,
+                dueClaim,
+                nextClinic,
+                pendingClinicCandidates,
+                retryWaitClinicCandidates,
+                expiredLeaseClinicCandidates,
+                leaseRecovery,
+            )
                 .none(QueryPlan::fullTableScan)
                 .shouldBeTrue()
         }
@@ -286,15 +407,22 @@ class ProfileReevaluationQueryPlanTest {
             """.trimIndent(),
         ).use { statement ->
             for (sequence in 1..FIXTURE_ROWS) {
-                val running = sequence % 2 == 0
+                val status =
+                    when (sequence % 3) {
+                        0 -> "RUNNING"
+                        1 -> "PENDING"
+                        else -> "RETRY_WAIT"
+                    }
+                val running = status == "RUNNING"
+                val clinicId = TARGET_CLINIC_ID + (sequence % CLINIC_BUCKETS)
                 statement.setLong(1, JOB_ID_BASE + sequence)
                 statement.setLong(2, HEAD_ID)
-                statement.setLong(3, TARGET_CLINIC_ID)
+                statement.setLong(3, clinicId)
                 statement.setString(4, TARGET_FINGERPRINT)
                 statement.setLong(5, sequence.toLong())
                 statement.setString(6, "event-$sequence")
                 statement.setString(7, "d".repeat(64))
-                statement.setString(8, if (running) "RUNNING" else "PENDING")
+                statement.setString(8, status)
                 statement.setTimestamp(9, Timestamp.from(NOW.minusSeconds(sequence.toLong())))
                 statement.setTimestamp(10, Timestamp.from(NOW.minusSeconds(sequence.toLong())))
                 statement.setTimestamp(11, Timestamp.from(NOW.minusSeconds(sequence.toLong())))
@@ -424,6 +552,7 @@ class ProfileReevaluationQueryPlanTest {
         val NOW: Instant = Instant.parse("2026-07-30T00:00:00Z")
         const val FIXTURE_ROWS = 4_000
         const val BATCH_SIZE = 500
+        const val CLINIC_BUCKETS = 32
         const val ELIGIBLE_INTERVAL = 100
         const val HELD_INTERVAL = 1_000
         const val TARGET_CLINIC_ID = 91_001L

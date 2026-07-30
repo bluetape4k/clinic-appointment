@@ -23,7 +23,6 @@ import io.micrometer.core.instrument.MeterRegistry
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
-import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -155,22 +154,22 @@ class ProfileReevaluationConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(
-        ProfileReevaluationWorkStore::class,
-        ProfileAssessmentClient::class,
-        ProfileReevaluationAppointmentProcessor::class,
+    @ConditionalOnProperty(
+        prefix = "appointment.profile-reevaluation",
+        name = ["enabled"],
+        havingValue = "true",
     )
     fun profileReevaluationWorker(
         store: ProfileReevaluationWorkStore,
         assessmentClient: ProfileAssessmentClient,
-        processorProvider: ObjectProvider<ProfileReevaluationAppointmentProcessor>,
+        processor: ProfileReevaluationAppointmentProcessor,
         runtimeGate: ProfileReevaluationRuntimeGate,
         properties: ProfileReevaluationProperties,
     ): ProfileReevaluationWorker =
         ProfileReevaluationWorker(
             store = store,
             assessmentClient = assessmentClient,
-            appointmentProcessor = processorProvider.getObject(),
+            appointmentProcessor = processor,
             runtimeGate = runtimeGate,
             retryPolicy = ProfileReevaluationRetryPolicy(
                 maxAttempts = properties.retryMaxAttempts,
