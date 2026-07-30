@@ -218,4 +218,3 @@ data class ProfileReevaluationOutcomeRecord(
 ) : Serializable
 
 private val SHA256_REGEX = Regex("^[0-9a-f]{64}$")
-
