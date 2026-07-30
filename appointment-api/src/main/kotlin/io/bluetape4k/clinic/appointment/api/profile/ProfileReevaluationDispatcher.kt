@@ -15,7 +15,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import java.time.Clock
 import java.time.Duration
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 실행 가능한 재평가 작업을 병원별 공정 선점 후 제한된 동시성으로 실행합니다.
@@ -33,7 +32,7 @@ class ProfileReevaluationDispatcher(
     private val clock: Clock = Clock.systemUTC(),
 ) {
     private val globalPermits: Semaphore
-    private val clinicPermits = ConcurrentHashMap<ClinicKey, Semaphore>()
+    private val clinicPermitRegistry: ClinicPermitRegistry
     private val claimMutex = Mutex()
     private var clinicCursor: ProfileReevaluationClinicCursor? = null
 
@@ -47,6 +46,7 @@ class ProfileReevaluationDispatcher(
         }
         require(autoRedriveLimit > 0) { "autoRedriveLimit must be positive" }
         globalPermits = Semaphore(globalConcurrency)
+        clinicPermitRegistry = ClinicPermitRegistry(perClinicConcurrency, metrics)
     }
 
     suspend fun dispatchOnce(): List<ProfileReevaluationWorkerResult> {
@@ -60,7 +60,7 @@ class ProfileReevaluationDispatcher(
             jobs.map { job ->
                 async {
                     globalPermits.withPermit {
-                        clinicSemaphore(job).withPermit {
+                        clinicPermitRegistry.withPermit(job.scope) {
                             worker.process(job)
                         }
                     }
@@ -120,18 +120,6 @@ class ProfileReevaluationDispatcher(
             .mapNotNull { redrivePolicy.commandFor(it, now) }
             .forEach { store.redrive(it) }
     }
-
-    private fun clinicSemaphore(job: ProfileReevaluationJobRecord): Semaphore =
-        clinicPermits.computeIfAbsent(
-            ClinicKey(job.scope.tenantGroupId, job.scope.clinicId),
-        ) {
-            Semaphore(perClinicConcurrency)
-        }
-
-    private data class ClinicKey(
-        val tenantGroupId: Long,
-        val clinicId: Long,
-    )
 }
 
 fun interface ProfileReevaluationJobWorker {

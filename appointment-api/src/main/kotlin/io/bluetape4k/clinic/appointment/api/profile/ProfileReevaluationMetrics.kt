@@ -7,9 +7,11 @@ import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationPriorityCla
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationJobStatus
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationOutcomeType
 import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 프로필 재평가의 저카디널리티 운영 지표를 기록합니다.
@@ -22,6 +24,17 @@ class ProfileReevaluationMetrics(
     private val monitor: ProfileReevaluationOperationalMonitor =
         ProfileReevaluationOperationalMonitor(),
 ) {
+    private val clinicPermitRegistrySize = AtomicInteger()
+    private val clinicPermitEvictions =
+        Counter.builder(CLINIC_PERMIT_EVICTIONS)
+            .register(registry)
+
+    init {
+        Gauge.builder(CLINIC_PERMIT_REGISTRY_SIZE, clinicPermitRegistrySize) {
+            it.get().toDouble()
+        }.register(registry)
+    }
+
     fun recordEvent(result: ProfileReevaluationEventMetricResult) =
         counter(EVENTS, "result", result.metricValue).increment()
 
@@ -90,6 +103,15 @@ class ProfileReevaluationMetrics(
     fun recordDryRunParity(result: ProfileReevaluationParityMetric) =
         counter(DRY_RUN_PARITY, "result", result.metricValue).increment()
 
+    internal fun recordClinicPermitEntryCreated() {
+        clinicPermitRegistrySize.incrementAndGet()
+    }
+
+    internal fun recordClinicPermitEntryEvicted() {
+        clinicPermitRegistrySize.decrementAndGet()
+        clinicPermitEvictions.increment()
+    }
+
     private fun counter(
         name: String,
         key: String,
@@ -105,6 +127,10 @@ class ProfileReevaluationMetrics(
         const val ASSESSMENT_LATENCY = "clinic.profile.reevaluation.assessment.latency"
         const val OPERATIONAL = "clinic.profile.reevaluation.operational"
         const val DRY_RUN_PARITY = "clinic.profile.reevaluation.dryrun.parity"
+        const val CLINIC_PERMIT_REGISTRY_SIZE =
+            "clinic.profile.reevaluation.clinic.permit.registry.size"
+        const val CLINIC_PERMIT_EVICTIONS =
+            "clinic.profile.reevaluation.clinic.permit.evictions"
     }
 }
 
