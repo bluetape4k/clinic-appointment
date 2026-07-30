@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.commitment
 
+import io.bluetape4k.clinic.appointment.api.profile.ProfileSchedulingAssessment
 import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentItemDraft
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentProposalDraft
@@ -58,6 +59,79 @@ class AppointmentProposalService(
      * platform 상한을 넘을 때 발생합니다.
      */
     fun generate(request: AppointmentProposalRequest): ProposalGenerationResult {
+        return generate(request) { true }
+    }
+
+    /**
+     * 최신 CRM assessment와 현재 유효 정책으로 대체 proposal 후보를 계산합니다.
+     *
+     * 기존 선점의 유효성 판단은 이 함수의 책임이 아닙니다. caller는 commitment에 고정된
+     * 정책 snapshot으로 기존 선점을 먼저 판단하고, 무효일 때만 현재 정책 snapshot을
+     * 담은 [request]로 이 함수를 호출해야 합니다. assessment는 계산 중에만 사용하며
+     * proposal이나 이벤트 payload에 원문을 저장하지 않습니다.
+     */
+    fun generateForProfileReevaluation(
+        request: AppointmentProposalRequest,
+        assessment: ProfileSchedulingAssessment,
+        supersedesProposalId: Long,
+    ): ProposalGenerationResult {
+        supersedesProposalId.requirePositiveNumber("supersedesProposalId")
+        require(
+            assessment.tenantGroupId == request.tenantGroupId &&
+                assessment.clinicId == request.clinicId,
+        ) {
+            "profile assessment scope must match proposal request scope"
+        }
+        val assessmentRequest =
+            request.copy(
+                treatments =
+                    request.treatments.filter { treatment ->
+                        treatment.detailedTreatmentCodes.isNotEmpty() &&
+                            treatment.detailedTreatmentCodes.all(assessment.eligibleServiceCodes::contains)
+                    },
+                candidateSlots =
+                    request.candidateSlots.filter { slot ->
+                        val availableTags =
+                            slot.availableResources
+                                .asSequence()
+                                .flatMap { it.capabilities.asSequence() }
+                                .toSet()
+                        availableTags.containsAll(assessment.requiredResourceTags)
+                    },
+            )
+        val generated =
+            generate(assessmentRequest) { proposal ->
+                assessment.allowedTimeWindows.any { window ->
+                    proposal.startsAt >= window.startAt && proposal.endsAt <= window.endAt
+                }
+            }
+        return generated.copy(
+            proposals =
+                generated.proposals.map { candidate ->
+                    val original = candidate.proposal
+                    val superseding =
+                        AppointmentProposalDraft(
+                            appointmentId = original.appointmentId,
+                            revision = original.revision,
+                            startsAt = original.startsAt,
+                            endsAt = original.endsAt,
+                            items = original.items,
+                            allocations = original.allocations,
+                            policySnapshotId = original.policySnapshotId,
+                            supersedesProposalId = supersedesProposalId,
+                        )
+                    candidate.copy(
+                        proposal = superseding,
+                        proposalHash = ProposalHasher.hash(superseding),
+                    )
+                },
+        )
+    }
+
+    private fun generate(
+        request: AppointmentProposalRequest,
+        acceptsProposal: (AppointmentProposalDraft) -> Boolean,
+    ): ProposalGenerationResult {
         validateRequest(request)
         val dependencies = request.dependencies.map(PlanRevisionDependencyRecord::toDomain)
         val eligibleKeys = eligibleTreatmentKeys(request, dependencies)
@@ -87,6 +161,7 @@ class AppointmentProposalService(
                     .filter { request.acceptsSearchHorizon(it.startsAt) }
                     .filter { request.acceptsPredecessorWindows(visit.treatments, it.startsAt) }
                     .mapNotNull { slot -> buildProposal(request, visitIndex, visit.treatments, slot) }
+                    .filter { candidate -> acceptsProposal(candidate.proposal) }
                     .firstOrNull()
 
             if (selected == null) {

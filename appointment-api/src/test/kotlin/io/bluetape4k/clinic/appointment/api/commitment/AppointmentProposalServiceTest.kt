@@ -6,6 +6,8 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldHaveSize
 import io.bluetape4k.assertions.shouldNotBeEqualTo
+import io.bluetape4k.clinic.appointment.api.profile.AllowedTimeWindow
+import io.bluetape4k.clinic.appointment.api.profile.ProfileSchedulingAssessment
 import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
 import io.bluetape4k.clinic.appointment.model.commitment.ResourceAllocationMode
 import io.bluetape4k.clinic.appointment.model.commitment.ResourceType
@@ -384,6 +386,69 @@ class AppointmentProposalServiceTest {
         first.proposalHash shouldBeEqualTo replay.proposalHash
         first.proposalHash.shouldNotBeEqualTo(changedPolicy.proposalHash)
         (first.proposalHash.length == 64).shouldBeTrue()
+    }
+
+    @Test
+    fun `프로필 재평가 후보는 최신 assessment와 현재 정책을 사용해 기존 제안을 대체한다`() {
+        val result =
+            service.generateForProfileReevaluation(
+                request =
+                    request(
+                        treatments = listOf(treatment("consult")),
+                        slots =
+                            listOf(
+                                slot(
+                                    start = "2026-08-02T01:00:00Z",
+                                    resources =
+                                        listOf(
+                                            resource(
+                                                ResourceType.PRACTITIONER,
+                                                "doctor-without-profile-tag",
+                                                setOf("GENERAL"),
+                                            ),
+                                        ),
+                                ),
+                                slot(
+                                    start = "2026-08-03T01:00:00Z",
+                                    resources =
+                                        listOf(
+                                            resource(
+                                                ResourceType.PRACTITIONER,
+                                                "doctor-profile",
+                                                setOf("PROFILE_OK"),
+                                            ),
+                                        ),
+                                ),
+                            ),
+                        policySnapshotId = 73L,
+                    ),
+                assessment =
+                    ProfileSchedulingAssessment(
+                        tenantGroupId = 1L,
+                        clinicId = 10L,
+                        patientReferenceFingerprint = "f".repeat(64),
+                        profileRevision = 9L,
+                        assessmentReference = "assessment-9",
+                        assessmentHash = "a".repeat(64),
+                        eligibleServiceCodes = setOf("CODE-consult"),
+                        requiredResourceTags = setOf("PROFILE_OK"),
+                        allowedTimeWindows =
+                            listOf(
+                                AllowedTimeWindow(
+                                    startAt = Instant.parse("2026-08-03T01:00:00Z"),
+                                    endAt = Instant.parse("2026-08-03T02:00:00Z"),
+                                ),
+                            ),
+                    ),
+                supersedesProposalId = 55L,
+            )
+
+        val proposal = result.proposals.single()
+        proposal.proposal.startsAt shouldBeEqualTo Instant.parse("2026-08-03T01:00:00Z")
+        proposal.proposal.policySnapshotId shouldBeEqualTo 73L
+        proposal.proposal.supersedesProposalId shouldBeEqualTo 55L
+        proposal.proposalHash shouldBeEqualTo
+            io.bluetape4k.clinic.appointment.service.ProposalHasher.hash(proposal.proposal)
     }
 
     @Suppress("LongParameterList")

@@ -210,6 +210,21 @@ class ResourceAllocationRepository {
     }
 
     /**
+     * 교체 또는 fallback 전에 이전 proposal의 active allocation을 생성 순서로 잠급니다.
+     */
+    fun findActiveByProposalForUpdate(proposalId: Long): List<ResourceAllocationRecord> {
+        val validProposalId = proposalId.requirePositiveNumber("proposalId")
+        return ResourceAllocations
+            .selectAll()
+            .where {
+                (ResourceAllocations.proposalId eq validProposalId) and
+                    (ResourceAllocations.status eq ResourceAllocationStatus.ACTIVE)
+            }.orderBy(ResourceAllocations.id)
+            .forUpdate()
+            .map(::mapAllocation)
+    }
+
+    /**
      * 동일 병원·자원의 overlap 검증을 직렬화하는 coarse-grained DB mutex를 획득합니다.
      *
      * [ResourceCapacityBuckets.bucketStartAt]에는 실제 예약 시각이 아니라 모든 지원
