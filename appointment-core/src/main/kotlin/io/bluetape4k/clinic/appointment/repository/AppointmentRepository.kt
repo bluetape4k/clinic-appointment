@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.ConfirmedAppointmentProjection
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
 import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -230,6 +231,21 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             afterAppointmentId = afterAppointmentId,
             limit = limit,
         )
+
+    /**
+     * 프로필 재평가 범위에 `HELD` 예약이 하나라도 있는지 indexed existence query로 확인합니다.
+     *
+     * 호출자가 소유한 Exposed transaction 안에서 실행합니다.
+     */
+    fun hasHeldProfileReevaluationAppointments(scope: ProfileReevaluationScope): Boolean =
+        findProfileReevaluationCandidates(
+            tenantGroupId = scope.tenantGroupId,
+            clinicId = scope.clinicId,
+            patientReferenceFingerprint = scope.patientReferenceFingerprint,
+            status = AppointmentCommitmentStatus.HELD,
+            afterAppointmentId = 0L,
+            limit = 1,
+        ).isNotEmpty()
 
     /**
      * 상태별 resume cursor를 독립적으로 전진시키기 위한 keyset 페이지를 조회합니다.
