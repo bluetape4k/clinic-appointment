@@ -79,6 +79,19 @@ class AppointmentCommitmentRepository {
     }
 
     /**
+     * 재평가 최종 적용 전에 commitment row를 잠그고 최신 상태와 version을 반환합니다.
+     */
+    fun findByIdForUpdate(commitmentId: Long): AppointmentCommitmentRecord? {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        return AppointmentCommitments
+            .selectAll()
+            .where { AppointmentCommitments.id eq validCommitmentId }
+            .forUpdate()
+            .singleOrNull()
+            ?.let(::mapCommitment)
+    }
+
+    /**
      * [commitmentId]에 실제로 속한 정확한 proposal을 반환합니다.
      *
      * 다른 commitment의 proposal ID를 command가 재사용해도 이 경계를 통과할 수 없습니다.
@@ -147,6 +160,19 @@ class AppointmentCommitmentRepository {
             .singleOrNull()
             ?.get(AppointmentProposals.revision)
     }
+
+    /** commitment에 append된 가장 최근 proposal을 반환합니다. */
+    fun findLatestProposal(commitmentId: Long): AppointmentProposalRecord? =
+        findLatestProposal(commitmentId, forUpdate = false)
+
+    /**
+     * commitment에 append된 가장 최근 proposal을 잠급니다.
+     *
+     * 재평가 서비스는 commitment를 먼저 잠근 뒤 이 함수를 호출해 잠금 순서를 일정하게
+     * 유지해야 합니다.
+     */
+    fun findLatestProposalForUpdate(commitmentId: Long): AppointmentProposalRecord? =
+        findLatestProposal(commitmentId, forUpdate = true)
 
     /**
      * proposal ID/revision/hash에 정확히 결합된 가장 최근 고객 결정을 반환합니다.
@@ -439,6 +465,62 @@ class AppointmentCommitmentRepository {
         } == 1
     }
 
+    /**
+     * 프로필 재평가 대상 상태와 version이 모두 일치할 때만 다음 미확정 상태로 전이합니다.
+     *
+     * `CONFIRMED`, `EXPIRED`, `CANCELLED`는 입력 단계에서 거부하므로 이 primitive로
+     * 확정 약정을 변경할 수 없습니다. 새 정책 snapshot은 새 proposal을 채택할 때만
+     * caller가 전달하고, 기존 선점 유지에는 이 메서드를 호출하지 않습니다.
+     */
+    fun advanceProfileReevaluationByVersion(
+        commitmentId: Long,
+        expectedStatus: AppointmentCommitmentStatus,
+        expectedVersion: Long,
+        nextStatus: AppointmentCommitmentStatus,
+        effectivePolicySnapshotId: Long,
+        updatedAt: Instant,
+    ): Boolean {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val validExpectedVersion = expectedVersion.requirePositiveNumber("expectedVersion")
+        val validPolicySnapshotId =
+            effectivePolicySnapshotId.requirePositiveNumber("effectivePolicySnapshotId")
+        require(expectedStatus in PROFILE_REEVALUATION_STATUSES) {
+            "expectedStatus must be PROPOSED or HELD"
+        }
+        require(nextStatus in PROFILE_REEVALUATION_STATUSES) {
+            "nextStatus must be PROPOSED or HELD"
+        }
+        return AppointmentCommitments.update(
+            where = {
+                (AppointmentCommitments.id eq validCommitmentId) and
+                    (AppointmentCommitments.status eq expectedStatus) and
+                    (AppointmentCommitments.version eq validExpectedVersion) and
+                    AppointmentCommitments.confirmedProposalId.isNull()
+            },
+        ) {
+            it[status] = nextStatus
+            it[AppointmentCommitments.effectivePolicySnapshotId] = validPolicySnapshotId
+            it[version] = validExpectedVersion + 1L
+            it[AppointmentCommitments.updatedAt] = updatedAt
+        } == 1
+    }
+
+    private fun findLatestProposal(
+        commitmentId: Long,
+        forUpdate: Boolean,
+    ): AppointmentProposalRecord? {
+        val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
+        val query =
+            AppointmentProposals
+                .selectAll()
+                .where { AppointmentProposals.commitmentId eq validCommitmentId }
+                .orderBy(AppointmentProposals.revision, SortOrder.DESC)
+                .limit(1)
+        return (if (forUpdate) query.forUpdate() else query)
+            .singleOrNull()
+            ?.let(::mapProposal)
+    }
+
     private fun mapCommitment(row: ResultRow) =
         AppointmentCommitmentRecord(
             id = row[AppointmentCommitments.id].value,
@@ -465,4 +547,9 @@ class AppointmentCommitmentRepository {
             supersedesProposalId = row[AppointmentProposals.supersedesProposalId],
             createdByActor = row[AppointmentProposals.createdByActor],
         )
+
+    private companion object {
+        val PROFILE_REEVALUATION_STATUSES =
+            setOf(AppointmentCommitmentStatus.PROPOSED, AppointmentCommitmentStatus.HELD)
+    }
 }

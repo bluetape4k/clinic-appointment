@@ -169,7 +169,7 @@ class ProfileReevaluationRepository(
     fun renewLease(jobId: Long, revision: Long, leaseOwner: String): Boolean {
         validateTransitionIdentity(jobId, revision, leaseOwner)
         val dbNow = dbCurrentTimestamp()
-        if (!isCurrentRevision(jobId, revision)) return false
+        if (!matchesCurrentRevision(jobId, revision)) return false
         return ProfileReevaluationJobs.update({
             activeLeasePredicate(jobId, revision, leaseOwner, dbNow)
         }) {
@@ -189,7 +189,7 @@ class ProfileReevaluationRepository(
     ): Boolean {
         validateTransitionIdentity(jobId, revision, leaseOwner)
         val dbNow = dbCurrentTimestamp()
-        if (!isCurrentRevision(jobId, revision)) return false
+        if (!matchesCurrentRevision(jobId, revision)) return false
         val row = findJobRow(jobId, forUpdate = true) ?: return false
         if (!hasActiveLease(row, revision, leaseOwner, dbNow)) return false
         if (!cursorIsMonotonic(row, cursor)) return false
@@ -229,7 +229,7 @@ class ProfileReevaluationRepository(
             "failureCode must contain 1..96 uppercase identifier characters"
         }
         val dbNow = dbCurrentTimestamp()
-        if (!isCurrentRevision(jobId, revision)) return false
+        if (!matchesCurrentRevision(jobId, revision)) return false
         val row = findJobRow(jobId, forUpdate = true) ?: return false
         if (!hasActiveLease(row, revision, leaseOwner, dbNow)) return false
         val exhausted = row[ProfileReevaluationJobs.attemptCount] >= maxAttempts
@@ -256,7 +256,7 @@ class ProfileReevaluationRepository(
     fun complete(jobId: Long, revision: Long, leaseOwner: String): Boolean {
         validateTransitionIdentity(jobId, revision, leaseOwner)
         val dbNow = dbCurrentTimestamp()
-        if (!isCurrentRevision(jobId, revision)) return false
+        if (!matchesCurrentRevision(jobId, revision)) return false
         return ProfileReevaluationJobs.update({
             activeLeasePredicate(jobId, revision, leaseOwner, dbNow)
         }) {
@@ -307,7 +307,7 @@ class ProfileReevaluationRepository(
             return null
         }
         val revision = original[ProfileReevaluationJobs.targetRevision]
-        if (!isCurrentRevision(command.jobId, revision)) return null
+        if (!matchesCurrentRevision(command.jobId, revision)) return null
 
         val updated = ProfileReevaluationJobs.update({
             (ProfileReevaluationJobs.id eq command.jobId) and
@@ -373,6 +373,51 @@ class ProfileReevaluationRepository(
             }
             .single()
             .toOutcomeRecord()
+    }
+
+    /** 같은 작업에서 이미 완료한 예약 결과를 반환합니다. */
+    fun findOutcome(
+        jobId: Long,
+        appointmentId: Long,
+    ): ProfileReevaluationOutcomeRecord? {
+        require(jobId > 0 && appointmentId > 0) {
+            "jobId and appointmentId must be positive"
+        }
+        return ProfileReevaluationOutcomes
+            .selectAll()
+            .where {
+                (ProfileReevaluationOutcomes.jobId eq EntityID(jobId, ProfileReevaluationJobs)) and
+                    (ProfileReevaluationOutcomes.appointmentId eq appointmentId)
+            }.singleOrNull()
+            ?.toOutcomeRecord()
+    }
+
+    /** 작업이 해당 환자 범위의 최신 revision을 계속 가리키는지 반환합니다. */
+    fun isCurrentRevision(
+        jobId: Long,
+        revision: Long,
+    ): Boolean {
+        require(jobId > 0 && revision > 0) { "jobId and revision must be positive" }
+        return matchesCurrentRevision(jobId, revision)
+    }
+
+    /**
+     * head와 job을 ingress와 같은 순서로 잠근 뒤 최신 revision 여부를 다시 검증합니다.
+     *
+     * appointment 최종 transaction이 이 fencing을 통과해야 더 최신 event와 경합한
+     * 오래된 worker가 뒤늦게 예약 상태를 commit하지 못합니다.
+     */
+    fun lockCurrentRevision(
+        jobId: Long,
+        revision: Long,
+    ): Boolean {
+        require(jobId > 0 && revision > 0) { "jobId and revision must be positive" }
+        val observedJob = findJobRow(jobId, forUpdate = false) ?: return false
+        val head = findHeadRow(observedJob.toScope(), forUpdate = true) ?: return false
+        if (head[ProfileReevaluationHeads.latestRevision] != revision) return false
+        val lockedJob = findJobRow(jobId, forUpdate = true) ?: return false
+        return lockedJob[ProfileReevaluationJobs.targetRevision] == revision &&
+            lockedJob[ProfileReevaluationJobs.headId] == observedJob[ProfileReevaluationJobs.headId]
     }
 
     fun findHead(scope: ProfileReevaluationScope): ProfileReevaluationHeadRecord? =
@@ -466,7 +511,7 @@ class ProfileReevaluationRepository(
         return if (updated == 1) findJob(jobId) else null
     }
 
-    private fun isCurrentRevision(jobId: Long, revision: Long): Boolean {
+    private fun matchesCurrentRevision(jobId: Long, revision: Long): Boolean {
         val job = findJobRow(jobId, forUpdate = true) ?: return false
         if (job[ProfileReevaluationJobs.targetRevision] != revision) return false
         val head = findHeadRow(job.toScope(), forUpdate = true) ?: return false
