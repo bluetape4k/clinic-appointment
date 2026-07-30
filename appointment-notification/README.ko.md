@@ -24,11 +24,11 @@ Redis Leader Election + Resilience4j 기반 고가용성(HA) 알림 스케줄러
 
 ## 알림 처리 흐름
 
-![고가용성 알림 아키텍처 다이어그램](../docs/images/readme-diagrams/appointment-notification-architecture-01.png)
+![고가용성 알림 아키텍처 다이어그램](../docs/images/readme-diagrams/appointment-notification-architecture-01-ko.png)
 
-![알림 이벤트 데이터 흐름](../docs/requirements/assets/data-flow-05-notification-events.png)
+![알림 이벤트 데이터 흐름](../docs/requirements/assets/data-flow-05-notification-events-ko.png)
 
-![고가용성 리마인더 시나리오](../docs/requirements/assets/user-scenarios-05-ha-reminder.png)
+![고가용성 리마인더 시나리오](../docs/requirements/assets/user-scenarios-05-ha-reminder-ko.png)
 
 → 전체 시나리오: [user-scenarios.md S5](../docs/requirements/user-scenarios.md#s5-ha-알림-리마인더-발송-스케줄러)
 

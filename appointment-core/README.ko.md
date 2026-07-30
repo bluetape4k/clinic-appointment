@@ -116,23 +116,23 @@ val newState = machine.transition(
 
 ## 주요 엔티티 관계도
 
-![예약 도메인 엔티티 관계도](../docs/images/readme-diagrams/appointment-core-erd-01.png)
+![예약 도메인 엔티티 관계도](../docs/images/readme-diagrams/appointment-core-erd-01-ko.png)
 
 → 전체 ERD: [erd.md](../docs/requirements/erd.md)
 
 ## 예약 상태머신
 
-![예약 상태머신 다이어그램](../docs/images/readme-diagrams/appointment-core-architecture-02.png)
+![예약 상태 머신 다이어그램](../docs/images/readme-diagrams/appointment-core-architecture-02-ko.png)
 
 → 상태 전이 전체 목록: [domain-model.md](../docs/requirements/domain-model.md#상태-전이도)
 
 ## 핵심 도메인 흐름
 
-![가용 슬롯 조회 데이터 흐름](../docs/requirements/assets/data-flow-02-slot-query.png)
+![가용 슬롯 조회 데이터 흐름](../docs/requirements/assets/data-flow-02-slot-query-ko.png)
 
-![임시휴진 재배정 데이터 흐름](../docs/requirements/assets/data-flow-03-closure-reschedule.png)
+![임시 휴진 재배정 데이터 흐름](../docs/requirements/assets/data-flow-03-closure-reschedule-ko.png)
 
-![장비 사용불가 데이터 흐름](../docs/requirements/assets/data-flow-04-equipment-unavailability.png)
+![장비 사용 불가 데이터 흐름](../docs/requirements/assets/data-flow-04-equipment-unavailability-ko.png)
 
 ## 타임존 설계
 

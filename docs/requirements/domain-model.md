@@ -77,9 +77,9 @@ stateDiagram-v2
     NO_SHOW --> [*]
 ```
 
-![Appointment state machine](assets/domain-model-01-appointment-state-machine.png)
+![예약 상태 머신](assets/domain-model-01-appointment-state-machine-ko.png)
 
-[SVG](assets/domain-model-01-appointment-state-machine.svg) · [Mermaid source](assets/domain-model-01-appointment-state-machine.mmd)
+[SVG](assets/domain-model-01-appointment-state-machine-ko.svg) · [Mermaid source](assets/domain-model-01-appointment-state-machine.mmd)
 
 ### Solver Pinned 상태
 

@@ -115,23 +115,23 @@ Full transition list: [domain model document](../docs/requirements/domain-model.
 
 ## Entity Relationship Overview
 
-![Entity Relationship Overview diagram](../docs/images/readme-diagrams/appointment-core-erd-01.png)
+![Entity Relationship Overview diagram](../docs/images/readme-diagrams/appointment-core-erd-01-en.png)
 
 Full ERD: [erd.md](../docs/requirements/erd.md)
 
 ## Appointment State Machine
 
-![Appointment State Machine diagram](../docs/images/readme-diagrams/appointment-core-architecture-02.png)
+![Appointment State Machine diagram](../docs/images/readme-diagrams/appointment-core-architecture-02-en.png)
 
 Full transition list: [domain-model.md](../docs/requirements/domain-model.md#상태-전이도)
 
 ## Core Domain Flows
 
-![Available slot query data flow](../docs/requirements/assets/data-flow-02-slot-query.png)
+![Available slot query data flow](../docs/requirements/assets/data-flow-02-slot-query-en.png)
 
-![Temporary closure reschedule data flow](../docs/requirements/assets/data-flow-03-closure-reschedule.png)
+![Temporary closure reschedule data flow](../docs/requirements/assets/data-flow-03-closure-reschedule-en.png)
 
-![Equipment unavailability data flow](../docs/requirements/assets/data-flow-04-equipment-unavailability.png)
+![Equipment unavailability data flow](../docs/requirements/assets/data-flow-04-equipment-unavailability-en.png)
 
 ## Timezone Design
 

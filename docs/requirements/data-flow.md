@@ -22,9 +22,9 @@ flowchart TD
     style EVT fill:#E8A838,color:#fff
 ```
 
-![Appointment creation data flow](assets/data-flow-01-appointment-create.png)
+![예약 생성 데이터 흐름](assets/data-flow-01-appointment-create-ko.png)
 
-[SVG](assets/data-flow-01-appointment-create.svg) · [Mermaid source](assets/data-flow-01-appointment-create.mmd)
+[SVG](assets/data-flow-01-appointment-create-ko.svg) · [Mermaid source](assets/data-flow-01-appointment-create.mmd)
 
 ## 2. 슬롯 조회 흐름
 
@@ -49,9 +49,9 @@ flowchart LR
     style CALC fill:#27AE60,color:#fff
 ```
 
-![Slot query data flow](assets/data-flow-02-slot-query.png)
+![슬롯 조회 데이터 흐름](assets/data-flow-02-slot-query-ko.png)
 
-[SVG](assets/data-flow-02-slot-query.svg) · [Mermaid source](assets/data-flow-02-slot-query.mmd)
+[SVG](assets/data-flow-02-slot-query-ko.svg) · [Mermaid source](assets/data-flow-02-slot-query.mmd)
 
 ## 3. 임시휴진 재배정 흐름
 
@@ -86,9 +86,9 @@ flowchart TD
     style Greedy fill:#27AE60,color:#fff,stroke:#1E8449
 ```
 
-![Closure reschedule data flow](assets/data-flow-03-closure-reschedule.png)
+![휴진 재배정 데이터 흐름](assets/data-flow-03-closure-reschedule-ko.png)
 
-[SVG](assets/data-flow-03-closure-reschedule.svg) · [Mermaid source](assets/data-flow-03-closure-reschedule.mmd)
+[SVG](assets/data-flow-03-closure-reschedule-ko.svg) · [Mermaid source](assets/data-flow-03-closure-reschedule.mmd)
 
 ## 4. 장비 사용불가 등록 흐름
 
@@ -111,9 +111,9 @@ flowchart TD
     style ERR fill:#C0392B,color:#fff
 ```
 
-![Equipment unavailability data flow](assets/data-flow-04-equipment-unavailability.png)
+![장비 사용 불가 데이터 흐름](assets/data-flow-04-equipment-unavailability-ko.png)
 
-[SVG](assets/data-flow-04-equipment-unavailability.svg) · [Mermaid source](assets/data-flow-04-equipment-unavailability.mmd)
+[SVG](assets/data-flow-04-equipment-unavailability-ko.svg) · [Mermaid source](assets/data-flow-04-equipment-unavailability.mmd)
 
 ## 5. 알림 이벤트 흐름
 
@@ -139,9 +139,9 @@ flowchart LR
     style HA fill:#16A085,color:#fff,stroke:#0E6655
 ```
 
-![Notification event data flow](assets/data-flow-05-notification-events.png)
+![알림 이벤트 데이터 흐름](assets/data-flow-05-notification-events-ko.png)
 
-[SVG](assets/data-flow-05-notification-events.svg) · [Mermaid source](assets/data-flow-05-notification-events.mmd)
+[SVG](assets/data-flow-05-notification-events-ko.svg) · [Mermaid source](assets/data-flow-05-notification-events.mmd)
 
 ## 6. Solver 데이터 흐름
 
@@ -177,9 +177,9 @@ flowchart TD
     style SOLVE fill:#D35400,color:#fff
 ```
 
-![Solver data flow](assets/data-flow-06-solver-data.png)
+![Solver 데이터 흐름](assets/data-flow-06-solver-data-ko.png)
 
-[SVG](assets/data-flow-06-solver-data.svg) · [Mermaid source](assets/data-flow-06-solver-data.mmd)
+[SVG](assets/data-flow-06-solver-data-ko.svg) · [Mermaid source](assets/data-flow-06-solver-data.mmd)
 
 ## 7. Scheduling Policy 관리 흐름
 

@@ -90,7 +90,7 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 
 ## Event Flow
 
-![Appointment event architecture diagram](../docs/images/readme-diagrams/appointment-event-architecture-01.png)
+![Appointment event architecture diagram](../docs/images/readme-diagrams/appointment-event-architecture-01-en.png)
 
 ## Dependencies
 

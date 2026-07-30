@@ -16,9 +16,9 @@ The API server at `http://localhost:8080` must be running first.
 
 ## User Flows
 
-![Patient booking scenario sequence](../../docs/requirements/assets/user-scenarios-01-patient-booking.png)
+![Patient booking scenario sequence](../../docs/requirements/assets/user-scenarios-01-patient-booking-en.png)
 
-![Equipment unavailability scenario sequence](../../docs/requirements/assets/user-scenarios-04-equipment-unavailability.png)
+![Equipment unavailability scenario sequence](../../docs/requirements/assets/user-scenarios-04-equipment-unavailability-en.png)
 
 ## Build
 

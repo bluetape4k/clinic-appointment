@@ -32,11 +32,11 @@ Soft (6개): 의사 부하 분산(가중치 100), 스케줄 갭 최소화(가중
 
 ## Solver 데이터 흐름
 
-![Solver 데이터 흐름 다이어그램](../docs/images/readme-diagrams/appointment-solver-architecture-01.png)
+![Solver 데이터 흐름 다이어그램](../docs/images/readme-diagrams/appointment-solver-architecture-01-ko.png)
 
-![Solver 요구사항 데이터 흐름](../docs/requirements/assets/data-flow-06-solver-data.png)
+![Solver 요구사항 데이터 흐름](../docs/requirements/assets/data-flow-06-solver-data-ko.png)
 
-![임시휴진 Solver 재배정 시나리오](../docs/requirements/assets/user-scenarios-03-closure-reschedule-solver.png)
+![임시 휴진 Solver 재배정 시나리오](../docs/requirements/assets/user-scenarios-03-closure-reschedule-solver-ko.png)
 
 → 전체 흐름: [data-flow.md](../docs/requirements/data-flow.md#6-solver-데이터-흐름)
 

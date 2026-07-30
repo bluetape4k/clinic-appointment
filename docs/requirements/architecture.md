@@ -20,9 +20,9 @@ graph TD
     solver --> api
 ```
 
-![Module dependency graph](assets/architecture-01-module-dependency.png)
+![모듈 의존성 그래프](assets/architecture-01-module-dependency-ko.png)
 
-[SVG](assets/architecture-01-module-dependency.svg) · [Mermaid source](assets/architecture-01-module-dependency.mmd)
+[SVG](assets/architecture-01-module-dependency-ko.svg) · [Mermaid source](assets/architecture-01-module-dependency.mmd)
 
 > `appointment-api`는 `appointment-notification`에 **의존하지 않는다**.
 > 알림은 도메인 이벤트를 구독하여 독립적으로 동작한다.

@@ -62,15 +62,15 @@ Scheduling policy는 앞으로의 예약 결정이 따라야 할 동작을 정�
 
 ## 아키텍처
 
-![Clinic Appointment Architecture](docs/images/readme-diagrams/clinic-appointment-architecture-01.png)
+![Clinic Appointment 아키텍처](docs/images/readme-diagrams/clinic-appointment-architecture-01-ko.png)
 
 ## 모듈 개요
 
-![Module Overview](docs/images/readme-diagrams/root-readme-overview-01.png)
+![모듈 개요](docs/images/readme-diagrams/root-readme-overview-01-ko.png)
 
 ## 대표 요구사항 흐름
 
-![예약 생성 요구사항 흐름](docs/requirements/assets/data-flow-01-appointment-create.png)
+![예약 생성 요구사항 흐름](docs/requirements/assets/data-flow-01-appointment-create-ko.png)
 
 전체 요구사항 다이어그램 목록은 [docs/requirements](docs/requirements/README.md)에서 관리합니다.
 

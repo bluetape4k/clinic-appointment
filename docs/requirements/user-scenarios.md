@@ -49,9 +49,9 @@ sequenceDiagram
     Frontend-->>Patient: 예약 완료 확인
 ```
 
-![Patient booking sequence](assets/user-scenarios-01-patient-booking.png)
+![환자 예약 시퀀스](assets/user-scenarios-01-patient-booking-ko.png)
 
-[SVG](assets/user-scenarios-01-patient-booking.svg) · [Mermaid source](assets/user-scenarios-01-patient-booking.mmd)
+[SVG](assets/user-scenarios-01-patient-booking-ko.svg) · [Mermaid source](assets/user-scenarios-01-patient-booking.mmd)
 
 ---
 
@@ -98,9 +98,9 @@ sequenceDiagram
     API-->>Frontend: 200 OK
 ```
 
-![Appointment status lifecycle sequence](assets/user-scenarios-02-status-lifecycle.png)
+![예약 상태 생명주기 시퀀스](assets/user-scenarios-02-status-lifecycle-ko.png)
 
-[SVG](assets/user-scenarios-02-status-lifecycle.svg) · [Mermaid source](assets/user-scenarios-02-status-lifecycle.mmd)
+[SVG](assets/user-scenarios-02-status-lifecycle-ko.svg) · [Mermaid source](assets/user-scenarios-02-status-lifecycle.mmd)
 
 ---
 
@@ -142,9 +142,9 @@ sequenceDiagram
     Frontend-->>Admin: 재배정 완료 목록 표시
 ```
 
-![Closure reschedule solver sequence](assets/user-scenarios-03-closure-reschedule-solver.png)
+![휴진 재배정 Solver 시퀀스](assets/user-scenarios-03-closure-reschedule-solver-ko.png)
 
-[SVG](assets/user-scenarios-03-closure-reschedule-solver.svg) · [Mermaid source](assets/user-scenarios-03-closure-reschedule-solver.mmd)
+[SVG](assets/user-scenarios-03-closure-reschedule-solver-ko.svg) · [Mermaid source](assets/user-scenarios-03-closure-reschedule-solver.mmd)
 
 ---
 
@@ -179,9 +179,9 @@ sequenceDiagram
     Note over API,Core: 이후 SlotCalculationService가<br/>해당 기간 슬롯 제외
 ```
 
-![Equipment unavailability sequence](assets/user-scenarios-04-equipment-unavailability.png)
+![장비 사용 불가 시퀀스](assets/user-scenarios-04-equipment-unavailability-ko.png)
 
-[SVG](assets/user-scenarios-04-equipment-unavailability.svg) · [Mermaid source](assets/user-scenarios-04-equipment-unavailability.mmd)
+[SVG](assets/user-scenarios-04-equipment-unavailability-ko.svg) · [Mermaid source](assets/user-scenarios-04-equipment-unavailability.mmd)
 
 ---
 
@@ -212,6 +212,6 @@ sequenceDiagram
     end
 ```
 
-![HA reminder sequence](assets/user-scenarios-05-ha-reminder.png)
+![고가용성 리마인더 시퀀스](assets/user-scenarios-05-ha-reminder-ko.png)
 
-[SVG](assets/user-scenarios-05-ha-reminder.svg) · [Mermaid source](assets/user-scenarios-05-ha-reminder.mmd)
+[SVG](assets/user-scenarios-05-ha-reminder-ko.svg) · [Mermaid source](assets/user-scenarios-05-ha-reminder.mmd)
