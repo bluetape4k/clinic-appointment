@@ -104,4 +104,3 @@ CREATE INDEX idx_appointment_profile_reevaluation
     ON scheduling_appointments(clinic_id, patient_reference_fingerprint, id);
 CREATE INDEX idx_commitment_profile_reevaluation
     ON scheduling_appointment_commitments(commitment_status, appointment_id);
-

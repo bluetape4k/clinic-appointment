@@ -28,4 +28,3 @@ object ProfileReevaluationHeads : LongIdTable("scheduling_profile_reevaluation_h
         )
     }
 }
-
