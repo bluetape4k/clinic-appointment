@@ -120,7 +120,7 @@ scheduling assessment를 이용해 현재 예약 결과가 달라지는지 다�
 3. 무효하면 기존 hold를 유지한 상태에서 대체 후보를 계산한다.
 4. 대체 allocation을 확보할 수 있으면 한 트랜잭션에서 새 allocation 획득,
    commitment/proposal 교체, 기존 allocation 해제와 outbox 기록을 수행한다.
-5. authoritative한 계산 결과 대체 allocation이 없으면 한 트랜잭션에서 기존
+5. 재평가가 정상 완료됐지만 대체 allocation이 없으면 한 트랜잭션에서 기존
    allocation을 해제하고 `PROPOSED`로 전환한다.
 
 CRM 조회 실패, solver 오류, DB 오류, timeout이나 CAS 충돌은 “대체 후보 없음”과
@@ -267,7 +267,7 @@ revision을 사용해 CRM의 제한된 scheduling assessment를 조회한다.
   않는다.
 
 예약서비스의 감사 기록은 `profileRevision`, `assessmentRef`, `assessmentHash`,
-발행 authority, event ID와 처리 outcome만 저장한다. 이 기록만으로 CRM의 원본
+발행 주체, event ID와 처리 outcome만 저장한다. 이 기록만으로 CRM의 원본
 프로필을 복원할 수 없어야 한다.
 
 ### 5.3 권한과 scope 검증
@@ -280,7 +280,7 @@ event consumer와 assessment client는 신뢰된 service identity를 사용한�
 - revision rollback
 - assessment hash 불일치
 - 허용되지 않은 field 포함
-- 발행 authority 또는 signature 검증 실패
+- 발행 권한 또는 서명 검증 실패
 
 보안 실패 payload를 그대로 로그에 남기지 않는다. bounded reason code와 event ID만
 감사한다.
@@ -323,7 +323,7 @@ appointment별 outcome은 작업 terminal state와 분리한다.
 | `PROPOSAL_SUPERSEDED` | `PROPOSED`를 최신 proposal로 교체 |
 | `HOLD_KEPT` | 기존 hold가 여전히 유효 |
 | `HOLD_REPLACED` | 새 allocation으로 원자 교체 |
-| `FALLBACK_TO_PROPOSED` | authoritative한 대체 후보 부재로 hold 해제 후 제안 상태 전환 |
+| `FALLBACK_TO_PROPOSED` | 재평가 완료 후 대체 후보가 없어 hold를 해제하고 제안 상태로 전환 |
 | `SKIPPED_INELIGIBLE` | 상태가 바뀌어 더 이상 대상이 아님 |
 | `SKIPPED_UNCHANGED` | 평가 결과상 실질 변경이 없음 |
 
@@ -437,7 +437,7 @@ recovery policy로 제한한다. 이를 소진한 뒤에는 운영자 명시 실
 | runnable job | state, next attempt/due time, clinic |
 | lease 복구 | state, lease until |
 | 최신 revision 병합 | tenant, clinic, patient fingerprint, profile revision |
-| inbox 멱등성 | event ID 또는 authority-scoped event ID |
+| inbox 멱등성 | event ID 또는 발행 주체별 event ID |
 
 구체적인 table과 index DDL은 구현 계획에서 H2, PostgreSQL, MySQL의 동등한
 업무 의미를 확인한 뒤 고정한다.
@@ -467,7 +467,7 @@ tenant/clinic과 bounded state/reason code만 허용한다.
 - `FAILED` 증가 또는 같은 오류의 연속 재시도
 - lease expiry 급증
 - 특정 clinic의 backlog가 다른 clinic의 lateness를 유발
-- scope/hash/authority 보안 검증 실패
+- scope, hash 또는 발행 주체 검증 실패
 - catch-up cursor 정체
 
 로그는 job ID, event ID, profile revision, tenant/clinic, 상태와 bounded reason
@@ -492,8 +492,8 @@ code만 구조화한다. payload dump, assessment 본문과 patient fingerprint 
 
 - 유효한 `HELD`는 기존 allocation과 만료시각을 유지한다.
 - 무효한 `HELD`는 새 allocation으로 원자 교체된다.
-- authoritative한 대체 후보 부재 시 기존 allocation 해제와 `PROPOSED` 전환이
-  한 트랜잭션에서 수행된다.
+- 재평가가 정상 완료됐지만 대체 후보가 없을 때 기존 allocation 해제와
+  `PROPOSED` 전환이 한 트랜잭션에서 수행된다.
 - CRM, solver, DB와 CAS 기술 실패에서는 예약과 allocation이 변경되지 않는다.
 - 처리 중 `CONFIRMED`가 된 예약은 `SKIPPED_INELIGIBLE`로 종료된다.
 - 중복 event, 역순 revision, lease 만료, worker crash와 outbox replay가 중복
@@ -515,7 +515,7 @@ schema, 직렬화 결과, job row, outbox, audit, log와 metric을 검사해 다
 - patient fingerprint metric label
 - 인증 token, 암호문과 key material
 
-tenant/clinic/patient scope, revision, hash와 authority 불일치를 각각 거부하며
+tenant/clinic/patient scope, revision, hash와 발행 주체 불일치를 각각 거부하며
 오류 응답과 로그에도 금지 필드가 노출되지 않는지 검증한다.
 
 ### 11.4 부하와 공정성 검증
@@ -574,7 +574,7 @@ transaction을 일괄 되돌리지 않으며, 대기 job은 보존한다. `FAILE
 
 ## 13. 시각화와 문서 계약
 
-이 업무 흐름의 권위 원본은 이 Markdown 설계다. 독자가 상태별 처리, 개인정보
+이 업무 흐름의 기준 문서는 이 Markdown 설계다. 독자가 상태별 처리, 개인정보
 경계, 장애 복구와 병원 간 공정성을 탐색할 수 있도록 최종 시각 자료는 HTML과
 PNG로 제공한다.
 
@@ -603,7 +603,7 @@ dimension과 hash가 같은지 확인한다.
 3. 기술 실패, retry/lease/catch-up과 개인정보 경계
 
 sequence, class, ERD처럼 정적인 구조·관계 자료가 추가로 필요하면 SVG와 PNG를
-사용한다. 이 업무 흐름 자체를 위해 hand-maintained SVG를 별도 권위 원본으로
+사용한다. 이 업무 흐름 자체를 위해 hand-maintained SVG를 별도의 기준 문서로
 관리하지 않는다.
 
 향후 README에 넣을 때는 `<picture>`로 light/dark PNG를 선택하고 이미지를 같은
@@ -644,8 +644,8 @@ backpressure를 구현하기 어렵다. 비동기 bounded job과 catch-up을 사
 ### F. 기술 실패 시 기존 hold를 선제 해제
 
 기각한다. 인프라 장애를 업무 판단으로 오인해 고객의 유효한 자원 선점을 잃게
-한다. 기존 hold 해제는 authoritative한 재평가가 성공하고 대체 후보가 없다는
-업무 결과가 나온 경우에만 허용한다.
+한다. 기존 hold 해제는 재평가를 정상 완료한 결과 대체 후보가 없는 경우에만
+허용한다.
 
 ## 15. 구현 계획 진입 조건
 
