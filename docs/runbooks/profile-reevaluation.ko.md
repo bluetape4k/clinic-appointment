@@ -215,10 +215,14 @@ curl --fail-with-body -X POST \
 tenant 전체 또는 여러 병원을 한 번에 redrive하는 기능은 이 endpoint에서 지원하지
 않는다.
 
-서비스는 실패 row를 고치지 않고 lineage가 이어지는 새 attempt를 만든다. 같은
-idempotency key는 같은 요청에만 재사용할 수 있다. 자동 redrive는
+서비스는 실패 row를 고치지 않고 lineage가 이어지는 새 attempt를 만든다. 동일 프로세스에서
+같은 요청에 같은 idempotency key를 사용하면 이전 응답을 그대로
+반환한다. 프로세스가 재시작되면 응답 cache는 사라진다. 저장된 lineage와 CAS는 attempt
+중복 생성을 계속 막지만, 같은 명령이 이전 작업 목록 대신 `created=0`을 반환할 수 있다.
+새 preview와 운영자 판단이 필요한지 결정하기 전에 실패 row와
+`redrive_of_job_id` successor를 확인한다. 자동 redrive는
 `appointment.profile-reevaluation.auto-redrive-max`까지만 실행하고 설정한 횟수를
-소진하면 멈춘다. 이후 복구는 항상 새 preview와 운영자 판단이 필요하다.
+소진하면 멈춘다.
 
 <a id="privacy-incident"></a>
 ## 개인정보 사고

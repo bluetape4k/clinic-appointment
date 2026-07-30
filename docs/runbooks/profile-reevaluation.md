@@ -230,10 +230,14 @@ cannot override it. A tenant-wide or cross-clinic redrive is not supported by
 this endpoint.
 
 The service creates a new lineage attempt; it does not rewrite the failed row.
-The same idempotency key is replay-safe only for the same request. Automatic
-redrive is capped by `appointment.profile-reevaluation.auto-redrive-max` and
-stops after the configured limit. Further recovery always requires a new
-preview and an operator decision.
+Within one service process, the same idempotency key replays the exact response
+only for the same request. After a process restart, the replay cache is empty:
+persisted lineage/CAS still prevents a duplicate attempt, but the repeated
+command can report `created=0` instead of the original job list. Inspect the
+failed row and its `redrive_of_job_id` successor before deciding whether a new
+preview and a new operator decision are required. Automatic redrive is capped
+by `appointment.profile-reevaluation.auto-redrive-max` and stops after the
+configured limit.
 
 <a id="privacy-incident"></a>
 ## Privacy incident

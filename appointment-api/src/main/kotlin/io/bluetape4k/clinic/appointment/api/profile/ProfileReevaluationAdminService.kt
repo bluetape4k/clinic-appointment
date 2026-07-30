@@ -21,6 +21,9 @@ import java.util.LinkedHashMap
  *
  * preview는 저장 상태를 변경하지 않습니다. execute는 실패 원본을 수정하지 않고 저장소의
  * lineage/CAS 계약으로 새 attempt만 생성합니다. idempotency key 원문은 보관하지 않습니다.
+ * 같은 프로세스에서는 크기가 제한된 cache로 응답을 재사용합니다. 프로세스 재시작 뒤에는
+ * 기존 응답을 그대로 재생한다고 보장하지 않으며, 저장된 lineage/CAS가 attempt 중복 생성만
+ * 방지합니다.
  */
 class ProfileReevaluationAdminService(
     private val store: ProfileReevaluationAdminStore,
