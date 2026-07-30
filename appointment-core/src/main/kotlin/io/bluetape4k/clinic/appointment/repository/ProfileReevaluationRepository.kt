@@ -931,7 +931,7 @@ class ProfileReevaluationRepository(
             it[latestEventId] = "bootstrap"
             it[assessmentRef] = "bootstrap"
             it[assessmentHash] = "0".repeat(64)
-            it[occurredAt] = Instant.EPOCH
+            it[occurredAt] = BOOTSTRAP_OCCURRED_AT
         }
         if (TransactionManager.current().db.dialect.name.equals("h2", ignoreCase = true)) {
             val exists = findHeadRow(scope, forUpdate = false) != null
@@ -1116,6 +1116,9 @@ class ProfileReevaluationRepository(
         val NON_TERMINAL_STATES = READY_STATES + ProfileReevaluationJobStatus.RUNNING
         const val MAX_FAILED_JOB_PAGE_SIZE = 1_000
         val FAILURE_CODE_REGEX = Regex("^[A-Z][A-Z0-9_]{0,95}$")
+
+        // MySQL TIMESTAMP의 최소 유효 UTC 값입니다. Instant.EPOCH은 zero date로 저장될 수 있습니다.
+        private val BOOTSTRAP_OCCURRED_AT: Instant = Instant.ofEpochSecond(1L)
     }
 }
 

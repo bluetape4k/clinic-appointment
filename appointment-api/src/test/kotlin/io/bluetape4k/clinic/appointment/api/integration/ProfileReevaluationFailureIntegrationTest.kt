@@ -225,6 +225,18 @@ internal class ProfileReevaluationFailureIntegrationTest :
 @ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 internal class ProfileReevaluationFailureMySqlIntegrationTest :
     AbstractProfileReevaluationFailureIntegrationTest() {
+
+    @Test
+    fun `MySQL에서 bootstrap head의 기준 시각은 zero date를 만들지 않는다`() {
+        val head =
+            transaction(database) {
+                ProfileReevaluationRepository()
+                    .upsertEvent(profileChange(revision = 7L, occurredAt = NOW))
+            }
+
+        head.occurredAt shouldBeEqualTo NOW
+    }
+
     override fun createDatabase(): Database {
         val mysql = Containers.MySql8
         return Database.connect(
