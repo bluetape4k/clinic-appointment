@@ -7,7 +7,7 @@ import java.sql.Driver
 class FlywayMigrationTest {
 
     @Test
-    fun `V9 contract remains valid and V10 through V12 add versioned visit commitment schema`() {
+    fun `V9 contract remains valid and V10 through V13 add visit and reevaluation schema`() {
         val driver = Class.forName("org.h2.Driver").getDeclaredConstructor().newInstance() as Driver
         val dataSource = SimpleDriverDataSource(
             driver,
@@ -18,6 +18,10 @@ class FlywayMigrationTest {
             location = "classpath:db/migration/h2",
         )
         VisitCommitmentMigrationTestSupport.verifyVisitCommitmentMigrations(
+            dataSource = dataSource,
+            location = "classpath:db/migration/h2",
+        )
+        ProfileReevaluationMigrationTestSupport.verifyV13Migration(
             dataSource = dataSource,
             location = "classpath:db/migration/h2",
         )

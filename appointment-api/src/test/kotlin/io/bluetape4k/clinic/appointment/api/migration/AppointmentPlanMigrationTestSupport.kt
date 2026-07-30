@@ -118,7 +118,9 @@ internal object AppointmentPlanMigrationTestSupport {
             MigrationUtils.statementsRequiredForDatabaseMigration(
                 *EXPOSED_POLICY_MIGRATION_TABLES,
                 withLogs = false,
-            ).filter(::isAdditiveSchemaChange)
+            )
+                .filter(::isAdditiveSchemaChange)
+                .filterNot(::isLaterMigrationIndex)
         }
 
         check(additiveDrift.isEmpty()) {
@@ -143,6 +145,12 @@ internal object AppointmentPlanMigrationTestSupport {
             (normalized.startsWith("ALTER TABLE ") &&
                 normalized.contains(" ADD COLUMN "))
     }
+
+    /**
+     * V9 검사 시점 이후 버전이 소유하는 예약 조회 index는 해당 버전의 전용 검사가 검증합니다.
+     */
+    private fun isLaterMigrationIndex(statement: String): Boolean =
+        statement.contains("idx_appointment_profile_reevaluation", ignoreCase = true)
 
     /**
      * Proves the repository's documented 256 KiB canonical JSON limit on every

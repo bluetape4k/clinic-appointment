@@ -26,5 +26,6 @@ object AppointmentCommitments : LongIdTable("scheduling_appointment_commitments"
     init {
         uniqueIndex("uq_commitment_appointment", appointmentId)
         index("idx_commitment_confirmed_proposal", false, confirmedProposalId)
+        index("idx_commitment_profile_reevaluation", false, status, appointmentId)
     }
 }

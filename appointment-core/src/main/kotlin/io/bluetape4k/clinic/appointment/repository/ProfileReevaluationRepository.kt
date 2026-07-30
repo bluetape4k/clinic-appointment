@@ -18,6 +18,7 @@ import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationOutcomes
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
@@ -87,7 +88,7 @@ class ProfileReevaluationRepository(
             it[updatedAt] = dbNow
         }
         ProfileReevaluationJobs.update({
-            (ProfileReevaluationJobs.headId eq headId) and
+            (ProfileReevaluationJobs.headId eq EntityID(headId, ProfileReevaluationHeads)) and
                 (ProfileReevaluationJobs.targetRevision lessEq command.revision - 1L) and
                 (ProfileReevaluationJobs.status inList READY_STATES)
         }) {
@@ -98,7 +99,7 @@ class ProfileReevaluationRepository(
         }
 
         val jobId = ProfileReevaluationJobs.insertAndGetId {
-            it[ProfileReevaluationJobs.headId] = headId
+            it[ProfileReevaluationJobs.headId] = EntityID(headId, ProfileReevaluationHeads)
             it[tenantGroupId] = command.scope.tenantGroupId
             it[clinicId] = command.scope.clinicId
             it[patientReferenceFingerprint] = command.scope.patientReferenceFingerprint
@@ -358,7 +359,7 @@ class ProfileReevaluationRepository(
             "jobId, revision and appointmentId must be positive"
         }
         ProfileReevaluationOutcomes.insertIgnore {
-            it[ProfileReevaluationOutcomes.jobId] = jobId
+            it[ProfileReevaluationOutcomes.jobId] = EntityID(jobId, ProfileReevaluationJobs)
             it[targetRevision] = revision
             it[ProfileReevaluationOutcomes.appointmentId] = appointmentId
             it[ProfileReevaluationOutcomes.outcomeType] = outcomeType
@@ -366,7 +367,7 @@ class ProfileReevaluationRepository(
         return ProfileReevaluationOutcomes
             .selectAll()
             .where {
-                (ProfileReevaluationOutcomes.jobId eq jobId) and
+                (ProfileReevaluationOutcomes.jobId eq EntityID(jobId, ProfileReevaluationJobs)) and
                     (ProfileReevaluationOutcomes.targetRevision eq revision) and
                     (ProfileReevaluationOutcomes.appointmentId eq appointmentId)
             }
@@ -566,7 +567,7 @@ class ProfileReevaluationRepository(
 
     private fun ResultRow.toJobRecord() = ProfileReevaluationJobRecord(
         id = this[ProfileReevaluationJobs.id].value,
-        headId = this[ProfileReevaluationJobs.headId],
+        headId = this[ProfileReevaluationJobs.headId].value,
         scope = toScope(),
         targetRevision = this[ProfileReevaluationJobs.targetRevision],
         eventId = this[ProfileReevaluationJobs.eventId],
@@ -616,7 +617,7 @@ class ProfileReevaluationRepository(
 
     private fun ResultRow.toOutcomeRecord() = ProfileReevaluationOutcomeRecord(
         id = this[ProfileReevaluationOutcomes.id].value,
-        jobId = this[ProfileReevaluationOutcomes.jobId],
+        jobId = this[ProfileReevaluationOutcomes.jobId].value,
         targetRevision = this[ProfileReevaluationOutcomes.targetRevision],
         appointmentId = this[ProfileReevaluationOutcomes.appointmentId],
         outcomeType = this[ProfileReevaluationOutcomes.outcomeType],
