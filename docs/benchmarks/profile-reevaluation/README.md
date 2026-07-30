@@ -22,8 +22,8 @@ rollback과 query plan은 별도 통합 테스트에서 검증한다.
 
 | 항목 | 값 |
 |---|---|
-| benchmark commit | `8542453` |
-| production baseline | `2ee920f` |
+| benchmark commit | `27dfebf` |
+| production baseline | `1c79cb8` |
 | 실행 시각 | 2026-07-30, Asia/Seoul |
 | OS | macOS Darwin 25.5.0, arm64 |
 | CPU | Apple M5, 10 physical / 10 logical cores |
