@@ -64,6 +64,8 @@ object ProfileReevaluationJobs : LongIdTable("scheduling_profile_reevaluation_jo
     init {
         index("idx_profile_reevaluation_due", false, status, nextAttemptAt, clinicId, id)
         index("idx_profile_reevaluation_lease", false, status, leaseExpiresAt, clinicId, id)
+        index("idx_profile_reevaluation_failed", false, status, updatedAt, id)
+        index("idx_profile_reevaluation_backlog", false, dueAt, id, status)
         index(
             "idx_profile_reevaluation_clinic_ready",
             false,

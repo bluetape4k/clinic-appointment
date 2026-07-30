@@ -30,6 +30,7 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationEndpoint
+import io.bluetape4k.clinic.appointment.api.profile.PROFILE_REEVALUATION_OPERATE_SCOPE
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
@@ -182,7 +183,7 @@ class SecurityConfig {
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(EndpointRequest.to(ProfileReevaluationEndpoint::class.java))
-                    .hasRole(SchedulingRole.ADMIN)
+                    .access(profileReevaluationAccess())
                     // OpenAPI / Swagger remain public; operational endpoints
                     // stay authenticated unless a deployment adds an explicit policy.
                     .requestMatchers(
@@ -245,6 +246,17 @@ class SecurityConfig {
         AuthorizationManagers.allOf(
             AuthorityAuthorizationManager.hasRole(SchedulingRole.ADMIN),
             tenantAuthorizationManager,
+        )
+
+    /**
+     * 전역 actuator 경로는 tenant path가 없으므로 관리자 role만으로 열지 않습니다.
+     * Gateway가 부여한 전용 운영 capability를 추가로 요구하고, write operation은
+     * endpoint에서 요청 clinic과 principal allow-list를 다시 대조합니다.
+     */
+    private fun profileReevaluationAccess(): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasRole(SchedulingRole.ADMIN),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_$PROFILE_REEVALUATION_OPERATE_SCOPE"),
         )
 
     /**

@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.event.profile
 
 import io.bluetape4k.clinic.appointment.event.integration.ProtectedQuarantineEnvelope
+import io.bluetape4k.clinic.appointment.event.integration.ProfileAssessmentEventBounds
 import io.bluetape4k.clinic.appointment.event.integration.QuarantineDetection
 import io.bluetape4k.clinic.appointment.event.integration.QuarantineEnvelopeProtector
 import io.bluetape4k.clinic.appointment.event.integration.QuarantineRetentionClass
@@ -63,6 +64,14 @@ class ProfileReevaluationEventService(
     fun accept(
         rawEnvelope: UntrustedSchedulingEventEnvelope<PatientSchedulingAssessmentChanged>,
     ): ProfileReevaluationEventResult {
+        try {
+            ProfileAssessmentEventBounds.validateEnvelopeMetadata(rawEnvelope)
+        } catch (_: IllegalArgumentException) {
+            return ProfileReevaluationEventResult(
+                ProfileReevaluationEventStatus.QUARANTINED,
+                PAYLOAD_CONTRACT_INVALID,
+            )
+        }
         val protectedEnvelope = quarantineEnvelopeProtector.protect(rawEnvelope)
         val trusted = try {
             trustVerifier.verifyProfileAssessment(rawEnvelope)
@@ -212,6 +221,7 @@ class ProfileReevaluationEventService(
     private companion object {
         const val PROFILE_ASSESSMENT_SOURCE_AUTHORITY = "crm-assessment"
         const val PROFILE_REFERENCE_FINGERPRINT_INVALID = "PROFILE_REFERENCE_FINGERPRINT_INVALID"
+        const val PAYLOAD_CONTRACT_INVALID = "PAYLOAD_CONTRACT_INVALID"
         const val NO_MATERIAL_CHANGE = "NO_MATERIAL_CHANGE"
     }
 }

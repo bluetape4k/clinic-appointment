@@ -75,6 +75,10 @@ CREATE INDEX idx_profile_reevaluation_due
     ON scheduling_profile_reevaluation_jobs(status, next_attempt_at, clinic_id, id);
 CREATE INDEX idx_profile_reevaluation_lease
     ON scheduling_profile_reevaluation_jobs(status, lease_expires_at, clinic_id, id);
+CREATE INDEX idx_profile_reevaluation_failed
+    ON scheduling_profile_reevaluation_jobs(status, updated_at, id);
+CREATE INDEX idx_profile_reevaluation_backlog
+    ON scheduling_profile_reevaluation_jobs(due_at, id, status);
 CREATE INDEX idx_profile_reevaluation_clinic_ready
     ON scheduling_profile_reevaluation_jobs(
         tenant_group_id, clinic_id, status, next_attempt_at, due_at, id

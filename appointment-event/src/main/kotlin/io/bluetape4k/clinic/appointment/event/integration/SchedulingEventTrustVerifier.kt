@@ -169,6 +169,11 @@ class SchedulingEventTrustVerifier(
     fun verifyProfileAssessment(
         envelope: UntrustedSchedulingEventEnvelope<PatientSchedulingAssessmentChanged>,
     ): TrustedSchedulingEventEnvelope<PatientSchedulingAssessmentChanged> {
+        try {
+            ProfileAssessmentEventBounds.validateEnvelopeMetadata(envelope)
+        } catch (_: IllegalArgumentException) {
+            throw SchedulingTrustException("PAYLOAD_CONTRACT_INVALID")
+        }
         verifyCommonEnvelope(
             envelope,
             eventType = "PatientSchedulingAssessmentChanged",
@@ -203,6 +208,69 @@ class SchedulingEventTrustVerifier(
 
     private fun trust(condition: Boolean, reasonCode: String) {
         if (!condition) throw SchedulingTrustException(reasonCode)
+    }
+}
+
+/**
+ * CRM 프로필 변경 신호가 canonical hash, 암호화, 격리 저장소에 도달하기 전에 적용하는
+ * 구조·크기 경계입니다. 프로필 본문은 받지 않으며 비식별 참조도 bounded 값만 허용합니다.
+ */
+internal object ProfileAssessmentEventBounds {
+    private const val MAX_IDENTIFIER_LENGTH = 160
+    private const val MAX_REFERENCE_LENGTH = 512
+    private const val MAX_SIGNATURE_LENGTH = 1_024
+    private const val MAX_CANONICAL_PAYLOAD_BYTES = 16 * 1_024
+    private val identifier = Regex("[A-Za-z0-9][A-Za-z0-9._:/-]*")
+    private val sha256 = Regex("[0-9a-f]{64}")
+
+    fun validateEnvelopeMetadata(
+        envelope: UntrustedSchedulingEventEnvelope<PatientSchedulingAssessmentChanged>,
+    ) {
+        listOf(
+            envelope.eventId,
+            envelope.eventType,
+            envelope.producer,
+            envelope.issuer,
+            envelope.audience,
+            envelope.keyId,
+            envelope.algorithm,
+            envelope.correlationId,
+        ).forEach(::boundedIdentifier)
+        require(envelope.payloadHash.matches(sha256)) {
+            "payloadHash must be lowercase SHA-256"
+        }
+        require(envelope.schemaVersion > 0) { "schemaVersion must be positive" }
+        require(envelope.signature.length in 1..MAX_SIGNATURE_LENGTH) {
+            "signature length is invalid"
+        }
+
+        val payload = envelope.payload
+        boundedIdentifier(payload.eventId)
+        require(payload.tenantGroupId > 0) { "tenantGroupId must be positive" }
+        require(payload.clinicId > 0) { "clinicId must be positive" }
+        require(payload.patientReferenceFingerprint.matches(sha256)) {
+            "patientReferenceFingerprint must be lowercase SHA-256"
+        }
+        require(payload.profileRevision > 0) { "profileRevision must be positive" }
+        require(payload.assessmentRef.length in 1..MAX_REFERENCE_LENGTH) {
+            "assessmentRef length is invalid"
+        }
+        require(payload.assessmentHash.matches(sha256)) {
+            "assessmentHash must be lowercase SHA-256"
+        }
+        require(
+            PatientSchedulingAssessmentChangedHasher.canonicalBytes(payload).size <=
+                MAX_CANONICAL_PAYLOAD_BYTES,
+        ) {
+            "profile assessment payload is too large"
+        }
+    }
+
+    private fun boundedIdentifier(value: String) {
+        require(value.length in 1..MAX_IDENTIFIER_LENGTH) {
+            "identifier length is invalid"
+        }
+        require(identifier.matches(value)) { "identifier contains unsafe characters" }
     }
 }
 

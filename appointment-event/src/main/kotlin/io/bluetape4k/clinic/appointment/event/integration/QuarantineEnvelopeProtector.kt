@@ -57,6 +57,11 @@ class AesGcmQuarantineEnvelopeProtector(
             PurchaseEventBounds.validateEnvelopeMetadata(
                 envelope as UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
             )
+        } else if (envelope.payload is PatientSchedulingAssessmentChanged) {
+            @Suppress("UNCHECKED_CAST")
+            ProfileAssessmentEventBounds.validateEnvelopeMetadata(
+                envelope as UntrustedSchedulingEventEnvelope<PatientSchedulingAssessmentChanged>,
+            )
         }
         val plaintext = canonicalBytes(envelope)
         val hash = MessageDigest.getInstance("SHA-256")

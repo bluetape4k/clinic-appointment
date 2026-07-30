@@ -182,6 +182,39 @@ internal class ProfileReevaluationWorkerTest {
     }
 
     @Test
+    fun `예상 밖 처리 실패는 민감정보 없이 구분 가능한 terminal 증거를 남긴다`() {
+        runBlocking {
+            val job = job()
+            val store =
+                FakeWorkStore(
+                    currentRevision = job.targetRevision,
+                    candidates = listOf(candidate(1L, AppointmentCommitmentStatus.HELD)),
+                )
+            val observed = mutableListOf<ProfileReevaluationFailureEvidence>()
+            val result =
+                worker(
+                    store = store,
+                    failureObserver = ProfileReevaluationFailureObserver(observed::add),
+                    processor =
+                        ProfileReevaluationAppointmentProcessor { _, _, _, _ ->
+                            throw IllegalStateException("must not be persisted")
+                        },
+                ).process(job)
+
+            result shouldBeEqualTo ProfileReevaluationWorkerResult.FAILED
+            store.retryFailureCode shouldBeEqualTo "PROCESSING_STATE_FAILED"
+            store.retryTerminal.shouldBeTrue()
+            observed.single() shouldBeEqualTo
+                ProfileReevaluationFailureEvidence(
+                    jobId = job.id,
+                    targetRevision = job.targetRevision,
+                    failureCode = "PROCESSING_STATE_FAILED",
+                    exceptionType = IllegalStateException::class.qualifiedName!!,
+                )
+        }
+    }
+
+    @Test
     fun `runtime mode가 제안 전용으로 낮아지면 이후 선점은 변경하지 않는다`() {
         runBlocking {
             val job = job()
@@ -343,12 +376,15 @@ internal class ProfileReevaluationWorkerTest {
                     ProfileReevaluationMutationMode.APPLY_PROPOSED_AND_HELD,
                 )
             },
+        failureObserver: ProfileReevaluationFailureObserver =
+            ProfileReevaluationFailureObserver { },
         processor: ProfileReevaluationAppointmentProcessor,
     ) = ProfileReevaluationWorker(
         store = store,
         assessmentClient = ProfileAssessmentClient { assessment() },
         appointmentProcessor = processor,
         runtimeGate = runtimeGate,
+        failureObserver = failureObserver,
         retryPolicy = ProfileReevaluationRetryPolicy(randomFraction = { 0.5 }),
         maxAppointmentsPerTick = maxAppointmentsPerTick,
         pageSize = pageSize,
@@ -434,6 +470,7 @@ private class FakeWorkStore(
     var completed = false
     var markedStaleRevision: Long? = null
     var retryFailureCode: String? = null
+    var retryTerminal: Boolean = false
     var deferReasonCode: String? = null
 
     override suspend fun claim(command: ClaimProfileReevaluationJobs): List<ProfileReevaluationJobRecord> =
@@ -487,6 +524,7 @@ private class FakeWorkStore(
         terminal: Boolean,
     ): Boolean {
         retryFailureCode = failureCode
+        retryTerminal = terminal
         return true
     }
 

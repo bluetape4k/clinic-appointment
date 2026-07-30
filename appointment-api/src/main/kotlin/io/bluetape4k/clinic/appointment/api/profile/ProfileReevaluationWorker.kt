@@ -13,12 +13,15 @@ import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationJobStat
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.ProfileReevaluationAppointmentCandidate
 import io.bluetape4k.clinic.appointment.repository.ProfileReevaluationRepository
+import io.bluetape4k.logging.KLogging
+import io.bluetape4k.logging.error
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Clock
 import java.time.Duration
@@ -35,6 +38,8 @@ class ProfileReevaluationWorker(
     private val assessmentClient: ProfileAssessmentClient,
     private val appointmentProcessor: ProfileReevaluationAppointmentProcessor,
     private val runtimeGate: ProfileReevaluationRuntimeGate,
+    private val failureObserver: ProfileReevaluationFailureObserver =
+        LoggingProfileReevaluationFailureObserver,
     private val retryPolicy: ProfileReevaluationRetryPolicy = ProfileReevaluationRetryPolicy(),
     private val maxAppointmentsPerTick: Int = 100,
     private val pageSize: Int = 50,
@@ -77,9 +82,32 @@ class ProfileReevaluationWorker(
             throw cancelled
         } catch (failure: ProfileAssessmentException) {
             return fail(job, failure.code.name, terminal = !failure.retryable)
-        } catch (_: Exception) {
-            return fail(job, FAILURE_PROCESSING)
+        } catch (failure: ExposedSQLException) {
+            return recordFailure(job, failure, FAILURE_DATABASE, terminal = false)
+        } catch (failure: IllegalArgumentException) {
+            return recordFailure(job, failure, FAILURE_CONTRACT, terminal = true)
+        } catch (failure: IllegalStateException) {
+            return recordFailure(job, failure, FAILURE_STATE, terminal = true)
+        } catch (failure: Exception) {
+            return recordFailure(job, failure, FAILURE_UNEXPECTED, terminal = true)
         }
+    }
+
+    private suspend fun recordFailure(
+        job: ProfileReevaluationJobRecord,
+        failure: Exception,
+        failureCode: String,
+        terminal: Boolean,
+    ): ProfileReevaluationWorkerResult {
+        failureObserver.record(
+            ProfileReevaluationFailureEvidence(
+                jobId = job.id,
+                targetRevision = job.targetRevision,
+                failureCode = failureCode,
+                exceptionType = failure::class.qualifiedName ?: failure.javaClass.name,
+            ),
+        )
+        return fail(job, failureCode, terminal)
     }
 
     private suspend fun fetchAssessment(job: ProfileReevaluationJobRecord): ProfileSchedulingAssessment =
@@ -271,10 +299,44 @@ class ProfileReevaluationWorker(
         val RUNTIME_GATE_RECHECK_DELAY: Duration = Duration.ofSeconds(5)
         const val FAILURE_HEAD_MISSING = "HEAD_MISSING"
         const val FAILURE_HEAD_REVISION_MISMATCH = "HEAD_REVISION_MISMATCH"
-        const val FAILURE_PROCESSING = "PROCESSING_FAILED"
+        const val FAILURE_DATABASE = "PROCESSING_DATABASE_FAILED"
+        const val FAILURE_CONTRACT = "PROCESSING_CONTRACT_FAILED"
+        const val FAILURE_STATE = "PROCESSING_STATE_FAILED"
+        const val FAILURE_UNEXPECTED = "PROCESSING_UNEXPECTED_FAILED"
         const val FAILURE_RUNTIME_GATE_DISABLED = "RUNTIME_GATE_DISABLED"
         const val FAILURE_RUNTIME_MODE_EXCLUDES_HELD = "RUNTIME_MODE_EXCLUDES_HELD"
         const val FAILURE_TICK_BUDGET_EXHAUSTED = "TICK_BUDGET_EXHAUSTED"
+    }
+}
+
+/**
+ * 프로필 재평가 처리 실패를 운영 로그나 외부 관찰기로 전달할 때 사용하는 비식별 증거입니다.
+ *
+ * 예외 메시지와 환자·assessment payload는 포함하지 않습니다.
+ */
+data class ProfileReevaluationFailureEvidence(
+    val jobId: Long,
+    val targetRevision: Long,
+    val failureCode: String,
+    val exceptionType: String,
+)
+
+/**
+ * 프로필 재평가 worker의 비식별 실패 증거를 기록합니다.
+ */
+fun interface ProfileReevaluationFailureObserver {
+    fun record(evidence: ProfileReevaluationFailureEvidence)
+}
+
+private object LoggingProfileReevaluationFailureObserver :
+    ProfileReevaluationFailureObserver,
+    KLogging() {
+    override fun record(evidence: ProfileReevaluationFailureEvidence) {
+        log.error {
+            "Profile reevaluation worker failed: jobId=${evidence.jobId}, " +
+                "targetRevision=${evidence.targetRevision}, failureCode=${evidence.failureCode}, " +
+                "exceptionType=${evidence.exceptionType}"
+        }
     }
 }
 

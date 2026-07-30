@@ -34,17 +34,19 @@ class ProfileReevaluationEndpoint(
         limit: Int = 50,
     ): ProfileReevaluationAdminResult =
         runBlocking {
+            val scope =
+                ProfileReevaluationAdminScope(
+                    tenantGroupId = tenantGroupId,
+                    clinicId = clinicId,
+                    targetRevision = targetRevision,
+                )
             adminService.redrive(
                 ProfileReevaluationAdminCommand(
                     action = action,
-                    actor = actorResolver.resolve(),
+                    actor = actorResolver.resolve(scope),
                     reason = reason,
                     idempotencyKey = idempotencyKey,
-                    scope = ProfileReevaluationAdminScope(
-                        tenantGroupId = tenantGroupId,
-                        clinicId = clinicId,
-                        targetRevision = targetRevision,
-                    ),
+                    scope = scope,
                     limit = limit,
                 ),
             )
@@ -55,7 +57,7 @@ class ProfileReevaluationEndpoint(
  * 운영 mutation의 감사 주체를 검증된 Spring Security token에서만 가져옵니다.
  */
 class ProfileReevaluationAdminActorResolver {
-    fun resolve(): String {
+    fun resolve(scope: ProfileReevaluationAdminScope): String {
         val principal =
             SecurityContextHolder.getContext().authentication
                 ?.takeIf(Authentication::isAuthenticated)
@@ -68,6 +70,16 @@ class ProfileReevaluationAdminActorResolver {
         ) {
             throw AccessDeniedException("Authentication evidence is incomplete")
         }
+        val clinicId = scope.clinicId
+        if (
+            scope.tenantGroupId == null ||
+            clinicId == null ||
+            clinicId !in principal.allowedClinicIds
+        ) {
+            throw AccessDeniedException("Profile reevaluation redrive requires an allowed clinic scope")
+        }
         return principal.userId
     }
 }
+
+internal const val PROFILE_REEVALUATION_OPERATE_SCOPE = "profile-reevaluation:operate"
