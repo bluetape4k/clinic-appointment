@@ -50,8 +50,16 @@ justifies a change:
 
 - `appointment.profile-reevaluation.held-target=5m`
 - `appointment.profile-reevaluation.proposed-target=30m`
+- `appointment.profile-reevaluation.global-concurrency=8`
+- `appointment.profile-reevaluation.per-clinic-concurrency=2`
 - `appointment.profile-reevaluation.auto-redrive-max=2`
 - `appointment.profile-reevaluation.auto-redrive-cooldown=30m`
+
+With these defaults, one tick performs at most 48 indexed `HELD` existence
+checks: eight clinic queues, two ready states plus one expired-lease path, and
+two candidates per path. Patient backlog size does not increase this bound.
+Do not raise both concurrency settings toward their maximum of 64 without a
+database-and-CRM load test and fresh PostgreSQL/MySQL query-plan evidence.
 
 Each hospital can override the `HELD` and `PROPOSED` target through its
 scheduling policy. The effective target is resolved clinic, tenant, then
@@ -265,6 +273,10 @@ transactions:
 5. Keep `scheduling_profile_reevaluation_jobs`, outcomes, inbox, quarantine,
    outbox, and audit rows. Do not drop V13 schema or delete failed jobs.
 6. Resume with `DRY_RUN` and the smallest clinic allowlist.
+
+With `mutation-mode=DISABLED`, the dispatcher returns before automatic redrive
+or job claim, so rollback does not create new redrive lineage while the queue
+drains.
 
 ```sql
 SELECT commitment_status, COUNT(*) AS outcome_count

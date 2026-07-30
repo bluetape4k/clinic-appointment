@@ -159,6 +159,35 @@ internal class ProfileReevaluationWorkerTest {
     }
 
     @Test
+    fun `CRM 조회 뒤 lease 재검증에 실패하면 예약 mutation을 시작하지 않는다`() {
+        runBlocking {
+            val job = job()
+            val store =
+                FakeWorkStore(
+                    currentRevision = job.targetRevision,
+                    candidates = listOf(candidate(1L, AppointmentCommitmentStatus.HELD)),
+                    renewLeaseResults = listOf(true, false),
+                )
+            var mutations = 0
+
+            val result =
+                worker(
+                    store = store,
+                    processor =
+                        ProfileReevaluationAppointmentProcessor { _, _, _, _ ->
+                            mutations++
+                            ProfileReevaluationOutcomeType.HOLD_KEPT
+                        },
+                ).process(job)
+
+            result shouldBeEqualTo ProfileReevaluationWorkerResult.LEASE_LOST
+            store.renewLeaseCalls shouldBeEqualTo 2
+            mutations shouldBeEqualTo 0
+            store.checkpoints shouldBeEqualTo emptyList()
+        }
+    }
+
+    @Test
     fun `coroutine cancellation은 retry로 바꾸지 않고 즉시 전파한다`() {
         val job = job()
         val store =
@@ -465,8 +494,11 @@ private class FakeWorkStore(
     var currentRevision: Long,
     private val candidates: List<ProfileReevaluationAppointmentCandidate>,
     private val renewLeaseResult: Boolean = true,
+    renewLeaseResults: List<Boolean>? = null,
 ) : ProfileReevaluationWorkStore {
+    private val leaseResults = renewLeaseResults?.let(::ArrayDeque)
     val checkpoints = mutableListOf<ProfileReevaluationCursor>()
+    var renewLeaseCalls = 0
     var completed = false
     var markedStaleRevision: Long? = null
     var retryFailureCode: String? = null
@@ -488,7 +520,10 @@ private class FakeWorkStore(
             .filter { it.commitmentStatus == status && it.appointmentId > afterAppointmentId }
             .take(limit)
 
-    override suspend fun renewLease(job: ProfileReevaluationJobRecord): Boolean = renewLeaseResult
+    override suspend fun renewLease(job: ProfileReevaluationJobRecord): Boolean {
+        renewLeaseCalls++
+        return leaseResults?.removeFirstOrNull() ?: renewLeaseResult
+    }
 
     override suspend fun checkpoint(
         job: ProfileReevaluationJobRecord,

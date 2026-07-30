@@ -10,6 +10,8 @@ import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationEndpoint
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationHealthIndicator
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationRuntimeGate
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationWorker
+import io.bluetape4k.clinic.appointment.event.profile.ProfileReevaluationEventObservationResult
+import io.bluetape4k.clinic.appointment.event.profile.ProfileReevaluationEventObserver
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentOrigin
@@ -67,6 +69,26 @@ class ProfileReevaluationWiringTest {
             context.getBeansOfType(ProfileReevaluationWorker::class.java).size shouldBeEqualTo 0
             context.getBeansOfType(ProfileReevaluationDispatcher::class.java).size shouldBeEqualTo 0
             context.getBeansOfType(ProfileReevaluationSchedulingRunner::class.java).size shouldBeEqualTo 0
+            context.getBeansOfType(ProfileReevaluationEventObserver::class.java).size shouldBeEqualTo 1
+        }
+    }
+
+    @Test
+    fun `프로필 이벤트 observer는 API metric으로 rejected quarantine 결과를 기록한다`() {
+        runner.run { context ->
+            context.startupFailure shouldBeEqualTo null
+            val observer = context.getBean(ProfileReevaluationEventObserver::class.java)
+            val registry = context.getBean(MeterRegistry::class.java)
+
+            observer.record(ProfileReevaluationEventObservationResult.REJECTED)
+
+            registry.get("clinic.profile.reevaluation.events")
+                .tag("result", "rejected")
+                .counter()
+                .count() shouldBeEqualTo 1.0
+            registry.get("clinic.profile.reevaluation.events")
+                .counter()
+                .id.tags.map { it.key } shouldBeEqualTo listOf("result")
         }
     }
 

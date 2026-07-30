@@ -10,6 +10,7 @@ import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationDispatche
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationEndpoint
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationHealthIndicator
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationMetrics
+import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationMetricsEventObserver
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationOperationalMonitor
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationRedrivePolicy
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationRetryPolicy
@@ -17,6 +18,7 @@ import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationRuntimeGa
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationWorkStore
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationWorker
 import io.bluetape4k.clinic.appointment.api.profile.RestClientProfileAssessmentClient
+import io.bluetape4k.clinic.appointment.event.profile.ProfileReevaluationEventObserver
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.ProfileReevaluationRepository
 import io.micrometer.core.instrument.MeterRegistry
@@ -93,6 +95,12 @@ class ProfileReevaluationConfiguration {
         monitor: ProfileReevaluationOperationalMonitor,
     ): ProfileReevaluationMetrics =
         ProfileReevaluationMetrics(registry, monitor)
+
+    @Bean
+    fun profileReevaluationEventObserver(
+        metrics: ProfileReevaluationMetrics,
+    ): ProfileReevaluationEventObserver =
+        ProfileReevaluationMetricsEventObserver(metrics)
 
     @Bean
     fun profileReevaluationWorkStore(
@@ -190,6 +198,7 @@ class ProfileReevaluationConfiguration {
     fun profileReevaluationDispatcher(
         store: ProfileReevaluationWorkStore,
         worker: ProfileReevaluationWorker,
+        runtimeGate: ProfileReevaluationRuntimeGate,
         metrics: ProfileReevaluationMetrics,
         properties: ProfileReevaluationProperties,
     ): ProfileReevaluationDispatcher =
@@ -199,6 +208,7 @@ class ProfileReevaluationConfiguration {
             leaseOwner = "profile-reevaluation:${ManagementFactory.getRuntimeMXBean().name}",
             globalConcurrency = properties.globalConcurrency,
             perClinicConcurrency = properties.perClinicConcurrency,
+            runtimeGate = runtimeGate,
             redrivePolicy = ProfileReevaluationRedrivePolicy(
                 maxRedrives = properties.autoRedriveMax,
                 cooldown = properties.autoRedriveCooldown,

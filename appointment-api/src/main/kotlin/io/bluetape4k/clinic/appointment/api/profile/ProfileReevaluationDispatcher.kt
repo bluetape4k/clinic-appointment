@@ -26,6 +26,7 @@ class ProfileReevaluationDispatcher(
     private val leaseOwner: String,
     private val globalConcurrency: Int,
     private val perClinicConcurrency: Int,
+    private val runtimeGate: ProfileReevaluationRuntimeGate,
     private val redrivePolicy: ProfileReevaluationRedrivePolicy = ProfileReevaluationRedrivePolicy(),
     private val autoRedriveLimit: Int = globalConcurrency,
     private val metrics: ProfileReevaluationMetrics? = null,
@@ -49,6 +50,9 @@ class ProfileReevaluationDispatcher(
     }
 
     suspend fun dispatchOnce(): List<ProfileReevaluationWorkerResult> {
+        if (runtimeGate.read().mode == ProfileReevaluationMutationMode.DISABLED) {
+            return emptyList()
+        }
         redriveEligibleFailures()
         val jobs = claimFairBatch()
         recordFirstClaimWait(jobs)

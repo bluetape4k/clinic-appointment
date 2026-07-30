@@ -55,6 +55,7 @@ internal class ProfileReevaluationDispatcherTest {
                     leaseOwner = "dispatcher-a",
                     globalConcurrency = 8,
                     perClinicConcurrency = 2,
+                    runtimeGate = enabledRuntimeGate(),
                 )
 
             while (jobs.isNotEmpty()) {
@@ -85,6 +86,7 @@ internal class ProfileReevaluationDispatcherTest {
                     leaseOwner = "dispatcher-a",
                     globalConcurrency = 2,
                     perClinicConcurrency = 1,
+                    runtimeGate = enabledRuntimeGate(),
                 )
 
             dispatcher.dispatchOnce()
@@ -121,6 +123,7 @@ internal class ProfileReevaluationDispatcherTest {
                     leaseOwner = "dispatcher-a",
                     globalConcurrency = 2,
                     perClinicConcurrency = 1,
+                    runtimeGate = enabledRuntimeGate(),
                 )
 
             repeat(5) { dispatcher.dispatchOnce() }
@@ -170,6 +173,7 @@ internal class ProfileReevaluationDispatcherTest {
                     leaseOwner = "dispatcher-a",
                     globalConcurrency = 2,
                     perClinicConcurrency = 1,
+                    runtimeGate = enabledRuntimeGate(),
                     clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
 
@@ -177,6 +181,42 @@ internal class ProfileReevaluationDispatcherTest {
 
             redriveCommand?.jobId shouldBeEqualTo failed.id
             redriveCommand?.expectedRedriveCount shouldBeEqualTo 0
+        }
+    }
+
+    @Test
+    fun `runtime gate가 비활성이면 redrive와 claim을 시작하지 않는다`() {
+        runBlocking {
+            var failedLookupCount = 0
+            var claimCount = 0
+            val store =
+                object : ProfileReevaluationWorkStore by UnsupportedWorkStore {
+                    override suspend fun failedForRedrive(limit: Int): List<ProfileReevaluationJobRecord> {
+                        failedLookupCount++
+                        return emptyList()
+                    }
+
+                    override suspend fun claim(command: ClaimProfileReevaluationJobs): List<ProfileReevaluationJobRecord> {
+                        claimCount++
+                        return emptyList()
+                    }
+                }
+            val dispatcher =
+                ProfileReevaluationDispatcher(
+                    store = store,
+                    worker = ProfileReevaluationJobWorker { ProfileReevaluationWorkerResult.COMPLETED },
+                    leaseOwner = "dispatcher-a",
+                    globalConcurrency = 2,
+                    perClinicConcurrency = 1,
+                    runtimeGate = ProfileReevaluationRuntimeGate {
+                        ProfileReevaluationRuntimeAccess.disabled()
+                    },
+                )
+
+            dispatcher.dispatchOnce() shouldBeEqualTo emptyList()
+
+            failedLookupCount shouldBeEqualTo 0
+            claimCount shouldBeEqualTo 0
         }
     }
 
@@ -199,6 +239,7 @@ internal class ProfileReevaluationDispatcherTest {
                     leaseOwner = "dispatcher-a",
                     globalConcurrency = 3,
                     perClinicConcurrency = 1,
+                    runtimeGate = enabledRuntimeGate(),
                     metrics = ProfileReevaluationMetrics(registry),
                     clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
@@ -259,6 +300,13 @@ internal class ProfileReevaluationDispatcherTest {
         }
     }
 }
+
+private fun enabledRuntimeGate(): ProfileReevaluationRuntimeGate =
+    ProfileReevaluationRuntimeGate {
+        ProfileReevaluationRuntimeAccess.enabled(
+            ProfileReevaluationMutationMode.APPLY_PROPOSED_AND_HELD,
+        )
+    }
 
 private class QueueWorkStore(
     private val jobs: MutableList<ProfileReevaluationJobRecord>,

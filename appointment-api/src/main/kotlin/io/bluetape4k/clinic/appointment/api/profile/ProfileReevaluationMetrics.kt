@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.profile
 
+import io.bluetape4k.clinic.appointment.event.profile.ProfileReevaluationEventObservationResult
+import io.bluetape4k.clinic.appointment.event.profile.ProfileReevaluationEventObserver
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationPriorityClass
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationJobStatus
@@ -104,6 +106,24 @@ class ProfileReevaluationMetrics(
         const val OPERATIONAL = "clinic.profile.reevaluation.operational"
         const val DRY_RUN_PARITY = "clinic.profile.reevaluation.dryrun.parity"
     }
+}
+
+class ProfileReevaluationMetricsEventObserver(
+    private val metrics: ProfileReevaluationMetrics,
+) : ProfileReevaluationEventObserver {
+    override fun record(result: ProfileReevaluationEventObservationResult) {
+        metrics.recordEvent(result.toMetricResult())
+    }
+
+    private fun ProfileReevaluationEventObservationResult.toMetricResult(): ProfileReevaluationEventMetricResult =
+        when (this) {
+            ProfileReevaluationEventObservationResult.ACCEPTED ->
+                ProfileReevaluationEventMetricResult.ACCEPTED
+            ProfileReevaluationEventObservationResult.REJECTED ->
+                ProfileReevaluationEventMetricResult.REJECTED
+            ProfileReevaluationEventObservationResult.STALE ->
+                ProfileReevaluationEventMetricResult.STALE
+        }
 }
 
 enum class ProfileReevaluationEventMetricResult(val metricValue: String) {

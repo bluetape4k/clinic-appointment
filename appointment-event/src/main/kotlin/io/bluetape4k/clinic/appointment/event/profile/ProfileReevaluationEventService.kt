@@ -28,6 +28,20 @@ enum class ProfileReevaluationEventStatus {
     QUARANTINED,
 }
 
+enum class ProfileReevaluationEventObservationResult {
+    ACCEPTED,
+    REJECTED,
+    STALE,
+}
+
+fun interface ProfileReevaluationEventObserver {
+    fun record(result: ProfileReevaluationEventObservationResult)
+
+    companion object {
+        val NoOp = ProfileReevaluationEventObserver { }
+    }
+}
+
 data class ProfileReevaluationEventResult(
     val status: ProfileReevaluationEventStatus,
     val reasonCode: String? = null,
@@ -52,6 +66,7 @@ class ProfileReevaluationEventService(
     private val proposedTarget: Duration,
     private val targetPolicyRef: String,
     private val targetPolicyGeneration: Long,
+    private val eventObserver: ProfileReevaluationEventObserver = ProfileReevaluationEventObserver.NoOp,
 ) {
     init {
         require(!quarantineRetention.isNegative) { "quarantineRetention must be non-negative" }
@@ -70,7 +85,7 @@ class ProfileReevaluationEventService(
             return ProfileReevaluationEventResult(
                 ProfileReevaluationEventStatus.QUARANTINED,
                 PAYLOAD_CONTRACT_INVALID,
-            )
+            ).observed()
         }
         val protectedEnvelope = quarantineEnvelopeProtector.protect(rawEnvelope)
         val trusted = try {
@@ -133,11 +148,11 @@ class ProfileReevaluationEventService(
                 )
                 eventRepository.markProcessed(inboxId, clock.instant())
                 ProfileReevaluationEventResult(ProfileReevaluationEventStatus.PROCESSED)
-            }
+            }.observed()
         } catch (failure: SchedulingTrustException) {
             quarantine(rawEnvelope, protectedEnvelope, failure.reasonCode)
         } catch (failure: ExposedSQLException) {
-            findDuplicate(rawEnvelope.eventId) ?: throw failure
+            findDuplicate(rawEnvelope.eventId)?.observed() ?: throw failure
         }
     }
 
@@ -197,9 +212,9 @@ class ProfileReevaluationEventService(
                     ProfileReevaluationEventStatus.QUARANTINED,
                     reasonCode,
                 )
-            }
+            }.observed()
         } catch (failure: ExposedSQLException) {
-            findDuplicate(rawEnvelope.eventId) ?: throw failure
+            findDuplicate(rawEnvelope.eventId)?.observed() ?: throw failure
         }
 
     private fun findDuplicate(eventId: String): ProfileReevaluationEventResult? =
@@ -216,6 +231,22 @@ class ProfileReevaluationEventService(
                 )
             }
             null
+        }
+
+    private fun ProfileReevaluationEventResult.observed(): ProfileReevaluationEventResult =
+        also { result ->
+            eventObserver.record(
+                when (result.status) {
+                    ProfileReevaluationEventStatus.PROCESSED ->
+                        ProfileReevaluationEventObservationResult.ACCEPTED
+                    ProfileReevaluationEventStatus.QUARANTINED ->
+                        ProfileReevaluationEventObservationResult.REJECTED
+                    ProfileReevaluationEventStatus.NO_MATERIAL_CHANGE,
+                    ProfileReevaluationEventStatus.DUPLICATE,
+                    ->
+                        ProfileReevaluationEventObservationResult.STALE
+                },
+            )
         }
 
     private companion object {

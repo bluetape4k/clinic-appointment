@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.profile
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
+import io.bluetape4k.clinic.appointment.event.profile.ProfileReevaluationEventObservationResult
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationJobStatus
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationOutcomeType
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
@@ -50,6 +51,23 @@ class ProfileReevaluationMetricsTest {
             .tag("result", "retry")
             .counter()
             .count() shouldBeEqualTo 1.0
+    }
+
+    @Test
+    fun `프로필 이벤트 관측 adapter는 quarantine을 rejected result로 기록한다`() {
+        val registry = SimpleMeterRegistry()
+        val metrics = ProfileReevaluationMetrics(registry)
+        val observer = ProfileReevaluationMetricsEventObserver(metrics)
+
+        observer.record(ProfileReevaluationEventObservationResult.REJECTED)
+
+        registry.get(ProfileReevaluationMetrics.EVENTS)
+            .tag("result", "rejected")
+            .counter()
+            .count() shouldBeEqualTo 1.0
+        registry.get(ProfileReevaluationMetrics.EVENTS)
+            .counter()
+            .id.tags.map { it.key } shouldBeEqualTo listOf("result")
     }
 
     @Test
