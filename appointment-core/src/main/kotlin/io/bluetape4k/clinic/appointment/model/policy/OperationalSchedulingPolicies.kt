@@ -158,11 +158,17 @@ data class OperatingExtensionOverride(
  * 경과 시간입니다. 단위는 초이며 반드시 양수입니다.
  * @property mandatoryResponseSeconds 병원이 반드시 수행해야 하는 운영 조치의 최대
  * 응답 시간입니다. 단위는 초이며 반드시 양수이고 비활성화할 수 없습니다.
+ * @property profileReevaluationHeldTargetSeconds 프로필 변경 후 `HELD` 예약을
+ * 재평가할 목표 시간입니다. 단위는 초이며 `null`이면 플랫폼 환경 기본값을 사용합니다.
+ * @property profileReevaluationProposedTargetSeconds 프로필 변경 후 `PROPOSED` 예약을
+ * 재평가할 목표 시간입니다. 단위는 초이며 `null`이면 플랫폼 환경 기본값을 사용합니다.
  */
 data class NotificationAndSlaPolicy(
     val notificationChannels: Set<String>,
     val disruptionNoticeSeconds: Long,
     val mandatoryResponseSeconds: Long,
+    val profileReevaluationHeldTargetSeconds: Long? = null,
+    val profileReevaluationProposedTargetSeconds: Long? = null,
 ) : SchedulingPolicyPayload {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.NOTIFICATION_AND_SLA
     companion object { private const val serialVersionUID = 1L }
@@ -175,6 +181,10 @@ data class NotificationAndSlaPolicy(
  * 않습니다. 영향을 받는 고객에게 계속 도달 가능해야 하므로 `Disable`은 유효하지 않습니다.
  * @property disruptionNoticeSeconds 고객 통지 한도입니다. 단위는 초이며 양수여야 하고
  * `Disable`은 유효하지 않습니다.
+ * @property profileReevaluationHeldTargetSeconds `HELD` 예약 재평가 처리 목표
+ * 조정입니다. `Inherit` 또는 1분 이상 15분 이하의 `Set`만 허용합니다.
+ * @property profileReevaluationProposedTargetSeconds `PROPOSED` 예약 재평가 처리 목표
+ * 조정입니다. `Inherit` 또는 5분 이상 120분 이하의 `Set`만 허용합니다.
  *
  * [NotificationAndSlaPolicy.mandatoryResponseSeconds]는 tenant/platform SLA를
  * clinic이 완화하거나 비활성화할 수 없도록 의도적으로 제외했습니다.
@@ -182,6 +192,8 @@ data class NotificationAndSlaPolicy(
 data class NotificationAndSlaOverride(
     val notificationChannels: OverrideValue<Set<String>>,
     val disruptionNoticeSeconds: OverrideValue<Long>,
+    val profileReevaluationHeldTargetSeconds: OverrideValue<Long> = OverrideValue.Inherit,
+    val profileReevaluationProposedTargetSeconds: OverrideValue<Long> = OverrideValue.Inherit,
 ) : SchedulingPolicyPayload {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.NOTIFICATION_AND_SLA
     companion object { private const val serialVersionUID = 1L }

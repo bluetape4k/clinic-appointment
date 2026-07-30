@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.policy
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.model.policy.BookingCommitmentPolicy
+import io.bluetape4k.clinic.appointment.model.policy.NotificationAndSlaPolicy
 import io.bluetape4k.clinic.appointment.model.policy.PolicyGenerationVector
 import io.bluetape4k.clinic.appointment.model.policy.PolicyValueSource
 import io.bluetape4k.clinic.appointment.model.policy.PriorityAndReliabilityPolicy
@@ -65,6 +66,23 @@ class SchedulingPolicyHashTest {
         assertFailsWith<IllegalArgumentException> {
             SchedulingPolicyHasher.payloadHash(oversized)
         }
+    }
+
+    @Test
+    fun `notification payload hash includes both profile reevaluation targets`() {
+        val inherited = NotificationAndSlaPolicy(
+            notificationChannels = setOf("SMS"),
+            disruptionNoticeSeconds = 900L,
+            mandatoryResponseSeconds = 3_600L,
+        )
+        val heldTarget = inherited.copy(profileReevaluationHeldTargetSeconds = 300L)
+        val proposedTarget = inherited.copy(profileReevaluationProposedTargetSeconds = 1_800L)
+
+        val inheritedHash = SchedulingPolicyHasher.payloadHash(inherited)
+        (inheritedHash == SchedulingPolicyHasher.payloadHash(heldTarget)) shouldBeEqualTo false
+        (inheritedHash == SchedulingPolicyHasher.payloadHash(proposedTarget)) shouldBeEqualTo false
+        (SchedulingPolicyHasher.payloadHash(heldTarget) ==
+            SchedulingPolicyHasher.payloadHash(proposedTarget)) shouldBeEqualTo false
     }
 
     @Test

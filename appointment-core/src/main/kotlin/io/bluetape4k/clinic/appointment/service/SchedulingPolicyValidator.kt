@@ -36,6 +36,8 @@ object SchedulingPolicyValidator {
     private val maximumRequestTtl: Duration = Duration.ofDays(7)
     private val minimumResourceHoldTtl: Duration = Duration.ofMinutes(1)
     private val maximumResourceHoldTtl: Duration = Duration.ofMinutes(30)
+    private val heldReevaluationTargetSeconds = 60L..900L
+    private val proposedReevaluationTargetSeconds = 300L..7_200L
     private val sha256 = Regex("[0-9a-f]{64}")
 
     /**
@@ -190,16 +192,40 @@ object SchedulingPolicyValidator {
                 require(payload.notificationChannels.isNotEmpty())
                 require(payload.disruptionNoticeSeconds > 0L)
                 require(payload.mandatoryResponseSeconds > 0L)
+                payload.profileReevaluationHeldTargetSeconds?.let {
+                    require(it in heldReevaluationTargetSeconds) {
+                        "profileReevaluationHeldTargetSeconds must be between 60 and 900 seconds"
+                    }
+                }
+                payload.profileReevaluationProposedTargetSeconds?.let {
+                    require(it in proposedReevaluationTargetSeconds) {
+                        "profileReevaluationProposedTargetSeconds must be between 300 and 7200 seconds"
+                    }
+                }
             }
             is NotificationAndSlaOverride -> {
                 requireClinicOverride(scope)
                 payload.notificationChannels.requireNotDisabled("notificationChannels")
                 payload.disruptionNoticeSeconds.requireNotDisabled("disruptionNoticeSeconds")
+                payload.profileReevaluationHeldTargetSeconds
+                    .requireNotDisabled("profileReevaluationHeldTargetSeconds")
+                payload.profileReevaluationProposedTargetSeconds
+                    .requireNotDisabled("profileReevaluationProposedTargetSeconds")
                 payload.notificationChannels.setValueOrNull()?.let {
                     require(it.isNotEmpty()) { "notificationChannels must not be empty" }
                 }
                 payload.disruptionNoticeSeconds.setValueOrNull()?.let {
                     require(it > 0L) { "disruptionNoticeSeconds must be positive" }
+                }
+                payload.profileReevaluationHeldTargetSeconds.setValueOrNull()?.let {
+                    require(it in heldReevaluationTargetSeconds) {
+                        "profileReevaluationHeldTargetSeconds must be between 60 and 900 seconds"
+                    }
+                }
+                payload.profileReevaluationProposedTargetSeconds.setValueOrNull()?.let {
+                    require(it in proposedReevaluationTargetSeconds) {
+                        "profileReevaluationProposedTargetSeconds must be between 300 and 7200 seconds"
+                    }
                 }
             }
         }

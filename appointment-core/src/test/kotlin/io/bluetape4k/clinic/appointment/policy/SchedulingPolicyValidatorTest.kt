@@ -10,6 +10,8 @@ import io.bluetape4k.clinic.appointment.model.policy.BookingCommitmentPolicy
 import io.bluetape4k.clinic.appointment.model.policy.CapacityAndOverbookingOverride
 import io.bluetape4k.clinic.appointment.model.policy.ConfirmedChangeMode
 import io.bluetape4k.clinic.appointment.model.policy.ConsentEvidenceRequirement
+import io.bluetape4k.clinic.appointment.model.policy.NotificationAndSlaOverride
+import io.bluetape4k.clinic.appointment.model.policy.NotificationAndSlaPolicy
 import io.bluetape4k.clinic.appointment.model.policy.OverrideValue
 import io.bluetape4k.clinic.appointment.model.policy.PatientBookingMode
 import io.bluetape4k.clinic.appointment.model.policy.PolicyLifecycle
@@ -250,6 +252,103 @@ class SchedulingPolicyValidatorTest {
                     nominalCapacity = OverrideValue.Disable,
                     overbookingQuota = OverrideValue.Inherit,
                     automaticReductionEnabled = OverrideValue.Inherit,
+                ),
+                PolicyScope.CLINIC_OVERRIDE,
+            )
+        }
+    }
+
+    @Test
+    fun `decodes legacy notification policy without profile reevaluation targets`() {
+        val decoded = SchedulingPolicyPayloadCodec().decode(
+            kind = SchedulingPolicyKind.NOTIFICATION_AND_SLA,
+            scope = PolicyScope.TENANT_DEFAULT,
+            schemaVersion = 1,
+            json =
+                """
+                {
+                  "notificationChannels": ["SMS"],
+                  "disruptionNoticeSeconds": 900,
+                  "mandatoryResponseSeconds": 3600
+                }
+                """.trimIndent(),
+        )
+
+        decoded shouldBeEqualTo NotificationAndSlaPolicy(
+            notificationChannels = setOf("SMS"),
+            disruptionNoticeSeconds = 900L,
+            mandatoryResponseSeconds = 3_600L,
+            profileReevaluationHeldTargetSeconds = null,
+            profileReevaluationProposedTargetSeconds = null,
+        )
+    }
+
+    @Test
+    fun `enforces profile reevaluation target ranges before activation`() {
+        fun tenant(
+            heldSeconds: Long? = 300L,
+            proposedSeconds: Long? = 1_800L,
+        ) = NotificationAndSlaPolicy(
+            notificationChannels = setOf("SMS"),
+            disruptionNoticeSeconds = 900L,
+            mandatoryResponseSeconds = 3_600L,
+            profileReevaluationHeldTargetSeconds = heldSeconds,
+            profileReevaluationProposedTargetSeconds = proposedSeconds,
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyValidator.validatePayload(
+                tenant(heldSeconds = 59L),
+                PolicyScope.TENANT_DEFAULT,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyValidator.validatePayload(
+                tenant(heldSeconds = 901L),
+                PolicyScope.TENANT_DEFAULT,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyValidator.validatePayload(
+                tenant(proposedSeconds = 299L),
+                PolicyScope.TENANT_DEFAULT,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyValidator.validatePayload(
+                tenant(proposedSeconds = 7_201L),
+                PolicyScope.TENANT_DEFAULT,
+            )
+        }
+    }
+
+    @Test
+    fun `decodes missing clinic target fields as inherit and rejects disable`() {
+        val decoded = SchedulingPolicyPayloadCodec().decode(
+            kind = SchedulingPolicyKind.NOTIFICATION_AND_SLA,
+            scope = PolicyScope.CLINIC_OVERRIDE,
+            schemaVersion = 1,
+            json =
+                """
+                {
+                  "notificationChannels": {"mode": "INHERIT"},
+                  "disruptionNoticeSeconds": {"mode": "INHERIT"}
+                }
+                """.trimIndent(),
+        )
+
+        decoded shouldBeEqualTo NotificationAndSlaOverride(
+            notificationChannels = OverrideValue.Inherit,
+            disruptionNoticeSeconds = OverrideValue.Inherit,
+            profileReevaluationHeldTargetSeconds = OverrideValue.Inherit,
+            profileReevaluationProposedTargetSeconds = OverrideValue.Inherit,
+        )
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyValidator.validatePayload(
+                NotificationAndSlaOverride(
+                    notificationChannels = OverrideValue.Inherit,
+                    disruptionNoticeSeconds = OverrideValue.Inherit,
+                    profileReevaluationHeldTargetSeconds = OverrideValue.Disable,
                 ),
                 PolicyScope.CLINIC_OVERRIDE,
             )
