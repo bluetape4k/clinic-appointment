@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.event.integration
 
+import io.bluetape4k.clinic.appointment.event.profile.PatientSchedulingAssessmentChanged
+import io.bluetape4k.clinic.appointment.event.profile.PatientSchedulingAssessmentChangedHasher
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.Base64
@@ -28,7 +30,7 @@ fun interface QuarantineEnvelopeProtector {
      * Encrypts the bounded original envelope before any persistence transaction.
      */
     fun protect(
-        envelope: UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        envelope: UntrustedSchedulingEventEnvelope<*>,
     ): ProtectedQuarantineEnvelope
 }
 
@@ -48,17 +50,23 @@ class AesGcmQuarantineEnvelopeProtector(
     }
 
     override fun protect(
-        envelope: UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        envelope: UntrustedSchedulingEventEnvelope<*>,
     ): ProtectedQuarantineEnvelope {
-        PurchaseEventBounds.validateEnvelopeMetadata(envelope)
+        if (envelope.payload is PurchaseCompletedEvent) {
+            @Suppress("UNCHECKED_CAST")
+            PurchaseEventBounds.validateEnvelopeMetadata(
+                envelope as UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+            )
+        }
         val plaintext = canonicalBytes(envelope)
         val hash = MessageDigest.getInstance("SHA-256")
             .digest(plaintext)
             .joinToString("") { byte -> "%02x".format(byte) }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, encryptionKey)
+        val scope = scope(envelope.payload)
         cipher.updateAAD(
-            "appointment-quarantine\u0000${envelope.payload.tenantGroupId}\u0000${envelope.payload.clinicId}\u0000${envelope.eventId}"
+            "appointment-quarantine\u0000${scope.first}\u0000${scope.second}\u0000${envelope.eventId}"
                 .toByteArray(StandardCharsets.UTF_8)
         )
         val encrypted = cipher.doFinal(plaintext)
@@ -70,7 +78,7 @@ class AesGcmQuarantineEnvelopeProtector(
     }
 
     private fun canonicalBytes(
-        envelope: UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
+        envelope: UntrustedSchedulingEventEnvelope<*>,
     ): ByteArray {
         val metadata = CanonicalFrameWriter().apply {
             string("eventId", envelope.eventId)
@@ -87,6 +95,19 @@ class AesGcmQuarantineEnvelopeProtector(
             string("payloadHash", envelope.payloadHash)
             string("signature", envelope.signature)
         }.toByteArray()
-        return metadata + PurchaseCompletedPayloadHasher.canonicalBytes(envelope.payload)
+        val payload = when (val event = envelope.payload) {
+            is PurchaseCompletedEvent -> PurchaseCompletedPayloadHasher.canonicalBytes(event)
+            is PatientSchedulingAssessmentChanged ->
+                PatientSchedulingAssessmentChangedHasher.canonicalBytes(event)
+            else -> throw IllegalArgumentException("unsupported quarantine envelope payload")
+        }
+        return metadata + payload
     }
+
+    private fun scope(payload: Any?): Pair<Long, Long> =
+        when (payload) {
+            is PurchaseCompletedEvent -> payload.tenantGroupId to payload.clinicId
+            is PatientSchedulingAssessmentChanged -> payload.tenantGroupId to payload.clinicId
+            else -> throw IllegalArgumentException("unsupported quarantine envelope payload")
+        }
 }

@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.event.integration
 
+import io.bluetape4k.clinic.appointment.event.profile.PatientSchedulingAssessmentChanged
+import io.bluetape4k.clinic.appointment.event.profile.PatientSchedulingAssessmentChangedHasher
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
 import io.bluetape4k.clinic.appointment.model.plan.ExecutionTreatment
 import io.bluetape4k.clinic.appointment.model.plan.MigrationMapping
@@ -158,6 +160,30 @@ class SchedulingEventTrustVerifier(
         return envelope.trusted()
     }
 
+    /**
+     * CRM의 최소 프로필 변경 신호를 trusted envelope로 승격합니다.
+     *
+     * profile 본문이나 점수는 계약에 없으며, transport metadata와 canonical hash,
+     * signature가 모두 맞는 신호만 이후 fingerprint·clinic scope 검증으로 넘깁니다.
+     */
+    fun verifyProfileAssessment(
+        envelope: UntrustedSchedulingEventEnvelope<PatientSchedulingAssessmentChanged>,
+    ): TrustedSchedulingEventEnvelope<PatientSchedulingAssessmentChanged> {
+        verifyCommonEnvelope(
+            envelope,
+            eventType = "PatientSchedulingAssessmentChanged",
+            schemaVersion = 1,
+        )
+        trust(envelope.payload.eventId == envelope.eventId, "ROUTING_METADATA_MISMATCH")
+        trust(envelope.payload.occurredAt == envelope.occurredAt, "ROUTING_METADATA_MISMATCH")
+        trust(
+            envelope.payloadHash == PatientSchedulingAssessmentChangedHasher.hash(envelope.payload),
+            "PAYLOAD_HASH_MISMATCH",
+        )
+        trust(signatureVerifier.verify(envelope), "SIGNATURE_INVALID")
+        return envelope.trusted()
+    }
+
     private fun verifyCommonEnvelope(
         envelope: UntrustedSchedulingEventEnvelope<*>,
         eventType: String,
@@ -242,6 +268,10 @@ internal class CanonicalFrameWriter {
 
     fun long(name: String, value: Long) {
         frame(name, "long", value.toString().toByteArray(StandardCharsets.UTF_8))
+    }
+
+    fun boolean(name: String, value: Boolean) {
+        frame(name, "boolean", value.toString().toByteArray(StandardCharsets.UTF_8))
     }
 
     fun instant(name: String, value: java.time.Instant) {

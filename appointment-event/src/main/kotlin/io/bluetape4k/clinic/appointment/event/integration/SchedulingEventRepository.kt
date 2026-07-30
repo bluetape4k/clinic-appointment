@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.event.integration
 
+import io.bluetape4k.clinic.appointment.event.profile.PatientSchedulingAssessmentChanged
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -236,6 +237,21 @@ class SchedulingEventRepository {
             sourceAuthority = envelope.payload.sourcePurchaseAuthority,
             sourceAggregateId = envelope.payload.sourceAggregateId,
             sourceAggregateVersion = envelope.payload.sourceAggregateVersion,
+            tenantGroupId = envelope.payload.tenantGroupId,
+            clinicId = envelope.payload.clinicId,
+        )
+
+    /**
+     * CRM 프로필 변경 event의 비식별 routing metadata와 payload hash만 저장합니다.
+     */
+    fun insertReceivedProfileAssessment(
+        envelope: TrustedSchedulingEventEnvelope<PatientSchedulingAssessmentChanged>,
+    ): Long =
+        insertReceivedExternalFact(
+            envelope = envelope,
+            sourceAuthority = "crm-assessment",
+            sourceAggregateId = envelope.payload.patientReferenceFingerprint,
+            sourceAggregateVersion = envelope.payload.profileRevision,
             tenantGroupId = envelope.payload.tenantGroupId,
             clinicId = envelope.payload.clinicId,
         )
