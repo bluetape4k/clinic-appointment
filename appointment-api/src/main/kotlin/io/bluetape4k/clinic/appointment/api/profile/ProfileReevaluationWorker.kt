@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationPriorityCla
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
 import io.bluetape4k.clinic.appointment.model.dto.RedriveProfileReevaluationJob
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationOutcomeType
+import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationJobStatus
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.ProfileReevaluationAppointmentCandidate
 import io.bluetape4k.clinic.appointment.repository.ProfileReevaluationRepository
@@ -383,9 +384,11 @@ class ExposedProfileReevaluationWorkStore(
     private val database: Database,
     private val profileRepository: ProfileReevaluationRepository,
     private val appointmentRepository: AppointmentRepository,
+    private val metrics: ProfileReevaluationMetrics? = null,
 ) : ProfileReevaluationWorkStore {
     override suspend fun claim(command: ClaimProfileReevaluationJobs): List<ProfileReevaluationJobRecord> =
         io { profileRepository.claimFairJobs(command) }
+            .onEach { metrics?.recordJob(ProfileReevaluationJobStatus.RUNNING) }
 
     override suspend fun failedForRedrive(limit: Int): List<ProfileReevaluationJobRecord> =
         io { profileRepository.findFailedJobs(limit) }
@@ -417,6 +420,12 @@ class ExposedProfileReevaluationWorkStore(
                 revision = job.targetRevision,
                 leaseOwner = job.requireLeaseOwner(),
             )
+        }.also { renewed ->
+            if (renewed) {
+                metrics?.recordLeaseRenewalSucceeded()
+            } else {
+                metrics?.recordOperational(ProfileReevaluationOperationalMetric.LEASE_LOST)
+            }
         }
 
     override suspend fun checkpoint(
@@ -430,6 +439,8 @@ class ExposedProfileReevaluationWorkStore(
                 leaseOwner = job.requireLeaseOwner(),
                 cursor = cursor,
             )
+        }.also { checkpointed ->
+            if (!checkpointed) metrics?.recordOperational(ProfileReevaluationOperationalMetric.LEASE_LOST)
         }
 
     override suspend fun complete(job: ProfileReevaluationJobRecord): Boolean =
@@ -439,6 +450,8 @@ class ExposedProfileReevaluationWorkStore(
                 revision = job.targetRevision,
                 leaseOwner = job.requireLeaseOwner(),
             )
+        }.also { completed ->
+            if (completed) metrics?.recordJob(ProfileReevaluationJobStatus.COMPLETED)
         }
 
     override suspend fun markStale(
@@ -451,6 +464,8 @@ class ExposedProfileReevaluationWorkStore(
                 observedRevision = observedRevision,
                 leaseOwner = job.requireLeaseOwner(),
             )
+        }.also { stale ->
+            if (stale) metrics?.recordJob(ProfileReevaluationJobStatus.STALE)
         }
 
     override suspend fun retry(
@@ -468,11 +483,23 @@ class ExposedProfileReevaluationWorkStore(
                 delay = delay,
                 terminal = terminal,
             )
+        }.also { scheduled ->
+            if (scheduled) {
+                metrics?.recordOperational(
+                    if (terminal) {
+                        ProfileReevaluationOperationalMetric.FAILED
+                    } else {
+                        ProfileReevaluationOperationalMetric.RETRY
+                    },
+                )
+            }
         }
 
     override suspend fun redrive(
         command: RedriveProfileReevaluationJob,
-    ): ProfileReevaluationJobRecord? = io { profileRepository.redriveFailed(command) }
+    ): ProfileReevaluationJobRecord? =
+        io { profileRepository.redriveFailed(command) }
+            .also { if (it != null) metrics?.recordOperational(ProfileReevaluationOperationalMetric.REDRIVE) }
 
     private suspend fun <T> io(block: () -> T): T =
         withContext(Dispatchers.IO) {

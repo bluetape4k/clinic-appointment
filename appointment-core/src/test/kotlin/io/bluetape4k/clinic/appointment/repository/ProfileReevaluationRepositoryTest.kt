@@ -138,6 +138,37 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
 
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `짧아진 목표는 기존 due를 앞당기고 길어진 목표는 다시 늦추지 않는다`(testDB: TestDB) {
+        withProfileReevaluationTables(testDB) {
+            val repository = ProfileReevaluationRepository()
+            val scope = scope()
+            repository.upsertEvent(change(scope, revision = 1L, eventId = "evt-target"))
+            val original = repository.findRunnableJobs(scope).single()
+
+            val shortened = repository.advanceTargets(
+                jobId = original.id,
+                heldTarget = Duration.ofMinutes(2),
+                proposedTarget = Duration.ofMinutes(10),
+                targetPolicyRef = "policy/shorter",
+                targetPolicyGeneration = 12L,
+            ).shouldNotBeNull()
+            shortened.dueAt shouldBeEqualTo original.occurredAt.plus(Duration.ofMinutes(2))
+
+            val lengthened = repository.advanceTargets(
+                jobId = original.id,
+                heldTarget = Duration.ofMinutes(10),
+                proposedTarget = Duration.ofMinutes(60),
+                targetPolicyRef = "policy/longer",
+                targetPolicyGeneration = 13L,
+            ).shouldNotBeNull()
+            lengthened.dueAt shouldBeEqualTo shortened.dueAt
+            lengthened.heldTarget shouldBeEqualTo Duration.ofMinutes(10)
+            lengthened.proposedTarget shouldBeEqualTo Duration.ofMinutes(60)
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
     fun `공정 선점은 큰 병원 하나보다 서로 다른 병원을 먼저 선택한다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository(hasHeldAppointments = { true })

@@ -450,6 +450,129 @@ class ProfileReevaluationRepository(
             .map { it.toJobRecord() }
     }
 
+    /**
+     * 운영자 redrive 화면에 필요한 실패 작업만 제한된 범위와 개수로 반환합니다.
+     *
+     * 환자 지문은 반환 record 내부에 남아 있지만 API projection에서 절대 노출하지 않습니다.
+     */
+    fun findFailedJobs(
+        tenantGroupId: Long?,
+        clinicId: Long?,
+        targetRevision: Long?,
+        limit: Int,
+    ): List<ProfileReevaluationJobRecord> {
+        require(tenantGroupId == null || tenantGroupId > 0) { "tenantGroupId must be positive" }
+        require(clinicId == null || clinicId > 0) { "clinicId must be positive" }
+        require(targetRevision == null || targetRevision > 0) { "targetRevision must be positive" }
+        require(limit in 1..MAX_FAILED_JOB_PAGE_SIZE) {
+            "limit must be in 1..$MAX_FAILED_JOB_PAGE_SIZE"
+        }
+        var predicate = ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.FAILED
+        if (tenantGroupId != null) {
+            predicate = predicate and (ProfileReevaluationJobs.tenantGroupId eq tenantGroupId)
+        }
+        if (clinicId != null) {
+            predicate = predicate and (ProfileReevaluationJobs.clinicId eq clinicId)
+        }
+        if (targetRevision != null) {
+            predicate = predicate and (ProfileReevaluationJobs.targetRevision eq targetRevision)
+        }
+        return ProfileReevaluationJobs
+            .selectAll()
+            .where { predicate }
+            .orderBy(
+                ProfileReevaluationJobs.updatedAt to SortOrder.ASC,
+                ProfileReevaluationJobs.id to SortOrder.ASC,
+            )
+            .limit(limit)
+            .map { it.toJobRecord() }
+    }
+
+    /**
+     * health와 내부 운영 endpoint가 사용할 식별자 없는 작업 집계를 반환합니다.
+     */
+    fun summarizeOperations(): ProfileReevaluationRepositorySummary {
+        val dbNow = dbCurrentTimestamp()
+        fun count(status: ProfileReevaluationJobStatus): Long =
+            ProfileReevaluationJobs.selectAll()
+                .where { ProfileReevaluationJobs.status eq status }
+                .count()
+
+        val oldestDueAt =
+            ProfileReevaluationJobs
+                .selectAll()
+                .where {
+                    ProfileReevaluationJobs.status inList listOf(
+                        ProfileReevaluationJobStatus.PENDING,
+                        ProfileReevaluationJobStatus.RUNNING,
+                        ProfileReevaluationJobStatus.RETRY_WAIT,
+                    )
+                }
+                .orderBy(ProfileReevaluationJobs.dueAt to SortOrder.ASC)
+                .limit(1)
+                .singleOrNull()
+                ?.get(ProfileReevaluationJobs.dueAt)
+        val activeLeases =
+            ProfileReevaluationJobs.selectAll()
+                .where {
+                    (ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.RUNNING) and
+                        (ProfileReevaluationJobs.leaseExpiresAt greater dbNow)
+                }
+                .count()
+
+        return ProfileReevaluationRepositorySummary(
+            pendingJobs = count(ProfileReevaluationJobStatus.PENDING),
+            runningJobs = count(ProfileReevaluationJobStatus.RUNNING),
+            retryWaitJobs = count(ProfileReevaluationJobStatus.RETRY_WAIT),
+            failedJobs = count(ProfileReevaluationJobStatus.FAILED),
+            activeLeases = activeLeases,
+            oldestBacklogAge =
+                oldestDueAt
+                    ?.let { Duration.between(it, dbNow).coerceAtLeast(Duration.ZERO) }
+                    ?: Duration.ZERO,
+        )
+    }
+
+    /**
+     * 기존 비종료 작업 한 건의 처리 목표를 갱신하되 이미 약속한 due 시각은 늦추지 않습니다.
+     *
+     * 병원 정책 변경의 대량 반영은 bounded keyset runner가 이 primitive를 호출해야 합니다.
+     */
+    fun advanceTargets(
+        jobId: Long,
+        heldTarget: Duration,
+        proposedTarget: Duration,
+        targetPolicyRef: String,
+        targetPolicyGeneration: Long,
+    ): ProfileReevaluationJobRecord? {
+        require(jobId > 0) { "jobId must be positive" }
+        require(heldTarget.isPositive && proposedTarget.isPositive) {
+            "profile reevaluation targets must be positive"
+        }
+        require(targetPolicyRef.isNotBlank() && targetPolicyRef.length <= 256) {
+            "targetPolicyRef must contain 1..256 characters"
+        }
+        require(targetPolicyGeneration > 0) { "targetPolicyGeneration must be positive" }
+        val row = findJobRow(jobId, forUpdate = true) ?: return null
+        if (row[ProfileReevaluationJobs.status] !in NON_TERMINAL_STATES) return null
+        val earliestTarget = minOf(heldTarget, proposedTarget)
+        val advancedDueAt = row[ProfileReevaluationJobs.occurredAt].plus(earliestTarget)
+        val pinnedDueAt = minOf(row[ProfileReevaluationJobs.dueAt], advancedDueAt)
+        ProfileReevaluationJobs.update({
+            (ProfileReevaluationJobs.id eq jobId) and
+                (ProfileReevaluationJobs.status inList NON_TERMINAL_STATES)
+        }) {
+            it[dueAt] = pinnedDueAt
+            it[targetDurationSeconds] = earliestTarget.seconds
+            it[heldTargetSeconds] = heldTarget.seconds
+            it[proposedTargetSeconds] = proposedTarget.seconds
+            it[ProfileReevaluationJobs.targetPolicyRef] = targetPolicyRef
+            it[ProfileReevaluationJobs.targetPolicyGeneration] = targetPolicyGeneration
+            it[updatedAt] = dbCurrentTimestamp()
+        }
+        return findJob(jobId)
+    }
+
     fun findJobs(scope: ProfileReevaluationScope): List<ProfileReevaluationJobRecord> =
         ProfileReevaluationJobs
             .selectAll()
@@ -815,6 +938,15 @@ class ProfileReevaluationRepository(
         val FAILURE_CODE_REGEX = Regex("^[A-Z][A-Z0-9_]{0,95}$")
     }
 }
+
+data class ProfileReevaluationRepositorySummary(
+    val pendingJobs: Long,
+    val runningJobs: Long,
+    val retryWaitJobs: Long,
+    val failedJobs: Long,
+    val activeLeases: Long,
+    val oldestBacklogAge: Duration,
+)
 
 private fun JdbcTransaction.dbCurrentTimestamp(): Instant =
     exec("SELECT CURRENT_TIMESTAMP") { resultSet ->

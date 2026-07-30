@@ -17,6 +17,16 @@ spring:
 server:
     port: 8080
 
+management:
+    endpoints:
+        web:
+            exposure:
+                include: health,info,profileReevaluation
+    endpoint:
+        profileReevaluation:
+            # HTTP 권한은 SecurityConfig의 EndpointRequest matcher가 ADMIN으로 제한합니다.
+            access: unrestricted
+
 scheduling:
     appointment:
         idempotency:
@@ -61,6 +71,34 @@ scheduling:
         # idempotency-hash-secret은 기본값을 두지 않는다. 설정된 환경에서만 policy write/worker bean이 생성된다.
 
 appointment:
+    profile-reevaluation:
+        # 병원 허용 목록이 비어 있으면 활성화해도 적용 대상은 없습니다.
+        enabled: false
+        mutation-mode: DRY_RUN
+        clinic-allowlist: []
+        held-target: 5m
+        proposed-target: 30m
+        global-concurrency: 8
+        per-clinic-concurrency: 2
+        page-size: 50
+        max-appointments-per-tick: 100
+        poll-interval: 1s
+        lease-duration: 30s
+        lease-renew-interval: 10s
+        retry-max-attempts: 5
+        retry-max-elapsed-time: 15m
+        retry-initial-backoff: 2s
+        retry-max-backoff: 1m
+        retry-jitter: 0.20
+        auto-redrive-max: 2
+        auto-redrive-cooldown: 30m
+        assessment:
+            # enabled=true일 때 HTTPS URL과 고정 host allowlist를 모두 설정해야 합니다.
+            allowed-hosts: []
+            connect-timeout: 2s
+            read-timeout: 3s
+            max-response-bytes: 65536
+            max-concurrency: 8
     plan-foundation:
         catalog-sync-enabled: false
         plan-read-enabled: false

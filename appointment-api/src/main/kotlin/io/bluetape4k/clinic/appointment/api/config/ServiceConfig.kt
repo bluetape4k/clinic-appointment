@@ -96,6 +96,7 @@ import kotlin.concurrent.withLock
     PlanFoundationProperties::class,
     SchedulingPolicyProperties::class,
     AppointmentCommitmentProperties::class,
+    ProfileReevaluationProperties::class,
 )
 class ServiceConfig {
 
@@ -602,6 +603,7 @@ class ServiceConfig {
         clinicEffectiveService: EffectiveSchedulingPolicyService,
         metrics: SchedulingPolicyMetrics,
         properties: SchedulingPolicyProperties,
+        profileReevaluationProperties: ProfileReevaluationProperties,
     ): SchedulingPolicyAdministrationService =
         SchedulingPolicyAdministrationService(
             commandService = commandService,
@@ -614,6 +616,7 @@ class ServiceConfig {
             clinicEffectiveService = clinicEffectiveService,
             metrics = metrics,
             properties = properties,
+            profileReevaluationProperties = profileReevaluationProperties,
         )
 
     /** DB-time due selection과 owner-fenced retry/missed primitive를 worker에 제공한다. */

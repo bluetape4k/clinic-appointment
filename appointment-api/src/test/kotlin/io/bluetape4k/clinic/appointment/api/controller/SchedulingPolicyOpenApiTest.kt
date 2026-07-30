@@ -183,6 +183,27 @@ class SchedulingPolicyOpenApiTest {
             assertTrue(propertyNames.intersect(forbidden).isEmpty(), propertyNames.toString())
         }
 
+        val draftPayload = schemas.path("CreateSchedulingPolicyDraftRequest")
+            .path("properties")
+            .path("payload")
+        assertTrue(
+            draftPayload.path("description").stringValue()
+                .contains("profileReevaluationHeldTargetSeconds"),
+            draftPayload.toString(),
+        )
+        val effectiveTargets = schemas.path("EffectiveSchedulingPolicyResponse")
+            .path("properties")
+            .path("profileReevaluationTargets")
+        assertFalse(effectiveTargets.isMissingNode, "profileReevaluationTargets")
+        val targetSchemaName = effectiveTargets.path("\$ref").stringValue().substringAfterLast("/")
+        val targetFields = schemas.path(targetSchemaName).path("properties")
+        listOf(
+            "heldTargetSeconds",
+            "heldSource",
+            "proposedTargetSeconds",
+            "proposedSource",
+        ).forEach { assertTrue(targetFields.has(it), it) }
+
         val errorFields = schemas.path("SchedulingApiErrorResponse").path("properties")
         listOf("errorCode", "correlationId", "retryable", "action").forEach {
             assertTrue(errorFields.has(it), it)
