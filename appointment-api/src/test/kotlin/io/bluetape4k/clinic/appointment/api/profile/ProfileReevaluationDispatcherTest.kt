@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.profile
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.model.dto.ClaimProfileReevaluationJobs
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationClinicCursor
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationJobRecord
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationOutcomeCounts
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationPriorityClass
@@ -89,6 +90,49 @@ internal class ProfileReevaluationDispatcherTest {
             dispatcher.dispatchOnce()
 
             order.toSet() shouldBeEqualTo setOf(held.id, agedProposed.id)
+        }
+    }
+
+    @Test
+    fun `dispatcher는 claim 결과의 마지막 병원을 다음 tick cursor로 이어 간다`() {
+        runBlocking {
+            val cursors = mutableListOf<ProfileReevaluationClinicCursor?>()
+            val batches =
+                ArrayDeque(
+                    listOf(
+                        listOf(workerJob(1L, 1L), workerJob(2L, 2L)),
+                        listOf(workerJob(3L, 3L), workerJob(4L, 4L)),
+                        listOf(workerJob(5L, 5L), workerJob(6L, 6L)),
+                        listOf(workerJob(7L, 1L), workerJob(8L, 2L)),
+                        emptyList(),
+                    ),
+                )
+            val store =
+                object : ProfileReevaluationWorkStore by UnsupportedWorkStore {
+                    override suspend fun claim(command: ClaimProfileReevaluationJobs): List<ProfileReevaluationJobRecord> {
+                        cursors += command.afterClinic
+                        return batches.removeFirst()
+                    }
+                }
+            val dispatcher =
+                ProfileReevaluationDispatcher(
+                    store = store,
+                    worker = ProfileReevaluationJobWorker { ProfileReevaluationWorkerResult.COMPLETED },
+                    leaseOwner = "dispatcher-a",
+                    globalConcurrency = 2,
+                    perClinicConcurrency = 1,
+                )
+
+            repeat(5) { dispatcher.dispatchOnce() }
+
+            cursors shouldBeEqualTo
+                listOf(
+                    null,
+                    ProfileReevaluationClinicCursor(1L, 2L),
+                    ProfileReevaluationClinicCursor(1L, 4L),
+                    ProfileReevaluationClinicCursor(1L, 6L),
+                    ProfileReevaluationClinicCursor(1L, 2L),
+                )
         }
     }
 
@@ -271,6 +315,12 @@ private object UnsupportedWorkStore : ProfileReevaluationWorkStore {
     override suspend fun markStale(
         job: ProfileReevaluationJobRecord,
         observedRevision: Long,
+    ): Boolean = error("unsupported")
+
+    override suspend fun defer(
+        job: ProfileReevaluationJobRecord,
+        reasonCode: String,
+        delay: java.time.Duration,
     ): Boolean = error("unsupported")
 
     override suspend fun retry(

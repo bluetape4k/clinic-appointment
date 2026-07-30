@@ -114,6 +114,7 @@ enum class ProfileReevaluationEventMetricResult(val metricValue: String) {
 
 enum class ProfileReevaluationOperationalMetric(val metricValue: String) {
     LEASE_LOST("lease_lost"),
+    DEFER("defer"),
     RETRY("retry"),
     FAILED("failed"),
     REDRIVE("redrive"),

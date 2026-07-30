@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.api.profile.ProfileAssessmentClient
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationAdminService
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationAppointmentProcessor
@@ -65,6 +66,24 @@ class ProfileReevaluationWiringTest {
                 context.getBeansOfType(ProfileReevaluationWorker::class.java).size shouldBeEqualTo 1
                 context.getBeansOfType(ProfileReevaluationDispatcher::class.java).size shouldBeEqualTo 1
                 context.getBeansOfType(ProfileReevaluationSchedulingRunner::class.java).size shouldBeEqualTo 1
+            }
+    }
+
+    @Test
+    fun `활성 구성에 예약 재평가 processor가 없으면 시작을 거부한다`() {
+        runner
+            .withBean(ProfileAssessmentClient::class.java, Supplier {
+                ProfileAssessmentClient { error("not called by wiring test") }
+            })
+            .withPropertyValues(
+                "appointment.profile-reevaluation.enabled=true",
+                "appointment.profile-reevaluation.mutation-mode=APPLY_PROPOSED",
+                "appointment.profile-reevaluation.clinic-allowlist[0]=11",
+                "appointment.profile-reevaluation.assessment.base-url=https://crm.example.test",
+                "appointment.profile-reevaluation.assessment.allowed-hosts[0]=crm.example.test",
+            )
+            .run { context ->
+                context.startupFailure.shouldNotBeNull()
             }
     }
 }

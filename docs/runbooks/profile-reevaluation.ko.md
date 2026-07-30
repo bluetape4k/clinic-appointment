@@ -90,9 +90,14 @@ histogram_quantile(
 
 이 histogram은 이벤트 발생부터 최초 선점까지의 대기 시간을 작업당 한 번
 기록하며, 닫힌 값인 `priority_class` tag만 사용한다. p95가 유효 목표보다 낮고
-대기만 하는 병원이 없을 때만 진행한다. 10분 동안 목표 시간의 80%를 쓰면 허용
-목록 확대를 멈춘다. 10분 동안 100%를 넘으면
-`DRY_RUN`으로 내리고 작업은 보존한 채 DB, worker, assessment 지연을 확인한다.
+대기만 하는 병원이 없을 때만 진행한다. dispatcher는 tick 사이에 병원 keyset
+cursor를 이어 가고 마지막 병원 뒤에서 처음으로 돌아간다. 따라서 처리 목표 시각이
+같아도 작은 clinic ID만 반복해서 선택하지 않는다. 선택한 병원마다 `LIMIT 1`
+keyset 조회와 범위가 제한된 `PENDING`, `RETRY_WAIT`, 만료 lease 조회만 실행한다.
+전역 동시성 상한이 64이므로 환자 backlog 크기와 무관하게 poll당 조회 횟수도
+제한된다. 10분 동안 목표 시간의 80%를 쓰면 허용 목록 확대를 멈춘다. 10분 동안
+100%를 넘으면 `DRY_RUN`으로 내리고 작업은 보존한 채 DB, worker, assessment
+지연을 확인한다.
 
 <a id="oldest-job"></a>
 ## 가장 오래된 작업과 backlog
@@ -179,7 +184,7 @@ curl --fail-with-body -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   http://localhost:8080/actuator/profileReevaluation \
-  -d '{"action":"PREVIEW","actor":"ops.user","reason":"CRM dependency restored","idempotencyKey":"reeval-preview-20260730-01","tenantGroupId":1,"clinicId":101,"targetRevision":42,"limit":50}'
+  -d '{"action":"PREVIEW","reason":"CRM dependency restored","idempotencyKey":"reeval-preview-20260730-01","tenantGroupId":1,"clinicId":101,"targetRevision":42,"limit":50}'
 ```
 
 preview의 모든 row가 승인 범위와 일치할 때만 실행한다.
@@ -189,8 +194,10 @@ curl --fail-with-body -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   http://localhost:8080/actuator/profileReevaluation \
-  -d '{"action":"EXECUTE","actor":"ops.user","reason":"CRM dependency restored","idempotencyKey":"reeval-execute-20260730-01","tenantGroupId":1,"clinicId":101,"targetRevision":42,"limit":50}'
+  -d '{"action":"EXECUTE","reason":"CRM dependency restored","idempotencyKey":"reeval-execute-20260730-01","tenantGroupId":1,"clinicId":101,"targetRevision":42,"limit":50}'
 ```
+
+감사 주체는 인증된 관리자 token에서 가져오며 요청 본문으로 바꿀 수 없다.
 
 서비스는 실패 row를 고치지 않고 lineage가 이어지는 새 attempt를 만든다. 같은
 idempotency key는 같은 요청에만 재사용할 수 있다. 자동 redrive는
@@ -270,6 +277,10 @@ appointment, event, correlation ID를 label에 넣지 않는다.
 - `clinic.profile.reevaluation.dryrun.parity`
 - `clinic.profile.assessment.inflight`
 - `clinic.profile.assessment.requests`
+
+운영 결과의 `defer`와 `retry`는 의미가 다르다. `defer`는 runtime gate나 tick
+상한 때문에 정상 작업을 미룬 경우이고, `retry`는 기술 실패로 재시도 정책을
+사용한 경우다.
 
 배포 가능한 기본 alert는
 [`profile-reevaluation-alerts.yml`](profile-reevaluation-alerts.yml)에 있다.

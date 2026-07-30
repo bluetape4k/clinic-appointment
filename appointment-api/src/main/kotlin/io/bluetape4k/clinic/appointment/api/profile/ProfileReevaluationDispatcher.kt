@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.profile
 
 import io.bluetape4k.clinic.appointment.model.dto.ClaimProfileReevaluationJobs
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationClinicCursor
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationJobRecord
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
 import kotlinx.coroutines.async
@@ -8,7 +9,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import java.time.Clock
 import java.time.Duration
@@ -30,6 +33,8 @@ class ProfileReevaluationDispatcher(
 ) {
     private val globalPermits: Semaphore
     private val clinicPermits = ConcurrentHashMap<ClinicKey, Semaphore>()
+    private val claimMutex = Mutex()
+    private var clinicCursor: ProfileReevaluationClinicCursor? = null
 
     init {
         require(leaseOwner.isNotBlank() && leaseOwner.length <= 160) {
@@ -45,14 +50,7 @@ class ProfileReevaluationDispatcher(
 
     suspend fun dispatchOnce(): List<ProfileReevaluationWorkerResult> {
         redriveEligibleFailures()
-        val jobs =
-            store.claim(
-                ClaimProfileReevaluationJobs(
-                    leaseOwner = leaseOwner,
-                    limit = globalConcurrency,
-                    perClinicLimit = perClinicConcurrency,
-                ),
-            )
+        val jobs = claimFairBatch()
         recordFirstClaimWait(jobs)
         return coroutineScope {
             jobs.map { job ->
@@ -65,6 +63,38 @@ class ProfileReevaluationDispatcher(
                 }
             }.awaitAll()
         }
+    }
+
+    private suspend fun claimFairBatch(): List<ProfileReevaluationJobRecord> =
+        claimMutex.withLock {
+            val previousCursor = clinicCursor
+            val jobs =
+                store.claim(
+                ClaimProfileReevaluationJobs(
+                    leaseOwner = leaseOwner,
+                    limit = globalConcurrency,
+                    perClinicLimit = perClinicConcurrency,
+                    afterClinic = previousCursor,
+                ),
+            )
+            clinicCursor = nextClinicCursor(previousCursor, jobs)
+            jobs
+        }
+
+    private fun nextClinicCursor(
+        previous: ProfileReevaluationClinicCursor?,
+        jobs: List<ProfileReevaluationJobRecord>,
+    ): ProfileReevaluationClinicCursor? {
+        val cursors =
+            jobs.map { job ->
+                ProfileReevaluationClinicCursor(
+                    tenantGroupId = job.scope.tenantGroupId,
+                    clinicId = job.scope.clinicId,
+                )
+            }.distinct()
+        if (cursors.isEmpty()) return previous
+        val wrapped = previous?.let { cursor -> cursors.filter { it <= cursor } }.orEmpty()
+        return (wrapped.ifEmpty { cursors }).maxOrNull()
     }
 
     private fun recordFirstClaimWait(jobs: List<ProfileReevaluationJobRecord>) {

@@ -178,14 +178,37 @@ data class ClaimProfileReevaluationJobs(
     val leaseOwner: String,
     val limit: Int,
     val perClinicLimit: Int,
+    val afterClinic: ProfileReevaluationClinicCursor? = null,
 ) : Serializable {
     init {
         require(leaseOwner.isNotBlank() && leaseOwner.length <= 160) {
             "leaseOwner must contain 1..160 characters"
         }
-        require(limit in 1..1000) { "limit must be between 1 and 1000" }
+        require(limit in 1..64) { "limit must be between 1 and 64" }
         require(perClinicLimit in 1..limit) { "perClinicLimit must be between 1 and limit" }
     }
+}
+
+/**
+ * 병원별 선점 순서를 tick 사이에서 이어 가기 위한 keyset cursor입니다.
+ */
+data class ProfileReevaluationClinicCursor(
+    val tenantGroupId: Long,
+    val clinicId: Long,
+) : Comparable<ProfileReevaluationClinicCursor>,
+    Serializable {
+    init {
+        require(tenantGroupId > 0) { "tenantGroupId must be positive" }
+        require(clinicId > 0) { "clinicId must be positive" }
+    }
+
+    override fun compareTo(other: ProfileReevaluationClinicCursor): Int =
+        compareValuesBy(
+            this,
+            other,
+            ProfileReevaluationClinicCursor::tenantGroupId,
+            ProfileReevaluationClinicCursor::clinicId,
+        )
 }
 
 /**

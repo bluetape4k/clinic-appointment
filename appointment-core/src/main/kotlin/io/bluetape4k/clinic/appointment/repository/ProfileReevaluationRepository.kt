@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.repository
 
 import io.bluetape4k.clinic.appointment.model.dto.ClaimProfileReevaluationJobs
+import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationClinicCursor
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationCursor
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationHeadRecord
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationJobRecord
@@ -15,6 +16,7 @@ import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationOutcome
 import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationHeads
 import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationJobs
 import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationOutcomes
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -22,6 +24,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
@@ -30,6 +33,7 @@ import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.update
@@ -130,24 +134,11 @@ class ProfileReevaluationRepository(
      */
     fun claimFairJobs(command: ClaimProfileReevaluationJobs): List<ProfileReevaluationJobRecord> {
         val dbNow = dbCurrentTimestamp()
-        val candidates = ProfileReevaluationJobs
-            .selectAll()
-            .where {
-                (
-                    (ProfileReevaluationJobs.status inList READY_STATES) and
-                        (ProfileReevaluationJobs.nextAttemptAt lessEq dbNow)
-                    ) or
-                    (
-                        (ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.RUNNING) and
-                            (ProfileReevaluationJobs.leaseExpiresAt lessEq dbNow)
-                        )
+        val clinicKeys = claimableClinicKeys(dbNow, command)
+        val candidates =
+            clinicKeys.flatMap { clinic ->
+                claimableJobsForClinic(dbNow, clinic, command.perClinicLimit)
             }
-            .orderBy(
-                ProfileReevaluationJobs.dueAt to SortOrder.ASC,
-                ProfileReevaluationJobs.id to SortOrder.ASC,
-            )
-            .limit(MAX_CLAIM_CANDIDATES)
-            .toList()
 
         val fairCandidates = fairClaimOrder(candidates, command.perClinicLimit)
         val claimed = ArrayList<ProfileReevaluationJobRecord>(command.limit)
@@ -164,6 +155,133 @@ class ProfileReevaluationRepository(
         }
         return claimed
     }
+
+    private fun claimableJobsForClinic(
+        dbNow: Instant,
+        clinic: ClinicKey,
+        limit: Int,
+    ): List<ResultRow> {
+        val clinicPredicate =
+            (ProfileReevaluationJobs.tenantGroupId eq clinic.tenantGroupId) and
+                (ProfileReevaluationJobs.clinicId eq clinic.clinicId)
+        val ready =
+            READY_STATES.flatMap { readyStatus ->
+                ProfileReevaluationJobs
+                    .selectAll()
+                    .where {
+                        clinicPredicate and
+                            (ProfileReevaluationJobs.status eq readyStatus) and
+                            (ProfileReevaluationJobs.nextAttemptAt lessEq dbNow)
+                    }
+                    .orderBy(
+                        ProfileReevaluationJobs.nextAttemptAt to SortOrder.ASC,
+                        ProfileReevaluationJobs.dueAt to SortOrder.ASC,
+                        ProfileReevaluationJobs.id to SortOrder.ASC,
+                    )
+                    .limit(limit)
+                    .toList()
+            }
+        val expiredLease =
+            ProfileReevaluationJobs
+                .selectAll()
+                .where {
+                    clinicPredicate and
+                        (ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.RUNNING) and
+                        (ProfileReevaluationJobs.leaseExpiresAt lessEq dbNow)
+                }
+                .orderBy(
+                    ProfileReevaluationJobs.leaseExpiresAt to SortOrder.ASC,
+                    ProfileReevaluationJobs.dueAt to SortOrder.ASC,
+                    ProfileReevaluationJobs.id to SortOrder.ASC,
+                )
+                .limit(limit)
+        return ready + expiredLease.toList()
+    }
+
+    /**
+     * 병원 keyset을 한 바퀴 순환하며 tick마다 최대
+     * [ClaimProfileReevaluationJobs.limit]개를 고릅니다.
+     *
+     * 각 조회는 다음 claim 가능한 병원 한 곳에서 멈추므로 환자 backlog 크기와 무관하게
+     * 병원 수와 전역 동시성으로 조회 횟수가 제한됩니다.
+     */
+    private fun claimableClinicKeys(
+        dbNow: Instant,
+        command: ClaimProfileReevaluationJobs,
+    ): List<ClinicKey> =
+        buildList {
+            var cursor = command.afterClinic?.toClinicKey()
+            while (size < command.limit) {
+                val next = findClaimableClinic(dbNow, cursor, atOrBefore = null) ?: break
+                add(next)
+                cursor = next
+            }
+            if (size < command.limit && command.afterClinic != null) {
+                cursor = null
+                val wrapAt = command.afterClinic.toClinicKey()
+                while (size < command.limit) {
+                    val next = findClaimableClinic(dbNow, cursor, atOrBefore = wrapAt) ?: break
+                    add(next)
+                    cursor = next
+                }
+            }
+        }
+
+    private fun findClaimableClinic(
+        dbNow: Instant,
+        afterExclusive: ClinicKey?,
+        atOrBefore: ClinicKey?,
+    ): ClinicKey? {
+        var predicate: Op<Boolean> = claimableAt(dbNow)
+        if (afterExclusive != null) {
+            predicate = predicate and clinicKeyAfter(afterExclusive)
+        }
+        if (atOrBefore != null) {
+            predicate = predicate and clinicKeyAtOrBefore(atOrBefore)
+        }
+        return ProfileReevaluationJobs
+            .select(
+                ProfileReevaluationJobs.tenantGroupId,
+                ProfileReevaluationJobs.clinicId,
+            )
+            .where { predicate }
+            .orderBy(
+                ProfileReevaluationJobs.tenantGroupId to SortOrder.ASC,
+                ProfileReevaluationJobs.clinicId to SortOrder.ASC,
+            )
+            .limit(1)
+            .firstOrNull()
+            ?.let { row ->
+                ClinicKey(
+                    tenantGroupId = row[ProfileReevaluationJobs.tenantGroupId],
+                    clinicId = row[ProfileReevaluationJobs.clinicId],
+                )
+            }
+    }
+
+    private fun claimableAt(dbNow: Instant) =
+        (
+            (ProfileReevaluationJobs.status inList READY_STATES) and
+                (ProfileReevaluationJobs.nextAttemptAt lessEq dbNow)
+            ) or
+            (
+                (ProfileReevaluationJobs.status eq ProfileReevaluationJobStatus.RUNNING) and
+                (ProfileReevaluationJobs.leaseExpiresAt lessEq dbNow)
+                )
+
+    private fun clinicKeyAfter(cursor: ClinicKey) =
+        (ProfileReevaluationJobs.tenantGroupId greater cursor.tenantGroupId) or
+            (
+                (ProfileReevaluationJobs.tenantGroupId eq cursor.tenantGroupId) and
+                    (ProfileReevaluationJobs.clinicId greater cursor.clinicId)
+                )
+
+    private fun clinicKeyAtOrBefore(cursor: ClinicKey) =
+        (ProfileReevaluationJobs.tenantGroupId less cursor.tenantGroupId) or
+            (
+                (ProfileReevaluationJobs.tenantGroupId eq cursor.tenantGroupId) and
+                    (ProfileReevaluationJobs.clinicId lessEq cursor.clinicId)
+                )
 
     /**
      * 최신 revision의 현재 worker에게만 lease 연장을 허용합니다.
@@ -251,6 +369,46 @@ class ProfileReevaluationRepository(
             it[ProfileReevaluationJobs.leaseOwner] = null
             it[leaseExpiresAt] = null
             it[lastFailureCode] = failureCode
+            it[updatedAt] = dbNow
+        } == 1
+    }
+
+    /**
+     * 기능 게이트나 한 tick 처리 한도에 따른 운영상 대기를 재시도 실패 예산과 분리합니다.
+     *
+     * claim 때 증가한 attempt를 되돌리므로 운영 모드 전환을 기다리는 동안 실제 처리 실패의
+     * 횟수와 경과 시간 한도가 소진되지 않습니다.
+     */
+    fun defer(
+        jobId: Long,
+        revision: Long,
+        leaseOwner: String,
+        reasonCode: String,
+        delay: Duration,
+    ): Boolean {
+        validateTransitionIdentity(jobId, revision, leaseOwner)
+        require(FAILURE_CODE_REGEX.matches(reasonCode)) {
+            "reasonCode must contain 1..96 uppercase identifier characters"
+        }
+        require(!delay.isNegative) { "delay must be non-negative" }
+        val dbNow = dbCurrentTimestamp()
+        if (!matchesCurrentRevision(jobId, revision)) return false
+        val row = findJobRow(jobId, forUpdate = true) ?: return false
+        if (!hasActiveLease(row, revision, leaseOwner, dbNow)) return false
+        val remainingAttempts = (row[ProfileReevaluationJobs.attemptCount] - 1).coerceAtLeast(0)
+
+        return ProfileReevaluationJobs.update({
+            activeLeasePredicate(jobId, revision, leaseOwner, dbNow)
+        }) {
+            it[status] = ProfileReevaluationJobStatus.RETRY_WAIT
+            it[nextAttemptAt] = dbNow.plus(delay)
+            it[ProfileReevaluationJobs.leaseOwner] = null
+            it[leaseExpiresAt] = null
+            it[attemptCount] = remainingAttempts
+            if (remainingAttempts == 0) {
+                it[firstAttemptAt] = null
+            }
+            it[lastFailureCode] = reasonCode
             it[updatedAt] = dbNow
         } == 1
     }
@@ -939,6 +1097,9 @@ class ProfileReevaluationRepository(
         val clinicId: Long,
     )
 
+    private fun ProfileReevaluationClinicCursor.toClinicKey() =
+        ClinicKey(tenantGroupId, clinicId)
+
     private data class FairClaimCandidate(
         val row: ResultRow,
         val clinicKey: ClinicKey,
@@ -953,7 +1114,6 @@ class ProfileReevaluationRepository(
             ProfileReevaluationJobStatus.RETRY_WAIT,
         )
         val NON_TERMINAL_STATES = READY_STATES + ProfileReevaluationJobStatus.RUNNING
-        const val MAX_CLAIM_CANDIDATES = 10_000
         const val MAX_FAILED_JOB_PAGE_SIZE = 1_000
         val FAILURE_CODE_REGEX = Regex("^[A-Z][A-Z0-9_]{0,95}$")
     }

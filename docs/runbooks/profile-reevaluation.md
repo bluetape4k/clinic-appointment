@@ -94,6 +94,11 @@ histogram_quantile(
 The histogram records event-to-first-claim wait once per job and uses only the
 closed `priority_class` tag. Continue when p95 is below the effective target
 and no clinic is starved.
+The dispatcher carries a clinic keyset cursor across ticks and wraps at the end,
+so equal due times do not repeatedly favor lower clinic IDs. Each selected
+clinic uses one `LIMIT 1` keyset lookup plus bounded `PENDING`, `RETRY_WAIT`, and
+expired-lease queries. The configured global concurrency cap of 64 therefore
+bounds poll query count independently of patient backlog size.
 At 80% target consumption for 10 minutes, pause allowlist expansion. At 100%
 for 10 minutes, return to `DRY_RUN`, preserve jobs, and inspect database,
 worker, and assessment latency before resuming.
@@ -184,7 +189,7 @@ curl --fail-with-body -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   http://localhost:8080/actuator/profileReevaluation \
-  -d '{"action":"PREVIEW","actor":"ops.user","reason":"CRM dependency restored","idempotencyKey":"reeval-preview-20260730-01","tenantGroupId":1,"clinicId":101,"targetRevision":42,"limit":50}'
+  -d '{"action":"PREVIEW","reason":"CRM dependency restored","idempotencyKey":"reeval-preview-20260730-01","tenantGroupId":1,"clinicId":101,"targetRevision":42,"limit":50}'
 ```
 
 Execute only when every preview row matches the approved scope:
@@ -194,8 +199,11 @@ curl --fail-with-body -X POST \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   http://localhost:8080/actuator/profileReevaluation \
-  -d '{"action":"EXECUTE","actor":"ops.user","reason":"CRM dependency restored","idempotencyKey":"reeval-execute-20260730-01","tenantGroupId":1,"clinicId":101,"targetRevision":42,"limit":50}'
+  -d '{"action":"EXECUTE","reason":"CRM dependency restored","idempotencyKey":"reeval-execute-20260730-01","tenantGroupId":1,"clinicId":101,"targetRevision":42,"limit":50}'
 ```
+
+The audit actor is derived from the authenticated admin token. The request body
+cannot override it.
 
 The service creates a new lineage attempt; it does not rewrite the failed row.
 The same idempotency key is replay-safe only for the same request. Automatic
@@ -282,6 +290,10 @@ event, and correlation identifiers are forbidden as labels.
 - `clinic.profile.reevaluation.dryrun.parity`
 - `clinic.profile.assessment.inflight`
 - `clinic.profile.assessment.requests`
+
+The operational result distinguishes `defer` from `retry`: `defer` means the
+runtime gate or bounded tick postponed otherwise valid work, while `retry`
+means a technical processing failure consumed retry policy.
 
 The deployable default alerts are in
 [`profile-reevaluation-alerts.yml`](profile-reevaluation-alerts.yml).

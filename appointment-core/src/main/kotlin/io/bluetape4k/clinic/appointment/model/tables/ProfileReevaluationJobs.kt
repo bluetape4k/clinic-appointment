@@ -64,7 +64,26 @@ object ProfileReevaluationJobs : LongIdTable("scheduling_profile_reevaluation_jo
     init {
         index("idx_profile_reevaluation_due", false, status, nextAttemptAt, clinicId, id)
         index("idx_profile_reevaluation_lease", false, status, leaseExpiresAt, clinicId, id)
-        index("idx_profile_reevaluation_clinic", false, tenantGroupId, clinicId, status, dueAt)
+        index(
+            "idx_profile_reevaluation_clinic_ready",
+            false,
+            tenantGroupId,
+            clinicId,
+            status,
+            nextAttemptAt,
+            dueAt,
+            id,
+        )
+        index(
+            "idx_profile_reevaluation_clinic_lease",
+            false,
+            tenantGroupId,
+            clinicId,
+            status,
+            leaseExpiresAt,
+            dueAt,
+            id,
+        )
         uniqueIndex(
             "uq_profile_reevaluation_job_lineage",
             rootJobId,
