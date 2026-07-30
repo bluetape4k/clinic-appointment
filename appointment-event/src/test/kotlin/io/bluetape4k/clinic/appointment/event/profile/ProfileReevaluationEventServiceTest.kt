@@ -235,12 +235,37 @@ class ProfileReevaluationEventServiceTest {
         }
     }
 
+    @Test
+    fun `불신 또는 계약 위반 프로필 이벤트는 bounded rejected 관측 결과를 남긴다`() {
+        val observed = mutableListOf<ProfileReevaluationEventObservationResult>()
+        val service =
+            service(
+                observer = ProfileReevaluationEventObserver { result ->
+                    observed += result
+                },
+            )
+
+        service.accept(envelope(eventId = "metric-bad-signature").copy(signature = "invalid"))
+        service.accept(
+            envelope(
+                eventId = "metric-oversized",
+                assessmentRef = "x".repeat(513),
+            ),
+        )
+
+        observed shouldBeEqualTo listOf(
+            ProfileReevaluationEventObservationResult.REJECTED,
+            ProfileReevaluationEventObservationResult.REJECTED,
+        )
+    }
+
     private fun service(
         protector: QuarantineEnvelopeProtector =
             AesGcmQuarantineEnvelopeProtector(
                 encryptionKey = ByteArray(32) { index -> index.toByte() },
                 keyId = "quarantine-key-1",
             ),
+        observer: ProfileReevaluationEventObserver = ProfileReevaluationEventObserver.NoOp,
     ) = ProfileReevaluationEventService(
         trustVerifier = SchedulingEventTrustVerifier(
             signatureVerifier = SchedulingEventSignatureVerifier { it.signature == "valid" },
@@ -263,6 +288,7 @@ class ProfileReevaluationEventServiceTest {
         proposedTarget = Duration.ofMinutes(30),
         targetPolicyRef = "profile-reevaluation/default",
         targetPolicyGeneration = 1L,
+        eventObserver = observer,
     )
 
     private fun envelope(

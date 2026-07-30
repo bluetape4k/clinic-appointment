@@ -445,7 +445,8 @@ recovery policy로 제한한다. 이를 소진한 뒤에는 운영자 명시 실
 ## 10. 관측 가능성과 운영
 
 metric label에는 patient, appointment, event, assessment reference를 넣지 않는다.
-tenant/clinic과 bounded state/reason code만 허용한다.
+tenant/clinic을 포함한 식별자도 label에 넣지 않고 bounded state/reason code만
+허용한다. 병원 범위 조사는 health detail과 범위가 제한된 운영 DB 조회를 사용한다.
 
 필수 지표는 다음과 같다.
 

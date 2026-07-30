@@ -77,6 +77,9 @@ class ProfileReevaluationWorker(
             }
 
             val assessment = fetchAssessment(job)
+            // CRM 호출은 transaction 밖에서 수행되므로 응답을 기다리는 동안 lease가
+            // 만료될 수 있습니다. 예약 mutation을 시작하기 전에 소유권을 다시 확인합니다.
+            if (!store.renewLease(job)) return ProfileReevaluationWorkerResult.LEASE_LOST
             return processCandidates(job, assessment, initialAccess.mode)
         } catch (cancelled: CancellationException) {
             throw cancelled
