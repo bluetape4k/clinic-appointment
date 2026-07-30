@@ -60,6 +60,25 @@ Scheduling policy는 앞으로의 예약 결정이 따라야 할 동작을 정�
 이 기반 구현에는 예약 생성 경로의 정책 소비 플래그가 없습니다. 확정 예약은 정책 기반 변경을
 적용하기 전에 여전히 고객 동의가 필요합니다.
 
+<a id="profile-reevaluation"></a>
+### 프로필 변경 예약 재평가 경계
+
+CRM이 예약 판단에 영향을 주는 프로필 변경을 알리면 예약서비스는 `PROPOSED`와
+`HELD` 예약만 다시 평가합니다. `CONFIRMED` 예약은 그대로 둡니다. 이벤트에는
+프로필 원문, 파생 특징, 점수, 설명 대신 범위가 제한된 fingerprint, revision과
+opaque assessment reference만 담습니다.
+
+<a href="docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.dark.png">
+    <img src="docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.light.png" alt="CRM 최소 프로필 변경 이벤트부터 병원 간 공정 처리와 예약 상태별 안전한 재평가까지의 업무 흐름">
+  </picture>
+</a>
+
+[업무 흐름 HTML](docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html),
+[기준 설계](docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
+[운영 런북](docs/runbooks/profile-reevaluation.ko.md)에서 자세한 계약을 확인할 수 있습니다.
+
 ## 아키텍처
 
 ![Clinic Appointment 아키텍처](docs/images/readme-diagrams/clinic-appointment-architecture-01-ko.png)
@@ -134,11 +153,13 @@ Scheduling policy는 앞으로의 예약 결정이 따라야 할 동작을 정�
 | [프론트엔드](docs/requirements/frontend.md) | Angular 구성, 페이지 구조 |
 | [예약 플랜 시각 동반 문서](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 예약 약속, 장애 재조정, 수용량의 시뮬레이션과 결정 이력 |
 | [예약 정책 시각 동반 문서](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html) | 정책 컴파일, 승인, 활성화, 복구의 시뮬레이션과 결정 이력 |
+| [프로필 변경 예약 재평가 업무 흐름](docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html) | CRM 최소 이벤트, 병원 간 공정 처리, 상태별 판단, 개인정보를 남기지 않는 복구 흐름 |
 | [예약 플랜 복구 런북](docs/runbooks/appointment-plan-foundation-recovery.md) | 격리 확인, 드라이런 재처리, 롤백, 원천 서비스 책임 |
 | [예약 정책 API](docs/api/scheduling-policy.md) | 테넌트/병원 정책 엔드포인트, 멱등성, 미리보기 폴링, 오류, 롤아웃 플래그 |
 | [예약 정책 활성화 런북](docs/runbooks/scheduling-policy-activation.md) | 작업자 경보, 60초/5분 활성화 처리, 재생/폐기 복구, V10 준비 조건 |
 | [방문 확정 약속 v2 API](docs/api/visit-commitment.md) | Gateway 인증, 가예약·승인·확정, 멱등성, 오류와 배포 설정 |
 | [방문 확정 약속 v2 운영 런북](docs/runbooks/visit-commitment-operations.md) | shadow/허용목록, 경보, 보존, 재처리, PostgreSQL 롤백 |
+| [프로필 변경 예약 재평가 운영 런북](docs/runbooks/profile-reevaluation.ko.md) | 비활성·드라이런 배포, 병원 허용목록, SLO 경보, 제한된 재처리, 개인정보 사고와 롤백 |
 
 ### 변경 이력
 

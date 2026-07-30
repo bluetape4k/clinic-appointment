@@ -38,6 +38,24 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 전체 예약 정책 요청, 생명주기, 유효 정책 조회, 오류 계약은
 [Scheduling Policy API](../docs/api/scheduling-policy.md)에 정리되어 있습니다.
 
+<a id="profile-reevaluation"></a>
+### 프로필 변경 예약 재평가
+
+프로필 변경 처리는 고객용 API가 아니라 내부 worker와 actuator로 실행합니다.
+`PROPOSED`와 `HELD`만 다시 평가하고 `CONFIRMED`는 건너뜁니다. 현재 시점의 최소
+assessment는 실제 처리할 때 CRM에서 조회합니다. 배포는 병원 허용 목록을 명시하고
+다음 순서로만 진행합니다.
+
+`DISABLED` → `DRY_RUN` → `APPLY_PROPOSED` →
+`APPLY_PROPOSED_AND_HELD`
+
+`GET`·`POST /actuator/profileReevaluation`은 `ADMIN`만 호출할 수 있습니다. 조회는
+backlog, lease, 실패와 drain 상태를 제공하고, 쓰기는 범위가 제한된 `PREVIEW`와
+멱등 `EXECUTE` redrive만 지원합니다. 자세한 내용은
+[업무 흐름](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html),
+[기준 설계](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
+[운영 런북](../docs/runbooks/profile-reevaluation.ko.md)에 있습니다.
+
 ### 방문 확정 약속 v2
 
 전체 상태·인증·오류 계약은 [방문 확정 약속 v2 API](../docs/api/visit-commitment.md),

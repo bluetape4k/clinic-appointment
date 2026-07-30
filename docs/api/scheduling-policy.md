@@ -51,6 +51,32 @@ service assurance와 함께 사용하는 전용 capability다. 외부 JWT에 이
 이 기반 구현에는 예약 생성 경로의 정책 소비 플래그가 없다. 예약 생성 경로가 새 정책을 소비하는
 단계는 별도 변경으로 추가해야 한다.
 
+## 프로필 변경 재평가 목표 시간
+
+프로필 변경으로 기존 예약을 다시 판단할 때는 `PROPOSED`와 `HELD`만 대상이다.
+`CONFIRMED`는 고객과 확정한 약속이므로 정책 목표 시간이 바뀌어도 자동으로
+재평가하지 않는다.
+
+플랫폼 기본값은 환경설정에서 관리한다.
+
+| 상태 | 환경설정 | 기본값 | 정책 허용 범위 |
+|---|---|---:|---:|
+| `HELD` | `appointment.profile-reevaluation.held-target` | 5분 | 60~900초 |
+| `PROPOSED` | `appointment.profile-reevaluation.proposed-target` | 30분 | 300~7,200초 |
+
+병원별 차이는 `NOTIFICATION_AND_SLA` clinic override의
+`profileReevaluationHeldTargetSeconds`,
+`profileReevaluationProposedTargetSeconds`로 설정한다. `INHERIT`는 tenant 값을
+따르고, tenant 값도 없으면 플랫폼 기본값을 사용한다. 병원에서 이 목표를
+`DISABLE`할 수는 없다. 유효값과 출처는 effective read 응답의
+`profileReevaluationTargets`에 `heldTargetSeconds`, `heldSource`,
+`proposedTargetSeconds`, `proposedSource`로 제공한다.
+
+이 값은 p95 queue 목표다. 개별 작업의 완료 시간을 보장하지 않으며, 이미 만든
+작업의 처리 시각을 나중에 더 느슨한 정책으로 뒤로 미루지 않는다. 실제 배포
+순서, 중단 기준과 rollback은
+[프로필 변경 예약 재평가 운영 런북](../runbooks/profile-reevaluation.ko.md)을 따른다.
+
 ## 정책 범위
 
 | 범위 | Base path | 의미 |
