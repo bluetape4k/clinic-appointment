@@ -54,6 +54,27 @@ class ProfileReevaluationAdminServiceTest {
     }
 
     @Test
+    fun `재시작 후 같은 execute는 기존 lineage를 중복 생성하지 않는다`() {
+        runBlocking {
+            val store = FakeAdminStore(mutableListOf(failedJob(1L)))
+            val command = command(ProfileReevaluationAdminAction.EXECUTE)
+
+            val first =
+                ProfileReevaluationAdminService(store, redriveCooldown = Duration.ZERO)
+                    .redrive(command)
+            val afterRestart =
+                ProfileReevaluationAdminService(store, redriveCooldown = Duration.ZERO)
+                    .redrive(command)
+
+            first.created shouldBeEqualTo 1
+            afterRestart.matched shouldBeEqualTo 1
+            afterRestart.created shouldBeEqualTo 0
+            store.redriveCalls shouldBeEqualTo 2
+            store.createdAttempts shouldBeEqualTo 1
+        }
+    }
+
+    @Test
     fun `actor reason idempotency key와 범위는 bounded 계약을 따른다`() = runBlocking {
         val service = ProfileReevaluationAdminService(FakeAdminStore())
 
@@ -87,6 +108,7 @@ class ProfileReevaluationAdminServiceTest {
         private val failed: MutableList<ProfileReevaluationJobRecord> = mutableListOf(),
     ) : ProfileReevaluationAdminStore {
         var redriveCalls: Int = 0
+        var createdAttempts: Int = 0
 
         override suspend fun snapshot() = ProfileReevaluationOperationalSnapshot(failedJobs = failed.size.toLong())
 
@@ -104,11 +126,15 @@ class ProfileReevaluationAdminServiceTest {
             command: RedriveProfileReevaluationJob,
         ): ProfileReevaluationJobRecord? {
             redriveCalls++
-            val original = failed.firstOrNull {
+            val index = failed.indexOfFirst {
                 it.id == command.jobId &&
                     (command.expectedRedriveCount == null || it.redriveCount == command.expectedRedriveCount)
-            } ?: return null
-            failed.remove(original)
+            }
+            if (index < 0) return null
+            val original = failed[index]
+            if (original.redriveCount > 0) return null
+            failed[index] = original.copy(redriveCount = original.redriveCount + 1)
+            createdAttempts++
             return original.copy(
                 id = original.id + 100,
                 status = ProfileReevaluationJobStatus.PENDING,
