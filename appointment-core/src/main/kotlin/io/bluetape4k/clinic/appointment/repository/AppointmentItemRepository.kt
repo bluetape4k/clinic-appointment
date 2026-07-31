@@ -136,7 +136,7 @@ class AppointmentItemRepository {
         requireNotNull(row) { "proposal must belong to scoped appointment" }
         if (scope.memberStableRef != null) {
             require(row[Appointments.patientExternalId] == scope.memberStableRef.value) {
-                "appointment patientExternalId must match memberStableRef"
+                "appointment memberId must match memberStableRef"
             }
         }
     }
