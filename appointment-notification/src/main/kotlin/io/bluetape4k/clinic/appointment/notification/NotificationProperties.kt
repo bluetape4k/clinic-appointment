@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.notification
 
+import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import org.springframework.boot.context.properties.ConfigurationProperties
 import java.io.Serializable
 import java.time.Duration
@@ -23,6 +24,9 @@ import java.time.Duration
  * @property events outbox 생성 시 적용하는 예약 이벤트별 알림 설정
  * @property reminder 리마인더 outbox 생성 설정
  * @property worker 내구성 outbox worker 설정
+ * @property observation backlog 관측 설정
+ * @property retention 종료 outbox 보존·삭제 설정
+ * @property rollout 병원별 provider route 전환 설정
  */
 @ConfigurationProperties(prefix = "clinic.notification")
 data class NotificationProperties(
@@ -30,6 +34,9 @@ data class NotificationProperties(
     val events: EventProperties = EventProperties(),
     val reminder: ReminderProperties = ReminderProperties(),
     val worker: WorkerProperties = WorkerProperties(),
+    val observation: ObservationProperties = ObservationProperties(),
+    val retention: RetentionProperties = RetentionProperties(),
+    val rollout: RolloutProperties = RolloutProperties(),
 ) : Serializable {
     companion object {
         private const val serialVersionUID = 1L
@@ -87,6 +94,7 @@ data class NotificationProperties(
         val catchUpWindow: Duration = Duration.ofMinutes(30),
         val leaseDuration: Duration = Duration.ofSeconds(60),
         val providerTimeout: Duration = Duration.ofSeconds(30),
+        val pollInterval: Duration = Duration.ofSeconds(1),
         val batchSize: Int = 100,
         val globalConcurrency: Int = 4,
         val perClinicConcurrency: Int = 1,
@@ -98,6 +106,10 @@ data class NotificationProperties(
         val channels: Map<String, ChannelWorkerProperties> =
             mapOf("dummy" to ChannelWorkerProperties()),
     ) : Serializable {
+        /** 채널 유형의 소문자 키로 설정한 timeout을 우선하고, 없으면 전역 timeout을 사용합니다. */
+        fun providerTimeoutFor(channelType: NotificationChannelType): Duration =
+            channels[channelType.name.lowercase()]?.providerTimeout ?: providerTimeout
+
         fun validate(): WorkerProperties {
             check(maxAttempts in 1..10) { "maxAttempts must be between 1 and 10" }
             check(maxElapsed in MIN_ELAPSED..MAX_ELAPSED) {
@@ -117,6 +129,9 @@ data class NotificationProperties(
             }
             check(!providerTimeout.isNegative && !providerTimeout.isZero) {
                 "providerTimeout must be positive"
+            }
+            check(!pollInterval.isNegative && !pollInterval.isZero) {
+                "pollInterval must be positive"
             }
             check(batchSize > 0) { "batchSize must be positive" }
             check(globalConcurrency > 0) { "globalConcurrency must be positive" }
@@ -140,10 +155,10 @@ data class NotificationProperties(
             }
             check(channels.isNotEmpty()) { "at least one channel worker limit is required" }
             channels.values.forEach(ChannelWorkerProperties::validate)
-            val longestProviderTimeout = channels.values
-                .map(ChannelWorkerProperties::providerTimeout)
-                .plus(providerTimeout)
-                .maxOrNull()!!
+            val longestProviderTimeout = maxOf(
+                providerTimeout,
+                channels.values.maxOf(ChannelWorkerProperties::providerTimeout),
+            )
             val inProcessProviderBound = longestProviderTimeout.multipliedBy(providerAttemptsPerLease.toLong())
             check(leaseDuration > inProcessProviderBound) {
                 "leaseDuration must exceed the in-process provider retry bound"
@@ -163,6 +178,50 @@ data class NotificationProperties(
             private const val serialVersionUID = 1L
             private val MIN_ELAPSED: Duration = Duration.ofMinutes(15)
             private val MAX_ELAPSED: Duration = Duration.ofHours(72)
+        }
+    }
+
+    /** ready backlog snapshot의 조회 주기와 상한입니다. */
+    data class ObservationProperties(
+        val pollInterval: Duration = Duration.ofSeconds(10),
+        val limit: Int = 10_001,
+    ) : Serializable {
+        fun validate(): ObservationProperties {
+            check(!pollInterval.isNegative && !pollInterval.isZero) {
+                "observation pollInterval must be positive"
+            }
+            check(limit > 0) { "observation limit must be positive" }
+            return this
+        }
+
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
+
+    /** 종료 outbox와 attempt의 상태별 보존·삭제 설정입니다. */
+    data class RetentionProperties(
+        val pollInterval: Duration = Duration.ofHours(1),
+        val sent: Duration = Duration.ofDays(7),
+        val suppressed: Duration = Duration.ofDays(7),
+        val exhausted: Duration = Duration.ofDays(30),
+        val pageSize: Int = 100,
+        val maxPagesPerStatus: Int = 10,
+        val backpressure: Duration = Duration.ofMillis(100),
+    ) : Serializable {
+        fun validate(): RetentionProperties {
+            check(!pollInterval.isNegative && !pollInterval.isZero) { "retention pollInterval must be positive" }
+            listOf(sent, suppressed, exhausted).forEach {
+                check(!it.isNegative && !it.isZero) { "retention duration must be positive" }
+            }
+            check(pageSize > 0) { "retention pageSize must be positive" }
+            check(maxPagesPerStatus > 0) { "retention maxPagesPerStatus must be positive" }
+            check(!backpressure.isNegative) { "retention backpressure must be non-negative" }
+            return this
+        }
+
+        companion object {
+            private const val serialVersionUID = 1L
         }
     }
 
@@ -188,6 +247,31 @@ data class NotificationProperties(
             check(rateLimitPerSecond > 0) { "rateLimitPerSecond must be positive" }
             check(circuitBreakerFailureRateThreshold in 1..100) {
                 "circuitBreakerFailureRateThreshold must be between 1 and 100"
+            }
+            return this
+        }
+
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
+
+    /**
+     * 병원별 알림 발송 route 전환 설정입니다.
+     *
+     * 기본 `SHADOW`는 background worker 발송을 막고 privacy-safe 전환기 event route를
+     * 유지합니다. `CANARY`만 병원 allowlist를 허용합니다.
+     */
+    data class RolloutProperties(
+        val mode: NotificationRolloutMode = NotificationRolloutMode.SHADOW,
+        val canaryClinicIds: Set<Long> = emptySet(),
+    ) : Serializable {
+        fun validate(): RolloutProperties {
+            check(canaryClinicIds.all { it > 0L }) { "canaryClinicIds must contain only positive IDs" }
+            if (mode == NotificationRolloutMode.CANARY) {
+                check(canaryClinicIds.isNotEmpty()) { "CANARY mode requires at least one clinic ID" }
+            } else {
+                check(canaryClinicIds.isEmpty()) { "canaryClinicIds are only allowed in CANARY mode" }
             }
             return this
         }

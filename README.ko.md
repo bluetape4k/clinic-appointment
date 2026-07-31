@@ -23,7 +23,7 @@ Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제�
 
 - **예약 상태 머신** - PENDING -> REQUESTED -> CONFIRMED -> CHECKED_IN -> IN_PROGRESS -> COMPLETED 전이, 취소/재배정 지원
 - **AI 최적 스케줄링** - Timefold Solver로 의사, 장비, 영업시간을 포함한 12개 Hard + 6개 Soft 제약을 만족하는 최적 배치
-- **고가용성 알림** - Redis Leader Election으로 단일 노드 전송 보장, Resilience4j CircuitBreaker/Retry/Bulkhead 적용
+- **내구성 알림** - 예약과 함께 개인정보를 최소화한 알림 outbox를 커밋하고, DB lease와 fencing, 병원 간 공정 처리, 발송 시점 회원 조회, 실행 시간이 제한된 Resilience4j 정책으로 전달
 - **테넌트 범위 REST API** - `/api/{tenantCode}/...` 경로, JWT tenant 인가, Flyway 마이그레이션, Swagger UI 제공
 - **예약 플랜 기반** - 구매 상품 BOM을 불변 진료 의무로 스냅숏하고, 카탈로그 동기화와 신뢰된 구매 이벤트를 통해 방문 예약 이전 단계를 관리
 - **예약 정책 기반** - 가예약, 동의, 오버부킹, 재확인, 운영 장애 복구, 통제된 진료 시간 연장에 대한 테넌트 기준 정책과 병원별 재정의를 버전 관리
@@ -79,6 +79,21 @@ opaque assessment reference만 담습니다.
 [기준 설계](docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
 [운영 런북](docs/runbooks/profile-reevaluation.ko.md)에서 자세한 계약을 확인할 수 있습니다.
 
+### 내구성 알림 경계
+
+예약 명령은 같은 데이터베이스 트랜잭션에서 최소 알림 outbox를 커밋합니다. 알림
+실행 모듈은 행을 선점한 뒤에만 회원 시스템에서 최신 연락처·언어·동의를 조회하고,
+승인된 template을 메모리에서 렌더링합니다. 종료 행에서는 회원 ID·예약 ID·template
+parameter를 제거합니다.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/requirements/assets/data-flow-05-notification-events-ko-dark.png">
+  <img src="docs/requirements/assets/data-flow-05-notification-events-ko.png" alt="예약과 함께 알림 의도를 저장하고 병원별 전환, 발송 시점 회원 조회, 개인정보를 남기지 않는 보존으로 이어지는 내구성 알림 outbox 흐름">
+</picture>
+
+[알림 설계](docs/requirements/notification.md)와
+[운영 런북](docs/runbooks/notification-outbox-operations.md)에서 자세한 기준을 확인할 수 있습니다.
+
 ## 아키텍처
 
 ![Clinic Appointment 아키텍처](docs/images/readme-diagrams/clinic-appointment-architecture-01-ko.png)
@@ -89,7 +104,10 @@ opaque assessment reference만 담습니다.
 
 ## 대표 요구사항 흐름
 
-![예약 생성 요구사항 흐름](docs/requirements/assets/data-flow-01-appointment-create-ko.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/requirements/assets/data-flow-01-appointment-create-ko-dark.png">
+  <img src="docs/requirements/assets/data-flow-01-appointment-create-ko.png" alt="예약과 최소 알림 outbox를 원자적으로 커밋한 뒤 비동기 발송으로 이어지는 예약 생성 흐름">
+</picture>
 
 전체 요구사항 다이어그램 목록은 [docs/requirements](docs/requirements/README.md)에서 관리합니다.
 
@@ -100,7 +118,7 @@ opaque assessment reference만 담습니다.
 | `appointment-core` | 예약, 구매 시술 플랜, 스케줄 정책, 방문 확정 약속 도메인과 Exposed ORM 리포지토리, 상태머신, 슬롯 계산 서비스 | [README](appointment-core/README.ko.md) |
 | `appointment-event` | Spring ApplicationEvent 기반 도메인 이벤트 발행/구독, 이벤트 로그 저장 | [README](appointment-event/README.ko.md) |
 | `appointment-solver` | Timefold Solver AI 최적화 - 12개 Hard + 6개 Soft 제약으로 대량 예약 최적 배치 | [README](appointment-solver/README.ko.md) |
-| `appointment-notification` | Redis Leader Election + Resilience4j 기반 HA 알림 스케줄러, 리마인더 발송 | [README](appointment-notification/README.ko.md) |
+| `appointment-notification` | 내구성 outbox 발송, 발송 시점 회원 조회, 리마인더 복구, 개인정보 보존 관리, provider 장애 격리 | [README](appointment-notification/README.ko.md) |
 | `appointment-api` | Spring Boot 4 REST API - 예약 CRUD, 슬롯 조회, 재배정, JWT 인증, Swagger | [README](appointment-api/README.ko.md) |
 | `frontend/appointment-frontend` | Angular 18 웹 UI - 예약 관리 인터페이스 | [README](frontend/appointment-frontend/README.ko.md) |
 
@@ -149,7 +167,8 @@ opaque assessment reference만 담습니다.
 | [아키텍처](docs/requirements/architecture.md) | 모듈 의존성, 주요 설계 결정 (ADR) |
 | [도메인 모델](docs/requirements/domain-model.md) | 16개 엔티티, 예약 상태머신, 테이블 관계 |
 | [AI 스케줄러](docs/requirements/solver.md) | Timefold Solver 제약조건 설계 |
-| [알림 모듈](docs/requirements/notification.md) | 알림 채널, HA 구성, Resilience4j |
+| [알림 모듈](docs/requirements/notification.md) | 내구성 outbox 생명주기, 단계별 전환, 회원정보 경계, provider 장애 격리 |
+| [알림 outbox 운영 런북](docs/runbooks/notification-outbox-operations.md) | 카나리 기준, 경보, 재알림, 키 교체, 마이그레이션, 롤백 |
 | [프론트엔드](docs/requirements/frontend.md) | Angular 구성, 페이지 구조 |
 | [예약 플랜 시각 동반 문서](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 예약 약속, 장애 재조정, 수용량의 시뮬레이션과 결정 이력 |
 | [예약 정책 시각 동반 문서](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html) | 정책 컴파일, 승인, 활성화, 복구의 시뮬레이션과 결정 이력 |

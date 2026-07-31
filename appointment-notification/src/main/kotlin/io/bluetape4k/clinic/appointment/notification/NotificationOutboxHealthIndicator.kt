@@ -34,7 +34,8 @@ class NotificationOutboxHealthIndicator(
         val degraded = snapshot.providerCircuitOpen > 0 ||
             snapshot.memberCircuitOpen > 0 ||
             snapshot.oldestActiveAge?.let { it > OLDEST_ACTIVE_AGE_WARNING } == true ||
-            snapshot.retentionFailures > 0
+            snapshot.retentionFailures > 0 ||
+            snapshot.backlogCapped
         return NotificationOutboxHealth(
             status = NotificationOutboxHealthStatus.UP,
             details = mapOf(
@@ -43,6 +44,7 @@ class NotificationOutboxHealthIndicator(
                 "memberCircuitOpen" to snapshot.memberCircuitOpen,
                 "oldestActiveAgeSeconds" to (snapshot.oldestActiveAge?.seconds ?: 0L),
                 "retentionFailures" to snapshot.retentionFailures,
+                "backlogCapped" to snapshot.backlogCapped,
             ),
         )
     }
@@ -86,6 +88,7 @@ data class NotificationOutboxLivenessSnapshot(
     val memberCircuitOpen: Int = 0,
     val oldestActiveAge: Duration? = null,
     val retentionFailures: Int = 0,
+    val backlogCapped: Boolean = false,
 ) : Serializable {
     init {
         require(providerCircuitOpen >= 0) { "providerCircuitOpen must be non-negative" }

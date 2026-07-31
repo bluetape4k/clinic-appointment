@@ -39,19 +39,27 @@ sequenceDiagram
     Patient->>Frontend: 슬롯 선택 후 예약 확인
     Frontend->>API: POST /api/appointments (JWT)
     API->>Core: AppointmentRepository.save()
-    Core->>DB: INSERT appointments (status=REQUESTED)
+    Core->>DB: 예약 + 최소 알림 outbox 원자적 INSERT
     DB-->>Core: 저장 완료
     Core-->>API: AppointmentRecord
     API->>EventBus: publishEvent(Created)
-    EventBus->>Notification: NotificationEventListener
-    Notification-->>DB: 알림 이력 저장
+    EventBus->>Notification: SHADOW 전환기 신호
+    Notification->>DB: 정확한 outbox 행 조건부 선점
+    DB-->>Notification: 선점 성공 또는 이미 처리 중
     API-->>Frontend: AppointmentResponse (201 Created)
     Frontend-->>Patient: 예약 완료 확인
 ```
 
-![환자 예약 시퀀스](assets/user-scenarios-01-patient-booking-ko.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/user-scenarios-01-patient-booking-ko-dark.png">
+  <img src="assets/user-scenarios-01-patient-booking-ko.png" alt="가용성 조회 뒤 예약과 최소 알림 outbox를 함께 커밋하고 전환기 알림 경로가 정확한 행을 선점하는 시퀀스">
+</picture>
 
-[SVG](assets/user-scenarios-01-patient-booking-ko.svg) · [Mermaid source](assets/user-scenarios-01-patient-booking.mmd)
+[한국어 light SVG](assets/user-scenarios-01-patient-booking-ko.svg) ·
+[한국어 dark SVG](assets/user-scenarios-01-patient-booking-ko-dark.svg) ·
+[English light SVG](assets/user-scenarios-01-patient-booking-en.svg) ·
+[English dark SVG](assets/user-scenarios-01-patient-booking-en-dark.svg) ·
+[Mermaid 의미 스케치](assets/user-scenarios-01-patient-booking.mmd)
 
 ---
 
@@ -185,33 +193,43 @@ sequenceDiagram
 
 ---
 
-## S5. HA 알림 리마인더 발송 (스케줄러)
+## S5. 내구성 리마인더 발송
 
 ```mermaid
 sequenceDiagram
-    participant Scheduler as AppointmentReminderScheduler<br/>(1시간마다)
-    participant Redis
-    participant Core
-    participant DB as PostgreSQL
-    participant Channel as DummyNotificationChannel
+    participant Materializer as 리마인더 생성기
+    participant DB as Notification outbox
+    participant Route as 선택된 발송 경로
+    participant Member as 회원 DB
+    participant Template as Template renderer
+    participant Provider
 
-    Scheduler->>Redis: SETNX leader-lock (bluetape4k-leader)
-    alt 리더 획득 성공
-        Redis-->>Scheduler: OK (이 인스턴스가 리더)
-        Scheduler->>Core: findTomorrowConfirmed() + findTodayConfirmed()
-        Core->>DB: SELECT appointments WHERE status=CONFIRMED AND date IN (tomorrow, today)
-        DB-->>Core: 예약 목록
-        Core-->>Scheduler: List<AppointmentRecord>
-        loop 각 예약
-            Scheduler->>Channel: sendReminder(appointment)
-            Channel->>DB: INSERT notification_history (SUCCESS)
-        end
-    else 리더 획득 실패
-        Redis-->>Scheduler: 다른 인스턴스가 리더
-        Scheduler->>Scheduler: SKIP (중복 발송 방지)
-    end
+    Materializer->>DB: 예약 version + reminder slot으로 의도 upsert
+    Route->>DB: lease + fencing token으로 준비된 행 선점
+    DB-->>Route: 논리 알림 한 건
+    Route->>Member: 최신 연락처·언어·동의 조회
+    Member-->>Route: 현재 프로필, 메모리에서만 사용
+    Route->>Template: 승인된 typed template 렌더링
+    Template-->>Route: provider 요청, 메모리에서만 사용
+    Route->>Provider: 결정적인 멱등성 키로 발송
+    Provider-->>Route: 안정적인 발송 결과
+    Route->>DB: fencing 종료 갱신 + 식별자 제거
+    Route->>DB: 상태별 제한된 보존 처리
+
+    Note over Materializer,DB: 보정 시간창이 지나면 REMINDER_WINDOW_MISSED로 억제하며 늦게 발송하지 않음
 ```
 
-![고가용성 리마인더 시퀀스](assets/user-scenarios-05-ha-reminder-ko.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/user-scenarios-05-ha-reminder-ko-dark.png">
+  <img src="assets/user-scenarios-05-ha-reminder-ko.png" alt="리마인더 의도 저장, outbox 선점, 발송 시점 회원 조회, template 렌더링, provider 멱등 발송, 개인정보 제거의 시퀀스">
+</picture>
 
-[SVG](assets/user-scenarios-05-ha-reminder-ko.svg) · [Mermaid source](assets/user-scenarios-05-ha-reminder.mmd)
+[한국어 light SVG](assets/user-scenarios-05-ha-reminder-ko.svg) ·
+[한국어 dark SVG](assets/user-scenarios-05-ha-reminder-ko-dark.svg) ·
+[English light SVG](assets/user-scenarios-05-ha-reminder-en.svg) ·
+[English dark SVG](assets/user-scenarios-05-ha-reminder-en-dark.svg) ·
+[Mermaid 의미 스케치](assets/user-scenarios-05-ha-reminder.mmd)
+
+Redis 리더 선출은 이 발송 시퀀스의 정합성 경계가 아닙니다. 향후 SaaS 병원 수가
+커지면 리마인더 보정 scanner의 trigger 수를 줄이는 최적화로 사용할 수 있지만,
+중복 방지는 outbox 멱등성 키, DB lease, fencing, provider 멱등성 키로 처리합니다.

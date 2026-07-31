@@ -1,0 +1,252 @@
+# 알림 outbox 운영 런북
+
+이 문서는 내구성 알림 outbox의 배포, 카나리 전환, 장애 대응, 재알림, 암호화 키
+교체, 스키마 변경을 다룹니다. 코드가 배포되었다고 운영 전환까지 끝난 것은 아닙니다.
+기본 모드는 `SHADOW`이며, 실제 카나리와 전체 전환은 별도 운영 이슈에서 증거를
+남기며 진행합니다. 현재 추적 이슈는 #204입니다.
+
+## 1. 운영 원칙
+
+- 예약 명령은 모든 rollout 모드에서 알림 outbox를 계속 저장합니다.
+- provider를 호출할 수 있는 경로는 병원별로 하나뿐입니다.
+- `PAUSED`는 provider 호출만 멈춥니다. enqueue, lease 복구, 종료 데이터 최소화,
+  retention은 계속 실행합니다.
+- 연락처·언어·동의는 발송 직전에 회원 시스템에서 조회하며 영속화하지 않습니다.
+- 종료된 행을 되살리지 않습니다. 필요한 경우 현재 예약과 회원 상태를 다시 읽어
+  새 generation의 알림을 만듭니다.
+
+## 2. 배포 전 점검
+
+다음 조건을 모두 확인합니다.
+
+- H2, PostgreSQL, MySQL의 V14 migration에 outbox·attempt table과 필수 index가 있다.
+- readiness가 schema, claim/recovery query, active idempotency key를 통과한다.
+- `clinic.notification.rollout.mode=SHADOW`이고
+  `clinic.notification.rollout.canary-clinic-ids`가 비어 있다.
+- 회원 directory, template catalog, provider adapter가 실제 운영 구현으로 연결되어
+  있다. 필수 adapter가 없으면 503으로 실패하도록 유지한다.
+- provider adapter의 connect/read/request timeout이 적용 대상
+  `channels.<채널 유형 소문자>.provider-timeout` 이하이다. 채널별 값이 없으면
+  `worker.provider-timeout`을 기준으로 삼는다.
+  worker의 future 취소만으로 interrupt를 무시하는 SDK 호출을 강제 종료할 수 없다.
+- 대시보드에서 pending 수, oldest active age, attempt·retry·suppression·exhaustion,
+  lease recovery를 볼 수 있다.
+- `worker.poll-interval` 주기로 dispatcher가 실행되고, `observation.poll-interval`
+  주기로 최대 `observation.limit`개의 ready backlog snapshot을 갱신한다. Actuator `health`의
+  `notificationOutboxHealth` 구성 요소가 readiness와 degraded 정보를 반환한다.
+- 공용 metric과 alert label에 tenant·clinic·member·appointment·outbox 식별자가
+  포함되지 않는다.
+
+이번 변경에서 확보한 성능 증거는 로컬 container 환경의 H2/PostgreSQL/MySQL
+통합 테스트와 20,000개 outbox 부하 시뮬레이션입니다. 이는 운영 DB의 DDL lock
+시간이나 실제 provider 처리량을 증명하지 않습니다. 운영 전환 전에 staging에서
+테이블·index 생성 시간, lock wait, 실행 계획, backlog 처리량을 다시 측정하고
+배포 기록에 첨부해야 합니다.
+
+## 3. 단계별 전환
+
+### 3.1 `SHADOW`
+
+```yaml
+clinic:
+  notification:
+    rollout:
+      mode: SHADOW
+      canary-clinic-ids: []
+```
+
+백그라운드 worker는 provider 행을 선점하지 않습니다. 전환기 Spring event 경로가
+정확히 같은 outbox 행을 조건부 선점하고 동일한 회원 조회·template·provider 절차를
+실행합니다. direct executor가 포화되면 예약 event thread가 provider I/O를 대신하지
+않고 작업을 거절하며, 이미 커밋된 outbox 행은 pending으로 남습니다. 포화 로그가
+반복되면 `worker.global-concurrency`와 `worker.batch-size`를 provider 용량 안에서
+조정하거나 즉시 `PAUSED`로 전환합니다. 다음을 확인합니다.
+
+- 논리 알림 한 건당 provider 결과가 하나다.
+- outbox와 attempt에 이름·연락처·본문·원본 오류가 없다.
+- 종료 시 회원 ID·예약 ID·parameter가 제거된다.
+- oldest active age가 5분 미만이고 suppression reason을 설명할 수 있다.
+
+### 3.2 `CANARY`
+
+첫 병원 한 곳만 허용 목록에 넣습니다.
+
+```yaml
+clinic:
+  notification:
+    rollout:
+      mode: CANARY
+      canary-clinic-ids: [101]
+```
+
+허용 목록 병원은 worker가 발송하고, 나머지 병원은 전환기 event 경로를 유지합니다.
+다음 조건을 모두 만족할 때만 다음 단계로 이동합니다.
+
+- 관측 시간: 최소 24시간
+- 관측량: 최소 1,000개 논리 알림
+- `DELIVERY_RESULT_UNKNOWN`: 0건
+- 동일 논리 알림의 중복 provider 결과: 0건
+- critical alert: 0건
+- oldest active row age: 5분 미만
+- 모든 suppression reason이 현재 회원 상태·동의·template 규칙으로 설명 가능
+
+알림 플랫폼 담당자와 해당 병원 운영 담당자가 증거를 함께 확인하고 다음 병원
+묶음을 승인합니다. 승인·측정·확대 시각을 후속 이슈에 기록합니다.
+
+### 3.3 `ACTIVE`
+
+모든 병원이 같은 카나리 기준을 통과한 뒤에만 `ACTIVE`로 바꿉니다.
+
+```yaml
+clinic:
+  notification:
+    rollout:
+      mode: ACTIVE
+      canary-clinic-ids: []
+```
+
+worker만 provider를 호출합니다. 안정 구간을 확인한 뒤 별도 변경으로 전환기
+listener를 제거합니다. 기존 `scheduling_notification_history` 물리 테이블도 보존
+정책과 참조 여부를 확인한 후 별도의 additive migration으로 제거합니다.
+
+### 3.4 중단과 롤백
+
+- 카나리 이상이 worker 경로에 한정되면 `SHADOW`로 되돌립니다.
+- 중복 가능성, provider 결과 불명, 키 장애가 있으면 `PAUSED`로 전환합니다.
+- 이미 선점한 행은 fencing된 생명주기로 종료하게 둡니다.
+- `PENDING`, `RETRY_WAIT` backlog는 삭제하지 않습니다. 경로가 복구되면 다시
+  처리합니다.
+- 새 outbox enqueue를 끄거나 개인정보를 저장하던 legacy 발송 경로를 되살리지
+  않습니다.
+- additive schema를 즉시 삭제하지 않습니다.
+
+## 4. 관측 지표와 경보
+
+주요 metric은 다음과 같습니다.
+
+- `clinic.notification.outbox.pending`
+- `clinic.notification.outbox.oldest.age`
+- `clinic.notification.delivery.attempts`
+- `clinic.notification.delivery.latency`
+- `clinic.notification.delivery.retries`
+- `clinic.notification.delivery.suppressed`
+- `clinic.notification.delivery.exhausted`
+- `clinic.notification.delivery.lease.recovered`
+
+`pending`과 `oldest age`는 미래 발송 예정 행을 제외하고 현재 DB 시각에 발송 가능한
+backlog만 셉니다. gauge는 metric scrape에서 테이블을 다시 읽지 않고, worker poll과
+분리된 scheduler가 기본 10초마다 최대 10,001건만 읽어 갱신한 snapshot을 반환합니다.
+Actuator liveness detail의 `backlogCapped=true`이면 실제 backlog가 관측 상한 이상이라는
+뜻이며 10,000건 경보를 해제하면 안 됩니다.
+
+공용 metric label은 `channel`, `event_type`, `outcome`, `reason_code`만 허용합니다.
+alert label은 `channel`, `event_type`, `outcome`, `provider_category`만 허용합니다.
+병원별 분석이 필요하면 tenant·clinic 권한을 확인하는 제한된 DB dashboard에서
+filter로 조회하고 metric label로 승격하지 않습니다.
+
+| 신호 | 발화 조건 | 해제 조건 | 첫 대응 |
+|---|---|---|---|
+| oldest active age | `>30m` 5분 지속: critical, `>5m` 10분 지속: warning | `<5m` 10분 지속 | claim 실패, DB 지연, provider circuit 확인 |
+| exhausted | 최근 5분 `>=10`: critical, `>=1`: ticket | 0건 15분 지속 | failure code와 provider 범주 확인 |
+| provider failure ratio | 최소 100회 시도, 5분 지속, `>=50%`: critical, `>=20%`: warning | `<5%` 15분 지속 | provider 상태 확인, 필요 시 `PAUSED` |
+| delivery result unknown | 최근 5분 `>=5`: critical, `>=1`: warning | 0건이며 원인 확인 완료 | 자동 재발송 금지, provider 결과 대조 |
+| lease recovery ratio | 최소 100회 발송, `>5%` 10분 지속: warning | `<1%` 15분 지속 | timeout, pod 종료, DB 시간 차이 확인 |
+| pending backlog | 10,000건 초과이며 10분 증가: warning | 15분 감소 | 병원별 공정성, DB·회원·provider 용량 확인 |
+| key revoke/lookup failure | 즉시 critical | 자동 해제 없음 | Security·Notification 공동 대응, enqueue/readiness 503 |
+
+## 5. 수동 재알림
+
+엔드포인트:
+
+```text
+POST /api/{tenantCode}/clinics/{clinicId}/notifications/re-notify
+```
+
+플랫폼 서비스 주체는 `SYSTEM` 역할, service assurance,
+`SCOPE_notification:renotify`, 정확한 clinic membership을 가져야 합니다. 요청에는
+플랫폼 승인 참조와 독립된 병원 담당자의 MFA 승인 참조가 모두 필요합니다. 병원
+승인자는 실행자와 달라야 하며 `ADMIN` 또는 `STAFF` 역할과 정확한 병원 범위를
+가져야 합니다.
+
+1. 최대 100개 appointment ID와 재사용 가능한 generation을 정합니다.
+2. `dryRun=true`로 현재 예약, 회원 mapping, 동의, 연락처, template 적합성을 다시
+   평가합니다.
+3. 개인정보 없는 accepted/skipped 수와 reason을 검토합니다.
+4. 승인 참조와 같은 generation을 유지한 채 `dryRun=false`로 실행합니다.
+5. 중단되면 아직 enqueue하지 않은 항목만 같은 generation으로 재개합니다.
+
+`SENT`, `DELIVERY_RESULT_UNKNOWN`, suppression된 항목은 기본적으로 제외합니다.
+종료 행의 상태를 되돌리거나 삭제된 연락처를 복구하지 않습니다. 실행 감사에는
+generation, 실행·승인 참조, scope, 단계, 시각, 결과 수만 남기고 예약 ID 원문은
+남기지 않습니다.
+
+## 6. 회원 ID 전환과 리마인더 누락
+
+legacy 예약의 회원 ID 누락은 기본 `ENFORCE`입니다. 이행이 필요한 병원만 담당자와
+만료 시각이 있는 `OBSERVE` 예외를 사용합니다. 만료된 예외는 자동으로 전역
+`ENFORCE`로 돌아갑니다. `MEMBER_DIRECTORY_UNAVAILABLE`은 개인정보를 대신 입력하는
+방식으로 우회하지 않고 회원 시스템을 복구한 뒤 같은 멱등 요청을 재시도합니다.
+
+리마인더 scanner 중단 시에는 다음처럼 처리합니다.
+
+- catch-up window 안: 동일한 예약 version·reminder slot 키로 누락 outbox 생성
+- catch-up window 밖: 늦게 발송하지 않고
+  `SUPPRESSED(REMINDER_WINDOW_MISSED)` 기록
+- 예약 변경: 이전 version 리마인더는
+  `SUPPRESSED(APPOINTMENT_CHANGED)`로 끝내고 새 version을 생성
+
+## 7. HMAC 키 교체와 긴급 폐기
+
+`clinic.notification.crypto`에는 key material이 아니라 외부 secret reference만
+설정합니다. 지원 scheme은 `vault:`, `aws-secretsmanager:`,
+`gcp-secretmanager:`, `azure-keyvault:`, `env:`, `file:`입니다.
+
+```yaml
+clinic:
+  notification:
+    crypto:
+      active:
+        key-id: notification-2026-q3
+        secret-reference: vault:secret/notification/2026-q3
+        activated-at: 2026-08-01T00:00:00Z
+        expires-at: 2026-11-01T00:00:00Z
+      previous:
+        key-id: notification-2026-q2
+        secret-reference: vault:secret/notification/2026-q2
+        activated-at: 2026-05-01T00:00:00Z
+        expires-at: 2026-09-05T00:00:00Z
+      maximum-previous-overlap: 35d
+```
+
+Security 담당자가 90일 주기로 교체합니다. 이전 키는 최대 재시도 72시간과 종료 행
+최대 보존 30일을 포함하도록 최대 35일 겹쳐 유지합니다. 긴급 폐기나 key lookup
+실패 시 새 enqueue와 readiness를 503으로 내리고, Security와 Notification
+on-call이 중복 가능성을 확인한 뒤 새 active key를 배포합니다. 이 경보는 자동으로
+해제하지 않습니다.
+
+## 8. DB 마이그레이션
+
+1. 배포 전 각 DB에서 V14를 별도 staging snapshot에 적용해 DDL lock 시간과
+   application timeout을 측정합니다.
+2. PostgreSQL은 운영 제약에 맞는 concurrent index 절차가 필요한지 확인합니다.
+   MySQL은 online DDL 지원과 metadata lock을 확인합니다.
+3. `idx_notification_outbox_ready_clinic_cursor`,
+   `idx_notification_outbox_ready_within_clinic`,
+   `idx_notification_outbox_direct_lookup`,
+   `idx_notification_outbox_reminder_suppression`, terminal retention index의 실제
+   실행 계획을 확인합니다.
+4. 새 binary 배포 전후로 schema readiness와 outbox enqueue를 확인합니다.
+5. 실패해도 새 table을 즉시 삭제하지 않습니다. 이전 binary가 무시할 수 있는지,
+   queued row와 retention을 보존할 수 있는지 먼저 확인합니다.
+
+로컬 검증 수치는 운영 승인 자료가 아닙니다. staging 측정값, 적용 시각, 영향 받은
+행 수, lock wait, rollback 판단을 후속 rollout 이슈에 첨부해야 합니다.
+
+## 9. 종료 확인
+
+- rollout 모드와 clinic allowlist가 의도한 값이다.
+- 동일 논리 알림의 중복과 `DELIVERY_RESULT_UNKNOWN`이 없다.
+- oldest active age와 pending 추세가 정상 구간이다.
+- outbox·attempt·로그·metric에 연락처·본문·원본 오류가 없다.
+- suppression, exhausted, lease recovery를 안정적인 코드로 설명할 수 있다.
+- 카나리 확대 또는 롤백 승인이 운영 이슈에 기록되어 있다.

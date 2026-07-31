@@ -43,6 +43,17 @@
 | migration | `appointment-api/src/main/resources/db/migration/{h2,mysql,postgresql}/V14__add_notification_outbox.sql` | 테이블, constraint, unique/claim/recovery/retention index |
 | 문서 | README 쌍, `docs/requirements/notification.md`, 운영 runbook, OpenAPI 테스트 | caller·운영 계약과 한/영 문서 동등성 |
 
+### 실행 상태
+
+| 작업 | 상태 | 근거 또는 처분 |
+|---|---|---|
+| Task 1~12 | 완료 | 회원 경계, outbox lifecycle, worker, 운영 API와 기존 검증 커밋 |
+| Task 13A | 완료 | 병원별 rollout mode, 상호 배타 route, 동일 outbox 행 조건부 선점 테스트 |
+| Task 13B | 후속 운영 이슈 | 실제 24시간·1,000건 canary와 `ACTIVE` 전환 뒤 listener 제거 |
+| Task 14 | 완료 | 3개 dialect·실행 계획 테스트, 20,000개 backlog 합성 부하와 Gatling 보고서 |
+| Task 15 | 완료 | OpenAPI 계약, README 한·영, 운영 runbook, 한·영 light/dark 다이어그램 |
+| Task 16 | 완료 | affected-module 검증, 최종 독립 재검토와 검토·lesson 문서 완료 |
+
 ## 2. 요구사항 추적표
 
 | 설계 수용 기준 | 구현 작업 | 핵심 증거 |
@@ -60,7 +71,7 @@
 | 11. 회원 조회 retry/suppression | Task 9, 10 | 결과별 분류 테스트 |
 | 12. metric/dashboard/alert | Task 12 | metric tag·status API·health 테스트 |
 | 13. 3개 DB migration과 claim | Task 3, 8, 14 | H2/PostgreSQL/MySQL 순차 검증 |
-| 14. direct listener 제거 | Task 13 | wiring 부재·worker 단일 경로 테스트 |
+| 14. 전환기 route와 worker 상호 배타, 최종 제거 추적 | Task 13A, 13B | 같은 outbox 행 조건부 claim·route gate 테스트, 후속 운영 이슈 |
 | 15. 대규모 backlog 상한 | Task 8, 14 | EXPLAIN·합성 부하 테스트 |
 | 16. 제한된 retention/redaction | Task 9, 14 | page·backpressure·redaction 테스트 |
 | 17. endpoint 오류와 OpenAPI | Task 5, 12, 15 | 오류 매핑·OpenAPI snapshot |
@@ -78,7 +89,7 @@
 | 3개 DB의 constraint/index 차이 | migration 또는 EXPLAIN 불일치 | dialect별 V14와 migration support matrix | Task 3 이후 H2, Task 14에서 PostgreSQL/MySQL 순차 재실행 |
 | 기존 caller가 `memberId` 없이 호출 | OBSERVE missing-member 증가 | 만료가 있는 clinic override와 readiness gate | Task 5 OBSERVE 유지, ENFORCE 전환 중단 |
 | key ring 장애로 중복 enqueue | idempotency digest 계산 실패 | enqueue readiness 503 fail-closed | Task 2 key 테스트, Task 12 health 테스트 |
-| direct listener와 worker 동시 발송 | 같은 논리 key의 provider 호출 2회 | 상호 배타 rollout mode와 canary 검증 | Task 13에서 direct mode 비활성, worker 호출 중단 후 backlog 보존 |
+| 전환기 listener와 worker 동시 발송 | 같은 논리 key의 provider 호출 2회 | route gate와 provider 호출 전 동일 outbox 행 조건부 claim | Task 13A에서 default SHADOW·상호 배타 테스트, Task 13B에서 실제 canary 검증 |
 
 ## Task 1: `MemberId` 도메인 경계와 예약 매핑
 
@@ -969,41 +980,55 @@ Tested: Metrics health status authorization and re-notify tests
 Not-tested: Rollout cutover until Task 13
 ```
 
-## Task 13: rollout mode, direct listener 제거와 legacy history 종료
+## Task 13A: rollout route gate와 privacy-safe 전환기 direct path
 
 **복잡도:** 중간
 **의존성:** Task 11, 12
-**write scope:** `appointment-notification`, configuration
+**write scope:** `appointment-event`, `appointment-notification`, configuration
 
 **Files:**
 - Create: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationDeliveryRouteGate.kt`
+- Create: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationDirectOutboxDelivery.kt`
+- Create: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationEventListener.kt`
+- Modify: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxRepository.kt`
 - Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfiguration.kt`
+- Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxDispatcher.kt`
+- Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxWorkStore.kt`
 - Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationProperties.kt`
-- Delete: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationEventListener.kt`
-- Delete: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationHistory.kt`
-- Delete: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationHistoryRepository.kt`
-- Modify: `appointment-notification/src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
 - Test: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfigurationTest.kt`
+- Test: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationDirectOutboxDeliveryTest.kt`
+- Test: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationEventListenerTest.kt`
 - Test: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationDeliveryRouteGateTest.kt`
 - Test: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationRolloutModeTest.kt`
 
-- [ ] **Step 1: 제거 전 상호 배타 rollout wiring RED 테스트**
+- [ ] **Step 1: 상호 배타 route와 동일 행 claim RED 테스트**
 
-shadow mode는 outbox worker가 claim/profile/template까지만 수행하고 provider 호출 0회다. canary mode는 allowlist clinic에서 worker만 provider를 호출하고 direct route는 같은 clinic·논리 key를 반드시 거절한다. non-canary clinic은 direct route만 호출하고 worker provider 호출은 0회다. route selector concurrency 테스트는 같은 논리 key가 두 경로에서 호출되지 않음을 반복 검증한다.
+기본 `SHADOW`에서는 background dispatcher의 provider 호출이 0회이고 전환기 event
+route만 같은 outbox 행을 claim한다. `CANARY`는 allowlist 병원에서 worker만,
+non-canary 병원에서는 event route만 claim한다. `ACTIVE`는 worker만, `PAUSED`는 두
+route 모두 claim하지 않는다. 경쟁 테스트는 서로 다른 route가 같은 행을 동시에
+claim해도 provider 호출이 최대 1회임을 반복 검증한다.
 
 - [ ] **Step 2: rollout mode 구현**
 
-`SHADOW`, `CANARY`, `ACTIVE`, `PAUSED`를 닫힌 enum으로 정의한다. canary는 병원 1곳에서 24시간과 1,000개 논리 알림을 모두 충족하고 duplicate/error/lag gate가 통과해야 확대한다. `PAUSED`도 enqueue와 retention은 유지한다. canary 중단은 해당 clinic을 상호 배타 direct route로 되돌리되 이미 claim한 outbox를 이중 발송하지 않으며, 전체 `ACTIVE` 뒤 rollback은 direct listener를 다시 켜지 않는다.
+`SHADOW`, `CANARY`, `ACTIVE`, `PAUSED`를 닫힌 enum으로 정의하고 기본값을
+`SHADOW`로 둔다. `CANARY`는 양수 병원 ID allowlist가 반드시 있어야 하며 다른
+모드의 stale allowlist는 시작 단계에서 거절한다. `PAUSED`도 enqueue와 retention은
+유지한다.
 
-- [ ] **Step 3: canary gate 뒤 direct/legacy 최종 제거**
+- [ ] **Step 3: privacy-safe 전환기 event route 구현**
 
-모든 clinic이 canary gate를 통과하고 안전한 상태 조회가 outbox/attempt만 사용함을 확인한 뒤 direct listener와 raw `NotificationHistoryTable` 코드를 제거한다. V14에서는 기존 table을 즉시 drop하지 않고 retention 뒤 별도 migration 대상으로 남긴다. 실제 24시간/1,000건 관측 권한이 없으면 삭제 단계와 전체 완료를 `PENDING`으로 남긴다.
+event listener는 예약 DTO, 이름, 전화번호나 완성 본문을 받지 않는다. 이벤트의 병원,
+예약과 event type으로 command transaction이 만든 sendable outbox 행을 찾고 짧은 DB
+transaction에서 조건부 claim한 뒤 기존 `NotificationOutboxWorker`에 전달한다. raw
+`NotificationHistoryTable` 코드와 message provider는 복원하지 않는다.
 
-- [ ] **Step 4: Task 13 검증**
+- [x] **Step 4: Task 13 검증**
 
 Run: `./gradlew :appointment-notification:test --tests "*.NotificationAutoConfigurationTest" --tests "*.NotificationDeliveryRouteGateTest" --tests "*.NotificationRolloutModeTest"`
 
-Expected: 단일 전달 경로, shadow provider 0회, PAUSED backlog 보존, legacy bean 부재 PASS.
+Expected: default SHADOW, background provider 0회, direct/worker 상호 배타, 동일 행
+provider 최대 1회, PAUSED backlog 보존, raw history bean 부재 PASS.
 
 Run: `rg -n "patientName|patientPhone|recipient|payloadJson|errorMessage|NotificationMessageProvider|NotificationHistoryRepository" appointment-notification/src/main`
 
@@ -1012,20 +1037,36 @@ Expected: 허용 목록 밖 raw 개인정보·legacy history/message provider �
 - [ ] **Step 5: Lore commit**
 
 ```text
-Make the durable worker the only notification delivery path
+Make rollout routes share one durable notification claim
 
-Constraint: Rollback must preserve queued rows and avoid a new loss window
-Rejected: Re-enabling the Spring listener | recreates non-transactional delivery
+Constraint: Production canary evidence is unavailable in the code-only PR
+Rejected: Restoring the raw direct channel | duplicates provider logic and revives privacy risk
 Confidence: high
 Scope-risk: broad
 Tested: Auto-configuration and rollout mode tests
-Not-tested: Canary duration is an operational observation
+Not-tested: 24-hour and 1,000-notification production canary
 ```
+
+## Task 13B: 운영 canary와 전환기 listener 최종 제거
+
+**상태:** 후속 운영 이슈 #204에서 수행
+**의존성:** Task 13A 배포
+
+- [ ] 병원 1곳에서 최소 24시간과 1,000개 논리 알림을 관찰한다.
+- [ ] unknown/duplicate 0건, critical alert 0건, oldest 활성 행 age 5분 미만,
+  suppression reason 설명 가능을 확인한다.
+- [ ] 병원별 승인 후 allowlist를 확대하고 전체 병원을 `ACTIVE`로 전환한다.
+- [ ] 전환기 event listener를 제거하고 raw legacy 물리 테이블의 retention 만료를
+  확인한 뒤 별도 migration을 계획한다.
+
+Task 13B는 운영 환경 변경과 실제 관측이 필요하므로 PR #203의 구현·검증 완료 조건에
+포함하지 않는다. 후속 GitHub 이슈 #204가 병원별 승인, 24시간·1,000건 관측,
+`ACTIVE` 전환과 listener 제거 gate를 추적한다.
 
 ## Task 14: 3개 DB, 실행 계획, 동시성·부하·retention 검증
 
 **복잡도:** 높음
-**의존성:** Task 4, 8, 9, 13
+**의존성:** Task 4, 8, 9, 13A
 **write scope:** integration/Gatling tests와 migration support
 
 **Files:**
@@ -1035,19 +1076,19 @@ Not-tested: Canary duration is an operational observation
 - Create: `appointment-api/src/gatling/kotlin/io/bluetape4k/clinic/appointment/api/NotificationOutboxScaleSimulation.kt`
 - Modify: migration test entry points from Task 4
 
-- [ ] **Step 1: H2 claim lifecycle 통합 테스트**
+- [x] **Step 1: H2 claim lifecycle 통합 테스트**
 
 10,000 active row와 10,000 종료 row에서 제한된 page, single claim, lease recovery, retention page를 검증한다.
 
-- [ ] **Step 2: PostgreSQL migration·claim·EXPLAIN**
+- [x] **Step 2: PostgreSQL migration·claim·EXPLAIN**
 
 singleton PostgreSQL launcher를 사용해 H2와 같은 10,000 active/10,000 종료 backlog를 준비하고 `ANALYZE`를 실행한다. clinic keyset, clinic 내부 ready candidate, recovery, retention, pending/oldest metric 질의의 `EXPLAIN`을 저장한다. 기대 index 이름을 검사하고 `Seq Scan`과 대규모 sort plan이면 실패한다.
 
-- [ ] **Step 3: MySQL migration·claim·EXPLAIN**
+- [x] **Step 3: MySQL migration·claim·EXPLAIN**
 
 singleton MySQL launcher를 사용하고 PostgreSQL Gradle invocation이 끝난 뒤 실행한다. 같은 10,000 active/10,000 종료 backlog와 통계 갱신 뒤 동일한 5개 질의의 `EXPLAIN`을 저장한다. CAS 영향 row 수와 unique key를 검증하고 access type `ALL`, 대규모 filesort 또는 temporary sort면 실패한다.
 
-- [ ] **Step 4: 합성 공정성·backpressure 부하**
+- [x] **Step 4: 합성 공정성·backpressure 부하**
 
 대형 clinic과 소형 clinic을 섞고 member resolver/provider를 포화시켜 다음 실패 기준을 executable assertion으로 둔다.
 
@@ -1058,7 +1099,7 @@ singleton MySQL launcher를 사용하고 PostgreSQL Gradle invocation이 끝난 
 
 profile별 threshold는 `NotificationOutboxScaleSimulation` fixture와 runbook에 같은 값으로 기록하며, 나쁜 측정값을 보고서만 남기고 통과시키지 않는다.
 
-- [ ] **Step 5: Task 14 순차 검증**
+- [x] **Step 5: Task 14 순차 검증**
 
 Run: `./gradlew :appointment-api:test --tests "*.NotificationOutboxDialectIntegrationTest" --tests "*.NotificationOutboxQueryPlanTest"`
 
@@ -1068,7 +1109,7 @@ Run: `./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.ap
 
 Expected: 3개 dialect lifecycle, 실행 계획, fair scheduling, 제한된 in-flight/retention PASS.
 
-- [ ] **Step 6: Lore commit**
+- [x] **Step 6: Lore commit**
 
 ```text
 Prove notification claim and cleanup under real dialect load
@@ -1104,16 +1145,16 @@ Not-tested: Production provider throughput
 - Regenerate: 대응 PNG 파일
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/NotificationOpenApiTest.kt`
 
-- [ ] **Step 1: OpenAPI contract RED 테스트**
+- [x] **Step 1: OpenAPI contract RED 테스트**
 
 self-service 성공·member mapping 거절, staff 대리 예약, legacy `403/404/422/503`, v2 member mapping `403/404/409/503`, retry/`EXHAUSTED` 상태 조회와 `re-notify` dry-run 예시를 실제 DTO와 error registry에서 생성해 검증한다. directory `503`에는 `Retry-After`가 있고, 모든 예시는 `SchedulingApiErrorResponse`를 사용하며 raw member 참조를 포함하지 않아야 한다. 현재 저장소의 self-service 생성 경로는 `POST /api/v2/appointment-requests`이므로 승인 설계의 축약 표현을 이 실제 경로로 맞춘다.
 Task 15는 Task 5·12에서 이미 구현한 DTO, 오류 registry와 endpoint 동작을 변경하지 않는다. controller 수정은 OpenAPI annotation·example에 한정하고 runtime API behavior는 새로 추가하지 않는다.
 
-- [ ] **Step 2: README 한/영 동등성 갱신**
+- [x] **Step 2: README 한/영 동등성 갱신**
 
 `README.md`와 `README.ko.md` 쌍에 durable outbox, `memberId`, at-least-once, 실패 관측과 운영 제한을 같은 의미로 추가한다. 한국어 문서에서는 기준이 되는 문서·데이터·경로를 문맥에 맞게 자연스럽게 표현한다.
 
-- [ ] **Step 3: 운영 runbook 작성**
+- [x] **Step 3: 운영 runbook 작성**
 
 다음 항목을 실제 설정명과 owner로 기록한다.
 
@@ -1133,11 +1174,11 @@ Task 15는 Task 5·12에서 이미 구현한 DTO, 오류 registry와 endpoint �
 - `OBSERVE` suppression 의미, override owner·expiry와 `ENFORCE` 전환 조건
 - `MEMBER_ID_REQUIRED` 발생 시 caller 조치
 
-- [ ] **Step 4: 한/영 다이어그램 갱신**
+- [x] **Step 4: 한/영 다이어그램 갱신**
 
 `$bluetape-diagram`을 읽고 sequence/class/ERD 성격인 기존 자산은 SVG+PNG로 유지한다. 예약 command → outbox → worker → member DB/template/provider → redacted attempt 흐름을 한/영에서 같은 의미로 만든다.
 
-- [ ] **Step 5: Task 15 검증**
+- [x] **Step 5: Task 15 검증**
 
 Run: `./gradlew :appointment-api:test --tests "*.NotificationOpenApiTest"`
 
@@ -1147,7 +1188,7 @@ Run: `$bluetape-diagram`의 현재 audit/render 명령
 
 Expected: OpenAPI example PASS, README 한/영 계약 일치, runbook 설정명 일치, 다이어그램 audit PASS.
 
-- [ ] **Step 6: Lore commit**
+- [x] **Step 6: Lore commit**
 
 ```text
 Document the durable notification contract for callers and operators
@@ -1171,13 +1212,13 @@ Not-tested: Human canary observation until deployment
 - Create: `docs/lessons/2026-07-31-issue-172-notification-outbox.md`
 - Modify: `docs/superpowers/plans/2026-07-31-issue-172-notification-outbox-plan.md`의 실행 체크와 검토 기록
 
-- [ ] **Step 1: module-scoped 전체 테스트**
+- [x] **Step 1: module-scoped 전체 테스트**
 
 Run: `./gradlew :appointment-core:test :appointment-event:test :appointment-notification:test :appointment-api:test`
 
 Expected: affected module tests PASS.
 
-- [ ] **Step 2: build와 정적 검사**
+- [x] **Step 2: build와 정적 검사**
 
 Run: `./gradlew :appointment-core:build :appointment-event:build :appointment-notification:build :appointment-api:build`
 
@@ -1185,19 +1226,19 @@ Run: `git diff --check`
 
 Expected: BUILD SUCCESSFUL, whitespace 오류 0건.
 
-- [ ] **Step 3: 설계·계획 추적 검증**
+- [x] **Step 3: 설계·계획 추적 검증**
 
 설계 수용 기준 18개를 실제 test와 문서 경로에 다시 연결한다. 누락 기준이 있으면 해당 Task의 RED 단계로 돌아가고 이후 검증을 새로 실행한다.
 
-- [ ] **Step 4: 6개 관점 최종 코드 검토**
+- [x] **Step 4: 6개 관점 최종 코드 검토**
 
 성능, 안정성, 보안, 운영, 개발자/API, 사용자/caller 관점을 독립 실행하고 주 세션이 중복 제거·심각도 정규화·문서/증거 검사를 수행한다. `P0=0`, `P1=0`이 될 때까지 해당 관점과 영향받은 테스트를 다시 실행한다.
 
-- [ ] **Step 5: lesson 작성**
+- [x] **Step 5: lesson 작성**
 
 caller transaction, lease fencing, 종료 비식별화, retry 계층 곱 방지, 다중 DB index 차이에서 얻은 실제 근거를 기록한다. 예상과 달랐던 점과 다음 작업자가 재사용할 guard를 포함한다.
 
-- [ ] **Step 6: Lore commit**
+- [x] **Step 6: Lore commit**
 
 ```text
 Converge notification reliability against the approved design

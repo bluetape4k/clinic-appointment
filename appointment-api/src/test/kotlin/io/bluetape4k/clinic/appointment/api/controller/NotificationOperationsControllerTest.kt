@@ -141,6 +141,28 @@ class NotificationOperationsControllerTest : AbstractApiIntegrationTest() {
         response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
     }
 
+    @Test
+    fun `re notify endpoint rejects non-positive appointment IDs`() {
+        val body = """
+            {
+              "appointmentIds": [-1],
+              "generation": "gen-invalid-id",
+              "platformApproval": {"authority": "platform-service-approval", "reference": "PLAT-1"},
+              "clinicApproval": {"authority": "clinic-mfa-approval", "reference": "CLINIC-1"},
+              "dryRun": true
+            }
+        """.trimIndent()
+
+        val response = client.post()
+            .uri("/api/tenant-default/clinics/$clinicId/notifications/re-notify")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer ${operatorToken()}")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+    }
+
     private fun operatorToken(): String =
         TestJwtProvider.createToken(
             userId = "notification-platform-service",

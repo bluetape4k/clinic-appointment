@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1120" viewBox="0 0 1900 1120" role="img" aria-labelledby="sequence-title sequence-description">
+  <title id="sequence-title">내구성 리마인더 발송 시퀀스</title><desc id="sequence-description">리마인더 정합성은 outbox key, DB lease, fencing, provider 멱등성으로 보장한다</desc>
+  <defs>
+    <filter id="sequence-shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.18"/></filter>
+    <marker id="sequence-arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 10 10"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#edf4ff"/></marker>
+    <style>
+      svg{font-family:"goorm Sans","Noto Sans KR",ui-sans-serif,system-ui,sans-serif}.canvas{fill:#0f1724}.frame{fill:#172234;stroke:#40526a;stroke-width:3}
+      .title{font-size:38px;font-weight:750;fill:#edf4ff}.subtitle{font-size:17px;fill:#b6c4d7}
+      .header{fill:#223148;stroke:#7da6ff;stroke-width:2.4;filter:url(#sequence-shadow)}
+      .participant-title{font-family:"goorm Sans Code","Noto Sans Mono",ui-monospace,monospace;font-size:16px;font-weight:700;fill:#edf4ff}
+      .lifeline{stroke:#49617d;stroke-width:2;stroke-dasharray:8 8}.message{stroke:#b09aff;stroke-width:2.8;fill:none}
+      .activation{fill:#263852;stroke:#b09aff;stroke-width:1.5}.label{fill:#172234;stroke:#40526a;stroke-width:1}.msg{font-size:12px;fill:#b6c4d7}
+      .step{fill:#b09aff}.badgeText{font-family:"goorm Sans Code","Noto Sans Mono",ui-monospace,monospace;font-size:10px;font-weight:700;fill:#172234}
+      .note{fill:#382f1c;stroke:#d6ad59;stroke-width:2}.note-text{font-size:15px;font-weight:650;fill:#edf4ff}
+    </style>
+  </defs>
+  <rect class="canvas" width="1900" height="1120"/><rect class="frame" x="36" y="32" width="1828" height="1052" rx="32"/>
+  <text class="title" x="950" y="88" text-anchor="middle">내구성 리마인더 발송 시퀀스</text>
+  <text class="subtitle" x="950" y="122" text-anchor="middle">리마인더 정합성은 outbox key, DB lease, fencing, provider 멱등성으로 보장한다</text>
+  <g id="rollout-note"><rect class="note" x="250" y="145" width="1400" height="42" rx="12"/><text class="note-text" x="950" y="172" text-anchor="middle">SHADOW: event bridge · CANARY: 허용 worker · ACTIVE: worker · PAUSED: backlog 보존</text></g>
+  <g id="participant-0">
+    <rect class="header" x="45" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="170" y="221" text-anchor="middle">리마인더 생성기</text>
+    <line class="lifeline" x1="170" y1="248" x2="170" y2="955"/>
+  </g>
+<g id="participant-1">
+    <rect class="header" x="357" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="482" y="221" text-anchor="middle">Outbox DB</text>
+    <line class="lifeline" x1="482" y1="248" x2="482" y2="955"/>
+  </g>
+<g id="participant-2">
+    <rect class="header" x="669" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="794" y="221" text-anchor="middle">선택된 발송 경로</text>
+    <line class="lifeline" x1="794" y1="248" x2="794" y2="955"/>
+  </g>
+<g id="participant-3">
+    <rect class="header" x="981" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="1106" y="221" text-anchor="middle">회원 DB</text>
+    <line class="lifeline" x1="1106" y1="248" x2="1106" y2="955"/>
+  </g>
+<g id="participant-4">
+    <rect class="header" x="1293" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="1418" y="221" text-anchor="middle">Template renderer</text>
+    <line class="lifeline" x1="1418" y1="248" x2="1418" y2="955"/>
+  </g>
+<g id="participant-5">
+    <rect class="header" x="1605" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="1730" y="221" text-anchor="middle">Provider</text>
+    <line class="lifeline" x1="1730" y1="248" x2="1730" y2="955"/>
+  </g>
+  <rect class="activation" x="786" y="292" width="16" height="663" rx="5"/>
+  <g id="message-1">
+      <rect class="label" x="192" y="292" width="264" height="24" rx="6"/>
+      <circle class="step" cx="207" cy="304" r="11"/>
+      <text class="badgeText" x="207" y="308" text-anchor="middle">1</text>
+      <text class="msg" x="224" y="308">예약 version + slot으로 리마인더 의도 upsert</text>
+      <path class="message" d="M180 320 H468" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-2">
+      <rect class="label" x="508" y="350" width="264" height="24" rx="6"/>
+      <circle class="step" cx="523" cy="362" r="11"/>
+      <text class="badgeText" x="523" y="366" text-anchor="middle">2</text>
+      <text class="msg" x="540" y="366">lease + fencing token으로 준비된 행 선점</text>
+      <path class="message" d="M784 378 H496" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-3">
+      <rect class="label" x="561" y="408" width="150" height="24" rx="6"/>
+      <circle class="step" cx="576" cy="420" r="11"/>
+      <text class="badgeText" x="576" y="424" text-anchor="middle">3</text>
+      <text class="msg" x="593" y="424">논리 알림 한 건 반환</text>
+      <path class="message" d="M492 436 H780" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-4">
+      <rect class="label" x="870.25" y="466" width="155.5" height="24" rx="6"/>
+      <circle class="step" cx="885.25" cy="478" r="11"/>
+      <text class="badgeText" x="885.25" y="482" text-anchor="middle">4</text>
+      <text class="msg" x="902.25" y="482">최신 연락처·언어·동의 조회</text>
+      <path class="message" d="M804 494 H1092" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-5">
+      <rect class="label" x="853" y="524" width="198" height="24" rx="6"/>
+      <circle class="step" cx="868" cy="536" r="11"/>
+      <text class="badgeText" x="868" y="540" text-anchor="middle">5</text>
+      <text class="msg" x="885" y="540">현재 프로필 반환, 메모리에서만 사용</text>
+      <path class="message" d="M1096 552 H808" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-6">
+      <rect class="label" x="996.5" y="582" width="215" height="24" rx="6"/>
+      <circle class="step" cx="1011.5" cy="594" r="11"/>
+      <text class="badgeText" x="1011.5" y="598" text-anchor="middle">6</text>
+      <text class="msg" x="1028.5" y="598">승인된 typed template 렌더링</text>
+      <path class="message" d="M804 610 H1404" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-7">
+      <rect class="label" x="987.75" y="640" width="240.5" height="24" rx="6"/>
+      <circle class="step" cx="1002.75" cy="652" r="11"/>
+      <text class="badgeText" x="1002.75" y="656" text-anchor="middle">7</text>
+      <text class="msg" x="1019.75" y="656">provider 요청 반환, 메모리에서만 사용</text>
+      <path class="message" d="M1408 668 H808" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-8">
+      <rect class="label" x="1185" y="698" width="150" height="24" rx="6"/>
+      <circle class="step" cx="1200" cy="710" r="11"/>
+      <text class="badgeText" x="1200" y="714" text-anchor="middle">8</text>
+      <text class="msg" x="1217" y="714">결정적인 멱등성 키로 발송</text>
+      <path class="message" d="M804 726 H1716" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-9">
+      <rect class="label" x="1189" y="756" width="150" height="24" rx="6"/>
+      <circle class="step" cx="1204" cy="768" r="11"/>
+      <text class="badgeText" x="1204" y="772" text-anchor="middle">9</text>
+      <text class="msg" x="1221" y="772">안정적인 발송 결과 반환</text>
+      <path class="message" d="M1720 784 H808" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-10">
+      <rect class="label" x="532.5" y="814" width="215" height="24" rx="6"/>
+      <circle class="step" cx="547.5" cy="826" r="11"/>
+      <text class="badgeText" x="547.5" y="830" text-anchor="middle">10</text>
+      <text class="msg" x="564.5" y="830">fencing 종료 갱신 + 식별자 제거</text>
+      <path class="message" d="M784 842 H496" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-11">
+      <rect class="label" x="565" y="872" width="150" height="24" rx="6"/>
+      <circle class="step" cx="580" cy="884" r="11"/>
+      <text class="badgeText" x="580" y="888" text-anchor="middle">11</text>
+      <text class="msg" x="597" y="888">상태별 제한된 보존 처리</text>
+      <path class="message" d="M784 900 H496" marker-end="url(#sequence-arrow)"/>
+    </g>
+  <g id="missed-reminder-note"><rect class="note" x="250" y="990" width="1400" height="48" rx="12"/><text class="note-text" x="950" y="1021" text-anchor="middle">보정 시간창 경과: SUPPRESSED(REMINDER_WINDOW_MISSED), 늦은 발송 금지</text></g>
+  </svg>

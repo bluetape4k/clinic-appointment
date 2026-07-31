@@ -484,11 +484,11 @@ internal object NotificationOutboxMigrationTestSupport {
         "clinic_notification_outbox" to mapOf(
             "idx_notification_outbox_ready_clinic_cursor" to listOf(
                 "row_kind:A",
+                "tenant_group_id:A",
+                "clinic_id:A",
                 "status:A",
                 "available_at:A",
                 "next_retry_at:A",
-                "tenant_group_id:A",
-                "clinic_id:A",
             ),
             "idx_notification_outbox_ready_within_clinic" to listOf(
                 "tenant_group_id:A",
@@ -498,6 +498,16 @@ internal object NotificationOutboxMigrationTestSupport {
                 "available_at:A",
                 "id:A",
                 "next_retry_at:A",
+            ),
+            "idx_notification_outbox_direct_lookup" to listOf(
+                "clinic_id:A",
+                "appointment_id:A",
+                "event_type:A",
+                "row_kind:A",
+                "status:A",
+                "available_at:A",
+                "next_retry_at:A",
+                "id:A",
             ),
             "idx_notification_outbox_lease_recovery" to listOf(
                 "row_kind:A",

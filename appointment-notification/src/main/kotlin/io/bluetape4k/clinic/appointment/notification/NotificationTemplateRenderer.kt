@@ -11,6 +11,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateP
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
 import java.net.URI
+import java.net.URISyntaxException
 import java.time.format.DateTimeFormatter
 
 /**
@@ -108,7 +109,11 @@ class NotificationTemplateRenderer(
     }
 
     private fun validateDeepLink(value: String) {
-        val scheme = runCatching { URI(value).scheme }.getOrNull()
+        val scheme = try {
+            URI(value).scheme
+        } catch (_: URISyntaxException) {
+            null
+        }
             ?: throw NotificationTemplateException(NotificationFailureCode.TEMPLATE_PARAMETER_INVALID, "deep-link scheme is required")
         if (scheme.lowercase() !in allowedDeepLinkSchemes) {
             throw NotificationTemplateException(NotificationFailureCode.TEMPLATE_PARAMETER_INVALID, "deep-link scheme is not allowed")

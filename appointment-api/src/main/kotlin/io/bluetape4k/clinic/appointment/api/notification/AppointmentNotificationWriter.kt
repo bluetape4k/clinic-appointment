@@ -222,6 +222,8 @@ class DefaultAppointmentNotificationWriter(
         reasonCode: CancellationReasonCode?,
     ) {
         repository.suppressOutstandingReminders(
+            tenantGroupId = TenantGroupId(tenantGroupId),
+            clinicId = ClinicId(record.clinicId),
             appointmentId = AppointmentId(record.id.requireNotNull("record.id")),
             suppressionReason = NotificationSuppressionReasonCode.APPOINTMENT_CHANGED,
         )
@@ -265,6 +267,8 @@ class DefaultAppointmentNotificationWriter(
             "rescheduled appointment must preserve the verified member"
         }
         repository.suppressOutstandingReminders(
+            tenantGroupId = TenantGroupId(tenantGroupId),
+            clinicId = ClinicId(original.clinicId),
             appointmentId = AppointmentId(original.id.requireNotNull("original.id")),
             suppressionReason = NotificationSuppressionReasonCode.APPOINTMENT_CHANGED,
         )
@@ -353,6 +357,8 @@ class DefaultAppointmentNotificationWriter(
         reasonCode: CancellationReasonCode?,
     ) {
         repository.suppressOutstandingReminders(
+            tenantGroupId = TenantGroupId(notification.tenantGroupId),
+            clinicId = ClinicId(notification.clinicId),
             appointmentId = AppointmentId(notification.appointmentId),
             suppressionReason = NotificationSuppressionReasonCode.APPOINTMENT_CHANGED,
         )
@@ -391,6 +397,8 @@ class DefaultAppointmentNotificationWriter(
             "rescheduled commitment must preserve the verified member"
         }
         repository.suppressOutstandingReminders(
+            tenantGroupId = TenantGroupId(previous.tenantGroupId),
+            clinicId = ClinicId(previous.clinicId),
             appointmentId = AppointmentId(previous.appointmentId),
             suppressionReason = NotificationSuppressionReasonCode.APPOINTMENT_CHANGED,
         )

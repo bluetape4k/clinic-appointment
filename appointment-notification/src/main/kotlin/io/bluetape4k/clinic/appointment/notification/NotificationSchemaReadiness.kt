@@ -85,8 +85,12 @@ class NotificationSchemaReadiness(
         const val REQUIRED_FLYWAY_VERSION = 14
         val REQUIRED_INDEXES = listOf(
             "idx_notification_outbox_ready_clinic_cursor",
+            "idx_notification_outbox_ready_within_clinic",
+            "idx_notification_outbox_direct_lookup",
+            "idx_notification_outbox_reminder_suppression",
             "idx_notification_outbox_lease_recovery",
             "idx_notification_outbox_terminal_retention",
+            "idx_notification_outbox_pending_oldest",
         )
     }
 }

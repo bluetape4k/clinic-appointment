@@ -21,6 +21,8 @@ class NotificationOutboxDispatcher(
     private val globalConcurrency: Int,
     private val perClinicConcurrency: Int,
     private val readiness: NotificationSchemaReadiness? = null,
+    private val routeGate: NotificationDeliveryRouteGate = NotificationDeliveryRouteGate.active(),
+    private val metrics: NotificationOutboxMetrics? = null,
 ) {
     private val globalPermits: Semaphore
     private val clinicPermits: NotificationClinicPermitRegistry
@@ -39,7 +41,7 @@ class NotificationOutboxDispatcher(
     }
 
     suspend fun dispatchOnce(): List<NotificationOutboxWorkerResult> {
-        if (readiness?.check()?.available == false) return emptyList()
+        if (!routeGate.hasWorkerRoute || readiness?.check()?.available == false) return emptyList()
         val claimed = claimWorkBatch()
         return coroutineScope {
             claimed.map { notification ->
@@ -59,7 +61,7 @@ class NotificationOutboxDispatcher(
             if (globalConcurrency == 1) {
                 return@withLock claimSingleWork()
             }
-            val recovered = store.recoverExpired(globalConcurrency - 1, leaseOwner)
+            val recovered = recoverExpired(globalConcurrency - 1)
             val remaining = globalConcurrency - recovered.size
             if (remaining <= 0) return@withLock recovered
             recovered + claimFairBatch(remaining)
@@ -68,24 +70,38 @@ class NotificationOutboxDispatcher(
     private suspend fun claimSingleWork(): List<ClaimedNotification> {
         if (recoveryTurn) {
             recoveryTurn = false
-            val recovered = store.recoverExpired(1, leaseOwner)
+            val recovered = recoverExpired(1)
             if (recovered.isNotEmpty()) return recovered
             return claimFairBatch(1)
         }
         recoveryTurn = true
         val claimed = claimFairBatch(1)
         if (claimed.isNotEmpty()) return claimed
-        return store.recoverExpired(1, leaseOwner)
+        return recoverExpired(1)
     }
 
+    private suspend fun recoverExpired(limit: Int): List<ClaimedNotification> =
+        store.recoverExpired(limit, leaseOwner).also { recovered ->
+            recovered.forEach { metrics?.recordLeaseRecovered(it.channel, it.eventType) }
+        }
+
     private suspend fun claimFairBatch(limit: Int): List<ClaimedNotification> {
-        val page = store.findFairCandidates(limit, cursor)
+        val page = store.findFairCandidatesForRoute(
+            limit = limit,
+            cursor = cursor,
+            perClinicLimit = perClinicConcurrency,
+            eligibleClinicIds = routeGate.workerClinicIds,
+        )
         cursor = page.nextCursor
-        return page.candidates.mapNotNull { candidate -> store.claim(candidate.id, leaseOwner) }
+        return page.candidates
+            .filter { candidate ->
+                routeGate.allows(NotificationDeliveryRoute.OUTBOX_WORKER, candidate.clinicId.value)
+            }
+            .mapNotNull { candidate -> store.claim(candidate.id, leaseOwner) }
     }
 }
 
-private class NotificationClinicPermitRegistry(
+internal class NotificationClinicPermitRegistry(
     private val permits: Int,
 ) {
     private val entries = ConcurrentHashMap<NotificationClinicPermitKey, NotificationClinicPermitEntry>()
@@ -93,8 +109,14 @@ private class NotificationClinicPermitRegistry(
     suspend fun <T> withPermit(
         notification: ClaimedNotification,
         action: suspend () -> T,
+    ): T = withPermit(notification.tenantGroupId.value, notification.clinicId.value, action)
+
+    suspend fun <T> withPermit(
+        tenantGroupId: Long,
+        clinicId: Long,
+        action: suspend () -> T,
     ): T {
-        val key = NotificationClinicPermitKey(notification.tenantGroupId.value, notification.clinicId.value)
+        val key = NotificationClinicPermitKey(tenantGroupId, clinicId)
         val entry = retain(key)
         return try {
             entry.semaphore.withPermit { action() }

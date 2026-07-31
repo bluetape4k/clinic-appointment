@@ -10,11 +10,11 @@ flowchart TD
     API -->|"SlotCalculationService.isAvailable()"| SLOT["슬롯 가용성 검증"]
     SLOT -->|"영업시간 / 의사 스케줄 / 기존 예약 충돌 확인"| CORE["appointment-core"]
     CORE --> DB[("PostgreSQL")]
-    API -->|"AppointmentRepository.save()"| DB
+    API -->|"예약 + 최소 알림 outbox\n같은 transaction"| DB
     API -->|"publishEvent(Created)"| EVT["AppointmentEventPublisher"]
     EVT -->|"@EventListener"| LOG["AppointmentEventLogger → DB"]
-    EVT -->|"@EventListener"| NOTIF["NotificationEventListener"]
-    NOTIF -->|"DummyNotificationChannel"| HIST["NotificationHistory → DB"]
+    EVT -. "SHADOW 전환기 신호" .-> NOTIF["NotificationEventListener"]
+    NOTIF -->|"정확한 outbox 행 조건부 선점"| DB
 
     style FE fill:#4A90D9,color:#fff
     style API fill:#7B68EE,color:#fff
@@ -22,9 +22,16 @@ flowchart TD
     style EVT fill:#E8A838,color:#fff
 ```
 
-![예약 생성 데이터 흐름](assets/data-flow-01-appointment-create-ko.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/data-flow-01-appointment-create-ko-dark.png">
+  <img src="assets/data-flow-01-appointment-create-ko.png" alt="예약과 최소 알림 outbox를 원자적으로 커밋한 뒤 비동기 발송으로 이어지는 예약 생성 흐름">
+</picture>
 
-[SVG](assets/data-flow-01-appointment-create-ko.svg) · [Mermaid source](assets/data-flow-01-appointment-create.mmd)
+[한국어 light SVG](assets/data-flow-01-appointment-create-ko.svg) ·
+[한국어 dark SVG](assets/data-flow-01-appointment-create-ko-dark.svg) ·
+[English light SVG](assets/data-flow-01-appointment-create-en.svg) ·
+[English dark SVG](assets/data-flow-01-appointment-create-en-dark.svg) ·
+[Mermaid 의미 스케치](assets/data-flow-01-appointment-create.mmd)
 
 ## 2. 슬롯 조회 흐름
 
@@ -115,33 +122,38 @@ flowchart TD
 
 [SVG](assets/data-flow-04-equipment-unavailability-ko.svg) · [Mermaid source](assets/data-flow-04-equipment-unavailability.mmd)
 
-## 5. 알림 이벤트 흐름
+## 5. 알림 outbox 발송 흐름
 
 ```mermaid
 flowchart LR
-    APT["예약 상태 변경\n(CRUD 완료 후)"] -->|"publishEvent()"| PUB["ApplicationEventPublisher\n(Spring)"]
-
-    PUB -->|"@EventListener"| LOG["AppointmentEventLogger\n→ AppointmentEventLogs 테이블"]
-    PUB -->|"@EventListener"| NOTIF["NotificationEventListener"]
-
-    NOTIF --> CB["CircuitBreaker\n(Resilience4j)"]
-    CB --> RETRY["Retry (3회)"]
-    RETRY --> BH["Bulkhead (동시 10)"]
-    BH --> CH["DummyNotificationChannel\n로그 + 이력 저장"]
-
-    subgraph HA["HA 리마인더 스케줄러 (1h)"]
-        LEADER{"Redis Leader?"}
-        LEADER -->|"Yes"| REMIND["내일/오늘 CONFIRMED\n예약 리마인더 발송"]
-        LEADER -->|"No (다른 노드)"| SKIP["SKIP"]
-    end
-
-    style PUB fill:#E8A838,color:#fff
-    style HA fill:#16A085,color:#fff,stroke:#0E6655
+    CMD["예약 명령"] -->|"같은 transaction"| OUTBOX[("예약 + 최소 알림 outbox")]
+    OUTBOX --> GATE{"SHADOW / CANARY / ACTIVE / PAUSED"}
+    GATE -->|"전환기 경로"| EVENT["Spring event listener"]
+    GATE -->|"백그라운드 경로"| WORKER["Outbox dispatcher"]
+    EVENT --> CLAIM["정확한 outbox 행 조건부 선점"]
+    WORKER --> CLAIM
+    CLAIM --> PROFILE["최신 연락처·언어·동의 조회"]
+    PROFILE --> TEMPLATE["승인된 typed template을 메모리에서 렌더링"]
+    TEMPLATE --> PROVIDER["결정적인 멱등성 키로 provider 호출"]
+    PROVIDER --> TERMINAL["fencing 종료 갱신 + 식별자 제거"]
+    TERMINAL --> RETENTION["상태별 제한된 보존"]
 ```
 
-![알림 이벤트 데이터 흐름](assets/data-flow-05-notification-events-ko.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/data-flow-05-notification-events-ko-dark.png">
+  <img src="assets/data-flow-05-notification-events-ko.png" alt="예약 트랜잭션의 최소 알림 outbox부터 병원별 단일 발송 경로, 발송 시점 회원 조회, 개인정보 제거와 보존까지의 흐름">
+</picture>
 
-[SVG](assets/data-flow-05-notification-events-ko.svg) · [Mermaid source](assets/data-flow-05-notification-events.mmd)
+[한국어 light SVG](assets/data-flow-05-notification-events-ko.svg) ·
+[한국어 dark SVG](assets/data-flow-05-notification-events-ko-dark.svg) ·
+[English light SVG](assets/data-flow-05-notification-events-en.svg) ·
+[English dark SVG](assets/data-flow-05-notification-events-en-dark.svg) ·
+[Mermaid 의미 스케치](assets/data-flow-05-notification-events.mmd)
+
+이 흐름에서 연락처·언어·동의는 DB 선점 뒤 회원 시스템에서 조회해 메모리에서만
+사용합니다. `SHADOW`와 `CANARY`의 전환기 listener도 별도 이력을 만들지 않고
+worker와 같은 outbox 행을 선점합니다. 완료 후에는 회원 ID·예약 ID·template
+parameter를 제거하고 개인정보가 없는 결과와 제한된 시도 metadata만 보존합니다.
 
 ## 6. Solver 데이터 흐름
 

@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
+import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
@@ -129,9 +130,10 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 TreatmentTypes, Equipments, TreatmentEquipments,
                 ConsultationTopics, Holidays,
                 Appointments, AppointmentIdempotencies, AppointmentNotes, AppointmentStateHistory,
-                RescheduleCandidates, AppointmentEventLogs, NotificationOutboxEvents,
+                RescheduleCandidates, AppointmentEventLogs, NotificationOutboxEvents, NotificationDeliveryAttempts,
             )
 
+            NotificationDeliveryAttempts.deleteAll()
             NotificationOutboxEvents.deleteAll()
             AppointmentEventLogs.deleteAll()
             AppointmentStateHistory.deleteAll()

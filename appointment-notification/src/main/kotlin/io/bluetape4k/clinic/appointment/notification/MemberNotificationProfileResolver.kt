@@ -7,6 +7,16 @@ import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException
+import io.github.resilience4j.circuitbreaker.CircuitBreaker
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig
+import io.github.resilience4j.kotlin.circuitbreaker.executeSuspendFunction
+import io.github.resilience4j.kotlin.ratelimiter.executeSuspendFunction
+import io.github.resilience4j.ratelimiter.RateLimiter
+import io.github.resilience4j.ratelimiter.RateLimiterConfig
+import io.github.resilience4j.ratelimiter.RequestNotPermitted
 import java.io.Serializable
 import java.time.Duration
 
@@ -83,16 +93,49 @@ class MemberNotificationProfileUnavailableException : RuntimeException() {
 class BoundedMemberNotificationProfileResolver(
     private val delegate: MemberNotificationProfileResolver,
     private val timeout: Duration,
+    maxConcurrency: Int = 1,
+    rateLimitPerSecond: Int = 100,
+    circuitBreakerFailureRateThreshold: Int = 50,
+    private val healthSignals: NotificationRuntimeHealthSignals? = null,
 ) : MemberNotificationProfileResolver {
+
+    private val permits = Semaphore(maxConcurrency)
+    private val rateLimiter = RateLimiter.of(
+        "member-notification-profile",
+        RateLimiterConfig.custom()
+            .limitRefreshPeriod(Duration.ofSeconds(1))
+            .limitForPeriod(rateLimitPerSecond)
+            .timeoutDuration(Duration.ZERO)
+            .build(),
+    )
+    private val circuitBreaker = CircuitBreaker.of(
+        "member-notification-profile",
+        CircuitBreakerConfig.custom()
+            .failureRateThreshold(circuitBreakerFailureRateThreshold.toFloat())
+            .slidingWindowSize(10)
+            .minimumNumberOfCalls(5)
+            .build(),
+    )
 
     init {
         require(!timeout.isNegative && !timeout.isZero) { "timeout must be positive" }
+        require(maxConcurrency > 0) { "maxConcurrency must be positive" }
+        require(rateLimitPerSecond > 0) { "rateLimitPerSecond must be positive" }
+        require(circuitBreakerFailureRateThreshold in 1..100) {
+            "circuitBreakerFailureRateThreshold must be between 1 and 100"
+        }
     }
 
     override suspend fun resolve(request: MemberNotificationProfileRequest): MemberNotificationProfileResult =
         try {
-            withTimeout(timeout.toMillis()) {
-                delegate.resolve(request)
+            permits.withPermit {
+                rateLimiter.executeSuspendFunction {
+                    circuitBreaker.executeSuspendFunction {
+                        withTimeout(timeout.toMillis()) {
+                            delegate.resolve(request)
+                        }
+                    }
+                }
             }
         } catch (e: MemberNotificationProfileRateLimitedException) {
             MemberNotificationProfileResult.RateLimited
@@ -100,7 +143,13 @@ class BoundedMemberNotificationProfileResolver(
             MemberNotificationProfileResult.DirectoryUnavailable
         } catch (e: MemberNotificationProfileUnavailableException) {
             MemberNotificationProfileResult.DirectoryUnavailable
+        } catch (e: RequestNotPermitted) {
+            MemberNotificationProfileResult.RateLimited
+        } catch (e: CallNotPermittedException) {
+            MemberNotificationProfileResult.DirectoryUnavailable
         } catch (e: CancellationException) {
             throw e
+        } finally {
+            healthSignals?.setMemberCircuitOpen(circuitBreaker.state == CircuitBreaker.State.OPEN)
         }
 }

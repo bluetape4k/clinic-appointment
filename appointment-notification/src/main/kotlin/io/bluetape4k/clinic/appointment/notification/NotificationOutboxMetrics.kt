@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.Timer
 import java.io.Serializable
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -27,6 +28,7 @@ class NotificationOutboxMetrics(
 ) {
     private val pendingReady = AtomicLong()
     private val oldestActiveAgeSeconds = AtomicLong()
+    private val backlogCapped = AtomicBoolean()
     private val deliveryAttemptCounters = ConcurrentHashMap<DeliveryMeterKey, Counter>()
     private val deliveryLatencyTimers = ConcurrentHashMap<DeliveryMeterKey, Timer>()
     private val deliveryRetryCounters = ConcurrentHashMap<FailureMeterKey, Counter>()
@@ -46,8 +48,16 @@ class NotificationOutboxMetrics(
         val snapshot = observationStore.loadBoundedSnapshot()
         pendingReady.set(snapshot.pendingReady)
         oldestActiveAgeSeconds.set(snapshot.oldestActiveAge?.seconds ?: 0L)
+        backlogCapped.set(snapshot.capped)
         return snapshot
     }
+
+    fun currentSnapshot(): NotificationOutboxObservationSnapshot =
+        NotificationOutboxObservationSnapshot(
+            pendingReady = pendingReady.get(),
+            oldestActiveAge = Duration.ofSeconds(oldestActiveAgeSeconds.get()),
+            capped = backlogCapped.get(),
+        )
 
     fun recordDeliveryAttempt(
         channel: NotificationChannelType,
@@ -210,6 +220,7 @@ fun interface NotificationOutboxObservationStore {
 data class NotificationOutboxObservationSnapshot(
     val pendingReady: Long,
     val oldestActiveAge: Duration?,
+    val capped: Boolean = false,
 ) : Serializable {
     init {
         require(pendingReady >= 0) { "pendingReady must be non-negative" }

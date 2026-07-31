@@ -21,7 +21,7 @@ Spring Boot 4, and Exposed ORM.
 | `:appointment-core` | Exposed ORM domain models, repositories, state machine |
 | `:appointment-event` | Spring event-based domain event publishing |
 | `:appointment-solver` | Timefold Solver AI scheduling optimizer |
-| `:appointment-notification` | Notification scheduler (Resilience4j, Redis Leader Election) |
+| `:appointment-notification` | Durable notification outbox, privacy-safe delivery, reminder recovery |
 | `:appointment-api` | Spring Boot MVC API (JWT, Flyway, Swagger, Gatling) |
 | `:frontend:appointment-frontend` | Angular frontend |
 

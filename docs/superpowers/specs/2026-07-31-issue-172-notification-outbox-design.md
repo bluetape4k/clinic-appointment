@@ -155,7 +155,13 @@ repository가 precomputed digest를 신뢰하거나 호출 모듈이 임의 key�
 - legacy와 commitment v2 command가 같은 outbox 계약을 사용한다.
 - 기존 Spring domain event는 logging과 다른 in-process observer를 위해 유지할 수
   있지만 알림 발송의 기준 문서가 아니다.
-- 알림 listener가 Spring event를 받아 직접 channel을 호출하는 경로는 제거한다.
+- 이번 PR에서는 legacy command의 발송 연속성을 위해 privacy-safe 전환기 listener를
+  route gate 뒤에 유지한다. 이 listener는 channel을 직접 호출하거나 별도 발송
+  payload를 만들지 않고, command transaction이 기록한 같은 outbox 행을 조건부
+  claim해 `appointment-notification`의 동일한 profile/template/provider 파이프라인에
+  전달한다.
+- 전환기 listener는 `NotificationHistoryTable`, raw 수신자·완성 본문·원문 오류를
+  기록하지 않는다. 최종 제거는 실제 canary 관측을 포함하는 후속 작업의 완료 조건이다.
 
 ### 6.3 `appointment-notification`
 
@@ -167,6 +173,7 @@ metric을 소유한다.
 - `MemberNotificationProfileResolver`
 - `NotificationTemplateCatalog`
 - provider별 `NotificationChannel`
+- `NotificationDeliveryRouteGate`와 privacy-safe 전환기 direct route
 - retry policy와 lease recovery
 - retention/redaction runner
 
@@ -755,32 +762,45 @@ oldest age와 pending 수를 경보하며 한 transaction에서 backlog 전체�
 
 ## 15. Migration과 rollout
 
+이번 변경은 코드 전환(Task 13A)과 운영 전환(Task 13B)을 분리한다. PR #203은
+Task 13A까지만 완료한다. 실제 24시간·1,000건 canary, 전체 병원 확대와 전환기
+listener 최종 제거는 배포 권한과 운영 관측이 필요한 후속 이슈에서 수행한다.
+
 1. 알림 outbox·attempt table과 index를 H2/PostgreSQL/MySQL Flyway migration으로
    additive하게 추가한다.
 2. `memberId` application invariant와 기존 `patientExternalId` adapter를 추가한다.
 3. legacy caller를 `OBSERVE`에서 검증하고 migration readiness gate를 통과시킨 뒤
    clinic별로 `ENFORCE`한다.
 4. 예약 command transaction에서 notification outbox를 dual-write한다.
-5. worker를 shadow mode로 실행해 claim 대상, member resolution과 template 검증
-   결과를 확인하되 provider는 호출하지 않는다.
-6. 기존 direct listener와 새 worker의 동시 발송을 막는 상호 배타 feature flag로
-   1개 clinic canary를 활성화한다.
-7. 최소 24시간과 1,000개 논리 알림을 관찰하고 unknown/duplicate 0건, critical
-   alert 0건, oldest 활성 행 age 5분 미만, suppression reason 설명 가능을 확인한다.
-8. 기준을 통과하면 알림 플랫폼 owner와 clinic owner가 다음 clinic 묶음을
-   승인한다. 실패하면 provider 호출만 중단하고 enqueue와 retention은 유지한다.
-9. 전체 clinic에서 같은 gate를 통과한 뒤 direct listener 발송 경로를 제거한다.
-10. 기존 `NotificationHistoryTable` dual-read를 종료하고 retention 후 제거한다.
+5. Task 13A에서 rollout 기본값을 `SHADOW`로 둔다. 이 모드에서는 background
+   dispatcher가 provider 경로를 claim하지 않고, legacy Spring event가 같은 outbox
+   행을 조건부 claim하는 privacy-safe 전환기 route만 발송한다.
+6. `SHADOW`, `CANARY`, `ACTIVE`, `PAUSED`를 닫힌 설정으로 구현한다. `CANARY`는
+   allowlist 병원만 worker route를 사용하고 나머지는 전환기 route를 사용한다.
+   `ACTIVE`는 worker route만, `PAUSED`는 두 provider route 모두 사용하지 않는다.
+   모든 모드에서 enqueue와 retention은 유지한다.
+7. route 판정과 별개로 provider 호출 전 outbox 조건부 claim을 필수로 둔다. rolling
+   deployment에서 서로 다른 설정의 인스턴스가 겹쳐도 같은 논리 알림을 두 경로가
+   동시에 발송하지 못한다.
+8. Task 13B에서 병원 1곳을 canary로 활성화한다. 최소 24시간과 1,000개 논리 알림을
+   관찰하고 unknown/duplicate 0건, critical alert 0건, oldest 활성 행 age 5분 미만,
+   suppression reason 설명 가능을 확인한다.
+9. 기준을 통과하면 알림 플랫폼 owner와 clinic owner가 다음 병원 묶음을 승인한다.
+   실패하면 `SHADOW` 또는 `PAUSED`로 전환하되 enqueue와 retention은 유지한다.
+10. 전체 병원이 같은 gate를 통과한 뒤 `ACTIVE`로 전환하고 전환기 listener를
+    제거한다. 기존 `NotificationHistoryTable` 물리 테이블은 retention 확인 뒤 별도
+    additive migration으로 제거한다.
 
 outbox·attempt 조회 API와 운영 dashboard는 tenant/clinic scope와 역할 기반
 권한을 매 요청마다 검증한다. raw `memberId`, appointment ID와 parameter는
 worker service account만 접근할 수 있다. 사용자 화면과 일반 운영 조회는
 redacted fingerprint, stable outcome과 제한된 metadata만 반환한다.
 
-rollback은 새 enqueue를 중단하고 direct listener를 다시 켜는 방식으로 수행하지
-않는다. 그렇게 하면 rollback 시점의 commit과 listener 사이에 다시 유실 구간이
-생긴다. 새 worker 발송을 중단하더라도 outbox enqueue는 유지하고, 장애를 복구한
-worker가 아직 종료되지 않은 `PENDING`과 `RETRY_WAIT` backlog를 처리한다.
+Task 13A 이후 rollback은 새 enqueue를 중단하거나 raw legacy listener를 되살리는
+방식으로 수행하지 않는다. `CANARY` 전에는 기본 `SHADOW`를 유지하고, canary 중단은
+`SHADOW` 또는 `PAUSED`로 전환한다. 새 worker 발송을 중단하더라도 outbox enqueue와
+retention은 유지한다. 이미 claim한 행은 fencing된 lifecycle로 종료하고, 아직
+종료되지 않은 `PENDING`과 `RETRY_WAIT` backlog는 후속 활성화 때 처리한다.
 
 schema rollback은 additive table을 즉시 삭제하지 않는다. 이전 binary가 새 table을
 무시할 수 있는지 확인하고, queued row 보존과 개인정보 retention을 우선한다.
@@ -927,7 +947,9 @@ recovery와 retention runner를 시작하지 않는다.
 11. 회원 조회 장애는 retry하고 탈퇴·연락처 없음·동의 거부는 suppression한다.
 12. `EXHAUSTED`, retry, lag와 oldest age를 metric·dashboard·alert로 관측할 수 있다.
 13. H2, PostgreSQL과 MySQL에서 migration과 claim lifecycle이 통과한다.
-14. direct Spring listener가 알림 전달의 기준 경로로 남지 않는다.
+14. 전환기 Spring listener는 channel을 직접 호출하지 않고 같은 outbox 행을 조건부
+    claim하며 raw history를 남기지 않는다. worker route와의 상호 배타성과 provider
+    호출 전 DB claim을 검증하고, 최종 listener 제거는 Task 13B로 추적한다.
 15. 대표적인 대규모 활성·종료 backlog에서 실행 계획과 합성 부하를 검증해
     poll당 조회 row 수, claim latency, in-flight worker와 정리 작업에 상한이 있음을
     확인한다.
@@ -947,6 +969,8 @@ recovery와 retention runner를 시작하지 않는다.
 - 신규 예약의 `memberId` 필수 정책과 legacy 제외 정책이 검증된다.
 - parameterized template이 이름과 연락처를 회원 DB에서 채운다.
 - 기존 raw `recipient`, `payloadJson`, `errorMessage` 중심 이력 계약이 제거된다.
+- default `SHADOW`, 병원 allowlist `CANARY`, `ACTIVE`, `PAUSED` route가 닫힌
+  설정으로 검증되고 direct/worker가 같은 outbox 행을 중복 발송하지 않는다.
 - module-scoped test와 multi-database migration 검증이 통과한다.
 - README와 OpenAPI에 self-service 성공·거절, staff 대리 예약, legacy suppression,
   retry/`EXHAUSTED` 조회 예시를 추가한다.
@@ -955,6 +979,8 @@ recovery와 retention runner를 시작하지 않는다.
 - spec/plan review와 최종 code review에서 P0=0, P1=0이다.
 - Issue #172의 실패 관측, 상한이 있는 재시도, dead-letter signal과 성공 dedupe 기준을
   충족한다.
+- 실제 24시간·1,000건 canary와 전환기 listener 최종 제거는 후속 이슈의 완료
+  조건으로 남기며 PR #203의 코드 완료를 막지 않는다.
 
 ## 19. 설계 검토 기록
 

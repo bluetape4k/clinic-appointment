@@ -32,7 +32,7 @@ data class CreateAppointmentRequest(
     val treatmentTypeId: Long,
     val equipmentId: Long? = null,
     @field:Schema(
-        description = "Opaque member identifier verified by the member directory; patient name and phone do not replace it.",
+        description = "Opaque member identifier verified by the member directory. It is required by default; omission is accepted only for an expiring clinic-scoped OBSERVE transition exception. Patient name and phone do not replace it.",
         nullable = true,
     )
     val memberId: String? = null,

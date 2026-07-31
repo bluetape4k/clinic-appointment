@@ -8,9 +8,11 @@
 전화번호까지 예약 서비스가 소유하면 실패 이력과 운영 지표에 개인정보가 남을 위험도
 커진다.
 
-Issue #172의 Task 1~12에서는 예약 트랜잭션 안에 개인정보가 없는 알림 의도를 기록하고,
-별도 worker가 발송 시점의 회원 정보와 동의를 조회하는 durable outbox 경계를 만들었다.
-실제 병원 canary와 legacy listener 제거는 Task 13 이후의 운영 gate로 남아 있다.
+Issue #172에서는 예약 트랜잭션 안에 개인정보가 없는 알림 의도를 기록하고, 별도
+worker가 발송 시점의 회원 정보와 동의를 조회하는 durable outbox 경계를 만들었다.
+`SHADOW`, 병원 allowlist `CANARY`, `ACTIVE`, `PAUSED` 전환 경로와 대규모 backlog
+검증까지 코드로 고정했다. 실제 병원 canary와 전환기 listener 제거는 배포 뒤 후속
+운영 gate로 남아 있다.
 
 ## 1. 원자성은 이벤트 발행이 아니라 caller transaction에서 시작한다
 
@@ -89,16 +91,45 @@ meter 등록 횟수까지 테스트해야 한다.
   `List`로 받은 뒤 중복을 거절하고 service 경계에서 `Set`으로 변환했다.
 - Spring ASYNC redispatch 허용은 최초 REQUEST 인증을 대신하지 않는다. 실제 서버 기반
   보안 테스트로 인증되지 않은 최초 요청이 거절되는지 확인했다.
+- 알림 모듈 단위 테스트는 통과했지만 API 통합 classpath에서는 coroutine builder의
+  바이너리 이름이 달라 `NoSuchMethodError`가 발생했다. 동기 Spring event 경계는
+  특정 coroutine builder ABI에 기대지 않고 표준 `Continuation` 완료를 기다리도록
+  바꿨다. 라이브러리 단위 테스트뿐 아니라 실제 소비 모듈 테스트가 필요한 이유다.
+- event route가 실제 worker를 호출하면서 delivery-attempt 자식 행이 생겼다. 기존 API
+  테스트 fixture가 부모 outbox를 먼저 삭제해 다음 실행부터 FK 오류가 연쇄 발생했다.
+  테스트 정리도 운영 retention과 같은 자식-부모 순서를 지켜야 한다.
+- worker 1초 poll에서 매번 100,001개 backlog를 객체로 만들면 관측 기능이 발송 성능을
+  잠식한다. ready backlog snapshot은 worker와 분리된 기본 10초 주기로 최대 10,001개만
+  읽고, `capped` 상태로 10,000건 경보 임계값 초과를 표현하도록 바꿨다.
+- 전환기 direct executor의 `CallerRunsPolicy`는 queue 포화 시 예약 event thread가
+  provider I/O를 수행하게 만든다. 포화 작업은 거절하되 이미 커밋된 outbox 행을 pending으로
+  남겨 예약 경로의 지연과 알림 복구 가능성을 분리해야 한다.
+- future timeout과 interrupt만으로 모든 provider SDK 호출을 강제 종료할 수는 없다.
+  adapter의 connect/read/request timeout을 worker timeout 이하로 맞추는 운영 계약이 함께
+  필요하다.
+- Swagger `ArraySchema.items`의 원소 제약은 현재 springdoc 조합에서 생성되지 않았다.
+  호환 속성인 `schema`로 원소 minimum을 지정하고 실제 `/v3/api-docs` 결과를 테스트해야
+  annotation만 보고 계약이 게시됐다고 판단하지 않게 된다.
+- 문서 본문만 새 outbox 흐름으로 바꾸어도 기존 예약 생성 PNG/SVG가
+  `NotificationHistory` 직접 저장을 보여 주면 독자는 오래된 흐름을 기준으로 이해한다.
+  하나의 생성기에서 한·영과 light/dark 변형을 함께 만들고, 활성 자산의 금지 용어를
+  별도로 검색해야 한다.
 
 ## 현재 증거와 남은 gate
 
-- `:appointment-api:test --rerun-tasks`: 528개 테스트 통과
-- `:appointment-notification:build :appointment-api:build`: 통과
-- 성능, 안정성, 보안, 운영, 개발자/API, 사용자/caller 검토: `P0=0`, `P1=0`
-- Task 13의 실제 `24시간 + 1,000건` canary 관측, legacy listener 제거, Task 14의
-  PostgreSQL/MySQL 실행계획과 부하 검증, Task 15 문서화, Task 16 최종 수렴은 미완료다.
+- `:appointment-core:build :appointment-event:build :appointment-notification:build
+  :appointment-api:build`: 총 1,347개 테스트, 실패·오류 0건, 2개 보류
+- `:appointment-core:build`와 나머지 affected module `build/check/Kover`: 통과
+- H2·PostgreSQL·MySQL migration/claim/실행 계획 테스트와 20,000개 backlog 합성
+  부하: 통과
+- 부하 측정 3회 모두 100개 병원, starvation 0, claim p95 14ms·p99 23ms,
+  resolver/provider 동시성 8 이하
+- 예약 생성, 환자 예약, outbox, 리마인더 다이어그램의 한·영 light/dark SVG 감사:
+  XML·endpoint·connector·geometry·sequence 규칙 통과
 
-현재 결과는 PR 검토를 시작할 수 있는 중간 단계이지 merge-ready 상태가 아니다.
+남은 gate는 실제 병원에서 `24시간 + 1,000건` canary를 관측하고 allowlist를 확대해
+`ACTIVE`로 전환한 뒤 전환기 listener를 제거하는 운영 작업이다. 이 작업은 코드 PR과
+분리하며 후속 운영 이슈 #204에서 배포 증거와 함께 닫는다.
 
 ## 재사용 지침
 
@@ -110,3 +141,12 @@ meter 등록 횟수까지 테스트해야 한다.
 - 종료 상태 전환과 원본 필드 제거를 같은 update로 수행한다.
 - metric과 운영 API는 개인정보 대신 닫힌 상태와 권장 조치만 제공한다.
 - 실제 canary 관측 없이 direct 경로를 제거하거나 전체 rollout 완료를 선언하지 않는다.
+- 소비 모듈 classpath가 다른 suspend 경계는 producer 모듈 단위 테스트만으로 ABI를
+  증명하지 않는다.
+- outbox 테스트 정리는 delivery attempt를 먼저 지우고 부모 행을 나중에 지운다.
+- 독자용 다이어그램은 의미·언어·theme 변형을 한 생성 모델과 감사 명령으로 묶는다.
+- 발송 worker poll과 backlog 관측 poll을 분리하고, 경보 임계값을 구분할 수 있는 최소
+  상한만 조회한다.
+- 전환기 executor 포화 시 호출자 thread에서 실행하지 않고 durable pending 행을 복구
+  경계로 사용한다.
+- 외부 호출 timeout은 wrapper와 provider adapter 자체 설정을 함께 검증한다.

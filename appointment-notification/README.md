@@ -12,17 +12,23 @@ with bounded Resilience4j policies.
 - **Does**: fair database claiming, lease recovery and fencing, send-time member
   profile resolution, typed template rendering, provider isolation, terminal
   data minimization, and bounded retention.
-- **Does not**: deliver directly from Spring appointment events, perform
-  appointment CRUD, or persist names, contact details, rendered bodies, provider
-  payloads, or raw exception messages in the outbox.
+- **Does not**: perform appointment CRUD or persist names, contact details,
+  rendered bodies, provider payloads, or raw exception messages in the outbox.
+  During rollout, the transitional Spring event listener may claim the exact
+  outbox row and execute the same privacy-safe delivery pipeline; it is not an
+  independent raw delivery or history path.
 
 ## Core Classes
 
 | Class | Role |
 |---|---|
 | `NotificationOutboxDispatcher` | Claims ready records fairly and enforces global and per-clinic concurrency. |
+| `NotificationOutboxSchedulingRunner` | Runs the dispatcher after application readiness and at the worker interval. |
+| `NotificationObservationSchedulingRunner` | Refreshes a bounded observation snapshot at a lower frequency independent of worker polling. |
 | `NotificationOutboxWorker` | Applies fenced completion, retry, exhaustion, and expired-lease recovery. |
 | `NotificationOutboxWorkStore` | Defines the transactional database boundary for outbox work. |
+| `NotificationDeliveryRouteGate` | Maps `SHADOW`, `CANARY`, `ACTIVE`, and `PAUSED` to one provider route per clinic. |
+| `NotificationDirectOutboxDelivery` | Lets the transitional event route conditionally claim the exact outbox row. |
 | `MemberNotificationProfileResolver` | Resolves current contact, locale, and consent within bounded runtime policies. |
 | `NotificationTemplateCatalog` | Owns supported template keys, versions, and channel-specific definitions. |
 | `NotificationTemplateRenderer` | Renders typed parameters and runtime profile data with fail-closed validation. |
@@ -32,6 +38,11 @@ with bounded Resilience4j policies.
 | `NotificationSchemaReadiness` | Fails readiness when required schema, indexes, or crypto references are unavailable. |
 
 ## Delivery Flow
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../docs/requirements/assets/data-flow-05-notification-events-en-dark.png">
+  <img src="../docs/requirements/assets/data-flow-05-notification-events-en.png" alt="Durable notification outbox route and privacy boundary">
+</picture>
 
 1. The appointment transaction commits a minimal outbox record containing
    member and appointment identifiers plus typed template parameters.
@@ -48,6 +59,20 @@ with bounded Resilience4j policies.
 The database lease and fencing token are the delivery correctness boundary.
 Redis leader election is reserved for a future reminder-recovery trigger; it is
 not required for safe concurrent outbox delivery.
+
+### Rollout routes
+
+| Mode | Transitional event route | Background worker route |
+|---|---|---|
+| `SHADOW` (default) | All clinics | Disabled |
+| `CANARY` | Clinics outside the allowlist | Allowlisted clinics only |
+| `ACTIVE` | Disabled | All clinics |
+| `PAUSED` | Disabled | Disabled |
+
+Every route must conditionally claim the same database row before invoking a
+provider. `PAUSED` stops provider calls but keeps enqueue, recovery, and
+retention active. Production canary activation is intentionally tracked outside
+the code-transition PR; see the operations runbook before changing the mode.
 
 ## Privacy and Reliability Boundaries
 
@@ -68,6 +93,15 @@ not required for safe concurrent outbox delivery.
 clinic:
   notification:
     enabled: true
+    crypto:
+      active:
+        key-id: notification-2026-q3
+        secret-reference: env:CLINIC_NOTIFICATION_HMAC_KEY
+        activated-at: 2026-07-01T00:00:00Z
+        expires-at: 2030-01-01T00:00:00Z
+    rollout:
+      mode: SHADOW
+      canary-clinic-ids: []
     worker:
       enabled: true
       max-attempts: 6
@@ -76,6 +110,7 @@ clinic:
       catch-up-window: 30m
       lease-duration: 60s
       provider-timeout: 30s
+      poll-interval: 1s
       batch-size: 100
       global-concurrency: 4
       per-clinic-concurrency: 1
@@ -91,6 +126,17 @@ clinic:
           provider-timeout: 30s
           rate-limit-per-second: 100
           circuit-breaker-failure-rate-threshold: 50
+    observation:
+      poll-interval: 10s
+      limit: 10001
+    retention:
+      poll-interval: 1h
+      sent: 7d
+      suppressed: 7d
+      exhausted: 30d
+      page-size: 100
+      max-pages-per-status: 10
+      backpressure: 100ms
     resilience:
       circuit-breaker:
         failure-rate-threshold: 50
@@ -104,7 +150,16 @@ clinic:
 
 The worker configuration is rejected at startup when a lease cannot cover the
 bounded in-process provider call or when worker concurrency exceeds database,
-member resolver, or provider capacity.
+member resolver, or provider capacity. A configured
+`channels.<lowercase-channel-type>.provider-timeout` overrides the global
+`worker.provider-timeout` for that channel; otherwise the global value applies.
+`provider-timeout` bounds the actual
+provider-call future; an overrun is cancelled and mapped to the stable
+`PROVIDER_UNAVAILABLE` failure. Provider adapters must also configure native
+connect/read/request timeouts no greater than this value; an SDK that ignores
+interrupts must terminate through its own timeout. A missing or invalid active crypto key reference
+makes notification readiness DOWN and blocks worker processing. Store only an
+external secret location in `secret-reference`, never key material.
 
 ## Dependencies
 
@@ -121,3 +176,5 @@ member resolver, or provider capacity.
 
 - [Durable Notification Outbox Design](../docs/superpowers/specs/2026-07-31-issue-172-notification-outbox-design.md)
 - [Implementation Plan](../docs/superpowers/plans/2026-07-31-issue-172-notification-outbox-plan.md)
+- [Operations Runbook](../docs/runbooks/notification-outbox-operations.md)
+- [Notification Data Flow](../docs/requirements/data-flow.md#5-알림-outbox-발송-흐름)

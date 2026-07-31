@@ -6,8 +6,10 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationContractE
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttemptOutcome
 import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
 import kotlinx.coroutines.CancellationException
+import java.time.Duration
 
 /**
  * claim된 notification outbox row 하나를 처리하는 worker 계약입니다.
@@ -18,6 +20,7 @@ fun interface NotificationOutboxJobWorker {
 
 enum class NotificationOutboxWorkerResult {
     COMPLETED,
+    SUPPRESSED,
     RETRY_SCHEDULED,
     LEASE_LOST,
     EXHAUSTED,
@@ -38,6 +41,7 @@ class NotificationOutboxWorker(
     private val providerIdempotencyKeyFactory: NotificationProviderIdempotencyKeyFactory? = null,
     private val outboxCodec: NotificationOutboxCodec = NotificationOutboxCodec(),
     private val securityAuditSink: NotificationSecurityAuditSink = NoopNotificationSecurityAuditSink,
+    private val metrics: NotificationOutboxMetrics? = null,
 ) : NotificationOutboxJobWorker {
 
     init {
@@ -58,22 +62,33 @@ class NotificationOutboxWorker(
     suspend fun recoverExpiredOnce(limit: Int): List<ClaimedNotification> {
         require(limit > 0) { "limit must be positive" }
         if (readiness?.check()?.available == false) return emptyList()
-        return workStore.recoverExpired(limit, leaseOwner)
+        return workStore.recoverExpired(limit, leaseOwner).also { recovered ->
+            recovered.forEach { metrics?.recordLeaseRecovered(it.channel, it.eventType) }
+        }
     }
 
     override suspend fun process(claimed: ClaimedNotification): NotificationOutboxWorkerResult {
         if (readiness?.check()?.available == false) return NotificationOutboxWorkerResult.NOT_READY
-        return try {
+        val started = System.nanoTime()
+        val result = try {
             if (profileResolver != null && templateRenderer != null && providerChannel != null && providerIdempotencyKeyFactory != null) {
-                return processRuntimeDelivery(claimed, profileResolver, templateRenderer, providerChannel, providerIdempotencyKeyFactory)
-            }
-            when (val result = deliveryAction.deliver(claimed)) {
+                processRuntimeDelivery(claimed, profileResolver, templateRenderer, providerChannel, providerIdempotencyKeyFactory)
+            } else when (val result = deliveryAction.deliver(claimed)) {
                 is NotificationDeliveryResult.Sent -> completeSent(claimed, result)
                 is NotificationDeliveryResult.RetryableFailure -> handleRetryableFailure(claimed, result.failureCode)
             }
         } catch (e: CancellationException) {
             throw e
         }
+        val outcome = result.toAttemptOutcome() ?: return result
+        metrics?.recordDeliveryAttempt(claimed.channel, claimed.eventType, outcome)
+        metrics?.recordDeliveryLatency(
+            claimed.channel,
+            claimed.eventType,
+            outcome,
+            Duration.ofNanos((System.nanoTime() - started).coerceAtLeast(0L)),
+        )
+        return result
     }
 
     private suspend fun processRuntimeDelivery(
@@ -200,7 +215,12 @@ class NotificationOutboxWorker(
                         retryDelay = requireNotNull(decision.retryDelay),
                     )
                 )
-                if (retried) NotificationOutboxWorkerResult.RETRY_SCHEDULED else NotificationOutboxWorkerResult.LEASE_LOST
+                if (retried) {
+                    metrics?.recordDeliveryRetry(claimed.channel, claimed.eventType, decision.failureCode)
+                    NotificationOutboxWorkerResult.RETRY_SCHEDULED
+                } else {
+                    NotificationOutboxWorkerResult.LEASE_LOST
+                }
             }
             NotificationRetryDecisionKind.EXHAUSTED -> {
                 val completed = workStore.complete(
@@ -213,7 +233,12 @@ class NotificationOutboxWorker(
                         failureCode = decision.failureCode,
                     )
                 )
-                if (completed) NotificationOutboxWorkerResult.EXHAUSTED else NotificationOutboxWorkerResult.LEASE_LOST
+                if (completed) {
+                    metrics?.recordExhausted(claimed.channel, claimed.eventType, decision.failureCode)
+                    NotificationOutboxWorkerResult.EXHAUSTED
+                } else {
+                    NotificationOutboxWorkerResult.LEASE_LOST
+                }
             }
         }
     }
@@ -232,11 +257,26 @@ class NotificationOutboxWorker(
                 suppressionReason = reason,
             )
         )
-        return if (completed) NotificationOutboxWorkerResult.COMPLETED else NotificationOutboxWorkerResult.LEASE_LOST
+        return if (completed) {
+            metrics?.recordSuppressed(reason)
+            NotificationOutboxWorkerResult.SUPPRESSED
+        } else {
+            NotificationOutboxWorkerResult.LEASE_LOST
+        }
     }
 }
 
 private const val RUNTIME_DEPENDENCY_COUNT = 4
+
+private fun NotificationOutboxWorkerResult.toAttemptOutcome(): NotificationDeliveryAttemptOutcome? =
+    when (this) {
+        NotificationOutboxWorkerResult.COMPLETED -> NotificationDeliveryAttemptOutcome.SUCCESS
+        NotificationOutboxWorkerResult.SUPPRESSED -> NotificationDeliveryAttemptOutcome.SUPPRESSED
+        NotificationOutboxWorkerResult.RETRY_SCHEDULED -> NotificationDeliveryAttemptOutcome.RETRY_SCHEDULED
+        NotificationOutboxWorkerResult.LEASE_LOST -> NotificationDeliveryAttemptOutcome.LEASE_LOST
+        NotificationOutboxWorkerResult.EXHAUSTED -> NotificationDeliveryAttemptOutcome.EXHAUSTED
+        NotificationOutboxWorkerResult.NOT_READY -> null
+    }
 
 /** provider adapter가 구현하는 단일 delivery 시도 계약입니다. */
 fun interface NotificationDeliveryAction {

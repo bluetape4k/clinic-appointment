@@ -19,6 +19,8 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.headers.Header
+import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -91,16 +93,19 @@ class AppointmentController(
         return ResponseEntity.ok(ApiResponse.ok(record.toResponse(timezone, locale)))
     }
 
-    @Operation(summary = "Create a new appointment")
+    @Operation(
+        summary = "Create a new appointment",
+        description = "Legacy creation requires a verified memberId by default. A missing memberId is accepted only for an expiring clinic-scoped OBSERVE transition exception; patient name and phone never replace it.",
+    )
     @ApiResponses(
         OApiResponse(responseCode = "200", description = "Existing appointment replayed for the idempotency key"),
         OApiResponse(responseCode = "201", description = "Appointment created"),
         OApiResponse(responseCode = "400", description = "Invalid parameters"),
-        OApiResponse(responseCode = "403", description = "Member or clinic scope rejected", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
-        OApiResponse(responseCode = "404", description = "Member not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
-        OApiResponse(responseCode = "409", description = "Scheduling, idempotency, or ambiguous member reference conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
-        OApiResponse(responseCode = "422", description = "Verified member identifier required", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
-        OApiResponse(responseCode = "503", description = "Member directory or notification enqueue unavailable", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        OApiResponse(responseCode = "403", description = "Member or clinic scope rejected", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberScopeMismatch", value = NotificationOpenApiExamples.MEMBER_SCOPE_MISMATCH)])]),
+        OApiResponse(responseCode = "404", description = "Member not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberNotFound", value = NotificationOpenApiExamples.MEMBER_NOT_FOUND)])]),
+        OApiResponse(responseCode = "409", description = "Scheduling, idempotency, or ambiguous member reference conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberReferenceAmbiguous", value = NotificationOpenApiExamples.MEMBER_REFERENCE_AMBIGUOUS)])]),
+        OApiResponse(responseCode = "422", description = "Verified member identifier required", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "verifiedMemberRequired", value = NotificationOpenApiExamples.MEMBER_ID_REQUIRED)])]),
+        OApiResponse(responseCode = "503", description = "Member directory or notification enqueue unavailable", headers = [Header(name = "Retry-After", description = "Seconds before retrying with the same idempotency key", schema = Schema(type = "integer", example = "5"))], content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberDirectoryUnavailable", value = NotificationOpenApiExamples.MEMBER_DIRECTORY_UNAVAILABLE)])]),
     )
     @PostMapping
     fun create(

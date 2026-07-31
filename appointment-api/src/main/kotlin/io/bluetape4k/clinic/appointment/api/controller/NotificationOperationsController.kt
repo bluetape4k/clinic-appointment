@@ -15,6 +15,16 @@ import io.bluetape4k.clinic.appointment.notification.NotificationStatusAudience
 import io.bluetape4k.clinic.appointment.notification.NotificationStatusQueryService
 import io.bluetape4k.clinic.appointment.notification.NotificationStatusScope
 import io.bluetape4k.support.requirePositiveNumber
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.headers.Header
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.ExampleObject
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.parameters.RequestBody as OpenApiRequestBody
+import io.swagger.v3.oas.annotations.responses.ApiResponse as OpenApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.tags.Tag
+import jakarta.validation.Valid
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
@@ -34,12 +44,23 @@ import org.springframework.web.bind.annotation.RestController
  */
 @RestController
 @RequestMapping("/api/{tenantCode}/clinics/{clinicId}/notifications")
+@Tag(name = "Notification Operations", description = "Privacy-safe notification status and controlled re-notification")
 class NotificationOperationsController(
     private val statusQueryServiceProvider: ObjectProvider<NotificationStatusQueryService>,
     private val reNotifyServiceProvider: ObjectProvider<NotificationReNotifyService>,
     private val tenantClinicAccessChecker: TenantClinicAccessChecker,
 ) {
 
+    @Operation(
+        summary = "Read a privacy-safe appointment notification status",
+        description = "Returns a bounded status and recommended action without member, destination, outbox, attempt, or provider identifiers.",
+    )
+    @ApiResponses(
+        OpenApiResponse(responseCode = "200", description = "Notification status found", content = [Content(mediaType = "application/json", examples = [ExampleObject(name = "exhausted", value = NotificationOpenApiExamples.EXHAUSTED_STATUS)])]),
+        OpenApiResponse(responseCode = "403", description = "Tenant, clinic, or appointment scope rejected"),
+        OpenApiResponse(responseCode = "404", description = "Notification status not found"),
+        OpenApiResponse(responseCode = "503", description = "Notification operation is unavailable", headers = [Header(name = "Retry-After", description = "Seconds before retrying", schema = Schema(type = "integer", example = "5"))], content = [Content(mediaType = "application/json", schema = Schema(implementation = io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "operationUnavailable", value = NotificationOpenApiExamples.NOTIFICATION_OPERATION_UNAVAILABLE)])]),
+    )
     @GetMapping("/appointments/{appointmentId}/status")
     suspend fun getStatus(
         @PathVariable tenantCode: String,
@@ -71,11 +92,29 @@ class NotificationOperationsController(
         )
     }
 
+    @Operation(
+        summary = "Preview or execute a controlled re-notification batch",
+        description = "Requires platform and clinic approval references. Start with dryRun=true; reuse the same generation when executing the approved batch.",
+    )
+    @ApiResponses(
+        OpenApiResponse(responseCode = "200", description = "Re-notification batch evaluated", content = [Content(mediaType = "application/json", examples = [ExampleObject(name = "dryRun", value = NotificationOpenApiExamples.RE_NOTIFY_DRY_RUN_RESPONSE)])]),
+        OpenApiResponse(responseCode = "400", description = "Invalid or duplicate appointment identifiers"),
+        OpenApiResponse(responseCode = "403", description = "Required role, scope, or clinic authority missing"),
+        OpenApiResponse(responseCode = "503", description = "Notification operation is unavailable", headers = [Header(name = "Retry-After", description = "Seconds before retrying", schema = Schema(type = "integer", example = "5"))], content = [Content(mediaType = "application/json", schema = Schema(implementation = io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "operationUnavailable", value = NotificationOpenApiExamples.NOTIFICATION_OPERATION_UNAVAILABLE)])]),
+    )
     @PostMapping("/re-notify")
     suspend fun reNotify(
         @PathVariable tenantCode: String,
         @PathVariable clinicId: Long,
-        @RequestBody request: ReNotifyRequest,
+        @OpenApiRequestBody(
+            required = true,
+            content = [Content(
+                mediaType = "application/json",
+                schema = Schema(implementation = ReNotifyRequest::class),
+                examples = [ExampleObject(name = "dryRun", value = NotificationOpenApiExamples.RE_NOTIFY_DRY_RUN_REQUEST)],
+            )],
+        )
+        @Valid @RequestBody request: ReNotifyRequest,
         authentication: Authentication,
     ): ApiResponse<ReNotifyResponse> {
         val tenant = tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)

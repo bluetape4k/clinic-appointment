@@ -23,6 +23,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import io.mockk.mockk
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 
 internal class NotificationOutboxDispatcherTest {
@@ -103,6 +105,7 @@ internal class NotificationOutboxDispatcherTest {
                 expired = recovered,
             )
             val processedIds = ConcurrentHashMap.newKeySet<Long>()
+            val metrics = mockk<NotificationOutboxMetrics>(relaxed = true)
             val dispatcher = NotificationOutboxDispatcher(
                 store = store,
                 worker = NotificationOutboxJobWorker {
@@ -112,6 +115,7 @@ internal class NotificationOutboxDispatcherTest {
                 leaseOwner = "dispatcher-test",
                 globalConcurrency = 3,
                 perClinicConcurrency = 1,
+                metrics = metrics,
             )
 
             dispatcher.dispatchOnce()
@@ -119,6 +123,9 @@ internal class NotificationOutboxDispatcherTest {
             store.operations shouldBeEqualTo listOf("recover:2", "find:1")
             store.claimedIds shouldBeEqualTo listOf(1L)
             processedIds.toSet() shouldBeEqualTo setOf(900L, 901L, 1L)
+            verify(exactly = 2) {
+                metrics.recordLeaseRecovered(NotificationChannelType.DUMMY, NotificationEventType.CONFIRMED)
+            }
         }
     }
 
@@ -150,6 +157,79 @@ internal class NotificationOutboxDispatcherTest {
         }
     }
 
+    @Test
+    fun `CANARY dispatcher는 allowlist 병원의 신규 후보만 claim한다`() {
+        runBlocking {
+            val store = FairFakeWorkStore(
+                candidates = listOf(candidate(id = 1L, clinicId = 7L), candidate(id = 2L, clinicId = 8L)),
+            )
+            val dispatcher = NotificationOutboxDispatcher(
+                store = store,
+                worker = NotificationOutboxJobWorker { NotificationOutboxWorkerResult.COMPLETED },
+                leaseOwner = "dispatcher-test",
+                globalConcurrency = 2,
+                perClinicConcurrency = 1,
+                routeGate = NotificationDeliveryRouteGate(
+                    NotificationProperties.RolloutProperties(
+                        mode = NotificationRolloutMode.CANARY,
+                        canaryClinicIds = setOf(7L),
+                    )
+                ),
+            )
+
+            dispatcher.dispatchOnce()
+
+            store.claimedIds shouldBeEqualTo listOf(1L)
+        }
+    }
+
+    @Test
+    fun `CANARY 병원이 많은 비대상 병원 뒤에 있어도 DB route filter로 첫 tick에 claim한다`() = runBlocking {
+        val store = FairFakeWorkStore(
+            candidates = buildList {
+                (1L..20L).forEach { add(candidate(id = it, clinicId = it)) }
+                add(candidate(id = 100L, clinicId = 77L))
+            },
+        )
+        val dispatcher = NotificationOutboxDispatcher(
+            store = store,
+            worker = NotificationOutboxJobWorker { NotificationOutboxWorkerResult.COMPLETED },
+            leaseOwner = "dispatcher-test",
+            globalConcurrency = 2,
+            perClinicConcurrency = 1,
+            routeGate = NotificationDeliveryRouteGate(
+                NotificationProperties.RolloutProperties(
+                    mode = NotificationRolloutMode.CANARY,
+                    canaryClinicIds = setOf(77L),
+                )
+            ),
+        )
+
+        dispatcher.dispatchOnce()
+
+        store.claimedIds shouldBeEqualTo listOf(100L)
+        Unit
+    }
+
+    @Test
+    fun `병원 backlog는 perClinicConcurrency만큼 한 tick에 claim한다`() = runBlocking {
+        val store = FairFakeWorkStore(
+            candidates = (1L..6L).map { candidate(id = it, clinicId = 7L) },
+        )
+        val dispatcher = NotificationOutboxDispatcher(
+            store = store,
+            worker = NotificationOutboxJobWorker { NotificationOutboxWorkerResult.COMPLETED },
+            leaseOwner = "dispatcher-test",
+            globalConcurrency = 4,
+            perClinicConcurrency = 2,
+        )
+
+        dispatcher.dispatchOnce()
+
+        store.claimedIds shouldBeEqualTo listOf(1L, 2L)
+        Unit
+    }
+
     private inner class FairFakeWorkStore(
         candidates: List<NotificationCandidate>,
         expired: List<ClaimedNotification> = emptyList(),
@@ -163,15 +243,24 @@ internal class NotificationOutboxDispatcherTest {
         override suspend fun findFairCandidates(
             limit: Int,
             cursor: NotificationFairCursor?,
+        ): NotificationCandidatePage =
+            findFairCandidatesForRoute(limit, cursor, perClinicLimit = 1, eligibleClinicIds = null)
+
+        override suspend fun findFairCandidatesForRoute(
+            limit: Int,
+            cursor: NotificationFairCursor?,
+            perClinicLimit: Int,
+            eligibleClinicIds: Set<Long>?,
         ): NotificationCandidatePage {
             operations += "find:$limit"
-            val grouped = remaining.groupBy { NotificationClinicKey(it.tenantGroupId, it.clinicId) }
+            val eligible = remaining.filter { eligibleClinicIds == null || it.clinicId.value in eligibleClinicIds }
+            val grouped = eligible.groupBy { NotificationClinicKey(it.tenantGroupId, it.clinicId) }
             val keys = grouped.keys.sortedWith(compareBy({ it.tenantGroupId.value }, { it.clinicId.value }))
             val orderedKeys = cursor?.let { fairCursor ->
                 keys.filter { it.tenantGroupId.value > fairCursor.tenantGroupId.value || it.clinicId.value > fairCursor.clinicId.value } +
                     keys.filter { it.tenantGroupId.value <= fairCursor.tenantGroupId.value && it.clinicId.value <= fairCursor.clinicId.value }
             } ?: keys
-            val selected = orderedKeys.mapNotNull { grouped[it]?.firstOrNull() }.take(limit)
+            val selected = orderedKeys.flatMap { grouped[it].orEmpty().take(perClinicLimit) }.take(limit)
             remaining.removeAll(selected.toSet())
             return NotificationCandidatePage(
                 candidates = selected,

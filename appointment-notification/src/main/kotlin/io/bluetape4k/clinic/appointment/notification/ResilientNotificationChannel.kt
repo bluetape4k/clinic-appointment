@@ -12,6 +12,12 @@ import io.github.resilience4j.retry.Retry
 import io.github.resilience4j.retry.RetryConfig
 import kotlinx.coroutines.CancellationException
 import java.time.Duration
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Resilience4j 기반 알림 채널 데코레이터.
@@ -30,7 +36,10 @@ class ResilientNotificationChannel(
     private val circuitBreaker: CircuitBreaker,
     private val retry: Retry,
     private val bulkhead: Bulkhead,
-) : NotificationChannel {
+    private val providerTimeout: Duration,
+    private val executor: ThreadPoolExecutor,
+    private val healthSignals: NotificationRuntimeHealthSignals? = null,
+) : NotificationChannel, AutoCloseable {
 
     companion object : KLogging() {
         private const val CB_NAME = "notification-channel"
@@ -40,7 +49,16 @@ class ResilientNotificationChannel(
         fun create(
             delegate: NotificationChannel,
             properties: NotificationResilienceProperties = NotificationResilienceProperties(),
+            providerAttemptsPerLease: Int = 1,
+            providerTimeout: Duration = Duration.ofSeconds(30),
+            healthSignals: NotificationRuntimeHealthSignals? = null,
         ): ResilientNotificationChannel {
+            require(providerAttemptsPerLease in 1..2) {
+                "providerAttemptsPerLease must be between 1 and 2"
+            }
+            require(!providerTimeout.isNegative && !providerTimeout.isZero) {
+                "providerTimeout must be positive"
+            }
             val cb = CircuitBreaker.of(
                 CB_NAME,
                 CircuitBreakerConfig.custom()
@@ -55,7 +73,7 @@ class ResilientNotificationChannel(
             val retry = Retry.of(
                 RETRY_NAME,
                 RetryConfig.custom<Any>()
-                    .maxAttempts(properties.retry.maxAttempts)
+                    .maxAttempts(providerAttemptsPerLease)
                     .waitDuration(properties.retry.waitDuration)
                     .ignoreExceptions(CancellationException::class.java)
                     .build(),
@@ -69,7 +87,23 @@ class ResilientNotificationChannel(
                     .build(),
             )
 
-            return ResilientNotificationChannel(delegate, cb, retry, bulkhead)
+            val sequence = AtomicLong()
+            val concurrency = properties.bulkhead.maxConcurrentCalls
+            val executor = ThreadPoolExecutor(
+                concurrency,
+                concurrency,
+                0L,
+                TimeUnit.MILLISECONDS,
+                ArrayBlockingQueue(concurrency),
+                { task ->
+                    Thread.ofPlatform()
+                        .name("notification-provider-${sequence.incrementAndGet()}")
+                        .daemon(true)
+                        .unstarted(task)
+                },
+                ThreadPoolExecutor.AbortPolicy(),
+            )
+            return ResilientNotificationChannel(delegate, cb, retry, bulkhead, providerTimeout, executor, healthSignals)
         }
     }
 
@@ -85,7 +119,15 @@ class ResilientNotificationChannel(
         }
 
         try {
-            return decorated.get()
+            val future = executor.submit<NotificationProviderResult> { decorated.get() }
+            return try {
+                future.get(providerTimeout.toMillis(), TimeUnit.MILLISECONDS)
+            } catch (e: TimeoutException) {
+                future.cancel(true)
+                throw e
+            } catch (e: ExecutionException) {
+                throw e.cause ?: e
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: NotificationProviderException) {
@@ -93,6 +135,17 @@ class ResilientNotificationChannel(
         } catch (e: Exception) {
             log.warn { "알림 발송 실패: channel=${request.channel}, cbState=${circuitBreaker.state}" }
             throw NotificationProviderException(NotificationProviderFailureMapper.fromException(e))
+        } finally {
+            healthSignals?.setProviderCircuitOpen(circuitBreaker.state == CircuitBreaker.State.OPEN)
+        }
+    }
+
+    override fun close() {
+        executor.shutdownNow()
+        try {
+            executor.awaitTermination(5, TimeUnit.SECONDS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 }
