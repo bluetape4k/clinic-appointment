@@ -1,7 +1,10 @@
 package io.bluetape4k.clinic.appointment.event.notification
 
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
-import tools.jackson.module.kotlin.jacksonObjectMapper
+import tools.jackson.databind.DeserializationFeature
+import tools.jackson.module.kotlin.KotlinFeature
+import tools.jackson.module.kotlin.jsonMapper
+import tools.jackson.module.kotlin.kotlinModule
 import tools.jackson.module.kotlin.readValue
 import java.io.Serializable
 import java.time.Instant
@@ -16,18 +19,34 @@ import java.time.LocalTime
  */
 class NotificationOutboxCodec {
 
-    private val mapper = jacksonObjectMapper()
+    private val mapper = jsonMapper {
+        addModule(
+            kotlinModule {
+                enable(KotlinFeature.StrictNullChecks)
+            },
+        )
+        enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+        enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+        enable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
+        enable(DeserializationFeature.FAIL_ON_NULL_CREATOR_PROPERTIES)
+    }
 
     fun encode(envelope: NotificationOutboxEnvelope): String =
         mapper.writeValueAsString(envelope.toJson())
 
-    fun decode(json: String): NotificationOutboxEnvelope {
+    fun decode(json: String): NotificationOutboxEnvelope =
+        try {
+            decodeStrict(json)
+        } catch (e: NotificationContractException) {
+            throw e
+        } catch (e: Exception) {
+            throw invalidPayload(e)
+        }
+
+    private fun decodeStrict(json: String): NotificationOutboxEnvelope {
         val encoded = mapper.readValue<NotificationOutboxEnvelopeJson>(json)
         if (encoded.schemaVersion != NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION) {
-            throw NotificationContractException(
-                failureCode = NotificationFailureCode.TEMPLATE_PARAMETER_INVALID,
-                message = "Unsupported notification outbox schemaVersion: ${encoded.schemaVersion}",
-            )
+            throw invalidPayload()
         }
 
         val parameterType = encoded.parameterType.toParameterType()
@@ -86,11 +105,7 @@ class NotificationOutboxCodec {
         try {
             NotificationParameterType.valueOf(this)
         } catch (e: IllegalArgumentException) {
-            throw NotificationContractException(
-                failureCode = NotificationFailureCode.TEMPLATE_PARAMETER_INVALID,
-                message = "Unsupported notification parameterType: $this",
-                cause = e,
-            )
+            throw invalidPayload(e)
         }
 
     private fun NotificationParametersJson.toParameters(
@@ -103,6 +118,13 @@ class NotificationOutboxCodec {
                 startTime = LocalTime.parse(startTime),
             )
         }
+
+    private fun invalidPayload(cause: Throwable? = null): NotificationContractException =
+        NotificationContractException(
+            failureCode = NotificationFailureCode.TEMPLATE_PARAMETER_INVALID,
+            message = "Invalid notification outbox payload",
+            cause = cause,
+        )
 }
 
 private data class NotificationOutboxEnvelopeJson(

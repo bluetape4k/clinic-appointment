@@ -6,6 +6,8 @@ import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeInstanceOf
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import org.junit.jupiter.api.Test
+import tools.jackson.module.kotlin.jacksonObjectMapper
+import tools.jackson.module.kotlin.readValue
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -13,6 +15,7 @@ import java.time.LocalTime
 class NotificationOutboxCodecTest {
 
     private val codec = NotificationOutboxCodec()
+    private val jsonMapper = jacksonObjectMapper()
 
     @Test
     fun `codec round trip preserves a typed appointment confirmation envelope`() {
@@ -54,9 +57,115 @@ class NotificationOutboxCodecTest {
     fun `codec output never carries recipient profile data or rendered messages`() {
         val json = codec.encode(envelope())
 
+        val tree = jsonMapper.readValue<Map<String, Any?>>(json)
+        tree.keys shouldBeEqualTo setOf(
+            "schemaVersion",
+            "eventId",
+            "idempotencyKey",
+            "tenantGroupId",
+            "clinicId",
+            "appointmentId",
+            "memberId",
+            "channel",
+            "eventType",
+            "notificationSlot",
+            "templateKey",
+            "templateVersion",
+            "parameterType",
+            "parameters",
+            "occurredAt",
+            "availableAt",
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val parameters = tree.getValue("parameters") as Map<String, Any?>
+        parameters.keys shouldBeEqualTo setOf("clinicDisplayName", "appointmentDate", "startTime")
+
         json.contains("patientName").shouldBeFalse()
         json.contains("patientPhone").shouldBeFalse()
         json.contains("memberName").shouldBeFalse()
+    }
+
+    @Test
+    fun `codec rejects closed boundary violations as template parameter invalid without raw payload leakage`() {
+        val valid = codec.encode(envelope())
+        val cases = listOf(
+            valid.replace("\"channel\":\"SMS\"", "\"channel\":\"FAX\""),
+            valid.replace("\"eventType\":\"CONFIRMED\"", "\"eventType\":\"UNKNOWN_EVENT\""),
+            valid.replace("\"notificationSlot\":\"CONFIRMED\"", "\"notificationSlot\":\"UNKNOWN_SLOT\""),
+            valid.replace("\"appointmentDate\":\"2026-08-01\"", "\"appointmentDate\":\"not-a-date\""),
+            valid.replace("\"startTime\":\"10:30\"", "\"startTime\":\"not-a-time\""),
+            valid.replace("\"eventId\":\"event-1\"", "\"eventId\":\"bad\\u0001id\""),
+            valid.replace("\"eventId\":\"event-1\",", ""),
+            valid.replace("\"eventId\":\"event-1\"", "\"eventId\":null"),
+            "{",
+        )
+
+        cases.forEach { json ->
+            val failure = assertFailsWith<NotificationContractException> {
+                codec.decode(json)
+            }
+
+            failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+            failure.message?.contains("FAX").shouldBeFalse()
+            failure.message?.contains("UNKNOWN_EVENT").shouldBeFalse()
+            failure.message?.contains("not-a-date").shouldBeFalse()
+            failure.message?.contains("bad").shouldBeFalse()
+            failure.message?.contains(json).shouldBeFalse()
+        }
+    }
+
+    @Test
+    fun `codec rejects top level and nested unknown fields`() {
+        val valid = codec.encode(envelope())
+        val topLevelUnknown = valid.replace("\"eventId\":\"event-1\"", "\"unexpected\":\"value\",\"eventId\":\"event-1\"")
+        val nestedUnknown = valid.replace(
+            "\"clinicDisplayName\":\"Blue Clinic\"",
+            "\"unexpected\":\"value\",\"clinicDisplayName\":\"Blue Clinic\"",
+        )
+
+        listOf(topLevelUnknown, nestedUnknown).forEach { json ->
+            val failure = assertFailsWith<NotificationContractException> {
+                codec.decode(json)
+            }
+
+            failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+            failure.message?.contains("unexpected").shouldBeFalse()
+            failure.message?.contains("value").shouldBeFalse()
+        }
+    }
+
+    @Test
+    fun `opaque durable strings and template parameters enforce bounded safe values`() {
+        NotificationEventId("a".repeat(128)).value shouldBeEqualTo "a".repeat(128)
+        NotificationIdempotencyKey("A".repeat(128)).value shouldBeEqualTo "A".repeat(128)
+        NotificationTemplateKey("template.key:v1").value shouldBeEqualTo "template.key:v1"
+        AppointmentConfirmedParameters(
+            clinicDisplayName = "가".repeat(120),
+            appointmentDate = LocalDate.parse("2026-08-01"),
+            startTime = LocalTime.parse("10:30"),
+        ).clinicDisplayName shouldBeEqualTo "가".repeat(120)
+
+        assertFailsWith<IllegalArgumentException> { NotificationEventId("a".repeat(129)) }
+        assertFailsWith<IllegalArgumentException> { NotificationEventId("bad\u0001id") }
+        assertFailsWith<IllegalArgumentException> { NotificationIdempotencyKey("a".repeat(129)) }
+        assertFailsWith<IllegalArgumentException> { NotificationIdempotencyKey("bad\u0001key") }
+        assertFailsWith<IllegalArgumentException> { NotificationTemplateKey("a".repeat(129)) }
+        assertFailsWith<IllegalArgumentException> { NotificationTemplateKey("bad\u0001template") }
+        assertFailsWith<IllegalArgumentException> {
+            AppointmentConfirmedParameters(
+                clinicDisplayName = "a".repeat(121),
+                appointmentDate = LocalDate.parse("2026-08-01"),
+                startTime = LocalTime.parse("10:30"),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AppointmentConfirmedParameters(
+                clinicDisplayName = "bad\u0001clinic",
+                appointmentDate = LocalDate.parse("2026-08-01"),
+                startTime = LocalTime.parse("10:30"),
+            )
+        }
     }
 
     private fun envelope(): NotificationOutboxEnvelope =
