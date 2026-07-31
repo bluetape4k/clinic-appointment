@@ -40,7 +40,7 @@ class NotificationOutboxCodec {
         } catch (e: NotificationContractException) {
             throw e
         } catch (e: Exception) {
-            throw invalidPayload(e)
+            throw invalidPayload()
         }
 
     private fun decodeStrict(json: String): NotificationOutboxEnvelope {
@@ -105,7 +105,7 @@ class NotificationOutboxCodec {
         try {
             NotificationParameterType.valueOf(this)
         } catch (e: IllegalArgumentException) {
-            throw invalidPayload(e)
+            throw invalidPayload()
         }
 
     private fun NotificationParametersJson.toParameters(
@@ -119,11 +119,10 @@ class NotificationOutboxCodec {
             )
         }
 
-    private fun invalidPayload(cause: Throwable? = null): NotificationContractException =
+    private fun invalidPayload(): NotificationContractException =
         NotificationContractException(
             failureCode = NotificationFailureCode.TEMPLATE_PARAMETER_INVALID,
             message = "Invalid notification outbox payload",
-            cause = cause,
         )
 }
 

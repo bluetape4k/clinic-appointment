@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import org.junit.jupiter.api.Test
+import java.io.Serializable
 
 class NotificationOutboxHasherTest {
 
@@ -100,6 +101,14 @@ class NotificationOutboxHasherTest {
         secret.fill(99)
 
         key.sign("clinic-notification:idempotency:v1", "payload") shouldBeEqualTo before
+    }
+
+    @Test
+    fun `hmac key is not serializable`() {
+        val key = NotificationHmacKey("active-key", keyBytes(1))
+        val candidate: Any = key
+
+        (candidate is Serializable).shouldBeFalse()
     }
 
     @Test

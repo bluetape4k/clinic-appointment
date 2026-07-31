@@ -116,6 +116,17 @@ class NotificationOutboxCodecTest {
     }
 
     @Test
+    fun `malformed JSON decode failure has sanitized message and no retained parser cause`() {
+        val failure = assertFailsWith<NotificationContractException> {
+            codec.decode("""{"schemaVersion":1,"eventId":""")
+        }
+
+        failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+        failure.message shouldBeEqualTo "Invalid notification outbox payload"
+        failure.cause shouldBeEqualTo null
+    }
+
+    @Test
     fun `codec rejects top level and nested unknown fields`() {
         val valid = codec.encode(envelope())
         val topLevelUnknown = valid.replace("\"eventId\":\"event-1\"", "\"unexpected\":\"value\",\"eventId\":\"event-1\"")
