@@ -88,8 +88,24 @@ class NotificationAutoConfiguration {
         properties: NotificationProperties,
         readiness: NotificationSchemaReadiness?,
         deliveryActionProvider: ObjectProvider<NotificationDeliveryAction>,
-    ): NotificationOutboxWorker =
-        NotificationOutboxWorker(
+        profileResolverProvider: ObjectProvider<MemberNotificationProfileResolver>,
+        templateRendererProvider: ObjectProvider<NotificationTemplateRenderer>,
+        providerIdempotencyKeyFactoryProvider: ObjectProvider<NotificationProviderIdempotencyKeyFactory>,
+        resilientNotificationChannel: ResilientNotificationChannel,
+    ): NotificationOutboxWorker {
+        val profileResolver = profileResolverProvider.ifAvailable
+        val templateRenderer = templateRendererProvider.ifAvailable
+        val providerIdempotencyKeyFactory = providerIdempotencyKeyFactoryProvider.ifAvailable
+        val runtimeDependencyCount = listOf(
+            profileResolver,
+            templateRenderer,
+            providerIdempotencyKeyFactory,
+        ).count { it != null }
+        check(runtimeDependencyCount == 0 || runtimeDependencyCount == RUNTIME_CONFIGURATION_DEPENDENCY_COUNT) {
+            "member profile resolver, template renderer, and provider idempotency key factory must be configured together"
+        }
+        val runtimeConfigured = runtimeDependencyCount == RUNTIME_CONFIGURATION_DEPENDENCY_COUNT
+        return NotificationOutboxWorker(
             workStore = workStore,
             leaseOwner = "notification-outbox-worker",
             readiness = readiness,
@@ -99,9 +115,14 @@ class NotificationAutoConfiguration {
                         io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode.DELIVERY_RESULT_UNKNOWN,
                     )
                 },
+            profileResolver = profileResolver.takeIf { runtimeConfigured },
+            templateRenderer = templateRenderer.takeIf { runtimeConfigured },
+            providerChannel = resilientNotificationChannel.takeIf { runtimeConfigured },
+            providerIdempotencyKeyFactory = providerIdempotencyKeyFactory.takeIf { runtimeConfigured },
         ).also {
             properties.worker.validate()
         }
+    }
 
     @Bean
     @ConditionalOnProperty(
@@ -113,7 +134,6 @@ class NotificationAutoConfiguration {
     @ConditionalOnBean(
         NotificationOutboxWorkStore::class,
         NotificationOutboxJobWorker::class,
-        NotificationDeliveryAction::class,
     )
     @ConditionalOnMissingBean(NotificationOutboxDispatcher::class)
     fun notificationOutboxDispatcher(
@@ -121,7 +141,16 @@ class NotificationAutoConfiguration {
         worker: NotificationOutboxJobWorker,
         properties: NotificationProperties,
         readiness: NotificationSchemaReadiness?,
-    ): NotificationOutboxDispatcher {
+        deliveryActionProvider: ObjectProvider<NotificationDeliveryAction>,
+        profileResolverProvider: ObjectProvider<MemberNotificationProfileResolver>,
+        templateRendererProvider: ObjectProvider<NotificationTemplateRenderer>,
+        providerIdempotencyKeyFactoryProvider: ObjectProvider<NotificationProviderIdempotencyKeyFactory>,
+    ): NotificationOutboxDispatcher? {
+        val runtimeConfigured =
+            profileResolverProvider.ifAvailable != null &&
+                templateRendererProvider.ifAvailable != null &&
+                providerIdempotencyKeyFactoryProvider.ifAvailable != null
+        if (deliveryActionProvider.ifAvailable == null && !runtimeConfigured) return null
         val workerProperties = properties.worker.validate()
         return NotificationOutboxDispatcher(
             store = workStore,
@@ -132,6 +161,42 @@ class NotificationAutoConfiguration {
             readiness = readiness,
         )
     }
+
+    @Bean
+    @ConditionalOnBean(
+        NotificationOutboxWorkStore::class,
+        ReminderRecoverySource::class,
+        ReminderRecoveryMaterializer::class,
+    )
+    @ConditionalOnMissingBean(NotificationReminderRecoveryScanner::class)
+    fun notificationReminderRecoveryScanner(
+        source: ReminderRecoverySource,
+        materializer: ReminderRecoveryMaterializer,
+        workStore: NotificationOutboxWorkStore,
+        properties: NotificationProperties,
+    ): NotificationReminderRecoveryScanner {
+        val workerProperties = properties.worker.validate()
+        return NotificationReminderRecoveryScanner(
+            source = source,
+            materializer = materializer,
+            catchUpWindow = workerProperties.catchUpWindow,
+            clock = ReminderRecoveryClock(workStore::currentDatabaseTime),
+        )
+    }
+
+    @Bean
+    @ConditionalOnBean(NotificationReminderRecoveryScanner::class)
+    @ConditionalOnMissingBean(AppointmentReminderScheduler::class)
+    fun appointmentReminderScheduler(
+        scanner: NotificationReminderRecoveryScanner,
+        properties: NotificationProperties,
+        triggerGuardProvider: ObjectProvider<ReminderRecoveryTriggerGuard>,
+    ): AppointmentReminderScheduler =
+        AppointmentReminderScheduler(
+            scanner = scanner,
+            triggerGuard = triggerGuardProvider.ifAvailable ?: ReminderRecoveryTriggerGuard { true },
+            batchSize = properties.worker.validate().batchSize,
+        )
 
     @Bean
     @ConditionalOnBean(NotificationOutboxWorkStore::class)
@@ -176,3 +241,5 @@ class NotificationAutoConfiguration {
     }
 
 }
+
+private const val RUNTIME_CONFIGURATION_DEPENDENCY_COUNT = 3

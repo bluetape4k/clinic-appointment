@@ -63,6 +63,95 @@ internal class NotificationAutoConfigurationTest {
             }
     }
 
+    @Test
+    fun `profile template provider key가 모두 준비되면 runtime delivery dispatcher를 구성한다`() {
+        val database = database("auto_runtime_dispatcher", version = "14")
+        context(database, withKey = true)
+            .withBean(
+                "memberNotificationProfileResolver",
+                MemberNotificationProfileResolver::class.java,
+                { MemberNotificationProfileResolver { MemberNotificationProfileResult.NotFound } },
+            )
+            .withBean(
+                "notificationTemplateRenderer",
+                NotificationTemplateRenderer::class.java,
+                {
+                    NotificationTemplateRenderer(
+                        NotificationTemplateCatalog { key, version, channel ->
+                            NotificationTemplate(
+                                key = key,
+                                version = version,
+                                channel = channel,
+                                fields = setOf("clinicDisplayName"),
+                                textTemplate = "{{clinicDisplayName}}",
+                            )
+                        }
+                    )
+                },
+            )
+            .withBean(
+                "notificationProviderIdempotencyKeyFactory",
+                NotificationProviderIdempotencyKeyFactory::class.java,
+                { NotificationProviderIdempotencyKeyFactory(ByteArray(32) { 1 }) },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(NotificationOutboxDispatcher::class.java).size shouldBeEqualTo 1
+            }
+    }
+
+    @Test
+    fun `runtime delivery dependency 일부만 설정하면 시작 단계에서 거절한다`() {
+        val database = database("auto_partial_runtime", version = "14")
+        context(database, withKey = true)
+            .withBean(
+                "memberNotificationProfileResolver",
+                MemberNotificationProfileResolver::class.java,
+                { MemberNotificationProfileResolver { MemberNotificationProfileResult.NotFound } },
+            )
+            .run { applicationContext ->
+                check(applicationContext.startupFailure != null) {
+                    "partial runtime delivery configuration must fail startup"
+                }
+            }
+    }
+
+    @Test
+    fun `recovery port가 모두 준비되면 DB 시각을 사용하는 scheduler를 구성한다`() {
+        val database = database("auto_reminder_recovery", version = "14")
+        context(database, withKey = true)
+            .withBean(
+                "reminderRecoverySource",
+                ReminderRecoverySource::class.java,
+                { ReminderRecoverySource { _, _ -> emptyList() } },
+            )
+            .withBean(
+                "reminderRecoveryMaterializer",
+                ReminderRecoveryMaterializer::class.java,
+                {
+                    object : ReminderRecoveryMaterializer {
+                        override suspend fun enqueue(
+                            candidate: ReminderRecoveryCandidate,
+                        ): ReminderRecoveryMaterializationResult =
+                            ReminderRecoveryMaterializationResult.ENQUEUED
+
+                        override suspend fun suppressMissed(
+                            candidate: ReminderRecoveryCandidate,
+                        ): ReminderRecoveryMaterializationResult =
+                            ReminderRecoveryMaterializationResult.SUPPRESSED
+                    }
+                },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(NotificationReminderRecoveryScanner::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(AppointmentReminderScheduler::class.java).size shouldBeEqualTo 1
+                runBlocking {
+                    applicationContext.getBean(AppointmentReminderScheduler::class.java).triggerOnce()
+                } shouldBeEqualTo ReminderRecoveryScanResult(0, 0, 0)
+            }
+    }
+
     private fun context(
         database: Database,
         withKey: Boolean,

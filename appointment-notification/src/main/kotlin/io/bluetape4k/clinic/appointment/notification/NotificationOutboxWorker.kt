@@ -2,7 +2,9 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand
+import io.bluetape4k.clinic.appointment.event.notification.NotificationContractException
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
 import kotlinx.coroutines.CancellationException
@@ -30,11 +32,26 @@ class NotificationOutboxWorker(
     private val deliveryAction: NotificationDeliveryAction = NotificationDeliveryAction {
         NotificationDeliveryResult.retry(NotificationFailureCode.DELIVERY_RESULT_UNKNOWN)
     },
+    private val profileResolver: MemberNotificationProfileResolver? = null,
+    private val templateRenderer: NotificationTemplateRenderer? = null,
+    private val providerChannel: NotificationChannel? = null,
+    private val providerIdempotencyKeyFactory: NotificationProviderIdempotencyKeyFactory? = null,
+    private val outboxCodec: NotificationOutboxCodec = NotificationOutboxCodec(),
+    private val securityAuditSink: NotificationSecurityAuditSink = NoopNotificationSecurityAuditSink,
 ) : NotificationOutboxJobWorker {
 
     init {
         require(leaseOwner.isNotBlank() && leaseOwner.length <= 128) {
             "leaseOwner must contain 1..128 characters"
+        }
+        val runtimeDependencyCount = listOf(
+            profileResolver,
+            templateRenderer,
+            providerChannel,
+            providerIdempotencyKeyFactory,
+        ).count { it != null }
+        require(runtimeDependencyCount == 0 || runtimeDependencyCount == RUNTIME_DEPENDENCY_COUNT) {
+            "runtime delivery dependencies must be configured together"
         }
     }
 
@@ -47,12 +64,96 @@ class NotificationOutboxWorker(
     override suspend fun process(claimed: ClaimedNotification): NotificationOutboxWorkerResult {
         if (readiness?.check()?.available == false) return NotificationOutboxWorkerResult.NOT_READY
         return try {
+            if (profileResolver != null && templateRenderer != null && providerChannel != null && providerIdempotencyKeyFactory != null) {
+                return processRuntimeDelivery(claimed, profileResolver, templateRenderer, providerChannel, providerIdempotencyKeyFactory)
+            }
             when (val result = deliveryAction.deliver(claimed)) {
                 is NotificationDeliveryResult.Sent -> completeSent(claimed, result)
                 is NotificationDeliveryResult.RetryableFailure -> handleRetryableFailure(claimed, result.failureCode)
             }
         } catch (e: CancellationException) {
             throw e
+        }
+    }
+
+    private suspend fun processRuntimeDelivery(
+        claimed: ClaimedNotification,
+        profileResolver: MemberNotificationProfileResolver,
+        templateRenderer: NotificationTemplateRenderer,
+        providerChannel: NotificationChannel,
+        keyFactory: NotificationProviderIdempotencyKeyFactory,
+    ): NotificationOutboxWorkerResult {
+        val envelope = try {
+            outboxCodec.decode(claimed.parametersJson)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: NotificationContractException) {
+            return handleRetryableFailure(claimed, e.failureCode)
+        } catch (e: IllegalArgumentException) {
+            return handleRetryableFailure(claimed, NotificationFailureCode.TEMPLATE_PARAMETER_INVALID)
+        } catch (e: RuntimeException) {
+            return handleRetryableFailure(claimed, NotificationFailureCode.TEMPLATE_PARAMETER_INVALID)
+        }
+        val profileResult = profileResolver.resolve(
+            MemberNotificationProfileRequest(
+                tenantGroupId = claimed.tenantGroupId,
+                clinicId = claimed.clinicId,
+                memberId = claimed.memberId,
+                channel = claimed.channel,
+            )
+        )
+        val profileDecision = MemberNotificationProfileClassifier.classify(
+            result = profileResult,
+            context = MemberProfileResolutionContext(
+                tenantGroupId = claimed.tenantGroupId,
+                clinicId = claimed.clinicId,
+                channel = claimed.channel,
+                memberId = claimed.memberId,
+            ),
+            auditSink = securityAuditSink,
+        )
+        profileDecision.failureCode?.let { return handleRetryableFailure(claimed, it) }
+        profileDecision.suppressionReason?.let { return completeSuppressed(claimed, it) }
+        val profile = checkNotNull(profileDecision.profile)
+        val rendered = try {
+            templateRenderer.render(
+                key = claimed.templateKey,
+                version = claimed.templateVersion,
+                channel = claimed.channel,
+                parameters = envelope.parameters,
+                profile = profile,
+            )
+        } catch (e: NotificationTemplateException) {
+            return handleRetryableFailure(claimed, e.failureCode)
+        } catch (e: IllegalArgumentException) {
+            return handleRetryableFailure(claimed, NotificationFailureCode.TEMPLATE_PARAMETER_INVALID)
+        }
+        val request = try {
+            NotificationProviderRequest(
+                channel = claimed.channel,
+                destination = checkNotNull(profile.destination) { "resolved profile destination must exist" },
+                idempotencyKey = keyFactory.create(claimed.idempotencyKey),
+                templateKey = claimed.templateKey,
+                templateVersion = claimed.templateVersion,
+                rendered = rendered,
+            )
+        } catch (e: IllegalArgumentException) {
+            return handleRetryableFailure(claimed, NotificationFailureCode.TEMPLATE_PARAMETER_INVALID)
+        }
+        val providerResult = try {
+            providerChannel.send(request)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: NotificationProviderException) {
+            return handleRetryableFailure(claimed, e.failureCode)
+        }
+        return when (providerResult) {
+            is NotificationProviderResult.Accepted -> completeSent(
+                claimed,
+                NotificationDeliveryResult.Sent(providerMessageReference = providerResult.providerMessageReference),
+            )
+            is NotificationProviderResult.RetryableFailure -> handleRetryableFailure(claimed, providerResult.failureCode)
+            is NotificationProviderResult.Suppressed -> completeSuppressed(claimed, providerResult.reason)
         }
     }
 
@@ -116,7 +217,26 @@ class NotificationOutboxWorker(
             }
         }
     }
+
+    private suspend fun completeSuppressed(
+        claimed: ClaimedNotification,
+        reason: io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode,
+    ): NotificationOutboxWorkerResult {
+        val completed = workStore.complete(
+            CompleteNotificationCommand(
+                outboxId = claimed.id,
+                owner = claimed.owner,
+                token = claimed.token,
+                attemptNumber = claimed.attemptNumber,
+                terminalStatus = NotificationOutboxStatus.SUPPRESSED,
+                suppressionReason = reason,
+            )
+        )
+        return if (completed) NotificationOutboxWorkerResult.COMPLETED else NotificationOutboxWorkerResult.LEASE_LOST
+    }
 }
+
+private const val RUNTIME_DEPENDENCY_COUNT = 4
 
 /** provider adapter가 구현하는 단일 delivery 시도 계약입니다. */
 fun interface NotificationDeliveryAction {

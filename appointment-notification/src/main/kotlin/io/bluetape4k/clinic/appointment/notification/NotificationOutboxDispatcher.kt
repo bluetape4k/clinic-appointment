@@ -26,6 +26,7 @@ class NotificationOutboxDispatcher(
     private val clinicPermits: NotificationClinicPermitRegistry
     private val claimMutex = Mutex()
     private var cursor: NotificationFairCursor? = null
+    private var recoveryTurn: Boolean = true
 
     init {
         require(leaseOwner.isNotBlank()) { "leaseOwner must not be blank" }
@@ -39,7 +40,7 @@ class NotificationOutboxDispatcher(
 
     suspend fun dispatchOnce(): List<NotificationOutboxWorkerResult> {
         if (readiness?.check()?.available == false) return emptyList()
-        val claimed = claimFairBatch()
+        val claimed = claimWorkBatch()
         return coroutineScope {
             claimed.map { notification ->
                 async {
@@ -53,12 +54,35 @@ class NotificationOutboxDispatcher(
         }
     }
 
-    private suspend fun claimFairBatch(): List<ClaimedNotification> =
+    private suspend fun claimWorkBatch(): List<ClaimedNotification> =
         claimMutex.withLock {
-            val page = store.findFairCandidates(globalConcurrency, cursor)
-            cursor = page.nextCursor
-            page.candidates.mapNotNull { candidate -> store.claim(candidate.id, leaseOwner) }
+            if (globalConcurrency == 1) {
+                return@withLock claimSingleWork()
+            }
+            val recovered = store.recoverExpired(globalConcurrency - 1, leaseOwner)
+            val remaining = globalConcurrency - recovered.size
+            if (remaining <= 0) return@withLock recovered
+            recovered + claimFairBatch(remaining)
         }
+
+    private suspend fun claimSingleWork(): List<ClaimedNotification> {
+        if (recoveryTurn) {
+            recoveryTurn = false
+            val recovered = store.recoverExpired(1, leaseOwner)
+            if (recovered.isNotEmpty()) return recovered
+            return claimFairBatch(1)
+        }
+        recoveryTurn = true
+        val claimed = claimFairBatch(1)
+        if (claimed.isNotEmpty()) return claimed
+        return store.recoverExpired(1, leaseOwner)
+    }
+
+    private suspend fun claimFairBatch(limit: Int): List<ClaimedNotification> {
+        val page = store.findFairCandidates(limit, cursor)
+        cursor = page.nextCursor
+        return page.candidates.mapNotNull { candidate -> store.claim(candidate.id, leaseOwner) }
+    }
 }
 
 private class NotificationClinicPermitRegistry(

@@ -11,6 +11,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationEventId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCursor
+import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationParameterType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
@@ -233,6 +234,7 @@ internal class NotificationOutboxLifecycleTest {
             clinicId = ClinicId(2L),
             appointmentId = AppointmentId(3L),
             memberId = MemberId("member-3"),
+            idempotencyKey = NotificationIdempotencyKey("idem-3"),
             owner = "worker-a",
             token = "token-1",
             attemptNumber = attemptNumber,

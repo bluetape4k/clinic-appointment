@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationClinicKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCursor
+import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationParameterType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
@@ -89,16 +90,81 @@ internal class NotificationOutboxDispatcherTest {
         }
     }
 
+    @Test
+    fun `dispatcher는 만료 lease 복구를 bounded drive하고 신규 후보 용량을 남긴다`() {
+        runBlocking {
+            val recovered = listOf(
+                claimed(id = 900L, clinicId = 9L),
+                claimed(id = 901L, clinicId = 9L),
+                claimed(id = 902L, clinicId = 9L),
+            )
+            val store = FairFakeWorkStore(
+                candidates = listOf(candidate(id = 1L, clinicId = 1L), candidate(id = 2L, clinicId = 2L)),
+                expired = recovered,
+            )
+            val processedIds = ConcurrentHashMap.newKeySet<Long>()
+            val dispatcher = NotificationOutboxDispatcher(
+                store = store,
+                worker = NotificationOutboxJobWorker {
+                    processedIds += it.id
+                    NotificationOutboxWorkerResult.COMPLETED
+                },
+                leaseOwner = "dispatcher-test",
+                globalConcurrency = 3,
+                perClinicConcurrency = 1,
+            )
+
+            dispatcher.dispatchOnce()
+
+            store.operations shouldBeEqualTo listOf("recover:2", "find:1")
+            store.claimedIds shouldBeEqualTo listOf(1L)
+            processedIds.toSet() shouldBeEqualTo setOf(900L, 901L, 1L)
+        }
+    }
+
+    @Test
+    fun `globalConcurrency 1에서는 만료 lease와 신규 후보를 tick마다 교대한다`() {
+        runBlocking {
+            val store = FairFakeWorkStore(
+                candidates = listOf(candidate(id = 1L, clinicId = 1L)),
+                expired = listOf(claimed(id = 900L, clinicId = 9L)),
+            )
+            val processedIds = mutableListOf<Long>()
+            val dispatcher = NotificationOutboxDispatcher(
+                store = store,
+                worker = NotificationOutboxJobWorker {
+                    processedIds += it.id
+                    NotificationOutboxWorkerResult.COMPLETED
+                },
+                leaseOwner = "dispatcher-test",
+                globalConcurrency = 1,
+                perClinicConcurrency = 1,
+            )
+
+            dispatcher.dispatchOnce()
+            dispatcher.dispatchOnce()
+
+            store.operations shouldBeEqualTo listOf("recover:1", "find:1")
+            store.claimedIds shouldBeEqualTo listOf(1L)
+            processedIds shouldBeEqualTo listOf(900L, 1L)
+        }
+    }
+
     private inner class FairFakeWorkStore(
         candidates: List<NotificationCandidate>,
+        expired: List<ClaimedNotification> = emptyList(),
     ) : NotificationOutboxWorkStore {
         private val byId = candidates.associateBy(NotificationCandidate::id)
         private val remaining = candidates.toMutableList()
+        private val expired = expired.toMutableList()
+        val operations = mutableListOf<String>()
+        val claimedIds = mutableListOf<Long>()
 
         override suspend fun findFairCandidates(
             limit: Int,
             cursor: NotificationFairCursor?,
         ): NotificationCandidatePage {
+            operations += "find:$limit"
             val grouped = remaining.groupBy { NotificationClinicKey(it.tenantGroupId, it.clinicId) }
             val keys = grouped.keys.sortedWith(compareBy({ it.tenantGroupId.value }, { it.clinicId.value }))
             val orderedKeys = cursor?.let { fairCursor ->
@@ -113,10 +179,17 @@ internal class NotificationOutboxDispatcherTest {
             )
         }
 
-        override suspend fun claim(id: Long, owner: String): ClaimedNotification? =
-            byId[id]?.let { claimed(it.id, it.clinicId.value) }
+        override suspend fun claim(id: Long, owner: String): ClaimedNotification? {
+            claimedIds += id
+            return byId[id]?.let { claimed(it.id, it.clinicId.value) }
+        }
 
-        override suspend fun recoverExpired(limit: Int, owner: String): List<ClaimedNotification> = emptyList()
+        override suspend fun recoverExpired(limit: Int, owner: String): List<ClaimedNotification> {
+            operations += "recover:$limit"
+            val selected = expired.take(limit)
+            expired.removeAll(selected.toSet())
+            return selected
+        }
 
         override suspend fun complete(command: io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand): Boolean = true
 
@@ -146,6 +219,7 @@ internal class NotificationOutboxDispatcherTest {
             clinicId = ClinicId(clinicId),
             appointmentId = AppointmentId(id),
             memberId = MemberId("member-$id"),
+            idempotencyKey = NotificationIdempotencyKey("idem-$id"),
             owner = "dispatcher-test",
             token = "token-$id",
             attemptNumber = 1,
