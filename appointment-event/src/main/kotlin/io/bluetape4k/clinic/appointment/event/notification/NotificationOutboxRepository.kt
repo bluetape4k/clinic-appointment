@@ -13,19 +13,16 @@ import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
-import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
+import org.jetbrains.exposed.v1.jdbc.insertIgnoreAndGetId
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.update
 import java.io.Serializable
-import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
-import java.time.OffsetDateTime
-import java.time.ZonedDateTime
 
 /**
  * caller transaction 안에서만 동작하는 알림 outbox repository다.
@@ -44,23 +41,17 @@ class NotificationOutboxRepository(
     }
 
     fun enqueue(draft: SendableNotificationDraft): NotificationOutboxRecord {
-        findByIdempotency(draft.idempotencyDigest)?.let { return it }
-
-        return try {
-            insertSendable(draft)
-        } catch (e: ExposedSQLException) {
-            findByIdempotency(draft.idempotencyDigest) ?: throw e
-        }
+        val insertedId = insertSendable(draft)
+        return insertedId?.let { findById(it) }
+            ?: findByIdempotency(draft.idempotencyDigest)
+            ?: error("notification outbox insert was ignored without an idempotency row")
     }
 
     fun suppressLegacy(draft: LegacySuppressionDraft): NotificationOutboxRecord {
-        findByIdempotency(draft.idempotencyDigest)?.let { return it }
-
-        return try {
-            insertSuppression(draft)
-        } catch (e: ExposedSQLException) {
-            findByIdempotency(draft.idempotencyDigest) ?: throw e
-        }
+        val insertedId = insertSuppression(draft)
+        return insertedId?.let { findById(it) }
+            ?: findByIdempotency(draft.idempotencyDigest)
+            ?: error("notification outbox suppression insert was ignored without an idempotency row")
     }
 
     fun findReadyClinicKeys(
@@ -196,10 +187,10 @@ class NotificationOutboxRepository(
             it[parametersJson] = null
             it[failureCode] = command.failureCode
             it[suppressionReason] = command.suppressionReason
-            it[providerMessageReference] = command.providerMessageReference
-            it[destinationFingerprint] = command.destinationFingerprint
-            it[correlationId] = command.correlationId
-            it[traceId] = command.traceId
+            it[providerMessageReference] = command.providerMessageReference?.value
+            it[destinationFingerprint] = command.destinationFingerprint?.value
+            it[correlationId] = command.correlationId?.value
+            it[traceId] = command.traceId?.value
             it[leaseOwner] = null
             it[leaseToken] = null
             it[leaseUntil] = null
@@ -219,10 +210,11 @@ class NotificationOutboxRepository(
             outcome = command.terminalStatus.toAttemptOutcome(),
             failureCode = command.failureCode,
             completedAt = dbNow,
-            providerMessageReference = command.providerMessageReference,
-            destinationFingerprint = command.destinationFingerprint,
-            correlationId = command.correlationId,
-            traceId = command.traceId,
+            providerMessageReference = command.providerMessageReference?.value,
+            destinationFingerprint = command.destinationFingerprint?.value,
+            correlationId = command.correlationId?.value,
+            traceId = command.traceId?.value,
+            requireExactlyOne = true,
         )
         return true
     }
@@ -251,18 +243,19 @@ class NotificationOutboxRepository(
             outcome = NotificationDeliveryAttemptOutcome.RETRY_SCHEDULED,
             failureCode = command.failureCode,
             completedAt = dbNow,
-            providerMessageReference = command.providerMessageReference,
-            destinationFingerprint = command.destinationFingerprint,
-            correlationId = command.correlationId,
-            traceId = command.traceId,
+            providerMessageReference = command.providerMessageReference?.value,
+            destinationFingerprint = command.destinationFingerprint?.value,
+            correlationId = command.correlationId?.value,
+            traceId = command.traceId?.value,
+            requireExactlyOne = true,
         )
         return true
     }
 
-    private fun insertSendable(draft: SendableNotificationDraft): NotificationOutboxRecord {
+    private fun insertSendable(draft: SendableNotificationDraft): Long? {
         val envelope = draft.envelope
         val dbNow = dbCurrentTimestamp()
-        val id = NotificationOutboxEvents.insertAndGetId {
+        val id = NotificationOutboxEvents.insertIgnoreAndGetId {
             it[rowKind] = NotificationOutboxRowKind.SENDABLE
             it[status] = NotificationOutboxStatus.PENDING
             it[idempotencyKeyVersion] = draft.idempotencyDigest.version
@@ -300,12 +293,12 @@ class NotificationOutboxRepository(
             it[updatedAt] = dbNow
             it[terminalAt] = null
         }
-        return findById(id.value) ?: error("notification outbox insert did not return a readable row")
+        return id?.value
     }
 
-    private fun insertSuppression(draft: LegacySuppressionDraft): NotificationOutboxRecord {
+    private fun insertSuppression(draft: LegacySuppressionDraft): Long? {
         val dbNow = dbCurrentTimestamp()
-        val id = NotificationOutboxEvents.insertAndGetId {
+        val id = NotificationOutboxEvents.insertIgnoreAndGetId {
             it[rowKind] = NotificationOutboxRowKind.LEGACY_SUPPRESSION
             it[status] = NotificationOutboxStatus.SUPPRESSED
             it[idempotencyKeyVersion] = draft.idempotencyDigest.version
@@ -343,7 +336,7 @@ class NotificationOutboxRepository(
             it[updatedAt] = dbNow
             it[terminalAt] = dbNow
         }
-        return findById(id.value) ?: error("notification outbox suppression insert did not return a readable row")
+        return id?.value
     }
 
     private fun insertAttempt(
@@ -389,6 +382,7 @@ class NotificationOutboxRepository(
         destinationFingerprint: String? = null,
         correlationId: String? = null,
         traceId: String? = null,
+        requireExactlyOne: Boolean = false,
     ) {
         val attempt = NotificationDeliveryAttempts.selectAll()
             .where {
@@ -399,8 +393,14 @@ class NotificationOutboxRepository(
                     NotificationDeliveryAttempts.completedAt.isNull()
             }
             .singleOrNull()
-        val startedAt = attempt?.get(NotificationDeliveryAttempts.startedAt) ?: return
-        NotificationDeliveryAttempts.update({
+        val startedAt = attempt?.get(NotificationDeliveryAttempts.startedAt)
+        if (startedAt == null) {
+            if (requireExactlyOne) {
+                error("notification delivery attempt close must affect exactly one row")
+            }
+            return
+        }
+        val updated = NotificationDeliveryAttempts.update({
             (NotificationDeliveryAttempts.outboxId eq EntityID(outboxId, NotificationOutboxEvents)) and
                 (NotificationDeliveryAttempts.attemptNumber eq attemptNumber) and
                 (NotificationDeliveryAttempts.owner eq owner) and
@@ -415,6 +415,9 @@ class NotificationOutboxRepository(
             it[NotificationDeliveryAttempts.destinationFingerprint] = destinationFingerprint
             it[NotificationDeliveryAttempts.correlationId] = correlationId
             it[NotificationDeliveryAttempts.traceId] = traceId
+        }
+        if (requireExactlyOne && updated != 1) {
+            error("notification delivery attempt close must affect exactly one row")
         }
     }
 
@@ -708,10 +711,10 @@ data class CompleteNotificationCommand(
     val terminalStatus: NotificationOutboxStatus = NotificationOutboxStatus.SENT,
     val failureCode: NotificationFailureCode? = null,
     val suppressionReason: NotificationSuppressionReasonCode? = null,
-    val providerMessageReference: String? = null,
-    val destinationFingerprint: String? = null,
-    val correlationId: String? = null,
-    val traceId: String? = null,
+    val providerMessageReference: NotificationProviderMessageReference? = null,
+    val destinationFingerprint: NotificationDestinationFingerprint? = null,
+    val correlationId: NotificationCorrelationId? = null,
+    val traceId: NotificationTraceId? = null,
 ) : NotificationFenceCommand,
     Serializable {
     companion object {
@@ -727,10 +730,10 @@ data class RetryNotificationCommand(
     override val attemptNumber: Int,
     val failureCode: NotificationFailureCode,
     val nextAttemptAt: Instant,
-    val providerMessageReference: String? = null,
-    val destinationFingerprint: String? = null,
-    val correlationId: String? = null,
-    val traceId: String? = null,
+    val providerMessageReference: NotificationProviderMessageReference? = null,
+    val destinationFingerprint: NotificationDestinationFingerprint? = null,
+    val correlationId: NotificationCorrelationId? = null,
+    val traceId: NotificationTraceId? = null,
 ) : NotificationFenceCommand,
     Serializable {
     companion object {
@@ -764,17 +767,17 @@ private fun NotificationFenceCommand.validate() {
 }
 
 private fun CompleteNotificationCommand.validateOptionalMetadata() {
-    providerMessageReference?.validFence("providerMessageReference")
-    destinationFingerprint?.validFence("destinationFingerprint")
-    correlationId?.validFence("correlationId")
-    traceId?.validFence("traceId")
+    providerMessageReference?.value?.validFence("providerMessageReference")
+    destinationFingerprint?.value?.validFence("destinationFingerprint")
+    correlationId?.value?.validFence("correlationId")
+    traceId?.value?.validFence("traceId")
 }
 
 private fun RetryNotificationCommand.validateOptionalMetadata() {
-    providerMessageReference?.validFence("providerMessageReference")
-    destinationFingerprint?.validFence("destinationFingerprint")
-    correlationId?.validFence("correlationId")
-    traceId?.validFence("traceId")
+    providerMessageReference?.value?.validFence("providerMessageReference")
+    destinationFingerprint?.value?.validFence("destinationFingerprint")
+    correlationId?.value?.validFence("correlationId")
+    traceId?.value?.validFence("traceId")
 }
 
 private fun NotificationOutboxStatus.toAttemptOutcome(): NotificationDeliveryAttemptOutcome =
@@ -800,14 +803,5 @@ private fun String.validFence(fieldName: String): String =
 private fun JdbcTransaction.dbCurrentTimestamp(): Instant =
     exec("SELECT CURRENT_TIMESTAMP") { resultSet ->
         if (!resultSet.next()) error("SELECT CURRENT_TIMESTAMP returned no rows")
-        resultSet.getObject(1).toInstant()
+        resultSet.getObject(1).toNotificationDbInstant()
     } ?: error("SELECT CURRENT_TIMESTAMP returned no result set")
-
-private fun Any?.toInstant(): Instant =
-    when (this) {
-        is Instant -> this
-        is Timestamp -> toInstant()
-        is OffsetDateTime -> toInstant()
-        is ZonedDateTime -> toInstant()
-        else -> error("Unsupported CURRENT_TIMESTAMP type: ${this?.javaClass?.name}")
-    }
