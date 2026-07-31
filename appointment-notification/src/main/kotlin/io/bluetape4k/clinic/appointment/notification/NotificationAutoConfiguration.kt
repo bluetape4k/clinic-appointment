@@ -5,8 +5,11 @@ import io.bluetape4k.logging.info
 import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
 import io.bluetape4k.leader.lettuce.leaderGroupElection
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
+import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.boot.ApplicationRunner
@@ -35,7 +38,8 @@ import org.springframework.scheduling.annotation.EnableScheduling
 )
 @EnableConfigurationProperties(
     NotificationProperties::class,
-    NotificationResilienceProperties::class
+    NotificationResilienceProperties::class,
+    NotificationCryptoProperties::class,
 )
 @EnableScheduling
 class NotificationAutoConfiguration {
@@ -55,6 +59,90 @@ class NotificationAutoConfiguration {
 
     @Bean
     fun notificationHistoryRepository(): NotificationHistoryRepository = NotificationHistoryRepository()
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationOutboxCodec(): NotificationOutboxCodec = NotificationOutboxCodec()
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationOutboxRepository(
+        codec: NotificationOutboxCodec,
+        properties: NotificationProperties,
+    ): NotificationOutboxRepository =
+        NotificationOutboxRepository(
+            codec = codec,
+            leaseDuration = properties.worker.validate().leaseDuration,
+        )
+
+    @Bean
+    @ConditionalOnBean(Database::class)
+    @ConditionalOnMissingBean
+    fun notificationSchemaReadiness(
+        database: Database,
+        cryptoProperties: NotificationCryptoProperties,
+    ): NotificationSchemaReadiness =
+        NotificationSchemaReadiness(database, cryptoProperties)
+
+    @Bean
+    @ConditionalOnBean(Database::class)
+    @ConditionalOnMissingBean(NotificationOutboxWorkStore::class)
+    fun notificationOutboxWorkStore(
+        database: Database,
+        repository: NotificationOutboxRepository,
+    ): NotificationOutboxWorkStore =
+        JdbcNotificationOutboxWorkStore(database, repository)
+
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "clinic.notification.worker",
+        name = ["enabled"],
+        havingValue = "true",
+        matchIfMissing = true,
+    )
+    @ConditionalOnBean(NotificationOutboxWorkStore::class)
+    @ConditionalOnMissingBean(NotificationOutboxWorker::class)
+    fun notificationOutboxWorker(
+        workStore: NotificationOutboxWorkStore,
+        properties: NotificationProperties,
+        readiness: NotificationSchemaReadiness?,
+    ): NotificationOutboxWorker =
+        NotificationOutboxWorker(
+            workStore = workStore,
+            leaseOwner = "notification-outbox-worker",
+            readiness = readiness,
+        ).also {
+            properties.worker.validate()
+        }
+
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "clinic.notification.worker",
+        name = ["enabled"],
+        havingValue = "true",
+        matchIfMissing = true,
+    )
+    @ConditionalOnBean(
+        NotificationOutboxWorkStore::class,
+        NotificationOutboxJobWorker::class,
+    )
+    @ConditionalOnMissingBean(NotificationOutboxDispatcher::class)
+    fun notificationOutboxDispatcher(
+        workStore: NotificationOutboxWorkStore,
+        worker: NotificationOutboxJobWorker,
+        properties: NotificationProperties,
+        readiness: NotificationSchemaReadiness?,
+    ): NotificationOutboxDispatcher {
+        val workerProperties = properties.worker.validate()
+        return NotificationOutboxDispatcher(
+            store = workStore,
+            worker = worker,
+            leaseOwner = "notification-outbox-worker",
+            globalConcurrency = workerProperties.globalConcurrency,
+            perClinicConcurrency = workerProperties.perClinicConcurrency,
+            readiness = readiness,
+        )
+    }
 
     @Bean
     @ConditionalOnMissingBean(NotificationChannel::class)
