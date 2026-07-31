@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -149,6 +150,52 @@ internal class NotificationAutoConfigurationTest {
                 runBlocking {
                     applicationContext.getBean(AppointmentReminderScheduler::class.java).triggerOnce()
                 } shouldBeEqualTo ReminderRecoveryScanResult(0, 0, 0)
+            }
+    }
+
+    @Test
+    fun `운영 관측 port가 준비되면 metric health alert status 서비스를 구성한다`() {
+        val database = database("auto_observability", version = "14")
+        context(database, withKey = true)
+            .withBean("meterRegistry", SimpleMeterRegistry::class.java, ::SimpleMeterRegistry)
+            .withBean(
+                "notificationOutboxObservationStore",
+                NotificationOutboxObservationStore::class.java,
+                {
+                    NotificationOutboxObservationStore {
+                        NotificationOutboxObservationSnapshot(0, null)
+                    }
+                },
+            )
+            .withBean(
+                "notificationOutboxReadinessSource",
+                NotificationOutboxReadinessSource::class.java,
+                {
+                    NotificationOutboxReadinessSource {
+                        NotificationOutboxReadinessSnapshot.up()
+                    }
+                },
+            )
+            .withBean(
+                "notificationOutboxLivenessSource",
+                NotificationOutboxLivenessSource::class.java,
+                {
+                    NotificationOutboxLivenessSource {
+                        NotificationOutboxLivenessSnapshot()
+                    }
+                },
+            )
+            .withBean(
+                "notificationStatusQueryStore",
+                NotificationStatusQueryStore::class.java,
+                { NotificationStatusQueryStore { null } },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(NotificationOutboxMetrics::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(NotificationOutboxHealthIndicator::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(NotificationOutboxAlertPolicy::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(NotificationStatusQueryService::class.java).size shouldBeEqualTo 1
             }
     }
 

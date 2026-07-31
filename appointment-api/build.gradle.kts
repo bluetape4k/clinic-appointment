@@ -17,6 +17,7 @@ exposed {
 dependencies {
     api(project(":appointment-core"))
     api(project(":appointment-event"))
+    implementation(project(":appointment-notification"))
     api(project(":appointment-solver"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")

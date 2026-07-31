@@ -1,11 +1,19 @@
 package io.bluetape4k.clinic.appointment.api.test
 
+import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
+import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
+import io.bluetape4k.clinic.appointment.event.notification.StaticNotificationOutboxKeyRing
 import io.bluetape4k.logging.KLogging
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.ActiveProfilesResolver
@@ -69,7 +77,22 @@ class DatabaseProfileResolver : ActiveProfilesResolver {
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Execution(ExecutionMode.SAME_THREAD)
 @ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
+@Import(AbstractApiIntegrationTest.NotificationTestConfig::class)
 abstract class AbstractApiIntegrationTest {
+
+    @TestConfiguration(proxyBeanMethods = false)
+    class NotificationTestConfig {
+
+        @Bean
+        @ConditionalOnMissingBean(NotificationOutboxHasher::class)
+        fun defaultNotificationOutboxHasher(): NotificationOutboxHasher =
+            DefaultNotificationOutboxHasher(
+                StaticNotificationOutboxKeyRing(
+                    active = NotificationHmacKey("api-integration-test", ByteArray(32) { 42 }),
+                    previous = null,
+                )
+            )
+    }
 
     companion object : KLogging() {
 

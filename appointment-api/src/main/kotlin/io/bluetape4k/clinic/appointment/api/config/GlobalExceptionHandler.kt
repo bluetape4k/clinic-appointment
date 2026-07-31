@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.clinic.appointment.api.commitment.ProposalFailureCode
 import io.bluetape4k.clinic.appointment.api.commitment.ProposalGenerationException
+import io.bluetape4k.clinic.appointment.api.controller.NotificationOperationUnavailableException
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse
 import io.bluetape4k.clinic.appointment.api.policy.EffectivePolicyGenerationConflictException
@@ -47,6 +48,7 @@ class GlobalExceptionHandler(
         private const val APPOINTMENT_COMMITMENT_RETRY_AFTER_SECONDS = "5"
         private const val MEMBER_DIRECTORY_RETRY_AFTER_SECONDS = "5"
         private const val NOTIFICATION_ENQUEUE_RETRY_AFTER_SECONDS = "5"
+        private const val NOTIFICATION_OPERATION_RETRY_AFTER_SECONDS = "5"
     }
 
     /**
@@ -86,6 +88,28 @@ class GlobalExceptionHandler(
                     correlationId = correlationId,
                     retryable = true,
                     action = "Retry with the same idempotency key after the Retry-After interval.",
+                )
+            )
+    }
+
+    /**
+     * rollout 또는 adapter 구성이 끝나지 않은 알림 운영 기능을 안정적인 503으로 변환합니다.
+     */
+    @ExceptionHandler(NotificationOperationUnavailableException::class)
+    fun handleNotificationOperationUnavailable(
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.correlationId()
+        log.warn { "Notification operation unavailable: correlation_id=$correlationId" }
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .header(HttpHeaders.RETRY_AFTER, NOTIFICATION_OPERATION_RETRY_AFTER_SECONDS)
+            .body(
+                SchedulingApiErrorResponse(
+                    error = "Notification operation is temporarily unavailable.",
+                    errorCode = "NOTIFICATION_OPERATION_UNAVAILABLE",
+                    correlationId = correlationId,
+                    retryable = true,
+                    action = "Retry after the Retry-After interval or verify notification operation wiring.",
                 )
             )
     }

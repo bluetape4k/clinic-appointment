@@ -6,6 +6,7 @@ import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
 import io.bluetape4k.leader.lettuce.leaderGroupElection
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.micrometer.core.instrument.MeterRegistry
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -73,6 +74,36 @@ class NotificationAutoConfiguration {
         repository: NotificationOutboxRepository,
     ): NotificationOutboxWorkStore =
         JdbcNotificationOutboxWorkStore(database, repository)
+
+    @Bean
+    @ConditionalOnBean(MeterRegistry::class, NotificationOutboxObservationStore::class)
+    @ConditionalOnMissingBean
+    fun notificationOutboxMetrics(
+        meterRegistry: MeterRegistry,
+        observationStore: NotificationOutboxObservationStore,
+    ): NotificationOutboxMetrics =
+        NotificationOutboxMetrics(meterRegistry, observationStore)
+
+    @Bean
+    @ConditionalOnBean(NotificationOutboxReadinessSource::class, NotificationOutboxLivenessSource::class)
+    @ConditionalOnMissingBean
+    fun notificationOutboxHealthIndicator(
+        readinessSource: NotificationOutboxReadinessSource,
+        livenessSource: NotificationOutboxLivenessSource,
+    ): NotificationOutboxHealthIndicator =
+        NotificationOutboxHealthIndicator(readinessSource, livenessSource)
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationOutboxAlertPolicy(): NotificationOutboxAlertPolicy = NotificationOutboxAlertPolicy()
+
+    @Bean
+    @ConditionalOnBean(NotificationStatusQueryStore::class)
+    @ConditionalOnMissingBean
+    fun notificationStatusQueryService(
+        store: NotificationStatusQueryStore,
+    ): NotificationStatusQueryService =
+        NotificationStatusQueryService(store)
 
     @Bean
     @ConditionalOnProperty(
