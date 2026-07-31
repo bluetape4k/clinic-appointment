@@ -299,8 +299,8 @@ operation을 사용한다.
 
 | 행 종류 | 허용 상태 | 필수 값 | 반드시 `NULL`인 값 |
 |---|---|---|---|
-| `SENDABLE` | 모든 상태 | 활성 상태일 때 appointment/member/channel/event/slot/template/parameter | 없음 |
-| `LEGACY_SUPPRESSION` | `SUPPRESSED`만 | tenant/clinic/event/slot/idempotency digest/reason | appointment/member/template/parameter/provider reference |
+| `SENDABLE` | 모든 상태 | 활성 상태일 때 appointment, member, channel, event type, notification slot, template, parameter | 없음 |
+| `LEGACY_SUPPRESSION` | `SUPPRESSED`만 | tenant, clinic, `eventId`, idempotency digest, suppression reason | appointment, member, channel, event type, notification slot, provider key, template, parameter |
 
 DB `CHECK` constraint는 위 조합을 강제하고 worker claim query는
 `rowKind = SENDABLE`만 선택한다. legacy 행의 idempotency digest는 command
@@ -603,7 +603,9 @@ metric을 남긴다. `ENFORCE`에서는 422로 거절한다. 신규 배포의 pl
   `SUPPRESSED(MEMBER_ID_MISSING_LEGACY)`로 upsert한다.
 - legacy suppression row는 raw `memberId`, appointment ID, 이름, 연락처,
   template parameter, message와 예외를 저장하지 않는다. tenant/clinic scope,
-  event type, notification slot, HMAC fingerprint와 stable reason code만 둔다.
+  `eventId`, HMAC fingerprint, idempotency digest, stable reason code만 둔다.
+  발송 분류에 쓰는 event type, notification slot, channel, template, provider
+  key, parameter 계열 필드는 모두 `NULL`로 둔다.
 - 이름과 전화번호로 회원을 추정하지 않는다.
 - 자동 backfill은 회원 서비스가 제공하는 확정적인 mapping만 사용한다.
 - backfill 전까지 해당 예약의 자동 알림은 제외한다.
