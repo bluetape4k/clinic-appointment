@@ -23,6 +23,9 @@ import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
+import io.bluetape4k.clinic.appointment.api.notification.AppointmentMemberDirectory
+import io.bluetape4k.clinic.appointment.api.notification.MemberDirectoryResult
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.assertions.shouldBeEqualTo
@@ -40,7 +43,12 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.boot.test.context.TestConfiguration
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
+import org.springframework.context.annotation.Primary
 import org.springframework.http.HttpStatus
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.web.client.RestClient
 import java.time.DayOfWeek
@@ -51,11 +59,36 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
+@Import(AppointmentControllerTest.MemberDirectoryTestConfig::class)
 class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
         private const val BASE_URL = "/api/tenant-default/appointments"
         private val futureDate: LocalDate = LocalDate.now().plusMonths(6)
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    class MemberDirectoryTestConfig {
+        @Bean
+        @Primary
+        internal fun appointmentMemberDirectory(): AppointmentMemberDirectory =
+            object : AppointmentMemberDirectory {
+                override fun resolveMember(
+                    request: io.bluetape4k.clinic.appointment.api.notification.MemberDirectoryRequest,
+                ): MemberDirectoryResult =
+                    when (request.memberId.value) {
+                        "missing-member" -> MemberDirectoryResult.NotFound
+                        "other-scope-member" -> MemberDirectoryResult.ScopeMismatch
+                        "ambiguous-member" -> MemberDirectoryResult.Ambiguous
+                        "unavailable-member" -> MemberDirectoryResult.Unavailable
+                        else -> MemberDirectoryResult.Resolved(MemberId(request.memberId.value))
+                    }
+
+                override fun resolvePlan(
+                    request: io.bluetape4k.clinic.appointment.api.notification.MemberPlanDirectoryRequest,
+                ): MemberDirectoryResult =
+                    MemberDirectoryResult.Resolved(MemberId("member-v2"))
+            }
     }
 
     @LocalServerPort
@@ -154,6 +187,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "clinicId": $clinicId,
                 "doctorId": $doctorId,
                 "treatmentTypeId": $treatmentTypeId,
+                "memberId": "member-1",
                 "patientName": "John Doe",
                 "patientPhone": "010-1234-5678",
                 "appointmentDate": "$futureDate",
@@ -174,6 +208,64 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         response.jsonPath<String>("$.data.status") shouldBeEqualTo "REQUESTED"
         response.jsonPath<String>("$.data.timezone") shouldBeEqualTo "Asia/Seoul"
         response.jsonPath<String>("$.data.locale") shouldBeEqualTo "ko-KR"
+        transaction {
+            Appointments.selectAll().single()[Appointments.patientExternalId] shouldBeEqualTo "member-1"
+        }
+    }
+
+    @Test
+    fun `POST - rejects a legacy appointment without memberId`() {
+        val response = postAppointment(memberId = null)
+
+        response.statusCode shouldBeEqualTo HttpStatus.UNPROCESSABLE_CONTENT
+        response.jsonPath<String>("$.errorCode") shouldBeEqualTo "MEMBER_ID_REQUIRED"
+        response.body.contains("privacy-name").shouldBeFalse()
+        response.body.contains("010-9999-9999").shouldBeFalse()
+    }
+
+    @Test
+    fun `POST - maps member directory failures without exposing protected values`() {
+        val cases = listOf(
+            Triple("missing-member", HttpStatus.NOT_FOUND, "MEMBER_NOT_FOUND"),
+            Triple("other-scope-member", HttpStatus.FORBIDDEN, "MEMBER_SCOPE_MISMATCH"),
+            Triple("ambiguous-member", HttpStatus.CONFLICT, "MEMBER_REFERENCE_AMBIGUOUS"),
+            Triple("unavailable-member", HttpStatus.SERVICE_UNAVAILABLE, "MEMBER_DIRECTORY_UNAVAILABLE"),
+        )
+
+        cases.forEach { (memberId, status, errorCode) ->
+            val response = postAppointment(memberId)
+
+            response.statusCode shouldBeEqualTo status
+            response.jsonPath<String>("$.errorCode") shouldBeEqualTo errorCode
+            response.body.contains(memberId).shouldBeFalse()
+            response.body.contains("privacy-name").shouldBeFalse()
+            response.body.contains("010-9999-9999").shouldBeFalse()
+            if (status == HttpStatus.SERVICE_UNAVAILABLE) {
+                response.headers.getFirst(HttpHeaders.RETRY_AFTER) shouldBeEqualTo "5"
+            }
+        }
+    }
+
+    private fun postAppointment(memberId: String?): TestResponse {
+        val memberField = memberId?.let { "\"memberId\": \"$it\"," }.orEmpty()
+        val body = """
+            {
+                "clinicId": $clinicId,
+                "doctorId": $doctorId,
+                "treatmentTypeId": $treatmentTypeId,
+                $memberField
+                "patientName": "privacy-name",
+                "patientPhone": "010-9999-9999",
+                "appointmentDate": "$futureDate",
+                "startTime": "10:00",
+                "endTime": "10:30"
+            }
+        """.trimIndent()
+        return client.post()
+            .uri(BASE_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .execute()
     }
 
     @Test
@@ -214,6 +306,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "clinicId": $clinicId,
                 "doctorId": $doctorId,
                 "treatmentTypeId": $treatmentTypeId,
+                "memberId": "member-1",
                 "patientName": "John Doe",
                 "patientPhone": "010-1234-5678",
                 "appointmentDate": "$futureDate",
@@ -245,19 +338,20 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
     }
 
     @Test
-    fun `POST - rejects idempotency key reused with a different request`() {
+    fun `POST - rejects idempotency key reused for a different member`() {
         val firstBody = """
             {
                 "clinicId": $clinicId,
                 "doctorId": $doctorId,
                 "treatmentTypeId": $treatmentTypeId,
+                "memberId": "member-1",
                 "patientName": "John Doe",
                 "appointmentDate": "$futureDate",
                 "startTime": "10:00",
                 "endTime": "10:30"
             }
         """.trimIndent()
-        val changedBody = firstBody.replace("John Doe", "Jane Doe")
+        val changedBody = firstBody.replace("member-1", "member-2")
 
         client.post()
             .uri(BASE_URL)
@@ -285,6 +379,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "clinicId": $clinicId,
                 "doctorId": $doctorId,
                 "treatmentTypeId": $treatmentTypeId,
+                "memberId": "member-1",
                 "patientName": "John Doe",
                 "appointmentDate": "$futureDate",
                 "startTime": "10:00",
@@ -309,6 +404,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "clinicId": $clinicId,
                 "doctorId": $doctorId,
                 "treatmentTypeId": $treatmentTypeId,
+                "memberId": "member-1",
                 "patientName": "John Doe",
                 "appointmentDate": "$futureDate",
                 "startTime": "10:00",
@@ -344,6 +440,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "clinicId": $clinicId,
                 "doctorId": $doctorId,
                 "treatmentTypeId": $treatmentTypeId,
+                "memberId": "member-1",
                 "patientName": "John Doe",
                 "appointmentDate": "$futureDate",
                 "startTime": "10:00",
@@ -372,6 +469,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "clinicId": $clinicId,
                 "doctorId": $doctorId,
                 "treatmentTypeId": $treatmentTypeId,
+                "memberId": "member-1",
                 "patientName": "John Doe",
                 "appointmentDate": "$futureDate",
                 "startTime": "10:00",
@@ -415,6 +513,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "clinicId": $clinicId,
                 "doctorId": $doctorId,
                 "treatmentTypeId": $treatmentTypeId,
+                "memberId": "member-1",
                 "patientName": "",
                 "appointmentDate": "$futureDate",
                 "startTime": "10:00",
@@ -439,6 +538,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "clinicId": 0,
                 "doctorId": $doctorId,
                 "treatmentTypeId": $treatmentTypeId,
+                "memberId": "member-1",
                 "patientName": "John Doe",
                 "appointmentDate": "$futureDate",
                 "startTime": "10:00",
@@ -494,6 +594,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "clinicId": $clinicId,
                 "doctorId": $otherDoctorId,
                 "treatmentTypeId": $treatmentTypeId,
+                "memberId": "member-1",
                 "patientName": "John Doe",
                 "appointmentDate": "$futureDate",
                 "startTime": "10:00",
@@ -692,6 +793,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 "clinicId": $expatClinicId,
                 "doctorId": $expatDoctorId,
                 "treatmentTypeId": $expatTreatmentId,
+                "memberId": "member-1",
                 "patientName": "김철수",
                 "appointmentDate": "$futureDate",
                 "startTime": "10:00",

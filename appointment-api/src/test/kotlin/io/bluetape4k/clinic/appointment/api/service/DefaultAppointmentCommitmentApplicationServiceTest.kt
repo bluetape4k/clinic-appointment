@@ -21,6 +21,10 @@ import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateAppointmentRequ
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateChangeProposalRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DirectConfirmRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DirectCreateAppointmentRequest
+import io.bluetape4k.clinic.appointment.api.notification.AppointmentMemberResolver
+import io.bluetape4k.clinic.appointment.api.notification.MemberResolution
+import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberApiError
+import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberApiException
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ProposalDecisionRequest
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
 import io.bluetape4k.clinic.appointment.api.security.ActorType
@@ -219,6 +223,37 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
                     .map { it[AppointmentItems.treatmentKey] }
             }
         treatmentKeys shouldBeEqualTo listOf("whitening")
+    }
+
+    @Test
+    fun `customer and admin entry points preserve every member directory error`() {
+        NotificationMemberApiError.entries
+            .filterNot { it == NotificationMemberApiError.MEMBER_ID_REQUIRED }
+            .forEach { error ->
+                val service = writableApplicationService(
+                    appointmentMemberResolver = FailingMemberResolver(error),
+                )
+
+                val customerFailure = assertFailsWith<NotificationMemberApiException> {
+                    service.requestAppointment(
+                        patientActor(),
+                        "member-customer-${error.name}",
+                        true,
+                        createAppointmentRequest("member-customer"),
+                    )
+                }
+                val adminFailure = assertFailsWith<NotificationMemberApiException> {
+                    service.directCreate(
+                        adminActor(),
+                        "member-admin-${error.name}",
+                        true,
+                        directCreateRequest("member-admin"),
+                    )
+                }
+
+                customerFailure.error shouldBeEqualTo error
+                adminFailure.error shouldBeEqualTo error
+            }
     }
 
     @Test
@@ -657,6 +692,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
         policySnapshot: CurrentPolicySnapshot = CurrentPolicySnapshot(42L, effectivePolicy()),
         policySnapshotResolver: AppointmentCommitmentPolicySnapshotResolver? = null,
         planningResolver: AppointmentCommitmentPlanningResolver = FakePlanningResolver(),
+        appointmentMemberResolver: AppointmentMemberResolver = VerifiedMemberResolver,
         consentMutation: ConsentEvidenceMutation = ConsentEvidenceMutation.NONE,
     ) = applicationService(
         properties =
@@ -667,6 +703,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
         policySnapshot = policySnapshot,
         policySnapshotResolver = policySnapshotResolver,
         planningResolver = planningResolver,
+        appointmentMemberResolver = appointmentMemberResolver,
         consentMutation = consentMutation,
     )
 
@@ -678,6 +715,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
         policySnapshot: CurrentPolicySnapshot = CurrentPolicySnapshot(42L, effectivePolicy()),
         policySnapshotResolver: AppointmentCommitmentPolicySnapshotResolver? = null,
         planningResolver: AppointmentCommitmentPlanningResolver = FakePlanningResolver(),
+        appointmentMemberResolver: AppointmentMemberResolver = VerifiedMemberResolver,
         consentMutation: ConsentEvidenceMutation = ConsentEvidenceMutation.NONE,
     ) = DefaultAppointmentCommitmentApplicationService(
         database = database,
@@ -718,6 +756,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
                     )
             },
         planningResolver = planningResolver,
+        appointmentMemberResolver = appointmentMemberResolver,
         consentEvidenceVerifier = FakeConsentEvidenceVerifier(consentMutation),
         metrics = metrics,
         idempotencyKeyHasher =
@@ -896,6 +935,34 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
             .getInstance("SHA-256")
             .digest(value.toByteArray(StandardCharsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
+
+    private object VerifiedMemberResolver : AppointmentMemberResolver {
+        override fun resolveLegacy(
+            tenantGroupId: Long,
+            clinicId: Long,
+            requested: MemberId?,
+        ): MemberResolution = MemberResolution.Resolved(requested ?: MemberId("patient-external-01"))
+
+        override fun resolvePlan(
+            actor: ActorContext,
+            access: ResolvedAppointmentPlanAccess,
+        ): MemberId = MemberId("patient-external-01")
+    }
+
+    private class FailingMemberResolver(
+        private val error: NotificationMemberApiError,
+    ) : AppointmentMemberResolver {
+        override fun resolveLegacy(
+            tenantGroupId: Long,
+            clinicId: Long,
+            requested: MemberId?,
+        ): MemberResolution = throw NotificationMemberApiException(error)
+
+        override fun resolvePlan(
+            actor: ActorContext,
+            access: ResolvedAppointmentPlanAccess,
+        ): MemberId = throw NotificationMemberApiException(error)
+    }
 
     private inner class FakePlanningResolver(
         private val candidateSlots: List<ProposalCandidateSlot> = listOf(defaultCandidateSlot()),
