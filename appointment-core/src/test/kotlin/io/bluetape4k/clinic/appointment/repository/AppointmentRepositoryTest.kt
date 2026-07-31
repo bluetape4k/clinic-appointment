@@ -2,6 +2,8 @@ package io.bluetape4k.clinic.appointment.repository
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeNull
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -69,6 +71,35 @@ class AppointmentRepositoryTest {
                 .where { Appointments.id eq saved.id.requireNotNull("saved.id") }
                 .single()[Appointments.patientExternalId]
         } shouldBeEqualTo "member-1"
+    }
+
+    @Test
+    fun `legacy 상태 변경은 명시적 version CAS로 한 번만 증가한다`() {
+        val saved = transaction(database) {
+            repository.save(appointment(memberId = MemberId("member-1")))
+        }
+        saved.version shouldBeEqualTo 0L
+
+        transaction(database) {
+            repository.updateLegacyStatus(
+                appointmentId = saved.id.requireNotNull("saved.id"),
+                expectedVersion = 0L,
+                newStatus = AppointmentState.CANCELLED,
+            )
+        }.shouldBeTrue()
+        transaction(database) {
+            repository.updateLegacyStatus(
+                appointmentId = saved.id.requireNotNull("saved.id"),
+                expectedVersion = 0L,
+                newStatus = AppointmentState.COMPLETED,
+            )
+        }.shouldBeFalse()
+
+        val updated = transaction(database) {
+            repository.findLegacyById(saved.id.requireNotNull("saved.id"))
+        }
+        updated?.version shouldBeEqualTo 1L
+        updated?.status shouldBeEqualTo AppointmentState.CANCELLED
     }
 
     @Test

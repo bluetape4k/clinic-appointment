@@ -69,10 +69,33 @@ class NotificationOutboxCodec {
             templateVersion = templateVersion.value,
             parameterType = parameterType.name,
             parameters = when (val typed = parameters) {
+                is AppointmentCreatedParameters -> NotificationParametersJson.AppointmentCreated(
+                    clinicDisplayName = typed.clinicDisplayName,
+                    appointmentDate = typed.appointmentDate.toString(),
+                    startTime = typed.startTime.toString(),
+                )
                 is AppointmentConfirmedParameters -> NotificationParametersJson.AppointmentConfirmed(
                     clinicDisplayName = typed.clinicDisplayName,
                     appointmentDate = typed.appointmentDate.toString(),
                     startTime = typed.startTime.toString(),
+                )
+                is AppointmentReminderParameters -> NotificationParametersJson.AppointmentReminder(
+                    clinicDisplayName = typed.clinicDisplayName,
+                    appointmentDate = typed.appointmentDate.toString(),
+                    startTime = typed.startTime.toString(),
+                )
+                is AppointmentCancelledParameters -> NotificationParametersJson.AppointmentCancelled(
+                    clinicDisplayName = typed.clinicDisplayName,
+                    appointmentDate = typed.appointmentDate.toString(),
+                    startTime = typed.startTime.toString(),
+                    cancellationReasonCode = typed.cancellationReasonCode?.value,
+                )
+                is AppointmentRescheduledParameters -> NotificationParametersJson.AppointmentRescheduled(
+                    clinicDisplayName = typed.clinicDisplayName,
+                    previousAppointmentDate = typed.previousAppointmentDate.toString(),
+                    previousStartTime = typed.previousStartTime.toString(),
+                    replacementAppointmentDate = typed.replacementAppointmentDate.toString(),
+                    replacementStartTime = typed.replacementStartTime.toString(),
                 )
             },
             occurredAt = occurredAt.toString(),
@@ -108,16 +131,24 @@ class NotificationOutboxCodec {
             throw invalidPayload()
         }
 
-    private fun NotificationParametersJson.toParameters(
+    private fun Any.toParameters(
         parameterType: NotificationParameterType,
     ): NotificationTemplateParameters =
         when (parameterType) {
-            NotificationParameterType.APPOINTMENT_CONFIRMED -> AppointmentConfirmedParameters(
-                clinicDisplayName = clinicDisplayName,
-                appointmentDate = LocalDate.parse(appointmentDate),
-                startTime = LocalTime.parse(startTime),
-            )
+            NotificationParameterType.APPOINTMENT_CREATED -> decodeAs<NotificationParametersJson.AppointmentCreated>()
+                .toParameters()
+            NotificationParameterType.APPOINTMENT_CONFIRMED -> decodeAs<NotificationParametersJson.AppointmentConfirmed>()
+                .toParameters()
+            NotificationParameterType.APPOINTMENT_REMINDER -> decodeAs<NotificationParametersJson.AppointmentReminder>()
+                .toParameters()
+            NotificationParameterType.APPOINTMENT_CANCELLED -> decodeAs<NotificationParametersJson.AppointmentCancelled>()
+                .toParameters()
+            NotificationParameterType.APPOINTMENT_RESCHEDULED -> decodeAs<NotificationParametersJson.AppointmentRescheduled>()
+                .toParameters()
         }
+
+    private inline fun <reified T : Any> Any.decodeAs(): T =
+        mapper.readValue(mapper.writeValueAsString(this))
 
     private fun invalidPayload(): NotificationContractException =
         NotificationContractException(
@@ -140,7 +171,7 @@ private data class NotificationOutboxEnvelopeJson(
     val templateKey: String,
     val templateVersion: Int,
     val parameterType: String,
-    val parameters: NotificationParametersJson,
+    val parameters: Any,
     val occurredAt: String,
     val availableAt: String,
 ) : Serializable {
@@ -149,25 +180,101 @@ private data class NotificationOutboxEnvelopeJson(
     }
 }
 
-private data class NotificationParametersJson(
-    val clinicDisplayName: String,
-    val appointmentDate: String,
-    val startTime: String,
-) : Serializable {
-    companion object {
-        private const val serialVersionUID = 1L
+private interface NotificationParametersJson : Serializable {
+
+    data class AppointmentCreated(
+        val clinicDisplayName: String,
+        val appointmentDate: String,
+        val startTime: String,
+    ) : NotificationParametersJson {
+
+        fun toParameters(): AppointmentCreatedParameters =
+            AppointmentCreatedParameters(
+                clinicDisplayName = clinicDisplayName,
+                appointmentDate = LocalDate.parse(appointmentDate),
+                startTime = LocalTime.parse(startTime),
+            )
+
+        companion object {
+            private const val serialVersionUID = 1L
+        }
     }
 
-    object AppointmentConfirmed {
-        operator fun invoke(
-            clinicDisplayName: String,
-            appointmentDate: String,
-            startTime: String,
-        ): NotificationParametersJson =
-            NotificationParametersJson(
+    data class AppointmentConfirmed(
+        val clinicDisplayName: String,
+        val appointmentDate: String,
+        val startTime: String,
+    ) : NotificationParametersJson {
+
+        fun toParameters(): AppointmentConfirmedParameters =
+            AppointmentConfirmedParameters(
                 clinicDisplayName = clinicDisplayName,
-                appointmentDate = appointmentDate,
-                startTime = startTime,
+                appointmentDate = LocalDate.parse(appointmentDate),
+                startTime = LocalTime.parse(startTime),
             )
+
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
+
+    data class AppointmentReminder(
+        val clinicDisplayName: String,
+        val appointmentDate: String,
+        val startTime: String,
+    ) : NotificationParametersJson {
+
+        fun toParameters(): AppointmentReminderParameters =
+            AppointmentReminderParameters(
+                clinicDisplayName = clinicDisplayName,
+                appointmentDate = LocalDate.parse(appointmentDate),
+                startTime = LocalTime.parse(startTime),
+            )
+
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
+
+    data class AppointmentCancelled(
+        val clinicDisplayName: String,
+        val appointmentDate: String,
+        val startTime: String,
+        val cancellationReasonCode: String?,
+    ) : NotificationParametersJson {
+
+        fun toParameters(): AppointmentCancelledParameters =
+            AppointmentCancelledParameters(
+                clinicDisplayName = clinicDisplayName,
+                appointmentDate = LocalDate.parse(appointmentDate),
+                startTime = LocalTime.parse(startTime),
+                cancellationReasonCode = cancellationReasonCode?.let(::CancellationReasonCode),
+            )
+
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
+
+    data class AppointmentRescheduled(
+        val clinicDisplayName: String,
+        val previousAppointmentDate: String,
+        val previousStartTime: String,
+        val replacementAppointmentDate: String,
+        val replacementStartTime: String,
+    ) : NotificationParametersJson {
+
+        fun toParameters(): AppointmentRescheduledParameters =
+            AppointmentRescheduledParameters(
+                clinicDisplayName = clinicDisplayName,
+                previousAppointmentDate = LocalDate.parse(previousAppointmentDate),
+                previousStartTime = LocalTime.parse(previousStartTime),
+                replacementAppointmentDate = LocalDate.parse(replacementAppointmentDate),
+                replacementStartTime = LocalTime.parse(replacementStartTime),
+            )
+
+        companion object {
+            private const val serialVersionUID = 1L
+        }
     }
 }

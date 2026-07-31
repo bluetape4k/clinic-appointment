@@ -41,6 +41,7 @@ object Appointments : LongIdTable("scheduling_appointments") {
     val consultationMethod = varchar("consultation_method", 30).nullable()
     val rescheduleFromId = long("reschedule_from_id").nullable()
     val status = appointmentState("status").clientDefault { AppointmentState.REQUESTED }
+    val version = long("version").default(0L)
     val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
     val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
 
