@@ -21,7 +21,7 @@ dependencies {
     implementation(libs.jetbrains.exposed.migration.jdbc)
     implementation("org.springframework.boot:spring-boot-starter-web")
 
-    // HA: Leader election for scheduler throttling
+    // Reminder recovery trigger leader election (delivery correctness uses DB lease/fencing)
     implementation(libs.bluetape4k.leader)
     implementation(libs.bluetape4k.lettuce)
     implementation(libs.lettuce.core)

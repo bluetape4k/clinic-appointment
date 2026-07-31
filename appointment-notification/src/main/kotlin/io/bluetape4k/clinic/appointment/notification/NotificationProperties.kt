@@ -11,21 +11,18 @@ import java.time.Duration
  * clinic:
  *   notification:
  *     enabled: true
- *     events:
- *       created: true
- *       confirmed: true
- *       cancelled: true
- *       rescheduled: true
- *     reminder:
+ *     worker:
  *       enabled: true
- *       day-before: true
- *       same-day: true
- *       same-day-hours-before: 2
+ *       max-attempts: 6
+ *       lease-duration: 60s
+ *       global-concurrency: 4
+ *       per-clinic-concurrency: 1
  * ```
  *
  * @property enabled 알림 모듈 활성화 여부
- * @property events 예약 이벤트별 알림 설정
- * @property reminder 예약 리마인더 설정
+ * @property events outbox 생성 시 적용하는 예약 이벤트별 알림 설정
+ * @property reminder 리마인더 outbox 생성 설정
+ * @property worker 내구성 outbox worker 설정
  */
 @ConfigurationProperties(prefix = "clinic.notification")
 data class NotificationProperties(
@@ -77,7 +74,7 @@ data class NotificationProperties(
     }
 
     /**
-     * durable notification outbox worker 설정입니다.
+     * 내구성 알림 outbox worker 설정입니다.
      *
      * provider 호출은 lease 안에서 제한된 횟수만 수행하고, 전체 worker 동시성은 회원 조회와
      * channel provider 상한보다 작거나 같아야 합니다.

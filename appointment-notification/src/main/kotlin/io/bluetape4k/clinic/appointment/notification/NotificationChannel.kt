@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.notification
 
-import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
+import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 
 /**
  * 알림 채널 인터페이스.
@@ -11,24 +11,8 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
  */
 interface NotificationChannel {
 
-    /** 채널 타입 식별자 (DUMMY, EMAIL, SMS, PUSH 등) */
-    val channelType: String
+    /** provider channel 유형입니다. */
+    val channelType: NotificationChannelType
 
-    fun sendCreated(appointment: AppointmentRecord)
-
-    fun sendConfirmed(appointment: AppointmentRecord)
-
-    fun sendCancelled(appointment: AppointmentRecord, reason: String?)
-
-    fun sendRescheduled(original: AppointmentRecord, newAppointment: AppointmentRecord)
-
-    fun sendReminder(appointment: AppointmentRecord, reminderType: ReminderType)
-}
-
-/**
- * 리마인더 유형.
- */
-enum class ReminderType {
-    DAY_BEFORE,
-    SAME_DAY,
+    fun send(request: NotificationProviderRequest): NotificationProviderResult
 }

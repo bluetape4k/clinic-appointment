@@ -4,15 +4,11 @@ import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
 import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
 import io.bluetape4k.leader.lettuce.leaderGroupElection
-import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.springframework.boot.ApplicationRunner
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -21,14 +17,14 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
-import org.springframework.scheduling.annotation.EnableScheduling
 
 /**
  * 알림 모듈 Auto-Configuration.
  *
  * `clinic.notification.enabled=true` (기본값)일 때 활성화됩니다.
  * [NotificationChannel] 빈이 없으면 [DummyNotificationChannel]을 등록합니다.
- * Redis가 있으면 리더 선출 + Resilience4j 장애 격리를 적용합니다.
+ * 데이터베이스가 있으면 내구성 outbox worker·dispatcher·retention runner를 구성하고,
+ * Redis가 있으면 향후 리마인더 복구 trigger용 리더 선출 빈을 등록합니다.
  */
 @AutoConfiguration
 @ConditionalOnProperty(
@@ -42,24 +38,8 @@ import org.springframework.scheduling.annotation.EnableScheduling
     NotificationResilienceProperties::class,
     NotificationCryptoProperties::class,
 )
-@EnableScheduling
 class NotificationAutoConfiguration {
     companion object : KLogging()
-
-    /**
-     * Flyway 비활성 시 Exposed SchemaUtils로 알림 테이블 생성.
-     */
-    @Bean
-    @ConditionalOnProperty(name = ["spring.flyway.enabled"], havingValue = "false", matchIfMissing = true)
-    fun notificationSchemaInitializer(): ApplicationRunner =
-        ApplicationRunner {
-            transaction {
-                MigrationUtils.statementsRequiredForDatabaseMigration(NotificationHistoryTable).forEach { exec(it) }
-            }
-        }
-
-    @Bean
-    fun notificationHistoryRepository(): NotificationHistoryRepository = NotificationHistoryRepository()
 
     @Bean
     @ConditionalOnMissingBean
@@ -167,8 +147,7 @@ class NotificationAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(NotificationChannel::class)
-    fun dummyNotificationChannel(historyRepository: NotificationHistoryRepository): NotificationChannel =
-        DummyNotificationChannel(historyRepository)
+    fun dummyNotificationChannel(): NotificationChannel = DummyNotificationChannel()
 
     /**
      * Resilience4j 데코레이터.
@@ -185,7 +164,8 @@ class NotificationAutoConfiguration {
 
     /**
      * Redis가 있을 때 리더 선출 빈 등록.
-     * HA 환경에서 스케줄러가 1개 인스턴스에서만 실행되도록 합니다.
+     * 향후 리마인더 복구 trigger를 단일 인스턴스에서 실행할 때 사용합니다.
+     * outbox 발송 정합성은 데이터베이스 lease와 fencing이 보장합니다.
      */
     @Bean
     @ConditionalOnClass(RedisClient::class)
@@ -195,27 +175,4 @@ class NotificationAutoConfiguration {
         return connection.leaderGroupElection()
     }
 
-    @Bean
-    fun notificationEventListener(
-        resilientNotificationChannel: ResilientNotificationChannel,
-        appointmentRepository: AppointmentRepository,
-        properties: NotificationProperties,
-    ): NotificationEventListener =
-        NotificationEventListener(resilientNotificationChannel, appointmentRepository, properties)
-
-    @Bean
-    fun appointmentReminderScheduler(
-        resilientNotificationChannel: ResilientNotificationChannel,
-        appointmentRepository: AppointmentRepository,
-        historyRepository: NotificationHistoryRepository,
-        properties: NotificationProperties,
-        leaderElection: LettuceLeaderGroupElector?,
-    ): AppointmentReminderScheduler =
-        AppointmentReminderScheduler(
-            resilientNotificationChannel,
-            appointmentRepository,
-            historyRepository,
-            properties,
-            leaderElection
-        )
 }
