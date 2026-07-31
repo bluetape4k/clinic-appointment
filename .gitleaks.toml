@@ -24,6 +24,7 @@ regexes = [
     '''YOUR_.*_HERE''',
     '''example[-_]key''',
     '''test[-_]api[-_]key''',
+    '''appointment-reminder-24h''',
     '''jwt\.secret=test-secret.*''',
     '''MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY''',
     '''0123456789abcdef0123456789abcdef''',
