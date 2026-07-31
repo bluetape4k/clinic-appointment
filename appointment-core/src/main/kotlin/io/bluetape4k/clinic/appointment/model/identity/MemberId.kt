@@ -23,6 +23,7 @@ value class MemberId(
     }
 
     companion object {
+        private const val serialVersionUID = 1L
         private const val MAX_LENGTH = 255
     }
 }
