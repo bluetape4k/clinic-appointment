@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.profile
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.model.dto.ClaimProfileReevaluationJobs
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationClinicCursor
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationJobRecord
@@ -10,8 +11,14 @@ import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
 import io.bluetape4k.clinic.appointment.model.dto.RedriveProfileReevaluationJob
 import io.bluetape4k.clinic.appointment.model.profile.ProfileReevaluationJobStatus
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
+import org.junit.jupiter.api.RepeatedTest
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Duration
@@ -21,6 +28,163 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class ProfileReevaluationDispatcherTest {
+    @Test
+    fun `서로 다른 병원 작업이 끝나면 permit registry 항목을 모두 제거한다`() {
+        runBlocking {
+            val clinicCount = 512
+            val jobs =
+                (1L..clinicCount.toLong())
+                    .map { clinicId -> workerJob(clinicId, clinicId) }
+                    .toMutableList()
+            val registry = SimpleMeterRegistry()
+            val dispatcher =
+                ProfileReevaluationDispatcher(
+                    store = QueueWorkStore(jobs),
+                    worker = ProfileReevaluationJobWorker { ProfileReevaluationWorkerResult.COMPLETED },
+                    leaseOwner = "dispatcher-a",
+                    globalConcurrency = 16,
+                    perClinicConcurrency = 2,
+                    runtimeGate = enabledRuntimeGate(),
+                    metrics = ProfileReevaluationMetrics(registry),
+                )
+
+            while (jobs.isNotEmpty()) {
+                dispatcher.dispatchOnce()
+            }
+
+            registry.find(ProfileReevaluationMetrics.CLINIC_PERMIT_REGISTRY_SIZE)
+                .gauge()
+                .shouldNotBeNull()
+                .value() shouldBeEqualTo 0.0
+            registry.find(ProfileReevaluationMetrics.CLINIC_PERMIT_EVICTIONS)
+                .counter()
+                .shouldNotBeNull()
+                .count() shouldBeEqualTo clinicCount.toDouble()
+        }
+    }
+
+    @Test
+    fun `permit 보유자와 대기자를 취소해도 registry 참조가 남지 않는다`() {
+        runBlocking {
+            val registry = SimpleMeterRegistry()
+            val workerStarted = CompletableDeferred<Unit>()
+            val dispatcher =
+                ProfileReevaluationDispatcher(
+                    store =
+                        SingleBatchWorkStore(
+                            listOf(
+                                workerJob(1L, 1L),
+                                workerJob(2L, 1L),
+                                workerJob(3L, 1L),
+                            ),
+                        ),
+                    worker =
+                        ProfileReevaluationJobWorker {
+                            workerStarted.complete(Unit)
+                            awaitCancellation()
+                        },
+                    leaseOwner = "dispatcher-a",
+                    globalConcurrency = 3,
+                    perClinicConcurrency = 1,
+                    runtimeGate = enabledRuntimeGate(),
+                    metrics = ProfileReevaluationMetrics(registry),
+                )
+
+            val dispatch = async { dispatcher.dispatchOnce() }
+            workerStarted.await()
+            delay(25)
+            dispatch.cancelAndJoin()
+
+            registry.find(ProfileReevaluationMetrics.CLINIC_PERMIT_REGISTRY_SIZE)
+                .gauge()
+                .shouldNotBeNull()
+                .value() shouldBeEqualTo 0.0
+            registry.find(ProfileReevaluationMetrics.CLINIC_PERMIT_EVICTIONS)
+                .counter()
+                .shouldNotBeNull()
+                .count() shouldBeEqualTo 1.0
+        }
+    }
+
+    @RepeatedTest(10)
+    fun `제거와 재확보가 경쟁해도 같은 병원은 설정한 동시 실행 수를 넘지 않는다`() {
+        runBlocking {
+            val registry = SimpleMeterRegistry()
+            val active = AtomicInteger()
+            val maximum = AtomicInteger()
+            val firstStarted = CompletableDeferred<Unit>()
+            val releaseFirst = CompletableDeferred<Unit>()
+            val secondStarted = CompletableDeferred<Unit>()
+            val releaseSecond = CompletableDeferred<Unit>()
+            val thirdStarted = CompletableDeferred<Unit>()
+            val lateBatchClaimed = CompletableDeferred<Unit>()
+            val store =
+                StagedWorkStore(
+                    ArrayDeque(
+                        listOf(
+                            listOf(workerJob(1L, 1L), workerJob(2L, 1L)),
+                            listOf(workerJob(3L, 1L)),
+                        ),
+                    ),
+                ) { claimCount ->
+                    if (claimCount == 2) {
+                        lateBatchClaimed.complete(Unit)
+                    }
+                }
+            val dispatcher =
+                ProfileReevaluationDispatcher(
+                    store = store,
+                    worker = ProfileReevaluationJobWorker { job ->
+                        val current = active.incrementAndGet()
+                        maximum.accumulateAndGet(current, ::maxOf)
+                        try {
+                            when (job.id) {
+                                1L -> {
+                                    firstStarted.complete(Unit)
+                                    releaseFirst.await()
+                                }
+                                2L -> {
+                                    secondStarted.complete(Unit)
+                                    releaseSecond.await()
+                                }
+                                3L -> thirdStarted.complete(Unit)
+                            }
+                            ProfileReevaluationWorkerResult.COMPLETED
+                        } finally {
+                            active.decrementAndGet()
+                        }
+                    },
+                    leaseOwner = "dispatcher-a",
+                    globalConcurrency = 3,
+                    perClinicConcurrency = 1,
+                    runtimeGate = enabledRuntimeGate(),
+                    metrics = ProfileReevaluationMetrics(registry),
+                )
+
+            val firstDispatch = async { dispatcher.dispatchOnce() }
+            firstStarted.await()
+            yield()
+            releaseFirst.complete(Unit)
+            secondStarted.await()
+
+            val lateDispatch = async { dispatcher.dispatchOnce() }
+            lateBatchClaimed.await()
+            yield()
+
+            thirdStarted.isCompleted shouldBeEqualTo false
+            maximum.get() shouldBeEqualTo 1
+
+            releaseSecond.complete(Unit)
+            thirdStarted.await()
+            firstDispatch.await()
+            lateDispatch.await()
+            registry.find(ProfileReevaluationMetrics.CLINIC_PERMIT_REGISTRY_SIZE)
+                .gauge()
+                .shouldNotBeNull()
+                .value() shouldBeEqualTo 0.0
+        }
+    }
+
     @Test
     fun `32개 병원의 backlog도 전역과 병원별 동시 실행 한도를 넘지 않는다`() {
         runBlocking {
@@ -332,6 +496,26 @@ private class QueueWorkStore(
                 }.take(command.limit)
         jobs.removeAll(selected.toSet())
         return selected
+    }
+}
+
+private class SingleBatchWorkStore(
+    private var jobs: List<ProfileReevaluationJobRecord>,
+) : ProfileReevaluationWorkStore by UnsupportedWorkStore {
+    override suspend fun claim(command: ClaimProfileReevaluationJobs): List<ProfileReevaluationJobRecord> =
+        jobs.also { jobs = emptyList() }
+}
+
+private class StagedWorkStore(
+    private val batches: ArrayDeque<List<ProfileReevaluationJobRecord>>,
+    private val onClaim: (Int) -> Unit,
+) : ProfileReevaluationWorkStore by UnsupportedWorkStore {
+    private var claimCount = 0
+
+    override suspend fun claim(command: ClaimProfileReevaluationJobs): List<ProfileReevaluationJobRecord> {
+        claimCount++
+        onClaim(claimCount)
+        return batches.removeFirstOrNull().orEmpty()
     }
 }
 
