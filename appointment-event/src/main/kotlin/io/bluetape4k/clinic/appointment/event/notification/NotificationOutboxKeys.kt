@@ -53,12 +53,12 @@ class StaticNotificationOutboxKeyRing(
 /**
  * 알림 outbox HMAC secret이다.
  *
- * secret byte 배열은 생성자와 accessor 양쪽에서 방어적으로 복사한다.
+ * 생성자는 key material byte 배열을 방어 복사하며, raw key byte는 외부로 노출하지 않는다.
  */
 class NotificationHmacKey(
     val keyId: String,
     secretBytes: ByteArray,
-) : Serializable {
+) {
 
     private val secretBytes = secretBytes.copyOf()
 
@@ -77,7 +77,6 @@ class NotificationHmacKey(
     }
 
     companion object {
-        private const val serialVersionUID = 1L
         private const val HMAC_SHA256 = "HmacSHA256"
         private const val MIN_SECRET_BYTES = 32
         private val SAFE_KEY_ID_REGEX = Regex("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
