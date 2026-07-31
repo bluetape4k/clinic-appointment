@@ -43,24 +43,47 @@ CREATE TABLE clinic_notification_outbox (
         idempotency_key_version, idempotency_key
     ),
     CONSTRAINT ck_notification_outbox_row_kind CHECK (
-        row_kind IN ('SENDABLE', 'LEGACY_SUPPRESSION')
+        CAST(row_kind AS BINARY) IN (CAST('SENDABLE' AS BINARY), CAST('LEGACY_SUPPRESSION' AS BINARY))
     ),
     CONSTRAINT ck_notification_outbox_status CHECK (
-        status IN ('PENDING', 'PROCESSING', 'RETRY_WAIT', 'SENT', 'SUPPRESSED', 'EXHAUSTED')
+        CAST(status AS BINARY) IN (
+            CAST('PENDING' AS BINARY),
+            CAST('PROCESSING' AS BINARY),
+            CAST('RETRY_WAIT' AS BINARY),
+            CAST('SENT' AS BINARY),
+            CAST('SUPPRESSED' AS BINARY),
+            CAST('EXHAUSTED' AS BINARY)
+        )
     ),
     CONSTRAINT ck_notification_outbox_channel CHECK (
-        channel IS NULL OR channel IN ('DUMMY', 'SMS', 'EMAIL', 'PUSH')
+        channel IS NULL OR CAST(channel AS BINARY) IN (
+            CAST('DUMMY' AS BINARY),
+            CAST('SMS' AS BINARY),
+            CAST('EMAIL' AS BINARY),
+            CAST('PUSH' AS BINARY)
+        )
     ),
     CONSTRAINT ck_notification_outbox_event_type CHECK (
-        event_type IS NULL OR event_type IN ('CREATED', 'CONFIRMED', 'CANCELLED', 'RESCHEDULED', 'REMINDER')
+        event_type IS NULL OR CAST(event_type AS BINARY) IN (
+            CAST('CREATED' AS BINARY),
+            CAST('CONFIRMED' AS BINARY),
+            CAST('CANCELLED' AS BINARY),
+            CAST('RESCHEDULED' AS BINARY),
+            CAST('REMINDER' AS BINARY)
+        )
     ),
     CONSTRAINT ck_notification_outbox_slot CHECK (
-        notification_slot IS NULL OR notification_slot IN (
-            'CREATED', 'CONFIRMED', 'CANCELLED', 'RESCHEDULED', 'REMINDER_24H', 'REMINDER_SAME_DAY'
+        notification_slot IS NULL OR CAST(notification_slot AS BINARY) IN (
+            CAST('CREATED' AS BINARY),
+            CAST('CONFIRMED' AS BINARY),
+            CAST('CANCELLED' AS BINARY),
+            CAST('RESCHEDULED' AS BINARY),
+            CAST('REMINDER_24H' AS BINARY),
+            CAST('REMINDER_SAME_DAY' AS BINARY)
         )
     ),
     CONSTRAINT ck_notification_outbox_parameter_type CHECK (
-        parameter_type IS NULL OR parameter_type IN ('APPOINTMENT_CONFIRMED')
+        parameter_type IS NULL OR CAST(parameter_type AS BINARY) IN (CAST('APPOINTMENT_CONFIRMED' AS BINARY))
     ),
     CONSTRAINT ck_notification_outbox_sendable_active_required CHECK (
         row_kind <> 'SENDABLE'
@@ -137,7 +160,13 @@ CREATE TABLE clinic_notification_delivery_attempts (
         REFERENCES clinic_notification_outbox(id) ON DELETE RESTRICT,
     CONSTRAINT uk_notification_delivery_attempt_number UNIQUE (outbox_id, attempt_number),
     CONSTRAINT ck_notification_delivery_attempt_outcome CHECK (
-        outcome IS NULL OR outcome IN ('SUCCESS', 'RETRY_SCHEDULED', 'SUPPRESSED', 'EXHAUSTED', 'LEASE_LOST')
+        outcome IS NULL OR CAST(outcome AS BINARY) IN (
+            CAST('SUCCESS' AS BINARY),
+            CAST('RETRY_SCHEDULED' AS BINARY),
+            CAST('SUPPRESSED' AS BINARY),
+            CAST('EXHAUSTED' AS BINARY),
+            CAST('LEASE_LOST' AS BINARY)
+        )
     ),
     INDEX idx_notification_delivery_attempt_completed_retention (completed_at, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
