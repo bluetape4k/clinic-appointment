@@ -17,6 +17,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
@@ -89,6 +90,60 @@ class AppointmentRepositoryTest {
                 .where { Appointments.id eq saved.id.requireNotNull("saved.id") }
                 .single()[Appointments.patientExternalId]
         }.shouldBeNull()
+    }
+
+    @Test
+    fun `legacy blank compatibility column은 nullable member id로 격리한다`() {
+        val appointmentId =
+            transaction(database) {
+                Appointments
+                    .insertAndGetId {
+                        it[clinicId] = CLINIC_ID
+                        it[doctorId] = DOCTOR_ID
+                        it[treatmentTypeId] = TREATMENT_TYPE_ID
+                        it[patientName] = "홍길동"
+                        it[patientPhone] = "010-1234-5678"
+                        it[patientExternalId] = "  \t"
+                        it[appointmentDate] = LocalDate.of(2026, 8, 1)
+                        it[startTime] = LocalTime.of(9, 0)
+                        it[endTime] = LocalTime.of(9, 30)
+                        it[status] = AppointmentState.CONFIRMED
+                    }.value
+            }
+
+        val found =
+            transaction(database) {
+                repository.findLegacyById(appointmentId)
+            }
+
+        found?.memberId.shouldBeNull()
+    }
+
+    @Test
+    fun `legacy nonblank compatibility column은 원문 공백까지 보존한다`() {
+        val appointmentId =
+            transaction(database) {
+                Appointments
+                    .insertAndGetId {
+                        it[clinicId] = CLINIC_ID
+                        it[doctorId] = DOCTOR_ID
+                        it[treatmentTypeId] = TREATMENT_TYPE_ID
+                        it[patientName] = "홍길동"
+                        it[patientPhone] = "010-1234-5678"
+                        it[patientExternalId] = "  member-1  "
+                        it[appointmentDate] = LocalDate.of(2026, 8, 1)
+                        it[startTime] = LocalTime.of(9, 0)
+                        it[endTime] = LocalTime.of(9, 30)
+                        it[status] = AppointmentState.CONFIRMED
+                    }.value
+            }
+
+        val found =
+            transaction(database) {
+                repository.findLegacyById(appointmentId)
+            }
+
+        found?.memberId shouldBeEqualTo MemberId("  member-1  ")
     }
 
     private fun appointment(memberId: MemberId?) =

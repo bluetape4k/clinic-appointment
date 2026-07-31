@@ -8,6 +8,7 @@ import io.bluetape4k.clinic.appointment.model.commitment.ResourceAllocationMode
 import io.bluetape4k.clinic.appointment.model.commitment.ResourceType
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.plan.AppointmentPlanStatus
 import io.bluetape4k.clinic.appointment.model.plan.PlanTreatmentStatus
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
@@ -609,7 +610,7 @@ private class VisitCommitmentCommandInvoker(
         AppointmentVisitIdentityDraft(
             patientName = "Patient $key",
             patientPhone = "010-0000-0000",
-            patientExternalId = "patient-$key",
+            memberId = MemberId("patient-$key"),
             patientReferenceFingerprint = clinic.patientReferenceFingerprint,
         )
 
