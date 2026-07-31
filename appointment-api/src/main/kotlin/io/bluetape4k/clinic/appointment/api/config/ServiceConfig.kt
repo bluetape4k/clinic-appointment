@@ -4,9 +4,12 @@ import io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentMetr
 import io.bluetape4k.clinic.appointment.api.commitment.AppointmentProposalService
 import io.bluetape4k.clinic.appointment.api.notification.AppointmentMemberDirectory
 import io.bluetape4k.clinic.appointment.api.notification.AppointmentMemberResolver
+import io.bluetape4k.clinic.appointment.api.notification.AppointmentNotificationWriter
+import io.bluetape4k.clinic.appointment.api.notification.DefaultAppointmentNotificationWriter
 import io.bluetape4k.clinic.appointment.api.notification.DefaultAppointmentMemberResolver
 import io.bluetape4k.clinic.appointment.api.notification.FailClosedAppointmentMemberDirectory
 import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberIdProperties
+import io.bluetape4k.clinic.appointment.api.notification.UnavailableAppointmentNotificationWriter
 import io.bluetape4k.clinic.appointment.api.policy.PolicyActivationPublisher
 import io.bluetape4k.clinic.appointment.api.policy.EffectiveSchedulingPolicyService
 import io.bluetape4k.clinic.appointment.api.policy.ExposedEffectivePolicyStore
@@ -41,6 +44,9 @@ import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContext
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.event.policy.SchedulingPolicyEventRepository
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
@@ -59,6 +65,7 @@ import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
+import io.bluetape4k.clinic.appointment.service.AppointmentRescheduleNotificationWriter
 import io.bluetape4k.clinic.appointment.service.AppointmentPlanQueryService
 import io.bluetape4k.clinic.appointment.service.PackageExecutionLimits
 import io.bluetape4k.clinic.appointment.service.CatalogSyncApplicationService
@@ -85,6 +92,7 @@ import javax.sql.DataSource
 import java.util.Base64
 import java.time.Instant
 import java.time.Clock
+import java.time.Duration
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -151,6 +159,41 @@ class ServiceConfig {
 
     @Bean
     fun appointmentPlanRepository(): AppointmentPlanRepository = AppointmentPlanRepository()
+
+    @Bean
+    fun notificationOutboxCodec(): NotificationOutboxCodec = NotificationOutboxCodec()
+
+    @Bean
+    fun notificationOutboxRepository(
+        notificationOutboxCodec: NotificationOutboxCodec,
+    ): NotificationOutboxRepository =
+        NotificationOutboxRepository(
+            codec = notificationOutboxCodec,
+            leaseDuration = Duration.ofMinutes(5),
+        )
+
+    /**
+     * 외부 secret-backed key ring이 준비된 환경에서만 실제 enqueue writer를 구성한다.
+     *
+     * key가 없으면 예약 command 시점에 닫힌 실패로 거절하며, 임시 키나 무서명
+     * idempotency 값으로 우회하지 않는다.
+     */
+    @Bean
+    fun appointmentNotificationWriter(
+        notificationOutboxRepository: NotificationOutboxRepository,
+        notificationOutboxHasherProvider: ObjectProvider<NotificationOutboxHasher>,
+        clinicRepository: ClinicRepository,
+    ): AppointmentNotificationWriter {
+        val hasher = notificationOutboxHasherProvider.getIfAvailable()
+            ?: return UnavailableAppointmentNotificationWriter
+        return DefaultAppointmentNotificationWriter(
+            repository = notificationOutboxRepository,
+            hasher = hasher,
+            clinicRepository = clinicRepository,
+            clock = Clock.systemUTC(),
+            sameDayReminderLeadTime = Duration.ofHours(2),
+        )
+    }
 
     /**
      * 회원 서비스 adapter가 연결되지 않은 환경에서는 신규 예약을 닫힌 실패로 막는다.
@@ -301,12 +344,21 @@ class ServiceConfig {
         rescheduleCandidateRepository: RescheduleCandidateRepository,
         appointmentStateHistoryRepository: AppointmentStateHistoryRepository,
         doctorRepository: DoctorRepository,
+        appointmentNotificationWriter: AppointmentNotificationWriter,
     ): ClosureRescheduleService = ClosureRescheduleService(
         slotCalculationService,
         appointmentRepository,
         rescheduleCandidateRepository,
         appointmentStateHistoryRepository,
         doctorRepository,
+        AppointmentRescheduleNotificationWriter { tenantGroupId, original, replacement, version ->
+            appointmentNotificationWriter.rescheduled(
+                tenantGroupId = tenantGroupId,
+                original = original,
+                replacement = replacement,
+                version = version,
+            )
+        },
     )
 
     @Bean

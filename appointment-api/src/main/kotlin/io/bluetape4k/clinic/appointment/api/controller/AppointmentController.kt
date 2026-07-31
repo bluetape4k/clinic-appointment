@@ -100,7 +100,7 @@ class AppointmentController(
         OApiResponse(responseCode = "404", description = "Member not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         OApiResponse(responseCode = "409", description = "Scheduling, idempotency, or ambiguous member reference conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         OApiResponse(responseCode = "422", description = "Verified member identifier required", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
-        OApiResponse(responseCode = "503", description = "Member directory unavailable", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        OApiResponse(responseCode = "503", description = "Member directory or notification enqueue unavailable", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
     )
     @PostMapping
     fun create(
@@ -116,18 +116,17 @@ class AppointmentController(
             treatmentTypeId = request.treatmentTypeId,
             equipmentId = request.equipmentId,
         )
-        val normalizedRequest = when (
-            val resolution = appointmentMemberResolver.resolveLegacy(
-                tenantGroupId = tenant.id,
-                clinicId = request.clinicId,
-                requested = request.memberId?.let(::MemberId),
-            )
-        ) {
+        val resolution = appointmentMemberResolver.resolveLegacy(
+            tenantGroupId = tenant.id,
+            clinicId = request.clinicId,
+            requested = request.memberId?.let(::MemberId),
+        )
+        val normalizedRequest = when (resolution) {
             is MemberResolution.Resolved -> request.copy(memberId = resolution.memberId.value)
             MemberResolution.LegacyMissing -> request.copy(memberId = null)
         }
         log.debug { "POST appointment tenantCode=$tenantCode, clinicId=${request.clinicId}" }
-        val result = appointmentService.create(tenant.id, normalizedRequest, idempotencyKey)
+        val result = appointmentService.create(tenant.id, normalizedRequest, idempotencyKey, resolution)
         val (timezone, locale) = timezoneService.getTimezoneAndLocale(result.appointment.clinicId)
         return ResponseEntity.status(if (result.replayed) HttpStatus.OK else HttpStatus.CREATED)
             .body(ApiResponse.ok(result.appointment.toResponse(timezone, locale)))
@@ -155,6 +154,7 @@ class AppointmentController(
         OApiResponse(responseCode = "400", description = "Invalid parameters"),
         OApiResponse(responseCode = "404", description = "Appointment not found"),
         OApiResponse(responseCode = "409", description = "Invalid state transition"),
+        OApiResponse(responseCode = "503", description = "Notification enqueue unavailable", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
     )
     @PatchMapping("/{id}/status")
     suspend fun updateStatus(
@@ -174,6 +174,7 @@ class AppointmentController(
         OApiResponse(responseCode = "200", description = "Success"),
         OApiResponse(responseCode = "404", description = "Appointment not found"),
         OApiResponse(responseCode = "409", description = "Invalid state transition"),
+        OApiResponse(responseCode = "503", description = "Notification enqueue unavailable", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
     )
     @DeleteMapping("/{id}")
     suspend fun cancel(

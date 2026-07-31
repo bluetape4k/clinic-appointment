@@ -536,6 +536,79 @@ class NotificationOutboxRepositoryTest {
         }
     }
 
+    @Test
+    fun `예약 변경 억제는 pending과 claimed 리마인더를 종료하고 늦은 fence 완료를 거절한다`() {
+        transaction(database) {
+            val reminderParameters = AppointmentReminderParameters(
+                clinicDisplayName = "Clinic",
+                appointmentDate = LocalDate.parse("2026-08-01"),
+                startTime = LocalTime.parse("09:00"),
+            )
+            val dayBefore = repository.enqueue(
+                sendableDraft(
+                    eventId = "reminder-24h",
+                    digest = "reminder-digest-24h",
+                    eventType = NotificationEventType.REMINDER,
+                    notificationSlot = NotificationSlot.REMINDER_24H,
+                    templateKey = "appointment-reminder-24h",
+                    parameterType = NotificationParameterType.APPOINTMENT_REMINDER,
+                    parameters = reminderParameters,
+                )
+            )
+            repository.enqueue(
+                sendableDraft(
+                    eventId = "reminder-same-day",
+                    digest = "reminder-digest-same-day",
+                    eventType = NotificationEventType.REMINDER,
+                    notificationSlot = NotificationSlot.REMINDER_SAME_DAY,
+                    templateKey = "appointment-reminder-same-day",
+                    parameterType = NotificationParameterType.APPOINTMENT_REMINDER,
+                    parameters = reminderParameters,
+                )
+            )
+            repository.enqueue(
+                sendableDraft(
+                    eventId = "confirmed-kept",
+                    digest = "confirmed-kept-digest",
+                )
+            )
+            val claimed = repository.claim(dayBefore.id, owner = "worker-a", token = "token-a")!!
+
+            repository.suppressOutstandingReminders(
+                appointmentId = AppointmentId(3L),
+                suppressionReason = NotificationSuppressionReasonCode.APPOINTMENT_CHANGED,
+            ) shouldBeEqualTo 2
+
+            val rows = NotificationOutboxEvents.selectAll().toList()
+            rows.filter {
+                it[NotificationOutboxEvents.notificationSlot] in
+                    setOf(NotificationSlot.REMINDER_24H, NotificationSlot.REMINDER_SAME_DAY)
+            }.forEach {
+                it[NotificationOutboxEvents.status] shouldBeEqualTo NotificationOutboxStatus.SUPPRESSED
+                it[NotificationOutboxEvents.appointmentId].shouldBeNull()
+                it[NotificationOutboxEvents.memberId].shouldBeNull()
+                it[NotificationOutboxEvents.parametersJson].shouldBeNull()
+                it[NotificationOutboxEvents.suppressionReason] shouldBeEqualTo
+                    NotificationSuppressionReasonCode.APPOINTMENT_CHANGED
+            }
+            rows.single { it[NotificationOutboxEvents.notificationSlot] == NotificationSlot.CONFIRMED }
+                .get(NotificationOutboxEvents.status) shouldBeEqualTo NotificationOutboxStatus.PENDING
+            val interruptedAttempt = NotificationDeliveryAttempts.selectAll().single()
+            interruptedAttempt[NotificationDeliveryAttempts.outcome] shouldBeEqualTo
+                NotificationDeliveryAttemptOutcome.LEASE_LOST
+            interruptedAttempt[NotificationDeliveryAttempts.failureCode] shouldBeEqualTo
+                NotificationFailureCode.LEASE_LOST.name
+            repository.complete(
+                CompleteNotificationCommand(
+                    outboxId = claimed.id,
+                    owner = claimed.owner,
+                    token = claimed.token,
+                    attemptNumber = claimed.attemptNumber,
+                )
+            ).shouldBeFalse()
+        }
+    }
+
     private fun sendableDraft(
         eventId: String = "event-1",
         digest: String = "digest-1",

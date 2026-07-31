@@ -25,6 +25,7 @@ import java.time.LocalDate
  * @param appointmentRepository 예약 Repository
  * @param rescheduleCandidateRepository 재배정 후보 Repository
  * @param stateHistoryRepository 예약 상태 이력 Repository
+ * @param notificationWriter tenant-scoped 재배정 command의 알림 outbox 연결 port
  */
 class ClosureRescheduleService(
     private val slotCalculationService: SlotCalculationService,
@@ -32,6 +33,7 @@ class ClosureRescheduleService(
     private val rescheduleCandidateRepository: RescheduleCandidateRepository = RescheduleCandidateRepository(),
     private val stateHistoryRepository: AppointmentStateHistoryRepository = AppointmentStateHistoryRepository(),
     private val doctorRepository: DoctorRepository = DoctorRepository(),
+    private val notificationWriter: AppointmentRescheduleNotificationWriter? = null,
 ) {
     companion object: KLogging() {
         private val ACTIVE_STATUSES = AppointmentState.ACTIVE_STATUSES
@@ -55,14 +57,16 @@ class ClosureRescheduleService(
             val affected = appointmentRepository.findActiveByClinicAndDate(clinicId, closureDate, ACTIVE_STATUSES)
             if (affected.isEmpty()) return@transaction emptyMap()
 
-            appointmentRepository.updateStatusByClinicAndDate(
-                clinicId,
-                closureDate,
-                ACTIVE_STATUSES,
-                AppointmentState.PENDING_RESCHEDULE
-            )
-
             for (appointment in affected) {
+                check(
+                    appointmentRepository.updateLegacyStatus(
+                        appointmentId = appointment.id.requireNotNull("appointment.id"),
+                        expectedVersion = appointment.version,
+                        newStatus = AppointmentState.PENDING_RESCHEDULE,
+                    )
+                ) {
+                    "Appointment changed concurrently during closure reschedule"
+                }
                 stateHistoryRepository.save(
                     AppointmentStateHistoryRecord(
                         appointmentId = appointment.id.requireNotNull("appointment.id"),
@@ -275,17 +279,42 @@ class ClosureRescheduleService(
         )
 
         val newAppointment = appointmentRepository.save(appointmentRecord)
-        appointmentRepository.updateStatus(original.id.requireNotNull("original.id"), AppointmentState.RESCHEDULED)
+        val originalId = original.id.requireNotNull("original.id")
+        check(appointmentRepository.updateLegacyStatus(originalId, original.version, AppointmentState.RESCHEDULED)) {
+            "Original appointment changed concurrently"
+        }
         stateHistoryRepository.save(
             AppointmentStateHistoryRecord(
-                appointmentId = original.id,
+                appointmentId = originalId,
                 fromState = original.status,
                 toState = AppointmentState.RESCHEDULED,
                 reason = "재배정 확정",
             )
         )
         rescheduleCandidateRepository.markSelected(candidateId)
+        if (tenantGroupId != null) {
+            val updatedOriginal = appointmentRepository.findByIdAndTenant(originalId, tenantGroupId)
+                ?: error("Original appointment is unavailable after reschedule")
+            notificationWriter?.rescheduled(
+                tenantGroupId = tenantGroupId,
+                original = updatedOriginal,
+                replacement = newAppointment,
+                version = updatedOriginal.version,
+            )
+        }
 
         return newAppointment.id.requireNotNull("newAppointment.id")
     }
+}
+
+/**
+ * `appointment-core`가 알림 모듈에 의존하지 않으면서 caller transaction을 공유하는 port다.
+ */
+fun interface AppointmentRescheduleNotificationWriter {
+    fun rescheduled(
+        tenantGroupId: Long,
+        original: AppointmentRecord,
+        replacement: AppointmentRecord,
+        version: Long,
+    )
 }
