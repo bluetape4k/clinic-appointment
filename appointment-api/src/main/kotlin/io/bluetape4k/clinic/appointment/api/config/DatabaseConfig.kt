@@ -6,6 +6,8 @@ import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingQuarantineAuditEvents
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingQuarantineEvents
 import io.bluetape4k.clinic.appointment.event.integration.UntrustedSchedulingEventRejections
+import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentAuditEvents
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommandIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
@@ -151,6 +153,8 @@ class SchemaInitConfig {
                     ProfileReevaluationHeads,
                     ProfileReevaluationJobs,
                     ProfileReevaluationOutcomes,
+                    NotificationOutboxEvents,
+                    NotificationDeliveryAttempts,
                 )
             }
         }
