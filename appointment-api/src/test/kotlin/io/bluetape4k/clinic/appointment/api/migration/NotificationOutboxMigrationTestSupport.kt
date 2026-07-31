@@ -141,6 +141,13 @@ internal object NotificationOutboxMigrationTestSupport {
         insertOutbox(connection, sendableRow(id = 2L, status = "SENT").copy(appointmentId = null, memberId = null, parametersJson = null))
         insertOutbox(connection, legacySuppressionRow(id = 3L))
 
+        VALID_PARAMETER_TYPES.forEachIndexed { offset, parameterType ->
+            insertOutbox(
+                connection,
+                sendableRow(id = 10L + offset).copy(parameterType = parameterType),
+            )
+        }
+
         ACTIVE_REQUIRED_FIELDS.forEachIndexed { offset, testCase ->
             expectConstraintViolation("active SENDABLE must include ${testCase.field}") {
                 insertOutbox(connection, testCase.mutate(sendableRow(id = 100L + offset)))
@@ -591,6 +598,14 @@ internal object NotificationOutboxMigrationTestSupport {
         ConstraintCase("event_type lowercase") { it.copy(eventType = "confirmed") },
         ConstraintCase("notification_slot lowercase") { it.copy(notificationSlot = "confirmed") },
         ConstraintCase("parameter_type lowercase") { it.copy(parameterType = "appointment_confirmed") },
+    )
+
+    private val VALID_PARAMETER_TYPES = listOf(
+        "APPOINTMENT_CREATED",
+        "APPOINTMENT_CONFIRMED",
+        "APPOINTMENT_REMINDER",
+        "APPOINTMENT_CANCELLED",
+        "APPOINTMENT_RESCHEDULED",
     )
 
     private const val OUTBOX_INSERT_SQL = """

@@ -62,7 +62,10 @@ CREATE TABLE clinic_notification_outbox (
     ),
     CONSTRAINT ck_notification_outbox_parameter_type CHECK (
         parameter_type IS NULL
-        OR LOCATE(CONCAT('|', parameter_type, '|'), '|APPOINTMENT_CONFIRMED|') > 0
+        OR LOCATE(
+            CONCAT('|', parameter_type, '|'),
+            '|APPOINTMENT_CREATED|APPOINTMENT_CONFIRMED|APPOINTMENT_REMINDER|APPOINTMENT_CANCELLED|APPOINTMENT_RESCHEDULED|'
+        ) > 0
     ),
     CONSTRAINT ck_notification_outbox_sendable_active_required CHECK (
         row_kind NOT LIKE 'SENDABLE'

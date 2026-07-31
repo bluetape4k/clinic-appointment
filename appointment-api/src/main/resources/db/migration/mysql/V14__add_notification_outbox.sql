@@ -83,7 +83,13 @@ CREATE TABLE clinic_notification_outbox (
         )
     ),
     CONSTRAINT ck_notification_outbox_parameter_type CHECK (
-        parameter_type IS NULL OR CAST(parameter_type AS BINARY) IN (CAST('APPOINTMENT_CONFIRMED' AS BINARY))
+        parameter_type IS NULL OR CAST(parameter_type AS BINARY) IN (
+            CAST('APPOINTMENT_CREATED' AS BINARY),
+            CAST('APPOINTMENT_CONFIRMED' AS BINARY),
+            CAST('APPOINTMENT_REMINDER' AS BINARY),
+            CAST('APPOINTMENT_CANCELLED' AS BINARY),
+            CAST('APPOINTMENT_RESCHEDULED' AS BINARY)
+        )
     ),
     CONSTRAINT ck_notification_outbox_sendable_active_required CHECK (
         row_kind <> 'SENDABLE'
