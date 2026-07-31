@@ -78,6 +78,21 @@ object NotificationOutboxEvents : LongIdTable("clinic_notification_outbox") {
     /** legacy suppression의 종료 원인이다. sendable row에서는 null이다. */
     val suppressionReason = enumerationByName<NotificationSuppressionReasonCode>("suppression_reason", 64).nullable()
 
+    /** terminal failure의 닫힌 code다. raw exception message는 저장하지 않는다. */
+    val failureCode = enumerationByName<NotificationFailureCode>("failure_code", 64).nullable()
+
+    /** provider가 검증해 반환한 낮은 cardinality message reference다. */
+    val providerMessageReference = varchar("provider_message_reference", 128).nullable()
+
+    /** 실제 수신자가 아닌 비식별 destination fingerprint다. */
+    val destinationFingerprint = varchar("destination_fingerprint", 128).nullable()
+
+    /** workflow correlation metadata다. */
+    val correlationId = varchar("correlation_id", 128).nullable()
+
+    /** distributed trace metadata다. */
+    val traceId = varchar("trace_id", 128).nullable()
+
     /** 최초 발송 또는 retry가 가능해지는 UTC 시각이다. */
     val availableAt = timestamp("available_at")
 
@@ -129,8 +144,8 @@ object NotificationOutboxEvents : LongIdTable("clinic_notification_outbox") {
             rowKind,
             status,
             availableAt,
-            nextRetryAt,
             id,
+            nextRetryAt,
         )
         index(
             NotificationOutboxIndexes.leaseRecovery.name,
@@ -181,7 +196,7 @@ object NotificationOutboxIndexes {
     )
     val readyWithinClinic = NotificationOutboxIndexContract(
         name = "idx_notification_outbox_ready_within_clinic",
-        columns = listOf("tenant_group_id", "clinic_id", "row_kind", "status", "available_at", "next_retry_at", "id"),
+        columns = listOf("tenant_group_id", "clinic_id", "row_kind", "status", "available_at", "id", "next_retry_at"),
     )
     val leaseRecovery = NotificationOutboxIndexContract(
         name = "idx_notification_outbox_lease_recovery",
@@ -229,8 +244,8 @@ object NotificationOutboxQueryContracts {
     )
     val readyWithinClinic = NotificationOutboxQueryContract(
         name = "readyWithinClinic",
-        filters = listOf("tenant_group_id", "clinic_id", "row_kind", "status", "available_at", "next_retry_at", "id"),
-        orderBy = listOf("id"),
+        filters = listOf("tenant_group_id", "clinic_id", "row_kind", "status", "available_at", "id", "next_retry_at"),
+        orderBy = listOf("available_at", "id"),
         indexColumns = NotificationOutboxIndexes.readyWithinClinic.columns,
     )
     val leaseRecovery = NotificationOutboxQueryContract(

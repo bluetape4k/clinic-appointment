@@ -3,11 +3,13 @@ package io.bluetape4k.clinic.appointment.event.notification
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.junit5.concurrency.MultithreadingTester
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -65,6 +67,43 @@ class NotificationOutboxConcurrencyTest {
         successes.size shouldBeEqualTo 1
         transaction(database) {
             NotificationDeliveryAttempts.selectAll().count() shouldBeEqualTo 1L
+            NotificationOutboxEvents.selectAll().single()[NotificationOutboxEvents.attemptNumber] shouldBeEqualTo 1
+        }
+    }
+
+    @Test
+    fun `만료 recovery를 20개 worker가 경쟁해도 이전 attempt는 한 번만 lease lost로 닫힌다`() {
+        val successes = ConcurrentLinkedQueue<ClaimedNotification>()
+        val workerId = AtomicInteger()
+        val candidateId = transaction(database) {
+            val candidate = repository.findReadyCandidates(NotificationClinicKey(TenantGroupId(1L), ClinicId(2L)), null, 10)
+                .single()
+            repository.claim(candidate.id, owner = "old-worker", token = "old-token")
+            NotificationOutboxEvents.update({ NotificationOutboxEvents.id eq candidate.id }) {
+                it[leaseUntil] = Instant.parse("2020-01-01T00:00:00Z")
+            }
+            candidate.id
+        }
+
+        MultithreadingTester()
+            .workers(20)
+            .rounds(1)
+            .add {
+                val worker = workerId.incrementAndGet()
+                transaction(database) {
+                    repository.recoverExpired(candidateId, owner = "recovery-$worker", token = "recovery-token-$worker")
+                }?.let(successes::add)
+            }
+            .run()
+
+        successes.size shouldBeEqualTo 1
+        transaction(database) {
+            NotificationOutboxEvents.selectAll().single()[NotificationOutboxEvents.attemptNumber] shouldBeEqualTo 2
+            NotificationDeliveryAttempts.selectAll().count() shouldBeEqualTo 2L
+            NotificationDeliveryAttempts.selectAll()
+                .orderBy(NotificationDeliveryAttempts.attemptNumber)
+                .map { it[NotificationDeliveryAttempts.outcome] } shouldBeEqualTo
+                listOf(NotificationDeliveryAttemptOutcome.LEASE_LOST, null)
         }
     }
 

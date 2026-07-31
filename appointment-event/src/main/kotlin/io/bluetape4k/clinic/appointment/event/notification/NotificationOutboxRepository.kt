@@ -10,6 +10,7 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
@@ -100,7 +101,7 @@ class NotificationOutboxRepository(
         require(limit > 0) { "limit must be positive" }
         cursorId?.let { require(it > 0) { "cursorId must be positive" } }
         val dbNow = dbCurrentTimestamp()
-        val cursorPredicate = cursorId?.let { NotificationOutboxEvents.id greater it }
+        val cursorPredicate = cursorId?.let { readyCursorPredicate(it) }
 
         return NotificationOutboxEvents
             .selectAll()
@@ -110,7 +111,7 @@ class NotificationOutboxRepository(
                     (NotificationOutboxEvents.clinicId eq key.clinicId.value) and
                     (cursorPredicate ?: org.jetbrains.exposed.v1.core.Op.TRUE),
             )
-            .orderBy(NotificationOutboxEvents.id to SortOrder.ASC)
+            .orderBy(NotificationOutboxEvents.availableAt to SortOrder.ASC, NotificationOutboxEvents.id to SortOrder.ASC)
             .limit(limit)
             .map { it.toCandidate() }
     }
@@ -119,50 +120,109 @@ class NotificationOutboxRepository(
         require(candidateId > 0) { "candidateId must be positive" }
         val validOwner = owner.validFence("owner")
         val validToken = token.validFence("token")
-        val row = findOutboxForUpdate(candidateId) ?: return null
         val dbNow = dbCurrentTimestamp()
-        if (!row.isReady(dbNow)) return null
+        val snapshot = findOutbox(candidateId) ?: return null
+        if (!snapshot.isReady(dbNow)) return null
+        val oldAttempt = snapshot[NotificationOutboxEvents.attemptNumber]
+        val nextAttempt = oldAttempt + 1
+        val leaseUntil = dbNow.plus(leaseDuration)
+        val updated = NotificationOutboxEvents.update({
+            readyPredicate(dbNow) and
+                (NotificationOutboxEvents.id eq candidateId) and
+                (NotificationOutboxEvents.attemptNumber eq oldAttempt)
+        }) {
+            it[status] = NotificationOutboxStatus.PROCESSING
+            it[leaseOwner] = validOwner
+            it[leaseToken] = validToken
+            it[NotificationOutboxEvents.leaseUntil] = leaseUntil
+            it[attemptNumber] = nextAttempt
+            it[updatedAt] = dbNow
+        }
+        if (updated != 1) return null
 
-        return openAttempt(row, validOwner, validToken, dbNow)
+        insertAttempt(snapshot, nextAttempt, validOwner, validToken, dbNow)
+        return snapshot.toClaimed(nextAttempt, validOwner, validToken, leaseUntil)
     }
 
     fun recoverExpired(candidateId: Long, owner: String, token: String): ClaimedNotification? {
         require(candidateId > 0) { "candidateId must be positive" }
         val validOwner = owner.validFence("owner")
         val validToken = token.validFence("token")
-        val row = findOutboxForUpdate(candidateId) ?: return null
         val dbNow = dbCurrentTimestamp()
-        if (!row.isExpiredProcessing(dbNow)) return null
+        val snapshot = findOutbox(candidateId) ?: return null
+        if (!snapshot.isExpiredProcessing(dbNow)) return null
+        val oldAttempt = snapshot[NotificationOutboxEvents.attemptNumber]
+        val oldOwner = snapshot[NotificationOutboxEvents.leaseOwner] ?: return null
+        val oldToken = snapshot[NotificationOutboxEvents.leaseToken] ?: return null
+        val nextAttempt = oldAttempt + 1
+        val leaseUntil = dbNow.plus(leaseDuration)
+        val updated = NotificationOutboxEvents.update({
+            (NotificationOutboxEvents.id eq candidateId) and
+                (NotificationOutboxEvents.rowKind eq NotificationOutboxRowKind.SENDABLE) and
+                (NotificationOutboxEvents.status eq NotificationOutboxStatus.PROCESSING) and
+                (NotificationOutboxEvents.attemptNumber eq oldAttempt) and
+                (NotificationOutboxEvents.leaseOwner eq oldOwner) and
+                (NotificationOutboxEvents.leaseToken eq oldToken) and
+                (NotificationOutboxEvents.leaseUntil less dbNow)
+        }) {
+            it[leaseOwner] = validOwner
+            it[leaseToken] = validToken
+            it[NotificationOutboxEvents.leaseUntil] = leaseUntil
+            it[attemptNumber] = nextAttempt
+            it[updatedAt] = dbNow
+        }
+        if (updated != 1) return null
 
         closeAttempt(
             outboxId = candidateId,
-            attemptNumber = row[NotificationOutboxEvents.attemptNumber],
-            succeeded = false,
+            attemptNumber = oldAttempt,
+            owner = oldOwner,
+            token = oldToken,
+            outcome = NotificationDeliveryAttemptOutcome.LEASE_LOST,
             failureCode = NotificationFailureCode.LEASE_LOST,
-            finishedAt = dbNow,
+            completedAt = dbNow,
         )
-        return openAttempt(row, validOwner, validToken, dbNow)
+        insertAttempt(snapshot, nextAttempt, validOwner, validToken, dbNow)
+        return snapshot.toClaimed(nextAttempt, validOwner, validToken, leaseUntil)
     }
 
     fun complete(command: CompleteNotificationCommand): Boolean {
         command.validate()
         val dbNow = dbCurrentTimestamp()
         val updated = NotificationOutboxEvents.update({ fencedProcessingPredicate(command, dbNow) }) {
-            it[status] = NotificationOutboxStatus.SENT
+            it[status] = command.terminalStatus
+            it[appointmentId] = null
+            it[memberId] = null
+            it[parametersJson] = null
+            it[failureCode] = command.failureCode
+            it[suppressionReason] = command.suppressionReason
+            it[providerMessageReference] = command.providerMessageReference
+            it[destinationFingerprint] = command.destinationFingerprint
+            it[correlationId] = command.correlationId
+            it[traceId] = command.traceId
             it[leaseOwner] = null
             it[leaseToken] = null
             it[leaseUntil] = null
             it[terminalAt] = dbNow
             it[updatedAt] = dbNow
         }
-        if (updated != 1) return false
+        if (updated != 1) {
+            closeLostFence(command, dbNow)
+            return false
+        }
 
         closeAttempt(
             outboxId = command.outboxId,
             attemptNumber = command.attemptNumber,
-            succeeded = true,
-            failureCode = null,
-            finishedAt = dbNow,
+            owner = command.owner,
+            token = command.token,
+            outcome = command.terminalStatus.toAttemptOutcome(),
+            failureCode = command.failureCode,
+            completedAt = dbNow,
+            providerMessageReference = command.providerMessageReference,
+            destinationFingerprint = command.destinationFingerprint,
+            correlationId = command.correlationId,
+            traceId = command.traceId,
         )
         return true
     }
@@ -178,14 +238,23 @@ class NotificationOutboxRepository(
             it[nextRetryAt] = command.nextAttemptAt
             it[updatedAt] = dbNow
         }
-        if (updated != 1) return false
+        if (updated != 1) {
+            closeLostFence(command, dbNow)
+            return false
+        }
 
         closeAttempt(
             outboxId = command.outboxId,
             attemptNumber = command.attemptNumber,
-            succeeded = false,
+            owner = command.owner,
+            token = command.token,
+            outcome = NotificationDeliveryAttemptOutcome.RETRY_SCHEDULED,
             failureCode = command.failureCode,
-            finishedAt = dbNow,
+            completedAt = dbNow,
+            providerMessageReference = command.providerMessageReference,
+            destinationFingerprint = command.destinationFingerprint,
+            correlationId = command.correlationId,
+            traceId = command.traceId,
         )
         return true
     }
@@ -216,6 +285,11 @@ class NotificationOutboxRepository(
             it[parameterType] = envelope.parameterType
             it[parametersJson] = codec.encode(envelope)
             it[suppressionReason] = null
+            it[failureCode] = null
+            it[providerMessageReference] = null
+            it[destinationFingerprint] = null
+            it[correlationId] = null
+            it[traceId] = null
             it[availableAt] = envelope.availableAt
             it[nextRetryAt] = null
             it[leaseOwner] = null
@@ -254,6 +328,11 @@ class NotificationOutboxRepository(
             it[parameterType] = null
             it[parametersJson] = null
             it[suppressionReason] = draft.suppressionReason
+            it[failureCode] = null
+            it[providerMessageReference] = null
+            it[destinationFingerprint] = null
+            it[correlationId] = null
+            it[traceId] = null
             it[availableAt] = draft.availableAt
             it[nextRetryAt] = null
             it[leaseOwner] = null
@@ -267,52 +346,88 @@ class NotificationOutboxRepository(
         return findById(id.value) ?: error("notification outbox suppression insert did not return a readable row")
     }
 
-    private fun openAttempt(
+    private fun insertAttempt(
         row: ResultRow,
+        attemptNumber: Int,
         owner: String,
         token: String,
         dbNow: Instant,
-    ): ClaimedNotification {
+    ) {
         val outboxId = row[NotificationOutboxEvents.id].value
-        val nextAttempt = row[NotificationOutboxEvents.attemptNumber] + 1
-        val leaseUntil = dbNow.plus(leaseDuration)
-        NotificationOutboxEvents.update({ NotificationOutboxEvents.id eq outboxId }) {
-            it[status] = NotificationOutboxStatus.PROCESSING
-            it[leaseOwner] = owner
-            it[leaseToken] = token
-            it[NotificationOutboxEvents.leaseUntil] = leaseUntil
-            it[attemptNumber] = nextAttempt
-            it[updatedAt] = dbNow
-        }
         NotificationDeliveryAttempts.insertAndGetId {
             it[NotificationDeliveryAttempts.outboxId] = EntityID(outboxId, NotificationOutboxEvents)
-            it[attemptNumber] = nextAttempt
+            it[NotificationDeliveryAttempts.attemptNumber] = attemptNumber
             it[NotificationDeliveryAttempts.owner] = owner
             it[NotificationDeliveryAttempts.token] = token
+            it[channel] = row[NotificationOutboxEvents.channel] ?: error("sendable notification outbox row must have channel")
+            it[eventType] = row[NotificationOutboxEvents.eventType] ?: error("sendable notification outbox row must have eventType")
+            it[templateKey] = row[NotificationOutboxEvents.templateKey]
+                ?: error("sendable notification outbox row must have templateKey")
+            it[templateVersion] = row[NotificationOutboxEvents.templateVersion]
+                ?: error("sendable notification outbox row must have templateVersion")
             it[startedAt] = dbNow
-            it[finishedAt] = null
-            it[succeeded] = null
+            it[completedAt] = null
+            it[durationMillis] = null
+            it[outcome] = null
             it[failureCode] = null
+            it[providerMessageReference] = null
+            it[destinationFingerprint] = null
+            it[correlationId] = null
+            it[traceId] = null
         }
-        return row.toClaimed(nextAttempt, owner, token, leaseUntil)
     }
 
     private fun closeAttempt(
         outboxId: Long,
         attemptNumber: Int,
-        succeeded: Boolean,
+        owner: String,
+        token: String,
+        outcome: NotificationDeliveryAttemptOutcome,
         failureCode: NotificationFailureCode?,
-        finishedAt: Instant,
+        completedAt: Instant,
+        providerMessageReference: String? = null,
+        destinationFingerprint: String? = null,
+        correlationId: String? = null,
+        traceId: String? = null,
     ) {
+        val attempt = NotificationDeliveryAttempts.selectAll()
+            .where {
+                (NotificationDeliveryAttempts.outboxId eq EntityID(outboxId, NotificationOutboxEvents)) and
+                    (NotificationDeliveryAttempts.attemptNumber eq attemptNumber) and
+                    (NotificationDeliveryAttempts.owner eq owner) and
+                    (NotificationDeliveryAttempts.token eq token) and
+                    NotificationDeliveryAttempts.completedAt.isNull()
+            }
+            .singleOrNull()
+        val startedAt = attempt?.get(NotificationDeliveryAttempts.startedAt) ?: return
         NotificationDeliveryAttempts.update({
             (NotificationDeliveryAttempts.outboxId eq EntityID(outboxId, NotificationOutboxEvents)) and
                 (NotificationDeliveryAttempts.attemptNumber eq attemptNumber) and
-                NotificationDeliveryAttempts.finishedAt.isNull()
+                (NotificationDeliveryAttempts.owner eq owner) and
+                (NotificationDeliveryAttempts.token eq token) and
+                NotificationDeliveryAttempts.completedAt.isNull()
         }) {
-            it[NotificationDeliveryAttempts.finishedAt] = finishedAt
-            it[NotificationDeliveryAttempts.succeeded] = succeeded
+            it[NotificationDeliveryAttempts.completedAt] = completedAt
+            it[NotificationDeliveryAttempts.durationMillis] = Duration.between(startedAt, completedAt).toMillis().coerceAtLeast(0L)
+            it[NotificationDeliveryAttempts.outcome] = outcome
             it[NotificationDeliveryAttempts.failureCode] = failureCode?.name
+            it[NotificationDeliveryAttempts.providerMessageReference] = providerMessageReference
+            it[NotificationDeliveryAttempts.destinationFingerprint] = destinationFingerprint
+            it[NotificationDeliveryAttempts.correlationId] = correlationId
+            it[NotificationDeliveryAttempts.traceId] = traceId
         }
+    }
+
+    private fun closeLostFence(command: NotificationFenceCommand, dbNow: Instant) {
+        closeAttempt(
+            outboxId = command.outboxId,
+            attemptNumber = command.attemptNumber,
+            owner = command.owner,
+            token = command.token,
+            outcome = NotificationDeliveryAttemptOutcome.LEASE_LOST,
+            failureCode = NotificationFailureCode.LEASE_LOST,
+            completedAt = dbNow,
+        )
     }
 
     private fun findById(id: Long): NotificationOutboxRecord? =
@@ -332,12 +447,18 @@ class NotificationOutboxRepository(
             .singleOrNull()
             ?.toRecord()
 
-    private fun findOutboxForUpdate(id: Long): ResultRow? =
+    private fun findOutbox(id: Long): ResultRow? =
         NotificationOutboxEvents
             .selectAll()
             .where { NotificationOutboxEvents.id eq id }
-            .forUpdate()
             .singleOrNull()
+
+    private fun readyCursorPredicate(cursorId: Long) =
+        findOutbox(cursorId)?.let { cursor ->
+            val cursorAvailableAt = cursor[NotificationOutboxEvents.availableAt]
+            (NotificationOutboxEvents.availableAt greater cursorAvailableAt) or
+                ((NotificationOutboxEvents.availableAt eq cursorAvailableAt) and (NotificationOutboxEvents.id greater cursorId))
+        } ?: org.jetbrains.exposed.v1.core.Op.TRUE
 
     private fun readyPredicate(dbNow: Instant) =
         (NotificationOutboxEvents.rowKind eq NotificationOutboxRowKind.SENDABLE) and
@@ -417,6 +538,32 @@ class NotificationOutboxRepository(
             token = token,
             attemptNumber = attemptNumber,
             leaseUntil = leaseUntil,
+            channel = checkNotNull(this[NotificationOutboxEvents.channel]) {
+                "sendable notification outbox row must have channel"
+            },
+            eventType = checkNotNull(this[NotificationOutboxEvents.eventType]) {
+                "sendable notification outbox row must have eventType"
+            },
+            notificationSlot = checkNotNull(this[NotificationOutboxEvents.notificationSlot]) {
+                "sendable notification outbox row must have notificationSlot"
+            },
+            providerKey = checkNotNull(this[NotificationOutboxEvents.providerKey]) {
+                "sendable notification outbox row must have providerKey"
+            },
+            templateKey = NotificationTemplateKey(
+                checkNotNull(this[NotificationOutboxEvents.templateKey]) {
+                    "sendable notification outbox row must have templateKey"
+                }
+            ),
+            templateVersion = NotificationTemplateVersion(
+                checkNotNull(this[NotificationOutboxEvents.templateVersion]) {
+                    "sendable notification outbox row must have templateVersion"
+                }
+            ),
+            parameterType = checkNotNull(this[NotificationOutboxEvents.parameterType]) {
+                "sendable notification outbox row must have parameterType"
+            },
+            eventId = NotificationEventId(this[NotificationOutboxEvents.eventId]),
             parametersJson = parametersJson,
         )
     }
@@ -510,6 +657,14 @@ data class ClaimedNotification(
     val token: String,
     val attemptNumber: Int,
     val leaseUntil: Instant,
+    val channel: NotificationChannelType,
+    val eventType: NotificationEventType,
+    val notificationSlot: NotificationSlot,
+    val providerKey: String,
+    val templateKey: NotificationTemplateKey,
+    val templateVersion: NotificationTemplateVersion,
+    val parameterType: NotificationParameterType,
+    val eventId: NotificationEventId,
     val parametersJson: String,
 ) : Serializable {
     companion object {
@@ -550,6 +705,13 @@ data class CompleteNotificationCommand(
     override val owner: String,
     override val token: String,
     override val attemptNumber: Int,
+    val terminalStatus: NotificationOutboxStatus = NotificationOutboxStatus.SENT,
+    val failureCode: NotificationFailureCode? = null,
+    val suppressionReason: NotificationSuppressionReasonCode? = null,
+    val providerMessageReference: String? = null,
+    val destinationFingerprint: String? = null,
+    val correlationId: String? = null,
+    val traceId: String? = null,
 ) : NotificationFenceCommand,
     Serializable {
     companion object {
@@ -565,6 +727,10 @@ data class RetryNotificationCommand(
     override val attemptNumber: Int,
     val failureCode: NotificationFailureCode,
     val nextAttemptAt: Instant,
+    val providerMessageReference: String? = null,
+    val destinationFingerprint: String? = null,
+    val correlationId: String? = null,
+    val traceId: String? = null,
 ) : NotificationFenceCommand,
     Serializable {
     companion object {
@@ -577,7 +743,56 @@ private fun NotificationFenceCommand.validate() {
     owner.validFence("owner")
     token.validFence("token")
     require(attemptNumber > 0) { "attemptNumber must be positive" }
+    when (this) {
+        is CompleteNotificationCommand -> {
+            require(terminalStatus in TERMINAL_STATUSES) { "terminalStatus must be SENT, SUPPRESSED, or EXHAUSTED" }
+            if (terminalStatus == NotificationOutboxStatus.SENT) {
+                require(failureCode == null) { "failureCode must be null for SENT" }
+                require(suppressionReason == null) { "suppressionReason must be null for SENT" }
+            }
+            if (terminalStatus == NotificationOutboxStatus.SUPPRESSED) {
+                require(suppressionReason != null) { "suppressionReason is required for SUPPRESSED" }
+            }
+            if (terminalStatus == NotificationOutboxStatus.EXHAUSTED) {
+                require(failureCode != null) { "failureCode is required for EXHAUSTED" }
+            }
+            validateOptionalMetadata()
+        }
+
+        is RetryNotificationCommand -> validateOptionalMetadata()
+    }
 }
+
+private fun CompleteNotificationCommand.validateOptionalMetadata() {
+    providerMessageReference?.validFence("providerMessageReference")
+    destinationFingerprint?.validFence("destinationFingerprint")
+    correlationId?.validFence("correlationId")
+    traceId?.validFence("traceId")
+}
+
+private fun RetryNotificationCommand.validateOptionalMetadata() {
+    providerMessageReference?.validFence("providerMessageReference")
+    destinationFingerprint?.validFence("destinationFingerprint")
+    correlationId?.validFence("correlationId")
+    traceId?.validFence("traceId")
+}
+
+private fun NotificationOutboxStatus.toAttemptOutcome(): NotificationDeliveryAttemptOutcome =
+    when (this) {
+        NotificationOutboxStatus.SENT -> NotificationDeliveryAttemptOutcome.SUCCESS
+        NotificationOutboxStatus.SUPPRESSED -> NotificationDeliveryAttemptOutcome.SUPPRESSED
+        NotificationOutboxStatus.EXHAUSTED -> NotificationDeliveryAttemptOutcome.EXHAUSTED
+        NotificationOutboxStatus.PENDING,
+        NotificationOutboxStatus.PROCESSING,
+        NotificationOutboxStatus.RETRY_WAIT,
+        -> error("status $this is not terminal")
+    }
+
+private val TERMINAL_STATUSES = setOf(
+    NotificationOutboxStatus.SENT,
+    NotificationOutboxStatus.SUPPRESSED,
+    NotificationOutboxStatus.EXHAUSTED,
+)
 
 private fun String.validFence(fieldName: String): String =
     validateDurableOpaqueString(this, fieldName, 128)
