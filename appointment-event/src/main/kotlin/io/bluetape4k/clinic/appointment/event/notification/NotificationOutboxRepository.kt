@@ -56,6 +56,64 @@ class NotificationOutboxRepository(
             ?: error("notification outbox suppression insert was ignored without an idempotency row")
     }
 
+    /**
+     * 예약 변경으로 더 이상 유효하지 않은 미래 리마인더를 종료한다.
+     *
+     * 이미 claim된 행도 lease fence를 제거하고 open attempt를 `LEASE_LOST`로 닫아
+     * provider 결과 불명 가능성을 보존한다. 늦게 도착한 worker 완료 update는 fence
+     * 검증에 실패한다. 호출자는 예약 변경과 이 작업을 같은 transaction에서 실행해야 한다.
+     */
+    fun suppressOutstandingReminders(
+        appointmentId: AppointmentId,
+        suppressionReason: NotificationSuppressionReasonCode,
+    ): Int {
+        val dbNow = dbCurrentTimestamp()
+        val candidates = NotificationOutboxEvents
+            .selectAll()
+            .where {
+                (NotificationOutboxEvents.rowKind eq NotificationOutboxRowKind.SENDABLE) and
+                    (NotificationOutboxEvents.appointmentId eq appointmentId.value) and
+                    (NotificationOutboxEvents.notificationSlot inList REMINDER_SLOTS) and
+                    (NotificationOutboxEvents.status inList SUPPRESSIBLE_STATUSES)
+            }
+            .forUpdate()
+            .toList()
+
+        return candidates.count { row ->
+            val outboxId = row[NotificationOutboxEvents.id].value
+            val attemptNumber = row[NotificationOutboxEvents.attemptNumber]
+            val owner = row[NotificationOutboxEvents.leaseOwner]
+            val token = row[NotificationOutboxEvents.leaseToken]
+            val updated = NotificationOutboxEvents.update({
+                (NotificationOutboxEvents.id eq outboxId) and
+                    (NotificationOutboxEvents.status inList SUPPRESSIBLE_STATUSES)
+            }) {
+                it[status] = NotificationOutboxStatus.SUPPRESSED
+                it[NotificationOutboxEvents.appointmentId] = null
+                it[memberId] = null
+                it[parametersJson] = null
+                it[NotificationOutboxEvents.suppressionReason] = suppressionReason
+                it[leaseOwner] = null
+                it[leaseToken] = null
+                it[leaseUntil] = null
+                it[terminalAt] = dbNow
+                it[updatedAt] = dbNow
+            } == 1
+            if (updated && owner != null && token != null && attemptNumber > 0) {
+                closeAttempt(
+                    outboxId = outboxId,
+                    attemptNumber = attemptNumber,
+                    owner = owner,
+                    token = token,
+                    outcome = NotificationDeliveryAttemptOutcome.LEASE_LOST,
+                    failureCode = NotificationFailureCode.LEASE_LOST,
+                    completedAt = dbNow,
+                )
+            }
+            updated
+        }
+    }
+
     fun findReadyClinicKeys(
         cursor: NotificationFairCursor?,
         limit: Int,
@@ -808,6 +866,17 @@ private val TERMINAL_STATUSES = setOf(
     NotificationOutboxStatus.SENT,
     NotificationOutboxStatus.SUPPRESSED,
     NotificationOutboxStatus.EXHAUSTED,
+)
+
+private val REMINDER_SLOTS = listOf(
+    NotificationSlot.REMINDER_24H,
+    NotificationSlot.REMINDER_SAME_DAY,
+)
+
+private val SUPPRESSIBLE_STATUSES = listOf(
+    NotificationOutboxStatus.PENDING,
+    NotificationOutboxStatus.PROCESSING,
+    NotificationOutboxStatus.RETRY_WAIT,
 )
 
 private fun String.validFence(fieldName: String): String =

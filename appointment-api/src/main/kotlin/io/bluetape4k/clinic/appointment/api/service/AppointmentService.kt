@@ -6,7 +6,10 @@ import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.clinic.appointment.api.dto.CreateAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiException
+import io.bluetape4k.clinic.appointment.api.notification.AppointmentNotificationWriter
+import io.bluetape4k.clinic.appointment.api.notification.MemberResolution
 import io.bluetape4k.clinic.appointment.event.AppointmentDomainEvent
+import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentIdempotencyRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
@@ -14,6 +17,7 @@ import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistoryReco
 import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
+import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentEvent
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentStateMachine
@@ -45,6 +49,8 @@ class AppointmentService(
     private val idempotencyRepository: AppointmentIdempotencyRepository,
     private val idempotencyProperties: AppointmentIdempotencyProperties,
     private val idempotencyClock: Clock,
+    private val clinicRepository: ClinicRepository,
+    private val notificationWriter: AppointmentNotificationWriter,
 ) {
     companion object : KLogging()
 
@@ -65,26 +71,34 @@ class AppointmentService(
             ?: throw NoSuchElementException("Appointment not found: $id")
     }
 
-    fun create(request: CreateAppointmentRequest): AppointmentRecord {
-        val saved = transaction { appointmentRepository.save(newAppointmentRecord(request)) }
-        publishCreated(saved)
-        return saved
-    }
-
     fun create(
         tenantGroupId: Long,
         request: CreateAppointmentRequest,
         idempotencyKey: String?,
+        resolution: MemberResolution,
     ): AppointmentCreationResult {
         val key = idempotencyKey?.also(::validateIdempotencyKey)
         if (key == null) {
-            return AppointmentCreationResult(create(request), replayed = false)
+            val saved = transaction {
+                appointmentRepository.save(newAppointmentRecord(request)).also {
+                    notificationWriter.appointmentCreated(tenantGroupId, it, it.version, resolution)
+                }
+            }
+            publishCreated(saved)
+            return AppointmentCreationResult(saved, replayed = false)
         }
 
         val fingerprint = request.fingerprint()
         val result = try {
             transaction {
-                createIdempotently(tenantGroupId, request, key, fingerprint, Instant.now(idempotencyClock))
+                createIdempotently(
+                    tenantGroupId = tenantGroupId,
+                    request = request,
+                    idempotencyKey = key,
+                    fingerprint = fingerprint,
+                    now = Instant.now(idempotencyClock),
+                    resolution = resolution,
+                )
             }
         } catch (ex: ExposedSQLException) {
             if (!ex.isUniqueConstraintViolation()) {
@@ -105,6 +119,7 @@ class AppointmentService(
         idempotencyKey: String,
         fingerprint: String,
         now: Instant,
+        resolution: MemberResolution,
     ): AppointmentCreationResult {
         idempotencyRepository.deleteExpired(tenantGroupId, request.clinicId, idempotencyKey, now)
         val existing = idempotencyRepository.findByTenantGroupAndClinicAndKey(
@@ -127,6 +142,7 @@ class AppointmentService(
                 expiresAt = now.plus(idempotencyProperties.ttl),
             )
         )
+        notificationWriter.appointmentCreated(tenantGroupId, saved, saved.version, resolution)
         return AppointmentCreationResult(saved, replayed = false)
     }
 
@@ -181,54 +197,21 @@ class AppointmentService(
     }
 
     internal suspend fun updateStatus(id: Long, targetStatus: String, reason: String?): AppointmentRecord {
-        log.debug { "updateStatus: id=$id, target=$targetStatus" }
-        val record = transaction { appointmentRepository.findByIdOrNull(id) }
-            ?: throw NoSuchElementException("Appointment not found: $id")
-
-        val currentState = record.status
-        val event = parseEvent(targetStatus, reason)
-        val nextState = stateMachine.transition(currentState, event)
-
-        transaction {
-            appointmentRepository.updateStatus(id, nextState)
-            stateHistoryRepository.save(
-                AppointmentStateHistoryRecord(
-                    appointmentId = id,
-                    fromState = currentState,
-                    toState = nextState,
-                    reason = reason,
-                )
-            )
-        }
-
-        eventPublisher.publishEvent(
-            AppointmentDomainEvent.StatusChanged(
-                appointmentId = id,
-                clinicId = record.clinicId,
-                fromState = currentState.name,
-                toState = nextState.name,
-                reason = reason,
-            )
-        )
-
-        return transaction { appointmentRepository.findByIdOrNull(id) }
-            ?: throw NoSuchElementException("Appointment not found after status update: $id")
+        val tenantGroupId = tenantGroupIdForAppointment(id)
+        return updateStatus(id, tenantGroupId, targetStatus, reason)
     }
 
     suspend fun updateStatus(id: Long, tenantGroupId: Long, targetStatus: String, reason: String?): AppointmentRecord {
         log.debug { "updateStatus: id=$id, tenantGroupId=$tenantGroupId, target=$targetStatus" }
-        val record = transaction {
+        val transition = transaction {
             rejectCommitmentV2Mutation(id, tenantGroupId)
-            appointmentRepository.findByIdAndTenant(id, tenantGroupId)
-        }
-            ?: throw NoSuchElementException("Appointment not found: $id")
-
-        val currentState = record.status
-        val event = parseEvent(targetStatus, reason)
-        val nextState = stateMachine.transition(currentState, event)
-
-        transaction {
-            appointmentRepository.updateStatus(id, nextState)
+            val record = appointmentRepository.findByIdAndTenant(id, tenantGroupId)
+                ?: throw NoSuchElementException("Appointment not found: $id")
+            val currentState = record.status
+            val nextState = stateMachine.nextState(currentState, parseEvent(targetStatus, reason))
+            check(appointmentRepository.updateLegacyStatus(id, record.version, nextState)) {
+                "Appointment changed concurrently"
+            }
             stateHistoryRepository.save(
                 AppointmentStateHistoryRecord(
                     appointmentId = id,
@@ -237,20 +220,28 @@ class AppointmentService(
                     reason = reason,
                 )
             )
+            val updated = appointmentRepository.findByIdAndTenant(id, tenantGroupId)
+                ?: throw NoSuchElementException("Appointment not found after status update: $id")
+            notificationWriter.statusChanged(
+                tenantGroupId = tenantGroupId,
+                record = updated,
+                version = updated.version,
+                from = currentState,
+                to = nextState,
+            )
+            AppointmentTransitionResult(updated, currentState, nextState)
         }
 
         eventPublisher.publishEvent(
             AppointmentDomainEvent.StatusChanged(
                 appointmentId = id,
-                clinicId = record.clinicId,
-                fromState = currentState.name,
-                toState = nextState.name,
+                clinicId = transition.record.clinicId,
+                fromState = transition.from.name,
+                toState = transition.to.name,
                 reason = reason,
             )
         )
-
-        return transaction { appointmentRepository.findByIdAndTenant(id, tenantGroupId) }
-            ?: throw NoSuchElementException("Appointment not found after status update: $id")
+        return transition.record
     }
 
     internal fun getStateHistory(appointmentId: Long): List<AppointmentStateHistoryRecord> {
@@ -272,52 +263,22 @@ class AppointmentService(
     }
 
     internal suspend fun cancel(id: Long, reason: String? = null): AppointmentRecord {
-        log.debug { "cancel: id=$id, reason=$reason" }
-        val record = transaction { appointmentRepository.findByIdOrNull(id) }
-            ?: throw NoSuchElementException("Appointment not found: $id")
-
-        val effectiveReason = reason ?: "Cancelled by user"
-        val currentState = record.status
-        stateMachine.transition(currentState, AppointmentEvent.Cancel(reason = effectiveReason))
-
-        transaction {
-            appointmentRepository.updateStatus(id, AppointmentState.CANCELLED)
-            stateHistoryRepository.save(
-                AppointmentStateHistoryRecord(
-                    appointmentId = id,
-                    fromState = currentState,
-                    toState = AppointmentState.CANCELLED,
-                    reason = effectiveReason,
-                )
-            )
-        }
-
-        eventPublisher.publishEvent(
-            AppointmentDomainEvent.Cancelled(
-                appointmentId = id,
-                clinicId = record.clinicId,
-                reason = effectiveReason,
-            )
-        )
-
-        return transaction { appointmentRepository.findByIdOrNull(id) }
-            ?: throw NoSuchElementException("Appointment not found after cancel: $id")
+        val tenantGroupId = tenantGroupIdForAppointment(id)
+        return cancel(id, tenantGroupId, reason)
     }
 
     suspend fun cancel(id: Long, tenantGroupId: Long, reason: String? = null): AppointmentRecord {
         log.debug { "cancel: id=$id, tenantGroupId=$tenantGroupId, reason=$reason" }
-        val record = transaction {
-            rejectCommitmentV2Mutation(id, tenantGroupId)
-            appointmentRepository.findByIdAndTenant(id, tenantGroupId)
-        }
-            ?: throw NoSuchElementException("Appointment not found: $id")
-
         val effectiveReason = reason ?: "Cancelled by user"
-        val currentState = record.status
-        stateMachine.transition(currentState, AppointmentEvent.Cancel(reason = effectiveReason))
-
-        transaction {
-            appointmentRepository.updateStatus(id, AppointmentState.CANCELLED)
+        val cancelled = transaction {
+            rejectCommitmentV2Mutation(id, tenantGroupId)
+            val record = appointmentRepository.findByIdAndTenant(id, tenantGroupId)
+                ?: throw NoSuchElementException("Appointment not found: $id")
+            val currentState = record.status
+            stateMachine.nextState(currentState, AppointmentEvent.Cancel(reason = effectiveReason))
+            check(appointmentRepository.updateLegacyStatus(id, record.version, AppointmentState.CANCELLED)) {
+                "Appointment changed concurrently"
+            }
             stateHistoryRepository.save(
                 AppointmentStateHistoryRecord(
                     appointmentId = id,
@@ -326,19 +287,34 @@ class AppointmentService(
                     reason = effectiveReason,
                 )
             )
+            val updated = appointmentRepository.findByIdAndTenant(id, tenantGroupId)
+                ?: throw NoSuchElementException("Appointment not found after cancel: $id")
+            notificationWriter.cancelled(
+                tenantGroupId = tenantGroupId,
+                record = updated,
+                version = updated.version,
+                reasonCode = reason?.toRegisteredCancellationReasonCode(),
+            )
+            updated
         }
 
         eventPublisher.publishEvent(
             AppointmentDomainEvent.Cancelled(
                 appointmentId = id,
-                clinicId = record.clinicId,
+                clinicId = cancelled.clinicId,
                 reason = effectiveReason,
             )
         )
-
-        return transaction { appointmentRepository.findByIdAndTenant(id, tenantGroupId) }
-            ?: throw NoSuchElementException("Appointment not found after cancel: $id")
+        return cancelled
     }
+
+    private fun tenantGroupIdForAppointment(appointmentId: Long): Long =
+        transaction {
+            val appointment = appointmentRepository.findByIdOrNull(appointmentId)
+                ?: throw NoSuchElementException("Appointment not found: $appointmentId")
+            clinicRepository.findByIdOrNull(appointment.clinicId)?.tenantGroupId
+                ?: throw NoSuchElementException("Clinic not found: ${appointment.clinicId}")
+        }
 
     /**
      * commitment v2 row가 legacy 상태 변경 경로로 우회하지 못하게 한다.
@@ -362,6 +338,15 @@ data class AppointmentCreationResult(
     val appointment: AppointmentRecord,
     val replayed: Boolean,
 )
+
+private data class AppointmentTransitionResult(
+    val record: AppointmentRecord,
+    val from: AppointmentState,
+    val to: AppointmentState,
+)
+
+private fun String.toRegisteredCancellationReasonCode(): CancellationReasonCode? =
+    runCatching(::CancellationReasonCode).getOrNull()
 
 private fun validateIdempotencyKey(idempotencyKey: String) {
     require(idempotencyKey.isNotBlank()) { "Idempotency-Key must not be blank" }

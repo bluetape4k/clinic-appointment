@@ -1,6 +1,12 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
+import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
+import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
+import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
+import io.bluetape4k.clinic.appointment.event.notification.StaticNotificationOutboxKeyRing
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
@@ -89,6 +95,16 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 ): MemberDirectoryResult =
                     MemberDirectoryResult.Resolved(MemberId("member-v2"))
             }
+
+        @Bean
+        @Primary
+        fun notificationOutboxHasher(): NotificationOutboxHasher =
+            DefaultNotificationOutboxHasher(
+                StaticNotificationOutboxKeyRing(
+                    active = NotificationHmacKey("appointment-controller-test", ByteArray(32) { 7 }),
+                    previous = null,
+                )
+            )
     }
 
     @LocalServerPort
@@ -113,9 +129,10 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 TreatmentTypes, Equipments, TreatmentEquipments,
                 ConsultationTopics, Holidays,
                 Appointments, AppointmentIdempotencies, AppointmentNotes, AppointmentStateHistory,
-                RescheduleCandidates, AppointmentEventLogs,
+                RescheduleCandidates, AppointmentEventLogs, NotificationOutboxEvents,
             )
 
+            NotificationOutboxEvents.deleteAll()
             AppointmentEventLogs.deleteAll()
             AppointmentStateHistory.deleteAll()
             RescheduleCandidates.deleteAll()
@@ -210,6 +227,8 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         response.jsonPath<String>("$.data.locale") shouldBeEqualTo "ko-KR"
         transaction {
             Appointments.selectAll().single()[Appointments.patientExternalId] shouldBeEqualTo "member-1"
+            NotificationOutboxEvents.selectAll().single()[NotificationOutboxEvents.notificationSlot] shouldBeEqualTo
+                NotificationSlot.CREATED
         }
     }
 
@@ -820,6 +839,7 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 it[Appointments.treatmentTypeId] = this@AppointmentControllerTest.treatmentTypeId
                 it[patientName] = "Jane Doe"
                 it[patientPhone] = "010-9876-5432"
+                it[patientExternalId] = "member-1"
                 it[appointmentDate] = futureDate
                 it[startTime] = LocalTime.of(11, 0)
                 it[endTime] = LocalTime.of(11, 30)

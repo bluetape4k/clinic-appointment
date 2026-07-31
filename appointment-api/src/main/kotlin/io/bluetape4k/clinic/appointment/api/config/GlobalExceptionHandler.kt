@@ -8,6 +8,7 @@ import io.bluetape4k.clinic.appointment.api.policy.EffectivePolicyGenerationConf
 import io.bluetape4k.clinic.appointment.api.policy.EffectivePolicyReadUnavailableException
 import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberApiError
 import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberApiException
+import io.bluetape4k.clinic.appointment.event.notification.NotificationContractException
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.service.IdempotencyKeyConflictException
 import io.bluetape4k.logging.KLogging
@@ -45,6 +46,7 @@ class GlobalExceptionHandler(
     companion object : KLogging() {
         private const val APPOINTMENT_COMMITMENT_RETRY_AFTER_SECONDS = "5"
         private const val MEMBER_DIRECTORY_RETRY_AFTER_SECONDS = "5"
+        private const val NOTIFICATION_ENQUEUE_RETRY_AFTER_SECONDS = "5"
     }
 
     /**
@@ -58,6 +60,35 @@ class GlobalExceptionHandler(
         request: HttpServletRequest,
     ): ResponseEntity<SchedulingApiErrorResponse> =
         notificationMemberResponse(ex.error, request)
+
+    /**
+     * HMAC key registry나 outbox 계약 장애를 privacy-safe한 일시 오류로 변환한다.
+     *
+     * command transaction은 이미 rollback되었으므로 caller는 같은 idempotency key로
+     * 재시도할 수 있다. 내부 key ID, SQL, 예약·회원 식별자는 응답과 로그에 남기지
+     * 않는다.
+     */
+    @ExceptionHandler(NotificationContractException::class)
+    fun handleNotificationContract(
+        ex: NotificationContractException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.correlationId()
+        log.warn {
+            "Notification enqueue rejected: failure_code=${ex.failureCode.name}, correlation_id=$correlationId"
+        }
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .header(HttpHeaders.RETRY_AFTER, NOTIFICATION_ENQUEUE_RETRY_AFTER_SECONDS)
+            .body(
+                SchedulingApiErrorResponse(
+                    error = "Notification enqueue is temporarily unavailable.",
+                    errorCode = "NOTIFICATION_ENQUEUE_UNAVAILABLE",
+                    correlationId = correlationId,
+                    retryable = true,
+                    action = "Retry with the same idempotency key after the Retry-After interval.",
+                )
+            )
+    }
 
     /**
      * commitment v2 application 오류를 닫힌 public registry로 직렬화한다.

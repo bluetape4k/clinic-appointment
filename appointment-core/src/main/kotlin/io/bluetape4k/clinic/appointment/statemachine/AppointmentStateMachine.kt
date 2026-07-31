@@ -84,15 +84,27 @@ class AppointmentStateMachine(
         currentState: AppointmentState,
         event: AppointmentEvent,
     ): AppointmentState {
-        val key = currentState to event::class.java
-        val nextState =
-            transitions[key]
-                ?: throw IllegalStateException(
-                    "Invalid transition: $currentState + $event. Allowed events: ${allowedEvents(currentState)}"
-                )
+        val nextState = nextState(currentState, event)
 
         onTransition?.invoke(currentState, event, nextState)
         return nextState
+    }
+
+    /**
+     * callback 없이 다음 상태만 계산한다.
+     *
+     * 데이터베이스 command transaction 안에서 상태 검증과 CAS update를 분리하지 않아야
+     * 하는 caller가 사용한다. callback이 필요한 경로는 [transition]을 사용한다.
+     */
+    fun nextState(
+        currentState: AppointmentState,
+        event: AppointmentEvent,
+    ): AppointmentState {
+        val key = currentState to event::class.java
+        return transitions[key]
+            ?: throw IllegalStateException(
+                "Invalid transition: $currentState + $event. Allowed events: ${allowedEvents(currentState)}"
+            )
     }
 
     /**
