@@ -1,115 +1,82 @@
 package io.bluetape4k.clinic.appointment.notification
 
-import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
-import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
-import io.mockk.clearMocks
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
+import io.bluetape4k.clinic.appointment.event.notification.NotificationProviderMessageReference
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import io.bluetape4k.assertions.shouldBeEqualTo
-import org.junit.jupiter.api.BeforeEach
+import kotlinx.coroutines.CancellationException
 import org.junit.jupiter.api.Test
-import java.time.LocalDate
-import java.time.LocalTime
+import org.junit.jupiter.api.assertThrows
 
-/**
- * [ResilientNotificationChannel] 테스트.
- *
- * CircuitBreaker + Retry + Bulkhead 동작을 검증합니다.
- */
-class ResilientNotificationChannelTest {
+internal class ResilientNotificationChannelTest {
 
-    private lateinit var delegate: NotificationChannel
-    private lateinit var resilientChannel: ResilientNotificationChannel
+    @Test
+    fun `정상 호출은 provider result를 그대로 반환한다`() {
+        val request = providerRequest()
+        val delegate = mockk<NotificationChannel>()
+        every { delegate.channelType } returns NotificationChannelType.SMS
+        every { delegate.send(request) } returns NotificationProviderResult.accepted(
+            NotificationProviderMessageReference("provider-1"),
+        )
 
-    private val sampleAppointment = AppointmentRecord(
-        id = 1L,
-        clinicId = 1L,
-        doctorId = 1L,
-        treatmentTypeId = 1L,
-        patientName = "홍길동",
-        patientPhone = "010-1234-5678",
-        appointmentDate = LocalDate.now().plusDays(1),
-        startTime = LocalTime.of(9, 0),
-        endTime = LocalTime.of(9, 30),
-        status = AppointmentState.CONFIRMED,
-    )
+        val channel = ResilientNotificationChannel.create(delegate)
+        val result = channel.send(request)
 
-    @BeforeEach
-    fun setup() {
-        delegate = mockk(relaxed = true)
-        resilientChannel = ResilientNotificationChannel.create(
+        result shouldBeEqualTo NotificationProviderResult.accepted(NotificationProviderMessageReference("provider-1"))
+        verify(exactly = 1) { delegate.send(request) }
+    }
+
+    @Test
+    fun `최종 provider exception은 삼키지 않고 typed exception으로 전파한다`() {
+        val request = providerRequest()
+        val delegate = mockk<NotificationChannel>()
+        every { delegate.channelType } returns NotificationChannelType.SMS
+        every { delegate.send(request) } throws NotificationProviderException(NotificationFailureCode.PROVIDER_UNAVAILABLE)
+
+        val channel = ResilientNotificationChannel.create(
             delegate,
             NotificationResilienceProperties(
-                retry = NotificationResilienceProperties.RetryProperties(maxAttempts = 2),
+                retry = NotificationResilienceProperties.RetryProperties(maxAttempts = 1),
             ),
         )
+
+        val failure = assertThrows<NotificationProviderException> {
+            channel.send(request)
+        }
+        failure.failureCode shouldBeEqualTo NotificationFailureCode.PROVIDER_UNAVAILABLE
     }
 
     @Test
-    fun `정상 호출 시 delegate로 전달`() {
-        resilientChannel.sendCreated(sampleAppointment)
+    fun `cancellation은 provider failure로 매핑하지 않고 그대로 전파한다`() {
+        val request = providerRequest()
+        val delegate = mockk<NotificationChannel>()
+        every { delegate.channelType } returns NotificationChannelType.SMS
+        every { delegate.send(request) } throws CancellationException("cancelled")
 
-        verify(exactly = 1) { delegate.sendCreated(sampleAppointment) }
+        val channel = ResilientNotificationChannel.create(delegate)
+
+        assertThrows<CancellationException> {
+            channel.send(request)
+        }
+        verify(exactly = 1) { delegate.send(request) }
     }
 
-    @Test
-    fun `channelType은 delegate에서 가져옴`() {
-        every { delegate.channelType } returns "FEIGN"
-
-        resilientChannel.channelType.shouldBeEqualTo("FEIGN")
-    }
-
-    @Test
-    fun `sendConfirmed 정상 전달`() {
-        resilientChannel.sendConfirmed(sampleAppointment)
-
-        verify(exactly = 1) { delegate.sendConfirmed(sampleAppointment) }
-    }
-
-    @Test
-    fun `sendCancelled 정상 전달`() {
-        resilientChannel.sendCancelled(sampleAppointment, "환자 요청")
-
-        verify(exactly = 1) { delegate.sendCancelled(sampleAppointment, "환자 요청") }
-    }
-
-    @Test
-    fun `sendRescheduled 정상 전달`() {
-        val newAppt = sampleAppointment.copy(id = 2L)
-
-        resilientChannel.sendRescheduled(sampleAppointment, newAppt)
-
-        verify(exactly = 1) { delegate.sendRescheduled(sampleAppointment, newAppt) }
-    }
-
-    @Test
-    fun `sendReminder 정상 전달`() {
-        resilientChannel.sendReminder(sampleAppointment, ReminderType.DAY_BEFORE)
-
-        verify(exactly = 1) { delegate.sendReminder(sampleAppointment, ReminderType.DAY_BEFORE) }
-    }
-
-    @Test
-    fun `delegate 실패 시 retry 후 예외 흡수`() {
-        every { delegate.sendCreated(any()) } throws RuntimeException("외부 서비스 장애")
-
-        // 예외가 흡수되어 전파되지 않음
-        resilientChannel.sendCreated(sampleAppointment)
-
-        // maxAttempts=2 이므로 2번 호출
-        verify(exactly = 2) { delegate.sendCreated(sampleAppointment) }
-    }
-
-    @Test
-    fun `연속 실패 후에도 다른 메서드는 독립 호출 가능`() {
-        every { delegate.sendCreated(any()) } throws RuntimeException("장애")
-
-        resilientChannel.sendCreated(sampleAppointment) // 실패 흡수
-
-        // sendConfirmed은 별도로 정상 동작
-        resilientChannel.sendConfirmed(sampleAppointment)
-
-        verify(exactly = 1) { delegate.sendConfirmed(sampleAppointment) }
-    }
+    private fun providerRequest(): NotificationProviderRequest =
+        NotificationProviderRequest(
+            channel = NotificationChannelType.SMS,
+            destination = "+821012345678",
+            idempotencyKey = NotificationProviderIdempotencyKey("hmac-v1.${"A".repeat(43)}"),
+            templateKey = NotificationTemplateKey("appointment.confirmed"),
+            templateVersion = NotificationTemplateVersion(1),
+            rendered = RenderedNotificationTemplate(
+                title = null,
+                textBody = "confirmed",
+                htmlBody = null,
+            ),
+        )
 }

@@ -2,7 +2,6 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
-import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.github.resilience4j.bulkhead.Bulkhead
 import io.github.resilience4j.bulkhead.BulkheadConfig
 import io.github.resilience4j.circuitbreaker.CircuitBreaker
@@ -11,6 +10,7 @@ import io.github.resilience4j.kotlin.bulkhead.executeSuspendFunction
 import io.github.resilience4j.kotlin.retry.executeSuspendFunction
 import io.github.resilience4j.retry.Retry
 import io.github.resilience4j.retry.RetryConfig
+import kotlinx.coroutines.CancellationException
 import java.time.Duration
 
 /**
@@ -57,6 +57,7 @@ class ResilientNotificationChannel(
                 RetryConfig.custom<Any>()
                     .maxAttempts(properties.retry.maxAttempts)
                     .waitDuration(properties.retry.waitDuration)
+                    .ignoreExceptions(CancellationException::class.java)
                     .build(),
             )
 
@@ -72,39 +73,26 @@ class ResilientNotificationChannel(
         }
     }
 
-    override val channelType: String get() = delegate.channelType
+    override val channelType get() = delegate.channelType
 
-    override fun sendCreated(appointment: AppointmentRecord) {
-        executeWithResilience("sendCreated") { delegate.sendCreated(appointment) }
-    }
-
-    override fun sendConfirmed(appointment: AppointmentRecord) {
-        executeWithResilience("sendConfirmed") { delegate.sendConfirmed(appointment) }
-    }
-
-    override fun sendCancelled(appointment: AppointmentRecord, reason: String?) {
-        executeWithResilience("sendCancelled") { delegate.sendCancelled(appointment, reason) }
-    }
-
-    override fun sendRescheduled(original: AppointmentRecord, newAppointment: AppointmentRecord) {
-        executeWithResilience("sendRescheduled") { delegate.sendRescheduled(original, newAppointment) }
-    }
-
-    override fun sendReminder(appointment: AppointmentRecord, reminderType: ReminderType) {
-        executeWithResilience("sendReminder") { delegate.sendReminder(appointment, reminderType) }
-    }
-
-    private fun executeWithResilience(operation: String, action: () -> Unit) {
-        val decorated = Bulkhead.decorateRunnable(bulkhead) {
-            Retry.decorateRunnable(retry) {
-                CircuitBreaker.decorateRunnable(circuitBreaker, action).run()
-            }.run()
+    override fun send(request: NotificationProviderRequest): NotificationProviderResult {
+        val decorated = Bulkhead.decorateSupplier(bulkhead) {
+            Retry.decorateSupplier(retry) {
+                CircuitBreaker.decorateSupplier(circuitBreaker) {
+                    delegate.send(request)
+                }.get()
+            }.get()
         }
 
         try {
-            decorated.run()
+            return decorated.get()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: NotificationProviderException) {
+            throw e
         } catch (e: Exception) {
-            log.warn(e) { "알림 발송 실패 (resilience): operation=$operation, cbState=${circuitBreaker.state}" }
+            log.warn { "알림 발송 실패: channel=${request.channel}, cbState=${circuitBreaker.state}" }
+            throw NotificationProviderException(NotificationProviderFailureMapper.fromException(e))
         }
     }
 }
