@@ -179,8 +179,11 @@ Not-tested: API and notification integration until later tasks
 - Create: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationTemplateParameters.kt`
 - Create: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxCodec.kt`
 - Create: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxKeys.kt`
+- Modify: `appointment-event/build.gradle.kts`
 - Test: `appointment-event/src/test/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxCodecTest.kt`
 - Test: `appointment-event/src/test/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxHasherTest.kt`
+
+`appointment-event/build.gradle.kts` 변경은 strict typed JSON codec을 위해 repository-standard 기존 Jackson 3 Kotlin module을 연결하는 범위로 제한한다. 새 외부 dependency를 추가하지 않는다.
 
 - [ ] **Step 1: 닫힌 계약과 codec RED 테스트**
 

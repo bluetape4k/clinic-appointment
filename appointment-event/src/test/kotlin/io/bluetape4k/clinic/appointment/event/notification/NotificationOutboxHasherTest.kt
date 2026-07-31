@@ -9,50 +9,79 @@ class NotificationOutboxHasherTest {
 
     @Test
     fun `idempotency candidates include active and previous keys without duplicate key id`() {
-        val hasher = NotificationOutboxHasher(
+        val hasher: NotificationOutboxHasher = DefaultNotificationOutboxHasher(
             keyRing = StaticNotificationOutboxKeyRing(
                 active = NotificationHmacKey("active-key", byteArrayOf(1, 2, 3, 4)),
-                previous = listOf(
-                    NotificationHmacKey("previous-key", byteArrayOf(5, 6, 7, 8)),
-                    NotificationHmacKey("active-key", byteArrayOf(9, 10, 11, 12)),
-                ),
+                previous = NotificationHmacKey("previous-key", byteArrayOf(5, 6, 7, 8)),
             ),
         )
 
-        val candidates = hasher.candidates("notification-business-key")
+        val candidates = hasher.idempotencyCandidates(idempotencyInput())
 
         candidates.map { it.keyId } shouldBeEqualTo listOf("active-key", "previous-key")
-        candidates.map { it.fingerprint }.toSet().size shouldBeEqualTo 2
+        candidates.map { it.version }.toSet() shouldBeEqualTo setOf(1)
+        candidates.map { it.value }.toSet().size shouldBeEqualTo 2
+    }
+
+    @Test
+    fun `idempotency candidates skip previous key with duplicate key id`() {
+        val hasher: NotificationOutboxHasher = DefaultNotificationOutboxHasher(
+            keyRing = StaticNotificationOutboxKeyRing(
+                active = NotificationHmacKey("active-key", byteArrayOf(1, 2, 3, 4)),
+                previous = NotificationHmacKey("active-key", byteArrayOf(9, 10, 11, 12)),
+            ),
+        )
+
+        hasher.idempotencyCandidates(idempotencyInput()).map { it.keyId } shouldBeEqualTo listOf("active-key")
     }
 
     @Test
     fun `idempotency and audit fingerprints use separated HMAC domains`() {
-        val hasher = NotificationOutboxHasher(
+        val hasher: NotificationOutboxHasher = DefaultNotificationOutboxHasher(
             keyRing = StaticNotificationOutboxKeyRing(
                 active = NotificationHmacKey("active-key", byteArrayOf(1, 2, 3, 4)),
-                previous = emptyList(),
+                previous = null,
             ),
         )
 
-        val idempotency = hasher.fingerprint("notification-business-key")
-        val audit = hasher.auditFingerprint("notification-business-key")
+        val idempotency = hasher.idempotencyCandidates(idempotencyInput()).single()
+        val audit = hasher.auditFingerprint(auditInput(stableSubject = idempotencyInput().normalize()))
 
         idempotency.keyId shouldBeEqualTo "active-key"
         audit.keyId shouldBeEqualTo "active-key"
-        idempotency.fingerprint.equals(audit.fingerprint).shouldBeFalse()
+        idempotency.version shouldBeEqualTo audit.version
+        idempotency.value.equals(audit.value).shouldBeFalse()
+    }
+
+    @Test
+    fun `idempotency fields affect digest with fixed deterministic normalization`() {
+        val hasher: NotificationOutboxHasher = DefaultNotificationOutboxHasher(
+            keyRing = StaticNotificationOutboxKeyRing(
+                active = NotificationHmacKey("active-key", byteArrayOf(1, 2, 3, 4)),
+                previous = null,
+            ),
+        )
+
+        val base = hasher.idempotencyCandidates(idempotencyInput()).single().value
+        val changedRevision = hasher.idempotencyCandidates(
+            idempotencyInput(appointmentVersionOrRevision = 124L),
+        ).single().value
+        val changedSlot = hasher.idempotencyCandidates(
+            idempotencyInput(notificationSlot = NotificationSlot.REMINDER_24H),
+        ).single().value
+
+        base.equals(changedRevision).shouldBeFalse()
+        base.equals(changedSlot).shouldBeFalse()
     }
 
     @Test
     fun `unavailable active key fails with hmac key unavailable`() {
-        val hasher = NotificationOutboxHasher(
-            keyRing = StaticNotificationOutboxKeyRing(
-                active = null,
-                previous = listOf(NotificationHmacKey("previous-key", byteArrayOf(5, 6, 7, 8))),
-            ),
+        val hasher: NotificationOutboxHasher = DefaultNotificationOutboxHasher(
+            keyRing = ThrowingNotificationOutboxKeyRing,
         )
 
         val failure = assertFailsWith<NotificationContractException> {
-            hasher.fingerprint("notification-business-key")
+            hasher.idempotencyCandidates(idempotencyInput())
         }
 
         failure.failureCode shouldBeEqualTo NotificationFailureCode.HMAC_KEY_UNAVAILABLE
@@ -69,5 +98,34 @@ class NotificationOutboxHasherTest {
         exposed.fill(88)
 
         key.sign("clinic-notification:idempotency:v1", "payload") shouldBeEqualTo before
+    }
+
+    private fun idempotencyInput(
+        appointmentVersionOrRevision: Long = 123L,
+        notificationSlot: NotificationSlot = NotificationSlot.CONFIRMED,
+    ): NotificationIdempotencyInput =
+        NotificationIdempotencyInput(
+            tenantGroupId = TenantGroupId(10L),
+            clinicId = ClinicId(20L),
+            appointmentId = AppointmentId(30L),
+            appointmentVersionOrRevision = appointmentVersionOrRevision,
+            eventType = NotificationEventType.CONFIRMED,
+            channel = NotificationChannelType.SMS,
+            notificationSlot = notificationSlot,
+        )
+
+    private fun auditInput(stableSubject: String = "appointment-30"): NotificationAuditInput =
+        NotificationAuditInput(
+            tenantGroupId = TenantGroupId(10L),
+            stableSubject = stableSubject,
+            purpose = "delivery-audit",
+        )
+
+    private object ThrowingNotificationOutboxKeyRing : NotificationOutboxKeyRing {
+        override fun active(): NotificationHmacKey =
+            throw IllegalStateException("active key is unavailable")
+
+        override fun previous(): NotificationHmacKey? =
+            NotificationHmacKey("previous-key", byteArrayOf(5, 6, 7, 8))
     }
 }

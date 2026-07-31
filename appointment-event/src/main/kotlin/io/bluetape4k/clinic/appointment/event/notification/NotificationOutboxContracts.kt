@@ -78,7 +78,7 @@ enum class NotificationFailureCode {
 /**
  * 발송하지 않는 것으로 종결되는 억제 원인이다.
  */
-enum class NotificationSuppressionReason {
+enum class NotificationSuppressionReasonCode {
     MEMBER_NOT_AVAILABLE,
     DESTINATION_UNAVAILABLE,
     CONSENT_DENIED,
