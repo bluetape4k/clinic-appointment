@@ -267,7 +267,7 @@ class ClosureRescheduleService(
             rescheduleFromId = original.id,
             patientName = original.patientName,
             patientPhone = original.patientPhone,
-            patientExternalId = original.patientExternalId,
+            memberId = original.memberId,
             appointmentDate = candidate.candidateDate,
             startTime = candidate.startTime,
             endTime = candidate.endTime,

@@ -12,6 +12,7 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentCommitmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentProposalRecord
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRecord
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.plan.AppointmentPlanStatus
 import io.bluetape4k.clinic.appointment.model.plan.PlanTreatmentStatus
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
@@ -305,7 +306,7 @@ internal abstract class VisitCommitmentCommandTestSupport {
         AppointmentVisitIdentity(
             patientName = "Patient $key",
             patientPhone = "010-0000-0000",
-            patientExternalId = "patient-$key",
+            memberId = MemberId("patient-$key"),
             patientReferenceFingerprint = clinic.patientReferenceFingerprint,
         )
 

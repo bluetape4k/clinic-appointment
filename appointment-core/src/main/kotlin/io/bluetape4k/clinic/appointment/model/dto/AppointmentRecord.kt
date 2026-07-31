@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.model.dto
 
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import java.io.Serializable
 import java.time.Instant
@@ -19,7 +20,7 @@ import java.time.LocalTime
  * @property rescheduleFromId 재배정 원본 예약 ID
  * @property patientName 환자명
  * @property patientPhone 환자 전화번호
- * @property patientExternalId 외부 시스템 환자 ID
+ * @property memberId 회원 서비스가 발급한 불투명 회원 ID
  * @property appointmentDate 예약 날짜
  * @property startTime 예약 시작 시간
  * @property endTime 예약 종료 시간
@@ -38,7 +39,7 @@ data class AppointmentRecord(
     val rescheduleFromId: Long? = null,
     val patientName: String,
     val patientPhone: String? = null,
-    val patientExternalId: String? = null,
+    val memberId: MemberId? = null,
     val appointmentDate: LocalDate,
     val startTime: LocalTime,
     val endTime: LocalTime,
@@ -46,6 +47,62 @@ data class AppointmentRecord(
     val createdAt: Instant? = null,
     val updatedAt: Instant? = null,
 ) : Serializable {
+    /**
+     * 이전 solver projection 경로가 읽는 호환 속성입니다.
+     *
+     * 새 도메인 코드는 [memberId]를 사용해야 합니다.
+     */
+    @Deprecated(
+        message = "memberId를 사용하세요.",
+        replaceWith = ReplaceWith("memberId?.value"),
+    )
+    val patientExternalId: String?
+        get() = memberId?.value
+
+    @Deprecated(
+        message = "memberId를 사용하세요.",
+        replaceWith = ReplaceWith("AppointmentRecord(memberId = patientExternalId?.let(::MemberId))"),
+    )
+    constructor(
+        id: Long? = null,
+        clinicId: Long,
+        doctorId: Long,
+        treatmentTypeId: Long,
+        equipmentId: Long? = null,
+        consultationTopicId: Long? = null,
+        consultationMethod: String? = null,
+        rescheduleFromId: Long? = null,
+        patientName: String,
+        patientPhone: String? = null,
+        patientExternalId: String?,
+        appointmentDate: LocalDate,
+        startTime: LocalTime,
+        endTime: LocalTime,
+        status: AppointmentState = AppointmentState.REQUESTED,
+        createdAt: Instant? = null,
+        updatedAt: Instant? = null,
+        @Suppress("UNUSED_PARAMETER")
+        compatibilityMarker: Unit = Unit,
+    ) : this(
+        id = id,
+        clinicId = clinicId,
+        doctorId = doctorId,
+        treatmentTypeId = treatmentTypeId,
+        equipmentId = equipmentId,
+        consultationTopicId = consultationTopicId,
+        consultationMethod = consultationMethod,
+        rescheduleFromId = rescheduleFromId,
+        patientName = patientName,
+        patientPhone = patientPhone,
+        memberId = patientExternalId?.let(::MemberId),
+        appointmentDate = appointmentDate,
+        startTime = startTime,
+        endTime = endTime,
+        status = status,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+    )
+
     companion object {
         private const val serialVersionUID = 1L
     }

@@ -32,6 +32,7 @@ import io.bluetape4k.clinic.appointment.model.commitment.ResourceType
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentProposalRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.policy.ActorRole
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
 import io.bluetape4k.clinic.appointment.model.policy.BookingCommitmentPolicy
@@ -906,7 +907,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
             AppointmentVisitIdentityDraft(
                 patientName = "홍길동",
                 patientPhone = "010-1234-5678",
-                patientExternalId = "patient-external-01",
+                memberId = MemberId("patient-external-01"),
                 patientReferenceFingerprint = access.plan.patientReferenceFingerprint,
             )
 

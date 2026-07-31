@@ -134,9 +134,9 @@ class AppointmentItemRepository {
                 }
         val row = query.singleOrNull()
         requireNotNull(row) { "proposal must belong to scoped appointment" }
-        if (scope.patientExternalStableRef != null) {
-            require(row[Appointments.patientExternalId] == scope.patientExternalStableRef) {
-                "appointment patientExternalId must match patientExternalStableRef"
+        if (scope.memberStableRef != null) {
+            require(row[Appointments.patientExternalId] == scope.memberStableRef.value) {
+                "appointment patientExternalId must match memberStableRef"
             }
         }
     }
