@@ -23,6 +23,8 @@ dependencies {
     api(libs.jetbrains.exposed.r2dbc)
     api(libs.jetbrains.exposed.java.time)
 
+    implementation(libs.jackson3.module.kotlin)
+
     testImplementation(libs.bluetape4k.junit5)
     testImplementation(libs.exposed.r2dbc.tests)
     testImplementation("org.springframework.boot:spring-boot-starter-test")
