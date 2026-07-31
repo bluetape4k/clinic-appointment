@@ -131,7 +131,7 @@ internal fun Any?.toNotificationDbInstant(): Instant =
     }
 
 private val durableMetadataPattern = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-private val destinationFingerprintPattern = Regex("^v[1-9][0-9]*:hmac-sha256:[A-Za-z0-9_-]{16,86}$")
+private val destinationFingerprintPattern = Regex("^v[1-9][0-9]*:hmac-sha256:[0-9a-f]{64}$")
 private val emailLikePattern = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
 private val rawErrorLikePattern = Regex("(?i).*(exception|error|stacktrace|caused[ -]by|failed:|failure:).*")
 
@@ -147,7 +147,9 @@ private fun validateLowRiskMetadata(value: String, fieldName: String): String {
 private fun String.isPhoneLike(): Boolean {
     val trimmed = trim()
     val digitCount = trimmed.count { it.isDigit() }
-    return digitCount >= 8 && trimmed.all { it.isDigit() || it in setOf('+', '-', '.', '(', ')') }
+    if (digitCount < 8) return false
+    if (trimmed.all { it.isDigit() || it in setOf('+', '-', '.', '(', ')') }) return true
+    return Regex(".*(?:^|[^A-Za-z0-9])(?:\\+?\\d[\\d().-]{7,}\\d)(?:$|[^A-Za-z0-9]).*").matches(trimmed)
 }
 
 /** provider adapter가 검증한 낮은 cardinality message reference다. */
@@ -172,6 +174,9 @@ value class NotificationDestinationFingerprint(val value: String) : Serializable
         require(!rawErrorLikePattern.matches(value)) { "destinationFingerprint must not contain raw error text" }
         require(destinationFingerprintPattern.matches(value)) {
             "destinationFingerprint must be versioned hmac-sha256 digest"
+        }
+        require(value.substringAfterLast(':').any { it in 'a'..'f' }) {
+            "destinationFingerprint digest must not be digit-only"
         }
     }
 

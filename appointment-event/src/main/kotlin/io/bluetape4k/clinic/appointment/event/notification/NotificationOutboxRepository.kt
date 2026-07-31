@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.event.notification
 
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
+import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -13,13 +14,16 @@ import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.vendors.MariaDBDialect
+import org.jetbrains.exposed.v1.core.vendors.MysqlDialect
+import org.jetbrains.exposed.v1.core.vendors.currentDialect
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
-import org.jetbrains.exposed.v1.jdbc.insertIgnoreAndGetId
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.jdbc.upsert
 import java.io.Serializable
 import java.time.Duration
 import java.time.Instant
@@ -41,16 +45,14 @@ class NotificationOutboxRepository(
     }
 
     fun enqueue(draft: SendableNotificationDraft): NotificationOutboxRecord {
-        val insertedId = insertSendable(draft)
-        return insertedId?.let { findById(it) }
-            ?: findByIdempotency(draft.idempotencyDigest)
+        upsertSendable(draft)
+        return findByIdempotency(draft.idempotencyDigest)
             ?: error("notification outbox insert was ignored without an idempotency row")
     }
 
     fun suppressLegacy(draft: LegacySuppressionDraft): NotificationOutboxRecord {
-        val insertedId = insertSuppression(draft)
-        return insertedId?.let { findById(it) }
-            ?: findByIdempotency(draft.idempotencyDigest)
+        upsertSuppression(draft)
+        return findByIdempotency(draft.idempotencyDigest)
             ?: error("notification outbox suppression insert was ignored without an idempotency row")
     }
 
@@ -252,10 +254,13 @@ class NotificationOutboxRepository(
         return true
     }
 
-    private fun insertSendable(draft: SendableNotificationDraft): Long? {
+    private fun upsertSendable(draft: SendableNotificationDraft) {
         val envelope = draft.envelope
         val dbNow = dbCurrentTimestamp()
-        val id = NotificationOutboxEvents.insertIgnoreAndGetId {
+        NotificationOutboxEvents.upsert(
+            *idempotencyUpsertKeys(),
+            onUpdate = { it[NotificationOutboxEvents.idempotencyKey] = draft.idempotencyDigest.value },
+        ) {
             it[rowKind] = NotificationOutboxRowKind.SENDABLE
             it[status] = NotificationOutboxStatus.PENDING
             it[idempotencyKeyVersion] = draft.idempotencyDigest.version
@@ -293,12 +298,14 @@ class NotificationOutboxRepository(
             it[updatedAt] = dbNow
             it[terminalAt] = null
         }
-        return id?.value
     }
 
-    private fun insertSuppression(draft: LegacySuppressionDraft): Long? {
+    private fun upsertSuppression(draft: LegacySuppressionDraft) {
         val dbNow = dbCurrentTimestamp()
-        val id = NotificationOutboxEvents.insertIgnoreAndGetId {
+        NotificationOutboxEvents.upsert(
+            *idempotencyUpsertKeys(),
+            onUpdate = { it[NotificationOutboxEvents.idempotencyKey] = draft.idempotencyDigest.value },
+        ) {
             it[rowKind] = NotificationOutboxRowKind.LEGACY_SUPPRESSION
             it[status] = NotificationOutboxStatus.SUPPRESSED
             it[idempotencyKeyVersion] = draft.idempotencyDigest.version
@@ -336,8 +343,14 @@ class NotificationOutboxRepository(
             it[updatedAt] = dbNow
             it[terminalAt] = dbNow
         }
-        return id?.value
     }
+
+    private fun idempotencyUpsertKeys(): Array<Column<*>> =
+        if (currentDialect is MysqlDialect || currentDialect is MariaDBDialect) {
+            emptyArray()
+        } else {
+            arrayOf(NotificationOutboxEvents.idempotencyKeyVersion, NotificationOutboxEvents.idempotencyKey)
+        }
 
     private fun insertAttempt(
         row: ResultRow,

@@ -59,7 +59,7 @@ class NotificationOutboxRepositoryTest {
     }
 
     @Test
-    fun `duplicate enqueue uses atomic ignore without hiding non idempotency sql errors`() {
+    fun `duplicate enqueue uses atomic upsert without hiding non idempotency sql errors`() {
         transaction(database) {
             val first = repository.enqueue(sendableDraft())
             val duplicate = repository.enqueue(sendableDraft())
@@ -311,7 +311,7 @@ class NotificationOutboxRepositoryTest {
                     token = current.token,
                     attemptNumber = current.attemptNumber,
                     providerMessageReference = NotificationProviderMessageReference("provider-message-1"),
-                    destinationFingerprint = NotificationDestinationFingerprint("v1:hmac-sha256:abcdef0123456789"),
+                    destinationFingerprint = NotificationDestinationFingerprint(TEST_DESTINATION_FINGERPRINT),
                     correlationId = NotificationCorrelationId("corr-1"),
                     traceId = NotificationTraceId("trace-abcdef0123456789"),
                 )
@@ -324,7 +324,7 @@ class NotificationOutboxRepositoryTest {
             sent[NotificationOutboxEvents.memberId].shouldBeNull()
             sent[NotificationOutboxEvents.parametersJson].shouldBeNull()
             sent[NotificationOutboxEvents.providerMessageReference] shouldBeEqualTo "provider-message-1"
-            sent[NotificationOutboxEvents.destinationFingerprint] shouldBeEqualTo "v1:hmac-sha256:abcdef0123456789"
+            sent[NotificationOutboxEvents.destinationFingerprint] shouldBeEqualTo TEST_DESTINATION_FINGERPRINT
             val currentAttempt = NotificationDeliveryAttempts.selectAll()
                 .where { NotificationDeliveryAttempts.attemptNumber eq current.attemptNumber }
                 .single()
@@ -337,16 +337,26 @@ class NotificationOutboxRepositoryTest {
     fun `provider metadata value types reject raw PII and unstable values`() {
         assertFailsWith<IllegalArgumentException> { NotificationProviderMessageReference("member@example.com") }
         assertFailsWith<IllegalArgumentException> { NotificationProviderMessageReference("010-1234-5678") }
+        assertFailsWith<IllegalArgumentException> { NotificationProviderMessageReference("sms-01012345678") }
+        assertFailsWith<IllegalArgumentException> { NotificationProviderMessageReference("ref-821012345678") }
         assertFailsWith<IllegalArgumentException> { NotificationProviderMessageReference("provider ref") }
         assertFailsWith<IllegalArgumentException> { NotificationProviderMessageReference("NullPointerException: raw failure") }
         assertFailsWith<IllegalArgumentException> { NotificationDestinationFingerprint("dest-fp-1") }
+        assertFailsWith<IllegalArgumentException> { NotificationDestinationFingerprint("v1:hmac-sha256:abcdef0123456789") }
         assertFailsWith<IllegalArgumentException> { NotificationDestinationFingerprint("v1:hmac-sha256:member@example.com") }
+        assertFailsWith<IllegalArgumentException> {
+            NotificationDestinationFingerprint("v1:hmac-sha256:sms01012345678")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            NotificationDestinationFingerprint("v1:hmac-sha256:${"1".repeat(64)}")
+        }
         assertFailsWith<IllegalArgumentException> { NotificationCorrelationId("corr 1") }
+        assertFailsWith<IllegalArgumentException> { NotificationCorrelationId("corr-01012345678") }
         assertFailsWith<IllegalArgumentException> { NotificationTraceId("trace\n1") }
+        assertFailsWith<IllegalArgumentException> { NotificationTraceId("trace-821012345678") }
 
         NotificationProviderMessageReference("provider-message-1").value shouldBeEqualTo "provider-message-1"
-        NotificationDestinationFingerprint("v1:hmac-sha256:abcdef0123456789").value shouldBeEqualTo
-            "v1:hmac-sha256:abcdef0123456789"
+        NotificationDestinationFingerprint(TEST_DESTINATION_FINGERPRINT).value shouldBeEqualTo TEST_DESTINATION_FINGERPRINT
         NotificationCorrelationId("corr-1").value shouldBeEqualTo "corr-1"
         NotificationTraceId("trace-abcdef0123456789").value shouldBeEqualTo "trace-abcdef0123456789"
     }
@@ -439,7 +449,7 @@ class NotificationOutboxRepositoryTest {
                     attemptNumber = suppressedClaim.attemptNumber,
                     terminalStatus = NotificationOutboxStatus.SUPPRESSED,
                     suppressionReason = NotificationSuppressionReasonCode.CONSENT_DENIED,
-                    destinationFingerprint = NotificationDestinationFingerprint("v1:hmac-sha256:suppressedabcdef"),
+                    destinationFingerprint = NotificationDestinationFingerprint(TEST_DESTINATION_FINGERPRINT),
                 )
             ).shouldBeTrue()
             val suppressedRow = NotificationOutboxEvents.selectAll()
@@ -552,4 +562,9 @@ class NotificationOutboxRepositoryTest {
             suppressionReason = NotificationSuppressionReasonCode.MEMBER_ID_MISSING_LEGACY,
             availableAt = Instant.parse("2020-01-01T00:00:00Z"),
         )
+
+    companion object {
+        private const val TEST_DESTINATION_FINGERPRINT =
+            "v1:hmac-sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
 }
