@@ -86,6 +86,7 @@ class NotificationSchemaReadiness(
         val REQUIRED_INDEXES = listOf(
             "idx_notification_outbox_ready_clinic_cursor",
             "idx_notification_outbox_lease_recovery",
+            "idx_notification_outbox_terminal_retention",
         )
     }
 }

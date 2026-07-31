@@ -16,6 +16,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateV
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -120,6 +121,14 @@ internal class NotificationOutboxDispatcherTest {
         override suspend fun complete(command: io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand): Boolean = true
 
         override suspend fun retry(command: io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand): Boolean = true
+
+        override suspend fun currentDatabaseTime(): java.time.Instant = java.time.Instant.parse("2026-07-31T00:00:00Z")
+
+        override suspend fun deleteTerminalBatch(
+            status: io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus,
+            retention: Duration,
+            limit: Int,
+        ): Int = 0
     }
 
     private fun candidate(id: Long, clinicId: Long): NotificationCandidate =
@@ -141,6 +150,8 @@ internal class NotificationOutboxDispatcherTest {
             token = "token-$id",
             attemptNumber = 1,
             leaseUntil = Instant.parse("2026-07-31T00:01:00Z"),
+            firstAttemptAt = Instant.parse("2026-07-31T00:00:00Z"),
+            claimedAt = Instant.parse("2026-07-31T00:00:00Z"),
             channel = NotificationChannelType.DUMMY,
             eventType = NotificationEventType.CONFIRMED,
             notificationSlot = NotificationSlot.CONFIRMED,

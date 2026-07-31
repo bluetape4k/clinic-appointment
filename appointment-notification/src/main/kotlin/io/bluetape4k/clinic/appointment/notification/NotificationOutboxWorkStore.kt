@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationC
 import io.bluetape4k.clinic.appointment.event.notification.NotificationCandidate
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCursor
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -12,6 +13,8 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.Serializable
 import java.security.SecureRandom
+import java.time.Duration
+import java.time.Instant
 import java.util.Base64
 
 /**
@@ -36,6 +39,14 @@ interface NotificationOutboxWorkStore {
     suspend fun complete(command: CompleteNotificationCommand): Boolean
 
     suspend fun retry(command: RetryNotificationCommand): Boolean
+
+    suspend fun currentDatabaseTime(): Instant
+
+    suspend fun deleteTerminalBatch(
+        status: NotificationOutboxStatus,
+        retention: Duration,
+        limit: Int,
+    ): Int
 }
 
 data class NotificationCandidatePage(
@@ -101,6 +112,16 @@ class JdbcNotificationOutboxWorkStore(
 
     override suspend fun retry(command: RetryNotificationCommand): Boolean =
         ioTransaction { repository.scheduleRetry(command) }
+
+    override suspend fun currentDatabaseTime(): Instant =
+        ioTransaction { repository.currentDatabaseTime() }
+
+    override suspend fun deleteTerminalBatch(
+        status: NotificationOutboxStatus,
+        retention: Duration,
+        limit: Int,
+    ): Int =
+        ioTransaction { repository.deleteTerminalBatch(status, retention, limit) }
 
     private suspend fun <T> ioTransaction(block: () -> T): T =
         withContext(Dispatchers.IO) {

@@ -1,8 +1,15 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
+import io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
+import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCursor
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
+import kotlinx.coroutines.runBlocking
+import java.time.Duration
 import java.time.Instant
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -81,6 +88,34 @@ internal class NotificationSchemaReadinessTest {
         readiness.check().available shouldBeEqualTo true
     }
 
+    @Test
+    fun `terminal retention index가 없으면 readiness DOWN이고 retention을 실행하지 않는다`() {
+        val database = connect("readiness_missing_retention_index")
+        transaction(database) {
+            SchemaUtils.create(NotificationOutboxEvents, NotificationDeliveryAttempts, FlywaySchemaHistory)
+            FlywaySchemaHistory.insert {
+                it[installedRank] = 1
+                it[version] = "14"
+                it[success] = true
+            }
+            exec("DROP INDEX idx_notification_outbox_terminal_retention")
+        }
+        val readiness = NotificationSchemaReadiness(
+            database = database,
+            cryptoProperties = NotificationCryptoProperties(active = key()),
+        )
+        val store = ReadinessRetentionWorkStore()
+
+        readiness.check().available shouldBeEqualTo false
+        runBlocking {
+            NotificationRetentionRunner(
+                workStore = store,
+                readiness = readiness,
+            ).runOnce().deletedByStatus shouldBeEqualTo emptyMap()
+        }
+        store.deleteCalls shouldBeEqualTo 0
+    }
+
     private fun connect(name: String): Database =
         Database.connect(
             "jdbc:h2:mem:${name}_${System.nanoTime()};MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
@@ -94,4 +129,32 @@ internal class NotificationSchemaReadinessTest {
             activatedAt = Instant.parse("2026-07-01T00:00:00Z"),
             expiresAt = Instant.parse("2026-08-31T00:00:00Z"),
         )
+
+    private class ReadinessRetentionWorkStore : NotificationOutboxWorkStore {
+        var deleteCalls: Int = 0
+
+        override suspend fun findFairCandidates(
+            limit: Int,
+            cursor: NotificationFairCursor?,
+        ): NotificationCandidatePage = NotificationCandidatePage(emptyList(), null)
+
+        override suspend fun claim(id: Long, owner: String): ClaimedNotification? = null
+
+        override suspend fun recoverExpired(limit: Int, owner: String): List<ClaimedNotification> = emptyList()
+
+        override suspend fun complete(command: CompleteNotificationCommand): Boolean = true
+
+        override suspend fun retry(command: RetryNotificationCommand): Boolean = true
+
+        override suspend fun currentDatabaseTime(): Instant = Instant.EPOCH
+
+        override suspend fun deleteTerminalBatch(
+            status: NotificationOutboxStatus,
+            retention: Duration,
+            limit: Int,
+        ): Int {
+            deleteCalls++
+            return 0
+        }
+    }
 }
