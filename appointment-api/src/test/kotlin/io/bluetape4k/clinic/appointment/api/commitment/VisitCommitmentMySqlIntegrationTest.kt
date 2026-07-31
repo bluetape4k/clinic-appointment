@@ -7,6 +7,7 @@ import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.junit5.concurrency.MultithreadingTester
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -80,5 +81,11 @@ internal class VisitCommitmentMySqlIntegrationTest : VisitCommitmentCommandTestS
                 .filterIsInstance<AppointmentCommitmentCommandException>()
         failures shouldHaveSize 1
         failures.single().code shouldBeEqualTo AppointmentCommitmentCommandError.RESOURCE_CONFLICT
+    }
+
+    private companion object {
+        @JvmStatic
+        @AfterAll
+        fun cleanSharedSchema() = Containers.cleanMySqlSchema()
     }
 }

@@ -25,6 +25,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -217,6 +218,12 @@ internal class ProfileReevaluationFailureIntegrationTest :
             password = postgres.password ?: "",
         )
     }
+
+    private companion object {
+        @JvmStatic
+        @AfterAll
+        fun cleanSharedSchema() = Containers.cleanPostgresSchema()
+    }
 }
 
 /**
@@ -245,5 +252,11 @@ internal class ProfileReevaluationFailureMySqlIntegrationTest :
             user = mysql.username ?: "test",
             password = mysql.password ?: "",
         )
+    }
+
+    private companion object {
+        @JvmStatic
+        @AfterAll
+        fun cleanSharedSchema() = Containers.cleanMySqlSchema()
     }
 }

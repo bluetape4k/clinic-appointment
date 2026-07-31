@@ -20,6 +20,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -544,4 +545,10 @@ internal class VisitCommitmentConcurrencyTest : VisitCommitmentCommandTestSuppor
         val operation: String,
         val result: Result<AppointmentCommitmentCommandResult>,
     )
+
+    private companion object {
+        @JvmStatic
+        @AfterAll
+        fun cleanSharedSchema() = Containers.cleanPostgresSchema()
+    }
 }

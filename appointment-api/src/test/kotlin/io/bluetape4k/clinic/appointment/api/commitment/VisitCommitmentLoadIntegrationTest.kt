@@ -16,6 +16,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -193,6 +194,10 @@ internal class VisitCommitmentLoadIntegrationTest : VisitCommitmentCommandTestSu
     }
 
     private companion object {
+        @JvmStatic
+        @AfterAll
+        fun cleanSharedSchema() = Containers.cleanPostgresSchema()
+
         const val CONCURRENT_CONFIRMATIONS = 100
         const val POOL_SIZE = 20
         const val CONCURRENCY_P95_BUDGET_MILLIS = 2_000L

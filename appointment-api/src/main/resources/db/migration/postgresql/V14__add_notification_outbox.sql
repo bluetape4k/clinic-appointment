@@ -62,7 +62,13 @@ CREATE TABLE clinic_notification_outbox (
         )
     ),
     CONSTRAINT ck_notification_outbox_parameter_type CHECK (
-        parameter_type IS NULL OR parameter_type IN ('APPOINTMENT_CONFIRMED')
+        parameter_type IS NULL OR parameter_type IN (
+            'APPOINTMENT_CREATED',
+            'APPOINTMENT_CONFIRMED',
+            'APPOINTMENT_REMINDER',
+            'APPOINTMENT_CANCELLED',
+            'APPOINTMENT_RESCHEDULED'
+        )
     ),
     CONSTRAINT ck_notification_outbox_sendable_active_required CHECK (
         row_kind <> 'SENDABLE'
