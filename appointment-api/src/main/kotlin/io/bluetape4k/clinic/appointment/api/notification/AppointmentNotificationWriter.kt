@@ -28,13 +28,43 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateV
 import io.bluetape4k.clinic.appointment.event.notification.SendableNotificationDraft
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.support.requireNotNull
+import io.bluetape4k.support.requirePositiveNumber
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
+
+/**
+ * commitment v2 명령이 알림 writer에 전달하는 개인정보 최소 입력입니다.
+ *
+ * 이름과 전화번호는 포함하지 않습니다. [memberId]는 발송 시점에 회원 시스템에서
+ * 최신 수신자 profile을 조회하는 기준이며, 일정은 UTC로 전달해 병원 시간대로 변환합니다.
+ */
+data class CommitmentAppointmentNotification(
+    val tenantGroupId: Long,
+    val clinicId: Long,
+    val appointmentId: Long,
+    val memberId: MemberId,
+    val commitmentVersion: Long,
+    val proposalRevision: Long,
+    val startsAt: Instant,
+    val endsAt: Instant,
+) {
+    init {
+        tenantGroupId.requirePositiveNumber("tenantGroupId")
+        clinicId.requirePositiveNumber("clinicId")
+        appointmentId.requirePositiveNumber("appointmentId")
+        commitmentVersion.requirePositiveNumber("commitmentVersion")
+        proposalRevision.requirePositiveNumber("proposalRevision")
+        require(startsAt < endsAt) { "startsAt must be before endsAt" }
+    }
+}
 
 /**
  * 예약 command transaction 안에서 알림 outbox를 기록하는 port다.
@@ -70,6 +100,20 @@ interface AppointmentNotificationWriter {
         original: AppointmentRecord,
         replacement: AppointmentRecord,
         version: Long,
+    )
+
+    fun commitmentRequested(notification: CommitmentAppointmentNotification)
+
+    fun commitmentConfirmed(notification: CommitmentAppointmentNotification)
+
+    fun commitmentCancelled(
+        notification: CommitmentAppointmentNotification,
+        reasonCode: CancellationReasonCode?,
+    )
+
+    fun commitmentRescheduled(
+        previous: CommitmentAppointmentNotification,
+        replacement: CommitmentAppointmentNotification,
     )
 }
 
@@ -265,6 +309,147 @@ class DefaultAppointmentNotificationWriter(
         )
     }
 
+    override fun commitmentRequested(notification: CommitmentAppointmentNotification) {
+        val clinic = clinic(notification)
+        val schedule = schedule(notification, clinic)
+        enqueueCommitment(
+            notification = notification,
+            version = notification.proposalRevision,
+            eventType = NotificationEventType.CREATED,
+            slot = NotificationSlot.CREATED,
+            templateKey = CREATED_TEMPLATE,
+            parameters = AppointmentCreatedParameters(
+                clinicDisplayName = clinic.displayName,
+                appointmentDate = schedule.appointmentDate,
+                startTime = schedule.startTime,
+            ),
+            availableAt = now(),
+        )
+    }
+
+    override fun commitmentConfirmed(notification: CommitmentAppointmentNotification) {
+        val clinic = clinic(notification)
+        val schedule = schedule(notification, clinic)
+        val occurredAt = now()
+        enqueueCommitment(
+            notification = notification,
+            version = notification.proposalRevision,
+            eventType = NotificationEventType.CONFIRMED,
+            slot = NotificationSlot.CONFIRMED,
+            templateKey = CONFIRMED_TEMPLATE,
+            parameters = AppointmentConfirmedParameters(
+                clinicDisplayName = clinic.displayName,
+                appointmentDate = schedule.appointmentDate,
+                startTime = schedule.startTime,
+            ),
+            availableAt = occurredAt,
+            occurredAt = occurredAt,
+        )
+        enqueueCommitmentReminders(notification, clinic, schedule, occurredAt)
+    }
+
+    override fun commitmentCancelled(
+        notification: CommitmentAppointmentNotification,
+        reasonCode: CancellationReasonCode?,
+    ) {
+        repository.suppressOutstandingReminders(
+            appointmentId = AppointmentId(notification.appointmentId),
+            suppressionReason = NotificationSuppressionReasonCode.APPOINTMENT_CHANGED,
+        )
+        val clinic = clinic(notification)
+        val schedule = schedule(notification, clinic)
+        enqueueCommitment(
+            notification = notification,
+            version = notification.commitmentVersion,
+            eventType = NotificationEventType.CANCELLED,
+            slot = NotificationSlot.CANCELLED,
+            templateKey = CANCELLED_TEMPLATE,
+            parameters = AppointmentCancelledParameters(
+                clinicDisplayName = clinic.displayName,
+                appointmentDate = schedule.appointmentDate,
+                startTime = schedule.startTime,
+                cancellationReasonCode = reasonCode,
+            ),
+            availableAt = now(),
+        )
+    }
+
+    override fun commitmentRescheduled(
+        previous: CommitmentAppointmentNotification,
+        replacement: CommitmentAppointmentNotification,
+    ) {
+        require(previous.tenantGroupId == replacement.tenantGroupId) {
+            "rescheduled commitment must preserve the tenant"
+        }
+        require(previous.clinicId == replacement.clinicId) {
+            "rescheduled commitment must preserve the clinic"
+        }
+        require(previous.appointmentId == replacement.appointmentId) {
+            "rescheduled commitment must preserve the appointment"
+        }
+        require(previous.memberId == replacement.memberId) {
+            "rescheduled commitment must preserve the verified member"
+        }
+        repository.suppressOutstandingReminders(
+            appointmentId = AppointmentId(previous.appointmentId),
+            suppressionReason = NotificationSuppressionReasonCode.APPOINTMENT_CHANGED,
+        )
+        val clinic = clinic(replacement)
+        val previousSchedule = schedule(previous, clinic)
+        val replacementSchedule = schedule(replacement, clinic)
+        val occurredAt = now()
+        enqueueCommitment(
+            notification = replacement,
+            version = replacement.commitmentVersion,
+            eventType = NotificationEventType.RESCHEDULED,
+            slot = NotificationSlot.RESCHEDULED,
+            templateKey = RESCHEDULED_TEMPLATE,
+            parameters = AppointmentRescheduledParameters(
+                clinicDisplayName = clinic.displayName,
+                previousAppointmentDate = previousSchedule.appointmentDate,
+                previousStartTime = previousSchedule.startTime,
+                replacementAppointmentDate = replacementSchedule.appointmentDate,
+                replacementStartTime = replacementSchedule.startTime,
+            ),
+            availableAt = occurredAt,
+            occurredAt = occurredAt,
+        )
+        enqueueCommitmentReminders(replacement, clinic, replacementSchedule, occurredAt)
+    }
+
+    private fun enqueueCommitmentReminders(
+        notification: CommitmentAppointmentNotification,
+        clinic: NotificationClinic,
+        schedule: NotificationSchedule,
+        occurredAt: Instant,
+    ) {
+        val parameters = AppointmentReminderParameters(
+            clinicDisplayName = clinic.displayName,
+            appointmentDate = schedule.appointmentDate,
+            startTime = schedule.startTime,
+        )
+        enqueueCommitment(
+            notification = notification,
+            version = notification.proposalRevision,
+            eventType = NotificationEventType.REMINDER,
+            slot = NotificationSlot.REMINDER_24H,
+            templateKey = REMINDER_24H_TEMPLATE,
+            parameters = parameters,
+            availableAt = notification.startsAt.minus(Duration.ofHours(24)).coerceAtLeast(occurredAt),
+            occurredAt = occurredAt,
+        )
+        enqueueCommitment(
+            notification = notification,
+            version = notification.proposalRevision,
+            eventType = NotificationEventType.REMINDER,
+            slot = NotificationSlot.REMINDER_SAME_DAY,
+            templateKey = REMINDER_SAME_DAY_TEMPLATE,
+            parameters = parameters,
+            availableAt = notification.startsAt.minus(sameDayReminderLeadTime).coerceAtLeast(occurredAt),
+            occurredAt = occurredAt,
+        )
+    }
+
     private fun enqueueReminders(
         tenantGroupId: Long,
         record: AppointmentRecord,
@@ -305,6 +490,59 @@ class DefaultAppointmentNotificationWriter(
             parameters = parameters,
             availableAt = appointmentStart.minus(sameDayReminderLeadTime).coerceAtLeast(occurredAt),
             occurredAt = occurredAt,
+        )
+    }
+
+    private fun enqueueCommitment(
+        notification: CommitmentAppointmentNotification,
+        version: Long,
+        eventType: NotificationEventType,
+        slot: NotificationSlot,
+        templateKey: NotificationTemplateKey,
+        parameters: NotificationTemplateParameters,
+        availableAt: Instant,
+        occurredAt: Instant = now(),
+    ) {
+        val input = NotificationIdempotencyInput(
+            tenantGroupId = TenantGroupId(notification.tenantGroupId),
+            clinicId = ClinicId(notification.clinicId),
+            appointmentId = AppointmentId(notification.appointmentId),
+            appointmentVersionOrRevision = version,
+            eventType = eventType,
+            channel = NotificationChannelType.DUMMY,
+            notificationSlot = slot,
+        )
+        val digest = hasher.idempotencyCandidates(input).first()
+        repository.enqueue(
+            SendableNotificationDraft(
+                envelope = NotificationOutboxEnvelope(
+                    schemaVersion = NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION,
+                    eventId = NotificationEventId(digest.value),
+                    idempotencyKey = NotificationIdempotencyKey(digest.value),
+                    tenantGroupId = TenantGroupId(notification.tenantGroupId),
+                    clinicId = ClinicId(notification.clinicId),
+                    appointmentId = AppointmentId(notification.appointmentId),
+                    memberId = notification.memberId,
+                    channel = NotificationChannelType.DUMMY,
+                    eventType = eventType,
+                    notificationSlot = slot,
+                    templateKey = templateKey,
+                    templateVersion = NotificationTemplateVersion(1),
+                    parameterType = parameters.parameterType,
+                    parameters = parameters,
+                    occurredAt = occurredAt,
+                    availableAt = availableAt,
+                ),
+                idempotencyDigest = digest,
+                auditFingerprint = hasher.auditFingerprint(
+                    NotificationAuditInput(
+                        tenantGroupId = TenantGroupId(notification.tenantGroupId),
+                        stableSubject = notification.appointmentId.toString(),
+                        purpose = eventType.name,
+                    )
+                ),
+                providerKey = DUMMY_PROVIDER,
+            )
         )
     }
 
@@ -438,6 +676,26 @@ class DefaultAppointmentNotificationWriter(
         )
     }
 
+    private fun clinic(notification: CommitmentAppointmentNotification): NotificationClinic {
+        val clinic = clinicRepository.findByIdAndTenant(notification.clinicId, notification.tenantGroupId)
+            ?: throw IllegalStateException("Appointment clinic is not available in the tenant scope")
+        return NotificationClinic(
+            displayName = clinic.name,
+            zoneId = ZoneId.of(clinic.timezone),
+        )
+    }
+
+    private fun schedule(
+        notification: CommitmentAppointmentNotification,
+        clinic: NotificationClinic,
+    ): NotificationSchedule {
+        val startsAt = notification.startsAt.atZone(clinic.zoneId)
+        return NotificationSchedule(
+            appointmentDate = startsAt.toLocalDate(),
+            startTime = startsAt.toLocalTime(),
+        )
+    }
+
     private fun now(): Instant = Instant.now(clock)
 
     private fun memberUnavailable(): NotificationContractException =
@@ -449,6 +707,11 @@ class DefaultAppointmentNotificationWriter(
     private data class NotificationClinic(
         val displayName: String,
         val zoneId: ZoneId,
+    )
+
+    private data class NotificationSchedule(
+        val appointmentDate: LocalDate,
+        val startTime: LocalTime,
     )
 
     companion object {
@@ -497,6 +760,20 @@ object UnavailableAppointmentNotificationWriter : AppointmentNotificationWriter 
         original: AppointmentRecord,
         replacement: AppointmentRecord,
         version: Long,
+    ): Nothing = unavailable()
+
+    override fun commitmentRequested(notification: CommitmentAppointmentNotification): Nothing = unavailable()
+
+    override fun commitmentConfirmed(notification: CommitmentAppointmentNotification): Nothing = unavailable()
+
+    override fun commitmentCancelled(
+        notification: CommitmentAppointmentNotification,
+        reasonCode: CancellationReasonCode?,
+    ): Nothing = unavailable()
+
+    override fun commitmentRescheduled(
+        previous: CommitmentAppointmentNotification,
+        replacement: CommitmentAppointmentNotification,
     ): Nothing = unavailable()
 
     private fun unavailable(): Nothing =

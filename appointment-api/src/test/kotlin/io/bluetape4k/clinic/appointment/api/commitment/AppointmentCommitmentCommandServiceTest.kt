@@ -5,11 +5,16 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldHaveSize
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
+import io.bluetape4k.clinic.appointment.api.notification.AppointmentNotificationWriter
+import io.bluetape4k.clinic.appointment.api.notification.CommitmentAppointmentNotification
+import io.bluetape4k.clinic.appointment.api.notification.MemberResolution
+import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentItemDraft
 import io.bluetape4k.clinic.appointment.model.commitment.ResourceAllocationDraft
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentCommandResultRecord
 import io.bluetape4k.clinic.appointment.model.dto.CommandClaimResult
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationStatus
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
@@ -256,6 +261,129 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
     }
 
     @Test
+    fun `v2 성공 command는 notification writer를 decision 뒤 idempotency 결과 전에 호출한다`() {
+        val writer = RecordingNotificationWriter()
+        val service = commandServiceWithWriter(notificationWriter = writer)
+        val requestProposal = proposalInput(revision = 1L, resourceId = "doctor-notify-request")
+
+        val requested = service.requestCustomerAppointment(
+            CustomerAppointmentRequestCommand(
+                context = commandContext("notify-request"),
+                identity = appointmentIdentity("notify-request"),
+                proposal = requestProposal,
+                expiresAt = ACTIVE_EXPIRY,
+                representativeTreatmentName = "고객 가예약",
+                consent = acceptedConsent("notify-request"),
+            ),
+        )
+        service.approveCustomerProposal(
+            ConfirmAppointmentProposalCommand(
+                context = commandContext("notify-approve"),
+                appointmentId = requested.commitment.appointmentId,
+                proposalId = requested.proposal.id,
+                expectedVersion = requested.commitment.version,
+                proposal = requestProposal,
+                expectedProposalHash = requested.proposal.proposalHash,
+                projectionTarget = confirmedProjectionTarget("doctor-notify-request"),
+            ),
+        )
+        service.confirmDirectAppointment(
+            DirectAppointmentConfirmationCommand(
+                context = commandContext("notify-direct"),
+                identity = appointmentIdentity("notify-direct"),
+                proposal = proposalInput(revision = 1L, resourceId = "doctor-notify-direct"),
+                expiresAt = ACTIVE_EXPIRY,
+                representativeTreatmentName = "직접 확정",
+                projectionTarget = confirmedProjectionTarget("doctor-notify-direct"),
+                policyDecision = directConfirmationPolicyDecision(),
+                consent = acceptedConsent("notify-direct"),
+            ),
+        )
+        val original = confirmDirect(service, "notify-change-original", "doctor-notify-original")
+        val changeInput = proposalInput(
+            revision = 2L,
+            resourceId = "doctor-notify-replacement",
+            supersedesProposalId = original.proposal.id,
+        )
+        val change = service.proposeChange(
+            ChangeAppointmentProposalCommand(
+                context = commandContext("notify-change-propose"),
+                appointmentId = original.commitment.appointmentId,
+                expectedVersion = original.commitment.version,
+                proposal = changeInput,
+                expiresAt = ACTIVE_EXPIRY,
+                representativeTreatmentName = "변경 제안",
+            ),
+        )
+        service.acceptProposal(
+            AcceptAppointmentProposalCommand(
+                context = commandContext("notify-change-accept"),
+                appointmentId = original.commitment.appointmentId,
+                proposalId = change.proposal.id,
+                expectedVersion = change.commitment.version,
+                proposal = changeInput,
+                expectedProposalHash = change.proposal.proposalHash,
+                projectionTarget = confirmedProjectionTarget("doctor-notify-replacement"),
+                consent = acceptedConsent("notify-change-accept"),
+            ),
+        )
+        val cancelTarget = confirmDirect(service, "notify-cancel-original", "doctor-notify-cancel")
+        service.cancelAppointment(
+            CancelAppointmentCommand(
+                context = commandContext("notify-cancel"),
+                appointmentId = cancelTarget.commitment.appointmentId,
+                proposalId = cancelTarget.proposal.id,
+                expectedVersion = cancelTarget.commitment.version,
+                expectedProposalHash = cancelTarget.proposal.proposalHash,
+                reasonCode = "CUSTOMER_REQUEST",
+            ),
+        )
+
+        writer.events shouldBeEqualTo listOf(
+            "requested:patient-notify-request:1",
+            "confirmed:patient-notify-request:1",
+            "confirmed:patient-notify-direct:1",
+            "confirmed:patient-notify-change-original:1",
+            "rescheduled:patient-notify-change-original:1->2",
+            "confirmed:patient-notify-cancel-original:1",
+            "cancelled:patient-notify-cancel-original:CUSTOMER_REQUEST",
+        )
+        transaction(database) {
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 8L
+        }
+    }
+
+    @Test
+    fun `v2 notification writer 실패는 command decision과 idempotency 결과를 함께 rollback한다`() {
+        val writer = RecordingNotificationWriter(failOn = "confirmed")
+        val service = commandServiceWithWriter(notificationWriter = writer)
+
+        val failure = assertFailsWith<IllegalStateException> {
+            service.confirmDirectAppointment(
+                DirectAppointmentConfirmationCommand(
+                    context = commandContext("notify-rollback"),
+                    identity = appointmentIdentity("notify-rollback"),
+                    proposal = proposalInput(revision = 1L, resourceId = "doctor-notify-rollback"),
+                    expiresAt = ACTIVE_EXPIRY,
+                    representativeTreatmentName = "rollback 검증",
+                    projectionTarget = confirmedProjectionTarget("doctor-notify-rollback"),
+                    policyDecision = directConfirmationPolicyDecision(),
+                    consent = acceptedConsent("notify-rollback"),
+                ),
+            )
+        }
+
+        failure.message shouldBeEqualTo "forced notification writer failure"
+        writer.events shouldBeEqualTo emptyList()
+        transaction(database) {
+            Appointments.selectAll().count() shouldBeEqualTo 0L
+            AppointmentAuditEvents.selectAll().count() shouldBeEqualTo 0L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
+            AppointmentCommandIdempotencies.selectAll().count() shouldBeEqualTo 0L
+        }
+    }
+
+    @Test
     fun `자원 item key가 proposal item을 가리키지 않으면 직접확정을 rollback한다`() {
         // Given: Plan item은 정상이나 자원 점유만 존재하지 않는 item key를 참조함
         val service = commandService()
@@ -407,7 +535,8 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
     @Test
     fun `직접확정 비허용 정책과 다른 약관 동의는 각각 안정적인 오류로 거부한다`() {
         // Given: 직접 확정을 허용하지 않는 정책
-        val service = commandService()
+        val writer = RecordingNotificationWriter()
+        val service = commandServiceWithWriter(notificationWriter = writer)
         val proposal = proposalInput(revision = 1L, resourceId = "doctor-policy-denied")
         val deniedCommand =
             DirectAppointmentConfirmationCommand(
@@ -460,6 +589,7 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
         // Then: 정책과 증빙 오류를 구분하고 어떤 방문도 생성하지 않음
         policyFailure.code shouldBeEqualTo AppointmentCommitmentCommandError.DIRECT_CONFIRM_NOT_ALLOWED
         termsFailure.code shouldBeEqualTo AppointmentCommitmentCommandError.CONSENT_EVIDENCE_INVALID
+        writer.events shouldBeEqualTo emptyList()
         transaction(database) {
             Appointments.selectAll().count() shouldBeEqualTo 0L
         }
@@ -1033,7 +1163,8 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
     @Test
     fun `동일한 멱등 command replay는 durable 결과와 단일 side effect만 반환한다`() {
         // Given: 직접 확정 command 하나
-        val service = commandService()
+        val writer = RecordingNotificationWriter()
+        val service = commandServiceWithWriter(notificationWriter = writer)
         val command =
             DirectAppointmentConfirmationCommand(
                 context = commandContext("idempotent-direct"),
@@ -1054,6 +1185,7 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
         replay.idempotentReplay.shouldBeTrue()
         replay.commitment shouldBeEqualTo first.commitment
         replay.proposal shouldBeEqualTo first.proposal
+        writer.events shouldBeEqualTo listOf("confirmed:patient-idempotent-direct:1")
         transaction(database) {
             AppointmentCommandIdempotencies.selectAll().count() shouldBeEqualTo 1L
             ResourceAllocationRepository().findByProposal(first.proposal.id) shouldHaveSize 1
@@ -1183,7 +1315,11 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
     fun `expected version 충돌은 재시도 없이 즉시 반환한다`() {
         // Given: version 2로 확정된 예약
         var retryCount = 0
-        val service = commandService { retryCount++ }
+        val writer = RecordingNotificationWriter()
+        val service = commandServiceWithWriter(
+            retryDelay = { retryCount++ },
+            notificationWriter = writer,
+        )
         val original = confirmDirect(service, "version-original")
         val changeInput =
             proposalInput(
@@ -1223,6 +1359,7 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
         // Then: domain conflict이며 DB retry/backoff를 수행하지 않음
         failure.code shouldBeEqualTo AppointmentCommitmentCommandError.VERSION_CONFLICT
         retryCount shouldBeEqualTo 0
+        writer.events shouldBeEqualTo listOf("confirmed:patient-version-original:1")
         transaction(database) {
             ResourceAllocationRepository().findByProposal(change.proposal.id) shouldHaveSize 0
         }
@@ -1403,6 +1540,86 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
         delays shouldBeEqualTo listOf(70L)
         verify(exactly = 2) {
             idempotencyRepository.claim(any(), any(), any(), any(), any())
+        }
+    }
+
+    private fun commandServiceWithWriter(
+        retryDelay: (Long) -> Unit = {},
+        notificationWriter: AppointmentNotificationWriter = RecordingNotificationWriter(),
+    ): AppointmentCommitmentCommandService =
+        AppointmentCommitmentCommandService(
+            database = database,
+            clock = CLOCK,
+            retryDelay = retryDelay,
+            notificationWriter = notificationWriter,
+        )
+
+    private class RecordingNotificationWriter(
+        private val failOn: String? = null,
+    ) : AppointmentNotificationWriter {
+        val events = mutableListOf<String>()
+
+        override fun appointmentCreated(
+            tenantGroupId: Long,
+            record: AppointmentRecord,
+            version: Long,
+            resolution: MemberResolution,
+        ) = Unit
+
+        override fun statusChanged(
+            tenantGroupId: Long,
+            record: AppointmentRecord,
+            version: Long,
+            from: AppointmentState,
+            to: AppointmentState,
+        ) = Unit
+
+        override fun cancelled(
+            tenantGroupId: Long,
+            record: AppointmentRecord,
+            version: Long,
+            reasonCode: CancellationReasonCode?,
+        ) = Unit
+
+        override fun rescheduled(
+            tenantGroupId: Long,
+            original: AppointmentRecord,
+            replacement: AppointmentRecord,
+            version: Long,
+        ) = Unit
+
+        override fun commitmentRequested(notification: CommitmentAppointmentNotification) {
+            maybeFail("requested")
+            events += "requested:${notification.memberId.value}:${notification.proposalRevision}"
+        }
+
+        override fun commitmentConfirmed(notification: CommitmentAppointmentNotification) {
+            maybeFail("confirmed")
+            events += "confirmed:${notification.memberId.value}:${notification.proposalRevision}"
+        }
+
+        override fun commitmentCancelled(
+            notification: CommitmentAppointmentNotification,
+            reasonCode: CancellationReasonCode?,
+        ) {
+            maybeFail("cancelled")
+            events += "cancelled:${notification.memberId.value}:${reasonCode?.value}"
+        }
+
+        override fun commitmentRescheduled(
+            previous: CommitmentAppointmentNotification,
+            replacement: CommitmentAppointmentNotification,
+        ) {
+            maybeFail("rescheduled")
+            events +=
+                "rescheduled:${replacement.memberId.value}:" +
+                    "${previous.proposalRevision}->${replacement.proposalRevision}"
+        }
+
+        private fun maybeFail(event: String) {
+            if (event == failOn) {
+                throw IllegalStateException("forced notification writer failure")
+            }
         }
     }
 }

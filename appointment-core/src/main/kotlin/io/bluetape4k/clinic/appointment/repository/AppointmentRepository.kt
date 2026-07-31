@@ -7,6 +7,7 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.ConfirmedAppointmentProjection
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
 import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
@@ -551,6 +552,33 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
                     (Appointments.modelVersion eq AppointmentModelVersion.COMMITMENT_V2)
             }.singleOrNull()
             ?.get(Appointments.patientReferenceFingerprint)
+    }
+
+    /**
+     * commitment v2 방문에 저장된 회원 식별자를 tenant·clinic 범위에서 찾습니다.
+     *
+     * 회원 식별자가 없는 row, legacy row 또는 다른 scope의 row는 `null`을 반환합니다.
+     * 환자 참조 fingerprint와 물리 컬럼 이름은 이 저장소 밖으로 노출하지 않습니다.
+     */
+    fun findCommitmentMemberId(
+        appointmentId: Long,
+        tenantGroupId: Long,
+        clinicId: Long,
+    ): MemberId? {
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
+        val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
+        val validClinicId = clinicId.requirePositiveNumber("clinicId")
+        return Appointments
+            .select(Appointments.patientExternalId)
+            .where {
+                (Appointments.id eq validAppointmentId) and
+                    (Appointments.clinicId eq validClinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(validTenantGroupId)) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.COMMITMENT_V2)
+            }.singleOrNull()
+            ?.get(Appointments.patientExternalId)
+            ?.takeIf(String::isNotBlank)
+            ?.let(::MemberId)
     }
 
     /**
