@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilter
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
+import jakarta.servlet.DispatcherType
 import jakarta.servlet.Filter
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.servlet.FilterRegistrationBean
@@ -182,6 +183,11 @@ class SecurityConfig {
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
+                    // suspend controller의 ASYNC 재디스패치는 최초 REQUEST가 권한 검사를
+                    // 통과한 뒤에만 발생한다. 최초 요청의 tenant·scope·clinic 검사는 아래
+                    // matcher가 담당하며, 보안 통합 테스트가 거절·허용 경로를 함께 고정한다.
+                    .dispatcherTypeMatchers(DispatcherType.ASYNC)
+                    .permitAll()
                     .requestMatchers(EndpointRequest.to(ProfileReevaluationEndpoint::class.java))
                     .access(profileReevaluationAccess())
                     // OpenAPI / Swagger remain public; operational endpoints
@@ -225,6 +231,16 @@ class SecurityConfig {
                         "/api/{tenantCode}/clinics/{clinicId}/appointment-plans/**",
                     )
                     .access(clinicOperatorReadAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/{tenantCode}/clinics/{clinicId}/notifications/**",
+                    )
+                    .access(notificationReadAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/{tenantCode}/clinics/{clinicId}/notifications/re-notify",
+                    )
+                    .access(notificationReNotifyAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/**")
                     .access(readTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/**")
@@ -338,6 +354,52 @@ class SecurityConfig {
                 AuthorizationDecision(requestedClinicId != null && requestedClinicId in principal?.allowedClinicIds.orEmpty())
             },
         )
+
+    private fun notificationReadAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(
+                SchedulingRole.ADMIN,
+                SchedulingRole.STAFF,
+                SchedulingRole.DOCTOR,
+            ),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_notification:read"),
+            tenantAuthorizationManager,
+            exactClinicMembershipAccess(),
+        )
+
+    private fun notificationReNotifyAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasRole(SchedulingRole.SYSTEM),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_notification:renotify"),
+            tenantAuthorizationManager,
+            exactClinicMembershipAccess(),
+            platformNotificationServiceAccess(),
+        )
+
+    private fun platformNotificationServiceAccess(): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManager { authentication, _ ->
+            val principal = authentication.get().principal as? SchedulingUserPrincipal
+            AuthorizationDecision(
+                principal?.actorType == ActorType.SYSTEM &&
+                    principal.assurance == AuthenticationAssurance.SERVICE &&
+                    principal.roles == setOf(SchedulingRole.SYSTEM)
+            )
+        }
+
+    private fun exactClinicMembershipAccess(): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManager { authentication, context ->
+            val principal = authentication.get().principal as? SchedulingUserPrincipal
+            val requestedClinicId = context.variables["clinicId"]?.toLongOrNull()
+            AuthorizationDecision(
+                requestedClinicId != null &&
+                    requestedClinicId > 0 &&
+                    requestedClinicId in principal?.allowedClinicIds.orEmpty()
+            )
+        }
 
     /**
      * Spring bean lifecycle은 유지하면서 embedded container의 독립 servlet filter 등록만 끈다.
