@@ -36,6 +36,7 @@ import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -494,6 +495,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
                     it[startTime] = record.startTime
                     it[endTime] = record.endTime
                     it[status] = record.status
+                    it[version] = record.version
                 }.value
         return record.copy(id = id)
     }
@@ -636,6 +638,32 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         Appointments.update(where = { Appointments.id eq appointmentId }) {
             it[status] = newStatus
         }
+
+    /**
+     * legacy 예약 상태를 예상 version과 일치할 때만 변경하고 version을 한 번 증가시킵니다.
+     *
+     * 알림 idempotency가 상태 이력 개수나 시각에 의존하지 않도록 상태 변경과 같은 SQL
+     * update에서 단조 증가 version을 소비합니다.
+     */
+    fun updateLegacyStatus(
+        appointmentId: Long,
+        expectedVersion: Long,
+        newStatus: AppointmentState,
+    ): Boolean {
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
+        require(expectedVersion >= 0L) { "expectedVersion must not be negative" }
+        return Appointments.update(
+            where = {
+                (Appointments.id eq validAppointmentId) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.LEGACY) and
+                    (Appointments.version eq expectedVersion)
+            },
+        ) {
+            it[status] = newStatus
+            it[version] = expectedVersion + 1L
+            it.update(updatedAt, CurrentTimestamp)
+        } == 1
+    }
 
     /**
      * 특정 장비의 사용불가 기간과 겹치는 legacy 예약을 조회합니다.

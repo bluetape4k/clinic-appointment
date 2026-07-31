@@ -25,6 +25,7 @@ import java.time.LocalTime
  * @property startTime 예약 시작 시간
  * @property endTime 예약 종료 시간
  * @property status 예약 상태
+ * @property version legacy command의 단조 증가 멱등성 version
  * @property createdAt 생성 시각
  * @property updatedAt 수정 시각
  */
@@ -44,9 +45,14 @@ data class AppointmentRecord(
     val startTime: LocalTime,
     val endTime: LocalTime,
     val status: AppointmentState = AppointmentState.REQUESTED,
+    val version: Long = 0L,
     val createdAt: Instant? = null,
     val updatedAt: Instant? = null,
 ) : Serializable {
+    init {
+        require(version >= 0L) { "version must not be negative" }
+    }
+
     companion object {
         private const val serialVersionUID = 1L
     }

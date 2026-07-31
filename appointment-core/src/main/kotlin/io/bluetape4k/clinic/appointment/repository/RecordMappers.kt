@@ -190,6 +190,7 @@ fun ResultRow.toAppointmentRecord() = AppointmentRecord(
     startTime = this[Appointments.startTime].requireNotNull("startTime"),
     endTime = this[Appointments.endTime].requireNotNull("endTime"),
     status = this[Appointments.status],
+    version = this[Appointments.version],
     createdAt = this[Appointments.createdAt],
     updatedAt = this[Appointments.updatedAt],
 )

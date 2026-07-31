@@ -250,6 +250,40 @@ class NotificationOutboxRepositoryTest {
     }
 
     @Test
+    fun `claim은 rescheduled template parameter contract를 보존한다`() {
+        transaction(database) {
+            val candidate = repository.enqueue(
+                sendableDraft(
+                    eventType = NotificationEventType.RESCHEDULED,
+                    notificationSlot = NotificationSlot.RESCHEDULED,
+                    templateKey = "appointment-rescheduled",
+                    parameterType = NotificationParameterType.APPOINTMENT_RESCHEDULED,
+                    parameters = AppointmentRescheduledParameters(
+                        clinicDisplayName = "Clinic",
+                        previousAppointmentDate = LocalDate.parse("2026-08-01"),
+                        previousStartTime = LocalTime.parse("09:00"),
+                        replacementAppointmentDate = LocalDate.parse("2026-08-02"),
+                        replacementStartTime = LocalTime.parse("14:00"),
+                    ),
+                ),
+            )
+
+            val claimed = repository.claim(candidate.id, owner = "worker-a", token = "token-a")!!
+
+            claimed.eventType shouldBeEqualTo NotificationEventType.RESCHEDULED
+            claimed.notificationSlot shouldBeEqualTo NotificationSlot.RESCHEDULED
+            claimed.parameterType shouldBeEqualTo NotificationParameterType.APPOINTMENT_RESCHEDULED
+            codec.decode(claimed.parametersJson).parameters shouldBeEqualTo AppointmentRescheduledParameters(
+                clinicDisplayName = "Clinic",
+                previousAppointmentDate = LocalDate.parse("2026-08-01"),
+                previousStartTime = LocalTime.parse("09:00"),
+                replacementAppointmentDate = LocalDate.parse("2026-08-02"),
+                replacementStartTime = LocalTime.parse("14:00"),
+            )
+        }
+    }
+
+    @Test
     fun `stale completion은 실패하고 현재 lease만 완료할 수 있다`() {
         transaction(database) {
             val candidate = repository.enqueue(sendableDraft())
@@ -507,6 +541,15 @@ class NotificationOutboxRepositoryTest {
         digest: String = "digest-1",
         availableAt: Instant = Instant.parse("2020-01-01T00:00:00Z"),
         providerKey: String? = "dummy",
+        eventType: NotificationEventType = NotificationEventType.CONFIRMED,
+        notificationSlot: NotificationSlot = NotificationSlot.CONFIRMED,
+        templateKey: String = "appointment-confirmed",
+        parameterType: NotificationParameterType = NotificationParameterType.APPOINTMENT_CONFIRMED,
+        parameters: NotificationTemplateParameters = AppointmentConfirmedParameters(
+            clinicDisplayName = "Clinic",
+            appointmentDate = LocalDate.parse("2026-08-01"),
+            startTime = LocalTime.parse("09:00"),
+        ),
     ): SendableNotificationDraft =
         SendableNotificationDraft(
             envelope = NotificationOutboxEnvelope(
@@ -518,16 +561,12 @@ class NotificationOutboxRepositoryTest {
                 appointmentId = AppointmentId(3L),
                 memberId = MemberId("member-1"),
                 channel = NotificationChannelType.DUMMY,
-                eventType = NotificationEventType.CONFIRMED,
-                notificationSlot = NotificationSlot.CONFIRMED,
-                templateKey = NotificationTemplateKey("appointment-confirmed"),
+                eventType = eventType,
+                notificationSlot = notificationSlot,
+                templateKey = NotificationTemplateKey(templateKey),
                 templateVersion = NotificationTemplateVersion(1),
-                parameterType = NotificationParameterType.APPOINTMENT_CONFIRMED,
-                parameters = AppointmentConfirmedParameters(
-                    clinicDisplayName = "Clinic",
-                    appointmentDate = LocalDate.parse("2026-08-01"),
-                    startTime = LocalTime.parse("09:00"),
-                ),
+                parameterType = parameterType,
+                parameters = parameters,
                 occurredAt = Instant.parse("2026-07-31T00:00:00Z"),
                 availableAt = availableAt,
             ),

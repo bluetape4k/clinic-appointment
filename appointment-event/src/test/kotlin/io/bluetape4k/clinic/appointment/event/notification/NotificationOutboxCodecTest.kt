@@ -29,6 +29,66 @@ class NotificationOutboxCodecTest {
     }
 
     @Test
+    fun `codec round trip preserves every appointment template parameter contract`() {
+        val cases = listOf(
+            envelope(
+                eventType = NotificationEventType.CREATED,
+                notificationSlot = NotificationSlot.CREATED,
+                templateKey = "appointment.created.sms",
+                parameterType = NotificationParameterType.APPOINTMENT_CREATED,
+                parameters = AppointmentCreatedParameters(
+                    clinicDisplayName = "Blue Clinic",
+                    appointmentDate = LocalDate.parse("2026-08-01"),
+                    startTime = LocalTime.parse("10:30"),
+                ),
+            ) to AppointmentCreatedParameters::class,
+            envelope(
+                eventType = NotificationEventType.REMINDER,
+                notificationSlot = NotificationSlot.REMINDER_24H,
+                templateKey = "appointment.reminder.sms",
+                parameterType = NotificationParameterType.APPOINTMENT_REMINDER,
+                parameters = AppointmentReminderParameters(
+                    clinicDisplayName = "Blue Clinic",
+                    appointmentDate = LocalDate.parse("2026-08-01"),
+                    startTime = LocalTime.parse("10:30"),
+                ),
+            ) to AppointmentReminderParameters::class,
+            envelope(
+                eventType = NotificationEventType.CANCELLED,
+                notificationSlot = NotificationSlot.CANCELLED,
+                templateKey = "appointment.cancelled.sms",
+                parameterType = NotificationParameterType.APPOINTMENT_CANCELLED,
+                parameters = AppointmentCancelledParameters(
+                    clinicDisplayName = "Blue Clinic",
+                    appointmentDate = LocalDate.parse("2026-08-01"),
+                    startTime = LocalTime.parse("10:30"),
+                    cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
+                ),
+            ) to AppointmentCancelledParameters::class,
+            envelope(
+                eventType = NotificationEventType.RESCHEDULED,
+                notificationSlot = NotificationSlot.RESCHEDULED,
+                templateKey = "appointment.rescheduled.sms",
+                parameterType = NotificationParameterType.APPOINTMENT_RESCHEDULED,
+                parameters = AppointmentRescheduledParameters(
+                    clinicDisplayName = "Blue Clinic",
+                    previousAppointmentDate = LocalDate.parse("2026-08-01"),
+                    previousStartTime = LocalTime.parse("10:30"),
+                    replacementAppointmentDate = LocalDate.parse("2026-08-02"),
+                    replacementStartTime = LocalTime.parse("14:00"),
+                ),
+            ) to AppointmentRescheduledParameters::class,
+        )
+
+        cases.forEach { (envelope, expectedType) ->
+            val decoded = codec.decode(codec.encode(envelope))
+
+            decoded shouldBeEqualTo envelope
+            expectedType.java.isInstance(decoded.parameters) shouldBeEqualTo true
+        }
+    }
+
+    @Test
     fun `codec rejects unknown schema version with template parameter invalid contract failure`() {
         val json = codec.encode(envelope()).replace("\"schemaVersion\":1", "\"schemaVersion\":2")
 
@@ -87,6 +147,39 @@ class NotificationOutboxCodecTest {
     }
 
     @Test
+    fun `codec keeps cancellation parameters to registered reason code only`() {
+        val json = codec.encode(
+            envelope(
+                eventType = NotificationEventType.CANCELLED,
+                notificationSlot = NotificationSlot.CANCELLED,
+                templateKey = "appointment.cancelled.sms",
+                parameterType = NotificationParameterType.APPOINTMENT_CANCELLED,
+                parameters = AppointmentCancelledParameters(
+                    clinicDisplayName = "Blue Clinic",
+                    appointmentDate = LocalDate.parse("2026-08-01"),
+                    startTime = LocalTime.parse("10:30"),
+                    cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
+                ),
+            ),
+        )
+
+        val tree = jsonMapper.readValue<Map<String, Any?>>(json)
+        @Suppress("UNCHECKED_CAST")
+        val parameters = tree.getValue("parameters") as Map<String, Any?>
+
+        parameters.keys shouldBeEqualTo setOf(
+            "clinicDisplayName",
+            "appointmentDate",
+            "startTime",
+            "cancellationReasonCode",
+        )
+        parameters.getValue("cancellationReasonCode") shouldBeEqualTo "CUSTOMER_REQUEST"
+        json.contains("cancellationReasonText").shouldBeFalse()
+        json.contains("reasonText").shouldBeFalse()
+        json.contains("freeText").shouldBeFalse()
+    }
+
+    @Test
     fun `codec rejects closed boundary violations as template parameter invalid without raw payload leakage`() {
         val valid = codec.encode(envelope())
         val cases = listOf(
@@ -112,6 +205,42 @@ class NotificationOutboxCodecTest {
             failure.message?.contains("not-a-date").shouldBeFalse()
             failure.message?.contains("bad").shouldBeFalse()
             failure.message?.contains(json).shouldBeFalse()
+        }
+    }
+
+    @Test
+    fun `codec rejects cancellation lowercase reason and parameter fields from another contract`() {
+        val valid = codec.encode(
+            envelope(
+                eventType = NotificationEventType.CANCELLED,
+                notificationSlot = NotificationSlot.CANCELLED,
+                templateKey = "appointment.cancelled.sms",
+                parameterType = NotificationParameterType.APPOINTMENT_CANCELLED,
+                parameters = AppointmentCancelledParameters(
+                    clinicDisplayName = "Blue Clinic",
+                    appointmentDate = LocalDate.parse("2026-08-01"),
+                    startTime = LocalTime.parse("10:30"),
+                    cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
+                ),
+            ),
+        )
+
+        val cases = listOf(
+            valid.replace("\"cancellationReasonCode\":\"CUSTOMER_REQUEST\"", "\"cancellationReasonCode\":\"customer_request\""),
+            valid.replace(
+                "\"cancellationReasonCode\":\"CUSTOMER_REQUEST\"",
+                "\"cancellationReasonCode\":\"CUSTOMER_REQUEST\",\"previousAppointmentDate\":\"2026-08-01\"",
+            ),
+        )
+
+        cases.forEach { json ->
+            val failure = assertFailsWith<NotificationContractException> {
+                codec.decode(json)
+            }
+
+            failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+            failure.message?.contains("customer_request").shouldBeFalse()
+            failure.message?.contains("previousAppointmentDate").shouldBeFalse()
         }
     }
 
@@ -179,7 +308,17 @@ class NotificationOutboxCodecTest {
         }
     }
 
-    private fun envelope(): NotificationOutboxEnvelope =
+    private fun envelope(
+        eventType: NotificationEventType = NotificationEventType.CONFIRMED,
+        notificationSlot: NotificationSlot = NotificationSlot.CONFIRMED,
+        templateKey: String = "appointment.confirmed.sms",
+        parameterType: NotificationParameterType = NotificationParameterType.APPOINTMENT_CONFIRMED,
+        parameters: NotificationTemplateParameters = AppointmentConfirmedParameters(
+            clinicDisplayName = "Blue Clinic",
+            appointmentDate = LocalDate.parse("2026-08-01"),
+            startTime = LocalTime.parse("10:30"),
+        ),
+    ): NotificationOutboxEnvelope =
         NotificationOutboxEnvelope(
             schemaVersion = NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION,
             eventId = NotificationEventId("event-1"),
@@ -189,16 +328,12 @@ class NotificationOutboxCodecTest {
             appointmentId = AppointmentId(30L),
             memberId = MemberId("member-40"),
             channel = NotificationChannelType.SMS,
-            eventType = NotificationEventType.CONFIRMED,
-            notificationSlot = NotificationSlot.CONFIRMED,
-            templateKey = NotificationTemplateKey("appointment.confirmed.sms"),
+            eventType = eventType,
+            notificationSlot = notificationSlot,
+            templateKey = NotificationTemplateKey(templateKey),
             templateVersion = NotificationTemplateVersion(3),
-            parameterType = NotificationParameterType.APPOINTMENT_CONFIRMED,
-            parameters = AppointmentConfirmedParameters(
-                clinicDisplayName = "Blue Clinic",
-                appointmentDate = LocalDate.parse("2026-08-01"),
-                startTime = LocalTime.parse("10:30"),
-            ),
+            parameterType = parameterType,
+            parameters = parameters,
             occurredAt = Instant.parse("2026-07-31T01:00:00Z"),
             availableAt = Instant.parse("2026-07-31T01:05:00Z"),
         )
