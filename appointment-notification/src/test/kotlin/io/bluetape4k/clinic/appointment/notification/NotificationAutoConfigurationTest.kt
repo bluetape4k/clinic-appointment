@@ -1,10 +1,16 @@
 package io.bluetape4k.clinic.appointment.notification
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
+import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -13,8 +19,46 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import kotlin.system.measureTimeMillis
 
 internal class NotificationAutoConfigurationTest {
+
+    @Test
+    fun `resilient channel bean은 실제 channel 유형의 provider timeout override를 적용한다`() {
+        val database = database("auto_channel_timeout", version = "14")
+        context(database, withKey = true)
+            .withPropertyValues(
+                "clinic.notification.worker.provider-timeout=2s",
+                "clinic.notification.worker.channels.sms.provider-timeout=25ms",
+            )
+            .withBean(
+                "smsNotificationChannel",
+                NotificationChannel::class.java,
+                {
+                    object : NotificationChannel {
+                        override val channelType: NotificationChannelType = NotificationChannelType.SMS
+
+                        override fun send(request: NotificationProviderRequest): NotificationProviderResult {
+                            CountDownLatch(1).await()
+                            return NotificationProviderResult.accepted()
+                        }
+                    }
+                },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                val channel = applicationContext.getBean(ResilientNotificationChannel::class.java)
+
+                val elapsed = measureTimeMillis {
+                    val failure = assertFailsWith<NotificationProviderException> {
+                        channel.send(providerRequest())
+                    }
+                    failure.failureCode shouldBeEqualTo NotificationFailureCode.PROVIDER_UNAVAILABLE
+                }
+
+                check(elapsed < 500L) { "channel timeout override was not applied: elapsed=${elapsed}ms" }
+            }
+    }
 
     @Test
     fun `old schema와 key 부재에서는 새 worker traffic을 받지 않는다`() {
@@ -46,13 +90,15 @@ internal class NotificationAutoConfigurationTest {
             applicationContext.getBeansOfType(NotificationOutboxWorker::class.java).size shouldBeEqualTo 1
             applicationContext.getBeansOfType(NotificationOutboxDispatcher::class.java).size shouldBeEqualTo 0
             applicationContext.getBeansOfType(NotificationRetentionRunner::class.java).size shouldBeEqualTo 1
+            applicationContext.getBeansOfType(NotificationRetentionSchedulingRunner::class.java).size shouldBeEqualTo 1
         }
     }
 
     @Test
-    fun `실제 delivery worker가 제공된 경우에만 dispatcher를 구성한다`() {
+    fun `ACTIVE에서 실제 delivery worker가 제공된 경우에만 dispatcher를 구성한다`() {
         val database = database("auto_dispatcher", version = "14")
         context(database, withKey = true)
+            .withPropertyValues("clinic.notification.rollout.mode=ACTIVE")
             .withBean(
                 "deliveryAction",
                 NotificationDeliveryAction::class.java,
@@ -61,11 +107,12 @@ internal class NotificationAutoConfigurationTest {
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
                 applicationContext.getBeansOfType(NotificationOutboxDispatcher::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(NotificationOutboxSchedulingRunner::class.java).size shouldBeEqualTo 1
             }
     }
 
     @Test
-    fun `profile template provider key가 모두 준비되면 runtime delivery dispatcher를 구성한다`() {
+    fun `기본 SHADOW는 runtime dependency가 있어도 background dispatcher를 구성하지 않는다`() {
         val database = database("auto_runtime_dispatcher", version = "14")
         context(database, withKey = true)
             .withBean(
@@ -97,7 +144,48 @@ internal class NotificationAutoConfigurationTest {
             )
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(NotificationOutboxDispatcher::class.java).size shouldBeEqualTo 0
+                applicationContext.getBeansOfType(NotificationOutboxSchedulingRunner::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(NotificationEventListener::class.java).size shouldBeEqualTo 1
+            }
+    }
+
+    @Test
+    fun `ACTIVE는 runtime delivery dispatcher를 구성한다`() {
+        val database = database("auto_runtime_active", version = "14")
+        context(database, withKey = true)
+            .withPropertyValues("clinic.notification.rollout.mode=ACTIVE")
+            .withBean(
+                "memberNotificationProfileResolver",
+                MemberNotificationProfileResolver::class.java,
+                { MemberNotificationProfileResolver { MemberNotificationProfileResult.NotFound } },
+            )
+            .withBean(
+                "notificationTemplateRenderer",
+                NotificationTemplateRenderer::class.java,
+                {
+                    NotificationTemplateRenderer(
+                        NotificationTemplateCatalog { key, version, channel ->
+                            NotificationTemplate(
+                                key = key,
+                                version = version,
+                                channel = channel,
+                                fields = setOf("clinicDisplayName"),
+                                textTemplate = "{{clinicDisplayName}}",
+                            )
+                        }
+                    )
+                },
+            )
+            .withBean(
+                "notificationProviderIdempotencyKeyFactory",
+                NotificationProviderIdempotencyKeyFactory::class.java,
+                { NotificationProviderIdempotencyKeyFactory(ByteArray(32) { 1 }) },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
                 applicationContext.getBeansOfType(NotificationOutboxDispatcher::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(NotificationOutboxSchedulingRunner::class.java).size shouldBeEqualTo 1
             }
     }
 
@@ -193,6 +281,7 @@ internal class NotificationAutoConfigurationTest {
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
                 applicationContext.getBeansOfType(NotificationOutboxMetrics::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(NotificationObservationSchedulingRunner::class.java).size shouldBeEqualTo 1
                 applicationContext.getBeansOfType(NotificationOutboxHealthIndicator::class.java).size shouldBeEqualTo 1
                 applicationContext.getBeansOfType(NotificationOutboxAlertPolicy::class.java).size shouldBeEqualTo 1
                 applicationContext.getBeansOfType(NotificationStatusQueryService::class.java).size shouldBeEqualTo 1
@@ -235,4 +324,18 @@ internal class NotificationAutoConfigurationTest {
                 }
             }
         }
+
+    private fun providerRequest(): NotificationProviderRequest =
+        NotificationProviderRequest(
+            channel = NotificationChannelType.SMS,
+            destination = "+821012345678",
+            idempotencyKey = NotificationProviderIdempotencyKey("hmac-v1.${"A".repeat(43)}"),
+            templateKey = NotificationTemplateKey("appointment.confirmed"),
+            templateVersion = NotificationTemplateVersion(1),
+            rendered = RenderedNotificationTemplate(
+                title = null,
+                textBody = "confirmed",
+                htmlBody = null,
+            ),
+        )
 }

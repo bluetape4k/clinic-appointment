@@ -24,7 +24,7 @@ notifications, Spring Boot APIs, and an Angular frontend.
 
 - **Appointment state machine** - Supports PENDING -> REQUESTED -> CONFIRMED -> CHECKED_IN -> IN_PROGRESS -> COMPLETED transitions, cancellation, and reassignment.
 - **AI schedule optimization** - Uses Timefold Solver to assign appointments while satisfying doctor, equipment, business-hour, 12 hard, and 6 soft constraints.
-- **High-availability notifications** - Uses Redis Leader Election to guarantee single-node delivery, with Resilience4j CircuitBreaker/Retry/Bulkhead.
+- **Durable notifications** - Commits a privacy-minimized notification outbox with the appointment, then uses database leases, fencing, fair clinic scheduling, send-time member lookup, and bounded Resilience4j policies for delivery.
 - **Tenant-scoped REST API** - Provides Spring Boot 4 MVC APIs under `/api/{tenantCode}/...` with JWT tenant authorization, Flyway migrations, and Swagger UI.
 - **Appointment plan foundation** - Snapshots a purchased product BOM into immutable treatment obligations through catalog sync and trusted purchase-event convergence, before any visit is scheduled.
 - **Scheduling policy foundation** - Version-controls tenant baselines and clinic overrides for provisional booking, consent, overbooking, reconfirmation, disruption recovery, and controlled operating-hour extension.
@@ -82,6 +82,22 @@ Open the [interactive workflow](docs/superpowers/specs/2026-07-30-profile-change
 the [reference design](docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
 or the [operations runbook](docs/runbooks/profile-reevaluation.md).
 
+### Durable Notification Boundary
+
+Appointment commands commit a minimal notification outbox in the same database
+transaction. The notification runtime resolves current contact details,
+language, and consent from the member service only after claiming a row. It
+renders the approved template in memory and removes member, appointment, and
+template parameters from terminal rows.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/requirements/assets/data-flow-05-notification-events-en-dark.png">
+  <img src="docs/requirements/assets/data-flow-05-notification-events-en.png" alt="Durable notification outbox flow from atomic intent persistence through clinic-scoped rollout, send-time member resolution, and privacy-safe retention">
+</picture>
+
+See the [notification design](docs/requirements/notification.md) and
+[operations runbook](docs/runbooks/notification-outbox-operations.md).
+
 ## Architecture
 
 ![Clinic Appointment Architecture](docs/images/readme-diagrams/clinic-appointment-architecture-01-en.png)
@@ -92,7 +108,10 @@ or the [operations runbook](docs/runbooks/profile-reevaluation.md).
 
 ## Representative Requirement Flow
 
-![Appointment creation requirement flow](docs/requirements/assets/data-flow-01-appointment-create-en.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/requirements/assets/data-flow-01-appointment-create-en-dark.png">
+  <img src="docs/requirements/assets/data-flow-01-appointment-create-en.png" alt="Appointment creation commits the appointment and minimal notification outbox atomically before asynchronous delivery">
+</picture>
 
 The full requirements diagram catalog is maintained in [docs/requirements](docs/requirements/README.md).
 
@@ -103,7 +122,7 @@ The full requirements diagram catalog is maintained in [docs/requirements](docs/
 | `appointment-core` | Domain model for appointments, purchased treatment plans, scheduling policies, visit commitments, Exposed ORM repositories, state machines, and slot calculation. | [README](appointment-core/README.md) |
 | `appointment-event` | Domain event publishing/subscription and event log persistence based on Spring ApplicationEvent. | [README](appointment-event/README.md) |
 | `appointment-solver` | Timefold Solver AI optimization for bulk appointment placement using 12 hard and 6 soft constraints. | [README](appointment-solver/README.md) |
-| `appointment-notification` | HA notification scheduler and reminder delivery using Redis Leader Election and Resilience4j. | [README](appointment-notification/README.md) |
+| `appointment-notification` | Durable outbox delivery, send-time member resolution, reminder recovery, privacy-safe retention, and provider isolation. | [README](appointment-notification/README.md) |
 | `appointment-api` | Spring Boot 4 REST API for appointment CRUD, slot lookup, reassignment, JWT authentication, and Swagger. | [README](appointment-api/README.md) |
 | `frontend/appointment-frontend` | Angular 18 web UI for appointment management. | [README](frontend/appointment-frontend/README.md) |
 
@@ -152,7 +171,8 @@ Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seede
 | [Architecture](docs/requirements/architecture.md) | Module dependencies and key architecture decisions. |
 | [Domain Model](docs/requirements/domain-model.md) | 16 entities, appointment state machine, and table relationships. |
 | [AI Scheduler](docs/requirements/solver.md) | Timefold Solver constraint design. |
-| [Notification Module](docs/requirements/notification.md) | Notification channels, HA configuration, and Resilience4j. |
+| [Notification Module](docs/requirements/notification.md) | Durable outbox lifecycle, rollout routes, member-data boundary, and provider isolation. |
+| [Notification outbox operations](docs/runbooks/notification-outbox-operations.md) | Canary gates, alerts, re-notify, key rotation, migration, and rollback. |
 | [Frontend](docs/requirements/frontend.md) | Angular structure and page design. |
 | [Appointment plan visual companion](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.en.html) | English simulation and decision history for plans, booking commitments, disruption, and capacity. |
 | [Scheduling policy visual companion](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.en.html) | English simulation and decision history for policy compilation, approval, activation, and recovery. |

@@ -133,10 +133,16 @@ CREATE TABLE clinic_notification_outbox (
         )
     ),
     INDEX idx_notification_outbox_ready_clinic_cursor (
-        row_kind, status, available_at, next_retry_at, tenant_group_id, clinic_id
+        row_kind, tenant_group_id, clinic_id, status, available_at, next_retry_at
     ),
     INDEX idx_notification_outbox_ready_within_clinic (
         tenant_group_id, clinic_id, row_kind, status, available_at, id, next_retry_at
+    ),
+    INDEX idx_notification_outbox_direct_lookup (
+        clinic_id, appointment_id, event_type, row_kind, status, available_at, next_retry_at, id
+    ),
+    INDEX idx_notification_outbox_reminder_suppression (
+        tenant_group_id, clinic_id, appointment_id, row_kind, notification_slot, status, id
     ),
     INDEX idx_notification_outbox_lease_recovery (row_kind, status, lease_until, id),
     INDEX idx_notification_outbox_terminal_retention (row_kind, status, terminal_at, id),

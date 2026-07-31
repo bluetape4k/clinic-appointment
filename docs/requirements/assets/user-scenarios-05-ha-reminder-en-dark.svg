@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1120" viewBox="0 0 1900 1120" role="img" aria-labelledby="sequence-title sequence-description">
+  <title id="sequence-title">Durable reminder delivery sequence</title><desc id="sequence-description">Reminder correctness comes from the outbox key, database lease, fencing, and provider idempotency</desc>
+  <defs>
+    <filter id="sequence-shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.18"/></filter>
+    <marker id="sequence-arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 10 10"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#edf4ff"/></marker>
+    <style>
+      svg{font-family:Inter,ui-sans-serif,system-ui,sans-serif}.canvas{fill:#0f1724}.frame{fill:#172234;stroke:#40526a;stroke-width:3}
+      .title{font-size:38px;font-weight:750;fill:#edf4ff}.subtitle{font-size:17px;fill:#b6c4d7}
+      .header{fill:#223148;stroke:#7da6ff;stroke-width:2.4;filter:url(#sequence-shadow)}
+      .participant-title{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:16px;font-weight:700;fill:#edf4ff}
+      .lifeline{stroke:#49617d;stroke-width:2;stroke-dasharray:8 8}.message{stroke:#b09aff;stroke-width:2.8;fill:none}
+      .activation{fill:#263852;stroke:#b09aff;stroke-width:1.5}.label{fill:#172234;stroke:#40526a;stroke-width:1}.msg{font-size:12px;fill:#b6c4d7}
+      .step{fill:#b09aff}.badgeText{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px;font-weight:700;fill:#172234}
+      .note{fill:#382f1c;stroke:#d6ad59;stroke-width:2}.note-text{font-size:15px;font-weight:650;fill:#edf4ff}
+    </style>
+  </defs>
+  <rect class="canvas" width="1900" height="1120"/><rect class="frame" x="36" y="32" width="1828" height="1052" rx="32"/>
+  <text class="title" x="950" y="88" text-anchor="middle">Durable reminder delivery sequence</text>
+  <text class="subtitle" x="950" y="122" text-anchor="middle">Reminder correctness comes from the outbox key, database lease, fencing, and provider idempotency</text>
+  <g id="rollout-note"><rect class="note" x="250" y="145" width="1400" height="42" rx="12"/><text class="note-text" x="950" y="172" text-anchor="middle">SHADOW: event bridge · CANARY: allowlisted worker · ACTIVE: worker · PAUSED: retain backlog</text></g>
+  <g id="participant-0">
+    <rect class="header" x="45" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="170" y="221" text-anchor="middle">Reminder materializer</text>
+    <line class="lifeline" x1="170" y1="248" x2="170" y2="955"/>
+  </g>
+<g id="participant-1">
+    <rect class="header" x="357" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="482" y="221" text-anchor="middle">Outbox DB</text>
+    <line class="lifeline" x1="482" y1="248" x2="482" y2="955"/>
+  </g>
+<g id="participant-2">
+    <rect class="header" x="669" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="794" y="221" text-anchor="middle">Selected route</text>
+    <line class="lifeline" x1="794" y1="248" x2="794" y2="955"/>
+  </g>
+<g id="participant-3">
+    <rect class="header" x="981" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="1106" y="221" text-anchor="middle">Member directory</text>
+    <line class="lifeline" x1="1106" y1="248" x2="1106" y2="955"/>
+  </g>
+<g id="participant-4">
+    <rect class="header" x="1293" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="1418" y="221" text-anchor="middle">Template renderer</text>
+    <line class="lifeline" x1="1418" y1="248" x2="1418" y2="955"/>
+  </g>
+<g id="participant-5">
+    <rect class="header" x="1605" y="180" width="250" height="68" rx="12"/>
+    <text class="participant-title" x="1730" y="221" text-anchor="middle">Provider</text>
+    <line class="lifeline" x1="1730" y1="248" x2="1730" y2="955"/>
+  </g>
+  <rect class="activation" x="786" y="292" width="16" height="663" rx="5"/>
+  <g id="message-1">
+      <rect class="label" x="192" y="292" width="264" height="24" rx="6"/>
+      <circle class="step" cx="207" cy="304" r="11"/>
+      <text class="badgeText" x="207" y="308" text-anchor="middle">1</text>
+      <text class="msg" x="224" y="308">upsert reminder intent with appointment version + slot</text>
+      <path class="message" d="M180 320 H468" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-2">
+      <rect class="label" x="508" y="350" width="264" height="24" rx="6"/>
+      <circle class="step" cx="523" cy="362" r="11"/>
+      <text class="badgeText" x="523" y="366" text-anchor="middle">2</text>
+      <text class="msg" x="540" y="366">claim ready row with lease + fencing token</text>
+      <path class="message" d="M784 378 H496" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-3">
+      <rect class="label" x="504" y="408" width="264" height="24" rx="6"/>
+      <circle class="step" cx="519" cy="420" r="11"/>
+      <text class="badgeText" x="519" y="424" text-anchor="middle">3</text>
+      <text class="msg" x="536" y="424">claimed work; one logical notification</text>
+      <path class="message" d="M492 436 H780" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-4">
+      <rect class="label" x="816" y="466" width="264" height="24" rx="6"/>
+      <circle class="step" cx="831" cy="478" r="11"/>
+      <text class="badgeText" x="831" y="482" text-anchor="middle">4</text>
+      <text class="msg" x="848" y="482">resolve current contact, language, and consent</text>
+      <path class="message" d="M804 494 H1092" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-5">
+      <rect class="label" x="838.6" y="524" width="226.79999999999998" height="24" rx="6"/>
+      <circle class="step" cx="853.6" cy="536" r="11"/>
+      <text class="badgeText" x="853.6" y="540" text-anchor="middle">5</text>
+      <text class="msg" x="870.6" y="540">current profile; memory only</text>
+      <path class="message" d="M1096 552 H808" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-6">
+      <rect class="label" x="983.5" y="582" width="241" height="24" rx="6"/>
+      <circle class="step" cx="998.5" cy="594" r="11"/>
+      <text class="badgeText" x="998.5" y="598" text-anchor="middle">6</text>
+      <text class="msg" x="1015.5" y="598">render approved typed template</text>
+      <path class="message" d="M804 610 H1404" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-7">
+      <rect class="label" x="969.75" y="640" width="276.5" height="24" rx="6"/>
+      <circle class="step" cx="984.75" cy="652" r="11"/>
+      <text class="badgeText" x="984.75" y="656" text-anchor="middle">7</text>
+      <text class="msg" x="1001.75" y="656">provider-ready request; memory only</text>
+      <path class="message" d="M1408 668 H808" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-8">
+      <rect class="label" x="1107.55" y="698" width="304.9" height="24" rx="6"/>
+      <circle class="step" cx="1122.55" cy="710" r="11"/>
+      <text class="badgeText" x="1122.55" y="714" text-anchor="middle">8</text>
+      <text class="msg" x="1139.55" y="714">send with deterministic idempotency key</text>
+      <path class="message" d="M804 726 H1716" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-9">
+      <rect class="label" x="1168.35" y="756" width="191.29999999999998" height="24" rx="6"/>
+      <circle class="step" cx="1183.35" cy="768" r="11"/>
+      <text class="badgeText" x="1183.35" y="772" text-anchor="middle">9</text>
+      <text class="msg" x="1200.35" y="772">stable delivery outcome</text>
+      <path class="message" d="M1720 784 H808" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-10">
+      <rect class="label" x="508" y="814" width="264" height="24" rx="6"/>
+      <circle class="step" cx="523" cy="826" r="11"/>
+      <text class="badgeText" x="523" y="830" text-anchor="middle">10</text>
+      <text class="msg" x="540" y="830">fenced terminal update; redact identifiers</text>
+      <path class="message" d="M784 842 H496" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-11">
+      <rect class="label" x="508.85" y="872" width="262.29999999999995" height="24" rx="6"/>
+      <circle class="step" cx="523.85" cy="884" r="11"/>
+      <text class="badgeText" x="523.85" y="888" text-anchor="middle">11</text>
+      <text class="msg" x="540.85" y="888">bounded status-specific retention</text>
+      <path class="message" d="M784 900 H496" marker-end="url(#sequence-arrow)"/>
+    </g>
+  <g id="missed-reminder-note"><rect class="note" x="250" y="990" width="1400" height="48" rx="12"/><text class="note-text" x="950" y="1021" text-anchor="middle">Past catch-up window: SUPPRESSED(REMINDER_WINDOW_MISSED), never send late</text></g>
+  </svg>

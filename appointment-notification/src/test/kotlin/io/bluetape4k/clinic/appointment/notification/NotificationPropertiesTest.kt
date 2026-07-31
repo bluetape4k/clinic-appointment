@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import java.time.Duration
 import org.junit.jupiter.api.Test
 
@@ -15,7 +16,23 @@ internal class NotificationPropertiesTest {
         worker.maxElapsed shouldBeEqualTo Duration.ofHours(24)
         worker.providerAttemptsPerLease shouldBeEqualTo 1
         worker.catchUpWindow shouldBeEqualTo Duration.ofMinutes(30)
+        worker.pollInterval shouldBeEqualTo Duration.ofSeconds(1)
         worker.validate()
+    }
+
+    @Test
+    fun `provider timeout은 채널별 소문자 key를 우선하고 없으면 전역값을 사용한다`() {
+        val worker = NotificationProperties.WorkerProperties(
+            providerTimeout = Duration.ofSeconds(30),
+            channels = mapOf(
+                "sms" to NotificationProperties.ChannelWorkerProperties(
+                    providerTimeout = Duration.ofSeconds(5),
+                ),
+            ),
+        )
+
+        worker.providerTimeoutFor(NotificationChannelType.SMS) shouldBeEqualTo Duration.ofSeconds(5)
+        worker.providerTimeoutFor(NotificationChannelType.EMAIL) shouldBeEqualTo Duration.ofSeconds(30)
     }
 
     @Test
@@ -40,6 +57,9 @@ internal class NotificationPropertiesTest {
             NotificationProperties.WorkerProperties(dbClaimMaxConcurrency = 0).validate()
         }
         assertFailsWith<IllegalStateException> {
+            NotificationProperties.WorkerProperties(pollInterval = Duration.ZERO).validate()
+        }
+        assertFailsWith<IllegalStateException> {
             NotificationProperties.WorkerProperties(memberResolverRateLimitPerSecond = 0).validate()
         }
         assertFailsWith<IllegalStateException> {
@@ -48,6 +68,41 @@ internal class NotificationPropertiesTest {
                     "sms" to NotificationProperties.ChannelWorkerProperties(bulkheadMaxConcurrentCalls = 0),
                 ),
             ).validate()
+        }
+    }
+
+    @Test
+    fun `retention 설정은 주기 보존 기간 page와 backpressure를 함께 검증한다`() {
+        val retention = NotificationProperties().retention.validate()
+
+        retention.pollInterval shouldBeEqualTo Duration.ofHours(1)
+        retention.sent shouldBeEqualTo Duration.ofDays(7)
+        retention.suppressed shouldBeEqualTo Duration.ofDays(7)
+        retention.exhausted shouldBeEqualTo Duration.ofDays(30)
+
+        assertFailsWith<IllegalStateException> {
+            retention.copy(pollInterval = Duration.ZERO).validate()
+        }
+        assertFailsWith<IllegalStateException> {
+            retention.copy(pageSize = 0).validate()
+        }
+        assertFailsWith<IllegalStateException> {
+            retention.copy(backpressure = Duration.ofMillis(-1)).validate()
+        }
+    }
+
+    @Test
+    fun `관측 설정은 worker보다 낮은 빈도와 경고 임계값 식별 상한을 사용한다`() {
+        val observation = NotificationProperties().observation.validate()
+
+        observation.pollInterval shouldBeEqualTo Duration.ofSeconds(10)
+        observation.limit shouldBeEqualTo 10_001
+
+        assertFailsWith<IllegalStateException> {
+            observation.copy(pollInterval = Duration.ZERO).validate()
+        }
+        assertFailsWith<IllegalStateException> {
+            observation.copy(limit = 0).validate()
         }
     }
 

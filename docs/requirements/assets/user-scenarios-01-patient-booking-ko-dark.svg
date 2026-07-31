@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="1320" viewBox="0 0 2100 1320" role="img" aria-labelledby="sequence-title sequence-description">
+  <title id="sequence-title">환자 예약 생성 시퀀스</title><desc id="sequence-description">가용성을 먼저 조회하고 예약과 알림 의도를 같은 트랜잭션으로 커밋한다</desc>
+  <defs>
+    <filter id="sequence-shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.18"/></filter>
+    <marker id="sequence-arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 10 10"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#edf4ff"/></marker>
+    <style>
+      svg{font-family:"goorm Sans","Noto Sans KR",ui-sans-serif,system-ui,sans-serif}.canvas{fill:#0f1724}.frame{fill:#172234;stroke:#40526a;stroke-width:3}
+      .title{font-size:38px;font-weight:750;fill:#edf4ff}.subtitle{font-size:17px;fill:#b6c4d7}
+      .header{fill:#223148;stroke:#7da6ff;stroke-width:2.4;filter:url(#sequence-shadow)}
+      .participant-title{font-family:"goorm Sans Code","Noto Sans Mono",ui-monospace,monospace;font-size:16px;font-weight:700;fill:#edf4ff}
+      .lifeline{stroke:#49617d;stroke-width:2;stroke-dasharray:8 8}.message{stroke:#b09aff;stroke-width:2.8;fill:none}
+      .activation{fill:#263852;stroke:#b09aff;stroke-width:1.5}.label{fill:#172234;stroke:#40526a;stroke-width:1}.msg{font-size:12px;fill:#b6c4d7}
+      .step{fill:#b09aff}.badgeText{font-family:"goorm Sans Code","Noto Sans Mono",ui-monospace,monospace;font-size:10px;font-weight:700;fill:#172234}
+      .note{fill:#382f1c;stroke:#d6ad59;stroke-width:2}.note-text{font-size:15px;font-weight:650;fill:#edf4ff}
+    </style>
+  </defs>
+  <rect class="canvas" width="2100" height="1320"/><rect class="frame" x="36" y="32" width="1828" height="1052" rx="32"/>
+  <text class="title" x="950" y="88" text-anchor="middle">환자 예약 생성 시퀀스</text>
+  <text class="subtitle" x="950" y="122" text-anchor="middle">가용성을 먼저 조회하고 예약과 알림 의도를 같은 트랜잭션으로 커밋한다</text>
+  <g id="rollout-note"><rect class="note" x="250" y="145" width="1400" height="42" rx="12"/><text class="note-text" x="950" y="172" text-anchor="middle">event bridge는 알림을 새로 만들지 않고 이미 커밋된 outbox 행을 선점한다.</text></g>
+  <g id="participant-0">
+    <rect class="header" x="35" y="180" width="230" height="68" rx="12"/>
+    <text class="participant-title" x="150" y="221" text-anchor="middle">환자</text>
+    <line class="lifeline" x1="150" y1="248" x2="150" y2="1200"/>
+  </g>
+<g id="participant-1">
+    <rect class="header" x="335" y="180" width="230" height="68" rx="12"/>
+    <text class="participant-title" x="450" y="221" text-anchor="middle">Frontend</text>
+    <line class="lifeline" x1="450" y1="248" x2="450" y2="1200"/>
+  </g>
+<g id="participant-2">
+    <rect class="header" x="635" y="180" width="230" height="68" rx="12"/>
+    <text class="participant-title" x="750" y="221" text-anchor="middle">API</text>
+    <line class="lifeline" x1="750" y1="248" x2="750" y2="1200"/>
+  </g>
+<g id="participant-3">
+    <rect class="header" x="935" y="180" width="230" height="68" rx="12"/>
+    <text class="participant-title" x="1050" y="221" text-anchor="middle">Core</text>
+    <line class="lifeline" x1="1050" y1="248" x2="1050" y2="1200"/>
+  </g>
+<g id="participant-4">
+    <rect class="header" x="1235" y="180" width="230" height="68" rx="12"/>
+    <text class="participant-title" x="1350" y="221" text-anchor="middle">PostgreSQL</text>
+    <line class="lifeline" x1="1350" y1="248" x2="1350" y2="1200"/>
+  </g>
+<g id="participant-5">
+    <rect class="header" x="1535" y="180" width="230" height="68" rx="12"/>
+    <text class="participant-title" x="1650" y="221" text-anchor="middle">Event bus</text>
+    <line class="lifeline" x1="1650" y1="248" x2="1650" y2="1200"/>
+  </g>
+<g id="participant-6">
+    <rect class="header" x="1835" y="180" width="230" height="68" rx="12"/>
+    <text class="participant-title" x="1950" y="221" text-anchor="middle">알림 경로</text>
+    <line class="lifeline" x1="1950" y1="248" x2="1950" y2="1200"/>
+  </g>
+  <rect class="activation" x="742" y="282" width="16" height="918" rx="5"/>
+  <g id="message-1">
+      <rect class="label" x="223" y="282" width="150" height="24" rx="6"/>
+      <circle class="step" cx="238" cy="294" r="11"/>
+      <text class="badgeText" x="238" y="298" text-anchor="middle">1</text>
+      <text class="msg" x="255" y="298">의사와 날짜 선택</text>
+      <path class="message" d="M160 310 H436" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-2">
+      <rect class="label" x="523" y="330" width="150" height="24" rx="6"/>
+      <circle class="step" cx="538" cy="342" r="11"/>
+      <text class="badgeText" x="538" y="346" text-anchor="middle">2</text>
+      <text class="msg" x="555" y="346">가용 슬롯 조회</text>
+      <path class="message" d="M460 358 H736" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-3">
+      <rect class="label" x="823" y="378" width="150" height="24" rx="6"/>
+      <circle class="step" cx="838" cy="390" r="11"/>
+      <text class="badgeText" x="838" y="394" text-anchor="middle">3</text>
+      <text class="msg" x="855" y="394">슬롯 계산</text>
+      <path class="message" d="M760 406 H1036" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-4">
+      <rect class="label" x="1123" y="426" width="150" height="24" rx="6"/>
+      <circle class="step" cx="1138" cy="438" r="11"/>
+      <text class="badgeText" x="1138" y="442" text-anchor="middle">4</text>
+      <text class="msg" x="1155" y="442">스케줄과 충돌 조회</text>
+      <path class="message" d="M1060 454 H1336" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-5">
+      <rect class="label" x="1127" y="474" width="150" height="24" rx="6"/>
+      <circle class="step" cx="1142" cy="486" r="11"/>
+      <text class="badgeText" x="1142" y="490" text-anchor="middle">5</text>
+      <text class="msg" x="1159" y="490">가용성 데이터 반환</text>
+      <path class="message" d="M1340 502 H1064" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-6">
+      <rect class="label" x="827" y="522" width="150" height="24" rx="6"/>
+      <circle class="step" cx="842" cy="534" r="11"/>
+      <text class="badgeText" x="842" y="538" text-anchor="middle">6</text>
+      <text class="msg" x="859" y="538">가용 슬롯 반환</text>
+      <path class="message" d="M1040 550 H764" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-7">
+      <rect class="label" x="527" y="570" width="150" height="24" rx="6"/>
+      <circle class="step" cx="542" cy="582" r="11"/>
+      <text class="badgeText" x="542" y="586" text-anchor="middle">7</text>
+      <text class="msg" x="559" y="586">슬롯 응답</text>
+      <path class="message" d="M740 598 H464" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-8">
+      <rect class="label" x="223" y="618" width="150" height="24" rx="6"/>
+      <circle class="step" cx="238" cy="630" r="11"/>
+      <text class="badgeText" x="238" y="634" text-anchor="middle">8</text>
+      <text class="msg" x="255" y="634">슬롯 선택 후 확인</text>
+      <path class="message" d="M160 646 H436" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-9">
+      <rect class="label" x="523" y="666" width="150" height="24" rx="6"/>
+      <circle class="step" cx="538" cy="678" r="11"/>
+      <text class="badgeText" x="538" y="682" text-anchor="middle">9</text>
+      <text class="msg" x="555" y="682">JWT로 예약 생성 요청</text>
+      <path class="message" d="M460 694 H736" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-10">
+      <rect class="label" x="823" y="714" width="150" height="24" rx="6"/>
+      <circle class="step" cx="838" cy="726" r="11"/>
+      <text class="badgeText" x="838" y="730" text-anchor="middle">10</text>
+      <text class="msg" x="855" y="730">예약 생성</text>
+      <path class="message" d="M760 742 H1036" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-11">
+      <rect class="label" x="1077.75" y="762" width="240.5" height="24" rx="6"/>
+      <circle class="step" cx="1092.75" cy="774" r="11"/>
+      <text class="badgeText" x="1092.75" y="778" text-anchor="middle">11</text>
+      <text class="msg" x="1109.75" y="778">예약 + 최소 outbox 원자적 INSERT</text>
+      <path class="message" d="M1060 790 H1336" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-12">
+      <rect class="label" x="1127" y="810" width="150" height="24" rx="6"/>
+      <circle class="step" cx="1142" cy="822" r="11"/>
+      <text class="badgeText" x="1142" y="826" text-anchor="middle">12</text>
+      <text class="msg" x="1159" y="826">커밋 성공</text>
+      <path class="message" d="M1340 838 H1064" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-13">
+      <rect class="label" x="827" y="858" width="150" height="24" rx="6"/>
+      <circle class="step" cx="842" cy="870" r="11"/>
+      <text class="badgeText" x="842" y="874" text-anchor="middle">13</text>
+      <text class="msg" x="859" y="874">예약 record 반환</text>
+      <path class="message" d="M1040 886 H764" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-14">
+      <rect class="label" x="1120.25" y="906" width="155.5" height="24" rx="6"/>
+      <circle class="step" cx="1135.25" cy="918" r="11"/>
+      <text class="badgeText" x="1135.25" y="922" text-anchor="middle">14</text>
+      <text class="msg" x="1152.25" y="922">커밋 후 Created 발행</text>
+      <path class="message" d="M760 934 H1636" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-15">
+      <rect class="label" x="1723" y="954" width="150" height="24" rx="6"/>
+      <circle class="step" cx="1738" cy="966" r="11"/>
+      <text class="badgeText" x="1738" y="970" text-anchor="middle">15</text>
+      <text class="msg" x="1755" y="970">SHADOW 전환기 신호</text>
+      <path class="message" d="M1660 982 H1936" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-16">
+      <rect class="label" x="1557.25" y="1002" width="189.5" height="24" rx="6"/>
+      <circle class="step" cx="1572.25" cy="1014" r="11"/>
+      <text class="badgeText" x="1572.25" y="1018" text-anchor="middle">16</text>
+      <text class="msg" x="1589.25" y="1018">정확한 outbox 행 조건부 선점</text>
+      <path class="message" d="M1940 1030 H1364" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-17">
+      <rect class="label" x="527" y="1050" width="150" height="24" rx="6"/>
+      <circle class="step" cx="542" cy="1062" r="11"/>
+      <text class="badgeText" x="542" y="1066" text-anchor="middle">17</text>
+      <text class="msg" x="559" y="1066">201 Created</text>
+      <path class="message" d="M740 1078 H464" marker-end="url(#sequence-arrow)"/>
+    </g>
+<g id="message-18">
+      <rect class="label" x="227" y="1098" width="150" height="24" rx="6"/>
+      <circle class="step" cx="242" cy="1110" r="11"/>
+      <text class="badgeText" x="242" y="1114" text-anchor="middle">18</text>
+      <text class="msg" x="259" y="1114">예약 완료 표시</text>
+      <path class="message" d="M440 1126 H164" marker-end="url(#sequence-arrow)"/>
+    </g>
+  <g id="missed-reminder-note"><rect class="note" x="250" y="1190" width="1600" height="48" rx="12"/><text class="note-text" x="1050" y="1221" text-anchor="middle">연락처와 완성 본문은 선점에 성공한 뒤에만 메모리에 들어온다.</text></g>
+  </svg>

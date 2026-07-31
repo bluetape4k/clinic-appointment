@@ -15,7 +15,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 | 임시휴진 시 예약 재배정 | `appointment-core` | v0.1.0 | [domain-model.md](domain-model.md) |
 | 도메인 이벤트 발행/구독 | `appointment-event` | v0.1.0 | [architecture.md](architecture.md) |
 | AI 최적 스케줄링 (Timefold Solver) | `appointment-solver` | v0.1.0 | [solver.md](solver.md) |
-| HA 알림 스케줄러 (Redis Leader Election) | `appointment-notification` | v0.1.0 | [notification.md](notification.md) |
+| 내구성 알림 outbox 발송·복구 | `appointment-notification` | v0.1.0 | [notification.md](notification.md) |
 | 예약 리마인더 (전날/당일) | `appointment-notification` | v0.1.0 | [notification.md](notification.md) |
 | REST API + JWT 인증 | `appointment-api` | v0.1.0 | [architecture.md](architecture.md) |
 | Flyway DB 마이그레이션 (벤더별 분리) | `appointment-api` | v0.1.0 / v0.3.0 | — |
@@ -45,7 +45,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 | [architecture.md](architecture.md) | 모듈 의존성 그래프, 주요 설계 결정 (ADR 스타일) |
 | [domain-model.md](domain-model.md) | 17개 도메인 엔티티, 예약 상태머신 전이도, Exposed 테이블 목록 |
 | [solver.md](solver.md) | Timefold Solver Planning Variable, Hard/Soft 제약조건 전체 목록 |
-| [notification.md](notification.md) | NotificationChannel 인터페이스, HA 구성, Resilience4j 설정 |
+| [notification.md](notification.md) | 내구성 outbox 생명주기, 병원별 전환, 회원정보 경계, provider 장애 격리 |
 | [frontend.md](frontend.md) | Angular 21 페이지 구성, API 연동, 빌드 설정 |
 | [erd.md](erd.md) | 전체 테이블 ERD (Mermaid), 관계 요약, 컬럼 타입 규칙 |
 | [data-flow.md](data-flow.md) | 예약 생성·슬롯 조회·재배정·Solver·알림 데이터 흐름 다이어그램 |
@@ -62,5 +62,5 @@ Mermaid 원본 블록은 각 요구사항 문서에 유지하고, GitHub와 문�
 | [architecture.md](architecture.md) | 모듈 의존성 그래프 |
 | [domain-model.md](domain-model.md) | 예약 상태머신 |
 | [erd.md](erd.md) | 전체 테이블 ERD |
-| [data-flow.md](data-flow.md) | 예약 생성, 슬롯 조회, 임시휴진 재배정, 장비 사용불가, 알림 이벤트, Solver 데이터 흐름 |
-| [user-scenarios.md](user-scenarios.md) | 환자 예약, 상태 변경, Solver 재배정, 장비 사용불가, HA 리마인더 시퀀스 |
+| [data-flow.md](data-flow.md) | 예약 생성, 슬롯 조회, 임시휴진 재배정, 장비 사용불가, 알림 outbox, Solver 데이터 흐름 |
+| [user-scenarios.md](user-scenarios.md) | 환자 예약, 상태 변경, Solver 재배정, 장비 사용불가, 내구성 리마인더 시퀀스 |

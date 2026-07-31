@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="900" viewBox="0 0 1800 900" role="img" aria-labelledby="appointment-title appointment-description">
+  <title id="appointment-title">Appointment creation and notification intent</title><desc id="appointment-description">The appointment and minimal outbox record commit atomically; delivery continues asynchronously</desc>
+  <defs><filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#000000" flood-opacity="0.18"/></filter>
+    <marker id="arrow" markerWidth="13" markerHeight="13" refX="11.5" refY="6.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L13 6.5 L0 13 Z" fill="#edf4ff"/></marker>
+    <style>svg{font-family:Inter,ui-sans-serif,system-ui,sans-serif}.canvas{fill:#0f1724}.frame{fill:#172234;stroke:#40526a;stroke-width:3}.title{font-size:38px;font-weight:750;fill:#edf4ff}.subtitle{font-size:17px;fill:#b6c4d7}.card{stroke-width:2.5;filter:url(#shadow)}.card-title{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:17px;font-weight:700;fill:#edf4ff}.detail{font-size:13px;fill:#b6c4d7}.edge{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}.edge-label-bg{fill:#172234;stroke:#40526a;stroke-width:1}.edge-label{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;fill:#b6c4d7}.note{fill:#382f1c;stroke:#d6ad59;stroke-width:2}.note-text{font-size:17px;font-weight:650;fill:#edf4ff}</style>
+  </defs><rect class="canvas" width="1800" height="900"/><rect class="frame" x="38" y="34" width="1724" height="832" rx="32"/>
+  <text class="title" x="900" y="100" text-anchor="middle">Appointment creation and notification intent</text><text class="subtitle" x="900" y="136" text-anchor="middle">The appointment and minimal outbox record commit atomically; delivery continues asynchronously</text>
+  <g id="appointment-flow-card-0">
+    <rect class="card" x="95" y="280" width="250" height="145" rx="18" fill="#223148" stroke="#7da6ff"/>
+    <rect x="95" y="280" width="8" height="145" rx="4" fill="#7da6ff"/>
+    <text class="card-title" x="119" y="315">Patient and frontend</text>
+    <text class="detail" x="119" y="346">choose an available slot</text>
+<text class="detail" x="119" y="370">POST /api/appointments</text>
+  </g>
+<g id="appointment-flow-card-1">
+    <rect class="card" x="390" y="280" width="250" height="145" rx="18" fill="#223148" stroke="#b09aff"/>
+    <rect x="390" y="280" width="8" height="145" rx="4" fill="#b09aff"/>
+    <text class="card-title" x="414" y="315">Appointment API</text>
+    <text class="detail" x="414" y="346">validate JWT and slot</text>
+<text class="detail" x="414" y="370">open one transaction</text>
+  </g>
+<g id="appointment-flow-card-2">
+    <rect class="card" x="685" y="280" width="250" height="145" rx="18" fill="#223148" stroke="#63cfbf"/>
+    <rect x="685" y="280" width="8" height="145" rx="4" fill="#63cfbf"/>
+    <text class="card-title" x="709" y="315">Appointment + outbox DB</text>
+    <text class="detail" x="709" y="346">appointment row</text>
+<text class="detail" x="709" y="370">minimal notification intent</text>
+  </g>
+<g id="appointment-flow-card-3">
+    <rect class="card" x="980" y="280" width="250" height="145" rx="18" fill="#223148" stroke="#f0b25b"/>
+    <rect x="980" y="280" width="8" height="145" rx="4" fill="#f0b25b"/>
+    <text class="card-title" x="1004" y="315">Domain event</text>
+    <text class="detail" x="1004" y="346">publish only after commit</text>
+<text class="detail" x="1004" y="370">logging and transition signal</text>
+  </g>
+<g id="appointment-flow-card-4">
+    <rect class="card" x="1275" y="280" width="250" height="145" rx="18" fill="#223148" stroke="#7da6ff"/>
+    <rect x="1275" y="280" width="8" height="145" rx="4" fill="#7da6ff"/>
+    <text class="card-title" x="1299" y="315">Selected route</text>
+    <text class="detail" x="1299" y="346">event bridge or worker</text>
+<text class="detail" x="1299" y="370">conditionally claim exact row</text>
+  </g>
+<g id="appointment-flow-card-5">
+    <rect class="card" x="1275" y="570" width="250" height="145" rx="18" fill="#223148" stroke="#63cfbf"/>
+    <rect x="1275" y="570" width="8" height="145" rx="4" fill="#63cfbf"/>
+    <text class="card-title" x="1299" y="605">Privacy-safe delivery</text>
+    <text class="detail" x="1299" y="636">resolve current member profile</text>
+<text class="detail" x="1299" y="660">render and send in memory</text>
+  </g><g id="appointment-flow-edge-0"><path class="edge" d="M345 352 H390" stroke="#7da6ff" marker-end="url(#arrow)"/></g>
+<g id="appointment-flow-edge-1"><path class="edge" d="M640 352 H685" stroke="#b09aff" marker-end="url(#arrow)"/></g>
+<g id="appointment-flow-edge-2"><path class="edge" d="M935 352 H980" stroke="#63cfbf" marker-end="url(#arrow)"/></g>
+<g id="appointment-flow-edge-3"><path class="edge" d="M1230 352 H1275" stroke="#f0b25b" marker-end="url(#arrow)"/></g>
+<g id="appointment-flow-edge-4"><path class="edge" d="M1400 425 V570" stroke="#7da6ff" marker-end="url(#arrow)"/></g><g><rect class="note" x="240" y="750" width="1320" height="58" rx="16"/><text class="note-text" x="900" y="786" text-anchor="middle">No recipient, phone number, rendered body, or raw provider error is stored in the outbox.</text></g></svg>

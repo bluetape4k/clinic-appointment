@@ -130,11 +130,11 @@ object NotificationOutboxEvents : LongIdTable("clinic_notification_outbox") {
             NotificationOutboxIndexes.readyClinicCursor.name,
             false,
             rowKind,
+            tenantGroupId,
+            clinicId,
             status,
             availableAt,
             nextRetryAt,
-            tenantGroupId,
-            clinicId,
         )
         index(
             NotificationOutboxIndexes.readyWithinClinic.name,
@@ -146,6 +146,29 @@ object NotificationOutboxEvents : LongIdTable("clinic_notification_outbox") {
             availableAt,
             id,
             nextRetryAt,
+        )
+        index(
+            NotificationOutboxIndexes.directLookup.name,
+            false,
+            clinicId,
+            appointmentId,
+            eventType,
+            rowKind,
+            status,
+            availableAt,
+            nextRetryAt,
+            id,
+        )
+        index(
+            NotificationOutboxIndexes.reminderSuppression.name,
+            false,
+            tenantGroupId,
+            clinicId,
+            appointmentId,
+            rowKind,
+            notificationSlot,
+            status,
+            id,
         )
         index(
             NotificationOutboxIndexes.leaseRecovery.name,
@@ -192,11 +215,36 @@ object NotificationOutboxIndexes {
     )
     val readyClinicCursor = NotificationOutboxIndexContract(
         name = "idx_notification_outbox_ready_clinic_cursor",
-        columns = listOf("row_kind", "status", "available_at", "next_retry_at", "tenant_group_id", "clinic_id"),
+        columns = listOf("row_kind", "tenant_group_id", "clinic_id", "status", "available_at", "next_retry_at"),
     )
     val readyWithinClinic = NotificationOutboxIndexContract(
         name = "idx_notification_outbox_ready_within_clinic",
         columns = listOf("tenant_group_id", "clinic_id", "row_kind", "status", "available_at", "id", "next_retry_at"),
+    )
+    val directLookup = NotificationOutboxIndexContract(
+        name = "idx_notification_outbox_direct_lookup",
+        columns = listOf(
+            "clinic_id",
+            "appointment_id",
+            "event_type",
+            "row_kind",
+            "status",
+            "available_at",
+            "next_retry_at",
+            "id",
+        ),
+    )
+    val reminderSuppression = NotificationOutboxIndexContract(
+        name = "idx_notification_outbox_reminder_suppression",
+        columns = listOf(
+            "tenant_group_id",
+            "clinic_id",
+            "appointment_id",
+            "row_kind",
+            "notification_slot",
+            "status",
+            "id",
+        ),
     )
     val leaseRecovery = NotificationOutboxIndexContract(
         name = "idx_notification_outbox_lease_recovery",
@@ -216,6 +264,8 @@ object NotificationOutboxIndexes {
             idempotency.name,
             readyClinicCursor.name,
             readyWithinClinic.name,
+            directLookup.name,
+            reminderSuppression.name,
             leaseRecovery.name,
             terminalRetention.name,
             pendingOldest.name,
@@ -238,7 +288,7 @@ data class NotificationOutboxQueryContract(
 object NotificationOutboxQueryContracts {
     val readyClinicCursor = NotificationOutboxQueryContract(
         name = "readyClinicCursor",
-        filters = listOf("row_kind", "status", "available_at", "next_retry_at", "tenant_group_id", "clinic_id"),
+        filters = listOf("row_kind", "tenant_group_id", "clinic_id", "status", "available_at", "next_retry_at"),
         orderBy = listOf("tenant_group_id", "clinic_id"),
         indexColumns = NotificationOutboxIndexes.readyClinicCursor.columns,
     )
@@ -247,6 +297,33 @@ object NotificationOutboxQueryContracts {
         filters = listOf("tenant_group_id", "clinic_id", "row_kind", "status", "available_at", "id", "next_retry_at"),
         orderBy = listOf("available_at", "id"),
         indexColumns = NotificationOutboxIndexes.readyWithinClinic.columns,
+    )
+    val directLookup = NotificationOutboxQueryContract(
+        name = "directLookup",
+        filters = listOf(
+            "clinic_id",
+            "appointment_id",
+            "event_type",
+            "row_kind",
+            "status",
+            "available_at",
+            "next_retry_at",
+        ),
+        orderBy = listOf("available_at", "id"),
+        indexColumns = NotificationOutboxIndexes.directLookup.columns,
+    )
+    val reminderSuppression = NotificationOutboxQueryContract(
+        name = "reminderSuppression",
+        filters = listOf(
+            "tenant_group_id",
+            "clinic_id",
+            "appointment_id",
+            "row_kind",
+            "notification_slot",
+            "status",
+        ),
+        orderBy = listOf("id"),
+        indexColumns = NotificationOutboxIndexes.reminderSuppression.columns,
     )
     val leaseRecovery = NotificationOutboxQueryContract(
         name = "leaseRecovery",

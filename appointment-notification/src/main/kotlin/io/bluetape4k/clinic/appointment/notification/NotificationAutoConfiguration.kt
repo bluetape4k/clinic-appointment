@@ -18,6 +18,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.scheduling.annotation.EnableScheduling
 
 /**
  * 알림 모듈 Auto-Configuration.
@@ -28,6 +29,7 @@ import org.springframework.context.annotation.Bean
  * Redis가 있으면 향후 리마인더 복구 trigger용 리더 선출 빈을 등록합니다.
  */
 @AutoConfiguration
+@EnableScheduling
 @ConditionalOnProperty(
     prefix = "clinic.notification",
     name = ["enabled"],
@@ -45,6 +47,10 @@ class NotificationAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun notificationOutboxCodec(): NotificationOutboxCodec = NotificationOutboxCodec()
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationRuntimeHealthSignals(): NotificationRuntimeHealthSignals = NotificationRuntimeHealthSignals()
 
     @Bean
     @ConditionalOnMissingBean
@@ -72,8 +78,29 @@ class NotificationAutoConfiguration {
     fun notificationOutboxWorkStore(
         database: Database,
         repository: NotificationOutboxRepository,
-    ): NotificationOutboxWorkStore =
+    ): JdbcNotificationOutboxWorkStore =
         JdbcNotificationOutboxWorkStore(database, repository)
+
+    @Bean
+    @ConditionalOnBean(Database::class)
+    @ConditionalOnMissingBean(NotificationOutboxObservationStore::class)
+    fun notificationOutboxObservationStore(
+        database: Database,
+        repository: NotificationOutboxRepository,
+        properties: NotificationProperties,
+    ): NotificationOutboxObservationStore =
+        JdbcNotificationOutboxObservationStore(
+            database = database,
+            repository = repository,
+            observationLimit = properties.observation.validate().limit,
+        )
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun notificationDeliveryRouteGate(
+        properties: NotificationProperties,
+    ): NotificationDeliveryRouteGate =
+        NotificationDeliveryRouteGate(properties.rollout)
 
     @Bean
     @ConditionalOnBean(MeterRegistry::class, NotificationOutboxObservationStore::class)
@@ -83,6 +110,36 @@ class NotificationAutoConfiguration {
         observationStore: NotificationOutboxObservationStore,
     ): NotificationOutboxMetrics =
         NotificationOutboxMetrics(meterRegistry, observationStore)
+
+    @Bean
+    @ConditionalOnBean(NotificationSchemaReadiness::class)
+    @ConditionalOnMissingBean(NotificationOutboxReadinessSource::class)
+    fun notificationOutboxReadinessSource(
+        readiness: NotificationSchemaReadiness,
+    ): NotificationOutboxReadinessSource =
+        NotificationOutboxReadinessSource {
+            if (readiness.check().available) {
+                NotificationOutboxReadinessSnapshot.up()
+            } else {
+                NotificationOutboxReadinessSnapshot(
+                    schema = NotificationComponentState.down("SCHEMA_NOT_READY"),
+                    claim = NotificationComponentState.down("CLAIM_NOT_READY"),
+                    keyRing = NotificationComponentState.down("KEY_RING_NOT_READY"),
+                )
+            }
+        }
+
+    @Bean
+    @ConditionalOnBean(NotificationOutboxMetrics::class)
+    @ConditionalOnMissingBean(NotificationOutboxLivenessSource::class)
+    fun notificationOutboxLivenessSource(
+        metrics: NotificationOutboxMetrics,
+        healthSignals: NotificationRuntimeHealthSignals,
+    ): NotificationOutboxLivenessSource =
+        NotificationOutboxLivenessSource {
+            val observation = metrics.currentSnapshot()
+            healthSignals.snapshot(observation.oldestActiveAge, observation.capped)
+        }
 
     @Bean
     @ConditionalOnBean(NotificationOutboxReadinessSource::class, NotificationOutboxLivenessSource::class)
@@ -123,6 +180,8 @@ class NotificationAutoConfiguration {
         templateRendererProvider: ObjectProvider<NotificationTemplateRenderer>,
         providerIdempotencyKeyFactoryProvider: ObjectProvider<NotificationProviderIdempotencyKeyFactory>,
         resilientNotificationChannel: ResilientNotificationChannel,
+        metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
+        healthSignals: NotificationRuntimeHealthSignals,
     ): NotificationOutboxWorker {
         val profileResolver = profileResolverProvider.ifAvailable
         val templateRenderer = templateRendererProvider.ifAvailable
@@ -136,6 +195,20 @@ class NotificationAutoConfiguration {
             "member profile resolver, template renderer, and provider idempotency key factory must be configured together"
         }
         val runtimeConfigured = runtimeDependencyCount == RUNTIME_CONFIGURATION_DEPENDENCY_COUNT
+        val workerProperties = properties.worker.validate()
+        val boundedProfileResolver = profileResolver
+            ?.takeIf { runtimeConfigured }
+            ?.let {
+                BoundedMemberNotificationProfileResolver(
+                    delegate = it,
+                    timeout = workerProperties.memberResolverTimeout,
+                    maxConcurrency = workerProperties.memberResolverMaxConcurrency,
+                    rateLimitPerSecond = workerProperties.memberResolverRateLimitPerSecond,
+                    circuitBreakerFailureRateThreshold =
+                        workerProperties.memberResolverCircuitBreakerFailureRateThreshold,
+                    healthSignals = healthSignals,
+                )
+            }
         return NotificationOutboxWorker(
             workStore = workStore,
             leaseOwner = "notification-outbox-worker",
@@ -146,13 +219,12 @@ class NotificationAutoConfiguration {
                         io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode.DELIVERY_RESULT_UNKNOWN,
                     )
                 },
-            profileResolver = profileResolver.takeIf { runtimeConfigured },
+            profileResolver = boundedProfileResolver,
             templateRenderer = templateRenderer.takeIf { runtimeConfigured },
             providerChannel = resilientNotificationChannel.takeIf { runtimeConfigured },
             providerIdempotencyKeyFactory = providerIdempotencyKeyFactory.takeIf { runtimeConfigured },
-        ).also {
-            properties.worker.validate()
-        }
+            metrics = metricsProvider.ifAvailable,
+        )
     }
 
     @Bean
@@ -176,7 +248,10 @@ class NotificationAutoConfiguration {
         profileResolverProvider: ObjectProvider<MemberNotificationProfileResolver>,
         templateRendererProvider: ObjectProvider<NotificationTemplateRenderer>,
         providerIdempotencyKeyFactoryProvider: ObjectProvider<NotificationProviderIdempotencyKeyFactory>,
+        routeGate: NotificationDeliveryRouteGate,
+        metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
     ): NotificationOutboxDispatcher? {
+        if (!routeGate.hasWorkerRoute) return null
         val runtimeConfigured =
             profileResolverProvider.ifAvailable != null &&
                 templateRendererProvider.ifAvailable != null &&
@@ -190,8 +265,69 @@ class NotificationAutoConfiguration {
             globalConcurrency = workerProperties.globalConcurrency,
             perClinicConcurrency = workerProperties.perClinicConcurrency,
             readiness = readiness,
+            routeGate = routeGate,
+            metrics = metricsProvider.ifAvailable,
         )
     }
+
+    @Bean
+    @ConditionalOnBean(NotificationDirectOutboxStore::class, NotificationOutboxJobWorker::class)
+    @ConditionalOnMissingBean(NotificationDirectDeliveryExecutor::class)
+    fun notificationDirectDeliveryExecutor(
+        properties: NotificationProperties,
+    ): NotificationDirectDeliveryExecutor {
+        val worker = properties.worker.validate()
+        return NotificationDirectDeliveryExecutor(
+            concurrency = worker.globalConcurrency,
+            queueCapacity = worker.batchSize,
+        )
+    }
+
+    @Bean
+    @ConditionalOnBean(NotificationDirectOutboxStore::class, NotificationOutboxJobWorker::class)
+    @ConditionalOnMissingBean(NotificationDirectDeliveryPort::class)
+    fun notificationDirectDelivery(
+        store: NotificationDirectOutboxStore,
+        worker: NotificationOutboxJobWorker,
+        routeGate: NotificationDeliveryRouteGate,
+        properties: NotificationProperties,
+    ): NotificationDirectDeliveryPort =
+        properties.worker.validate().let { workerProperties ->
+            NotificationDirectOutboxDelivery(
+                store = store,
+                worker = worker,
+                routeGate = routeGate,
+                globalConcurrency = workerProperties.globalConcurrency,
+                perClinicConcurrency = workerProperties.perClinicConcurrency,
+            )
+        }
+
+    @Bean
+    @ConditionalOnBean(NotificationDirectDeliveryPort::class)
+    @ConditionalOnMissingBean(NotificationEventListener::class)
+    fun notificationEventListener(
+        delivery: NotificationDirectDeliveryPort,
+        properties: NotificationProperties,
+        notificationDirectDeliveryExecutor: NotificationDirectDeliveryExecutor,
+        routeGate: NotificationDeliveryRouteGate,
+    ): NotificationEventListener =
+        NotificationEventListener(delivery, properties, notificationDirectDeliveryExecutor, routeGate)
+
+    @Bean
+    @ConditionalOnBean(NotificationOutboxWorkStore::class)
+    @ConditionalOnMissingBean(NotificationOutboxSchedulingRunner::class)
+    fun notificationOutboxSchedulingRunner(
+        dispatcherProvider: ObjectProvider<NotificationOutboxDispatcher>,
+    ): NotificationOutboxSchedulingRunner =
+        NotificationOutboxSchedulingRunner(dispatcherProvider.ifAvailable)
+
+    @Bean
+    @ConditionalOnBean(NotificationOutboxMetrics::class)
+    @ConditionalOnMissingBean(NotificationObservationSchedulingRunner::class)
+    fun notificationObservationSchedulingRunner(
+        metrics: NotificationOutboxMetrics,
+    ): NotificationObservationSchedulingRunner =
+        NotificationObservationSchedulingRunner(metrics)
 
     @Bean
     @ConditionalOnBean(
@@ -235,11 +371,29 @@ class NotificationAutoConfiguration {
     fun notificationRetentionRunner(
         workStore: NotificationOutboxWorkStore,
         readiness: NotificationSchemaReadiness?,
-    ): NotificationRetentionRunner =
-        NotificationRetentionRunner(
+        properties: NotificationProperties,
+    ): NotificationRetentionRunner {
+        val retention = properties.retention.validate()
+        return NotificationRetentionRunner(
             workStore = workStore,
+            sentRetention = retention.sent,
+            suppressedRetention = retention.suppressed,
+            exhaustedRetention = retention.exhausted,
+            pageSize = retention.pageSize,
+            maxPagesPerStatus = retention.maxPagesPerStatus,
+            backpressure = retention.backpressure,
             readiness = readiness,
         )
+    }
+
+    @Bean
+    @ConditionalOnBean(NotificationRetentionRunner::class)
+    @ConditionalOnMissingBean(NotificationRetentionSchedulingRunner::class)
+    fun notificationRetentionSchedulingRunner(
+        runner: NotificationRetentionRunner,
+        healthSignals: NotificationRuntimeHealthSignals,
+    ): NotificationRetentionSchedulingRunner =
+        NotificationRetentionSchedulingRunner(runner, healthSignals)
 
     @Bean
     @ConditionalOnMissingBean(NotificationChannel::class)
@@ -253,9 +407,18 @@ class NotificationAutoConfiguration {
     fun resilientNotificationChannel(
         notificationChannel: NotificationChannel,
         resilienceProperties: NotificationResilienceProperties,
+        properties: NotificationProperties,
+        healthSignals: NotificationRuntimeHealthSignals,
     ): ResilientNotificationChannel {
         log.info { "Resilience4j 적용: CircuitBreaker + Retry + Bulkhead" }
-        return ResilientNotificationChannel.create(notificationChannel, resilienceProperties)
+        val worker = properties.worker.validate()
+        return ResilientNotificationChannel.create(
+            delegate = notificationChannel,
+            properties = resilienceProperties,
+            providerAttemptsPerLease = worker.providerAttemptsPerLease,
+            providerTimeout = worker.providerTimeoutFor(notificationChannel.channelType),
+            healthSignals = healthSignals,
+        )
     }
 
     /**

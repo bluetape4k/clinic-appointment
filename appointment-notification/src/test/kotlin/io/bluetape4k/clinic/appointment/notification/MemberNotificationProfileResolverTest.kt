@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
@@ -8,12 +9,15 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressi
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicInteger
 
 internal class MemberNotificationProfileResolverTest {
 
@@ -65,7 +69,7 @@ internal class MemberNotificationProfileResolverTest {
             timeout = Duration.ofSeconds(1),
         )
 
-        assertThrows<CancellationException> {
+        assertFailsWith<CancellationException> {
             runBlocking { resolver.resolve(request()) }
         }
     }
@@ -83,6 +87,30 @@ internal class MemberNotificationProfileResolverTest {
         runBlocking {
             resolver.resolve(request()) shouldBeEqualTo MemberNotificationProfileResult.DirectoryUnavailable
         }
+    }
+
+    @Test
+    fun `resolver는 설정된 동시성 상한 안에서만 회원 시스템을 호출한다`() = runBlocking {
+        val active = AtomicInteger()
+        val maximum = AtomicInteger()
+        val resolver = BoundedMemberNotificationProfileResolver(
+            delegate = MemberNotificationProfileResolver {
+                val current = active.incrementAndGet()
+                maximum.accumulateAndGet(current, ::maxOf)
+                delay(25)
+                active.decrementAndGet()
+                MemberNotificationProfileResult.NotFound
+            },
+            timeout = Duration.ofSeconds(1),
+            maxConcurrency = 2,
+        )
+
+        coroutineScope {
+            (1..8).map { async { resolver.resolve(request()) } }.awaitAll()
+        }
+
+        maximum.get() shouldBeEqualTo 2
+        Unit
     }
 
     @Test
@@ -129,7 +157,7 @@ internal class MemberNotificationProfileResolverTest {
 
     @Test
     fun `scope 보안 이벤트는 raw 식별자를 fingerprint로 허용하지 않는다`() {
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             NotificationScopeMismatchSecurityEvent(
                 channel = NotificationChannelType.SMS,
                 auditFingerprint = "member-1",

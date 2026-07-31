@@ -120,11 +120,19 @@ CREATE TABLE clinic_notification_outbox (
 
 CREATE INDEX idx_notification_outbox_ready_clinic_cursor
     ON clinic_notification_outbox(
-        row_kind, status, available_at, next_retry_at, tenant_group_id, clinic_id
+        row_kind, tenant_group_id, clinic_id, status, available_at, next_retry_at
     );
 CREATE INDEX idx_notification_outbox_ready_within_clinic
     ON clinic_notification_outbox(
         tenant_group_id, clinic_id, row_kind, status, available_at, id, next_retry_at
+    );
+CREATE INDEX idx_notification_outbox_direct_lookup
+    ON clinic_notification_outbox(
+        clinic_id, appointment_id, event_type, row_kind, status, available_at, next_retry_at, id
+    );
+CREATE INDEX idx_notification_outbox_reminder_suppression
+    ON clinic_notification_outbox(
+        tenant_group_id, clinic_id, appointment_id, row_kind, notification_slot, status, id
     );
 CREATE INDEX idx_notification_outbox_lease_recovery
     ON clinic_notification_outbox(row_kind, status, lease_until, id);

@@ -1,22 +1,21 @@
 sequenceDiagram
-    participant Scheduler as AppointmentReminderScheduler<br/>(1시간마다)
-    participant Redis
-    participant Core
-    participant DB as PostgreSQL
-    participant Channel as DummyNotificationChannel
+    participant Materializer as Reminder materializer
+    participant DB as Notification outbox
+    participant Route as Selected route
+    participant Member as Member directory
+    participant Template as Template renderer
+    participant Provider
 
-    Scheduler->>Redis: SETNX leader-lock (bluetape4k-leader)
-    alt 리더 획득 성공
-        Redis-->>Scheduler: OK (이 인스턴스가 리더)
-        Scheduler->>Core: findTomorrowConfirmed() + findTodayConfirmed()
-        Core->>DB: SELECT appointments WHERE status=CONFIRMED AND date IN (tomorrow, today)
-        DB-->>Core: 예약 목록
-        Core-->>Scheduler: List<AppointmentRecord>
-        loop 각 예약
-            Scheduler->>Channel: sendReminder(appointment)
-            Channel->>DB: INSERT notification_history (SUCCESS)
-        end
-    else 리더 획득 실패
-        Redis-->>Scheduler: 다른 인스턴스가 리더
-        Scheduler->>Scheduler: SKIP (중복 발송 방지)
-    end
+    Materializer->>DB: upsert intent with appointment version + reminder slot
+    Route->>DB: claim ready row with lease + fencing token
+    DB-->>Route: one logical notification
+    Route->>Member: resolve current contact, language, consent
+    Member-->>Route: current profile, memory only
+    Route->>Template: render approved typed template
+    Template-->>Route: provider request, memory only
+    Route->>Provider: send with deterministic idempotency key
+    Provider-->>Route: stable outcome
+    Route->>DB: fenced terminal update + identifier redaction
+    Route->>DB: bounded status-specific retention
+
+    Note over Materializer,DB: Past catch-up window is suppressed as REMINDER_WINDOW_MISSED; never send late

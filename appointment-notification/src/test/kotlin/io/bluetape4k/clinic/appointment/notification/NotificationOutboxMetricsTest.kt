@@ -76,6 +76,7 @@ internal class NotificationOutboxMetricsTest {
             snapshot = NotificationOutboxObservationSnapshot(
                 pendingReady = 42,
                 oldestActiveAge = Duration.ofMinutes(7),
+                capped = true,
             ),
         )
         val registry = SimpleMeterRegistry()
@@ -87,6 +88,7 @@ internal class NotificationOutboxMetricsTest {
 
         registry.get(NotificationOutboxMetrics.PENDING).gauge().value() shouldBeEqualTo 42.0
         registry.get(NotificationOutboxMetrics.OLDEST_AGE).gauge().value() shouldBeEqualTo 420.0
+        metrics.currentSnapshot().capped shouldBeEqualTo true
         store.boundedSnapshotCalls shouldBeEqualTo 1
         store.fullScanCalls shouldBeEqualTo 0
     }

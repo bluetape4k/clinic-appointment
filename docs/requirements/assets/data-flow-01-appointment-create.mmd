@@ -5,11 +5,11 @@ flowchart TD
     API -->|"SlotCalculationService.isAvailable()"| SLOT["슬롯 가용성 검증"]
     SLOT -->|"영업시간 / 의사 스케줄 / 기존 예약 충돌 확인"| CORE["appointment-core"]
     CORE --> DB[("PostgreSQL")]
-    API -->|"AppointmentRepository.save()"| DB
+    API -->|"예약 + 최소 알림 outbox\n같은 transaction"| DB
     API -->|"publishEvent(Created)"| EVT["AppointmentEventPublisher"]
     EVT -->|"@EventListener"| LOG["AppointmentEventLogger → DB"]
-    EVT -->|"@EventListener"| NOTIF["NotificationEventListener"]
-    NOTIF -->|"DummyNotificationChannel"| HIST["NotificationHistory → DB"]
+    EVT -. "SHADOW 전환기 신호" .-> NOTIF["NotificationEventListener"]
+    NOTIF -->|"정확한 outbox 행 조건부 선점"| DB
 
     style FE fill:#4A90D9,color:#fff
     style API fill:#7B68EE,color:#fff

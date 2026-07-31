@@ -18,11 +18,12 @@ sequenceDiagram
     Patient->>Frontend: 슬롯 선택 후 예약 확인
     Frontend->>API: POST /api/appointments (JWT)
     API->>Core: AppointmentRepository.save()
-    Core->>DB: INSERT appointments (status=REQUESTED)
+    Core->>DB: INSERT appointment + minimal outbox (same transaction)
     DB-->>Core: 저장 완료
     Core-->>API: AppointmentRecord
     API->>EventBus: publishEvent(Created)
-    EventBus->>Notification: NotificationEventListener
-    Notification-->>DB: 알림 이력 저장
+    EventBus->>Notification: SHADOW 전환기 신호
+    Notification->>DB: 정확한 outbox 행 조건부 선점
+    DB-->>Notification: 선점 성공 또는 이미 처리 중
     API-->>Frontend: AppointmentResponse (201 Created)
     Frontend-->>Patient: 예약 완료 확인

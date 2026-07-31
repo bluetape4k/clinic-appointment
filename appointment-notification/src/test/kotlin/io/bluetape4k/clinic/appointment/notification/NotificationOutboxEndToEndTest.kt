@@ -72,7 +72,7 @@ internal class NotificationOutboxEndToEndTest {
 
             val result = worker.process(claimed())
 
-            result shouldBeEqualTo NotificationOutboxWorkerResult.COMPLETED
+            result shouldBeEqualTo NotificationOutboxWorkerResult.SUPPRESSED
             provider.requests.size shouldBeEqualTo 0
             store.completed.single().terminalStatus shouldBeEqualTo NotificationOutboxStatus.SUPPRESSED
             store.completed.single().suppressionReason shouldBeEqualTo NotificationSuppressionReasonCode.CONSENT_DENIED

@@ -110,6 +110,8 @@ class NotificationOutboxRepositoryTest {
             "uk_notification_outbox_idempotency",
             "idx_notification_outbox_ready_clinic_cursor",
             "idx_notification_outbox_ready_within_clinic",
+            "idx_notification_outbox_direct_lookup",
+            "idx_notification_outbox_reminder_suppression",
             "idx_notification_outbox_lease_recovery",
             "idx_notification_outbox_terminal_retention",
             "idx_notification_outbox_pending_oldest",
@@ -124,6 +126,11 @@ class NotificationOutboxRepositoryTest {
         NotificationOutboxQueryContracts.readyWithinClinic.filters shouldBeEqualTo
             NotificationOutboxIndexes.readyWithinClinic.columns
         NotificationOutboxQueryContracts.readyWithinClinic.orderBy shouldBeEqualTo listOf("available_at", "id")
+        NotificationOutboxQueryContracts.directLookup.indexColumns shouldBeEqualTo
+            NotificationOutboxIndexes.directLookup.columns
+        NotificationOutboxQueryContracts.directLookup.filters shouldBeEqualTo
+            NotificationOutboxIndexes.directLookup.columns.dropLast(1)
+        NotificationOutboxQueryContracts.directLookup.orderBy shouldBeEqualTo listOf("available_at", "id")
         NotificationOutboxQueryContracts.leaseRecovery.indexColumns shouldBeEqualTo
             NotificationOutboxIndexes.leaseRecovery.columns
         NotificationOutboxQueryContracts.leaseRecovery.filters shouldBeEqualTo
@@ -192,6 +199,32 @@ class NotificationOutboxRepositoryTest {
                 listOf(NotificationClinicKey(TenantGroupId(1L), ClinicId(2L)))
             repository.findReadyCandidates(NotificationClinicKey(TenantGroupId(1L), ClinicId(2L)), null, 10)
                 .map { it.id } shouldBeEqualTo listOf(readyId, retryId)
+        }
+    }
+
+    @Test
+    fun `운영 backlog 관측은 미래 예약을 제외하고 현재 ready 행만 센다`() {
+        transaction(database) {
+            repository.enqueue(
+                sendableDraft(
+                    eventId = "event-ready-observation",
+                    digest = "digest-ready-observation",
+                    availableAt = Instant.parse("2020-01-01T00:00:00Z"),
+                )
+            )
+            repository.enqueue(
+                sendableDraft(
+                    eventId = "event-future-observation",
+                    digest = "digest-future-observation",
+                    availableAt = Instant.parse("2999-01-01T00:00:00Z"),
+                )
+            )
+
+            val observation = repository.observeReady(limit = 10)
+
+            observation.readyCount shouldBeEqualTo 1L
+            observation.oldestReadyAt shouldBeEqualTo Instant.parse("2020-01-01T00:00:00Z")
+            observation.capped.shouldBeFalse()
         }
     }
 
@@ -278,6 +311,47 @@ class NotificationOutboxRepositoryTest {
             attempt[NotificationDeliveryAttempts.templateKey] shouldBeEqualTo "appointment-confirmed"
             attempt[NotificationDeliveryAttempts.templateVersion] shouldBeEqualTo 1
             attempt[NotificationDeliveryAttempts.outcome].shouldBeNull()
+        }
+    }
+
+    @Test
+    fun `전환기 direct claim은 같은 병원 예약 event의 준비된 sendable 행만 한 번 획득한다`() {
+        transaction(database) {
+            val confirmed = repository.enqueue(
+                sendableDraft(eventId = "event-direct-confirmed", digest = "digest-direct-confirmed")
+            )
+            repository.enqueue(
+                sendableDraft(
+                    eventId = "event-direct-created",
+                    digest = "digest-direct-created",
+                    eventType = NotificationEventType.CREATED,
+                    notificationSlot = NotificationSlot.CREATED,
+                    templateKey = "appointment-created",
+                    parameterType = NotificationParameterType.APPOINTMENT_CREATED,
+                    parameters = AppointmentCreatedParameters(
+                        clinicDisplayName = "Clinic",
+                        appointmentDate = LocalDate.parse("2026-08-01"),
+                        startTime = LocalTime.parse("09:00"),
+                    ),
+                )
+            )
+
+            val claimed = repository.claimReadyForDirect(
+                clinicId = ClinicId(2L),
+                appointmentId = AppointmentId(3L),
+                eventType = NotificationEventType.CONFIRMED,
+                owner = "notification-direct-event",
+                token = "direct-token-1",
+            )
+
+            claimed?.id shouldBeEqualTo confirmed.id
+            repository.claimReadyForDirect(
+                clinicId = ClinicId(2L),
+                appointmentId = AppointmentId(3L),
+                eventType = NotificationEventType.CONFIRMED,
+                owner = "notification-direct-event",
+                token = "direct-token-2",
+            ).shouldBeNull()
         }
     }
 
@@ -673,6 +747,8 @@ class NotificationOutboxRepositoryTest {
             val claimed = repository.claim(dayBefore.id, owner = "worker-a", token = "token-a")!!
 
             repository.suppressOutstandingReminders(
+                tenantGroupId = TenantGroupId(1L),
+                clinicId = ClinicId(2L),
                 appointmentId = AppointmentId(3L),
                 suppressionReason = NotificationSuppressionReasonCode.APPOINTMENT_CHANGED,
             ) shouldBeEqualTo 2
@@ -707,6 +783,55 @@ class NotificationOutboxRepositoryTest {
         }
     }
 
+    @Test
+    fun `예약 변경 억제는 다른 tenant와 clinic의 같은 예약 번호를 건드리지 않는다`() {
+        transaction(database) {
+            val parameters = AppointmentReminderParameters(
+                clinicDisplayName = "Clinic",
+                appointmentDate = LocalDate.parse("2026-08-01"),
+                startTime = LocalTime.parse("09:00"),
+            )
+            repository.enqueue(
+                sendableDraft(
+                    eventId = "owned-reminder",
+                    digest = "owned-reminder-digest",
+                    eventType = NotificationEventType.REMINDER,
+                    notificationSlot = NotificationSlot.REMINDER_24H,
+                    templateKey = "appointment-reminder-24h",
+                    parameterType = NotificationParameterType.APPOINTMENT_REMINDER,
+                    parameters = parameters,
+                )
+            )
+            repository.enqueue(
+                sendableDraft(
+                    eventId = "foreign-reminder",
+                    digest = "foreign-reminder-digest",
+                    eventType = NotificationEventType.REMINDER,
+                    notificationSlot = NotificationSlot.REMINDER_24H,
+                    templateKey = "appointment-reminder-24h",
+                    parameterType = NotificationParameterType.APPOINTMENT_REMINDER,
+                    parameters = parameters,
+                    tenantGroupId = 9L,
+                    clinicId = 9L,
+                )
+            )
+
+            repository.suppressOutstandingReminders(
+                tenantGroupId = TenantGroupId(1L),
+                clinicId = ClinicId(2L),
+                appointmentId = AppointmentId(3L),
+                suppressionReason = NotificationSuppressionReasonCode.APPOINTMENT_CHANGED,
+            ) shouldBeEqualTo 1
+
+            NotificationOutboxEvents.selectAll()
+                .associate { it[NotificationOutboxEvents.eventId] to it[NotificationOutboxEvents.status] }
+                .let { statuses ->
+                    statuses.getValue("owned-reminder") shouldBeEqualTo NotificationOutboxStatus.SUPPRESSED
+                    statuses.getValue("foreign-reminder") shouldBeEqualTo NotificationOutboxStatus.PENDING
+                }
+        }
+    }
+
     private fun sendableDraft(
         eventId: String = "event-1",
         digest: String = "digest-1",
@@ -721,15 +846,18 @@ class NotificationOutboxRepositoryTest {
             appointmentDate = LocalDate.parse("2026-08-01"),
             startTime = LocalTime.parse("09:00"),
         ),
+        tenantGroupId: Long = 1L,
+        clinicId: Long = 2L,
+        appointmentId: Long = 3L,
     ): SendableNotificationDraft =
         SendableNotificationDraft(
             envelope = NotificationOutboxEnvelope(
                 schemaVersion = NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION,
                 eventId = NotificationEventId(eventId),
                 idempotencyKey = NotificationIdempotencyKey("idem-$digest"),
-                tenantGroupId = TenantGroupId(1L),
-                clinicId = ClinicId(2L),
-                appointmentId = AppointmentId(3L),
+                tenantGroupId = TenantGroupId(tenantGroupId),
+                clinicId = ClinicId(clinicId),
+                appointmentId = AppointmentId(appointmentId),
                 memberId = MemberId("member-1"),
                 channel = NotificationChannelType.DUMMY,
                 eventType = eventType,

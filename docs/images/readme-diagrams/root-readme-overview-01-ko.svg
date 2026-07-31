@@ -54,9 +54,9 @@
 <title>notif</title>
 <path fill="#fdecef" stroke="#dc6b82" stroke-width="2" d="M633.18,-233.81C633.18,-233.81 483.75,-233.81 483.75,-233.81 477.75,-233.81 471.75,-227.81 471.75,-221.81 471.75,-221.81 471.75,-174.53 471.75,-174.53 471.75,-168.53 477.75,-162.53 483.75,-162.53 483.75,-162.53 633.18,-162.53 633.18,-162.53 639.18,-162.53 645.18,-168.53 645.18,-174.53 645.18,-174.53 645.18,-221.81 645.18,-221.81 645.18,-227.81 639.18,-233.81 633.18,-233.81"/>
 <text xml:space="preserve" text-anchor="middle" x="558.47" y="-214.72" font-family="goorm Sans" font-size="11.00" fill="#4a0e1c">appointment&#45;notification</text>
-<text xml:space="preserve" text-anchor="middle" x="558.47" y="-201.22" font-family="goorm Sans" font-size="11.00" fill="#4a0e1c">HA 알림 스케줄러</text>
-<text xml:space="preserve" text-anchor="middle" x="558.47" y="-187.72" font-family="goorm Sans" font-size="11.00" fill="#4a0e1c">Redis 리더 선출</text>
-<text xml:space="preserve" text-anchor="middle" x="558.47" y="-174.22" font-family="goorm Sans" font-size="11.00" fill="#4a0e1c">Resilience4j 보호 계층</text>
+<text xml:space="preserve" text-anchor="middle" x="558.47" y="-201.22" font-family="goorm Sans" font-size="11.00" fill="#4a0e1c">내구성 알림 outbox</text>
+<text xml:space="preserve" text-anchor="middle" x="558.47" y="-187.72" font-family="goorm Sans" font-size="11.00" fill="#4a0e1c">개인정보 안전 발송</text>
+<text xml:space="preserve" text-anchor="middle" x="558.47" y="-174.22" font-family="goorm Sans" font-size="11.00" fill="#4a0e1c">Reminder recovery</text>
 </g>
 <!-- notif&#45;&gt;core -->
 <g id="edge3" class="edge">

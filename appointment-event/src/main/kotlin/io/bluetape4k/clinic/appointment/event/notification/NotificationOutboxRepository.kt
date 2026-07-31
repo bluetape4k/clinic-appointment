@@ -72,6 +72,8 @@ class NotificationOutboxRepository(
      * 검증에 실패한다. 호출자는 예약 변경과 이 작업을 같은 transaction에서 실행해야 한다.
      */
     fun suppressOutstandingReminders(
+        tenantGroupId: TenantGroupId,
+        clinicId: ClinicId,
         appointmentId: AppointmentId,
         suppressionReason: NotificationSuppressionReasonCode,
     ): Int {
@@ -80,6 +82,8 @@ class NotificationOutboxRepository(
             .selectAll()
             .where {
                 (NotificationOutboxEvents.rowKind eq NotificationOutboxRowKind.SENDABLE) and
+                    (NotificationOutboxEvents.tenantGroupId eq tenantGroupId.value) and
+                    (NotificationOutboxEvents.clinicId eq clinicId.value) and
                     (NotificationOutboxEvents.appointmentId eq appointmentId.value) and
                     (NotificationOutboxEvents.notificationSlot inList REMINDER_SLOTS) and
                     (NotificationOutboxEvents.status inList SUPPRESSIBLE_STATUSES)
@@ -125,8 +129,13 @@ class NotificationOutboxRepository(
     fun findReadyClinicKeys(
         cursor: NotificationFairCursor?,
         limit: Int,
+        eligibleClinicIds: Set<Long>? = null,
     ): List<NotificationClinicKey> {
         require(limit > 0) { "limit must be positive" }
+        eligibleClinicIds?.let { ids ->
+            require(ids.all { it > 0L }) { "eligibleClinicIds must contain only positive IDs" }
+            if (ids.isEmpty()) return emptyList()
+        }
         val dbNow = dbCurrentTimestamp()
         val ready = readyPredicate(dbNow)
         val cursorPredicate = cursor?.let {
@@ -134,13 +143,17 @@ class NotificationOutboxRepository(
                 ((NotificationOutboxEvents.tenantGroupId eq it.tenantGroupId.value) and
                     (NotificationOutboxEvents.clinicId greater it.clinicId.value))
         }
+        val eligibilityPredicate = eligibleClinicIds?.let {
+            NotificationOutboxEvents.clinicId inList it
+        }
+        val filteredReady = if (eligibilityPredicate == null) ready else ready and eligibilityPredicate
 
         return NotificationOutboxEvents
             .select(
                 NotificationOutboxEvents.tenantGroupId,
                 NotificationOutboxEvents.clinicId,
             )
-            .where(if (cursorPredicate == null) ready else ready and cursorPredicate)
+            .where(if (cursorPredicate == null) filteredReady else filteredReady and cursorPredicate)
             .withDistinct()
             .orderBy(NotificationOutboxEvents.tenantGroupId to SortOrder.ASC, NotificationOutboxEvents.clinicId to SortOrder.ASC)
             .limit(limit)
@@ -173,6 +186,27 @@ class NotificationOutboxRepository(
             .orderBy(NotificationOutboxEvents.availableAt to SortOrder.ASC, NotificationOutboxEvents.id to SortOrder.ASC)
             .limit(limit)
             .map { it.toCandidate() }
+    }
+
+    /** metric refresh가 읽는 상한 있는 ready backlog snapshot입니다. */
+    fun observeReady(limit: Int): NotificationOutboxObservation {
+        require(limit > 0) { "limit must be positive" }
+        val dbNow = dbCurrentTimestamp()
+        val rows = NotificationOutboxEvents
+            .select(NotificationOutboxEvents.availableAt)
+            .where { readyPredicate(dbNow) }
+            .orderBy(
+                NotificationOutboxEvents.availableAt to SortOrder.ASC,
+                NotificationOutboxEvents.createdAt to SortOrder.ASC,
+            )
+            .limit(limit)
+            .map { it[NotificationOutboxEvents.availableAt] }
+        return NotificationOutboxObservation(
+            readyCount = rows.size.toLong(),
+            oldestReadyAt = rows.firstOrNull(),
+            observedAt = dbNow,
+            capped = rows.size == limit,
+        )
     }
 
     /**
@@ -226,6 +260,41 @@ class NotificationOutboxRepository(
 
         insertAttempt(snapshot, nextAttempt, validOwner, validToken, dbNow)
         return snapshot.toClaimed(nextAttempt, validOwner, validToken, leaseUntil, firstAttemptAt, dbNow)
+    }
+
+    /**
+     * 전환기 event route가 같은 병원·예약·event의 준비된 sendable 행을 조건부 claim합니다.
+     *
+     * caller는 짧은 transaction 안에서 호출해야 합니다. background worker와 동시에
+     * 실행돼도 [claim]의 상태·attempt 조건을 통과한 한 호출자만 행을 획득합니다.
+     */
+    fun claimReadyForDirect(
+        clinicId: ClinicId,
+        appointmentId: AppointmentId,
+        eventType: NotificationEventType,
+        owner: String,
+        token: String,
+    ): ClaimedNotification? {
+        val dbNow = dbCurrentTimestamp()
+        val candidateId = NotificationOutboxEvents
+            .select(NotificationOutboxEvents.id)
+            .where {
+                readyPredicate(dbNow) and
+                    (NotificationOutboxEvents.rowKind eq NotificationOutboxRowKind.SENDABLE) and
+                    (NotificationOutboxEvents.clinicId eq clinicId.value) and
+                    (NotificationOutboxEvents.appointmentId eq appointmentId.value) and
+                    (NotificationOutboxEvents.eventType eq eventType)
+            }
+            .orderBy(
+                NotificationOutboxEvents.availableAt to SortOrder.ASC,
+                NotificationOutboxEvents.id to SortOrder.ASC,
+            )
+            .limit(1)
+            .singleOrNull()
+            ?.get(NotificationOutboxEvents.id)
+            ?.value
+            ?: return null
+        return claim(candidateId, owner, token)
     }
 
     fun recoverExpired(candidateId: Long, owner: String, token: String): ClaimedNotification? {
@@ -803,6 +872,22 @@ data class NotificationCandidate(
     val clinicId: ClinicId,
     val availableAt: Instant,
 ) : Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/** 운영 gauge가 사용하는 상한 있는 ready outbox 관측값입니다. */
+data class NotificationOutboxObservation(
+    val readyCount: Long,
+    val oldestReadyAt: Instant?,
+    val observedAt: Instant,
+    val capped: Boolean,
+) : Serializable {
+    init {
+        require(readyCount >= 0L) { "readyCount must be non-negative" }
+    }
+
     companion object {
         private const val serialVersionUID = 1L
     }

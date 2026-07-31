@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1180" viewBox="0 0 1800 1180" role="img" aria-labelledby="title description">
+  <title id="title">Durable notification outbox flow</title>
+  <desc id="description">One database row, one provider route, and no persisted contact details</desc>
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#000000" flood-opacity="0.18"/></filter>
+    <marker id="arrow" markerWidth="13" markerHeight="13" refX="11.5" refY="6.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L13 6.5 L0 13 Z" fill="#edf4ff"/></marker>
+    <style>
+      svg{font-family:Inter,ui-sans-serif,system-ui,sans-serif} .canvas{fill:#0f1724} .frame{fill:#172234;stroke:#40526a;stroke-width:3}
+      .title{font-size:38px;font-weight:750;fill:#edf4ff} .subtitle{font-size:17px;fill:#b6c4d7}
+      .lane{fill:#1b293d;stroke:#49617d;stroke-width:2}.lane-title{font-size:22px;font-weight:700;fill:#edf4ff}
+      .card{stroke-width:2.5;filter:url(#shadow)}.card-title{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:18px;font-weight:700;fill:#edf4ff}
+      .detail{font-size:14px;fill:#b6c4d7}.edge{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+      .edge-label-bg{fill:#172234;stroke:#40526a;stroke-width:1}.edge-label{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;fill:#b6c4d7}
+      .mode-key{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:14px;font-weight:700}.mode-value{font-size:13px;fill:#b6c4d7}
+      .note{fill:#382f1c;stroke:#d6ad59;stroke-width:2}.question{font-size:16px;font-weight:650;fill:#edf4ff}
+    </style>
+  </defs>
+  <rect class="canvas" width="1800" height="1180"/>
+  <rect class="frame" x="38" y="34" width="1724" height="1110" rx="32"/>
+  <text class="title" x="900" y="92" text-anchor="middle">Durable notification outbox flow</text>
+  <text class="subtitle" x="900" y="126" text-anchor="middle">One database row, one provider route, and no persisted contact details</text>
+
+  <g id="lane-transaction"><rect class="lane" x="70" y="175" width="350" height="650" rx="24"/><text class="lane-title" x="95" y="215">Appointment transaction</text></g>
+  <g id="lane-rollout"><rect class="lane" x="440" y="175" width="500" height="650" rx="24"/><text class="lane-title" x="465" y="215">Clinic-scoped rollout</text></g>
+  <g id="lane-delivery"><rect class="lane" x="970" y="175" width="760" height="650" rx="24"/><text class="lane-title" x="995" y="215">Privacy-safe delivery pipeline</text></g>
+  <g id="lane-retention"><rect class="lane" x="970" y="845" width="760" height="190" rx="24"/><text class="lane-title" x="995" y="885">Retention and operations</text></g>
+
+  <g id="appointment-command">
+    <rect class="card" x="95" y="255" width="300" height="125" rx="18" fill="#223148" stroke="#7da6ff"/>
+    <rect x="95" y="255" width="8" height="125" rx="4" fill="#7da6ff"/>
+    <text class="card-title" x="119" y="290">Appointment command</text>
+    <text class="detail" x="119" y="321">create · confirm · cancel</text>
+<text class="detail" x="119" y="345">reschedule · reminder</text>
+  </g>
+  <g id="minimal-outbox">
+    <rect class="card" x="95" y="430" width="300" height="160" rx="18" fill="#223148" stroke="#63cfbf"/>
+    <rect x="95" y="430" width="8" height="160" rx="4" fill="#63cfbf"/>
+    <text class="card-title" x="119" y="465">Minimal outbox record</text>
+    <text class="detail" x="119" y="496">memberId · appointmentId</text>
+<text class="detail" x="119" y="520">typed template parameters</text>
+<text class="detail" x="119" y="544">committed atomically</text>
+  </g>
+  <g id="route-gate">
+    <rect class="card" x="465" y="255" width="450" height="105" rx="18" fill="#223148" stroke="#b09aff"/>
+    <rect x="465" y="255" width="8" height="105" rx="4" fill="#b09aff"/>
+    <text class="card-title" x="489" y="290">NotificationDeliveryRouteGate</text>
+    <text class="detail" x="489" y="321">select exactly one provider route</text>
+  </g>
+  <g id="event-route">
+    <rect class="card" x="465" y="405" width="220" height="125" rx="18" fill="#223148" stroke="#f0b25b"/>
+    <rect x="465" y="405" width="8" height="125" rx="4" fill="#f0b25b"/>
+    <text class="card-title" x="489" y="440">Event bridge</text>
+    <text class="detail" x="489" y="471">transitional route · SHADOW</text>
+<text class="detail" x="489" y="495">+ non-canary clinics</text>
+  </g>
+  <g id="worker-route">
+    <rect class="card" x="705" y="405" width="210" height="125" rx="18" fill="#223148" stroke="#7da6ff"/>
+    <rect x="705" y="405" width="8" height="125" rx="4" fill="#7da6ff"/>
+    <text class="card-title" x="729" y="440">Background worker</text>
+    <text class="detail" x="729" y="471">route · canary allowlist</text>
+<text class="detail" x="729" y="495">+ ACTIVE</text>
+  </g>
+  <g id="mode-shadow">
+      <rect x="465" y="580" width="450" height="42" rx="9" fill="#263852"/>
+      <text class="mode-key" x="485" y="607" fill="#edf4ff">SHADOW</text>
+      <text class="mode-value" x="580" y="607">event route for every clinic</text>
+    </g>
+<g id="mode-canary">
+      <rect x="465" y="628" width="450" height="42" rx="9" fill="#202f45"/>
+      <text class="mode-key" x="485" y="655" fill="#edf4ff">CANARY</text>
+      <text class="mode-value" x="580" y="655">worker for allowlist; event for others</text>
+    </g>
+<g id="mode-active">
+      <rect x="465" y="676" width="450" height="42" rx="9" fill="#263852"/>
+      <text class="mode-key" x="485" y="703" fill="#edf4ff">ACTIVE</text>
+      <text class="mode-value" x="580" y="703">worker route for every clinic</text>
+    </g>
+<g id="mode-paused">
+      <rect x="465" y="724" width="450" height="42" rx="9" fill="#202f45"/>
+      <text class="mode-key" x="485" y="751" fill="#f18189">PAUSED</text>
+      <text class="mode-value" x="580" y="751">no provider route; backlog retained</text>
+    </g>
+
+  <g id="conditional-claim">
+    <rect class="card" x="1000" y="275" width="320" height="120" rx="18" fill="#223148" stroke="#b09aff"/>
+    <rect x="1000" y="275" width="8" height="120" rx="4" fill="#b09aff"/>
+    <text class="card-title" x="1024" y="310">Conditional DB claim</text>
+    <text class="detail" x="1024" y="341">exact outbox row · lease · fencing token</text>
+  </g>
+  <g id="member-profile">
+    <rect class="card" x="1390" y="245" width="310" height="135" rx="18" fill="#223148" stroke="#63cfbf"/>
+    <rect x="1390" y="245" width="8" height="135" rx="4" fill="#63cfbf"/>
+    <text class="card-title" x="1414" y="280">Current member profile</text>
+    <text class="detail" x="1414" y="311">contact · language · consent</text>
+<text class="detail" x="1414" y="335">resolved after claim · memory only</text>
+  </g>
+  <g id="template-render">
+    <rect class="card" x="1390" y="440" width="310" height="135" rx="18" fill="#223148" stroke="#7da6ff"/>
+    <rect x="1390" y="440" width="8" height="135" rx="4" fill="#7da6ff"/>
+    <text class="card-title" x="1414" y="475">Render typed template</text>
+    <text class="detail" x="1414" y="506">approved key + version</text>
+<text class="detail" x="1414" y="530">body exists in memory only</text>
+  </g>
+  <g id="provider-call">
+    <rect class="card" x="1390" y="635" width="310" height="135" rx="18" fill="#223148" stroke="#f0b25b"/>
+    <rect x="1390" y="635" width="8" height="135" rx="4" fill="#f0b25b"/>
+    <text class="card-title" x="1414" y="670">Provider call</text>
+    <text class="detail" x="1414" y="701">deterministic idempotency key</text>
+<text class="detail" x="1414" y="725">bounded timeout · retry · bulkhead</text>
+  </g>
+  <g id="terminal-update">
+    <rect class="card" x="1000" y="620" width="320" height="155" rx="18" fill="#223148" stroke="#f18189"/>
+    <rect x="1000" y="620" width="8" height="155" rx="4" fill="#f18189"/>
+    <text class="card-title" x="1024" y="655">Fenced terminal update</text>
+    <text class="detail" x="1024" y="686">stable outcome · reason code · safe fingerprint</text>
+<text class="detail" x="1024" y="710">remove memberId · appointmentId</text>
+<text class="detail" x="1024" y="734">remove template parameters</text>
+  </g>
+  <g id="retained-data">
+    <rect class="card" x="1000" y="905" width="700" height="110" rx="18" fill="#223148" stroke="#63cfbf"/>
+    <rect x="1000" y="905" width="8" height="110" rx="4" fill="#63cfbf"/>
+    <text class="card-title" x="1024" y="940">What remains</text>
+    <text class="detail" x="1024" y="971">privacy-safe outcome and bounded attempt metadata</text>
+<text class="detail" x="1024" y="995">SENT 7d · SUPPRESSED 7d · EXHAUSTED 30d</text>
+  </g>
+
+  <g id="command-to-outbox"><path class="edge" d="M245 380 V430" stroke="#7da6ff" marker-end="url(#arrow)"/><rect class="edge-label-bg" x="252" y="397" width="131.2" height="25" rx="7"/><text class="edge-label" x="260" y="415">same transaction</text></g>
+  <g id="outbox-to-gate"><path class="edge" d="M395 510 H413 Q425 510 425 498 V319 Q425 307 437 307 H465" stroke="#63cfbf" marker-end="url(#arrow)"/></g>
+  <g id="gate-to-event"><path class="edge" d="M670 360 V376 Q670 388 658 388 H587 Q575 388 575 400 V405" stroke="#f0b25b" marker-end="url(#arrow)"/></g>
+  <g id="gate-to-worker"><path class="edge" d="M710 360 V376 Q710 388 722 388 H798 Q810 388 810 400 V405" stroke="#7da6ff" marker-end="url(#arrow)"/></g>
+  <g id="event-to-claim"><path class="edge" d="M575 530 V558 Q575 570 587 570 H1148 Q1160 570 1160 558 V395" stroke="#f0b25b" marker-end="url(#arrow)"/><rect class="edge-label-bg" x="692" y="545" width="147.6" height="25" rx="7"/><text class="edge-label" x="700" y="563">one selected route</text></g>
+  <g id="worker-to-claim"><path class="edge" d="M915 468 H953 Q965 468 965 456 V362 Q965 350 977 350 H1000" stroke="#7da6ff" marker-end="url(#arrow)"/></g>
+  <g id="claim-to-profile"><path class="edge" d="M1320 335 H1343 Q1355 335 1355 323 Q1355 313 1367 313 H1390" stroke="#b09aff" marker-end="url(#arrow)"/><rect class="edge-label-bg" x="1280" y="212" width="105" height="25" rx="7"/><text class="edge-label" x="1288" y="230">after claim</text></g>
+  <g id="profile-to-template"><path class="edge" d="M1545 380 V440" stroke="#63cfbf" marker-end="url(#arrow)"/></g>
+  <g id="template-to-provider"><path class="edge" d="M1545 575 V635" stroke="#7da6ff" marker-end="url(#arrow)"/></g>
+  <g id="provider-to-terminal"><path class="edge" d="M1390 703 H1320" stroke="#f0b25b" marker-end="url(#arrow)"/></g>
+  <g id="terminal-to-retention"><path class="edge" d="M1160 775 V905" stroke="#f18189" marker-end="url(#arrow)"/><rect class="edge-label-bg" x="1167" y="832" width="139.39999999999998" height="25" rx="7"/><text class="edge-label" x="1175" y="850">redact and finish</text></g>
+
+  <g id="reader-question"><rect class="note" x="180" y="1050" width="1440" height="58" rx="16"/><text class="question" x="900" y="1086" text-anchor="middle">Reader check: Where is intent persisted, when does contact data enter memory, and what remains after completion?</text></g>
+  </svg>

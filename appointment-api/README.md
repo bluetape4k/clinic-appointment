@@ -7,14 +7,17 @@ Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migr
 ## Responsibilities
 
 - **Does**: exposes HTTP APIs, handles authentication/authorization, runs DB migrations, and publishes domain events.
-- **Does not**: send notifications directly. Notifications are delegated through events. It may call Solver for scheduling workflows.
+- **Does not**: call notification providers. Appointment commands persist a
+  minimal notification outbox in the same transaction; the notification module
+  resolves current member data and performs delivery. It may call Solver for
+  scheduling workflows.
 
 ## API Endpoints
 
 | Group | Path | Description |
 |------|------|------|
 | Appointments | `GET /api/{tenantCode}/appointments` | List appointments by period. |
-| Appointments | `POST /api/{tenantCode}/appointments` | Create an appointment. |
+| Appointments | `POST /api/{tenantCode}/appointments` | Create an appointment. Default `ENFORCE` requires a verified `memberId`; omission is allowed only by an expiring clinic-scoped `OBSERVE` transition exception. |
 | Appointments | `PATCH /api/{tenantCode}/appointments/{id}/status` | Change status, such as Confirm, CheckIn, Complete. |
 | Appointments | `DELETE /api/{tenantCode}/appointments/{id}` | Cancel an appointment. |
 | Slots | `GET /api/{tenantCode}/clinics/{clinicId}/slots` | Query available slots by doctor, date, and treatment type. |
@@ -34,9 +37,18 @@ Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migr
 | Appointment plans | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | Read one purchased treatment plan. |
 | Appointment plans | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{authority}/{purchaseId}` | Read by authority-qualified source purchase. |
 | Scheduling policies | `/api/{tenantCode}/admin/**/scheduling-policies` | Manage tenant baselines and clinic overrides with preview and activation evidence. |
+| Notification status | `GET /api/{tenantCode}/clinics/{clinicId}/notifications/**` | Read privacy-safe delivery status with `SCOPE_notification:read`. |
+| Re-notify | `POST /api/{tenantCode}/clinics/{clinicId}/notifications/re-notify` | Dry-run or enqueue a bounded, dual-approved re-notification generation. |
 
 The complete scheduling-policy request, lifecycle, effective-read, and error
 contract is documented in [Scheduling Policy API](../docs/api/scheduling-policy.md).
+
+Notification requests store only the member ID needed to resolve the current
+profile at send time. Names, phone numbers, email addresses, rendered bodies,
+and raw provider errors are not written to the outbox. Re-notify requires a
+platform service principal with `SCOPE_notification:renotify`, exact clinic
+membership, and an independent MFA clinic approval. See the
+[notification operations runbook](../docs/runbooks/notification-outbox-operations.md).
 
 <a id="profile-reevaluation"></a>
 ### Profile Change Reevaluation

@@ -56,8 +56,8 @@ const KO_TEXT = new Map([
   ["Spring ApplicationEvent · EventLog", "Spring ApplicationEvent · EventLog"],
   ["Timefold Solver · 11 Hard + 2 Soft", "Timefold Solver · 11개 Hard + 2개 Soft"],
   ["bulk optimization · SolutionConverter", "일괄 최적화 · SolutionConverter"],
-  ["HA Scheduler · Reminder", "HA 스케줄러 · 리마인더"],
-  ["Redis Leader Election", "Redis 리더 선출"],
+  ["Durable Outbox · Reminder", "내구성 outbox · 리마인더"],
+  ["DB Lease · Fencing", "DB lease · fencing"],
   ["CircuitBreaker · Retry · Bulkhead", "CircuitBreaker · Retry · Bulkhead"],
   ["Exposed JDBC · Flyway", "Exposed JDBC · Flyway"],
   ["Leader Election · Cache", "리더 선출 · 캐시"],
@@ -72,8 +72,8 @@ const KO_TEXT = new Map([
   ["EventLog persistence", "EventLog 영속화"],
   ["Timefold Solver AI", "Timefold Solver AI"],
   ["Bulk optimization", "일괄 최적화"],
-  ["HA notification scheduler", "HA 알림 스케줄러"],
-  ["Resilience4j guards", "Resilience4j 보호 계층"],
+  ["Durable notification outbox", "내구성 알림 outbox"],
+  ["Privacy-safe delivery", "개인정보 안전 발송"],
   ["Spring Boot 4 REST API", "Spring Boot 4 REST API"],
   ["JWT auth · Flyway · Swagger", "JWT 인증 · Flyway · Swagger"],
   ["Gatling load tests", "Gatling 부하 테스트"],
@@ -273,7 +273,7 @@ function genArchitecture() {
   { rank=same; api; sec; exh; }
   { rank=same; core; evt; }
   { rank=same; solver; solver_svc; }
-  { rank=same; notif; redis_leader; r4j; }
+  { rank=same; notif; lease; r4j; }
   { rank=same; pg; redis; docker; micrometer; timefold_ai; }
 
   fe           [label="Angular 18 SPA\\nappointment-frontend"                          ${nc("blue")}]
@@ -291,12 +291,12 @@ function genArchitecture() {
   solver       [label="appointment-solver\\nTimefold Solver · 11 Hard + 2 Soft"       ${nc("amber")}]
   solver_svc   [label="SolverService\\nbulk optimization · SolutionConverter"          ${nc("amber")}]
 
-  notif        [label="appointment-notification\\nHA Scheduler · Reminder"             ${nc("pink")}]
-  redis_leader [label="Redis Leader Election\\nbluetape4k-leader"                      ${nc("pink")}]
+  notif        [label="appointment-notification\\nDurable Outbox · Reminder"           ${nc("pink")}]
+  lease        [label="PostgreSQL\\nDB Lease · Fencing"                                 ${nc("pink")}]
   r4j          [label="Resilience4j\\nCircuitBreaker · Retry · Bulkhead"               ${nc("pink")}]
 
   pg           [label="PostgreSQL\\nExposed JDBC · Flyway"  ${nc("gray")}]
-  redis        [label="Redis\\nLeader Election · Cache"      ${nc("gray")}]
+  redis        [label="Redis\\nCache"                        ${nc("gray")}]
   docker       [label="Docker\\nTestcontainers"              ${nc("gray")}]
   micrometer   [label="Micrometer\\nObservability"           ${nc("gray")}]
   timefold_ai  [label="Timefold AI\\nSolver Engine"          ${nc("gray")}]
@@ -306,7 +306,7 @@ function genArchitecture() {
   api          -> evt          [color="#45A7A1" style=dashed]
   core         -> solver       [color="#D6A441"]
   core         -> notif        [color="#DC6B82"]
-  notif        -> redis_leader [color="#DC6B82"]
+  notif        -> lease        [color="#DC6B82"]
   notif        -> r4j          [color="#DC6B82"]
   api          -> pg           [style=dashed color="#9AA8B8"]
   api          -> redis        [style=dashed color="#9AA8B8"]
@@ -328,7 +328,7 @@ function genModuleOverview() {
   core   [label="appointment-core\\nDomain model · Exposed ORM\\n16 entities · State machine\\nSlotCalculationService"  ${nc("teal")}]
   evt    [label="appointment-event\\nSpring ApplicationEvent\\nDomain event publishing\\nEventLog persistence"            ${nc("blue")}]
   solver [label="appointment-solver\\nTimefold Solver AI\\n11 hard + 2 soft constraints\\nBulk optimization"             ${nc("amber")}]
-  notif  [label="appointment-notification\\nHA notification scheduler\\nRedis Leader Election\\nResilience4j guards"      ${nc("pink")}]
+  notif  [label="appointment-notification\\nDurable notification outbox\\nPrivacy-safe delivery\\nReminder recovery"       ${nc("pink")}]
   api    [label="appointment-api\\nSpring Boot 4 REST API\\nJWT auth · Flyway · Swagger\\nGatling load tests"            ${nc("green")}]
   fe     [label="frontend\\nappointment-frontend\\nAngular 18 SPA\\nappointment management UI"                           ${nc("purple")}]
 
@@ -535,7 +535,7 @@ function genSolverFlow() {
 function genNotificationFlow() {
   const dot = `digraph {
   graph [${GRAPH} rankdir=TB splines=ortho
-    label="HA Notification Flow\\nappointment-notification · Redis Leader Election · Resilience4j guards"
+    label="Durable Notification Flow\\nappointment-notification · DB lease and fencing · Resilience4j guards"
     labelloc=t labeljust=l]
   ${NODES}
   ${EDGES}
@@ -551,14 +551,14 @@ function genNotificationFlow() {
     label="Notification Module" ${cc("pink")} fontname="Helvetica Neue" fontsize=11
     listener [label="NotificationEventListener\\n@EventListener\\nCreated/StatusChanged/Cancelled/Rescheduled" ${nc("pink")}]
     autoconf [label="NotificationAutoConfiguration\\nSpring @Configuration\\nregisters notification beans"      ${nc("pink")}]
-    dedup    [label="DuplicateGuard\\nRedis SETNX\\nprevents duplicate sends"                                   ${nc("pink")}]
+    dedup    [label="NotificationDeliveryRouteGate\\nclinic-scoped rollout mode\\nselects one provider route"          ${nc("pink")}]
   }
 
   subgraph cluster_ha {
-    label="Leader Election (HA)" ${cc("purple")} fontname="Helvetica Neue" fontsize=11
-    leader  [label="bluetape4k-leader (Redis SETNX)\\nif (!leaderElection.isLeader()) return\\nsingle node runs scheduler" ${nc("purple")}]
-    lettuce [label="Lettuce (Redis Client)\\nSETNX key, TTL=60s\\nperiodic heartbeat"                                      ${nc("purple")}]
-    redis_s [label="Redis Server\\nLeader key storage\\ncluster-safe"                                                      ${nc("purple")}]
+    label="Durable Coordination" ${cc("purple")} fontname="Helvetica Neue" fontsize=11
+    leader  [label="Conditional DB claim\\nlease + fencing token\\none logical notification" ${nc("purple")}]
+    lettuce [label="Notification outbox worker\\nclinic-fair polling\\nbounded concurrency"   ${nc("purple")}]
+    redis_s [label="PostgreSQL\\noutbox rows and leases\\nshared coordination"                ${nc("purple")}]
   }
 
   subgraph cluster_r4j {
@@ -571,14 +571,14 @@ function genNotificationFlow() {
 
   subgraph cluster_channels {
     label="Notification Channels" ${cc("teal")} fontname="Helvetica Neue" fontsize=11
-    dummy   [label="DummyNotificationChannel\\nlogs + stores history\\nalways returns SUCCESS"                     ${nc("teal")}]
+    dummy   [label="NotificationChannel\\nprovider request in memory\\nstable delivery outcome"                    ${nc("teal")}]
     future  [label="Future: KakaoTalk / Email / SMS\\nimplement NotificationChannel interface"                     ${nc("teal")}]
-    history [label="NotificationHistoryRepository\\nExposed table\\nstores send history"                          ${nc("teal")}]
+    history [label="Fenced terminal update\\nreason code + safe fingerprint\\nredacts identifiers"                 ${nc("teal")}]
   }
 
   subgraph cluster_persist {
     label="Persistence" ${cc("gray")} fontname="Helvetica Neue" fontsize=11
-    pg_hist [label="notification_history (PostgreSQL)" ${nc("gray")}]
+    pg_hist [label="notification_outbox (PostgreSQL)"  ${nc("gray")}]
     evt_log [label="event_logs (appointment-event)"    ${nc("gray")}]
   }
 

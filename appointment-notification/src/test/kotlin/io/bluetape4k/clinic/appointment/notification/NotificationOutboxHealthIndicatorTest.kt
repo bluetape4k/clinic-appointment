@@ -40,6 +40,7 @@ internal class NotificationOutboxHealthIndicatorTest {
                     memberCircuitOpen = 1,
                     oldestActiveAge = Duration.ofMinutes(31),
                     retentionFailures = 1,
+                    backlogCapped = true,
                 ),
             ),
         )
@@ -53,6 +54,7 @@ internal class NotificationOutboxHealthIndicatorTest {
             "memberCircuitOpen" to 1,
             "oldestActiveAgeSeconds" to 1_860L,
             "retentionFailures" to 1,
+            "backlogCapped" to true,
         )
     }
 
@@ -87,6 +89,26 @@ internal class NotificationOutboxHealthIndicatorTest {
         )
 
         indicator.liveness().details["degraded"] shouldBeEqualTo false
+    }
+
+    @Test
+    fun `runtime health signal은 circuit과 연속 retention 실패를 기본 liveness snapshot에 반영한다`() {
+        val signals = NotificationRuntimeHealthSignals()
+        signals.setProviderCircuitOpen(true)
+        signals.setMemberCircuitOpen(true)
+        signals.recordRetentionFailure()
+        signals.recordRetentionFailure()
+
+        signals.snapshot(Duration.ofMinutes(7), backlogCapped = true) shouldBeEqualTo NotificationOutboxLivenessSnapshot(
+            providerCircuitOpen = 1,
+            memberCircuitOpen = 1,
+            oldestActiveAge = Duration.ofMinutes(7),
+            retentionFailures = 2,
+            backlogCapped = true,
+        )
+
+        signals.recordRetentionSuccess()
+        signals.snapshot(null).retentionFailures shouldBeEqualTo 0
     }
 
     private class FixedReadinessSource(

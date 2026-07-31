@@ -1,46 +1,139 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="980" viewBox="0 0 2000 980" role="img" aria-label="HA 알림 아키텍처">
-<defs>
-  <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#27415f" flood-opacity="0.12"/></filter>
-  <marker id="arrow-blue" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#4f77c9" stroke="#4f77c9"/></marker>
-<marker id="arrow-cyan" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#4aa6b5" stroke="#4aa6b5"/></marker>
-<marker id="arrow-teal" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#2f9f93" stroke="#2f9f93"/></marker>
-<marker id="arrow-green" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#3c987e" stroke="#3c987e"/></marker>
-<marker id="arrow-amber" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d28a28" stroke="#d28a28"/></marker>
-<marker id="arrow-orange" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d9823b" stroke="#d9823b"/></marker>
-<marker id="arrow-pink" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d85f8d" stroke="#d85f8d"/></marker>
-<marker id="arrow-purple" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#8a65d8" stroke="#8a65d8"/></marker>
-<marker id="arrow-red" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#ca5f66" stroke="#ca5f66"/></marker>
-<marker id="arrow-slate" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#718096" stroke="#718096"/></marker>
-  <style>
-    svg{font-family:"goorm Sans","goorm Sans Code",ui-sans-serif,system-ui,sans-serif}
-    .canvas{fill:#f6f9fc}.frame{fill:#ffffff;stroke:#c4d5e8;stroke-width:3;filter:url(#shadow)}
-    .title,.panel-title{font-family:"goorm Sans",ui-sans-serif,system-ui,sans-serif;fill:#263a57}.card-title,.state-title{font-family:"goorm Sans Code","goorm Sans",ui-sans-serif,system-ui,sans-serif;fill:#263a57}
-    .title{font-size:36px}.subtitle{font-size:15px;fill:#526276}.panel-title{font-size:22px}.card-title{font-size:19px}.state-title{font-size:22px}
-    .detail,.small,.pill-text,.route-label,.footer{font-family:"goorm Sans Code","goorm Sans",ui-sans-serif,system-ui,sans-serif;fill:#526276}
-    .detail{font-size:14px}.small{font-size:12px}.pill-text{font-size:13px}.route-label{font-size:13px}.footer{font-size:14px}
-    .panel{stroke-width:2}.card{stroke-width:2.4;filter:url(#shadow)}.pill{stroke-width:1.8}.route{fill:none;stroke-linecap:round;stroke-linejoin:round}
-    .lifeline{stroke:#b7c8dc;stroke-width:2;stroke-dasharray:8 8}.message{fill:none;stroke-width:3;stroke-linecap:round}.note{fill:#fffdf7;stroke:#d7b970;stroke-width:2}
-    .table{stroke-width:2.2;filter:url(#shadow)}.table-head{font-family:"goorm Sans Code","goorm Sans",ui-sans-serif,sans-serif;font-size:18px;fill:#263a57}.row{font-size:11.5px;fill:#526276}
-  </style>
-</defs>
-<rect class="canvas" width="2000" height="980"/>
-<rect class="frame" x="48" y="42" width="1904" height="896" rx="34"/>
-<text class="title" x="1000" y="104" text-anchor="middle">HA 알림 아키텍처</text>
-<text class="subtitle" x="1000" y="138" text-anchor="middle">event delivery를 leader-elected reminder delivery와 failure isolation에서 분리한다.</text>
-<rect class="panel" x="105" y="205" width="410" height="580" rx="24" fill="#eef6ff" stroke="#b7d2f4"/><text class="panel-title" x="133" y="247">Event-driven path</text>
-<rect class="panel" x="555" y="205" width="500" height="580" rx="24" fill="#f7f0ff" stroke="#c9b7f4"/><text class="panel-title" x="583" y="247">Resilience boundary</text>
-<rect class="panel" x="1065" y="205" width="825" height="580" rx="24" fill="#eef9f5" stroke="#a7d5c5"/><text class="panel-title" x="1093" y="247">Reminder scheduler path</text>
-<g id="listener"><rect class="card" x="145" y="300" width="320" height="135" rx="16" fill="#fff" stroke="#4f77c9"/><g transform="translate(163 318)"><rect width="44" height="44" rx="10" fill="#4f77c9"/><g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M12 16h20M12 22h20M12 28h20"/><path d="M27 11l6 5-6 5M27 23l6 5-6 5"/></g></g><text class="card-title" x="221" y="340">NotificationEventListener</text><text class="detail" x="169" y="374" text-anchor="start"><tspan x="169" dy="0">Created, confirmed, cancelled,</tspan><tspan x="169" dy="19">rescheduled events</tspan></text></g>
-<g id="channel"><rect class="card" x="600" y="300" width="400" height="145" rx="16" fill="#fff" stroke="#8a65d8"/><g transform="translate(618 318)"><rect width="44" height="44" rx="10" fill="#8a65d8"/><g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 14h12l6 8-6 8H16l-6-8z"/><path d="M17 22h10"/></g></g><text class="card-title" x="676" y="340">ResilientNotificationChannel</text><text class="detail" x="624" y="374" text-anchor="start"><tspan x="624" dy="0">CircuitBreaker, Retry, Bulkhead가</tspan><tspan x="624" dy="19">delegate를 감싼다</tspan></text></g>
-<g id="dummy"><rect class="card" x="600" y="550" width="400" height="125" rx="16" fill="#fff" stroke="#3c987e"/><g transform="translate(618 568)"><rect width="44" height="44" rx="10" fill="#3c987e"/><g fill="none" stroke="#fff" stroke-width="2.3"><ellipse cx="22" cy="13" rx="12" ry="5"/><path d="M10 13v18c0 3 5 5 12 5s12-2 12-5V13"/><path d="M10 22c0 3 5 5 12 5s12-2 12-5"/></g></g><text class="card-title" x="676" y="590">DummyNotificationChannel</text><text class="detail" x="624" y="624" text-anchor="start"><tspan x="624" dy="0">output log와 DB history 저장</tspan></text></g>
-<g id="scheduler"><rect class="card" x="1130" y="285" width="320" height="145" rx="16" fill="#fff" stroke="#3c987e"/><g transform="translate(1148 303)"><rect width="44" height="44" rx="10" fill="#3c987e"/><g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 14h12l6 8-6 8H16l-6-8z"/><path d="M17 22h10"/></g></g><text class="card-title" x="1206" y="325">Hourly scheduler</text><text class="detail" x="1154" y="359" text-anchor="start"><tspan x="1154" dy="0">tomorrow와 same-day</tspan><tspan x="1154" dy="19">CONFIRMED appointments 검사</tspan></text></g>
-<g id="leader"><rect class="card" x="1580" y="285" width="270" height="145" rx="16" fill="#fff" stroke="#ca5f66"/><svg x="1598" y="303" width="44" height="44" viewBox="0 0 32 32" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g transform="matrix(.848327 0 0 .848327 -7.883573 -9.449691)"><use xlink:href="#B" fill="#a41e11"/><path d="M45.536 34.95c-2.013 1.05-12.44 5.337-14.66 6.494s-3.453 1.146-5.207.308-12.85-5.32-14.85-6.276-2.04-1.613-.077-2.382l15.332-5.936c2.332-.836 3.14-.867 5.126-.14S43.55 31.87 45.51 32.6s2.037 1.31.024 2.36z" fill="#d82c20"/><use xlink:href="#B" y="-6.218" fill="#a41e11"/><use xlink:href="#C" fill="#d82c20"/><path d="M45.536 26.098c-2.013 1.05-12.44 5.337-14.66 6.495s-3.453 1.146-5.207.308-12.85-5.32-14.85-6.276c-1-.478-1.524-.88-1.524-1.26V21.55s14.447-3.145 16.78-3.982 3.14-.867 5.126-.14 13.853 2.868 15.814 3.587v3.76c0 .377-.452.8-1.477 1.324z" fill="#a41e11"/><use xlink:href="#C" y="-6.449" fill="#d82c20"/><g fill="#fff"><path d="M29.096 20.712l-1.182-1.965-3.774-.34 2.816-1.016-.845-1.56 2.636 1.03 2.486-.814-.672 1.612 2.534.95-3.268.34zM22.8 24.624l8.74-1.342-2.64 3.872z"/><ellipse cx="20.444" rx="4.672" ry="1.811" cy="21.402"/></g><path d="M42.132 21.138l-5.17 2.042-.004-4.087z" fill="#7a0c00"/><path d="M36.963 23.18l-.56.22-5.166-2.042 5.723-2.264z" fill="#ad2115"/></g><defs ><path id="B" d="M45.536 38.764c-2.013 1.05-12.44 5.337-14.66 6.494s-3.453 1.146-5.207.308-12.85-5.32-14.85-6.276c-1-.478-1.524-.88-1.524-1.26v-3.813s14.447-3.145 16.78-3.982 3.14-.867 5.126-.14 13.853 2.868 15.814 3.587v3.76c0 .377-.452.8-1.477 1.324z"/><path id="C" d="M45.536 28.733c-2.013 1.05-12.44 5.337-14.66 6.494s-3.453 1.146-5.207.308-12.85-5.32-14.85-6.276-2.04-1.613-.077-2.382l15.332-5.935c2.332-.837 3.14-.867 5.126-.14s12.35 4.853 14.312 5.57 2.037 1.31.024 2.36z"/></defs></svg><text class="card-title" x="1656" y="325">Redis leader gate</text><text class="detail" x="1604" y="359" text-anchor="start"><tspan x="1604" dy="0">runIfLeader로 중복</tspan><tspan x="1604" dy="19">scheduler node 방지</tspan></text></g>
-<g id="history"><rect class="card" x="1260" y="550" width="360" height="125" rx="16" fill="#fff" stroke="#3c987e"/><g transform="translate(1278 568)"><rect width="44" height="44" rx="10" fill="#3c987e"/><g fill="none" stroke="#fff" stroke-width="2.3"><ellipse cx="22" cy="13" rx="12" ry="5"/><path d="M10 13v18c0 3 5 5 12 5s12-2 12-5V13"/><path d="M10 22c0 3 5 5 12 5s12-2 12-5"/></g></g><text class="card-title" x="1336" y="590">NotificationHistory</text><text class="detail" x="1284" y="624" text-anchor="start"><tspan x="1284" dy="0">duplicate reminder guard와 delivery</tspan><tspan x="1284" dy="19">audit</tspan></text></g>
-<path class="route" d="M465 368 L600 368" stroke="#4f77c9" stroke-width="3.2" marker-end="url(#arrow-blue)"/>
-<path class="route" d="M785 445 L785 550" stroke="#8a65d8" stroke-width="3.2" marker-end="url(#arrow-purple)"/>
-<path class="route" d="M1000 612 L1260 612" stroke="#3c987e" stroke-width="3.2" marker-end="url(#arrow-green)"/>
-<path class="route" d="M1450 358 L1580 358" stroke="#ca5f66" stroke-width="3.2" marker-end="url(#arrow-red)"/>
-<path class="route" d="M1290 430 L1290 550" stroke="#3c987e" stroke-width="3.2" marker-end="url(#arrow-green)"/>
-<path class="route" d="M1715 430 L1715.0 491.0 Q1715 505 1701.0 505.0 L1454.0 505.0 Q1440 505 1440.0 519.0 L1440 550" stroke="#ca5f66" stroke-width="2.7" stroke-dasharray="9 7" marker-end="url(#arrow-red)"/>
-<rect class="note" x="230" y="835" width="1540" height="58" rx="16"/><text class="footer" x="1000" y="871" text-anchor="middle">Event notification은 즉시 subscriber work이고, reminder는 scheduled work이며 Redis leader gate와 history duplicate check를 통과해야 한다.</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1180" viewBox="0 0 1800 1180" role="img" aria-labelledby="title description">
+  <title id="title">내구성 알림 outbox 발송 흐름</title>
+  <desc id="description">하나의 DB 행과 하나의 provider 경로를 사용하고 연락처는 저장하지 않는다</desc>
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#27415f" flood-opacity="0.18"/></filter>
+    <marker id="arrow" markerWidth="13" markerHeight="13" refX="11.5" refY="6.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L13 6.5 L0 13 Z" fill="#20324a"/></marker>
+    <style>
+      svg{font-family:"goorm Sans","Noto Sans KR",ui-sans-serif,system-ui,sans-serif} .canvas{fill:#f4f7fb} .frame{fill:#ffffff;stroke:#cbd7e6;stroke-width:3}
+      .title{font-size:38px;font-weight:750;fill:#20324a} .subtitle{font-size:17px;fill:#56677d}
+      .lane{fill:#f8fbff;stroke:#c7d6e8;stroke-width:2}.lane-title{font-size:22px;font-weight:700;fill:#20324a}
+      .card{stroke-width:2.5;filter:url(#shadow)}.card-title{font-family:"goorm Sans Code","Noto Sans Mono",ui-monospace,monospace;font-size:18px;font-weight:700;fill:#20324a}
+      .detail{font-size:14px;fill:#56677d}.edge{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+      .edge-label-bg{fill:#ffffff;stroke:#cbd7e6;stroke-width:1}.edge-label{font-family:"goorm Sans Code","Noto Sans Mono",ui-monospace,monospace;font-size:12px;fill:#56677d}
+      .mode-key{font-family:"goorm Sans Code","Noto Sans Mono",ui-monospace,monospace;font-size:14px;font-weight:700}.mode-value{font-size:13px;fill:#56677d}
+      .note{fill:#fff9e8;stroke:#d4aa53;stroke-width:2}.question{font-size:16px;font-weight:650;fill:#20324a}
+    </style>
+  </defs>
+  <rect class="canvas" width="1800" height="1180"/>
+  <rect class="frame" x="38" y="34" width="1724" height="1110" rx="32"/>
+  <text class="title" x="900" y="92" text-anchor="middle">내구성 알림 outbox 발송 흐름</text>
+  <text class="subtitle" x="900" y="126" text-anchor="middle">하나의 DB 행과 하나의 provider 경로를 사용하고 연락처는 저장하지 않는다</text>
+
+  <g id="lane-transaction"><rect class="lane" x="70" y="175" width="350" height="650" rx="24"/><text class="lane-title" x="95" y="215">예약 트랜잭션</text></g>
+  <g id="lane-rollout"><rect class="lane" x="440" y="175" width="500" height="650" rx="24"/><text class="lane-title" x="465" y="215">병원별 단계 전환</text></g>
+  <g id="lane-delivery"><rect class="lane" x="970" y="175" width="760" height="650" rx="24"/><text class="lane-title" x="995" y="215">개인정보를 남기지 않는 발송 절차</text></g>
+  <g id="lane-retention"><rect class="lane" x="970" y="845" width="760" height="190" rx="24"/><text class="lane-title" x="995" y="885">보존과 운영</text></g>
+
+  <g id="appointment-command">
+    <rect class="card" x="95" y="255" width="300" height="125" rx="18" fill="#ffffff" stroke="#4f77c9"/>
+    <rect x="95" y="255" width="8" height="125" rx="4" fill="#4f77c9"/>
+    <text class="card-title" x="119" y="290">예약 명령</text>
+    <text class="detail" x="119" y="321">생성 · 확정 · 취소 · 재배정 · 리마인더</text>
+  </g>
+  <g id="minimal-outbox">
+    <rect class="card" x="95" y="430" width="300" height="160" rx="18" fill="#ffffff" stroke="#2f9f93"/>
+    <rect x="95" y="430" width="8" height="160" rx="4" fill="#2f9f93"/>
+    <text class="card-title" x="119" y="465">예약 + 최소 outbox</text>
+    <text class="detail" x="119" y="496">memberId · appointmentId</text>
+<text class="detail" x="119" y="520">타입 지정 template parameter</text>
+<text class="detail" x="119" y="544">하나의 트랜잭션으로 커밋</text>
+  </g>
+  <g id="route-gate">
+    <rect class="card" x="465" y="255" width="450" height="105" rx="18" fill="#ffffff" stroke="#8067cf"/>
+    <rect x="465" y="255" width="8" height="105" rx="4" fill="#8067cf"/>
+    <text class="card-title" x="489" y="290">NotificationDeliveryRouteGate</text>
+    <text class="detail" x="489" y="321">provider 경로를 정확히 하나만 선택</text>
+  </g>
+  <g id="event-route">
+    <rect class="card" x="465" y="405" width="220" height="125" rx="18" fill="#ffffff" stroke="#cc8428"/>
+    <rect x="465" y="405" width="8" height="125" rx="4" fill="#cc8428"/>
+    <text class="card-title" x="489" y="440">전환기 event bridge</text>
+    <text class="detail" x="489" y="471">경로 · SHADOW</text>
+<text class="detail" x="489" y="495">+ 카나리 밖 병원</text>
+  </g>
+  <g id="worker-route">
+    <rect class="card" x="705" y="405" width="210" height="125" rx="18" fill="#ffffff" stroke="#4f77c9"/>
+    <rect x="705" y="405" width="8" height="125" rx="4" fill="#4f77c9"/>
+    <text class="card-title" x="729" y="440">백그라운드 worker</text>
+    <text class="detail" x="729" y="471">경로 · 카나리 허용 목록</text>
+<text class="detail" x="729" y="495">+ ACTIVE</text>
+  </g>
+  <g id="mode-shadow">
+      <rect x="465" y="580" width="450" height="42" rx="9" fill="#eef4fc"/>
+      <text class="mode-key" x="485" y="607" fill="#20324a">SHADOW</text>
+      <text class="mode-value" x="580" y="607">모든 병원은 이벤트 경로</text>
+    </g>
+<g id="mode-canary">
+      <rect x="465" y="628" width="450" height="42" rx="9" fill="#f7f9fc"/>
+      <text class="mode-key" x="485" y="655" fill="#20324a">CANARY</text>
+      <text class="mode-value" x="580" y="655">허용 병원은 worker, 나머지는 이벤트</text>
+    </g>
+<g id="mode-active">
+      <rect x="465" y="676" width="450" height="42" rx="9" fill="#eef4fc"/>
+      <text class="mode-key" x="485" y="703" fill="#20324a">ACTIVE</text>
+      <text class="mode-value" x="580" y="703">모든 병원은 worker 경로</text>
+    </g>
+<g id="mode-paused">
+      <rect x="465" y="724" width="450" height="42" rx="9" fill="#f7f9fc"/>
+      <text class="mode-key" x="485" y="751" fill="#c85c65">PAUSED</text>
+      <text class="mode-value" x="580" y="751">provider 경로 중단, backlog 보존</text>
+    </g>
+
+  <g id="conditional-claim">
+    <rect class="card" x="1000" y="275" width="320" height="120" rx="18" fill="#ffffff" stroke="#8067cf"/>
+    <rect x="1000" y="275" width="8" height="120" rx="4" fill="#8067cf"/>
+    <text class="card-title" x="1024" y="310">DB 조건부 선점</text>
+    <text class="detail" x="1024" y="341">정확한 outbox 행 · lease · fencing token</text>
+  </g>
+  <g id="member-profile">
+    <rect class="card" x="1390" y="245" width="310" height="135" rx="18" fill="#ffffff" stroke="#2f9f93"/>
+    <rect x="1390" y="245" width="8" height="135" rx="4" fill="#2f9f93"/>
+    <text class="card-title" x="1414" y="280">최신 회원 프로필 조회</text>
+    <text class="detail" x="1414" y="311">연락처 · 언어 · 동의</text>
+<text class="detail" x="1414" y="335">메모리에서만 사용</text>
+  </g>
+  <g id="template-render">
+    <rect class="card" x="1390" y="440" width="310" height="135" rx="18" fill="#ffffff" stroke="#4f77c9"/>
+    <rect x="1390" y="440" width="8" height="135" rx="4" fill="#4f77c9"/>
+    <text class="card-title" x="1414" y="475">타입 지정 template 렌더링</text>
+    <text class="detail" x="1414" y="506">승인된 key + version</text>
+<text class="detail" x="1414" y="530">본문은 메모리에만 존재</text>
+  </g>
+  <g id="provider-call">
+    <rect class="card" x="1390" y="635" width="310" height="135" rx="18" fill="#ffffff" stroke="#cc8428"/>
+    <rect x="1390" y="635" width="8" height="135" rx="4" fill="#cc8428"/>
+    <text class="card-title" x="1414" y="670">Provider 호출</text>
+    <text class="detail" x="1414" y="701">결정적인 멱등성 키</text>
+<text class="detail" x="1414" y="725">제한된 timeout · retry · bulkhead</text>
+  </g>
+  <g id="terminal-update">
+    <rect class="card" x="1000" y="620" width="320" height="155" rx="18" fill="#ffffff" stroke="#c85c65"/>
+    <rect x="1000" y="620" width="8" height="155" rx="4" fill="#c85c65"/>
+    <text class="card-title" x="1024" y="655">Fencing 종료 갱신</text>
+    <text class="detail" x="1024" y="686">안정적인 결과 · 사유 코드 · 안전한 fingerprint</text>
+<text class="detail" x="1024" y="710">memberId · appointmentId 제거</text>
+<text class="detail" x="1024" y="734">template parameter 제거</text>
+  </g>
+  <g id="retained-data">
+    <rect class="card" x="1000" y="905" width="700" height="110" rx="18" fill="#ffffff" stroke="#2f9f93"/>
+    <rect x="1000" y="905" width="8" height="110" rx="4" fill="#2f9f93"/>
+    <text class="card-title" x="1024" y="940">완료 후 남는 정보</text>
+    <text class="detail" x="1024" y="971">개인정보가 없는 결과와 제한된 시도 metadata</text>
+<text class="detail" x="1024" y="995">SENT 7일 · SUPPRESSED 7일 · EXHAUSTED 30일</text>
+  </g>
+
+  <g id="command-to-outbox"><path class="edge" d="M245 380 V430" stroke="#4f77c9" marker-end="url(#arrow)"/><rect class="edge-label-bg" x="252" y="397" width="105" height="25" rx="7"/><text class="edge-label" x="260" y="415">같은 트랜잭션</text></g>
+  <g id="outbox-to-gate"><path class="edge" d="M395 510 H413 Q425 510 425 498 V319 Q425 307 437 307 H465" stroke="#2f9f93" marker-end="url(#arrow)"/></g>
+  <g id="gate-to-event"><path class="edge" d="M670 360 V376 Q670 388 658 388 H587 Q575 388 575 400 V405" stroke="#cc8428" marker-end="url(#arrow)"/></g>
+  <g id="gate-to-worker"><path class="edge" d="M710 360 V376 Q710 388 722 388 H798 Q810 388 810 400 V405" stroke="#4f77c9" marker-end="url(#arrow)"/></g>
+  <g id="event-to-claim"><path class="edge" d="M575 530 V558 Q575 570 587 570 H1148 Q1160 570 1160 558 V395" stroke="#cc8428" marker-end="url(#arrow)"/><rect class="edge-label-bg" x="692" y="545" width="105" height="25" rx="7"/><text class="edge-label" x="700" y="563">선택된 경로 하나</text></g>
+  <g id="worker-to-claim"><path class="edge" d="M915 468 H953 Q965 468 965 456 V362 Q965 350 977 350 H1000" stroke="#4f77c9" marker-end="url(#arrow)"/></g>
+  <g id="claim-to-profile"><path class="edge" d="M1320 335 H1343 Q1355 335 1355 323 Q1355 313 1367 313 H1390" stroke="#8067cf" marker-end="url(#arrow)"/><rect class="edge-label-bg" x="1280" y="212" width="105" height="25" rx="7"/><text class="edge-label" x="1288" y="230">선점 후 조회</text></g>
+  <g id="profile-to-template"><path class="edge" d="M1545 380 V440" stroke="#2f9f93" marker-end="url(#arrow)"/></g>
+  <g id="template-to-provider"><path class="edge" d="M1545 575 V635" stroke="#4f77c9" marker-end="url(#arrow)"/></g>
+  <g id="provider-to-terminal"><path class="edge" d="M1390 703 H1320" stroke="#cc8428" marker-end="url(#arrow)"/></g>
+  <g id="terminal-to-retention"><path class="edge" d="M1160 775 V905" stroke="#c85c65" marker-end="url(#arrow)"/><rect class="edge-label-bg" x="1167" y="832" width="105" height="25" rx="7"/><text class="edge-label" x="1175" y="850">제거 후 종료</text></g>
+
+  <g id="reader-question"><rect class="note" x="180" y="1050" width="1440" height="58" rx="16"/><text class="question" x="900" y="1086" text-anchor="middle">독자 확인: 알림 의도는 어디에 저장되고, 연락처는 언제 메모리에 들어오며, 완료 후 무엇이 남는가?</text></g>
+  </svg>

@@ -13,7 +13,9 @@ import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentApplica
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.headers.Header
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -54,19 +56,20 @@ class AdminAppointmentV2Controller(
 
     @Operation(
         summary = "Create and confirm an administrator appointment",
-        description = "Direct confirmation succeeds only when the effective clinic policy permits it.",
+        description = "Direct confirmation succeeds only when the effective clinic policy permits it. " +
+            "The service resolves the selected plan member; the staff request body never carries a member identifier.",
     )
     @ApiResponses(
         ApiResponse(responseCode = "201", description = "Appointment created and confirmed"),
         ApiResponse(responseCode = "400", description = "Invalid request", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "401", description = "Missing or invalid Gateway identity", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
-        ApiResponse(responseCode = "403", description = "Administrator, member, or clinic scope rejected", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
-        ApiResponse(responseCode = "404", description = "Plan member not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
-        ApiResponse(responseCode = "409", description = "Policy, idempotency, resource, or ambiguous member reference conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        ApiResponse(responseCode = "403", description = "Administrator, member, or clinic scope rejected", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberScopeMismatch", value = NotificationOpenApiExamples.MEMBER_SCOPE_MISMATCH)])]),
+        ApiResponse(responseCode = "404", description = "Plan member not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberNotFound", value = NotificationOpenApiExamples.MEMBER_NOT_FOUND)])]),
+        ApiResponse(responseCode = "409", description = "Policy, idempotency, resource, or ambiguous member reference conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberReferenceAmbiguous", value = NotificationOpenApiExamples.MEMBER_REFERENCE_AMBIGUOUS)])]),
         ApiResponse(responseCode = "422", description = "No feasible proposal or plan limit exceeded", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "428", description = "Creation precondition missing", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
         ApiResponse(responseCode = "500", description = "Internal scheduling error", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
-        ApiResponse(responseCode = "503", description = "New appointment intake is disabled or the member directory is unavailable", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        ApiResponse(responseCode = "503", description = "New appointment intake is disabled or the member directory is unavailable", headers = [Header(name = "Retry-After", description = "Seconds before retrying with the same idempotency key", schema = Schema(type = "integer", example = "5"))], content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberDirectoryUnavailable", value = NotificationOpenApiExamples.MEMBER_DIRECTORY_UNAVAILABLE)])]),
     )
     @PostMapping("/admin/appointments")
     fun directCreate(

@@ -7,14 +7,16 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 ## 책임
 
 - **하는 것**: HTTP API 제공, 인증/인가, DB 마이그레이션, 도메인 이벤트 발행
-- **하지 않는 것**: 알림 직접 발송 없음 (이벤트로 위임), Solver 직접 호출 가능
+- **하지 않는 것**: 알림 provider 직접 호출. 예약 명령은 같은 트랜잭션에서 최소
+  알림 outbox를 저장하고, 최신 회원정보 조회와 실제 발송은 알림 모듈이 담당합니다.
+  스케줄링 업무에서는 Solver를 호출할 수 있습니다.
 
 ## API 엔드포인트
 
 | 그룹 | 경로 | 설명 |
 |------|------|------|
 | 예약 | `GET /api/{tenantCode}/appointments` | 기간별 예약 목록 조회 |
-| 예약 | `POST /api/{tenantCode}/appointments` | 예약 생성 |
+| 예약 | `POST /api/{tenantCode}/appointments` | 예약 생성. 기본 `ENFORCE`에서는 검증된 `memberId`가 필수이며, 누락은 만료 시각이 있는 병원 범위 `OBSERVE` 전환 예외에서만 허용됩니다. |
 | 예약 | `PATCH /api/{tenantCode}/appointments/{id}/status` | 상태 변경 (Confirm, CheckIn, Complete 등) |
 | 예약 | `DELETE /api/{tenantCode}/appointments/{id}` | 예약 취소 |
 | 슬롯 | `GET /api/{tenantCode}/clinics/{clinicId}/slots` | 가용 슬롯 조회 (의사/날짜/진료유형) |
@@ -34,9 +36,17 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 | 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | 구매 진료 플랜 한 건 조회 |
 | 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{authority}/{purchaseId}` | `authority` 경로 변수로 한정된 원천 구매 조회 |
 | 예약 정책 | `/api/{tenantCode}/admin/**/scheduling-policies` | 미리보기와 활성화 증거를 사용해 테넌트 기준 정책과 병원별 재정의 관리 |
+| 알림 상태 | `GET /api/{tenantCode}/clinics/{clinicId}/notifications/**` | `SCOPE_notification:read` 권한으로 개인정보가 제거된 발송 상태 조회 |
+| 재알림 | `POST /api/{tenantCode}/clinics/{clinicId}/notifications/re-notify` | 범위와 수량이 제한되고 이중 승인된 재알림을 미리 확인하거나 새 generation으로 등록 |
 
 전체 예약 정책 요청, 생명주기, 유효 정책 조회, 오류 계약은
 [Scheduling Policy API](../docs/api/scheduling-policy.md)에 정리되어 있습니다.
+
+알림 요청에는 발송 시점에 최신 프로필을 조회하는 데 필요한 회원 ID만 저장합니다.
+이름·전화번호·이메일·렌더링 본문·provider 원본 오류는 outbox에 기록하지 않습니다.
+재알림에는 `SCOPE_notification:renotify` 권한과 정확한 병원 범위를 가진 플랫폼
+서비스 주체, 별도의 MFA 병원 담당자 승인이 모두 필요합니다. 자세한 절차는
+[알림 outbox 운영 런북](../docs/runbooks/notification-outbox-operations.md)에 있습니다.
 
 <a id="profile-reevaluation"></a>
 ### 프로필 변경 예약 재평가
