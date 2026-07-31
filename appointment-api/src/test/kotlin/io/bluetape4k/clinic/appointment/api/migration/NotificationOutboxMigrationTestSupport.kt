@@ -8,7 +8,6 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
 import java.sql.Connection
-import java.sql.PreparedStatement
 import java.sql.SQLException
 import java.sql.Timestamp
 import javax.sql.DataSource
@@ -137,100 +136,127 @@ internal object NotificationOutboxMigrationTestSupport {
     }
 
     private fun verifyLifecycleConstraints(connection: Connection) {
-        insertSendable(connection, id = 1L)
+        insertOutbox(connection, sendableRow(id = 1L))
         insertAttempt(connection, id = 1L, outboxId = 1L)
+        insertOutbox(connection, sendableRow(id = 2L, status = "SENT").copy(appointmentId = null, memberId = null, parametersJson = null))
+        insertOutbox(connection, legacySuppressionRow(id = 3L))
 
-        expectConstraintViolation("active SENDABLE must include member_id") {
-            insertSendable(connection, id = 2L, memberId = null)
+        ACTIVE_REQUIRED_FIELDS.forEachIndexed { offset, testCase ->
+            expectConstraintViolation("active SENDABLE must include ${testCase.field}") {
+                insertOutbox(connection, testCase.mutate(sendableRow(id = 100L + offset)))
+            }
         }
-        expectConstraintViolation("terminal SENDABLE must redact member_id") {
-            insertSendable(connection, id = 3L, status = "SENT", memberId = "member-3", parametersJson = null)
+
+        TERMINAL_REDACTION_FIELDS.forEachIndexed { offset, testCase ->
+            expectConstraintViolation("terminal SENDABLE must redact ${testCase.field}") {
+                insertOutbox(
+                    connection,
+                    testCase.mutate(
+                        sendableRow(id = 200L + offset, status = "SENT")
+                            .copy(appointmentId = null, memberId = null, parametersJson = null),
+                    ),
+                )
+            }
         }
-        expectConstraintViolation("terminal SENDABLE must redact parameters_json") {
-            insertSendable(connection, id = 4L, status = "EXHAUSTED", memberId = null, parametersJson = "{}")
+
+        LEGACY_SUPPRESSION_FIELDS.forEachIndexed { offset, testCase ->
+            expectConstraintViolation("LEGACY_SUPPRESSION must reject ${testCase.field}") {
+                insertOutbox(connection, testCase.mutate(legacySuppressionRow(id = 300L + offset)))
+            }
         }
-        expectConstraintViolation("legacy suppression must be SUPPRESSED") {
-            insertLegacySuppression(connection, id = 5L, status = "PENDING")
+
+        ALLOW_LIST_FIELDS.forEachIndexed { offset, testCase ->
+            expectConstraintViolation("allow-list must reject invalid ${testCase.field}") {
+                insertOutbox(connection, testCase.mutate(sendableRow(id = 400L + offset)))
+            }
         }
-        expectConstraintViolation("legacy suppression must not keep template_key") {
-            insertLegacySuppression(connection, id = 6L, templateKey = "appointment-confirmed")
-        }
+
         expectConstraintViolation("idempotency digest must be unique") {
-            insertSendable(connection, id = 7L, idempotencyKey = "digest-1")
+            insertOutbox(connection, sendableRow(id = 500L).copy(idempotencyKey = "digest-1"))
         }
     }
 
-    private fun insertSendable(
-        connection: Connection,
+    private fun sendableRow(
         id: Long,
         status: String = "PENDING",
-        memberId: String? = "member-$id",
-        parametersJson: String? = "{}",
-        idempotencyKey: String = "digest-$id",
-    ) {
-        connection.prepareStatement(SENDABLE_INSERT_SQL).use { statement ->
-            bindCommon(statement, id, rowKind = "SENDABLE", status = status, idempotencyKey = idempotencyKey)
-            statement.setLong(11, 1000L + id)
-            statement.setString(12, memberId)
-            statement.setString(13, "SMS")
-            statement.setString(14, "CONFIRMED")
-            statement.setString(15, "CONFIRMED")
-            statement.setString(16, "provider")
-            statement.setString(17, "appointment-confirmed")
-            statement.setInt(18, 1)
-            statement.setString(19, "APPOINTMENT_CONFIRMED")
-            statement.setString(20, parametersJson)
-            statement.setString(21, null)
-            statement.executeUpdate() shouldBeEqualTo 1
-        }
-    }
+    ): OutboxRow =
+        OutboxRow(
+            id = id,
+            rowKind = "SENDABLE",
+            status = status,
+            idempotencyKey = "digest-$id",
+            auditFingerprint = "fingerprint-$id",
+            appointmentId = 1000L + id,
+            memberId = "member-$id",
+            channel = "SMS",
+            eventType = "CONFIRMED",
+            notificationSlot = "CONFIRMED",
+            providerKey = "provider",
+            templateKey = "appointment-confirmed",
+            templateVersion = 1,
+            parameterType = "APPOINTMENT_CONFIRMED",
+            parametersJson = "{}",
+            suppressionReason = null,
+            clinicId = 20L,
+            eventId = "event-$id",
+        )
 
-    private fun insertLegacySuppression(
+    private fun legacySuppressionRow(id: Long): OutboxRow =
+        OutboxRow(
+            id = id,
+            rowKind = "LEGACY_SUPPRESSION",
+            status = "SUPPRESSED",
+            idempotencyKey = "digest-$id",
+            auditFingerprint = "fingerprint-$id",
+            appointmentId = null,
+            memberId = null,
+            channel = null,
+            eventType = null,
+            notificationSlot = null,
+            providerKey = null,
+            templateKey = null,
+            templateVersion = null,
+            parameterType = null,
+            parametersJson = null,
+            suppressionReason = "MEMBER_ID_MISSING_LEGACY",
+            clinicId = 20L,
+            eventId = "event-$id",
+        )
+
+    private fun insertOutbox(
         connection: Connection,
-        id: Long,
-        status: String = "SUPPRESSED",
-        templateKey: String? = null,
+        row: OutboxRow,
     ) {
-        connection.prepareStatement(SENDABLE_INSERT_SQL).use { statement ->
-            bindCommon(statement, id, rowKind = "LEGACY_SUPPRESSION", status = status)
-            statement.setObject(11, null)
-            statement.setString(12, null)
-            statement.setString(13, null)
-            statement.setString(14, null)
-            statement.setString(15, null)
-            statement.setString(16, null)
-            statement.setString(17, templateKey)
-            statement.setObject(18, null)
-            statement.setString(19, null)
-            statement.setString(20, null)
-            statement.setString(21, "MEMBER_ID_MISSING_LEGACY")
+        connection.prepareStatement(OUTBOX_INSERT_SQL).use { statement ->
+            val now = Timestamp.valueOf("2026-07-31 00:00:00")
+            statement.setLong(1, row.id)
+            statement.setString(2, row.rowKind)
+            statement.setString(3, row.status)
+            statement.setInt(4, 1)
+            statement.setString(5, row.idempotencyKey)
+            statement.setString(6, "key-id")
+            statement.setInt(7, 1)
+            statement.setString(8, row.auditFingerprint)
+            statement.setString(9, "audit-key-id")
+            statement.setLong(10, 10L)
+            statement.setObject(11, row.appointmentId)
+            statement.setString(12, row.memberId)
+            statement.setString(13, row.channel)
+            statement.setString(14, row.eventType)
+            statement.setString(15, row.notificationSlot)
+            statement.setString(16, row.providerKey)
+            statement.setString(17, row.templateKey)
+            statement.setObject(18, row.templateVersion)
+            statement.setString(19, row.parameterType)
+            statement.setString(20, row.parametersJson)
+            statement.setString(21, row.suppressionReason)
+            statement.setLong(22, row.clinicId)
+            statement.setString(23, row.eventId)
+            statement.setTimestamp(24, now)
+            statement.setTimestamp(25, now)
+            statement.setTimestamp(26, now)
             statement.executeUpdate() shouldBeEqualTo 1
         }
-    }
-
-    private fun bindCommon(
-        statement: PreparedStatement,
-        id: Long,
-        rowKind: String,
-        status: String,
-        idempotencyKey: String = "digest-$id",
-    ) {
-        val now = Timestamp.valueOf("2026-07-31 00:00:00")
-        statement.setLong(1, id)
-        statement.setString(2, rowKind)
-        statement.setString(3, status)
-        statement.setInt(4, 1)
-        statement.setString(5, idempotencyKey)
-        statement.setString(6, "key-id")
-        statement.setInt(7, 1)
-        statement.setString(8, "fingerprint-$id")
-        statement.setString(9, "audit-key-id")
-        statement.setLong(10, 10L)
-        statement.setLong(22, 20L)
-        statement.setString(23, "event-$id")
-        statement.setTimestamp(24, now)
-        statement.setTimestamp(25, now)
-        statement.setTimestamp(26, now)
     }
 
     private fun insertAttempt(
@@ -482,7 +508,75 @@ internal object NotificationOutboxMigrationTestSupport {
         ),
     )
 
-    private const val SENDABLE_INSERT_SQL = """
+    private data class OutboxRow(
+        val id: Long,
+        val rowKind: String,
+        val status: String,
+        val idempotencyKey: String,
+        val auditFingerprint: String,
+        val appointmentId: Long?,
+        val memberId: String?,
+        val channel: String?,
+        val eventType: String?,
+        val notificationSlot: String?,
+        val providerKey: String?,
+        val templateKey: String?,
+        val templateVersion: Int?,
+        val parameterType: String?,
+        val parametersJson: String?,
+        val suppressionReason: String?,
+        val clinicId: Long,
+        val eventId: String,
+    )
+
+    private data class ConstraintCase(
+        val field: String,
+        val mutate: (OutboxRow) -> OutboxRow,
+    )
+
+    private val ACTIVE_REQUIRED_FIELDS = listOf(
+        ConstraintCase("appointment_id") { it.copy(appointmentId = null) },
+        ConstraintCase("member_id") { it.copy(memberId = null) },
+        ConstraintCase("channel") { it.copy(channel = null) },
+        ConstraintCase("event_type") { it.copy(eventType = null) },
+        ConstraintCase("notification_slot") { it.copy(notificationSlot = null) },
+        ConstraintCase("template_key") { it.copy(templateKey = null) },
+        ConstraintCase("template_version") { it.copy(templateVersion = null) },
+        ConstraintCase("parameter_type") { it.copy(parameterType = null) },
+        ConstraintCase("parameters_json") { it.copy(parametersJson = null) },
+    )
+
+    private val TERMINAL_REDACTION_FIELDS = listOf(
+        ConstraintCase("appointment_id") { it.copy(appointmentId = 9001L) },
+        ConstraintCase("member_id") { it.copy(memberId = "member-terminal") },
+        ConstraintCase("parameters_json") { it.copy(parametersJson = "{}") },
+    )
+
+    private val LEGACY_SUPPRESSION_FIELDS = listOf(
+        ConstraintCase("status") { it.copy(status = "PENDING") },
+        ConstraintCase("suppression_reason") { it.copy(suppressionReason = null) },
+        ConstraintCase("appointment_id") { it.copy(appointmentId = 9002L) },
+        ConstraintCase("member_id") { it.copy(memberId = "member-legacy") },
+        ConstraintCase("channel") { it.copy(channel = "SMS") },
+        ConstraintCase("event_type") { it.copy(eventType = "CONFIRMED") },
+        ConstraintCase("notification_slot") { it.copy(notificationSlot = "CONFIRMED") },
+        ConstraintCase("provider_key") { it.copy(providerKey = "provider") },
+        ConstraintCase("template_key") { it.copy(templateKey = "appointment-confirmed") },
+        ConstraintCase("template_version") { it.copy(templateVersion = 1) },
+        ConstraintCase("parameter_type") { it.copy(parameterType = "APPOINTMENT_CONFIRMED") },
+        ConstraintCase("parameters_json") { it.copy(parametersJson = "{}") },
+    )
+
+    private val ALLOW_LIST_FIELDS = listOf(
+        ConstraintCase("row_kind") { it.copy(rowKind = "BROKEN") },
+        ConstraintCase("status") { it.copy(status = "BROKEN") },
+        ConstraintCase("channel") { it.copy(channel = "BROKEN") },
+        ConstraintCase("event_type") { it.copy(eventType = "BROKEN") },
+        ConstraintCase("notification_slot") { it.copy(notificationSlot = "BROKEN") },
+        ConstraintCase("parameter_type") { it.copy(parameterType = "BROKEN") },
+    )
+
+    private const val OUTBOX_INSERT_SQL = """
         INSERT INTO clinic_notification_outbox(
             id, row_kind, status, idempotency_key_version, idempotency_key,
             idempotency_key_id, audit_fingerprint_version, audit_fingerprint,

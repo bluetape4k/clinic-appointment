@@ -90,6 +90,7 @@ CREATE TABLE clinic_notification_outbox (
         row_kind <> 'LEGACY_SUPPRESSION'
         OR (
             status = 'SUPPRESSED'
+            AND suppression_reason IS NOT NULL
             AND appointment_id IS NULL
             AND member_id IS NULL
             AND channel IS NULL

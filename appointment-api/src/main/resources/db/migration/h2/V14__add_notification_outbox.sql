@@ -42,6 +42,28 @@ CREATE TABLE clinic_notification_outbox (
     CONSTRAINT uk_notification_outbox_idempotency UNIQUE (
         idempotency_key_version, idempotency_key
     ),
+    CONSTRAINT ck_notification_outbox_row_kind CHECK (
+        LOCATE(CONCAT('|', row_kind, '|'), '|SENDABLE|LEGACY_SUPPRESSION|') > 0
+    ),
+    CONSTRAINT ck_notification_outbox_status CHECK (
+        LOCATE(CONCAT('|', status, '|'), '|PENDING|PROCESSING|RETRY_WAIT|SENT|SUPPRESSED|EXHAUSTED|') > 0
+    ),
+    CONSTRAINT ck_notification_outbox_channel CHECK (
+        channel IS NULL
+        OR LOCATE(CONCAT('|', channel, '|'), '|DUMMY|SMS|EMAIL|PUSH|') > 0
+    ),
+    CONSTRAINT ck_notification_outbox_event_type CHECK (
+        event_type IS NULL
+        OR LOCATE(CONCAT('|', event_type, '|'), '|CREATED|CONFIRMED|CANCELLED|RESCHEDULED|REMINDER|') > 0
+    ),
+    CONSTRAINT ck_notification_outbox_slot CHECK (
+        notification_slot IS NULL
+        OR LOCATE(CONCAT('|', notification_slot, '|'), '|CREATED|CONFIRMED|CANCELLED|RESCHEDULED|REMINDER_24H|REMINDER_SAME_DAY|') > 0
+    ),
+    CONSTRAINT ck_notification_outbox_parameter_type CHECK (
+        parameter_type IS NULL
+        OR LOCATE(CONCAT('|', parameter_type, '|'), '|APPOINTMENT_CONFIRMED|') > 0
+    ),
     CONSTRAINT ck_notification_outbox_sendable_active_required CHECK (
         row_kind NOT LIKE 'SENDABLE'
         OR (
@@ -78,6 +100,7 @@ CREATE TABLE clinic_notification_outbox (
         row_kind NOT LIKE 'LEGACY_SUPPRESSION'
         OR (
             status LIKE 'SUPPRESSED'
+            AND suppression_reason IS NOT NULL
             AND appointment_id IS NULL
             AND member_id IS NULL
             AND channel IS NULL
