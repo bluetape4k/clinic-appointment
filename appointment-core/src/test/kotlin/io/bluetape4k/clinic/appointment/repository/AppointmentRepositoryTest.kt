@@ -5,6 +5,7 @@ import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
@@ -175,6 +176,44 @@ class AppointmentRepositoryTest {
             }
 
         found?.memberId shouldBeEqualTo MemberId("  member-1  ")
+    }
+
+    @Test
+    fun `commitment 방문 회원 식별자는 tenant clinic 범위에서만 조회한다`() {
+        val appointmentId =
+            transaction(database) {
+                repository.createCommitmentVisitIdentity(
+                    clinicId = CLINIC_ID,
+                    identity = AppointmentVisitIdentityDraft(
+                        patientName = "홍길동",
+                        patientPhone = null,
+                        memberId = MemberId("member-v2"),
+                        patientReferenceFingerprint = "fingerprint-v2",
+                    ),
+                )
+            }
+
+        transaction(database) {
+            repository.findCommitmentMemberId(
+                appointmentId = appointmentId,
+                tenantGroupId = TenantGroups.DEFAULT_TENANT_GROUP_ID,
+                clinicId = CLINIC_ID,
+            )
+        } shouldBeEqualTo MemberId("member-v2")
+        transaction(database) {
+            repository.findCommitmentMemberId(
+                appointmentId = appointmentId,
+                tenantGroupId = TenantGroups.DEFAULT_TENANT_GROUP_ID + 1,
+                clinicId = CLINIC_ID,
+            )
+        }.shouldBeNull()
+        transaction(database) {
+            repository.findCommitmentMemberId(
+                appointmentId = appointmentId,
+                tenantGroupId = TenantGroups.DEFAULT_TENANT_GROUP_ID,
+                clinicId = CLINIC_ID + 1,
+            )
+        }.shouldBeNull()
     }
 
     private fun appointment(memberId: MemberId?) =

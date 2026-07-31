@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.api.dto.CreateAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.notification.AppointmentNotificationWriter
+import io.bluetape4k.clinic.appointment.api.notification.CommitmentAppointmentNotification
 import io.bluetape4k.clinic.appointment.api.notification.DefaultAppointmentNotificationWriter
 import io.bluetape4k.clinic.appointment.api.notification.MemberResolution
 import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
@@ -426,6 +427,22 @@ internal class AppointmentNotificationAtomicityTest {
                 original: AppointmentRecord,
                 replacement: AppointmentRecord,
                 version: Long,
+            ) = error("forced outbox failure")
+
+            override fun commitmentRequested(notification: CommitmentAppointmentNotification) =
+                error("forced outbox failure")
+
+            override fun commitmentConfirmed(notification: CommitmentAppointmentNotification) =
+                error("forced outbox failure")
+
+            override fun commitmentCancelled(
+                notification: CommitmentAppointmentNotification,
+                reasonCode: CancellationReasonCode?,
+            ) = error("forced outbox failure")
+
+            override fun commitmentRescheduled(
+                previous: CommitmentAppointmentNotification,
+                replacement: CommitmentAppointmentNotification,
             ) = error("forced outbox failure")
         }
 

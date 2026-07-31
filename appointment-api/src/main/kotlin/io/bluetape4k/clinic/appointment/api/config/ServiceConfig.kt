@@ -562,6 +562,7 @@ class ServiceConfig {
         tenantGroupRepository: TenantGroupRepository,
         appointmentPlanRepository: AppointmentPlanRepository,
         appointmentRepository: AppointmentRepository,
+        appointmentNotificationWriter: AppointmentNotificationWriter,
         environment: Environment,
     ): AppointmentCommitmentApplicationService =
         DefaultAppointmentCommitmentApplicationService(
@@ -580,6 +581,7 @@ class ServiceConfig {
                     database = database,
                     maxTransactionAttempts = properties.retry.maxAttempts,
                     initialRetryDelayMillis = properties.retry.initialBackoff.toMillis(),
+                    notificationWriter = appointmentNotificationWriter,
                 ),
             policySnapshotResolver = policySnapshotResolver,
             planningResolver = planningResolver,

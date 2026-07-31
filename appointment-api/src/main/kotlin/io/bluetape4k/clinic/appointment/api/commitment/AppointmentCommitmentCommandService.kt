@@ -1,7 +1,11 @@
 package io.bluetape4k.clinic.appointment.api.commitment
 
+import io.bluetape4k.clinic.appointment.api.notification.AppointmentNotificationWriter
+import io.bluetape4k.clinic.appointment.api.notification.CommitmentAppointmentNotification
+import io.bluetape4k.clinic.appointment.api.notification.MemberResolution
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxStatus
+import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitment
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentOrigin
@@ -13,6 +17,7 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentCommandResultRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentCommitmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentItemAppendScope
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentProposalRecord
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.CommandClaimResult
 import io.bluetape4k.clinic.appointment.model.dto.ConfirmedAppointmentProjection
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
@@ -28,6 +33,7 @@ import io.bluetape4k.clinic.appointment.repository.LockedResourceAvailability
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationConflictException
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationRepository
 import io.bluetape4k.clinic.appointment.service.ProposalHasher
+import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
 import io.bluetape4k.logging.warn
@@ -77,6 +83,7 @@ import java.util.concurrent.ThreadLocalRandom
  * @param itemRepository proposal에 고정된 Plan-linked 세부 진료 스냅샷 저장소입니다.
  * @param allocationRepository 실제 자원 점유 검증과 교체 저장소입니다.
  * @param idempotencyRepository actor scope별 command 선점과 결과 저장소입니다.
+ * @param notificationWriter commitment v2 알림 outbox를 같은 command transaction에 기록하는 writer입니다.
  */
 internal class AppointmentCommitmentCommandService(
     private val database: Database,
@@ -93,6 +100,7 @@ internal class AppointmentCommitmentCommandService(
     private val allocationRepository: ResourceAllocationRepository = ResourceAllocationRepository(),
     private val idempotencyRepository: AppointmentCommandIdempotencyRepository =
         AppointmentCommandIdempotencyRepository(),
+    private val notificationWriter: AppointmentNotificationWriter = NoopAppointmentNotificationWriter,
 ) {
     init {
         require(maxTransactionAttempts in 1..3) {
@@ -146,6 +154,14 @@ internal class AppointmentCommitmentCommandService(
                 commitment = created.commitment,
                 proposal = created.proposal,
                 occurredAt = now,
+            )
+            notificationWriter.commitmentRequested(
+                notificationInput(
+                    context = command.context,
+                    commitment = created.commitment,
+                    proposal = created.proposal,
+                    memberId = requireIdentityMemberId(command.identity),
+                ),
             )
             persistCommandResult(command.context, created.commitment, created.proposal)
             AppointmentCommitmentCommandResult(
@@ -208,6 +224,14 @@ internal class AppointmentCommitmentCommandService(
                 proposal = proposal,
                 occurredAt = now,
             )
+            notificationWriter.commitmentConfirmed(
+                notificationInput(
+                    context = command.context,
+                    commitment = confirmed,
+                    proposal = proposal,
+                    memberId = requireCommitmentMemberId(command.context, confirmed.appointmentId),
+                ),
+            )
             persistCommandResult(command.context, confirmed, proposal)
             AppointmentCommitmentCommandResult(confirmed, proposal, idempotentReplay = false)
         }
@@ -257,6 +281,14 @@ internal class AppointmentCommitmentCommandService(
                 commitment = confirmed,
                 proposal = created.proposal,
                 occurredAt = now,
+            )
+            notificationWriter.commitmentConfirmed(
+                notificationInput(
+                    context = command.context,
+                    commitment = confirmed,
+                    proposal = created.proposal,
+                    memberId = requireIdentityMemberId(command.identity),
+                ),
             )
             persistCommandResult(command.context, confirmed, created.proposal)
             AppointmentCommitmentCommandResult(confirmed, created.proposal, idempotentReplay = false)
@@ -355,6 +387,11 @@ internal class AppointmentCommitmentCommandService(
                     now = now,
                 )
             requirePendingChangeProposal(commitment, proposal)
+            val previousProposal =
+                commitmentRepository.findProposal(
+                    commitmentId = commitment.id,
+                    proposalId = checkNotNull(commitment.confirmedProposalId),
+                ) ?: error("confirmed proposal must remain readable")
             appendConsent(commitment, proposal, command.consent)
             requireAcceptedConsent(commitment, proposal)
             val confirmed =
@@ -372,6 +409,23 @@ internal class AppointmentCommitmentCommandService(
                 commitment = confirmed,
                 proposal = proposal,
                 occurredAt = now,
+            )
+            val memberId = requireCommitmentMemberId(command.context, confirmed.appointmentId)
+            notificationWriter.commitmentRescheduled(
+                previous =
+                    notificationInput(
+                        context = command.context,
+                        commitment = commitment,
+                        proposal = previousProposal,
+                        memberId = memberId,
+                    ),
+                replacement =
+                    notificationInput(
+                        context = command.context,
+                        commitment = confirmed,
+                        proposal = proposal,
+                        memberId = memberId,
+                    ),
             )
             persistCommandResult(command.context, confirmed, proposal)
             AppointmentCommitmentCommandResult(confirmed, proposal, idempotentReplay = false)
@@ -586,6 +640,16 @@ internal class AppointmentCommitmentCommandService(
                 proposal = proposal,
                 occurredAt = now,
                 reasonCode = command.reasonCode,
+            )
+            notificationWriter.commitmentCancelled(
+                notification =
+                    notificationInput(
+                        context = command.context,
+                        commitment = cancelled,
+                        proposal = proposal,
+                        memberId = requireCommitmentMemberId(command.context, cancelled.appointmentId),
+                    ),
+                reasonCode = CancellationReasonCode(command.reasonCode),
             )
             persistCommandResult(command.context, cancelled, proposal)
             AppointmentCommitmentCommandResult(cancelled, proposal, idempotentReplay = false)
@@ -1086,6 +1150,44 @@ internal class AppointmentCommitmentCommandService(
             )
     }
 
+    /** commitment v2 알림은 회원 DB 조회 기준인 durable member ID만 전달합니다. */
+    private fun notificationInput(
+        context: CommitmentCommandContext,
+        commitment: AppointmentCommitmentRecord,
+        proposal: AppointmentProposalRecord,
+        memberId: MemberId,
+    ): CommitmentAppointmentNotification =
+        CommitmentAppointmentNotification(
+            tenantGroupId = context.tenantGroupId,
+            clinicId = context.clinicId,
+            appointmentId = commitment.appointmentId,
+            memberId = memberId,
+            commitmentVersion = commitment.version,
+            proposalRevision = proposal.revision,
+            startsAt = proposal.proposedStartAt,
+            endsAt = proposal.proposedEndAt,
+        )
+
+    private fun requireIdentityMemberId(identity: AppointmentVisitIdentity): MemberId =
+        identity.memberId
+            ?: reject(
+                AppointmentCommitmentCommandError.APPOINTMENT_ITEM_INVALID,
+                "commitment appointment has no verified memberId",
+            )
+
+    private fun requireCommitmentMemberId(
+        context: CommitmentCommandContext,
+        appointmentId: Long,
+    ): MemberId =
+        appointmentRepository.findCommitmentMemberId(
+            appointmentId = appointmentId,
+            tenantGroupId = context.tenantGroupId,
+            clinicId = context.clinicId,
+        ) ?: reject(
+            AppointmentCommitmentCommandError.APPOINTMENT_ITEM_INVALID,
+            "commitment appointment has no verified memberId",
+        )
+
     /** stale caller가 allocation write에 진입하기 전에 version을 검증합니다. */
     private fun requireExpectedVersion(
         commitment: AppointmentCommitmentRecord,
@@ -1537,6 +1639,51 @@ internal class AppointmentCommitmentCommandService(
         val commitment: AppointmentCommitmentRecord,
         val proposal: AppointmentProposalRecord,
     )
+
+    private object NoopAppointmentNotificationWriter : AppointmentNotificationWriter {
+        override fun appointmentCreated(
+            tenantGroupId: Long,
+            record: AppointmentRecord,
+            version: Long,
+            resolution: MemberResolution,
+        ) = Unit
+
+        override fun statusChanged(
+            tenantGroupId: Long,
+            record: AppointmentRecord,
+            version: Long,
+            from: AppointmentState,
+            to: AppointmentState,
+        ) = Unit
+
+        override fun cancelled(
+            tenantGroupId: Long,
+            record: AppointmentRecord,
+            version: Long,
+            reasonCode: CancellationReasonCode?,
+        ) = Unit
+
+        override fun rescheduled(
+            tenantGroupId: Long,
+            original: AppointmentRecord,
+            replacement: AppointmentRecord,
+            version: Long,
+        ) = Unit
+
+        override fun commitmentRequested(notification: CommitmentAppointmentNotification) = Unit
+
+        override fun commitmentConfirmed(notification: CommitmentAppointmentNotification) = Unit
+
+        override fun commitmentCancelled(
+            notification: CommitmentAppointmentNotification,
+            reasonCode: CancellationReasonCode?,
+        ) = Unit
+
+        override fun commitmentRescheduled(
+            previous: CommitmentAppointmentNotification,
+            replacement: CommitmentAppointmentNotification,
+        ) = Unit
+    }
 
     private companion object : KLogging() {
         const val INITIAL_COMMITMENT_VERSION = 1L

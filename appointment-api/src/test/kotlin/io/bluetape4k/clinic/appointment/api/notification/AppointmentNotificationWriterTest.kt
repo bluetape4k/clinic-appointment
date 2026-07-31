@@ -3,11 +3,13 @@ package io.bluetape4k.clinic.appointment.api.notification
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentCancelledParameters
+import io.bluetape4k.clinic.appointment.event.notification.AppointmentConfirmedParameters
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentRescheduledParameters
 import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationContractException
+import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
@@ -247,6 +249,75 @@ internal class AppointmentNotificationWriterTest {
         }
     }
 
+    @Test
+    fun `v2 고객 요청은 proposal 일정과 회원 ID로 생성 알림만 기록한다`() {
+        transaction {
+            writer.commitmentRequested(commitmentNotification())
+        }
+
+        transaction {
+            val row = NotificationOutboxEvents.selectAll().single()
+            row[NotificationOutboxEvents.eventType] shouldBeEqualTo NotificationEventType.CREATED
+            row[NotificationOutboxEvents.notificationSlot] shouldBeEqualTo NotificationSlot.CREATED
+            row[NotificationOutboxEvents.memberId] shouldBeEqualTo "member-v2"
+            row[NotificationOutboxEvents.parametersJson]!!.contains("환자 이름") shouldBeEqualTo false
+            row[NotificationOutboxEvents.parametersJson]!!.contains("010-0000-0000") shouldBeEqualTo false
+        }
+    }
+
+    @Test
+    fun `v2 확정은 병원 시간대로 확정 알림과 두 리마인더를 기록한다`() {
+        transaction {
+            writer.commitmentConfirmed(commitmentNotification())
+        }
+
+        transaction {
+            val rows = NotificationOutboxEvents.selectAll().toList()
+            rows.map { it[NotificationOutboxEvents.notificationSlot] }.toSet() shouldBeEqualTo
+                setOf(NotificationSlot.CONFIRMED, NotificationSlot.REMINDER_24H, NotificationSlot.REMINDER_SAME_DAY)
+            val confirmed = rows.single { it[NotificationOutboxEvents.notificationSlot] == NotificationSlot.CONFIRMED }
+            val parameters = NotificationOutboxCodec()
+                .decode(confirmed[NotificationOutboxEvents.parametersJson]!!)
+                .parameters as AppointmentConfirmedParameters
+            parameters.appointmentDate shouldBeEqualTo LocalDate.of(2026, 8, 3)
+            parameters.startTime shouldBeEqualTo LocalTime.of(10, 0)
+        }
+    }
+
+    @Test
+    fun `v2 재배정은 이전 리마인더를 억제하고 새 일정 리마인더를 기록한다`() {
+        val previous = commitmentNotification()
+        val replacement = commitmentNotification(
+            commitmentVersion = 3L,
+            proposalRevision = 2L,
+            startsAt = Instant.parse("2026-08-04T02:00:00Z"),
+        )
+        transaction {
+            writer.commitmentConfirmed(previous)
+            writer.commitmentRescheduled(previous, replacement)
+        }
+
+        transaction {
+            val rows = NotificationOutboxEvents.selectAll().toList()
+            rows.filter {
+                it[NotificationOutboxEvents.eventType] == NotificationEventType.REMINDER &&
+                    it[NotificationOutboxEvents.status] == NotificationOutboxStatus.SUPPRESSED
+            }.size shouldBeEqualTo 2
+            rows.filter {
+                it[NotificationOutboxEvents.eventType] == NotificationEventType.REMINDER &&
+                    it[NotificationOutboxEvents.status] == NotificationOutboxStatus.PENDING
+            }.size shouldBeEqualTo 2
+            val rescheduled = rows.single {
+                it[NotificationOutboxEvents.notificationSlot] == NotificationSlot.RESCHEDULED
+            }
+            val parameters = NotificationOutboxCodec()
+                .decode(rescheduled[NotificationOutboxEvents.parametersJson]!!)
+                .parameters as AppointmentRescheduledParameters
+            parameters.previousAppointmentDate shouldBeEqualTo LocalDate.of(2026, 8, 3)
+            parameters.replacementAppointmentDate shouldBeEqualTo LocalDate.of(2026, 8, 4)
+        }
+    }
+
     private fun appointment(
         memberId: MemberId? = MemberId("member-100"),
         appointmentDate: LocalDate = LocalDate.of(2026, 8, 2),
@@ -268,6 +339,21 @@ internal class AppointmentNotificationWriterTest {
             status = status,
             version = version,
         )
+
+    private fun commitmentNotification(
+        commitmentVersion: Long = 1L,
+        proposalRevision: Long = 1L,
+        startsAt: Instant = Instant.parse("2026-08-03T01:00:00Z"),
+    ) = CommitmentAppointmentNotification(
+        tenantGroupId = tenantGroupId,
+        clinicId = clinicId,
+        appointmentId = 300L,
+        memberId = MemberId("member-v2"),
+        commitmentVersion = commitmentVersion,
+        proposalRevision = proposalRevision,
+        startsAt = startsAt,
+        endsAt = startsAt.plus(Duration.ofMinutes(30)),
+    )
 
     companion object {
         @JvmStatic
