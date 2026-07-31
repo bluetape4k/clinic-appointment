@@ -167,6 +167,30 @@ class NotificationOutboxRepository(
             .map { it.toCandidate() }
     }
 
+    /**
+     * DB 시각을 기준으로 lease가 만료된 처리 중 행의 식별자를 오래된 순서로 찾는다.
+     *
+     * 이 조회는 행 상태를 바꾸지 않는다. caller는 같은 짧은 transaction에서 각 식별자를
+     * [recoverExpired]로 조건부 복구해야 한다.
+     */
+    fun findExpiredProcessingIds(limit: Int): List<Long> {
+        require(limit > 0) { "limit must be positive" }
+        val dbNow = dbCurrentTimestamp()
+        return NotificationOutboxEvents
+            .select(NotificationOutboxEvents.id)
+            .where {
+                (NotificationOutboxEvents.rowKind eq NotificationOutboxRowKind.SENDABLE) and
+                    (NotificationOutboxEvents.status eq NotificationOutboxStatus.PROCESSING) and
+                    (NotificationOutboxEvents.leaseUntil less dbNow)
+            }
+            .orderBy(
+                NotificationOutboxEvents.leaseUntil to SortOrder.ASC,
+                NotificationOutboxEvents.id to SortOrder.ASC,
+            )
+            .limit(limit)
+            .map { it[NotificationOutboxEvents.id].value }
+    }
+
     fun claim(candidateId: Long, owner: String, token: String): ClaimedNotification? {
         require(candidateId > 0) { "candidateId must be positive" }
         val validOwner = owner.validFence("owner")

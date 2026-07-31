@@ -525,6 +525,7 @@ class NotificationOutboxRepositoryTest {
                 it[NotificationOutboxEvents.leaseUntil] = Instant.parse("2020-01-01T00:00:00Z")
             }
 
+            repository.findExpiredProcessingIds(limit = 10) shouldBeEqualTo listOf(candidate.id)
             val recovered = repository.recoverExpired(candidate.id, owner = "new-worker", token = "new-token")!!
 
             recovered.owner shouldBeEqualTo "new-worker"
