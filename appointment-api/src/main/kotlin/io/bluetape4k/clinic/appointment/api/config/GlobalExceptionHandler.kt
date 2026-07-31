@@ -6,6 +6,8 @@ import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse
 import io.bluetape4k.clinic.appointment.api.policy.EffectivePolicyGenerationConflictException
 import io.bluetape4k.clinic.appointment.api.policy.EffectivePolicyReadUnavailableException
+import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberApiError
+import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberApiException
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.service.IdempotencyKeyConflictException
 import io.bluetape4k.logging.KLogging
@@ -42,7 +44,20 @@ class GlobalExceptionHandler(
 
     companion object : KLogging() {
         private const val APPOINTMENT_COMMITMENT_RETRY_AFTER_SECONDS = "5"
+        private const val MEMBER_DIRECTORY_RETRY_AFTER_SECONDS = "5"
     }
+
+    /**
+     * legacy와 v2 예약 진입점의 회원 식별 오류를 같은 공개 계약으로 변환한다.
+     *
+     * 회원 ID, 이름, 전화번호, Plan 참조와 디렉터리 원문 오류는 응답과 로그에 남기지 않는다.
+     */
+    @ExceptionHandler(NotificationMemberApiException::class)
+    fun handleNotificationMember(
+        ex: NotificationMemberApiException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> =
+        notificationMemberResponse(ex.error, request)
 
     /**
      * commitment v2 application 오류를 닫힌 public registry로 직렬화한다.
@@ -378,6 +393,29 @@ class GlobalExceptionHandler(
         val builder = ResponseEntity.status(error.httpStatus)
         if (error.retryable) {
             builder.header(HttpHeaders.RETRY_AFTER, APPOINTMENT_COMMITMENT_RETRY_AFTER_SECONDS)
+        }
+        return builder.body(
+            SchedulingApiErrorResponse(
+                error = error.safeMessage,
+                errorCode = error.name,
+                correlationId = correlationId,
+                retryable = error.retryable,
+                action = error.action,
+            )
+        )
+    }
+
+    private fun notificationMemberResponse(
+        error: NotificationMemberApiError,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.correlationId()
+        log.warn {
+            "Appointment member resolution rejected: error_code=${error.name}, correlation_id=$correlationId"
+        }
+        val builder = ResponseEntity.status(error.httpStatus)
+        if (error.retryable) {
+            builder.header(HttpHeaders.RETRY_AFTER, MEMBER_DIRECTORY_RETRY_AFTER_SECONDS)
         }
         return builder.body(
             SchedulingApiErrorResponse(

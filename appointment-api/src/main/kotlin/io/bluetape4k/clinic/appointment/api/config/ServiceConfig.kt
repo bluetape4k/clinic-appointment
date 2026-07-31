@@ -2,6 +2,11 @@ package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentMetrics
 import io.bluetape4k.clinic.appointment.api.commitment.AppointmentProposalService
+import io.bluetape4k.clinic.appointment.api.notification.AppointmentMemberDirectory
+import io.bluetape4k.clinic.appointment.api.notification.AppointmentMemberResolver
+import io.bluetape4k.clinic.appointment.api.notification.DefaultAppointmentMemberResolver
+import io.bluetape4k.clinic.appointment.api.notification.FailClosedAppointmentMemberDirectory
+import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberIdProperties
 import io.bluetape4k.clinic.appointment.api.policy.PolicyActivationPublisher
 import io.bluetape4k.clinic.appointment.api.policy.EffectiveSchedulingPolicyService
 import io.bluetape4k.clinic.appointment.api.policy.ExposedEffectivePolicyStore
@@ -79,6 +84,7 @@ import org.springframework.core.env.Environment
 import javax.sql.DataSource
 import java.util.Base64
 import java.time.Instant
+import java.time.Clock
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -97,6 +103,7 @@ import kotlin.concurrent.withLock
     SchedulingPolicyProperties::class,
     AppointmentCommitmentProperties::class,
     ProfileReevaluationProperties::class,
+    NotificationMemberIdProperties::class,
 )
 class ServiceConfig {
 
@@ -144,6 +151,29 @@ class ServiceConfig {
 
     @Bean
     fun appointmentPlanRepository(): AppointmentPlanRepository = AppointmentPlanRepository()
+
+    /**
+     * 회원 서비스 adapter가 연결되지 않은 환경에서는 신규 예약을 닫힌 실패로 막는다.
+     */
+    @Bean
+    @ConditionalOnMissingBean(AppointmentMemberDirectory::class)
+    internal fun appointmentMemberDirectory(): AppointmentMemberDirectory =
+        FailClosedAppointmentMemberDirectory
+
+    /**
+     * legacy와 v2 예약 진입점이 공유하는 회원 식별 경계를 구성한다.
+     */
+    @Bean
+    @ConditionalOnMissingBean(AppointmentMemberResolver::class)
+    internal fun appointmentMemberResolver(
+        appointmentMemberDirectory: AppointmentMemberDirectory,
+        notificationMemberIdProperties: NotificationMemberIdProperties,
+    ): AppointmentMemberResolver =
+        DefaultAppointmentMemberResolver(
+            directory = appointmentMemberDirectory,
+            properties = notificationMemberIdProperties,
+            clock = Clock.systemUTC(),
+        )
 
     @Bean
     fun schedulingPolicyRepository(): SchedulingPolicyRepository = SchedulingPolicyRepository()
@@ -474,6 +504,7 @@ class ServiceConfig {
         metrics: AppointmentCommitmentMetrics,
         policySnapshotResolver: AppointmentCommitmentPolicySnapshotResolver,
         planningResolver: AppointmentCommitmentPlanningResolver,
+        appointmentMemberResolver: AppointmentMemberResolver,
         consentEvidenceVerifier: AppointmentCommitmentConsentEvidenceVerifier,
         patientSubjectFingerprintResolver: PatientSubjectFingerprintResolver,
         tenantGroupRepository: TenantGroupRepository,
@@ -500,6 +531,7 @@ class ServiceConfig {
                 ),
             policySnapshotResolver = policySnapshotResolver,
             planningResolver = planningResolver,
+            appointmentMemberResolver = appointmentMemberResolver,
             consentEvidenceVerifier = consentEvidenceVerifier,
             metrics = metrics,
             proposalService =

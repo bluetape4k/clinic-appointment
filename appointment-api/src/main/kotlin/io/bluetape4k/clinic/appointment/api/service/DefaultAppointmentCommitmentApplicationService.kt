@@ -31,6 +31,7 @@ import io.bluetape4k.clinic.appointment.api.dto.commitment.ApproveProposalReques
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CancelAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ConsentEvidenceRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateAppointmentRequestV2
+import io.bluetape4k.clinic.appointment.api.notification.AppointmentMemberResolver
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateChangeProposalRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DeclineProposalRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DirectConfirmRequest
@@ -43,6 +44,7 @@ import io.bluetape4k.clinic.appointment.model.commitment.AppointmentItemDraft
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecisionType
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentCommitmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentProposalRecord
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.PersistedAppointmentPlanRevisionAggregateRecord
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
@@ -141,6 +143,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
     private val commandService: AppointmentCommitmentCommandService,
     private val policySnapshotResolver: AppointmentCommitmentPolicySnapshotResolver,
     private val planningResolver: AppointmentCommitmentPlanningResolver,
+    private val appointmentMemberResolver: AppointmentMemberResolver,
     private val consentEvidenceVerifier: AppointmentCommitmentConsentEvidenceVerifier,
     private val metrics: AppointmentCommitmentCommandMetrics,
     private val idempotencyKeyHasher: AppointmentCommitmentIdempotencyKeyHasher,
@@ -192,7 +195,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
             commandService.requestCustomerAppointment(
                 CustomerAppointmentRequestCommand(
                     context = commandContext(actor, planAccess.tenantGroupId, planAccess.clinicId, idempotencyKey, "request", request),
-                    identity = planningResolver.resolveIdentity(actor, planAccess),
+                    identity = resolveIdentity(actor, planAccess),
                     proposal = proposal,
                     expiresAt = proposalExpiry(proposal.startsAt),
                     representativeTreatmentName = representativeTreatmentName(planRevision),
@@ -256,7 +259,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
             commandService.confirmDirectAppointment(
                 DirectAppointmentConfirmationCommand(
                     context = commandContext(actor, planAccess.tenantGroupId, planAccess.clinicId, idempotencyKey, "direct-create", request),
-                    identity = planningResolver.resolveIdentity(actor, planAccess),
+                    identity = resolveIdentity(actor, planAccess),
                     proposal = proposal,
                     expiresAt = proposalExpiry(proposal.startsAt),
                     representativeTreatmentName = representativeTreatmentName(planRevision),
@@ -777,6 +780,26 @@ internal class DefaultAppointmentCommitmentApplicationService(
         items: List<AppointmentItemDraft>,
     ): List<ResourceAllocationRequest> =
         planningResolver.resolveStoredProposalResourceRequests(clinicId, proposal, items)
+
+    /**
+     * planning adapter가 제공한 표시 정보에 회원 디렉터리에서 검증한 불투명 ID를 결합한다.
+     *
+     * adapter가 임의의 회원 ID를 반환하더라도 사용하지 않으며, 이름과 전화번호로 회원을
+     * 추정하지 않는다.
+     */
+    private fun resolveIdentity(
+        actor: ActorContext,
+        access: ResolvedAppointmentPlanAccess,
+    ): AppointmentVisitIdentityDraft {
+        val verifiedMemberId = appointmentMemberResolver.resolvePlan(actor, access)
+        val planned = planningResolver.resolveIdentity(actor, access)
+        return AppointmentVisitIdentityDraft(
+            patientName = planned.patientName,
+            patientPhone = planned.patientPhone,
+            memberId = verifiedMemberId,
+            patientReferenceFingerprint = planned.patientReferenceFingerprint,
+        )
+    }
 
     private fun currentPolicySnapshot(
         access: ResolvedAppointmentPlanAccess,

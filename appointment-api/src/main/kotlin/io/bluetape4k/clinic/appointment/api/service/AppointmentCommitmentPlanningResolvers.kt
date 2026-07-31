@@ -136,6 +136,10 @@ internal class EffectiveAppointmentCommitmentPolicySnapshotResolver(
  * 이 interface는 request DTO의 시간·동의 참조만으로 만들 수 없는 값을 외부 권위 시스템이나
  * 병원 inventory에서 해석한다. production adapter가 없는 배포에서는 fail-closed 구현을
  * 사용해 고객 이름·연락처, 담당자, 장비, 공간을 임의로 합성하지 않는다.
+ *
+ * [resolveIdentity]가 반환한 회원 ID는 신뢰하지 않는다. application service가 인증 actor와
+ * Plan의 보호된 참조를 [io.bluetape4k.clinic.appointment.api.notification.AppointmentMemberResolver]로
+ * 별도 검증한 뒤 그 결과로 교체한다.
  */
 internal interface AppointmentCommitmentPlanningResolver {
     fun resolveIdentity(

@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.dto
 
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.FutureOrPresent
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -15,6 +16,7 @@ import java.time.LocalTime
  * @property doctorId 의사 ID
  * @property treatmentTypeId 진료 유형 ID
  * @property equipmentId 사용할 장비 ID (optional)
+ * @property memberId 회원 서비스가 발급한 불투명 회원 ID. 환자명과 전화번호로 대신할 수 없습니다.
  * @property patientName 환자명
  * @property patientPhone 환자 전화번호 (optional)
  * @property appointmentDate 예약 날짜
@@ -29,6 +31,11 @@ data class CreateAppointmentRequest(
     @field:Positive
     val treatmentTypeId: Long,
     val equipmentId: Long? = null,
+    @field:Schema(
+        description = "Opaque member identifier verified by the member directory; patient name and phone do not replace it.",
+        nullable = true,
+    )
+    val memberId: String? = null,
     @field:NotBlank
     val patientName: String,
     val patientPhone: String? = null,

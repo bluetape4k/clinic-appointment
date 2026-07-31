@@ -179,6 +179,7 @@ class AppointmentRequestV2Test {
             "tenantGroupId",
             "clinicId",
             "patientId",
+            "memberId",
             "patientSubjectId",
             "expectedVersion",
             "idempotencyKey",

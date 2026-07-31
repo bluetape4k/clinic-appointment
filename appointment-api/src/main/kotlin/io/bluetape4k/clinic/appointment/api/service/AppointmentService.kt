@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiExcep
 import io.bluetape4k.clinic.appointment.event.AppointmentDomainEvent
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentIdempotencyRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistoryRecord
 import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
@@ -161,6 +162,7 @@ class AppointmentService(
             doctorId = request.doctorId,
             treatmentTypeId = request.treatmentTypeId,
             equipmentId = request.equipmentId,
+            memberId = request.memberId?.let(::MemberId),
             patientName = request.patientName,
             patientPhone = request.patientPhone,
             appointmentDate = request.appointmentDate,
@@ -373,6 +375,7 @@ private fun CreateAppointmentRequest.fingerprint(): String =
             updateField("doctorId", doctorId.toString())
             updateField("treatmentTypeId", treatmentTypeId.toString())
             updateField("equipmentId", equipmentId?.toString())
+            updateField("memberId", memberId)
             updateField("patientName", patientName)
             updateField("patientPhone", patientPhone)
             updateField("appointmentDate", appointmentDate.toString())

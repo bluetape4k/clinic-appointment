@@ -5,14 +5,20 @@ import io.bluetape4k.logging.debug
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.AppointmentResponse
 import io.bluetape4k.clinic.appointment.api.dto.CreateAppointmentRequest
+import io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse
 import io.bluetape4k.clinic.appointment.api.dto.StateHistoryResponse
 import io.bluetape4k.clinic.appointment.api.dto.UpdateStatusRequest
 import io.bluetape4k.clinic.appointment.api.dto.toResponse
+import io.bluetape4k.clinic.appointment.api.notification.LegacyAppointmentMemberResolver
+import io.bluetape4k.clinic.appointment.api.notification.MemberResolution
 import io.bluetape4k.clinic.appointment.api.service.AppointmentService
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -45,6 +51,7 @@ class AppointmentController(
     private val appointmentService: AppointmentService,
     private val timezoneService: ClinicTimezoneService,
     private val tenantClinicAccessChecker: TenantClinicAccessChecker,
+    private val appointmentMemberResolver: LegacyAppointmentMemberResolver,
 ) {
     companion object : KLogging()
 
@@ -89,7 +96,11 @@ class AppointmentController(
         OApiResponse(responseCode = "200", description = "Existing appointment replayed for the idempotency key"),
         OApiResponse(responseCode = "201", description = "Appointment created"),
         OApiResponse(responseCode = "400", description = "Invalid parameters"),
-        OApiResponse(responseCode = "409", description = "Scheduling conflict or idempotency key reused with a different request"),
+        OApiResponse(responseCode = "403", description = "Member or clinic scope rejected", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        OApiResponse(responseCode = "404", description = "Member not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        OApiResponse(responseCode = "409", description = "Scheduling, idempotency, or ambiguous member reference conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        OApiResponse(responseCode = "422", description = "Verified member identifier required", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
+        OApiResponse(responseCode = "503", description = "Member directory unavailable", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]),
     )
     @PostMapping
     fun create(
@@ -105,8 +116,18 @@ class AppointmentController(
             treatmentTypeId = request.treatmentTypeId,
             equipmentId = request.equipmentId,
         )
+        val normalizedRequest = when (
+            val resolution = appointmentMemberResolver.resolveLegacy(
+                tenantGroupId = tenant.id,
+                clinicId = request.clinicId,
+                requested = request.memberId?.let(::MemberId),
+            )
+        ) {
+            is MemberResolution.Resolved -> request.copy(memberId = resolution.memberId.value)
+            MemberResolution.LegacyMissing -> request.copy(memberId = null)
+        }
         log.debug { "POST appointment tenantCode=$tenantCode, clinicId=${request.clinicId}" }
-        val result = appointmentService.create(tenant.id, request, idempotencyKey)
+        val result = appointmentService.create(tenant.id, normalizedRequest, idempotencyKey)
         val (timezone, locale) = timezoneService.getTimezoneAndLocale(result.appointment.clinicId)
         return ResponseEntity.status(if (result.replayed) HttpStatus.OK else HttpStatus.CREATED)
             .body(ApiResponse.ok(result.appointment.toResponse(timezone, locale)))
