@@ -4,6 +4,7 @@ import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentSt
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentOrigin
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecisionType
 import io.bluetape4k.clinic.appointment.model.commitment.ResourceAllocationDraft
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.support.requireNotBlank
 import io.bluetape4k.support.requirePositiveNumber
 import java.io.Serializable
@@ -182,7 +183,7 @@ enum class CommandClaimResult {
  *
  * @property patientName 예약 운영에 필요한 고객 표시명입니다.
  * @property patientPhone 선택적인 고객 연락처입니다.
- * @property patientExternalId 고객 서비스가 발급한 선택적 외부 식별자입니다.
+ * @property memberId 회원 서비스가 발급한 선택적 불투명 식별자입니다.
  * @property patientReferenceFingerprint 구매 Plan과 같은 환자임을 원문 복호화 없이
  * 검증하는 필수 비가역 참조입니다. commitment v2 방문 row에 보존하며 legacy 예약에는
  * 존재하지 않을 수 있습니다.
@@ -190,12 +191,12 @@ enum class CommandClaimResult {
 class AppointmentVisitIdentityDraft(
     patientName: String,
     patientPhone: String?,
-    patientExternalId: String?,
+    memberId: MemberId?,
     patientReferenceFingerprint: String,
 ) : Serializable {
     val patientName = patientName.requireNotBlank("patientName")
     val patientPhone = patientPhone?.requireNotBlank("patientPhone")
-    val patientExternalId = patientExternalId?.requireNotBlank("patientExternalId")
+    val memberId = memberId
     val patientReferenceFingerprint =
         patientReferenceFingerprint.requireNotBlank("patientReferenceFingerprint")
 

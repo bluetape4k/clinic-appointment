@@ -489,7 +489,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
                     it[rescheduleFromId] = record.rescheduleFromId
                     it[patientName] = record.patientName
                     it[patientPhone] = record.patientPhone
-                    it[patientExternalId] = record.patientExternalId
+                    it[patientExternalId] = record.memberId?.value
                     it[appointmentDate] = record.appointmentDate
                     it[startTime] = record.startTime
                     it[endTime] = record.endTime
@@ -520,7 +520,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
                 it[modelVersion] = AppointmentModelVersion.COMMITMENT_V2
                 it[patientName] = identity.patientName
                 it[patientPhone] = identity.patientPhone
-                it[patientExternalId] = identity.patientExternalId
+                it[patientExternalId] = identity.memberId?.value
                 it[patientReferenceFingerprint] = identity.patientReferenceFingerprint
                 it[status] = AppointmentState.REQUESTED
             }.value

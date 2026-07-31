@@ -16,6 +16,7 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentProposalRecord
 import io.bluetape4k.clinic.appointment.model.dto.CommandClaimResult
 import io.bluetape4k.clinic.appointment.model.dto.ConfirmedAppointmentProjection
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentAuditEvents
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommandIdempotencyConflictException
@@ -309,7 +310,7 @@ internal class AppointmentCommitmentCommandService(
                         AppointmentCommitmentCommandError.APPOINTMENT_ITEM_INVALID,
                         "commitment appointment has no patient reference fingerprint",
                     ),
-                patientExternalStableRef = null,
+                memberStableRef = null,
                 proposalInput = command.proposal,
             )
             writeDecision(
@@ -732,7 +733,7 @@ internal class AppointmentCommitmentCommandService(
             appointmentId = appointmentId,
             proposalId = proposal.id,
             patientReferenceFingerprint = identity.patientReferenceFingerprint,
-            patientExternalStableRef = identity.patientExternalId,
+            memberStableRef = identity.memberId,
             proposalInput = proposalInput,
         )
         return InitialProposal(commitment, proposal)
@@ -750,7 +751,7 @@ internal class AppointmentCommitmentCommandService(
         appointmentId: Long,
         proposalId: Long,
         patientReferenceFingerprint: String,
-        patientExternalStableRef: String?,
+        memberStableRef: MemberId?,
         proposalInput: VisitProposalInput,
     ) {
         try {
@@ -762,7 +763,7 @@ internal class AppointmentCommitmentCommandService(
                         tenantGroupId = context.tenantGroupId,
                         clinicId = context.clinicId,
                         patientReferenceFingerprint = patientReferenceFingerprint,
-                        patientExternalStableRef = patientExternalStableRef,
+                        memberStableRef = memberStableRef,
                     ),
                 items = proposalInput.items,
             )

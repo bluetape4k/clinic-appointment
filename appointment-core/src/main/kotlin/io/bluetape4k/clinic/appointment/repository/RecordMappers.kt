@@ -32,6 +32,7 @@ import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomDependency
 import io.bluetape4k.clinic.appointment.model.catalog.CatalogBomItem
 import io.bluetape4k.clinic.appointment.model.catalog.InitialBookingRule
 import io.bluetape4k.clinic.appointment.model.catalog.ProductCatalogDefinition
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
 import io.bluetape4k.clinic.appointment.model.plan.LocalTimeWindow
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlans
@@ -184,7 +185,7 @@ fun ResultRow.toAppointmentRecord() = AppointmentRecord(
     rescheduleFromId = this[Appointments.rescheduleFromId],
     patientName = this[Appointments.patientName],
     patientPhone = this[Appointments.patientPhone],
-    patientExternalId = this[Appointments.patientExternalId],
+    memberId = this[Appointments.patientExternalId]?.let(::MemberId),
     appointmentDate = this[Appointments.appointmentDate].requireNotNull("appointmentDate"),
     startTime = this[Appointments.startTime].requireNotNull("startTime"),
     endTime = this[Appointments.endTime].requireNotNull("endTime"),
