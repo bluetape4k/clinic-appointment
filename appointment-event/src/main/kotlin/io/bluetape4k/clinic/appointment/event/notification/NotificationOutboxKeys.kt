@@ -26,6 +26,18 @@ interface NotificationOutboxHasher {
 }
 
 /**
+ * key provider가 HMAC key를 제공할 수 없을 때만 사용하는 좁은 예외다.
+ */
+class NotificationHmacKeyUnavailableException(
+    message: String = "Notification HMAC key is unavailable",
+    cause: Throwable? = null,
+) : RuntimeException(message, cause) {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/**
  * 테스트와 고정 설정에서 사용하는 in-memory key ring이다.
  */
 class StaticNotificationOutboxKeyRing(
@@ -51,11 +63,9 @@ class NotificationHmacKey(
     private val secretBytes = secretBytes.copyOf()
 
     init {
-        require(keyId.isNotBlank()) { "keyId must not be blank" }
-        require(secretBytes.isNotEmpty()) { "secretBytes must not be empty" }
+        require(SAFE_KEY_ID_REGEX.matches(keyId)) { "keyId must be a safe key identifier" }
+        require(secretBytes.size >= MIN_SECRET_BYTES) { "secretBytes must be at least $MIN_SECRET_BYTES bytes" }
     }
-
-    fun secretBytes(): ByteArray = secretBytes.copyOf()
 
     fun sign(domainPrefix: String, normalizedInput: String): String {
         require(domainPrefix.isNotBlank()) { "domainPrefix must not be blank" }
@@ -69,6 +79,8 @@ class NotificationHmacKey(
     companion object {
         private const val serialVersionUID = 1L
         private const val HMAC_SHA256 = "HmacSHA256"
+        private const val MIN_SECRET_BYTES = 32
+        private val SAFE_KEY_ID_REGEX = Regex("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
     }
 }
 
@@ -123,6 +135,8 @@ data class NotificationAuditInput(
     init {
         require(stableSubject.isNotBlank()) { "stableSubject must not be blank" }
         require(purpose.isNotBlank()) { "purpose must not be blank" }
+        validateDurableOpaqueString(stableSubject, "stableSubject", MAX_STABLE_SUBJECT_LENGTH)
+        validateDurableOpaqueString(purpose, "purpose", MAX_PURPOSE_LENGTH)
     }
 
     fun normalize(): String =
@@ -136,6 +150,8 @@ data class NotificationAuditInput(
 
     companion object {
         private const val serialVersionUID = 1L
+        private const val MAX_STABLE_SUBJECT_LENGTH = 255
+        private const val MAX_PURPOSE_LENGTH = 64
     }
 }
 
@@ -175,7 +191,14 @@ class DefaultNotificationOutboxHasher(
     override fun idempotencyCandidates(input: NotificationIdempotencyInput): List<NotificationIdempotencyDigest> {
         val active = activeKey()
         val previous = previousKey()
-        val keys = if (previous == null || previous.keyId == active.keyId) {
+        if (previous?.keyId == active.keyId) {
+            throw NotificationContractException(
+                failureCode = NotificationFailureCode.HMAC_KEY_UNAVAILABLE,
+                message = "Notification HMAC key rotation state is unavailable",
+            )
+        }
+
+        val keys = if (previous == null) {
             listOf(active)
         } else {
             listOf(active, previous)
@@ -202,7 +225,7 @@ class DefaultNotificationOutboxHasher(
     private fun activeKey(): NotificationHmacKey =
         try {
             keyRing.active()
-        } catch (e: RuntimeException) {
+        } catch (e: NotificationHmacKeyUnavailableException) {
             throw NotificationContractException(
                 failureCode = NotificationFailureCode.HMAC_KEY_UNAVAILABLE,
                 message = "Active notification HMAC key is unavailable",
@@ -213,7 +236,7 @@ class DefaultNotificationOutboxHasher(
     private fun previousKey(): NotificationHmacKey? =
         try {
             keyRing.previous()
-        } catch (e: RuntimeException) {
+        } catch (e: NotificationHmacKeyUnavailableException) {
             throw NotificationContractException(
                 failureCode = NotificationFailureCode.HMAC_KEY_UNAVAILABLE,
                 message = "Previous notification HMAC key is unavailable",

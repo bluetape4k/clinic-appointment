@@ -31,12 +31,13 @@ data class AppointmentConfirmedParameters(
 ) : NotificationTemplateParameters {
 
     init {
-        require(clinicDisplayName.isNotBlank()) { "clinicDisplayName must not be blank" }
+        validateDurableOpaqueString(clinicDisplayName, "clinicDisplayName", MAX_CLINIC_DISPLAY_NAME_LENGTH)
     }
 
     override val parameterType: NotificationParameterType = NotificationParameterType.APPOINTMENT_CONFIRMED
 
     companion object {
         private const val serialVersionUID = 1L
+        private const val MAX_CLINIC_DISPLAY_NAME_LENGTH = 120
     }
 }

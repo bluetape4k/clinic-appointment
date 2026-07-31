@@ -101,17 +101,29 @@ class NotificationContractException(
     }
 }
 
+internal fun validateDurableOpaqueString(
+    value: String,
+    fieldName: String,
+    maxLength: Int,
+): String {
+    require(value.isNotBlank()) { "$fieldName must not be blank" }
+    require(value.length <= maxLength) { "$fieldName must not exceed $maxLength characters" }
+    require(value.none { it.isISOControl() }) { "$fieldName must not contain control characters" }
+    return value
+}
+
 /**
  * 알림 이벤트의 불투명 식별자다.
  */
 @JvmInline
 value class NotificationEventId(val value: String) : Serializable {
     init {
-        require(value.isNotBlank()) { "value must not be blank" }
+        validateDurableOpaqueString(value, "eventId", MAX_LENGTH)
     }
 
     companion object {
         private const val serialVersionUID = 1L
+        private const val MAX_LENGTH = 128
     }
 }
 
@@ -121,11 +133,12 @@ value class NotificationEventId(val value: String) : Serializable {
 @JvmInline
 value class NotificationIdempotencyKey(val value: String) : Serializable {
     init {
-        require(value.isNotBlank()) { "value must not be blank" }
+        validateDurableOpaqueString(value, "idempotencyKey", MAX_LENGTH)
     }
 
     companion object {
         private const val serialVersionUID = 1L
+        private const val MAX_LENGTH = 128
     }
 }
 
@@ -177,11 +190,12 @@ value class AppointmentId(val value: Long) : Serializable {
 @JvmInline
 value class NotificationTemplateKey(val value: String) : Serializable {
     init {
-        require(value.isNotBlank()) { "value must not be blank" }
+        validateDurableOpaqueString(value, "templateKey", MAX_LENGTH)
     }
 
     companion object {
         private const val serialVersionUID = 1L
+        private const val MAX_LENGTH = 128
     }
 }
 
