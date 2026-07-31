@@ -8,6 +8,7 @@ import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -161,7 +162,7 @@ class NotificationOutboxRepositoryTest {
 
     @Test
     fun `ready 조회는 발송 가능한 clinic key와 candidate만 반환한다`() {
-        transaction(database) {
+        val (readyId, retryId) = transaction(database) {
             val readyOne = repository.enqueue(sendableDraft(eventId = "event-ready-1", digest = "digest-ready-1"))
             repository.enqueue(
                 sendableDraft(
@@ -179,14 +180,45 @@ class NotificationOutboxRepositoryTest {
                     token = claimed.token,
                     attemptNumber = claimed.attemptNumber,
                     failureCode = NotificationFailureCode.PROVIDER_UNAVAILABLE,
-                    nextAttemptAt = Instant.parse("2020-01-01T00:01:00Z"),
+                    retryDelay = Duration.ofMillis(1),
                 )
             ).shouldBeTrue()
+            readyOne.id to retry.id
+        }
 
+        Thread.sleep(5)
+        transaction(database) {
             repository.findReadyClinicKeys(cursor = null, limit = 10) shouldBeEqualTo
                 listOf(NotificationClinicKey(TenantGroupId(1L), ClinicId(2L)))
             repository.findReadyCandidates(NotificationClinicKey(TenantGroupId(1L), ClinicId(2L)), null, 10)
-                .map { it.id } shouldBeEqualTo listOf(readyOne.id, retry.id)
+                .map { it.id } shouldBeEqualTo listOf(readyId, retryId)
+        }
+    }
+
+    @Test
+    fun `retry 시각은 애플리케이션 clock이 아니라 DB 갱신 시각에 delay를 더해 기록한다`() {
+        transaction(database) {
+            val row = repository.enqueue(sendableDraft(eventId = "event-db-retry", digest = "digest-db-retry"))
+            val claim = repository.claim(row.id, owner = "worker-db", token = "token-db")!!
+
+            repository.scheduleRetry(
+                RetryNotificationCommand(
+                    outboxId = row.id,
+                    owner = claim.owner,
+                    token = claim.token,
+                    attemptNumber = claim.attemptNumber,
+                    failureCode = NotificationFailureCode.PROVIDER_UNAVAILABLE,
+                    retryDelay = Duration.ofMinutes(10),
+                ),
+            ).shouldBeTrue()
+
+            val stored = NotificationOutboxEvents.selectAll()
+                .where { NotificationOutboxEvents.id eq row.id }
+                .single()
+            Duration.between(
+                stored[NotificationOutboxEvents.updatedAt],
+                checkNotNull(stored[NotificationOutboxEvents.nextRetryAt]),
+            ) shouldBeEqualTo Duration.ofMinutes(10)
         }
     }
 
@@ -462,7 +494,7 @@ class NotificationOutboxRepositoryTest {
                         token = claimed.token,
                         attemptNumber = claimed.attemptNumber,
                         failureCode = NotificationFailureCode.PROVIDER_UNAVAILABLE,
-                        nextAttemptAt = Instant.parse("2026-07-31T00:10:00Z"),
+                        retryDelay = Duration.ofMinutes(10),
                     )
                 )
             }
@@ -517,10 +549,73 @@ class NotificationOutboxRepositoryTest {
     }
 
     @Test
+    fun `retention은 DB cutoff와 page limit에 따라 attempt를 먼저 지우고 종료 행만 삭제한다`() {
+        transaction(database) {
+            val sentIds = (1..2).map { index ->
+                val row = repository.enqueue(
+                    sendableDraft(eventId = "retention-sent-$index", digest = "retention-sent-$index"),
+                )
+                val claim = repository.claim(row.id, owner = "worker-$index", token = "token-$index")!!
+                repository.complete(
+                    CompleteNotificationCommand(
+                        outboxId = row.id,
+                        owner = claim.owner,
+                        token = claim.token,
+                        attemptNumber = claim.attemptNumber,
+                    ),
+                ).shouldBeTrue()
+                row.id
+            }
+            val exhausted = repository.enqueue(
+                sendableDraft(eventId = "retention-exhausted", digest = "retention-exhausted"),
+            )
+            val exhaustedClaim = repository.claim(exhausted.id, owner = "worker-x", token = "token-x")!!
+            repository.complete(
+                CompleteNotificationCommand(
+                    outboxId = exhausted.id,
+                    owner = exhaustedClaim.owner,
+                    token = exhaustedClaim.token,
+                    attemptNumber = exhaustedClaim.attemptNumber,
+                    terminalStatus = NotificationOutboxStatus.EXHAUSTED,
+                    failureCode = NotificationFailureCode.PROVIDER_UNAVAILABLE,
+                ),
+            ).shouldBeTrue()
+            NotificationOutboxEvents.update({
+                NotificationOutboxEvents.id inList (sentIds + exhausted.id).map {
+                    EntityID(it, NotificationOutboxEvents)
+                }
+            }) {
+                it[terminalAt] = Instant.parse("2020-01-01T00:00:00Z")
+            }
+
+            repository.deleteTerminalBatch(
+                status = NotificationOutboxStatus.SENT,
+                retention = Duration.ofDays(7),
+                limit = 1,
+            ) shouldBeEqualTo 1
+            NotificationOutboxEvents.selectAll().count() shouldBeEqualTo 2L
+            NotificationDeliveryAttempts.selectAll().count() shouldBeEqualTo 2L
+
+            repository.deleteTerminalBatch(
+                status = NotificationOutboxStatus.SENT,
+                retention = Duration.ofDays(7),
+                limit = 10,
+            ) shouldBeEqualTo 1
+            repository.deleteTerminalBatch(
+                status = NotificationOutboxStatus.EXHAUSTED,
+                retention = Duration.ofDays(30),
+                limit = 10,
+            ) shouldBeEqualTo 1
+            NotificationOutboxEvents.selectAll().count() shouldBeEqualTo 0L
+            NotificationDeliveryAttempts.selectAll().count() shouldBeEqualTo 0L
+        }
+    }
+
+    @Test
     fun `expired recovery closes previous attempt as lease lost and creates current attempt`() {
         transaction(database) {
             val candidate = repository.enqueue(sendableDraft())
-            repository.claim(candidate.id, owner = "old-worker", token = "old-token")!!
+            val first = repository.claim(candidate.id, owner = "old-worker", token = "old-token")!!
             NotificationOutboxEvents.update({ NotificationOutboxEvents.id eq candidate.id }) {
                 it[NotificationOutboxEvents.leaseUntil] = Instant.parse("2020-01-01T00:00:00Z")
             }
@@ -530,6 +625,8 @@ class NotificationOutboxRepositoryTest {
 
             recovered.owner shouldBeEqualTo "new-worker"
             recovered.attemptNumber shouldBeEqualTo 2
+            recovered.firstAttemptAt shouldBeEqualTo first.firstAttemptAt
+            (recovered.claimedAt >= recovered.firstAttemptAt).shouldBeTrue()
             NotificationDeliveryAttempts.selectAll()
                 .orderBy(NotificationDeliveryAttempts.attemptNumber)
                 .map { it[NotificationDeliveryAttempts.failureCode] } shouldBeEqualTo

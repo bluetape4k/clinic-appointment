@@ -18,6 +18,7 @@ import org.jetbrains.exposed.v1.core.vendors.MariaDBDialect
 import org.jetbrains.exposed.v1.core.vendors.MysqlDialect
 import org.jetbrains.exposed.v1.core.vendors.currentDialect
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -39,6 +40,13 @@ class NotificationOutboxRepository(
     private val codec: NotificationOutboxCodec,
     private val leaseDuration: Duration,
 ) {
+    /**
+     * 현재 transaction이 연결된 DB의 현재 시각을 반환한다.
+     *
+     * 외부 I/O가 끝난 뒤 elapsed retry 상한을 판단할 때 애플리케이션 clock 대신 사용한다.
+     */
+    fun currentDatabaseTime(): Instant = dbCurrentTimestamp()
+
 
     init {
         require(!leaseDuration.isNegative && !leaseDuration.isZero) { "leaseDuration must be positive" }
@@ -200,6 +208,7 @@ class NotificationOutboxRepository(
         if (!snapshot.isReady(dbNow)) return null
         val oldAttempt = snapshot[NotificationOutboxEvents.attemptNumber]
         val nextAttempt = oldAttempt + 1
+        val firstAttemptAt = findFirstAttemptAt(candidateId) ?: dbNow
         val leaseUntil = dbNow.plus(leaseDuration)
         val updated = NotificationOutboxEvents.update({
             readyPredicate(dbNow) and
@@ -216,7 +225,7 @@ class NotificationOutboxRepository(
         if (updated != 1) return null
 
         insertAttempt(snapshot, nextAttempt, validOwner, validToken, dbNow)
-        return snapshot.toClaimed(nextAttempt, validOwner, validToken, leaseUntil)
+        return snapshot.toClaimed(nextAttempt, validOwner, validToken, leaseUntil, firstAttemptAt, dbNow)
     }
 
     fun recoverExpired(candidateId: Long, owner: String, token: String): ClaimedNotification? {
@@ -230,6 +239,7 @@ class NotificationOutboxRepository(
         val oldOwner = snapshot[NotificationOutboxEvents.leaseOwner] ?: return null
         val oldToken = snapshot[NotificationOutboxEvents.leaseToken] ?: return null
         val nextAttempt = oldAttempt + 1
+        val firstAttemptAt = findFirstAttemptAt(candidateId) ?: dbNow
         val leaseUntil = dbNow.plus(leaseDuration)
         val updated = NotificationOutboxEvents.update({
             (NotificationOutboxEvents.id eq candidateId) and
@@ -258,7 +268,7 @@ class NotificationOutboxRepository(
             completedAt = dbNow,
         )
         insertAttempt(snapshot, nextAttempt, validOwner, validToken, dbNow)
-        return snapshot.toClaimed(nextAttempt, validOwner, validToken, leaseUntil)
+        return snapshot.toClaimed(nextAttempt, validOwner, validToken, leaseUntil, firstAttemptAt, dbNow)
     }
 
     fun complete(command: CompleteNotificationCommand): Boolean {
@@ -311,7 +321,7 @@ class NotificationOutboxRepository(
             it[leaseOwner] = null
             it[leaseToken] = null
             it[leaseUntil] = null
-            it[nextRetryAt] = command.nextAttemptAt
+            it[nextRetryAt] = dbNow.plus(command.retryDelay)
             it[updatedAt] = dbNow
         }
         if (updated != 1) {
@@ -334,6 +344,44 @@ class NotificationOutboxRepository(
             requireExactlyOne = true,
         )
         return true
+    }
+
+    /**
+     * 보존 기간이 지난 종료 행을 오래된 순서로 제한된 개수만 삭제한다.
+     *
+     * attempt 외래 키가 outbox 삭제를 제한하므로 같은 caller transaction에서 attempt를
+     * 먼저 삭제한다. cutoff는 애플리케이션 시각이 아니라 DB 현재 시각으로 계산한다.
+     */
+    fun deleteTerminalBatch(
+        status: NotificationOutboxStatus,
+        retention: Duration,
+        limit: Int,
+    ): Int {
+        require(status in TERMINAL_STATUSES) { "status must be SENT, SUPPRESSED, or EXHAUSTED" }
+        require(!retention.isNegative && !retention.isZero) { "retention must be positive" }
+        require(limit > 0) { "limit must be positive" }
+        val cutoff = dbCurrentTimestamp().minus(retention)
+        val ids = NotificationOutboxEvents
+            .select(NotificationOutboxEvents.id)
+            .where {
+                (NotificationOutboxEvents.rowKind inList TERMINAL_ROW_KINDS) and
+                    (NotificationOutboxEvents.status eq status) and
+                    (NotificationOutboxEvents.terminalAt lessEq cutoff)
+            }
+            .orderBy(
+                NotificationOutboxEvents.terminalAt to SortOrder.ASC,
+                NotificationOutboxEvents.id to SortOrder.ASC,
+            )
+            .limit(limit)
+            .map { it[NotificationOutboxEvents.id] }
+        if (ids.isEmpty()) return 0
+
+        NotificationDeliveryAttempts.deleteWhere {
+            NotificationDeliveryAttempts.outboxId inList ids
+        }
+        return NotificationOutboxEvents.deleteWhere {
+            NotificationOutboxEvents.id inList ids
+        }
     }
 
     private fun upsertSendable(draft: SendableNotificationDraft) {
@@ -551,6 +599,17 @@ class NotificationOutboxRepository(
             .where { NotificationOutboxEvents.id eq id }
             .singleOrNull()
 
+    private fun findFirstAttemptAt(outboxId: Long): Instant? =
+        NotificationDeliveryAttempts
+            .select(NotificationDeliveryAttempts.startedAt)
+            .where {
+                NotificationDeliveryAttempts.outboxId eq EntityID(outboxId, NotificationOutboxEvents)
+            }
+            .orderBy(NotificationDeliveryAttempts.startedAt to SortOrder.ASC)
+            .limit(1)
+            .singleOrNull()
+            ?.get(NotificationDeliveryAttempts.startedAt)
+
     private fun readyCursorPredicate(cursorId: Long) =
         findOutbox(cursorId)?.let { cursor ->
             val cursorAvailableAt = cursor[NotificationOutboxEvents.availableAt]
@@ -616,6 +675,8 @@ class NotificationOutboxRepository(
         owner: String,
         token: String,
         leaseUntil: Instant,
+        firstAttemptAt: Instant,
+        claimedAt: Instant,
     ): ClaimedNotification {
         val appointmentId = checkNotNull(this[NotificationOutboxEvents.appointmentId]) {
             "sendable notification outbox row must have appointmentId"
@@ -636,6 +697,8 @@ class NotificationOutboxRepository(
             token = token,
             attemptNumber = attemptNumber,
             leaseUntil = leaseUntil,
+            firstAttemptAt = firstAttemptAt,
+            claimedAt = claimedAt,
             channel = checkNotNull(this[NotificationOutboxEvents.channel]) {
                 "sendable notification outbox row must have channel"
             },
@@ -755,6 +818,8 @@ data class ClaimedNotification(
     val token: String,
     val attemptNumber: Int,
     val leaseUntil: Instant,
+    val firstAttemptAt: Instant,
+    val claimedAt: Instant,
     val channel: NotificationChannelType,
     val eventType: NotificationEventType,
     val notificationSlot: NotificationSlot,
@@ -824,7 +889,7 @@ data class RetryNotificationCommand(
     override val token: String,
     override val attemptNumber: Int,
     val failureCode: NotificationFailureCode,
-    val nextAttemptAt: Instant,
+    val retryDelay: Duration,
     val providerMessageReference: NotificationProviderMessageReference? = null,
     val destinationFingerprint: NotificationDestinationFingerprint? = null,
     val correlationId: NotificationCorrelationId? = null,
@@ -869,6 +934,8 @@ private fun CompleteNotificationCommand.validateOptionalMetadata() {
 }
 
 private fun RetryNotificationCommand.validateOptionalMetadata() {
+    require(!retryDelay.isNegative && !retryDelay.isZero) { "retryDelay must be positive" }
+    require(retryDelay <= Duration.ofHours(72)) { "retryDelay must not exceed 72 hours" }
     providerMessageReference?.value?.validFence("providerMessageReference")
     destinationFingerprint?.value?.validFence("destinationFingerprint")
     correlationId?.value?.validFence("correlationId")
@@ -890,6 +957,11 @@ private val TERMINAL_STATUSES = setOf(
     NotificationOutboxStatus.SENT,
     NotificationOutboxStatus.SUPPRESSED,
     NotificationOutboxStatus.EXHAUSTED,
+)
+
+private val TERMINAL_ROW_KINDS = listOf(
+    NotificationOutboxRowKind.SENDABLE,
+    NotificationOutboxRowKind.LEGACY_SUPPRESSION,
 )
 
 private val REMINDER_SLOTS = listOf(

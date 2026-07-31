@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.boot.ApplicationRunner
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -106,11 +107,18 @@ class NotificationAutoConfiguration {
         workStore: NotificationOutboxWorkStore,
         properties: NotificationProperties,
         readiness: NotificationSchemaReadiness?,
+        deliveryActionProvider: ObjectProvider<NotificationDeliveryAction>,
     ): NotificationOutboxWorker =
         NotificationOutboxWorker(
             workStore = workStore,
             leaseOwner = "notification-outbox-worker",
             readiness = readiness,
+            deliveryAction = deliveryActionProvider.ifAvailable
+                ?: NotificationDeliveryAction {
+                    NotificationDeliveryResult.retry(
+                        io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode.DELIVERY_RESULT_UNKNOWN,
+                    )
+                },
         ).also {
             properties.worker.validate()
         }
@@ -125,6 +133,7 @@ class NotificationAutoConfiguration {
     @ConditionalOnBean(
         NotificationOutboxWorkStore::class,
         NotificationOutboxJobWorker::class,
+        NotificationDeliveryAction::class,
     )
     @ConditionalOnMissingBean(NotificationOutboxDispatcher::class)
     fun notificationOutboxDispatcher(
@@ -143,6 +152,18 @@ class NotificationAutoConfiguration {
             readiness = readiness,
         )
     }
+
+    @Bean
+    @ConditionalOnBean(NotificationOutboxWorkStore::class)
+    @ConditionalOnMissingBean(NotificationRetentionRunner::class)
+    fun notificationRetentionRunner(
+        workStore: NotificationOutboxWorkStore,
+        readiness: NotificationSchemaReadiness?,
+    ): NotificationRetentionRunner =
+        NotificationRetentionRunner(
+            workStore = workStore,
+            readiness = readiness,
+        )
 
     @Bean
     @ConditionalOnMissingBean(NotificationChannel::class)

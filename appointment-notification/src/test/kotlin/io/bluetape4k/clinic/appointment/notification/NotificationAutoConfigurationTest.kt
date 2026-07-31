@@ -22,6 +22,8 @@ internal class NotificationAutoConfigurationTest {
             applicationContext.startupFailure shouldBeEqualTo null
             val worker = applicationContext.getBean(NotificationOutboxWorker::class.java)
             runBlocking { worker.recoverExpiredOnce(10) } shouldBeEqualTo emptyList()
+            val retention = applicationContext.getBean(NotificationRetentionRunner::class.java)
+            runBlocking { retention.runOnce().deletedByStatus } shouldBeEqualTo emptyMap()
         }
 
         val missingKey = database("auto_missing_key", version = "14")
@@ -42,6 +44,7 @@ internal class NotificationAutoConfigurationTest {
                 .available shouldBeEqualTo true
             applicationContext.getBeansOfType(NotificationOutboxWorker::class.java).size shouldBeEqualTo 1
             applicationContext.getBeansOfType(NotificationOutboxDispatcher::class.java).size shouldBeEqualTo 0
+            applicationContext.getBeansOfType(NotificationRetentionRunner::class.java).size shouldBeEqualTo 1
         }
     }
 
@@ -50,9 +53,9 @@ internal class NotificationAutoConfigurationTest {
         val database = database("auto_dispatcher", version = "14")
         context(database, withKey = true)
             .withBean(
-                "deliveryWorker",
-                NotificationOutboxJobWorker::class.java,
-                { NotificationOutboxJobWorker { NotificationOutboxWorkerResult.COMPLETED } },
+                "deliveryAction",
+                NotificationDeliveryAction::class.java,
+                { NotificationDeliveryAction { NotificationDeliveryResult.sent() } },
             )
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
