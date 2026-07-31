@@ -151,7 +151,11 @@ CREATE TABLE clinic_notification_delivery_attempts (
     trace_id VARCHAR(128),
     CONSTRAINT fk_notification_delivery_attempt_outbox FOREIGN KEY (outbox_id)
         REFERENCES clinic_notification_outbox(id) ON DELETE RESTRICT,
-    CONSTRAINT uk_notification_delivery_attempt_number UNIQUE (outbox_id, attempt_number)
+    CONSTRAINT uk_notification_delivery_attempt_number UNIQUE (outbox_id, attempt_number),
+    CONSTRAINT ck_notification_delivery_attempt_outcome CHECK (
+        outcome IS NULL
+        OR LOCATE(CONCAT('|', outcome, '|'), '|SUCCESS|RETRY_SCHEDULED|SUPPRESSED|EXHAUSTED|LEASE_LOST|') > 0
+    )
 );
 
 CREATE INDEX idx_notification_delivery_attempt_completed_retention

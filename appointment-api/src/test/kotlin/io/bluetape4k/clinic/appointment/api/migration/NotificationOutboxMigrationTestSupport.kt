@@ -171,6 +171,10 @@ internal object NotificationOutboxMigrationTestSupport {
             }
         }
 
+        expectConstraintViolation("attempt outcome must use the exact allow-list value") {
+            insertAttempt(connection, id = 2L, outboxId = 1L, outcome = "success")
+        }
+
         expectConstraintViolation("idempotency digest must be unique") {
             insertOutbox(connection, sendableRow(id = 500L).copy(idempotencyKey = "digest-1"))
         }
@@ -263,19 +267,26 @@ internal object NotificationOutboxMigrationTestSupport {
         connection: Connection,
         id: Long,
         outboxId: Long,
+        outcome: String? = null,
     ) {
         connection.prepareStatement(
             """
             INSERT INTO clinic_notification_delivery_attempts(
                 id, outbox_id, attempt_number, owner, token, channel, event_type,
-                template_key, template_version, started_at
-            ) VALUES (?, ?, 1, 'worker-a', 'token-a', 'SMS', 'CONFIRMED',
-                      'appointment-confirmed', 1, ?)
+                template_key, template_version, started_at, completed_at, outcome
+            ) VALUES (?, ?, ?, 'worker-a', 'token-a', 'SMS', 'CONFIRMED',
+                      'appointment-confirmed', 1, ?, ?, ?)
             """.trimIndent(),
         ).use { statement ->
             statement.setLong(1, id)
             statement.setLong(2, outboxId)
-            statement.setTimestamp(3, Timestamp.valueOf("2026-07-31 00:00:00"))
+            statement.setInt(3, id.toInt())
+            statement.setTimestamp(4, Timestamp.valueOf("2026-07-31 00:00:00"))
+            statement.setTimestamp(
+                5,
+                outcome?.let { Timestamp.valueOf("2026-07-31 00:01:00") },
+            )
+            statement.setString(6, outcome)
             statement.executeUpdate() shouldBeEqualTo 1
         }
     }
@@ -574,6 +585,12 @@ internal object NotificationOutboxMigrationTestSupport {
         ConstraintCase("event_type") { it.copy(eventType = "BROKEN") },
         ConstraintCase("notification_slot") { it.copy(notificationSlot = "BROKEN") },
         ConstraintCase("parameter_type") { it.copy(parameterType = "BROKEN") },
+        ConstraintCase("row_kind lowercase") { it.copy(rowKind = "sendable") },
+        ConstraintCase("status lowercase") { it.copy(status = "pending") },
+        ConstraintCase("channel lowercase") { it.copy(channel = "sms") },
+        ConstraintCase("event_type lowercase") { it.copy(eventType = "confirmed") },
+        ConstraintCase("notification_slot lowercase") { it.copy(notificationSlot = "confirmed") },
+        ConstraintCase("parameter_type lowercase") { it.copy(parameterType = "appointment_confirmed") },
     )
 
     private const val OUTBOX_INSERT_SQL = """
