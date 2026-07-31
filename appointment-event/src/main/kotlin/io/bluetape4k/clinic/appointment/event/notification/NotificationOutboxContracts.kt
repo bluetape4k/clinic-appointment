@@ -2,7 +2,12 @@ package io.bluetape4k.clinic.appointment.event.notification
 
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import java.io.Serializable
+import java.sql.Timestamp
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 
 /**
  * 알림 outbox row의 처리 계열이다.
@@ -110,6 +115,93 @@ internal fun validateDurableOpaqueString(
     require(value.length <= maxLength) { "$fieldName must not exceed $maxLength characters" }
     require(value.none { it.isISOControl() }) { "$fieldName must not contain control characters" }
     return value
+}
+
+/**
+ * JDBC driver별 `CURRENT_TIMESTAMP` 반환형을 UTC [Instant] 정책으로 정규화한다.
+ */
+internal fun Any?.toNotificationDbInstant(): Instant =
+    when (this) {
+        is Instant -> this
+        is Timestamp -> toInstant()
+        is OffsetDateTime -> toInstant()
+        is ZonedDateTime -> toInstant()
+        is LocalDateTime -> toInstant(ZoneOffset.UTC)
+        else -> error("Unsupported CURRENT_TIMESTAMP type: ${this?.javaClass?.name}")
+    }
+
+private val durableMetadataPattern = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+private val destinationFingerprintPattern = Regex("^v[1-9][0-9]*:hmac-sha256:[A-Za-z0-9_-]{16,86}$")
+private val emailLikePattern = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
+private val rawErrorLikePattern = Regex("(?i).*(exception|error|stacktrace|caused[ -]by|failed:|failure:).*")
+
+private fun validateLowRiskMetadata(value: String, fieldName: String): String {
+    validateDurableOpaqueString(value, fieldName, 128)
+    require(durableMetadataPattern.matches(value)) { "$fieldName must use low-risk opaque characters" }
+    require(!emailLikePattern.containsMatchIn(value)) { "$fieldName must not contain email-like values" }
+    require(!value.isPhoneLike()) { "$fieldName must not contain phone-like values" }
+    require(!rawErrorLikePattern.matches(value)) { "$fieldName must not contain raw error text" }
+    return value
+}
+
+private fun String.isPhoneLike(): Boolean {
+    val trimmed = trim()
+    val digitCount = trimmed.count { it.isDigit() }
+    return digitCount >= 8 && trimmed.all { it.isDigit() || it in setOf('+', '-', '.', '(', ')') }
+}
+
+/** provider adapter가 검증한 낮은 cardinality message reference다. */
+@JvmInline
+value class NotificationProviderMessageReference(val value: String) : Serializable {
+    init {
+        validateLowRiskMetadata(value, "providerMessageReference")
+    }
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/** 실제 수신자가 아닌 versioned HMAC destination digest다. */
+@JvmInline
+value class NotificationDestinationFingerprint(val value: String) : Serializable {
+    init {
+        validateDurableOpaqueString(value, "destinationFingerprint", 128)
+        require(value.none { it.isWhitespace() }) { "destinationFingerprint must not contain whitespace" }
+        require(!emailLikePattern.containsMatchIn(value)) { "destinationFingerprint must not contain email-like values" }
+        require(!rawErrorLikePattern.matches(value)) { "destinationFingerprint must not contain raw error text" }
+        require(destinationFingerprintPattern.matches(value)) {
+            "destinationFingerprint must be versioned hmac-sha256 digest"
+        }
+    }
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/** 알림 delivery workflow를 묶는 제한된 correlation id다. */
+@JvmInline
+value class NotificationCorrelationId(val value: String) : Serializable {
+    init {
+        validateLowRiskMetadata(value, "correlationId")
+    }
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/** 외부 tracing system에 전달 가능한 제한된 trace id다. */
+@JvmInline
+value class NotificationTraceId(val value: String) : Serializable {
+    init {
+        validateLowRiskMetadata(value, "traceId")
+    }
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
 }
 
 /**

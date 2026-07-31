@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.event.notification
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeNull
@@ -7,6 +8,7 @@ import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -16,10 +18,13 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneOffset
 
 class NotificationOutboxRepositoryTest {
 
@@ -49,6 +54,28 @@ class NotificationOutboxRepositoryTest {
             val second = repository.enqueue(sendableDraft())
 
             first.id shouldBeEqualTo second.id
+            NotificationOutboxEvents.selectAll().count() shouldBeEqualTo 1L
+        }
+    }
+
+    @Test
+    fun `duplicate enqueue uses atomic ignore without hiding non idempotency sql errors`() {
+        transaction(database) {
+            val first = repository.enqueue(sendableDraft())
+            val duplicate = repository.enqueue(sendableDraft())
+
+            duplicate.id shouldBeEqualTo first.id
+            NotificationOutboxEvents.selectAll().count() shouldBeEqualTo 1L
+
+            exec(
+                """
+                ALTER TABLE clinic_notification_outbox
+                ADD CONSTRAINT chk_notification_test_provider_key CHECK (provider_key <> 'dummy-broken')
+                """.trimIndent()
+            )
+            assertFailsWith<ExposedSQLException> {
+                repository.enqueue(sendableDraft(eventId = "event-broken", digest = "digest-broken", providerKey = "dummy-broken"))
+            }
             NotificationOutboxEvents.selectAll().count() shouldBeEqualTo 1L
         }
     }
@@ -283,10 +310,10 @@ class NotificationOutboxRepositoryTest {
                     owner = current.owner,
                     token = current.token,
                     attemptNumber = current.attemptNumber,
-                    providerMessageReference = "provider-message-1",
-                    destinationFingerprint = "dest-fp-1",
-                    correlationId = "corr-1",
-                    traceId = "trace-1",
+                    providerMessageReference = NotificationProviderMessageReference("provider-message-1"),
+                    destinationFingerprint = NotificationDestinationFingerprint("v1:hmac-sha256:abcdef0123456789"),
+                    correlationId = NotificationCorrelationId("corr-1"),
+                    traceId = NotificationTraceId("trace-abcdef0123456789"),
                 )
             ).shouldBeTrue()
             val sent = NotificationOutboxEvents.selectAll()
@@ -297,12 +324,104 @@ class NotificationOutboxRepositoryTest {
             sent[NotificationOutboxEvents.memberId].shouldBeNull()
             sent[NotificationOutboxEvents.parametersJson].shouldBeNull()
             sent[NotificationOutboxEvents.providerMessageReference] shouldBeEqualTo "provider-message-1"
-            sent[NotificationOutboxEvents.destinationFingerprint] shouldBeEqualTo "dest-fp-1"
+            sent[NotificationOutboxEvents.destinationFingerprint] shouldBeEqualTo "v1:hmac-sha256:abcdef0123456789"
             val currentAttempt = NotificationDeliveryAttempts.selectAll()
                 .where { NotificationDeliveryAttempts.attemptNumber eq current.attemptNumber }
                 .single()
             currentAttempt[NotificationDeliveryAttempts.outcome] shouldBeEqualTo NotificationDeliveryAttemptOutcome.SUCCESS
             currentAttempt[NotificationDeliveryAttempts.providerMessageReference] shouldBeEqualTo "provider-message-1"
+        }
+    }
+
+    @Test
+    fun `provider metadata value types reject raw PII and unstable values`() {
+        assertFailsWith<IllegalArgumentException> { NotificationProviderMessageReference("member@example.com") }
+        assertFailsWith<IllegalArgumentException> { NotificationProviderMessageReference("010-1234-5678") }
+        assertFailsWith<IllegalArgumentException> { NotificationProviderMessageReference("provider ref") }
+        assertFailsWith<IllegalArgumentException> { NotificationProviderMessageReference("NullPointerException: raw failure") }
+        assertFailsWith<IllegalArgumentException> { NotificationDestinationFingerprint("dest-fp-1") }
+        assertFailsWith<IllegalArgumentException> { NotificationDestinationFingerprint("v1:hmac-sha256:member@example.com") }
+        assertFailsWith<IllegalArgumentException> { NotificationCorrelationId("corr 1") }
+        assertFailsWith<IllegalArgumentException> { NotificationTraceId("trace\n1") }
+
+        NotificationProviderMessageReference("provider-message-1").value shouldBeEqualTo "provider-message-1"
+        NotificationDestinationFingerprint("v1:hmac-sha256:abcdef0123456789").value shouldBeEqualTo
+            "v1:hmac-sha256:abcdef0123456789"
+        NotificationCorrelationId("corr-1").value shouldBeEqualTo "corr-1"
+        NotificationTraceId("trace-abcdef0123456789").value shouldBeEqualTo "trace-abcdef0123456789"
+    }
+
+    @Test
+    fun `db timestamp conversion normalizes JDBC local date time values as UTC`() {
+        val local = LocalDateTime.parse("2026-07-31T12:34:56")
+
+        local.toNotificationDbInstant() shouldBeEqualTo Instant.parse("2026-07-31T12:34:56Z")
+        Timestamp.from(Instant.parse("2026-07-31T12:34:56Z")).toNotificationDbInstant() shouldBeEqualTo
+            Instant.parse("2026-07-31T12:34:56Z")
+        Instant.parse("2026-07-31T12:34:56Z").toNotificationDbInstant() shouldBeEqualTo
+            Instant.parse("2026-07-31T12:34:56Z")
+        local.atOffset(ZoneOffset.UTC).toNotificationDbInstant() shouldBeEqualTo
+            Instant.parse("2026-07-31T12:34:56Z")
+    }
+
+    @Test
+    fun `successful complete fails caller transaction when attempt close is not exactly one row`() {
+        val candidateAndClaim = transaction(database) {
+            val candidate = repository.enqueue(sendableDraft())
+            val claimed = repository.claim(candidate.id, owner = "worker-a", token = "token-a")!!
+            NotificationDeliveryAttempts.deleteAll()
+            candidate to claimed
+        }
+
+        assertFailsWith<IllegalStateException> {
+            transaction(database) {
+                val (candidate, claimed) = candidateAndClaim
+                repository.complete(
+                    CompleteNotificationCommand(
+                        outboxId = candidate.id,
+                        owner = claimed.owner,
+                        token = claimed.token,
+                        attemptNumber = claimed.attemptNumber,
+                    )
+                )
+            }
+        }
+        transaction(database) {
+            val (candidate, claimed) = candidateAndClaim
+            val outbox = NotificationOutboxEvents.selectAll()
+                .where { NotificationOutboxEvents.id eq candidate.id }
+                .single()
+            outbox[NotificationOutboxEvents.status] shouldBeEqualTo NotificationOutboxStatus.PROCESSING
+            outbox[NotificationOutboxEvents.leaseOwner] shouldBeEqualTo claimed.owner
+            outbox[NotificationOutboxEvents.terminalAt].shouldBeNull()
+            NotificationDeliveryAttempts.selectAll().count() shouldBeEqualTo 0L
+        }
+
+        transaction(database) {
+            val (candidate, claimed) = candidateAndClaim
+            NotificationOutboxEvents.update({ NotificationOutboxEvents.id eq candidate.id }) {
+                it[NotificationOutboxEvents.status] = NotificationOutboxStatus.PROCESSING
+                it[NotificationOutboxEvents.leaseOwner] = claimed.owner
+                it[NotificationOutboxEvents.leaseToken] = claimed.token
+                it[NotificationOutboxEvents.leaseUntil] = Instant.parse("2999-01-01T00:00:00Z")
+                it[NotificationOutboxEvents.attemptNumber] = claimed.attemptNumber
+                it[NotificationOutboxEvents.terminalAt] = null
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            transaction(database) {
+                val (candidate, claimed) = candidateAndClaim
+                repository.scheduleRetry(
+                    RetryNotificationCommand(
+                        outboxId = candidate.id,
+                        owner = claimed.owner,
+                        token = claimed.token,
+                        attemptNumber = claimed.attemptNumber,
+                        failureCode = NotificationFailureCode.PROVIDER_UNAVAILABLE,
+                        nextAttemptAt = Instant.parse("2026-07-31T00:10:00Z"),
+                    )
+                )
+            }
         }
     }
 
@@ -320,7 +439,7 @@ class NotificationOutboxRepositoryTest {
                     attemptNumber = suppressedClaim.attemptNumber,
                     terminalStatus = NotificationOutboxStatus.SUPPRESSED,
                     suppressionReason = NotificationSuppressionReasonCode.CONSENT_DENIED,
-                    destinationFingerprint = "dest-suppressed",
+                    destinationFingerprint = NotificationDestinationFingerprint("v1:hmac-sha256:suppressedabcdef"),
                 )
             ).shouldBeTrue()
             val suppressedRow = NotificationOutboxEvents.selectAll()
@@ -377,6 +496,7 @@ class NotificationOutboxRepositoryTest {
         eventId: String = "event-1",
         digest: String = "digest-1",
         availableAt: Instant = Instant.parse("2020-01-01T00:00:00Z"),
+        providerKey: String? = "dummy",
     ): SendableNotificationDraft =
         SendableNotificationDraft(
             envelope = NotificationOutboxEnvelope(
@@ -411,7 +531,7 @@ class NotificationOutboxRepositoryTest {
                 version = 1,
                 value = "audit-1",
             ),
-            providerKey = "dummy",
+            providerKey = providerKey ?: "",
         )
 
     private fun legacySuppressionDraft(): LegacySuppressionDraft =
