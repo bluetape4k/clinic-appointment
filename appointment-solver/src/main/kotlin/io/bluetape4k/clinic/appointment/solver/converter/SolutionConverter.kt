@@ -132,7 +132,7 @@ object SolutionConverter: KLogging() {
                     rescheduleFromId = original?.rescheduleFromId,
                     patientName = planning.patientName,
                     patientPhone = original?.patientPhone,
-                    patientExternalId = original?.patientExternalId,
+                    memberId = original?.memberId,
                     appointmentDate = planning.appointmentDate!!,
                     startTime = planning.startTime!!,
                     endTime = planning.endTime!!,
