@@ -47,62 +47,6 @@ data class AppointmentRecord(
     val createdAt: Instant? = null,
     val updatedAt: Instant? = null,
 ) : Serializable {
-    /**
-     * 이전 solver projection 경로가 읽는 호환 속성입니다.
-     *
-     * 새 도메인 코드는 [memberId]를 사용해야 합니다.
-     */
-    @Deprecated(
-        message = "memberId를 사용하세요.",
-        replaceWith = ReplaceWith("memberId?.value"),
-    )
-    val patientExternalId: String?
-        get() = memberId?.value
-
-    @Deprecated(
-        message = "memberId를 사용하세요.",
-        replaceWith = ReplaceWith("AppointmentRecord(memberId = patientExternalId?.let(::MemberId))"),
-    )
-    constructor(
-        id: Long? = null,
-        clinicId: Long,
-        doctorId: Long,
-        treatmentTypeId: Long,
-        equipmentId: Long? = null,
-        consultationTopicId: Long? = null,
-        consultationMethod: String? = null,
-        rescheduleFromId: Long? = null,
-        patientName: String,
-        patientPhone: String? = null,
-        patientExternalId: String?,
-        appointmentDate: LocalDate,
-        startTime: LocalTime,
-        endTime: LocalTime,
-        status: AppointmentState = AppointmentState.REQUESTED,
-        createdAt: Instant? = null,
-        updatedAt: Instant? = null,
-        @Suppress("UNUSED_PARAMETER")
-        compatibilityMarker: Unit = Unit,
-    ) : this(
-        id = id,
-        clinicId = clinicId,
-        doctorId = doctorId,
-        treatmentTypeId = treatmentTypeId,
-        equipmentId = equipmentId,
-        consultationTopicId = consultationTopicId,
-        consultationMethod = consultationMethod,
-        rescheduleFromId = rescheduleFromId,
-        patientName = patientName,
-        patientPhone = patientPhone,
-        memberId = patientExternalId?.let(::MemberId),
-        appointmentDate = appointmentDate,
-        startTime = startTime,
-        endTime = endTime,
-        status = status,
-        createdAt = createdAt,
-        updatedAt = updatedAt,
-    )
-
     companion object {
         private const val serialVersionUID = 1L
     }

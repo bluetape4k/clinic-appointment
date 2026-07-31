@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.OperatingHoursRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
+import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.solver.domain.AppointmentPlanning
 import io.bluetape4k.clinic.appointment.solver.domain.ScheduleSolution
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
@@ -241,6 +242,30 @@ class SolutionConverterTest {
         results shouldHaveSize 1
         results[0].doctorId shouldBeEqualTo doctorId
         results[0].patientName shouldBeEqualTo "John Doe"
+    }
+
+    @Test
+    fun `extractResults preserves original member id`() {
+        val memberAppointment = appointment.copy(memberId = MemberId("member-solver-1"))
+        val solvedPlanning = AppointmentPlanning(
+            id = 1L,
+            clinicId = clinicId,
+            patientName = "John Doe",
+            durationMinutes = 30,
+            doctorId = doctorId,
+            appointmentDate = LocalDate.of(2026, 4, 6),
+            startTime = LocalTime.of(10, 0),
+            pinned = false,
+        )
+
+        val results =
+            SolutionConverter.extractResults(
+                ScheduleSolution(appointments = listOf(solvedPlanning)),
+                mapOf(memberAppointment.id!! to memberAppointment),
+            )
+
+        results shouldHaveSize 1
+        results[0].memberId shouldBeEqualTo MemberId("member-solver-1")
     }
 
     @Test
