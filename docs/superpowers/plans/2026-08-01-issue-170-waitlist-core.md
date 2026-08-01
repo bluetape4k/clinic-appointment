@@ -34,6 +34,19 @@
 - 각 행동은 `RED → GREEN → REFACTOR`로 진행한다. RED test를 먼저 실행해 의도한 실패를 확인하고, 최소 구현 후 같은 test와 module compile/test를 다시 실행한다.
 - 변경 commit은 Lore 형식을 사용하고, 각 단계 후 `git diff --check`를 실행한다. 계획 승인 전에는 production source/migration을 변경하지 않는다.
 
+## 실행 위험과 중단 기준
+
+| 위험 | 조기 신호 | 완화·검증 | 중단/되돌림 지점 |
+|---|---|---|---|
+| `bluetape4k-states` artifact 또는 DSL symbol 미해결 | Task 0 dependency/compile probe 실패 | BOM chain과 source jar를 확인하고 versionless alias만 사용 | local FSM 복제를 하지 않고 dependency release-train blocker로 중단 |
+| confirmed allocation·active hold와의 경쟁 또는 FK-safe lock 순서 오류 | `SlotOccupied`, deadlock, unexpected SQL error, duplicate active key | resource mutex 아래 capacity validation, creation FK exception, 100-way contention test | offer/hold/history 전체 rollback; Task 6/9 수정 전 다음 task 금지 |
+| dialect별 V18 schema/index drift | Flyway history/version, FK, nullable unique, EXPLAIN 불일치 | H2/PostgreSQL/MySQL 순차 matrix와 metadata/EXPLAIN assertion | migration 배포·allowlist를 중지하고 V18 DDL만 수정 |
+| CAS/version 또는 offer-entry-hold 상태 불일치 | `VersionConflict`, `OfferStateConflict`, mismatch backlog 증가 | `forUpdate` 재검증, bounded reconcile, row 직접 수정 금지 | 실패 transaction rollback; backlog는 보존하고 recovery task로 되돌림 |
+| PII/actor/correlation 유출 | malicious-input test 또는 log/metric capture에 raw 값 검출 | command boundary validation, HMAC/opaque actor, low-cardinality labels | 해당 command와 rollout을 fail closed; raw payload를 저장하지 않음 |
+| contention p95/p99 또는 pool budget 초과 | 100-way test가 runbook budget을 초과 | p95 ≤ 2,000 ms, p99 ≤ 5,000 ms fail-fast assertion과 pool/dataset artifact | clinic allowlist를 열지 않고 flag off; durable row는 bounded reconcile |
+| launcher/network/container 불안정 | DB test의 connection/launcher 오류 | 재시도만으로 PASS하지 않고 로그·launcher evidence로 분류 | 테스트를 통과 처리하지 않고 해당 dialect gate를 pending으로 유지 |
+| root checkout의 Issue #176 dirty diff 혼입 | feature worktree 밖 changed path 발견 | `feat/issue-170-waitlist-core` worktree와 scoped mutation-check만 사용 | unrelated diff를 건드리지 않고 작업을 feature worktree로 되돌림 |
+
 ### Task 0: 의존성·artifact compile probe
 
 **Files:**
