@@ -8,6 +8,7 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentProposalRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
+import io.bluetape4k.clinic.appointment.model.reliability.BookingReliabilityDecisionStamp
 import io.bluetape4k.support.requireNotBlank
 import io.bluetape4k.support.requirePositiveNumber
 import java.io.Serializable
@@ -119,7 +120,10 @@ internal class VisitProposalInput(
     }
 
     /** 영속 appointment identity가 정해진 뒤 canonical proposal 초안으로 결합합니다. */
-    fun toDraft(appointmentId: Long): AppointmentProposalDraft =
+    fun toDraft(
+        appointmentId: Long,
+        reliabilityStamp: BookingReliabilityDecisionStamp? = null,
+    ): AppointmentProposalDraft =
         AppointmentProposalDraft(
             appointmentId = appointmentId.requirePositiveNumber("appointmentId"),
             revision = revision,
@@ -129,6 +133,7 @@ internal class VisitProposalInput(
             allocations = resourceRequests.map(ResourceAllocationRequest::allocation),
             policySnapshotId = policySnapshotId,
             supersedesProposalId = supersedesProposalId,
+            bookingReliabilityStamp = reliabilityStamp,
         )
 
     companion object {

@@ -141,6 +141,30 @@
           "html": "docs/superpowers/specs/2026-07-29-issue-184-product-bom-to-appointment-flow.html"
         }
       }
+    },
+    {
+      "id": "booking-reliability-workflow",
+      "source": "docs/superpowers/specs/2026-08-01-issue-176-booking-reliability-design.md",
+      "status": "approved",
+      "public": true,
+      "presentation": {
+        "mode": "hybrid",
+        "defaultView": "simulation",
+        "views": [
+          "simulation",
+          "history"
+        ]
+      },
+      "locales": {
+        "en": {
+          "title": "Booking Reliability Workflow",
+          "html": "docs/visual-companions/booking-reliability-workflow-en-light.html"
+        },
+        "ko": {
+          "title": "예약 신뢰도 업무 흐름",
+          "html": "docs/visual-companions/booking-reliability-workflow-ko-light.html"
+        }
+      }
     }
   ]
 }

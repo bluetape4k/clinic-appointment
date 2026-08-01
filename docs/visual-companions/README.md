@@ -45,6 +45,22 @@ Markdown 문서다. HTML은 역할별 흐름, 상태 전이, 정책 합성, 실�
 기존 한국어 접미사 없는 HTML은 경로를 보존한다. 이 저장소의 첫 두 공개 문서는
 영문 동등본에 `.en.html` 접미사를 사용한다.
 
+## 예약 신뢰도 업무 흐름
+
+`booking-reliability-workflow`는 Issue #176의 승인된 업무 흐름을 설명한다.
+manifest의 기본 문서는 밝은 테마이며, 같은 내용의 어두운 테마와 두 locale
+변형도 함께 보관한다. HTML은 시뮬레이션과 결정 이력을 제공하고, PNG는 README나
+오프라인 문서에서 바로 읽을 수 있는 캡처다.
+
+| Locale | Light | Dark | PNG |
+|---|---|---|---|
+| English | [HTML](booking-reliability-workflow-en-light.html) | [HTML](booking-reliability-workflow-en-dark.html) | [PNG](booking-reliability-workflow-en-light.png), [dark](booking-reliability-workflow-en-dark.png) |
+| 한국어 | [HTML](booking-reliability-workflow-ko-light.html) | [HTML](booking-reliability-workflow-ko-dark.html) | [PNG](booking-reliability-workflow-ko-light.png), [dark](booking-reliability-workflow-ko-dark.png) |
+
+정적 ERD·sequence·class 자료는 [README 다이어그램 디렉터리](../images/readme-diagrams/)에
+SVG 원본과 PNG를 함께 둔다. HTML/PNG와 정적 다이어그램 모두 기준 Markdown과
+코드 계약을 보충할 뿐, 별도의 정책 의미를 정의하지 않는다.
+
 ## 검증
 
 ```bash

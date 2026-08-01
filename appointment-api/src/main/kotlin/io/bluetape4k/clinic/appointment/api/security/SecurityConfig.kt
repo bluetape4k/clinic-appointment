@@ -5,6 +5,8 @@ import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
 import io.bluetape4k.clinic.appointment.api.config.isAppointmentCommitmentRequestPath
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import io.bluetape4k.clinic.appointment.api.config.isSchedulingPolicyRequestPath
+import io.bluetape4k.clinic.appointment.api.config.isBookingReliabilityRequestPath
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiError
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilter
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.logging.KLogging
@@ -170,6 +172,11 @@ class SecurityConfig {
                             response,
                             SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
                         )
+                    } else if (status == HttpStatus.FORBIDDEN && request.isBookingReliabilityRequest()) {
+                        SecurityErrorResponseWriter.write(
+                            response,
+                            BookingReliabilityApiError.BOOKING_RELIABILITY_FORBIDDEN,
+                        )
                     } else {
                         val error = if (status == HttpStatus.FORBIDDEN) {
                             PlanFoundationError.FORBIDDEN
@@ -241,6 +248,22 @@ class SecurityConfig {
                         "/api/{tenantCode}/clinics/{clinicId}/notifications/re-notify",
                     )
                     .access(notificationReNotifyAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/{tenantCode}/clinics/{clinicId}/members/*/booking-reliability/decision",
+                    )
+                    .access(bookingReliabilityReadAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/{tenantCode}/clinics/{clinicId}/members/*/booking-reliability/audit",
+                    )
+                    .access(bookingReliabilityAuditAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/{tenantCode}/clinics/{clinicId}/members/*/booking-reliability/override",
+                        "/api/{tenantCode}/clinics/{clinicId}/members/*/booking-reliability/clear",
+                    )
+                    .access(bookingReliabilityWriteAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/**")
                     .access(readTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/**")
@@ -380,6 +403,40 @@ class SecurityConfig {
             platformNotificationServiceAccess(),
         )
 
+    private fun bookingReliabilityReadAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(
+                SchedulingRole.ADMIN,
+                SchedulingRole.STAFF,
+                SchedulingRole.DOCTOR,
+            ),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_booking-reliability:read"),
+            tenantAuthorizationManager,
+            exactClinicMembershipAccess(),
+        )
+
+    private fun bookingReliabilityAuditAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_booking-reliability:audit"),
+            tenantAuthorizationManager,
+            exactClinicMembershipAccess(),
+        )
+
+    private fun bookingReliabilityWriteAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_booking-reliability:write"),
+            tenantAuthorizationManager,
+            exactClinicMembershipAccess(),
+        )
+
     private fun platformNotificationServiceAccess(): AuthorizationManager<RequestAuthorizationContext> =
         AuthorizationManager { authentication, _ ->
             val principal = authentication.get().principal as? SchedulingUserPrincipal
@@ -413,6 +470,9 @@ class SecurityConfig {
 /** security filter chain에서도 policy 전용 privacy-safe 오류 계약을 선택한다. */
 private fun jakarta.servlet.http.HttpServletRequest.isSchedulingPolicyRequest(): Boolean =
     isSchedulingPolicyRequestPath(requestURI)
+
+private fun jakarta.servlet.http.HttpServletRequest.isBookingReliabilityRequest(): Boolean =
+    isBookingReliabilityRequestPath(requestURI)
 
 /** commitment v2 Security 실패가 기존 foundation 오류로 축약되지 않게 path를 구분한다. */
 private fun jakarta.servlet.http.HttpServletRequest.isAppointmentCommitmentRequest(): Boolean =

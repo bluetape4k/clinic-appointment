@@ -14,6 +14,7 @@ import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecision
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecisionType
 import io.bluetape4k.clinic.appointment.model.commitment.ProposalConsentSubject
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
+import io.bluetape4k.clinic.appointment.model.reliability.BookingReliabilityDecisionStamp
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -90,6 +91,54 @@ class AppointmentCommitmentRepositoryTest {
             found.status shouldBeEqualTo AppointmentCommitmentStatus.CONFIRMED
             found.confirmedProposalId shouldBeEqualTo proposal.id
             found.version shouldBeEqualTo 2L
+        }
+    }
+
+    @Test
+    fun `confirm CAS는 기존 reliability decision stamp가 바뀌면 실패한다`() {
+        withCommitmentTables { seed ->
+            val expectedStamp = BookingReliabilityDecisionStamp(
+                decisionId = 11L,
+                policyVersionId = 7L,
+                policyHash = "a".repeat(64),
+                evaluationDigest = "b".repeat(64),
+                expiresAt = Instant.parse("2026-08-10T00:00:00Z"),
+            )
+            val replacementStamp = expectedStamp.copy(
+                decisionId = 12L,
+                evaluationDigest = "c".repeat(64),
+            )
+            val commitment = repository.create(
+                AppointmentCommitment(
+                    appointmentId = seed.appointmentId,
+                    status = AppointmentCommitmentStatus.PROPOSED,
+                    origin = AppointmentOrigin.PATIENT,
+                    confirmedProposalId = null,
+                    effectivePolicySnapshotId = 7L,
+                    version = 1L,
+                    bookingReliabilityStamp = expectedStamp,
+                ),
+            )
+            val proposal = repository.appendProposal(
+                commitmentId = commitment.id,
+                draft = proposal(seed.appointmentId),
+                proposalHash = "p".repeat(64),
+                expiresAt = Instant.parse("2026-08-10T00:30:00Z"),
+                representativeTreatmentName = "복합 진료",
+                createdByActor = "patient",
+            )
+
+            repository.confirmByVersion(
+                commitmentId = commitment.id,
+                expectedVersion = 1L,
+                proposalId = proposal.id,
+                bookingReliabilityStamp = replacementStamp,
+                expectedBookingReliabilityStamp = replacementStamp,
+            ).shouldBeFalse()
+
+            repository.findByAppointmentId(seed.appointmentId)
+                .shouldNotBeNull()
+                .status shouldBeEqualTo AppointmentCommitmentStatus.PROPOSED
         }
     }
 

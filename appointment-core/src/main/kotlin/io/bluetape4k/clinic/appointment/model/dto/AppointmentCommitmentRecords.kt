@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.model.commitment.AppointmentOrigin
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecisionType
 import io.bluetape4k.clinic.appointment.model.commitment.ResourceAllocationDraft
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
+import io.bluetape4k.clinic.appointment.model.reliability.BookingReliabilityDecisionStamp
 import io.bluetape4k.support.requireNotBlank
 import io.bluetape4k.support.requirePositiveNumber
 import java.io.Serializable
@@ -23,6 +24,7 @@ import java.time.LocalTime
  * 확정 전에는 `null`이며 새 제안 대기 중에도 기존 확정 값을 보존합니다.
  * @property effectivePolicySnapshotId 결정 당시 정책 스냅샷입니다.
  * @property version CAS에 사용하는 양수 낙관적 잠금 값입니다.
+ * @property bookingReliabilityStamp 신규 예약 eligibility를 증명한 immutable stamp입니다.
  */
 data class AppointmentCommitmentRecord(
     val id: Long,
@@ -32,6 +34,7 @@ data class AppointmentCommitmentRecord(
     val confirmedProposalId: Long?,
     val effectivePolicySnapshotId: Long,
     val version: Long,
+    val bookingReliabilityStamp: BookingReliabilityDecisionStamp? = null,
 ) : Serializable {
     companion object {
         private const val serialVersionUID = 1L
@@ -62,6 +65,7 @@ data class AppointmentProposalRecord(
     val policySnapshotId: Long,
     val supersedesProposalId: Long?,
     val createdByActor: String,
+    val bookingReliabilityStamp: BookingReliabilityDecisionStamp? = null,
 ) : Serializable {
     companion object {
         private const val serialVersionUID = 1L

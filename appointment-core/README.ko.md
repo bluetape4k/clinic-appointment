@@ -32,6 +32,21 @@ activation command, preview job은 이 모듈에 있고 HTTP와 worker orchestra
 [예약 정책 도메인 모델](../docs/requirements/domain-model.md#scheduling-policy-모델)과
 [Scheduling Policy API 계약](../docs/api/scheduling-policy.md)을 참고하세요.
 
+## 예약 신뢰도 도메인
+
+`BookingReliabilityEvaluator`는 typed `NO_SHOW`·`CANCELLED` 사건을 평가하는 순수하고 결정적인
+evaluator입니다. 고객 책임만 남기고 event ID/source version으로 중복을 제거한 뒤, 불변 정책
+snapshot의 lookback·지각 취소·임계값을 적용하여 제한된 reason code, trigger ID, 만료 시각,
+digest를 반환합니다. `BookingEligibilityPort`가 읽기 계약을 제공하고 rollout mode·권한은 API
+모듈이 담당합니다. core 모델은 회원 이름·전화번호·자유 입력 메모를 읽지 않습니다.
+
+영속 모델은 사건, 불변 결정, append-only override, keyset 재평가 작업을 위한 additive V17 테이블로
+분리했습니다. Exposed `transaction {}` 경계는 호출자가 소유합니다.
+
+[예약 신뢰도 기준 문서](../docs/booking-reliability-policy.ko.md),
+[ERD](../docs/images/readme-diagrams/booking-reliability-erd-01-ko.png),
+[클래스 경계](../docs/images/readme-diagrams/booking-reliability-class-01-ko.png)를 참고하세요.
+
 ## 핵심 클래스
 
 ### 도메인 엔티티 (Record)

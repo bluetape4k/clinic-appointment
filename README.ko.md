@@ -27,6 +27,7 @@ Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제�
 - **테넌트 범위 REST API** - `/api/{tenantCode}/...` 경로, JWT tenant 인가, Flyway 마이그레이션, Swagger UI 제공
 - **예약 플랜 기반** - 구매 상품 BOM을 불변 진료 의무로 스냅숏하고, 카탈로그 동기화와 신뢰된 구매 이벤트를 통해 방문 예약 이전 단계를 관리
 - **예약 정책 기반** - 가예약, 동의, 오버부킹, 재확인, 운영 장애 복구, 통제된 진료 시간 연장에 대한 테넌트 기준 정책과 병원별 재정의를 버전 관리
+- **예약 신뢰도 경계** - 고객 책임 no-show·지각 취소 임계값을 회원 프로필 복제 없이 평가하고, 기존 확정 약속을 보호하며, 제한된 직원 검토 경로를 제공
 - **Angular 18 웹 UI** - 예약 조회/생성/상태 변경 인터페이스
 
 카탈로그 동기화 호출자는 [docs/api/catalog-payload-hash.md](docs/api/catalog-payload-hash.md)의
@@ -59,6 +60,23 @@ Scheduling policy는 앞으로의 예약 결정이 따라야 할 동작을 정�
 
 이 기반 구현에는 예약 생성 경로의 정책 소비 플래그가 없습니다. 확정 예약은 정책 기반 변경을
 적용하기 전에 여전히 고객 동의가 필요합니다.
+
+### 예약 신뢰도 경계
+
+예약 신뢰도 evaluator는 typed 예약 결과, 불변 effective policy snapshot, 제한된 회원 이력으로
+새 예약 자격을 판단합니다. 예약 경계에는 불투명한 `MemberId`만 전달합니다. clinic allowlist와
+`OFF`·`SHADOW`·`ENFORCE` 모드로 단계적으로 전개하며, `PROPOSED`·`HELD`는 검토할 수 있지만
+이미 `CONFIRMED`인 약속은 그대로 둡니다.
+
+<a href="docs/visual-companions/booking-reliability-workflow-ko-light.html">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/visual-companions/booking-reliability-workflow-ko-dark.png">
+    <img src="docs/visual-companions/booking-reliability-workflow-ko-light.png" alt="신뢰 이벤트부터 제한된 예약 자격 gate까지의 예약 신뢰도 업무 흐름">
+  </picture>
+</a>
+
+[예약 신뢰도 기준 문서](docs/booking-reliability-policy.ko.md), [API 계약](docs/api/booking-reliability.md),
+[운영 런북](docs/runbooks/booking-reliability.ko.md), [interactive workflow](docs/visual-companions/booking-reliability-workflow-ko-light.html)를 함께 참고하세요.
 
 <a id="profile-reevaluation"></a>
 ### 프로필 변경 예약 재평가 경계
@@ -182,6 +200,10 @@ parameter를 제거합니다.
 | [방문 확정 약속 v2 API](docs/api/visit-commitment.md) | Gateway 인증, 가예약·승인·확정, 멱등성, 오류와 배포 설정 |
 | [방문 확정 약속 v2 운영 런북](docs/runbooks/visit-commitment-operations.md) | shadow/허용목록, 경보, 보존, 재처리, PostgreSQL 롤백 |
 | [프로필 변경 예약 재평가 운영 런북](docs/runbooks/profile-reevaluation.ko.md) | 비활성·드라이런 배포, 병원 허용목록, SLO 경보, 제한된 재처리, 개인정보 사고와 롤백 |
+| [예약 신뢰도 기준 문서](docs/booking-reliability-policy.ko.md) | 임계값, typed 책임, 개인정보 경계, Choice B 확정 약속 보호, 단계별 전개 계약 |
+| [예약 신뢰도 API](docs/api/booking-reliability.md) | 결정·override·clear·감사 endpoint와 capability·병원 범위 검증 |
+| [예약 신뢰도 운영 런북](docs/runbooks/booking-reliability.ko.md) | schema readiness, shadow/canary 증거, 제한된 재평가, 보존·삭제, 롤백 |
+| [예약 신뢰도 업무 흐름](docs/visual-companions/booking-reliability-workflow-ko-light.html) | 한국어 light-theme 인터랙티브 시뮬레이션과 결정 이력; dark/영문 변형은 visual companion manifest에서 확인 |
 
 ### 변경 이력
 

@@ -12,6 +12,8 @@ import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberApiEx
 import io.bluetape4k.clinic.appointment.event.notification.NotificationContractException
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.service.IdempotencyKeyConflictException
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiError
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiException
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
 import jakarta.servlet.http.HttpServletRequest
@@ -127,6 +129,13 @@ class GlobalExceptionHandler(
     ): ResponseEntity<SchedulingApiErrorResponse> =
         appointmentCommitmentResponse(ex.error, request)
 
+    @ExceptionHandler(BookingReliabilityApiException::class)
+    fun handleBookingReliability(
+        ex: BookingReliabilityApiException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> =
+        bookingReliabilityResponse(ex.error, request)
+
     @ExceptionHandler(PlanFoundationApiException::class)
     fun handlePlanFoundation(
         ex: PlanFoundationApiException,
@@ -212,6 +221,9 @@ class GlobalExceptionHandler(
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
         }
+        if (request.isBookingReliabilityRequest()) {
+            return bookingReliabilityResponse(BookingReliabilityApiError.BOOKING_PAYLOAD_INVALID, request)
+        }
         if (request.isSchedulingPolicyRequest()) {
             log.warn { "Scheduling policy request validation failed" }
             return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
@@ -234,6 +246,9 @@ class GlobalExceptionHandler(
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
         }
+        if (request.isBookingReliabilityRequest()) {
+            return bookingReliabilityResponse(BookingReliabilityApiError.BOOKING_PAYLOAD_INVALID, request)
+        }
         if (request.isSchedulingPolicyRequest()) {
             log.warn { "Scheduling policy path parameter validation failed" }
             return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
@@ -255,6 +270,9 @@ class GlobalExceptionHandler(
     ): ResponseEntity<*> {
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
+        }
+        if (request.isBookingReliabilityRequest()) {
+            return bookingReliabilityResponse(BookingReliabilityApiError.BOOKING_PAYLOAD_INVALID, request)
         }
         if (request.isSchedulingPolicyRequest()) {
             log.warn { "Scheduling policy request body could not be decoded" }
@@ -296,6 +314,9 @@ class GlobalExceptionHandler(
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
         }
+        if (request.isBookingReliabilityRequest()) {
+            return bookingReliabilityResponse(BookingReliabilityApiError.BOOKING_PAYLOAD_INVALID, request)
+        }
         if (request.isSchedulingPolicyRequest()) {
             log.warn { "Scheduling policy request failed domain validation" }
             return schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_PAYLOAD_INVALID, request)
@@ -316,6 +337,9 @@ class GlobalExceptionHandler(
     ): ResponseEntity<*> {
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.COMMITMENT_NOT_FOUND, request)
+        }
+        if (request.isBookingReliabilityRequest()) {
+            return bookingReliabilityResponse(BookingReliabilityApiError.BOOKING_DECISION_UNAVAILABLE, request)
         }
         if (request.isSchedulingPolicyRequest()) {
             log.warn { "Scheduling policy resource lookup was hidden" }
@@ -341,6 +365,9 @@ class GlobalExceptionHandler(
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.COMMITMENT_NOT_FOUND, request)
         }
+        if (request.isBookingReliabilityRequest()) {
+            return bookingReliabilityResponse(BookingReliabilityApiError.BOOKING_DECISION_UNAVAILABLE, request)
+        }
         log.warn { "Request path was not mapped: exception_type=${ex::class.simpleName}" }
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
             .body(ApiResponse.error<Nothing>("Not found"))
@@ -353,6 +380,9 @@ class GlobalExceptionHandler(
     ): ResponseEntity<*> {
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentInternalError(ex, request)
+        }
+        if (request.isBookingReliabilityRequest()) {
+            return bookingReliabilityResponse(BookingReliabilityApiError.BOOKING_DECISION_UNAVAILABLE, request)
         }
         if (request.isSchedulingPolicyRequest()) {
             return schedulingPolicyInternalError(ex, request)
@@ -377,6 +407,8 @@ class GlobalExceptionHandler(
     fun handleAccessDenied(request: HttpServletRequest): ResponseEntity<*> =
         if (request.isAppointmentCommitmentRequest()) {
             appointmentCommitmentResponse(AppointmentCommitmentApiError.SCOPE_FORBIDDEN, request)
+        } else if (request.isBookingReliabilityRequest()) {
+            bookingReliabilityResponse(BookingReliabilityApiError.BOOKING_RELIABILITY_FORBIDDEN, request)
         } else if (request.isSchedulingPolicyRequest()) {
             schedulingPolicyResponse(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, request)
         } else if (request.isPlanFoundationRequest()) {
@@ -392,6 +424,9 @@ class GlobalExceptionHandler(
     ): ResponseEntity<*> {
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentInternalError(ex, request)
+        }
+        if (request.isBookingReliabilityRequest()) {
+            return bookingReliabilityResponse(BookingReliabilityApiError.BOOKING_DECISION_UNAVAILABLE, request)
         }
         if (request.isSchedulingPolicyRequest()) {
             return schedulingPolicyInternalError(ex, request)
@@ -510,6 +545,28 @@ class GlobalExceptionHandler(
 
     private fun HttpServletRequest.isAppointmentCommitmentRequest(): Boolean =
         isAppointmentCommitmentRequestPath(requestURI)
+
+    private fun HttpServletRequest.isBookingReliabilityRequest(): Boolean =
+        isBookingReliabilityRequestPath(requestURI)
+
+    private fun bookingReliabilityResponse(
+        error: BookingReliabilityApiError,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.correlationId()
+        log.warn { "Booking reliability request rejected: error_code=${error.name}, correlation_id=$correlationId" }
+        val builder = ResponseEntity.status(error.httpStatus)
+        if (error.retryable) builder.header(HttpHeaders.RETRY_AFTER, "5")
+        return builder.body(
+            SchedulingApiErrorResponse(
+                error = error.safeMessage,
+                errorCode = error.name,
+                correlationId = correlationId,
+                retryable = error.retryable,
+                action = error.action,
+            ),
+        )
+    }
 
     private fun HttpServletRequest.correlationId(): String =
         getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) as? String

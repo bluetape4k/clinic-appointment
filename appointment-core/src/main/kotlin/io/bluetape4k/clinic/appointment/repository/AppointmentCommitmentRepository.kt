@@ -10,12 +10,15 @@ import io.bluetape4k.clinic.appointment.model.commitment.ProposalConsentSubject
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentCommitmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentProposalRecord
 import io.bluetape4k.clinic.appointment.model.dto.ProposalConsentDecisionRecord
+import io.bluetape4k.clinic.appointment.model.reliability.BookingReliabilityDecisionStamp
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentProposals
 import io.bluetape4k.clinic.appointment.model.tables.ConsentDecisions
 import io.bluetape4k.support.requireNotBlank
 import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.Column
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -43,9 +46,14 @@ class AppointmentCommitmentRepository {
                     it[appointmentId] = commitment.appointmentId
                     it[status] = commitment.status
                     it[origin] = commitment.origin
-                    it[confirmedProposalId] = commitment.confirmedProposalId
-                    it[effectivePolicySnapshotId] = commitment.effectivePolicySnapshotId
-                    it[version] = commitment.version
+                it[confirmedProposalId] = commitment.confirmedProposalId
+                it[effectivePolicySnapshotId] = commitment.effectivePolicySnapshotId
+                it[bookingReliabilityDecisionId] = commitment.bookingReliabilityStamp?.decisionId
+                it[bookingReliabilityPolicyVersionId] = commitment.bookingReliabilityStamp?.policyVersionId
+                it[bookingReliabilityPolicyHash] = commitment.bookingReliabilityStamp?.policyHash
+                it[bookingReliabilityEvaluationDigest] = commitment.bookingReliabilityStamp?.evaluationDigest
+                it[bookingReliabilityExpiresAt] = commitment.bookingReliabilityStamp?.expiresAt
+                it[version] = commitment.version
                 }.value
         return AppointmentCommitmentRecord(
             id = id,
@@ -55,6 +63,7 @@ class AppointmentCommitmentRepository {
             confirmedProposalId = commitment.confirmedProposalId,
             effectivePolicySnapshotId = commitment.effectivePolicySnapshotId,
             version = commitment.version,
+            bookingReliabilityStamp = commitment.bookingReliabilityStamp,
         )
     }
 
@@ -254,6 +263,11 @@ class AppointmentCommitmentRepository {
                     it[AppointmentProposals.representativeTreatmentName] = validTreatmentName
                     it[AppointmentProposals.proposalHash] = validProposalHash
                     it[policySnapshotId] = draft.policySnapshotId
+                    it[bookingReliabilityDecisionId] = draft.bookingReliabilityStamp?.decisionId
+                    it[bookingReliabilityPolicyVersionId] = draft.bookingReliabilityStamp?.policyVersionId
+                    it[bookingReliabilityPolicyHash] = draft.bookingReliabilityStamp?.policyHash
+                    it[bookingReliabilityEvaluationDigest] = draft.bookingReliabilityStamp?.evaluationDigest
+                    it[bookingReliabilityExpiresAt] = draft.bookingReliabilityStamp?.expiresAt
                     it[supersedesProposalId] = draft.supersedesProposalId
                     it[AppointmentProposals.createdByActor] = validCreatedByActor
                 }.value
@@ -270,6 +284,7 @@ class AppointmentCommitmentRepository {
             policySnapshotId = draft.policySnapshotId,
             supersedesProposalId = draft.supersedesProposalId,
             createdByActor = validCreatedByActor,
+            bookingReliabilityStamp = draft.bookingReliabilityStamp,
         )
     }
 
@@ -341,6 +356,8 @@ class AppointmentCommitmentRepository {
         expectedVersion: Long,
         proposalId: Long,
         updatedAt: Instant = Instant.now(),
+        bookingReliabilityStamp: BookingReliabilityDecisionStamp? = null,
+        expectedBookingReliabilityStamp: BookingReliabilityDecisionStamp? = null,
     ): Boolean {
         val validCommitmentId = commitmentId.requirePositiveNumber("commitmentId")
         val validExpectedVersion = expectedVersion.requirePositiveNumber("expectedVersion")
@@ -365,15 +382,37 @@ class AppointmentCommitmentRepository {
                 .single()[AppointmentProposals.policySnapshotId]
         return AppointmentCommitments.update(
             where = {
-                (AppointmentCommitments.id eq validCommitmentId) and
-                    (AppointmentCommitments.version eq validExpectedVersion) and
-                    (AppointmentCommitments.status neq AppointmentCommitmentStatus.EXPIRED) and
-                    (AppointmentCommitments.status neq AppointmentCommitmentStatus.CANCELLED)
+                var predicate: Op<Boolean> =
+                    (AppointmentCommitments.id eq validCommitmentId) and
+                        (AppointmentCommitments.version eq validExpectedVersion) and
+                        (AppointmentCommitments.status neq AppointmentCommitmentStatus.EXPIRED) and
+                        (AppointmentCommitments.status neq AppointmentCommitmentStatus.CANCELLED)
+                expectedBookingReliabilityStamp?.let { stamp ->
+                    predicate = predicate and (AppointmentCommitments.bookingReliabilityDecisionId eq stamp.decisionId)
+                    predicate = predicate and
+                        (AppointmentCommitments.bookingReliabilityPolicyVersionId eq stamp.policyVersionId)
+                    predicate = predicate and (AppointmentCommitments.bookingReliabilityPolicyHash eq stamp.policyHash)
+                    predicate = predicate and
+                        (AppointmentCommitments.bookingReliabilityEvaluationDigest eq stamp.evaluationDigest)
+                    predicate = predicate and if (stamp.expiresAt == null) {
+                        AppointmentCommitments.bookingReliabilityExpiresAt.isNull()
+                    } else {
+                        AppointmentCommitments.bookingReliabilityExpiresAt eq stamp.expiresAt
+                    }
+                }
+                predicate
             },
         ) {
             it[status] = AppointmentCommitmentStatus.CONFIRMED
             it[confirmedProposalId] = validProposalId
             it[effectivePolicySnapshotId] = policySnapshotId
+            bookingReliabilityStamp?.let { stamp ->
+                it[AppointmentCommitments.bookingReliabilityDecisionId] = stamp.decisionId
+                it[AppointmentCommitments.bookingReliabilityPolicyVersionId] = stamp.policyVersionId
+                it[AppointmentCommitments.bookingReliabilityPolicyHash] = stamp.policyHash
+                it[AppointmentCommitments.bookingReliabilityEvaluationDigest] = stamp.evaluationDigest
+                it[AppointmentCommitments.bookingReliabilityExpiresAt] = stamp.expiresAt
+            }
             it[version] = validExpectedVersion + 1
             it[AppointmentCommitments.updatedAt] = updatedAt
         } == 1
@@ -530,6 +569,13 @@ class AppointmentCommitmentRepository {
             confirmedProposalId = row[AppointmentCommitments.confirmedProposalId],
             effectivePolicySnapshotId = row[AppointmentCommitments.effectivePolicySnapshotId],
             version = row[AppointmentCommitments.version],
+            bookingReliabilityStamp = row.toBookingReliabilityStamp(
+                decisionId = AppointmentCommitments.bookingReliabilityDecisionId,
+                policyVersionId = AppointmentCommitments.bookingReliabilityPolicyVersionId,
+                policyHash = AppointmentCommitments.bookingReliabilityPolicyHash,
+                evaluationDigest = AppointmentCommitments.bookingReliabilityEvaluationDigest,
+                expiresAt = AppointmentCommitments.bookingReliabilityExpiresAt,
+            ),
         )
 
     private fun mapProposal(row: ResultRow) =
@@ -546,10 +592,37 @@ class AppointmentCommitmentRepository {
             policySnapshotId = row[AppointmentProposals.policySnapshotId],
             supersedesProposalId = row[AppointmentProposals.supersedesProposalId],
             createdByActor = row[AppointmentProposals.createdByActor],
+            bookingReliabilityStamp = row.toBookingReliabilityStamp(
+                decisionId = AppointmentProposals.bookingReliabilityDecisionId,
+                policyVersionId = AppointmentProposals.bookingReliabilityPolicyVersionId,
+                policyHash = AppointmentProposals.bookingReliabilityPolicyHash,
+                evaluationDigest = AppointmentProposals.bookingReliabilityEvaluationDigest,
+                expiresAt = AppointmentProposals.bookingReliabilityExpiresAt,
+            ),
         )
 
     private companion object {
         val PROFILE_REEVALUATION_STATUSES =
             setOf(AppointmentCommitmentStatus.PROPOSED, AppointmentCommitmentStatus.HELD)
     }
+}
+
+private fun ResultRow.toBookingReliabilityStamp(
+    decisionId: Column<Long?>,
+    policyVersionId: Column<Long?>,
+    policyHash: Column<String?>,
+    evaluationDigest: Column<String?>,
+    expiresAt: Column<Instant?>,
+): BookingReliabilityDecisionStamp? {
+    val id = this[decisionId] ?: return null
+    val version = this[policyVersionId] ?: return null
+    val hash = this[policyHash] ?: return null
+    val digest = this[evaluationDigest] ?: return null
+    return BookingReliabilityDecisionStamp(
+        decisionId = id,
+        policyVersionId = version,
+        policyHash = hash,
+        evaluationDigest = digest,
+        expiresAt = this[expiresAt],
+    )
 }

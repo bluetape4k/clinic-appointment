@@ -189,6 +189,33 @@ class SchedulingEventTrustVerifier(
         return envelope.trusted()
     }
 
+    /**
+     * 출석 신뢰도 정책용 최소 event를 trusted envelope로 승격합니다.
+     *
+     * payload는 회원 서비스의 opaque member ID와 bounded attribution만 포함하며, producer가
+     * 보낸 이름·전화번호·상담 원문은 예약서비스 신뢰 경계를 통과할 수 없습니다.
+     */
+    fun verifyBookingReliability(
+        envelope: UntrustedSchedulingEventEnvelope<BookingReliabilitySignalEvent>,
+    ): TrustedSchedulingEventEnvelope<BookingReliabilitySignalEvent> {
+        try {
+            BookingReliabilityEventBounds.validate(envelope)
+        } catch (_: IllegalArgumentException) {
+            throw SchedulingTrustException("PAYLOAD_CONTRACT_INVALID")
+        }
+        verifyCommonEnvelope(
+            envelope,
+            eventType = "BookingReliabilitySignalRecorded",
+            schemaVersion = 1,
+        )
+        trust(
+            envelope.payloadHash == BookingReliabilitySignalPayloadHasher.hash(envelope.payload),
+            "PAYLOAD_HASH_MISMATCH",
+        )
+        trust(signatureVerifier.verify(envelope), "SIGNATURE_INVALID")
+        return envelope.trusted()
+    }
+
     private fun verifyCommonEnvelope(
         envelope: UntrustedSchedulingEventEnvelope<*>,
         eventType: String,
@@ -731,4 +758,50 @@ internal object ExternalFactEventBounds {
         }
     }
 
+}
+
+/** 예약 신뢰도 event가 내부 table 경계를 넘기 전 적용하는 구조·PII 방지 경계입니다. */
+internal object BookingReliabilityEventBounds {
+    private const val MAX_IDENTIFIER_LENGTH = 128
+    private const val MAX_SIGNATURE_LENGTH = 1_024
+    private const val MAX_CANONICAL_PAYLOAD_BYTES = 16 * 1_024
+    private val identifier = Regex("[A-Za-z0-9][A-Za-z0-9._:-]*")
+    private val sha256 = Regex("[0-9a-f]{64}")
+
+    fun validate(envelope: UntrustedSchedulingEventEnvelope<BookingReliabilitySignalEvent>) {
+        listOf(
+            envelope.eventId,
+            envelope.eventType,
+            envelope.producer,
+            envelope.issuer,
+            envelope.audience,
+            envelope.keyId,
+            envelope.algorithm,
+            envelope.correlationId,
+        ).forEach(::boundedIdentifier)
+        require(envelope.payloadHash.matches(sha256)) { "payloadHash must be lowercase SHA-256" }
+        require(envelope.schemaVersion > 0) { "schemaVersion must be positive" }
+        require(envelope.signature.length in 1..MAX_SIGNATURE_LENGTH) { "signature length is invalid" }
+
+        val payload = envelope.payload
+        require(payload.eventId == envelope.eventId) { "eventId does not match envelope" }
+        require(payload.occurredAt == envelope.occurredAt) { "occurredAt does not match envelope" }
+        boundedIdentifier(payload.sourceAuthority)
+        boundedIdentifier(payload.sourceAggregateId)
+        require(payload.sourceVersion > 0) { "sourceVersion must be positive" }
+        require(payload.tenantGroupId > 0) { "tenantGroupId must be positive" }
+        require(payload.clinicId > 0) { "clinicId must be positive" }
+        boundedIdentifier(payload.memberId)
+        boundedIdentifier(payload.eventId)
+        require(payload.appointmentId > 0) { "appointmentId must be positive" }
+        require(BookingReliabilitySignalPayloadHasher.canonicalBytes(payload).size <= MAX_CANONICAL_PAYLOAD_BYTES) {
+            "booking reliability payload is too large"
+        }
+    }
+
+    private fun boundedIdentifier(value: String) {
+        require(value.length in 1..MAX_IDENTIFIER_LENGTH && identifier.matches(value)) {
+            "identifier is invalid"
+        }
+    }
 }
