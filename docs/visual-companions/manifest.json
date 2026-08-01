@@ -72,6 +72,75 @@
           "html": "docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html"
         }
       }
+    },
+    {
+      "id": "product-scheduling-classification",
+      "source": "docs/superpowers/specs/2026-07-29-issue-184-visit-commitment-design.md",
+      "status": "approved",
+      "public": true,
+      "presentation": {
+        "mode": "simulation",
+        "defaultView": "simulation",
+        "views": [
+          "simulation"
+        ]
+      },
+      "locales": {
+        "en": {
+          "title": "Product Scheduling Classification",
+          "html": "docs/superpowers/specs/2026-07-29-issue-184-product-scheduling-classification.en.html"
+        },
+        "ko": {
+          "title": "상품 예약 운영 특성 분류",
+          "html": "docs/superpowers/specs/2026-07-29-issue-184-product-scheduling-classification.html"
+        }
+      }
+    },
+    {
+      "id": "package-product-composition",
+      "source": "docs/superpowers/specs/2026-07-29-issue-184-visit-commitment-design.md",
+      "status": "approved",
+      "public": true,
+      "presentation": {
+        "mode": "simulation",
+        "defaultView": "simulation",
+        "views": [
+          "simulation"
+        ]
+      },
+      "locales": {
+        "en": {
+          "title": "Package Product Composition",
+          "html": "docs/superpowers/specs/2026-07-29-issue-184-package-product-composition.en.html"
+        },
+        "ko": {
+          "title": "패키지 상품 구성",
+          "html": "docs/superpowers/specs/2026-07-29-issue-184-package-product-composition.html"
+        }
+      }
+    },
+    {
+      "id": "product-bom-to-appointment-flow",
+      "source": "docs/superpowers/specs/2026-07-29-issue-184-visit-commitment-design.md",
+      "status": "approved",
+      "public": true,
+      "presentation": {
+        "mode": "simulation",
+        "defaultView": "simulation",
+        "views": [
+          "simulation"
+        ]
+      },
+      "locales": {
+        "en": {
+          "title": "Execution BOM to Appointment Flow",
+          "html": "docs/superpowers/specs/2026-07-29-issue-184-product-bom-to-appointment-flow.en.html"
+        },
+        "ko": {
+          "title": "상품 실행 BOM의 예약 전개 흐름",
+          "html": "docs/superpowers/specs/2026-07-29-issue-184-product-bom-to-appointment-flow.html"
+        }
+      }
     }
   ]
 }

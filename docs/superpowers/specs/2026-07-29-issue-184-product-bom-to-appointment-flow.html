@@ -4,14 +4,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
   <link rel="icon" href="data:,">
   <title>상품 실행 BOM에서 확정 예약까지</title>
+  <script>
+    (() => {
+      const stored = localStorage.getItem("starlight-theme");
+      const preferred = stored || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.dataset.theme = preferred;
+    })();
+  </script>
   <style>
     :root {
-      color-scheme:dark;
+      color-scheme: light dark;
       --bg:#07111f; --panel:#101d31; --panel2:#172740; --line:#2b4265;
       --text:#eef5ff; --muted:#9fafc7; --blue:#64b2ff; --green:#50d6a1;
       --amber:#ffbd69; --purple:#b39aff; --red:#ff7e8e; --teal:#61d7d1;
+    }
+    :root[data-theme="light"] {
+      --bg:#f4f8fd; --panel:#ffffff; --panel2:#eaf1f9; --line:#c6d5e7;
+      --text:#152238; --muted:#53657d; --blue:#1264c3; --green:#087a57;
+      --amber:#9a5b00; --purple:#6b4bb5; --red:#b4233c; --teal:#007c82;
     }
     * { box-sizing:border-box; }
     body {
@@ -24,7 +37,14 @@
     }
     button { font:inherit; }
     main { max-width:1500px; margin:auto; padding:28px; }
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
     .eyebrow { color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.08em; }
+    .eyebrow a { color:inherit; text-decoration:none; }
+    .theme-toggle { border:1px solid var(--line); border-radius:9px; padding:8px 11px; color:var(--text); background:var(--panel); cursor:pointer; }
+    .theme-toggle:focus-visible { outline:3px solid var(--amber); outline-offset:2px; }
+    .provenance { display:grid; grid-template-columns:auto 1fr auto auto; gap:10px; align-items:center; margin:18px 0; padding:11px 13px; border:1px dashed var(--line); border-radius:11px; background:rgba(100,178,255,.08); color:var(--muted); font-size:11px; line-height:1.45; }
+    .provenance strong { color:var(--green); font-size:10px; letter-spacing:.06em; }
+    .provenance a { color:var(--blue); }
     h1 { margin:8px 0; font-size:30px; }
     .lead { margin:0 0 18px; color:var(--muted); line-height:1.6; }
     .boundary {
@@ -125,14 +145,27 @@
       .future,.footer-rule { grid-template-columns:1fr; }
     }
   </style>
+  <style>
+    :root[data-theme="light"] .lane, :root[data-theme="light"] .step, :root[data-theme="light"] .panel, :root[data-theme="light"] .stage, :root[data-theme="light"] .future-card { background:#fff; }
+    :root[data-theme="light"] .contract-box, :root[data-theme="light"] .item, :root[data-theme="light"] .visit { background:#eef4fb; }
+    :root[data-theme="light"] .chip { background:#dfeaf6; color:var(--muted); }
+  </style>
 </head>
 <body>
 <main>
-  <div class="eyebrow">Issue #184 · 예약서비스 흐름 화면 2/2</div>
+  <div class="toolbar">
+    <div class="eyebrow"><a href="./2026-07-29-issue-184-visit-commitment-design.md">Issue #184 · 예약서비스 흐름 화면 2/2</a></div>
+    <button class="theme-toggle" type="button" aria-label="라이트 테마와 다크 테마 전환">테마</button>
+  </div>
+  <aside class="provenance" data-status="approved" data-source="2026-07-29-issue-184-visit-commitment-design.md" data-baseline="6ece3a0">
+    <strong>SOURCE SNAPSHOT</strong><span>Issue #184 · 승인된 실행 BOM 예약 전개 흐름</span>
+    <a href="./2026-07-29-issue-184-visit-commitment-design.md">기준 Markdown</a>
+    <a href="./2026-07-29-issue-184-product-bom-to-appointment-flow.en.html">English</a>
+  </aside>
   <h1>상품 실행 BOM이 방문별 확정 예약으로 바뀌는 과정</h1>
   <p class="lead">상품 구성 화면에서 발행한 예약 관련 계약을 예약서비스가 다시 해석하지 않고, Plan과 방문 일정으로 전개하는 흐름입니다. 각 단계를 눌러 입력·처리·출력을 확인하세요.</p>
 
-  <section class="boundary">
+  <section id="simulation" class="boundary">
     <div class="lane product">
       <span class="owner product">상품관리서비스 소유</span>
       <h2>상품 특성·패키지 구성·version</h2>
@@ -317,6 +350,22 @@
   }
 
   selectStep('publish');
+</script>
+<script>
+  (() => {
+    const button = document.querySelector('.theme-toggle');
+    const apply = (theme) => {
+      document.documentElement.dataset.theme = theme;
+      button.textContent = theme === 'dark' ? '라이트 테마' : '다크 테마';
+      button.setAttribute('aria-label', theme === 'dark' ? '라이트 테마로 전환' : '다크 테마로 전환');
+    };
+    apply(document.documentElement.dataset.theme || 'light');
+    button.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      apply(next);
+      localStorage.setItem("starlight-theme", next);
+    });
+  })();
 </script>
 </body>
 </html>

@@ -177,6 +177,9 @@ Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seede
 | [Appointment plan visual companion](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.en.html) | English simulation and decision history for plans, booking commitments, disruption, and capacity. |
 | [Scheduling policy visual companion](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.en.html) | English simulation and decision history for policy compilation, approval, activation, and recovery. |
 | [Profile change reevaluation workflow](docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html) | English light/dark workflow for minimal CRM events, fair dispatch, state decisions, and privacy-safe recovery. |
+| [Product scheduling classification](docs/superpowers/specs/2026-07-29-issue-184-product-scheduling-classification.en.html) | English simulation for product traits, capacity ownership, and the validated booking contract. |
+| [Package product composition](docs/superpowers/specs/2026-07-29-issue-184-package-product-composition.en.html) | English simulation for repeated, composite, and choose-M-of-N package composition. |
+| [Execution BOM to appointment flow](docs/superpowers/specs/2026-07-29-issue-184-product-bom-to-appointment-flow.en.html) | English simulation from immutable execution BOM through visits, proposals, consent, and confirmation. |
 | [Appointment plan recovery](docs/runbooks/appointment-plan-foundation-recovery.md) | Quarantine inspection, dry-run redrive, rollback, and authority ownership. |
 | [Scheduling policy API](docs/api/scheduling-policy.md) | Tenant/clinic policy endpoints, idempotency, preview polling, errors, and rollout flags. |
 | [Scheduling policy activation runbook](docs/runbooks/scheduling-policy-activation.md) | Worker alerts, 60s/5m activation handling, replay/retire recovery, and V10 readiness. |

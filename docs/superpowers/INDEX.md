@@ -20,3 +20,6 @@ Markdown 원본이 규범이며 HTML은 이해를 돕는 자체 포함형 시각
 |---|---|---|---|---|---|
 | 예약 플랜·수용량 | [source](specs/2026-07-26-appointment-plan-and-capacity-design.md) | [English](specs/2026-07-26-appointment-plan-and-capacity-design.en.html) | [한국어](specs/2026-07-26-appointment-plan-and-capacity-design.html) | `hybrid` (`simulation` 기본) | `true` |
 | 예약 정책 기반 구현 | [source](specs/2026-07-27-scheduling-policy-foundation-design.md) | [English](specs/2026-07-27-scheduling-policy-foundation-design.en.html) | [한국어](specs/2026-07-27-scheduling-policy-foundation-design.html) | `hybrid` (`simulation` 기본) | `true` |
+| 상품 예약 운영 특성 분류 | [source](specs/2026-07-29-issue-184-visit-commitment-design.md) | [English](specs/2026-07-29-issue-184-product-scheduling-classification.en.html) | [한국어](specs/2026-07-29-issue-184-product-scheduling-classification.html) | `simulation` | `true` |
+| 패키지 상품 구성 | [source](specs/2026-07-29-issue-184-visit-commitment-design.md) | [English](specs/2026-07-29-issue-184-package-product-composition.en.html) | [한국어](specs/2026-07-29-issue-184-package-product-composition.html) | `simulation` | `true` |
+| 상품 실행 BOM의 예약 전개 흐름 | [source](specs/2026-07-29-issue-184-visit-commitment-design.md) | [English](specs/2026-07-29-issue-184-product-bom-to-appointment-flow.en.html) | [한국어](specs/2026-07-29-issue-184-product-bom-to-appointment-flow.html) | `simulation` | `true` |

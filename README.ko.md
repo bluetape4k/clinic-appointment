@@ -173,6 +173,9 @@ parameter를 제거합니다.
 | [예약 플랜 시각 동반 문서](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 예약 약속, 장애 재조정, 수용량의 시뮬레이션과 결정 이력 |
 | [예약 정책 시각 동반 문서](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html) | 정책 컴파일, 승인, 활성화, 복구의 시뮬레이션과 결정 이력 |
 | [프로필 변경 예약 재평가 업무 흐름](docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html) | CRM 최소 이벤트, 병원 간 공정 처리, 상태별 판단, 개인정보를 남기지 않는 복구 흐름 |
+| [상품 예약 운영 특성 분류](docs/superpowers/specs/2026-07-29-issue-184-product-scheduling-classification.html) | 상품 특성, 수용량 소유권, 검증된 예약 계약을 확인하는 시뮬레이션 |
+| [패키지 상품 구성](docs/superpowers/specs/2026-07-29-issue-184-package-product-composition.html) | 반복형, 복합형, N개 중 M개 선택형 패키지 구성을 비교하는 시뮬레이션 |
+| [상품 실행 BOM의 예약 전개 흐름](docs/superpowers/specs/2026-07-29-issue-184-product-bom-to-appointment-flow.html) | 불변 실행 BOM이 방문, 제안, 동의, 확정 예약으로 전개되는 과정의 시뮬레이션 |
 | [예약 플랜 복구 런북](docs/runbooks/appointment-plan-foundation-recovery.md) | 격리 확인, 드라이런 재처리, 롤백, 원천 서비스 책임 |
 | [예약 정책 API](docs/api/scheduling-policy.md) | 테넌트/병원 정책 엔드포인트, 멱등성, 미리보기 폴링, 오류, 롤아웃 플래그 |
 | [예약 정책 활성화 런북](docs/runbooks/scheduling-policy-activation.md) | 작업자 경보, 60초/5분 활성화 처리, 재생/폐기 복구, V10 준비 조건 |
