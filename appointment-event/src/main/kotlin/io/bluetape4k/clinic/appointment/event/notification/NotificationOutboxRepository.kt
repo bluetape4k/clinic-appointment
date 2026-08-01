@@ -58,6 +58,10 @@ class NotificationOutboxRepository(
             ?: error("notification outbox insert was ignored without an idempotency row")
     }
 
+    /** 현재 caller transaction에서 같은 멱등성 digest의 outbox 행이 보이는지 확인합니다. */
+    fun containsIdempotency(digest: NotificationIdempotencyDigest): Boolean =
+        findByIdempotency(digest) != null
+
     fun suppressLegacy(draft: LegacySuppressionDraft): NotificationOutboxRecord {
         upsertSuppression(draft)
         return findByIdempotency(draft.idempotencyDigest)

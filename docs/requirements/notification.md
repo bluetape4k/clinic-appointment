@@ -86,7 +86,18 @@ clinic:
 확정 예약의 전일·당일 리마인더는 예약 version과 reminder slot을 포함한 멱등성
 키로 미리 outbox에 기록합니다. 보정 scanner는 중단 시간에 누락된 materialization만
 같은 키로 복구합니다. `catch-up-window`가 지난 리마인더는 늦게 발송하지 않고
-`SUPPRESSED(REMINDER_WINDOW_MISSED)`로 끝냅니다.
+`SUPPRESSED(REMINDER_WINDOW_MISSED)`로 끝냅니다. 아직 발송 시각이 오지 않은 slot도
+미래 `availableAt`을 가진 outbox로 미리 기록해 긴 backlog 순회 중 due 시각을 놓치지
+않습니다.
+
+애플리케이션 준비 직후와 `reminder-recovery-interval`마다 확정 예약을 ID keyset
+page로 제한해 조회합니다. DB 조회 한 번은 `batch-size`, 실행 한 번은
+`reminder-recovery-max-candidates-per-run`을 넘지 않으며, 다음 page는 이전 cursor 뒤에서
+이어집니다. 현재 순회의 `run_id`와 마지막 완료 예약 ID는
+`clinic_notification_reminder_checkpoint`에 기록하므로 프로세스 재시작이나 leader 교체
+뒤에도 이어집니다. outbox unique key는 같은 알림의 중복 생성을 막습니다. 별도 환자
+목록이나 연락처 snapshot은 만들지 않습니다. `worker.enabled=false`이면 보정 경로도
+구성하지 않습니다.
 
 Redis 기반 `LeaderGroupElector`는 향후 많은 병원이 사용하는 SaaS 환경에서 보정
 scanner trigger를 줄이는 최적화로 추가할 수 있습니다. 현재 발송 정합성은 Redis가
@@ -100,6 +111,8 @@ scanner trigger를 줄이는 최적화로 추가할 수 있습니다. 현재 발
 | `worker.max-elapsed` | `24h` | 최초 시도부터 허용하는 최대 경과 시간 |
 | `worker.provider-attempts-per-lease` | `1` | 한 lease에서 수행할 provider 호출 횟수 |
 | `worker.catch-up-window` | `30m` | 누락 리마인더 보정 시간창 |
+| `worker.reminder-recovery-interval` | `1h` | 시작 시 보정 이후 반복 실행 간격 |
+| `worker.reminder-recovery-max-candidates-per-run` | `1,000` | 한 번의 보정 실행에서 처리할 후보 상한 |
 | `worker.lease-duration` | `60s` | 선점 유효 시간 |
 | `worker.provider-timeout` | `30s` | 실제 provider 호출을 기다리는 최대 시간 |
 | `worker.poll-interval` | `1s` | dispatcher 실행 주기 |

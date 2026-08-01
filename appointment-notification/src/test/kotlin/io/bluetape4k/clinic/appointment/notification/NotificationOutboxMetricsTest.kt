@@ -15,7 +15,7 @@ import java.time.Duration
 internal class NotificationOutboxMetricsTest {
 
     @Test
-    fun `설계 기준의 8개 metric 이름만 등록하고 태그는 낮은 cardinality 값만 사용한다`() {
+    fun `설계 기준의 9개 metric 이름만 등록하고 태그는 낮은 cardinality 값만 사용한다`() {
         val registry = SimpleMeterRegistry()
         val metrics = NotificationOutboxMetrics(registry, FixedObservationStore())
 
@@ -47,6 +47,9 @@ internal class NotificationOutboxMetricsTest {
         metrics.recordLeaseRecovered(
             channel = NotificationChannelType.SMS,
             eventType = NotificationEventType.REMINDER,
+        )
+        metrics.recordReminderRecovery(
+            ReminderRecoveryScanResult(notYetDue = 0, enqueued = 2, suppressed = 1, alreadyExists = 3),
         )
 
         registry.meters.map { it.id.name }.toSet() shouldBeEqualTo NotificationOutboxMetrics.METER_NAMES

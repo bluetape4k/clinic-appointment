@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 
 internal class NotificationSchedulingRunnersTest {
@@ -70,5 +71,28 @@ internal class NotificationSchedulingRunnersTest {
         NotificationOutboxSchedulingRunner(dispatcher).poll()
 
         coVerify(exactly = 1) { dispatcher.dispatchOnce() }
+    }
+
+    @Test
+    fun `reminder poll은 보정 결과를 낮은 cardinality metric으로 기록한다`() {
+        val scheduler = mockk<AppointmentReminderScheduler>()
+        val metrics = mockk<NotificationOutboxMetrics>(relaxed = true)
+        val result = ReminderRecoveryScanResult(notYetDue = 1, enqueued = 2, suppressed = 3, alreadyExists = 4)
+        coEvery { scheduler.triggerOnce() } returns result
+
+        NotificationReminderSchedulingRunner(scheduler, metrics).poll()
+
+        coVerify(exactly = 1) { scheduler.triggerOnce() }
+        verify(exactly = 1) { metrics.recordReminderRecovery(result) }
+    }
+
+    @Test
+    fun `reminder 보정 실패는 다음 scheduled tick을 위해 호출 경계에서 흡수한다`() {
+        val scheduler = mockk<AppointmentReminderScheduler>()
+        coEvery { scheduler.triggerOnce() } throws IllegalStateException("temporary database error")
+
+        NotificationReminderSchedulingRunner(scheduler).poll()
+
+        coVerify(exactly = 1) { scheduler.triggerOnce() }
     }
 }

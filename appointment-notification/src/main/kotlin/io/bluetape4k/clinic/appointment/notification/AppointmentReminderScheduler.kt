@@ -10,16 +10,34 @@ class AppointmentReminderScheduler(
     private val scanner: NotificationReminderRecoveryScanner,
     private val triggerGuard: ReminderRecoveryTriggerGuard = ReminderRecoveryTriggerGuard { true },
     private val batchSize: Int = 100,
+    private val maxCandidatesPerRun: Int = batchSize,
 ) {
 
     init {
         require(batchSize > 0) { "batchSize must be positive" }
+        require(maxCandidatesPerRun >= batchSize) { "maxCandidatesPerRun must be at least batchSize" }
     }
 
     suspend fun triggerOnce(): ReminderRecoveryScanResult? {
         if (!triggerGuard.shouldTrigger()) return null
-        return scanner.scanOnce(batchSize)
+        var aggregate = ReminderRecoveryScanResult(0, 0, 0)
+        while (aggregate.scanned < maxCandidatesPerRun) {
+            val pageLimit = minOf(batchSize, maxCandidatesPerRun - aggregate.scanned)
+            val page = scanner.scanOnce(pageLimit)
+            aggregate = aggregate + page
+            if (page.scanned < pageLimit) break
+        }
+        return aggregate
     }
+
+    private operator fun ReminderRecoveryScanResult.plus(other: ReminderRecoveryScanResult): ReminderRecoveryScanResult =
+        ReminderRecoveryScanResult(
+            notYetDue = notYetDue + other.notYetDue,
+            enqueued = enqueued + other.enqueued,
+            suppressed = suppressed + other.suppressed,
+            alreadyExists = alreadyExists + other.alreadyExists,
+            scanned = scanned + other.scanned,
+        )
 }
 
 fun interface ReminderRecoveryTriggerGuard {

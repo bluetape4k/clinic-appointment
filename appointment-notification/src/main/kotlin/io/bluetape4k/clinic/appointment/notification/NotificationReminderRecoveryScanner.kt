@@ -5,6 +5,8 @@ import io.bluetape4k.clinic.appointment.event.notification.ClinicId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
+import io.bluetape4k.clinic.appointment.event.notification.LegacySuppressionDraft
+import io.bluetape4k.clinic.appointment.event.notification.SendableNotificationDraft
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import java.io.Serializable
 import java.time.Duration
@@ -33,22 +35,41 @@ class NotificationReminderRecoveryScanner(
         var notYetDue = 0
         var enqueued = 0
         var suppressed = 0
-        source.findCandidates(now, limit).forEach { candidate ->
+        var alreadyExists = 0
+        val candidates = source.findCandidates(now, limit)
+        candidates.forEach { candidate ->
             when {
-                candidate.dueAt.isAfter(now) -> notYetDue++
+                candidate.dueAt.isAfter(now) -> {
+                    when (materializer.scheduleFuture(candidate)) {
+                        null -> notYetDue++
+                        ReminderRecoveryMaterializationResult.ENQUEUED -> enqueued++
+                        ReminderRecoveryMaterializationResult.SUPPRESSED -> suppressed++
+                        ReminderRecoveryMaterializationResult.ALREADY_EXISTS -> alreadyExists++
+                    }
+                }
                 candidate.dueAt.isBefore(now.minus(catchUpWindow)) -> {
-                    if (materializer.suppressMissed(candidate) == ReminderRecoveryMaterializationResult.SUPPRESSED) {
-                        suppressed++
+                    when (materializer.suppressMissed(candidate)) {
+                        ReminderRecoveryMaterializationResult.SUPPRESSED -> suppressed++
+                        ReminderRecoveryMaterializationResult.ALREADY_EXISTS -> alreadyExists++
+                        ReminderRecoveryMaterializationResult.ENQUEUED -> Unit
                     }
                 }
                 else -> {
-                    if (materializer.enqueue(candidate) == ReminderRecoveryMaterializationResult.ENQUEUED) {
-                        enqueued++
+                    when (materializer.enqueue(candidate)) {
+                        ReminderRecoveryMaterializationResult.ENQUEUED -> enqueued++
+                        ReminderRecoveryMaterializationResult.SUPPRESSED -> suppressed++
+                        ReminderRecoveryMaterializationResult.ALREADY_EXISTS -> alreadyExists++
                     }
                 }
             }
         }
-        return ReminderRecoveryScanResult(notYetDue = notYetDue, enqueued = enqueued, suppressed = suppressed)
+        return ReminderRecoveryScanResult(
+            notYetDue = notYetDue,
+            enqueued = enqueued,
+            suppressed = suppressed,
+            alreadyExists = alreadyExists,
+            scanned = candidates.size,
+        )
     }
 }
 
@@ -72,6 +93,12 @@ interface ReminderRecoveryMaterializer {
      * [candidate]와 같은 멱등성 key로 window-missed suppression을 기록해야 합니다.
      */
     suspend fun suppressMissed(candidate: ReminderRecoveryCandidate): ReminderRecoveryMaterializationResult
+
+    /**
+     * 아직 발송 시각이 아닌 후보를 미래 `availableAt` outbox로 미리 기록합니다.
+     * 이를 지원하지 않는 adapter는 `null`을 반환해 기존 not-yet-due 동작을 유지합니다.
+     */
+    suspend fun scheduleFuture(candidate: ReminderRecoveryCandidate): ReminderRecoveryMaterializationResult? = null
 }
 
 data class ReminderRecoveryCandidate(
@@ -81,6 +108,8 @@ data class ReminderRecoveryCandidate(
     val slot: NotificationSlot,
     val idempotencyKey: NotificationIdempotencyKey,
     val dueAt: Instant,
+    val payload: ReminderRecoveryPayload? = null,
+    val progress: ReminderRecoveryProgress? = null,
 ) : Serializable {
     init {
         require(slot == NotificationSlot.REMINDER_24H || slot == NotificationSlot.REMINDER_SAME_DAY) {
@@ -91,6 +120,33 @@ data class ReminderRecoveryCandidate(
     override fun toString(): String =
         "ReminderRecoveryCandidate(scope=<redacted>, appointmentId=<redacted>, slot=$slot, idempotencyKey=<redacted>, dueAt=$dueAt)"
 
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/** 한 예약의 모든 reminder slot 처리가 끝난 뒤 전진할 durable 순회 위치입니다. */
+data class ReminderRecoveryProgress(
+    val runId: String,
+    val appointmentId: Long,
+    val completesRun: Boolean = false,
+    val advancesCursor: Boolean = true,
+) : Serializable {
+    init {
+        require(runId.isNotBlank()) { "runId must not be blank" }
+        require(appointmentId > 0) { "appointmentId must be positive" }
+    }
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/** 예약 조회 adapter가 materializer에 전달하는 개인정보 비포함 outbox draft입니다. */
+data class ReminderRecoveryPayload(
+    val sendableDraft: SendableNotificationDraft?,
+    val suppressionDraft: LegacySuppressionDraft,
+) : Serializable {
     companion object {
         private const val serialVersionUID = 1L
     }
@@ -115,7 +171,18 @@ data class ReminderRecoveryScanResult(
     val notYetDue: Int,
     val enqueued: Int,
     val suppressed: Int,
+    val alreadyExists: Int = 0,
+    val scanned: Int = notYetDue + enqueued + suppressed + alreadyExists,
 ) : Serializable {
+    init {
+        require(listOf(notYetDue, enqueued, suppressed, alreadyExists, scanned).all { it >= 0 }) {
+            "reminder recovery counts must be non-negative"
+        }
+        require(scanned == notYetDue + enqueued + suppressed + alreadyExists) {
+            "scanned must equal the sum of reminder recovery outcomes"
+        }
+    }
+
     companion object {
         private const val serialVersionUID = 1L
     }

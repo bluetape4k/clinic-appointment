@@ -189,11 +189,25 @@ legacy 예약의 회원 ID 누락은 기본 `ENFORCE`입니다. 이행이 필요
 
 리마인더 scanner 중단 시에는 다음처럼 처리합니다.
 
+- 애플리케이션 준비 직후 보정 runner가 실행되고 이후
+  `clinic.notification.worker.reminder-recovery-interval` 간격으로 반복
+- DB 조회 한 번은 `worker.batch-size`, 실행 한 번은
+  `worker.reminder-recovery-max-candidates-per-run` 이하로 제한
+- `clinic_notification_reminder_checkpoint`의 `run_id`와 마지막 완료 예약 ID에서 재개
+- `worker.enabled=false`이면 scanner, scheduler, 주기 runner를 모두 구성하지 않음
 - catch-up window 안: 동일한 예약 version·reminder slot 키로 누락 outbox 생성
+- 아직 due 전인 slot: 미래 `availableAt`의 `PENDING` outbox로 미리 기록
 - catch-up window 밖: 늦게 발송하지 않고
   `SUPPRESSED(REMINDER_WINDOW_MISSED)` 기록
 - 예약 변경: 이전 version 리마인더는
   `SUPPRESSED(APPOINTMENT_CHANGED)`로 끝내고 새 version을 생성
+- `clinic.notification.reminder.recovery{result=enqueued|suppressed|already_exists|not_yet_due}`와
+  비식별 집계 로그로 보정량 확인
+
+`already_exists`가 반복해서 높아도 중복 발송을 의미하지는 않습니다. outbox unique key가
+같은 논리 알림을 한 행으로 수렴시킨 결과입니다. 반대로 `suppressed`가 급증하면 장애 시간이
+`worker.catch-up-window`를 넘었는지 먼저 확인합니다. metric과 로그에는 tenant, clinic,
+appointment, member 식별자를 넣지 않습니다.
 
 ## 7. HMAC 키 교체와 긴급 폐기
 

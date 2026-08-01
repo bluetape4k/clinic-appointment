@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.logging.KLogging
+import io.bluetape4k.logging.info
 import io.bluetape4k.logging.warn
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
@@ -63,6 +64,35 @@ class NotificationRetentionSchedulingRunner(
         } catch (e: Exception) {
             healthSignals?.recordRetentionFailure()
             log.warn { "알림 outbox retention에 실패했습니다: failure=${e.javaClass.simpleName}" }
+        }
+    }
+}
+
+/** 애플리케이션 준비 직후와 설정된 간격마다 누락된 reminder materialization을 보정합니다. */
+class NotificationReminderSchedulingRunner(
+    private val scheduler: AppointmentReminderScheduler,
+    private val metrics: NotificationOutboxMetrics? = null,
+) {
+    companion object : KLogging()
+
+    @EventListener(ApplicationReadyEvent::class)
+    fun onApplicationReady() {
+        poll()
+    }
+
+    @Scheduled(fixedDelayString = "\${clinic.notification.worker.reminder-recovery-interval:PT1H}")
+    fun poll() {
+        try {
+            val result = runSynchronously { scheduler.triggerOnce() } ?: return
+            metrics?.recordReminderRecovery(result)
+            if (result.scanned > 0) {
+                log.info {
+                    "리마인더 보정 완료: enqueued=${result.enqueued}, suppressed=${result.suppressed}, " +
+                        "alreadyExists=${result.alreadyExists}, notYetDue=${result.notYetDue}, scanned=${result.scanned}"
+                }
+            }
+        } catch (e: Exception) {
+            log.warn { "리마인더 보정에 실패했습니다: failure=${e.javaClass.simpleName}" }
         }
     }
 }

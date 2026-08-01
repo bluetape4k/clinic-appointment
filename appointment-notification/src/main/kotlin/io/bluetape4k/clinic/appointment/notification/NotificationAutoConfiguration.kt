@@ -335,6 +335,7 @@ class NotificationAutoConfiguration {
         ReminderRecoverySource::class,
         ReminderRecoveryMaterializer::class,
     )
+    @ConditionalOnProperty(prefix = "clinic.notification.worker", name = ["enabled"], havingValue = "true", matchIfMissing = true)
     @ConditionalOnMissingBean(NotificationReminderRecoveryScanner::class)
     fun notificationReminderRecoveryScanner(
         source: ReminderRecoverySource,
@@ -353,6 +354,7 @@ class NotificationAutoConfiguration {
 
     @Bean
     @ConditionalOnBean(NotificationReminderRecoveryScanner::class)
+    @ConditionalOnProperty(prefix = "clinic.notification.worker", name = ["enabled"], havingValue = "true", matchIfMissing = true)
     @ConditionalOnMissingBean(AppointmentReminderScheduler::class)
     fun appointmentReminderScheduler(
         scanner: NotificationReminderRecoveryScanner,
@@ -363,7 +365,18 @@ class NotificationAutoConfiguration {
             scanner = scanner,
             triggerGuard = triggerGuardProvider.ifAvailable ?: ReminderRecoveryTriggerGuard { true },
             batchSize = properties.worker.validate().batchSize,
+            maxCandidatesPerRun = properties.worker.validate().reminderRecoveryMaxCandidatesPerRun,
         )
+
+    @Bean
+    @ConditionalOnBean(AppointmentReminderScheduler::class)
+    @ConditionalOnProperty(prefix = "clinic.notification.worker", name = ["enabled"], havingValue = "true", matchIfMissing = true)
+    @ConditionalOnMissingBean(NotificationReminderSchedulingRunner::class)
+    fun notificationReminderSchedulingRunner(
+        scheduler: AppointmentReminderScheduler,
+        metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
+    ): NotificationReminderSchedulingRunner =
+        NotificationReminderSchedulingRunner(scheduler, metricsProvider.ifAvailable)
 
     @Bean
     @ConditionalOnBean(NotificationOutboxWorkStore::class)
