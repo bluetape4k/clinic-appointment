@@ -269,5 +269,10 @@ Status: `PENDING` — procedural repair in progress
 Implementation is forbidden until `CL-01..CL-06`, `WF-06`, and `A-03` are
 checked with fresh evidence. The current run remains `PENDING`.
 
+Step 2-R evidence is now recorded at
+`docs/review/2026-08-01-issue-170-waitlist-core-spec-review.md`. Its integrated
+verdict is `NEEDS REVIEW SCOPE` with P0=1 and P1=10, so the approved spec must
+be materially revised and reapproved before the plan gate can open.
+
 Required checks: `15/46` checked so far; N/A: `1`; Blocked: `0`.
 Unchecked IDs: all executable rows above.
