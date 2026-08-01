@@ -1,5 +1,14 @@
 package io.bluetape4k.clinic.appointment.model.policy
 
+/** schema-one에서 threshold가 없을 때 재현 가능한 compatibility 값입니다. */
+internal object BookingReliabilityPolicyDefaults {
+    const val LOOKBACK_DAYS: Int = 180
+    const val LATE_CANCELLATION_WINDOW_MINUTES: Int = 120
+    const val NO_SHOW_THRESHOLD: Int = 3
+    const val LATE_CANCELLATION_THRESHOLD: Int = 3
+    const val COOLING_OFF_HOURS: Int = 24
+}
+
 /**
  * 하나의 scheduling bucket에 적용되는 tenant 수용량과 의도적 overbooking 한도입니다.
  *
@@ -70,12 +79,31 @@ data class CapacityAndOverbookingOverride(
  * 단위는 score이며 음수가 될 수 없습니다.
  * @property minimumPriorityScore 모든 가중치와 penalty를 적용한 뒤 보장하는 하한입니다.
  * 비활성화할 수 없고 음수가 될 수 없습니다.
+ * @property lookbackDays 고객 책임 사건을 조회할 과거 기간입니다. 단위는 일입니다.
+ * @property lateCancellationWindowMinutes 진료 시작 전 이 시간 이내의 취소를 late
+ * cancellation으로 분류하는 기준입니다. 단위는 분입니다.
+ * @property noShowThreshold lookback 기간 안 고객 책임 no-show 누적 기준입니다. `0`은
+ * 비활성화를 의미하지 않으며 즉시 제한 기준으로 해석됩니다.
+ * @property lateCancellationThreshold lookback 기간 안 고객 책임 late cancellation 누적
+ * 기준입니다. `0`은 비활성화를 의미하지 않습니다.
+ * @property coolingOffHours 제한 결정의 기본 유효 기간입니다. 단위는 시간입니다.
+ * @property thresholdsPresent schema-one legacy payload에 다섯 threshold가 모두 있었는지
+ * 나타냅니다. `false`이면 compiler가 reliability threshold 판단을 비활성화하고 기존 scoring
+ * 입력만 보존합니다.
  */
 data class PriorityAndReliabilityPolicy(
     val priorityWeights: Map<String, Int>,
     val noShowPenalty: Int,
     val sameDayCancellationPenalty: Int,
     val minimumPriorityScore: Int,
+    val lookbackDays: Int = BookingReliabilityPolicyDefaults.LOOKBACK_DAYS,
+    val lateCancellationWindowMinutes: Int =
+        BookingReliabilityPolicyDefaults.LATE_CANCELLATION_WINDOW_MINUTES,
+    val noShowThreshold: Int = BookingReliabilityPolicyDefaults.NO_SHOW_THRESHOLD,
+    val lateCancellationThreshold: Int =
+        BookingReliabilityPolicyDefaults.LATE_CANCELLATION_THRESHOLD,
+    val coolingOffHours: Int = BookingReliabilityPolicyDefaults.COOLING_OFF_HOURS,
+    val thresholdsPresent: Boolean = true,
 ) : SchedulingPolicyPayload {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.PRIORITY_AND_RELIABILITY
 
@@ -93,6 +121,15 @@ data class PriorityAndReliabilityPolicy(
  * 없고 `Disable`도 유효하지 않습니다.
  * @property sameDayCancellationPenalty 당일 취소 penalty 대체값입니다. 단위는 score이며
  * 음수가 될 수 없고 `Disable`도 유효하지 않습니다.
+ * @property lookbackDays 사건 조회 기간의 clinic 대체값입니다. `Disable`은 유효하지 않습니다.
+ * @property lateCancellationWindowMinutes late cancellation cutoff의 clinic 대체값입니다.
+ * `Disable`은 유효하지 않습니다.
+ * @property noShowThreshold no-show 누적 기준의 clinic 대체값입니다. `Disable`이면 해당
+ * 기준만 제한 없이 상속 값으로 유지하고 decision snapshot에서 비활성 경로로 기록합니다.
+ * @property lateCancellationThreshold late cancellation 누적 기준의 clinic 대체값입니다.
+ * `Disable`이면 해당 기준만 제한 없이 상속 값으로 유지하고 decision snapshot에서 비활성
+ * 경로로 기록합니다.
+ * @property coolingOffHours 제한 유효 기간의 clinic 대체값입니다. `Disable`은 유효하지 않습니다.
  *
  * tenant [PriorityAndReliabilityPolicy.minimumPriorityScore]는 안전 하한이므로
  * clinic에서 override할 수 없도록 의도적으로 제외했습니다.
@@ -101,6 +138,11 @@ data class PriorityAndReliabilityOverride(
     val priorityWeights: OverrideValue<Map<String, Int>>,
     val noShowPenalty: OverrideValue<Int>,
     val sameDayCancellationPenalty: OverrideValue<Int>,
+    val lookbackDays: OverrideValue<Int> = OverrideValue.Inherit,
+    val lateCancellationWindowMinutes: OverrideValue<Int> = OverrideValue.Inherit,
+    val noShowThreshold: OverrideValue<Int> = OverrideValue.Inherit,
+    val lateCancellationThreshold: OverrideValue<Int> = OverrideValue.Inherit,
+    val coolingOffHours: OverrideValue<Int> = OverrideValue.Inherit,
 ) : SchedulingPolicyPayload {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.PRIORITY_AND_RELIABILITY
 

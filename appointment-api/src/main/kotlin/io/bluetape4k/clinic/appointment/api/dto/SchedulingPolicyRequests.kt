@@ -48,7 +48,8 @@ data class PolicyGenerationRequest(
  * scope와 행위자 정보는 URL과 검증된 Gateway principal에서만 결정한다.
  *
  * @property kind 폐쇄형 정책 종류.
- * @property schemaVersion payload wire schema. 현재 `1`만 허용한다.
+ * @property schemaVersion payload wire schema. 기존 정책은 `1`을 읽을 수 있고,
+ * priority/reliability 정책의 새 draft는 현재 schema `2`를 사용한다.
  * @property effectiveFrom 정책 선택 반개구간의 포함 UTC 시작 시각.
  * @property effectiveUntil 선택 반개구간의 제외 UTC 종료 시각. 끝이 없으면 `null`.
  * @property payload [kind]와 URL scope가 선택한 폐쇄형 schema-one JSON.

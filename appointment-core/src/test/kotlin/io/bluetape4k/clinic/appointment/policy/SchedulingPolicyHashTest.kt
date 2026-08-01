@@ -55,6 +55,26 @@ class SchedulingPolicyHashTest {
     }
 
     @Test
+    fun `reliability payload hash includes thresholds and compatibility presence`() {
+        val complete = PriorityAndReliabilityPolicy(
+            priorityWeights = mapOf("RETURN_VISIT" to 2),
+            noShowPenalty = 5,
+            sameDayCancellationPenalty = 2,
+            minimumPriorityScore = 0,
+            lookbackDays = 180,
+            lateCancellationWindowMinutes = 120,
+            noShowThreshold = 3,
+            lateCancellationThreshold = 2,
+            coolingOffHours = 24,
+        )
+
+        (SchedulingPolicyHasher.payloadHash(complete) ==
+            SchedulingPolicyHasher.payloadHash(complete.copy(noShowThreshold = 4))) shouldBeEqualTo false
+        (SchedulingPolicyHasher.payloadHash(complete) ==
+            SchedulingPolicyHasher.payloadHash(complete.copy(thresholdsPresent = false))) shouldBeEqualTo false
+    }
+
+    @Test
     fun `payload hashing rejects canonical input above the codec safety bound`() {
         val oversized = PriorityAndReliabilityPolicy(
             priorityWeights = (1..20_000).associate { "SIGNAL_$it" to it },

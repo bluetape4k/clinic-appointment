@@ -5,6 +5,7 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyApiException
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyProperties
+import io.bluetape4k.clinic.appointment.api.dto.CreateSchedulingPolicyDraftRequest
 import io.bluetape4k.clinic.appointment.api.dto.PolicyGenerationRequest
 import io.bluetape4k.clinic.appointment.api.dto.PreviewSchedulingPolicyRequest
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
@@ -13,6 +14,7 @@ import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
 import io.bluetape4k.clinic.appointment.model.dto.PolicyScopeRef
 import io.bluetape4k.clinic.appointment.model.policy.ActorRole
 import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
+import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyKind
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyJobRepository
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
 import io.mockk.mockk
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.Assertions.assertSame
 import java.io.IOException
 import java.time.Instant
+import tools.jackson.databind.json.JsonMapper
 
 /**
  * 정책 HTTP facade가 단계적 rollout 설정에서도 처리 불가능한 durable 작업을 만들지
@@ -36,9 +39,10 @@ import java.time.Instant
 class SchedulingPolicyAdministrationServiceTest {
 
     private val previewService = mockk<SchedulingPolicyPreviewService>(relaxed = true)
+    private val commandService = mockk<SchedulingPolicyCommandService>()
     private val registry = SimpleMeterRegistry()
     private val service = SchedulingPolicyAdministrationService(
-        commandService = mockk(),
+        commandService = commandService,
         previewService = previewService,
         previewStore = mockk(),
         previewVerifier = mockk(),
@@ -122,6 +126,26 @@ class SchedulingPolicyAdministrationServiceTest {
                 PolicyScope.TENANT_DEFAULT,
             )
         }
+    }
+
+    @Test
+    fun `new reliability drafts require the current schema`() {
+        assertFailsWith<IllegalArgumentException> {
+            service.createDraft(
+                scope = PolicyScopeRef(11L, PolicyScope.TENANT_DEFAULT),
+                actor = actor(),
+                request = CreateSchedulingPolicyDraftRequest(
+                    kind = SchedulingPolicyKind.PRIORITY_AND_RELIABILITY,
+                    schemaVersion = 1,
+                    effectiveFrom = Instant.parse("2026-08-01T00:00:00Z"),
+                    effectiveUntil = null,
+                    payload = JsonMapper.builder().build().createObjectNode(),
+                    expectedScopeRevision = 0L,
+                    changeReason = "Introduce reliability thresholds",
+                ),
+            )
+        }
+        verify(exactly = 0) { commandService.createDraft(any()) }
     }
 
     private fun serviceWith(metrics: SchedulingPolicyMetrics) =

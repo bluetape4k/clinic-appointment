@@ -16,6 +16,8 @@ import io.bluetape4k.clinic.appointment.model.policy.OverrideValue
 import io.bluetape4k.clinic.appointment.model.policy.PatientBookingMode
 import io.bluetape4k.clinic.appointment.model.policy.PolicyLifecycle
 import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
+import io.bluetape4k.clinic.appointment.model.policy.PriorityAndReliabilityOverride
+import io.bluetape4k.clinic.appointment.model.policy.PriorityAndReliabilityPolicy
 import io.bluetape4k.clinic.appointment.model.policy.ProvisionalCapacityMode
 import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyDefinition
 import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyKind
@@ -63,7 +65,7 @@ class SchedulingPolicyValidatorTest {
             SchedulingPolicyValidator.validate(valid.copy(changeReason = " "))
         }
         assertFailsWith<IllegalArgumentException> {
-            SchedulingPolicyValidator.validate(valid.copy(schemaVersion = 2))
+            SchedulingPolicyValidator.validate(valid.copy(schemaVersion = 3))
         }
         assertFailsWith<IllegalArgumentException> {
             SchedulingPolicyValidator.validate(
@@ -349,6 +351,135 @@ class SchedulingPolicyValidatorTest {
                     notificationChannels = OverrideValue.Inherit,
                     disruptionNoticeSeconds = OverrideValue.Inherit,
                     profileReevaluationHeldTargetSeconds = OverrideValue.Disable,
+                ),
+                PolicyScope.CLINIC_OVERRIDE,
+            )
+        }
+    }
+
+    @Test
+    fun `decodes a legacy reliability payload as an explicit disabled compatibility state`() {
+        val decoded = SchedulingPolicyPayloadCodec().decode(
+            kind = SchedulingPolicyKind.PRIORITY_AND_RELIABILITY,
+            scope = PolicyScope.TENANT_DEFAULT,
+            schemaVersion = 1,
+            json =
+                """
+                {
+                  "priorityWeights": {"RETURN_VISIT": 2},
+                  "noShowPenalty": 5,
+                  "sameDayCancellationPenalty": 2,
+                  "minimumPriorityScore": 0
+                }
+                """.trimIndent(),
+        )
+
+        decoded shouldBeEqualTo PriorityAndReliabilityPolicy(
+            priorityWeights = mapOf("RETURN_VISIT" to 2),
+            noShowPenalty = 5,
+            sameDayCancellationPenalty = 2,
+            minimumPriorityScore = 0,
+            thresholdsPresent = false,
+        )
+    }
+
+    @Test
+    fun `schema two reliability payload requires every threshold field`() {
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyPayloadCodec().decode(
+                kind = SchedulingPolicyKind.PRIORITY_AND_RELIABILITY,
+                scope = PolicyScope.TENANT_DEFAULT,
+                schemaVersion = 2,
+                json =
+                    """
+                    {
+                      "priorityWeights": {"RETURN_VISIT": 2},
+                      "noShowPenalty": 5,
+                      "sameDayCancellationPenalty": 2,
+                      "minimumPriorityScore": 0,
+                      "lookbackDays": 180,
+                      "lateCancellationWindowMinutes": 120,
+                      "noShowThreshold": 3,
+                      "lateCancellationThreshold": 2
+                    }
+                    """.trimIndent(),
+            )
+        }
+    }
+
+    @Test
+    fun `accepts reliability clinic threshold override and only explicit disable`() {
+        val decoded = SchedulingPolicyPayloadCodec().decode(
+            kind = SchedulingPolicyKind.PRIORITY_AND_RELIABILITY,
+            scope = PolicyScope.CLINIC_OVERRIDE,
+            schemaVersion = 2,
+            json =
+                """
+                {
+                  "priorityWeights": {"mode": "INHERIT"},
+                  "noShowPenalty": {"mode": "INHERIT"},
+                  "sameDayCancellationPenalty": {"mode": "INHERIT"},
+                  "lookbackDays": {"mode": "SET", "value": 90},
+                  "lateCancellationWindowMinutes": {"mode": "SET", "value": 60},
+                  "noShowThreshold": {"mode": "DISABLE"},
+                  "lateCancellationThreshold": {"mode": "SET", "value": 2},
+                  "coolingOffHours": {"mode": "SET", "value": 48}
+                }
+                """.trimIndent(),
+        )
+
+        decoded shouldBeEqualTo PriorityAndReliabilityOverride(
+            priorityWeights = OverrideValue.Inherit,
+            noShowPenalty = OverrideValue.Inherit,
+            sameDayCancellationPenalty = OverrideValue.Inherit,
+            lookbackDays = OverrideValue.Set(90),
+            lateCancellationWindowMinutes = OverrideValue.Set(60),
+            noShowThreshold = OverrideValue.Disable,
+            lateCancellationThreshold = OverrideValue.Set(2),
+            coolingOffHours = OverrideValue.Set(48),
+        )
+    }
+
+    @Test
+    fun `rejects invalid reliability ranges and disabling the lookback window`() {
+        val valid = PriorityAndReliabilityPolicy(
+            priorityWeights = mapOf("RETURN_VISIT" to 2),
+            noShowPenalty = 5,
+            sameDayCancellationPenalty = 2,
+            minimumPriorityScore = 0,
+            lookbackDays = 180,
+            lateCancellationWindowMinutes = 120,
+            noShowThreshold = 3,
+            lateCancellationThreshold = 2,
+            coolingOffHours = 24,
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyValidator.validatePayload(valid.copy(lookbackDays = 0), PolicyScope.TENANT_DEFAULT)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyValidator.validatePayload(
+                valid.copy(lateCancellationWindowMinutes = 10_081),
+                PolicyScope.TENANT_DEFAULT,
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyValidator.validatePayload(valid.copy(coolingOffHours = 721), PolicyScope.TENANT_DEFAULT)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyValidator.validatePayload(valid.copy(noShowThreshold = -1), PolicyScope.TENANT_DEFAULT)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            SchedulingPolicyValidator.validatePayload(
+                PriorityAndReliabilityOverride(
+                    priorityWeights = OverrideValue.Inherit,
+                    noShowPenalty = OverrideValue.Inherit,
+                    sameDayCancellationPenalty = OverrideValue.Inherit,
+                    lookbackDays = OverrideValue.Disable,
+                    lateCancellationWindowMinutes = OverrideValue.Inherit,
+                    noShowThreshold = OverrideValue.Inherit,
+                    lateCancellationThreshold = OverrideValue.Inherit,
+                    coolingOffHours = OverrideValue.Inherit,
                 ),
                 PolicyScope.CLINIC_OVERRIDE,
             )
