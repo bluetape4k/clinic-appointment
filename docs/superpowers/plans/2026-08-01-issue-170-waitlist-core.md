@@ -54,11 +54,11 @@
 - Modify: `appointment-core/build.gradle.kts`
 - Test/Probe: Gradle dependency resolution and `AppointmentStateMachine` compile probe
 
-- [ ] **Step 1: BOM 좌표와 기존 artifact를 확인한다**
+- [x] **Step 1: BOM 좌표와 기존 artifact를 확인한다**
 
 `~/.gradle/caches/modules-2/files-2.1/io.github.bluetape4k/bluetape4k-bom/1.11.0/` 아래의 POM에서 `io.github.bluetape4k:bluetape4k-states`와 관리 version을 확인하고, catalog에는 version을 중복 선언하지 않는다.
 
-- [ ] **Step 2: versionless catalog alias와 core dependency를 추가한다**
+- [x] **Step 2: versionless catalog alias와 core dependency를 추가한다**
 
 `gradle/libs.versions.toml`에 다음 alias를 추가하고 `appointment-core/build.gradle.kts`에 동일한 public visibility의 dependency를 추가한다.
 
@@ -72,7 +72,7 @@ api(libs.bluetape4k.states)
 
 기존 BOM이 version을 관리하므로 alias에 `version =`을 쓰지 않는다.
 
-- [ ] **Step 3: compile probe를 RED/GREEN 경계로 실행한다**
+- [x] **Step 3: compile probe를 RED/GREEN 경계로 실행한다**
 
 실행:
 
@@ -83,9 +83,9 @@ api(libs.bluetape4k.states)
 
 기대 결과: `io.github.bluetape4k:bluetape4k-states:<BOM managed version>`이 resolve되고 compile task가 통과한다. artifact 또는 DSL symbol이 resolve되지 않으면 local FSM을 복제하지 말고 이 계획을 dependency release-train blocker로 중단한다.
 
-- [ ] **Step 4: probe 결과를 기록하고 commit한다**
+- [x] **Step 4: probe 결과를 기록하고 commit한다**
 
-`docs/superpowers/plans`나 source에 실패한 artifact를 우회하는 임시 코드가 없는지 확인한 뒤 catalog/build 파일만 commit한다. 이 commit의 테스트는 위 dependency/compile 출력과 `git diff --check`다.
+`docs/superpowers/plans`나 source에 실패한 artifact를 우회하는 임시 코드가 없는지 확인한 뒤 catalog/build 파일만 commit한다. 이 commit의 테스트는 위 dependency/compile 출력과 `git diff --check`다. BOM POM은 `bluetape4k-states:1.11.0`을 관리했고 dependency graph와 `:appointment-core:compileKotlin --refresh-dependencies`가 모두 성공했다.
 
 ### Task 1: typed state, identity, command/result 계약
 
@@ -633,4 +633,4 @@ git status --short
 
 계획 파일: `docs/superpowers/plans/2026-08-01-issue-170-waitlist-core.md`
 
-계획은 A-04 계획 검토와 사용자 승인 이후에만 Task 0부터 실행한다. 승인 전에는 source/migration을 변경하지 않는다.
+계획은 A-04 계획 검토와 사용자 승인 이후에 Task 0부터 실행한다. A-04 승인과 Task 0 probe가 완료되었으므로 다음은 Task 1 typed model의 RED 테스트다.
