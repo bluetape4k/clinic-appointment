@@ -200,11 +200,18 @@ terminal state는 `ACCEPTED`, `DECLINED`, `EXPIRED`, `WITHDRAWN`이다. phase 1�
 
 `member_id`에는 길이·공백 validation을 적용한다. `waiting_since`는 최초
 `WAITING` 진입 시 한 번만 기록하고 재시도·requeue로 덮어쓰지 않는다.
-`(tenant_group_id, clinic_id, status, preferred_date_from, waiting_since, id)`와
-`(tenant_group_id, clinic_id, treatment_type_id, status, waiting_since, id)`
-조회 인덱스를 둔다. entry 하나에는 phase 1에서 동시에 하나의 concrete offer만
-허용한다. 활성 offer 존재 여부는 entry 상태만 믿지 않고 offer의 active status와
-unique 제약으로 다시 확인한다.
+날짜 범위를 먼저 줄이는
+`(tenant_group_id, clinic_id, treatment_type_id, status, preferred_date_from,
+preferred_date_to, id)` 보조 인덱스도 둔다.
+`(tenant_group_id, clinic_id, treatment_type_id, status, priority_rank,
+waiting_since, id)`와 doctor가 지정된 경로를 위한
+`(tenant_group_id, clinic_id, doctor_id, treatment_type_id, status,
+priority_rank, waiting_since, id)` 조회 인덱스를 둔다. 날짜/time-window hard
+eligibility는 이 후보 집합에 bounded predicate로 적용하고, `slotFit`은
+doctor-specific query를 먼저 실행한 뒤 unspecified-doctor query를 실행해
+random/filesort를 피한다. entry 하나에는 phase 1에서 동시에 하나의 concrete
+offer만 허용한다. 활성 offer 존재 여부는 entry 상태만 믿지 않고 offer의 active
+status와 unique 제약으로 다시 확인한다.
 
 ### 8.2 `WaitlistOffers`
 
@@ -315,7 +322,7 @@ SQL에서 다음 조건을 먼저 적용한다.
 tenant·clinic이 다른 row가 FK만으로 후보가 되지 않도록 scope predicate를 항상 SQL에 포함한다.
 
 후보 조회는 현재 상태 snapshot을 잠그는 최종 transaction과 분리된 read 단계다.
-read 단계는 `waiting_since, id` keyset cursor와 bounded page(기본 100, 최대
+read 단계는 `slotFit, priority_rank, waiting_since, id` keyset cursor와 bounded page(기본 100, 최대
 500)를 사용하고, 후보를 실제 offer로 승격할 때는 자원 mutex를 먼저 잡은 뒤
 entry를 다시 읽어 `WAITING`, active offer 없음, 같은 scope를 재확인한다. 같은
 vacancy를 처리하는 두 호출이 동시에 들어오면 mutex와 `active_vacancy_key`
@@ -331,7 +338,10 @@ hard eligibility 통과 후보 page마다 `BookingReliabilityRepository` 또는 
 `expiresAt`가 포함되어야 한다. 후보별 단건 조회를 반복하는 N+1 경로는 사용하지
 않으며, provider가 일부 member를 반환하지 않으면 해당 후보만
 `DECISION_UNAVAILABLE`로 분류한다. decision의 PII와 사건 원문은 매칭 코드로
-전달하지 않는다.
+전달하지 않는다. 이 provider는 appointment DB 안의 immutable decision snapshot을
+읽는 local repository port여야 한다. 외부 회원/정책 서비스 호출이 필요한 경우
+transaction을 열기 전에 batch로 끝내고, transaction 안에서는 저장된 decision
+row와 stamp만 재검증한다.
 
 | decision | 자동 candidate 처리 |
 |---|---|
@@ -360,12 +370,15 @@ offer에 저장하는 decision ID·policy version·hash·digest·expiresAt은 cl
 `slotFit`은 지정 의사가 vacancy와 정확히 일치하면 1, 미지정이면 0이다. `priorityRank`는 0 이상 bounded 정수이며, 같은 값이면 오래 기다린 entry를 먼저 선택한다. `entryId`는 최종 deterministic tie-break다. 정책 점수·recovery credit·benefit grant가 추가되는 후속 단계도 이 tuple의 마지막 `waitingSince, entryId` 안정성을 유지한다.
 
 `waiting_since`를 실제 column으로 저장하고 `(tenant_group_id, clinic_id,
-status, priority_rank, waiting_since, id)` 또는 동일 실행 계획을 보장하는
-covering index를 dialect별로 검증한다. 후보 조회는 keyset page를 사용하고 page
-size는 기본 100, 최대 500으로 제한한다. 한 page의 후보가 reliability decision에서
-제외되면 다음 page를 같은 정렬 기준으로 계속 읽는다. offset paging과 random order는
-사용하지 않는다. 구현 계획에는 representative dataset에 대한 `EXPLAIN`/실행
-계획과 decision batch round-trip 수를 기록하는 검증을 포함한다.
+treatment_type_id, status, priority_rank, waiting_since, id)`와
+doctor-specific 변형 index가 동일 실행 계획을 보장하는지 dialect별로 검증한다.
+후보 조회는 keyset page를 사용하고 page size는 기본 100, 최대 500으로 제한한다.
+한 매칭 invocation은 최대 10 page/1,000 candidate 평가 또는 2초 budget 중 먼저
+도달한 지점에서 멈추며, 남은 후보는 다음 recovery tick으로 넘긴다. 한 page의
+후보가 reliability decision에서 제외되면 다음 page를 같은 정렬 기준으로 계속
+읽는다. offset paging과 random order는 사용하지 않는다. 구현 계획에는
+representative dataset에 대한 `EXPLAIN`/실행 계획, full scan/filesort 여부,
+decision batch round-trip 수와 budget 초과 결과를 기록하는 검증을 포함한다.
 
 ### 9.4 offer 생성 원자성
 
@@ -373,8 +386,9 @@ size는 기본 100, 최대 500으로 제한한다. 한 page의 후보가 reliabi
 
 1. transaction 시작 시 `now`를 한 번 캡처하고 vacancy의
    `ResourceCapacityBuckets` mutex를 정규화된 key 순서로 잠근다.
-2. `WAITING` 후보를 keyset으로 읽고 reliability decision을 page 단위로 batch
-   조회한다. 후보별 결정이 바뀌면 해당 후보만 제외하고 다음 후보로 진행한다.
+2. `WAITING` 후보를 keyset으로 읽고 local decision snapshot을 page 단위로
+   batch 조회한다. 후보별 결정이 바뀌면 해당 후보만 제외하고 다음 후보로
+   진행한다. 외부 provider refresh가 필요하면 이 transaction 전에 수행한다.
 3. 후보 entry를 다시 `forUpdate`로 읽어 scope·version·active offer 부재를
    확인한 뒤, `WaitlistOffers(status=OFFERED, active_entry_key,
    active_vacancy_key)`와 `WaitlistCapacityHolds(status=OFFERED)`를 함께
@@ -410,8 +424,10 @@ unique conflict 의미를 사용한다.
 5. `now >= expiresAt` 또는 `now >= startsAt`이면 hold를
    `EXPIRED`로 전이하고 active key를 NULL로 만든 뒤 offer/entry도 `EXPIRED`로
    전이하고 history를 append한다. 만료 처리와 claim 거부는 같은 transaction이다.
-6. 저장된 reliability decision stamp를 provider에서 같은
-   `(tenantGroupId, clinicId, memberId, now)` scope로 다시 확인한다.
+6. transaction 밖에서 준비한 decision stamp를 local
+   `BookingReliabilityRepository`의 같은 `(tenantGroupId, clinicId, memberId,
+   now)` scope row와 다시 확인한다. 외부 service/network 호출은 열린 DB
+   transaction 안에서 수행하지 않는다.
    `RESTRICTED`, `STALE`, `UNAVAILABLE`, 만료 decision 또는 scope mismatch면
    `DECISION_STALE`/`DECISION_UNAVAILABLE`로 거부하고 `ACCEPTED` 전이를 하지 않는다.
 7. `ResourceAllocationRepository`가 `OFFERED` hold를 이미 보유하고 있는지
@@ -433,7 +449,23 @@ terminal 전이를 한 transaction에서 수행한다. DB unique conflict는 예
 `SLOT_OCCUPIED`/`DUPLICATE_CLAIM`으로 매핑하고, 원인 불명의 SQL 오류를 성공으로
 숨기지 않는다.
 
-### 10.1 만료·recovery 경계
+### 10.1 Core port 계약
+
+이번 단계에서 HTTP endpoint는 만들지 않지만 후속 API가 의존할 port와 결과를
+다음처럼 고정한다.
+
+| Port | 성공 결과 | 주요 실패 결과 | transaction 경계 |
+|---|---|---|---|
+| `selectAndOffer(vacancy, now)` | `CandidateFound(offerId, holdId, rank)` | `NoEligibleCandidate`, `OfferAlreadyExists`, `DecisionUnavailable`, `SlotOccupied` | 자원 mutex·offer·hold·entry·history를 하나로 확정 |
+| `claim(command)` | `OfferClaimed(offerId, holdId, memberId, holdExpiresAt)` | `OfferExpired`, `VersionConflict`, `OfferScopeMismatch`, `DecisionStale`, `SlotOccupied` | caller가 연 `transaction {}` 안에서 hold/offer/entry/history CAS |
+| `release(command)` | `OfferReleased(offerId, holdId, reason)` | `OfferStateConflict`, `VersionConflict`, `OfferScopeMismatch` | hold release와 terminal 전이를 하나로 확정 |
+| `reconcileWaitlistHolds(limit, now)` | `CapacityHoldExpired(count, lastId)` | `RecoveryConflict`, `RecoveryBudgetExceeded` | resource별 bounded transaction 반복 |
+
+모든 결과에는 `correlationId`와 stable reason code가 있으며 member ID는
+`OfferClaimed` handoff에만 포함한다. HTTP status, notification payload, 회원 이름·전화번호
+채움은 후속 adapter의 책임이다.
+
+### 10.2 만료·recovery 경계
 
 이번 코어에는 전역 scheduler를 넣지 않지만 `selectAndOffer`, `claim`, 그리고
 operator가 호출하는 `reconcileWaitlistHolds(limit, now)`가 동일한 transaction
@@ -448,6 +480,10 @@ CAS로 `EXPIRED` 처리한다. 처리 중 connection이 끊기면 transaction ro
 recovery command만 release할 수 있다. feature flag를 끄면 신규 offer/claim만
 차단하고 기존 hold를 삭제하지 않으므로 rollback 뒤에도 durable 상태와 재처리
 경로가 남는다.
+
+모든 scope, keyset cursor, vacancy key, member ID, actor ref, reason code는
+parameterized Exposed DSL expression으로만 전달한다. 문자열을 이어 붙이는 raw SQL,
+동적 `ORDER BY`, SQL error text를 domain 결과로 재사용하는 구현은 금지한다.
 
 ## 11. 예외와 관측 경계
 
@@ -496,7 +532,7 @@ appointment-api/src/main/resources/db/migration/mysql/V18__add_waitlist_core.sql
 - 네 table(`WaitlistEntries`, `WaitlistOffers`, `WaitlistOfferEvents`,
   `WaitlistCapacityHolds`)과 FK, status/version not-null 제약
 - offer/hold의 tenant/clinic/member scope 및 immutable snapshot 검증용 컬럼
-- tenant/clinic scope와 deterministic candidate 조회 인덱스
+- tenant/clinic scope, date-window hard eligibility, deterministic candidate 조회 인덱스
 - nullable `active_entry_key`, `active_vacancy_key`의 unique 제약
 - hold의 `(offer_id)` unique 제약과 active overlap 조회 인덱스
 - offer expiry와 history 시간축 인덱스
@@ -550,7 +586,8 @@ contention/load proof가 끝난 clinic만 allowlist로 켠다. rollback은 flag 
    이전 hold/history row는 삭제되지 않는다.
 7. H2, PostgreSQL, MySQL migration과 unique/FK/index 검증이 통과한다.
 8. bounded candidate page에서 reliability provider round-trip이 page 수와
-   일치하고, `EXPLAIN`이 keyset/index 경로를 사용한다.
+   일치하고, 외부 provider 호출이 열린 transaction 안에서 발생하지 않으며,
+   `EXPLAIN`이 keyset/index 경로를 사용한다.
 9. `appointment-core:test`와 migration test가 순차 실행되고, pre-existing 테스트의
    동작이 유지된다.
 
@@ -562,6 +599,8 @@ contention/load proof가 끝난 clinic만 allowlist로 켠다. rollback은 flag 
    처리하고, 중간 rollback·재시작 뒤 중복 release나 active count drift가 없다.
 3. metric/health/log에 member ID, 이름, 전화번호, raw decision payload가 없고,
    bounded reason·correlation ID만 남는다.
+4. malicious cursor/member/actor/reason 입력이 parameterized Exposed predicate를
+   벗어나지 않고, raw SQL·동적 sort·SQL error text가 결과나 로그에 나타나지 않는다.
 
 ## 14. 구현 산출물과 후속 경계
 
@@ -577,6 +616,8 @@ contention/load proof가 끝난 clinic만 allowlist로 켠다. rollback은 flag 
   reserve/activate/release/consume 경계
 - `appointment-core/.../service/WaitlistCandidateMatcher.kt`, `WaitlistOfferClaimService.kt`
 - 세 dialect의 `V18__add_waitlist_core.sql`와 migration/schema tests
+- `docs/runbooks/waitlist-core.md` — V18 readiness, feature flag rollout/rollback,
+  expiry backlog, stale decision, slot conflict, stuck hold triage
 
 다음 단계에서 별도 설계·검증할 항목은 다음과 같다.
 
