@@ -20,6 +20,7 @@ dependencies {
     api(libs.bluetape4k.cache.core)
     api(libs.exposed.core)
     api(libs.bluetape4k.coroutines)
+    api(libs.bluetape4k.states)
     api(libs.kotlinx.coroutines.core)
 
     implementation(libs.jetbrains.exposed.jdbc)
