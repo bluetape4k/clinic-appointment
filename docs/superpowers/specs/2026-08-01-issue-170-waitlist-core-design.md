@@ -302,9 +302,9 @@ hold를 insert·update·reconcile·consume하는 모든 경로는 hold의
 entry 생성 시 `offer_id`가 아직 없으므로 nullable인 history row로 `WAITING` snapshot을 append한다. concrete offer가 만들어진 뒤에는 `offer_id`를 채운 전이만 기록한다. 이후 모든 전이는 append-only로 기록하고 entry summary는 `WaitlistEntries.status`, concrete offer의 현재 값은 `WaitlistOffers.status`가 보유한다. 자유 텍스트 reason은 받지 않으며 actor는 검증된 command boundary에서만 전달한다.
 
 hold 생성·활성화·소비·해제도 동일 event stream에 연결한다. `actor_ref`는
-`SYSTEM`, 검증된 staff principal digest, 또는 bounded recovery command ID 중
-하나이며 원문 이름·JWT·전화번호를 받지 않는다. reason은 enum/bounded code만
-허용하고 raw SQL exception과 자유 입력을 저장하지 않는다.
+`SYSTEM`, 내부 opaque staff actor ID 또는 domain-separated HMAC digest, bounded
+recovery command ID 중 하나이며 원문 이름·JWT·전화번호를 받지 않는다. reason은
+enum/bounded code만 허용하고 raw SQL exception과 자유 입력을 저장하지 않는다.
 
 ## 9. 후보 매칭과 reliability decision 소비
 
