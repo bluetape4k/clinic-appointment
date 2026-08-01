@@ -1,6 +1,6 @@
 # Issue #170 Waitlist Core Workflow Checklist
 
-Status: `PENDING` — procedural repair in progress
+Status: `DESIGN REVIEW PASSED` — implementation and plan gates remain pending
 
 ## Classification
 
@@ -17,9 +17,10 @@ Status: `PENDING` — procedural repair in progress
   irreversible non-PR action is in the approved scope); Type-B/C/D/E/F/P leaf
   branches (the issue is classified as Type-A).
 - Repair note: `CL-01` was not instantiated before the existing spec commit
-  `5b48fd9`. No implementation source was changed; downstream work is paused
-  until this checklist is read back, the receipt liveness gap is repaired, and
-  Step 2-R is rerun.
+  `5b48fd9`. The receipt liveness gap was repaired through the registered
+  recovery lane and fresh mutation checks. The design was revised through
+  commits `a3cfcb2`, `0e4c786`, `1f9388b`, and `b041179`; no implementation
+  source has been changed. Step 2-R now passes at `b041179`.
 
 ## Router gates
 
@@ -65,24 +66,24 @@ Status: `PENDING` — procedural repair in progress
   - **Evidence:** Classification section has no unclassified row.
   - **Failure:** Treat an unclassified row as required and unchecked.
 
-- [ ] **CL-03 — Respect dependency order**
+- [x] **CL-03 — Respect dependency order**
   - **Action:** Execute rows top to bottom and rerun downstream proof after every repaired gate.
-  - **Evidence:** Checklist order, receipt sequence, and artifact timestamps show no backward jump.
+  - **Evidence:** Design repair commits precede the final Step 2-R artifact at `b041179`; review and mutation-check ran after the final design/runbook edits.
   - **Failure:** Stop and rerun all affected downstream proof.
 
-- [ ] **CL-04 — Record evidence immediately**
+- [x] **CL-04 — Record evidence immediately**
   - **Action:** Attach command/file/result evidence when each row is checked.
-  - **Evidence:** Evidence is beside the checked row and readable from the worktree/receipt.
+  - **Evidence:** `docs/review/2026-08-01-issue-170-waitlist-core-spec-review-iteration-2.md`, the runbook, and fresh `git diff --check`/`mutation-check` evidence are in the feature worktree.
   - **Failure:** Leave the row unchecked and treat late reconstruction as repair.
 
-- [ ] **CL-05 — Fail closed**
+- [x] **CL-05 — Fail closed**
   - **Action:** Keep pending/failed rows unchecked and block dependent work.
-  - **Evidence:** Current pending/failed IDs and the stopped dependent branch are recorded.
+  - **Evidence:** A-04 and all implementation/PR rows remain unchecked; the checklist keeps implementation pending until the plan gate.
   - **Failure:** Reverify every dependent item before continuing.
 
-- [ ] **CL-06 — Repair skipped or reordered work**
+- [x] **CL-06 — Repair skipped or reordered work**
   - **Action:** Repair the missed checklist/liveness gates and rerun affected evidence.
-  - **Evidence:** Repair events, refreshed checklist rows, and fresh Step 2-R results.
+  - **Evidence:** Receipt recovery evidence, four repair commits, final runbook, and Step 2-R `PASS` review at `b041179`.
   - **Failure:** Final status remains `BLOCKED`.
 
 - [ ] **CL-07 — Refresh irreversible holds**
@@ -202,9 +203,9 @@ Status: `PENDING` — procedural repair in progress
   - **Evidence:** Anchors, source evidence, and adopt/borrow/reject rationale.
   - **Failure:** Do not design from recall.
 
-- [ ] **A-03 — Approve and review the design spec**
+- [x] **A-03 — Approve and review the design spec**
   - **Action:** Review the approved spec with six independent perspectives plus main integration and fix all P0/P1 findings.
-  - **Evidence:** Spec path, review table, and latest integrated P0=0/P1=0.
+  - **Evidence:** Approved spec, `docs/review/2026-08-01-issue-170-waitlist-core-spec-review-iteration-2.md`, exact commit `b041179`, integrated P0=0/P1=0.
   - **Failure:** Revise/reapprove material changes and keep planning blocked.
 
 - [ ] **A-04 — Approve and review the implementation plan**
@@ -266,13 +267,15 @@ Status: `PENDING` — procedural repair in progress
 
 ## Current stop condition
 
-Implementation is forbidden until `CL-01..CL-06`, `WF-06`, and `A-03` are
-checked with fresh evidence. The current run remains `PENDING`.
+Implementation remains paused until the implementation plan is written and
+passes A-04. Step 2-R is no longer a blocker. PR/merge and performance/code
+verification rows remain pending by dependency order.
 
-Step 2-R evidence is now recorded at
-`docs/review/2026-08-01-issue-170-waitlist-core-spec-review.md`. Its integrated
-verdict is `NEEDS REVIEW SCOPE` with P0=1 and P1=10, so the approved spec must
-be materially revised and reapproved before the plan gate can open.
+Step 2-R evidence is recorded at
+`docs/review/2026-08-01-issue-170-waitlist-core-spec-review-iteration-2.md`.
+Its integrated verdict is `PASS` with P0=0 and P1=0; P2 items are explicit
+plan/adapter follow-ups.
 
-Required checks: `15/46` checked so far; N/A: `1`; Blocked: `0`.
-Unchecked IDs: all executable rows above.
+Required checks: `20/47` checked so far; N/A: `1`; Blocked: `0`.
+Unchecked IDs: `CL-07`, `CL-08`, `CG-06..CG-18`, `A-04..A-12`, `Step 4-S`,
+`Step 4-P`.
