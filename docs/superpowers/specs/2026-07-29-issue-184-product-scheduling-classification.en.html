@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:,">
+  <meta name="description" content="Issue #184 product scheduling characteristic classification companion">
+  <title>Product Scheduling Setup</title>
+  <script>
+    (() => {
+      const stored = localStorage.getItem("starlight-theme");
+      const preferred = stored || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.dataset.theme = preferred;
+    })();
+  </script>
+  <style>
+    :root { color-scheme:light dark; --bg:#08111f; --panel:#111d30; --panel2:#172640; --line:#2a4062; --text:#edf5ff; --muted:#9daec8; --blue:#62afff; --green:#4dd6a2; --orange:#ffbc68; --red:#ff7787; }
+    :root[data-theme="light"] { --bg:#f4f8fd; --panel:#fff; --panel2:#eaf1f9; --line:#c6d5e7; --text:#152238; --muted:#53657d; --blue:#1264c3; --green:#087a57; --orange:#9a5b00; --red:#b4233c; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--text); font-family:Inter,ui-sans-serif,system-ui,sans-serif; background:radial-gradient(circle at 8% 0%,rgba(40,104,194,.25),transparent 32%),var(--bg); }
+    main { max-width:1420px; margin:auto; padding:32px; }
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .eyebrow { color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.08em; }
+    .eyebrow a,.provenance a { color:inherit; text-decoration:none; }
+    .theme-toggle { border:1px solid var(--line); border-radius:9px; padding:8px 11px; color:var(--text); background:var(--panel); cursor:pointer; }
+    .theme-toggle:focus-visible { outline:3px solid var(--orange); outline-offset:2px; }
+    .provenance { display:grid; grid-template-columns:auto 1fr auto auto; gap:10px; align-items:center; margin:18px 0; padding:11px 13px; border:1px dashed var(--line); border-radius:11px; background:rgba(98,175,255,.08); color:var(--muted); font-size:11px; line-height:1.45; }
+    .provenance strong { color:var(--green); font-size:10px; letter-spacing:.06em; }
+    .provenance a { color:var(--blue); text-decoration:underline; }
+    h1 { margin:8px 0; font-size:30px; }
+    .lead { margin:0 0 24px; color:var(--muted); line-height:1.65; }
+    .layout { display:grid; grid-template-columns:minmax(600px,1.35fr) minmax(380px,.85fr); gap:16px; }
+    .panel { background:rgba(17,29,48,.95); border:1px solid var(--line); border-radius:18px; padding:22px; }
+    .panel h2 { font-size:19px; margin:0 0 6px; }
+    .sub { color:var(--muted); font-size:13px; line-height:1.55; margin:0 0 18px; }
+    .section { margin-top:20px; }
+    .section-title { display:flex; align-items:baseline; justify-content:space-between; font-size:14px; font-weight:800; margin-bottom:9px; }
+    .section-title small { color:var(--muted); font-weight:500; }
+    .checks { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .check { display:flex; gap:9px; min-height:70px; padding:12px; border-radius:12px; border:1px solid transparent; background:var(--panel2); cursor:pointer; transition:.15s; }
+    .check:hover { border-color:#50709a; }
+    .check.active { border-color:var(--blue); background:rgba(98,175,255,.13); }
+    .check.disabled { opacity:.34; cursor:not-allowed; }
+    .check input { margin-top:3px; accent-color:var(--blue); }
+    .check strong { display:block; font-size:13px; line-height:1.35; }
+    .check span { display:block; margin-top:4px; color:var(--muted); font-size:11px; line-height:1.4; }
+    .code { color:#7890af!important; font-family:ui-monospace,monospace; font-size:9px!important; }
+    .time-card { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+    .setting { border:1px solid var(--line); border-radius:14px; padding:15px; background:rgba(13,24,41,.8); }
+    .setting.product { border-color:#2d76dc; }
+    .setting h3 { margin:0 0 4px; font-size:14px; }
+    .owner { display:inline-block; margin-bottom:12px; color:var(--blue); font-size:10px; font-weight:800; letter-spacing:.06em; }
+    .owner.hospital { color:var(--green); }
+    .field { margin-top:10px; }
+    .field label { display:block; color:var(--muted); font-size:11px; margin-bottom:5px; }
+    select,input[type=number] { width:100%; background:var(--panel2); border:1px solid #345074; color:var(--text); border-radius:9px; padding:10px; font-size:13px; }
+    .formula { margin-top:12px; padding:13px; border-radius:11px; background:rgba(77,214,162,.08); border-left:3px solid var(--green); color:var(--text); font-size:12px; line-height:1.6; }
+    .rule { padding:12px; margin-top:9px; border-radius:10px; background:rgba(255,188,104,.08); border-left:3px solid var(--orange); font-size:12px; line-height:1.55; }
+    .rule strong { color:var(--orange); }
+    .rule.good { background:rgba(77,214,162,.08); border-color:var(--green); }
+    .rule.good strong { color:var(--green); }
+    .snapshot { margin-top:14px; padding:14px; border-radius:12px; background:rgba(8,19,33,.8); border:1px solid #293e5b; color:var(--muted); font:11px/1.65 ui-monospace,monospace; white-space:pre-wrap; min-height:245px; }
+    .decision { margin-top:16px; padding:15px; border:1px solid var(--blue); border-radius:13px; background:rgba(98,175,255,.1); }
+    .decision strong { display:block; margin-bottom:5px; }
+    .decision span { color:var(--muted); font-size:12px; line-height:1.55; }
+    :root[data-theme="light"] .panel, :root[data-theme="light"] .setting { background:#fff; }
+    :root[data-theme="light"] .snapshot { background:#eef4fb; color:var(--muted); }
+    @media(max-width:1050px){.layout{grid-template-columns:1fr}.checks,.time-card{grid-template-columns:1fr}.provenance{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="toolbar">
+    <div class="eyebrow"><a href="./2026-07-29-issue-184-visit-commitment-design.md">Issue #184 · Return to the design</a></div>
+    <button class="theme-toggle" type="button" aria-label="Toggle light and dark theme">Theme</button>
+  </div>
+  <aside class="provenance" data-status="approved" data-source="2026-07-29-issue-184-visit-commitment-design.md" data-baseline="6ece3a0">
+    <strong>SOURCE SNAPSHOT</strong><span>Issue #184 · approved product scheduling classification</span>
+    <a href="./2026-07-29-issue-184-visit-commitment-design.md">Normative Markdown</a>
+    <a href="./2026-07-29-issue-184-product-scheduling-classification.html">한국어</a>
+  </aside>
+  <h1>How should this product be scheduled at the clinic?</h1>
+  <p class="lead">Select the operational traits that describe the product. Business wording stays primary; the system identifiers are shown as small supporting labels.</p>
+
+  <section id="simulation" class="layout" aria-label="Product scheduling classification simulation">
+    <section class="panel">
+      <h2>Select product traits</h2>
+      <p class="sub">Choose all applicable traits. Incompatible combinations are disabled automatically.</p>
+      <div class="section">
+        <div class="section-title">Visits and treatment composition <small>Multiple selections</small></div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" value="multiVisit"><div><strong>Customers visit more than once</strong><span>Keep each visit as a separate booking.</span><span class="code">MULTI_VISIT</span></div></label>
+          <label class="check"><input type="checkbox" value="package"><div><strong>This product is a package</strong><span>Its treatment mix may differ by visit.</span><span class="code">PACKAGE</span></div></label>
+          <label class="check"><input type="checkbox" value="dependent"><div><strong>The next booking waits for the prior treatment</strong><span>Recalculate the next date from completion.</span><span class="code">PREDECESSOR_DEPENDENT</span></div></label>
+          <label class="check"><input type="checkbox" value="partial"><div><strong>Unfinished treatments continue on another day</strong><span>Split remaining items into a follow-up booking.</span><span class="code">PARTIAL_FULFILLMENT</span></div></label>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Booking operation <small>Multiple selections · automatic validation</small></div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" value="massPromotion"><div><strong>Many customers are processed in a short window</strong><span>Throughput is the priority for a campaign.</span><span class="code">MASS_PROMOTION</span></div></label>
+          <label class="check"><input type="checkbox" value="capacityBucket"><div><strong>Maximum customers per time bucket matter</strong><span>Book against concurrent capacity.</span><span class="code">CAPACITY_BUCKET</span></div></label>
+          <label class="check"><input type="checkbox" value="vipManaged"><div><strong>One customer receives focused care</strong><span>Reserve an assigned clinician and slack time.</span><span class="code">VIP_MANAGED</span></div></label>
+          <label class="check"><input type="checkbox" value="exclusive"><div><strong>Clinician, equipment, or room is exclusive</strong><span>Do not share the resource during the booking.</span><span class="code">EXCLUSIVE_RESOURCE</span></div></label>
+          <label class="check"><input type="checkbox" value="surgical"><div><strong>Preparation and recovery are required</strong><span>Reserve the complete surgical window.</span><span class="code">SURGICAL_COORDINATION</span></div></label>
+          <label class="check"><input type="checkbox" value="overbooking"><div><strong>Policy allows bounded overbooking</strong><span>Apply only within the clinic's limit.</span><span class="code">OVERBOOKING_ALLOWED</span></div></label>
+        </div>
+      </div>
+      <div id="time-settings" class="section" style="display:none">
+        <div class="section-title">Capacity settings <small>Product time is separate from clinic capacity</small></div>
+        <div class="time-card">
+          <div class="setting product"><span class="owner">PRODUCT PLANNING</span><h3>Product booking duration</h3><div class="field"><label for="duration">Base time per customer</label><select id="duration"><option value="15">15 minutes</option><option value="30" selected>30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1 hour 30 minutes</option><option value="120">2 hours</option></select></div><div class="field"><label for="seat-use">Capacity seats per customer</label><input id="seat-use" type="number" min="1" max="10" value="1"></div></div>
+          <div class="setting"><span class="owner hospital">CLINIC / RESOURCE OPERATIONS</span><h3>Resource capacity rule</h3><div class="field"><label>Calculation unit</label><select disabled><option selected>15-minute unit</option></select></div><div class="field"><label>Concurrent customers per unit</label><input type="number" value="3" disabled></div></div>
+        </div>
+        <div id="formula" class="formula"></div>
+      </div>
+    </section>
+    <aside class="panel">
+      <h2>Validation and booking contract</h2>
+      <p class="sub">The product management service validates composition and sends only the validated scheduling result to the appointment service.</p>
+      <div class="rule"><strong>Mass-promotion product</strong><br>Cannot be combined with focused care, exclusive resources, or surgical coordination.</div>
+      <div class="rule"><strong>Surgical product</strong><br>Requires an exclusive resource and disallows overbooking.</div>
+      <div class="rule"><strong>Predecessor dependency</strong><br>Automatically implies multiple visits.</div>
+      <div class="rule good"><strong>Current combination is usable.</strong><br>Saving publishes the scheduling characteristics.</div>
+      <div id="snapshot" class="snapshot"></div>
+      <div class="decision"><strong>What this screen confirms</strong><span>Product planning owns traits and expected duration. Clinic/resource operations own the calculation unit and actual concurrent capacity.</span></div>
+    </aside>
+  </section>
+</main>
+<script>
+  const boxes=[...document.querySelectorAll('input[type=checkbox]')];
+  const get=value=>boxes.find(box=>box.value===value);
+  const names={multiVisit:'multiple visits',package:'package',dependent:'predecessor dependency',partial:'partial fulfillment',massPromotion:'mass promotion',capacityBucket:'capacity bucket',vipManaged:'focused care',exclusive:'exclusive resource',surgical:'surgical coordination',overbooking:'bounded overbooking'};
+  function disable(value,disabled,message){const box=get(value);box.disabled=disabled;box.closest('.check').classList.toggle('disabled',disabled);box.closest('.check').title=disabled?message:'';if(disabled)box.checked=false;}
+  function update(){let selected=new Set(boxes.filter(box=>box.checked).map(box=>box.value));const mass=selected.has('massPromotion'),surgery=selected.has('surgical'),vip=selected.has('vipManaged');disable('massPromotion',surgery||vip,'Cannot combine with surgical or focused care.');disable('vipManaged',mass,'Cannot combine with mass promotion.');disable('exclusive',mass,'Cannot combine with mass promotion.');disable('surgical',mass,'Cannot combine with mass promotion.');disable('overbooking',surgery,'Surgical products do not allow overbooking.');if(surgery)get('exclusive').checked=true;if(selected.has('dependent'))get('multiVisit').checked=true;boxes.forEach(box=>box.closest('.check').classList.toggle('active',box.checked));selected=new Set(boxes.filter(box=>box.checked).map(box=>box.value));document.getElementById('time-settings').style.display=selected.has('capacityBucket')?'block':'none';const values=[...selected].map(value=>names[value]);document.getElementById('snapshot').textContent=`Appointment service payload\n────────────────────\nContract version: 1\nSelected traits:\n${values.length?values.map(value=>'• '+value).join('\n'):'• No traits selected yet.'}\n\nProduct detail, price, and marketing data:\n• Not included`;updateFormula();}
+  function updateFormula(){const duration=Number(document.getElementById('duration').value),use=Number(document.getElementById('seat-use').value),unit=15,capacity=3,blocks=Math.ceil(duration/unit);document.getElementById('formula').innerHTML=`<strong>Capacity example</strong><br>A ${duration}-minute product consumes ${blocks} consecutive ${unit}-minute units. With ${use} seat(s) per customer and ${capacity} seats available, at most ${Math.floor(capacity/use)} customer(s) fit in the same unit.`;}
+  boxes.forEach(box=>box.addEventListener('change',update));document.getElementById('duration').addEventListener('change',updateFormula);document.getElementById('seat-use').addEventListener('input',updateFormula);update();
+</script>
+<script>
+  (() => { const button=document.querySelector('.theme-toggle'); const apply=theme=>{document.documentElement.dataset.theme=theme;button.textContent=theme==='dark'?'Light theme':'Dark theme';button.setAttribute('aria-label',theme==='dark'?'Switch to light theme':'Switch to dark theme');}; apply(document.documentElement.dataset.theme||'light'); button.addEventListener('click',()=>{const next=document.documentElement.dataset.theme==='dark'?'light':'dark';apply(next);localStorage.setItem("starlight-theme",next);}); })();
+</script>
+</body>
+</html>

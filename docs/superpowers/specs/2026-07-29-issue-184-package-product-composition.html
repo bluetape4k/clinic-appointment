@@ -4,14 +4,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
   <link rel="icon" href="data:,">
   <title>패키지 상품 구성 · 유형별 편집</title>
+  <script>
+    (() => {
+      const stored = localStorage.getItem("starlight-theme");
+      const preferred = stored || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.dataset.theme = preferred;
+    })();
+  </script>
   <style>
     :root {
-      color-scheme: dark;
+      color-scheme: light dark;
       --bg:#07111f; --panel:#101d31; --panel2:#172740; --line:#2b4265;
       --text:#eef5ff; --muted:#9fafc7; --blue:#64b2ff; --green:#50d6a1;
       --orange:#ffbd69; --purple:#b39aff; --red:#ff7e8e;
+    }
+    :root[data-theme="light"] {
+      --bg:#f4f8fd; --panel:#ffffff; --panel2:#eaf1f9; --line:#c6d5e7;
+      --text:#152238; --muted:#53657d; --blue:#1264c3; --green:#087a57;
+      --orange:#9a5b00; --purple:#6b4bb5; --red:#b4233c;
     }
     * { box-sizing:border-box; }
     body {
@@ -24,6 +37,12 @@
     }
     button,input,select { font:inherit; }
     main { max-width:1480px; margin:auto; padding:28px; }
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .theme-toggle { border:1px solid var(--line); border-radius:9px; padding:8px 11px; color:var(--text); background:var(--panel); cursor:pointer; }
+    .theme-toggle:focus-visible { outline:3px solid var(--orange); outline-offset:2px; }
+    .provenance { display:grid; grid-template-columns:auto 1fr auto auto; gap:10px; align-items:center; margin:18px 0; padding:11px 13px; border:1px dashed var(--line); border-radius:11px; background:rgba(100,178,255,.08); color:var(--muted); font-size:11px; line-height:1.45; }
+    .provenance strong { color:var(--green); font-size:10px; letter-spacing:.06em; }
+    .provenance a { color:var(--blue); }
     .eyebrow { color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.08em; }
     h1 { margin:8px 0; font-size:30px; }
     .lead { margin:0 0 18px; color:var(--muted); line-height:1.6; }
@@ -127,14 +146,27 @@
       .cart-foot { grid-template-columns:1fr 1fr; }
     }
   </style>
+  <style>
+    :root[data-theme="light"] .type-card, :root[data-theme="light"] .panel, :root[data-theme="light"] .cart, :root[data-theme="light"] .field { background:#fff; }
+    :root[data-theme="light"] .node, :root[data-theme="light"] .check, :root[data-theme="light"] .metric { background:#eef4fb; }
+    :root[data-theme="light"] .chip, :root[data-theme="light"] .resource { background:#dfeaf6; color:var(--muted); }
+  </style>
 </head>
 <body>
 <main>
-  <div class="eyebrow">Issue #184 · 패키지 상품 기획 화면 v3</div>
+  <div class="toolbar">
+    <div class="eyebrow"><a href="./2026-07-29-issue-184-visit-commitment-design.md">Issue #184 · 패키지 상품 기획 화면 v3</a></div>
+    <button class="theme-toggle" type="button" aria-label="라이트 테마와 다크 테마 전환">테마</button>
+  </div>
+  <aside class="provenance" data-status="approved" data-source="2026-07-29-issue-184-visit-commitment-design.md" data-baseline="6ece3a0">
+    <strong>SOURCE SNAPSHOT</strong><span>Issue #184 · 승인된 패키지 구성 편집</span>
+    <a href="./2026-07-29-issue-184-visit-commitment-design.md">기준 Markdown</a>
+    <a href="./2026-07-29-issue-184-package-product-composition.en.html">English</a>
+  </aside>
   <h1>패키지 유형을 고르고, 구성 결과를 한눈에 확인합니다</h1>
   <p class="lead">세 유형을 눌러 비교해 보세요. 선택을 해제하면 해당 상품의 상세 설정이 비활성화되고, 하단 구성 요약도 즉시 바뀝니다.</p>
 
-  <section class="type-grid" aria-label="패키지 유형">
+  <section id="simulation" class="type-grid" aria-label="패키지 유형">
     <button class="type-card" data-type="repeated" onclick="switchType('repeated')">
       <span class="num">1</span><strong>동일 상품 반복형</strong>
       <p>미백 5회권처럼 같은 상품을 정해진 횟수만큼 반복합니다.</p>
@@ -385,6 +417,22 @@
   }
 
   render();
+</script>
+<script>
+  (() => {
+    const button = document.querySelector('.theme-toggle');
+    const apply = (theme) => {
+      document.documentElement.dataset.theme = theme;
+      button.textContent = theme === 'dark' ? '라이트 테마' : '다크 테마';
+      button.setAttribute('aria-label', theme === 'dark' ? '라이트 테마로 전환' : '다크 테마로 전환');
+    };
+    apply(document.documentElement.dataset.theme || 'light');
+    button.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      apply(next);
+      localStorage.setItem("starlight-theme", next);
+    });
+  })();
 </script>
 </body>
 </html>

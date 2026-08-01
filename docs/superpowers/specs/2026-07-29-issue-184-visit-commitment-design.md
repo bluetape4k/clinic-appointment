@@ -8,8 +8,11 @@
 >
 > 시각 자료:
 > [상품 예약 운영 특성 분류 승인안](./2026-07-29-issue-184-product-scheduling-classification.html) ·
+> [Product scheduling classification (English)](./2026-07-29-issue-184-product-scheduling-classification.en.html) ·
 > [패키지 상품 구성 그래프 승인안](./2026-07-29-issue-184-package-product-composition.html) ·
+> [Package product composition (English)](./2026-07-29-issue-184-package-product-composition.en.html) ·
 > [상품 실행 BOM의 예약 전개 흐름](./2026-07-29-issue-184-product-bom-to-appointment-flow.html)
+> [Execution BOM to appointment flow (English)](./2026-07-29-issue-184-product-bom-to-appointment-flow.en.html)
 >
 > 상품 예약 운영 특성 분류 승인안은 선행 설계 커밋 `d86f34a`에 포함되어 있으며,
 > 나머지 두 자료와 함께 2-R 검토 범위에 포함한다.
