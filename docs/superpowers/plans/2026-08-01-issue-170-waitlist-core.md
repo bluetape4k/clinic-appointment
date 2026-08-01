@@ -116,7 +116,7 @@ fun `correlation id rejects newline and profile-shaped input`() {
 
 - [ ] **Step 2: immutable typed model을 구현한다**
 
-`WaitlistScope(tenantGroupId: Long, clinicId: Long, memberId: MemberId)`, `VacancyDescriptor(tenantGroupId, clinicId, treatmentTypeId, doctorId: Long?, startsAt, endsAt, resourceType, resourceId, capacityUnits, maximumCapacity, now)`, `DecisionStamp`, `WaitlistEntryRecord`, `WaitlistOfferRecord`, `WaitlistCapacityHoldRecord`를 immutable `Serializable` data class로 둔다. `CorrelationId`, `ActorRef`, `WaitlistReasonCode`, `WaitlistCursor`, `NewOffer`, `NewHold`, `OfferHoldIds`도 이 task에서 값의 범위와 생성 규칙을 함께 고정한다. 모든 시간은 UTC `Instant`이며 `startsAt < endsAt`, `capacityUnits <= maximumCapacity`, `now < endsAt`를 검증한다.
+`WaitlistScope(tenantGroupId: Long, clinicId: Long, memberId: MemberId)`, `VacancyDescriptor(tenantGroupId, clinicId, treatmentTypeId, doctorId: Long?, startsAt, endsAt, resourceType, resourceId, capacityUnits, maximumCapacity, now)`, `DecisionStamp`, `WaitlistEntryRecord`, `WaitlistOfferRecord`, `WaitlistCapacityHoldRecord`를 immutable `Serializable` data class로 둔다. `CorrelationId`, `ActorRef`, `WaitlistReasonCode`, `WaitlistCursor`, `NewOffer`, `NewHold`, `OfferHoldIds`, `WaitlistCapacityReservation`도 이 task에서 값의 범위와 생성 규칙을 함께 고정한다. 모든 시간은 UTC `Instant`이며 `startsAt < endsAt`, `capacityUnits <= maximumCapacity`, `now < endsAt`를 검증한다.
 
 `WaitlistOfferState`는 `OFFERED`, `ACCEPTED`, `DECLINED`, `EXPIRED`, `WITHDRAWN`, hold state는 `OFFERED`, `ACCEPTED`, `CONSUMED`, `RELEASED`, `EXPIRED`로 닫는다. `WaitlistEvent.OfferSelected`를 포함한 typed event와 `WaitlistEntryTransitions.transition` 구현은 `WaitlistEvents.kt`에 둔다. `WaitlistOfferCommand`는 `offerId`, `scope`, `expectedVersion`, `correlationId`, `actorRef`를 포함하고 claim/release/reconcile command를 별도 typed class로 둔다.
 
@@ -128,7 +128,10 @@ fun `correlation id rejects newline and profile-shaped input`() {
 sealed interface WaitlistResult
 data class CandidateFound(val offerId: Long, val holdId: Long, val rank: Int) : WaitlistResult
 data class OfferClaimed(val offerId: Long, val holdId: Long, val memberId: MemberId, val holdExpiresAt: Instant) : WaitlistResult
-data class OfferReleased(val offerId: Long, val holdId: Long, val reason: WaitlistReasonCode) : WaitlistResult
+data class OfferWithdrawn(val offerId: Long, val holdId: Long, val reason: WaitlistReasonCode) : WaitlistResult
+data class CapacityHoldCreated(val offerId: Long, val holdId: Long, val expiresAt: Instant) : WaitlistResult
+data class CapacityHoldReleased(val offerId: Long, val holdId: Long, val reason: WaitlistReasonCode) : WaitlistResult
+data class CapacityHoldConsumed(val offerId: Long, val holdId: Long) : WaitlistResult
 data class CapacityHoldExpired(val count: Int, val lastId: Long?) : WaitlistResult
 ```
 
@@ -227,7 +230,7 @@ withTables(testDB, WaitlistEntries, WaitlistOffers, WaitlistCapacityHolds, Waitl
 
 - [ ] **Step 1: V18 migration contract test를 RED로 만든다**
 
-`WaitlistCoreMigrationTestSupport`는 Flyway clean install과 V17→V18 upgrade를 각각 실행해 `migrationsExecuted == 1`, 네 table, FK, columns, named index, nullable active-key unique semantics를 확인한다. H2/PostgreSQL/MySQL test class는 기존 support/launcher와 순차 실행 규칙을 사용한다.
+`WaitlistCoreMigrationTestSupport`는 Flyway clean install과 V17→V18 upgrade를 각각 실행한다. clean install은 V1부터 V18까지의 전체 migration history와 최종 V18 schema를 확인하고, V17→V18 upgrade만 `migrationsExecuted == 1`을 확인한다. 두 경로 모두 네 table, FK, columns, named index, nullable active-key unique semantics를 확인한다. H2/PostgreSQL/MySQL test class는 기존 support/launcher와 순차 실행 규칙을 사용한다.
 
 - [ ] **Step 2: 세 dialect에 동일 의미의 DDL을 작성한다**
 
@@ -345,15 +348,23 @@ exclusive/shared/capacity bucket 각각에 대해 half-open overlap과 capacity 
 
 - [ ] **Step 2: common lock and occupancy path를 구현한다**
 
-기존 `lockResourceMutex`/`validateExistingConflicts`에 hold row를 active allocation과 같은 `tenantGroupId, clinicId, resourceType, resourceId, status, startsAt, endsAt` 기준으로 포함한다. 새 public/internal 경계는 다음 의미를 갖는다.
+기존 `lockResourceMutex`/`validateExistingConflicts`에 hold row를 active allocation과 같은 `tenantGroupId, clinicId, resourceType, resourceId, status, startsAt, endsAt` 기준으로 포함한다. 기존-row mutation의 공통 순서는 `resource mutex → hold → offer → entry → reliability snapshot`이다. 단, 새 offer 생성은 `hold.offer_id` FK 때문에 durable row insert 순서가 `resource mutex → capacity validation → offer insert → hold insert → entry CAS → history`가 되는 명시적 예외다. 이 예외에서도 capacity validation과 모든 insert는 같은 resource mutex transaction 안에서 수행하고, claim/release/reconcile은 기존-row 순서를 그대로 사용한다. 새 public/internal 경계는 다음 의미를 갖는다.
 
 ```kotlin
-fun reserveWaitlistCapacityHold(hold: NewHold): WaitlistCapacityHoldRecord
+fun lockAndValidateWaitlistCapacity(hold: NewHold): WaitlistCapacityReservation
+fun reserveWaitlistCapacityHold(scope: WaitlistScope, offerId: Long, hold: NewHold): WaitlistCapacityHoldRecord
 fun consumeWaitlistCapacityHold(scope: WaitlistScope, holdId: Long, expectedVersion: Long): Boolean
 fun releaseWaitlistCapacityHold(scope: WaitlistScope, holdId: Long, terminal: WaitlistCapacityHoldState): Boolean
 ```
 
-자원 mutex → hold → offer → entry → reliability snapshot 순서를 모든 mutation에서 지킨다. proposal을 synthetic하게 생성하지 않는다. hold scope mismatch는 변경 전 fail closed다.
+`reserveWaitlistCapacityHold`의 성공 mapping은 `CapacityHoldCreated`, consume는
+`CapacityHoldConsumed`, terminal release는 `CapacityHoldReleased`, bounded expiry
+batch는 `CapacityHoldExpired`를 사용한다. 이 결과는 row mutation과 같은 transaction
+경계에서만 반환한다.
+
+기존-row mutation은 `자원 mutex → hold → offer → entry → reliability snapshot` 순서를
+지키고, 새 offer creation은 위의 FK 예외 순서를 사용한다. proposal을 synthetic하게
+생성하지 않는다. hold scope mismatch는 변경 전 fail closed다.
 
 - [ ] **Step 3: capacity/rollback/concurrency test를 GREEN으로 만든다**
 
@@ -436,10 +447,11 @@ expected: scope leak 0, deterministic in-memory/DB order 동일, page round-trip
 다음 실패/성공을 service test에 고정한다.
 
 1. one vacancy에서 active offer/hold가 하나만 생성된다.
-2. entry CAS, offer insert, hold insert, history insert 중 하나가 실패하면 전체 rollback이다.
-3. decision unavailable candidate는 건너뛰고 다음 page를 읽는다.
-4. same vacancy 경쟁 loser는 bounded max 3 retry 후 `OfferAlreadyExists`/`NoEligibleCandidate`다.
-5. wrong scope/active entry는 `OfferScopeMismatch`다.
+2. 같은 resource/time에 confirmed allocation이 이미 있으면 `SlotOccupied`를 반환하고 offer/hold/history를 만들지 않는다.
+3. entry CAS, offer insert, hold insert, history insert 중 하나가 실패하면 전체 rollback이다.
+4. decision unavailable candidate는 건너뛰고 다음 page를 읽는다.
+5. same vacancy 경쟁 loser는 bounded max 3 retry 후 `OfferAlreadyExists`/`NoEligibleCandidate`다.
+6. wrong scope/active entry는 `OfferScopeMismatch`다.
 
 - [ ] **Step 2: resource-first offer transaction을 구현한다**
 
@@ -449,6 +461,7 @@ expected: scope leak 0, deterministic in-memory/DB order 동일, page round-trip
 resource mutex
 → bounded WAITING keyset page + local decision batch
 → candidate entry forUpdate/scope/version recheck
+→ lockAndValidateWaitlistCapacity(confirmed allocation + active hold overlap)
 → WaitlistOffers(OFFERED, active keys) insert
 → WaitlistCapacityHolds(OFFERED) insert
 → entry CAS WAITING→OFFERED
@@ -456,7 +469,10 @@ resource mutex
 → commit
 ```
 
-active unique conflict만 예상 가능한 retry로 분류하고 unknown SQL error는 rollback/throw한다. hold가 생성되지 않은 offer는 절대 성공으로 반환하지 않는다.
+`lockAndValidateWaitlistCapacity`가 기존 confirmed allocation 또는 active hold와 충돌하면
+`SlotOccupied`로 종료하고 insert를 시작하지 않는다. active unique conflict만 예상 가능한
+retry로 분류하고 unknown SQL error는 rollback/throw한다. hold가 생성되지 않은 offer는
+절대 성공으로 반환하지 않는다.
 
 - [ ] **Step 3: offer service test를 GREEN으로 만든다**
 
@@ -479,11 +495,22 @@ test output에 active offer/hold count, retry count, stable result를 남기되 
 2. 같은 caller retry는 `ACCEPTED`와 기존 hold ID/expiry를 replay하고 새 row를 만들지 않는다.
 3. `now >= expiresAt` 또는 `now >= startsAt`이면 hold/offer/entry가 같은 transaction에서 `EXPIRED`다.
 4. stale/expired/scope mismatch/occupied capacity/version conflict는 deterministic failure이고 offer/entry를 `ACCEPTED`로 만들지 않는다.
-5. existing `OFFERED` hold가 없으면 same-tx reserve repair를 시도하되 capacity conflict면 `SlotOccupied`다.
+5. existing `OFFERED` hold가 없으면 same-tx `lockAndValidateWaitlistCapacity` 후
+   `reserveWaitlistCapacityHold(scope, offerId, hold)` repair를 시도하되 capacity conflict면
+   `SlotOccupied`다.
 
 - [ ] **Step 2: claim/release CAS를 구현한다**
 
-transaction 시작 시 `Clock.now()`를 한 번 캡처한다. decision stamp는 transaction 밖에서 준비하고 local row/scope/digest/expiry만 transaction 안에서 재확인한다. 성공 결과는 `OfferClaimed(offerId, holdId, memberId, holdExpiresAt)`이고 appointment 생성은 수행하지 않는다. decline/withdraw는 hold release, active key NULL, offer/entry terminal CAS, history append를 하나의 transaction으로 묶는다.
+transaction 시작 시 `Clock.now()`를 한 번 캡처한다. decision stamp는 transaction 밖에서 준비하고 local row/scope/digest/expiry만 transaction 안에서 재확인한다. 성공 결과는 `OfferClaimed(offerId, holdId, memberId, holdExpiresAt)`이고 appointment 생성은 수행하지 않는다. decline/withdraw는 `OfferWithdrawn`과 `CapacityHoldReleased` mapping을 사용하며, hold release, active key NULL, offer/entry terminal CAS, history append를 하나의 transaction으로 묶는다. replacement 성공 후에는 `CapacityHoldConsumed` mapping을 사용한다.
+
+후속 caller가 결과를 잘못 해석하지 않도록 다음 handoff matrix를 계약으로 고정한다.
+
+| Core result | caller action | idempotency/identity bridge | next owner and boundary |
+|---|---|---|---|
+| `CandidateFound` | offer 알림 또는 후속 API 응답으로 offer를 전달한다. | `offerId`와 `holdId`만 전달하며 이름·전화번호를 복제하지 않는다. | API/notification adapter; 이 core에는 endpoint/outbox를 추가하지 않는다. |
+| `OfferClaimed` | replacement command를 호출해 hold를 appointment allocation과 함께 소비한다. | caller가 발급한 opaque `replacementCommandId`를 idempotency key로 사용하고 `holdId`를 handoff key로 보낸다. 동일 command replay는 새 appointment/hold를 만들지 않아야 한다. | appointment replacement 후속 이슈; 현재 Task 10은 hold를 `CONSUMED`로 바꾸는 경계만 고정한다. |
+| `OfferWithdrawn` / `CapacityHoldReleased` / `CapacityHoldExpired` | caller는 재시도하지 않고 stable reason과 metric만 처리한다. | `offerId`, `holdId`, `correlationId`는 bounded 값만 사용한다. | API/notification/recovery adapter; raw profile payload와 outbox는 후속 범위다. |
+| `CapacityHoldConsumed` | replacement 성공을 완료로 기록한다. | 동일 `replacementCommandId` replay는 기존 consume 결과를 반환한다. | appointment allocation owner; core는 appointment 생성 자체를 수행하지 않는다. |
 
 - [ ] **Step 3: bounded recovery RED/GREEN을 구현한다**
 
@@ -527,7 +554,7 @@ runbook의 threshold/triage가 실제 metric name과 command result를 그대로
 
 - [ ] **Step 1: RED load/stability tests를 작성한다**
 
-bounded JDBC pool에서 popular vacancy에 100 concurrent offer/claim attempt를 실행한다. 승자는 active offer/hold 또는 claim 하나이고, losers는 stable conflict/no-candidate이며 deadlock/unexpected SQL failure는 0이다. p95와 pool 설정을 결과 artifact에 기록한다. `MultithreadingTester`가 DB connection/transaction 증거를 충분히 표현하지 못하면 그 근거를 test KDoc에 쓰고 existing launcher와 bounded `ExecutorService`를 사용한다.
+bounded JDBC pool에서 popular vacancy에 100 concurrent offer/claim attempt를 실행한다. 승자는 active offer/hold 또는 claim 하나이고, losers는 stable conflict/no-candidate이며 deadlock/unexpected SQL failure는 0이다. `docs/runbooks/waitlist-core.md`의 contention budget인 p95 ≤ 2,000 ms, p99 ≤ 5,000 ms를 fail-fast assertion으로 적용하고 p50/p95/p99·pool 설정을 결과 artifact에 기록한다. `MultithreadingTester`가 DB connection/transaction 증거를 충분히 표현하지 못하면 그 근거를 test KDoc에 쓰고 existing launcher와 bounded `ExecutorService`를 사용한다.
 
 - [ ] **Step 2: sequential DB matrix를 실행한다**
 
@@ -538,7 +565,11 @@ Testcontainers raw instance를 만들지 않고 `TestDB`/bluetape4k launcher를 
 ./gradlew :appointment-api:test --tests '*FlywayMigrationTest' --tests '*FlywayPostgreSQLMigrationTest' --tests '*FlywayMySQLMigrationTest'
 ```
 
-중간 rollback/restart 후 duplicate release, active count drift, state mismatch backlog 보존을 확인한다. 컨테이너 test는 다른 Gradle process와 병렬 실행하지 않는다.
+feature flag off → migration-only → representative dataset을 둔 clinic allowlist enable →
+fake clock으로 flag off rollback의 네 단계를 별도 evidence로 실행한다. 각 단계에서
+active offer/hold count, expiry backlog, history 보존, 중간 rollback/restart 뒤 duplicate
+release·active count drift·state mismatch backlog 보존을 확인한다. 컨테이너 test는 다른
+Gradle process와 병렬 실행하지 않는다.
 
 - [ ] **Step 3: full affected module proof를 실행한다**
 
@@ -547,7 +578,7 @@ Testcontainers raw instance를 만들지 않고 `TestDB`/bluetape4k launcher를 
 ./gradlew :appointment-core:build :appointment-api:build
 ```
 
-Kover는 full module test 이후 report-only로 실행하며 새 hard threshold를 추가하지 않는다. compile warnings/deprecations, `!!`, raw SQL, log payload, unregistered files를 `rg`와 diff review로 확인한다.
+Kover는 full module test 이후 report-only로 실행하며 새 hard threshold를 추가하지 않는다. compile warnings/deprecations, `!!`, Kotlin runtime의 string-concatenated raw SQL/dynamic `ORDER BY`, log payload, unregistered files를 `rg`와 diff review로 확인한다. 정적 Flyway DDL은 이 runtime SQL scan에서 제외하고 migration metadata/EXPLAIN 검토로 별도 확인한다.
 
 - [ ] **Step 4: plan/spec/checklist traceability를 갱신한다**
 
@@ -579,7 +610,7 @@ git status --short
 
 ## 계획 자체의 self-review
 
-- **A-04 gate evidence:** reviewed design commit `b041179` and iteration-2 review `2abd0e7` both report P0=0/P1=0; the integrated review is PASS with only two explicitly deferred P2 follow-ups (developer/API compile probe and caller replacement-idempotency examples), both covered by Tasks 0, 2, 9, and 10.
+- **Historical gate evidence:** Step 2-R reviewed design/runbook commit `b041179` and iteration-2 review artifact at `2abd0e7`; both report P0=0/P1=0 with two explicitly deferred P2 follow-ups (developer/API compile probe and caller replacement-idempotency examples). The A-04 plan review must cite its own exact plan-review artifact after the six-lens rerun.
 - **Spec coverage:** §1–§7은 Tasks 0–2, §8은 Task 3, §9는 Tasks 7–9, §10은 Tasks 6/9/10, §11은 Task 11, §12는 Task 4, §13은 Tasks 5/6/8/10–12, §14 운영 산출물은 Task 11/13에 매핑했다.
 - **No placeholders:** 각 task에 정확한 파일, public method shape, schema columns/index, command와 기대 결과를 적었고 비어 있는 설계 단계를 남기지 않았다.
 - **Type consistency:** `WaitlistScope`, `VacancyDescriptor`, `DecisionStamp`, `WaitlistOfferState`, `WaitlistCapacityHoldState`, `OfferClaimed`, `CapacityHoldExpired`를 앞 Task에서 정의하고 repository/service/test가 같은 이름을 사용한다.

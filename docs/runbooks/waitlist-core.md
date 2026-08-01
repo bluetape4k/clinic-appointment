@@ -23,6 +23,10 @@ DB row를 수동 수정하지 않는다.
 6. `appointment.waitlist.core.enabled=false` 상태에서 shadow candidate 결과와
    active/backlog metric 수집이 정상이다.
 
+bounded contention의 기준 장비 budget은 p95 2,000 ms 이하, p99 5,000 ms
+이하로 고정한다. pool size, dataset, DB image/version이 달라지면 결과에 실제
+값과 budget 변경 사유를 함께 기록하며, budget 초과는 allowlist 승격을 막는다.
+
 readiness 증거에는 migration 버전, 테스트 결과, representative dataset의
 `EXPLAIN`, JDBC pool 설정, 검증한 clinic 범위를 함께 기록한다.
 
