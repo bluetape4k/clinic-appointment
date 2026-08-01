@@ -35,6 +35,7 @@ class NotificationOutboxMetrics(
     private val suppressedCounters = ConcurrentHashMap<NotificationSuppressionReasonCode, Counter>()
     private val exhaustedCounters = ConcurrentHashMap<FailureMeterKey, Counter>()
     private val leaseRecoveredCounters = ConcurrentHashMap<ChannelEventMeterKey, Counter>()
+    private val reminderRecoveryCounters = ConcurrentHashMap<String, Counter>()
 
     init {
         Gauge.builder(PENDING, pendingReady) { it.get().toDouble() }
@@ -166,6 +167,23 @@ class NotificationOutboxMetrics(
         }.increment()
     }
 
+    /** 한 보정 tick의 비식별 결과 건수를 낮은 cardinality result tag로 기록합니다. */
+    fun recordReminderRecovery(result: ReminderRecoveryScanResult) {
+        incrementReminderRecovery("enqueued", result.enqueued)
+        incrementReminderRecovery("suppressed", result.suppressed)
+        incrementReminderRecovery("already_exists", result.alreadyExists)
+        incrementReminderRecovery("not_yet_due", result.notYetDue)
+    }
+
+    private fun incrementReminderRecovery(result: String, count: Int) {
+        if (count <= 0) return
+        reminderRecoveryCounters.computeIfAbsent(result) {
+            Counter.builder(REMINDER_RECOVERY)
+                .tag("result", result)
+                .register(registry)
+        }.increment(count.toDouble())
+    }
+
     companion object {
         const val PENDING = "clinic.notification.outbox.pending"
         const val OLDEST_AGE = "clinic.notification.outbox.oldest.age"
@@ -175,6 +193,7 @@ class NotificationOutboxMetrics(
         const val DELIVERY_SUPPRESSED = "clinic.notification.delivery.suppressed"
         const val DELIVERY_EXHAUSTED = "clinic.notification.delivery.exhausted"
         const val DELIVERY_LEASE_RECOVERED = "clinic.notification.delivery.lease.recovered"
+        const val REMINDER_RECOVERY = "clinic.notification.reminder.recovery"
 
         val METER_NAMES: Set<String> = setOf(
             PENDING,
@@ -185,6 +204,7 @@ class NotificationOutboxMetrics(
             DELIVERY_SUPPRESSED,
             DELIVERY_EXHAUSTED,
             DELIVERY_LEASE_RECOVERED,
+            REMINDER_RECOVERY,
         )
     }
 }

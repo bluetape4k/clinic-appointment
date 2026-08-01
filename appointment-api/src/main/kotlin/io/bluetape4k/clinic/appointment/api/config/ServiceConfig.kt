@@ -8,6 +8,7 @@ import io.bluetape4k.clinic.appointment.api.notification.AppointmentNotification
 import io.bluetape4k.clinic.appointment.api.notification.DefaultAppointmentNotificationWriter
 import io.bluetape4k.clinic.appointment.api.notification.DefaultAppointmentMemberResolver
 import io.bluetape4k.clinic.appointment.api.notification.FailClosedAppointmentMemberDirectory
+import io.bluetape4k.clinic.appointment.api.notification.JdbcAppointmentReminderRecoveryStore
 import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberIdProperties
 import io.bluetape4k.clinic.appointment.api.notification.UnavailableAppointmentNotificationWriter
 import io.bluetape4k.clinic.appointment.api.policy.PolicyActivationPublisher
@@ -47,6 +48,7 @@ import io.bluetape4k.clinic.appointment.event.policy.SchedulingPolicyEventReposi
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.NotificationProperties
 import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
@@ -82,6 +84,7 @@ import io.bluetape4k.logging.KLogging
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -112,6 +115,7 @@ import kotlin.concurrent.withLock
     AppointmentCommitmentProperties::class,
     ProfileReevaluationProperties::class,
     NotificationMemberIdProperties::class,
+    NotificationProperties::class,
 )
 class ServiceConfig {
 
@@ -192,6 +196,26 @@ class ServiceConfig {
             clinicRepository = clinicRepository,
             clock = Clock.systemUTC(),
             sameDayReminderLeadTime = Duration.ofHours(2),
+        )
+    }
+
+    @Bean
+    @ConditionalOnBean(NotificationOutboxHasher::class)
+    @ConditionalOnMissingBean(JdbcAppointmentReminderRecoveryStore::class)
+    fun appointmentReminderRecoveryStore(
+        database: Database,
+        notificationOutboxRepository: NotificationOutboxRepository,
+        notificationOutboxHasher: NotificationOutboxHasher,
+        notificationProperties: NotificationProperties,
+    ): JdbcAppointmentReminderRecoveryStore {
+        val reminder = notificationProperties.reminder
+        return JdbcAppointmentReminderRecoveryStore(
+            database = database,
+            repository = notificationOutboxRepository,
+            hasher = notificationOutboxHasher,
+            sameDayReminderLeadTime = Duration.ofHours(reminder.sameDayHoursBefore.toLong()),
+            dayBeforeEnabled = reminder.enabled && reminder.dayBefore,
+            sameDayEnabled = reminder.enabled && reminder.sameDay,
         )
     }
 

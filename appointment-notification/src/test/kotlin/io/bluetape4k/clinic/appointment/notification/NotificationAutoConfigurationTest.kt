@@ -235,9 +235,41 @@ internal class NotificationAutoConfigurationTest {
                 applicationContext.startupFailure shouldBeEqualTo null
                 applicationContext.getBeansOfType(NotificationReminderRecoveryScanner::class.java).size shouldBeEqualTo 1
                 applicationContext.getBeansOfType(AppointmentReminderScheduler::class.java).size shouldBeEqualTo 1
+                applicationContext.containsBean("notificationReminderSchedulingRunner") shouldBeEqualTo true
                 runBlocking {
                     applicationContext.getBean(AppointmentReminderScheduler::class.java).triggerOnce()
                 } shouldBeEqualTo ReminderRecoveryScanResult(0, 0, 0)
+            }
+    }
+
+    @Test
+    fun `worker가 비활성화되면 reminder recovery background path를 구성하지 않는다`() {
+        val database = database("auto_reminder_recovery_disabled", version = "14")
+        context(database, withKey = true)
+            .withPropertyValues("clinic.notification.worker.enabled=false")
+            .withBean(
+                "reminderRecoverySource",
+                ReminderRecoverySource::class.java,
+                { ReminderRecoverySource { _, _ -> emptyList() } },
+            )
+            .withBean(
+                "reminderRecoveryMaterializer",
+                ReminderRecoveryMaterializer::class.java,
+                {
+                    object : ReminderRecoveryMaterializer {
+                        override suspend fun enqueue(candidate: ReminderRecoveryCandidate) =
+                            ReminderRecoveryMaterializationResult.ENQUEUED
+
+                        override suspend fun suppressMissed(candidate: ReminderRecoveryCandidate) =
+                            ReminderRecoveryMaterializationResult.SUPPRESSED
+                    }
+                },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(NotificationReminderRecoveryScanner::class.java).size shouldBeEqualTo 0
+                applicationContext.getBeansOfType(AppointmentReminderScheduler::class.java).size shouldBeEqualTo 0
+                applicationContext.getBeansOfType(NotificationReminderSchedulingRunner::class.java).size shouldBeEqualTo 0
             }
     }
 

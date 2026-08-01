@@ -58,7 +58,9 @@ internal class NotificationReminderRecoveryScannerTest {
             )
 
             scanner.scanOnce(limit = 10).enqueued shouldBeEqualTo 1
-            scanner.scanOnce(limit = 10).enqueued shouldBeEqualTo 0
+            val replay = scanner.scanOnce(limit = 10)
+            replay.enqueued shouldBeEqualTo 0
+            replay.alreadyExists shouldBeEqualTo 1
 
             materializer.enqueueAttempts shouldBeEqualTo listOf(candidate.idempotencyKey, candidate.idempotencyKey)
             materializer.enqueued shouldBeEqualTo listOf(candidate)
@@ -85,6 +87,29 @@ internal class NotificationReminderRecoveryScannerTest {
         }
     }
 
+    @Test
+    fun `한 실행은 작은 DB page를 반복하되 설정된 전체 후보 상한에서 멈춘다`() {
+        runBlocking {
+            val source = PagedReminderSource((1L..6L).map { reminder(it, now.minusSeconds(1)) })
+            val scheduler = AppointmentReminderScheduler(
+                scanner = NotificationReminderRecoveryScanner(
+                    source = source,
+                    materializer = FakeReminderMaterializer(),
+                    catchUpWindow = Duration.ofMinutes(30),
+                    clock = { now },
+                ),
+                batchSize = 2,
+                maxCandidatesPerRun = 5,
+            )
+
+            val result = scheduler.triggerOnce()!!
+
+            result.scanned shouldBeEqualTo 5
+            result.enqueued shouldBeEqualTo 5
+            source.calls shouldBeEqualTo 3
+        }
+    }
+
     private fun reminder(id: Long, dueAt: Instant): ReminderRecoveryCandidate =
         ReminderRecoveryCandidate(
             tenantGroupId = TenantGroupId(1L),
@@ -103,6 +128,17 @@ internal class NotificationReminderRecoveryScannerTest {
     ) : ReminderRecoverySource {
         override suspend fun findCandidates(now: Instant, limit: Int): List<ReminderRecoveryCandidate> =
             candidates.take(limit)
+    }
+
+    private class PagedReminderSource(candidates: List<ReminderRecoveryCandidate>) : ReminderRecoverySource {
+        private val remaining = candidates.toMutableList()
+        var calls: Int = 0
+            private set
+
+        override suspend fun findCandidates(now: Instant, limit: Int): List<ReminderRecoveryCandidate> {
+            calls++
+            return remaining.take(limit).also { remaining.subList(0, it.size).clear() }
+        }
     }
 
     private class FakeReminderMaterializer : ReminderRecoveryMaterializer {

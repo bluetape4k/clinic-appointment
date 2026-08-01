@@ -60,6 +60,16 @@ class NotificationOutboxRepositoryTest {
     }
 
     @Test
+    fun `현재 transaction에서 기존 멱등성 행을 확인한다`() {
+        transaction(database) {
+            repository.containsIdempotency(sendableDraft().idempotencyDigest) shouldBeEqualTo false
+            repository.enqueue(sendableDraft())
+            repository.containsIdempotency(sendableDraft().idempotencyDigest) shouldBeEqualTo true
+            NotificationOutboxEvents.selectAll().count() shouldBeEqualTo 1L
+        }
+    }
+
+    @Test
     fun `duplicate enqueue uses atomic upsert without hiding non idempotency sql errors`() {
         transaction(database) {
             val first = repository.enqueue(sendableDraft())

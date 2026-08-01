@@ -16,6 +16,8 @@ internal class NotificationPropertiesTest {
         worker.maxElapsed shouldBeEqualTo Duration.ofHours(24)
         worker.providerAttemptsPerLease shouldBeEqualTo 1
         worker.catchUpWindow shouldBeEqualTo Duration.ofMinutes(30)
+        worker.reminderRecoveryInterval shouldBeEqualTo Duration.ofHours(1)
+        worker.reminderRecoveryMaxCandidatesPerRun shouldBeEqualTo 1_000
         worker.pollInterval shouldBeEqualTo Duration.ofSeconds(1)
         worker.validate()
     }
@@ -58,6 +60,12 @@ internal class NotificationPropertiesTest {
         }
         assertFailsWith<IllegalStateException> {
             NotificationProperties.WorkerProperties(pollInterval = Duration.ZERO).validate()
+        }
+        assertFailsWith<IllegalStateException> {
+            NotificationProperties.WorkerProperties(
+                batchSize = 100,
+                reminderRecoveryMaxCandidatesPerRun = 99,
+            ).validate()
         }
         assertFailsWith<IllegalStateException> {
             NotificationProperties.WorkerProperties(memberResolverRateLimitPerSecond = 0).validate()

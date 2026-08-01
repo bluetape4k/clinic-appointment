@@ -92,6 +92,8 @@ data class NotificationProperties(
         val maxElapsed: Duration = Duration.ofHours(24),
         val providerAttemptsPerLease: Int = 1,
         val catchUpWindow: Duration = Duration.ofMinutes(30),
+        val reminderRecoveryInterval: Duration = Duration.ofHours(1),
+        val reminderRecoveryMaxCandidatesPerRun: Int = 1_000,
         val leaseDuration: Duration = Duration.ofSeconds(60),
         val providerTimeout: Duration = Duration.ofSeconds(30),
         val pollInterval: Duration = Duration.ofSeconds(1),
@@ -123,6 +125,12 @@ data class NotificationProperties(
             }
             check(!catchUpWindow.isNegative && !catchUpWindow.isZero) {
                 "catchUpWindow must be positive"
+            }
+            check(!reminderRecoveryInterval.isNegative && !reminderRecoveryInterval.isZero) {
+                "reminderRecoveryInterval must be positive"
+            }
+            check(reminderRecoveryMaxCandidatesPerRun in batchSize..100_000) {
+                "reminderRecoveryMaxCandidatesPerRun must be between batchSize and 100000"
             }
             check(!leaseDuration.isNegative && !leaseDuration.isZero) {
                 "leaseDuration must be positive"
