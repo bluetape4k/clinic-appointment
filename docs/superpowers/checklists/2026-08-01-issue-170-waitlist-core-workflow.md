@@ -210,8 +210,8 @@ Status: `DESIGN REVIEW PASSED` — implementation and plan gates remain pending
 
 - [ ] **A-04 — Approve and review the implementation plan**
   - **Action:** Write the ordered plan and run all six plan perspectives plus integration.
-  - **Evidence:** Plan path, traceability map, review table, and P0=0/P1=0.
-  - **Failure:** Repair ordering/proof/ownership/hazard gaps before code.
+  - **Evidence:** Plan `docs/superpowers/plans/2026-08-01-issue-170-waitlist-core.md` at `a2e67d5`, review `docs/review/2026-08-01-issue-170-waitlist-core-plan-review.md`, integrated PASS, P0=0/P1=0/P2=0/P3=0. User plan approval remains pending.
+  - **Failure:** Repair ordering/proof/ownership/hazard gaps before code; do not start implementation without approval.
 
 - [ ] **A-05 — Predict triggered risks**
   - **Action:** Record concurrency, DB migration, CAS, privacy, dependency, and recovery risks with signals, mitigations, and rollback/rerun points.
@@ -267,14 +267,20 @@ Status: `DESIGN REVIEW PASSED` — implementation and plan gates remain pending
 
 ## Current stop condition
 
-Implementation remains paused until the implementation plan is written and
-passes A-04. Step 2-R is no longer a blocker. PR/merge and performance/code
-verification rows remain pending by dependency order.
+Implementation remains paused until the implementation plan is written, passes
+A-04, and receives explicit user approval. The A-04 review is PASS but its row
+remains unchecked until that approval. Step 2-R is no longer a blocker. PR/merge
+and performance/code verification rows remain pending by dependency order.
 
 Step 2-R evidence is recorded at
 `docs/review/2026-08-01-issue-170-waitlist-core-spec-review-iteration-2.md`.
 Its integrated verdict is `PASS` with P0=0 and P1=0; P2 items are explicit
 plan/adapter follow-ups.
+
+A-04 review evidence is recorded at
+`docs/review/2026-08-01-issue-170-waitlist-core-plan-review.md`. Its integrated
+verdict is `PASS` with P0=0, P1=0, P2=0, and P3=0; implementation approval is
+still pending.
 
 Required checks: `20/47` checked so far; N/A: `1`; Blocked: `0`.
 Unchecked IDs: `CL-07`, `CL-08`, `CG-06..CG-18`, `A-04..A-12`, `Step 4-S`,
