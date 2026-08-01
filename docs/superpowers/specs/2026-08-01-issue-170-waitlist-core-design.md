@@ -488,8 +488,11 @@ terminal 전이를 한 transaction에서 수행한다. DB unique conflict는 예
 operator가 호출하는 `reconcileWaitlistHolds(limit, now)`가 동일한 transaction
 service를 사용한다. 한 번에 최대 100건(설정 상한 500건)만 처리하고, 각 row는
 resource mutex를 잡은 뒤 `OFFERED` 만료 또는 slot 시작 이후의 `ACCEPTED` hold만
-CAS로 `EXPIRED` 처리한다. 처리 중 connection이 끊기면 transaction rollback 후
-다음 실행이 같은 row를 재시도한다.
+CAS로 `EXPIRED` 처리한다. 그 transaction에서 연결된 offer와 entry도 같은
+`EXPIRED` 전이·history append를 수행하며, scope/state 불일치면
+`OfferStateConflict`를 recovery backlog에 남기고 해당 row의 상태·capacity를
+변경하지 않는다. 처리 중 connection이 끊기면 transaction rollback 후 다음
+실행이 같은 row를 재시도한다.
 
 운영 ownership은 `appointment-core` 서비스 owner가 갖고, `waitlist_hold_active`
 및 `waitlist_expiry_backlog` health/metric을 통해 backlog를 관찰한다. active hold를
@@ -559,7 +562,11 @@ appointment-api/src/main/resources/db/migration/mysql/V18__add_waitlist_core.sql
 - offer/hold의 tenant/clinic/member scope 및 immutable snapshot 검증용 컬럼
 - tenant/clinic scope, date-window hard eligibility, deterministic candidate 조회 인덱스
 - nullable `active_entry_key`, `active_vacancy_key`의 unique 제약
-- hold의 `(offer_id)` unique 제약과 active overlap 조회 인덱스
+- hold의 `(offer_id)` unique 제약과
+  `(tenant_group_id, clinic_id, resource_type, resource_id, status, starts_at,
+  ends_at, id)` active overlap 조회 인덱스. dialect가 range 조건을 다른
+  순서로 최적화하면 같은 equality prefix와 시간 범위를 유지한 대체 인덱스를
+  사용하되 `EXPLAIN` 결과로 근거를 남긴다.
 - offer expiry와 history 시간축 인덱스
 
 기존 `scheduling_*` 이름을 변경하지 않는다. down migration이나 운영 table 삭제는
@@ -626,7 +633,9 @@ allowlist로 켠다. rollback은 flag off와
 10. hold replay·consume·reconcile에서 다른 member의 hold/offer/entry 조합을
    주입하면 `HOLD_SCOPE_MISMATCH`로 거부되고 상태·capacity·history가 바뀌지
    않는다.
-11. `appointment-core:test`와 migration test가 순차 실행되고, pre-existing 테스트의
+11. accepted hold와 offer/entry 상태를 의도적으로 불일치시킨 뒤 reconcile하면
+   `OfferStateConflict`가 반환되고 세 row와 capacity가 보존된다.
+12. `appointment-core:test`와 migration test가 순차 실행되고, pre-existing 테스트의
    동작이 유지된다.
 
 ### 운영·복구
@@ -634,11 +643,15 @@ allowlist로 켠다. rollback은 flag off와
 1. feature flag off, migration-only, clinic allowlist enable, rollback flag off의
    네 단계를 fake clock과 representative dataset에서 재현한다.
 2. `reconcileWaitlistHolds(limit, now)`가 만료 backlog를 100건 이하 batch로
-   처리하고, 중간 rollback·재시작 뒤 중복 release나 active count drift가 없다.
+   처리하며 offer·entry·hold·history가 함께 terminal 전이된다. 중간
+   rollback·재시작 뒤 중복 release나 active count drift가 없고,
+   `OfferStateConflict` row는 상태를 바꾸지 않은 채 bounded backlog로 남는다.
 3. metric/health/log에 member ID, 이름, 전화번호, raw decision payload가 없고,
    bounded reason·correlation ID만 남는다.
-4. malicious cursor/member/actor/reason 입력이 parameterized Exposed predicate를
-   벗어나지 않고, raw SQL·동적 sort·SQL error text가 결과나 로그에 나타나지 않는다.
+4. malicious cursor/member/actor/reason/correlation 입력이 parameterized Exposed
+   predicate를 벗어나지 않고, correlation newline/log-injection과
+   email·phone·JWT 모양도 거부하며, raw SQL·동적 sort·SQL error text가 결과나
+   로그에 나타나지 않는다.
 
 ## 14. 구현 산출물과 후속 경계
 
