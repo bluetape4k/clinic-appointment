@@ -203,10 +203,10 @@ terminal state는 `ACCEPTED`, `DECLINED`, `EXPIRED`, `WITHDRAWN`이다. phase 1�
 날짜 범위를 먼저 줄이는
 `(tenant_group_id, clinic_id, treatment_type_id, status, preferred_date_from,
 preferred_date_to, id)` 보조 인덱스도 둔다.
-`(tenant_group_id, clinic_id, treatment_type_id, status, priority_rank,
-waiting_since, id)`와 doctor가 지정된 경로를 위한
+`(tenant_group_id, clinic_id, treatment_type_id, status, priority_rank DESC,
+waiting_since ASC, id ASC)`와 doctor가 지정된 경로를 위한
 `(tenant_group_id, clinic_id, doctor_id, treatment_type_id, status,
-priority_rank, waiting_since, id)` 조회 인덱스를 둔다. 날짜/time-window hard
+priority_rank DESC, waiting_since ASC, id ASC)` 조회 인덱스를 둔다. 날짜/time-window hard
 eligibility는 이 후보 집합에 bounded predicate로 적용하고, `slotFit`은
 doctor-specific query를 먼저 실행한 뒤 unspecified-doctor query를 실행해
 random/filesort를 피한다. entry 하나에는 phase 1에서 동시에 하나의 concrete
@@ -222,9 +222,9 @@ status와 unique 제약으로 다시 확인한다.
 | `id` | Long PK |
 | `tenant_group_id`, `clinic_id`, `member_id` | entry와 일치하는 immutable scope snapshot |
 | `waitlist_entry_id` | `WaitlistEntries` FK |
-| `vacancy_key` | clinic·slot·resource capacity token의 canonical hash |
-| `active_entry_key` | `OFFERED`/`ACCEPTED` 동안만 entry ID를 canonical text로 보관하고 terminal 전이에서 NULL로 지우는 값 |
-| `active_vacancy_key` | `OFFERED`/`ACCEPTED` 동안만 `vacancy_key`를 복제하고 terminal 전이에서 NULL로 지우는 값 |
+| `vacancy_key` | server가 clinic·slot·resource capacity token을 canonicalize한 SHA-256 hash |
+| `active_entry_key` | server가 계산한 entry ID key를 `OFFERED`/`ACCEPTED` 동안만 보관하고 terminal 전이에서 NULL로 지우는 값 |
+| `active_vacancy_key` | server가 계산한 `vacancy_key`를 `OFFERED`/`ACCEPTED` 동안만 복제하고 terminal 전이에서 NULL로 지우는 값 |
 | `doctor_id`, `treatment_type_id` | offer 시점의 slot snapshot |
 | `starts_at`, `ends_at` | UTC slot 시각 |
 | `expires_at` | offer 수락 가능 만료 시각 |
@@ -247,7 +247,8 @@ portable 규칙을 사용한다. immutable `vacancy_key` 자체는 이력·재�
 vacancy key에는 clinic scope가 포함되며, capacity가 여러 개인 자원은 기존
 `ResourceCapacityBuckets`의 고정 resource ID와 half-open 시간 구간을 포함한다.
 
-offer 단독 조회·수정은 항상 `(tenant_group_id, clinic_id, id)` scope predicate를
+`vacancy_key`, `active_entry_key`, `active_vacancy_key`는 client 입력을 받지 않고
+server-side canonicalizer가 생성한다. offer 단독 조회·수정은 항상 `(tenant_group_id, clinic_id, id)` scope predicate를
 사용하고, 같은 transaction에서 `waitlist_entry_id`의 scope/member와 일치하는지
 검증한다. 이 검증이 실패하면 `OFFER_SCOPE_MISMATCH`로 거부한다.
 
@@ -268,9 +269,9 @@ appointment proposal을 대신하는 임시 row가 아니라, 후속 replacement
 | 컬럼 | 의미 |
 |---|---|
 | `id` | Long PK, claim 결과로 전달하는 hold ID |
-| `tenant_group_id`, `clinic_id` | 자원 scope FK |
+| `tenant_group_id`, `clinic_id`, `member_id` | offer/entry와 일치하는 immutable scope snapshot |
 | `offer_id` | `WaitlistOffers` FK, offer당 hold 하나를 보장하는 unique 키 |
-| `vacancy_key`, `active_vacancy_key` | offer와 같은 immutable/active key 규칙 |
+| `vacancy_key`, `active_vacancy_key` | server-side canonical hash와 offer의 active key 규칙 |
 | `resource_type`, `resource_id` | `ResourceAllocationRepository`가 잠그는 자원 key |
 | `starts_at`, `ends_at`, `capacity_units`, `maximum_capacity` | allocation과 같은 half-open capacity snapshot |
 | `status` | `OFFERED`, `ACCEPTED`, `CONSUMED`, `RELEASED`, `EXPIRED` |
@@ -283,6 +284,12 @@ active allocation 조회·capacity timeline에 두 상태를 함께 포함하며
 capacity를 반환하지만 row와 event를 삭제하지 않는다. accepted hold가 slot 시작
 시각까지 소비되지 않으면 bounded recovery가 `EXPIRED`로 수렴시키고 operator
 경보를 남긴다.
+
+hold를 insert·update·reconcile·consume하는 모든 경로는 hold의
+`tenant_group_id`, `clinic_id`, `member_id`가 연결된 offer와 entry의 동일 컬럼과
+일치하는지 같은 transaction에서 검증한다. hold ID만으로 상태를 바꾸는 경로는
+허용하지 않으며, 불일치는 `HOLD_SCOPE_MISMATCH`로 거부하고 capacity나 상태를
+변경하지 않는다.
 
 ### 8.3 `WaitlistOfferEvents`
 
@@ -309,6 +316,12 @@ hold 생성·활성화·소비·해제도 동일 event stream에 연결한다. `
 tenantGroupId, clinicId, treatmentTypeId, doctorId,
 startsAt, endsAt, resourceCapacityToken, now
 ```
+
+`resourceCapacityToken`은 API caller가 만든 문자열이 아니라 appointment/resource
+projection에서 읽은 server-owned immutable descriptor다. descriptor에는 resource
+type·ID·capacity units·maximum capacity와 half-open 시간 구간이 포함되며,
+canonicalizer가 이 값 전체와 clinic scope를 hash해 `vacancy_key`를 만든다. 외부
+caller는 token·active key·vacancy hash를 주입할 수 없다.
 
 SQL에서 다음 조건을 먼저 적용한다.
 
@@ -370,8 +383,12 @@ offer에 저장하는 decision ID·policy version·hash·digest·expiresAt은 cl
 `slotFit`은 지정 의사가 vacancy와 정확히 일치하면 1, 미지정이면 0이다. `priorityRank`는 0 이상 bounded 정수이며, 같은 값이면 오래 기다린 entry를 먼저 선택한다. `entryId`는 최종 deterministic tie-break다. 정책 점수·recovery credit·benefit grant가 추가되는 후속 단계도 이 tuple의 마지막 `waitingSince, entryId` 안정성을 유지한다.
 
 `waiting_since`를 실제 column으로 저장하고 `(tenant_group_id, clinic_id,
-treatment_type_id, status, priority_rank, waiting_since, id)`와
+treatment_type_id, status, priority_rank DESC, waiting_since ASC, id ASC)`와
 doctor-specific 변형 index가 동일 실행 계획을 보장하는지 dialect별로 검증한다.
+마이그레이션 메타데이터 assertion은 두 인덱스 모두
+`priority_rank:D`, `waiting_since:A`, `id:A` 방향을 확인해야 한다. PostgreSQL과
+MySQL representative dataset의 `EXPLAIN`은 full scan/filesort 없이 이
+keyset 경로를 사용해야 한다.
 후보 조회는 keyset page를 사용하고 page size는 기본 100, 최대 500으로 제한한다.
 한 매칭 invocation은 최대 10 page/1,000 candidate 평가 또는 2초 budget 중 먼저
 도달한 지점에서 멈추며, 남은 후보는 다음 recovery tick으로 넘긴다. 한 page의
@@ -481,6 +498,14 @@ recovery command만 release할 수 있다. feature flag를 끄면 신규 offer/c
 차단하고 기존 hold를 삭제하지 않으므로 rollback 뒤에도 durable 상태와 재처리
 경로가 남는다.
 
+`actor_ref`는 내부 opaque staff actor ID 또는 server secret으로 계산한
+domain-separated HMAC digest만 허용한다. email·전화번호·JWT subject의 raw hash는
+허용하지 않으며, key domain/rotation 정책은 operator runbook에 기록한다.
+
+`correlation_id`는 command boundary에서 1..128자의 `[A-Za-z0-9._:-]` 형식으로
+검증한 opaque 값만 허용한다. newline, email/phone/JWT 모양, profile text는 거부하고
+로그·metric·exception에는 sanitized correlation ID만 전달한다.
+
 모든 scope, keyset cursor, vacancy key, member ID, actor ref, reason code는
 parameterized Exposed DSL expression으로만 전달한다. 문자열을 이어 붙이는 raw SQL,
 동적 `ORDER BY`, SQL error text를 domain 결과로 재사용하는 구현은 금지한다.
@@ -545,8 +570,11 @@ H2/PostgreSQL/MySQL 테스트는 V1부터 V18까지 순차 적용해 schema hist
 active unique constraint, hold overlap index를 확인한다.
 
 rollout은 additive migration 후 `appointment.waitlist.core.enabled=false`인
-상태로 배포한다. schema·repository·shadow candidate 검증과 representative
-contention/load proof가 끝난 clinic만 allowlist로 켠다. rollback은 flag off와
+상태로 배포한다. readiness gate는 V18 schema/FK/index 검증,
+`bluetape4k-states` artifact compile, 기존 `AppointmentStateMachine` 전이
+동등성 테스트, hold/claim concurrency proof, shadow candidate 결과를 모두
+요구한다. 이 gate와 representative contention/load proof가 끝난 clinic만
+allowlist로 켠다. rollback은 flag off와
 신규 command 차단으로 제한하며, 이미 생성된 offer/hold를 삭제하거나 migration을
 되돌리지 않는다. 재활성화 전 `reconcileWaitlistHolds`와 backlog/active count를
 확인한다.
@@ -587,8 +615,18 @@ contention/load proof가 끝난 clinic만 allowlist로 켠다. rollback은 flag 
 7. H2, PostgreSQL, MySQL migration과 unique/FK/index 검증이 통과한다.
 8. bounded candidate page에서 reliability provider round-trip이 page 수와
    일치하고, 외부 provider 호출이 열린 transaction 안에서 발생하지 않으며,
-   `EXPLAIN`이 keyset/index 경로를 사용한다.
-9. `appointment-core:test`와 migration test가 순차 실행되고, pre-existing 테스트의
+   `EXPLAIN`이 keyset/index 경로를 사용한다. 두 candidate 인덱스의
+   `priority_rank DESC, waiting_since ASC, id ASC` 방향과 PostgreSQL/MySQL
+   full scan/filesort 부재를 migration/query-plan test로 고정한다.
+9. popular vacancy/offer contention에서 bounded JDBC pool을 사용해 100개
+   동시 offer/claim 시도를 수행한다. active offer/hold 또는 claim 승자는 정확히
+   하나이고 나머지는 stable conflict/no-candidate 결과로 수렴하며, deadlock이나
+   예상 밖 SQL 오류가 0건이어야 한다. p95 latency와 pool 설정을 결과에 기록하고
+   구현 단계의 운영 budget을 초과하지 않아야 한다.
+10. hold replay·consume·reconcile에서 다른 member의 hold/offer/entry 조합을
+   주입하면 `HOLD_SCOPE_MISMATCH`로 거부되고 상태·capacity·history가 바뀌지
+   않는다.
+11. `appointment-core:test`와 migration test가 순차 실행되고, pre-existing 테스트의
    동작이 유지된다.
 
 ### 운영·복구
