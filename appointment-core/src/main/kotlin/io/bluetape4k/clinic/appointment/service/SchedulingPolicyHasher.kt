@@ -232,6 +232,15 @@ object SchedulingPolicyHasher {
         field("$prefix.noShowPenalty", policy.noShowPenalty)
         field("$prefix.sameDayCancellationPenalty", policy.sameDayCancellationPenalty)
         field("$prefix.minimumPriorityScore", policy.minimumPriorityScore)
+        field("$prefix.lookbackDays", policy.lookbackDays)
+        field(
+            "$prefix.lateCancellationWindowMinutes",
+            policy.lateCancellationWindowMinutes,
+        )
+        field("$prefix.noShowThreshold", policy.noShowThreshold)
+        field("$prefix.lateCancellationThreshold", policy.lateCancellationThreshold)
+        field("$prefix.coolingOffHours", policy.coolingOffHours)
+        field("$prefix.thresholdsPresent", policy.thresholdsPresent)
     }
 
     private fun CanonicalDigest.updatePriorityOverride(
@@ -247,6 +256,17 @@ object SchedulingPolicyHasher {
             policy.sameDayCancellationPenalty,
             { name, value -> field(name, value) },
         )
+        updateScalarOverride("$prefix.lookbackDays", policy.lookbackDays)
+        updateScalarOverride(
+            "$prefix.lateCancellationWindowMinutes",
+            policy.lateCancellationWindowMinutes,
+        )
+        updateScalarOverride("$prefix.noShowThreshold", policy.noShowThreshold)
+        updateScalarOverride(
+            "$prefix.lateCancellationThreshold",
+            policy.lateCancellationThreshold,
+        )
+        updateScalarOverride("$prefix.coolingOffHours", policy.coolingOffHours)
     }
 
     private fun CanonicalDigest.updateReconfirmation(

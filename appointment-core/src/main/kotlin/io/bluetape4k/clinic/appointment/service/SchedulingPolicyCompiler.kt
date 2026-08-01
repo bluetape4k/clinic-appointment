@@ -120,6 +120,9 @@ object SchedulingPolicyCompiler {
             "tenant priorityAndReliability policy is required"
         }.validatedTenant()
         val priorityOverride = clinic.priorityAndReliability?.validatedClinic()
+        if (!tenantPriority.thresholdsPresent) {
+            disabled += reliabilityThresholdPaths
+        }
         val priority = PriorityAndReliabilityPolicy(
             priorityWeights = resolveRequired(
                 "priorityAndReliability.priorityWeights",
@@ -139,10 +142,43 @@ object SchedulingPolicyCompiler {
                 priorityOverride?.sameDayCancellationPenalty,
                 sourceByPath,
             ),
+            lookbackDays = resolveRequired(
+                "priorityAndReliability.lookbackDays",
+                tenantPriority.lookbackDays,
+                priorityOverride?.lookbackDays,
+                sourceByPath,
+            ),
+            lateCancellationWindowMinutes = resolveRequired(
+                "priorityAndReliability.lateCancellationWindowMinutes",
+                tenantPriority.lateCancellationWindowMinutes,
+                priorityOverride?.lateCancellationWindowMinutes,
+                sourceByPath,
+            ),
+            noShowThreshold = resolveDisableable(
+                "priorityAndReliability.noShowThreshold",
+                tenantPriority.noShowThreshold,
+                priorityOverride?.noShowThreshold,
+                sourceByPath,
+                disabled,
+            ),
+            lateCancellationThreshold = resolveDisableable(
+                "priorityAndReliability.lateCancellationThreshold",
+                tenantPriority.lateCancellationThreshold,
+                priorityOverride?.lateCancellationThreshold,
+                sourceByPath,
+                disabled,
+            ),
+            coolingOffHours = resolveRequired(
+                "priorityAndReliability.coolingOffHours",
+                tenantPriority.coolingOffHours,
+                priorityOverride?.coolingOffHours,
+                sourceByPath,
+            ),
             minimumPriorityScore = tenantPriority.minimumPriorityScore.also {
                 sourceByPath["priorityAndReliability.minimumPriorityScore"] =
                     PolicyValueSource.TENANT
             },
+            thresholdsPresent = tenantPriority.thresholdsPresent,
         ).validatedTenant()
 
         val tenantReconfirmation = requireNotNull(tenant.reconfirmation) {
@@ -489,6 +525,24 @@ object SchedulingPolicyCompiler {
         OverrideValue.Disable -> throw IllegalArgumentException("$path cannot be disabled")
     }
 
+    private fun <T> resolveDisableable(
+        path: String,
+        tenantValue: T,
+        override: OverrideValue<T>?,
+        sourceByPath: MutableMap<String, PolicyValueSource>,
+        disabled: MutableSet<String>,
+    ): T = when (override) {
+        null,
+        OverrideValue.Inherit,
+        -> tenantValue.also { sourceByPath[path] = PolicyValueSource.TENANT }
+        is OverrideValue.Set ->
+            override.value.also { sourceByPath[path] = PolicyValueSource.CLINIC }
+        OverrideValue.Disable -> tenantValue.also {
+            sourceByPath[path] = PolicyValueSource.TENANT
+            disabled += path
+        }
+    }
+
     private fun <T : Comparable<T>> resolveUpperBound(
         path: String,
         tenantValue: T,
@@ -519,6 +573,14 @@ object SchedulingPolicyCompiler {
             null
         }
     }
+
+    private val reliabilityThresholdPaths = setOf(
+        "priorityAndReliability.lookbackDays",
+        "priorityAndReliability.lateCancellationWindowMinutes",
+        "priorityAndReliability.noShowThreshold",
+        "priorityAndReliability.lateCancellationThreshold",
+        "priorityAndReliability.coolingOffHours",
+    )
 
     private fun resolveOptionalBoolean(
         path: String,

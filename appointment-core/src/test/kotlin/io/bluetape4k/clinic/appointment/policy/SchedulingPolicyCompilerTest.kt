@@ -122,7 +122,7 @@ class SchedulingPolicyCompilerTest {
         result.payload.capacityAndOverbooking?.automaticReductionEnabled shouldBeEqualTo false
         result.payload.reconfirmation?.maximumAttempts shouldBeEqualTo 2
         result.payload.operatingExtension?.maximumExtensionMinutes shouldBeEqualTo 30
-        result.sourceByPath.size shouldBeEqualTo 32
+        result.sourceByPath.size shouldBeEqualTo 37
         result.sourceByPath["bookingCommitment.confirmedChangeMode"] shouldBeEqualTo
             PolicyValueSource.TENANT
         result.sourceByPath["reconfirmation.maximumAttempts"] shouldBeEqualTo
@@ -133,6 +133,33 @@ class SchedulingPolicyCompilerTest {
             PolicyValueSource.PLATFORM
         result.disabledFeatures shouldBeEqualTo
             setOf("capacityAndOverbooking.automaticReductionEnabled")
+    }
+
+    @Test
+    fun `legacy reliability thresholds compile as disabled without changing existing scoring inputs`() {
+        val tenant = fullTenantPolicy()
+        val result = SchedulingPolicyCompiler.compile(
+            tenantGroupId = 1L,
+            clinicId = 2L,
+            decisionAt = Instant.parse("2026-08-01T00:00:00Z"),
+            serviceAt = Instant.parse("2026-08-20T00:00:00Z"),
+            generation = PolicyGenerationVector(7L, 0L),
+            sourceVersions = sourceVersions(),
+            tenant = tenant.copy(
+                priorityAndReliability = tenant.priorityAndReliability?.copy(
+                    thresholdsPresent = false,
+                ),
+            ),
+        )
+
+        result.payload.priorityAndReliability?.thresholdsPresent shouldBeEqualTo false
+        result.disabledFeatures shouldBeEqualTo setOf(
+            "priorityAndReliability.lookbackDays",
+            "priorityAndReliability.lateCancellationWindowMinutes",
+            "priorityAndReliability.noShowThreshold",
+            "priorityAndReliability.lateCancellationThreshold",
+            "priorityAndReliability.coolingOffHours",
+        )
     }
 
     @Test

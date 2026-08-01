@@ -29,6 +29,7 @@ import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyPreviewJobReco
 import io.bluetape4k.clinic.appointment.model.policy.PolicyGenerationVector
 import io.bluetape4k.clinic.appointment.model.policy.PolicyLifecycle
 import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
+import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyKind
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyJobRepository
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
 import io.bluetape4k.clinic.appointment.service.SchedulingPolicyHasher
@@ -102,6 +103,12 @@ class SchedulingPolicyAdministrationService(
     ) {
         requireAdminWrite(actor, scope)
         require(request.schemaVersion > 0) { "schemaVersion must be positive" }
+        require(
+            request.kind != SchedulingPolicyKind.PRIORITY_AND_RELIABILITY ||
+                request.schemaVersion == SchedulingPolicyPayloadCodec.CURRENT_SCHEMA_VERSION,
+        ) {
+            "priority-and-reliability drafts must use schemaVersion ${SchedulingPolicyPayloadCodec.CURRENT_SCHEMA_VERSION}"
+        }
         require(request.expectedScopeRevision >= 0) { "expectedScopeRevision must be non-negative" }
         requireChangeReason(request.changeReason)
         require(request.effectiveUntil == null || request.effectiveUntil > request.effectiveFrom) {

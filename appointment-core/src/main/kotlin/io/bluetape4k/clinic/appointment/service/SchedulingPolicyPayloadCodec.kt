@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.service
 
 import io.bluetape4k.clinic.appointment.model.policy.ActorRole
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
+import io.bluetape4k.clinic.appointment.model.policy.BookingReliabilityPolicyDefaults
 import io.bluetape4k.clinic.appointment.model.policy.BookingCommitmentOverride
 import io.bluetape4k.clinic.appointment.model.policy.BookingCommitmentPolicy
 import io.bluetape4k.clinic.appointment.model.policy.CapacityAndOverbookingOverride
@@ -62,6 +63,9 @@ class SchedulingPolicyPayloadCodec(
     companion object {
         /** 허용되는 최대 UTF-8 JSON 크기입니다. 값은 256 KiB입니다. */
         const val MAX_PAYLOAD_BYTES: Int = 256 * 1024
+
+        /** 새 scheduling-policy payload에 사용하는 schema version입니다. */
+        const val CURRENT_SCHEMA_VERSION: Int = 2
     }
 
     /**
@@ -69,7 +73,7 @@ class SchedulingPolicyPayloadCodec(
      *
      * @param kind 주변 definition envelope에서 온 trusted policy kind입니다.
      * @param scope definition envelope에서 온 trusted tenant/clinic scope입니다.
-     * @param schemaVersion wire schema version입니다. 이 구현은 `1`만 허용합니다.
+     * @param schemaVersion wire schema version입니다. `1` legacy와 `2` current를 읽습니다.
      * @param json raw UTF-8 JSON text입니다. [MAX_PAYLOAD_BYTES]를 초과하면 안 됩니다.
      * @return dispatch tuple과 kind/scope가 일치하는 typed tenant policy 또는 clinic override입니다.
      * @throws IllegalArgumentException tuple이 지원되지 않거나, JSON이 너무 크거나 malformed인 경우,
@@ -82,7 +86,9 @@ class SchedulingPolicyPayloadCodec(
         schemaVersion: Int,
         json: String,
     ): SchedulingPolicyPayload {
-        require(schemaVersion == 1) { "unsupported schemaVersion($schemaVersion)" }
+        require(schemaVersion in SchedulingPolicyValidator.supportedSchemaVersions) {
+            "unsupported schemaVersion($schemaVersion)"
+        }
         require(json.toByteArray(StandardCharsets.UTF_8).size <= MAX_PAYLOAD_BYTES) {
             "policy payload must not exceed $MAX_PAYLOAD_BYTES UTF-8 bytes"
         }
@@ -101,9 +107,11 @@ class SchedulingPolicyPayloadCodec(
                 SchedulingPolicyKind.CAPACITY_AND_OVERBOOKING to PolicyScope.CLINIC_OVERRIDE ->
                     objectMapper.readValue(json, CapacityAndOverbookingOverrideWire::class.java).toPolicy()
                 SchedulingPolicyKind.PRIORITY_AND_RELIABILITY to PolicyScope.TENANT_DEFAULT ->
-                    objectMapper.readValue(json, PriorityAndReliabilityPolicy::class.java)
+                    objectMapper.readValue(json, PriorityAndReliabilityWire::class.java)
+                        .toPolicy(schemaVersion)
                 SchedulingPolicyKind.PRIORITY_AND_RELIABILITY to PolicyScope.CLINIC_OVERRIDE ->
-                    objectMapper.readValue(json, PriorityAndReliabilityOverrideWire::class.java).toPolicy()
+                    objectMapper.readValue(json, PriorityAndReliabilityOverrideWire::class.java)
+                        .toPolicy(schemaVersion)
                 SchedulingPolicyKind.RECONFIRMATION to PolicyScope.TENANT_DEFAULT ->
                     objectMapper.readValue(json, ReconfirmationPolicy::class.java)
                 SchedulingPolicyKind.RECONFIRMATION to PolicyScope.CLINIC_OVERRIDE ->
@@ -123,7 +131,7 @@ class SchedulingPolicyPayloadCodec(
                 else -> error("unsupported policy kind and scope combination: $kind/$scope")
             }
         } catch (error: Exception) {
-            throw IllegalArgumentException("invalid $kind schema-one payload", error)
+            throw IllegalArgumentException("invalid $kind schemaVersion($schemaVersion) payload", error)
         }
         return SchedulingPolicyValidator.validatePayload(decoded, scope)
     }
@@ -192,11 +200,90 @@ class SchedulingPolicyPayloadCodec(
         val automaticReductionEnabled: OverrideWire<Boolean>,
     )
 
+    private data class PriorityAndReliabilityWire(
+        val priorityWeights: Map<String, Int>,
+        val noShowPenalty: Int,
+        val sameDayCancellationPenalty: Int,
+        val minimumPriorityScore: Int,
+        val lookbackDays: Int? = null,
+        val lateCancellationWindowMinutes: Int? = null,
+        val noShowThreshold: Int? = null,
+        val lateCancellationThreshold: Int? = null,
+        val coolingOffHours: Int? = null,
+    ) {
+        fun toPolicy(schemaVersion: Int): PriorityAndReliabilityPolicy {
+            val thresholds = listOf(
+                lookbackDays,
+                lateCancellationWindowMinutes,
+                noShowThreshold,
+                lateCancellationThreshold,
+                coolingOffHours,
+            )
+            val thresholdsPresent = thresholds.all { it != null }
+            require(schemaVersion == 1 || thresholdsPresent) {
+                "schemaVersion 2 reliability payload must contain every threshold"
+            }
+            require(thresholdsPresent || thresholds.all { it == null }) {
+                "legacy reliability payload must contain all thresholds or none"
+            }
+            return PriorityAndReliabilityPolicy(
+                priorityWeights = priorityWeights,
+                noShowPenalty = noShowPenalty,
+                sameDayCancellationPenalty = sameDayCancellationPenalty,
+                minimumPriorityScore = minimumPriorityScore,
+                lookbackDays = lookbackDays ?: BookingReliabilityPolicyDefaults.LOOKBACK_DAYS,
+                lateCancellationWindowMinutes = lateCancellationWindowMinutes
+                    ?: BookingReliabilityPolicyDefaults.LATE_CANCELLATION_WINDOW_MINUTES,
+                noShowThreshold = noShowThreshold ?: BookingReliabilityPolicyDefaults.NO_SHOW_THRESHOLD,
+                lateCancellationThreshold = lateCancellationThreshold
+                    ?: BookingReliabilityPolicyDefaults.LATE_CANCELLATION_THRESHOLD,
+                coolingOffHours = coolingOffHours ?: BookingReliabilityPolicyDefaults.COOLING_OFF_HOURS,
+                thresholdsPresent = thresholdsPresent,
+            )
+        }
+    }
+
     private data class PriorityAndReliabilityOverrideWire(
         val priorityWeights: OverrideWire<Map<String, Int>>,
         val noShowPenalty: OverrideWire<Int>,
         val sameDayCancellationPenalty: OverrideWire<Int>,
-    )
+        val lookbackDays: OverrideWire<Int>? = null,
+        val lateCancellationWindowMinutes: OverrideWire<Int>? = null,
+        val noShowThreshold: OverrideWire<Int>? = null,
+        val lateCancellationThreshold: OverrideWire<Int>? = null,
+        val coolingOffHours: OverrideWire<Int>? = null,
+
+    ) {
+        fun toPolicy(schemaVersion: Int): PriorityAndReliabilityOverride {
+            if (schemaVersion >= CURRENT_SCHEMA_VERSION) {
+                require(
+                    lookbackDays != null && lateCancellationWindowMinutes != null &&
+                        noShowThreshold != null && lateCancellationThreshold != null &&
+                        coolingOffHours != null,
+                ) {
+                    "schemaVersion 2 reliability override must declare every threshold"
+                }
+            }
+            return PriorityAndReliabilityOverride(
+                priorityWeights = priorityWeights.toDomain("priorityWeights"),
+                noShowPenalty = noShowPenalty.toDomain("noShowPenalty"),
+                sameDayCancellationPenalty =
+                    sameDayCancellationPenalty.toDomain("sameDayCancellationPenalty"),
+                lookbackDays = (lookbackDays ?: OverrideWire(OverrideMode.INHERIT))
+                    .toDomain("lookbackDays"),
+                lateCancellationWindowMinutes =
+                    (lateCancellationWindowMinutes ?: OverrideWire(OverrideMode.INHERIT))
+                        .toDomain("lateCancellationWindowMinutes"),
+                noShowThreshold = (noShowThreshold ?: OverrideWire(OverrideMode.INHERIT))
+                    .toDomain("noShowThreshold"),
+                lateCancellationThreshold =
+                    (lateCancellationThreshold ?: OverrideWire(OverrideMode.INHERIT))
+                        .toDomain("lateCancellationThreshold"),
+                coolingOffHours = (coolingOffHours ?: OverrideWire(OverrideMode.INHERIT))
+                    .toDomain("coolingOffHours"),
+            )
+        }
+    }
 
     private data class ReconfirmationOverrideWire(
         val required: OverrideWire<Boolean>,
@@ -268,13 +355,6 @@ class SchedulingPolicyPayloadCodec(
         overbookingQuota = overbookingQuota.toDomain("overbookingQuota"),
         automaticReductionEnabled =
             automaticReductionEnabled.toDomain("automaticReductionEnabled"),
-    )
-
-    private fun PriorityAndReliabilityOverrideWire.toPolicy() = PriorityAndReliabilityOverride(
-        priorityWeights = priorityWeights.toDomain("priorityWeights"),
-        noShowPenalty = noShowPenalty.toDomain("noShowPenalty"),
-        sameDayCancellationPenalty =
-            sameDayCancellationPenalty.toDomain("sameDayCancellationPenalty"),
     )
 
     private fun ReconfirmationOverrideWire.toPolicy() = ReconfirmationOverride(

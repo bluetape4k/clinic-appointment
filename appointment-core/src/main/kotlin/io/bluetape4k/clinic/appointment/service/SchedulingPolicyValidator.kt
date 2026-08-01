@@ -32,12 +32,17 @@ import java.time.Duration
  * 우회 경로가 되는 것을 막습니다.
  */
 object SchedulingPolicyValidator {
+    /** decoder가 재현할 수 있는 scheduling-policy schema 버전입니다. */
+    val supportedSchemaVersions: Set<Int> = setOf(1, 2)
     private val minimumRequestTtl: Duration = Duration.ofMinutes(5)
     private val maximumRequestTtl: Duration = Duration.ofDays(7)
     private val minimumResourceHoldTtl: Duration = Duration.ofMinutes(1)
     private val maximumResourceHoldTtl: Duration = Duration.ofMinutes(30)
     private val heldReevaluationTargetSeconds = 60L..900L
     private val proposedReevaluationTargetSeconds = 300L..7_200L
+    private val lookbackDays = 1..3_650
+    private val lateCancellationWindowMinutes = 1..10_080
+    private val coolingOffHours = 1..720
     private val sha256 = Regex("[0-9a-f]{64}")
 
     /**
@@ -64,7 +69,9 @@ object SchedulingPolicyValidator {
         }
         require(definition.version >= 1L) { "version must be at least one" }
         require(definition.revision >= 1L) { "revision must be at least one" }
-        require(definition.schemaVersion == 1) { "unsupported schemaVersion(${definition.schemaVersion})" }
+        require(definition.schemaVersion in supportedSchemaVersions) {
+            "unsupported schemaVersion(${definition.schemaVersion})"
+        }
         require(definition.changeReason.isNotBlank()) { "changeReason must not be blank" }
         require(definition.changeReason.length <= 1_000) { "changeReason must not exceed 1000 characters" }
         require(definition.effectiveUntil == null || definition.effectiveUntil > definition.effectiveFrom) {
@@ -75,6 +82,11 @@ object SchedulingPolicyValidator {
             "policy kind(${definition.kind}) does not match payload kind(${definition.payload.kind})"
         }
         validatePayload(definition.payload, definition.scope)
+        if (definition.schemaVersion >= 2 && definition.payload is PriorityAndReliabilityPolicy) {
+            require(definition.payload.thresholdsPresent) {
+                "schemaVersion 2 reliability payload must contain every threshold"
+            }
+        }
         return definition
     }
 
@@ -128,18 +140,46 @@ object SchedulingPolicyValidator {
                 require(payload.minimumPriorityScore >= 0)
                 require(payload.noShowPenalty >= 0)
                 require(payload.sameDayCancellationPenalty >= 0)
+                validateReliabilityThresholds(payload)
             }
             is PriorityAndReliabilityOverride -> {
                 requireClinicOverride(scope)
                 payload.priorityWeights.requireNotDisabled("priorityWeights")
                 payload.noShowPenalty.requireNotDisabled("noShowPenalty")
                 payload.sameDayCancellationPenalty.requireNotDisabled("sameDayCancellationPenalty")
+                payload.lookbackDays.requireNotDisabled("lookbackDays")
+                payload.lateCancellationWindowMinutes.requireNotDisabled(
+                    "lateCancellationWindowMinutes",
+                )
+                payload.coolingOffHours.requireNotDisabled("coolingOffHours")
                 payload.priorityWeights.setValueOrNull()?.let(::validatePriorityWeights)
                 payload.noShowPenalty.setValueOrNull()?.let {
                     require(it >= 0) { "noShowPenalty must not be negative" }
                 }
                 payload.sameDayCancellationPenalty.setValueOrNull()?.let {
                     require(it >= 0) { "sameDayCancellationPenalty must not be negative" }
+                }
+                payload.lookbackDays.setValueOrNull()?.let {
+                    require(it in lookbackDays) {
+                        "lookbackDays must be between ${lookbackDays.first} and ${lookbackDays.last}"
+                    }
+                }
+                payload.lateCancellationWindowMinutes.setValueOrNull()?.let {
+                    require(it in lateCancellationWindowMinutes) {
+                        "lateCancellationWindowMinutes must be between " +
+                            "${lateCancellationWindowMinutes.first} and ${lateCancellationWindowMinutes.last}"
+                    }
+                }
+                payload.noShowThreshold.setValueOrNull()?.let {
+                    require(it >= 0) { "noShowThreshold must not be negative" }
+                }
+                payload.lateCancellationThreshold.setValueOrNull()?.let {
+                    require(it >= 0) { "lateCancellationThreshold must not be negative" }
+                }
+                payload.coolingOffHours.setValueOrNull()?.let {
+                    require(it in coolingOffHours) {
+                        "coolingOffHours must be between ${coolingOffHours.first} and ${coolingOffHours.last}"
+                    }
                 }
             }
             is ReconfirmationPolicy -> {
@@ -328,6 +368,29 @@ object SchedulingPolicyValidator {
     private fun validatePriorityWeights(weights: Map<String, Int>) {
         require(weights.keys.all(String::isNotBlank)) { "priority weight names must not be blank" }
         require(weights.values.all { it >= 0 }) { "priority weights must not be negative" }
+    }
+
+    private fun validateReliabilityThresholds(policy: PriorityAndReliabilityPolicy) {
+        require(policy.lookbackDays in lookbackDays) {
+            "lookbackDays must be between ${lookbackDays.first} and ${lookbackDays.last}"
+        }
+        require(policy.lateCancellationWindowMinutes in lateCancellationWindowMinutes) {
+            "lateCancellationWindowMinutes must be between " +
+                "${lateCancellationWindowMinutes.first} and ${lateCancellationWindowMinutes.last}"
+        }
+        require(policy.noShowThreshold >= 0) { "noShowThreshold must not be negative" }
+        require(policy.lateCancellationThreshold >= 0) {
+            "lateCancellationThreshold must not be negative"
+        }
+        require(policy.coolingOffHours in coolingOffHours) {
+            "coolingOffHours must be between ${coolingOffHours.first} and ${coolingOffHours.last}"
+        }
+        require(policy.lookbackDays.toLong() * 24L * 60L <= Int.MAX_VALUE) {
+            "lookbackDays exceeds the supported minute range"
+        }
+        require(policy.coolingOffHours.toLong() * 60L <= Int.MAX_VALUE) {
+            "coolingOffHours exceeds the supported minute range"
+        }
     }
 
     private fun io.bluetape4k.clinic.appointment.model.policy.OverrideValue<*>.requireNotDisabled(

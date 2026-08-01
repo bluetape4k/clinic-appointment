@@ -139,7 +139,8 @@ sealed interface SchedulingPolicyPayload : Serializable {
  * @property kind 닫힌 정책 영역입니다. [SchedulingPolicyPayload.kind]와 같아야 합니다.
  * @property version `1`부터 시작하는 단조 증가 immutable publication version입니다.
  * effective contract가 바뀌면 history를 수정하지 않고 version을 올립니다.
- * @property schemaVersion [payload] wire schema version입니다. 이 foundation에서는 schema `1`만 허용합니다.
+ * @property schemaVersion [payload] wire schema version입니다. legacy schema `1`을 읽을 수 있고
+ * 새 threshold payload는 schema `2`로 기록합니다.
  * @property lifecycle 관리 상태입니다. active definition만 effective snapshot에 기여하며,
  * lifecycle transition 규칙은 command service가 강제합니다.
  * @property effectiveFrom 이 version이 compilation에 선택될 수 있는 UTC inclusive instant입니다.
