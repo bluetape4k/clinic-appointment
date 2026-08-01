@@ -213,9 +213,9 @@ Status: `DESIGN REVIEW PASSED` — implementation and plan gates remain pending
   - **Evidence:** Plan `docs/superpowers/plans/2026-08-01-issue-170-waitlist-core.md` at `a2e67d5`, review `docs/review/2026-08-01-issue-170-waitlist-core-plan-review.md`, integrated PASS, P0=0/P1=0/P2=0/P3=0. User plan approval remains pending.
   - **Failure:** Repair ordering/proof/ownership/hazard gaps before code; do not start implementation without approval.
 
-- [ ] **A-05 — Predict triggered risks**
+- [x] **A-05 — Predict triggered risks**
   - **Action:** Record concurrency, DB migration, CAS, privacy, dependency, and recovery risks with signals, mitigations, and rollback/rerun points.
-  - **Evidence:** Risk entries attached to plan tasks.
+  - **Evidence:** Plan commit `a2e67d5`, section `실행 위험과 중단 기준`, and the integrated A-04 review at `docs/review/2026-08-01-issue-170-waitlist-core-plan-review.md`.
   - **Failure:** Complete risk prediction before implementation.
 
 - [ ] **A-06 — Implement with test-first proof**
@@ -282,6 +282,6 @@ A-04 review evidence is recorded at
 verdict is `PASS` with P0=0, P1=0, P2=0, and P3=0; implementation approval is
 still pending.
 
-Required checks: `20/47` checked so far; N/A: `1`; Blocked: `0`.
-Unchecked IDs: `CL-07`, `CL-08`, `CG-06..CG-18`, `A-04..A-12`, `Step 4-S`,
+Required checks: `21/47` checked so far; N/A: `1`; Blocked: `0`.
+Unchecked IDs: `CL-07`, `CL-08`, `CG-06..CG-18`, `A-04`, `A-06..A-12`, `Step 4-S`,
 `Step 4-P`.
