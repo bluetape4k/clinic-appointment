@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.security
 import io.bluetape4k.clinic.appointment.api.config.PlanFoundationError
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiError
 import jakarta.servlet.http.HttpServletResponse
 import java.util.UUID
 
@@ -79,6 +80,21 @@ object SecurityErrorResponseWriter {
                 response.setHeader(CorrelationIdFilter.HEADER_NAME, it)
             }
 
+        response.status = error.httpStatus.value()
+        response.contentType = "application/json"
+        response.characterEncoding = Charsets.UTF_8.name()
+        response.writer.write(
+            """{"success":false,"data":null,"error":"${escapeJson(error.safeMessage)}","errorCode":"${error.name}","correlationId":"${escapeJson(correlationId)}","retryable":${error.retryable},"action":"${escapeJson(error.action)}"}"""
+        )
+    }
+
+    /** 예약 신뢰성 route의 clinic/capability 거절을 안정된 registry로 직렬화합니다. */
+    fun write(response: HttpServletResponse, error: BookingReliabilityApiError) {
+        val correlationId = response.getHeader(CorrelationIdFilter.HEADER_NAME)
+            ?.takeIf { it.isNotBlank() }
+            ?: UUID.randomUUID().toString().also {
+                response.setHeader(CorrelationIdFilter.HEADER_NAME, it)
+            }
         response.status = error.httpStatus.value()
         response.contentType = "application/json"
         response.characterEncoding = Charsets.UTF_8.name()

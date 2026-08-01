@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { validateManifest } from './visual-companions/contract.mjs';
 
 const MANIFEST_PATH = 'docs/visual-companions/manifest.json';
-const ALLOWED_DOCUMENT_ROOT = 'docs/superpowers/specs/';
+const ALLOWED_DOCUMENT_ROOTS = ['docs/superpowers/specs/', 'docs/visual-companions/'];
 const FORBIDDEN_SURFACES = [
   /<script\b[^>]*\bsrc\s*=/i,
   /<link\b[^>]*\brel\s*=\s*["']?stylesheet\b/i,
@@ -29,8 +29,8 @@ function inside(root, candidate) {
 }
 
 function assertAllowedDocumentPath(value, field, errors) {
-  if (!value.startsWith(ALLOWED_DOCUMENT_ROOT)) {
-    errors.push(`${field} must be under ${ALLOWED_DOCUMENT_ROOT}`);
+  if (!ALLOWED_DOCUMENT_ROOTS.some((root) => value.startsWith(root))) {
+    errors.push(`${field} must be under one of ${ALLOWED_DOCUMENT_ROOTS.join(', ')}`);
   }
 }
 

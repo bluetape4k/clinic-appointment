@@ -39,6 +39,21 @@ import io.bluetape4k.clinic.appointment.api.service.FailClosedAppointmentCommitm
 import io.bluetape4k.clinic.appointment.api.service.FailClosedPatientSubjectFingerprintResolver
 import io.bluetape4k.clinic.appointment.api.service.HmacAppointmentCommitmentIdempotencyKeyHasher
 import io.bluetape4k.clinic.appointment.api.service.PatientSubjectFingerprintResolver
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiService
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApplicationPort
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityMetrics
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityProperties
+import io.bluetape4k.clinic.appointment.api.reliability.DefaultBookingReliabilityApplicationAdapter
+import io.bluetape4k.clinic.appointment.api.reliability.DefaultBookingReliabilityApiService
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityReevaluationWorker
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityRetryPolicy
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityHealthIndicator
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityHealthSource
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityOperationalSnapshot
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityOperationalState
+import io.bluetape4k.clinic.appointment.api.reliability.DefaultBookingReliabilitySchemaReadiness
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilitySchemaReadiness
+import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilitySchemaProbe
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
 import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
@@ -54,6 +69,8 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStatsRepository
+import io.bluetape4k.clinic.appointment.repository.BookingReliabilityRepository
+import io.bluetape4k.clinic.appointment.repository.BookingReliabilityReevaluationJobRepository
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
 import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
@@ -83,6 +100,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.bluetape4k.logging.KLogging
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -116,11 +134,25 @@ import kotlin.concurrent.withLock
     ProfileReevaluationProperties::class,
     NotificationMemberIdProperties::class,
     NotificationProperties::class,
+    BookingReliabilityProperties::class,
 )
 class ServiceConfig {
 
     companion object : KLogging() {
         private val commitmentDatabaseRegistrationLock = ReentrantLock()
+        private const val REQUIRED_MIGRATION_VERSION = 17
+        private val REQUIRED_RELIABILITY_TABLES = setOf(
+            "booking_reliability_events",
+            "booking_reliability_decisions",
+            "booking_reliability_overrides",
+            "booking_reliability_reevaluation_jobs",
+        )
+        private val REQUIRED_RELIABILITY_INDEXES = setOf(
+            "ux_booking_reliability_event_identity",
+            "ux_booking_reliability_decision_digest",
+            "ux_booking_reliability_override_idempotency",
+            "ux_booking_reliability_reevaluation_idempotency",
+        )
     }
 
     // --- Repository 빈 ---
@@ -587,6 +619,9 @@ class ServiceConfig {
         appointmentPlanRepository: AppointmentPlanRepository,
         appointmentRepository: AppointmentRepository,
         appointmentNotificationWriter: AppointmentNotificationWriter,
+        bookingReliabilityApplicationPort: ObjectProvider<BookingReliabilityApplicationPort>,
+        bookingReliabilityProperties: BookingReliabilityProperties,
+        bookingReliabilitySchemaReadiness: ObjectProvider<DefaultBookingReliabilitySchemaReadiness>,
         environment: Environment,
     ): AppointmentCommitmentApplicationService =
         DefaultAppointmentCommitmentApplicationService(
@@ -606,6 +641,12 @@ class ServiceConfig {
                     maxTransactionAttempts = properties.retry.maxAttempts,
                     initialRetryDelayMillis = properties.retry.initialBackoff.toMillis(),
                     notificationWriter = appointmentNotificationWriter,
+                    bookingEligibilityGate =
+                        io.bluetape4k.clinic.appointment.api.commitment.BookingEligibilityGate(
+                            port = bookingReliabilityApplicationPort.getIfAvailable(),
+                            properties = bookingReliabilityProperties,
+                            schemaReadiness = bookingReliabilitySchemaReadiness.getIfAvailable(),
+                        ),
                 ),
             policySnapshotResolver = policySnapshotResolver,
             planningResolver = planningResolver,
@@ -808,6 +849,140 @@ class ServiceConfig {
 
     @Bean
     fun appointmentStatsRepository(): AppointmentStatsRepository = AppointmentStatsRepository()
+
+    @Bean
+    fun bookingReliabilityRepository(): BookingReliabilityRepository = BookingReliabilityRepository()
+
+    @Bean
+    fun bookingReliabilityReevaluationJobRepository(): BookingReliabilityReevaluationJobRepository =
+        BookingReliabilityReevaluationJobRepository()
+
+    @Bean
+    fun bookingReliabilityMetrics(meterRegistry: MeterRegistry): BookingReliabilityMetrics =
+        BookingReliabilityMetrics(meterRegistry)
+
+    @Bean
+    fun bookingReliabilityOperationalState(): BookingReliabilityOperationalState =
+        BookingReliabilityOperationalState()
+
+    /** V17 테이블·인덱스와 Flyway 최신 version을 확인하는 fail-closed readiness probe입니다. */
+    @Bean
+    @ConditionalOnBean(DataSource::class)
+    fun bookingReliabilitySchemaReadiness(dataSource: DataSource): DefaultBookingReliabilitySchemaReadiness =
+        DefaultBookingReliabilitySchemaReadiness(
+            BookingReliabilitySchemaProbe {
+                dataSource.connection.use { connection ->
+                    runCatching {
+                        val metadata = connection.metaData
+                        val tables = buildSet {
+                            metadata.getTables(null, null, "%", arrayOf("TABLE")).use { rows ->
+                                while (rows.next()) rows.getString("TABLE_NAME")?.lowercase()?.let(::add)
+                            }
+                        }
+                        val indexes = buildSet {
+                            REQUIRED_RELIABILITY_TABLES.forEach { table ->
+                                metadata.getIndexInfo(null, null, table, false, false).use { rows ->
+                                    while (rows.next()) rows.getString("INDEX_NAME")?.lowercase()?.let(::add)
+                                }
+                            }
+                        }
+                        val migrationVersion = connection.prepareStatement(
+                            "select version from flyway_schema_history order by installed_rank desc",
+                        ).use { statement ->
+                            statement.executeQuery().use { rows ->
+                                if (rows.next()) rows.getString(1)?.substringBefore('.')?.toIntOrNull() else null
+                            }
+                        }
+                        BookingReliabilitySchemaReadiness(
+                            migrationVersion = migrationVersion,
+                            requiredTablesPresent = REQUIRED_RELIABILITY_TABLES.all(tables::contains),
+                            requiredIndexesPresent = REQUIRED_RELIABILITY_INDEXES.all(indexes::contains),
+                            migrationCurrent = migrationVersion?.let { it >= REQUIRED_MIGRATION_VERSION } == true,
+                        )
+                    }.getOrElse {
+                        BookingReliabilitySchemaReadiness(null, false, false, false)
+                    }
+                }
+            },
+        )
+
+    /** 식별자 없이 reliability schema/worker backlog 상태만 actuator health에 노출합니다. */
+    @Bean
+    @ConditionalOnBean(DefaultBookingReliabilitySchemaReadiness::class)
+    @ConditionalOnMissingBean(BookingReliabilityHealthIndicator::class)
+    fun bookingReliabilityHealthIndicator(
+        readiness: DefaultBookingReliabilitySchemaReadiness,
+        properties: BookingReliabilityProperties,
+        bookingReliabilityRepository: BookingReliabilityRepository,
+        operationalState: BookingReliabilityOperationalState,
+    ): BookingReliabilityHealthIndicator =
+        BookingReliabilityHealthIndicator(
+            source = BookingReliabilityHealthSource {
+                val schema = readiness.current()
+                val operations = if (schema.ready) {
+                    runCatching { transaction { bookingReliabilityRepository.summarizeOperations() } }.getOrNull()
+                } else null
+                BookingReliabilityOperationalSnapshot(
+                    schemaReady = schema.ready,
+                    pendingJobs = operations?.pendingJobs ?: 0L,
+                    oldestBacklogAge = operations?.oldestBacklogAge ?: Duration.ZERO,
+                    unavailableDecisions = operations?.unavailableDecisions ?: 0L,
+                    deadLetterJobs = operations?.deadLetterJobs ?: 0L,
+                    leaseLostJobs = operationalState.leaseLostJobs(),
+                    mode = properties.mode,
+                )
+            },
+        )
+
+    /** effective policy와 core evaluator/persistence를 실제 reliability port로 연결합니다. */
+    @Bean
+    @ConditionalOnMissingBean(BookingReliabilityApplicationPort::class)
+    fun bookingReliabilityApplicationPort(
+        effectiveSchedulingPolicyService: EffectiveSchedulingPolicyService,
+        bookingReliabilityRepository: BookingReliabilityRepository,
+        bookingReliabilityProperties: BookingReliabilityProperties,
+        bookingReliabilityMetrics: BookingReliabilityMetrics,
+    ): BookingReliabilityApplicationPort =
+        DefaultBookingReliabilityApplicationAdapter(
+            effectivePolicyService = effectiveSchedulingPolicyService,
+            repository = bookingReliabilityRepository,
+            properties = bookingReliabilityProperties,
+            metrics = bookingReliabilityMetrics,
+            clock = Clock.systemUTC(),
+        )
+
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "booking.reliability",
+        name = ["worker-enabled"],
+        havingValue = "true",
+    )
+    fun bookingReliabilityReevaluationWorker(
+        bookingReliabilityReevaluationJobRepository: BookingReliabilityReevaluationJobRepository,
+        bookingReliabilityApplicationPort: BookingReliabilityApplicationPort,
+        bookingReliabilityProperties: BookingReliabilityProperties,
+        bookingReliabilityMetrics: BookingReliabilityMetrics,
+        bookingReliabilityOperationalState: BookingReliabilityOperationalState,
+        bookingReliabilitySchemaReadiness: ObjectProvider<DefaultBookingReliabilitySchemaReadiness>,
+    ): BookingReliabilityReevaluationWorker =
+        BookingReliabilityReevaluationWorker(
+            jobRepository = bookingReliabilityReevaluationJobRepository,
+            applicationPort = bookingReliabilityApplicationPort,
+            properties = bookingReliabilityProperties,
+            metrics = bookingReliabilityMetrics,
+            operationalState = bookingReliabilityOperationalState,
+            retryPolicy = BookingReliabilityRetryPolicy(),
+            schemaReadiness = bookingReliabilitySchemaReadiness.getIfAvailable(),
+        )
+
+    /** core evaluator/persistence port가 제공된 환경에서 reliability HTTP facade를 노출합니다. */
+    @Bean
+    @ConditionalOnBean(BookingReliabilityApplicationPort::class)
+    fun bookingReliabilityApiService(
+        port: BookingReliabilityApplicationPort,
+        properties: BookingReliabilityProperties,
+    ): BookingReliabilityApiService =
+        DefaultBookingReliabilityApiService(port, properties, Clock.systemUTC())
 
     @Bean
     fun dashboardStatsService(

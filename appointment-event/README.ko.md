@@ -43,6 +43,17 @@ event module은 작업을 만들 뿐 예약 변경을 판단하지 않습니다.
 [업무 흐름](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html)과
 [운영 런북](../docs/runbooks/profile-reevaluation.ko.md)을 참고합니다.
 
+## 예약 신뢰도 이벤트 ingress
+
+`BookingReliabilityEventIngress`는 `NO_SHOW`·`CANCELLED` 결과의 strict typed schema를 받고,
+신뢰된 producer envelope를 검증하며, 잘못되거나 신뢰할 수 없는 입력은 회원 프로필을 복제하지
+않고 quarantine합니다. 이벤트에는 tenant/clinic/member 범위, 책임, source version, correlation,
+payload hash만 담습니다. 자격 판단은 core evaluator의 책임이고 이 모듈은 사실을 검증·저장합니다.
+
+[예약 신뢰도 기준 문서](../docs/booking-reliability-policy.ko.md),
+[영속 ERD](../docs/images/readme-diagrams/booking-reliability-erd-01-ko.png),
+[event ingress API 메모](../docs/api/booking-reliability.md)를 참고하세요.
+
 ## 외부 예약 사실
 
 예약서비스는 상품·구매·시술 이행의 소유권을 가져오지 않고 다음 사실만 수신합니다.

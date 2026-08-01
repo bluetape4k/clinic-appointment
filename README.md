@@ -28,6 +28,7 @@ notifications, Spring Boot APIs, and an Angular frontend.
 - **Tenant-scoped REST API** - Provides Spring Boot 4 MVC APIs under `/api/{tenantCode}/...` with JWT tenant authorization, Flyway migrations, and Swagger UI.
 - **Appointment plan foundation** - Snapshots a purchased product BOM into immutable treatment obligations through catalog sync and trusted purchase-event convergence, before any visit is scheduled.
 - **Scheduling policy foundation** - Version-controls tenant baselines and clinic overrides for provisional booking, consent, overbooking, reconfirmation, disruption recovery, and controlled operating-hour extension.
+- **Booking reliability boundary** - Evaluates patient-responsible no-show and late-cancellation thresholds without copying profile data, preserves existing confirmed commitments, and supports bounded staff review.
 - **Angular 18 web UI** - Provides appointment search, creation, and status-change workflows.
 
 Catalog sync callers can reproduce `payloadHash` from the canonical hash
@@ -61,6 +62,26 @@ All rollout flags are off by default and must be enabled in this order:
 
 There is no booking-consumer flag in this foundation. Confirmed appointments
 still require customer consent before policy-driven changes are applied.
+
+### Booking Reliability Boundary
+
+The booking reliability evaluator uses typed appointment outcomes, an immutable
+effective policy snapshot, and bounded member history. It passes only an opaque
+`MemberId` across the reservation boundary. `OFF`, `SHADOW`, and `ENFORCE` modes
+support a clinic allowlist rollout; `PROPOSED` and `HELD` can be reviewed while
+existing `CONFIRMED` commitments remain unchanged.
+
+<a href="docs/visual-companions/booking-reliability-workflow-en-light.html">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/visual-companions/booking-reliability-workflow-en-dark.png">
+    <img src="docs/visual-companions/booking-reliability-workflow-en-light.png" alt="Booking reliability workflow from trusted events through a bounded eligibility gate">
+  </picture>
+</a>
+
+Read the [booking reliability policy](docs/booking-reliability-policy.md),
+[API contract](docs/api/booking-reliability.md),
+[operations runbook](docs/runbooks/booking-reliability.md), or the
+[interactive workflow](docs/visual-companions/booking-reliability-workflow-en-light.html).
 
 <a id="profile-reevaluation"></a>
 ### Profile Change Reevaluation Boundary
@@ -186,6 +207,10 @@ Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seede
 | [Appointment Commitment v2 API](docs/api/visit-commitment.md) | Gateway identity, provisional/approval/confirmation flow, idempotency, errors, and rollout settings. |
 | [Appointment Commitment v2 operations](docs/runbooks/visit-commitment-operations.md) | Shadow/allowlist rollout, alerts, retention, redrive, and PostgreSQL rollback. |
 | [Profile change reevaluation operations](docs/runbooks/profile-reevaluation.md) | Disabled-to-dry-run rollout, clinic allowlists, SLO alerts, bounded redrive, privacy response, and rollback. |
+| [Booking reliability policy](docs/booking-reliability-policy.md) | Thresholds, typed responsibility, privacy boundary, Choice B commitment protection, and rollout contract. |
+| [Booking reliability API](docs/api/booking-reliability.md) | Decision, override, clear, and audit endpoints with capability and clinic scope. |
+| [Booking reliability operations](docs/runbooks/booking-reliability.md) | Schema readiness, shadow/canary evidence, bounded reevaluation, retention, and rollback. |
+| [Booking reliability workflow](docs/visual-companions/booking-reliability-workflow-en-light.html) | English light-theme interactive simulation and decision history; dark and Korean variants are listed in the visual companion manifest. |
 
 ### Change History
 

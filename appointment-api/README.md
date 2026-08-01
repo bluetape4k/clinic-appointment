@@ -39,9 +39,23 @@ Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migr
 | Scheduling policies | `/api/{tenantCode}/admin/**/scheduling-policies` | Manage tenant baselines and clinic overrides with preview and activation evidence. |
 | Notification status | `GET /api/{tenantCode}/clinics/{clinicId}/notifications/**` | Read privacy-safe delivery status with `SCOPE_notification:read`. |
 | Re-notify | `POST /api/{tenantCode}/clinics/{clinicId}/notifications/re-notify` | Dry-run or enqueue a bounded, dual-approved re-notification generation. |
+| Booking reliability decision | `GET /api/{tenantCode}/clinics/{clinicId}/members/{memberId}/booking-reliability/decision` | Read a bounded, privacy-safe eligibility decision for staff preview. |
+| Booking reliability override/clear | `POST .../booking-reliability/override`, `POST .../booking-reliability/clear` | Apply or clear an expiring staff decision with capability and clinic scope. |
+| Booking reliability audit | `GET .../booking-reliability/audit` | Read bounded decision, event, and override history without profile fields. |
 
 The complete scheduling-policy request, lifecycle, effective-read, and error
 contract is documented in [Scheduling Policy API](../docs/api/scheduling-policy.md).
+
+### Booking Reliability
+
+The reliability API consumes only an opaque `MemberId`; the member database
+remains the source of names and phone numbers. `OFF` is the default mode,
+`SHADOW` records decisions without blocking, and `ENFORCE` gates new
+`PROPOSED`/`HELD` paths after schema readiness and clinic allowlist checks.
+Existing `CONFIRMED` commitments are never cancelled or moved by this policy.
+See the [API contract](../docs/api/booking-reliability.md),
+[English runbook](../docs/runbooks/booking-reliability.md), and
+[한국어 기준/런북](../docs/booking-reliability-policy.ko.md).
 
 Notification requests store only the member ID needed to resolve the current
 profile at send time. Names, phone numbers, email addresses, rendered bodies,

@@ -32,6 +32,24 @@ this module; HTTP and worker orchestration live in `appointment-api`.
 See the [scheduling-policy domain model](../docs/requirements/domain-model.md#scheduling-policy-모델)
 and [Scheduling Policy API contract](../docs/api/scheduling-policy.md).
 
+## Booking Reliability Domain
+
+`BookingReliabilityEvaluator` is a pure, deterministic evaluator for typed
+`NO_SHOW` and `CANCELLED` events. It filters by patient responsibility,
+deduplicates by event ID/source version, applies lookback and late-cancellation
+thresholds from an immutable policy snapshot, and returns bounded reason codes,
+trigger IDs, expiry, and a digest. `BookingEligibilityPort` exposes this as a
+read contract; the API module owns rollout mode and authorization. The core
+model never loads member names, phone numbers, or free-text notes.
+
+Persistence uses additive V17 tables for events, immutable decisions,
+append-only overrides, and keyset reevaluation jobs. Callers own the Exposed
+`transaction {}` boundary.
+
+See the [booking reliability policy](../docs/booking-reliability-policy.md),
+[ERD](../docs/images/readme-diagrams/booking-reliability-erd-01-en.png), and
+[class boundary](../docs/images/readme-diagrams/booking-reliability-class-01-en.png).
+
 ## Core Classes
 
 ### Domain Entities (Record)

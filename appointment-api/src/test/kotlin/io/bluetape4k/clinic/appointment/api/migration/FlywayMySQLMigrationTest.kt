@@ -15,7 +15,7 @@ import java.sql.Driver
 class FlywayMySQLMigrationTest {
 
     @Test
-    fun `V9 contract remains valid and V10 through V16 add durable scheduling schema on MySQL 8`() {
+    fun `V9 contract remains valid and V10 through V17 add durable scheduling schema on MySQL 8`() {
         val mysql = Containers.MySql8
         val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
         val dataSource = SimpleDriverDataSource(
@@ -46,6 +46,10 @@ class FlywayMySQLMigrationTest {
             location = "classpath:db/migration/mysql",
         )
         ReminderRecoveryCheckpointMigrationTestSupport.verifyV16Migration(
+            dataSource = dataSource,
+            location = "classpath:db/migration/mysql",
+        )
+        BookingReliabilityMigrationTestSupport.verifyV17Migration(
             dataSource = dataSource,
             location = "classpath:db/migration/mysql",
         )

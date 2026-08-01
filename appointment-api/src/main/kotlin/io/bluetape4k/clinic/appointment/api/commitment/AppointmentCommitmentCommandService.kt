@@ -23,6 +23,7 @@ import io.bluetape4k.clinic.appointment.model.dto.ConfirmedAppointmentProjection
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
+import io.bluetape4k.clinic.appointment.model.reliability.BookingReliabilityDecisionStamp
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentAuditEvents
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommandIdempotencyConflictException
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommandIdempotencyRepository
@@ -101,6 +102,7 @@ internal class AppointmentCommitmentCommandService(
     private val idempotencyRepository: AppointmentCommandIdempotencyRepository =
         AppointmentCommandIdempotencyRepository(),
     private val notificationWriter: AppointmentNotificationWriter = NoopAppointmentNotificationWriter,
+    private val bookingEligibilityGate: BookingEligibilityGate = BookingEligibilityGate.disabled(),
 ) {
     init {
         require(maxTransactionAttempts in 1..3) {
@@ -121,7 +123,9 @@ internal class AppointmentCommitmentCommandService(
         executeCommand(command.context, OPERATION_CUSTOMER_REQUEST) {
             val now = Instant.now(clock)
             requireClinicScope(command.context)
+            val reliabilityStamp = bookingEligibilityGate.requireAllowed(command.context, command.identity.memberId)
             requireProposalActive(command.expiresAt, now)
+            bookingEligibilityGate.requireFresh(command.context, command.identity.memberId, reliabilityStamp)
             val created =
                 createInitialProposal(
                     context = command.context,
@@ -130,6 +134,7 @@ internal class AppointmentCommitmentCommandService(
                     expiresAt = command.expiresAt,
                     representativeTreatmentName = command.representativeTreatmentName,
                     origin = AppointmentOrigin.PATIENT,
+                    reliabilityStamp = reliabilityStamp,
                     status =
                         if (command.holdResources) {
                             AppointmentCommitmentStatus.HELD
@@ -184,6 +189,10 @@ internal class AppointmentCommitmentCommandService(
             val commitment = requireCommitment(command.context, command.appointmentId)
             requireExpectedVersion(commitment, command.expectedVersion)
             requireInitialCustomerApproval(commitment)
+            val reliabilityStamp = bookingEligibilityGate.requireAllowed(
+                command.context,
+                requireCommitmentMemberId(command.context, commitment.appointmentId),
+            )
             val proposal =
                 requireExactProposal(
                     commitment = commitment,
@@ -208,6 +217,11 @@ internal class AppointmentCommitmentCommandService(
                 )
             }
             requireAcceptedConsent(commitment, proposal)
+            bookingEligibilityGate.requireFresh(
+                command.context,
+                requireCommitmentMemberId(command.context, commitment.appointmentId),
+                reliabilityStamp,
+            )
             val confirmed =
                 confirmProposal(
                     context = command.context,
@@ -216,6 +230,7 @@ internal class AppointmentCommitmentCommandService(
                     resourceRequests = command.proposal.resourceRequests,
                     projectionTarget = command.projectionTarget,
                     now = now,
+                    reliabilityStamp = reliabilityStamp,
                 )
             writeDecision(
                 context = command.context,
@@ -246,6 +261,7 @@ internal class AppointmentCommitmentCommandService(
         executeCommand(command.context, OPERATION_DIRECT_CONFIRMATION) {
             val now = Instant.now(clock)
             requireClinicScope(command.context)
+            val reliabilityStamp = bookingEligibilityGate.requireAllowed(command.context, command.identity.memberId)
             requireProposalActive(command.expiresAt, now)
             requireDirectConfirmationPolicy(command, now)
             val availabilityLock = allocationRepository.lockAndValidateAvailability(
@@ -254,6 +270,7 @@ internal class AppointmentCommitmentCommandService(
                 replacingProposalId = null,
                 requests = command.proposal.resourceRequests,
             )
+            bookingEligibilityGate.requireFresh(command.context, command.identity.memberId, reliabilityStamp)
             val created =
                 createInitialProposal(
                     context = command.context,
@@ -262,6 +279,7 @@ internal class AppointmentCommitmentCommandService(
                     expiresAt = command.expiresAt,
                     representativeTreatmentName = command.representativeTreatmentName,
                     origin = AppointmentOrigin.CLINIC,
+                    reliabilityStamp = reliabilityStamp,
                     status = AppointmentCommitmentStatus.PROPOSED,
                 )
             appendConsent(created.commitment, created.proposal, command.consent)
@@ -273,6 +291,7 @@ internal class AppointmentCommitmentCommandService(
                     resourceRequests = command.proposal.resourceRequests,
                     projectionTarget = command.projectionTarget,
                     now = now,
+                    reliabilityStamp = reliabilityStamp,
                     availabilityLock = availabilityLock,
                 )
             writeDecision(
@@ -763,6 +782,7 @@ internal class AppointmentCommitmentCommandService(
         expiresAt: Instant,
         representativeTreatmentName: String,
         origin: AppointmentOrigin,
+        reliabilityStamp: BookingReliabilityDecisionStamp? = null,
         status: AppointmentCommitmentStatus,
     ): InitialProposal {
         requireInitialProposalRevision(proposalInput.revision)
@@ -771,7 +791,7 @@ internal class AppointmentCommitmentCommandService(
                 clinicId = context.clinicId,
                 identity = identity,
             )
-        val draft = proposalInput.toDraft(appointmentId)
+        val draft = proposalInput.toDraft(appointmentId, reliabilityStamp)
         val commitment =
             commitmentRepository.create(
                 AppointmentCommitment(
@@ -781,6 +801,7 @@ internal class AppointmentCommitmentCommandService(
                     confirmedProposalId = null,
                     effectivePolicySnapshotId = proposalInput.policySnapshotId,
                     version = INITIAL_COMMITMENT_VERSION,
+                    bookingReliabilityStamp = reliabilityStamp,
                 ),
             )
         val proposal =
@@ -855,6 +876,7 @@ internal class AppointmentCommitmentCommandService(
         resourceRequests: List<ResourceAllocationRequest>,
         projectionTarget: ConfirmedAppointmentProjectionTarget,
         now: Instant,
+        reliabilityStamp: BookingReliabilityDecisionStamp? = null,
         availabilityLock: LockedResourceAvailability? = null,
     ): AppointmentCommitmentRecord {
         requireResourceItemReferences(proposal.id, resourceRequests)
@@ -884,6 +906,9 @@ internal class AppointmentCommitmentCommandService(
                 expectedVersion = commitment.version,
                 proposalId = proposal.id,
                 updatedAt = now,
+                bookingReliabilityStamp = reliabilityStamp,
+                expectedBookingReliabilityStamp = commitment.bookingReliabilityStamp
+                    ?: proposal.bookingReliabilityStamp,
             )
         ) {
             reject(
@@ -1562,6 +1587,11 @@ internal class AppointmentCommitmentCommandService(
                 commitment.confirmedProposalId,
                 commitment.effectivePolicySnapshotId,
                 commitment.version,
+                commitment.bookingReliabilityStamp?.decisionId,
+                commitment.bookingReliabilityStamp?.policyVersionId,
+                commitment.bookingReliabilityStamp?.policyHash,
+                commitment.bookingReliabilityStamp?.evaluationDigest,
+                commitment.bookingReliabilityStamp?.expiresAt,
                 proposal.id,
                 proposal.commitmentId,
                 proposal.revision,
@@ -1574,6 +1604,11 @@ internal class AppointmentCommitmentCommandService(
                 proposal.policySnapshotId,
                 proposal.supersedesProposalId,
                 proposal.createdByActor,
+                proposal.bookingReliabilityStamp?.decisionId,
+                proposal.bookingReliabilityStamp?.policyVersionId,
+                proposal.bookingReliabilityStamp?.policyHash,
+                proposal.bookingReliabilityStamp?.evaluationDigest,
+                proposal.bookingReliabilityStamp?.expiresAt,
             ).joinToString(separator = "|") { it?.toString().orEmpty() }
         return MessageDigest
             .getInstance("SHA-256")

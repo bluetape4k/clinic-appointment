@@ -1,6 +1,6 @@
 # Issue #176 예약 신뢰도 정책 설계 기준
 
-상태: 설계·명세 승인 완료, 구현 계획 검토 대기
+상태: 구현 완료, 최종 review evidence 반영 완료
 작성일: 2026-08-01
 대상: `clinic-appointment`
 관련 이슈: #176, #170
@@ -41,7 +41,9 @@
 - tenant 기본 정책과 clinic별 override를 동일한 effective snapshot으로 컴파일한다.
 - 결정·입력 사건·정책 버전·override 이력을 감사 가능한 형태로 보존한다.
 - `#170`이 한 번의 조회로 설명 가능한 booking eligibility를 소비하도록 계약한다.
-- 대규모 clinic에서도 예약 한 건의 판단은 해당 회원의 bounded history만 읽고, 과거 데이터 재계산은 keyset batch worker로 처리한다.
+- 대규모 clinic에서도 예약 한 건의 판단은 해당 회원의 bounded history만 읽는다. 현재 구현의
+  durable job은 회원 단위 재평가를 lease·cursor로 이어가며, clinic 전체 event keyset backfill은
+  별도 후속 작업으로 남긴다.
 - 민감정보를 예약 서비스에 복제하지 않고 직원에게 필요한 최소 설명만 제공한다.
 
 ### 비목표
@@ -202,7 +204,7 @@ data class BookingEligibilityDecision(
 
 1. 호출자의 tenant/clinic/member scope를 검증한다.
 2. 요청 시각에 유효한 immutable policy snapshot을 읽는다.
-3. 해당 clinic·member의 책임 attribution 사건을 lookback 기간으로 keyset 조회한다.
+3. 해당 clinic·member의 책임 attribution 사건을 lookback 기간으로 bounded 조회한다.
 4. 중복 event ID와 이전 source version을 제거하고 no-show·late cancellation을 각각 집계한다.
 5. cooling-off가 남아 있으면 `COOLING_OFF_ACTIVE`를 기록한다.
 6. threshold를 넘은 reason code를 구성한다. 하나라도 넘으면 `RESTRICTED`, 아니면 `ELIGIBLE`이다.
@@ -213,7 +215,8 @@ data class BookingEligibilityDecision(
 
 ### 7.3 `#170` 소비 규칙
 
-`#170`은 아래 read-only 계약을 호출한다.
+`#170`은 아래 read-only 계약을 호출한다. #176은 이 port와 신규 commitment gate/stamp를
+제공하지만, waitlist 후보 생성·offer 발행·고객 응답 소비를 구현하지 않는다.
 
 ```text
 evaluateBookingEligibility(query) -> BookingEligibilityDecision
@@ -223,7 +226,12 @@ evaluateBookingEligibility(query) -> BookingEligibilityDecision
 
 `PROPOSED` 생성, `HELD` 선점, `CONFIRMED` 전환 직전에 decision ID·policy snapshot ID·evaluation digest를 다시 확인한다. 확인 대상이 이미 만료됐거나 정책 버전이 달라졌으면 새 evaluator 호출 없이 확정하지 않는다. 이 재확인은 동시 override와 정책 변경 사이의 stale decision 사용을 막는다.
 
-사건 원장 반영, 유효 정책 snapshot 조회, 결정 snapshot upsert는 application service가 하나의 Exposed `transaction {}` 경계에서 수행한다. 외부 회원 서비스·알림·waitlist 호출은 이 transaction 안에서 실행하지 않는다. transaction commit 뒤 필요한 backfill/재평가 작업은 outbox 또는 durable job으로 발행하고, 동일 `evaluationDigest`와 source version unique key로 재시작을 멱등화한다.
+사건 원장 반영과 결정 snapshot upsert는 호출자가 소유한 reliability transaction에서 수행한다.
+정책 snapshot은 기존 권위 policy service 경계에서 읽고, adapter는 이미 열린 transaction을
+재사용한다. 외부 회원 서비스·알림·waitlist 호출은 이 transaction 안에서 실행하지 않는다.
+transaction commit 뒤 필요한 member 재평가 작업은 durable job으로 발행하고, 동일
+`evaluationDigest`와 source version unique key로 재시작을 멱등화한다. clinic 전체 event
+keyset backfill과 #170 waitlist/offer lifecycle 연결은 후속 이슈다.
 
 ### 7.4 안정적인 HTTP contract
 
@@ -297,13 +305,18 @@ H2, MySQL, PostgreSQL migration을 동일 의미로 추가한다. `MemberId` 원
 
 `MemberId`가 개인정보로 취급될 수 있음을 전제로 clinic의 보존 기간과 회원 서비스의 삭제 요청을 연결한다. 보존 기간이 지나거나 삭제 요청이 확정되면 사건·결정 projection에서 회원 직접 식별자를 제거하거나 irreversibly pseudonymize하고, aggregate audit에는 사건 수·정책 버전·reason code·삭제 처리 시각만 남긴다. 법적 보존이 필요한 감사 row는 별도 retention class와 접근 권한으로 격리한다. 이름·전화번호는 처음부터 이 저장소에 없으므로 삭제 작업이 회원 profile DB를 수정하지 않는다.
 
+#176은 이 경계를 검증하는 bounded retention executor 계약과 부분 실패 격리 runner를 제공한다.
+기본 executor는 no-op이며, 실제 삭제·가명화는 운영 배포가 tenant/clinic 범위와 감사 증적을
+검증한 executor를 주입할 때만 수행한다.
+
 ## 10. 대규모 clinic 처리 전략
 
 한 병원에 많은 회원이 있어도 예약 요청 하나가 전체 clinic을 스캔해서는 안 된다.
 
 - 동기 evaluator는 `(clinicId, MemberId)`의 bounded history만 읽는다.
 - 사건 backfill·정책 변경 재평가는 outbox 또는 durable job으로 분리한다.
-- worker는 `(clinicId, memberId, occurredAt, eventId)` keyset cursor를 사용하고 batch 상한·lease·재시도·dead-letter를 둔다.
+- worker는 member 단위 durable job의 bounded cursor와 batch 상한·lease·재시도·pause/resume·dead-letter를 둔다.
+- clinic 전체 event keyset backfill은 현재 범위가 아니며, 별도 job 설계에서 `(clinicId, memberId, occurredAt, eventId)` cursor를 추가한다.
 - 동일 member key에 대한 concurrent evaluation은 DB unique digest와 optimistic CAS로 수렴한다.
 - 정책 snapshot은 immutable cache 대상이지만 cache miss가 판단을 바꾸지 않는다.
 - 직원 preview는 전체 환자 수나 연락처를 반환하지 않고 요청된 member의 bounded 결과만 반환한다.
@@ -326,7 +339,7 @@ H2, MySQL, PostgreSQL migration을 동일 의미로 추가한다. `MemberId` 원
 | `GET decision` | 직원 preview/explain | clinic-scoped `booking-reliability:read` |
 | `POST override` | 제한을 특정 기간 동안 대체 | clinic-scoped `booking-reliability:write` |
 | `POST clear` | 활성 override 또는 제한을 해제 | clinic-scoped `booking-reliability:write` + 사유 코드 |
-| `GET audit` | 결정·사건·override 확인 | 별도 감사 read capability |
+| `GET audit` | override/clear command와 decision digest 참조 확인 | 별도 감사 read capability |
 
 request body의 actor, clinic, member contact 정보는 권한 근거로 사용하지 않는다. path clinic이 principal allow-list와 기준 데이터에 속하지 않으면 `403`이다. 선언되지 않은 필드는 fail-closed로 거절한다. `MemberId` 자체를 고객에게 “신뢰도 점수”로 공개하는 고객용 endpoint는 만들지 않는다.
 
@@ -410,11 +423,14 @@ override와 `PROPOSED`/`HELD`/`CONFIRMED` command는 decision version과 digest�
 - decision 만료·policy version 변경 시 stale command가 `CONFIRMED`가 되지 않음
 - 이미 `CONFIRMED`인 예약이 no-show 재평가로 변경·취소되지 않음
 - 동시 evaluator와 booking command가 중복 allocation 없이 수렴
+- #176 범위에서는 위 gate가 decision stamp를 proposal/commitment에 보존하는지 검증한다.
+- waitlist 후보 정렬, offer 발행·응답·소비 lifecycle은 #170 구현 시 별도 검증한다.
 
 ### 성능·운영 테스트
 
 - 회원 수가 큰 clinic에서 한 건 조회가 full-clinic scan을 하지 않음
-- keyset batch가 재시작·lease 만료·retry 후 중복 없이 진행
+- member-level durable job이 재시작·lease 만료·retry·pause/resume 후 중복 없이 진행
+- clinic 전체 event keyset backfill은 후속 이슈의 검증 범위로 남긴다.
 - p95/p99 latency, oldest backlog, attribution 누락률 metric이 bounded label만 사용
 - 장애 주입 시 `DECISION_UNAVAILABLE`과 retry/quarantine이 관찰됨
 
@@ -426,6 +442,11 @@ Markdown 명세가 기준 문서다. 구현 완료 시 다음 reader-facing 산�
 2. HTML/PNG는 dark/light theme와 한국어/영어 locale을 모두 생성하고, 문자열·레이아웃·색상 대비를 각각 검증한다.
 3. 영속 관계가 구현 계획에서 확정되면 ERD는 정적 SVG+PNG로 만든다. sequence/class가 필요한 경우에도 SVG+PNG를 우선한다.
 4. source Markdown과 코드 계약이 HTML/PNG보다 우선하며, 시각화 파일에 새로운 정책 의미를 추가하지 않는다.
+
+업무 흐름 companion: [한국어 light](../../visual-companions/booking-reliability-workflow-ko-light.html),
+[영어 light](../../visual-companions/booking-reliability-workflow-en-light.html),
+[한국어 dark](../../visual-companions/booking-reliability-workflow-ko-dark.html),
+[영어 dark](../../visual-companions/booking-reliability-workflow-en-dark.html).
 
 ## 16. 대안과 기각 이유
 
@@ -445,17 +466,18 @@ Markdown 명세가 기준 문서다. 구현 완료 시 다음 reader-facing 산�
 
 waitlist/offer 수명주기와 신뢰도 정책의 변경 주기가 결합되고, 다른 예약 진입점이 다른 기준을 사용할 위험이 있다. #176은 독립된 auditable decision port만 제공하고 #170은 소비자로 남긴다.
 
-## 17. 구현 완료 기준(DoD 초안)
+## 17. 구현 완료 기준(DoD)
 
-- [ ] 기존 `PRIORITY_AND_RELIABILITY` payload/codec/validator/hasher에 versioned threshold가 추가됨
-- [ ] 고객 책임과 병원·운영 책임을 분리하는 typed attribution과 allowlist reason code가 구현됨
-- [ ] 사건 원장, immutable decision snapshot, override/clear audit가 H2/MySQL/PostgreSQL에서 동작함
-- [ ] `MemberId + clinicId` 범위와 개인정보 금지 항목이 테스트로 고정됨
-- [ ] `#170` 소비 계약이 decision ID·policy snapshot·digest·expiry를 전달함
-- [ ] `PROPOSED`/`HELD`/신규 `CONFIRMED` 경로가 제한 결정을 적용하고 기존 `CONFIRMED`를 변경하지 않음
-- [ ] 직원 preview/override/clear API와 capability·clinic scope 검증이 추가됨
-- [ ] idempotency, CAS, stale snapshot, outage, event reorder, batch retry 테스트가 통과함
-- [ ] 한국어 기준 문서와 필요 시 bilingual HTML+PNG/정적 다이어그램이 `bluetape-writer`·`bluetape-diagram` 계약을 통과함
-- [ ] 모듈 테스트·정적 검사·migration 검증·최종 review에서 P0/P1이 0건임
+- [x] 기존 `PRIORITY_AND_RELIABILITY` payload/codec/validator/hasher에 versioned threshold가 추가됨
+- [x] 고객 책임과 병원·운영 책임을 분리하는 typed attribution과 allowlist reason code가 구현됨
+- [x] 사건 원장, immutable decision snapshot, override/clear audit가 H2/MySQL/PostgreSQL에서 동작함
+- [x] `MemberId + clinicId` 범위와 개인정보 금지 항목이 테스트로 고정됨
+- [ ] `#170` waitlist/offer lifecycle이 decision ID·policy snapshot·digest·expiry를 소비함 (후속 이슈)
+- [x] #176 gate가 신규 proposal/commitment에 decision stamp를 저장하고 재사용함
+- [x] `PROPOSED`/`HELD`/신규 `CONFIRMED` 경로가 제한 결정을 적용하고 기존 `CONFIRMED`를 변경하지 않음
+- [x] 직원 preview/override/clear API와 capability·clinic scope 검증이 추가됨
+- [x] idempotency, CAS, stale snapshot, outage, event reorder, batch retry 테스트가 통과함
+- [x] 한국어 기준 문서와 필요 시 bilingual HTML+PNG/정적 다이어그램이 `bluetape-writer`·`bluetape-diagram` 계약을 통과함
+- [x] 모듈 테스트·정적 검사·migration 검증·최종 review에서 P0/P1이 0건임
 
 이 명세를 구현 계획의 기준으로 삼는다. 구현 중 schema 이름이나 threshold 범위를 바꿀 때는 이 문서와 `#170` 소비 계약을 함께 갱신하고, 기존 `CONFIRMED` 보호·개인정보 경계를 약화하지 않는다.

@@ -385,6 +385,11 @@ internal abstract class VisitCommitmentCommandTestSupport {
                 commitment.confirmedProposalId,
                 commitment.effectivePolicySnapshotId,
                 commitment.version,
+                commitment.bookingReliabilityStamp?.decisionId,
+                commitment.bookingReliabilityStamp?.policyVersionId,
+                commitment.bookingReliabilityStamp?.policyHash,
+                commitment.bookingReliabilityStamp?.evaluationDigest,
+                commitment.bookingReliabilityStamp?.expiresAt,
                 proposal.id,
                 proposal.commitmentId,
                 proposal.revision,
@@ -397,6 +402,11 @@ internal abstract class VisitCommitmentCommandTestSupport {
                 proposal.policySnapshotId,
                 proposal.supersedesProposalId,
                 proposal.createdByActor,
+                proposal.bookingReliabilityStamp?.decisionId,
+                proposal.bookingReliabilityStamp?.policyVersionId,
+                proposal.bookingReliabilityStamp?.policyHash,
+                proposal.bookingReliabilityStamp?.evaluationDigest,
+                proposal.bookingReliabilityStamp?.expiresAt,
             ).joinToString(separator = "|") { it?.toString().orEmpty() }
         return MessageDigest
             .getInstance("SHA-256")

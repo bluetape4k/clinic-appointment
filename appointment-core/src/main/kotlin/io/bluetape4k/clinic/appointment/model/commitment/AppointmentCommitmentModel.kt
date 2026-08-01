@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.model.commitment
 
+import io.bluetape4k.clinic.appointment.model.reliability.BookingReliabilityDecisionStamp
 import io.bluetape4k.support.requirePositiveNumber
 import java.io.Serializable
 import java.time.Instant
@@ -25,6 +26,7 @@ import java.time.Instant
  * 식별자입니다. 현재 정책을 다시 조회해 과거 결정을 재해석해서는 안 됩니다.
  * @property version repository의 compare-and-set에 사용하는 양수 낙관적 잠금
  * version입니다. 업무 revision이나 proposal revision과 혼용하지 않습니다.
+ * @property bookingReliabilityStamp 신규 예약 eligibility를 증명한 immutable stamp입니다.
  */
 class AppointmentCommitment(
     appointmentId: Long,
@@ -33,6 +35,7 @@ class AppointmentCommitment(
     confirmedProposalId: Long?,
     effectivePolicySnapshotId: Long,
     version: Long,
+    val bookingReliabilityStamp: BookingReliabilityDecisionStamp? = null,
 ) : Serializable {
     val appointmentId = appointmentId.requirePositiveNumber("appointmentId")
     val confirmedProposalId =
@@ -65,6 +68,7 @@ class AppointmentCommitment(
         proposal: AppointmentProposalDraft,
         proposalHash: String,
         consent: ConsentDecision,
+        reliabilityStamp: BookingReliabilityDecisionStamp? = bookingReliabilityStamp,
     ): AppointmentCommitment {
         proposalId.requirePositiveNumber("proposalId")
         require(appointmentId == proposal.appointmentId) {
@@ -83,6 +87,7 @@ class AppointmentCommitment(
             confirmedProposalId = proposalId,
             effectivePolicySnapshotId = effectivePolicySnapshotId,
             version = version + 1,
+            bookingReliabilityStamp = reliabilityStamp,
         )
     }
 
@@ -149,6 +154,7 @@ class AppointmentProposalDraft(
     allocations: List<ResourceAllocationDraft>,
     policySnapshotId: Long,
     supersedesProposalId: Long?,
+    val bookingReliabilityStamp: BookingReliabilityDecisionStamp? = null,
 ) : Serializable {
     val appointmentId = appointmentId.requirePositiveNumber("appointmentId")
     val revision = revision.requirePositiveNumber("revision")

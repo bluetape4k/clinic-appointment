@@ -62,6 +62,11 @@ class AesGcmQuarantineEnvelopeProtector(
             ProfileAssessmentEventBounds.validateEnvelopeMetadata(
                 envelope as UntrustedSchedulingEventEnvelope<PatientSchedulingAssessmentChanged>,
             )
+        } else if (envelope.payload is BookingReliabilitySignalEvent) {
+            @Suppress("UNCHECKED_CAST")
+            BookingReliabilityEventBounds.validate(
+                envelope as UntrustedSchedulingEventEnvelope<BookingReliabilitySignalEvent>,
+            )
         }
         val plaintext = canonicalBytes(envelope)
         val hash = MessageDigest.getInstance("SHA-256")
@@ -104,6 +109,7 @@ class AesGcmQuarantineEnvelopeProtector(
             is PurchaseCompletedEvent -> PurchaseCompletedPayloadHasher.canonicalBytes(event)
             is PatientSchedulingAssessmentChanged ->
                 PatientSchedulingAssessmentChangedHasher.canonicalBytes(event)
+            is BookingReliabilitySignalEvent -> BookingReliabilitySignalPayloadHasher.canonicalBytes(event)
             else -> throw IllegalArgumentException("unsupported quarantine envelope payload")
         }
         return metadata + payload
@@ -113,6 +119,7 @@ class AesGcmQuarantineEnvelopeProtector(
         when (payload) {
             is PurchaseCompletedEvent -> payload.tenantGroupId to payload.clinicId
             is PatientSchedulingAssessmentChanged -> payload.tenantGroupId to payload.clinicId
+            is BookingReliabilitySignalEvent -> payload.tenantGroupId to payload.clinicId
             else -> throw IllegalArgumentException("unsupported quarantine envelope payload")
         }
 }

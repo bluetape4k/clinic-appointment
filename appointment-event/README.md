@@ -49,6 +49,19 @@ skipped. See the
 [workflow](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html)
 and [operations runbook](../docs/runbooks/profile-reevaluation.md).
 
+## Booking Reliability Event Ingress
+
+`BookingReliabilityEventIngress` accepts a strict typed schema for
+`NO_SHOW`/`CANCELLED` outcomes, verifies the trusted producer envelope, and
+quarantines malformed or untrusted input without copying profile data. The
+event carries only tenant/clinic/member scope, responsibility, source version,
+correlation, and a payload hash. The core evaluator decides eligibility; this
+module only validates and persists the fact.
+
+See the [reliability policy](../docs/booking-reliability-policy.md),
+[persistence ERD](../docs/images/readme-diagrams/booking-reliability-erd-01-en.png),
+and [event ingress API notes](../docs/api/booking-reliability.md).
+
 ## External Scheduling Facts
 
 The reservation service consumes facts without taking ownership of commerce or

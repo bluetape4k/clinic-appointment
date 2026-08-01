@@ -38,9 +38,20 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 | 예약 정책 | `/api/{tenantCode}/admin/**/scheduling-policies` | 미리보기와 활성화 증거를 사용해 테넌트 기준 정책과 병원별 재정의 관리 |
 | 알림 상태 | `GET /api/{tenantCode}/clinics/{clinicId}/notifications/**` | `SCOPE_notification:read` 권한으로 개인정보가 제거된 발송 상태 조회 |
 | 재알림 | `POST /api/{tenantCode}/clinics/{clinicId}/notifications/re-notify` | 범위와 수량이 제한되고 이중 승인된 재알림을 미리 확인하거나 새 generation으로 등록 |
+| 예약 신뢰도 결정 | `GET /api/{tenantCode}/clinics/{clinicId}/members/{memberId}/booking-reliability/decision` | 직원 preview용 제한적·개인정보 안전 자격 결정 조회 |
+| 예약 신뢰도 override/clear | `POST .../booking-reliability/override`, `POST .../booking-reliability/clear` | capability와 병원 범위 검증 뒤 만료되는 직원 결정을 적용·해제 |
+| 예약 신뢰도 감사 | `GET .../booking-reliability/audit` | 프로필 필드 없이 제한된 결정·사건·override 이력 조회 |
 
 전체 예약 정책 요청, 생명주기, 유효 정책 조회, 오류 계약은
 [Scheduling Policy API](../docs/api/scheduling-policy.md)에 정리되어 있습니다.
+
+### 예약 신뢰도
+
+신뢰도 API는 불투명한 `MemberId`만 사용하며 이름·전화번호는 회원 DB가 소유합니다. 기본 모드는
+`OFF`이고 `SHADOW`에서는 차단 없이 결정을 기록하며, `ENFORCE`에서는 schema readiness와 clinic
+allowlist가 확인된 뒤 신규 `PROPOSED`·`HELD` 경로를 제한합니다. 이미 `CONFIRMED`인 약속은 이
+정책으로 취소하거나 이동하지 않습니다. [API 계약](../docs/api/booking-reliability.md),
+[영문 런북](../docs/runbooks/booking-reliability.md), [한국어 기준 문서](../docs/booking-reliability-policy.ko.md)를 참고하세요.
 
 알림 요청에는 발송 시점에 최신 프로필을 조회하는 데 필요한 회원 ID만 저장합니다.
 이름·전화번호·이메일·렌더링 본문·provider 원본 오류는 outbox에 기록하지 않습니다.
