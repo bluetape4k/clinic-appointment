@@ -1,6 +1,6 @@
 # Issue #170 Waitlist Core Workflow Checklist
 
-Status: `DESIGN REVIEW PASSED` — implementation and plan gates remain pending
+Status: `IMPLEMENTATION APPROVED` — implementation gate in progress
 
 ## Classification
 
@@ -208,9 +208,9 @@ Status: `DESIGN REVIEW PASSED` — implementation and plan gates remain pending
   - **Evidence:** Approved spec, `docs/review/2026-08-01-issue-170-waitlist-core-spec-review-iteration-2.md`, exact commit `b041179`, integrated P0=0/P1=0.
   - **Failure:** Revise/reapprove material changes and keep planning blocked.
 
-- [ ] **A-04 — Approve and review the implementation plan**
+- [x] **A-04 — Approve and review the implementation plan**
   - **Action:** Write the ordered plan and run all six plan perspectives plus integration.
-  - **Evidence:** Plan `docs/superpowers/plans/2026-08-01-issue-170-waitlist-core.md` at `a2e67d5`, review `docs/review/2026-08-01-issue-170-waitlist-core-plan-review.md`, integrated PASS, P0=0/P1=0/P2=0/P3=0. User plan approval remains pending.
+  - **Evidence:** Plan `docs/superpowers/plans/2026-08-01-issue-170-waitlist-core.md` at `a2e67d5`, review `docs/review/2026-08-01-issue-170-waitlist-core-plan-review.md`, integrated PASS, P0=0/P1=0/P2=0/P3=0, and explicit chat approval `승인, $bluetape-kotlin-patterns 을 철저히 준수하면서 구현해라`.
   - **Failure:** Repair ordering/proof/ownership/hazard gaps before code; do not start implementation without approval.
 
 - [x] **A-05 — Predict triggered risks**
@@ -267,10 +267,9 @@ Status: `DESIGN REVIEW PASSED` — implementation and plan gates remain pending
 
 ## Current stop condition
 
-Implementation remains paused until the implementation plan is written, passes
-A-04, and receives explicit user approval. The A-04 review is PASS but its row
-remains unchecked until that approval. Step 2-R is no longer a blocker. PR/merge
-and performance/code verification rows remain pending by dependency order.
+Implementation is authorized after the written plan passed A-04 and received
+explicit user approval. Step 2-R is no longer a blocker. PR/merge and
+performance/code verification rows remain pending by dependency order.
 
 Step 2-R evidence is recorded at
 `docs/review/2026-08-01-issue-170-waitlist-core-spec-review-iteration-2.md`.
@@ -280,8 +279,8 @@ plan/adapter follow-ups.
 A-04 review evidence is recorded at
 `docs/review/2026-08-01-issue-170-waitlist-core-plan-review.md`. Its integrated
 verdict is `PASS` with P0=0, P1=0, P2=0, and P3=0; implementation approval is
-still pending.
+recorded in the current chat message.
 
-Required checks: `21/47` checked so far; N/A: `1`; Blocked: `0`.
-Unchecked IDs: `CL-07`, `CL-08`, `CG-06..CG-18`, `A-04`, `A-06..A-12`, `Step 4-S`,
+Required checks: `22/47` checked so far; N/A: `1`; Blocked: `0`.
+Unchecked IDs: `CL-07`, `CL-08`, `CG-06..CG-18`, `A-06..A-12`, `Step 4-S`,
 `Step 4-P`.
