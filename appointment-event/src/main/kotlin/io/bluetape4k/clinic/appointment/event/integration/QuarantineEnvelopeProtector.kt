@@ -2,7 +2,10 @@ package io.bluetape4k.clinic.appointment.event.integration
 
 import io.bluetape4k.clinic.appointment.event.profile.PatientSchedulingAssessmentChanged
 import io.bluetape4k.clinic.appointment.event.profile.PatientSchedulingAssessmentChangedHasher
+import java.io.OutputStream
+import java.io.OutputStreamWriter
 import java.nio.charset.StandardCharsets
+import java.security.DigestOutputStream
 import java.security.MessageDigest
 import java.util.Base64
 import javax.crypto.Cipher
@@ -32,6 +35,11 @@ fun interface QuarantineEnvelopeProtector {
     fun protect(
         envelope: UntrustedSchedulingEventEnvelope<*>,
     ): ProtectedQuarantineEnvelope
+
+    /** trust 검증 전에 관측된 envelope를 bounded evidence로 보호합니다. */
+    fun protectUntrusted(
+        envelope: UntrustedSchedulingEventEnvelope<*>,
+    ): ProtectedQuarantineEnvelope = protect(envelope)
 }
 
 class AesGcmQuarantineEnvelopeProtector(
@@ -68,7 +76,18 @@ class AesGcmQuarantineEnvelopeProtector(
                 envelope as UntrustedSchedulingEventEnvelope<BookingReliabilitySignalEvent>,
             )
         }
-        val plaintext = canonicalBytes(envelope)
+        return encrypt(envelope, tolerant = false)
+    }
+
+    override fun protectUntrusted(
+        envelope: UntrustedSchedulingEventEnvelope<*>,
+    ): ProtectedQuarantineEnvelope = encrypt(envelope, tolerant = true)
+
+    private fun encrypt(
+        envelope: UntrustedSchedulingEventEnvelope<*>,
+        tolerant: Boolean,
+    ): ProtectedQuarantineEnvelope {
+        val plaintext = canonicalBytes(envelope, tolerant)
         val hash = MessageDigest.getInstance("SHA-256")
             .digest(plaintext)
             .joinToString("") { byte -> "%02x".format(byte) }
@@ -76,7 +95,7 @@ class AesGcmQuarantineEnvelopeProtector(
         cipher.init(Cipher.ENCRYPT_MODE, encryptionKey)
         val scope = scope(envelope.payload)
         cipher.updateAAD(
-            "appointment-quarantine\u0000${scope.first}\u0000${scope.second}\u0000${envelope.eventId}"
+            "appointment-quarantine\u0000${scope.first}\u0000${scope.second}\u0000${aadComponent(envelope.eventId, tolerant)}"
                 .toByteArray(StandardCharsets.UTF_8)
         )
         val encrypted = cipher.doFinal(plaintext)
@@ -89,21 +108,22 @@ class AesGcmQuarantineEnvelopeProtector(
 
     private fun canonicalBytes(
         envelope: UntrustedSchedulingEventEnvelope<*>,
+        tolerant: Boolean,
     ): ByteArray {
         val metadata = CanonicalFrameWriter().apply {
-            string("eventId", envelope.eventId)
-            string("eventType", envelope.eventType)
+            metadataString("eventId", envelope.eventId, MAX_IDENTIFIER_LENGTH, tolerant)
+            metadataString("eventType", envelope.eventType, MAX_IDENTIFIER_LENGTH, tolerant)
             instant("occurredAt", envelope.occurredAt)
             instant("receivedAt", envelope.receivedAt)
-            string("producer", envelope.producer)
-            string("issuer", envelope.issuer)
-            string("audience", envelope.audience)
-            string("keyId", envelope.keyId)
-            string("algorithm", envelope.algorithm)
+            metadataString("producer", envelope.producer, MAX_IDENTIFIER_LENGTH, tolerant)
+            metadataString("issuer", envelope.issuer, MAX_IDENTIFIER_LENGTH, tolerant)
+            metadataString("audience", envelope.audience, MAX_IDENTIFIER_LENGTH, tolerant)
+            metadataString("keyId", envelope.keyId, MAX_IDENTIFIER_LENGTH, tolerant)
+            metadataString("algorithm", envelope.algorithm, MAX_IDENTIFIER_LENGTH, tolerant)
             int("schemaVersion", envelope.schemaVersion)
-            string("correlationId", envelope.correlationId)
-            string("payloadHash", envelope.payloadHash)
-            string("signature", envelope.signature)
+            metadataString("correlationId", envelope.correlationId, MAX_IDENTIFIER_LENGTH, tolerant)
+            metadataString("payloadHash", envelope.payloadHash, MAX_SHA256_LENGTH, tolerant)
+            metadataString("signature", envelope.signature, MAX_SIGNATURE_LENGTH, tolerant)
         }.toByteArray()
         val payload = when (val event = envelope.payload) {
             is PurchaseCompletedEvent -> PurchaseCompletedPayloadHasher.canonicalBytes(event)
@@ -115,6 +135,51 @@ class AesGcmQuarantineEnvelopeProtector(
         return metadata + payload
     }
 
+    private fun CanonicalFrameWriter.metadataString(
+        name: String,
+        value: String,
+        maximumLength: Int,
+        tolerant: Boolean,
+    ) {
+        if (tolerant) {
+            boundedString(name, value, maximumLength)
+        } else {
+            string(name, value)
+        }
+    }
+
+    /** 초과 metadata는 전체 길이와 앞 256자의 SHA-256만 frame에 남깁니다. */
+    private fun CanonicalFrameWriter.boundedString(
+        name: String,
+        value: String,
+        maximumLength: Int,
+    ) {
+        if (value.length <= maximumLength) {
+            string(name, value)
+        } else {
+            int("$name.length", value.length)
+            string("$name.sampleHash", boundedSampleHash(value))
+        }
+    }
+
+    private fun aadComponent(value: String, tolerant: Boolean): String =
+        if (!tolerant || (value.length <= MAX_IDENTIFIER_LENGTH && SAFE_IDENTIFIER.matches(value))) {
+            value
+        } else {
+            "invalid:${value.length}:${boundedSampleHash(value)}"
+        }
+
+    /** 입력 전체를 복제하지 않고 고정 길이 표본만 hash합니다. */
+    private fun boundedSampleHash(value: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        DigestOutputStream(OutputStream.nullOutputStream(), digest).use { digestStream ->
+            OutputStreamWriter(digestStream, StandardCharsets.UTF_8).use { writer ->
+                writer.write(value, 0, minOf(value.length, MAX_METADATA_SAMPLE_LENGTH))
+            }
+        }
+        return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+    }
+
     private fun scope(payload: Any?): Pair<Long, Long> =
         when (payload) {
             is PurchaseCompletedEvent -> payload.tenantGroupId to payload.clinicId
@@ -122,4 +187,12 @@ class AesGcmQuarantineEnvelopeProtector(
             is BookingReliabilitySignalEvent -> payload.tenantGroupId to payload.clinicId
             else -> throw IllegalArgumentException("unsupported quarantine envelope payload")
         }
+
+    private companion object {
+        const val MAX_IDENTIFIER_LENGTH = 128
+        const val MAX_SHA256_LENGTH = 64
+        const val MAX_SIGNATURE_LENGTH = 1_024
+        const val MAX_METADATA_SAMPLE_LENGTH = 256
+        val SAFE_IDENTIFIER = Regex("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+    }
 }
