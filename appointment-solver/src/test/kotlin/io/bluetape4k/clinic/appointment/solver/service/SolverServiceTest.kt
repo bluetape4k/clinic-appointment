@@ -297,7 +297,7 @@ class SolverServiceTest {
 
         val service = SolverService(solverFactory = factory)
 
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<IllegalStateException> {
             service.optimize(clinicId, MONDAY..FRIDAY)
         }
     }

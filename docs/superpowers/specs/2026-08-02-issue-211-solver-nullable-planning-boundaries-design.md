@@ -23,8 +23,9 @@ Timefold가 부분 초기화된 입력을 다루기 위해 nullable planning var
 3. `SolutionConverter.extractResults`는 완전 배정된 비-pinned 예약만 변환한다.
    헬퍼가 `null`을 반환하는 항목은 기존 동작처럼 결과에서 제외한다.
 4. `SolverService`의 repository ID와 solver score는 우연한 NPE가 아니라
-   boundary invariant다. 이 경계에서는 `requireNotNull`로 명시적인 오류를
-   발생시켜 원인을 보존한다.
+   boundary invariant다. 호출자 입력이 아닌 내부 lifecycle 오류이므로
+   `checkNotNull`로 명시적인 `IllegalStateException`을 발생시켜 원인을
+   보존한다.
 5. `allowsUnassigned=true`를 추가하거나 미배정 penalty를 도입하지 않는다.
    현재 도메인에서 `null`은 최종 비즈니스 상태가 아니라 계획 중 상태다.
 
@@ -159,13 +160,14 @@ optional metadata도 현재처럼 `original?.field`로 유지한다.
 
 | 값 | 처리 | 이유 |
 |---|---|---|
-| repository record `id` | `requireNotNull(id) { context }` | DB projection은 저장 ID가 있어야 하며 누락은 데이터/mapper 계약 위반 |
-| `ScheduleSolution.score` after `solve` | `requireNotNull(score) { context }` | solver 완료 결과는 score를 가져야 하며 누락은 solver lifecycle 계약 위반 |
+| repository record `id` | `checkNotNull(id) { context }` | DB projection은 저장 ID가 있어야 하며 누락은 데이터/mapper 계약 위반 |
+| `ScheduleSolution.score` after `solve` | `checkNotNull(score) { context }` | solver 완료 결과는 score를 가져야 하며 누락은 solver lifecycle 계약 위반 |
 | planning variable | `withAssigned` 또는 stream 기본 filter | 부분 초기화가 허용된 solver 상태 |
 
 예외 메시지는 clinic/date range 또는 record context를 포함하되 환자 개인정보를
-포함하지 않는다. 이 변경은 예외 타입을 새로 만들지 않고 현재 service의
-`IllegalArgumentException`/`IllegalStateException` 관례를 따른다.
+포함하지 않는다. 호출자 입력 검증은 기존 `IllegalArgumentException` 경로를
+유지하고, repository/solver lifecycle 오류는 `IllegalStateException` 경로로
+분리한다.
 
 ## 6. 테스트 계약
 
@@ -209,7 +211,7 @@ optional metadata도 현재처럼 `original?.field`로 유지한다.
 | helper가 일부 constraint의 null 조건을 빠뜨림 | H1~H11별 RED 테스트와 production `!!` 검색을 함께 실행 |
 | method reference의 nullable key 추론이 Timefold API와 맞지 않음 | 컴파일 가능한 기존 H7/H8 join pattern을 기준으로 한 constraint씩 적용 |
 | helper가 새 allocation 또는 lambda 비용을 추가함 | `inline` block과 property snapshot 금지, module build 후 benchmark 차이가 관찰될 때만 별도 이슈화 |
-| `requireNotNull` 메시지에 민감정보가 들어감 | clinic/date range와 record ID 같은 운영 context만 허용하고 patient fields는 금지 |
+| `checkNotNull` 메시지에 민감정보가 들어감 | clinic/date range와 record ID 같은 운영 context만 허용하고 patient fields는 금지 |
 | 부분 결과 skip이 장애를 숨김 | 이번 issue에서는 기존 결과 계약을 유지하고, 누락 count/진단 API는 별도 이슈로 분리 |
 
 ## 8. 대안과 기각 이유
