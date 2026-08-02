@@ -41,6 +41,26 @@ class QuarantineEnvelopeProtectorTest {
         }
     }
 
+    @Test
+    fun `untrusted protection bounds oversized metadata`() {
+        val protector = AesGcmQuarantineEnvelopeProtector(
+            encryptionKey = ByteArray(32) { index -> index.toByte() },
+            keyId = "quarantine-key-1",
+        )
+        val oversized = envelope().copy(
+            eventId = "event-${"x".repeat(200)}",
+            signature = "s".repeat(2_000),
+        )
+
+        val protected = protector.protectUntrusted(oversized)
+
+        protected.envelopeHash.matches(Regex("[0-9a-f]{64}")).shouldBeTrue()
+        Base64.getDecoder().decode(checkNotNull(protected.ciphertext)).size
+            .let { it < 2_048 }
+            .shouldBeTrue()
+        assertFailsWith<IllegalArgumentException> { protector.protect(oversized) }
+    }
+
     private fun envelope(): UntrustedSchedulingEventEnvelope<PurchaseCompletedEvent> {
         val payload = PurchaseCompletedEvent(
             sourceAggregateId = "purchase-aggregate",

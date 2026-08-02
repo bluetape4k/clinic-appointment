@@ -107,6 +107,77 @@ class BookingReliabilityEventIngressTest {
     }
 
     @Test
+    fun `envelope payload mismatch is quarantined instead of escaping validation`() {
+        val event = signalEvent()
+        val mismatched = envelope(event).copy(eventId = "envelope-event-2")
+
+        val result = transaction { ingress(event).accept(mismatched, VALID_RAW_PAYLOAD) }
+
+        result as BookingReliabilityIngressResult.Quarantined
+        result.reasonCode shouldBeEqualTo "PAYLOAD_CONTRACT_INVALID"
+        transaction {
+            SchedulingQuarantineEvents.selectAll().toList().shouldHaveSize(1)
+            UntrustedSchedulingEventRejections.selectAll().toList().shouldHaveSize(1)
+        }
+    }
+
+    @Test
+    fun `malformed decoder failure is quarantined`() {
+        val event = signalEvent()
+        val result = transaction {
+            ingress(
+                event,
+                payloadDecoder = BookingReliabilitySignalEventDecoder {
+                    throw IllegalArgumentException("malformed payload")
+                },
+            ).accept(envelope(event), VALID_RAW_PAYLOAD)
+        }
+
+        result as BookingReliabilityIngressResult.Quarantined
+        result.reasonCode shouldBeEqualTo "BOOKING_RELIABILITY_MAPPING_FAILED"
+        transaction {
+            SchedulingQuarantineEvents.selectAll().toList().shouldHaveSize(1)
+            UntrustedSchedulingEventRejections.selectAll().toList().shouldHaveSize(1)
+        }
+    }
+
+    @Test
+    fun `verification failure uses tolerant protection only`() {
+        val event = signalEvent()
+        val protector = RecordingQuarantineEnvelopeProtector()
+        val mismatched = envelope(event).copy(eventId = "envelope-event-2")
+
+        val result = transaction {
+            ingress(event, quarantineEnvelopeProtector = protector).accept(mismatched, VALID_RAW_PAYLOAD)
+        }
+
+        result as BookingReliabilityIngressResult.Quarantined
+        protector.protectCalls shouldBeEqualTo 0
+        protector.protectUntrustedCalls shouldBeEqualTo 1
+    }
+
+    @Test
+    fun `verified repository failure uses normal protection only`() {
+        val first = signalEvent()
+        transaction { ingress(first).accept(envelope(first), VALID_RAW_PAYLOAD) }
+        val conflicting = first.copy(
+            signalType = BookingReliabilitySignalType.LATE_CANCELLATION_RECORDED,
+            scheduledStartAt = now.plusSeconds(600),
+        )
+        val protector = RecordingQuarantineEnvelopeProtector()
+
+        val result = transaction {
+            ingress(conflicting, quarantineEnvelopeProtector = protector)
+                .accept(envelope(conflicting), VALID_RAW_PAYLOAD)
+        }
+
+        result as BookingReliabilityIngressResult.Quarantined
+        result.reasonCode shouldBeEqualTo "SOURCE_VERSION_HASH_CONFLICT"
+        protector.protectCalls shouldBeEqualTo 1
+        protector.protectUntrustedCalls shouldBeEqualTo 0
+    }
+
+    @Test
     fun `invalid signature is quarantined before accepted insert`() {
         val event = signalEvent()
         val result = transaction {
@@ -151,7 +222,14 @@ class BookingReliabilityEventIngressTest {
         }
     }
 
-    private fun ingress(decoded: BookingReliabilitySignalEvent): BookingReliabilityEventIngress =
+    private fun ingress(
+        decoded: BookingReliabilitySignalEvent,
+        payloadDecoder: BookingReliabilitySignalEventDecoder = BookingReliabilitySignalEventDecoder { decoded },
+        quarantineEnvelopeProtector: QuarantineEnvelopeProtector = AesGcmQuarantineEnvelopeProtector(
+            encryptionKey = ByteArray(32) { index -> index.toByte() },
+            keyId = "quarantine-key-1",
+        ),
+    ): BookingReliabilityEventIngress =
         BookingReliabilityEventIngress(
             trustVerifier = SchedulingEventTrustVerifier(
                 signatureVerifier = SchedulingEventSignatureVerifier { it.signature == "valid-signature" },
@@ -163,12 +241,9 @@ class BookingReliabilityEventIngressTest {
                 replayWindow = Duration.ofHours(1),
                 clock = clock,
             ),
-            payloadDecoder = BookingReliabilitySignalEventDecoder { decoded },
+            payloadDecoder = payloadDecoder,
             eventRepository = BookingReliabilityEventRepository(clock),
-            quarantineEnvelopeProtector = AesGcmQuarantineEnvelopeProtector(
-                encryptionKey = ByteArray(32) { index -> index.toByte() },
-                keyId = "quarantine-key-1",
-            ),
+            quarantineEnvelopeProtector = quarantineEnvelopeProtector,
             quarantineRepository = SchedulingQuarantineRepository(clock),
             rejectionRepository = UntrustedSchedulingEventRejectionRepository(),
             clock = clock,
@@ -210,6 +285,32 @@ class BookingReliabilityEventIngressTest {
         signature = signature,
         payload = payload,
     )
+
+    private class RecordingQuarantineEnvelopeProtector : QuarantineEnvelopeProtector {
+        private val delegate = AesGcmQuarantineEnvelopeProtector(
+            encryptionKey = ByteArray(32) { index -> index.toByte() },
+            keyId = "quarantine-key-1",
+        )
+
+        var protectCalls: Int = 0
+            private set
+        var protectUntrustedCalls: Int = 0
+            private set
+
+        override fun protect(
+            envelope: UntrustedSchedulingEventEnvelope<*>,
+        ): ProtectedQuarantineEnvelope {
+            protectCalls++
+            return delegate.protect(envelope)
+        }
+
+        override fun protectUntrusted(
+            envelope: UntrustedSchedulingEventEnvelope<*>,
+        ): ProtectedQuarantineEnvelope {
+            protectUntrustedCalls++
+            return delegate.protectUntrusted(envelope)
+        }
+    }
 
     private companion object {
         val VALID_RAW_PAYLOAD = "{}".encodeToByteArray()

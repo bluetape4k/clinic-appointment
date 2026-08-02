@@ -46,17 +46,25 @@ class BookingReliabilityEventIngress(
         rawEnvelope: UntrustedSchedulingEventEnvelope<BookingReliabilitySignalEvent>,
         rawPayload: ByteArray,
     ): BookingReliabilityIngressResult {
-        val protectedEnvelope = quarantineEnvelopeProtector.protect(rawEnvelope)
         val trusted = try {
             verify(rawEnvelope, rawPayload)
         } catch (failure: SchedulingTrustException) {
-            return quarantine(rawEnvelope, protectedEnvelope, failure.reasonCode)
+            return quarantine(
+                rawEnvelope,
+                quarantineEnvelopeProtector.protectUntrusted(rawEnvelope),
+                failure.reasonCode,
+            )
         }
 
+        val verifiedEnvelope = rawEnvelope.copy(payload = trusted.payload)
         val eventRecordId = try {
             eventRepository.recordAccepted(trusted)
         } catch (failure: SchedulingTrustException) {
-            return quarantine(rawEnvelope, protectedEnvelope, failure.reasonCode)
+            return quarantine(
+                verifiedEnvelope,
+                quarantineEnvelopeProtector.protect(verifiedEnvelope),
+                failure.reasonCode,
+            )
         }
         return BookingReliabilityIngressResult.Accepted(eventRecordId)
     }
