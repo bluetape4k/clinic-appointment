@@ -305,6 +305,26 @@ class SolutionConverterTest {
     }
 
     @Test
+    fun `extractResults skips appointments without start time`() {
+        val incomplete = AppointmentPlanning(
+            id = 1L,
+            clinicId = clinicId,
+            patientName = "Jane Doe",
+            durationMinutes = 30,
+            doctorId = doctorId,
+            appointmentDate = LocalDate.of(2026, 4, 6),
+            startTime = null,
+        )
+
+        val results = SolutionConverter.extractResults(
+            ScheduleSolution(appointments = listOf(incomplete)),
+            mapOf(appointment.id!! to appointment),
+        )
+
+        results shouldHaveSize 0
+    }
+
+    @Test
     fun `buildSolution handles equipments`() {
         val equipment = EquipmentRecord(
             id = 200L,
