@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.solver.service
 
+import ai.timefold.solver.core.api.solver.Solver
+import ai.timefold.solver.core.api.solver.SolverFactory
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.BreakTimes
@@ -19,11 +21,14 @@ import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.clinic.appointment.solver.domain.ScheduleSolution
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldHaveSize
+import io.mockk.every
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -34,6 +39,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
@@ -279,5 +285,20 @@ class SolverServiceTest {
 
         result.appointments.shouldBeEmpty()
         result.isFeasible.shouldBeTrue()
+    }
+
+    @Test
+    fun `optimize fails explicitly when solver returns no score`() {
+        val (clinicId, _, _, _) = insertBaseData()
+        val factory = mockk<SolverFactory<ScheduleSolution>>()
+        val solver = mockk<Solver<ScheduleSolution>>()
+        every { factory.buildSolver() } returns solver
+        every { solver.solve(any()) } returns ScheduleSolution()
+
+        val service = SolverService(solverFactory = factory)
+
+        assertThrows<IllegalArgumentException> {
+            service.optimize(clinicId, MONDAY..FRIDAY)
+        }
     }
 }
