@@ -73,4 +73,3 @@ blocker가 없으므로 다음 게이트인 3-R 계획 검토로 진행한다. �
    hash 256자 규칙을 명세 2절에 고정.
 4. dialect/ingress regression: 명세 7-8절의 H2/PostgreSQL/MySQL 및 RED/GREEN 순서.
 5. exact-head review/CI/lesson/issue links: 명세 7-8절과 후속 workflow gate.
-
