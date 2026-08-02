@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.solver.service
 
 import ai.timefold.solver.core.api.solver.Solver
 import ai.timefold.solver.core.api.solver.SolverFactory
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.BreakTimes
@@ -39,7 +40,6 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
@@ -297,7 +297,7 @@ class SolverServiceTest {
 
         val service = SolverService(solverFactory = factory)
 
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             service.optimize(clinicId, MONDAY..FRIDAY)
         }
     }
