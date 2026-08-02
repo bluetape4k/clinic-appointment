@@ -1,7 +1,7 @@
 package io.bluetape4k.clinic.appointment.solver.domain
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeNull
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
 import java.time.LocalTime
@@ -32,7 +32,7 @@ class AppointmentPlanningAssignmentTest {
             Snapshot(doctorId, appointmentDate, startTime, endTime)
         }
 
-        assertEquals(Snapshot(10L, date, start, LocalTime.of(9, 30)), snapshot)
+        snapshot shouldBeEqualTo Snapshot(10L, date, start, LocalTime.of(9, 30))
     }
 
     @Test
@@ -47,7 +47,7 @@ class AppointmentPlanningAssignmentTest {
             val snapshot = planning.withAssigned { doctorId, appointmentDate, startTime, endTime ->
                 Snapshot(doctorId, appointmentDate, startTime, endTime)
             }
-            assertNull(snapshot)
+            snapshot.shouldBeNull()
         }
     }
 }
