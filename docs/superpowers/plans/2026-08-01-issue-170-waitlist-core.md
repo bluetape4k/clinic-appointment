@@ -633,4 +633,15 @@ git status --short
 
 계획 파일: `docs/superpowers/plans/2026-08-01-issue-170-waitlist-core.md`
 
-계획은 A-04 계획 검토와 사용자 승인 이후에 Task 0부터 실행한다. A-04 승인과 Task 0 probe가 완료되었으므로 다음은 Task 1 typed model의 RED 테스트다.
+계획은 A-04 계획 검토와 사용자 승인 이후에 Task 0부터 실행한다. A-04 승인과
+Task 0 probe가 완료되었고, 승인된 Task 1–13 구현 및 최종 검증까지 완료되었다.
+
+## 구현 검증 결과 (2026-08-02)
+
+- `:appointment-core:test :appointment-api:test` 전체 영향 모듈 테스트가 exit 0으로 완료되었다. 최신 XML 합계는 core `590/0/0/0`, API `593/0/0/2` (tests/failures/errors/skipped)이다.
+- `--no-daemon :appointment-core:build :appointment-api:build`가 `FULL_BUILDS_POST_LOG=PASS`로 완료되었다.
+- 마지막 KDoc/invariant 정리 뒤 core build와 API compile이 `FINAL_CORE_BUILD_API_COMPILE=PASS`로 완료되었다.
+- 대기열 targeted 테스트(`CORE_TARGETED_POST_KOTLIN=PASS`)와 H2 → PostgreSQL → MySQL 마이그레이션 검증을 순차 실행해 모두 `PASS`를 확인했다.
+- contention 테스트 결과는 `pool=16, attempts=100, p50=31ms, p95=172ms, p99=247ms`이며 restart recovery는 중복 terminal 전이 없이 완료되었다.
+- `bluetape-kotlin-patterns` 기준으로 production `!!`, 운영용 `println`/`System.out`/`System.err`, suspend `runCatching`, blocking/raw SQL 패턴을 스캔해 이상이 없고 `git diff --check`도 통과했다.
+- 이번 턴의 범위는 로컬 구현·검증이다. PR 생성, push, merge, branch 삭제, release/tag는 별도 권한이 없어 실행하지 않았다.

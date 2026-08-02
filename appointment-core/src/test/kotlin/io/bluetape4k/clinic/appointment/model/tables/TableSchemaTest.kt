@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.model.tables
 
+import io.bluetape4k.assertions.shouldContainAll
 import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
@@ -50,6 +51,10 @@ class TableSchemaTest : AbstractExposedTest() {
         ProfileReevaluationHeads,
         ProfileReevaluationJobs,
         ProfileReevaluationOutcomes,
+        WaitlistEntries,
+        WaitlistOffers,
+        WaitlistCapacityHolds,
+        WaitlistOfferEvents,
     )
 
     @ParameterizedTest
@@ -66,6 +71,52 @@ class TableSchemaTest : AbstractExposedTest() {
         withTables(testDB, *allTables) {
             SchemaUtils.drop(*allTables)
             SchemaUtils.create(*allTables)
+        }
+    }
+
+    @org.junit.jupiter.api.Test
+    fun `waitlist tables declare the same safety checks as V18`() {
+        val constraints = listOf(
+            WaitlistEntries to setOf(
+                "ck_waitlist_entry_status",
+                "ck_waitlist_entry_date_range",
+                "ck_waitlist_entry_time_range",
+                "ck_waitlist_entry_member_opaque",
+            ),
+            WaitlistOffers to setOf(
+                "ck_waitlist_offer_status",
+                "ck_waitlist_offer_time_range",
+                "ck_waitlist_offer_expiry",
+                "ck_waitlist_offer_units",
+                "ck_waitlist_offer_policy_hash",
+                "ck_waitlist_offer_evaluation_digest",
+            ),
+            WaitlistCapacityHolds to setOf(
+                "ck_waitlist_capacity_hold_status",
+                "ck_waitlist_capacity_hold_time_range",
+                "ck_waitlist_capacity_hold_units",
+            ),
+            WaitlistOfferEvents to setOf(
+                "ck_waitlist_offer_event_version",
+                "ck_waitlist_offer_event_actor_ref",
+                "ck_waitlist_offer_event_correlation_id",
+            ),
+        )
+
+        withTables(
+            TestDB.H2,
+            Clinics,
+            Doctors,
+            TreatmentTypes,
+            ResourceCapacityBuckets,
+            WaitlistEntries,
+            WaitlistOffers,
+            WaitlistCapacityHolds,
+            WaitlistOfferEvents,
+        ) {
+            constraints.forEach { (table, expected) ->
+                table.checkConstraints().map { it.checkName }.toSet() shouldContainAll expected
+            }
         }
     }
 }

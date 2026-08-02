@@ -1,10 +1,14 @@
 package io.bluetape4k.clinic.appointment.statemachine
 
+import io.bluetape4k.states.api.StateMachineException
+import io.bluetape4k.states.api.StateMachine
+import io.bluetape4k.states.core.stateMachine
+
 /**
  * 예약 상태 머신.
  *
- * [transitions] Map 으로 허용된 상태 전이를 정의하고,
- * [transition] 함수로 현재 상태와 이벤트에 따라 다음 상태를 반환합니다.
+ * bluetape4k-states DSL 로 허용된 상태 전이를 정의하고,
+ * 기존 appointment domain facade API로 현재 상태와 이벤트에 따른 다음 상태를 반환합니다.
  */
 class AppointmentStateMachine(
     private val onTransition: (
@@ -15,63 +19,6 @@ class AppointmentStateMachine(
         ) -> Unit
     )? = null,
 ) {
-    /**
-     * 허용된 상태 전이 정의.
-     * Key: (현재 상태, 이벤트 클래스) → Value: 다음 상태
-     *
-     * [AppointmentEvent.Cancel]은 모든 cancellable 상태에서 허용됩니다.
-     */
-    private val transitions: Map<Pair<AppointmentState, Class<out AppointmentEvent>>, AppointmentState> =
-        buildMap {
-            // PENDING → REQUESTED
-            put(AppointmentState.PENDING to AppointmentEvent.Request::class.java, AppointmentState.REQUESTED)
-            // PENDING → CANCELLED
-            put(AppointmentState.PENDING to AppointmentEvent.Cancel::class.java, AppointmentState.CANCELLED)
-
-            // REQUESTED → CONFIRMED
-            put(AppointmentState.REQUESTED to AppointmentEvent.Confirm::class.java, AppointmentState.CONFIRMED)
-            // REQUESTED → PENDING_RESCHEDULE (임시휴진)
-            put(
-                AppointmentState.REQUESTED to AppointmentEvent.RequestReschedule::class.java,
-                AppointmentState.PENDING_RESCHEDULE
-            )
-            // REQUESTED → CANCELLED
-            put(AppointmentState.REQUESTED to AppointmentEvent.Cancel::class.java, AppointmentState.CANCELLED)
-
-            // CONFIRMED → CHECKED_IN
-            put(AppointmentState.CONFIRMED to AppointmentEvent.CheckIn::class.java, AppointmentState.CHECKED_IN)
-            // CONFIRMED → NO_SHOW
-            put(AppointmentState.CONFIRMED to AppointmentEvent.MarkNoShow::class.java, AppointmentState.NO_SHOW)
-            // CONFIRMED → CANCELLED
-            put(AppointmentState.CONFIRMED to AppointmentEvent.Cancel::class.java, AppointmentState.CANCELLED)
-            // CONFIRMED → PENDING (재예약)
-            put(AppointmentState.CONFIRMED to AppointmentEvent.Reschedule::class.java, AppointmentState.PENDING)
-            // CONFIRMED → PENDING_RESCHEDULE (임시휴진)
-            put(
-                AppointmentState.CONFIRMED to AppointmentEvent.RequestReschedule::class.java,
-                AppointmentState.PENDING_RESCHEDULE
-            )
-
-            // PENDING_RESCHEDULE → RESCHEDULED (재배정 확정)
-            put(
-                AppointmentState.PENDING_RESCHEDULE to AppointmentEvent.ConfirmReschedule::class.java,
-                AppointmentState.RESCHEDULED
-            )
-            // PENDING_RESCHEDULE → CANCELLED
-            put(AppointmentState.PENDING_RESCHEDULE to AppointmentEvent.Cancel::class.java, AppointmentState.CANCELLED)
-
-            // CHECKED_IN → IN_PROGRESS
-            put(
-                AppointmentState.CHECKED_IN to AppointmentEvent.StartTreatment::class.java,
-                AppointmentState.IN_PROGRESS
-            )
-            // CHECKED_IN → CANCELLED
-            put(AppointmentState.CHECKED_IN to AppointmentEvent.Cancel::class.java, AppointmentState.CANCELLED)
-
-            // IN_PROGRESS → COMPLETED
-            put(AppointmentState.IN_PROGRESS to AppointmentEvent.Complete::class.java, AppointmentState.COMPLETED)
-        }
-
     /**
      * 현재 상태에서 이벤트를 처리하여 다음 상태로 전이합니다.
      *
@@ -84,10 +31,14 @@ class AppointmentStateMachine(
         currentState: AppointmentState,
         event: AppointmentEvent,
     ): AppointmentState {
-        val nextState = nextState(currentState, event)
+        val result = try {
+            stateMachine(currentState).transition(event)
+        } catch (e: StateMachineException) {
+            throw invalidTransition(currentState, event, e)
+        }
 
-        onTransition?.invoke(currentState, event, nextState)
-        return nextState
+        onTransition?.invoke(result.previousState, result.event, result.currentState)
+        return result.currentState
     }
 
     /**
@@ -99,13 +50,7 @@ class AppointmentStateMachine(
     fun nextState(
         currentState: AppointmentState,
         event: AppointmentEvent,
-    ): AppointmentState {
-        val key = currentState to event::class.java
-        return transitions[key]
-            ?: throw IllegalStateException(
-                "Invalid transition: $currentState + $event. Allowed events: ${allowedEvents(currentState)}"
-            )
-    }
+    ): AppointmentState = transitionWithoutCallback(currentState, event)
 
     /**
      * 현재 상태에서 해당 이벤트로 전이 가능한지 확인합니다.
@@ -113,17 +58,89 @@ class AppointmentStateMachine(
     fun canTransition(
         currentState: AppointmentState,
         event: AppointmentEvent,
-    ): Boolean {
-        val key = currentState to event::class.java
-        return transitions.containsKey(key)
-    }
+    ): Boolean =
+        stateMachine(currentState).canTransition(event)
 
     /**
      * 현재 상태에서 허용된 이벤트 클래스 목록을 반환합니다.
      */
     fun allowedEvents(currentState: AppointmentState): Set<Class<out AppointmentEvent>> =
-        transitions.keys
-            .filter { it.first == currentState }
-            .map { it.second }
-            .toSet()
+        stateMachine(currentState).allowedEvents()
+
+    private fun transitionWithoutCallback(
+        currentState: AppointmentState,
+        event: AppointmentEvent,
+    ): AppointmentState {
+        val result = try {
+            stateMachine(currentState).transition(event)
+        } catch (e: StateMachineException) {
+            throw invalidTransition(currentState, event, e)
+        }
+
+        return result.currentState
+    }
+
+    private fun stateMachine(
+        currentState: AppointmentState,
+    ): StateMachine<AppointmentState, AppointmentEvent> =
+        stateMachine {
+            initialState = currentState
+            finalStates = setOf(
+                AppointmentState.COMPLETED,
+                AppointmentState.CANCELLED,
+                AppointmentState.NO_SHOW,
+                AppointmentState.RESCHEDULED,
+            )
+
+            transition(AppointmentState.PENDING, AppointmentEvent.Request::class.java, AppointmentState.REQUESTED)
+            transition(AppointmentState.PENDING, AppointmentEvent.Cancel::class.java, AppointmentState.CANCELLED)
+
+            transition(AppointmentState.REQUESTED, AppointmentEvent.Confirm::class.java, AppointmentState.CONFIRMED)
+            transition(
+                AppointmentState.REQUESTED,
+                AppointmentEvent.RequestReschedule::class.java,
+                AppointmentState.PENDING_RESCHEDULE,
+            )
+            transition(AppointmentState.REQUESTED, AppointmentEvent.Cancel::class.java, AppointmentState.CANCELLED)
+
+            transition(AppointmentState.CONFIRMED, AppointmentEvent.CheckIn::class.java, AppointmentState.CHECKED_IN)
+            transition(AppointmentState.CONFIRMED, AppointmentEvent.MarkNoShow::class.java, AppointmentState.NO_SHOW)
+            transition(AppointmentState.CONFIRMED, AppointmentEvent.Cancel::class.java, AppointmentState.CANCELLED)
+            transition(AppointmentState.CONFIRMED, AppointmentEvent.Reschedule::class.java, AppointmentState.PENDING)
+            transition(
+                AppointmentState.CONFIRMED,
+                AppointmentEvent.RequestReschedule::class.java,
+                AppointmentState.PENDING_RESCHEDULE,
+            )
+
+            transition(
+                AppointmentState.PENDING_RESCHEDULE,
+                AppointmentEvent.ConfirmReschedule::class.java,
+                AppointmentState.RESCHEDULED,
+            )
+            transition(
+                AppointmentState.PENDING_RESCHEDULE,
+                AppointmentEvent.Cancel::class.java,
+                AppointmentState.CANCELLED,
+            )
+
+            transition(
+                AppointmentState.CHECKED_IN,
+                AppointmentEvent.StartTreatment::class.java,
+                AppointmentState.IN_PROGRESS,
+            )
+            transition(AppointmentState.CHECKED_IN, AppointmentEvent.Cancel::class.java, AppointmentState.CANCELLED)
+
+            transition(AppointmentState.IN_PROGRESS, AppointmentEvent.Complete::class.java, AppointmentState.COMPLETED)
+        }
+
+    private fun invalidTransition(
+        currentState: AppointmentState,
+        event: AppointmentEvent,
+        cause: StateMachineException,
+    ): IllegalStateException =
+        IllegalStateException(
+            "Invalid transition: $currentState + $event. Allowed events: ${allowedEvents(currentState)}",
+            cause,
+        )
 }

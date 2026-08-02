@@ -1,14 +1,15 @@
 package io.bluetape4k.clinic.appointment.statemachine
 
-import io.bluetape4k.logging.KLogging
-import kotlinx.coroutines.test.runTest
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldContain
 import io.bluetape4k.assertions.shouldNotContain
+import io.bluetape4k.logging.KLogging
+import kotlinx.coroutines.test.runTest
+import java.util.concurrent.CancellationException
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 
 class AppointmentStateMachineTest {
 
@@ -120,35 +121,35 @@ class AppointmentStateMachineTest {
 
     @Test
     fun `PENDING에서 Complete 이벤트는 예외 발생`() = runTest {
-        assertThrows<IllegalStateException> {
+        assertFailsWith<IllegalStateException> {
             stateMachine.transition(AppointmentState.PENDING, AppointmentEvent.Complete)
         }
     }
 
     @Test
     fun `COMPLETED에서 Cancel 이벤트는 예외 발생`() = runTest {
-        assertThrows<IllegalStateException> {
+        assertFailsWith<IllegalStateException> {
             stateMachine.transition(AppointmentState.COMPLETED, AppointmentEvent.Cancel("취소 시도"))
         }
     }
 
     @Test
     fun `CANCELLED에서 Request 이벤트는 예외 발생`() = runTest {
-        assertThrows<IllegalStateException> {
+        assertFailsWith<IllegalStateException> {
             stateMachine.transition(AppointmentState.CANCELLED, AppointmentEvent.Request)
         }
     }
 
     @Test
     fun `NO_SHOW에서 CheckIn 이벤트는 예외 발생`() = runTest {
-        assertThrows<IllegalStateException> {
+        assertFailsWith<IllegalStateException> {
             stateMachine.transition(AppointmentState.NO_SHOW, AppointmentEvent.CheckIn)
         }
     }
 
     @Test
     fun `IN_PROGRESS에서 Cancel 이벤트는 예외 발생`() = runTest {
-        assertThrows<IllegalStateException> {
+        assertFailsWith<IllegalStateException> {
             stateMachine.transition(AppointmentState.IN_PROGRESS, AppointmentEvent.Cancel("진료 중 취소 불가"))
         }
     }
@@ -247,10 +248,41 @@ class AppointmentStateMachineTest {
                 callbackInvoked = true
             }
 
-        assertThrows<IllegalStateException> {
+        assertFailsWith<IllegalStateException> {
             sm.transition(AppointmentState.PENDING, AppointmentEvent.Complete)
         }
 
         callbackInvoked.shouldBeFalse()
+    }
+
+    @Test
+    fun `onTransition 콜백은 성공 전이마다 정확히 한 번 호출됨`() = runTest {
+        var callbackCount = 0
+
+        val sm =
+            AppointmentStateMachine { from, event, to ->
+                callbackCount += 1
+                from shouldBeEqualTo AppointmentState.PENDING
+                event shouldBeEqualTo AppointmentEvent.Request
+                to shouldBeEqualTo AppointmentState.REQUESTED
+            }
+
+        sm.transition(AppointmentState.PENDING, AppointmentEvent.Request) shouldBeEqualTo AppointmentState.REQUESTED
+
+        callbackCount shouldBeEqualTo 1
+    }
+
+    @Test
+    fun `onTransition 콜백의 cancellation은 그대로 전파됨`() = runTest {
+        val sm =
+            AppointmentStateMachine { _, _, _ ->
+                throw CancellationException("cancel transition")
+            }
+
+        val error = assertFailsWith<CancellationException> {
+            sm.transition(AppointmentState.PENDING, AppointmentEvent.Request)
+        }
+
+        error.message shouldBeEqualTo "cancel transition"
     }
 }
