@@ -71,14 +71,14 @@ class SolverService(
         val originalMap = transaction {
             appointmentRepository.findByClinicAndDateRange(clinicId, dateRange)
                 .associateBy { record ->
-                    requireNotNull(record.id) {
+                    checkNotNull(record.id) {
                         "Appointment record is missing id: clinicId=${record.clinicId}"
                     }
                 }
         }
 
         val optimizedAppointments = SolutionConverter.extractResults(result, originalMap)
-        val score = requireNotNull(result.score) {
+        val score = checkNotNull(result.score) {
             "Solver returned no score: clinicId=$clinicId, dateRange=$dateRange"
         }
 
@@ -124,13 +124,13 @@ class SolverService(
             val equipments = equipmentRepository.findByClinicId(clinicId)
             val operatingHours = clinicRepository.findAllOperatingHours(clinicId)
             val doctorSchedules = doctors.flatMap { doctor ->
-                val doctorId = requireNotNull(doctor.id) {
+                val doctorId = checkNotNull(doctor.id) {
                     "Doctor record is missing id: clinicId=${doctor.clinicId}"
                 }
                 doctorRepository.findAllSchedules(doctorId)
             }
             val doctorAbsences = doctors.flatMap { doctor ->
-                val doctorId = requireNotNull(doctor.id) {
+                val doctorId = checkNotNull(doctor.id) {
                     "Doctor record is missing id: clinicId=${doctor.clinicId}"
                 }
                 doctorRepository.findAbsencesByDateRange(doctorId, dateRange)

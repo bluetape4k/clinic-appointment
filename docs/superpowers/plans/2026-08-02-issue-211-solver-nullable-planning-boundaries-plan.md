@@ -4,7 +4,7 @@
 
 **Goal:** Remove incidental nullable assertion failures from `appointment-solver` while preserving Timefold partial-solution scoring and the existing rule that incomplete non-pinned appointments are omitted from converted results.
 
-**Architecture:** Add one inline domain extension, `AppointmentPlanning.withAssigned`, that supplies all four derived assignment values only when the planning entity is complete. Hard constraints use it for multi-value predicates and nullable property/method-reference keys for indexed joins; `SolutionConverter` uses it with `mapNotNull`; `SolverService` uses explicit `requireNotNull` only for repository and solver lifecycle invariants.
+**Architecture:** Add one internal inline domain extension, `AppointmentPlanning.withAssigned`, that supplies all four derived assignment values only when the planning entity is complete. Hard constraints use it for multi-value predicates and nullable property/method-reference keys for indexed joins; `SolutionConverter` uses it with `mapNotNull`; `SolverService` uses explicit `checkNotNull` for repository and solver lifecycle invariants.
 
 **Tech Stack:** Kotlin 2.3, Timefold Solver 2.2, JUnit 5, MockK, Gradle, `appointment-solver` module.
 
@@ -17,13 +17,13 @@
 
 | File | Responsibility | Planned change |
 |---|---|---|
-| `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/domain/AppointmentPlanningAssignment.kt` | Domain boundary for a complete planning assignment | Create inline `withAssigned` extension; no mutable state or default values |
+| `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/domain/AppointmentPlanningAssignment.kt` | Domain boundary for a complete planning assignment | Create internal inline `withAssigned` extension with KDoc; no mutable state or default values |
 | `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/domain/AppointmentPlanningAssignmentTest.kt` | Helper contract | Create RED/GREEN tests for complete and partial entities |
 | `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/constraint/HardConstraints.kt` | H1~H11 hard constraints | Remove every `!!`; keep indexed equality/overlap joins and existing filters/weights |
 | `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/constraint/ConstraintVerifierTest.kt` | Constraint regression behavior | Add partial-entity cases and retain existing full-entity penalty assertions |
 | `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/converter/SolutionConverter.kt` | Planning-to-record conversion | Replace assertion-based extraction with `withAssigned` + `mapNotNull` |
 | `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/converter/SolutionConverterTest.kt` | Extraction behavior | Extend coverage for every missing assignment component and complete conversion |
-| `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverService.kt` | Solver and persistence boundary | Replace IDs/score assertions with contextual `requireNotNull` |
+| `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverService.kt` | Solver and persistence boundary | Replace IDs/score assertions with contextual `checkNotNull` |
 | `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServiceTest.kt` | Solver lifecycle boundary | Add a mocked solver test for a missing score |
 
 The implementation must not change `AppointmentPlanning` variable annotations,
@@ -393,7 +393,7 @@ fun `optimize fails explicitly when solver returns no score`() {
 
     val service = SolverService(solverFactory = factory)
 
-    assertThrows<IllegalArgumentException> {
+    assertFailsWith<IllegalStateException> {
         service.optimize(clinicId, MONDAY..FRIDAY)
     }
 }
@@ -409,9 +409,9 @@ Run:
 
 Expected pre-change behavior: the mocked solve reaches the `result.score!!`
 site and fails with a Kotlin null assertion (or the test fails because the
-expected contextual `IllegalArgumentException` contract is not yet implemented).
+expected contextual `IllegalStateException` contract is not yet implemented).
 
-- [x] **Step 3: Replace service assertions with contextual `requireNotNull`.**
+- [x] **Step 3: Replace service assertions with contextual `checkNotNull`.**
 
 Use these exact boundary patterns in `SolverService.kt`:
 
@@ -419,13 +419,13 @@ Use these exact boundary patterns in `SolverService.kt`:
 val originalMap = transaction {
     appointmentRepository.findByClinicAndDateRange(clinicId, dateRange)
         .associateBy { record ->
-            requireNotNull(record.id) {
+            checkNotNull(record.id) {
                 "Appointment record is missing id: clinicId=${record.clinicId}"
             }
         }
 }
 
-val score = requireNotNull(result.score) {
+val score = checkNotNull(result.score) {
     "Solver returned no score: clinicId=$clinicId, dateRange=$dateRange"
 }
 ```
@@ -434,13 +434,13 @@ For doctor schedule/absence loading, bind and validate the ID once per lambda:
 
 ```kotlin
 val doctorSchedules = doctors.flatMap { doctor ->
-    val doctorId = requireNotNull(doctor.id) {
+    val doctorId = checkNotNull(doctor.id) {
         "Doctor record is missing id: clinicId=${doctor.clinicId}"
     }
     doctorRepository.findAllSchedules(doctorId)
 }
 val doctorAbsences = doctors.flatMap { doctor ->
-    val doctorId = requireNotNull(doctor.id) {
+    val doctorId = checkNotNull(doctor.id) {
         "Doctor record is missing id: clinicId=${doctor.clinicId}"
     }
     doctorRepository.findAbsencesByDateRange(doctorId, dateRange)
@@ -453,7 +453,7 @@ messages. Do not change the public `SolverResult` type.
 - [x] **Step 4: Run the service tests and verify the explicit error contract.**
 
 Run the same targeted service command. Expected result: all existing database
-solver tests pass and the missing-score test receives `IllegalArgumentException`
+solver tests pass and the missing-score test receives `IllegalStateException`
 with the clinic/date-range context.
 
 - [x] **Step 5: Commit the service boundary.**
@@ -518,6 +518,9 @@ and confirm:
 - incomplete non-pinned results remain excluded;
 - full solution score, feasibility, counts, and converted records remain equivalent;
 - error messages contain no patient/member personal data;
+- lifecycle failures use `IllegalStateException`, not caller-input `IllegalArgumentException`;
+- the internal `withAssigned` helper documents its partial-state contract;
+- H2/H3/H4/H11 partial-state regression paths are covered;
 - no P0/P1 review finding remains.
 
 - [x] **Step 5: Commit the verified implementation with the Lore protocol.**
@@ -545,10 +548,12 @@ git commit -m $'Make solver nullable planning boundaries safe\n\nPreserve partia
 
 - 집중 회귀 테스트: `AppointmentPlanningAssignmentTest`,
   `ConstraintVerifierTest`, `SolutionConverterTest`, `SolverServiceTest` 대상
-  `BUILD SUCCESSFUL` (40개 선택 테스트).
+  `BUILD SUCCESSFUL` (40개 선택 테스트; partial-state assertions expanded within the constraint suite).
 - 모듈 전체 검증: `./gradlew :appointment-solver:build --no-build-cache`;
   `67 passing`, Kover `koverVerify`, `BUILD SUCCESSFUL`.
 - 정적 점검: production `!!` 0건, `allowsUnassigned` 및
   `forEachIncludingUnassigned` 0건, `git diff --check` 통과.
-- 독립 완료 검토: 설계의 nullable planning semantics, indexed join 형태,
-  불완전 결과 제외, boundary 예외 계약, P0/P1 잔여 항목을 확인했다.
+- 독립 완료 검토: code-reviewer와 architect가 exact HEAD를 각각 검토했다.
+  code-reviewer는 코드 결함 P0/P1/P2/P3 0건을 확인했으며, architect가 지적한
+  lifecycle 예외 매핑(P1), helper API visibility/KDoc(P2), 부분 제약 테스트
+  범위(P3)를 보정했다.

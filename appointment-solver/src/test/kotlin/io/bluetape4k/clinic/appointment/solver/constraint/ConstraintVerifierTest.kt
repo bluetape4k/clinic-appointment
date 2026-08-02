@@ -2,11 +2,15 @@ package io.bluetape4k.clinic.appointment.solver.constraint
 
 import ai.timefold.solver.core.api.score.stream.test.ConstraintVerifier
 import io.bluetape4k.logging.KLogging
+import io.bluetape4k.clinic.appointment.model.dto.BreakTimeRecord
+import io.bluetape4k.clinic.appointment.model.dto.ClinicDefaultBreakTimeRecord
 import io.bluetape4k.clinic.appointment.model.dto.ClinicClosureRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorAbsenceRecord
+import io.bluetape4k.clinic.appointment.model.dto.DoctorScheduleRecord
 import io.bluetape4k.clinic.appointment.model.dto.OperatingHoursRecord
 import io.bluetape4k.clinic.appointment.solver.domain.AppointmentPlanning
 import io.bluetape4k.clinic.appointment.solver.domain.DoctorFact
+import io.bluetape4k.clinic.appointment.solver.domain.EquipmentUnavailabilityFact
 import io.bluetape4k.clinic.appointment.solver.domain.ScheduleSolution
 import org.junit.jupiter.api.Test
 import java.time.DayOfWeek
@@ -140,6 +144,47 @@ class ConstraintVerifierTest {
             closureDate = monday,
             isFullDay = true,
         )
+        val schedule = DoctorScheduleRecord(
+            doctorId = 100L,
+            dayOfWeek = DayOfWeek.MONDAY,
+            startTime = LocalTime.of(9, 0),
+            endTime = LocalTime.of(18, 0),
+        )
+        val absence = DoctorAbsenceRecord(
+            doctorId = 100L,
+            absenceDate = monday,
+            startTime = LocalTime.of(9, 0),
+            endTime = LocalTime.of(10, 0),
+        )
+        val breakTime = BreakTimeRecord(
+            clinicId = 10L,
+            dayOfWeek = DayOfWeek.MONDAY,
+            startTime = LocalTime.of(9, 0),
+            endTime = LocalTime.of(10, 0),
+        )
+        val defaultBreakTime = ClinicDefaultBreakTimeRecord(
+            clinicId = 10L,
+            name = "morning break",
+            startTime = LocalTime.of(9, 0),
+            endTime = LocalTime.of(10, 0),
+        )
+        val equipmentPartial = AppointmentPlanning(
+            id = 2L,
+            clinicId = 10L,
+            treatmentTypeId = 1L,
+            equipmentId = 200L,
+            requiresEquipment = true,
+            durationMinutes = 30,
+            doctorId = null,
+            appointmentDate = monday,
+            startTime = LocalTime.of(9, 0),
+        )
+        val equipmentUnavailability = EquipmentUnavailabilityFact(
+            equipmentId = 200L,
+            date = monday,
+            startTime = LocalTime.of(9, 0),
+            endTime = LocalTime.of(10, 0),
+        )
 
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.withinOperatingHours(factory) }
@@ -156,6 +201,26 @@ class ConstraintVerifierTest {
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.doctorBelongsToClinic(factory) }
             .given(partial, doctor)
+            .penalizesBy(0)
+        constraintVerifier
+            .verifyThat { _, factory -> HardConstraints.withinDoctorSchedule(factory) }
+            .given(partial, schedule)
+            .penalizesBy(0)
+        constraintVerifier
+            .verifyThat { _, factory -> HardConstraints.noDoctorAbsenceConflict(factory) }
+            .given(partial, absence)
+            .penalizesBy(0)
+        constraintVerifier
+            .verifyThat { _, factory -> HardConstraints.noBreakTimeConflict(factory) }
+            .given(partial, breakTime)
+            .penalizesBy(0)
+        constraintVerifier
+            .verifyThat { _, factory -> HardConstraints.noDefaultBreakTimeConflict(factory) }
+            .given(partial, defaultBreakTime)
+            .penalizesBy(0)
+        constraintVerifier
+            .verifyThat { _, factory -> HardConstraints.equipmentUnavailabilityConflict(factory) }
+            .given(equipmentPartial, equipmentUnavailability)
             .penalizesBy(0)
     }
 
