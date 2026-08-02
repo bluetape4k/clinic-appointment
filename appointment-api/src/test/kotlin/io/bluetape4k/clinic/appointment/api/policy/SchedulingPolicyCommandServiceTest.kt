@@ -3,7 +3,10 @@ package io.bluetape4k.clinic.appointment.api.policy
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldContain
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.assertions.shouldNotContain
 import io.bluetape4k.clinic.appointment.api.config.GlobalExceptionHandler
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyApiException
@@ -38,11 +41,6 @@ import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -112,12 +110,12 @@ class SchedulingPolicyCommandServiceTest {
             SchedulingPolicyErrorCode.POLICY_EFFECTIVE_READ_UNAVAILABLE,
         )
 
-        assertEquals(expectedStatus.keys, SchedulingPolicyErrorCode.entries.toSet())
+        SchedulingPolicyErrorCode.entries.toSet() shouldBeEqualTo expectedStatus.keys
         expectedStatus.forEach { (error, status) ->
-            assertEquals(status, error.httpStatus.value())
-            assertEquals(error in retryableErrors, error.retryable)
-            assertTrue(error.safeMessage.isNotBlank())
-            assertTrue(error.action.isNotBlank())
+            error.httpStatus.value() shouldBeEqualTo status
+            error.retryable shouldBeEqualTo (error in retryableErrors)
+            error.safeMessage.isNotBlank().shouldBeTrue()
+            error.action.isNotBlank().shouldBeTrue()
         }
         val nonRetryableJson = ObjectMapper().writeValueAsString(
             SchedulingApiErrorResponse(
@@ -128,7 +126,7 @@ class SchedulingPolicyCommandServiceTest {
                 action = SchedulingPolicyErrorCode.POLICY_DRAFT_STALE.action,
             )
         )
-        assertTrue(nonRetryableJson.contains("\"retryable\":false"))
+        nonRetryableJson.contains("\"retryable\":false").shouldBeTrue()
     }
 
     @Test
@@ -143,13 +141,14 @@ class SchedulingPolicyCommandServiceTest {
 
         val response = GlobalExceptionHandler().handleSchedulingPolicy(error, request)
 
-        assertEquals(429, response.statusCode.value())
-        assertEquals("POLICY_PREVIEW_LIMITED", response.body!!.errorCode)
-        assertEquals("correlation-policy-error", response.body!!.correlationId)
-        assertEquals(true, response.body!!.retryable)
-        assertEquals(SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED.action, response.body!!.action)
-        assertEquals(SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED.safeMessage, response.body!!.error)
-        assertFalse(response.body!!.error.contains("internal SQL detail"))
+        response.statusCode.value() shouldBeEqualTo 429
+        val body = response.body.shouldNotBeNull()
+        body.errorCode shouldBeEqualTo "POLICY_PREVIEW_LIMITED"
+        body.correlationId shouldBeEqualTo "correlation-policy-error"
+        body.retryable.shouldBeTrue()
+        body.action shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED.action
+        body.error shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED.safeMessage
+        body.error.contains("internal SQL detail").shouldBeFalse()
     }
 
     @Test
@@ -193,14 +192,16 @@ class SchedulingPolicyCommandServiceTest {
             request,
         )
 
-        assertEquals(409, conflict.statusCode.value())
-        assertEquals("POLICY_EFFECTIVE_READ_CONFLICT", conflict.body!!.errorCode)
-        assertEquals(true, conflict.body!!.retryable)
-        assertEquals("correlation-effective-read", conflict.body!!.correlationId)
-        assertEquals(503, unavailable.statusCode.value())
-        assertEquals("POLICY_EFFECTIVE_READ_UNAVAILABLE", unavailable.body!!.errorCode)
-        assertEquals(true, unavailable.body!!.retryable)
-        assertFalse(unavailable.body!!.error.contains("secret database detail"))
+        conflict.statusCode.value() shouldBeEqualTo 409
+        val conflictBody = conflict.body.shouldNotBeNull()
+        conflictBody.errorCode shouldBeEqualTo "POLICY_EFFECTIVE_READ_CONFLICT"
+        conflictBody.retryable.shouldBeTrue()
+        conflictBody.correlationId shouldBeEqualTo "correlation-effective-read"
+        unavailable.statusCode.value() shouldBeEqualTo 503
+        val unavailableBody = unavailable.body.shouldNotBeNull()
+        unavailableBody.errorCode shouldBeEqualTo "POLICY_EFFECTIVE_READ_UNAVAILABLE"
+        unavailableBody.retryable.shouldBeTrue()
+        unavailableBody.error.contains("secret database detail").shouldBeFalse()
     }
 
     @Test
@@ -208,47 +209,46 @@ class SchedulingPolicyCommandServiceTest {
         val service = service()
         val admin = actor("admin-a", ActorType.ADMIN, ActorRole.ADMIN)
         val draft = service.createDraft(createDraft(admin))
-        assertEquals(PolicyLifecycle.DRAFT, draft.definition.lifecycle)
-        assertEquals(1L, draft.definition.revision)
-        assertEquals(1L, draft.head.revision)
-        assertEquals(0L, draft.head.generation)
+        draft.definition.lifecycle shouldBeEqualTo PolicyLifecycle.DRAFT
+        draft.definition.revision shouldBeEqualTo 1L
+        draft.head.revision shouldBeEqualTo 1L
+        draft.head.generation shouldBeEqualTo 0L
 
-        service.approve(
-            ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin)
-        )
+        val definitionId = draft.definition.id.shouldNotBeNull()
+        service.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, admin))
         val activation = activationCommand(
-            definitionId = draft.definition.id!!,
+            definitionId = definitionId,
             actor = admin,
             expectedHeadRevision = 1L,
             idempotencyKey = "activate-basic",
         )
         val first = service.activate(activation)
-        assertEquals(PolicyLifecycle.ACTIVE, first.definition.lifecycle)
-        assertEquals(PolicyActivationCommandStatus.COMPLETED, first.command.status)
-        assertEquals(1L, first.generation.tenantGeneration)
-        assertFalse(first.idempotentReplay)
+        first.definition.lifecycle shouldBeEqualTo PolicyLifecycle.ACTIVE
+        first.command.status shouldBeEqualTo PolicyActivationCommandStatus.COMPLETED
+        first.generation.tenantGeneration shouldBeEqualTo 1L
+        first.idempotentReplay.shouldBeFalse()
 
         val replay = service.activate(activation)
-        assertTrue(replay.idempotentReplay)
-        assertEquals(first.command.id, replay.command.id)
+        replay.idempotentReplay.shouldBeTrue()
+        replay.command.id shouldBeEqualTo first.command.id
         transaction {
-            assertEquals(1L, SchedulingOutboxEvents.selectAll().count())
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
         }
 
         val retired = service.retire(
             RetireSchedulingPolicyCommand(
                 scope = scope,
-                definitionId = draft.definition.id!!,
+                definitionId = definitionId,
                 expectedDraftRevision = 1L,
                 expectedScopeRevision = 2L,
                 actor = admin,
             )
         )
-        assertEquals(PolicyLifecycle.RETIRED, retired.definition.lifecycle)
-        assertEquals(2L, retired.head.generation)
+        retired.definition.lifecycle shouldBeEqualTo PolicyLifecycle.RETIRED
+        retired.head.generation shouldBeEqualTo 2L
         transaction {
-            assertNotNull(policyRepository.findDefinition(draft.definition.id!!))
-            assertEquals(1L, SchedulingOutboxEvents.selectAll().count())
+            policyRepository.findDefinition(definitionId).shouldNotBeNull()
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
         }
     }
 
@@ -259,32 +259,30 @@ class SchedulingPolicyCommandServiceTest {
         val draft = service.createDraft(
             createDraft(creator, SchedulingPolicyKind.CAPACITY_AND_OVERBOOKING)
         )
+        val definitionId = draft.definition.id.shouldNotBeNull()
 
-        val creatorApproval = assertThrows(SchedulingPolicyApiException::class.java) {
+        val creatorApproval = assertFailsWith<SchedulingPolicyApiException> {
             service.approve(
-                ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, creator)
+                ApproveSchedulingPolicyCommand(scope, definitionId, 1L, creator)
             )
         }
-        assertEquals(
-            SchedulingPolicyErrorCode.POLICY_APPROVAL_INSUFFICIENT,
-            creatorApproval.errorCode,
-        )
+        creatorApproval.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_APPROVAL_INSUFFICIENT
 
         val approverOne = actor("approver-1", ActorType.ADMIN, ActorRole.ADMIN, AuthenticationAssurance.MFA)
         val approverTwo = actor("approver-2", ActorType.STAFF, ActorRole.STAFF, AuthenticationAssurance.MFA)
-        service.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, approverOne))
-        service.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, approverTwo))
+        service.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, approverOne))
+        service.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, approverTwo))
 
         val separated = actor("activator", ActorType.ADMIN, ActorRole.ADMIN, AuthenticationAssurance.MFA)
         val result = service.activate(
             activationCommand(
-                draft.definition.id!!,
+                definitionId,
                 separated,
                 expectedHeadRevision = 1L,
                 idempotencyKey = "activate-sensitive",
             )
         )
-        assertEquals(PolicyLifecycle.ACTIVE, result.definition.lifecycle)
+        result.definition.lifecycle shouldBeEqualTo PolicyLifecycle.ACTIVE
     }
 
     @Test
@@ -292,17 +290,18 @@ class SchedulingPolicyCommandServiceTest {
         val service = service()
         val admin = actor("admin", ActorType.ADMIN, ActorRole.ADMIN)
         val draft = service.createDraft(createDraft(admin))
-        service.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin))
+        val definitionId = draft.definition.id.shouldNotBeNull()
+        service.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, admin))
 
         val error = assertFailsWith<SchedulingPolicyApiException> {
             service.activate(
                 activationCommand(
-                    definitionId = draft.definition.id!!,
+                    definitionId = definitionId,
                     actor = admin,
                     expectedHeadRevision = 1L,
                     idempotencyKey = "malformed-preview",
                 ).copy(
-                    preview = preview(draft.definition.id!!, tenantGeneration = 0L)
+                    preview = preview(definitionId, tenantGeneration = 0L)
                         .copy(evidenceId = "contains unsafe whitespace"),
                 )
             )
@@ -316,28 +315,26 @@ class SchedulingPolicyCommandServiceTest {
         val service = service()
         val admin = actor("admin", ActorType.ADMIN, ActorRole.ADMIN)
         val draft = service.createDraft(createDraft(admin))
-        service.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin))
+        val definitionId = draft.definition.id.shouldNotBeNull()
+        service.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, admin))
 
         val scheduled = service.schedule(
             ScheduleSchedulingPolicyCommand(
                 scope = scope,
-                definitionId = draft.definition.id!!,
+                definitionId = definitionId,
                 expectedDraftRevision = 1L,
                 expectedActiveRevision = 1L,
-                preview = preview(draft.definition.id!!, tenantGeneration = 0L),
+                preview = preview(definitionId, tenantGeneration = 0L),
                 actor = admin,
             )
         )
-        assertEquals(PolicyActivationCommandStatus.PENDING, scheduled.status)
-        assertEquals(2L, scheduled.expectedActiveRevision)
-        assertEquals(0L, scheduled.expectedTenantGeneration)
-        assertEquals(0L, scheduled.expectedClinicGeneration)
-        assertEquals("preview-${draft.definition.id}-0", scheduled.previewEvidenceToken)
-        assertEquals(
-            jobRepository.hashIdempotencyKey(
-                "scheduled:${draft.definition.id}:${draft.definition.version}:${draft.definition.effectiveFrom.toEpochMilli()}"
-            ),
-            scheduled.idempotencyKeyHash,
+        scheduled.status shouldBeEqualTo PolicyActivationCommandStatus.PENDING
+        scheduled.expectedActiveRevision shouldBeEqualTo 2L
+        scheduled.expectedTenantGeneration shouldBeEqualTo 0L
+        scheduled.expectedClinicGeneration shouldBeEqualTo 0L
+        scheduled.previewEvidenceToken shouldBeEqualTo "preview-$definitionId-0"
+        scheduled.idempotencyKeyHash shouldBeEqualTo jobRepository.hashIdempotencyKey(
+            "scheduled:${draft.definition.id}:${draft.definition.version}:${draft.definition.effectiveFrom.toEpochMilli()}"
         )
 
         val system = actor(
@@ -346,56 +343,53 @@ class SchedulingPolicyCommandServiceTest {
             ActorRole.SYSTEM,
             AuthenticationAssurance.SERVICE,
         )
-        val missingServiceScope = assertThrows(SchedulingPolicyApiException::class.java) {
+        val missingServiceScope = assertFailsWith<SchedulingPolicyApiException> {
             service.activate(
                 activationCommand(
-                    definitionId = draft.definition.id!!,
+                    definitionId = definitionId,
                     actor = system.copy(scopes = setOf("policy:write")),
                     expectedHeadRevision = 2L,
                     idempotencyKey = "unused-for-scheduled",
                 ).copy(idempotencyKey = null, scheduledCommandId = scheduled.id)
             )
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, missingServiceScope.errorCode)
+        missingServiceScope.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN
 
-        val missingSystemRole = assertThrows(SchedulingPolicyApiException::class.java) {
+        val missingSystemRole = assertFailsWith<SchedulingPolicyApiException> {
             service.activate(
                 activationCommand(
-                    definitionId = draft.definition.id!!,
+                    definitionId = definitionId,
                     actor = system.copy(roles = emptySet()),
                     expectedHeadRevision = 2L,
                     idempotencyKey = "unused-for-scheduled",
                 ).copy(idempotencyKey = null, scheduledCommandId = scheduled.id)
             )
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, missingSystemRole.errorCode)
+        missingSystemRole.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN
 
-        val publicSystemExecution = assertThrows(SchedulingPolicyApiException::class.java) {
+        val publicSystemExecution = assertFailsWith<SchedulingPolicyApiException> {
             service.activate(
                 activationCommand(
-                    definitionId = draft.definition.id!!,
+                    definitionId = definitionId,
                     actor = system,
                     expectedHeadRevision = 2L,
                     idempotencyKey = "unused-for-scheduled",
                 ).copy(idempotencyKey = null, scheduledCommandId = scheduled.id)
             )
         }
-        assertEquals(
-            SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
-            publicSystemExecution.errorCode,
-        )
+        publicSystemExecution.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN
 
-        val forbidden = assertThrows(SchedulingPolicyApiException::class.java) {
+        val forbidden = assertFailsWith<SchedulingPolicyApiException> {
             service.activate(
                 activationCommand(
-                    definitionId = draft.definition.id!!,
+                    definitionId = definitionId,
                     actor = system,
                     expectedHeadRevision = 3L,
                     idempotencyKey = "system-without-command",
                 )
             )
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, forbidden.errorCode)
+        forbidden.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN
     }
 
     @Test
@@ -403,14 +397,15 @@ class SchedulingPolicyCommandServiceTest {
         val setupService = service()
         val admin = actor("admin", ActorType.ADMIN, ActorRole.ADMIN)
         val draft = setupService.createDraft(createDraft(admin))
-        setupService.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin))
+        val definitionId = draft.definition.id.shouldNotBeNull()
+        setupService.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, admin))
         val scheduled = setupService.schedule(
             ScheduleSchedulingPolicyCommand(
                 scope = scope,
-                definitionId = draft.definition.id!!,
+                definitionId = definitionId,
                 expectedDraftRevision = 1L,
                 expectedActiveRevision = 1L,
-                preview = preview(draft.definition.id!!, tenantGeneration = 0L),
+                preview = preview(definitionId, tenantGeneration = 0L),
                 actor = admin,
             )
         )
@@ -423,7 +418,7 @@ class SchedulingPolicyCommandServiceTest {
             Clock.fixed(now, ZoneOffset.UTC),
         )
 
-        val commandId = scheduled.id!!
+        val commandId = scheduled.id.shouldNotBeNull()
         transaction {
             jobRepository.claimDueActivation(
                 commandId,
@@ -447,8 +442,8 @@ class SchedulingPolicyCommandServiceTest {
             databaseNow = now,
         )
 
-        assertEquals(PolicyLifecycle.ACTIVE, result.definition.lifecycle)
-        assertEquals(1L, result.generation.tenantGeneration)
+        result.definition.lifecycle shouldBeEqualTo PolicyLifecycle.ACTIVE
+        result.generation.tenantGeneration shouldBeEqualTo 1L
     }
 
     @Test
@@ -456,17 +451,18 @@ class SchedulingPolicyCommandServiceTest {
         val service = service()
         val admin = actor("admin", ActorType.ADMIN, ActorRole.ADMIN)
         val draft = service.createDraft(createDraft(admin))
-        service.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin))
+        val definitionId = draft.definition.id.shouldNotBeNull()
+        service.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, admin))
         service.activate(
-            activationCommand(draft.definition.id!!, admin, 1L, "same-key")
+            activationCommand(definitionId, admin, 1L, "same-key")
         )
 
-        val conflict = assertThrows(SchedulingPolicyApiException::class.java) {
+        val conflict = assertFailsWith<SchedulingPolicyApiException> {
             service.activate(
-                activationCommand(draft.definition.id!!, admin, 2L, "same-key")
+                activationCommand(definitionId, admin, 2L, "same-key")
             )
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_IDEMPOTENCY_CONFLICT, conflict.errorCode)
+        conflict.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_IDEMPOTENCY_CONFLICT
     }
 
     @Test
@@ -474,11 +470,12 @@ class SchedulingPolicyCommandServiceTest {
         val service = service()
         val admin = actor("admin", ActorType.ADMIN, ActorRole.ADMIN)
         val draft = service.createDraft(createDraft(admin))
-        service.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin))
+        val definitionId = draft.definition.id.shouldNotBeNull()
+        service.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, admin))
         val revised = service.reviseDraft(
             ReviseSchedulingPolicyDraftCommand(
                 scope = scope,
-                definitionId = draft.definition.id!!,
+                definitionId = definitionId,
                 expectedDraftRevision = 1L,
                 expectedScopeRevision = 1L,
                 schemaVersion = 1,
@@ -490,20 +487,20 @@ class SchedulingPolicyCommandServiceTest {
                 actor = admin,
             )
         )
-        assertEquals(2L, revised.definition.revision)
-        assertEquals(2L, revised.head.revision)
+        revised.definition.revision shouldBeEqualTo 2L
+        revised.head.revision shouldBeEqualTo 2L
 
-        val stale = assertThrows(SchedulingPolicyApiException::class.java) {
+        val stale = assertFailsWith<SchedulingPolicyApiException> {
             service.activate(
                 activationCommand(
-                    definitionId = draft.definition.id!!,
+                    definitionId = definitionId,
                     actor = admin,
                     expectedHeadRevision = 2L,
                     idempotencyKey = "stale-after-revision",
                 )
             )
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_DRAFT_STALE, stale.errorCode)
+        stale.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_DRAFT_STALE
     }
 
     @Test
@@ -511,52 +508,47 @@ class SchedulingPolicyCommandServiceTest {
         val service = service()
         val admin = actor("admin", ActorType.ADMIN, ActorRole.ADMIN)
         val draft = service.createDraft(createDraft(admin))
-        service.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin))
+        val definitionId = draft.definition.id.shouldNotBeNull()
+        service.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, admin))
         val scheduled = service.schedule(
             ScheduleSchedulingPolicyCommand(
                 scope = scope,
-                definitionId = draft.definition.id!!,
+                definitionId = definitionId,
                 expectedDraftRevision = 1L,
                 expectedActiveRevision = 1L,
-                preview = preview(draft.definition.id!!, 0L),
+                preview = preview(definitionId, 0L),
                 actor = admin,
             )
         )
         transaction {
-            assertTrue(
-                jobRepository.claimDueActivation(
-                    scheduled.id!!,
+            jobRepository.claimDueActivation(
+                    scheduled.id.shouldNotBeNull(),
                     "missed-worker",
                     now,
                     now.plusSeconds(30),
-                )
-            )
-            assertTrue(
-                jobRepository.markActivationMissed(
-                    scheduled.id!!,
+                ).shouldBeTrue()
+            jobRepository.markActivationMissed(
+                    scheduled.id.shouldNotBeNull(),
                     "missed-worker",
                     "POLICY_ACTIVATION_MISSED",
                     now.plusSeconds(10),
-                )
-            )
+                ).shouldBeTrue()
         }
 
         val replay = service.activate(
             activationCommand(
-                definitionId = draft.definition.id!!,
+                definitionId = definitionId,
                 actor = admin,
                 expectedHeadRevision = 2L,
                 idempotencyKey = "manual-replay",
             ).copy(replayOfCommandId = scheduled.id)
         )
 
-        assertEquals(scheduled.id, replay.command.replayOfCommandId)
-        assertEquals(PolicyActivationCommandStatus.COMPLETED, replay.command.status)
+        replay.command.replayOfCommandId shouldBeEqualTo scheduled.id
+        replay.command.status shouldBeEqualTo PolicyActivationCommandStatus.COMPLETED
         transaction {
-            assertEquals(
-                PolicyActivationCommandStatus.MISSED,
-                jobRepository.findActivation(scheduled.id!!)!!.status,
-            )
+            requireNotNull(jobRepository.findActivation(scheduled.id.shouldNotBeNull())).status shouldBeEqualTo
+                PolicyActivationCommandStatus.MISSED
         }
     }
 
@@ -565,20 +557,21 @@ class SchedulingPolicyCommandServiceTest {
         val admin = actor("admin", ActorType.ADMIN, ActorRole.ADMIN)
         val setupService = service()
         val draft = setupService.createDraft(createDraft(admin))
-        setupService.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin))
+        val definitionId = draft.definition.id.shouldNotBeNull()
+        setupService.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, admin))
         val failing = service(PolicyActivationPublisher { _, _, _, _ -> error("injected publisher failure") })
 
-        assertThrows(IllegalStateException::class.java) {
+        assertFailsWith<IllegalStateException> {
             failing.activate(
-                activationCommand(draft.definition.id!!, admin, 1L, "activate-rollback")
+                activationCommand(definitionId, admin, 1L, "activate-rollback")
             )
         }
 
         transaction {
-            assertEquals(PolicyLifecycle.DRAFT, policyRepository.findDefinition(draft.definition.id!!)!!.lifecycle)
-            assertEquals(0L, policyRepository.lockScopeHead(scope).generation)
-            assertEquals(0L, SchedulingPolicyActivationCommands.selectAll().count())
-            assertEquals(0L, SchedulingOutboxEvents.selectAll().count())
+            requireNotNull(policyRepository.findDefinition(definitionId)).lifecycle shouldBeEqualTo PolicyLifecycle.DRAFT
+            policyRepository.lockScopeHead(scope).generation shouldBeEqualTo 0L
+            SchedulingPolicyActivationCommands.selectAll().count() shouldBeEqualTo 0L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
         }
     }
 
@@ -588,12 +581,12 @@ class SchedulingPolicyCommandServiceTest {
         val crossTenant = createDraft(admin).copy(
             scope = PolicyScopeRef(tenantGroupId = 2L, scope = PolicyScope.TENANT_DEFAULT)
         )
-        val tenantDenied = assertThrows(SchedulingPolicyApiException::class.java) {
+        val tenantDenied = assertFailsWith<SchedulingPolicyApiException> {
             service().createDraft(crossTenant)
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, tenantDenied.errorCode)
+        tenantDenied.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN
 
-        val clinicDenied = assertThrows(SchedulingPolicyApiException::class.java) {
+        val clinicDenied = assertFailsWith<SchedulingPolicyApiException> {
             service().createDraft(
                 createDraft(admin).copy(
                     scope = PolicyScopeRef(
@@ -604,16 +597,17 @@ class SchedulingPolicyCommandServiceTest {
                 )
             )
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, clinicDenied.errorCode)
+        clinicDenied.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN
 
-        val missingCapability = assertThrows(SchedulingPolicyApiException::class.java) {
+        val missingCapability = assertFailsWith<SchedulingPolicyApiException> {
             service().createDraft(createDraft(admin.copy(scopes = emptySet())))
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN, missingCapability.errorCode)
+        missingCapability.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN
 
         val setupService = service()
         val draft = setupService.createDraft(createDraft(admin))
-        setupService.approve(ApproveSchedulingPolicyCommand(scope, draft.definition.id!!, 1L, admin))
+        val definitionId = draft.definition.id.shouldNotBeNull()
+        setupService.approve(ApproveSchedulingPolicyCommand(scope, definitionId, 1L, admin))
         val previewDeniedService = SchedulingPolicyCommandService(
             policyRepository,
             jobRepository,
@@ -624,12 +618,12 @@ class SchedulingPolicyCommandServiceTest {
             PolicyActivationPublisher(eventRepository::insertPolicyActivated),
             Clock.fixed(now, ZoneOffset.UTC),
         )
-        val stalePreview = assertThrows(SchedulingPolicyApiException::class.java) {
+        val stalePreview = assertFailsWith<SchedulingPolicyApiException> {
             previewDeniedService.activate(
-                activationCommand(draft.definition.id!!, admin, 1L, "preview-denied")
+                activationCommand(definitionId, admin, 1L, "preview-denied")
             )
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_PREVIEW_STALE, stalePreview.errorCode)
+        stalePreview.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_PREVIEW_STALE
     }
 
     private fun service(

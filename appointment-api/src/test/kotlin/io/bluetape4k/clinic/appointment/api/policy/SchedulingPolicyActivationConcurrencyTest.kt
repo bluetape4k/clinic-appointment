@@ -29,8 +29,8 @@ import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -99,7 +99,8 @@ class SchedulingPolicyActivationConcurrencyTest {
                 actor = admin,
             )
         ).definition
-        service.approve(ApproveSchedulingPolicyCommand(scope, draft.id!!, 1L, admin))
+        val draftId = requireNotNull(draft.id)
+        service.approve(ApproveSchedulingPolicyCommand(scope, draftId, 1L, admin))
 
         val ready = CountDownLatch(2)
         val start = CountDownLatch(1)
@@ -112,12 +113,12 @@ class SchedulingPolicyActivationConcurrencyTest {
                     service.activate(
                         ActivateSchedulingPolicyCommand(
                             scope = scope,
-                            definitionId = draft.id!!,
+                            definitionId = draftId,
                             expectedDraftRevision = 1L,
                             expectedActiveRevision = 1L,
                             idempotencyKey = key,
                             preview = PolicyPreviewEvidence(
-                                definitionId = draft.id!!,
+                                definitionId = draftId,
                                 draftRevision = 1L,
                                 tenantGeneration = 0L,
                                 clinicGeneration = 0L,
@@ -130,25 +131,22 @@ class SchedulingPolicyActivationConcurrencyTest {
             }
         }
         val futures = tasks.map(executor::submit)
-        assertTrue(ready.await(5, TimeUnit.SECONDS))
+        ready.await(5, TimeUnit.SECONDS).shouldBeTrue()
         start.countDown()
         val outcomes = futures.map { it.get(15, TimeUnit.SECONDS) }
         executor.shutdownNow()
 
-        assertEquals(1, outcomes.count { it.isSuccess })
-        assertEquals(1, outcomes.count { it.exceptionOrNull() is SchedulingPolicyApiException })
+        outcomes.count { it.isSuccess } shouldBeEqualTo 1
+        outcomes.count { it.exceptionOrNull() is SchedulingPolicyApiException } shouldBeEqualTo 1
         transaction {
-            assertEquals(1L, policyRepository.lockScopeHead(scope).generation)
-            assertEquals(
-                1L,
-                SchedulingPolicyActivationCommands.selectAll()
+            policyRepository.lockScopeHead(scope).generation shouldBeEqualTo 1L
+            SchedulingPolicyActivationCommands.selectAll()
                     .where {
                         SchedulingPolicyActivationCommands.status eq
                             PolicyActivationCommandStatus.COMPLETED
                     }
-                    .count(),
-            )
-            assertEquals(1L, SchedulingOutboxEvents.selectAll().count())
+                    .count() shouldBeEqualTo 1L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
         }
     }
 
@@ -166,17 +164,17 @@ class SchedulingPolicyActivationConcurrencyTest {
                 service.activate(activation(draftId, admin, "same-concurrent-key"))
             })
         }
-        assertTrue(ready.await(5, TimeUnit.SECONDS))
+        ready.await(5, TimeUnit.SECONDS).shouldBeTrue()
         start.countDown()
         val results = futures.map { it.get(15, TimeUnit.SECONDS) }
         executor.shutdownNow()
 
-        assertEquals(1, results.count { it.idempotentReplay })
-        assertEquals(1, results.map { it.command.id }.distinct().size)
+        results.count { it.idempotentReplay } shouldBeEqualTo 1
+        results.map { it.command.id }.distinct().size shouldBeEqualTo 1
         transaction {
-            assertEquals(1L, policyRepository.lockScopeHead(scope).generation)
-            assertEquals(1L, SchedulingPolicyActivationCommands.selectAll().count())
-            assertEquals(1L, SchedulingOutboxEvents.selectAll().count())
+            policyRepository.lockScopeHead(scope).generation shouldBeEqualTo 1L
+            SchedulingPolicyActivationCommands.selectAll().count() shouldBeEqualTo 1L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
         }
     }
 
@@ -195,8 +193,9 @@ class SchedulingPolicyActivationConcurrencyTest {
                 actor = admin,
             )
         ).definition
-        service.approve(ApproveSchedulingPolicyCommand(scope, draft.id!!, 1L, admin))
-        return draft.id!!
+        val draftId = requireNotNull(draft.id)
+        service.approve(ApproveSchedulingPolicyCommand(scope, draftId, 1L, admin))
+        return draftId
     }
 
     private fun activation(

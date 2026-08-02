@@ -83,7 +83,7 @@ class ProfileReevaluationMetricsTest {
             },
         )
 
-        val health = indicator.health()
+        val health = requireNotNull(indicator.health().block())
 
         health.status.code shouldBeEqualTo "DEGRADED"
         health.details.keys.intersect(

@@ -172,7 +172,7 @@ class ExposedSchedulingPolicyPreviewStoreTest {
             val admissions = results.map { it.get(5, TimeUnit.SECONDS) }
 
             admissions.count { it != null } shouldBeEqualTo 1
-            admissions.single { it != null }!!.let { admission ->
+            admissions.filterNotNull().single().let { admission ->
                 admission.job.nextAttemptAt shouldBeEqualTo admission.acceptedAt
                 admission.job.deadlineAt shouldBeEqualTo admission.acceptedAt.plus(Duration.ofMinutes(5))
             }

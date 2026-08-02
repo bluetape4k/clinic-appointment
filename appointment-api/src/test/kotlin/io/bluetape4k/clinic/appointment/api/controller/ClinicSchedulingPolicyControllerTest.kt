@@ -35,7 +35,7 @@ import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyKind
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import org.junit.jupiter.api.Assertions.assertEquals
+import io.bluetape4k.assertions.shouldBeEqualTo
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -114,16 +114,12 @@ class ClinicSchedulingPolicyControllerTest {
             administrationService.replay(scope, actor, 91L, "replay-key", replay)
         } returns activationResponse
 
-        assertEquals(
-            HttpStatus.CREATED,
-            controller.createDraft("clinic-a", 41L, draft, null, request()).statusCode,
-        )
+        controller.createDraft("clinic-a", 41L, draft, null, request()).statusCode shouldBeEqualTo
+            HttpStatus.CREATED
         controller.validate("clinic-a", 41L, 71L, validate, null, request())
         controller.approve("clinic-a", 41L, 71L, approve, null, request())
-        assertEquals(
-            HttpStatus.ACCEPTED,
-            controller.schedule("clinic-a", 41L, 71L, schedule, null, request()).statusCode,
-        )
+        controller.schedule("clinic-a", 41L, 71L, schedule, null, request()).statusCode shouldBeEqualTo
+            HttpStatus.ACCEPTED
         controller.activate("clinic-a", 41L, 71L, "activate-key", activate, null, request())
         controller.retire("clinic-a", 41L, 71L, retire, null, request())
         controller.replay("clinic-a", 41L, 91L, "replay-key", replay, null, request())
@@ -162,12 +158,10 @@ class ClinicSchedulingPolicyControllerTest {
             servletRequest = request(),
         )
 
-        assertEquals(HttpStatus.ACCEPTED, http.statusCode)
-        assertEquals(
-            "/api/clinic-a/admin/clinics/41/scheduling-policies/preview-jobs/301",
-            http.headers.location.toString(),
-        )
-        assertEquals("2", http.headers.getFirst(HttpHeaders.RETRY_AFTER))
+        http.statusCode shouldBeEqualTo HttpStatus.ACCEPTED
+        http.headers.location.toString() shouldBeEqualTo
+            "/api/clinic-a/admin/clinics/41/scheduling-policies/preview-jobs/301"
+        http.headers.getFirst(HttpHeaders.RETRY_AFTER) shouldBeEqualTo "2"
         verify(exactly = 1) { accessChecker.verifyClinic("clinic-a", 41L) }
         verify(exactly = 1) {
             administrationService.preview(
@@ -201,7 +195,7 @@ class ClinicSchedulingPolicyControllerTest {
             servletRequest = request(),
         )
 
-        assertEquals(expected, response.data)
+        response.data shouldBeEqualTo expected
         verify(exactly = 1) {
             administrationService.clinicEffective(
                 PolicyScopeRef(11L, PolicyScope.CLINIC_OVERRIDE, 41L),

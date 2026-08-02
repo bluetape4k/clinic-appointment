@@ -265,8 +265,11 @@ class SchedulingPolicyCommandService(
                             "The scheduled interval overlaps an existing published policy.",
                         )
                     }
+                    val definitionId = requireNotNull(definition.id) {
+                        "Persisted scheduling policy definition must have an identifier."
+                    }
                     val scheduled = policyRepository.compareAndTransitionLifecycle(
-                        definition.id!!,
+                        definitionId,
                         definition.revision,
                         PolicyLifecycle.DRAFT,
                         PolicyLifecycle.SCHEDULED,
@@ -280,7 +283,9 @@ class SchedulingPolicyCommandService(
                             tenantGroupId = command.scope.tenantGroupId,
                             scope = command.scope.scope,
                             clinicId = command.scope.clinicId,
-                            definitionId = scheduled.id!!,
+                            definitionId = requireNotNull(scheduled.id) {
+                                "Scheduled policy definition must have an identifier."
+                            },
                             expectedDraftRevision = scheduled.revision,
                             expectedActiveRevision = nextHead.revision,
                             expectedTenantGeneration = command.preview.tenantGeneration,
@@ -452,7 +457,9 @@ class SchedulingPolicyCommandService(
                     if (durable.status == PolicyActivationCommandStatus.COMPLETED) {
                         return@transaction completedResult(durable, idempotentReplay = true)
                     }
-                    val commandId = durable.id!!
+                    val commandId = requireNotNull(durable.id) {
+                        "Persisted activation command must have an identifier."
+                    }
                     val owner =
                         existingClaimOwner ?: "policy-activation-$commandId"
                     if (existingClaimOwner == null) {
@@ -496,8 +503,11 @@ class SchedulingPolicyCommandService(
                         )
                     }
                     retireOverlappingActive(command.scope, definition)
+                    val definitionId = requireNotNull(definition.id) {
+                        "Persisted scheduling policy definition must have an identifier."
+                    }
                     val active = policyRepository.compareAndTransitionLifecycle(
-                        definition.id!!,
+                        definitionId,
                         definition.revision,
                         expectedLifecycle,
                         PolicyLifecycle.ACTIVE,
@@ -569,8 +579,11 @@ class SchedulingPolicyCommandService(
                         "The policy revision or lifecycle changed before retirement.",
                     )
                 }
+                val definitionId = requireNotNull(definition.id) {
+                    "Persisted scheduling policy definition must have an identifier."
+                }
                 val retired = policyRepository.compareAndTransitionLifecycle(
-                    definition.id!!,
+                    definitionId,
                     definition.revision,
                     definition.lifecycle,
                     PolicyLifecycle.RETIRED,
@@ -691,9 +704,12 @@ class SchedulingPolicyCommandService(
             target.effectiveUntil,
         ).filter { it.id != target.id }.forEach { overlap ->
             when (overlap.lifecycle) {
-                PolicyLifecycle.ACTIVE ->
+                PolicyLifecycle.ACTIVE -> {
+                    val overlapId = requireNotNull(overlap.id) {
+                        "Persisted scheduling policy definition must have an identifier."
+                    }
                     policyRepository.compareAndTransitionLifecycle(
-                        overlap.id!!,
+                        overlapId,
                         overlap.revision,
                         PolicyLifecycle.ACTIVE,
                         PolicyLifecycle.RETIRED,
@@ -701,6 +717,7 @@ class SchedulingPolicyCommandService(
                         SchedulingPolicyErrorCode.POLICY_ACTIVATION_CONFLICT,
                         "An overlapping active policy changed before replacement.",
                     )
+                }
                 PolicyLifecycle.SCHEDULED -> reject(
                     SchedulingPolicyErrorCode.POLICY_ACTIVATION_CONFLICT,
                     "Another scheduled policy overlaps the activation interval.",
@@ -715,7 +732,10 @@ class SchedulingPolicyCommandService(
         actor: ActorContext,
         activation: Boolean,
     ) {
-        val approvals = policyRepository.findApprovals(definition.id!!, definition.revision)
+        val definitionId = requireNotNull(definition.id) {
+            "Persisted scheduling policy definition must have an identifier."
+        }
+        val approvals = policyRepository.findApprovals(definitionId, definition.revision)
         val required = if (definition.kind.isSensitive()) 2 else 1
         val eligible = approvals
             .filter { it.actorRole == ActorRole.ADMIN || it.actorRole == ActorRole.STAFF }

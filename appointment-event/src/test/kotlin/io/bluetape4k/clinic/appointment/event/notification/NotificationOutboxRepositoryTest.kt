@@ -189,7 +189,7 @@ class NotificationOutboxRepositoryTest {
                 )
             )
             val retry = repository.enqueue(sendableDraft(eventId = "event-retry", digest = "digest-retry"))
-            val claimed = repository.claim(retry.id, owner = "worker-a", token = "token-a")!!
+            val claimed = requireNotNull(repository.claim(retry.id, owner = "worker-a", token = "token-a"))
             repository.scheduleRetry(
                 RetryNotificationCommand(
                     outboxId = retry.id,
@@ -242,7 +242,7 @@ class NotificationOutboxRepositoryTest {
     fun `retry 시각은 애플리케이션 clock이 아니라 DB 갱신 시각에 delay를 더해 기록한다`() {
         transaction(database) {
             val row = repository.enqueue(sendableDraft(eventId = "event-db-retry", digest = "digest-db-retry"))
-            val claim = repository.claim(row.id, owner = "worker-db", token = "token-db")!!
+            val claim = requireNotNull(repository.claim(row.id, owner = "worker-db", token = "token-db"))
 
             repository.scheduleRetry(
                 RetryNotificationCommand(
@@ -302,7 +302,7 @@ class NotificationOutboxRepositoryTest {
         transaction(database) {
             val candidate = repository.enqueue(sendableDraft())
 
-            val claimed = repository.claim(candidate.id, owner = "worker-a", token = "token-a")!!
+            val claimed = requireNotNull(repository.claim(candidate.id, owner = "worker-a", token = "token-a"))
 
             claimed.attemptNumber shouldBeEqualTo 1
             claimed.channel shouldBeEqualTo NotificationChannelType.DUMMY
@@ -384,7 +384,7 @@ class NotificationOutboxRepositoryTest {
                 ),
             )
 
-            val claimed = repository.claim(candidate.id, owner = "worker-a", token = "token-a")!!
+            val claimed = requireNotNull(repository.claim(candidate.id, owner = "worker-a", token = "token-a"))
 
             claimed.eventType shouldBeEqualTo NotificationEventType.RESCHEDULED
             claimed.notificationSlot shouldBeEqualTo NotificationSlot.RESCHEDULED
@@ -403,7 +403,7 @@ class NotificationOutboxRepositoryTest {
     fun `stale completion은 실패하고 현재 lease만 완료할 수 있다`() {
         transaction(database) {
             val candidate = repository.enqueue(sendableDraft())
-            val stale = repository.claim(candidate.id, owner = "worker-a", token = "token-a")!!
+            val stale = requireNotNull(repository.claim(candidate.id, owner = "worker-a", token = "token-a"))
             val current = stale.copy(
                 owner = "worker-b",
                 token = "token-b",
@@ -528,7 +528,7 @@ class NotificationOutboxRepositoryTest {
     fun `successful complete fails caller transaction when attempt close is not exactly one row`() {
         val candidateAndClaim = transaction(database) {
             val candidate = repository.enqueue(sendableDraft())
-            val claimed = repository.claim(candidate.id, owner = "worker-a", token = "token-a")!!
+            val claimed = requireNotNull(repository.claim(candidate.id, owner = "worker-a", token = "token-a"))
             NotificationDeliveryAttempts.deleteAll()
             candidate to claimed
         }
@@ -589,7 +589,7 @@ class NotificationOutboxRepositoryTest {
     fun `complete는 suppressed와 exhausted terminal status code를 저장하고 개인정보를 지운다`() {
         transaction(database) {
             val suppressed = repository.enqueue(sendableDraft(eventId = "event-suppressed", digest = "digest-suppressed"))
-            val suppressedClaim = repository.claim(suppressed.id, owner = "worker-a", token = "token-a")!!
+            val suppressedClaim = requireNotNull(repository.claim(suppressed.id, owner = "worker-a", token = "token-a"))
 
             repository.complete(
                 CompleteNotificationCommand(
@@ -611,7 +611,7 @@ class NotificationOutboxRepositoryTest {
             suppressedRow[NotificationOutboxEvents.parametersJson].shouldBeNull()
 
             val exhausted = repository.enqueue(sendableDraft(eventId = "event-exhausted", digest = "digest-exhausted"))
-            val exhaustedClaim = repository.claim(exhausted.id, owner = "worker-b", token = "token-b")!!
+            val exhaustedClaim = requireNotNull(repository.claim(exhausted.id, owner = "worker-b", token = "token-b"))
             repository.complete(
                 CompleteNotificationCommand(
                     outboxId = exhausted.id,
@@ -639,7 +639,7 @@ class NotificationOutboxRepositoryTest {
                 val row = repository.enqueue(
                     sendableDraft(eventId = "retention-sent-$index", digest = "retention-sent-$index"),
                 )
-                val claim = repository.claim(row.id, owner = "worker-$index", token = "token-$index")!!
+                val claim = requireNotNull(repository.claim(row.id, owner = "worker-$index", token = "token-$index"))
                 repository.complete(
                     CompleteNotificationCommand(
                         outboxId = row.id,
@@ -653,7 +653,7 @@ class NotificationOutboxRepositoryTest {
             val exhausted = repository.enqueue(
                 sendableDraft(eventId = "retention-exhausted", digest = "retention-exhausted"),
             )
-            val exhaustedClaim = repository.claim(exhausted.id, owner = "worker-x", token = "token-x")!!
+            val exhaustedClaim = requireNotNull(repository.claim(exhausted.id, owner = "worker-x", token = "token-x"))
             repository.complete(
                 CompleteNotificationCommand(
                     outboxId = exhausted.id,
@@ -699,13 +699,13 @@ class NotificationOutboxRepositoryTest {
     fun `expired recovery closes previous attempt as lease lost and creates current attempt`() {
         transaction(database) {
             val candidate = repository.enqueue(sendableDraft())
-            val first = repository.claim(candidate.id, owner = "old-worker", token = "old-token")!!
+            val first = requireNotNull(repository.claim(candidate.id, owner = "old-worker", token = "old-token"))
             NotificationOutboxEvents.update({ NotificationOutboxEvents.id eq candidate.id }) {
                 it[NotificationOutboxEvents.leaseUntil] = Instant.parse("2020-01-01T00:00:00Z")
             }
 
             repository.findExpiredProcessingIds(limit = 10) shouldBeEqualTo listOf(candidate.id)
-            val recovered = repository.recoverExpired(candidate.id, owner = "new-worker", token = "new-token")!!
+            val recovered = requireNotNull(repository.recoverExpired(candidate.id, owner = "new-worker", token = "new-token"))
 
             recovered.owner shouldBeEqualTo "new-worker"
             recovered.attemptNumber shouldBeEqualTo 2
@@ -754,7 +754,7 @@ class NotificationOutboxRepositoryTest {
                     digest = "confirmed-kept-digest",
                 )
             )
-            val claimed = repository.claim(dayBefore.id, owner = "worker-a", token = "token-a")!!
+            val claimed = requireNotNull(repository.claim(dayBefore.id, owner = "worker-a", token = "token-a"))
 
             repository.suppressOutstandingReminders(
                 tenantGroupId = TenantGroupId(1L),

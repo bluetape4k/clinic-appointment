@@ -213,8 +213,10 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
         failure.code shouldBeEqualTo AppointmentCommitmentCommandError.RESOURCE_CONFLICT
         transaction(database) {
             ResourceAllocationRepository().findByProposal(requested.proposal.id) shouldHaveSize 0
-            AppointmentCommitmentRepository()
-                .findByAppointmentId(requested.commitment.appointmentId)!!
+            requireNotNull(
+                AppointmentCommitmentRepository()
+                    .findByAppointmentId(requested.commitment.appointmentId)
+            )
                 .status shouldBeEqualTo AppointmentCommitmentStatus.PROPOSED
             AppointmentAuditEvents
                 .selectAll()

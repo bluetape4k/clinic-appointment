@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.repository
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
@@ -16,7 +17,6 @@ import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.update
-import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import java.time.Duration
@@ -39,7 +39,7 @@ class BookingReliabilityReevaluationJobRepositoryTest : AbstractExposedTest() {
             val replay = repository.create(job(nextAttemptAt = Instant.now().minusSeconds(60)))
 
             replay.jobId shouldBeEqualTo created.jobId
-            assertThrows<IllegalArgumentException> {
+            assertFailsWith<IllegalArgumentException> {
                 repository.create(
                     job(
                         nextAttemptAt = Instant.now().minusSeconds(60),

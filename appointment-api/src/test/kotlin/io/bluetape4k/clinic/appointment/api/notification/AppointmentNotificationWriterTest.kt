@@ -98,8 +98,8 @@ internal class AppointmentNotificationWriterTest {
             row[NotificationOutboxEvents.status] shouldBeEqualTo NotificationOutboxStatus.PENDING
             row[NotificationOutboxEvents.notificationSlot] shouldBeEqualTo NotificationSlot.CREATED
             row[NotificationOutboxEvents.memberId] shouldBeEqualTo "member-100"
-            row[NotificationOutboxEvents.parametersJson]!!.contains("환자 이름") shouldBeEqualTo false
-            row[NotificationOutboxEvents.parametersJson]!!.contains("010-0000-0000") shouldBeEqualTo false
+            requireNotNull(row[NotificationOutboxEvents.parametersJson]).contains("환자 이름") shouldBeEqualTo false
+            requireNotNull(row[NotificationOutboxEvents.parametersJson]).contains("010-0000-0000") shouldBeEqualTo false
         }
     }
 
@@ -238,11 +238,11 @@ internal class AppointmentNotificationWriterTest {
             val codec = NotificationOutboxCodec()
             val rows = NotificationOutboxEvents.selectAll().toList()
             val cancelled = rows.single { it[NotificationOutboxEvents.notificationSlot] == NotificationSlot.CANCELLED }
-            val cancelledEnvelope = codec.decode(cancelled[NotificationOutboxEvents.parametersJson]!!)
+            val cancelledEnvelope = codec.decode(requireNotNull(cancelled[NotificationOutboxEvents.parametersJson]))
             (cancelledEnvelope.parameters as AppointmentCancelledParameters).cancellationReasonCode?.value shouldBeEqualTo
                 "CUSTOMER_REQUEST"
             val rescheduled = rows.single { it[NotificationOutboxEvents.notificationSlot] == NotificationSlot.RESCHEDULED }
-            val parameters = codec.decode(rescheduled[NotificationOutboxEvents.parametersJson]!!).parameters as
+            val parameters = codec.decode(requireNotNull(rescheduled[NotificationOutboxEvents.parametersJson])).parameters as
                 AppointmentRescheduledParameters
             parameters.previousAppointmentDate shouldBeEqualTo original.appointmentDate
             parameters.replacementAppointmentDate shouldBeEqualTo replacement.appointmentDate
@@ -260,8 +260,8 @@ internal class AppointmentNotificationWriterTest {
             row[NotificationOutboxEvents.eventType] shouldBeEqualTo NotificationEventType.CREATED
             row[NotificationOutboxEvents.notificationSlot] shouldBeEqualTo NotificationSlot.CREATED
             row[NotificationOutboxEvents.memberId] shouldBeEqualTo "member-v2"
-            row[NotificationOutboxEvents.parametersJson]!!.contains("환자 이름") shouldBeEqualTo false
-            row[NotificationOutboxEvents.parametersJson]!!.contains("010-0000-0000") shouldBeEqualTo false
+            requireNotNull(row[NotificationOutboxEvents.parametersJson]).contains("환자 이름") shouldBeEqualTo false
+            requireNotNull(row[NotificationOutboxEvents.parametersJson]).contains("010-0000-0000") shouldBeEqualTo false
         }
     }
 
@@ -277,7 +277,7 @@ internal class AppointmentNotificationWriterTest {
                 setOf(NotificationSlot.CONFIRMED, NotificationSlot.REMINDER_24H, NotificationSlot.REMINDER_SAME_DAY)
             val confirmed = rows.single { it[NotificationOutboxEvents.notificationSlot] == NotificationSlot.CONFIRMED }
             val parameters = NotificationOutboxCodec()
-                .decode(confirmed[NotificationOutboxEvents.parametersJson]!!)
+                .decode(requireNotNull(confirmed[NotificationOutboxEvents.parametersJson]))
                 .parameters as AppointmentConfirmedParameters
             parameters.appointmentDate shouldBeEqualTo LocalDate.of(2026, 8, 3)
             parameters.startTime shouldBeEqualTo LocalTime.of(10, 0)
@@ -311,7 +311,7 @@ internal class AppointmentNotificationWriterTest {
                 it[NotificationOutboxEvents.notificationSlot] == NotificationSlot.RESCHEDULED
             }
             val parameters = NotificationOutboxCodec()
-                .decode(rescheduled[NotificationOutboxEvents.parametersJson]!!)
+                .decode(requireNotNull(rescheduled[NotificationOutboxEvents.parametersJson]))
                 .parameters as AppointmentRescheduledParameters
             parameters.previousAppointmentDate shouldBeEqualTo LocalDate.of(2026, 8, 3)
             parameters.replacementAppointmentDate shouldBeEqualTo LocalDate.of(2026, 8, 4)

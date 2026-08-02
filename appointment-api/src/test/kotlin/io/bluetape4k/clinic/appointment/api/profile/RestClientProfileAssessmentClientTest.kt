@@ -3,11 +3,12 @@ package io.bluetape4k.clinic.appointment.api.profile
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -31,8 +32,7 @@ class RestClientProfileAssessmentClientTest {
 
     @Test
     fun `assessment 계약은 예약 계산에 필요한 비식별 필드만 가진다`() {
-        assertEquals(
-            setOf(
+        ProfileSchedulingAssessment::class.memberProperties.map { it.name }.toSet() shouldBeEqualTo setOf(
                 "tenantGroupId",
                 "clinicId",
                 "patientReferenceFingerprint",
@@ -42,13 +42,8 @@ class RestClientProfileAssessmentClientTest {
                 "eligibleServiceCodes",
                 "requiredResourceTags",
                 "allowedTimeWindows",
-            ),
-            ProfileSchedulingAssessment::class.memberProperties.map { it.name }.toSet(),
-        )
-        assertEquals(
-            setOf("startAt", "endAt"),
-            AllowedTimeWindow::class.memberProperties.map { it.name }.toSet(),
-        )
+            )
+        AllowedTimeWindow::class.memberProperties.map { it.name }.toSet() shouldBeEqualTo setOf("startAt", "endAt")
     }
 
     @Test
@@ -65,13 +60,13 @@ class RestClientProfileAssessmentClientTest {
             allowedTimeWindows = emptyList(),
         )
 
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             base.copy(eligibleServiceCodes = (1..65).map { "SERVICE_$it" }.toSet())
         }
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             base.copy(requiredResourceTags = setOf("resource tag with spaces"))
         }
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             base.copy(
                 allowedTimeWindows = List(65) { index ->
                     AllowedTimeWindow(
@@ -92,16 +87,15 @@ class RestClientProfileAssessmentClientTest {
 
         val result = client.fetch(request())
 
-        assertEquals(7L, result.profileRevision)
-        assertEquals(setOf("LASER", "FOLLOW_UP"), result.eligibleServiceCodes)
-        assertEquals("/assessments/assessment%20ref%207", fixture.rawPaths.single())
-        assertEquals("a".repeat(64), fixture.header("X-Patient-Reference-Fingerprint"))
-        assertEquals("7", fixture.header("X-Profile-Revision"))
-        assertEquals("correlation-7", fixture.header("X-Correlation-Id"))
-        assertEquals(1.0, registry.find(ProfileAssessmentClientMetrics.REQUESTS)
+        result.profileRevision shouldBeEqualTo 7L
+        result.eligibleServiceCodes shouldBeEqualTo setOf("LASER", "FOLLOW_UP")
+        fixture.rawPaths.single() shouldBeEqualTo "/assessments/assessment%20ref%207"
+        fixture.header("X-Patient-Reference-Fingerprint") shouldBeEqualTo "a".repeat(64)
+        fixture.header("X-Profile-Revision") shouldBeEqualTo "7"
+        fixture.header("X-Correlation-Id") shouldBeEqualTo "correlation-7"
+        registry.find(ProfileAssessmentClientMetrics.REQUESTS)
             .tag("result", "success")
-            .counter()!!
-            .count())
+            .counter().shouldNotBeNull().count() shouldBeEqualTo 1.0
     }
 
     @Test
@@ -113,9 +107,9 @@ class RestClientProfileAssessmentClientTest {
 
         val schemaFailure = failure { client.fetch(request()) }
 
-        assertEquals(ProfileAssessmentFailureCode.SCHEMA_INVALID, schemaFailure.code)
-        assertFalse(schemaFailure.retryable)
-        assertFalse(schemaFailure.message!!.contains(marker))
+        schemaFailure.code shouldBeEqualTo ProfileAssessmentFailureCode.SCHEMA_INVALID
+        schemaFailure.retryable.shouldBeFalse()
+        requireNotNull(schemaFailure.message).contains(marker).shouldBeFalse()
 
         listOf(
             assessmentJson(tenantGroupId = 2L),
@@ -127,8 +121,8 @@ class RestClientProfileAssessmentClientTest {
         ).forEach { mismatched ->
             fixture.respond(200, mismatched)
             val mismatch = failure { client.fetch(request()) }
-            assertEquals(ProfileAssessmentFailureCode.RESPONSE_IDENTITY_MISMATCH, mismatch.code)
-            assertFalse(mismatch.retryable)
+            mismatch.code shouldBeEqualTo ProfileAssessmentFailureCode.RESPONSE_IDENTITY_MISMATCH
+            mismatch.retryable.shouldBeFalse()
         }
     }
 
@@ -139,22 +133,22 @@ class RestClientProfileAssessmentClientTest {
 
         fixture.respond(503, """{"ignored":"body-marker"}""")
         failure { client.fetch(request()) }.also {
-            assertEquals(ProfileAssessmentFailureCode.UPSTREAM_UNAVAILABLE, it.code)
-            assertTrue(it.retryable)
-            assertFalse(it.message!!.contains("body-marker"))
+            it.code shouldBeEqualTo ProfileAssessmentFailureCode.UPSTREAM_UNAVAILABLE
+            it.retryable.shouldBeTrue()
+            requireNotNull(it.message).contains("body-marker").shouldBeFalse()
         }
 
         fixture.respond(401, """{"token":"credential-marker"}""")
         failure { client.fetch(request()) }.also {
-            assertEquals(ProfileAssessmentFailureCode.AUTHENTICATION_INFRASTRUCTURE_UNAVAILABLE, it.code)
-            assertTrue(it.retryable)
-            assertFalse(it.message!!.contains("credential-marker"))
+            it.code shouldBeEqualTo ProfileAssessmentFailureCode.AUTHENTICATION_INFRASTRUCTURE_UNAVAILABLE
+            it.retryable.shouldBeTrue()
+            requireNotNull(it.message).contains("credential-marker").shouldBeFalse()
         }
 
         fixture.respond(200, assessmentJson(), delay = Duration.ofMillis(200))
         failure { client.fetch(request()) }.also {
-            assertEquals(ProfileAssessmentFailureCode.TIMEOUT, it.code)
-            assertTrue(it.retryable)
+            it.code shouldBeEqualTo ProfileAssessmentFailureCode.TIMEOUT
+            it.retryable.shouldBeTrue()
         }
     }
 
@@ -163,20 +157,20 @@ class RestClientProfileAssessmentClientTest {
         val publicAddress = InetAddress.getByName("93.184.216.34")
         val publicResolver = ProfileAssessmentAddressResolver { listOf(publicAddress) }
 
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             productionClient(
                 baseUrl = URI("http://crm.example.test/assessments"),
                 resolver = publicResolver,
             )
         }
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             productionClient(
                 baseUrl = URI("https://other.example.test/assessments"),
                 resolver = publicResolver,
             )
         }
         listOf("127.0.0.1", "10.0.0.8", "169.254.10.20", "100.64.0.1", "fc00::1").forEach { address ->
-            assertThrows(IllegalArgumentException::class.java) {
+            assertFailsWith<IllegalArgumentException> {
                 productionClient(
                     baseUrl = URI("https://crm.example.test/assessments"),
                     resolver = ProfileAssessmentAddressResolver {
@@ -204,8 +198,8 @@ class RestClientProfileAssessmentClientTest {
 
         val failure = failure { client.fetch(request()) }
 
-        assertEquals(ProfileAssessmentFailureCode.ENDPOINT_ADDRESS_REJECTED, failure.code)
-        assertFalse(failure.retryable)
+        failure.code shouldBeEqualTo ProfileAssessmentFailureCode.ENDPOINT_ADDRESS_REJECTED
+        failure.retryable.shouldBeFalse()
     }
 
     @Test
@@ -222,16 +216,16 @@ class RestClientProfileAssessmentClientTest {
             val rejected = failure {
                 client.fetch(request().copy(assessmentReference = reference))
             }
-            assertEquals(ProfileAssessmentFailureCode.ASSESSMENT_REFERENCE_INVALID, rejected.code)
-            assertFalse(rejected.retryable)
+            rejected.code shouldBeEqualTo ProfileAssessmentFailureCode.ASSESSMENT_REFERENCE_INVALID
+            rejected.retryable.shouldBeFalse()
         }
-        assertEquals(0, fixture.requestCount.get())
+        fixture.requestCount.get() shouldBeEqualTo 0
 
         fixture.redirect("/redirect-target")
         val redirected = failure { client.fetch(request()) }
-        assertEquals(ProfileAssessmentFailureCode.REDIRECT_REJECTED, redirected.code)
-        assertFalse(redirected.retryable)
-        assertEquals(0, fixture.redirectTargetCount.get())
+        redirected.code shouldBeEqualTo ProfileAssessmentFailureCode.REDIRECT_REJECTED
+        redirected.retryable.shouldBeFalse()
+        fixture.redirectTargetCount.get() shouldBeEqualTo 0
     }
 
     @Test
@@ -246,9 +240,9 @@ class RestClientProfileAssessmentClientTest {
 
         val rejected = failure { client.fetch(request()) }
 
-        assertEquals(ProfileAssessmentFailureCode.RESPONSE_TOO_LARGE, rejected.code)
-        assertFalse(rejected.retryable)
-        assertFalse(rejected.message!!.contains(marker))
+        rejected.code shouldBeEqualTo ProfileAssessmentFailureCode.RESPONSE_TOO_LARGE
+        rejected.retryable.shouldBeFalse()
+        requireNotNull(rejected.message).contains(marker).shouldBeFalse()
     }
 
     private fun productionClient(
@@ -289,7 +283,7 @@ class RestClientProfileAssessmentClientTest {
     private fun fixture() = ProfileAssessmentHttpFixture().also(fixtures::add)
 
     private fun failure(block: () -> Unit): ProfileAssessmentException =
-        assertThrows(ProfileAssessmentException::class.java, block)
+        assertFailsWith<ProfileAssessmentException>(block = block)
 }
 
 internal class ProfileAssessmentHttpFixture : AutoCloseable {

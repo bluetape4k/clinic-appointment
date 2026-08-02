@@ -3,10 +3,10 @@ package io.bluetape4k.clinic.appointment.api.controller
 import io.bluetape4k.clinic.appointment.api.security.ActorContextResolver
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertTrue
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -88,8 +88,8 @@ class SchedulingPolicyOpenApiTest {
         )
         listOf(tenantBase, clinicBase).forEach { base ->
             suffixes.forEach { (suffix, method) ->
-                assertNotNull(root.at("/paths/${pointer(base + suffix)}/$method"), "$method $base$suffix")
-                assertFalse(root.at("/paths/${pointer(base + suffix)}/$method").isMissingNode)
+                root.at("/paths/${pointer(base + suffix)}/$method").shouldNotBeNull()
+                root.at("/paths/${pointer(base + suffix)}/$method").isMissingNode.shouldBeFalse()
             }
         }
 
@@ -97,47 +97,47 @@ class SchedulingPolicyOpenApiTest {
             val effective = root.at("/paths/${pointer("$base/effective")}/get")
             val parameters = effective.path("parameters").associateBy { it.path("name").stringValue() }
             listOf("decisionAt", "serviceAt").forEach { name ->
-                assertEquals(true, parameters[name]?.path("required")?.asBoolean(), name)
-                assertEquals("date-time", parameters[name]?.path("schema")?.path("format")?.stringValue(), name)
+                parameters[name]?.path("required")?.asBoolean().shouldBeTrue()
+                parameters[name]?.path("schema")?.path("format")?.stringValue() shouldBeEqualTo "date-time"
             }
-            assertTrue(effective.path("responses").has("400"))
-            assertTrue(effective.path("responses").has("409"))
-            assertTrue(effective.path("responses").has("503"))
+            effective.path("responses").has("400").shouldBeTrue()
+            effective.path("responses").has("409").shouldBeTrue()
+            effective.path("responses").has("503").shouldBeTrue()
         }
 
         listOf(tenantBase, clinicBase).forEach { base ->
             val previewResponses = root.at("/paths/${pointer("$base/{id}/preview")}/post/responses")
-            assertTrue(previewResponses.has("200"))
-            assertTrue(previewResponses.has("202"))
-            assertTrue(previewResponses.path("202").path("headers").has(HttpHeader.LOCATION))
-            assertTrue(previewResponses.path("202").path("headers").has(HttpHeader.RETRY_AFTER))
+            previewResponses.has("200").shouldBeTrue()
+            previewResponses.has("202").shouldBeTrue()
+            previewResponses.path("202").path("headers").has(HttpHeader.LOCATION).shouldBeTrue()
+            previewResponses.path("202").path("headers").has(HttpHeader.RETRY_AFTER).shouldBeTrue()
             val pollingHeaders = root.at(
                 "/paths/${pointer("$base/preview-jobs/{jobId}")}/get/responses/200/headers"
             )
-            assertTrue(pollingHeaders.has(HttpHeader.RETRY_AFTER))
+            pollingHeaders.has(HttpHeader.RETRY_AFTER).shouldBeTrue()
 
             listOf("/{id}/activate", "/activation-commands/{commandId}/replay").forEach { suffix ->
                 val parameters = root.at("/paths/${pointer(base + suffix)}/post/parameters")
                     .associateBy { it.path("name").stringValue() }
                 val idempotency = requireNotNull(parameters[HttpHeader.IDEMPOTENCY_KEY]) { "$base$suffix" }
-                assertEquals(true, idempotency.path("required").asBoolean(), "$base$suffix")
-                assertEquals("header", idempotency.path("in").stringValue(), "$base$suffix")
+                idempotency.path("required").asBoolean().shouldBeTrue()
+                idempotency.path("in").stringValue() shouldBeEqualTo "header"
             }
 
             val approvalResponses = root.at("/paths/${pointer("$base/{id}/approve")}/post/responses")
             listOf("200", "400", "403", "404", "409", "422").forEach {
-                assertTrue(approvalResponses.has(it), "$base approve $it")
+                approvalResponses.has(it).shouldBeTrue()
             }
             val scheduledResponses = root.at("/paths/${pointer("$base/{id}/schedule")}/post/responses")
-            assertFalse(scheduledResponses.has("200"), "$base schedule must not advertise 200")
+            scheduledResponses.has("200").shouldBeFalse()
             listOf("202", "400", "403", "404", "409", "422").forEach {
-                assertTrue(scheduledResponses.has(it), "$base schedule $it")
+                scheduledResponses.has(it).shouldBeTrue()
             }
             listOf("/{id}/activate", "/activation-commands/{commandId}/replay").forEach { suffix ->
                 val responses = root.at("/paths/${pointer(base + suffix)}/post/responses")
-                assertFalse(responses.has("202"), "$base$suffix must not advertise 202")
+                responses.has("202").shouldBeFalse()
                 listOf("200", "400", "403", "404", "409", "422").forEach {
-                    assertTrue(responses.has(it), "$base$suffix $it")
+                    responses.has(it).shouldBeTrue()
                 }
             }
         }
@@ -156,7 +156,7 @@ class SchedulingPolicyOpenApiTest {
             "EffectiveSchedulingPolicyResponse",
             "SchedulingApiErrorResponse",
         ).forEach { schemaName ->
-            assertFalse(schemas.path(schemaName).isMissingNode, schemaName)
+            schemas.path(schemaName).isMissingNode.shouldBeFalse()
         }
 
         val forbidden = setOf(
@@ -180,21 +180,18 @@ class SchedulingPolicyOpenApiTest {
             .toList()
         requestSchemas.forEach { schema ->
             val propertyNames = schema.path("properties").properties().asSequence().map { it.key }.toSet()
-            assertTrue(propertyNames.intersect(forbidden).isEmpty(), propertyNames.toString())
+            propertyNames.intersect(forbidden).isEmpty().shouldBeTrue()
         }
 
         val draftPayload = schemas.path("CreateSchedulingPolicyDraftRequest")
             .path("properties")
             .path("payload")
-        assertTrue(
-            draftPayload.path("description").stringValue()
-                .contains("profileReevaluationHeldTargetSeconds"),
-            draftPayload.toString(),
-        )
+        draftPayload.path("description").stringValue()
+            .contains("profileReevaluationHeldTargetSeconds").shouldBeTrue()
         val effectiveTargets = schemas.path("EffectiveSchedulingPolicyResponse")
             .path("properties")
             .path("profileReevaluationTargets")
-        assertFalse(effectiveTargets.isMissingNode, "profileReevaluationTargets")
+        effectiveTargets.isMissingNode.shouldBeFalse()
         val targetSchemaName = effectiveTargets.path("\$ref").stringValue().substringAfterLast("/")
         val targetFields = schemas.path(targetSchemaName).path("properties")
         listOf(
@@ -202,11 +199,11 @@ class SchedulingPolicyOpenApiTest {
             "heldSource",
             "proposedTargetSeconds",
             "proposedSource",
-        ).forEach { assertTrue(targetFields.has(it), it) }
+        ).forEach { targetFields.has(it).shouldBeTrue() }
 
         val errorFields = schemas.path("SchedulingApiErrorResponse").path("properties")
         listOf("errorCode", "correlationId", "retryable", "action").forEach {
-            assertTrue(errorFields.has(it), it)
+            errorFields.has(it).shouldBeTrue()
         }
     }
 

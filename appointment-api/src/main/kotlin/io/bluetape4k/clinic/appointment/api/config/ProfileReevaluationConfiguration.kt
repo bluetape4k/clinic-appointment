@@ -22,7 +22,6 @@ import io.bluetape4k.clinic.appointment.event.profile.ProfileReevaluationEventOb
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.ProfileReevaluationRepository
 import io.micrometer.core.instrument.MeterRegistry
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -31,8 +30,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.context.event.EventListener
-import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.scheduling.annotation.Scheduled
 import java.lang.management.ManagementFactory
@@ -231,13 +228,11 @@ class ProfileReevaluationConfiguration {
 class ProfileReevaluationSchedulingRunner(
     private val dispatcher: ProfileReevaluationDispatcher,
 ) {
-    @EventListener(ApplicationReadyEvent::class)
-    fun onApplicationReady() {
-        poll()
-    }
-
-    @Scheduled(fixedDelayString = "\${appointment.profile-reevaluation.poll-interval:PT1S}")
-    fun poll() {
-        runBlocking { dispatcher.dispatchOnce() }
+    @Scheduled(
+        fixedDelayString = "\${appointment.profile-reevaluation.poll-interval:PT1S}",
+        initialDelayString = "PT0S",
+    )
+    suspend fun poll() {
+        dispatcher.dispatchOnce()
     }
 }

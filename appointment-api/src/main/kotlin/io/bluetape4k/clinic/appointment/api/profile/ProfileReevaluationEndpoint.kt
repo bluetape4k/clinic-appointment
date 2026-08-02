@@ -1,13 +1,14 @@
 package io.bluetape4k.clinic.appointment.api.profile
 
 import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.reactor.mono
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation
 import org.springframework.boot.actuate.endpoint.annotation.WriteOperation
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
+import reactor.core.publisher.Mono
 import java.time.Instant
 
 /**
@@ -20,8 +21,8 @@ class ProfileReevaluationEndpoint(
         ProfileReevaluationAdminActorResolver(),
 ) {
     @ReadOperation
-    fun status(): ProfileReevaluationOperationalSnapshot =
-        runBlocking { adminService.snapshot() }
+    fun status(): Mono<ProfileReevaluationOperationalSnapshot> =
+        mono { adminService.snapshot() }
 
     @WriteOperation
     fun redrive(
@@ -32,25 +33,28 @@ class ProfileReevaluationEndpoint(
         clinicId: Long? = null,
         targetRevision: Long? = null,
         limit: Int = 50,
-    ): ProfileReevaluationAdminResult =
-        runBlocking {
-            val scope =
-                ProfileReevaluationAdminScope(
-                    tenantGroupId = tenantGroupId,
-                    clinicId = clinicId,
-                    targetRevision = targetRevision,
-                )
+    ): Mono<ProfileReevaluationAdminResult> {
+        val scope =
+            ProfileReevaluationAdminScope(
+                tenantGroupId = tenantGroupId,
+                clinicId = clinicId,
+                targetRevision = targetRevision,
+            )
+        val command =
+            ProfileReevaluationAdminCommand(
+                action = action,
+                actor = actorResolver.resolve(scope),
+                reason = reason,
+                idempotencyKey = idempotencyKey,
+                scope = scope,
+                limit = limit,
+            )
+        return mono {
             adminService.redrive(
-                ProfileReevaluationAdminCommand(
-                    action = action,
-                    actor = actorResolver.resolve(scope),
-                    reason = reason,
-                    idempotencyKey = idempotencyKey,
-                    scope = scope,
-                    limit = limit,
-                ),
+                command,
             )
         }
+    }
 }
 
 /**

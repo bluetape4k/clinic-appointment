@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.policy
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBe
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyApiException
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
@@ -22,8 +23,6 @@ import io.mockk.every
 import io.mockk.verify
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
-import org.junit.jupiter.api.Assertions.assertSame
 import java.io.IOException
 import java.time.Instant
 import tools.jackson.databind.json.JsonMapper
@@ -103,7 +102,7 @@ class SchedulingPolicyAdministrationServiceTest {
         } shouldBeEqualTo "committed"
 
         val original = IOException("repository adapter failed")
-        val propagated = assertThrows<IOException> {
+        val propagated = assertFailsWith<IOException> {
             resilientService.observe(
                 PolicyAdministrationMetricOperation.VALIDATE,
                 scope,
@@ -111,7 +110,7 @@ class SchedulingPolicyAdministrationServiceTest {
                 throw original
             }
         }
-        assertSame(original, propagated)
+        propagated shouldBe original
         verify(exactly = 1) {
             brokenMetrics.recordAdministration(
                 PolicyAdministrationMetricResult.SUCCEEDED,

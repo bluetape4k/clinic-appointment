@@ -55,7 +55,7 @@ class ProfileReevaluationEndpointTest {
             idempotencyKey = "redrive-20260731-0001",
             tenantGroupId = 1L,
             clinicId = 41L,
-        )
+        ).block()
 
         auditEvents.single().actor shouldBeEqualTo principal.userId
         ProfileReevaluationEndpoint::class.java
@@ -67,7 +67,7 @@ class ProfileReevaluationEndpointTest {
                 java.lang.Long::class.java,
                 java.lang.Long::class.java,
                 java.lang.Long::class.java,
-                Int::class.javaPrimitiveType!!,
+                requireNotNull(Int::class.javaPrimitiveType),
             )
             .parameterCount shouldBeEqualTo 7
     }

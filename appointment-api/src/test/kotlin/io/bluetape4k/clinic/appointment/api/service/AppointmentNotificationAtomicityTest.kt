@@ -202,7 +202,7 @@ internal class AppointmentNotificationAtomicityTest {
             }
 
             transaction {
-                val appointment = appointmentRepository.findByIdOrNull(appointmentId)!!
+                val appointment = requireNotNull(appointmentRepository.findByIdOrNull(appointmentId))
                 appointment.status shouldBeEqualTo AppointmentState.REQUESTED
                 appointment.version shouldBeEqualTo 0L
                 AppointmentStateHistory.selectAll().count() shouldBeEqualTo 0L
@@ -296,7 +296,7 @@ internal class AppointmentNotificationAtomicityTest {
         }
 
         transaction {
-            val record = appointmentRepository.findByIdOrNull(appointmentId)!!
+            val record = requireNotNull(appointmentRepository.findByIdOrNull(appointmentId))
             record.status shouldBeEqualTo AppointmentState.CONFIRMED
             record.version shouldBeEqualTo 1L
             NotificationOutboxEvents.selectAll()
@@ -323,8 +323,8 @@ internal class AppointmentNotificationAtomicityTest {
         )
 
         transaction {
-            val original = appointmentRepository.findByIdOrNull(originalId)!!
-            val replacement = appointmentRepository.findByIdOrNull(replacementId)!!
+            val original = requireNotNull(appointmentRepository.findByIdOrNull(originalId))
+            val replacement = requireNotNull(appointmentRepository.findByIdOrNull(replacementId))
             original.status shouldBeEqualTo AppointmentState.RESCHEDULED
             original.version shouldBeEqualTo 3L
             replacement.status shouldBeEqualTo AppointmentState.CONFIRMED
@@ -369,7 +369,7 @@ internal class AppointmentNotificationAtomicityTest {
         }
 
         transaction {
-            val original = appointmentRepository.findByIdOrNull(originalId)!!
+            val original = requireNotNull(appointmentRepository.findByIdOrNull(originalId))
             original.status shouldBeEqualTo AppointmentState.PENDING_RESCHEDULE
             original.version shouldBeEqualTo 2L
             Appointments.selectAll().count() shouldBeEqualTo 1L
@@ -487,7 +487,7 @@ internal class AppointmentNotificationAtomicityTest {
                     doctorId = doctorId,
                     priority = 1,
                 )
-            ).id!!
+            ).id ?: error("reschedule candidate id must be persisted")
         }
 
     private fun saveRequestedAppointment(): Long =
@@ -505,7 +505,7 @@ internal class AppointmentNotificationAtomicityTest {
                     endTime = LocalTime.of(10, 30),
                     status = AppointmentState.REQUESTED,
                 )
-            ).id!!
+            ).id ?: error("appointment id must be persisted")
         }
 
     private fun request(memberId: String? = "member-1"): CreateAppointmentRequest =

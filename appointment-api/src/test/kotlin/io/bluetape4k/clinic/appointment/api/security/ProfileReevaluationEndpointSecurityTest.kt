@@ -12,6 +12,7 @@ import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.ApplicationContext
+import org.springframework.core.ParameterizedTypeReference
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.test.context.ActiveProfiles
@@ -47,6 +48,12 @@ class ProfileReevaluationEndpointSecurityTest {
     @Test
     fun `재평가 actuator는 admin만 접근하고 일반 API에는 노출하지 않는다`() {
         applicationContext.getBeansOfType(ProfileReevaluationEndpoint::class.java).size shouldBeEqualTo 1
+        val operatorToken =
+            token(
+                SchedulingRole.ADMIN,
+                ActorType.ADMIN,
+                scopes = setOf(PROFILE_REEVALUATION_OPERATE_SCOPE),
+            )
         status("/actuator/profileReevaluation") shouldBeEqualTo HttpStatus.UNAUTHORIZED
         status(
             "/actuator/profileReevaluation",
@@ -58,12 +65,9 @@ class ProfileReevaluationEndpointSecurityTest {
         ) shouldBeEqualTo HttpStatus.FORBIDDEN
         status(
             "/actuator/profileReevaluation",
-            token(
-                SchedulingRole.ADMIN,
-                ActorType.ADMIN,
-                scopes = setOf(PROFILE_REEVALUATION_OPERATE_SCOPE),
-            ),
+            operatorToken,
         ) shouldBeEqualTo HttpStatus.OK
+        body("/actuator/profileReevaluation", operatorToken)["drainState"] shouldBeEqualTo "DRAINED"
         status(
             "/api/v2/profileReevaluation",
             token(SchedulingRole.ADMIN, ActorType.ADMIN),
@@ -80,6 +84,18 @@ class ProfileReevaluationEndpointSecurityTest {
                 if (token != null) header(HttpHeaders.AUTHORIZATION, "Bearer $token")
             }
             .exchange { _, response -> HttpStatus.valueOf(response.statusCode.value()) }
+
+    private fun body(
+        path: String,
+        token: String,
+    ): Map<String, Any> =
+        requireNotNull(
+            client.get()
+                .uri(path)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                .retrieve()
+                .body(object : ParameterizedTypeReference<Map<String, Any>>() {}),
+        )
 
     private fun token(
         role: String,

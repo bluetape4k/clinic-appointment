@@ -141,7 +141,7 @@ class ProfileReevaluationEventServiceTest {
             val scope = ProfileReferenceFingerprintValidator.scope(1L, 41L, fingerprint)
             val repository = ProfileReevaluationRepository()
 
-            repository.findHead(scope)!!.latestRevision shouldBeEqualTo 8L
+            requireNotNull(repository.findHead(scope)).latestRevision shouldBeEqualTo 8L
             repository.findRunnableJobs(scope).single().targetRevision shouldBeEqualTo 8L
             repository.findJobs(scope).shouldHaveSize(2)
             SchedulingInboxEvents.selectAll().toList().shouldHaveSize(3)
@@ -193,7 +193,7 @@ class ProfileReevaluationEventServiceTest {
             val quarantined = SchedulingQuarantineEvents.selectAll()
                 .where { SchedulingQuarantineEvents.eventId eq "bad-schema" }
                 .single()
-            val ciphertext = quarantined[SchedulingQuarantineEvents.encryptedOriginalEnvelope]!!
+            val ciphertext = requireNotNull(quarantined[SchedulingQuarantineEvents.encryptedOriginalEnvelope])
             ciphertext.contains("A".repeat(64)).shouldBeFalse()
             ciphertext.contains("assessment:7").shouldBeFalse()
             SchedulingQuarantineEvents.selectAll()
