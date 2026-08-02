@@ -120,6 +120,45 @@ class ConstraintVerifierTest {
             .penalizesBy(1)
     }
 
+    @Test
+    fun `partially initialized planning entity is ignored by representative hard constraints`() {
+        val partial = appointment(doctorId = null)
+        val operatingHours = OperatingHoursRecord(
+            clinicId = 10L,
+            dayOfWeek = DayOfWeek.MONDAY,
+            openTime = LocalTime.of(9, 0),
+            closeTime = LocalTime.of(18, 0),
+        )
+        val doctor = DoctorFact(
+            id = 100L,
+            clinicId = 10L,
+            providerType = "DOCTOR",
+            maxConcurrentPatients = null,
+        )
+        val closure = ClinicClosureRecord(
+            clinicId = 10L,
+            closureDate = monday,
+            isFullDay = true,
+        )
+
+        constraintVerifier
+            .verifyThat { _, factory -> HardConstraints.withinOperatingHours(factory) }
+            .given(partial, operatingHours)
+            .penalizesBy(0)
+        constraintVerifier
+            .verifyThat { _, factory -> HardConstraints.noClinicClosureConflict(factory) }
+            .given(partial, closure)
+            .penalizesBy(0)
+        constraintVerifier
+            .verifyThat { _, factory -> HardConstraints.providerTypeMatch(factory) }
+            .given(partial, doctor)
+            .penalizesBy(0)
+        constraintVerifier
+            .verifyThat { _, factory -> HardConstraints.doctorBelongsToClinic(factory) }
+            .given(partial, doctor)
+            .penalizesBy(0)
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // H3: noDoctorAbsenceConflict
     // ══════════════════════════════════════════════════════════════════════════

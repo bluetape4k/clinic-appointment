@@ -17,6 +17,7 @@ import io.bluetape4k.clinic.appointment.solver.domain.DoctorFact
 import io.bluetape4k.clinic.appointment.solver.domain.EquipmentFact
 import io.bluetape4k.clinic.appointment.solver.domain.EquipmentUnavailabilityFact
 import io.bluetape4k.clinic.appointment.solver.domain.TreatmentFact
+import io.bluetape4k.clinic.appointment.solver.domain.withAssigned
 
 /**
  * Hard Constraints (H1~H10) for appointment scheduling.
@@ -40,13 +41,15 @@ object HardConstraints {
             .ifNotExists(
                 OperatingHoursRecord::class.java,
                 Joiners.equal(
-                    { appt -> appt.appointmentDate!!.dayOfWeek },
+                    { appt -> appt.appointmentDate?.dayOfWeek },
                     { oh -> oh.dayOfWeek },
                 ),
                 Joiners.filtering { appt, oh ->
-                    oh.isActive &&
-                        appt.startTime!! >= oh.openTime &&
-                        appt.endTime!! <= oh.closeTime
+                    appt.withAssigned { _, _, startTime, endTime ->
+                        oh.isActive &&
+                            startTime >= oh.openTime &&
+                            endTime <= oh.closeTime
+                    } == true
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
@@ -61,15 +64,17 @@ object HardConstraints {
             .ifNotExists(
                 DoctorScheduleRecord::class.java,
                 Joiners.equal(
-                    { appt -> appt.doctorId!! },
+                    { appt -> appt.doctorId },
                     { ds -> ds.doctorId },
                 ),
                 Joiners.equal(
-                    { appt -> appt.appointmentDate!!.dayOfWeek },
+                    { appt -> appt.appointmentDate?.dayOfWeek },
                     { ds -> ds.dayOfWeek },
                 ),
                 Joiners.filtering { appt, ds ->
-                    appt.startTime!! >= ds.startTime && appt.endTime!! <= ds.endTime
+                    appt.withAssigned { _, _, startTime, endTime ->
+                        startTime >= ds.startTime && endTime <= ds.endTime
+                    } == true
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
@@ -85,19 +90,21 @@ object HardConstraints {
             .ifExists(
                 DoctorAbsenceRecord::class.java,
                 Joiners.equal(
-                    { appt -> appt.doctorId!! },
+                    { appt -> appt.doctorId },
                     { abs -> abs.doctorId },
                 ),
                 Joiners.equal(
-                    { appt -> appt.appointmentDate!! },
+                    { appt -> appt.appointmentDate },
                     { abs -> abs.absenceDate },
                 ),
                 Joiners.filtering { appt, abs ->
                     // 전일 부재이거나 시간 구간이 겹치는 경우
                     val absStart = abs.startTime
                     val absEnd = abs.endTime
-                    absStart == null ||
-                        (absEnd != null && appt.startTime!! < absEnd && absStart < appt.endTime!!)
+                    appt.withAssigned { _, _, startTime, endTime ->
+                        absStart == null ||
+                            (absEnd != null && startTime < absEnd && absStart < endTime)
+                    } == true
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
@@ -112,11 +119,13 @@ object HardConstraints {
             .ifExists(
                 BreakTimeRecord::class.java,
                 Joiners.equal(
-                    { appt -> appt.appointmentDate!!.dayOfWeek },
+                    { appt -> appt.appointmentDate?.dayOfWeek },
                     { bt -> bt.dayOfWeek },
                 ),
                 Joiners.filtering { appt, bt ->
-                    appt.startTime!! < bt.endTime && bt.startTime < appt.endTime!!
+                    appt.withAssigned { _, _, startTime, endTime ->
+                        startTime < bt.endTime && bt.startTime < endTime
+                    } == true
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
@@ -131,7 +140,9 @@ object HardConstraints {
             .ifExists(
                 ClinicDefaultBreakTimeRecord::class.java,
                 Joiners.filtering { appt: AppointmentPlanning, dbt: ClinicDefaultBreakTimeRecord ->
-                    appt.startTime!! < dbt.endTime && dbt.startTime < appt.endTime!!
+                    appt.withAssigned { _, _, startTime, endTime ->
+                        startTime < dbt.endTime && dbt.startTime < endTime
+                    } == true
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
@@ -146,15 +157,17 @@ object HardConstraints {
             .ifExists(
                 ClinicClosureRecord::class.java,
                 Joiners.equal(
-                    { appt -> appt.appointmentDate!! },
+                    { appt -> appt.appointmentDate },
                     { cl -> cl.closureDate },
                 ),
                 Joiners.filtering { appt, cl ->
                     val clStart = cl.startTime
                     val clEnd = cl.endTime
-                    cl.isFullDay ||
-                        (clStart != null && clEnd != null &&
-                            appt.startTime!! < clEnd && clStart < appt.endTime!!)
+                    appt.withAssigned { _, _, startTime, endTime ->
+                        cl.isFullDay ||
+                            (clStart != null && clEnd != null &&
+                                startTime < clEnd && clStart < endTime)
+                    } == true
                 },
             )
             .penalize(HardSoftScore.ONE_HARD)
@@ -171,7 +184,7 @@ object HardConstraints {
             .ifExists(
                 HolidayRecord::class.java,
                 Joiners.equal(
-                    { appt, _ -> appt.appointmentDate!! },
+                    { appt, _ -> appt.appointmentDate },
                     { h -> h.holidayDate },
                 ),
             )
@@ -212,7 +225,7 @@ object HardConstraints {
             .join(
                 DoctorFact::class.java,
                 Joiners.equal(
-                    { appt, _ -> appt.doctorId!! },
+                    { appt, _ -> appt.doctorId },
                     DoctorFact::id,
                 ),
             )
@@ -273,7 +286,7 @@ object HardConstraints {
             .join(
                 EquipmentFact::class.java,
                 Joiners.equal(
-                    { appt, _ -> appt.equipmentId!! },
+                    { appt, _ -> appt.equipmentId },
                     EquipmentFact::id,
                 ),
             )
@@ -293,7 +306,7 @@ object HardConstraints {
             .join(
                 DoctorFact::class.java,
                 Joiners.equal(
-                    { appt -> appt.doctorId!! },
+                    { appt -> appt.doctorId },
                     DoctorFact::id,
                 ),
             )
@@ -312,7 +325,7 @@ object HardConstraints {
             .join(
                 DoctorFact::class.java,
                 Joiners.equal(
-                    { appt -> appt.doctorId!! },
+                    { appt -> appt.doctorId },
                     DoctorFact::id,
                 ),
             )
@@ -332,11 +345,13 @@ object HardConstraints {
             }
             .join(
                 EquipmentUnavailabilityFact::class.java,
-                Joiners.equal({ appt -> appt.equipmentId!! }, { fact -> fact.equipmentId }),
+                Joiners.equal({ appt -> appt.equipmentId }, { fact -> fact.equipmentId }),
                 Joiners.equal({ appt -> appt.appointmentDate }, { fact -> fact.date }),
             )
             .filter { appt, fact ->
-                appt.startTime!! < fact.endTime && fact.startTime < appt.endTime!!
+                appt.withAssigned { _, _, startTime, endTime ->
+                    startTime < fact.endTime && fact.startTime < endTime
+                } == true
             }
             .penalize(HardSoftScore.ONE_HARD)
             .asConstraint("H11 equipmentUnavailabilityConflict")
