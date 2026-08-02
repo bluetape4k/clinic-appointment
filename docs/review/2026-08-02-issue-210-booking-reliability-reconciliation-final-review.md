@@ -7,7 +7,7 @@
 - P1: `0`
 - P2: `0`
 - P3: `0`
-- 리뷰 기준점: `71207014328f1b9fe712d6352e121597fc39d69e`
+- 리뷰 기준점: `b22209a5ddc7d300eb9045c344bcf5fa7991bfe1`
 - 비교 기준: `origin/develop` (`a53675e5d24e08c17117dc5224bc71f6d739aa30`)
 - 작업 경계: `fix/issue-210-booking-reliability-reconcile`
 
