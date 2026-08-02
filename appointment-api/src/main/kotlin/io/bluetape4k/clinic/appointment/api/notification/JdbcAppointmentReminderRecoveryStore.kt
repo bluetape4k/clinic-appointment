@@ -33,6 +33,11 @@ import io.bluetape4k.clinic.appointment.notification.ReminderRecoveryPayload
 import io.bluetape4k.clinic.appointment.notification.ReminderRecoveryProgress
 import io.bluetape4k.clinic.appointment.notification.ReminderRecoverySource
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -68,9 +73,10 @@ class JdbcAppointmentReminderRecoveryStore(
     private val sameDayReminderLeadTime: Duration,
     private val dayBeforeEnabled: Boolean,
     private val sameDayEnabled: Boolean,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ReminderRecoverySource, ReminderRecoveryMaterializer {
 
-    private val cursorLock = Any()
+    private val cursorMutex = Mutex()
     private val pendingCandidates = ArrayDeque<ReminderRecoveryCandidate>()
 
     init {
@@ -82,50 +88,52 @@ class JdbcAppointmentReminderRecoveryStore(
     override suspend fun findCandidates(now: Instant, limit: Int): List<ReminderRecoveryCandidate> {
         require(limit > 0) { "limit must be positive" }
         if (!dayBeforeEnabled && !sameDayEnabled) return emptyList()
-        return synchronized(cursorLock) {
-            val result = buildList {
-                while (size < limit && pendingCandidates.isNotEmpty()) {
-                    add(pendingCandidates.removeFirst())
-                }
-            }.toMutableList()
-            if (result.size == limit) return@synchronized result
-            transaction(database) {
-                val checkpoint = activeCheckpoint()
-                val slotCount = listOf(dayBeforeEnabled, sameDayEnabled).count { it }
-                val remaining = limit - result.size
-                val appointmentLimit = max(1, (remaining + slotCount - 1) / slotCount)
-                val fromDate = now.minus(Duration.ofDays(2)).atZone(UTC).toLocalDate()
-                val toDate = now.plus(Duration.ofDays(3)).atZone(UTC).toLocalDate()
-                val rows = (Appointments innerJoin Clinics)
-                    .selectAll()
-                    .where {
-                        (Appointments.status eq AppointmentState.CONFIRMED) and
-                            (Appointments.id greater checkpoint.lastAppointmentId) and
-                            Appointments.appointmentDate.between(fromDate, toDate)
+        return withContext(ioDispatcher) {
+            cursorMutex.withLock {
+                val result = buildList {
+                    while (size < limit && pendingCandidates.isNotEmpty()) {
+                        add(pendingCandidates.removeFirst())
                     }
-                    .orderBy(Appointments.id to SortOrder.ASC)
-                    .limit(appointmentLimit)
-                    .toList()
+                }.toMutableList()
+                if (result.size == limit) return@withLock result
+                transaction(database) {
+                    val checkpoint = activeCheckpoint()
+                    val slotCount = listOf(dayBeforeEnabled, sameDayEnabled).count { it }
+                    val remaining = limit - result.size
+                    val appointmentLimit = max(1, (remaining + slotCount - 1) / slotCount)
+                    val fromDate = now.minus(Duration.ofDays(2)).atZone(UTC).toLocalDate()
+                    val toDate = now.plus(Duration.ofDays(3)).atZone(UTC).toLocalDate()
+                    val rows = (Appointments innerJoin Clinics)
+                        .selectAll()
+                        .where {
+                            (Appointments.status eq AppointmentState.CONFIRMED) and
+                                (Appointments.id greater checkpoint.lastAppointmentId) and
+                                Appointments.appointmentDate.between(fromDate, toDate)
+                        }
+                        .orderBy(Appointments.id to SortOrder.ASC)
+                        .limit(appointmentLimit)
+                        .toList()
 
-                if (rows.isEmpty()) {
-                    completeCheckpoint(checkpoint.runId)
-                    return@transaction result
+                    if (rows.isEmpty()) {
+                        completeCheckpoint(checkpoint.runId)
+                        return@transaction result
+                    }
+                    val v2Schedules = loadCommitmentSchedules(rows)
+                    val lastRowId = rows.last()[Appointments.id].value
+                    val completesRun = rows.size < appointmentLimit
+                    val generated = rows.flatMap { row ->
+                        val rowId = row[Appointments.id].value
+                        row.toCandidates(
+                            now = now,
+                            commitmentSchedule = v2Schedules[rowId],
+                            runId = checkpoint.runId,
+                            completesRun = completesRun && rowId == lastRowId,
+                        )
+                    }
+                    result += generated.take(remaining)
+                    pendingCandidates.addAll(generated.drop(remaining))
+                    result
                 }
-                val v2Schedules = loadCommitmentSchedules(rows)
-                val lastRowId = rows.last()[Appointments.id].value
-                val completesRun = rows.size < appointmentLimit
-                val generated = rows.flatMap { row ->
-                    val rowId = row[Appointments.id].value
-                    row.toCandidates(
-                        now = now,
-                        commitmentSchedule = v2Schedules[rowId],
-                        runId = checkpoint.runId,
-                        completesRun = completesRun && rowId == lastRowId,
-                    )
-                }
-                result += generated.take(remaining)
-                pendingCandidates.addAll(generated.drop(remaining))
-                result
             }
         }
     }

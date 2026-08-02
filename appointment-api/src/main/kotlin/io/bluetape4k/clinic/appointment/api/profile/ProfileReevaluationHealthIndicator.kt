@@ -1,8 +1,9 @@
 package io.bluetape4k.clinic.appointment.api.profile
 
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.reactor.mono
 import org.springframework.boot.health.contributor.Health
-import org.springframework.boot.health.contributor.HealthIndicator
+import org.springframework.boot.health.contributor.ReactiveHealthIndicator
+import reactor.core.publisher.Mono
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -14,27 +15,28 @@ class ProfileReevaluationHealthIndicator(
     private val source: ProfileReevaluationHealthSource,
     private val backlogWarningAge: Duration = Duration.ofMinutes(30),
     private val assessmentFailureThreshold: Int = 5,
-) : HealthIndicator {
+) : ReactiveHealthIndicator {
     init {
         require(backlogWarningAge.isPositive) { "backlogWarningAge must be positive" }
         require(assessmentFailureThreshold > 0) { "assessmentFailureThreshold must be positive" }
     }
 
-    override fun health(): Health {
-        val snapshot = runBlocking { source.snapshot() }
-        val unhealthy =
-            snapshot.consecutiveAssessmentFailures >= assessmentFailureThreshold ||
-                snapshot.oldestBacklogAge >= backlogWarningAge ||
-                snapshot.leaseRenewalFailures > 0
-        val builder = if (unhealthy) Health.status("DEGRADED") else Health.up()
-        return builder
-            .withDetail("oldestBacklogAgeSeconds", snapshot.oldestBacklogAge.seconds)
-            .withDetail("leaseRenewalFailures", snapshot.leaseRenewalFailures)
-            .withDetail("consecutiveAssessmentFailures", snapshot.consecutiveAssessmentFailures)
-            .withDetail("failedJobs", snapshot.failedJobs)
-            .withDetail("drainState", snapshot.drainState.name)
-            .build()
-    }
+    override fun health(): Mono<Health> =
+        mono {
+            val snapshot = source.snapshot()
+            val unhealthy =
+                snapshot.consecutiveAssessmentFailures >= assessmentFailureThreshold ||
+                    snapshot.oldestBacklogAge >= backlogWarningAge ||
+                    snapshot.leaseRenewalFailures > 0
+            val builder = if (unhealthy) Health.status("DEGRADED") else Health.up()
+            builder
+                .withDetail("oldestBacklogAgeSeconds", snapshot.oldestBacklogAge.seconds)
+                .withDetail("leaseRenewalFailures", snapshot.leaseRenewalFailures)
+                .withDetail("consecutiveAssessmentFailures", snapshot.consecutiveAssessmentFailures)
+                .withDetail("failedJobs", snapshot.failedJobs)
+                .withDetail("drainState", snapshot.drainState.name)
+                .build()
+        }
 }
 
 fun interface ProfileReevaluationHealthSource {

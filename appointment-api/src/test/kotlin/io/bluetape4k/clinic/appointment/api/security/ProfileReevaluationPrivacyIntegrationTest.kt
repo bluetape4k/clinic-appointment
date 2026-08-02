@@ -292,7 +292,8 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
                         drainState = ProfileReevaluationDrainState.DRAINING,
                     )
                 },
-            ).health()
+            ).health().block()
+                ?: error("Profile reevaluation health must emit a result")
 
             registry.meters.forEach { meter ->
                 val exposed = meter.id.tags.joinToString("|") { tag ->
