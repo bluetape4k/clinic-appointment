@@ -195,6 +195,42 @@ class BookingReliabilityRepository {
     }
 
     /**
+     * 한 page의 member를 한 번에 조회해 각 member의 최신 decision만 반환합니다.
+     *
+     * caller가 전달한 scope와 평가 시각 이전 조건을 SQL에 포함하고, 동일 member의
+     * tie는 evaluatedAt DESC, id DESC로 결정합니다. member별 추가 조회는 하지 않습니다.
+     */
+    fun findLatestDecisions(
+        tenantGroupId: Long,
+        clinicId: Long,
+        memberIds: Collection<MemberId>,
+        evaluatedAt: Instant,
+    ): Map<MemberId, BookingReliabilityDecisionRecord> {
+        validateScope(tenantGroupId, clinicId)
+        val distinctMemberIds = memberIds.distinct()
+        require(distinctMemberIds.isNotEmpty()) { "memberIds must not be empty" }
+        require(distinctMemberIds.size <= 500) { "memberIds must not exceed 500" }
+        val values = distinctMemberIds.map(MemberId::value)
+        return BookingReliabilityDecisions
+            .selectAll()
+            .where {
+                (BookingReliabilityDecisions.tenantGroupId eq tenantGroupId) and
+                    (BookingReliabilityDecisions.clinicId eq clinicId) and
+                    (BookingReliabilityDecisions.memberId inList values) and
+                    (BookingReliabilityDecisions.evaluatedAt lessEq evaluatedAt)
+            }
+            .orderBy(
+                BookingReliabilityDecisions.memberId to SortOrder.ASC,
+                BookingReliabilityDecisions.evaluatedAt to SortOrder.DESC,
+                BookingReliabilityDecisions.id to SortOrder.DESC,
+            )
+            .asSequence()
+            .map { it.toDecisionRecord() }
+            .distinctBy { it.memberId }
+            .associateBy { it.memberId }
+    }
+
+    /**
      * booking command와 override command가 같은 reliability head를 직렬화하도록 잠급니다.
      * 호출자는 이 조회 결과와 decision stamp 검증을 같은 transaction 안에서 수행해야 합니다.
      */

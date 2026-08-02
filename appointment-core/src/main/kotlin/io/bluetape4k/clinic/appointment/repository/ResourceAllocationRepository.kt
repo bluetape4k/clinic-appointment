@@ -6,20 +6,32 @@ import io.bluetape4k.clinic.appointment.model.commitment.ResourceType
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRecord
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationStatus
+import io.bluetape4k.clinic.appointment.model.waitlist.HoldScopeMismatch
+import io.bluetape4k.clinic.appointment.model.waitlist.NewHold
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCapacityHoldRecord
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCapacityHoldState
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCapacityReservation
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistScope
 import io.bluetape4k.clinic.appointment.model.tables.ResourceAllocations
 import io.bluetape4k.clinic.appointment.model.tables.ResourceCapacityBuckets
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistCapacityHolds
 import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.neq
+import org.jetbrains.exposed.v1.core.Op
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.vendors.ForUpdateOption
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.batchInsert
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -179,6 +191,201 @@ class ResourceAllocationRepository {
     }
 
     /**
+     * waitlist hold가 차지할 자원 mutex를 먼저 획득하고 confirmed allocation과 기존
+     * active hold를 함께 검증합니다. 이 메서드는 transaction을 열지 않습니다.
+     */
+    fun lockAndValidateWaitlistCapacity(
+        scope: WaitlistScope,
+        hold: NewHold,
+    ): WaitlistCapacityReservation =
+        lockAndValidateWaitlistCapacity(
+            tenantGroupId = scope.tenantGroupId,
+            clinicId = scope.clinicId,
+            hold = hold,
+        )
+
+    /** scope를 별도로 보유한 caller를 위한 waitlist capacity preflight입니다. */
+    fun lockAndValidateWaitlistCapacity(
+        tenantGroupId: Long,
+        clinicId: Long,
+        hold: NewHold,
+    ): WaitlistCapacityReservation {
+        val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
+        val validClinicId = clinicId.requirePositiveNumber("clinicId")
+        val key =
+            ResourceMutexKey(
+                tenantGroupId = validTenantGroupId,
+                clinicId = validClinicId,
+                resourceType = hold.resourceType,
+                resourceId = hold.resourceId,
+            )
+        lockResourceMutex(key)
+        validateWaitlistCapacity(
+            tenantGroupId = validTenantGroupId,
+            clinicId = validClinicId,
+            hold = hold,
+        )
+        return WaitlistCapacityReservation(
+            resourceType = hold.resourceType,
+            resourceId = hold.resourceId,
+            startsAt = hold.startsAt,
+            endsAt = hold.endsAt,
+            capacityUnits = hold.capacityUnits,
+            maximumCapacity = hold.maximumCapacity,
+        )
+    }
+
+    /** 기존 waitlist hold mutation 전에 같은 자원의 canonical mutex만 획득합니다. */
+    internal fun lockWaitlistHoldResource(hold: WaitlistCapacityHoldRecord) {
+        lockWaitlistResource(hold.scope, hold.resourceType, hold.resourceId)
+    }
+
+    /** hold가 유실된 claim이 offer snapshot으로 동일한 자원 mutex를 선점합니다. */
+    internal fun lockWaitlistResource(
+        scope: WaitlistScope,
+        resourceType: ResourceType,
+        resourceId: String,
+    ) {
+        lockResourceMutex(
+            ResourceMutexKey(
+                tenantGroupId = scope.tenantGroupId,
+                clinicId = scope.clinicId,
+                resourceType = resourceType,
+                resourceId = resourceId,
+            ),
+        )
+    }
+
+    /** 이미 자원 mutex를 선점한 claim이 durable hold 복구 전 capacity를 재검증합니다. */
+    internal fun validateWaitlistCapacityAfterResourceLock(
+        scope: WaitlistScope,
+        hold: NewHold,
+    ) {
+        validateWaitlistCapacity(
+            tenantGroupId = scope.tenantGroupId,
+            clinicId = scope.clinicId,
+            hold = hold,
+        )
+    }
+
+    /** offer insert가 끝난 뒤 같은 transaction에서 durable hold를 생성합니다. */
+    fun reserveWaitlistCapacityHold(
+        scope: WaitlistScope,
+        offerId: Long,
+        hold: NewHold,
+        now: Instant = Instant.now(),
+    ): WaitlistCapacityHoldRecord {
+        val validOfferId = offerId.requirePositiveNumber("offerId")
+        val id =
+            WaitlistCapacityHolds.insertAndGetId {
+                it[tenantGroupId] = scope.tenantGroupId
+                it[clinicId] = scope.clinicId
+                it[memberId] = scope.memberId.value
+                it[WaitlistCapacityHolds.offerId] = validOfferId
+                it[vacancyKey] = hold.vacancyKey
+                it[activeVacancyKey] = hold.activeVacancyKey
+                it[resourceType] = hold.resourceType
+                it[resourceId] = hold.resourceId
+                it[startsAt] = hold.startsAt
+                it[endsAt] = hold.endsAt
+                it[capacityUnits] = hold.capacityUnits
+                it[maximumCapacity] = hold.maximumCapacity
+                it[status] = WaitlistCapacityHoldState.OFFERED
+                it[holdExpiresAt] = hold.holdExpiresAt
+                it[version] = 0L
+                it[createdAt] = now
+                it[updatedAt] = now
+            }.value
+        return WaitlistCapacityHolds
+            .selectAll()
+            .where { WaitlistCapacityHolds.id eq id }
+            .single()
+            .toWaitlistCapacityHoldRecord()
+    }
+
+    /** replacement allocation 성공 뒤 accepted hold를 consumed로 CAS합니다. */
+    fun consumeWaitlistCapacityHold(
+        scope: WaitlistScope,
+        holdId: Long,
+        expectedVersion: Long,
+        consumedAt: Instant = Instant.now(),
+    ): Boolean {
+        val validHoldId = holdId.requirePositiveNumber("holdId")
+        require(expectedVersion >= 0L) { "expectedVersion must be zero or positive" }
+        ensureWaitlistHoldScope(scope, validHoldId)
+        return WaitlistCapacityHolds.update(
+            where = {
+                (WaitlistCapacityHolds.id eq validHoldId) and
+                    (WaitlistCapacityHolds.tenantGroupId eq scope.tenantGroupId) and
+                    (WaitlistCapacityHolds.clinicId eq scope.clinicId) and
+                    (WaitlistCapacityHolds.memberId eq scope.memberId.value) and
+                    (WaitlistCapacityHolds.status eq WaitlistCapacityHoldState.ACCEPTED) and
+                    (WaitlistCapacityHolds.version eq expectedVersion)
+            },
+        ) {
+            it[status] = WaitlistCapacityHoldState.CONSUMED
+            it[version] = expectedVersion + 1L
+            it[updatedAt] = consumedAt
+            it[WaitlistCapacityHolds.consumedAt] = consumedAt
+            it[WaitlistCapacityHolds.activeVacancyKey] = null
+        } == 1
+    }
+
+    /** decline/withdraw/expiry 시 hold를 terminal 상태로 만들고 audit row를 보존합니다. */
+    fun releaseWaitlistCapacityHold(
+        scope: WaitlistScope,
+        holdId: Long,
+        terminal: WaitlistCapacityHoldState,
+        releasedAt: Instant = Instant.now(),
+    ): Boolean {
+        require(terminal == WaitlistCapacityHoldState.RELEASED || terminal == WaitlistCapacityHoldState.EXPIRED) {
+            "waitlist hold release terminal must be RELEASED or EXPIRED"
+        }
+        val validHoldId = holdId.requirePositiveNumber("holdId")
+        val row = ensureWaitlistHoldScope(scope, validHoldId) ?: return false
+        if (!row[WaitlistCapacityHolds.status].isActive) return false
+        return WaitlistCapacityHolds.update(
+            where = {
+                (WaitlistCapacityHolds.id eq validHoldId) and
+                    (WaitlistCapacityHolds.tenantGroupId eq scope.tenantGroupId) and
+                    (WaitlistCapacityHolds.clinicId eq scope.clinicId) and
+                    (WaitlistCapacityHolds.memberId eq scope.memberId.value) and
+                    (WaitlistCapacityHolds.version eq row[WaitlistCapacityHolds.version])
+            },
+        ) {
+            it[status] = terminal
+            it[version] = row[WaitlistCapacityHolds.version] + 1L
+            it[updatedAt] = releasedAt
+            it[WaitlistCapacityHolds.releasedAt] = releasedAt.takeIf { terminal == WaitlistCapacityHoldState.RELEASED }
+            it[WaitlistCapacityHolds.activeVacancyKey] = null
+        } == 1
+    }
+
+    /** 만료 후보를 bounded batch로 조회하며 row를 삭제하지 않습니다. */
+    fun findExpiredWaitlistHolds(
+        limit: Int,
+        now: Instant,
+    ): List<WaitlistCapacityHoldRecord> {
+        require(limit in 1..500) { "limit must be in 1..500" }
+        return WaitlistCapacityHolds
+            .selectAll()
+            .where {
+                activeWaitlistHoldCondition() and
+                    (
+                        (WaitlistCapacityHolds.holdExpiresAt lessEq now) or
+                            (
+                                (WaitlistCapacityHolds.status eq WaitlistCapacityHoldState.ACCEPTED) and
+                                    (WaitlistCapacityHolds.startsAt lessEq now)
+                            )
+                    )
+            }
+            .orderBy(WaitlistCapacityHolds.holdExpiresAt to org.jetbrains.exposed.v1.core.SortOrder.ASC)
+            .limit(limit)
+            .forUpdate()
+            .map { it.toWaitlistCapacityHoldRecord() }
+    }
+
+    /**
      * commitment CAS로 대체가 확정된 이전 proposal의 active allocation을 해제합니다.
      *
      * @return `ACTIVE`에서 `RELEASED`로 전환된 row 수입니다.
@@ -233,26 +440,49 @@ class ResourceAllocationRepository {
      * [ResourceAllocationRequest.maximumCapacity]와 활성 allocation으로 검증합니다.
      */
     private fun lockResourceMutex(key: ResourceMutexKey) {
-        ResourceCapacityBuckets.insertIgnore {
-            it[tenantGroupId] = key.tenantGroupId
-            it[clinicId] = key.clinicId
-            it[resourceType] = key.resourceType
-            it[resourceId] = key.resourceId
-            it[bucketStartAt] = RESOURCE_MUTEX_INSTANT
-            it[ResourceCapacityBuckets.maximumCapacity] = RESOURCE_MUTEX_CAPACITY
+        val dialectName = TransactionManager.current().db.dialect.name.lowercase()
+        if (dialectName == "h2") {
+            val mutexExists =
+                ResourceCapacityBuckets
+                    .selectAll()
+                    .where { resourceMutexCondition(key) }
+                    .any()
+            if (!mutexExists) {
+                try {
+                    ResourceCapacityBuckets.insert {
+                        it[tenantGroupId] = key.tenantGroupId
+                        it[clinicId] = key.clinicId
+                        it[resourceType] = key.resourceType
+                        it[resourceId] = key.resourceId
+                        it[bucketStartAt] = RESOURCE_MUTEX_INSTANT
+                        it[ResourceCapacityBuckets.maximumCapacity] = RESOURCE_MUTEX_CAPACITY
+                    }
+                } catch (failure: ExposedSQLException) {
+                    // Two H2 transactions may observe the missing mutex row together. The
+                    // unique key is the arbitration point; only that expected race is ignored.
+                    if (!failure.isUniqueConstraintViolation()) {
+                        throw failure
+                    }
+                }
+            }
+        } else {
+            ResourceCapacityBuckets.insertIgnore {
+                it[tenantGroupId] = key.tenantGroupId
+                it[clinicId] = key.clinicId
+                it[resourceType] = key.resourceType
+                it[resourceId] = key.resourceId
+                it[bucketStartAt] = RESOURCE_MUTEX_INSTANT
+                it[ResourceCapacityBuckets.maximumCapacity] = RESOURCE_MUTEX_CAPACITY
+            }
         }
         val query =
             ResourceCapacityBuckets
             .selectAll()
             .where {
-                (ResourceCapacityBuckets.tenantGroupId eq key.tenantGroupId) and
-                    (ResourceCapacityBuckets.clinicId eq key.clinicId) and
-                    (ResourceCapacityBuckets.resourceType eq key.resourceType) and
-                    (ResourceCapacityBuckets.resourceId eq key.resourceId) and
-                    (ResourceCapacityBuckets.bucketStartAt eq RESOURCE_MUTEX_INSTANT)
+                resourceMutexCondition(key)
             }
         val lockOption =
-            when (TransactionManager.current().db.dialect.name.lowercase()) {
+            when (dialectName) {
                 "postgresql" ->
                     ForUpdateOption.PostgreSQL.ForUpdate(ForUpdateOption.PostgreSQL.MODE.NO_WAIT)
                 "mysql" ->
@@ -268,6 +498,16 @@ class ResourceAllocationRepository {
             throw failure
         }
     }
+
+    private fun resourceMutexCondition(key: ResourceMutexKey): Op<Boolean> =
+        (ResourceCapacityBuckets.tenantGroupId eq key.tenantGroupId) and
+            (ResourceCapacityBuckets.clinicId eq key.clinicId) and
+            (ResourceCapacityBuckets.resourceType eq key.resourceType) and
+            (ResourceCapacityBuckets.resourceId eq key.resourceId) and
+            (ResourceCapacityBuckets.bucketStartAt eq RESOURCE_MUTEX_INSTANT)
+
+    private fun ExposedSQLException.isUniqueConstraintViolation(): Boolean =
+        sqlState == H2_UNIQUE_VIOLATION || errorCode == H2_UNIQUE_VIOLATION_CODE
 
     private fun validateInternalConflicts(requests: List<ResourceAllocationRequest>) {
         requests.forEachIndexed { index, first ->
@@ -297,6 +537,126 @@ class ResourceAllocationRepository {
                 }
             }
         }
+    }
+
+    private fun validateWaitlistCapacity(
+        tenantGroupId: Long,
+        clinicId: Long,
+        hold: NewHold,
+    ) {
+        val existingAllocations =
+            ResourceAllocations
+                .selectAll()
+                .where {
+                    (ResourceAllocations.tenantGroupId eq tenantGroupId) and
+                        (ResourceAllocations.clinicId eq clinicId) and
+                        (ResourceAllocations.resourceType eq hold.resourceType) and
+                        (ResourceAllocations.resourceId eq hold.resourceId) and
+                        (ResourceAllocations.status eq ResourceAllocationStatus.ACTIVE) and
+                        (ResourceAllocations.startsAt less hold.endsAt) and
+                        (ResourceAllocations.endsAt greater hold.startsAt)
+                }
+                .forUpdate()
+                .toList()
+        val existingHolds =
+            WaitlistCapacityHolds
+                .selectAll()
+                .where {
+                    (WaitlistCapacityHolds.tenantGroupId eq tenantGroupId) and
+                        (WaitlistCapacityHolds.clinicId eq clinicId) and
+                        (WaitlistCapacityHolds.resourceType eq hold.resourceType) and
+                        (WaitlistCapacityHolds.resourceId eq hold.resourceId) and
+                        activeWaitlistHoldCondition() and
+                        (WaitlistCapacityHolds.startsAt less hold.endsAt) and
+                        (WaitlistCapacityHolds.endsAt greater hold.startsAt)
+                }
+                .forUpdate()
+                .toList()
+
+        if (hold.resourceType != ResourceType.CAPACITY_BUCKET) {
+            if (existingAllocations.isNotEmpty() || existingHolds.isNotEmpty()) {
+                throw ResourceAllocationConflictException("waitlist hold overlaps an active allocation")
+            }
+            return
+        }
+
+        if (existingAllocations.any { it[ResourceAllocations.allocationMode] != ResourceAllocationMode.CAPACITY_BUCKET }) {
+            throw ResourceAllocationConflictException("waitlist bucket overlaps an incompatible allocation")
+        }
+        val checkpoints =
+            buildSet {
+                add(hold.startsAt)
+                existingAllocations.mapTo(this) { it[ResourceAllocations.startsAt] }
+                existingHolds.mapTo(this) { it[WaitlistCapacityHolds.startsAt] }
+            }
+        checkpoints.forEach { checkpoint ->
+            val allocationUnits = existingAllocations.sumOf { row ->
+                if (
+                    row[ResourceAllocations.startsAt] <= checkpoint &&
+                    row[ResourceAllocations.endsAt] > checkpoint
+                ) {
+                    row[ResourceAllocations.capacityUnits]
+                } else {
+                    0
+                }
+            }
+            val holdUnits = existingHolds.sumOf { row ->
+                if (
+                    row[WaitlistCapacityHolds.startsAt] <= checkpoint &&
+                    row[WaitlistCapacityHolds.endsAt] > checkpoint
+                ) {
+                    row[WaitlistCapacityHolds.capacityUnits]
+                } else {
+                    0
+                }
+            }
+            val newUnits =
+                if (hold.startsAt <= checkpoint && hold.endsAt > checkpoint) {
+                    hold.capacityUnits
+                } else {
+                    0
+                }
+            val maxima = buildList {
+                add(hold.maximumCapacity)
+                existingAllocations
+                    .filter { row ->
+                        row[ResourceAllocations.startsAt] <= checkpoint &&
+                            row[ResourceAllocations.endsAt] > checkpoint
+                    }
+                    .mapTo(this) { it[ResourceAllocations.maximumCapacity] }
+                existingHolds
+                    .filter { row ->
+                        row[WaitlistCapacityHolds.startsAt] <= checkpoint &&
+                            row[WaitlistCapacityHolds.endsAt] > checkpoint
+                    }
+                    .mapTo(this) { it[WaitlistCapacityHolds.maximumCapacity] }
+            }
+            if (allocationUnits + holdUnits + newUnits > maxima.min()) {
+                throw ResourceAllocationConflictException("waitlist bucket capacity is exhausted")
+            }
+        }
+    }
+
+    private fun ensureWaitlistHoldScope(
+        scope: WaitlistScope,
+        holdId: Long,
+    ): ResultRow? {
+        val scoped =
+            WaitlistCapacityHolds
+                .selectAll()
+                .where {
+                    (WaitlistCapacityHolds.id eq holdId) and
+                        (WaitlistCapacityHolds.tenantGroupId eq scope.tenantGroupId) and
+                        (WaitlistCapacityHolds.clinicId eq scope.clinicId) and
+                        (WaitlistCapacityHolds.memberId eq scope.memberId.value)
+                }
+                .forUpdate()
+                .singleOrNull()
+        if (scoped != null) return scoped
+        if (WaitlistCapacityHolds.selectAll().where { WaitlistCapacityHolds.id eq holdId }.any()) {
+            throw HoldScopeMismatch(holdId)
+        }
+        return null
     }
 
     private fun validateExistingConflicts(
@@ -333,8 +693,23 @@ class ResourceAllocationRepository {
              * 순서를 유지한다.
              */
             val existing = query.forUpdate().toList()
+            val existingWaitlistHolds =
+                WaitlistCapacityHolds
+                    .selectAll()
+                    .where {
+                        (WaitlistCapacityHolds.tenantGroupId eq tenantGroupId) and
+                            (WaitlistCapacityHolds.clinicId eq clinicId) and
+                            (WaitlistCapacityHolds.resourceType eq representativeAllocation.resourceType) and
+                            (WaitlistCapacityHolds.resourceId eq representativeAllocation.resourceId) and
+                            activeWaitlistHoldCondition() and
+                            (WaitlistCapacityHolds.startsAt less groupEnd) and
+                            (WaitlistCapacityHolds.endsAt greater groupStart)
+                    }
+                    .forUpdate()
+                    .toList()
             groupedRequests.forEach { request ->
                 validateExistingOverlap(request, existing)
+                validateWaitlistHoldOverlap(request, existingWaitlistHolds)
             }
             val capacityRequests =
                 groupedRequests.filter { request ->
@@ -344,6 +719,7 @@ class ResourceAllocationRepository {
                 validateCapacityTimeline(
                     requests = capacityRequests,
                     existing = existing,
+                    existingWaitlistHolds = existingWaitlistHolds,
                 )
             }
         }
@@ -397,6 +773,25 @@ class ResourceAllocationRepository {
         }
     }
 
+    /** 활성 waitlist hold를 confirmed allocation과 같은 occupancy domain에 포함합니다. */
+    private fun validateWaitlistHoldOverlap(
+        request: ResourceAllocationRequest,
+        existing: List<ResultRow>,
+    ) {
+        if (existing.isEmpty()) return
+        val allocation = request.allocation
+        if (allocation.allocationMode != ResourceAllocationMode.CAPACITY_BUCKET) {
+            throw ResourceAllocationConflictException(
+                "waitlist hold overlaps an exclusive or shared allocation",
+            )
+        }
+        if (existing.any { it[WaitlistCapacityHolds.resourceType] != ResourceType.CAPACITY_BUCKET }) {
+            throw ResourceAllocationConflictException(
+                "capacity allocation overlaps a non-bucket waitlist hold",
+            )
+        }
+    }
+
     /**
      * 서로 다른 시작·종료 시각을 가진 패키지 항목을 half-open 구간으로 합산합니다.
      *
@@ -407,6 +802,7 @@ class ResourceAllocationRepository {
     private fun validateCapacityTimeline(
         requests: List<ResourceAllocationRequest>,
         existing: List<ResultRow>,
+        existingWaitlistHolds: List<ResultRow>,
     ) {
         val firstRequestStart = requests.minOf { it.allocation.startsAt }
         val checkpoints =
@@ -414,6 +810,7 @@ class ResourceAllocationRepository {
                 add(firstRequestStart)
                 requests.mapTo(this) { it.allocation.startsAt }
                 existing.mapTo(this) { it[ResourceAllocations.startsAt] }
+                existingWaitlistHolds.mapTo(this) { it[WaitlistCapacityHolds.startsAt] }
             }
         checkpoints.forEach { checkpoint ->
             val activeRequests =
@@ -431,16 +828,26 @@ class ResourceAllocationRepository {
                         row[ResourceAllocations.startsAt] <= checkpoint &&
                             row[ResourceAllocations.endsAt] > checkpoint
                     }
+            val activeWaitlistHolds =
+                existingWaitlistHolds
+                    .filter { row ->
+                        row[WaitlistCapacityHolds.startsAt] <= checkpoint &&
+                            row[WaitlistCapacityHolds.endsAt] > checkpoint
+                    }
             val effectiveMaximum =
                 (
                     activeRequests.map(ResourceAllocationRequest::maximumCapacity) +
                         activeExisting.map { row ->
                             row[ResourceAllocations.maximumCapacity]
+                        } +
+                        activeWaitlistHolds.map { row ->
+                            row[WaitlistCapacityHolds.maximumCapacity]
                         }
                 ).min()
             val requestedUnits = activeRequests.sumOf { it.allocation.capacityUnits }
             val existingUnits = activeExisting.sumOf { it[ResourceAllocations.capacityUnits] }
-            if (existingUnits + requestedUnits > effectiveMaximum) {
+            val waitlistHoldUnits = activeWaitlistHolds.sumOf { it[WaitlistCapacityHolds.capacityUnits] }
+            if (existingUnits + waitlistHoldUnits + requestedUnits > effectiveMaximum) {
                 throw ResourceAllocationConflictException("resource capacity bucket is exhausted")
             }
         }
@@ -494,6 +901,8 @@ class ResourceAllocationRepository {
         const val RESOURCE_MUTEX_CAPACITY = 1
         const val POSTGRES_LOCK_UNAVAILABLE = "55P03"
         const val MYSQL_LOCK_NOWAIT = 3_572
+        const val H2_UNIQUE_VIOLATION = "23505"
+        const val H2_UNIQUE_VIOLATION_CODE = 2_3505
     }
 }
 
@@ -573,6 +982,36 @@ private fun List<ResourceAllocationRequest>.toAvailabilityKeys(): List<ResourceA
             allocationMode = allocation.allocationMode,
         )
     }
+
+private fun activeWaitlistHoldCondition(): Op<Boolean> =
+    (WaitlistCapacityHolds.status eq WaitlistCapacityHoldState.OFFERED) or
+        (WaitlistCapacityHolds.status eq WaitlistCapacityHoldState.ACCEPTED)
+
+private fun ResultRow.toWaitlistCapacityHoldRecord(): WaitlistCapacityHoldRecord =
+    WaitlistCapacityHoldRecord(
+        id = this[WaitlistCapacityHolds.id].value,
+        scope = WaitlistScope(
+            tenantGroupId = this[WaitlistCapacityHolds.tenantGroupId].value,
+            clinicId = this[WaitlistCapacityHolds.clinicId].value,
+            memberId = io.bluetape4k.clinic.appointment.model.identity.MemberId(this[WaitlistCapacityHolds.memberId]),
+        ),
+        offerId = this[WaitlistCapacityHolds.offerId].value,
+        vacancyKey = this[WaitlistCapacityHolds.vacancyKey],
+        activeVacancyKey = this[WaitlistCapacityHolds.activeVacancyKey],
+        resourceType = this[WaitlistCapacityHolds.resourceType],
+        resourceId = this[WaitlistCapacityHolds.resourceId],
+        startsAt = this[WaitlistCapacityHolds.startsAt],
+        endsAt = this[WaitlistCapacityHolds.endsAt],
+        capacityUnits = this[WaitlistCapacityHolds.capacityUnits],
+        maximumCapacity = this[WaitlistCapacityHolds.maximumCapacity],
+        status = this[WaitlistCapacityHolds.status],
+        holdExpiresAt = this[WaitlistCapacityHolds.holdExpiresAt],
+        version = this[WaitlistCapacityHolds.version],
+        createdAt = this[WaitlistCapacityHolds.createdAt],
+        updatedAt = this[WaitlistCapacityHolds.updatedAt],
+        releasedAt = this[WaitlistCapacityHolds.releasedAt],
+        consumedAt = this[WaitlistCapacityHolds.consumedAt],
+    )
 
 /**
  * 자원 점유 또는 capacity 상한 충돌로 확정 transaction을 진행할 수 없음을 나타냅니다.

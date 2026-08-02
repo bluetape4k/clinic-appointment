@@ -35,6 +35,10 @@ import io.bluetape4k.clinic.appointment.model.tables.ResourceAllocations
 import io.bluetape4k.clinic.appointment.model.tables.ResourceCapacityBuckets
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistCapacityHolds
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistEntries
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistOfferEvents
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistOffers
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentRepository
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationRepository
 import org.jetbrains.exposed.v1.core.Table
@@ -576,6 +580,10 @@ internal abstract class VisitCommitmentCommandTestSupport {
                 ConsentDecisions,
                 ResourceCapacityBuckets,
                 ResourceAllocations,
+                WaitlistEntries,
+                WaitlistOffers,
+                WaitlistCapacityHolds,
+                WaitlistOfferEvents,
                 AppointmentCommandIdempotencies,
                 AppointmentAuditEvents,
                 SchedulingOutboxEvents,
