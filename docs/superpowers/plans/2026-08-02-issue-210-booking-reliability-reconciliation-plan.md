@@ -16,6 +16,7 @@
 |---|---|---|
 | `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/QuarantineEnvelopeProtector.kt` | 검증된/tolerant protection API, bounded canonical metadata, bounded AAD | 수정 |
 | `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/BookingReliabilityEventIngress.kt` | verify-before-protect 순서, pre/post verification failure routing | 수정 |
+| `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingQuarantineRepository.kt` | mapping failure reason의 quarantine/redrive allowlist | 수정 |
 | `appointment-event/src/test/kotlin/io/bluetape4k/clinic/appointment/event/reliability/BookingReliabilityEventIngressTest.kt` | mismatch/malformed quarantine regression | 수정 |
 | `appointment-event/src/test/kotlin/io/bluetape4k/clinic/appointment/event/integration/QuarantineEnvelopeProtectorTest.kt` | tolerant protection 및 metadata bound regression | 수정 |
 | `docs/review/2026-08-02-issue-210-booking-reliability-reconciliation-spec-review.md` | 2-R 명세 검토 증거 | 이미 작성 |
@@ -244,6 +245,16 @@ Flyway migration, `patient_reference_fingerprint`, waitlist-offer persistence,
   `ProtectedQuarantineEnvelope(ciphertext = "ciphertext", keyId = "key", envelopeHash = "a".repeat(64))`
   를 반환하고 AES 자체의 안정성은 Task 4 unit test가 담당한다. 이 검증으로
   두 경계가 이름만 분리되고 실제 ingress 흐름에서 뒤섞이는 회귀를 막는다.
+
+- [ ] **Step 5: mapping failure reason을 quarantine 계약에 등록한다**
+
+  `SchedulingQuarantineRepository`의 `allowedReasonCodes`와
+  `trustFailureReasonCodes`에 `BOOKING_RELIABILITY_MAPPING_FAILED`를 추가한다.
+  strict decoder가 반환하는 이 안정적 reason code가 `recordDetected`의
+  allowlist validation을 통과하고 trust-failure redrive approval 정책에도
+  포함되어야 한다. migration은 추가하지 않으며, malformed decoder ingress
+  테스트가 실제 rejection/quarantine 두 row를 확인하는 것으로 저장 계약을
+  검증한다.
 
 ## Task 6: Kotlin/Exposed 및 migration 계약을 검증한다
 
