@@ -8,8 +8,9 @@
 
 **Tech Stack:** Kotlin 2.3, Timefold Solver 2.2, JUnit 5, MockK, Gradle, `appointment-solver` module.
 
-**Execution status:** 완료 (2026-08-02). 구현 커밋 `1d91f65`, `435d3cf`,
-`649f95c`, `29618ec`와 모듈 검증 결과를 아래에 기록했다.
+**Execution status:** 완료 (2026-08-02). 구현·보정 커밋 `1d91f65`, `435d3cf`,
+`649f95c`, `29618ec`, `cfd72a4`, `c5c6466`와 모듈 검증·독립 리뷰 결과를
+아래에 기록했다.
 
 ---
 
