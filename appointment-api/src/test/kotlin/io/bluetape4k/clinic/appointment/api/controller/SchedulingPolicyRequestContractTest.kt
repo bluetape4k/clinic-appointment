@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.api.dto.ActivateSchedulingPolicyRequest
 import io.bluetape4k.clinic.appointment.api.dto.ApproveSchedulingPolicyRequest
 import io.bluetape4k.clinic.appointment.api.dto.CreateSchedulingPolicyDraftRequest
@@ -188,8 +189,9 @@ class SchedulingPolicyRequestContractTest {
         )
         (limited.statusCode.value() == 429).shouldBeTrue()
         (limited.headers.getFirst(HttpHeaders.RETRY_AFTER) == "2").shouldBeTrue()
-        limited.body!!.retryable.shouldBeTrue()
-        limited.body!!.correlationId.contains("corr-error").shouldBeTrue()
+        val body = limited.body.shouldNotBeNull()
+        body.retryable.shouldBeTrue()
+        body.correlationId.contains("corr-error").shouldBeTrue()
     }
 
     @Test

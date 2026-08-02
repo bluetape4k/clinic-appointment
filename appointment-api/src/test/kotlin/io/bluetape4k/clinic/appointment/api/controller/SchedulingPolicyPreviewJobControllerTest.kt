@@ -23,9 +23,9 @@ import io.bluetape4k.clinic.appointment.model.policy.PolicyScope
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertThrows
+import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeNull
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.mock.web.MockHttpServletRequest
@@ -64,8 +64,8 @@ class SchedulingPolicyPreviewJobControllerTest {
 
         val http = controller.tenantJob("clinic-a", 301L, null, request())
 
-        assertEquals("2", http.headers.getFirst(HttpHeaders.RETRY_AFTER))
-        assertEquals(PolicyPreviewJobStatus.PENDING, http.body?.data?.status)
+        http.headers.getFirst(HttpHeaders.RETRY_AFTER) shouldBeEqualTo "2"
+        http.body?.data?.status shouldBeEqualTo PolicyPreviewJobStatus.PENDING
         verify(exactly = 1) {
             administrationService.previewJob(
                 PolicyScopeRef(11L, PolicyScope.TENANT_DEFAULT),
@@ -89,8 +89,8 @@ class SchedulingPolicyPreviewJobControllerTest {
 
         val http = controller.clinicJob("clinic-a", 41L, 301L, null, request())
 
-        assertNull(http.headers.getFirst(HttpHeaders.RETRY_AFTER))
-        assertEquals("evidence-token", http.body?.data?.activationEvidenceToken)
+        http.headers.getFirst(HttpHeaders.RETRY_AFTER).shouldBeNull()
+        http.body?.data?.activationEvidenceToken shouldBeEqualTo "evidence-token"
     }
 
     @Test
@@ -104,10 +104,10 @@ class SchedulingPolicyPreviewJobControllerTest {
         val clinicScope = PolicyScopeRef(11L, PolicyScope.CLINIC_OVERRIDE, 41L)
 
         limiter.requireAllowed(tenantScope, record(PolicyPreviewJobStatus.RUNNING, 301L, tenantScope))
-        val repeated = assertThrows(SchedulingPolicyApiException::class.java) {
+        val repeated = assertFailsWith<SchedulingPolicyApiException> {
             limiter.requireAllowed(tenantScope, record(PolicyPreviewJobStatus.RUNNING, 301L, tenantScope))
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED, repeated.errorCode)
+        repeated.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED
 
         limiter.requireAllowed(clinicScope, record(PolicyPreviewJobStatus.RUNNING, 301L, clinicScope))
         now += Duration.ofSeconds(1).toNanos()
@@ -129,13 +129,13 @@ class SchedulingPolicyPreviewJobControllerTest {
                 record(PolicyPreviewJobStatus.RUNNING, index.toLong() + 1L, tenantScope),
             )
         }
-        val saturated = assertThrows(SchedulingPolicyApiException::class.java) {
+        val saturated = assertFailsWith<SchedulingPolicyApiException> {
             limiter.requireAllowed(
                 tenantScope,
                 record(PolicyPreviewJobStatus.RUNNING, 10_001L, tenantScope),
             )
         }
-        assertEquals(SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED, saturated.errorCode)
+        saturated.errorCode shouldBeEqualTo SchedulingPolicyErrorCode.POLICY_PREVIEW_LIMITED
 
         now += Duration.ofSeconds(1).toNanos()
         limiter.requireAllowed(

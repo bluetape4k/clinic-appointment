@@ -188,11 +188,11 @@ class SchedulingPolicyDialectIntegrationTest : AbstractApiIntegrationTest() {
                 )
             )
 
-            policyRepository.findActiveDefinitionAt(
+            requireNotNull(policyRepository.findActiveDefinitionAt(
                 scope,
                 SchedulingPolicyKind.BOOKING_COMMITMENT,
                 now.plusSeconds(60),
-            )!!.id shouldBeEqualTo activeId
+            )).id shouldBeEqualTo activeId
             policyRepository.findOverlappingPublishedDefinitions(
                 scope,
                 SchedulingPolicyKind.BOOKING_COMMITMENT,

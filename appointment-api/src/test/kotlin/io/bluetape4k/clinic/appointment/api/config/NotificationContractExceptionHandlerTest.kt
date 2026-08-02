@@ -3,8 +3,10 @@ package io.bluetape4k.clinic.appointment.api.config
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.event.notification.NotificationContractException
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.mock.web.MockHttpServletRequest
@@ -26,12 +28,13 @@ internal class NotificationContractExceptionHandlerTest {
             request,
         )
 
-        assertEquals(503, response.statusCode.value())
-        assertEquals("5", response.headers.getFirst(HttpHeaders.RETRY_AFTER))
-        assertEquals("NOTIFICATION_ENQUEUE_UNAVAILABLE", response.body!!.errorCode)
-        assertEquals("notification-correlation", response.body!!.correlationId)
-        assertEquals(true, response.body!!.retryable)
-        assertFalse(response.body!!.error.contains(secretMarker))
-        assertFalse(response.body!!.action.orEmpty().contains(secretMarker))
+        response.statusCode.value() shouldBeEqualTo 503
+        response.headers.getFirst(HttpHeaders.RETRY_AFTER) shouldBeEqualTo "5"
+        val body = response.body.shouldNotBeNull()
+        body.errorCode shouldBeEqualTo "NOTIFICATION_ENQUEUE_UNAVAILABLE"
+        body.correlationId shouldBeEqualTo "notification-correlation"
+        body.retryable.shouldBeTrue()
+        body.error.contains(secretMarker).shouldBeFalse()
+        body.action.orEmpty().contains(secretMarker).shouldBeFalse()
     }
 }

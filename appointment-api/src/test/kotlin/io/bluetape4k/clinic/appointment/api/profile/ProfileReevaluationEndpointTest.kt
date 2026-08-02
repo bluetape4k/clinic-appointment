@@ -67,7 +67,7 @@ class ProfileReevaluationEndpointTest {
                 java.lang.Long::class.java,
                 java.lang.Long::class.java,
                 java.lang.Long::class.java,
-                Int::class.javaPrimitiveType!!,
+                requireNotNull(Int::class.javaPrimitiveType),
             )
             .parameterCount shouldBeEqualTo 7
     }

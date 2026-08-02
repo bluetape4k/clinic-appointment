@@ -238,7 +238,7 @@ internal class ProfileReevaluationWorkerTest {
                     jobId = job.id,
                     targetRevision = job.targetRevision,
                     failureCode = "PROCESSING_STATE_FAILED",
-                    exceptionType = IllegalStateException::class.qualifiedName!!,
+                    exceptionType = requireNotNull(IllegalStateException::class.qualifiedName),
                 )
         }
     }

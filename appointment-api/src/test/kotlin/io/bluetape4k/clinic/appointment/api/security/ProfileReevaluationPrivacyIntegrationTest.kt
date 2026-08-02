@@ -41,15 +41,15 @@ import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationHeads
 import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationJobs
 import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationOutcomes
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -104,8 +104,7 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
 
     @Test
     fun `event와 assessment 계약은 예약 계산에 필요한 허용 필드만 가진다`() {
-        assertEquals(
-            setOf(
+        PatientSchedulingAssessmentChanged::class.memberProperties.map { it.name }.toSet() shouldBeEqualTo setOf(
                 "eventId",
                 "tenantGroupId",
                 "clinicId",
@@ -115,11 +114,8 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
                 "assessmentRef",
                 "assessmentHash",
                 "occurredAt",
-            ),
-            PatientSchedulingAssessmentChanged::class.memberProperties.map { it.name }.toSet(),
-        )
-        assertEquals(
-            setOf(
+            )
+        ProfileSchedulingAssessment::class.memberProperties.map { it.name }.toSet() shouldBeEqualTo setOf(
                 "tenantGroupId",
                 "clinicId",
                 "patientReferenceFingerprint",
@@ -129,9 +125,7 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
                 "eligibleServiceCodes",
                 "requiredResourceTags",
                 "allowedTimeWindows",
-            ),
-            ProfileSchedulingAssessment::class.memberProperties.map { it.name }.toSet(),
-        )
+            )
     }
 
     @Test
@@ -141,14 +135,14 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
             eventId = "profile-event-7",
             assessmentReference = "assessment-7",
         )
-        assertEquals(ProfileReevaluationEventStatus.PROCESSED, service.accept(trusted).status)
+        service.accept(trusted).status shouldBeEqualTo ProfileReevaluationEventStatus.PROCESSED
 
         val quarantined = envelope(
             eventId = "profile-rejected",
             assessmentReference = RAW_PROFILE_MARKER,
             signature = "invalid",
         )
-        assertEquals(ProfileReevaluationEventStatus.QUARANTINED, service.accept(quarantined).status)
+        service.accept(quarantined).status shouldBeEqualTo ProfileReevaluationEventStatus.QUARANTINED
 
         val held = commandService().requestCustomerAppointment(
             CustomerAppointmentRequestCommand(
@@ -167,7 +161,7 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
             planner = ProfileReevaluationPlanner { ProfileReevaluationDecision.KeepHeld },
             clock = CLOCK,
         ).reevaluate(command)
-        assertEquals(ProfileReevaluationOutcomeType.HOLD_KEPT, result.outcomeType)
+        result.outcomeType shouldBeEqualTo ProfileReevaluationOutcomeType.HOLD_KEPT
 
         transaction(database) {
             val persisted = listOf(
@@ -181,10 +175,7 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
             ).flatMap { table -> table.persistedText() }
 
             FORBIDDEN_VALUES.forEach { forbidden ->
-                assertFalse(
-                    persisted.any { it.contains(forbidden, ignoreCase = true) },
-                    "금지된 개인정보 값이 영속 계층에 남았습니다: $forbidden",
-                )
+                persisted.any { it.contains(forbidden, ignoreCase = true) }.shouldBeFalse()
             }
 
             val outboxPayload = SchedulingOutboxEvents
@@ -193,8 +184,11 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
                     it[SchedulingOutboxEvents.eventType] ==
                         "PROFILE_REEVALUATION_HOLD_KEPT"
                 }[SchedulingOutboxEvents.payloadJson]
-            assertEquals(
-                setOf(
+            JsonMapper.builder().build()
+                .readTree(outboxPayload)
+                .fieldNames()
+                .asSequence()
+                .toSet() shouldBeEqualTo setOf(
                     "jobId",
                     "appointmentId",
                     "revision",
@@ -205,13 +199,7 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
                     "emitter",
                     "eventId",
                     "completedAt",
-                ),
-                JsonMapper.builder().build()
-                    .readTree(outboxPayload)
-                    .fieldNames()
-                    .asSequence()
-                    .toSet(),
-            )
+                )
         }
     }
 
@@ -256,7 +244,7 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
                 allowUnsafeTestEndpoint = true,
                 addressResolver = { emptyList() },
             )
-            val failure = assertThrows(ProfileAssessmentException::class.java) {
+            val failure = assertFailsWith<ProfileAssessmentException> {
                 client.fetch(
                     FetchProfileAssessment(
                         tenantGroupId = TENANT_ID,
@@ -270,10 +258,10 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
                 )
             }
 
-            assertEquals(ProfileAssessmentFailureCode.SCHEMA_INVALID, failure.code)
-            assertFalse(failure.message.orEmpty().contains(RAW_PROFILE_MARKER))
-            assertEquals("/assessments/assessment-privacy", requestPath.get())
-            assertFalse(requestPath.get().contains(RAW_PROFILE_MARKER))
+            failure.code shouldBeEqualTo ProfileAssessmentFailureCode.SCHEMA_INVALID
+            failure.message.orEmpty().contains(RAW_PROFILE_MARKER).shouldBeFalse()
+            requestPath.get() shouldBeEqualTo "/assessments/assessment-privacy"
+            requestPath.get().contains(RAW_PROFILE_MARKER).shouldBeFalse()
 
             val metrics = ProfileReevaluationMetrics(registry)
             metrics.recordEvent(ProfileReevaluationEventMetricResult.ACCEPTED)
@@ -300,18 +288,15 @@ internal class ProfileReevaluationPrivacyIntegrationTest :
                     "${tag.key}=${tag.value}"
                 }
                 FORBIDDEN_OBSERVABILITY_TOKENS.forEach { forbidden ->
-                    assertFalse(
-                        exposed.contains(forbidden, ignoreCase = true),
-                        "metric이 금지된 식별자를 노출합니다: $exposed",
-                    )
+                    exposed.contains(forbidden, ignoreCase = true).shouldBeFalse()
                 }
             }
             val healthText = health.details.entries.joinToString("|") { "${it.key}=${it.value}" }
             FORBIDDEN_OBSERVABILITY_TOKENS.forEach { forbidden ->
-                assertFalse(healthText.contains(forbidden, ignoreCase = true))
+                healthText.contains(forbidden, ignoreCase = true).shouldBeFalse()
             }
             FORBIDDEN_VALUES.forEach { forbidden ->
-                assertFalse(output.all.contains(forbidden, ignoreCase = true))
+                output.all.contains(forbidden, ignoreCase = true).shouldBeFalse()
             }
         } finally {
             server.stop(0)

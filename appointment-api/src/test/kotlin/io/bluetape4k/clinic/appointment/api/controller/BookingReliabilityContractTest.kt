@@ -1,7 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.Test
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
@@ -13,16 +13,14 @@ class BookingReliabilityContractTest {
     @Test
     fun `controller exposes the approved scoped routes`() {
         val controller = BookingReliabilityController::class.java
-        assertTrue(controller.isAnnotationPresent(Validated::class.java))
-        assertEquals(
-            listOf("/api/{tenantCode}/clinics/{clinicId}/members/{memberId}/booking-reliability"),
-            controller.getAnnotation(RequestMapping::class.java).value.toList(),
-        )
+        controller.isAnnotationPresent(Validated::class.java).shouldBeTrue()
+        controller.getAnnotation(RequestMapping::class.java).value.toList() shouldBeEqualTo
+            listOf("/api/{tenantCode}/clinics/{clinicId}/members/{memberId}/booking-reliability")
 
         val methods = controller.declaredMethods.associateBy { it.name }
-        assertEquals(listOf("/decision"), methods.getValue("decision").getAnnotation(GetMapping::class.java).value.toList())
-        assertEquals(listOf("/override"), methods.getValue("override").getAnnotation(PostMapping::class.java).value.toList())
-        assertEquals(listOf("/clear"), methods.getValue("clear").getAnnotation(PostMapping::class.java).value.toList())
-        assertEquals(listOf("/audit"), methods.getValue("audit").getAnnotation(GetMapping::class.java).value.toList())
+        methods.getValue("decision").getAnnotation(GetMapping::class.java).value.toList() shouldBeEqualTo listOf("/decision")
+        methods.getValue("override").getAnnotation(PostMapping::class.java).value.toList() shouldBeEqualTo listOf("/override")
+        methods.getValue("clear").getAnnotation(PostMapping::class.java).value.toList() shouldBeEqualTo listOf("/clear")
+        methods.getValue("audit").getAnnotation(GetMapping::class.java).value.toList() shouldBeEqualTo listOf("/audit")
     }
 }

@@ -34,8 +34,8 @@ import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyKind
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertThrows
+import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldBeEqualTo
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -115,16 +115,12 @@ class TenantSchedulingPolicyControllerTest {
             administrationService.replay(scope, actor, 91L, "replay-key", replay)
         } returns activationResponse
 
-        assertEquals(
-            HttpStatus.CREATED,
-            controller.createDraft("clinic-a", draft, null, request("corr-tenant")).statusCode,
-        )
+        controller.createDraft("clinic-a", draft, null, request("corr-tenant")).statusCode shouldBeEqualTo
+            HttpStatus.CREATED
         controller.validate("clinic-a", 71L, validate, null, request("corr-tenant"))
         controller.approve("clinic-a", 71L, approve, null, request("corr-tenant"))
-        assertEquals(
-            HttpStatus.ACCEPTED,
-            controller.schedule("clinic-a", 71L, schedule, null, request("corr-tenant")).statusCode,
-        )
+        controller.schedule("clinic-a", 71L, schedule, null, request("corr-tenant")).statusCode shouldBeEqualTo
+            HttpStatus.ACCEPTED
         controller.activate("clinic-a", 71L, "activate-key", activate, null, request("corr-tenant"))
         controller.retire("clinic-a", 71L, retire, null, request("corr-tenant"))
         controller.replay("clinic-a", 91L, "replay-key", replay, null, request("corr-tenant"))
@@ -167,13 +163,11 @@ class TenantSchedulingPolicyControllerTest {
             servletRequest = request("corr-tenant"),
         )
 
-        assertEquals(HttpStatus.ACCEPTED, http.statusCode)
-        assertEquals(
-            "/api/clinic-a/admin/scheduling-policies/preview-jobs/301",
-            http.headers.location.toString(),
-        )
-        assertEquals("2", http.headers.getFirst(HttpHeaders.RETRY_AFTER))
-        assertEquals(PolicyPreviewJobStatus.PENDING, http.body?.data?.status)
+        http.statusCode shouldBeEqualTo HttpStatus.ACCEPTED
+        http.headers.location.toString() shouldBeEqualTo
+            "/api/clinic-a/admin/scheduling-policies/preview-jobs/301"
+        http.headers.getFirst(HttpHeaders.RETRY_AFTER) shouldBeEqualTo "2"
+        http.body?.data?.status shouldBeEqualTo PolicyPreviewJobStatus.PENDING
         verify(exactly = 1) {
             administrationService.preview(
                 PolicyScopeRef(11L, PolicyScope.TENANT_DEFAULT),
@@ -193,7 +187,7 @@ class TenantSchedulingPolicyControllerTest {
         every { accessChecker.requireTenant("clinic-a") } returns TenantInfo(11L, "clinic-a", "Clinic A")
         every { actorResolver.resolve(null, "clinic-a", null, "corr-tenant") } returns actor
 
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             controller.effective(
                 tenantCode = "clinic-a",
                 decisionAt = "2026-07-28T09:00:00",

@@ -1,8 +1,9 @@
 package io.bluetape4k.clinic.appointment.api.commitment
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import org.junit.jupiter.api.Test
 import java.time.Duration
 
@@ -31,10 +32,10 @@ class AppointmentCommitmentMetricsTest {
 
         val forbidden = setOf("patientId", "productId", "eventId", "appointmentId", "proposalId")
         registry.meters.forEach { meter ->
-            assertTrue(meter.id.tags.map { it.key }.none(forbidden::contains), meter.id.toString())
+            meter.id.tags.map { it.key }.none(forbidden::contains).shouldBeTrue()
         }
-        assertEquals(1.0, registry.find("appointment.commitment.proposal.expired").counter()!!.count())
-        assertEquals(1.0, registry.find("appointment.commitment.allocation.conflict").counter()!!.count())
-        assertEquals(1.0, registry.find("appointment.commitment.migration.rejected").counter()!!.count())
+        registry.find("appointment.commitment.proposal.expired").counter().shouldNotBeNull().count() shouldBeEqualTo 1.0
+        registry.find("appointment.commitment.allocation.conflict").counter().shouldNotBeNull().count() shouldBeEqualTo 1.0
+        registry.find("appointment.commitment.migration.rejected").counter().shouldNotBeNull().count() shouldBeEqualTo 1.0
     }
 }

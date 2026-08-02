@@ -105,7 +105,7 @@ abstract class AbstractApiIntegrationTest {
             when {
                 activeProfiles.contains("test-postgresql") -> {
                     val pg = Containers.Postgres
-                    registry.add("spring.datasource.url") { pg.jdbcUrl!! }
+                    registry.add("spring.datasource.url") { requireNotNull(pg.jdbcUrl) }
                     registry.add("spring.datasource.username") { pg.username ?: "test" }
                     registry.add("spring.datasource.password") { pg.password ?: "" }
                     registry.add("spring.flyway.enabled") { "true" }
@@ -113,7 +113,7 @@ abstract class AbstractApiIntegrationTest {
 
                 activeProfiles.contains("test-mysql") -> {
                     val mysql = Containers.MySql8
-                    registry.add("spring.datasource.url") { mysql.jdbcUrl!! }
+                    registry.add("spring.datasource.url") { requireNotNull(mysql.jdbcUrl) }
                     registry.add("spring.datasource.username") { mysql.username ?: "test" }
                     registry.add("spring.datasource.password") { mysql.password ?: "" }
                     registry.add("spring.flyway.enabled") { "true" }

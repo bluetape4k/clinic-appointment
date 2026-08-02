@@ -1,9 +1,10 @@
 package io.bluetape4k.clinic.appointment.api.profile
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import org.junit.jupiter.api.Test
 import java.net.InetAddress
 import java.time.Duration
@@ -40,38 +41,25 @@ class ProfileAssessmentResilienceTest {
                         runCatching { client.fetch(request()) }.exceptionOrNull() as ProfileAssessmentException
                     }
                 }
-                assertTrue(entered.await(5, TimeUnit.SECONDS))
+                entered.await(5, TimeUnit.SECONDS).shouldBeTrue()
 
                 val saturated = runCatching { client.fetch(request()) }
                     .exceptionOrNull() as ProfileAssessmentException
 
-                assertEquals(ProfileAssessmentFailureCode.CONCURRENCY_SATURATED, saturated.code)
-                assertTrue(saturated.retryable)
-                assertEquals(2, fixture.requestCount.get())
-                assertEquals(2, maxActive.get())
-                assertEquals(
-                    2.0,
-                    registry.find(ProfileAssessmentClientMetrics.IN_FLIGHT).gauge()!!.value(),
-                )
-                assertEquals(
-                    1.0,
-                    registry.find(ProfileAssessmentClientMetrics.REQUESTS)
-                        .tag("result", "saturated")
-                        .counter()!!
-                        .count(),
-                )
+                saturated.code shouldBeEqualTo ProfileAssessmentFailureCode.CONCURRENCY_SATURATED
+                saturated.retryable.shouldBeTrue()
+                fixture.requestCount.get() shouldBeEqualTo 2
+                maxActive.get() shouldBeEqualTo 2
+                registry.find(ProfileAssessmentClientMetrics.IN_FLIGHT).gauge().shouldNotBeNull().value() shouldBeEqualTo 2.0
+                registry.find(ProfileAssessmentClientMetrics.REQUESTS)
+                    .tag("result", "saturated")
+                    .counter().shouldNotBeNull().count() shouldBeEqualTo 1.0
 
                 release.countDown()
                 running.forEach { future ->
-                    assertEquals(
-                        ProfileAssessmentFailureCode.UPSTREAM_UNAVAILABLE,
-                        future.get(5, TimeUnit.SECONDS).code,
-                    )
+                    future.get(5, TimeUnit.SECONDS).code shouldBeEqualTo ProfileAssessmentFailureCode.UPSTREAM_UNAVAILABLE
                 }
-                assertEquals(
-                    0.0,
-                    registry.find(ProfileAssessmentClientMetrics.IN_FLIGHT).gauge()!!.value(),
-                )
+                registry.find(ProfileAssessmentClientMetrics.IN_FLIGHT).gauge().shouldNotBeNull().value() shouldBeEqualTo 0.0
             } finally {
                 release.countDown()
                 executor.shutdownNow()
@@ -94,15 +82,11 @@ class ProfileAssessmentResilienceTest {
             val timeout = runCatching { client.fetch(request()) }
                 .exceptionOrNull() as ProfileAssessmentException
 
-            assertEquals(ProfileAssessmentFailureCode.TIMEOUT, timeout.code)
-            assertTrue(timeout.retryable)
-            assertEquals(
-                1.0,
-                registry.find(ProfileAssessmentClientMetrics.REQUESTS)
-                    .tag("result", "timeout")
-                    .counter()!!
-                    .count(),
-            )
+            timeout.code shouldBeEqualTo ProfileAssessmentFailureCode.TIMEOUT
+            timeout.retryable.shouldBeTrue()
+            registry.find(ProfileAssessmentClientMetrics.REQUESTS)
+                .tag("result", "timeout")
+                .counter().shouldNotBeNull().count() shouldBeEqualTo 1.0
             val sensitiveValues = setOf(
                 request().patientReferenceFingerprint,
                 request().assessmentReference,
@@ -111,7 +95,7 @@ class ProfileAssessmentResilienceTest {
             registry.meters
                 .flatMap { meter -> meter.id.tags.map { it.value } }
                 .forEach { tagValue ->
-                    assertFalse(tagValue in sensitiveValues)
+                    (tagValue in sensitiveValues).shouldBeFalse()
                 }
         }
     }

@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
-import org.junit.jupiter.api.Assertions.assertTrue
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
@@ -27,8 +28,8 @@ class BookingReliabilityDocumentationTest {
             "OFF",
             "SHADOW",
             "ENFORCE",
-        ).forEach { required -> assertTrue(content.contains(required), required) }
-        assertTrue(!content.contains("phoneNumber"))
-        assertTrue(!content.contains("emailAddress"))
+        ).forEach { required -> content.contains(required).shouldBeTrue() }
+        content.contains("phoneNumber").shouldBeFalse()
+        content.contains("emailAddress").shouldBeFalse()
     }
 }

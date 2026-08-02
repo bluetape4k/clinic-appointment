@@ -237,7 +237,7 @@ class SchedulingPolicyPreviewServiceTest {
         )
         val service = service(store)
         val pending = store.seed(command, now.plusSeconds(300))
-        val claimed = store.claim(pending.id!!, "worker-1", now, now.plusSeconds(30)).shouldNotBeNull()
+        val claimed = store.claim(pending.id.shouldNotBeNull(), "worker-1", now, now.plusSeconds(30)).shouldNotBeNull()
 
         val result = service.processClaimedPage(claimed, "worker-1")
 
@@ -258,7 +258,7 @@ class SchedulingPolicyPreviewServiceTest {
         )
         val service = service(store)
         val pending = store.seed(command, now.plusSeconds(300))
-        val claimed = store.claim(pending.id!!, "worker-1", now, now.plusSeconds(400)).shouldNotBeNull()
+        val claimed = store.claim(pending.id.shouldNotBeNull(), "worker-1", now, now.plusSeconds(400)).shouldNotBeNull()
 
         val result = service.processClaimedPage(claimed, "worker-1")
 
@@ -277,7 +277,7 @@ class SchedulingPolicyPreviewServiceTest {
         )
         val service = service(store)
         val pending = store.seed(command, now.plusSeconds(300))
-        val claimed = store.claim(pending.id!!, "worker-1", now, now.plusSeconds(400)).shouldNotBeNull()
+        val claimed = store.claim(pending.id.shouldNotBeNull(), "worker-1", now, now.plusSeconds(400)).shouldNotBeNull()
 
         val result = service.processClaimedPage(claimed, "worker-1")
 
@@ -298,7 +298,7 @@ class SchedulingPolicyPreviewServiceTest {
         )
         val service = service(store)
         val pending = store.seed(command, now.plusSeconds(300))
-        val claimed = store.claim(pending.id!!, "worker-1", now, now.plusSeconds(30)).shouldNotBeNull()
+        val claimed = store.claim(pending.id.shouldNotBeNull(), "worker-1", now, now.plusSeconds(30)).shouldNotBeNull()
 
         val result = service.processClaimedPage(claimed, "worker-1")
 
@@ -335,7 +335,7 @@ class SchedulingPolicyPreviewServiceTest {
 
             third.disposition shouldBeEqualTo SchedulingPolicyPreviewDisposition.ACCEPTED_ASYNC
             third.job.status shouldBeEqualTo PolicyPreviewJobStatus.PENDING
-            service.process(third.job.id!!, "worker-3", now).shouldBeNull()
+            service.process(third.job.id.shouldNotBeNull(), "worker-3", now).shouldBeNull()
             store.claimCalls.get() shouldBeEqualTo 2
             store.scanCalls.get() shouldBeEqualTo 2
 
@@ -345,7 +345,7 @@ class SchedulingPolicyPreviewServiceTest {
             second.get(5, TimeUnit.SECONDS).disposition shouldBeEqualTo
                 SchedulingPolicyPreviewDisposition.COMPLETED
 
-            val resumed = service.process(third.job.id!!, "worker-3", now).shouldNotBeNull()
+        val resumed = service.process(third.job.id.shouldNotBeNull(), "worker-3", now).shouldNotBeNull()
             resumed.disposition shouldBeEqualTo SchedulingPolicyPreviewDisposition.COMPLETED
             store.claimCalls.get() shouldBeEqualTo 3
             store.scanCalls.get() shouldBeEqualTo 3
