@@ -390,7 +390,7 @@ fun `optimize fails explicitly when solver returns no score`() {
 
     val service = SolverService(solverFactory = factory)
 
-    assertThrows<IllegalStateException> {
+    assertThrows<IllegalArgumentException> {
         service.optimize(clinicId, MONDAY..FRIDAY)
     }
 }
@@ -406,7 +406,7 @@ Run:
 
 Expected pre-change behavior: the mocked solve reaches the `result.score!!`
 site and fails with a Kotlin null assertion (or the test fails because the
-expected contextual `IllegalStateException` contract is not yet implemented).
+expected contextual `IllegalArgumentException` contract is not yet implemented).
 
 - [ ] **Step 3: Replace service assertions with contextual `requireNotNull`.**
 
@@ -450,7 +450,7 @@ messages. Do not change the public `SolverResult` type.
 - [ ] **Step 4: Run the service tests and verify the explicit error contract.**
 
 Run the same targeted service command. Expected result: all existing database
-solver tests pass and the missing-score test receives `IllegalStateException`
+solver tests pass and the missing-score test receives `IllegalArgumentException`
 with the clinic/date-range context.
 
 - [ ] **Step 5: Commit the service boundary.**

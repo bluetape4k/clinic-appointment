@@ -70,11 +70,17 @@ class SolverService(
 
         val originalMap = transaction {
             appointmentRepository.findByClinicAndDateRange(clinicId, dateRange)
-                .associateBy { it.id!! }
+                .associateBy { record ->
+                    requireNotNull(record.id) {
+                        "Appointment record is missing id: clinicId=${record.clinicId}"
+                    }
+                }
         }
 
         val optimizedAppointments = SolutionConverter.extractResults(result, originalMap)
-        val score = result.score!!
+        val score = requireNotNull(result.score) {
+            "Solver returned no score: clinicId=$clinicId, dateRange=$dateRange"
+        }
 
         log.info("Solver 완료: score=$score, feasible=${score.isFeasible}, time=${solveTimeMillis}ms")
 
@@ -117,8 +123,18 @@ class SolverService(
             val treatments = treatmentTypeRepository.findByClinicId(clinicId)
             val equipments = equipmentRepository.findByClinicId(clinicId)
             val operatingHours = clinicRepository.findAllOperatingHours(clinicId)
-            val doctorSchedules = doctors.flatMap { doctorRepository.findAllSchedules(it.id!!) }
-            val doctorAbsences = doctors.flatMap { doctorRepository.findAbsencesByDateRange(it.id!!, dateRange) }
+            val doctorSchedules = doctors.flatMap { doctor ->
+                val doctorId = requireNotNull(doctor.id) {
+                    "Doctor record is missing id: clinicId=${doctor.clinicId}"
+                }
+                doctorRepository.findAllSchedules(doctorId)
+            }
+            val doctorAbsences = doctors.flatMap { doctor ->
+                val doctorId = requireNotNull(doctor.id) {
+                    "Doctor record is missing id: clinicId=${doctor.clinicId}"
+                }
+                doctorRepository.findAbsencesByDateRange(doctorId, dateRange)
+            }
             val breakTimes = clinicRepository.findAllBreakTimes(clinicId)
             val defaultBreakTimes = clinicRepository.findDefaultBreakTimes(clinicId)
             val closures = clinicRepository.findClosuresByDateRange(clinicId, dateRange)
