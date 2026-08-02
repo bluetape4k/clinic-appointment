@@ -107,6 +107,41 @@ class BookingReliabilityEventIngressTest {
     }
 
     @Test
+    fun `envelope payload mismatch is quarantined instead of escaping validation`() {
+        val event = signalEvent()
+        val mismatched = envelope(event).copy(eventId = "envelope-event-2")
+
+        val result = transaction { ingress(event).accept(mismatched, VALID_RAW_PAYLOAD) }
+
+        result as BookingReliabilityIngressResult.Quarantined
+        result.reasonCode shouldBeEqualTo "PAYLOAD_CONTRACT_INVALID"
+        transaction {
+            SchedulingQuarantineEvents.selectAll().toList().shouldHaveSize(1)
+            UntrustedSchedulingEventRejections.selectAll().toList().shouldHaveSize(1)
+        }
+    }
+
+    @Test
+    fun `malformed decoder failure is quarantined`() {
+        val event = signalEvent()
+        val result = transaction {
+            ingress(
+                event,
+                payloadDecoder = BookingReliabilitySignalEventDecoder {
+                    throw IllegalArgumentException("malformed payload")
+                },
+            ).accept(envelope(event), VALID_RAW_PAYLOAD)
+        }
+
+        result as BookingReliabilityIngressResult.Quarantined
+        result.reasonCode shouldBeEqualTo "BOOKING_RELIABILITY_MAPPING_FAILED"
+        transaction {
+            SchedulingQuarantineEvents.selectAll().toList().shouldHaveSize(1)
+            UntrustedSchedulingEventRejections.selectAll().toList().shouldHaveSize(1)
+        }
+    }
+
+    @Test
     fun `invalid signature is quarantined before accepted insert`() {
         val event = signalEvent()
         val result = transaction {
@@ -151,7 +186,10 @@ class BookingReliabilityEventIngressTest {
         }
     }
 
-    private fun ingress(decoded: BookingReliabilitySignalEvent): BookingReliabilityEventIngress =
+    private fun ingress(
+        decoded: BookingReliabilitySignalEvent,
+        payloadDecoder: BookingReliabilitySignalEventDecoder = BookingReliabilitySignalEventDecoder { decoded },
+    ): BookingReliabilityEventIngress =
         BookingReliabilityEventIngress(
             trustVerifier = SchedulingEventTrustVerifier(
                 signatureVerifier = SchedulingEventSignatureVerifier { it.signature == "valid-signature" },
@@ -163,7 +201,7 @@ class BookingReliabilityEventIngressTest {
                 replayWindow = Duration.ofHours(1),
                 clock = clock,
             ),
-            payloadDecoder = BookingReliabilitySignalEventDecoder { decoded },
+            payloadDecoder = payloadDecoder,
             eventRepository = BookingReliabilityEventRepository(clock),
             quarantineEnvelopeProtector = AesGcmQuarantineEnvelopeProtector(
                 encryptionKey = ByteArray(32) { index -> index.toByte() },
