@@ -1,6 +1,6 @@
 # Issue #211 Solver nullable planning boundary 설계
 
-상태: 설계 승인됨, 구현 전 사용자 문서 검토 대기
+상태: 사용자 승인 완료, 구현 계획 작성 완료
 작성일: 2026-08-02
 대상: `appointment-solver`
 관련 이슈: #211
@@ -103,10 +103,10 @@ Timefold 공식 문서는 다음 규칙을 명시한다.
 inline fun <T> AppointmentPlanning.withAssigned(
     block: (doctorId: Long, appointmentDate: LocalDate, startTime: LocalTime, endTime: LocalTime) -> T,
 ): T? {
-    val doctorId = doctorId ?: return null
-    val appointmentDate = appointmentDate ?: return null
-    val startTime = startTime ?: return null
-    val endTime = endTime ?: return null
+    val doctorId = this.doctorId ?: return null
+    val appointmentDate = this.appointmentDate ?: return null
+    val startTime = this.startTime ?: return null
+    val endTime = this.endTime ?: return null
     return block(doctorId, appointmentDate, startTime, endTime)
 }
 ```
