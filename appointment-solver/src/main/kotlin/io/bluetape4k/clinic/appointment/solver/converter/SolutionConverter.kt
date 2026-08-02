@@ -23,6 +23,7 @@ import io.bluetape4k.clinic.appointment.solver.domain.EquipmentUnavailabilityFac
 import io.bluetape4k.clinic.appointment.solver.domain.ScheduleSolution
 import io.bluetape4k.clinic.appointment.solver.domain.TreatmentFact
 import io.bluetape4k.clinic.appointment.solver.domain.generateTimeSlots
+import io.bluetape4k.clinic.appointment.solver.domain.withAssigned
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -118,26 +119,28 @@ object SolutionConverter: KLogging() {
         originalAppointments: Map<Long, AppointmentRecord>,
     ): List<AppointmentRecord> =
         solution.appointments
-            .filter { !it.pinned && it.doctorId != null && it.appointmentDate != null && it.startTime != null }
-            .map { planning ->
-                val original = originalAppointments[planning.id]
-                AppointmentRecord(
-                    id = planning.id,
-                    clinicId = planning.clinicId,
-                    doctorId = planning.doctorId!!,
-                    treatmentTypeId = planning.treatmentTypeId,
-                    equipmentId = planning.equipmentId,
-                    consultationTopicId = original?.consultationTopicId,
-                    consultationMethod = original?.consultationMethod,
-                    rescheduleFromId = original?.rescheduleFromId,
-                    patientName = planning.patientName,
-                    patientPhone = original?.patientPhone,
-                    memberId = original?.memberId,
-                    appointmentDate = planning.appointmentDate!!,
-                    startTime = planning.startTime!!,
-                    endTime = planning.endTime!!,
-                    status = original?.status ?: AppointmentState.REQUESTED,
-                )
+            .filter { !it.pinned }
+            .mapNotNull { planning ->
+                planning.withAssigned { doctorId, appointmentDate, startTime, endTime ->
+                    val original = originalAppointments[planning.id]
+                    AppointmentRecord(
+                        id = planning.id,
+                        clinicId = planning.clinicId,
+                        doctorId = doctorId,
+                        treatmentTypeId = planning.treatmentTypeId,
+                        equipmentId = planning.equipmentId,
+                        consultationTopicId = original?.consultationTopicId,
+                        consultationMethod = original?.consultationMethod,
+                        rescheduleFromId = original?.rescheduleFromId,
+                        patientName = planning.patientName,
+                        patientPhone = original?.patientPhone,
+                        memberId = original?.memberId,
+                        appointmentDate = appointmentDate,
+                        startTime = startTime,
+                        endTime = endTime,
+                        status = original?.status ?: AppointmentState.REQUESTED,
+                    )
+                }
             }
 
     private fun generateDateList(range: ClosedRange<LocalDate>): List<LocalDate> {
