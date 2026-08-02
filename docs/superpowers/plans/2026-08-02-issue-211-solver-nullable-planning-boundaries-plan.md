@@ -8,6 +8,9 @@
 
 **Tech Stack:** Kotlin 2.3, Timefold Solver 2.2, JUnit 5, MockK, Gradle, `appointment-solver` module.
 
+**Execution status:** 완료 (2026-08-02). 구현 커밋 `1d91f65`, `435d3cf`,
+`649f95c`, `29618ec`와 모듈 검증 결과를 아래에 기록했다.
+
 ---
 
 ## Scope map and invariants
@@ -35,7 +38,7 @@ outside this issue.
 - Create: `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/domain/AppointmentPlanningAssignmentTest.kt`
 - Create: `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/domain/AppointmentPlanningAssignment.kt`
 
-- [ ] **Step 1: Write the failing helper contract test.**
+- [x] **Step 1: Write the failing helper contract test.**
 
 Create the test with a local snapshot type so the test proves all four values,
 including the derived end time, are passed without introducing a production
@@ -97,7 +100,7 @@ class AppointmentPlanningAssignmentTest {
 }
 ```
 
-- [ ] **Step 2: Run the helper test and confirm RED.**
+- [x] **Step 2: Run the helper test and confirm RED.**
 
 Run:
 
@@ -107,7 +110,7 @@ Run:
 
 Expected result: compilation fails because `withAssigned` does not yet exist.
 
-- [ ] **Step 3: Implement the minimal inline extension.**
+- [x] **Step 3: Implement the minimal inline extension.**
 
 Create the production file with this contract; keep the block inline and do not
 cache a snapshot because Timefold mutates planning variables during solving:
@@ -132,11 +135,11 @@ inline fun <T> AppointmentPlanning.withAssigned(
 The helper returns `null` for incomplete planning state and never substitutes
 `0L`, `LocalDate.MIN`, `LocalTime.MIN`, or any other default.
 
-- [ ] **Step 4: Run the helper test and confirm GREEN.**
+- [x] **Step 4: Run the helper test and confirm GREEN.**
 
 Run the same targeted Gradle command. Expected result: 2 tests pass.
 
-- [ ] **Step 5: Commit the isolated domain boundary.**
+- [x] **Step 5: Commit the isolated domain boundary.**
 
 ```bash
 git add appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/domain/AppointmentPlanningAssignment.kt appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/domain/AppointmentPlanningAssignmentTest.kt
@@ -150,7 +153,7 @@ git commit -m $'Make complete planning assignment explicit\n\nAdd a zero-state h
 - Modify: `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/constraint/ConstraintVerifierTest.kt`
 - Modify: `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/constraint/HardConstraints.kt`
 
-- [ ] **Step 1: Add a partial planning regression test before editing constraints.**
+- [x] **Step 1: Add a partial planning regression test before editing constraints.**
 
 Extend `ConstraintVerifierTest` with a partial appointment and facts that exercise
 the date, doctor, and time predicate shapes already covered by the file. The
@@ -198,7 +201,7 @@ fun `partially initialized planning entity is ignored by representative hard con
 }
 ```
 
-- [ ] **Step 2: Run the constraint regression test before the refactor.**
+- [x] **Step 2: Run the constraint regression test before the refactor.**
 
 Run:
 
@@ -211,7 +214,7 @@ Timefold may already exclude the partial entity before invoking the assertion,
 so the RED signal for the production change is the helper compilation test and
 the source-level `!!` audit.
 
-- [ ] **Step 3: Replace all hard-constraint `!!` uses with safe keys and helper predicates.**
+- [x] **Step 3: Replace all hard-constraint `!!` uses with safe keys and helper predicates.**
 
 Apply the following exact transformation rules in `HardConstraints.kt`:
 
@@ -251,7 +254,7 @@ H3, H4a, H4b, H5, and H11. Retain explicit `equipmentId != null` and
 an indexed equality join with a broad `Joiners.filtering` join merely to avoid
 Kotlin nullability; that would alter the constraint stream performance shape.
 
-- [ ] **Step 4: Compile and run constraint tests after the refactor.**
+- [x] **Step 4: Compile and run constraint tests after the refactor.**
 
 Run:
 
@@ -262,7 +265,7 @@ Run:
 Expected result: all existing full-entity penalty tests and the new partial-entity
 test pass, with no `NullPointerException`.
 
-- [ ] **Step 5: Commit the hard-constraint boundary.**
+- [x] **Step 5: Commit the hard-constraint boundary.**
 
 ```bash
 git add appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/constraint/HardConstraints.kt appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/constraint/ConstraintVerifierTest.kt
@@ -276,7 +279,7 @@ git commit -m $'Make hard constraints tolerate partial planning state\n\nUse saf
 - Modify: `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/converter/SolutionConverterTest.kt`
 - Modify: `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/converter/SolutionConverter.kt`
 
-- [ ] **Step 1: Add the missing-start extraction regression.**
+- [x] **Step 1: Add the missing-start extraction regression.**
 
 Add a test next to the existing missing-doctor and missing-date/time tests. Keep
 doctor and date present so this case specifically proves the helper guards the
@@ -304,7 +307,7 @@ fun `extractResults skips appointments without start time`() {
 }
 ```
 
-- [ ] **Step 2: Run converter tests before changing production code.**
+- [x] **Step 2: Run converter tests before changing production code.**
 
 Run:
 
@@ -316,7 +319,7 @@ Expected result: existing extraction tests pass and the new regression test pass
 under the current filter; the helper compilation test remains the RED guard for
 the new production API.
 
-- [ ] **Step 3: Replace `extractResults` with helper-backed `mapNotNull`.**
+- [x] **Step 3: Replace `extractResults` with helper-backed `mapNotNull`.**
 
 Replace only the extraction pipeline; keep all record fields and optional original
 metadata unchanged:
@@ -352,13 +355,13 @@ fun extractResults(
         }
 ```
 
-- [ ] **Step 4: Run the converter test suite and verify result equivalence.**
+- [x] **Step 4: Run the converter test suite and verify result equivalence.**
 
 Run the same targeted converter command. Expected result: complete non-pinned
 appointments still retain their original metadata, pinned appointments remain
 excluded, and all incomplete variants return zero records.
 
-- [ ] **Step 5: Commit the converter boundary.**
+- [x] **Step 5: Commit the converter boundary.**
 
 ```bash
 git add appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/converter/SolutionConverter.kt appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/converter/SolutionConverterTest.kt
@@ -372,7 +375,7 @@ git commit -m $'Preserve incomplete appointment result semantics safely\n\nConve
 - Modify: `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServiceTest.kt`
 - Modify: `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverService.kt`
 
-- [ ] **Step 1: Add a missing-score boundary test with a mocked solver.**
+- [x] **Step 1: Add a missing-score boundary test with a mocked solver.**
 
 Add the imports `ai.timefold.solver.core.api.solver.Solver`,
 `ai.timefold.solver.core.api.solver.SolverFactory`, `io.mockk.every`,
@@ -396,7 +399,7 @@ fun `optimize fails explicitly when solver returns no score`() {
 }
 ```
 
-- [ ] **Step 2: Run the service test and confirm the new assertion fails or reaches the old NPE.**
+- [x] **Step 2: Run the service test and confirm the new assertion fails or reaches the old NPE.**
 
 Run:
 
@@ -408,7 +411,7 @@ Expected pre-change behavior: the mocked solve reaches the `result.score!!`
 site and fails with a Kotlin null assertion (or the test fails because the
 expected contextual `IllegalArgumentException` contract is not yet implemented).
 
-- [ ] **Step 3: Replace service assertions with contextual `requireNotNull`.**
+- [x] **Step 3: Replace service assertions with contextual `requireNotNull`.**
 
 Use these exact boundary patterns in `SolverService.kt`:
 
@@ -447,13 +450,13 @@ val doctorAbsences = doctors.flatMap { doctor ->
 Do not include patient name, phone, member ID, or other personal data in these
 messages. Do not change the public `SolverResult` type.
 
-- [ ] **Step 4: Run the service tests and verify the explicit error contract.**
+- [x] **Step 4: Run the service tests and verify the explicit error contract.**
 
 Run the same targeted service command. Expected result: all existing database
 solver tests pass and the missing-score test receives `IllegalArgumentException`
 with the clinic/date-range context.
 
-- [ ] **Step 5: Commit the service boundary.**
+- [x] **Step 5: Commit the service boundary.**
 
 ```bash
 git add appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverService.kt appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServiceTest.kt
@@ -467,7 +470,7 @@ git commit -m $'Make solver lifecycle invariants explicit\n\nReport missing pers
 - Verify: all production Kotlin files under `appointment-solver/src/main/kotlin`
 - Verify: all changed solver tests and the approved design/plan documents
 
-- [ ] **Step 1: Run the focused solver test set.**
+- [x] **Step 1: Run the focused solver test set.**
 
 ```bash
 ./gradlew :appointment-solver:test \
@@ -480,7 +483,7 @@ git commit -m $'Make solver lifecycle invariants explicit\n\nReport missing pers
 Expected result: all selected tests pass, including complete-result equivalence,
 partial-entity skip behavior, and explicit missing-score failure.
 
-- [ ] **Step 2: Audit the production source for assertions and forbidden semantic changes.**
+- [x] **Step 2: Audit the production source for assertions and forbidden semantic changes.**
 
 Run:
 
@@ -493,7 +496,7 @@ git diff --check
 Expected result: the first two searches print no production matches and
 `git diff --check` is silent.
 
-- [ ] **Step 3: Build the solver module.**
+- [x] **Step 3: Build the solver module.**
 
 ```bash
 ./gradlew :appointment-solver:build --no-build-cache
@@ -502,7 +505,7 @@ Expected result: the first two searches print no production matches and
 Expected result: `BUILD SUCCESSFUL`; record any unrelated shutdown-delay warning
 separately instead of weakening the solver verification claim.
 
-- [ ] **Step 4: Perform the independent completion review.**
+- [x] **Step 4: Perform the independent completion review.**
 
 Review the diff against
 `docs/superpowers/specs/2026-08-02-issue-211-solver-nullable-planning-boundaries-design.md`
@@ -517,7 +520,7 @@ and confirm:
 - error messages contain no patient/member personal data;
 - no P0/P1 review finding remains.
 
-- [ ] **Step 5: Commit the verified implementation with the Lore protocol.**
+- [x] **Step 5: Commit the verified implementation with the Lore protocol.**
 
 ```bash
 git add appointment-solver docs/superpowers/plans/2026-08-02-issue-211-solver-nullable-planning-boundaries-plan.md
@@ -537,3 +540,15 @@ git commit -m $'Make solver nullable planning boundaries safe\n\nPreserve partia
   nullable and narrows it only at the service boundary.
 - Behavior lock: `allowsUnassigned`, `forEachIncludingUnassigned`, constraint
   weights, and `SolverResult` are explicitly protected from accidental scope growth.
+
+## 실행 결과
+
+- 집중 회귀 테스트: `AppointmentPlanningAssignmentTest`,
+  `ConstraintVerifierTest`, `SolutionConverterTest`, `SolverServiceTest` 대상
+  `BUILD SUCCESSFUL` (40개 선택 테스트).
+- 모듈 전체 검증: `./gradlew :appointment-solver:build --no-build-cache`;
+  `67 passing`, Kover `koverVerify`, `BUILD SUCCESSFUL`.
+- 정적 점검: production `!!` 0건, `allowsUnassigned` 및
+  `forEachIncludingUnassigned` 0건, `git diff --check` 통과.
+- 독립 완료 검토: 설계의 nullable planning semantics, indexed join 형태,
+  불완전 결과 제외, boundary 예외 계약, P0/P1 잔여 항목을 확인했다.

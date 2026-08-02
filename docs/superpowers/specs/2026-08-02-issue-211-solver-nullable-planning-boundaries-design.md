@@ -1,6 +1,6 @@
 # Issue #211 Solver nullable planning boundary 설계
 
-상태: 사용자 승인 완료, 구현 계획 작성 완료
+상태: 구현 완료, 모듈 검증 완료
 작성일: 2026-08-02
 대상: `appointment-solver`
 관련 이슈: #211
