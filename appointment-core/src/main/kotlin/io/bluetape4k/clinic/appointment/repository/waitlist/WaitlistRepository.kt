@@ -49,7 +49,6 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.inSubQuery
-import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
@@ -510,7 +509,7 @@ class WaitlistRepository {
         this == null || this.slotFit >= slotFit
     private fun activeOfferQuery(vacancy: VacancyDescriptor) =
         WaitlistOffers
-            .selectAll()
+            .select(WaitlistOffers.id)
             .where {
                 (WaitlistOffers.tenantGroupId eq vacancy.tenantGroupId) and
                     (WaitlistOffers.clinicId eq vacancy.clinicId) and
@@ -520,7 +519,7 @@ class WaitlistRepository {
 
     private fun activeRestrictionQuery(vacancy: VacancyDescriptor) =
         BookingRestrictions
-            .selectAll()
+            .select(BookingRestrictions.id)
             .where {
                 (BookingRestrictions.tenantGroupId eq vacancy.tenantGroupId) and
                     (BookingRestrictions.clinicId eq vacancy.clinicId) and
