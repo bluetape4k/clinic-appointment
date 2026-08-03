@@ -243,3 +243,44 @@ CREATE INDEX idx_waitlist_delivery_candidate_scope_order
     ON scheduling_waitlist_entries (tenant_group_id, clinic_id, status, updated_at, id);
 CREATE INDEX idx_waitlist_delivery_offer_active_entry
     ON scheduling_waitlist_offers (tenant_group_id, clinic_id, active_entry_key, status, id);
+
+CREATE TABLE clinic_waitlist_notification_outbox (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    status VARCHAR(32) NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL,
+    event_id VARCHAR(160) NOT NULL,
+    tenant_group_id BIGINT NOT NULL,
+    clinic_id BIGINT NOT NULL,
+    offer_id BIGINT NOT NULL,
+    hold_id BIGINT NOT NULL,
+    waitlist_entry_id BIGINT NOT NULL,
+    reason_code VARCHAR(96) NOT NULL,
+    correlation_id VARCHAR(128) NOT NULL,
+    payload_json CLOB NOT NULL,
+    occurred_at TIMESTAMP NOT NULL,
+    available_at TIMESTAMP NOT NULL,
+    lease_owner VARCHAR(128),
+    lease_token VARCHAR(128),
+    lease_until TIMESTAMP,
+    attempt_number INTEGER DEFAULT 0 NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    terminal_at TIMESTAMP,
+    CONSTRAINT fk_waitlist_notification_outbox_tenant_group FOREIGN KEY (tenant_group_id)
+        REFERENCES scheduling_tenant_groups(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_waitlist_notification_outbox_clinic FOREIGN KEY (clinic_id)
+        REFERENCES scheduling_clinics(id) ON DELETE CASCADE,
+    CONSTRAINT ck_waitlist_notification_outbox_status CHECK (
+        REGEXP_LIKE(status, '^(PENDING|PROCESSING|RETRY_WAIT|SENT|SUPPRESSED|EXHAUSTED)$')
+    ),
+    CONSTRAINT ck_waitlist_notification_outbox_ids CHECK (
+        tenant_group_id > 0 AND clinic_id > 0 AND offer_id > 0 AND hold_id > 0 AND waitlist_entry_id > 0
+    ),
+    CONSTRAINT ck_waitlist_notification_outbox_attempt CHECK (attempt_number >= 0)
+);
+CREATE UNIQUE INDEX uk_waitlist_notification_outbox_idempotency
+    ON clinic_waitlist_notification_outbox (tenant_group_id, clinic_id, idempotency_key);
+CREATE INDEX idx_waitlist_notification_outbox_ready
+    ON clinic_waitlist_notification_outbox (tenant_group_id, clinic_id, status, available_at, id);
+CREATE INDEX idx_waitlist_notification_outbox_lease
+    ON clinic_waitlist_notification_outbox (status, lease_until, id);

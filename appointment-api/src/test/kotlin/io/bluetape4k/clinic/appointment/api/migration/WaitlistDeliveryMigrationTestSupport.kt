@@ -25,6 +25,7 @@ internal object WaitlistDeliveryMigrationTestSupport {
         "scheduling_booking_benefit_grants",
         "scheduling_waitlist_vacancy_jobs",
         "scheduling_waitlist_command_records",
+        "clinic_waitlist_notification_outbox",
     )
 
     private val expectedColumns = mapOf(
@@ -66,6 +67,12 @@ internal object WaitlistDeliveryMigrationTestSupport {
             "id", "tenant_group_id", "clinic_id", "command_type", "key_digest", "request_digest",
             "status", "result_type", "result_id", "response_digest", "failure_code", "expires_at",
             "created_at", "updated_at",
+        ),
+        "clinic_waitlist_notification_outbox" to setOf(
+            "id", "status", "idempotency_key", "event_id", "tenant_group_id", "clinic_id", "offer_id",
+            "hold_id", "waitlist_entry_id", "reason_code", "correlation_id", "payload_json", "occurred_at",
+            "available_at", "lease_owner", "lease_token", "lease_until", "attempt_number", "created_at",
+            "updated_at", "terminal_at",
         ),
     )
 
@@ -220,6 +227,21 @@ internal object WaitlistDeliveryMigrationTestSupport {
             "scheduling_waitlist_offers",
             "idx_waitlist_delivery_offer_active_entry",
         ) shouldBeEqualTo listOf("tenant_group_id:A", "clinic_id:A", "active_entry_key:A", "status:A", "id:A")
+        uniqueIndexColumns(
+            connection,
+            "clinic_waitlist_notification_outbox",
+            "uk_waitlist_notification_outbox_idempotency",
+        ) shouldBeEqualTo listOf("tenant_group_id", "clinic_id", "idempotency_key")
+        indexDefinition(
+            connection,
+            "clinic_waitlist_notification_outbox",
+            "idx_waitlist_notification_outbox_ready",
+        ) shouldBeEqualTo listOf("tenant_group_id:A", "clinic_id:A", "status:A", "available_at:A", "id:A")
+        indexDefinition(
+            connection,
+            "clinic_waitlist_notification_outbox",
+            "idx_waitlist_notification_outbox_lease",
+        ) shouldBeEqualTo listOf("status:A", "lease_until:A", "id:A")
     }
 
     private fun verifyCommandIdempotencyKey(connection: Connection) {
