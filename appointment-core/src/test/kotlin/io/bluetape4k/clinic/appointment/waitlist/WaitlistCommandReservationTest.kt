@@ -69,7 +69,7 @@ class WaitlistCommandReservationTest {
     @Test
     fun `reservation stores only hmac digest and keeps twenty four hour retention`() {
         withCommandTables {
-            val rawKey = "0123456789abcdef-retention"
+            val rawKey = "retention-test-key-01"
             val key = commandKey(rawKey = rawKey)
 
             repository.reserve(key, requestDigest = DIGEST_A, now = NOW)
@@ -115,7 +115,7 @@ class WaitlistCommandReservationTest {
             repository.reserve(key, requestDigest = DIGEST_A, now = NOW.plusSeconds(3)) shouldBeEqualTo
                 CommandReservation.ReplaySucceeded(status = 200, resultBody = """{"type":"OFFER","id":70}""")
 
-            val failedKey = commandKey(rawKey = "0123456789abcdef-failed")
+            val failedKey = commandKey(rawKey = "failed-test-key-01")
             val failedId = (repository.reserve(failedKey, requestDigest = DIGEST_A, now = NOW) as CommandReservation.Acquired).recordId
             repository.completeCommandFailed(
                 recordId = failedId,
