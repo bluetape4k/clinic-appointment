@@ -78,9 +78,7 @@ data class DecodedWaitlistPolicyDocument(
  * 이 codec은 default typing을 켜지 않고, unknown field, duplicate key, depth 9 이상, 64 KiB
  * 초과 payload, Jackson `@class` metadata, enum-like `mode` injection을 모두 거부한다.
  */
-class WaitlistPolicyDocumentCodec(
-    private val objectMapper: JsonMapper = mapper,
-) {
+class WaitlistPolicyDocumentCodec {
     companion object {
         const val MAX_PAYLOAD_BYTES: Int = 64 * 1024
         const val MAX_NESTING_DEPTH: Int = 8
@@ -93,7 +91,7 @@ class WaitlistPolicyDocumentCodec(
         }
         return try {
             validateDepth(rawBytes)
-            val node = objectMapper.readTree(rawBytes)
+            val node = mapper.readTree(rawBytes)
             val document = readDocument(node)
             val canonicalJson = WaitlistPolicyDocument.canonicalJson(document)
             DecodedWaitlistPolicyDocument(
@@ -110,7 +108,7 @@ class WaitlistPolicyDocumentCodec(
 
     private fun validateDepth(rawBytes: ByteArray) {
         var depth = 0
-        objectMapper.createParser(rawBytes).use { parser ->
+        mapper.createParser(rawBytes).use { parser ->
             while (parser.nextToken() != null) {
                 when (parser.currentToken()) {
                     JsonToken.START_OBJECT,

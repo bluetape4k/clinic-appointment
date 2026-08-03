@@ -22,7 +22,19 @@ class WaitlistPolicyDocumentTest {
             codec.decode("""{"@class":"evil.Type","urgencyWeight":1}""")
         }
         assertFailsWith<WaitlistPolicyValidationException> {
-            codec.decode("""{"urgencyWeight":1,"urgencyWeight":2}""")
+            codec.decode(
+                """
+                {
+                  "urgencyWeight": 1,
+                  "recoveryWeight": 1,
+                  "benefitWeight": 1,
+                  "reliabilityWeight": 1,
+                  "waitingAgeWeight": 1,
+                  "slotFitWeight": 1,
+                  "urgencyWeight": 2
+                }
+                """.trimIndent(),
+            )
         }
         assertFailsWith<WaitlistPolicyValidationException> {
             codec.decode("""{"container":{"level1":{"level2":{"level3":{"level4":{"level5":{"level6":{"level7":{"level8":1}}}}}}}}}""")
