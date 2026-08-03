@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
+import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
 import io.github.resilience4j.bulkhead.Bulkhead
 import io.github.resilience4j.bulkhead.BulkheadConfig
 import io.github.resilience4j.circuitbreaker.CircuitBreaker
@@ -12,6 +13,7 @@ import io.github.resilience4j.retry.Retry
 import io.github.resilience4j.retry.RetryConfig
 import kotlinx.coroutines.CancellationException
 import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ThreadPoolExecutor
@@ -110,6 +112,22 @@ class ResilientNotificationChannel(
     override val channelType get() = delegate.channelType
 
     override fun send(request: NotificationProviderRequest): NotificationProviderResult {
+        return sendWithTimeout(request, providerTimeout)
+    }
+
+    /** waitlist offer의 가장 이른 만료 경계를 provider timeout에도 전달합니다. */
+    override fun send(request: NotificationProviderRequest, deadline: Instant): NotificationProviderResult {
+        val remaining = Duration.between(Instant.now(), deadline)
+        if (remaining.isZero || remaining.isNegative) {
+            throw NotificationProviderException(NotificationFailureCode.PROVIDER_UNAVAILABLE)
+        }
+        return sendWithTimeout(request, minOf(providerTimeout, remaining))
+    }
+
+    private fun sendWithTimeout(
+        request: NotificationProviderRequest,
+        timeout: Duration,
+    ): NotificationProviderResult {
         val decorated = Bulkhead.decorateSupplier(bulkhead) {
             Retry.decorateSupplier(retry) {
                 CircuitBreaker.decorateSupplier(circuitBreaker) {
@@ -121,7 +139,7 @@ class ResilientNotificationChannel(
         try {
             val future = executor.submit<NotificationProviderResult> { decorated.get() }
             return try {
-                future.get(providerTimeout.toMillis(), TimeUnit.MILLISECONDS)
+                future.get(timeout.toMillis().coerceAtLeast(1L), TimeUnit.MILLISECONDS)
             } catch (e: TimeoutException) {
                 future.cancel(true)
                 throw e

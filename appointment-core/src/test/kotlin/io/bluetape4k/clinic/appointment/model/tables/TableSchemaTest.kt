@@ -55,6 +55,13 @@ class TableSchemaTest : AbstractExposedTest() {
         WaitlistOffers,
         WaitlistCapacityHolds,
         WaitlistOfferEvents,
+        WaitlistPolicyVersions,
+        WaitlistPolicyEvents,
+        BookingRestrictions,
+        DisruptionRecoveryCredits,
+        BookingBenefitGrants,
+        WaitlistVacancyJobs,
+        WaitlistCommandRecords,
     )
 
     @ParameterizedTest

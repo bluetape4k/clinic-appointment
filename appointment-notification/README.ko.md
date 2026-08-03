@@ -174,3 +174,15 @@ key reference가 없거나 유효하지 않으면 알림 readiness가 DOWN이 �
 - [구현 계획](../docs/superpowers/plans/2026-07-31-issue-172-notification-outbox-plan.md)
 - [운영 런북](../docs/runbooks/notification-outbox-operations.md)
 - [알림 데이터 흐름](../docs/requirements/data-flow.md#5-알림-outbox-발송-흐름)
+
+## Waitlist offer notification
+
+waitlist offer 전달은 기존 durable notification lifecycle을 재사용합니다. worker가 제한된
+row를 claim하고 현재 회원 profile을 조회한 뒤 provider I/O 직전에 offer expiry CAS를 마지막으로
+확인하고 fenced update로 결과를 기록합니다. provider latency를 appointment transaction 안에
+가두지 않습니다. 만료·terminal offer는 suppression하고, provider 결과를 알 수 없으면
+manual-review 상태로 남기며 offer를 accept하거나 되살리지 않습니다.
+
+rollout은 `appointment.waitlist.delivery.enabled`와 선택적인 `clinic-allowlist`로 제어합니다.
+기본값은 global-off이지만 expiry, suppression, stuck-hold recovery는 계속 실행됩니다.
+[waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)을 참고하세요.

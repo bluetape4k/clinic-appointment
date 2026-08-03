@@ -1,0 +1,52 @@
+groups:
+  - name: appointment-waitlist-delivery
+    rules:
+      - alert: AppointmentWaitlistOldestVacancyWarning
+        expr: appointment_waitlist_oldest_vacancy_seconds >= 120
+        for: 5m
+        labels:
+          severity: warning
+          service: appointment-api
+        annotations:
+          summary: "Waitlist vacancy backlog is older than two minutes"
+          runbook: "docs/runbooks/waitlist-delivery.md"
+      - alert: AppointmentWaitlistOldestVacancyCritical
+        expr: appointment_waitlist_oldest_vacancy_seconds > 300
+        for: 2m
+        labels:
+          severity: critical
+          service: appointment-api
+        annotations:
+          summary: "Waitlist vacancy backlog is older than five minutes"
+          runbook: "docs/runbooks/waitlist-delivery.md"
+      - alert: AppointmentWaitlistFailedJob
+        expr: appointment_waitlist_failed_jobs > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: appointment-api
+        annotations:
+          summary: "A waitlist delivery job is failed and needs operator review"
+          runbook: "docs/runbooks/waitlist-delivery.md"
+      - alert: AppointmentWaitlistExpiredBacklog
+        expr: appointment_waitlist_expired_backlog > 100
+        for: 5m
+        labels:
+          severity: critical
+          service: appointment-api
+        annotations:
+          summary: "Expired waitlist backlog exceeds the out-of-service threshold"
+          runbook: "docs/runbooks/waitlist-delivery.md"
+      - alert: AppointmentWaitlistProviderFailureRatio
+        expr: |
+          sum(rate(appointment_waitlist_provider_attempts_total{outcome="failure"}[5m]))
+            /
+          clamp_min(sum(rate(appointment_waitlist_provider_attempts_total[5m])), 1)
+            >= 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: appointment-notification
+        annotations:
+          summary: "Waitlist provider failures have degraded delivery readiness"
+          runbook: "docs/runbooks/waitlist-delivery.md"

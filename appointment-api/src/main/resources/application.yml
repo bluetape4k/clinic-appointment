@@ -71,6 +71,17 @@ scheduling:
         # idempotency-hash-secret은 기본값을 두지 않는다. 설정된 환경에서만 policy write/worker bean이 생성된다.
 
 appointment:
+    waitlist:
+        delivery:
+            # New vacancy dispatch is opt-in. Recovery jobs remain active while this is false.
+            enabled: false
+            clinic-allowlist: []
+            batch-size: 25
+            job-lease: 30s
+            max-attempts: 5
+            poll-interval: 1s
+            retention-interval: 1h
+            retention-batch-size: 100
     profile-reevaluation:
         # 병원 허용 목록이 비어 있으면 활성화해도 적용 대상은 없습니다.
         enabled: false

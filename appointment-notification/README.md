@@ -178,3 +178,17 @@ external secret location in `secret-reference`, never key material.
 - [Implementation Plan](../docs/superpowers/plans/2026-07-31-issue-172-notification-outbox-plan.md)
 - [Operations Runbook](../docs/runbooks/notification-outbox-operations.md)
 - [Notification Data Flow](../docs/requirements/data-flow.md#5-알림-outbox-발송-흐름)
+
+## Waitlist offer notification
+
+Waitlist offer delivery uses the same durable notification lifecycle as other
+channels. The worker claims a bounded row, resolves the current member profile,
+performs a final offer-expiry CAS immediately before provider I/O, and records
+the result with another fenced update. Provider latency is never held inside an
+appointment transaction. An expired or terminal offer is suppressed; an unknown
+provider result is manual-review state and never accepts or revives an offer.
+
+Rollout is controlled by `appointment.waitlist.delivery.enabled` and the optional
+`clinic-allowlist`. The default is global-off, while expiry, suppression, and
+stuck-hold recovery remain active. See the [waitlist delivery API and operations
+contract](../docs/api/waitlist-delivery.md).

@@ -15,7 +15,7 @@ import java.sql.Driver
 class FlywayPostgreSQLMigrationTest {
 
     @Test
-    fun `V9 contract remains valid and V10 through V18 add durable scheduling schema on PostgreSQL`() {
+    fun `V9 contract remains valid and V10 through V19 add durable scheduling schema on PostgreSQL`() {
         val postgres = Containers.Postgres
         val driver = Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance() as Driver
         val dataSource = SimpleDriverDataSource(
@@ -57,6 +57,11 @@ class FlywayPostgreSQLMigrationTest {
             dataSource = dataSource,
             location = "classpath:db/migration/postgresql",
             dialect = WaitlistCoreMigrationTestSupport.Dialect.POSTGRESQL,
+        )
+        WaitlistDeliveryMigrationTestSupport.verifyV19Migration(
+            dataSource = dataSource,
+            location = "classpath:db/migration/postgresql",
+            dialect = WaitlistDeliveryMigrationTestSupport.Dialect.POSTGRESQL,
         )
     }
 }

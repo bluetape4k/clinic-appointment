@@ -351,3 +351,27 @@ API 응답(`AppointmentResponse`)에는 항상 `timezone` 과 `locale` 필드가
 - Spring Profile에 따라 DataSource를 동적으로 주입 (`@DynamicPropertySource`)
 - Controller 테스트는 `RestClient` 방식 사용. MockMvc 미사용
 - CI에서 H2 / PostgreSQL / MySQL8 세 환경을 병렬로 검증
+
+## 직원용 Waitlist API
+
+phase-two 직원 API의 기본 경로는
+`/api/{tenantCode}/clinics/{clinicId}/waitlist`입니다. 모든 mutation은 출력 가능한 ASCII
+`Idempotency-Key`(16~128자)가 필요하며 resource precondition이 있는 요청은 본문에
+`expectedVersion`을 담습니다. 외부 entry, offer, policy, adjustment, appointment reference는
+versioned opaque string이고 내부 숫자 ID를 사용하기 전에 tenant/clinic 범위를 다시 확인합니다.
+
+| 작업 | 경로 | 권한 |
+|---|---|---|
+| Entry | `POST/GET /entries`, `GET /entries/{entryRef}`, `POST /entries/{entryRef}/withdraw` | `waitlist:read` 또는 `waitlist:write` |
+| Offer | `GET /offers`, `GET /offers/{offerRef}`, `POST /offers/{offerRef}/confirm`, `/decline`, `GET .../decision` | `waitlist:read` 또는 `waitlist:write` |
+| Policy | `GET /policies/active`, `GET /policies/{policyRef}`, `POST /policies`, `POST /policies/{policyRef}/activate` | `waitlist:policy` |
+| 조정 | `POST /restrictions`, `/recovery-credits`, `/benefit-grants`와 release/revoke 경로 | `waitlist:adjustment` |
+
+응답에는 제한된 상태·사유와 correlation ID만 포함합니다. `403` 범위 거부, `404` 숨겨진
+교차 병원 reference, `409` stale/expired/occupied 충돌, `503` 의존성 장애는 waitlist의
+안정된 오류 registry를 사용합니다. 환자 self-service와 public magic-link 수락은 범위 밖입니다.
+
+delivery 기본값은 `appointment.waitlist.delivery.enabled=false`입니다. clinic을
+`clinic-allowlist`에서 제거하면 새 dispatch와 notification만 멈추고 expiry, suppression,
+hold recovery는 계속 실행됩니다. [waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)과
+[운영 런북](../docs/runbooks/waitlist-delivery.md)을 참고하세요.

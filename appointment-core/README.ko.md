@@ -197,3 +197,24 @@ val zoned: ZonedDateTime = timezoneService.toClinicTime(clinicId, date, time)
 ## 설계 문서
 
 - [도메인 모델 전체](../docs/requirements/domain-model.md)
+
+## Waitlist 전달 경계
+
+waitlist core는 내구성 있는 vacancy, 후보, offer, hold, policy, command record 상태를
+소유합니다. 당일 확정 예약이 `CANCELLED` 또는 `NO_SHOW`가 되면 범위가 고정된 vacancy
+generation을 만들고, ranked matcher가 hard eligibility를 먼저 확인한 뒤 결정적인 policy
+점수를 계산합니다. offer, hold, decision audit, notification draft, vacancy 완료는 호출자가
+소유한 `transaction {}` 경계 안에서 기록합니다.
+
+core는 Spring, Redis, notification provider, 회원 profile 서비스에 직접 호출하지 않습니다.
+`SlotAvailable`은 빠른 신호일 뿐이며 durable vacancy job이 복구 권위입니다. worker lease를
+잃으면 DB version과 owner predicate가 fencing하고, confirm 재요청은 durable command record로
+해결합니다.
+
+| 경계 | 계약 |
+|---|---|
+| 롤백 | `appointment.waitlist.delivery.enabled=false`는 새 dispatch만 멈추고 expiry, suppression, hold recovery는 계속 실행합니다. |
+| 개인정보 | entry, event, offer, notification draft에는 opaque reference와 제한된 reason code만 담고 이름·연락처는 복제하지 않습니다. |
+| 완료 | `OFFERED`는 `ACCEPTED`, `DECLINED`, `EXPIRED`, `WITHDRAWN` 중 하나로 한 번만 전이하며 terminal 재시도는 no-op 성공입니다. |
+
+[waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)에서 전체 경계를 확인하세요.

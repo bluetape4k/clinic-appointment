@@ -91,6 +91,8 @@ enum class NotificationSuppressionReasonCode {
     MEMBER_ID_MISSING_LEGACY,
     APPOINTMENT_CHANGED,
     REMINDER_WINDOW_MISSED,
+    WAITLIST_OFFER_EXPIRED,
+    WAITLIST_OFFER_NOT_ACTIVE,
 }
 
 /**

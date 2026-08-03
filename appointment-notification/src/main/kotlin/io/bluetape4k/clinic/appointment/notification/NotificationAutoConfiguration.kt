@@ -6,6 +6,7 @@ import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
 import io.bluetape4k.leader.lettuce.leaderGroupElection
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistRepository
 import io.micrometer.core.instrument.MeterRegistry
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
@@ -226,6 +227,59 @@ class NotificationAutoConfiguration {
             metrics = metricsProvider.ifAvailable,
         )
     }
+
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "appointment.waitlist.delivery",
+        name = ["enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnBean(Database::class, WaitlistRepository::class)
+    @ConditionalOnMissingBean(WaitlistOfferNotificationStore::class)
+    fun waitlistOfferNotificationStore(
+        database: Database,
+        waitlistRepository: WaitlistRepository,
+        properties: NotificationProperties,
+    ): WaitlistOfferNotificationStore {
+        val worker = properties.worker.validate()
+        return JdbcWaitlistOfferNotificationStore(
+            database = database,
+            waitlistRepository = waitlistRepository,
+            leaseDuration = worker.leaseDuration,
+            maxAttempts = worker.maxAttempts,
+            retryDelay = worker.pollInterval,
+        )
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "appointment.waitlist.delivery",
+        name = ["enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnBean(
+        WaitlistOfferNotificationStore::class,
+        MemberNotificationProfileResolver::class,
+        NotificationProviderIdempotencyKeyFactory::class,
+    )
+    @ConditionalOnMissingBean(WaitlistOfferNotificationWorker::class)
+    fun waitlistOfferNotificationWorker(
+        store: WaitlistOfferNotificationStore,
+        profileResolver: MemberNotificationProfileResolver,
+        resilientNotificationChannel: ResilientNotificationChannel,
+        providerIdempotencyKeyFactory: NotificationProviderIdempotencyKeyFactory,
+        templateCatalogProvider: ObjectProvider<NotificationTemplateCatalog>,
+    ): WaitlistOfferNotificationWorker =
+        WaitlistOfferNotificationWorker(
+            store = store,
+            profileResolver = profileResolver,
+            channel = resilientNotificationChannel,
+            requestRenderer = DefaultWaitlistOfferNotificationRequestRenderer(
+                providerIdempotencyKeyFactory = providerIdempotencyKeyFactory,
+                templateCatalog = templateCatalogProvider.ifAvailable ?: BuiltInWaitlistNotificationTemplateCatalog,
+                channel = resilientNotificationChannel.channelType,
+            ),
+        )
 
     @Bean
     @ConditionalOnProperty(

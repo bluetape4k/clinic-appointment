@@ -7,7 +7,7 @@ import java.sql.Driver
 class FlywayMigrationTest {
 
     @Test
-    fun `V9 contract remains valid and V10 through V18 add durable scheduling schema`() {
+    fun `V9 contract remains valid and V10 through V19 add durable scheduling schema`() {
         AppointmentPlanMigrationTestSupport.verifyV9Migration(
             dataSource = h2DataSource("plan"),
             location = "classpath:db/migration/h2",
@@ -40,6 +40,11 @@ class FlywayMigrationTest {
             dataSource = h2DataSource("waitlist-core"),
             location = "classpath:db/migration/h2",
             dialect = WaitlistCoreMigrationTestSupport.Dialect.H2,
+        )
+        WaitlistDeliveryMigrationTestSupport.verifyV19Migration(
+            dataSource = h2DataSource("waitlist-delivery"),
+            location = "classpath:db/migration/h2",
+            dialect = WaitlistDeliveryMigrationTestSupport.Dialect.H2,
         )
     }
 
