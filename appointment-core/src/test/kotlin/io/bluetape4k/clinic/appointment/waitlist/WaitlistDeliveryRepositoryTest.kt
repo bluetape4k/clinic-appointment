@@ -25,7 +25,6 @@ import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import java.sql.SQLException
 import java.time.Duration
 import java.time.Instant
@@ -237,7 +236,7 @@ class WaitlistDeliveryRepositoryTest {
         )
         val nonretryable = SQLException("not retryable", "42000")
 
-        val failure = assertThrows<SQLException> {
+        val failure = assertFailsWith<SQLException> {
             retryingRepository.withContentionRetry {
                 calls += 1
                 throw nonretryable
@@ -260,7 +259,7 @@ class WaitlistDeliveryRepositoryTest {
         )
         val retryable = SQLException("serialization", "40001")
 
-        val failure = assertThrows<WaitlistContention> {
+        val failure = assertFailsWith<WaitlistContention> {
             retryingRepository.withContentionRetry {
                 throw retryable
             }
@@ -282,7 +281,7 @@ class WaitlistDeliveryRepositoryTest {
         val failure =
             try {
                 Thread.currentThread().interrupt()
-                assertThrows<WaitlistContention> {
+                assertFailsWith<WaitlistContention> {
                     retryingRepository.withContentionRetry {
                         throw retryable
                     }
@@ -331,7 +330,7 @@ class WaitlistDeliveryRepositoryTest {
         )
         val h2LockWait = SQLException("lock wait timeout", "HY000", 1205)
 
-        val failure = assertThrows<SQLException> {
+        val failure = assertFailsWith<SQLException> {
             h2Repository.withContentionRetry {
                 h2Calls += 1
                 throw h2LockWait
