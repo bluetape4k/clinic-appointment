@@ -212,9 +212,13 @@ active 상태일 때만 deterministic scope/generation 또는 entry key를 저�
 
 ### 6.7 `scheduling_waitlist_command_records`
 
-staff mutation의 scope, command type, `Idempotency-Key` digest, request digest,
+staff mutation의 scope, command type, `Idempotency-Key` domain-separated HMAC-SHA-256 digest,
+request digest,
 result reference와 expiry를 저장한다. 동일 key와 동일 request는 기존 결과를 반환하고,
 동일 key와 다른 request는 conflict다.
+
+HMAC secret은 waitlist domain 전용 32 byte 이상이어야 하며 raw key는 DB, log, response,
+metric label에 저장하거나 노출하지 않는다.
 
 상태는 `PROCESSING`, `SUCCEEDED`, `FAILED`다. 짧은 reservation transaction이 scope,
 command type, key digest unique insert를 commit한 뒤 business transaction을 시작하며
@@ -386,6 +390,10 @@ reference가 이미 존재하면 그 결과로 reconciliation한다.
 
 기본 path는 `/api/{tenantCode}/clinics/{clinicId}/waitlist`다.
 
+외부 entry/offer/policy/adjustment/appointment reference는 versioned opaque string이며 API
+layer가 tenant/clinic scope와 resource kind를 검증해 내부 `Long` ID로 변환한다. raw numeric
+ID는 response나 OpenAPI에 노출하지 않고 malformed/wrong-kind/wrong-scope reference는 `404`다.
+
 controller 진입 시 `TenantScope(tenantGroupId, tenantCode, clinicId)`를 한 번 resolve한다.
 JWT의 canonical tenant group/clinic membership과 path를 대조한 뒤에만 application service와
 repository에 이 값 객체를 전달한다. unknown tenant는 `404`, 유효 tenant의 clinic membership
@@ -396,12 +404,12 @@ repository에 이 값 객체를 전달한다. unknown tenant는 `404`, 유효 te
 
 - `POST /entries`
 - `GET /entries?status=&cursor=&limit=`
-- `GET /entries/{entryId}`
-- `POST /entries/{entryId}/withdraw`
-- `GET /offers/{offerId}`
-- `POST /offers/{offerId}/confirm`
-- `POST /offers/{offerId}/decline`
-- `GET /offers/{offerId}/decision`
+- `GET /entries/{entryRef}`
+- `POST /entries/{entryRef}/withdraw`
+- `GET /offers/{offerRef}`
+- `POST /offers/{offerRef}/confirm`
+- `POST /offers/{offerRef}/decline`
+- `GET /offers/{offerRef}/decision`
 - `GET /offers?status=&memberId=&entryId=&expiresBefore=&deliveryState=&cursor=&limit=`
 
 mutation은 `Idempotency-Key`를 요구한다. list는 bounded keyset pagination을 사용한다.
@@ -515,7 +523,7 @@ optional field는 OpenAPI schema에서 nullable로 표시한다.
 |---|---|---|---|
 | `POST /entries` | `{"memberId":"m-1","treatmentTypeId":7,"windowStart":"2026-08-03T09:00:00Z","windowEnd":"2026-08-03T12:00:00Z","reasonCode":"STAFF_REQUEST"}` | `201 {"id":"e-1","version":1,"status":"ACTIVE","correlationId":"c-1"}` | `409 {"reasonCode":"ENTRY_ALREADY_ACTIVE","correlationId":"c-1","retryable":false}` |
 | `POST /entries/e-1/withdraw` | `{"expectedVersion":1,"reasonCode":"MEMBER_DECLINED"}` | `200 {"id":"e-1","version":2,"status":"WITHDRAWN","correlationId":"c-2"}` | `409 {"reasonCode":"ENTRY_TERMINAL","correlationId":"c-2","retryable":false}` |
-| `POST /offers/o-1/confirm` | `{"expectedVersion":1,"confirmationSource":"STAFF_PHONE"}` | `201 {"appointmentId":101,"offerId":"o-1","correlationId":"c-3"}` | `409 {"reasonCode":"OFFER_EXPIRED","correlationId":"c-3","retryable":false}` |
+| `POST /offers/o-1/confirm` | `{"expectedVersion":1,"confirmationSource":"STAFF_PHONE"}` | `201 {"appointmentRef":"a-1","offerRef":"o-1","correlationId":"c-3"}` | `409 {"reasonCode":"OFFER_EXPIRED","correlationId":"c-3","retryable":false}` |
 | `POST /offers/o-1/decline` | `{"expectedVersion":1,"reasonCode":"MEMBER_DECLINED"}` | `200 {"id":"o-1","version":2,"status":"DECLINED","correlationId":"c-4"}` | `409 {"reasonCode":"OFFER_TERMINAL","correlationId":"c-4","retryable":false}` |
 | `POST /policies/versions` | `{"document":{"urgencyWeight":10},"effectiveFrom":"2026-08-04T00:00:00Z","reasonCode":"INITIAL"}` | `201 {"id":"p-1","generation":0,"status":"DRAFT","correlationId":"c-5"}` | `400 {"reasonCode":"VALIDATION_POLICY_DOCUMENT","correlationId":"c-5","retryable":false}` |
 | `POST /policies/versions/p-1/activate` | `{"expectedGeneration":0,"reasonCode":"APPROVED"}` | `200 {"id":"p-1","generation":1,"status":"ACTIVE","correlationId":"c-6"}` | `409 {"reasonCode":"POLICY_WINDOW_OVERLAP","correlationId":"c-6","retryable":false}` |
@@ -817,7 +825,8 @@ job을 재시도한다.
 - requirements: policy, API, security, failure behavior
 - 기존 V18 문서 `docs/runbooks/waitlist-core.md`는 유지하고 새
   `docs/runbooks/waitlist-delivery.md`에 V19 운영을 분리한다. 새 runbook은
-  `./gradlew :appointment-api:flywayInfo`, Actuator health/metric query, deployment config의
+  `./gradlew :appointment-api:test --tests "*FlywayMigrationTest" --no-build-cache`, Actuator
+  health/metric query, deployment config의
   `appointment.waitlist.delivery.enabled`/allowlist 변경, failed-job requeue와 unknown-delivery
   suppress admin endpoint, 위 rollback mode matrix, 재활성화 gate를 exact command/expected
   output과 evidence template으로 제공한다.
