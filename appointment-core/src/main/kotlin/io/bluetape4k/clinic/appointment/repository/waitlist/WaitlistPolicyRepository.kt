@@ -20,7 +20,6 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.or
-import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -51,30 +50,25 @@ class WaitlistPolicyRepository {
         lockClinic(scope)
         val policyVersion = nextPolicyVersion(scope)
         val draftGeneration = -policyVersion
-        val policyId =
-            try {
-                WaitlistPolicyVersions.insertAndGetId {
-                    it[tenantGroupId] = EntityID(scope.tenantGroupId, TenantGroups)
-                    it[clinicId] = EntityID(scope.clinicId, Clinics)
-                    it[generation] = draftGeneration
-                    it[WaitlistPolicyVersions.policyVersion] = policyVersion
-                    it[policyDigest] = policy.digest
-                    it[urgencyWeight] = policy.document.urgencyWeight
-                    it[recoveryWeight] = policy.document.recoveryWeight
-                    it[benefitWeight] = policy.document.benefitWeight
-                    it[reliabilityWeight] = policy.document.reliabilityWeight
-                    it[waitingAgeWeight] = policy.document.waitingAgeWeight
-                    it[slotFitWeight] = policy.document.slotFitWeight
-                    it[status] = WaitlistPolicyState.DRAFT
-                    it[WaitlistPolicyVersions.effectiveFrom] = effectiveFrom
-                    it[WaitlistPolicyVersions.effectiveUntil] = effectiveUntil
-                    it[canonicalPolicyJson] = policy.canonicalJson
-                    it[createdBy] = actor.value
-                    it[createdAt] = now
-                }.value
-            } catch (ex: ExposedSQLException) {
-                throw WaitlistPolicyConflict()
-            }
+        val policyId = WaitlistPolicyVersions.insertAndGetId {
+            it[tenantGroupId] = EntityID(scope.tenantGroupId, TenantGroups)
+            it[clinicId] = EntityID(scope.clinicId, Clinics)
+            it[generation] = draftGeneration
+            it[WaitlistPolicyVersions.policyVersion] = policyVersion
+            it[policyDigest] = policy.digest
+            it[urgencyWeight] = policy.document.urgencyWeight
+            it[recoveryWeight] = policy.document.recoveryWeight
+            it[benefitWeight] = policy.document.benefitWeight
+            it[reliabilityWeight] = policy.document.reliabilityWeight
+            it[waitingAgeWeight] = policy.document.waitingAgeWeight
+            it[slotFitWeight] = policy.document.slotFitWeight
+            it[status] = WaitlistPolicyState.DRAFT
+            it[WaitlistPolicyVersions.effectiveFrom] = effectiveFrom
+            it[WaitlistPolicyVersions.effectiveUntil] = effectiveUntil
+            it[canonicalPolicyJson] = policy.canonicalJson
+            it[createdBy] = actor.value
+            it[createdAt] = now
+        }.value
         appendEvent(
             scope = scope,
             policyVersion = policyVersion,
