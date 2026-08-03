@@ -1,5 +1,8 @@
 package io.bluetape4k.clinic.appointment.repository.waitlist
 
+import io.bluetape4k.clinic.appointment.model.tables.BookingBenefitGrants
+import io.bluetape4k.clinic.appointment.model.tables.BookingRestrictions
+import io.bluetape4k.clinic.appointment.model.tables.DisruptionRecoveryCredits
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
@@ -17,6 +20,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.OfferAlreadyExists
 import io.bluetape4k.clinic.appointment.model.waitlist.OfferHoldIds
 import io.bluetape4k.clinic.appointment.model.waitlist.OfferScopeMismatch
 import io.bluetape4k.clinic.appointment.model.waitlist.VacancyDescriptor
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyDocumentCodec
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCapacityHoldRecord
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCapacityHoldState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCursor
@@ -46,6 +50,9 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
+import java.io.Serializable
+import java.security.MessageDigest
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -82,6 +89,60 @@ class WaitlistRepository {
             )
         }
         return rows.take(limit)
+    }
+
+    /**
+     * active policy snapshot 기준으로 hard eligibility를 통과한 후보를 global deterministic
+     * tuple 순서로 조회합니다.
+     *
+     * Exposed caller-owned transaction 안에서 scope/state/time predicate와 active offer,
+     * restriction 제외를 먼저 적용하고, page cursor는 이미 관측한 ranked row 이후만 넘깁니다.
+     */
+    fun findRankedCandidatePage(
+        vacancy: VacancyDescriptor,
+        policy: ClinicWaitlistPolicyRecord,
+        cursor: RankedWaitlistCursor?,
+        limit: Int = 100,
+    ): List<RankedWaitlistCandidateRow> {
+        require(limit in 1..500) { "limit must be in 1..500" }
+        require(policy.scope.tenantGroupId == vacancy.tenantGroupId && policy.scope.clinicId == vacancy.clinicId) {
+            "policy scope must match vacancy scope"
+        }
+
+        val activeOfferMembers = activeOfferMembers(vacancy)
+        val activeRestrictionMembers = activeRestrictionMembers(vacancy)
+        val activeRecoveryMembers = activeRecoveryMembers(vacancy)
+        val activeBenefitMembers = activeBenefitMembers(vacancy)
+        val policyDocument = policyCodec.decode(policy.canonicalPolicyJson).document
+
+        return WaitlistEntries
+            .selectAll()
+            .where {
+                candidateBaseCondition(vacancy) and
+                    rankedDoctorCondition(vacancy)
+            }
+            .map { row -> row.toEntryRecord() }
+            .asSequence()
+            .filter { entry -> entry.scope.memberId.value !in activeOfferMembers }
+            .filter { entry -> entry.scope.memberId.value !in activeRestrictionMembers }
+            .map { entry ->
+                entry.toRankedRow(
+                    vacancy = vacancy,
+                    policy = policy,
+                    urgencyWeight = policyDocument.urgencyWeight,
+                    recoveryWeight = policyDocument.recoveryWeight,
+                    benefitWeight = policyDocument.benefitWeight,
+                    reliabilityWeight = policyDocument.reliabilityWeight,
+                    waitingAgeWeight = policyDocument.waitingAgeWeight,
+                    slotFitWeight = policyDocument.slotFitWeight,
+                    recoveryActive = entry.scope.memberId.value in activeRecoveryMembers,
+                    benefitActive = entry.scope.memberId.value in activeBenefitMembers,
+                )
+            }
+            .sortedWith(RANKED_ROW_ORDER)
+            .dropWhile { row -> cursor != null && row.isAtOrBefore(cursor) }
+            .take(limit)
+            .toList()
     }
 
     /** scope가 일치하는 offer row를 비관 잠금으로 읽습니다. */
@@ -393,6 +454,13 @@ class WaitlistRepository {
             (WaitlistEntries.preferredEndTime greaterEq vacancyEndTime)
     }
 
+    private fun rankedDoctorCondition(vacancy: VacancyDescriptor): Op<Boolean> =
+        if (vacancy.doctorId == null) {
+            WaitlistEntries.doctorId.isNull()
+        } else {
+            (WaitlistEntries.doctorId eq vacancy.doctorId) or WaitlistEntries.doctorId.isNull()
+        }
+
     private fun doctorCondition(vacancy: VacancyDescriptor, slotFit: Int): Op<Boolean> =
         when (slotFit) {
             SLOT_FIT_EXACT -> WaitlistEntries.doctorId eq checkNotNull(vacancy.doctorId) {
@@ -419,6 +487,104 @@ class WaitlistRepository {
 
     private fun WaitlistCursor?.allowsSlotFit(slotFit: Int): Boolean =
         this == null || this.slotFit >= slotFit
+
+    private fun activeOfferMembers(vacancy: VacancyDescriptor): Set<String> =
+        WaitlistOffers
+            .selectAll()
+            .where {
+                (WaitlistOffers.tenantGroupId eq vacancy.tenantGroupId) and
+                    (WaitlistOffers.clinicId eq vacancy.clinicId) and
+                    (WaitlistOffers.status inList WaitlistOfferState.activeStates.toList())
+            }
+            .map { row -> row[WaitlistOffers.memberId] }
+            .toSet()
+
+    private fun activeRestrictionMembers(vacancy: VacancyDescriptor): Set<String> =
+        BookingRestrictions
+            .selectAll()
+            .where {
+                (BookingRestrictions.tenantGroupId eq vacancy.tenantGroupId) and
+                    (BookingRestrictions.clinicId eq vacancy.clinicId) and
+                    (BookingRestrictions.startsAt lessEq vacancy.now) and
+                    (BookingRestrictions.releasedAt.isNull()) and
+                    (BookingRestrictions.expiresAt.isNull() or (BookingRestrictions.expiresAt greater vacancy.now))
+            }
+            .map { row -> row[BookingRestrictions.memberId] }
+            .toSet()
+
+    private fun activeRecoveryMembers(vacancy: VacancyDescriptor): Set<String> =
+        DisruptionRecoveryCredits
+            .selectAll()
+            .where {
+                (DisruptionRecoveryCredits.tenantGroupId eq vacancy.tenantGroupId) and
+                    (DisruptionRecoveryCredits.clinicId eq vacancy.clinicId) and
+                    (DisruptionRecoveryCredits.expiresAt greater vacancy.now) and
+                    DisruptionRecoveryCredits.consumedAt.isNull() and
+                    DisruptionRecoveryCredits.reversedAt.isNull()
+            }
+            .map { row -> row[DisruptionRecoveryCredits.memberId] }
+            .toSet()
+
+    private fun activeBenefitMembers(vacancy: VacancyDescriptor): Set<String> =
+        BookingBenefitGrants
+            .selectAll()
+            .where {
+                (BookingBenefitGrants.tenantGroupId eq vacancy.tenantGroupId) and
+                    (BookingBenefitGrants.clinicId eq vacancy.clinicId) and
+                    (BookingBenefitGrants.startsAt lessEq vacancy.now) and
+                    (BookingBenefitGrants.consumedAt.isNull()) and
+                    (BookingBenefitGrants.revokedAt.isNull()) and
+                    (BookingBenefitGrants.expiresAt.isNull() or (BookingBenefitGrants.expiresAt greater vacancy.now))
+            }
+            .map { row -> row[BookingBenefitGrants.memberId] }
+            .toSet()
+
+    private fun WaitlistEntryRecord.toRankedRow(
+        vacancy: VacancyDescriptor,
+        policy: ClinicWaitlistPolicyRecord,
+        urgencyWeight: Int,
+        recoveryWeight: Int,
+        benefitWeight: Int,
+        reliabilityWeight: Int,
+        waitingAgeWeight: Int,
+        slotFitWeight: Int,
+        recoveryActive: Boolean,
+        benefitActive: Boolean,
+    ): RankedWaitlistCandidateRow {
+        val waitingAgeMinutes = Duration.between(waitingSince, vacancy.now).toMinutes().coerceAtLeast(0L)
+        val slotFitScore = if (doctorId == vacancy.doctorId) 100L else 0L
+        val scoreTuple = listOf(
+            priorityRank.toLong() * urgencyWeight,
+            if (recoveryActive) recoveryWeight.toLong() else 0L,
+            if (benefitActive) benefitWeight.toLong() else 0L,
+            RELIABILITY_SCORE_PENDING * reliabilityWeight,
+            waitingAgeMinutes * waitingAgeWeight,
+            slotFitScore * slotFitWeight,
+        )
+        return RankedWaitlistCandidateRow(
+            entry = this,
+            eligibilityDigest = sha256(
+                listOf(
+                    id,
+                    version,
+                    policy.policyVersion,
+                    policy.policyDigest,
+                    recoveryActive,
+                    benefitActive,
+                    vacancy.startsAt,
+                    vacancy.endsAt,
+                ).joinToString("|"),
+            ),
+            scoreTuple = scoreTuple,
+            policyVersion = policy.policyVersion,
+            policyDigest = policy.policyDigest,
+        )
+    }
+
+    private fun RankedWaitlistCandidateRow.isAtOrBefore(cursor: RankedWaitlistCursor): Boolean {
+        val compared = compareRank(this, cursor.scoreTuple, cursor.entryId)
+        return compared <= 0
+    }
 
     private fun insertOffer(
         scope: WaitlistScope,
@@ -584,5 +750,72 @@ class WaitlistRepository {
         private const val SLOT_FIT_EXACT = 1
         private const val SLOT_FIT_UNSPECIFIED = 0
         private const val INITIAL_VERSION = 0L
+        private const val RELIABILITY_SCORE_PENDING = 0L
+        private val policyCodec = WaitlistPolicyDocumentCodec()
+        private val RANKED_ROW_ORDER =
+            compareByDescending<RankedWaitlistCandidateRow> { row -> row.scoreTuple[0] }
+                .thenByDescending { row -> row.scoreTuple[1] }
+                .thenByDescending { row -> row.scoreTuple[2] }
+                .thenByDescending { row -> row.scoreTuple[3] }
+                .thenByDescending { row -> row.scoreTuple[4] }
+                .thenByDescending { row -> row.scoreTuple[5] }
+                .thenBy { row -> row.entry.id }
     }
 }
+
+/** ranked 후보 page를 이어 읽기 위한 keyset cursor입니다. */
+data class RankedWaitlistCursor(
+    val scoreTuple: List<Long>,
+    val entryId: Long,
+) : Serializable {
+    init {
+        require(scoreTuple.size == 6) { "scoreTuple must contain six factors" }
+        entryId.requirePositiveNumber("entryId")
+    }
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/** active policy snapshot으로 계산한 waitlist candidate projection입니다. */
+data class RankedWaitlistCandidateRow(
+    val entry: WaitlistEntryRecord,
+    val eligibilityDigest: String,
+    val scoreTuple: List<Long>,
+    val policyVersion: Long,
+    val policyDigest: String,
+    val decisionStamp: DecisionStamp? = null,
+) : Serializable {
+    init {
+        require(eligibilityDigest.matches(LOWER_SHA256)) { "eligibilityDigest must be lowercase SHA-256" }
+        require(scoreTuple.isEmpty() || scoreTuple.size == 6) { "scoreTuple must be empty or contain six factors" }
+        policyVersion.requirePositiveNumber("policyVersion")
+        require(policyDigest.matches(LOWER_SHA256)) { "policyDigest must be lowercase SHA-256" }
+    }
+
+    fun toCursor(): RankedWaitlistCursor = RankedWaitlistCursor(scoreTuple = scoreTuple, entryId = entry.id)
+
+    fun withDecisionStamp(decisionStamp: DecisionStamp): RankedWaitlistCandidateRow =
+        copy(decisionStamp = decisionStamp)
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+private val LOWER_SHA256 = Regex("^[a-f0-9]{64}$")
+
+private fun compareRank(row: RankedWaitlistCandidateRow, scoreTuple: List<Long>, entryId: Long): Int {
+    row.scoreTuple.zip(scoreTuple).forEach { (left, right) ->
+        if (left != right) {
+            return right.compareTo(left)
+        }
+    }
+    return row.entry.id.compareTo(entryId)
+}
+
+private fun sha256(value: String): String =
+    MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray(Charsets.UTF_8))
+        .joinToString("") { byte -> "%02x".format(byte) }
