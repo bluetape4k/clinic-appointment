@@ -30,6 +30,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistOfferEventRecord
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistOfferRecord
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistOfferState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyDocument
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyValidationException
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistReasonCode
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistScope
 import io.bluetape4k.support.requirePositiveNumber
@@ -47,12 +48,13 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.isNull
-import org.jetbrains.exposed.v1.core.leftJoin
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.longLiteral
+import org.jetbrains.exposed.v1.core.notExists
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.times
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -121,20 +123,29 @@ class WaitlistRepository {
         }
 
         val policyDocument = policyCodec.decode(policy.canonicalPolicyJson).document
+        requireRankedProjectionSupport(policyDocument)
+        require(cursor == null || policyDocument.waitingAgeWeight == 0 || cursor.waitingSince != null) {
+            "ranked cursor must carry waitingSince when waiting age participates in ordering"
+        }
         val scores = rankedScoreExpressions(vacancy, policyDocument)
         val orderExpressions = rankedOrderExpressions(scores, policyDocument)
 
-        return rankedCandidateSet(vacancy)
+        return WaitlistEntries
             .select(
                 WaitlistEntries.columns +
-                    listOf(DisruptionRecoveryCredits.id, BookingBenefitGrants.id) +
-                    orderExpressions.map { it.first },
+                    listOf(
+                        scores.urgencyScore,
+                        scores.recoveryScore,
+                        scores.benefitScore,
+                        scores.reliabilityScore,
+                        scores.slotFitScore,
+                    ),
             )
             .where {
                 candidateBaseCondition(vacancy) and
                     rankedDoctorCondition(vacancy) and
-                    WaitlistOffers.id.isNull() and
-                    BookingRestrictions.id.isNull() and
+                    notExists(activeOfferQuery(vacancy)) and
+                    notExists(activeRestrictionQuery(vacancy)) and
                     rankedCursorCondition(cursor, scores, policyDocument.waitingAgeWeight)
             }
             .orderBy(*orderExpressions.toTypedArray())
@@ -149,8 +160,8 @@ class WaitlistRepository {
                     reliabilityWeight = policyDocument.reliabilityWeight,
                     waitingAgeWeight = policyDocument.waitingAgeWeight,
                     slotFitWeight = policyDocument.slotFitWeight,
-                    recoveryActive = row.getOrNull(DisruptionRecoveryCredits.id) != null,
-                    benefitActive = row.getOrNull(BookingBenefitGrants.id) != null,
+                    recoveryActive = row[scores.recoveryScore] > 0L,
+                    benefitActive = row[scores.benefitScore] > 0L,
                 )
             }
     }
@@ -497,16 +508,20 @@ class WaitlistRepository {
 
     private fun WaitlistCursor?.allowsSlotFit(slotFit: Int): Boolean =
         this == null || this.slotFit >= slotFit
-
-    private fun rankedCandidateSet(vacancy: VacancyDescriptor) =
-        WaitlistEntries
-            .leftJoin(WaitlistOffers) {
+    private fun activeOfferQuery(vacancy: VacancyDescriptor) =
+        WaitlistOffers
+            .selectAll()
+            .where {
                 (WaitlistOffers.tenantGroupId eq vacancy.tenantGroupId) and
                     (WaitlistOffers.clinicId eq vacancy.clinicId) and
                     (WaitlistOffers.memberId eq WaitlistEntries.memberId) and
                     (WaitlistOffers.status inList WaitlistOfferState.activeStates.toList())
             }
-            .leftJoin(BookingRestrictions) {
+
+    private fun activeRestrictionQuery(vacancy: VacancyDescriptor) =
+        BookingRestrictions
+            .selectAll()
+            .where {
                 (BookingRestrictions.tenantGroupId eq vacancy.tenantGroupId) and
                     (BookingRestrictions.clinicId eq vacancy.clinicId) and
                     (BookingRestrictions.memberId eq WaitlistEntries.memberId) and
@@ -514,23 +529,31 @@ class WaitlistRepository {
                     BookingRestrictions.releasedAt.isNull() and
                     (BookingRestrictions.expiresAt.isNull() or (BookingRestrictions.expiresAt greater vacancy.now))
             }
-            .leftJoin(DisruptionRecoveryCredits) {
+
+    private fun activeRecoveryMembers(vacancy: VacancyDescriptor) =
+        DisruptionRecoveryCredits
+            .select(DisruptionRecoveryCredits.memberId)
+            .where {
                 (DisruptionRecoveryCredits.tenantGroupId eq vacancy.tenantGroupId) and
                     (DisruptionRecoveryCredits.clinicId eq vacancy.clinicId) and
-                    (DisruptionRecoveryCredits.memberId eq WaitlistEntries.memberId) and
                     (DisruptionRecoveryCredits.expiresAt greater vacancy.now) and
                     DisruptionRecoveryCredits.consumedAt.isNull() and
                     DisruptionRecoveryCredits.reversedAt.isNull()
             }
-            .leftJoin(BookingBenefitGrants) {
+            .withDistinct()
+
+    private fun activeBenefitMembers(vacancy: VacancyDescriptor) =
+        BookingBenefitGrants
+            .select(BookingBenefitGrants.memberId)
+            .where {
                 (BookingBenefitGrants.tenantGroupId eq vacancy.tenantGroupId) and
                     (BookingBenefitGrants.clinicId eq vacancy.clinicId) and
-                    (BookingBenefitGrants.memberId eq WaitlistEntries.memberId) and
                     (BookingBenefitGrants.startsAt lessEq vacancy.now) and
                     BookingBenefitGrants.consumedAt.isNull() and
                     BookingBenefitGrants.revokedAt.isNull() and
                     (BookingBenefitGrants.expiresAt.isNull() or (BookingBenefitGrants.expiresAt greater vacancy.now))
             }
+            .withDistinct()
 
     private fun rankedScoreExpressions(
         vacancy: VacancyDescriptor,
@@ -538,8 +561,14 @@ class WaitlistRepository {
     ): RankedScoreExpressions {
         val urgencyScore =
             WaitlistEntries.priorityRank.castTo(LongColumnType()) * longLiteral(policyDocument.urgencyWeight.toLong())
-        val recoveryScore = activeScore(DisruptionRecoveryCredits.id, policyDocument.recoveryWeight)
-        val benefitScore = activeScore(BookingBenefitGrants.id, policyDocument.benefitWeight)
+        val recoveryScore = activeScore(
+            WaitlistEntries.memberId inSubQuery activeRecoveryMembers(vacancy),
+            policyDocument.recoveryWeight,
+        )
+        val benefitScore = activeScore(
+            WaitlistEntries.memberId inSubQuery activeBenefitMembers(vacancy),
+            policyDocument.benefitWeight,
+        )
         val reliabilityScore = longLiteral(RELIABILITY_SCORE_PENDING * policyDocument.reliabilityWeight)
         val slotFitBase =
             if (vacancy.doctorId == null) {
@@ -558,11 +587,11 @@ class WaitlistRepository {
     }
 
     private fun activeScore(
-        activeId: Expression<*>,
+        activeCondition: Op<Boolean>,
         weight: Int,
     ): ExpressionWithColumnType<Long> =
         case()
-            .When(activeId.isNotNull(), longLiteral(weight.toLong()))
+            .When(activeCondition, longLiteral(weight.toLong()))
             .Else(longLiteral(0L))
 
     private fun rankedOrderExpressions(
@@ -578,6 +607,9 @@ class WaitlistRepository {
             }
             if (policyDocument.benefitWeight > 0) {
                 add(scores.benefitScore to SortOrder.DESC)
+            }
+            if (policyDocument.reliabilityWeight > 0) {
+                add(scores.reliabilityScore to SortOrder.DESC)
             }
             if (policyDocument.waitingAgeWeight > 0) {
                 add(WaitlistEntries.waitingSince to SortOrder.ASC)
@@ -607,6 +639,7 @@ class WaitlistRepository {
         addDescending(scores.urgencyScore, cursor.scoreTuple[0])
         addDescending(scores.recoveryScore, cursor.scoreTuple[1])
         addDescending(scores.benefitScore, cursor.scoreTuple[2])
+        addDescending(scores.reliabilityScore, cursor.scoreTuple[3])
 
         if (waitingAgeWeight > 0 && cursor.waitingSince != null) {
             after = after or (tie and (WaitlistEntries.waitingSince greater cursor.waitingSince))
@@ -615,6 +648,14 @@ class WaitlistRepository {
 
         addDescending(scores.slotFitScore, cursor.scoreTuple[5])
         return after or (tie and (WaitlistEntries.id greater cursor.entryId))
+    }
+
+    private fun requireRankedProjectionSupport(policyDocument: WaitlistPolicyDocument) {
+        if (policyDocument.reliabilityWeight > 0) {
+            throw WaitlistPolicyValidationException(
+                "ranked waitlist delivery requires a persisted booking reliability tier projection",
+            )
+        }
     }
 
     private fun WaitlistEntryRecord.toRankedRow(

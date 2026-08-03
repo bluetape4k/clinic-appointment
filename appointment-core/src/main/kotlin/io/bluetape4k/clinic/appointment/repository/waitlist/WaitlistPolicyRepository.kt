@@ -9,6 +9,8 @@ import io.bluetape4k.clinic.appointment.model.waitlist.ClinicWaitlistScope
 import io.bluetape4k.clinic.appointment.model.waitlist.DecodedWaitlistPolicyDocument
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyConflict
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyState
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyDocumentCodec
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyValidationException
 import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -97,6 +99,7 @@ class WaitlistPolicyRepository {
         val draft = findByIdForUpdate(scope, policyId)
             ?.takeIf { it.status == WaitlistPolicyState.DRAFT }
             ?: throw WaitlistPolicyConflict()
+        requireRankedProjectionSupport(draft)
         if (currentGeneration(scope) != expectedGeneration || overlapsActiveWindow(scope, draft)) {
             throw WaitlistPolicyConflict()
         }
@@ -199,6 +202,15 @@ class WaitlistPolicyRepository {
             ?.plus(1L)
             ?: 1L
 
+    private fun requireRankedProjectionSupport(policy: ClinicWaitlistPolicyRecord) {
+        val document = policyCodec.decode(policy.canonicalPolicyJson).document
+        if (document.reliabilityWeight > 0) {
+            throw WaitlistPolicyValidationException(
+                "waitlist policy activation requires a persisted booking reliability tier projection",
+            )
+        }
+    }
+
     private fun appendEvent(
         scope: ClinicWaitlistScope,
         policyVersion: Long,
@@ -267,6 +279,7 @@ class WaitlistPolicyRepository {
 
     private companion object {
         private val FAR_FUTURE: Instant = Instant.parse("9999-12-31T23:59:59Z")
+        private val policyCodec = WaitlistPolicyDocumentCodec()
     }
 }
 

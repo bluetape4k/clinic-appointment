@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.waitlist
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldContainAll
 import io.bluetape4k.assertions.shouldNotBeNull
@@ -21,6 +22,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.DecisionStamp
 import io.bluetape4k.clinic.appointment.model.waitlist.VacancyDescriptor
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistEntryState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistOfferState
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyValidationException
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistScope
 import io.bluetape4k.clinic.appointment.repository.waitlist.ClinicWaitlistPolicyRecord
@@ -135,7 +137,7 @@ class WaitlistCandidateMatcherTest {
                 .filter { sql -> sql.startsWith("select") && WaitlistEntries.tableName in sql }
                 .last()
             rankedSelect shouldContainAll listOf(
-                "left join",
+                "not exists",
                 BookingRestrictions.tableName,
                 WaitlistOffers.tableName,
                 "order by",
@@ -168,6 +170,85 @@ class WaitlistCandidateMatcherTest {
             page.candidates.size shouldBeEqualTo 400
             page.scannedPages shouldBeEqualTo 4
             page.decisionBatchCalls shouldBeEqualTo 4
+        }
+    }
+
+    @Test
+    fun `positive reliability weight is rejected because no persisted waitlist reliability tier exists`() {
+        withWaitlistTables {
+            insertEntry(memberId = "member-reliability", doctorId = DOCTOR_ID)
+            val matcher = matcher(
+                decisions = mapOf(MemberId("member-reliability") to decision("member-reliability", marker = "r")),
+            )
+
+            assertFailsWith<WaitlistPolicyValidationException> {
+                matcher.findCandidates(
+                    vacancy = vacancy(),
+                    policy = policyRecord(reliabilityWeight = 1),
+                    request = WaitlistCandidateRequest(pageSize = 100, maxPages = 4),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `duplicate active recovery and benefit adjustments still produce one ranked candidate per entry`() {
+        withWaitlistTables {
+            val boosted = insertEntry(memberId = "member-duplicate-adjustment", doctorId = DOCTOR_ID, priorityRank = 100)
+            repeat(2) { index ->
+                insertRecoveryCredit(memberId = "member-duplicate-adjustment", marker = "recovery-$index")
+                insertBenefitGrant(memberId = "member-duplicate-adjustment", marker = "benefit-$index")
+            }
+            val ordinary = insertEntry(memberId = "member-ordinary", doctorId = DOCTOR_ID, priorityRank = 2)
+            val matcher = matcher(
+                decisions = mapOf(
+                    MemberId("member-duplicate-adjustment") to decision("member-duplicate-adjustment", marker = "g"),
+                    MemberId("member-ordinary") to decision("member-ordinary", marker = "h"),
+                ),
+            )
+
+            val page = matcher.findCandidates(
+                vacancy = vacancy(),
+                policy = policyRecord(urgencyWeight = 1, recoveryWeight = 10, benefitWeight = 10),
+                request = WaitlistCandidateRequest(pageSize = 100, maxPages = 1),
+            )
+
+            page.candidates.map { it.entry.id } shouldBeEqualTo listOf(boosted, ordinary)
+            page.candidates.single { it.entry.id == boosted }.ranked.shouldNotBeNull().scoreTuple shouldBeEqualTo
+                listOf(100L, 10L, 10L, 0L, 0L, 0L)
+        }
+    }
+
+    @Test
+    fun `ranked cursor pagination continues after the previous ranked row without duplication`() {
+        withWaitlistTables {
+            val decisions = mutableMapOf<MemberId, DecisionStamp>()
+            val entryIds = (0 until 3).map { index ->
+                val memberId = "member-ranked-cursor-$index"
+                decisions[MemberId(memberId)] = decision(memberId, marker = "i")
+                insertEntry(
+                    memberId = memberId,
+                    doctorId = DOCTOR_ID,
+                    priorityRank = 1,
+                    waitingSince = NOW.minusSeconds(index.toLong()),
+                )
+            }
+            val matcher = matcher(decisions)
+            val policy = policyRecord(urgencyWeight = 1)
+
+            val first = matcher.findCandidates(
+                vacancy = vacancy(),
+                policy = policy,
+                request = WaitlistCandidateRequest(pageSize = 1, maxPages = 1),
+            )
+            val second = matcher.findCandidates(
+                vacancy = vacancy(),
+                policy = policy,
+                request = WaitlistCandidateRequest(rankedCursor = first.nextRankedCursor, pageSize = 2, maxPages = 1),
+            )
+
+            first.candidates.map { it.entry.id } shouldBeEqualTo listOf(entryIds[0])
+            second.candidates.map { it.entry.id } shouldBeEqualTo listOf(entryIds[1], entryIds[2])
         }
     }
 
@@ -318,15 +399,28 @@ class WaitlistCandidateMatcherTest {
             it[updatedAt] = NOW
         }.value
 
-    private fun insertBenefitGrant(memberId: String): Long =
+    private fun insertRecoveryCredit(memberId: String, marker: String = memberId): Long =
+        DisruptionRecoveryCredits.insertAndGetId {
+            it[tenantGroupId] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+            it[clinicId] = EntityID(CLINIC_ID, Clinics)
+            it[DisruptionRecoveryCredits.memberId] = memberId
+            it[sourceAppointmentId] = marker.hashCode().toLong().let { hash -> if (hash == 0L) 1L else kotlin.math.abs(hash) }
+            it[creditDigest] = marker.padEnd(64, '0').take(64)
+            it[reasonCode] = "DISRUPTION_RECOVERY"
+            it[priorityBoost] = 1
+            it[grantedBy] = "staff:waitlist"
+            it[expiresAt] = NOW.plusSeconds(3_600)
+        }.value
+
+    private fun insertBenefitGrant(memberId: String, marker: String = memberId): Long =
         BookingBenefitGrants.insertAndGetId {
             it[tenantGroupId] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
             it[clinicId] = EntityID(CLINIC_ID, Clinics)
             it[BookingBenefitGrants.memberId] = memberId
-            it[approvalReference] = "approval:$memberId"
+            it[approvalReference] = "approval:$marker"
             it[benefitType] = "PRIORITY_GRANT"
             it[benefitCap] = 1
-            it[grantDigest] = memberId.padEnd(64, '0').take(64)
+            it[grantDigest] = marker.padEnd(64, '0').take(64)
             it[policyVersion] = 1L
             it[startsAt] = NOW.minusSeconds(60)
             it[expiresAt] = NOW.plusSeconds(3_600)
@@ -397,10 +491,15 @@ class WaitlistCandidateMatcherTest {
             scope = WaitlistScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, CLINIC_ID, MemberId(memberId)),
             decisionId = marker.first().code.toLong(),
             policyVersionId = marker.last().code.toLong() + 100,
-            policyHash = marker.repeat(64),
-            evaluationDigest = marker.repeat(64),
+            policyHash = markerDigest(marker),
+            evaluationDigest = markerDigest("evaluation:$marker"),
             expiresAt = expiresAt,
         )
+
+    private fun markerDigest(marker: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(marker.toByteArray())
+            .joinToString("") { byte -> "%02x".format(byte) }
 
     private fun policyRecord(
         urgencyWeight: Int = 0,

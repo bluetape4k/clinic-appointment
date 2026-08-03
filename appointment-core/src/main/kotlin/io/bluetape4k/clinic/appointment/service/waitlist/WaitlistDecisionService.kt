@@ -4,10 +4,12 @@ import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.WaitlistPolicyEvents
 import io.bluetape4k.clinic.appointment.model.waitlist.ActorRef
+import io.bluetape4k.clinic.appointment.model.waitlist.VacancyDescriptor
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyConflict
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistReasonCode
 import io.bluetape4k.clinic.appointment.repository.waitlist.ClinicWaitlistPolicyRecord
 import io.bluetape4k.clinic.appointment.repository.waitlist.RankedWaitlistCandidateRow
+import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistRepository
 import io.bluetape4k.clinic.appointment.repository.waitlist.rankedWaitlistEligibilityDigest
 import io.bluetape4k.support.requireNotBlank
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -19,7 +21,9 @@ import java.time.Instant
 /**
  * ranked waitlist preview와 staff override decision을 caller-owned transaction 안에서 검증합니다.
  */
-class WaitlistDecisionService {
+class WaitlistDecisionService(
+    private val repository: WaitlistRepository = WaitlistRepository(),
+) {
 
     /** preview가 현재 active policy snapshot과 같은 version/digest인지 확인합니다. */
     fun ensureFreshPreview(
@@ -41,6 +45,7 @@ class WaitlistDecisionService {
      * 명시 권한을 가진 actor만 hard eligibility를 통과한 후보 사이에서 기본 후보를 교체합니다.
      */
     fun override(
+        vacancy: VacancyDescriptor,
         defaultWinner: RankedWaitlistCandidateRow,
         requestedCandidate: RankedWaitlistCandidateRow,
         actor: WaitlistDecisionActor,
@@ -55,10 +60,10 @@ class WaitlistDecisionService {
         if (!actor.canOverrideWaitlist) {
             throw WaitlistOverridePermissionDenied(actor.actorRef)
         }
-        if (!requestedCandidate.isHardEligibleFor(policy)) {
+        if (!requestedCandidate.isCurrentHardEligibleFor(vacancy, policy)) {
             throw WaitlistOverrideRejected(requestedCandidate.entry.id)
         }
-        if (!defaultWinner.isHardEligibleFor(policy)) {
+        if (!defaultWinner.isCurrentHardEligibleFor(vacancy, policy)) {
             throw WaitlistOverrideRejected(defaultWinner.entry.id)
         }
 
@@ -72,7 +77,29 @@ class WaitlistDecisionService {
         )
     }
 
-    private fun RankedWaitlistCandidateRow.isHardEligibleFor(policy: ClinicWaitlistPolicyRecord): Boolean =
+    private fun RankedWaitlistCandidateRow.isCurrentHardEligibleFor(
+        vacancy: VacancyDescriptor,
+        policy: ClinicWaitlistPolicyRecord,
+    ): Boolean {
+        if (!hasValidSnapshotFor(policy) || decisionStamp?.scope != entry.scope) {
+            return false
+        }
+        return repository
+            .findRankedCandidatePage(
+                vacancy = vacancy,
+                policy = policy,
+                cursor = null,
+                limit = MAX_RANKED_CANDIDATE_EVIDENCE,
+            )
+            .any { current ->
+                current.entry.id == entry.id &&
+                    current.entry.version == entry.version &&
+                    current.scoreTuple == scoreTuple &&
+                    current.eligibilityDigest == eligibilityDigest
+            }
+    }
+
+    private fun RankedWaitlistCandidateRow.hasValidSnapshotFor(policy: ClinicWaitlistPolicyRecord): Boolean =
         scoreTuple.size == 6 &&
             policyVersion == policy.policyVersion &&
             policyDigest == policy.policyDigest &&
@@ -82,6 +109,10 @@ class WaitlistDecisionService {
                 policyDigest = policyDigest,
                 scoreTuple = scoreTuple,
             )
+
+    private companion object {
+        private const val MAX_RANKED_CANDIDATE_EVIDENCE = 400
+    }
 
     private fun appendOverrideEvent(
         defaultWinner: RankedWaitlistCandidateRow,

@@ -13,6 +13,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.ClinicWaitlistScope
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyConflict
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyDocumentCodec
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyState
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyValidationException
 import io.bluetape4k.clinic.appointment.repository.waitlist.ClinicWaitlistPolicyRecord
 import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistPolicyRepository
 import io.bluetape4k.clinic.appointment.test.TestDB
@@ -84,6 +85,33 @@ class WaitlistPolicyRepositoryTest {
             )
             val serializable: Serializable = activated
             (serializable is ClinicWaitlistPolicyRecord) shouldBeEqualTo true
+        }
+    }
+
+    @Test
+    fun `activation rejects a reliability weight without a persisted tier projection`() {
+        withPolicyTables {
+            val draft = repository.insertDraft(
+                scope = scope(),
+                policy = decodedPolicy(reliabilityWeight = 1),
+                effectiveFrom = BASE_TIME,
+                effectiveUntil = null,
+                actor = ACTOR,
+                now = BASE_TIME,
+            )
+
+            assertFailsWith<WaitlistPolicyValidationException> {
+                repository.activate(
+                    scope = scope(),
+                    policyId = draft.id,
+                    expectedGeneration = 0L,
+                    actor = ACTOR,
+                    now = BASE_TIME,
+                )
+            }
+
+            repository.findById(scope(), draft.id)?.status shouldBeEqualTo WaitlistPolicyState.DRAFT
+            WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 1L
         }
     }
 
@@ -255,7 +283,7 @@ class WaitlistPolicyRepositoryTest {
         urgencyWeight: Int = 1,
         recoveryWeight: Int = 1,
         benefitWeight: Int = 1,
-        reliabilityWeight: Int = 1,
+        reliabilityWeight: Int = 0,
         waitingAgeWeight: Int = 1,
         slotFitWeight: Int = 1,
     ) = codec.decode(
