@@ -23,6 +23,7 @@ import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.update
 import java.io.Serializable
 import java.sql.SQLException
@@ -37,15 +38,9 @@ import java.time.Instant
  * command reservation 결과를 DB write 권위로 사용해야 합니다.
  */
 class WaitlistDeliveryRepository(
-    private val maxContentionRetries: Int = DEFAULT_MAX_CONTENTION_RETRIES,
-    private val retryDelay: (Int) -> Unit = {},
+    private val claimStrategy: VacancyClaimStrategy? = null,
+    private val retryPolicy: ContentionRetryPolicy = ContentionRetryPolicy(),
 ) {
-    init {
-        require(maxContentionRetries in 1..MAX_CONTENTION_RETRIES) {
-            "maxContentionRetries must be in 1..$MAX_CONTENTION_RETRIES"
-        }
-    }
-
     fun insertVacancy(vacancy: NewVacancyJob): VacancyJobRecord {
         vacancy.validate()
         val jobId = WaitlistVacancyJobs.insertAndGetId {
@@ -96,34 +91,29 @@ class WaitlistDeliveryRepository(
         }
         require(leaseUntil > now) { "leaseUntil must be later than now" }
 
-        val current = findVacancy(validJobId) ?: return null
-        val eligible = current.status == VacancyJobState.READY ||
-            (current.status == VacancyJobState.PROCESSING && current.leaseExpiresAt != null && current.leaseExpiresAt <= now)
-        if (!eligible) return null
-
-        val nextVersion = current.version + 1L
-        val affected = WaitlistVacancyJobs.update({
-            (WaitlistVacancyJobs.id eq validJobId) and
-                (WaitlistVacancyJobs.version eq current.version) and
-                (
-                    (WaitlistVacancyJobs.status eq VacancyJobState.READY) or
-                        (
-                            (WaitlistVacancyJobs.status eq VacancyJobState.PROCESSING) and
-                                (WaitlistVacancyJobs.leaseExpiresAt lessEq now)
-                            )
-                    )
-        }) {
-            it[status] = VacancyJobState.PROCESSING
-            it[leaseOwner] = validOwner
-            it[leaseVersion] = current.leaseVersion + 1L
-            it[leaseExpiresAt] = leaseUntil
-            it[version] = nextVersion
-            it[updatedAt] = now
-        }
-        return if (affected == 1) {
-            VacancyClaim(validJobId, validOwner, nextVersion, leaseUntil)
-        } else {
-            null
+        return withContentionRetry {
+            val strategy = resolvedClaimStrategy()
+            val lockTimeoutPlan = strategy.lockTimeoutPlan
+            var appliedLockTimeoutStatements = 0
+            try {
+                lockTimeoutPlan?.beforeClaimSql?.forEach { sql ->
+                    TransactionManager.current().exec(sql)
+                    appliedLockTimeoutStatements += 1
+                }
+                claimWithStrategy(
+                    strategy = strategy,
+                    jobId = validJobId,
+                    owner = validOwner,
+                    now = now,
+                    leaseUntil = leaseUntil,
+                )
+            } finally {
+                if (appliedLockTimeoutStatements > 0) {
+                    lockTimeoutPlan?.afterClaimSql?.forEach { sql ->
+                        TransactionManager.current().exec(sql)
+                    }
+                }
+            }
         }
     }
 
@@ -350,23 +340,98 @@ class WaitlistDeliveryRepository(
 
     fun <T> withContentionRetry(block: () -> T): T {
         var attempt = 1
+        val strategy = resolvedClaimStrategy()
         while (true) {
             try {
                 return block()
             } catch (failure: ExposedSQLException) {
-                if (!failure.isRetryableContention() || attempt >= maxContentionRetries) {
+                if (!failure.isRetryableContention(strategy) || attempt >= retryPolicy.maxAttempts) {
                     throw WaitlistContention()
                 }
-                retryDelay(attempt)
+                retryPolicy.sleepBeforeRetry(attempt)
                 attempt += 1
             } catch (failure: SQLException) {
-                if (!failure.isRetryableContention() || attempt >= maxContentionRetries) {
+                if (!failure.isRetryableContention(strategy) || attempt >= retryPolicy.maxAttempts) {
                     throw WaitlistContention()
                 }
-                retryDelay(attempt)
+                retryPolicy.sleepBeforeRetry(attempt)
                 attempt += 1
             }
         }
+    }
+
+    private fun claimWithStrategy(
+        strategy: VacancyClaimStrategy,
+        jobId: Long,
+        owner: String,
+        now: Instant,
+        leaseUntil: Instant,
+    ): VacancyClaim? {
+        val current =
+            when (strategy.mode) {
+                VacancyClaimMode.VERSION_UPDATE -> findVacancy(jobId)
+                VacancyClaimMode.LOCKED_SELECTION -> findClaimCandidate(jobId, now, forUpdate = true)
+            } ?: return null
+        val eligible = current.status == VacancyJobState.READY ||
+            (current.status == VacancyJobState.PROCESSING && current.leaseExpiresAt != null && current.leaseExpiresAt <= now)
+        if (!eligible) return null
+
+        val nextVersion = current.version + 1L
+        val nextLeaseVersion = current.leaseVersion + 1L
+        val affected = WaitlistVacancyJobs.update({
+            (WaitlistVacancyJobs.id eq jobId) and
+                (WaitlistVacancyJobs.version eq current.version) and
+                (WaitlistVacancyJobs.leaseVersion eq current.leaseVersion) and
+                (
+                    (WaitlistVacancyJobs.status eq VacancyJobState.READY) or
+                        (
+                            (WaitlistVacancyJobs.status eq VacancyJobState.PROCESSING) and
+                                (WaitlistVacancyJobs.leaseExpiresAt lessEq now)
+                            )
+                    )
+        }) {
+            it[status] = VacancyJobState.PROCESSING
+            it[leaseOwner] = owner
+            it[leaseVersion] = nextLeaseVersion
+            it[leaseExpiresAt] = leaseUntil
+            it[version] = nextVersion
+            it[updatedAt] = now
+        }
+        return if (affected == 1) {
+            VacancyClaim(
+                jobId = jobId,
+                owner = owner,
+                version = nextVersion,
+                leaseVersion = nextLeaseVersion,
+                expiresAt = leaseUntil,
+            )
+        } else {
+            null
+        }
+    }
+
+    private fun findClaimCandidate(
+        jobId: Long,
+        now: Instant,
+        forUpdate: Boolean,
+    ): VacancyJobRecord? {
+        val query =
+            WaitlistVacancyJobs
+                .selectAll()
+                .where {
+                    (WaitlistVacancyJobs.id eq jobId) and
+                        (
+                            (WaitlistVacancyJobs.status eq VacancyJobState.READY) or
+                                (
+                                    (WaitlistVacancyJobs.status eq VacancyJobState.PROCESSING) and
+                                        (WaitlistVacancyJobs.leaseExpiresAt lessEq now)
+                                    )
+                            )
+                }
+                .limit(1)
+        return (if (forUpdate) query.forUpdate() else query)
+            .singleOrNull()
+            ?.toVacancyJobRecord()
     }
 
     private fun terminalUpdate(
@@ -381,6 +446,7 @@ class WaitlistDeliveryRepository(
                 (WaitlistVacancyJobs.status eq VacancyJobState.PROCESSING) and
                 (WaitlistVacancyJobs.leaseOwner eq claim.owner) and
                 (WaitlistVacancyJobs.version eq claim.version) and
+                (WaitlistVacancyJobs.leaseVersion eq claim.leaseVersion) and
                 (WaitlistVacancyJobs.leaseExpiresAt greater now)
         }) {
             it[WaitlistVacancyJobs.status] = status
@@ -414,11 +480,19 @@ class WaitlistDeliveryRepository(
         return validValue
     }
 
-    private fun SQLException.isRetryableContention(): Boolean =
-        sqlState in RETRYABLE_SQL_STATES || errorCode in LOCK_TIMEOUT_ERROR_CODES
+    private fun resolvedClaimStrategy(): VacancyClaimStrategy =
+        claimStrategy ?: VacancyClaimStrategies.current()
 
-    private fun ExposedSQLException.isRetryableContention(): Boolean =
-        sqlState in RETRYABLE_SQL_STATES || errorCode in LOCK_TIMEOUT_ERROR_CODES
+    private fun SQLException.isRetryableContention(strategy: VacancyClaimStrategy): Boolean =
+        sqlState in RETRYABLE_SQL_STATES || isMysqlLockWaitTimeout(strategy)
+
+    private fun ExposedSQLException.isRetryableContention(strategy: VacancyClaimStrategy): Boolean =
+        sqlState in RETRYABLE_SQL_STATES || isMysqlLockWaitTimeout(strategy)
+
+    private fun SQLException.isMysqlLockWaitTimeout(strategy: VacancyClaimStrategy): Boolean =
+        errorCode == MYSQL_LOCK_WAIT_TIMEOUT_ERROR_CODE &&
+            strategy.dialect == VacancyClaimDialect.MYSQL &&
+            strategy.lockTimeoutPlan?.timeout == MYSQL_LOCK_WAIT_TIMEOUT
 
     private fun SQLException.isUniqueConstraintViolation(): Boolean =
         sqlState == UNIQUE_CONSTRAINT_SQL_STATE || errorCode == H2_UNIQUE_CONSTRAINT_ERROR_CODE
@@ -427,8 +501,6 @@ class WaitlistDeliveryRepository(
         sqlState == UNIQUE_CONSTRAINT_SQL_STATE || errorCode == H2_UNIQUE_CONSTRAINT_ERROR_CODE
 
     private companion object {
-        private const val DEFAULT_MAX_CONTENTION_RETRIES = 3
-        private const val MAX_CONTENTION_RETRIES = 3
         private const val MAX_OWNER_LENGTH = 160
         private const val SUCCESS_REPLAY_STATUS = 200
         private const val FAILURE_REPLAY_STATUS = 409
@@ -443,9 +515,143 @@ class WaitlistDeliveryRepository(
         private val STABLE_ERROR_CODE_REGEX = Regex("[A-Z0-9_]{1,96}")
         private val COMMAND_RESULT_TYPE_REGEX = Regex("[A-Z0-9_]{1,64}")
         private val RETRYABLE_SQL_STATES = setOf("40001", "40P01")
-        private val LOCK_TIMEOUT_ERROR_CODES = setOf(1205)
+        private const val MYSQL_LOCK_WAIT_TIMEOUT_ERROR_CODE = 1205
+        private val MYSQL_LOCK_WAIT_TIMEOUT = Duration.ofSeconds(2)
         private const val UNIQUE_CONSTRAINT_SQL_STATE = "23505"
         private const val H2_UNIQUE_CONSTRAINT_ERROR_CODE = 23505
+    }
+}
+
+/** vacancy claim의 DB별 획득 방식을 식별합니다. */
+enum class VacancyClaimMode {
+    VERSION_UPDATE,
+    LOCKED_SELECTION,
+}
+
+/** vacancy claim adapter가 지원하는 DB dialect입니다. */
+enum class VacancyClaimDialect {
+    H2,
+    POSTGRESQL,
+    MYSQL,
+}
+
+/**
+ * DB session에 적용할 bounded lock wait 설정입니다.
+ *
+ * PostgreSQL은 `SET LOCAL`로 transaction scope에 묶고, MySQL은 기존 session 값을 저장한 뒤
+ * claim 이후 복원해서 lock wait 설정이 호출자 transaction 바깥으로 새지 않도록 합니다.
+ */
+data class LockTimeoutPlan(
+    val timeout: Duration,
+    val beforeClaimSql: List<String>,
+    val afterClaimSql: List<String>,
+) : Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/**
+ * vacancy claim의 dialect별 public contract입니다.
+ *
+ * H2는 conditional version update를 사용하고 PostgreSQL/MySQL은 row lock 기반 selection을
+ * 먼저 수행합니다. 저장소 public API는 동일하게 유지됩니다.
+ */
+interface VacancyClaimStrategy : Serializable {
+    val dialect: VacancyClaimDialect
+    val mode: VacancyClaimMode
+    val lockTimeoutPlan: LockTimeoutPlan?
+
+    fun claimSelectionSql(tableName: String = WaitlistVacancyJobs.tableName): String
+}
+
+/** Exposed dialect 이름에서 waitlist vacancy claim adapter를 선택합니다. */
+object VacancyClaimStrategies {
+    fun current(): VacancyClaimStrategy =
+        forDialectName(TransactionManager.currentOrNull()?.db?.dialect?.name ?: H2_DIALECT_NAME)
+
+    fun forDialectName(dialectName: String): VacancyClaimStrategy =
+        when (dialectName.trim().lowercase()) {
+            "postgresql", "postgres", "pgsql" -> PostgreSqlLockedVacancyClaimStrategy
+            "mysql", "mariadb" -> MySqlLockedVacancyClaimStrategy
+            else -> H2VersionUpdateVacancyClaimStrategy
+        }
+
+    private const val H2_DIALECT_NAME = "h2"
+}
+
+private object H2VersionUpdateVacancyClaimStrategy : VacancyClaimStrategy {
+    override val dialect: VacancyClaimDialect = VacancyClaimDialect.H2
+    override val mode: VacancyClaimMode = VacancyClaimMode.VERSION_UPDATE
+    override val lockTimeoutPlan: LockTimeoutPlan? = null
+
+    override fun claimSelectionSql(tableName: String): String =
+        "UPDATE $tableName SET status = ?, lease_owner = ?, lease_version = lease_version + 1, version = version + 1 " +
+            "WHERE id = ? AND version = ? AND lease_version = ?"
+
+    private fun readResolve(): Any = H2VersionUpdateVacancyClaimStrategy
+}
+
+private object PostgreSqlLockedVacancyClaimStrategy : VacancyClaimStrategy {
+    override val dialect: VacancyClaimDialect = VacancyClaimDialect.POSTGRESQL
+    override val mode: VacancyClaimMode = VacancyClaimMode.LOCKED_SELECTION
+    override val lockTimeoutPlan: LockTimeoutPlan =
+        LockTimeoutPlan(
+            timeout = Duration.ofSeconds(2),
+            beforeClaimSql = listOf("SET LOCAL lock_timeout = '2s'"),
+            afterClaimSql = emptyList(),
+        )
+
+    override fun claimSelectionSql(tableName: String): String =
+        "SELECT * FROM $tableName WHERE id = ? AND status IN ('READY', 'PROCESSING') FOR UPDATE"
+
+    private fun readResolve(): Any = PostgreSqlLockedVacancyClaimStrategy
+}
+
+private object MySqlLockedVacancyClaimStrategy : VacancyClaimStrategy {
+    override val dialect: VacancyClaimDialect = VacancyClaimDialect.MYSQL
+    override val mode: VacancyClaimMode = VacancyClaimMode.LOCKED_SELECTION
+    override val lockTimeoutPlan: LockTimeoutPlan =
+        LockTimeoutPlan(
+            timeout = Duration.ofSeconds(2),
+            beforeClaimSql = listOf(
+                "SET @waitlist_previous_innodb_lock_wait_timeout := @@innodb_lock_wait_timeout",
+                "SET innodb_lock_wait_timeout = 2",
+            ),
+            afterClaimSql = listOf("SET innodb_lock_wait_timeout = @waitlist_previous_innodb_lock_wait_timeout"),
+        )
+
+    override fun claimSelectionSql(tableName: String): String =
+        "SELECT * FROM $tableName WHERE id = ? AND status IN ('READY', 'PROCESSING') FOR UPDATE"
+
+    private fun readResolve(): Any = MySqlLockedVacancyClaimStrategy
+}
+
+/** DB contention retry의 attempt 수, jitter 계산, sleep side effect를 주입합니다. */
+class ContentionRetryPolicy(
+    val maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
+    private val jitterDelay: (Int) -> Duration = { Duration.ZERO },
+    private val sleeper: (Duration) -> Unit = { delay ->
+        if (!delay.isZero && !delay.isNegative) {
+            Thread.sleep(delay.toMillis())
+        }
+    },
+) {
+    init {
+        require(maxAttempts in 1..MAX_ATTEMPTS) {
+            "maxAttempts must be in 1..$MAX_ATTEMPTS"
+        }
+    }
+
+    fun sleepBeforeRetry(attempt: Int) {
+        val delay = jitterDelay(attempt)
+        require(!delay.isNegative) { "retry delay must be zero or positive" }
+        sleeper(delay)
+    }
+
+    private companion object {
+        private const val DEFAULT_MAX_ATTEMPTS = 3
+        private const val MAX_ATTEMPTS = 3
     }
 }
 
@@ -533,12 +739,14 @@ data class VacancyClaim(
     val jobId: Long,
     val owner: String,
     val version: Long,
+    val leaseVersion: Long,
     val expiresAt: Instant,
 ) : Serializable {
     init {
         jobId.requirePositiveNumber("jobId")
         owner.requireNotBlank("owner")
         require(version >= 0L) { "version must be zero or positive" }
+        require(leaseVersion >= 0L) { "leaseVersion must be zero or positive" }
     }
 
     companion object {
