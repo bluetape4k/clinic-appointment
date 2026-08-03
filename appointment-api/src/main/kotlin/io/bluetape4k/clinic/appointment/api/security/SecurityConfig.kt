@@ -6,8 +6,10 @@ import io.bluetape4k.clinic.appointment.api.config.isAppointmentCommitmentReques
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import io.bluetape4k.clinic.appointment.api.config.isSchedulingPolicyRequestPath
 import io.bluetape4k.clinic.appointment.api.config.isBookingReliabilityRequestPath
+import io.bluetape4k.clinic.appointment.api.config.isWaitlistRequestPath
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiError
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilter
+import io.bluetape4k.clinic.appointment.api.waitlist.WaitlistApiError
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
@@ -177,6 +179,11 @@ class SecurityConfig {
                             response,
                             BookingReliabilityApiError.BOOKING_RELIABILITY_FORBIDDEN,
                         )
+                    } else if (status == HttpStatus.FORBIDDEN && request.isWaitlistRequest()) {
+                        SecurityErrorResponseWriter.write(
+                            response,
+                            WaitlistApiError.WAITLIST_FORBIDDEN,
+                        )
                     } else {
                         val error = if (status == HttpStatus.FORBIDDEN) {
                             PlanFoundationError.FORBIDDEN
@@ -264,6 +271,28 @@ class SecurityConfig {
                         "/api/{tenantCode}/clinics/{clinicId}/members/*/booking-reliability/clear",
                     )
                     .access(bookingReliabilityWriteAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/{tenantCode}/clinics/{clinicId}/waitlist/**",
+                    )
+                    .access(waitlistReadAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/{tenantCode}/clinics/{clinicId}/waitlist/policies/**",
+                    )
+                    .access(waitlistPolicyAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/{tenantCode}/clinics/{clinicId}/waitlist/restrictions/**",
+                        "/api/{tenantCode}/clinics/{clinicId}/waitlist/recovery-credits/**",
+                        "/api/{tenantCode}/clinics/{clinicId}/waitlist/benefit-grants/**",
+                    )
+                    .access(waitlistAdjustmentAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/{tenantCode}/clinics/{clinicId}/waitlist/**",
+                    )
+                    .access(waitlistWriteAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/**")
                     .access(readTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/**")
@@ -437,6 +466,50 @@ class SecurityConfig {
             exactClinicMembershipAccess(),
         )
 
+    private fun waitlistReadAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(
+                SchedulingRole.ADMIN,
+                SchedulingRole.STAFF,
+                SchedulingRole.DOCTOR,
+            ),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_waitlist:read"),
+            tenantAuthorizationManager,
+            exactClinicMembershipAccess(),
+        )
+
+    private fun waitlistWriteAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_waitlist:write"),
+            tenantAuthorizationManager,
+            exactClinicMembershipAccess(),
+        )
+
+    private fun waitlistPolicyAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_waitlist:policy"),
+            tenantAuthorizationManager,
+            exactClinicMembershipAccess(),
+        )
+
+    private fun waitlistAdjustmentAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF),
+            AuthorityAuthorizationManager.hasAuthority("SCOPE_waitlist:adjustment"),
+            tenantAuthorizationManager,
+            exactClinicMembershipAccess(),
+        )
+
     private fun platformNotificationServiceAccess(): AuthorizationManager<RequestAuthorizationContext> =
         AuthorizationManager { authentication, _ ->
             val principal = authentication.get().principal as? SchedulingUserPrincipal
@@ -473,6 +546,9 @@ private fun jakarta.servlet.http.HttpServletRequest.isSchedulingPolicyRequest():
 
 private fun jakarta.servlet.http.HttpServletRequest.isBookingReliabilityRequest(): Boolean =
     isBookingReliabilityRequestPath(requestURI)
+
+private fun jakarta.servlet.http.HttpServletRequest.isWaitlistRequest(): Boolean =
+    isWaitlistRequestPath(requestURI)
 
 /** commitment v2 Security 실패가 기존 foundation 오류로 축약되지 않게 path를 구분한다. */
 private fun jakarta.servlet.http.HttpServletRequest.isAppointmentCommitmentRequest(): Boolean =
