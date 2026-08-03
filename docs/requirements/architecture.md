@@ -181,3 +181,58 @@ scope head revision이 동시에 맞아야 한다. HTTP 계층에서 부분 판�
 `POLICY_EFFECTIVE_READ_CONFLICT`, 권위 저장소 장애를
 `POLICY_EFFECTIVE_READ_UNAVAILABLE`로 반환한다. 두 경우 모두 stale cache를 관대하게
 반환하지 않는 fail-closed 계약이다.
+
+---
+
+### ADR-13: 외부 메시징 — Kafka4 전용 outbox relay
+
+**결정**: 외부 broker 기반 메시징은 `bluetape4k-kafka4`, Spring Kafka 4,
+Jackson 3 조합만 지원한다. DB가 aggregate와 outbox의 transaction authority이며,
+별도 relay가 commit된 outbox를 Kafka4에 발행한다. 버전은 bluetape4k governed catalog를
+따르며 clinic-appointment가 Kafka client, Spring Kafka 또는 Jackson 버전을 독립적으로
+override하지 않는다.
+
+**전달 계약**:
+
+- end-to-end at-least-once와 stable event ID 기반 producer/consumer 멱등성을 사용한다.
+- consumer dedup unique key는 stable logical consumer/stream identity와 `eventId`로 구성하고,
+  topic/partition/offset은 provenance로만 기록해 partition 변경이나 topic migration 뒤에도
+  같은 event의 side effect가 다시 실행되지 않게 한다.
+- aggregate scope를 partition key로 사용해 같은 aggregate의 순서를 보존한다.
+- partition 증설은 단일 hot aggregate 해결책이 아니며, 기존 key remap에 대비한 producer
+  pause/relay hold, drain/checkpoint 또는 새 topic migration과 ordering 증명 없이 실행하지 않는다.
+- envelope는 `eventId`, `eventType`, `schemaVersion`, UTC `occurredAt`,
+  tenant/clinic/aggregate scope, correlation/causation ID와 bounded payload를 가진다.
+- DB와 Kafka를 하나의 전역 exactly-once transaction으로 표현하지 않는다.
+- unsafe typing, FQN type header, 기본 tombstone/null payload와 raw PHI DLT 복제를 금지한다.
+
+**보안·운영 gate**:
+
+- broker credential을 저장소에 커밋하지 않고 producer/consumer principal을 필요한
+  topic/action과 application scope로 제한한다.
+- patient/PII 식별자를 key, metric label, log 또는 raw payload 출력에 넣지 않는다.
+- replay는 별도 group, 승인된 scope/offset, dry-run과 audit을 요구하며 운영 group
+  offset을 되감지 않는다. rollback도 offset rewind나 topic 삭제로 event를 숨기지 않는다.
+- application topic auto-create를 금지하고 startup/readiness에서 authn/authz, topic/config,
+  serializer/envelope 호환성을 확인한다.
+
+**후속 검증 gate**: #41/#42는 구현 전에 burst와 지속 부하, publish-to-ack p95/p99,
+consumer lag catch-up, oldest-age, broker outage recovery, partition skew, heap/thread 상한과
+재현 명령을 수치화한다. #42의 dedup ledger retention/cleanup, index/partition 전략,
+cardinality/storage 상한과 target cardinality duplicate lookup p95도 수치화한다. relay
+lease/fencing·bounded backpressure와 record/header/depth 상한, partition-change ordering
+migration도 해당 spec과 테스트의 차단 기준이다.
+
+**후속 책임**:
+
+| 이슈 | 책임 |
+|---|---|
+| #41 | `appointment-messaging`, producer envelope/partition key, 세 dialect outbox lease/fencing migration, bounded relay와 readiness |
+| #42 | bounded consumer idempotency ledger/offset, Schema Registry compatibility, retry/DLT/quarantine와 승인된 replay |
+
+**기각**: Kafka3는 Spring Boot 3/Jackson 2 line이라 기각한다. RabbitMQ는 replay와
+schema evolution 요구 및 bluetape4k runtime 지원이 약해 기각한다. broker-neutral
+abstraction은 Kafka partition/offset/replay 의미를 숨기는 YAGNI이므로 도입하지 않는다.
+
+**근거**: 상세 failure mode, 보안·운영 계약과 검증 gate는
+`docs/superpowers/specs/2026-08-03-issue-40-kafka4-messaging-decision-design.md`를 따른다.

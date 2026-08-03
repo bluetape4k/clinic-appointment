@@ -1,6 +1,6 @@
 # TODO — clinic-appointment
 
-> 최종 점검일: 2026-05-13
+> 최종 점검일: 2026-08-03
 
 ---
 
@@ -269,13 +269,14 @@ Angular 21 유지. 프레임워크 마이그레이션 **미채택**.
 
 ### 9.3 메시지 큐 — 비동기 이벤트 처리 (LOW) — [EPIC #17](https://github.com/bluetape4k/clinic-appointment/issues/17)
 
-현재 Spring `ApplicationEvent`로 동기 처리 중. 대용량/외부 시스템 연동 시 Kafka/RabbitMQ 필요.
+현재 Spring `ApplicationEvent`로 동기 처리 중. 대용량/외부 시스템 연동은 DB outbox와
+Kafka4 비동기 메시징으로 확장한다.
 
-- ⬜ Kafka 또는 RabbitMQ 도입 검토 (bluetape4k 지원 여부 확인 선행) — [#40](https://github.com/bluetape4k/clinic-appointment/issues/40)
+- ✅ Kafka4 도입 결정 (`bluetape4k-kafka4`, Spring Kafka 4, Jackson 3) — [#40](https://github.com/bluetape4k/clinic-appointment/issues/40)
 - ⬜ `appointment-messaging` 신규 모듈 생성 — [#41](https://github.com/bluetape4k/clinic-appointment/issues/41)
 - ⬜ 도메인 이벤트(Created/StatusChanged/Cancelled/Rescheduled) → 메시지 큐 발행
 - ⬜ 외부 시스템(알림, 통계) 구독 컨슈머 구현 — [#42](https://github.com/bluetape4k/clinic-appointment/issues/42)
-- ⬜ 이벤트 스키마 버전 관리 (Avro/JSON Schema Registry)
+- ⬜ 이벤트 schema/version compatibility와 Schema Registry 정책
 
 ### 9.4 관리자 대시보드 — 통계/분석 (LOW) — [EPIC #18](https://github.com/bluetape4k/clinic-appointment/issues/18)
 
