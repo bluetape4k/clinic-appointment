@@ -15,6 +15,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyState
 import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistPolicyRepository
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -64,7 +65,20 @@ class WaitlistPolicyRepositoryTest {
                     now = BASE_TIME.plusSeconds(2),
                 )
             }
-            WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 1L
+            val events = policyEvents()
+            events.map { it[WaitlistPolicyEvents.eventType] } shouldBeEqualTo listOf(
+                "WAITLIST_POLICY_DRAFT_CREATED",
+                "WAITLIST_POLICY_DRAFT_CREATED",
+                "WAITLIST_POLICY_ACTIVATED",
+            )
+            events.map { it[WaitlistPolicyEvents.actorRef] } shouldBeEqualTo listOf(ACTOR.value, ACTOR.value, ACTOR.value)
+            events.map { it[WaitlistPolicyEvents.policyVersion] } shouldBeEqualTo listOf(1L, 2L, 1L)
+            events.map { it[WaitlistPolicyEvents.toGeneration] } shouldBeEqualTo listOf(-1L, -2L, 1L)
+            events.map { it[WaitlistPolicyEvents.reasonCode] } shouldBeEqualTo listOf(
+                "DRAFT_CREATED",
+                "DRAFT_CREATED",
+                "ACTIVATION",
+            )
         }
     }
 
@@ -94,7 +108,7 @@ class WaitlistPolicyRepositoryTest {
             }
 
             repository.findById(overlapping.id).shouldNotBeNull().status shouldBeEqualTo WaitlistPolicyState.DRAFT
-            WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 1L
+            WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 3L
         }
     }
 
@@ -125,6 +139,28 @@ class WaitlistPolicyRepositoryTest {
 
             repository.findActive(scope()).shouldNotBeNull().id shouldBeEqualTo active.id
             repository.findById(later.id).shouldNotBeNull().status shouldBeEqualTo WaitlistPolicyState.DRAFT
+            WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 3L
+        }
+    }
+
+    @Test
+    fun `draft row and creation event rollback together inside caller transaction`() {
+        withPolicyTables {
+            repository.insertDraft(
+                scope = scope(),
+                policy = decodedPolicy(),
+                effectiveFrom = BASE_TIME,
+                effectiveUntil = null,
+                actor = ACTOR,
+                now = BASE_TIME,
+            )
+            WaitlistPolicyVersions.selectAll().count() shouldBeEqualTo 1L
+            WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 1L
+
+            rollback()
+
+            WaitlistPolicyVersions.selectAll().count() shouldBeEqualTo 0L
+            WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 0L
         }
     }
 
@@ -152,6 +188,12 @@ class WaitlistPolicyRepositoryTest {
 
     private fun scope(): ClinicWaitlistScope =
         ClinicWaitlistScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, CLINIC_ID)
+
+    private fun policyEvents() =
+        WaitlistPolicyEvents
+            .selectAll()
+            .orderBy(WaitlistPolicyEvents.id to SortOrder.ASC)
+            .toList()
 
     private fun decodedPolicy(
         urgencyWeight: Int = 1,

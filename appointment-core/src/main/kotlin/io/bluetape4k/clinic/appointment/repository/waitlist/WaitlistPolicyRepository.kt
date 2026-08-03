@@ -67,6 +67,18 @@ class WaitlistPolicyRepository {
             it[createdBy] = actor.value
             it[createdAt] = now
         }.value
+        appendEvent(
+            scope = scope,
+            policyVersion = policyVersion,
+            eventType = "WAITLIST_POLICY_DRAFT_CREATED",
+            actor = actor,
+            correlationId = "policy:$policyId",
+            fromGeneration = null,
+            toGeneration = draftGeneration,
+            reasonCode = "DRAFT_CREATED",
+            payloadJson = """{"policyId":$policyId,"policyVersion":$policyVersion,"status":"DRAFT"}""",
+            now = now,
+        )
         return findById(policyId) ?: error("Inserted waitlist policy $policyId was not readable")
     }
 
