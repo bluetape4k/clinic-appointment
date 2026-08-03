@@ -92,21 +92,11 @@ class WaitlistPolicyEvaluator {
         val reliabilityScore = candidate.reliabilityScore.toLong() * policy.reliabilityWeight
         val waitingAgeScore = candidate.waitingAgeMinutes * policy.waitingAgeWeight
         val slotFitScore = candidate.slotFitScore.toLong() * policy.slotFitWeight
-        val totalScore = listOf(
-            urgencyScore,
-            recoveryScore,
-            benefitScore,
-            reliabilityScore,
-            waitingAgeScore,
-            slotFitScore,
-        ).sum()
-
         return WaitlistPolicyDecision(
             entryId = candidate.entryId,
             eligible = true,
             reasonCodes = listOf(WaitlistReasonCode("ELIGIBLE")),
             scoreTuple = listOf(
-                totalScore,
                 urgencyScore,
                 recoveryScore,
                 benefitScore,
@@ -127,7 +117,12 @@ class WaitlistPolicyEvaluator {
             .map { candidate -> evaluate(candidate, vacancy, policy) }
             .filter { decision -> decision.eligible }
             .sortedWith(
-                compareByDescending<WaitlistPolicyDecision> { decision -> decision.scoreTuple.first() }
+                compareByDescending<WaitlistPolicyDecision> { decision -> decision.scoreTuple[0] }
+                    .thenByDescending { decision -> decision.scoreTuple[1] }
+                    .thenByDescending { decision -> decision.scoreTuple[2] }
+                    .thenByDescending { decision -> decision.scoreTuple[3] }
+                    .thenByDescending { decision -> decision.scoreTuple[4] }
+                    .thenByDescending { decision -> decision.scoreTuple[5] }
                     .thenBy { decision -> decision.entryId },
             )
 }

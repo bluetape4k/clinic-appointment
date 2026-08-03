@@ -43,8 +43,32 @@ class WaitlistPolicyEvaluatorTest {
 
         result.eligible shouldBeEqualTo true
         result.reasonCodes shouldBeEqualTo listOf(WaitlistReasonCode("ELIGIBLE"))
-        result.scoreTuple shouldBeEqualTo listOf(1_567L, 70L, 3L, 2L, 372L, 720L, 400L)
+        result.scoreTuple shouldBeEqualTo listOf(70L, 3L, 2L, 372L, 720L, 400L)
         result.policyDigest shouldBeEqualTo WaitlistPolicyDocument.canonicalDigest(policy())
+    }
+
+    @Test
+    fun `lexicographic urgency outranks a lower urgency aggregate total`() {
+        evaluator.rank(
+            candidates = listOf(
+                candidate(
+                    id = 20L,
+                    urgencyScore = 9,
+                    reliabilityScore = 0,
+                    waitingAgeMinutes = 100,
+                    slotFitScore = 0,
+                ),
+                candidate(
+                    id = 10L,
+                    urgencyScore = 10,
+                    reliabilityScore = 0,
+                    waitingAgeMinutes = 0,
+                    slotFitScore = 0,
+                ),
+            ),
+            vacancy = vacancy(),
+            policy = policy(),
+        ).map { it.entryId } shouldBeEqualTo listOf(10L, 20L)
     }
 
     @Test

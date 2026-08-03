@@ -5,6 +5,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyDocumentCodec
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyValidationException
 import org.junit.jupiter.api.Test
+import java.nio.charset.StandardCharsets
 
 class WaitlistPolicyDocumentTest {
     private val codec = WaitlistPolicyDocumentCodec()
@@ -39,6 +40,18 @@ class WaitlistPolicyDocumentTest {
         assertFailsWith<WaitlistPolicyValidationException> {
             codec.decode(policyJson(recoveryWeight = 10_001))
         }
+    }
+
+    @Test
+    fun `exactly max sized policy payload is accepted with insignificant whitespace padding`() {
+        val base = policyJson()
+        val paddingSize = WaitlistPolicyDocumentCodec.MAX_PAYLOAD_BYTES -
+            base.toByteArray(StandardCharsets.UTF_8).size
+        val padded = base + " ".repeat(paddingSize)
+
+        padded.toByteArray(StandardCharsets.UTF_8).size shouldBeEqualTo
+            WaitlistPolicyDocumentCodec.MAX_PAYLOAD_BYTES
+        codec.decode(padded).document shouldBeEqualTo codec.decode(base).document
     }
 
     @Test
