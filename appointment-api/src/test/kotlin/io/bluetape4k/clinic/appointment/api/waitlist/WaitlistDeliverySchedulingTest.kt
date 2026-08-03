@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.waitlist
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Instant
@@ -62,6 +63,27 @@ class WaitlistDeliverySchedulingTest {
         val properties = WaitlistDeliveryProperties(enabled = true, clinicAllowlist = setOf(7L))
         properties.modeFor(7L) shouldBeEqualTo DeliveryMode.ACTIVE
         properties.modeFor(8L) shouldBeEqualTo DeliveryMode.CLINIC_DISABLED
+    }
+
+    @Test
+    fun `unscoped tick fails closed when clinic allowlist is configured`() {
+        val calls = mutableListOf<String>()
+        val runner = WaitlistDeliverySchedulingRunner(
+            properties = WaitlistDeliveryProperties(enabled = true, clinicAllowlist = setOf(7L)),
+            leaderLease = lease(acquired = true, calls),
+            vacancyDispatcher = WaitlistVacancyDispatcher { _, _ -> calls += "dispatch"; 1 },
+            offerExpiryRunner = WaitlistOfferExpiryRunner { _, _ -> calls += "expiry"; 1 },
+            notificationSuppressionRunner = WaitlistNotificationSuppressionRunner { _, _ -> calls += "suppression"; 1 },
+            holdReconciler = WaitlistHoldReconciler { _, _ -> calls += "reconcile"; 1 },
+            clock = clock,
+        )
+
+        val result = runner.tick()
+
+        result.mode shouldBeEqualTo DeliveryMode.CLINIC_DISABLED
+        result.dispatchCount shouldBeEqualTo 0
+        calls.contains("dispatch").shouldBeFalse()
+        calls.contains("expiry").shouldBeTrue()
     }
 
     private fun lease(acquired: Boolean, calls: MutableList<String>): WaitlistLeaderLease =

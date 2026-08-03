@@ -1,6 +1,17 @@
 package io.bluetape4k.clinic.appointment.test
 
+import io.bluetape4k.clinic.appointment.model.tables.BookingBenefitGrants
+import io.bluetape4k.clinic.appointment.model.tables.BookingRestrictions
+import io.bluetape4k.clinic.appointment.model.tables.DisruptionRecoveryCredits
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistCapacityHolds
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistCommandRecords
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistEntries
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistOfferEvents
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistOffers
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistPolicyEvents
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistPolicyVersions
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistVacancyJobs
 import io.bluetape4k.logging.error
 import org.jetbrains.exposed.v1.core.DatabaseConfig
 import org.jetbrains.exposed.v1.core.Table
@@ -30,7 +41,9 @@ fun withTables(
 
         withDb(testDB, configure = configure) {
             runCatching {
-                SchemaUtils.drop(*tablesToUse)
+                withReferentialIntegrityDisabled(testDB) {
+                    dropTestTables(testDB, tablesToUse)
+                }
             }
 
             SchemaUtils.create(*tablesToUse)
@@ -43,7 +56,9 @@ fun withTables(
             } finally {
                 if (dropTables) {
                     try {
-                        SchemaUtils.drop(*tablesToUse)
+                        withReferentialIntegrityDisabled(testDB) {
+                            dropTestTables(testDB, tablesToUse)
+                        }
                         commit()
                     } catch (ex: Exception) {
                         logger.error(ex) { "Drop Tables 에서 예외가 발생했습니다. 삭제할 테이블: ${tablesToUse.joinToString { it.tableName }}" }
@@ -53,7 +68,9 @@ fun withTables(
                             db = database
                         ) {
                             maxAttempts = 1
-                            SchemaUtils.drop(*tablesToUse)
+                            withReferentialIntegrityDisabled(testDB) {
+                                dropTestTables(testDB, tablesToUse)
+                            }
                         }
                     }
                 }
@@ -63,6 +80,64 @@ fun withTables(
 }
 
 private val withTablesSchemaLock = Any()
+
+/**
+ * Tables introduced by the waitlist delivery contract all reference [Clinics].
+ * They may be left behind by schema-contract tests that intentionally keep their
+ * tables between assertions, so a narrower fixture must remove these children
+ * before dropping a shared clinic parent. The list is H2-test cleanup only; it
+ * never changes production schema or application transactions.
+ */
+private val sharedClinicDependentWaitlistTables = arrayOf(
+    WaitlistOfferEvents,
+    WaitlistCapacityHolds,
+    WaitlistOffers,
+    WaitlistEntries,
+    WaitlistPolicyEvents,
+    WaitlistPolicyVersions,
+    BookingRestrictions,
+    DisruptionRecoveryCredits,
+    BookingBenefitGrants,
+    WaitlistVacancyJobs,
+    WaitlistCommandRecords,
+)
+
+private fun org.jetbrains.exposed.v1.jdbc.JdbcTransaction.dropTestTables(
+    testDB: TestDB,
+    tables: Array<out Table>,
+) {
+    val tablesToDrop = if (testDB.name.startsWith("H2")) {
+        (sharedClinicDependentWaitlistTables.asList() + tables.asList())
+            .distinctBy { it.tableName }
+            .toTypedArray()
+    } else {
+        tables
+    }
+    SchemaUtils.drop(*tablesToDrop)
+}
+
+/**
+ * Shared in-memory H2 databases may retain tables created by another test while a
+ * narrower fixture is being torn down. H2 refuses to drop a parent table while
+ * those foreign keys exist, even when the child table is outside the fixture.
+ * Disable only H2's test-database referential checks for the bounded DDL cleanup;
+ * production databases keep their normal constraint enforcement.
+ */
+private inline fun <T> org.jetbrains.exposed.v1.jdbc.JdbcTransaction.withReferentialIntegrityDisabled(
+    testDB: TestDB,
+    block: () -> T,
+): T {
+    if (!testDB.name.startsWith("H2")) {
+        return block()
+    }
+
+    exec("SET REFERENTIAL_INTEGRITY FALSE")
+    return try {
+        block()
+    } finally {
+        exec("SET REFERENTIAL_INTEGRITY TRUE")
+    }
+}
 
 private fun withTenantGroups(tables: Array<out Table>): Array<out Table> =
     if (tables.any { it === TenantGroups }) {

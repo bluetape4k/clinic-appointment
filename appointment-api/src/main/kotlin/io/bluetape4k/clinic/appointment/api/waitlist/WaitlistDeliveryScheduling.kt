@@ -1,6 +1,12 @@
 package io.bluetape4k.clinic.appointment.api.waitlist
 
 import io.bluetape4k.clinic.appointment.model.waitlist.CorrelationId
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.scheduling.annotation.EnableScheduling
+import org.springframework.scheduling.annotation.Scheduled
 import java.time.Clock
 import java.time.Instant
 
@@ -75,7 +81,11 @@ class WaitlistDeliverySchedulingRunner(
     fun tick(clinicId: Long = ALLOW_ALL_CLINICS): WaitlistDeliveryTickResult {
         val now = clock.instant()
         val mode = if (clinicId == ALLOW_ALL_CLINICS) {
-            if (properties.enabled) DeliveryMode.ACTIVE else DeliveryMode.GLOBAL_OFF
+            when {
+                !properties.enabled -> DeliveryMode.GLOBAL_OFF
+                properties.clinicAllowlist.isNotEmpty() -> DeliveryMode.CLINIC_DISABLED
+                else -> DeliveryMode.ACTIVE
+            }
         } else {
             properties.modeFor(clinicId)
         }
@@ -127,3 +137,27 @@ class WaitlistDeliverySchedulingRunner(
 /** Correlation id factory for scheduled recovery commands. */
 fun waitlistSchedulerCorrelation(now: Instant): CorrelationId =
     CorrelationId("waitlist-scheduler:${now.epochSecond}")
+
+/** 주입된 runner가 있을 때만 polling trigger를 등록하는 Spring adapter입니다. */
+@Configuration(proxyBeanMethods = false)
+@EnableScheduling
+@ConditionalOnBean(WaitlistDeliverySchedulingRunner::class)
+class WaitlistDeliverySchedulingConfiguration {
+    @Bean
+    @ConditionalOnMissingBean
+    fun waitlistDeliveryScheduler(
+        runner: WaitlistDeliverySchedulingRunner,
+        properties: WaitlistDeliveryProperties,
+    ): WaitlistDeliveryScheduler = WaitlistDeliveryScheduler(runner, properties)
+}
+
+/** scheduler thread와 도메인 runner를 분리해 runner를 직접 검증할 수 있게 합니다. */
+class WaitlistDeliveryScheduler(
+    private val runner: WaitlistDeliverySchedulingRunner,
+    private val properties: WaitlistDeliveryProperties,
+) {
+    @Scheduled(fixedDelayString = "\${appointment.waitlist.delivery.poll-interval:PT1S}")
+    fun poll(): WaitlistDeliveryTickResult = runner.tick()
+
+    internal fun configuredPollInterval() = properties.pollInterval
+}
