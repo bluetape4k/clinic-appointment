@@ -98,6 +98,12 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
                 "generation",
                 "policy_version",
                 "policy_digest",
+                "urgency_weight",
+                "recovery_weight",
+                "benefit_weight",
+                "reliability_weight",
+                "waiting_age_weight",
+                "slot_fit_weight",
                 "canonical_policy_json",
                 "status",
                 "effective_from",
@@ -112,6 +118,7 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
                 "clinic_id",
                 "generation",
             ) shouldBeEqualTo true
+            WaitlistPolicyVersions.hasCheckConstraint("ck_waitlist_policy_weights_bounded") shouldBeEqualTo true
         }
     }
 
@@ -214,5 +221,8 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
             indices.any { index ->
                 index.unique && index.columns.map { it.name } == columnNames.toList()
             }
+
+        private fun Table.hasCheckConstraint(name: String): Boolean =
+            checkConstraints().any { it.checkName == name }
     }
 }
