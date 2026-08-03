@@ -195,10 +195,12 @@ key에 포함해 cross-tenant collision을 방지한다. clinic-scoped record는
 
 단일 aggregate 자체가 hot key가 되더라도 ordering을 깨는 임의 key salting은 하지
 않는다. #41은 단일 aggregate burst와 다수 clinic burst fixture로 partition별 record/byte
-분포와 lag skew를 측정하고 alert 기준을 수치로 고정해야 한다. 임계값을 넘으면 먼저
-partition 증설, consumer capacity, event type/topic 분리를 검토한다. key 변경이 필요한
-경우에는 기존 key와의 ordering 단절, dual-read 기간과 offset migration을 별도 설계로
-승인한다.
+분포와 lag skew를 측정하고 alert 기준을 수치로 고정해야 한다. 임계값을 넘으면 consumer
+capacity, event type/topic 분리와 producer load shaping을 먼저 검토한다. partition 증설은
+단일 hot aggregate의 해결책이 아니며 기존 key의 이후 record를 다른 partition으로 remap해
+ordering을 끊을 수 있다. partition 수 또는 key 변경이 필요한 경우 producer pause와
+outbox relay hold, 기존 partition drain/checkpoint 또는 새 topic migration, dual-read와
+offset 전환, aggregate별 ordering 증명을 별도 설계하고 승인한다.
 
 ### 6.3 event envelope
 
@@ -353,8 +355,10 @@ quarantine/rollback과 audit retention을 순서대로 요구한다. side-effect
 topic/partition/retention 변경 runbook은 config snapshot과 drift precheck, capacity review
 owner, rollout/abort 기준, consumer assignment·replay·catch-up 영향, 변경 후 검증을 가진다.
 retention 축소는 최소 보존 조건을 위반하면 금지한다. partition 증설은 기존 record의
-partition을 바꾸지 않지만 새 key 배치와 consumer rebalance에 영향을 주므로 되돌릴 수
-없는 변경으로 취급하고, 단순 partition 감소를 rollback으로 제시하지 않는다.
+partition을 바꾸지 않지만 같은 key의 이후 record를 다른 partition으로 remap할 수 있다.
+따라서 producer pause/relay hold와 drain/checkpoint 또는 새 topic migration, dual-read/offset
+전환 및 ordering 증명 없이는 실행하지 않는다. 이는 되돌릴 수 없는 변경으로 취급하며
+단순 partition 감소를 rollback으로 제시하지 않는다.
 
 ## 9. 후속 이슈 책임
 

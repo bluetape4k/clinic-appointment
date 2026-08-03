@@ -4,7 +4,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 
 ## 구현 상태표
 
-> 최종 갱신: 2026-04-20 (v0.3.0)
+> 최종 갱신: 2026-08-03 (v0.3.0)
 
 ### 완료
 
@@ -34,7 +34,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 |---------|------|----------|------|
 | **환자 포털 (자가 예약 웹앱)** | `appointment-patient-portal` (신규) | MEDIUM | TODO 섹션 9.1 |
 | **멀티테넌시 (병원 그룹 데이터 격리)** | `appointment-core` | MEDIUM | TODO 섹션 9.2, clinicId 해소 선행 |
-| **메시지 큐 (Kafka/RabbitMQ 비동기)** | `appointment-messaging` (신규) | LOW | TODO 섹션 9.3 |
+| **메시지 큐 (Kafka4 비동기)** | `appointment-messaging` (신규) | LOW | broker 결정 #40 완료, 구현 #41/#42 — TODO 섹션 9.3 |
 | **관리자 대시보드 (통계/분석)** | `appointment-dashboard` (신규) | LOW | TODO 섹션 9.4 |
 | **SSE 기반 일괄 재배정 진행 표시** | `appointment-api` / `appointment-frontend` | HIGH | TODO 섹션 3.5 |
 

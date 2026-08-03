@@ -17,9 +17,10 @@
 2-R 당시 기록된 user-scope model drift는 현재 해소됐다. 3-R 종료 시점에
 `~/.codex/agents/{verifier,code-reviewer,writer}.toml`은 모두 `gpt-5.6-luna`와
 `max` reasoning을 가리키고, `~/.codex/.omx-config.json`도 해당 role을
-`gpt-5.6-luna`로 매핑했다. `omx doctor`는 stale install 없이 17 PASS, state directory
-미생성 경고 1건만 반환했다. 이 검사는 read-only였으며 repository 밖 설정을 변경하지
-않았다.
+`gpt-5.6-luna`로 매핑했다. 별도 Codex 프로세스도 같은 worktree에서 leader/verifier
+`gpt-5.6-luna`, autonomy directive와 변경된 hook 두 파일을 로드했고, 이후
+`omx doctor`는 18 PASS, warning/failure 0건을 반환했다. 이 검사는 repository 밖 설정을
+변경하지 않았다.
 
 ## 초기 finding과 수정
 
@@ -44,6 +45,12 @@
 | User/caller | PASS | Kafka4 결정 완료와 구현 미완료가 ADR, TODO, requirements README에서 일관되며 RabbitMQ와 Avro를 선택된 backlog로 오인하지 않는다. |
 
 ## Main-session 통합 검토
+
+통합 실행 직전 main session은 production-path 검사에 있던
+`rg && exit 1 || true`가 match까지 성공으로 덮을 수 있는 P1을 추가로 발견했다. 변경
+경로 수집 실패를 먼저 차단한 뒤 exact Markdown allowlist와 비교하도록 교체했다. 이로써
+Java, XML, properties와 임의 Markdown까지 fail-closed로 거부한다. whitespace 검사는
+commit된 branch diff도 포함하도록 `git diff --check origin/develop`로 고정했다.
 
 | 항목 | 판정 | 근거 |
 |---|---|---|

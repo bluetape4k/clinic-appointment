@@ -121,6 +121,8 @@ override하지 않는다.
 
 - end-to-end at-least-once와 stable event ID 기반 producer/consumer 멱등성을 사용한다.
 - aggregate scope를 partition key로 사용해 같은 aggregate의 순서를 보존한다.
+- partition 증설은 단일 hot aggregate 해결책이 아니며, 기존 key remap에 대비한 producer
+  pause/relay hold, drain/checkpoint 또는 새 topic migration과 ordering 증명 없이 실행하지 않는다.
 - envelope는 `eventId`, `eventType`, `schemaVersion`, UTC `occurredAt`,
   tenant/clinic/aggregate scope, correlation/causation ID와 bounded payload를 가진다.
 - DB와 Kafka를 하나의 전역 exactly-once transaction으로 표현하지 않는다.
@@ -139,7 +141,7 @@ override하지 않는다.
 **후속 검증 gate**: #41/#42는 구현 전에 burst와 지속 부하, publish-to-ack p95/p99,
 consumer lag catch-up, oldest-age, broker outage recovery, partition skew, heap/thread 상한과
 재현 명령을 수치화한다. relay lease/fencing·bounded backpressure와 record/header/depth
-상한도 해당 spec과 테스트의 차단 기준이다.
+상한, partition-change ordering migration도 해당 spec과 테스트의 차단 기준이다.
 
 **후속 책임**:
 
@@ -164,7 +166,7 @@ Expected: ADR은 상세 spec을 중복하지 않으면서 runtime, 권위, 전�
 Run:
 
 ```bash
-rg -n 'ADR-13|bluetape4k-kafka4|governed catalog|override|at-least-once|schemaVersion|exactly-once|#41|#42|Kafka3|RabbitMQ|broker-neutral|credential|principal|PII|PHI|metric label|replay|dry-run|offset|auto-create|p95|p99|consumer lag|oldest-age|partition skew|heap/thread|재현 명령' docs/requirements/architecture.md
+rg -n 'ADR-13|bluetape4k-kafka4|governed catalog|override|at-least-once|schemaVersion|exactly-once|#41|#42|Kafka3|RabbitMQ|broker-neutral|credential|principal|PII|PHI|metric label|replay|dry-run|offset|auto-create|p95|p99|consumer lag|oldest-age|partition skew|heap/thread|재현 명령|partition 증설|key remap|drain/checkpoint|ordering 증명' docs/requirements/architecture.md
 ```
 
 Expected: 모든 계약이 ADR-13 안에서 한 번 이상 확인되고 Kafka3/RabbitMQ를 지원한다고
@@ -255,22 +257,35 @@ Expected: Kafka4 선택은 완료, #41/#42 구현은 미완료, Kafka3/RabbitMQ�
 Run:
 
 ```bash
-{ git diff --name-only origin/develop; git ls-files --others --exclude-standard; } | sort -u
+issue40_changed_paths="$(
+  git diff --name-only origin/develop &&
+  git ls-files --others --exclude-standard
+)" || exit 1
+printf '%s\n' "$issue40_changed_paths" | sort -u
+test -n "$issue40_changed_paths"
+issue40_allowed_path_regex='^(TODO\.md|docs/requirements/(README\.md|architecture\.md)|docs/review/2026-08-03-issue-40-kafka4-messaging-decision-(spec-review|plan-review|final-review)\.md|docs/superpowers/(specs/2026-08-03-issue-40-kafka4-messaging-decision-design|plans/2026-08-03-issue-40-kafka4-messaging-decision-plan)\.md|docs/lessons/2026-08-03-issue-40-kafka4-messaging-decision\.md)$'
+if printf '%s\n' "$issue40_changed_paths" | rg -v "$issue40_allowed_path_regex"; then
+  exit 1
+else
+  test "$?" -eq 1
+fi
 git status --short
 ```
 
-Expected: commit된 spec/review/plan과 Task 1/2의 문서 파일만 존재한다. Kotlin, Gradle,
-SQL, YAML 또는 module path는 없다.
+Expected: exact allowlist의 spec/plan/review/lesson과 Task 1/2 문서만 존재한다. 다른
+Markdown, Java/Kotlin, Gradle, SQL, YAML, XML, properties 또는 module path는 모두 실패한다.
 
 - [ ] **Step 2: Markdown whitespace와 placeholder를 검사한다**
 
 Run:
 
 ```bash
-git diff --check
+git diff --check origin/develop
 if rg -n 'T[B]D|FIX[M]E|implement la[t]er|미[정]|추후 결[정]' \
   docs/superpowers/specs/2026-08-03-issue-40-kafka4-messaging-decision-design.md \
   docs/superpowers/plans/2026-08-03-issue-40-kafka4-messaging-decision-plan.md \
+  docs/review/2026-08-03-issue-40-kafka4-messaging-decision-spec-review.md \
+  docs/review/2026-08-03-issue-40-kafka4-messaging-decision-plan-review.md \
   docs/requirements/architecture.md TODO.md docs/requirements/README.md; then
   exit 1
 else
@@ -278,7 +293,8 @@ else
 fi
 ```
 
-Expected: `git diff --check`는 출력 없이 성공하고 불완전 placeholder가 없다.
+Expected: `git diff --check origin/develop`는 commit된 변경까지 포함해 출력 없이 성공하고
+불완전 placeholder가 없다.
 
 - [ ] **Step 3: 문서 링크와 GitHub issue를 확인한다**
 
@@ -298,15 +314,17 @@ Expected: spec path가 존재하고 #40/#41/#42 링크가 live issue를 가리�
 Run:
 
 ```bash
-{ git diff --name-only origin/develop; git ls-files --others --exclude-standard; } \
-  | sort -u \
-  | rg '\.(kt|kts|sql|ya?ml)$' \
-  && exit 1 || true
+issue40_changed_paths="$(
+  git diff --name-only origin/develop &&
+  git ls-files --others --exclude-standard
+)" || exit 1
+test -n "$issue40_changed_paths"
 ```
 
-Expected: source/config/migration 파일이 없으므로 Gradle test/build, Testcontainers,
-Kotlin pattern 검사는 N/A다. baseline `./gradlew help --no-daemon --no-configuration-cache`
-PASS는 worktree 생성 때 이미 확인했다.
+Expected: Step 1의 exact allowlist가 모든 비허용 경로를 차단했다. production source/config/
+migration 파일이 없으므로 Gradle test/build, Testcontainers, Kotlin pattern 검사는 N/A다.
+baseline `./gradlew help --no-daemon --no-configuration-cache` PASS는 worktree 생성 때 이미
+확인했다.
 
 ## Task 4: 최종 diff의 pre-PR proof를 만들고 커밋한다
 
@@ -314,7 +332,9 @@ PASS는 worktree 생성 때 이미 확인했다.
 
 **Dependencies:** Task 1, Task 2, Task 3 PASS
 
-**Write scope:** Task 1/2 문서 세 파일, 필요한 review evidence
+**Write scope:** Task 1/2 문서 세 파일,
+`docs/review/2026-08-03-issue-40-kafka4-messaging-decision-final-review.md`,
+`docs/lessons/2026-08-03-issue-40-kafka4-messaging-decision.md`
 
 - [ ] **Step 1: Task 3 검증을 exact final diff에서 다시 실행한다**
 
@@ -326,7 +346,38 @@ Expected: 최종 diff가 P0=0/P1=0이다. 새로운 failure/recovery/operational
 spec과 2-R artifact에 보존되므로 별도 lesson은 N/A 후보이며, 최종 diff를 읽은 뒤 네
 absence category를 근거로 판정한다.
 
-- [ ] **Step 3: Lore commit을 만든다**
+- [ ] **Step 3: 생성된 final review와 lesson을 포함해 exact diff를 다시 검사한다**
+
+Run:
+
+```bash
+test -f docs/review/2026-08-03-issue-40-kafka4-messaging-decision-final-review.md
+test -f docs/lessons/2026-08-03-issue-40-kafka4-messaging-decision.md
+git add \
+  TODO.md \
+  docs/requirements/README.md \
+  docs/requirements/architecture.md \
+  docs/review/2026-08-03-issue-40-kafka4-messaging-decision-spec-review.md \
+  docs/review/2026-08-03-issue-40-kafka4-messaging-decision-plan-review.md \
+  docs/review/2026-08-03-issue-40-kafka4-messaging-decision-final-review.md \
+  docs/superpowers/specs/2026-08-03-issue-40-kafka4-messaging-decision-design.md \
+  docs/superpowers/plans/2026-08-03-issue-40-kafka4-messaging-decision-plan.md \
+  docs/lessons/2026-08-03-issue-40-kafka4-messaging-decision.md
+git diff --cached --check
+git diff --check origin/develop
+if rg -n 'T[B]D|FIX[M]E|implement la[t]er|미[정]|추후 결[정]' \
+  docs/review/2026-08-03-issue-40-kafka4-messaging-decision-final-review.md \
+  docs/lessons/2026-08-03-issue-40-kafka4-messaging-decision.md; then
+  exit 1
+else
+  test "$?" -eq 1
+fi
+```
+
+Expected: 두 artifact가 존재하며 untracked였던 파일까지 stage된 exact diff의 whitespace,
+branch 전체 whitespace와 placeholder 검사가 모두 PASS다.
+
+- [ ] **Step 4: Lore commit을 만든다**
 
 Commit intent:
 
@@ -361,7 +412,8 @@ Expected: local과 remote head SHA가 같다.
 
 PR은 `bluetape4k/clinic-appointment`, base `develop`, head
 `feat/issue-40-messaging-decision`를 사용한다. assignee `debop`, Issue #40의
-`enhancement` label을 맞추고 body 마지막 `##` section을 `## DoD Status`로 둔다.
+`enhancement` label을 맞추며 body에 `Closes #40`을 포함하고 마지막 `##` section을
+`## DoD Status`로 둔다.
 
 Expected: live PR body, assignee, label, base/head와 linked Issue #40이 정확하다.
 
@@ -385,8 +437,8 @@ approval만 CG-16과 cleanup 권한을 충족한다.
 
 - [ ] **Step 5: 승인된 exact PR head를 merge하고 live 상태를 확인한다**
 
-Expected: 승인된 merge method로 PR이 `MERGED`이고 merge SHA가 확인된다. auto-merge는
-사용하지 않는다.
+Expected: 승인된 merge method로 PR이 `MERGED`이고 merge SHA가 확인되며 Issue #40이
+`CLOSED`다. auto-merge는 사용하지 않는다.
 
 - [ ] **Step 6: root checkout을 merge SHA로 동기화한다**
 
