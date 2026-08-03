@@ -9,6 +9,8 @@ import io.bluetape4k.clinic.appointment.model.tables.WaitlistPolicyEvents
 import io.bluetape4k.clinic.appointment.model.waitlist.ActorRef
 import io.bluetape4k.clinic.appointment.model.waitlist.ClinicWaitlistScope
 import io.bluetape4k.clinic.appointment.model.waitlist.VersionConflict
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistAdjustmentConflictException
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistAdjustmentNotFoundException
 import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.Op
@@ -352,22 +354,6 @@ class WaitlistAdjustmentRepository {
 
     private companion object {
         private val SYSTEM_ACTOR = ActorRef("SYSTEM")
-    }
-}
-
-class WaitlistAdjustmentConflictException(
-    message: String,
-) : RuntimeException(message) {
-    companion object {
-        private const val serialVersionUID = 1L
-    }
-}
-
-class WaitlistAdjustmentNotFoundException(
-    message: String,
-) : RuntimeException(message) {
-    companion object {
-        private const val serialVersionUID = 1L
     }
 }
 

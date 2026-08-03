@@ -12,7 +12,9 @@ import io.bluetape4k.clinic.appointment.model.tables.WaitlistPolicyEvents
 import io.bluetape4k.clinic.appointment.model.waitlist.ActorRef
 import io.bluetape4k.clinic.appointment.model.waitlist.ClinicWaitlistScope
 import io.bluetape4k.clinic.appointment.model.waitlist.VersionConflict
-import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistAdjustmentConflictException
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistAdjustmentConflictException
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistAdjustmentNotFoundException
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistException
 import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistAdjustmentRepository
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import io.bluetape4k.clinic.appointment.test.TestDB
@@ -110,7 +112,7 @@ class WaitlistAdjustmentRepositoryTest {
             val cappedId = insertBenefitGrant("member-cap", digest = "c".repeat(64), benefitCap = 2)
             val revokedId = insertBenefitGrant("member-revoke", digest = "d".repeat(64), benefitCap = 1)
 
-            assertFailsWith<WaitlistAdjustmentConflictException> {
+            val capFailure = assertFailsWith<WaitlistAdjustmentConflictException> {
                 repository.consumeBenefitGrant(
                     scope = scope(),
                     grantId = cappedId,
@@ -120,6 +122,8 @@ class WaitlistAdjustmentRepositoryTest {
                     now = BASE_TIME,
                 )
             }
+            val stableConflict: WaitlistException = capFailure
+            stableConflict.reason.code shouldBeEqualTo "WAITLIST_ADJUSTMENT_CONFLICT"
             repository.consumeBenefitGrant(
                 scope = scope(),
                 grantId = cappedId,
@@ -147,6 +151,25 @@ class WaitlistAdjustmentRepositoryTest {
                 .where { BookingBenefitGrants.id eq revokedId }
                 .single()[BookingBenefitGrants.revokedBy] shouldBeEqualTo ACTOR.value
             WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 2L
+        }
+    }
+
+    @Test
+    fun `adjustment not found uses stable waitlist exception reason`() {
+        withAdjustmentTables {
+            val failure = assertFailsWith<WaitlistAdjustmentNotFoundException> {
+                repository.revokeBenefitGrant(
+                    scope = scope(),
+                    grantId = 9_999L,
+                    expectedVersion = 0L,
+                    actor = ACTOR,
+                    decisionRef = "decision:not-found",
+                    now = BASE_TIME,
+                )
+            }
+
+            val stableNotFound: WaitlistException = failure
+            stableNotFound.reason.code shouldBeEqualTo "WAITLIST_ADJUSTMENT_NOT_FOUND"
         }
     }
 

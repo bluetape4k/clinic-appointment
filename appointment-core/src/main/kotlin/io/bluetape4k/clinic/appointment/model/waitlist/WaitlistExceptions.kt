@@ -182,3 +182,27 @@ class RecoveryBudgetExceeded(
         private const val serialVersionUID = 1L
     }
 }
+
+/** waitlist adjustment projection이 현재 상태에서 요청한 결정을 적용할 수 없습니다. */
+class WaitlistAdjustmentConflictException(
+    message: String,
+) : WaitlistException(
+    message = message,
+    reason = WaitlistReasonCode("WAITLIST_ADJUSTMENT_CONFLICT"),
+) {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/** waitlist adjustment projection mutation 대상이 현재 scope에 없습니다. */
+class WaitlistAdjustmentNotFoundException(
+    message: String,
+) : WaitlistException(
+    message = message,
+    reason = WaitlistReasonCode("WAITLIST_ADJUSTMENT_NOT_FOUND"),
+) {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}

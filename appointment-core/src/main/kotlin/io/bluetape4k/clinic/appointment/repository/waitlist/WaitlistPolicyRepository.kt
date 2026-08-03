@@ -20,10 +20,12 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
+import java.io.Serializable
 import java.security.MessageDigest
 import java.time.Instant
 
@@ -46,27 +48,33 @@ class WaitlistPolicyRepository {
         require(effectiveUntil == null || effectiveUntil > effectiveFrom) {
             "effectiveUntil must be later than effectiveFrom"
         }
+        lockClinic(scope)
         val policyVersion = nextPolicyVersion(scope)
         val draftGeneration = -policyVersion
-        val policyId = WaitlistPolicyVersions.insertAndGetId {
-            it[tenantGroupId] = EntityID(scope.tenantGroupId, TenantGroups)
-            it[clinicId] = EntityID(scope.clinicId, Clinics)
-            it[generation] = draftGeneration
-            it[WaitlistPolicyVersions.policyVersion] = policyVersion
-            it[policyDigest] = policy.digest
-            it[urgencyWeight] = policy.document.urgencyWeight
-            it[recoveryWeight] = policy.document.recoveryWeight
-            it[benefitWeight] = policy.document.benefitWeight
-            it[reliabilityWeight] = policy.document.reliabilityWeight
-            it[waitingAgeWeight] = policy.document.waitingAgeWeight
-            it[slotFitWeight] = policy.document.slotFitWeight
-            it[status] = WaitlistPolicyState.DRAFT
-            it[WaitlistPolicyVersions.effectiveFrom] = effectiveFrom
-            it[WaitlistPolicyVersions.effectiveUntil] = effectiveUntil
-            it[canonicalPolicyJson] = policy.canonicalJson
-            it[createdBy] = actor.value
-            it[createdAt] = now
-        }.value
+        val policyId =
+            try {
+                WaitlistPolicyVersions.insertAndGetId {
+                    it[tenantGroupId] = EntityID(scope.tenantGroupId, TenantGroups)
+                    it[clinicId] = EntityID(scope.clinicId, Clinics)
+                    it[generation] = draftGeneration
+                    it[WaitlistPolicyVersions.policyVersion] = policyVersion
+                    it[policyDigest] = policy.digest
+                    it[urgencyWeight] = policy.document.urgencyWeight
+                    it[recoveryWeight] = policy.document.recoveryWeight
+                    it[benefitWeight] = policy.document.benefitWeight
+                    it[reliabilityWeight] = policy.document.reliabilityWeight
+                    it[waitingAgeWeight] = policy.document.waitingAgeWeight
+                    it[slotFitWeight] = policy.document.slotFitWeight
+                    it[status] = WaitlistPolicyState.DRAFT
+                    it[WaitlistPolicyVersions.effectiveFrom] = effectiveFrom
+                    it[WaitlistPolicyVersions.effectiveUntil] = effectiveUntil
+                    it[canonicalPolicyJson] = policy.canonicalJson
+                    it[createdBy] = actor.value
+                    it[createdAt] = now
+                }.value
+            } catch (ex: ExposedSQLException) {
+                throw WaitlistPolicyConflict()
+            }
         appendEvent(
             scope = scope,
             policyVersion = policyVersion,
@@ -79,7 +87,7 @@ class WaitlistPolicyRepository {
             payloadJson = """{"policyId":$policyId,"policyVersion":$policyVersion,"status":"DRAFT"}""",
             now = now,
         )
-        return findById(policyId) ?: error("Inserted waitlist policy $policyId was not readable")
+        return findById(scope, policyId) ?: error("Inserted waitlist policy $policyId was not readable")
     }
 
     fun activate(
@@ -92,8 +100,8 @@ class WaitlistPolicyRepository {
         policyId.requirePositiveNumber("policyId")
         require(expectedGeneration >= 0L) { "expectedGeneration must be zero or positive" }
         lockClinic(scope)
-        val draft = findByIdForUpdate(policyId)
-            ?.takeIf { it.scope == scope && it.status == WaitlistPolicyState.DRAFT }
+        val draft = findByIdForUpdate(scope, policyId)
+            ?.takeIf { it.status == WaitlistPolicyState.DRAFT }
             ?: throw WaitlistPolicyConflict()
         if (currentGeneration(scope) != expectedGeneration || overlapsActiveWindow(scope, draft)) {
             throw WaitlistPolicyConflict()
@@ -123,14 +131,14 @@ class WaitlistPolicyRepository {
             payloadJson = """{"policyId":${draft.id},"policyVersion":${draft.policyVersion}}""",
             now = now,
         )
-        return findById(policyId) ?: error("Activated waitlist policy $policyId was not readable")
+        return findById(scope, policyId) ?: error("Activated waitlist policy $policyId was not readable")
     }
 
-    fun findById(policyId: Long): ClinicWaitlistPolicyRecord? {
+    fun findById(scope: ClinicWaitlistScope, policyId: Long): ClinicWaitlistPolicyRecord? {
         policyId.requirePositiveNumber("policyId")
         return WaitlistPolicyVersions
             .selectAll()
-            .where { WaitlistPolicyVersions.id eq policyId }
+            .where { scopeCondition(scope) and (WaitlistPolicyVersions.id eq policyId) }
             .singleOrNull()
             ?.toRecord()
     }
@@ -159,10 +167,10 @@ class WaitlistPolicyRepository {
             ?: throw WaitlistPolicyConflict()
     }
 
-    private fun findByIdForUpdate(policyId: Long): ClinicWaitlistPolicyRecord? =
+    private fun findByIdForUpdate(scope: ClinicWaitlistScope, policyId: Long): ClinicWaitlistPolicyRecord? =
         WaitlistPolicyVersions
             .selectAll()
-            .where { WaitlistPolicyVersions.id eq policyId }
+            .where { scopeCondition(scope) and (WaitlistPolicyVersions.id eq policyId) }
             .forUpdate()
             .singleOrNull()
             ?.toRecord()
@@ -282,7 +290,11 @@ data class ClinicWaitlistPolicyRecord(
     val createdAt: Instant,
     val retiredBy: String?,
     val retiredAt: Instant?,
-)
+) : Serializable {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
 
 private fun sha256(value: String): String =
     MessageDigest.getInstance("SHA-256")

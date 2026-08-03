@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.waitlist
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.WaitlistPolicyEvents
@@ -12,6 +13,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.ClinicWaitlistScope
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyConflict
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyDocumentCodec
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyState
+import io.bluetape4k.clinic.appointment.repository.waitlist.ClinicWaitlistPolicyRecord
 import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistPolicyRepository
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
@@ -20,6 +22,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.junit.jupiter.api.Test
+import java.io.Serializable
 import java.time.Instant
 
 class WaitlistPolicyRepositoryTest {
@@ -79,6 +82,8 @@ class WaitlistPolicyRepositoryTest {
                 "DRAFT_CREATED",
                 "ACTIVATION",
             )
+            val serializable: Serializable = activated
+            (serializable is ClinicWaitlistPolicyRecord) shouldBeEqualTo true
         }
     }
 
@@ -107,7 +112,7 @@ class WaitlistPolicyRepositoryTest {
                 repository.activate(scope(), overlapping.id, expectedGeneration = 1L, actor = ACTOR, now = BASE_TIME)
             }
 
-            repository.findById(overlapping.id).shouldNotBeNull().status shouldBeEqualTo WaitlistPolicyState.DRAFT
+            repository.findById(scope(), overlapping.id).shouldNotBeNull().status shouldBeEqualTo WaitlistPolicyState.DRAFT
             WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 3L
         }
     }
@@ -138,8 +143,51 @@ class WaitlistPolicyRepositoryTest {
             }
 
             repository.findActive(scope()).shouldNotBeNull().id shouldBeEqualTo active.id
-            repository.findById(later.id).shouldNotBeNull().status shouldBeEqualTo WaitlistPolicyState.DRAFT
+            repository.findById(scope(), later.id).shouldNotBeNull().status shouldBeEqualTo WaitlistPolicyState.DRAFT
             WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 3L
+        }
+    }
+
+    @Test
+    fun `find by id is scoped by tenant and clinic in SQL`() {
+        withPolicyTables {
+            val first = repository.insertDraft(
+                scope = scope(),
+                policy = decodedPolicy(),
+                effectiveFrom = BASE_TIME,
+                effectiveUntil = null,
+                actor = ACTOR,
+                now = BASE_TIME,
+            )
+            Clinics.insert {
+                it[id] = EntityID(OTHER_CLINIC_ID, Clinics)
+                it[tenantGroupId] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+                it[name] = "Other Clinic"
+                it[slotDurationMinutes] = 30
+                it[maxConcurrentPatients] = 1
+            }
+
+            repository.findById(otherScope(), first.id).shouldBeNull()
+            repository.findById(scope(), first.id).shouldNotBeNull().id shouldBeEqualTo first.id
+        }
+    }
+
+    @Test
+    fun `insert draft locks clinic scope before allocating policy version`() {
+        withPolicyTables(seedClinic = false) {
+            assertFailsWith<WaitlistPolicyConflict> {
+                repository.insertDraft(
+                    scope = scope(),
+                    policy = decodedPolicy(),
+                    effectiveFrom = BASE_TIME,
+                    effectiveUntil = null,
+                    actor = ACTOR,
+                    now = BASE_TIME,
+                )
+            }
+
+            WaitlistPolicyVersions.selectAll().count() shouldBeEqualTo 0L
+            WaitlistPolicyEvents.selectAll().count() shouldBeEqualTo 0L
         }
     }
 
@@ -164,14 +212,19 @@ class WaitlistPolicyRepositoryTest {
         }
     }
 
-    private fun withPolicyTables(block: org.jetbrains.exposed.v1.jdbc.JdbcTransaction.() -> Unit) {
+    private fun withPolicyTables(
+        seedClinic: Boolean = true,
+        block: org.jetbrains.exposed.v1.jdbc.JdbcTransaction.() -> Unit,
+    ) {
         withTables(
             TestDB.H2,
             Clinics,
             WaitlistPolicyVersions,
             WaitlistPolicyEvents,
         ) {
-            seedClinic()
+            if (seedClinic) {
+                seedClinic()
+            }
             block()
         }
     }
@@ -188,6 +241,9 @@ class WaitlistPolicyRepositoryTest {
 
     private fun scope(): ClinicWaitlistScope =
         ClinicWaitlistScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, CLINIC_ID)
+
+    private fun otherScope(): ClinicWaitlistScope =
+        ClinicWaitlistScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, OTHER_CLINIC_ID)
 
     private fun policyEvents() =
         WaitlistPolicyEvents
@@ -217,6 +273,7 @@ class WaitlistPolicyRepositoryTest {
 
     private companion object {
         const val CLINIC_ID = 41L
+        const val OTHER_CLINIC_ID = 42L
         val BASE_TIME: Instant = Instant.parse("2026-08-03T09:00:00Z")
         val ACTOR: ActorRef = ActorRef("staff:policy-admin")
     }
