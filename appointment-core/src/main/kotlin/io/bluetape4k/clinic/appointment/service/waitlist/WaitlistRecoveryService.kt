@@ -12,6 +12,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistOfferRecord
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistOfferState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistReasonCode
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationRepository
+import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistDeliveryRepository
 import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
@@ -22,6 +23,7 @@ class WaitlistRecoveryService(
     private val waitlistRepository: WaitlistRepository,
     private val resourceAllocationRepository: ResourceAllocationRepository,
     private val clock: Clock,
+    private val deliveryRepository: WaitlistDeliveryRepository? = null,
 ) {
     /** bounded 후보를 재조회·재잠금한 뒤 만료된 hold와 연결 row를 terminal로 수렴시킵니다. */
     fun reconcileWaitlistHolds(command: ReconcileWaitlistHoldsCommand): CapacityHoldExpired {
@@ -32,13 +34,13 @@ class WaitlistRecoveryService(
         var lastId: Long? = null
 
         expired.forEach { candidate ->
-            resourceAllocationRepository.lockWaitlistHoldResource(candidate)
+            val offer = waitlistRepository.findOfferForUpdate(candidate.scope, candidate.offerId) ?: return@forEach
+            val entry = waitlistRepository.findEntryForUpdate(candidate.scope, offer.waitlistEntryId) ?: return@forEach
             val hold = waitlistRepository.findHoldForUpdate(candidate.scope, candidate.id) ?: return@forEach
-            val offer = waitlistRepository.findOfferForUpdate(hold.scope, hold.offerId) ?: return@forEach
-            val entry = waitlistRepository.findEntryForUpdate(hold.scope, offer.waitlistEntryId) ?: return@forEach
             if (!canExpire(offer, hold, entry, now)) {
                 return@forEach
             }
+            resourceAllocationRepository.lockWaitlistHoldResource(hold)
             expireLockedRows(command, offer, hold, entry, now)
             count += 1
             lastId = hold.id
@@ -120,6 +122,36 @@ class WaitlistRecoveryService(
                 eventVersion = entry.version + 1L,
             ),
         )
+        progressVacancyAfterTerminal(offer, now)
+    }
+
+    private fun progressVacancyAfterTerminal(
+        offer: WaitlistOfferRecord,
+        now: java.time.Instant,
+    ) {
+        val delivery = deliveryRepository ?: return
+        val previous = delivery.findTerminalVacancy(
+            tenantGroupId = offer.scope.tenantGroupId,
+            clinicId = offer.scope.clinicId,
+            vacancyKey = offer.vacancyKey,
+        ) ?: delivery.findVacancy(
+            tenantGroupId = offer.scope.tenantGroupId,
+            clinicId = offer.scope.clinicId,
+            vacancyKey = offer.vacancyKey,
+        ) ?: return
+        val slotValid = now < previous.vacancyStartsAt && now < previous.vacancyEndsAt
+        val closed = delivery.terminalizeForProgress(
+            jobId = previous.id,
+            now = now,
+            status = if (slotValid) {
+                io.bluetape4k.clinic.appointment.model.waitlist.VacancyJobState.NO_CANDIDATE
+            } else {
+                io.bluetape4k.clinic.appointment.model.waitlist.VacancyJobState.EXPIRED
+            },
+        ) ?: return
+        if (slotValid) {
+            delivery.nextGeneration(closed.id, now)
+        }
     }
 
     private companion object : KLogging() {

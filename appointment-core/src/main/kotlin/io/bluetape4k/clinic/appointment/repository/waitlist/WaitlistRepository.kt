@@ -33,6 +33,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyDocument
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyValidationException
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistReasonCode
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistScope
+import io.bluetape4k.support.requireNotBlank
 import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.ExpressionWithColumnType
@@ -185,6 +186,29 @@ class WaitlistRepository {
             .where { offerScopeCondition(scope) and (WaitlistOffers.id eq offerId) }
             .singleOrNull()
             ?.takeIf { row -> row[WaitlistOffers.memberId] == scope.memberId.value }
+            ?.toOfferRecord()
+    }
+
+    /** vacancy key와 clinic scope로 방금 생성된 active offer를 읽습니다. */
+    fun findOfferByVacancy(
+        tenantGroupId: Long,
+        clinicId: Long,
+        vacancyKey: String,
+    ): WaitlistOfferRecord? {
+        tenantGroupId.requirePositiveNumber("tenantGroupId")
+        clinicId.requirePositiveNumber("clinicId")
+        vacancyKey.requireNotBlank("vacancyKey")
+        return WaitlistOffers
+            .selectAll()
+            .where {
+                (WaitlistOffers.tenantGroupId eq tenantGroupId) and
+                    (WaitlistOffers.clinicId eq clinicId) and
+                    (WaitlistOffers.vacancyKey eq vacancyKey) and
+                    (WaitlistOffers.status inList WaitlistOfferState.activeStates.toList())
+            }
+            .orderBy(WaitlistOffers.id to SortOrder.DESC)
+            .limit(1)
+            .singleOrNull()
             ?.toOfferRecord()
     }
 

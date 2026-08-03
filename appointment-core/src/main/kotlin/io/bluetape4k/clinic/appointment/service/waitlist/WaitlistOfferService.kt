@@ -69,6 +69,24 @@ class WaitlistOfferService(
         throw OfferAlreadyExists()
     }
 
+    /** delivery orchestration이 opaque notification draft를 만들 수 있도록 생성 row를 반환합니다. */
+    fun selectAndOfferDetailed(
+        vacancy: VacancyDescriptor,
+        correlationId: CorrelationId,
+        actorRef: ActorRef = ActorRef("SYSTEM"),
+    ): WaitlistOfferCreated {
+        val result = selectAndOffer(vacancy, correlationId, actorRef)
+        val vacancyKey = WaitlistVacancyKeyHasher.hash(vacancy)
+        val offer = waitlistRepository.findOfferByVacancy(
+            tenantGroupId = vacancy.tenantGroupId,
+            clinicId = vacancy.clinicId,
+            vacancyKey = vacancyKey,
+        ) ?: error("created waitlist offer is not readable")
+        val hold = waitlistRepository.findHoldByOffer(offer.scope, offer.id)
+            ?: error("created waitlist hold is not readable")
+        return WaitlistOfferCreated(offer = offer, hold = hold, rank = result.rank)
+    }
+
     private fun tryCreateOffer(
         vacancy: VacancyDescriptor,
         candidate: WaitlistCandidate,

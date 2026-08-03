@@ -106,4 +106,20 @@ class WaitlistContention(
     }
 }
 
+/** lease가 만료되었거나 다른 worker가 갱신한 job의 terminal write를 거부합니다. */
+class VacancyLeaseFenced : WaitlistDeliveryException("LEASE_FENCED") {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
+/** notification outbox 기록 실패를 offer transaction의 안정 오류로 노출합니다. */
+class OutboxWriteFailed(
+    cause: Throwable? = null,
+) : WaitlistDeliveryException("OUTBOX_WRITE_FAILED", cause) {
+    companion object {
+        private const val serialVersionUID = 1L
+    }
+}
+
 private val HMAC_SHA256_DIGEST = Regex("^hmac-sha256:[a-f0-9]{64}$")

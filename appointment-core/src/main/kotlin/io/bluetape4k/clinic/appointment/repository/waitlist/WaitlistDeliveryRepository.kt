@@ -6,11 +6,13 @@ import io.bluetape4k.clinic.appointment.model.tables.WaitlistVacancyJobs
 import io.bluetape4k.clinic.appointment.model.waitlist.IdempotencyRequestMismatch
 import io.bluetape4k.clinic.appointment.model.waitlist.VacancyGenerationConflict
 import io.bluetape4k.clinic.appointment.model.waitlist.VacancyJobState
+import io.bluetape4k.clinic.appointment.model.waitlist.VacancyLeaseFenced
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCommandKey
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCommandState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistContention
 import io.bluetape4k.support.requireNotBlank
 import io.bluetape4k.support.requirePositiveNumber
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -74,6 +76,84 @@ class WaitlistDeliveryRepository(
         return WaitlistVacancyJobs
             .selectAll()
             .where { WaitlistVacancyJobs.id eq validJobId }
+            .singleOrNull()
+            ?.toVacancyJobRecord()
+    }
+
+    /** processing transaction 시작 시 lease/version fence를 확인합니다. */
+    fun requireValidFence(
+        claim: VacancyClaim,
+        now: Instant,
+    ): VacancyJobRecord {
+        val current = findVacancy(claim.jobId) ?: throw VacancyLeaseFenced()
+        if (!current.matchesFence(claim, now)) {
+            throw VacancyLeaseFenced()
+        }
+        return current
+    }
+
+    /** vacancy job을 비관 잠금으로 재조회하고 같은 lease fence를 유지하는지 확인합니다. */
+    fun lockVacancy(
+        claim: VacancyClaim,
+        now: Instant,
+    ): VacancyJobRecord {
+        val locked = WaitlistVacancyJobs
+            .selectAll()
+            .where { WaitlistVacancyJobs.id eq claim.jobId.requirePositiveNumber("jobId") }
+            .forUpdate()
+            .singleOrNull()
+            ?.toVacancyJobRecord()
+            ?: throw VacancyLeaseFenced()
+        if (!locked.matchesFence(claim, now)) {
+            throw VacancyLeaseFenced()
+        }
+        return locked
+    }
+
+    /** test와 recovery가 vacancy key로 현재 generation을 찾을 수 있는 scope-bound 조회입니다. */
+    fun findVacancy(
+        tenantGroupId: Long,
+        clinicId: Long,
+        vacancyKey: String,
+        vacancyGeneration: Long? = null,
+    ): VacancyJobRecord? {
+        tenantGroupId.requirePositiveNumber("tenantGroupId")
+        clinicId.requirePositiveNumber("clinicId")
+        vacancyKey.requireNotBlank("vacancyKey")
+        vacancyGeneration?.let { require(it > 0L) { "vacancyGeneration must be positive" } }
+        return WaitlistVacancyJobs
+            .selectAll()
+            .where {
+                (WaitlistVacancyJobs.tenantGroupId eq tenantGroupId) and
+                    (WaitlistVacancyJobs.clinicId eq clinicId) and
+                    (WaitlistVacancyJobs.vacancyKey eq vacancyKey) and
+                    (vacancyGeneration?.let { WaitlistVacancyJobs.vacancyGeneration eq it } ?: Op.TRUE)
+            }
+            .orderBy(WaitlistVacancyJobs.vacancyGeneration to SortOrder.DESC, WaitlistVacancyJobs.id to SortOrder.DESC)
+            .limit(1)
+            .singleOrNull()
+            ?.toVacancyJobRecord()
+    }
+
+    /** 같은 vacancy key에서 이미 terminal 처리된 generation만 찾아 반복 expiry를 멱등화합니다. */
+    fun findTerminalVacancy(
+        tenantGroupId: Long,
+        clinicId: Long,
+        vacancyKey: String,
+    ): VacancyJobRecord? {
+        tenantGroupId.requirePositiveNumber("tenantGroupId")
+        clinicId.requirePositiveNumber("clinicId")
+        vacancyKey.requireNotBlank("vacancyKey")
+        return WaitlistVacancyJobs
+            .selectAll()
+            .where {
+                (WaitlistVacancyJobs.tenantGroupId eq tenantGroupId) and
+                    (WaitlistVacancyJobs.clinicId eq clinicId) and
+                    (WaitlistVacancyJobs.vacancyKey eq vacancyKey) and
+                    (WaitlistVacancyJobs.status inList TERMINAL_STATES.toList())
+            }
+            .orderBy(WaitlistVacancyJobs.vacancyGeneration to SortOrder.DESC, WaitlistVacancyJobs.id to SortOrder.DESC)
+            .limit(1)
             .singleOrNull()
             ?.toVacancyJobRecord()
     }
@@ -142,6 +222,61 @@ class WaitlistDeliveryRepository(
             errorCode = null,
         )
 
+    /** 이름을 delivery orchestration contract에 맞춘 no-candidate terminal alias입니다. */
+    fun completeNoCandidate(
+        claim: VacancyClaim,
+        now: Instant,
+    ): Boolean = markNoCandidate(claim, now)
+
+    /** 유효 slot이 사라진 processing job을 terminal EXPIRED로 닫습니다. */
+    fun markExpired(
+        claim: VacancyClaim,
+        now: Instant,
+    ): Boolean =
+        terminalUpdate(
+            claim = claim,
+            now = now,
+            status = VacancyJobState.EXPIRED,
+            resultOfferId = null,
+            errorCode = null,
+        )
+
+    /** expiry/withdraw progression이 다음 generation을 만들기 전에 열린 job을 닫습니다. */
+    fun terminalizeForProgress(
+        jobId: Long,
+        now: Instant,
+        status: VacancyJobState = VacancyJobState.NO_CANDIDATE,
+    ): VacancyJobRecord? {
+        require(status in TERMINAL_STATES) { "progress status must be terminal" }
+        val validJobId = jobId.requirePositiveNumber("jobId")
+        val current = WaitlistVacancyJobs
+            .selectAll()
+            .where { WaitlistVacancyJobs.id eq validJobId }
+            .forUpdate()
+            .singleOrNull()
+            ?.toVacancyJobRecord()
+            ?: return null
+        if (current.status == VacancyJobState.READY || current.status == VacancyJobState.PROCESSING) {
+            WaitlistVacancyJobs.update({
+                (WaitlistVacancyJobs.id eq validJobId) and
+                    (WaitlistVacancyJobs.status inList listOf(
+                        VacancyJobState.READY,
+                        VacancyJobState.PROCESSING,
+                    ))
+            }) {
+                it[WaitlistVacancyJobs.status] = status
+                it[WaitlistVacancyJobs.offeredWaitlistEntryId] = null
+                it[WaitlistVacancyJobs.activeVacancyKey] = null
+                it[WaitlistVacancyJobs.leaseOwner] = null
+                it[WaitlistVacancyJobs.leaseExpiresAt] = null
+                it[WaitlistVacancyJobs.lastErrorCode] = null
+                it[WaitlistVacancyJobs.version] = current.version + 1L
+                it[WaitlistVacancyJobs.updatedAt] = now
+            }
+        }
+        return findVacancy(validJobId)
+    }
+
     fun markFailed(
         claim: VacancyClaim,
         now: Instant,
@@ -169,6 +304,12 @@ class WaitlistDeliveryRepository(
         if (previous.status !in TERMINAL_STATES) {
             throw VacancyGenerationConflict()
         }
+        findVacancy(
+            tenantGroupId = previous.tenantGroupId,
+            clinicId = previous.clinicId,
+            vacancyKey = previous.vacancyKey,
+            vacancyGeneration = previous.vacancyGeneration + 1L,
+        )?.let { return it }
         return insertVacancy(
             NewVacancyJob(
                 tenantGroupId = previous.tenantGroupId,
@@ -528,6 +669,15 @@ class WaitlistDeliveryRepository(
         private val MYSQL_LOCK_WAIT_TIMEOUT = Duration.ofSeconds(2)
     }
 }
+
+private fun VacancyJobRecord.matchesFence(claim: VacancyClaim, now: Instant): Boolean =
+    status == VacancyJobState.PROCESSING &&
+        leaseOwner == claim.owner &&
+        version == claim.version &&
+        leaseVersion == claim.leaseVersion &&
+        leaseExpiresAt != null &&
+        leaseExpiresAt.isAfter(now) &&
+        claim.expiresAt.isAfter(now)
 
 /** command idempotency unique authority에서 발생한 duplicate insert 실패만 분류합니다. */
 object WaitlistCommandDuplicateClassifier {

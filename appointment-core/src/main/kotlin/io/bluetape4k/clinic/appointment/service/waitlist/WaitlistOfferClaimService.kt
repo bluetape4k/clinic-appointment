@@ -25,6 +25,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistScope
 import io.bluetape4k.clinic.appointment.model.waitlist.SlotOccupied
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationConflictException
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationRepository
+import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistDeliveryRepository
 import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistRepository
 import io.bluetape4k.clinic.appointment.service.reliability.BookingReliabilityDecisionBatchPort
 import io.bluetape4k.logging.KLogging
@@ -43,29 +44,27 @@ class WaitlistOfferClaimService(
     private val resourceAllocationRepository: ResourceAllocationRepository,
     private val decisionBatchPort: BookingReliabilityDecisionBatchPort,
     private val clock: Clock,
+    private val deliveryRepository: WaitlistDeliveryRepository? = null,
 ) {
     /** 고객 claim을 decision 재검증과 capacity hold ACCEPTED 전이까지 원자적으로 처리합니다. */
     fun claim(command: ClaimWaitlistOfferCommand): OfferClaimed {
         val now = clock.instant()
-        val offerSnapshot = waitlistRepository.findOffer(command.scope, command.offerId)
+        val offer = waitlistRepository.findOfferForUpdate(command.scope, command.offerId)
             ?: throw OfferScopeMismatch(command.offerId)
-        val firstHold = waitlistRepository.findHoldByOffer(command.scope, command.offerId)
-        if (firstHold != null) {
-            resourceAllocationRepository.lockWaitlistHoldResource(firstHold)
+        val entry = waitlistRepository.findEntryForUpdate(command.scope, offer.waitlistEntryId)
+            ?: throw OfferScopeMismatch(command.offerId)
+        val holdCandidate = waitlistRepository.findHoldByOfferForUpdate(command.scope, command.offerId)
+        val hold = if (holdCandidate != null) {
+            resourceAllocationRepository.lockWaitlistHoldResource(holdCandidate)
+            holdCandidate
         } else {
             resourceAllocationRepository.lockWaitlistResource(
                 scope = command.scope,
-                resourceType = offerSnapshot.resourceType,
-                resourceId = offerSnapshot.resourceId,
+                resourceType = offer.resourceType,
+                resourceId = offer.resourceId,
             )
+            repairMissingOfferedHold(command.scope, offer, now)
         }
-
-        val holdCandidate = waitlistRepository.findHoldByOfferForUpdate(command.scope, command.offerId)
-        val offer = waitlistRepository.findOfferForUpdate(command.scope, command.offerId)
-            ?: throw OfferScopeMismatch(command.offerId)
-        val hold = holdCandidate ?: repairMissingOfferedHold(command.scope, offer, now)
-        val entry = waitlistRepository.findEntryForUpdate(command.scope, offer.waitlistEntryId)
-            ?: throw OfferScopeMismatch(command.offerId)
         verifyLinkedRows(offer, hold, entry)
 
         if (offer.status == WaitlistOfferState.ACCEPTED) {
@@ -164,15 +163,12 @@ class WaitlistOfferClaimService(
     /** 고객 또는 운영자의 release를 hold 반환과 offer/entry terminal 전이로 기록합니다. */
     fun release(command: ReleaseWaitlistOfferCommand): OfferWithdrawn {
         val now = clock.instant()
-        val hold = waitlistRepository.findHoldByOffer(command.scope, command.offerId)
-            ?: throw HoldScopeMismatch(command.offerId)
-        resourceAllocationRepository.lockWaitlistHoldResource(hold)
-        val lockedHold = waitlistRepository.findHoldByOfferForUpdate(command.scope, command.offerId)
-            ?: throw HoldScopeMismatch(hold.id)
         val offer = waitlistRepository.findOfferForUpdate(command.scope, command.offerId)
             ?: throw OfferScopeMismatch(command.offerId)
         val entry = waitlistRepository.findEntryForUpdate(command.scope, offer.waitlistEntryId)
             ?: throw OfferScopeMismatch(command.offerId)
+        val lockedHold = waitlistRepository.findHoldByOfferForUpdate(command.scope, command.offerId)
+            ?: throw HoldScopeMismatch(offer.id)
         verifyLinkedRows(offer, lockedHold, entry)
         if (!offer.status.isActive || !lockedHold.status.isActive) {
             throw OfferStateConflict(offer.id)
@@ -180,6 +176,7 @@ class WaitlistOfferClaimService(
         if (offer.version != command.expectedVersion) {
             throw VersionConflict(offer.id)
         }
+        resourceAllocationRepository.lockWaitlistHoldResource(lockedHold)
         val released = resourceAllocationRepository.releaseWaitlistCapacityHold(
             scope = command.scope,
             holdId = lockedHold.id,
@@ -221,6 +218,7 @@ class WaitlistOfferClaimService(
             correlationId = command.correlationId,
             actorRef = command.actorRef,
         )
+        progressVacancyAfterTerminal(offer, now)
         log.info {
             "Waitlist offer released: tenantGroupId=${command.scope.tenantGroupId}, clinicId=${command.scope.clinicId}, " +
                 "offerId=${offer.id}, holdId=${lockedHold.id}, correlationId=${command.correlationId.value}"
@@ -278,6 +276,7 @@ class WaitlistOfferClaimService(
             correlationId = correlationId,
             actorRef = actorRef,
         )
+        progressVacancyAfterTerminal(offer, now)
         log.info {
             "Waitlist offer expired during claim: tenantGroupId=${offer.scope.tenantGroupId}, " +
                 "clinicId=${offer.scope.clinicId}, offerId=${offer.id}, holdId=${hold.id}, " +
@@ -386,6 +385,35 @@ class WaitlistOfferClaimService(
                 eventVersion = entry.version + 1L,
             ),
         )
+    }
+
+    /** release/expiry 직후 slot이 유효하면 같은 vacancy의 다음 generation을 멱등 생성합니다. */
+    private fun progressVacancyAfterTerminal(
+        offer: WaitlistOfferRecord,
+        now: Instant,
+    ) {
+        val delivery = deliveryRepository ?: return
+        val previous = delivery.findTerminalVacancy(
+            tenantGroupId = offer.scope.tenantGroupId,
+            clinicId = offer.scope.clinicId,
+            vacancyKey = offer.vacancyKey,
+        ) ?: delivery.findVacancy(
+            tenantGroupId = offer.scope.tenantGroupId,
+            clinicId = offer.scope.clinicId,
+            vacancyKey = offer.vacancyKey,
+        ) ?: return
+        val closed = delivery.terminalizeForProgress(
+            jobId = previous.id,
+            now = now,
+            status = if (now < previous.vacancyStartsAt && now < previous.vacancyEndsAt) {
+                io.bluetape4k.clinic.appointment.model.waitlist.VacancyJobState.NO_CANDIDATE
+            } else {
+                io.bluetape4k.clinic.appointment.model.waitlist.VacancyJobState.EXPIRED
+            },
+        ) ?: return
+        if (now < closed.vacancyStartsAt && now < closed.vacancyEndsAt) {
+            delivery.nextGeneration(closed.id, now)
+        }
     }
 
     companion object : KLogging()
