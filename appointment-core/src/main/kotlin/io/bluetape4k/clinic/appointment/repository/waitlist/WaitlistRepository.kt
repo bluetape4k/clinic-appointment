@@ -29,25 +29,36 @@ import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistEntryState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistOfferEventRecord
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistOfferRecord
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistOfferState
+import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyDocument
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistReasonCode
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistScope
 import io.bluetape4k.support.requirePositiveNumber
+import org.jetbrains.exposed.v1.core.Expression
+import org.jetbrains.exposed.v1.core.ExpressionWithColumnType
+import org.jetbrains.exposed.v1.core.LongColumnType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.case
+import org.jetbrains.exposed.v1.core.castTo
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.leftJoin
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.longLiteral
 import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.times
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import java.io.Serializable
@@ -109,24 +120,27 @@ class WaitlistRepository {
             "policy scope must match vacancy scope"
         }
 
-        val activeOfferMembers = activeOfferMembers(vacancy)
-        val activeRestrictionMembers = activeRestrictionMembers(vacancy)
-        val activeRecoveryMembers = activeRecoveryMembers(vacancy)
-        val activeBenefitMembers = activeBenefitMembers(vacancy)
         val policyDocument = policyCodec.decode(policy.canonicalPolicyJson).document
+        val scores = rankedScoreExpressions(vacancy, policyDocument)
+        val orderExpressions = rankedOrderExpressions(scores, policyDocument)
 
-        return WaitlistEntries
-            .selectAll()
+        return rankedCandidateSet(vacancy)
+            .select(
+                WaitlistEntries.columns +
+                    listOf(DisruptionRecoveryCredits.id, BookingBenefitGrants.id) +
+                    orderExpressions.map { it.first },
+            )
             .where {
                 candidateBaseCondition(vacancy) and
-                    rankedDoctorCondition(vacancy)
+                    rankedDoctorCondition(vacancy) and
+                    WaitlistOffers.id.isNull() and
+                    BookingRestrictions.id.isNull() and
+                    rankedCursorCondition(cursor, scores, policyDocument.waitingAgeWeight)
             }
-            .map { row -> row.toEntryRecord() }
-            .asSequence()
-            .filter { entry -> entry.scope.memberId.value !in activeOfferMembers }
-            .filter { entry -> entry.scope.memberId.value !in activeRestrictionMembers }
-            .map { entry ->
-                entry.toRankedRow(
+            .orderBy(*orderExpressions.toTypedArray())
+            .limit(limit)
+            .map { row ->
+                row.toEntryRecord().toRankedRow(
                     vacancy = vacancy,
                     policy = policy,
                     urgencyWeight = policyDocument.urgencyWeight,
@@ -135,14 +149,10 @@ class WaitlistRepository {
                     reliabilityWeight = policyDocument.reliabilityWeight,
                     waitingAgeWeight = policyDocument.waitingAgeWeight,
                     slotFitWeight = policyDocument.slotFitWeight,
-                    recoveryActive = entry.scope.memberId.value in activeRecoveryMembers,
-                    benefitActive = entry.scope.memberId.value in activeBenefitMembers,
+                    recoveryActive = row.getOrNull(DisruptionRecoveryCredits.id) != null,
+                    benefitActive = row.getOrNull(BookingBenefitGrants.id) != null,
                 )
             }
-            .sortedWith(RANKED_ROW_ORDER)
-            .dropWhile { row -> cursor != null && row.isAtOrBefore(cursor) }
-            .take(limit)
-            .toList()
     }
 
     /** scope가 일치하는 offer row를 비관 잠금으로 읽습니다. */
@@ -488,56 +498,124 @@ class WaitlistRepository {
     private fun WaitlistCursor?.allowsSlotFit(slotFit: Int): Boolean =
         this == null || this.slotFit >= slotFit
 
-    private fun activeOfferMembers(vacancy: VacancyDescriptor): Set<String> =
-        WaitlistOffers
-            .selectAll()
-            .where {
+    private fun rankedCandidateSet(vacancy: VacancyDescriptor) =
+        WaitlistEntries
+            .leftJoin(WaitlistOffers) {
                 (WaitlistOffers.tenantGroupId eq vacancy.tenantGroupId) and
                     (WaitlistOffers.clinicId eq vacancy.clinicId) and
+                    (WaitlistOffers.memberId eq WaitlistEntries.memberId) and
                     (WaitlistOffers.status inList WaitlistOfferState.activeStates.toList())
             }
-            .map { row -> row[WaitlistOffers.memberId] }
-            .toSet()
-
-    private fun activeRestrictionMembers(vacancy: VacancyDescriptor): Set<String> =
-        BookingRestrictions
-            .selectAll()
-            .where {
+            .leftJoin(BookingRestrictions) {
                 (BookingRestrictions.tenantGroupId eq vacancy.tenantGroupId) and
                     (BookingRestrictions.clinicId eq vacancy.clinicId) and
+                    (BookingRestrictions.memberId eq WaitlistEntries.memberId) and
                     (BookingRestrictions.startsAt lessEq vacancy.now) and
-                    (BookingRestrictions.releasedAt.isNull()) and
+                    BookingRestrictions.releasedAt.isNull() and
                     (BookingRestrictions.expiresAt.isNull() or (BookingRestrictions.expiresAt greater vacancy.now))
             }
-            .map { row -> row[BookingRestrictions.memberId] }
-            .toSet()
-
-    private fun activeRecoveryMembers(vacancy: VacancyDescriptor): Set<String> =
-        DisruptionRecoveryCredits
-            .selectAll()
-            .where {
+            .leftJoin(DisruptionRecoveryCredits) {
                 (DisruptionRecoveryCredits.tenantGroupId eq vacancy.tenantGroupId) and
                     (DisruptionRecoveryCredits.clinicId eq vacancy.clinicId) and
+                    (DisruptionRecoveryCredits.memberId eq WaitlistEntries.memberId) and
                     (DisruptionRecoveryCredits.expiresAt greater vacancy.now) and
                     DisruptionRecoveryCredits.consumedAt.isNull() and
                     DisruptionRecoveryCredits.reversedAt.isNull()
             }
-            .map { row -> row[DisruptionRecoveryCredits.memberId] }
-            .toSet()
-
-    private fun activeBenefitMembers(vacancy: VacancyDescriptor): Set<String> =
-        BookingBenefitGrants
-            .selectAll()
-            .where {
+            .leftJoin(BookingBenefitGrants) {
                 (BookingBenefitGrants.tenantGroupId eq vacancy.tenantGroupId) and
                     (BookingBenefitGrants.clinicId eq vacancy.clinicId) and
+                    (BookingBenefitGrants.memberId eq WaitlistEntries.memberId) and
                     (BookingBenefitGrants.startsAt lessEq vacancy.now) and
-                    (BookingBenefitGrants.consumedAt.isNull()) and
-                    (BookingBenefitGrants.revokedAt.isNull()) and
+                    BookingBenefitGrants.consumedAt.isNull() and
+                    BookingBenefitGrants.revokedAt.isNull() and
                     (BookingBenefitGrants.expiresAt.isNull() or (BookingBenefitGrants.expiresAt greater vacancy.now))
             }
-            .map { row -> row[BookingBenefitGrants.memberId] }
-            .toSet()
+
+    private fun rankedScoreExpressions(
+        vacancy: VacancyDescriptor,
+        policyDocument: WaitlistPolicyDocument,
+    ): RankedScoreExpressions {
+        val urgencyScore =
+            WaitlistEntries.priorityRank.castTo(LongColumnType()) * longLiteral(policyDocument.urgencyWeight.toLong())
+        val recoveryScore = activeScore(DisruptionRecoveryCredits.id, policyDocument.recoveryWeight)
+        val benefitScore = activeScore(BookingBenefitGrants.id, policyDocument.benefitWeight)
+        val reliabilityScore = longLiteral(RELIABILITY_SCORE_PENDING * policyDocument.reliabilityWeight)
+        val slotFitBase =
+            if (vacancy.doctorId == null) {
+                case().When(WaitlistEntries.doctorId.isNull(), longLiteral(100L)).Else(longLiteral(0L))
+            } else {
+                case().When(WaitlistEntries.doctorId eq vacancy.doctorId, longLiteral(100L)).Else(longLiteral(0L))
+            }
+        val slotFitScore = slotFitBase * longLiteral(policyDocument.slotFitWeight.toLong())
+        return RankedScoreExpressions(
+            urgencyScore = urgencyScore,
+            recoveryScore = recoveryScore,
+            benefitScore = benefitScore,
+            reliabilityScore = reliabilityScore,
+            slotFitScore = slotFitScore,
+        )
+    }
+
+    private fun activeScore(
+        activeId: Expression<*>,
+        weight: Int,
+    ): ExpressionWithColumnType<Long> =
+        case()
+            .When(activeId.isNotNull(), longLiteral(weight.toLong()))
+            .Else(longLiteral(0L))
+
+    private fun rankedOrderExpressions(
+        scores: RankedScoreExpressions,
+        policyDocument: WaitlistPolicyDocument,
+    ): List<Pair<Expression<*>, SortOrder>> =
+        buildList {
+            if (policyDocument.urgencyWeight > 0) {
+                add(scores.urgencyScore to SortOrder.DESC)
+            }
+            if (policyDocument.recoveryWeight > 0) {
+                add(scores.recoveryScore to SortOrder.DESC)
+            }
+            if (policyDocument.benefitWeight > 0) {
+                add(scores.benefitScore to SortOrder.DESC)
+            }
+            if (policyDocument.waitingAgeWeight > 0) {
+                add(WaitlistEntries.waitingSince to SortOrder.ASC)
+            }
+            if (policyDocument.slotFitWeight > 0) {
+                add(scores.slotFitScore to SortOrder.DESC)
+            }
+            add(WaitlistEntries.id to SortOrder.ASC)
+        }
+
+    private fun rankedCursorCondition(
+        cursor: RankedWaitlistCursor?,
+        scores: RankedScoreExpressions,
+        waitingAgeWeight: Int,
+    ): Op<Boolean> {
+        if (cursor == null) {
+            return Op.TRUE
+        }
+        var after: Op<Boolean> = Op.FALSE
+        var tie: Op<Boolean> = Op.TRUE
+
+        fun addDescending(expression: ExpressionWithColumnType<Long>, cursorValue: Long) {
+            after = after or (tie and (expression less cursorValue))
+            tie = tie and (expression eq cursorValue)
+        }
+
+        addDescending(scores.urgencyScore, cursor.scoreTuple[0])
+        addDescending(scores.recoveryScore, cursor.scoreTuple[1])
+        addDescending(scores.benefitScore, cursor.scoreTuple[2])
+
+        if (waitingAgeWeight > 0 && cursor.waitingSince != null) {
+            after = after or (tie and (WaitlistEntries.waitingSince greater cursor.waitingSince))
+            tie = tie and (WaitlistEntries.waitingSince eq cursor.waitingSince)
+        }
+
+        addDescending(scores.slotFitScore, cursor.scoreTuple[5])
+        return after or (tie and (WaitlistEntries.id greater cursor.entryId))
+    }
 
     private fun WaitlistEntryRecord.toRankedRow(
         vacancy: VacancyDescriptor,
@@ -563,27 +641,16 @@ class WaitlistRepository {
         )
         return RankedWaitlistCandidateRow(
             entry = this,
-            eligibilityDigest = sha256(
-                listOf(
-                    id,
-                    version,
-                    policy.policyVersion,
-                    policy.policyDigest,
-                    recoveryActive,
-                    benefitActive,
-                    vacancy.startsAt,
-                    vacancy.endsAt,
-                ).joinToString("|"),
+            eligibilityDigest = rankedWaitlistEligibilityDigest(
+                entry = this,
+                policyVersion = policy.policyVersion,
+                policyDigest = policy.policyDigest,
+                scoreTuple = scoreTuple,
             ),
             scoreTuple = scoreTuple,
             policyVersion = policy.policyVersion,
             policyDigest = policy.policyDigest,
         )
-    }
-
-    private fun RankedWaitlistCandidateRow.isAtOrBefore(cursor: RankedWaitlistCursor): Boolean {
-        val compared = compareRank(this, cursor.scoreTuple, cursor.entryId)
-        return compared <= 0
     }
 
     private fun insertOffer(
@@ -752,14 +819,6 @@ class WaitlistRepository {
         private const val INITIAL_VERSION = 0L
         private const val RELIABILITY_SCORE_PENDING = 0L
         private val policyCodec = WaitlistPolicyDocumentCodec()
-        private val RANKED_ROW_ORDER =
-            compareByDescending<RankedWaitlistCandidateRow> { row -> row.scoreTuple[0] }
-                .thenByDescending { row -> row.scoreTuple[1] }
-                .thenByDescending { row -> row.scoreTuple[2] }
-                .thenByDescending { row -> row.scoreTuple[3] }
-                .thenByDescending { row -> row.scoreTuple[4] }
-                .thenByDescending { row -> row.scoreTuple[5] }
-                .thenBy { row -> row.entry.id }
     }
 }
 
@@ -767,6 +826,7 @@ class WaitlistRepository {
 data class RankedWaitlistCursor(
     val scoreTuple: List<Long>,
     val entryId: Long,
+    val waitingSince: Instant? = null,
 ) : Serializable {
     init {
         require(scoreTuple.size == 6) { "scoreTuple must contain six factors" }
@@ -794,7 +854,8 @@ data class RankedWaitlistCandidateRow(
         require(policyDigest.matches(LOWER_SHA256)) { "policyDigest must be lowercase SHA-256" }
     }
 
-    fun toCursor(): RankedWaitlistCursor = RankedWaitlistCursor(scoreTuple = scoreTuple, entryId = entry.id)
+    fun toCursor(): RankedWaitlistCursor =
+        RankedWaitlistCursor(scoreTuple = scoreTuple, entryId = entry.id, waitingSince = entry.waitingSince)
 
     fun withDecisionStamp(decisionStamp: DecisionStamp): RankedWaitlistCandidateRow =
         copy(decisionStamp = decisionStamp)
@@ -804,16 +865,35 @@ data class RankedWaitlistCandidateRow(
     }
 }
 
+private data class RankedScoreExpressions(
+    val urgencyScore: ExpressionWithColumnType<Long>,
+    val recoveryScore: ExpressionWithColumnType<Long>,
+    val benefitScore: ExpressionWithColumnType<Long>,
+    val reliabilityScore: ExpressionWithColumnType<Long>,
+    val slotFitScore: ExpressionWithColumnType<Long>,
+)
+
 private val LOWER_SHA256 = Regex("^[a-f0-9]{64}$")
 
-private fun compareRank(row: RankedWaitlistCandidateRow, scoreTuple: List<Long>, entryId: Long): Int {
-    row.scoreTuple.zip(scoreTuple).forEach { (left, right) ->
-        if (left != right) {
-            return right.compareTo(left)
-        }
-    }
-    return row.entry.id.compareTo(entryId)
-}
+internal fun rankedWaitlistEligibilityDigest(
+    entry: WaitlistEntryRecord,
+    policyVersion: Long,
+    policyDigest: String,
+    scoreTuple: List<Long>,
+): String =
+    sha256(
+        listOf(
+            "waitlist-ranked-candidate-v1",
+            entry.id,
+            entry.version,
+            entry.scope.tenantGroupId,
+            entry.scope.clinicId,
+            entry.scope.memberId.value,
+            policyVersion,
+            policyDigest,
+            scoreTuple.joinToString(","),
+        ).joinToString("|"),
+    )
 
 private fun sha256(value: String): String =
     MessageDigest.getInstance("SHA-256")

@@ -8,6 +8,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyConflict
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistReasonCode
 import io.bluetape4k.clinic.appointment.repository.waitlist.ClinicWaitlistPolicyRecord
 import io.bluetape4k.clinic.appointment.repository.waitlist.RankedWaitlistCandidateRow
+import io.bluetape4k.clinic.appointment.repository.waitlist.rankedWaitlistEligibilityDigest
 import io.bluetape4k.support.requireNotBlank
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -74,7 +75,13 @@ class WaitlistDecisionService {
     private fun RankedWaitlistCandidateRow.isHardEligibleFor(policy: ClinicWaitlistPolicyRecord): Boolean =
         scoreTuple.size == 6 &&
             policyVersion == policy.policyVersion &&
-            policyDigest == policy.policyDigest
+            policyDigest == policy.policyDigest &&
+            eligibilityDigest == rankedWaitlistEligibilityDigest(
+                entry = entry,
+                policyVersion = policyVersion,
+                policyDigest = policyDigest,
+                scoreTuple = scoreTuple,
+            )
 
     private fun appendOverrideEvent(
         defaultWinner: RankedWaitlistCandidateRow,

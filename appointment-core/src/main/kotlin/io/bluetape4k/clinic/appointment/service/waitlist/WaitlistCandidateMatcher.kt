@@ -45,9 +45,9 @@ class WaitlistCandidateMatcher(
             return WaitlistCandidatePage.empty(cursor = request.cursor)
         }
 
-        val pageSize = request.pageSize.coerceIn(1, MAX_PAGE_SIZE)
-        val maxCandidates = request.maxCandidates.coerceIn(1, MAX_CANDIDATES)
-        val maxPages = request.maxPages.coerceIn(1, MAX_PAGES)
+        val pageSize = request.pageSize.coerceIn(1, MAX_RANKED_PAGE_SIZE)
+        val maxCandidates = request.maxCandidates.coerceIn(1, MAX_RANKED_CANDIDATES)
+        val maxPages = request.maxPages.coerceIn(1, MAX_RANKED_PAGES)
         val deadline = nanoTime() + timeBudget.toNanos()
         val candidates = mutableListOf<WaitlistCandidate>()
         var cursor = request.cursor
@@ -110,9 +110,9 @@ class WaitlistCandidateMatcher(
             return WaitlistCandidatePage.empty(cursor = request.cursor)
         }
 
-        val pageSize = request.pageSize.coerceIn(1, MAX_PAGE_SIZE)
-        val maxCandidates = request.maxCandidates.coerceIn(1, MAX_CANDIDATES)
-        val maxPages = request.maxPages.coerceIn(1, MAX_PAGES)
+        val pageSize = request.pageSize.coerceIn(1, MAX_RANKED_PAGE_SIZE)
+        val maxCandidates = request.maxCandidates.coerceIn(1, MAX_RANKED_CANDIDATES)
+        val maxPages = request.maxPages.coerceIn(1, MAX_RANKED_PAGES)
         val deadline = nanoTime() + timeBudget.toNanos()
         val candidates = mutableListOf<WaitlistCandidate>()
         var rankedCursor = request.rankedCursor
@@ -181,6 +181,9 @@ class WaitlistCandidateMatcher(
         private const val MAX_PAGE_SIZE = 500
         private const val MAX_PAGES = 10
         private const val MAX_CANDIDATES = 1_000
+        private const val MAX_RANKED_PAGE_SIZE = 100
+        private const val MAX_RANKED_PAGES = 4
+        private const val MAX_RANKED_CANDIDATES = MAX_RANKED_PAGE_SIZE * MAX_RANKED_PAGES
         private val DEFAULT_TIME_BUDGET: Duration = Duration.ofSeconds(2)
     }
 }

@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.waitlist
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldContainAll
 import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.model.commitment.ResourceType
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
@@ -28,7 +29,11 @@ import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistCandidateMatche
 import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistCandidateRequest
 import io.bluetape4k.clinic.appointment.test.TestDB
 import io.bluetape4k.clinic.appointment.test.withTables
+import org.jetbrains.exposed.v1.core.statements.StatementContext
+import org.jetbrains.exposed.v1.core.statements.StatementInterceptor
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi
+import org.jetbrains.exposed.v1.core.Transaction
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.junit.jupiter.api.Test
@@ -97,6 +102,72 @@ class WaitlistCandidateMatcherTest {
             page.scannedPages shouldBeEqualTo 4
             page.decisionBatchCalls shouldBeEqualTo 4
             page.exhausted shouldBeEqualTo false
+        }
+    }
+
+    @Test
+    fun `ranked query는 DB에서 정렬과 limit을 적용한 page만 materialize한다`() {
+        withWaitlistTables {
+            val decisions = mutableMapOf<MemberId, DecisionStamp>()
+            repeat(450) { index ->
+                val memberId = "member-sql-$index"
+                insertEntry(
+                    memberId = memberId,
+                    doctorId = DOCTOR_ID,
+                    priorityRank = if (index == 449) 1 else 100,
+                    waitingSince = NOW.minusSeconds(index.toLong()),
+                )
+                decisions[MemberId(memberId)] = decision(memberId, marker = "d")
+                if (index == 449) {
+                    insertBenefitGrant(memberId = memberId)
+                }
+            }
+            val capture = SqlStatementCapture()
+            registerInterceptor(capture)
+
+            matcher(decisions).findCandidates(
+                vacancy = vacancy(),
+                policy = policyRecord(benefitWeight = 10_000),
+                request = WaitlistCandidateRequest(pageSize = 100, maxPages = 4),
+            )
+
+            val rankedSelect = capture.statements
+                .filter { sql -> sql.startsWith("select") && WaitlistEntries.tableName in sql }
+                .last()
+            rankedSelect shouldContainAll listOf(
+                "left join",
+                BookingRestrictions.tableName,
+                WaitlistOffers.tableName,
+                "order by",
+                "limit",
+            )
+        }
+    }
+
+    @Test
+    fun `ranked candidate 요청은 언제나 four by one hundred scan budget으로 제한된다`() {
+        withWaitlistTables {
+            val decisions = mutableMapOf<MemberId, DecisionStamp>()
+            repeat(450) { index ->
+                val memberId = "member-budget-$index"
+                insertEntry(
+                    memberId = memberId,
+                    doctorId = DOCTOR_ID,
+                    priorityRank = 100,
+                    waitingSince = NOW.minusSeconds(index.toLong()),
+                )
+                decisions[MemberId(memberId)] = decision(memberId, marker = "e")
+            }
+
+            val page = matcher(decisions).findCandidates(
+                vacancy = vacancy(),
+                policy = policyRecord(waitingAgeWeight = 1),
+                request = WaitlistCandidateRequest(pageSize = 500, maxPages = 10, maxCandidates = 1_000),
+            )
+
+            page.candidates.size shouldBeEqualTo 400
+            page.scannedPages shouldBeEqualTo 4
+            page.decisionBatchCalls shouldBeEqualTo 4
         }
     }
 
@@ -363,6 +434,21 @@ class WaitlistCandidateMatcherTest {
             retiredBy = null,
             retiredAt = null,
         )
+
+    /** ranked SQL이 DB-side anti-join/order/limit 경계를 유지하는지 캡처합니다. */
+    private class SqlStatementCapture : StatementInterceptor {
+        val statements = mutableListOf<String>()
+
+        override fun afterExecution(
+            transaction: Transaction,
+            contexts: List<StatementContext>,
+            executedStatement: PreparedStatementApi,
+        ) {
+            contexts.firstOrNull()?.let { context ->
+                statements += context.sql(transaction).lowercase()
+            }
+        }
+    }
 
     private companion object {
         private const val CLINIC_ID = 10L

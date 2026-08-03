@@ -16,6 +16,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistPolicyState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistScope
 import io.bluetape4k.clinic.appointment.repository.waitlist.ClinicWaitlistPolicyRecord
 import io.bluetape4k.clinic.appointment.repository.waitlist.RankedWaitlistCandidateRow
+import io.bluetape4k.clinic.appointment.repository.waitlist.rankedWaitlistEligibilityDigest
 import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistDecisionActor
 import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistDecisionPreview
 import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistDecisionService
@@ -82,6 +83,23 @@ class WaitlistDecisionServiceTest {
     }
 
     @Test
+    fun `override는 repository evidence 없는 fabricated candidate를 거부한다`() {
+        withDecisionTables {
+            assertFailsWith<WaitlistOverrideRejected> {
+                service.override(
+                    defaultWinner = rankedCandidate(entryId = 1L),
+                    requestedCandidate = rankedCandidate(entryId = 2L, eligibilityDigest = "a".repeat(64)),
+                    actor = WaitlistDecisionActor(ActorRef("staff:waitlist-manager"), canOverrideWaitlist = true),
+                    policy = policyRecord(),
+                    reasonCode = "MANUAL_PRIORITY",
+                    correlationId = "decision:fabricated-candidate",
+                    now = NOW,
+                )
+            }
+        }
+    }
+
+    @Test
     fun `valid override는 후보 교체와 typed audit을 남긴다`() {
         withDecisionTables {
             val result = service.override(
@@ -124,15 +142,23 @@ class WaitlistDecisionServiceTest {
         policyVersion: Long = 1L,
         policyDigest: String = "c".repeat(64),
         scoreTuple: List<Long> = listOf(10L, 0L, 0L, 0L, 0L, 0L),
-    ): RankedWaitlistCandidateRow =
-        RankedWaitlistCandidateRow(
-            entry = entry(entryId, memberId),
-            eligibilityDigest = "e".repeat(64),
+        eligibilityDigest: String? = null,
+    ): RankedWaitlistCandidateRow {
+        val entry = entry(entryId, memberId)
+        return RankedWaitlistCandidateRow(
+            entry = entry,
+            eligibilityDigest = eligibilityDigest ?: rankedWaitlistEligibilityDigest(
+                entry = entry,
+                policyVersion = policyVersion,
+                policyDigest = policyDigest,
+                scoreTuple = scoreTuple,
+            ),
             scoreTuple = scoreTuple,
             policyVersion = policyVersion,
             policyDigest = policyDigest,
             decisionStamp = decision(memberId),
         )
+    }
 
     private fun entry(id: Long, memberId: String): WaitlistEntryRecord =
         WaitlistEntryRecord(
