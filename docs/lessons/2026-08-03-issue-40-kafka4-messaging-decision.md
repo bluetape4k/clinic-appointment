@@ -14,6 +14,9 @@ Issue #40은 production code 없이 Kafka4-only 메시징 계약을 spec, ADR과
 - Kafka partition 증설은 단일 hot aggregate 해결책으로 취급하지 않는다. 같은 key의 이후
   record가 다른 partition으로 remap될 수 있으므로 pause/hold, drain/checkpoint 또는 새
   topic migration, dual-read/offset 전환과 ordering 증명을 선행한다.
+- 같은 이유로 consumer dedup unique key에 partition을 넣지 않는다. stable logical
+  consumer/stream identity와 `eventId`를 사용하고 topic/partition/offset은 provenance로만
+  보존해야 republish와 migration 뒤에도 동일 side effect를 막을 수 있다.
 
 ## 놀라움과 실패
 

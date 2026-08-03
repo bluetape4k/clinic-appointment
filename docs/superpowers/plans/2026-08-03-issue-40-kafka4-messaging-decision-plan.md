@@ -37,6 +37,7 @@
 | `bluetape4k-kafka4` + Spring Kafka 4 + Jackson 3 + governed catalog 권위 | Task 1 | ADR exact phrase 검사 |
 | DB outbox authority, 전역 exactly-once 금지 | Task 1 | ADR boundary 검사 |
 | partition/envelope/at-least-once/idempotency | Task 1 | ADR contract 검사 |
+| partition/topic migration에도 안정적인 consumer dedup identity | Task 1 | logical consumer/stream/event ID와 provenance 분리 검사 |
 | failure/security/observability/replay/rollback | Task 1 | ADR operational summary 검사 |
 | #41/#42 성능·복구 수치와 재현 명령 차단 gate | Pre-execution gate, Task 1 | ADR 후속 검증 gate와 3-R 추적 |
 | relay fencing/backpressure와 broker 입력 상한 | Pre-execution gate, Task 1 | ADR 후속 책임과 exact spec link 검사 |
@@ -120,6 +121,9 @@ override하지 않는다.
 **전달 계약**:
 
 - end-to-end at-least-once와 stable event ID 기반 producer/consumer 멱등성을 사용한다.
+- consumer dedup unique key는 stable logical consumer/stream identity와 `eventId`로 구성하고,
+  topic/partition/offset은 provenance로만 기록해 partition 변경이나 topic migration 뒤에도
+  같은 event의 side effect가 다시 실행되지 않게 한다.
 - aggregate scope를 partition key로 사용해 같은 aggregate의 순서를 보존한다.
 - partition 증설은 단일 hot aggregate 해결책이 아니며, 기존 key remap에 대비한 producer
   pause/relay hold, drain/checkpoint 또는 새 topic migration과 ordering 증명 없이 실행하지 않는다.
@@ -166,7 +170,7 @@ Expected: ADR은 상세 spec을 중복하지 않으면서 runtime, 권위, 전�
 Run:
 
 ```bash
-rg -n 'ADR-13|bluetape4k-kafka4|governed catalog|override|at-least-once|schemaVersion|exactly-once|#41|#42|Kafka3|RabbitMQ|broker-neutral|credential|principal|PII|PHI|metric label|replay|dry-run|offset|auto-create|p95|p99|consumer lag|oldest-age|partition skew|heap/thread|재현 명령|partition 증설|key remap|drain/checkpoint|ordering 증명' docs/requirements/architecture.md
+rg -n 'ADR-13|bluetape4k-kafka4|governed catalog|override|at-least-once|logical consumer/stream identity|provenance|schemaVersion|exactly-once|#41|#42|Kafka3|RabbitMQ|broker-neutral|credential|principal|PII|PHI|metric label|replay|dry-run|offset|auto-create|p95|p99|consumer lag|oldest-age|partition skew|heap/thread|재현 명령|partition 증설|key remap|drain/checkpoint|ordering 증명' docs/requirements/architecture.md
 ```
 
 Expected: 모든 계약이 ADR-13 안에서 한 번 이상 확인되고 Kafka3/RabbitMQ를 지원한다고

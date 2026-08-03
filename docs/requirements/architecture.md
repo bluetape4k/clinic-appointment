@@ -195,6 +195,9 @@ override하지 않는다.
 **전달 계약**:
 
 - end-to-end at-least-once와 stable event ID 기반 producer/consumer 멱등성을 사용한다.
+- consumer dedup unique key는 stable logical consumer/stream identity와 `eventId`로 구성하고,
+  topic/partition/offset은 provenance로만 기록해 partition 변경이나 topic migration 뒤에도
+  같은 event의 side effect가 다시 실행되지 않게 한다.
 - aggregate scope를 partition key로 사용해 같은 aggregate의 순서를 보존한다.
 - partition 증설은 단일 hot aggregate 해결책이 아니며, 기존 key remap에 대비한 producer
   pause/relay hold, drain/checkpoint 또는 새 topic migration과 ordering 증명 없이 실행하지 않는다.

@@ -389,11 +389,16 @@ partition을 바꾸지 않지만 같은 key의 이후 record를 다른 partition
 - replay 운영 절차와 schema migration 검증
 - consumer lag·처리 실패·DLT 관측성
 
-consumer 처리 순서는 `(group, topic, partition, eventId 또는 안정된 source identity)` unique
-ledger 확인, handler의 DB transaction 또는 side-effect ledger 기록, 처리 완료 기록,
-offset commit이다. 외부 provider 호출은 provider idempotency key와 결과 ledger를 먼저
-확보해야 한다. 성공 응답 뒤 crash가 발생해도 ledger로 reconcile할 수 없는 non-idempotent
-side effect는 지원하지 않으며 quarantine 또는 별도 승인된 adapter 설계로 보낸다.
+consumer 처리 순서는 `(logicalConsumerId, logicalStreamId, eventId)` unique ledger 확인,
+handler의 DB transaction 또는 side-effect ledger 기록, 처리 완료 기록, offset commit이다.
+`logicalStreamId`는 topic 교체나 partition 증설 전후에도 같은 event lineage에 대해 안정적이어야
+한다. topic, partition과 offset은 수신 provenance로 기록하되 중복 제거 unique key에는 넣지
+않는다. replay용 consumer group이 동일 side effect를 실행한다면 기존
+`logicalConsumerId`의 dedup scope를 공유하고, 공유하지 않는 replay는 shadow output 또는
+별도 승인된 격리 target만 사용할 수 있다. 외부 provider 호출은 provider idempotency key와
+결과 ledger를 먼저 확보해야 한다. 성공 응답 뒤 crash가 발생해도 ledger로 reconcile할 수
+없는 non-idempotent side effect는 지원하지 않으며 quarantine 또는 별도 승인된 adapter
+설계로 보낸다.
 
 #41은 임의 schema registry 정책이나 업무 consumer를 구현하지 않는다. #42는 Kafka3,
 RabbitMQ 또는 broker-neutral facade를 추가하지 않는다.

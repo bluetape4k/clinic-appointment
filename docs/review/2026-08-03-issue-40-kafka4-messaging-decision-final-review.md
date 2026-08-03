@@ -25,7 +25,7 @@ worktree에서 leader/verifier `gpt-5.6-luna`, autonomy directive와 변경된
 | Stability | P1=2, 재검토 P1=1 | extension blacklist를 exact allowlist로 교체하고 staged/branch whitespace 검사와 artifact 생성 순서를 수정 | PASS, P0=0/P1=0 |
 | Security | PASS | least privilege, secret, bounded input, PHI, replay/offset/rollback 경계 확인 | PASS, P0=0/P1=0 |
 | Operator/Ops | PASS | readiness/runbook, exact-head closeout, no-match/경로 검증 실행 가능성 확인 | PASS, P0=0/P1=0 |
-| Developer/API | PASS | governed catalog와 #41 producer/#42 consumer 책임, schemaVersion 계약 확인 | PASS, P0=0/P1=0 |
+| Developer/API | P1=1 | partition을 dedup unique key에서 제거하고 stable logical consumer/stream identity와 eventId를 사용하며 topic/partition/offset은 provenance로 분리 | PASS, P0=0/P1=0 |
 | User/caller | PASS | #40 결정 완료와 #41/#42 구현 미완료, 날짜·링크·RabbitMQ/Avro 모순 부재 확인 | PASS, P0=0/P1=0 |
 
 ## Main-session 통합
@@ -34,6 +34,7 @@ worktree에서 leader/verifier `gpt-5.6-luna`, autonomy directive와 변경된
 |---|---|---|
 | 결정 일관성 | PASS | Kafka4-only, governed catalog, DB outbox authority와 전역 exactly-once 금지가 spec/ADR에서 일치한다. |
 | ordering 안전성 | PASS | partition/key 변경은 irreversible migration이며 ordering proof 없이는 실행하지 않는다. |
+| cross-partition 멱등성 | PASS | dedup identity는 partition과 분리되어 republish, partition 증설, topic migration에서도 동일 event side effect를 차단한다. |
 | 범위 통제 | PASS | anchored exact allowlist가 허용되지 않은 Java fixture를 검출한다. |
 | 검증 무결성 | PASS | `git diff --check origin/develop`가 commit된 변경을 포함하고 negative `rg`의 exit 상태를 구분한다. |
 | 후속 책임 | PASS | #41은 module/producer/relay, #42는 consumer/schema/DLT/replay를 소유한다. |
