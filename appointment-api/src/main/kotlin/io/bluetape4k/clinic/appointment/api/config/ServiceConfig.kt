@@ -54,6 +54,7 @@ import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityOperat
 import io.bluetape4k.clinic.appointment.api.reliability.DefaultBookingReliabilitySchemaReadiness
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilitySchemaReadiness
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilitySchemaProbe
+import io.bluetape4k.clinic.appointment.api.waitlist.WaitlistDeliveryProperties
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
 import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
@@ -135,6 +136,7 @@ import kotlin.concurrent.withLock
     NotificationMemberIdProperties::class,
     NotificationProperties::class,
     BookingReliabilityProperties::class,
+    WaitlistDeliveryProperties::class,
 )
 class ServiceConfig {
 
