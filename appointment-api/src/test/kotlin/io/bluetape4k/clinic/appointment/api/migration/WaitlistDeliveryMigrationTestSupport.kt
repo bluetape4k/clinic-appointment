@@ -93,7 +93,7 @@ internal object WaitlistDeliveryMigrationTestSupport {
 
         dataSource.connection.use { connection ->
             verifyWaitlistDeliveryContract(connection, dialect)
-            verifyPolicyFirstActivationAuthority(connection)
+            verifyPolicyPersistenceGenerationAuthority(connection)
             verifyExpiredLeaseOneWorkerClaim(connection)
             verifyRankedCandidateSkeleton(connection, dialect)
         }
@@ -230,12 +230,13 @@ internal object WaitlistDeliveryMigrationTestSupport {
         ) shouldBeEqualTo listOf("tenant_group_id", "clinic_id", "command_type", "key_digest")
     }
 
-    private fun verifyPolicyFirstActivationAuthority(connection: Connection) {
+    private fun verifyPolicyPersistenceGenerationAuthority(connection: Connection) {
         seedScope(connection)
         insertPolicyVersion(connection, id = 190101L, generation = 1L, policyVersion = 1001L)
         expectConstraintViolation {
             insertPolicyVersion(connection, id = 190102L, generation = 2L, policyVersion = 1002L, urgencyWeight = 10001)
         }
+        // ACTIVE window overlap과 first-activation race는 Task 2 repository의 scope lock + transaction algorithm이 검증한다.
         expectConstraintViolation {
             insertPolicyVersion(connection, id = 190103L, generation = 1L, policyVersion = 1003L)
         }

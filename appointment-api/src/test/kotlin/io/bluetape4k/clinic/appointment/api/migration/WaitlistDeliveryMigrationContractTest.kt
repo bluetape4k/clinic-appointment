@@ -13,7 +13,7 @@ import java.sql.Driver
 class WaitlistDeliveryMigrationContractTest {
 
     @Test
-    fun `V19 policy activation lease claim and ranked candidate contracts hold across dialects`() {
+    fun `V19 policy persistence lease claim and ranked candidate contracts hold across dialects`() {
         WaitlistDeliveryMigrationTestSupport.verifyV19DialectContracts(
             dataSource = h2DataSource("waitlist-delivery-contract"),
             location = "classpath:db/migration/h2",
