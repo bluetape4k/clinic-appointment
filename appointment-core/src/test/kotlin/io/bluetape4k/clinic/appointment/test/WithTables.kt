@@ -5,9 +5,11 @@ import io.bluetape4k.logging.error
 import org.jetbrains.exposed.v1.core.DatabaseConfig
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.inTopLevelTransaction
 import org.jetbrains.exposed.v1.jdbc.transactions.transactionManager
 
@@ -23,40 +25,44 @@ fun withTables(
     dropTables: Boolean = true,
     statement: JdbcTransaction.(TestDB) -> Unit,
 ) {
-    val tablesToUse = withTenantGroups(tables)
+    synchronized(withTablesSchemaLock) {
+        val tablesToUse = withTenantGroups(tables)
 
-    withDb(testDB, configure = configure) {
-        runCatching {
-            SchemaUtils.drop(*tablesToUse)
-        }
+        withDb(testDB, configure = configure) {
+            runCatching {
+                SchemaUtils.drop(*tablesToUse)
+            }
 
-        SchemaUtils.create(*tablesToUse)
-        seedDefaultTenantIfNeeded(tablesToUse)
-        commit()
+            SchemaUtils.create(*tablesToUse)
+            seedDefaultTenantIfNeeded(tablesToUse)
+            commit()
 
-        try {
-            statement(testDB)
-            commit() // Need commit to persist data before drop tables
-        } finally {
-            if (dropTables) {
-                try {
-                    SchemaUtils.drop(*tablesToUse)
-                    commit()
-                } catch (ex: Exception) {
-                    logger.error(ex) { "Drop Tables 에서 예외가 발생했습니다. 삭제할 테이블: ${tablesToUse.joinToString { it.tableName }}" }
-                    val database = testDB.db ?: return@withDb
-                    inTopLevelTransaction(
-                        transactionIsolation = database.transactionManager.defaultIsolationLevel,
-                        db = database
-                    ) {
-                        maxAttempts = 1
+            try {
+                statement(testDB)
+                commit() // Need commit to persist data before drop tables
+            } finally {
+                if (dropTables) {
+                    try {
                         SchemaUtils.drop(*tablesToUse)
+                        commit()
+                    } catch (ex: Exception) {
+                        logger.error(ex) { "Drop Tables 에서 예외가 발생했습니다. 삭제할 테이블: ${tablesToUse.joinToString { it.tableName }}" }
+                        val database = testDB.db ?: return@withDb
+                        inTopLevelTransaction(
+                            transactionIsolation = database.transactionManager.defaultIsolationLevel,
+                            db = database
+                        ) {
+                            maxAttempts = 1
+                            SchemaUtils.drop(*tablesToUse)
+                        }
                     }
                 }
             }
         }
     }
 }
+
+private val withTablesSchemaLock = Any()
 
 private fun withTenantGroups(tables: Array<out Table>): Array<out Table> =
     if (tables.any { it === TenantGroups }) {
@@ -67,6 +73,14 @@ private fun withTenantGroups(tables: Array<out Table>): Array<out Table> =
 
 private fun seedDefaultTenantIfNeeded(tables: Array<out Table>) {
     if (tables.none { it === TenantGroups }) {
+        return
+    }
+
+    val defaultTenantExists = !TenantGroups
+        .selectAll()
+        .where { TenantGroups.id eq TenantGroups.DEFAULT_TENANT_GROUP_ID }
+        .empty()
+    if (defaultTenantExists) {
         return
     }
 
