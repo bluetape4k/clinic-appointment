@@ -218,15 +218,17 @@ override하지 않는다.
 
 **후속 검증 gate**: #41/#42는 구현 전에 burst와 지속 부하, publish-to-ack p95/p99,
 consumer lag catch-up, oldest-age, broker outage recovery, partition skew, heap/thread 상한과
-재현 명령을 수치화한다. relay lease/fencing·bounded backpressure와 record/header/depth
-상한, partition-change ordering migration도 해당 spec과 테스트의 차단 기준이다.
+재현 명령을 수치화한다. #42의 dedup ledger retention/cleanup, index/partition 전략,
+cardinality/storage 상한과 target cardinality duplicate lookup p95도 수치화한다. relay
+lease/fencing·bounded backpressure와 record/header/depth 상한, partition-change ordering
+migration도 해당 spec과 테스트의 차단 기준이다.
 
 **후속 책임**:
 
 | 이슈 | 책임 |
 |---|---|
 | #41 | `appointment-messaging`, producer envelope/partition key, 세 dialect outbox lease/fencing migration, bounded relay와 readiness |
-| #42 | consumer idempotency/offset, Schema Registry compatibility, retry/DLT/quarantine와 승인된 replay |
+| #42 | bounded consumer idempotency ledger/offset, Schema Registry compatibility, retry/DLT/quarantine와 승인된 replay |
 
 **기각**: Kafka3는 Spring Boot 3/Jackson 2 line이라 기각한다. RabbitMQ는 replay와
 schema evolution 요구 및 bluetape4k runtime 지원이 약해 기각한다. broker-neutral

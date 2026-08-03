@@ -38,6 +38,7 @@
 | DB outbox authority, 전역 exactly-once 금지 | Task 1 | ADR boundary 검사 |
 | partition/envelope/at-least-once/idempotency | Task 1 | ADR contract 검사 |
 | partition/topic migration에도 안정적인 consumer dedup identity | Task 1 | logical consumer/stream/event ID와 provenance 분리 검사 |
+| bounded consumer dedup ledger | Task 1 | retention/cleanup, index/partition, cardinality/storage 상한과 lookup p95 검사 |
 | failure/security/observability/replay/rollback | Task 1 | ADR operational summary 검사 |
 | #41/#42 성능·복구 수치와 재현 명령 차단 gate | Pre-execution gate, Task 1 | ADR 후속 검증 gate와 3-R 추적 |
 | relay fencing/backpressure와 broker 입력 상한 | Pre-execution gate, Task 1 | ADR 후속 책임과 exact spec link 검사 |
@@ -144,15 +145,17 @@ override하지 않는다.
 
 **후속 검증 gate**: #41/#42는 구현 전에 burst와 지속 부하, publish-to-ack p95/p99,
 consumer lag catch-up, oldest-age, broker outage recovery, partition skew, heap/thread 상한과
-재현 명령을 수치화한다. relay lease/fencing·bounded backpressure와 record/header/depth
-상한, partition-change ordering migration도 해당 spec과 테스트의 차단 기준이다.
+재현 명령을 수치화한다. #42의 dedup ledger retention/cleanup, index/partition 전략,
+cardinality/storage 상한과 target cardinality duplicate lookup p95도 수치화한다. relay
+lease/fencing·bounded backpressure와 record/header/depth 상한, partition-change ordering
+migration도 해당 spec과 테스트의 차단 기준이다.
 
 **후속 책임**:
 
 | 이슈 | 책임 |
 |---|---|
 | #41 | `appointment-messaging`, producer envelope/partition key, 세 dialect outbox lease/fencing migration, bounded relay와 readiness |
-| #42 | consumer idempotency/offset, Schema Registry compatibility, retry/DLT/quarantine와 승인된 replay |
+| #42 | bounded consumer idempotency ledger/offset, Schema Registry compatibility, retry/DLT/quarantine와 승인된 replay |
 
 **기각**: Kafka3는 Spring Boot 3/Jackson 2 line이라 기각한다. RabbitMQ는 replay와
 schema evolution 요구 및 bluetape4k runtime 지원이 약해 기각한다. broker-neutral

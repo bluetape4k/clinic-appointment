@@ -17,6 +17,9 @@ Issue #40은 production code 없이 Kafka4-only 메시징 계약을 spec, ADR과
 - 같은 이유로 consumer dedup unique key에 partition을 넣지 않는다. stable logical
   consumer/stream identity와 `eventId`를 사용하고 topic/partition/offset은 provenance로만
   보존해야 republish와 migration 뒤에도 동일 side effect를 막을 수 있다.
+- 안정적인 dedup key만으로는 충분하지 않다. #42는 ledger retention/cleanup,
+  index/partition 전략, cardinality/storage 상한과 target-cardinality lookup p95를 함께
+  고정해 장기 운영에서 중복 검사가 무한 성장하지 않게 해야 한다.
 
 ## 놀라움과 실패
 

@@ -21,7 +21,7 @@ worktree에서 leader/verifier `gpt-5.6-luna`, autonomy directive와 변경된
 
 | 관점 | 초기 판정 | 수정 또는 근거 | 최신 판정 |
 |---|---:|---|---:|
-| Performance | P1=1 | partition 증설의 same-key remap을 명시하고 pause/hold, drain/checkpoint 또는 topic migration, offset 전환과 ordering 증명을 차단 gate로 추가 | PASS, P0=0/P1=0 |
+| Performance | P1=1, 재검토 P2=1 | partition remap ordering gate와 bounded dedup ledger retention/cleanup, index/partition, cardinality/storage 상한, target-cardinality lookup p95를 #42 계약에 추가 | PASS, P0=0/P1=0/P2=0 |
 | Stability | P1=2, 재검토 P1=1 | extension blacklist를 exact allowlist로 교체하고 staged/branch whitespace 검사와 artifact 생성 순서를 수정 | PASS, P0=0/P1=0 |
 | Security | PASS | least privilege, secret, bounded input, PHI, replay/offset/rollback 경계 확인 | PASS, P0=0/P1=0 |
 | Operator/Ops | PASS | readiness/runbook, exact-head closeout, no-match/경로 검증 실행 가능성 확인 | PASS, P0=0/P1=0 |
@@ -35,6 +35,7 @@ worktree에서 leader/verifier `gpt-5.6-luna`, autonomy directive와 변경된
 | 결정 일관성 | PASS | Kafka4-only, governed catalog, DB outbox authority와 전역 exactly-once 금지가 spec/ADR에서 일치한다. |
 | ordering 안전성 | PASS | partition/key 변경은 irreversible migration이며 ordering proof 없이는 실행하지 않는다. |
 | cross-partition 멱등성 | PASS | dedup identity는 partition과 분리되어 republish, partition 증설, topic migration에서도 동일 event side effect를 차단한다. |
+| dedup ledger boundedness | PASS | #42가 retention/cleanup, index/partition, cardinality/storage 상한과 target-cardinality lookup p95를 구현 전에 고정한다. |
 | 범위 통제 | PASS | anchored exact allowlist가 허용되지 않은 Java fixture를 검출한다. |
 | 검증 무결성 | PASS | `git diff --check origin/develop`가 commit된 변경을 포함하고 negative `rg`의 exit 상태를 구분한다. |
 | 후속 책임 | PASS | #41은 module/producer/relay, #42는 consumer/schema/DLT/replay를 소유한다. |

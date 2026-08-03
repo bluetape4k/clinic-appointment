@@ -385,6 +385,8 @@ partition을 바꾸지 않지만 같은 key의 이후 record를 다른 partition
 - record/header/identifier/JSON depth의 숫자 상한과 oversize fail-closed 처리
 - Schema Registry format, subject naming, compatibility mode
 - consumer idempotency ledger와 offset commit 경계
+- replay/SLO window에 맞춘 ledger retention·cleanup/compaction, index/partition 전략,
+  cardinality/저장 용량 상한과 초과 시 fail-closed 또는 backpressure 동작
 - retry/DLT/quarantine와 poison-event 처리
 - replay 운영 절차와 schema migration 검증
 - consumer lag·처리 실패·DLT 관측성
@@ -428,8 +430,10 @@ Issue #40 자체는 문서 변경만 수행한다.
 #41/#42 spec은 구현 전에 다음 성능 수용값을 수치화한다. outbox burst fixture와 지속
 부하율, publish-to-ack p95/p99, consumer lag catch-up time, retry exhaustion latency,
 backlog oldest-age ceiling, broker outage recovery time, partition skew, heap/thread 증가
-상한이다. 또한 serializer allocation/latency smoke와 static DTO topic의 type-header
-부재를 검증한다. 이 값과 재현 명령이 없거나 측정 결과가 기준을 넘으면 후속 이슈의
+상한이다. #42는 target ledger cardinality에서 duplicate lookup p95, storage ceiling,
+retention cleanup/compaction latency와 replay·republish·partition/topic migration 뒤의
+dedup 성능도 측정한다. 또한 serializer allocation/latency smoke와 static DTO topic의
+type-header 부재를 검증한다. 이 값과 재현 명령이 없거나 측정 결과가 기준을 넘으면 후속 이슈의
 완료와 PR 진행을 막는다.
 
 ## 11. 수용 기준과 DoD
@@ -445,6 +449,8 @@ backlog oldest-age ceiling, broker outage recovery time, partition skew, heap/th
 - [ ] relay lease/fencing, bounded backpressure와 stale-claim 복구가 #41의 필수 계약이다.
 - [ ] broker 입력 크기/depth/header 상한과 oversize fail-closed 처리가 #42의 필수
   계약이다.
+- [ ] #42가 dedup ledger retention/cleanup, index/partition 전략, cardinality/storage 상한과
+  target-cardinality duplicate lookup p95를 구현 전에 수치화한다.
 - [ ] #41/#42가 성능·복구 수용값과 재현 명령을 구현 전에 수치화하도록 차단 gate가
   정의된다.
 - [ ] #41과 #42의 책임과 비목표가 겹치지 않게 분리된다.
