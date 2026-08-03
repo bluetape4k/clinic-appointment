@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
+import java.time.Instant
 
 /**
  * 알림 채널 인터페이스.
@@ -15,4 +16,8 @@ interface NotificationChannel {
     val channelType: NotificationChannelType
 
     fun send(request: NotificationProviderRequest): NotificationProviderResult
+
+    /** provider deadline을 전달하되 기존 channel 구현체와의 source compatibility를 유지합니다. */
+    fun send(request: NotificationProviderRequest, deadline: Instant): NotificationProviderResult =
+        send(request)
 }

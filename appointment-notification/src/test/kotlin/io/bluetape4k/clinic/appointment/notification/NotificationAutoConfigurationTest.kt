@@ -151,6 +151,56 @@ internal class NotificationAutoConfigurationTest {
     }
 
     @Test
+    fun `waitlist delivery feature flag가 worker bean을 명시적으로 제어한다`() {
+        fun runner(enabled: Boolean): ApplicationContextRunner =
+            ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
+                .withPropertyValues("appointment.waitlist.delivery.enabled=$enabled")
+                .withBean(
+                    "waitlistStore",
+                    WaitlistOfferNotificationStore::class.java,
+                    {
+                        object : WaitlistOfferNotificationStore {
+                            override suspend fun claim(
+                                now: java.time.Instant,
+                                owner: String,
+                            ): WaitlistOfferNotificationClaim? = null
+
+                            override suspend fun authorizeSend(
+                                claim: WaitlistOfferNotificationClaim,
+                                now: java.time.Instant,
+                            ): Boolean = false
+
+                            override suspend fun recordResult(
+                                claim: WaitlistOfferNotificationClaim,
+                                result: WaitlistNotificationDeliveryResult,
+                                now: java.time.Instant,
+                            ): Boolean = true
+                        }
+                    },
+                )
+                .withBean(
+                    "memberResolver",
+                    MemberNotificationProfileResolver::class.java,
+                    { MemberNotificationProfileResolver { MemberNotificationProfileResult.NotFound } },
+                )
+                .withBean(
+                    "providerKeyFactory",
+                    NotificationProviderIdempotencyKeyFactory::class.java,
+                    { NotificationProviderIdempotencyKeyFactory(ByteArray(32) { 7 }) },
+                )
+
+        runner(false).run { applicationContext ->
+            applicationContext.startupFailure shouldBeEqualTo null
+            applicationContext.getBeansOfType(WaitlistOfferNotificationWorker::class.java).size shouldBeEqualTo 0
+        }
+        runner(true).run { applicationContext ->
+            applicationContext.startupFailure shouldBeEqualTo null
+            applicationContext.getBeansOfType(WaitlistOfferNotificationWorker::class.java).size shouldBeEqualTo 1
+        }
+    }
+
+    @Test
     fun `ACTIVE는 runtime delivery dispatcher를 구성한다`() {
         val database = database("auto_runtime_active", version = "14")
         context(database, withKey = true)

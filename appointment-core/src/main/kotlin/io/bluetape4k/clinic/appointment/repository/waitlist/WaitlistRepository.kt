@@ -178,6 +178,27 @@ class WaitlistRepository {
             ?.toOfferRecord()
     }
 
+    /** notification worker가 member를 아직 알지 못한 상태에서 offer scope를 확정합니다. */
+    fun findOfferByIdForUpdate(
+        tenantGroupId: Long,
+        clinicId: Long,
+        offerId: Long,
+    ): WaitlistOfferRecord? {
+        tenantGroupId.requirePositiveNumber("tenantGroupId")
+        clinicId.requirePositiveNumber("clinicId")
+        offerId.requirePositiveNumber("offerId")
+        return WaitlistOffers
+            .selectAll()
+            .where {
+                (WaitlistOffers.tenantGroupId eq tenantGroupId) and
+                    (WaitlistOffers.clinicId eq clinicId) and
+                    (WaitlistOffers.id eq offerId)
+            }
+            .forUpdate()
+            .singleOrNull()
+            ?.toOfferRecord()
+    }
+
     /** hold가 유실된 claim이 자원 snapshot으로 canonical mutex를 찾을 수 있도록 offer를 읽습니다. */
     fun findOffer(scope: WaitlistScope, offerId: Long): WaitlistOfferRecord? {
         offerId.requirePositiveNumber("offerId")
