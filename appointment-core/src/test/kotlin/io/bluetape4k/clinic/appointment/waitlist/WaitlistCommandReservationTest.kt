@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.model.tables.WaitlistCommandRecords
 import io.bluetape4k.clinic.appointment.model.waitlist.ClinicWaitlistScope
 import io.bluetape4k.clinic.appointment.model.waitlist.IdempotencyRequestMismatch
 import io.bluetape4k.clinic.appointment.repository.waitlist.CommandReservation
+import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistCommandDuplicateClassifier
 import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistDeliveryRepository
 import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistCommandIdempotencyKeyHasher
 import io.bluetape4k.clinic.appointment.test.TestDB
@@ -17,6 +18,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.junit.jupiter.api.Test
+import java.sql.SQLException
 import java.time.Instant
 
 class WaitlistCommandReservationTest {
@@ -31,6 +33,35 @@ class WaitlistCommandReservationTest {
 
             assertFailsWith<IdempotencyRequestMismatch> {
                 repository.reserve(key, requestDigest = DIGEST_B, now = NOW)
+            }
+        }
+    }
+
+    @Test
+    fun `mysql style command duplicate classification supports replay and mismatch authority`() {
+        val mysqlDuplicate = SQLException("Duplicate entry 'abc' for key 'uq_waitlist_command_key'", "23000", 1062)
+        val wrappedDuplicate = SQLException("outer").also { it.initCause(mysqlDuplicate) }
+        val genericIntegrity = SQLException("Duplicate entry 'abc' for key 'other_unique_key'", "23000", 1062)
+
+        WaitlistCommandDuplicateClassifier.isCommandReservationDuplicate(wrappedDuplicate).shouldBeEqualTo(true)
+        WaitlistCommandDuplicateClassifier.isCommandReservationDuplicate(genericIntegrity).shouldBeEqualTo(false)
+
+        withCommandTables {
+            val key = commandKey()
+            val recordId = (repository.reserve(key, requestDigest = DIGEST_A, now = NOW) as CommandReservation.Acquired).recordId
+            repository.completeCommandSucceeded(
+                recordId = recordId,
+                requestDigest = DIGEST_A,
+                resultType = "OFFER",
+                resultId = 70L,
+                responseDigest = DIGEST_B,
+                now = NOW.plusSeconds(2),
+            )
+
+            repository.reserve(key, requestDigest = DIGEST_A, now = NOW.plusSeconds(3)) shouldBeEqualTo
+                CommandReservation.ReplaySucceeded(status = 200, resultBody = """{"type":"OFFER","id":70}""")
+            assertFailsWith<IdempotencyRequestMismatch> {
+                repository.reserve(key, requestDigest = DIGEST_B, now = NOW.plusSeconds(4))
             }
         }
     }

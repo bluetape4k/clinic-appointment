@@ -69,7 +69,8 @@ data class WaitlistCommandKey(
 /** waitlist delivery 전용 stable failure base type입니다. */
 sealed class WaitlistDeliveryException(
     message: String,
-) : RuntimeException(message), Serializable {
+    cause: Throwable? = null,
+) : RuntimeException(message, cause), Serializable {
     companion object {
         private const val serialVersionUID = 1L
     }
@@ -97,7 +98,9 @@ class IdempotencyRequestMismatch : WaitlistDeliveryException("IDEMPOTENCY_REQUES
 }
 
 /** active vacancy 또는 command 선점 중 경쟁 상태가 감지됐습니다. */
-class WaitlistContention : WaitlistDeliveryException("WAITLIST_CONTENTION") {
+class WaitlistContention(
+    cause: Throwable? = null,
+) : WaitlistDeliveryException("WAITLIST_CONTENTION", cause) {
     companion object {
         private const val serialVersionUID = 1L
     }

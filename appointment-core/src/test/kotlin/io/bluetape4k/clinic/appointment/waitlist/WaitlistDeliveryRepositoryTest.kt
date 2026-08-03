@@ -25,6 +25,7 @@ import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.sql.SQLException
 import java.time.Duration
 import java.time.Instant
@@ -224,7 +225,7 @@ class WaitlistDeliveryRepositoryTest {
     }
 
     @Test
-    fun `contention retry rejects nonretryable sql states without sleeping`() {
+    fun `contention retry rethrows nonretryable sql states unchanged without sleeping`() {
         var calls = 0
         val delays = mutableListOf<Duration>()
         val retryingRepository = WaitlistDeliveryRepository(
@@ -234,16 +235,64 @@ class WaitlistDeliveryRepositoryTest {
                 sleeper = { delay -> delays += delay },
             ),
         )
+        val nonretryable = SQLException("not retryable", "42000")
 
-        assertFailsWith<WaitlistContention> {
+        val failure = assertThrows<SQLException> {
             retryingRepository.withContentionRetry {
                 calls += 1
-                throw SQLException("not retryable", "42000")
+                throw nonretryable
             }
         }
 
+        (failure === nonretryable) shouldBeEqualTo true
         calls shouldBeEqualTo 1
         delays shouldBeEqualTo emptyList<Duration>()
+    }
+
+    @Test
+    fun `contention retry exhaustion preserves original retryable cause`() {
+        val retryingRepository = WaitlistDeliveryRepository(
+            retryPolicy = ContentionRetryPolicy(
+                maxAttempts = 2,
+                jitterDelay = { Duration.ZERO },
+                sleeper = {},
+            ),
+        )
+        val retryable = SQLException("serialization", "40001")
+
+        val failure = assertThrows<WaitlistContention> {
+            retryingRepository.withContentionRetry {
+                throw retryable
+            }
+        }
+
+        failure.cause shouldBeEqualTo retryable
+    }
+
+    @Test
+    fun `contention retry restores interrupt flag and exposes interruption cause`() {
+        val retryingRepository = WaitlistDeliveryRepository(
+            retryPolicy = ContentionRetryPolicy(
+                maxAttempts = 2,
+                jitterDelay = { Duration.ofMillis(1) },
+            ),
+        )
+        val retryable = SQLException("serialization", "40001")
+
+        val failure =
+            try {
+                Thread.currentThread().interrupt()
+                assertThrows<WaitlistContention> {
+                    retryingRepository.withContentionRetry {
+                        throw retryable
+                    }
+                }
+            } finally {
+                Thread.interrupted()
+            }
+
+        (failure.cause is InterruptedException) shouldBeEqualTo true
+        Thread.currentThread().isInterrupted shouldBeEqualTo false
     }
 
     @Test
@@ -280,14 +329,16 @@ class WaitlistDeliveryRepositoryTest {
                 sleeper = { delay -> h2Delays += delay },
             ),
         )
+        val h2LockWait = SQLException("lock wait timeout", "HY000", 1205)
 
-        assertFailsWith<WaitlistContention> {
+        val failure = assertThrows<SQLException> {
             h2Repository.withContentionRetry {
                 h2Calls += 1
-                throw SQLException("lock wait timeout", "HY000", 1205)
+                throw h2LockWait
             }
         }
 
+        (failure === h2LockWait) shouldBeEqualTo true
         h2Calls shouldBeEqualTo 1
         h2Delays shouldBeEqualTo emptyList<Duration>()
     }

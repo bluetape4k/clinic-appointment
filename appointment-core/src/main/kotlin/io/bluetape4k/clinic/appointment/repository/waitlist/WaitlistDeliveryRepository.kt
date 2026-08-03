@@ -215,11 +215,11 @@ class WaitlistDeliveryRepository(
                 }.value
                 return CommandReservation.Acquired(recordId)
             } catch (failure: ExposedSQLException) {
-                if (!failure.isUniqueConstraintViolation()) {
+                if (!WaitlistCommandDuplicateClassifier.isCommandReservationDuplicate(failure)) {
                     throw failure
                 }
             } catch (failure: SQLException) {
-                if (!failure.isUniqueConstraintViolation()) {
+                if (!WaitlistCommandDuplicateClassifier.isCommandReservationDuplicate(failure)) {
                     throw failure
                 }
             }
@@ -345,18 +345,33 @@ class WaitlistDeliveryRepository(
             try {
                 return block()
             } catch (failure: ExposedSQLException) {
-                if (!failure.isRetryableContention(strategy) || attempt >= retryPolicy.maxAttempts) {
-                    throw WaitlistContention()
+                if (!failure.isRetryableContention(strategy)) {
+                    throw failure
                 }
-                retryPolicy.sleepBeforeRetry(attempt)
+                if (attempt >= retryPolicy.maxAttempts) {
+                    throw WaitlistContention(failure)
+                }
+                sleepBeforeRetry(attempt)
                 attempt += 1
             } catch (failure: SQLException) {
-                if (!failure.isRetryableContention(strategy) || attempt >= retryPolicy.maxAttempts) {
-                    throw WaitlistContention()
+                if (!failure.isRetryableContention(strategy)) {
+                    throw failure
                 }
-                retryPolicy.sleepBeforeRetry(attempt)
+                if (attempt >= retryPolicy.maxAttempts) {
+                    throw WaitlistContention(failure)
+                }
+                sleepBeforeRetry(attempt)
                 attempt += 1
             }
+        }
+    }
+
+    private fun sleepBeforeRetry(attempt: Int) {
+        try {
+            retryPolicy.sleepBeforeRetry(attempt)
+        } catch (failure: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw WaitlistContention(failure)
         }
     }
 
@@ -494,12 +509,6 @@ class WaitlistDeliveryRepository(
             strategy.dialect == VacancyClaimDialect.MYSQL &&
             strategy.lockTimeoutPlan?.timeout == MYSQL_LOCK_WAIT_TIMEOUT
 
-    private fun SQLException.isUniqueConstraintViolation(): Boolean =
-        sqlState == UNIQUE_CONSTRAINT_SQL_STATE || errorCode == H2_UNIQUE_CONSTRAINT_ERROR_CODE
-
-    private fun ExposedSQLException.isUniqueConstraintViolation(): Boolean =
-        sqlState == UNIQUE_CONSTRAINT_SQL_STATE || errorCode == H2_UNIQUE_CONSTRAINT_ERROR_CODE
-
     private companion object {
         private const val MAX_OWNER_LENGTH = 160
         private const val SUCCESS_REPLAY_STATUS = 200
@@ -517,9 +526,50 @@ class WaitlistDeliveryRepository(
         private val RETRYABLE_SQL_STATES = setOf("40001", "40P01")
         private const val MYSQL_LOCK_WAIT_TIMEOUT_ERROR_CODE = 1205
         private val MYSQL_LOCK_WAIT_TIMEOUT = Duration.ofSeconds(2)
-        private const val UNIQUE_CONSTRAINT_SQL_STATE = "23505"
-        private const val H2_UNIQUE_CONSTRAINT_ERROR_CODE = 23505
     }
+}
+
+/** command idempotency unique authority에서 발생한 duplicate insert 실패만 분류합니다. */
+object WaitlistCommandDuplicateClassifier {
+    fun isCommandReservationDuplicate(failure: Throwable): Boolean =
+        failure.sqlFailureChain().any { sqlFailure ->
+            sqlFailure.isKnownUniqueViolation() && sqlFailure.referencesCommandIdempotencyAuthority()
+        }
+
+    private fun Throwable.sqlFailureChain(): Sequence<SQLException> =
+        sequence {
+            val seen = mutableSetOf<Throwable>()
+            var current: Throwable? = this@sqlFailureChain
+            while (current != null && seen.add(current)) {
+                if (current is SQLException) {
+                    yield(current)
+                    var next = current.nextException
+                    while (next != null && seen.add(next)) {
+                        yield(next)
+                        next = next.nextException
+                    }
+                }
+                current = current.cause
+            }
+        }
+
+    private fun SQLException.isKnownUniqueViolation(): Boolean =
+        sqlState == POSTGRES_OR_H2_UNIQUE_SQL_STATE ||
+            (sqlState == MYSQL_INTEGRITY_SQL_STATE && errorCode == MYSQL_DUPLICATE_ENTRY_ERROR_CODE)
+
+    private fun SQLException.referencesCommandIdempotencyAuthority(): Boolean {
+        val lowerMessage = message?.lowercase() ?: return false
+        return COMMAND_IDEMPOTENCY_AUTHORITY_HINTS.any { hint -> hint in lowerMessage }
+    }
+
+    private const val POSTGRES_OR_H2_UNIQUE_SQL_STATE = "23505"
+    private const val MYSQL_INTEGRITY_SQL_STATE = "23000"
+    private const val MYSQL_DUPLICATE_ENTRY_ERROR_CODE = 1062
+    private val COMMAND_IDEMPOTENCY_AUTHORITY_HINTS = listOf(
+        "uq_waitlist_command_idempotency",
+        "uq_waitlist_command",
+        "scheduling_waitlist_command_records",
+    )
 }
 
 /** vacancy claim의 DB별 획득 방식을 식별합니다. */
