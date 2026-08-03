@@ -68,9 +68,11 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
                 "doctor_id",
                 "attempt",
                 "lease_owner",
+                "lease_version",
                 "lease_expires_at",
                 "version",
             )
+            WaitlistVacancyJobs.hasUniqueIndex("uq_waitlist_vacancy_active") shouldBeEqualTo true
             WaitlistVacancyJobs.hasUniqueIndex(
                 "tenant_group_id",
                 "clinic_id",
@@ -176,6 +178,7 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
                 "reversed_at",
                 "reversal_version",
             )
+            DisruptionRecoveryCredits.hasUniqueIndex("uq_disruption_recovery_credit") shouldBeEqualTo true
             BookingBenefitGrants.columns.map { it.name }.toSet() shouldContainAll setOf(
                 "approval_reference",
                 "benefit_cap",
@@ -185,6 +188,7 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
                 "revoked_at",
                 "revoke_version",
             )
+            BookingBenefitGrants.hasUniqueIndex("uq_booking_benefit_grant") shouldBeEqualTo true
         }
     }
 
@@ -203,6 +207,7 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
                 "status",
                 "expires_at",
             )
+            WaitlistCommandRecords.hasUniqueIndex("uq_waitlist_command_idempotency") shouldBeEqualTo true
         }
     }
 
@@ -220,6 +225,11 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
         private fun Table.hasUniqueIndex(vararg columnNames: String): Boolean =
             indices.any { index ->
                 index.unique && index.columns.map { it.name } == columnNames.toList()
+            }
+
+        private fun Table.hasUniqueIndex(indexName: String): Boolean =
+            indices.any { index ->
+                index.unique && index.customName == indexName
             }
 
         private fun Table.hasCheckConstraint(name: String): Boolean =
