@@ -14,8 +14,12 @@ object DisruptionRecoveryCredits : LongIdTable("scheduling_disruption_recovery_c
     val creditDigest = varchar("credit_digest", 64)
     val priorityBoost = integer("priority_boost")
     val reasonCode = varchar("reason_code", 64)
+    val grantedBy = varchar("granted_by", 160)
     val expiresAt = timestamp("expires_at")
     val consumedAt = timestamp("consumed_at").nullable()
+    val reversedBy = varchar("reversed_by", 160).nullable()
+    val reversedAt = timestamp("reversed_at").nullable()
+    val reversalVersion = long("reversal_version").nullable()
     val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
 
     init {
