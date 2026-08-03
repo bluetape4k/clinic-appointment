@@ -139,3 +139,15 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 ```bash
 ./gradlew :appointment-event:test
 ```
+
+## Waitlist vacancy signal
+
+`SlotAvailable` is an opaque, after-commit fast signal containing only the
+vacancy job, tenant/clinic scope, correlation token, and occurrence time. The
+event publisher never carries member, appointment, doctor, or treatment details.
+The durable vacancy job in `appointment-core` remains authoritative when event
+delivery is delayed or lost. `WaitlistNotificationOutboxAdapter` implements the
+core notification draft port and writes the canonical outbox payload without
+making the event module depend on a provider SDK.
+
+See the [waitlist delivery API and operations contract](../docs/api/waitlist-delivery.md).

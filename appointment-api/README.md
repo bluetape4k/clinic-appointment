@@ -363,3 +363,30 @@ Detailed design: [appointment-core timezone design](../appointment-core/README.m
 - DataSource is injected dynamically by Spring profile with `@DynamicPropertySource`.
 - Controller tests use `RestClient`, not MockMvc.
 - CI verifies H2, PostgreSQL, and MySQL8 in parallel.
+
+## Staff waitlist API
+
+The phase-two staff API is rooted at
+`/api/{tenantCode}/clinics/{clinicId}/waitlist`. Every mutation requires a
+printable ASCII `Idempotency-Key` (16–128 characters) and a body
+`expectedVersion` where a resource precondition is needed. Public entry, offer,
+policy, adjustment, and appointment references are versioned opaque strings; the
+tenant/clinic scope is checked before the internal numeric ID is used.
+
+| Operation | Path | Capability |
+|---|---|---|
+| Entries | `POST/GET /entries`, `GET /entries/{entryRef}`, `POST /entries/{entryRef}/withdraw` | `waitlist:read` or `waitlist:write` |
+| Offers | `GET /offers`, `GET /offers/{offerRef}`, `POST /offers/{offerRef}/confirm`, `/decline`, `GET .../decision` | `waitlist:read` or `waitlist:write` |
+| Policy | `GET /policies/active`, `GET /policies/{policyRef}`, `POST /policies`, `POST /policies/{policyRef}/activate` | `waitlist:policy` |
+| Adjustments | `POST /restrictions`, `/recovery-credits`, `/benefit-grants` and their release/revoke paths | `waitlist:adjustment` |
+
+Responses contain only bounded status/reason data and correlation IDs. `403`
+scope denial, `404` hidden cross-clinic references, `409` stale/expired/occupied
+conflicts, and `503` dependency failures use the stable waitlist error registry.
+Patient self-service and public magic-link acceptance are out of scope.
+
+Delivery defaults to `appointment.waitlist.delivery.enabled=false`; removing a
+clinic from `clinic-allowlist` stops new dispatch and notification but leaves
+expiry, suppression, and hold recovery running. See the [waitlist delivery API
+and operations contract](../docs/api/waitlist-delivery.md) and [operations
+runbook](../docs/runbooks/waitlist-delivery.md).

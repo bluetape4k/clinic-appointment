@@ -201,3 +201,24 @@ val zoned: ZonedDateTime = timezoneService.toClinicTime(clinicId, date, time)
 ## Design Documents
 
 - [Full Domain Model](../docs/requirements/domain-model.md)
+
+## Waitlist delivery boundary
+
+The waitlist core owns the durable vacancy, candidate, offer, hold, policy, and
+command-record state. A confirmed same-day cancellation or `NO_SHOW` creates a
+scoped vacancy generation; the ranked matcher evaluates hard eligibility before
+the deterministic policy score. Offer, hold, decision audit, notification draft,
+and vacancy completion are written inside caller-owned `transaction {}` blocks.
+
+The core never calls Spring, Redis, a notification provider, or a member profile
+service. `SlotAvailable` is only a fast signal; the durable vacancy job remains
+the recovery authority. A lost worker lease is fenced by the database version and
+owner predicate, and a repeated confirm is resolved by the durable command record.
+
+| Boundary | Contract |
+|---|---|
+| Rollback | `appointment.waitlist.delivery.enabled=false` stops new dispatch while expiry, suppression, and hold recovery continue. |
+| Privacy | Entries, events, offers, and notification drafts carry opaque references and bounded reason codes, never names or contact details. |
+| Completion | `OFFERED` can become `ACCEPTED`, `DECLINED`, `EXPIRED`, or `WITHDRAWN` once; terminal retries are no-op success. |
+
+See the [waitlist delivery API and operations contract](../docs/api/waitlist-delivery.md).

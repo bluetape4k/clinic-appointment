@@ -125,3 +125,14 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 ```bash
 ./gradlew :appointment-event:test
 ```
+
+## Waitlist vacancy 신호
+
+`SlotAvailable`은 commit 이후 발행되는 opaque fast signal이며 vacancy job, tenant/clinic
+범위, correlation token, 발생 시각만 담습니다. event publisher는 member, appointment, 의사,
+진료유형 세부정보를 전달하지 않습니다. event가 지연되거나 유실되어도
+`appointment-core`의 durable vacancy job이 권위입니다. `WaitlistNotificationOutboxAdapter`는
+core notification draft port를 구현해 canonical outbox payload를 기록하며 provider SDK에
+의존하지 않습니다.
+
+[waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)을 참고하세요.
