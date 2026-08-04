@@ -100,7 +100,6 @@ import io.bluetape4k.clinic.appointment.model.policy.ActorRole
 import io.micrometer.core.instrument.MeterRegistry
 import io.bluetape4k.logging.KLogging
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -115,8 +114,6 @@ import java.util.Base64
 import java.time.Instant
 import java.time.Clock
 import java.time.Duration
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 /**
  * 예약 API의 repository와 application service를 명시적으로 조립하는 Spring 설정이다.
@@ -141,7 +138,6 @@ import kotlin.concurrent.withLock
 class ServiceConfig {
 
     companion object : KLogging() {
-        private val commitmentDatabaseRegistrationLock = ReentrantLock()
         private const val REQUIRED_MIGRATION_VERSION = 17
         private val REQUIRED_RELIABILITY_TABLES = setOf(
             "booking_reliability_events",
@@ -516,9 +512,9 @@ class ServiceConfig {
      * 명시적인 Exposed database handle을 생성한다.
      *
      * controller/OpenAPI slice가 [AppointmentCommitmentApplicationService]를 mock으로
-     * 대체한 경우에는 불필요한 database 조립을 생략한다. [Database.connect]는 새 handle을
-     * 전역 기본 database로 등록하므로, 기존 기본값을 즉시 복원해 Spring test context 사이의
-     * 전역 상태 오염과 legacy `transaction {}` 호출의 database 전환을 막는다.
+     * 대체한 경우에는 불필요한 database 조립을 생략한다. 등록·전역 기본 database 복원과
+     * context 종료 시 manager 해제는 [ExposedDatabaseFactory]와
+     * [ExposedDatabaseLifecycle]이 담당한다.
      */
     @Bean
     @ConditionalOnProperty(
@@ -533,14 +529,12 @@ class ServiceConfig {
         ],
     )
     internal fun appointmentCommitmentDatabase(dataSource: DataSource): Database =
-        commitmentDatabaseRegistrationLock.withLock {
-            val previousDefaultDatabase = TransactionManager.defaultDatabase
-            try {
-                Database.connect(dataSource)
-            } finally {
-                TransactionManager.defaultDatabase = previousDefaultDatabase
-            }
-        }
+        ExposedDatabaseFactory.connect(dataSource)
+
+    @Bean
+    @ConditionalOnBean(name = ["appointmentCommitmentDatabase"])
+    internal fun appointmentCommitmentDatabaseLifecycle(database: Database): ExposedDatabaseLifecycle =
+        ExposedDatabaseLifecycle(database)
 
     /**
      * effective-policy service가 만든 snapshot과 command FK용 row ID를 결합한다.

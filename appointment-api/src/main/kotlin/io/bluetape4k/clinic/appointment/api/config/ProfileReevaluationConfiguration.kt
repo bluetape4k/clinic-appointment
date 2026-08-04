@@ -23,7 +23,6 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.repository.ProfileReevaluationRepository
 import io.micrometer.core.instrument.MeterRegistry
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -33,9 +32,7 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.scheduling.annotation.Scheduled
 import java.lang.management.ManagementFactory
-import java.util.concurrent.locks.ReentrantLock
 import javax.sql.DataSource
-import kotlin.concurrent.withLock
 
 /**
  * 프로필 재평가의 fail-closed 설정, 운영 조회, 선택적 worker graph를 조립합니다.
@@ -44,24 +41,18 @@ import kotlin.concurrent.withLock
 @EnableConfigurationProperties(ProfileReevaluationProperties::class)
 @EnableScheduling
 class ProfileReevaluationConfiguration {
-    companion object {
-        private val databaseRegistrationLock = ReentrantLock()
-    }
-
     /**
      * 재평가 worker와 운영 endpoint가 Spring DataSource와 같은 pool을 사용하게 합니다.
      */
     @Bean
     @ConditionalOnMissingBean(Database::class)
     fun profileReevaluationDatabase(dataSource: DataSource): Database =
-        databaseRegistrationLock.withLock {
-            val previousDefaultDatabase = TransactionManager.defaultDatabase
-            try {
-                Database.connect(dataSource)
-            } finally {
-                TransactionManager.defaultDatabase = previousDefaultDatabase
-            }
-        }
+        ExposedDatabaseFactory.connect(dataSource)
+
+    @Bean
+    @ConditionalOnBean(name = ["profileReevaluationDatabase"])
+    internal fun profileReevaluationDatabaseLifecycle(database: Database): ExposedDatabaseLifecycle =
+        ExposedDatabaseLifecycle(database)
 
     @Bean
     @ConditionalOnMissingBean
