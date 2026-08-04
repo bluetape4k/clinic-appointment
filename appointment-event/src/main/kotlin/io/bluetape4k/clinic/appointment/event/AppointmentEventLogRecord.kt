@@ -10,6 +10,7 @@ import java.time.Instant
  * @property eventType 이벤트 유형
  * @property entityType 이벤트 대상 엔티티 유형
  * @property entityId 이벤트 대상 엔티티 ID
+ * @property tenantGroupId tenant group ID, rolling migration 동안 null일 수 있음
  * @property clinicId 병원 ID
  * @property payloadJson 이벤트 페이로드 JSON
  * @property createdAt 생성 시각
@@ -19,6 +20,7 @@ data class AppointmentEventLogRecord(
     val eventType: String,
     val entityType: String,
     val entityId: Long,
+    val tenantGroupId: Long? = null,
     val clinicId: Long,
     val payloadJson: String,
     val createdAt: Instant? = null,

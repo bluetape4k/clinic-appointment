@@ -22,6 +22,7 @@ import io.bluetape4k.clinic.appointment.event.notification.StaticNotificationOut
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.RescheduleCandidateRecord
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -319,7 +320,7 @@ internal class AppointmentNotificationAtomicityTest {
         val replacementId = closureService(actualWriter).confirmReschedule(
             candidateId = candidateId,
             originalAppointmentId = originalId,
-            tenantGroupId = tenantGroupId,
+            scope = TenantClinicScope(tenantGroupId, clinicId),
         )
 
         transaction {
@@ -364,7 +365,7 @@ internal class AppointmentNotificationAtomicityTest {
             closureService(failing).confirmReschedule(
                 candidateId = candidateId,
                 originalAppointmentId = originalId,
-                tenantGroupId = tenantGroupId,
+                scope = TenantClinicScope(tenantGroupId, clinicId),
             )
         }
 
@@ -467,6 +468,10 @@ internal class AppointmentNotificationAtomicityTest {
         transaction {
             check(
                 appointmentRepository.updateLegacyStatus(
+                    scope = TenantClinicScope(
+                        tenantGroupId,
+                        checkNotNull(appointmentRepository.findByIdAndTenant(appointmentId, tenantGroupId)).clinicId,
+                    ),
                     appointmentId = appointmentId,
                     expectedVersion = 1L,
                     newStatus = AppointmentState.PENDING_RESCHEDULE,
@@ -486,7 +491,8 @@ internal class AppointmentNotificationAtomicityTest {
                     endTime = LocalTime.of(11, 30),
                     doctorId = doctorId,
                     priority = 1,
-                )
+                ),
+                TenantClinicScope(tenantGroupId, clinicId),
             ).id ?: error("reschedule candidate id must be persisted")
         }
 

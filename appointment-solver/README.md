@@ -70,9 +70,8 @@ Full flow: [data-flow.md](../docs/requirements/data-flow.md#6-solver-데이터-�
 ## Usage Example
 
 ```kotlin
-val result: SolverResult = solverService.solve(
-    clinicId = 1L,
-    appointmentIds = listOf(10L, 11L, 12L),
+val result: SolverResult = solverService.optimize(
+    scope = TenantClinicScope(tenantGroupId = 1L, clinicId = 23L),
     dateRange = LocalDate.now()..LocalDate.now().plusDays(7),
 )
 // result.assignments: Map<Long, Assignment>
@@ -103,3 +102,11 @@ Details: [solver-benchmark-report.md](../docs/requirements/solver.md#벤치마�
 ## Design Documents
 
 - [Full Solver Design](../docs/requirements/solver.md)
+
+## Tenant-scoped optimization
+
+`optimize` and `optimizeReschedule` require the same verified
+`TenantClinicScope`. The snapshot, fact queries, source-version map, and apply
+freshness check stay inside that scope; no thread-local tenant context is used.
+The solver result is read-only until `verifySourceVersions` succeeds immediately
+before applying changes.

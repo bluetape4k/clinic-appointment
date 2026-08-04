@@ -10,7 +10,10 @@ import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
 import io.bluetape4k.clinic.appointment.test.TestDB
@@ -36,6 +39,7 @@ class TenantGuardRepositoryTest : AbstractExposedTest() {
             Doctors,
             TreatmentTypes,
             Equipments,
+            TreatmentEquipments,
             ConsultationTopics,
             Appointments,
             EquipmentUnavailabilities,
@@ -55,6 +59,13 @@ class TenantGuardRepositoryTest : AbstractExposedTest() {
         withTables(testDB, *allTables) {
             val tenantRows = setupTenantRows()
 
+            // A corrupt cross-clinic link must not turn another tenant's equipment
+            // into a solver fact for the requested scope.
+            TreatmentEquipments.insert {
+                it[TreatmentEquipments.treatmentTypeId] = tenantRows.tenantA.treatmentTypeId
+                it[TreatmentEquipments.equipmentId] = tenantRows.tenantB.equipmentId
+            }
+
             clinicRepository.findByIdAndTenant(tenantRows.tenantA.clinicId, TENANT_A)
                 .shouldNotBeNull()
                 .tenantGroupId shouldBeEqualTo TENANT_A
@@ -66,6 +77,13 @@ class TenantGuardRepositoryTest : AbstractExposedTest() {
             treatmentTypeRepository.findByIdAndTenant(tenantRows.tenantA.treatmentTypeId, TENANT_A).shouldNotBeNull()
             treatmentTypeRepository.findByIdAndTenant(tenantRows.tenantB.treatmentTypeId, TENANT_A).shouldBeNull()
 
+            val scopeA = TenantClinicScope(TENANT_A, tenantRows.tenantA.clinicId)
+            treatmentTypeRepository.findRequiredEquipmentIds(tenantRows.tenantA.treatmentTypeId, scopeA)
+                .shouldBeEqualTo(listOf(tenantRows.tenantA.equipmentId))
+            treatmentTypeRepository.findAllTreatmentEquipments(scopeA)
+                .map { it.equipmentId }
+                .shouldBeEqualTo(listOf(tenantRows.tenantA.equipmentId))
+
             equipmentRepository.findByIdAndTenant(tenantRows.tenantA.equipmentId, TENANT_A).shouldNotBeNull()
             equipmentRepository.findByIdAndTenant(tenantRows.tenantB.equipmentId, TENANT_A).shouldBeNull()
 
@@ -76,6 +94,27 @@ class TenantGuardRepositoryTest : AbstractExposedTest() {
                 .shouldNotBeNull()
             equipmentUnavailabilityRepository.findByIdAndTenant(tenantRows.tenantB.unavailabilityId, TENANT_A)
                 .shouldBeNull()
+
+            val scopeB = TenantClinicScope(TENANT_B, tenantRows.tenantB.clinicId)
+            equipmentUnavailabilityRepository.findByIdAndScope(tenantRows.tenantA.unavailabilityId, scopeA)
+                .shouldNotBeNull()
+            equipmentUnavailabilityRepository.findByIdAndScope(tenantRows.tenantB.unavailabilityId, scopeA)
+                .shouldBeNull()
+
+            val overlap = UnavailablePeriod(
+                equipmentId = tenantRows.tenantA.equipmentId,
+                date = LocalDate.of(2026, 5, 20),
+                startTime = LocalTime.of(8, 30),
+                endTime = LocalTime.of(9, 30),
+            )
+            appointmentRepository.findOverlappingByEquipment(scopeA, tenantRows.tenantA.equipmentId, listOf(overlap))
+                .map { it.id }
+                .shouldBeEqualTo(listOf(tenantRows.tenantA.appointmentId))
+            appointmentRepository.findOverlappingByEquipment(scopeA, tenantRows.tenantB.equipmentId, listOf(overlap))
+                .shouldBeEqualTo(emptyList())
+            appointmentRepository.findOverlappingByEquipment(scopeB, tenantRows.tenantB.equipmentId, listOf(overlap.copy(equipmentId = tenantRows.tenantB.equipmentId)))
+                .map { it.id }
+                .shouldBeEqualTo(listOf(tenantRows.tenantB.appointmentId))
         }
     }
 
@@ -130,6 +169,11 @@ class TenantGuardRepositoryTest : AbstractExposedTest() {
             it[usageDurationMinutes] = 30
             it[quantity] = 1
         }.value
+
+        TreatmentEquipments.insert {
+            it[TreatmentEquipments.treatmentTypeId] = treatmentTypeId
+            it[TreatmentEquipments.equipmentId] = equipmentId
+        }
 
         val appointmentId = Appointments.insertAndGetId {
             it[Appointments.clinicId] = clinicId

@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.event.AppointmentDomainEvent
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import org.springframework.context.event.EventListener
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
@@ -28,7 +29,8 @@ class NotificationEventListener(
     private val properties: NotificationProperties,
     private val executor: Executor = Executor(Runnable::run),
     private val routeGate: NotificationDeliveryRouteGate =
-        NotificationDeliveryRouteGate(NotificationProperties.RolloutProperties()),
+        NotificationDeliveryRouteGate(properties.rollout),
+    private val metrics: NotificationOutboxMetrics? = null,
 ) {
 
     companion object : KLogging()
@@ -36,48 +38,51 @@ class NotificationEventListener(
     @EventListener
     fun onCreated(event: AppointmentDomainEvent.Created) {
         if (!properties.enabled || !properties.events.created) return
-        deliver(event.clinicId, event.appointmentId, NotificationEventType.CREATED)
+        deliver(event.scope, event.appointmentId, NotificationEventType.CREATED)
     }
 
     @EventListener
     fun onStatusChanged(event: AppointmentDomainEvent.StatusChanged) {
         if (!properties.enabled || !properties.events.confirmed || event.toState != "CONFIRMED") return
-        deliver(event.clinicId, event.appointmentId, NotificationEventType.CONFIRMED)
+        deliver(event.scope, event.appointmentId, NotificationEventType.CONFIRMED)
     }
 
     @EventListener
     fun onCancelled(event: AppointmentDomainEvent.Cancelled) {
         if (!properties.enabled || !properties.events.cancelled) return
-        deliver(event.clinicId, event.appointmentId, NotificationEventType.CANCELLED)
+        deliver(event.scope, event.appointmentId, NotificationEventType.CANCELLED)
     }
 
     @EventListener
     fun onRescheduled(event: AppointmentDomainEvent.Rescheduled) {
         if (!properties.enabled || !properties.events.rescheduled) return
-        deliver(event.clinicId, event.originalId, NotificationEventType.RESCHEDULED)
+        deliver(event.scope, event.originalId, NotificationEventType.RESCHEDULED)
     }
 
     private fun deliver(
-        clinicId: Long,
+        scope: TenantClinicScope,
         appointmentId: Long,
         eventType: NotificationEventType,
     ) {
-        if (!routeGate.allows(NotificationDeliveryRoute.DIRECT_EVENT, clinicId)) return
+        if (!routeGate.allows(NotificationDeliveryRoute.DIRECT_EVENT, scope)) {
+            metrics?.recordDirectEventScopeRejected(NotificationOutboxMetrics.DIRECT_EVENT_SCOPE_REJECTED)
+            return
+        }
         try {
             executor.execute {
                 try {
                     runSynchronously {
-                        delivery.deliver(clinicId, appointmentId, eventType)
+                        delivery.deliver(scope, appointmentId, eventType)
                     }
                 } catch (e: InterruptedException) {
                     Thread.currentThread().interrupt()
-                    log.warn { "전환기 알림 전달이 중단되었습니다: clinicId=$clinicId, eventType=$eventType" }
+                    log.warn { "전환기 알림 전달이 중단되었습니다: eventType=$eventType" }
                 } catch (e: Exception) {
-                    log.warn { "전환기 알림 전달에 실패했습니다: clinicId=$clinicId, eventType=$eventType, failure=${e.javaClass.simpleName}" }
+                    log.warn { "전환기 알림 전달에 실패했습니다: eventType=$eventType, failure=${e.javaClass.simpleName}" }
                 }
             }
         } catch (e: RejectedExecutionException) {
-            log.warn { "전환기 알림 executor가 포화되었습니다: clinicId=$clinicId, eventType=$eventType" }
+            log.warn { "전환기 알림 executor가 포화되었습니다: eventType=$eventType" }
         }
     }
 }

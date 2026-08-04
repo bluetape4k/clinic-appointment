@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.notification
 
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 /** 알림 provider 호출을 허용하는 rollout 단계입니다. */
 enum class NotificationRolloutMode {
     /** Background worker는 발송하지 않고 privacy-safe 전환기 event route를 유지합니다. */
@@ -36,22 +37,20 @@ class NotificationDeliveryRouteGate(
         get() = rollout.mode == NotificationRolloutMode.CANARY ||
             rollout.mode == NotificationRolloutMode.ACTIVE
 
-    /** `null`이면 모든 병원, 값이 있으면 해당 병원만 worker 조회 대상입니다. */
-    val workerClinicIds: Set<Long>?
+    val workerScopes: Set<TenantClinicScope>?
         get() = when (rollout.mode) {
-            NotificationRolloutMode.CANARY -> rollout.canaryClinicIds
+            NotificationRolloutMode.CANARY -> rollout.canaryScopes
             NotificationRolloutMode.ACTIVE -> null
             NotificationRolloutMode.SHADOW,
             NotificationRolloutMode.PAUSED,
             -> emptySet()
         }
 
-    fun allows(route: NotificationDeliveryRoute, clinicId: Long): Boolean {
-        require(clinicId > 0L) { "clinicId must be positive" }
+    fun allows(route: NotificationDeliveryRoute, scope: TenantClinicScope): Boolean {
         return when (rollout.mode) {
             NotificationRolloutMode.SHADOW -> route == NotificationDeliveryRoute.DIRECT_EVENT
             NotificationRolloutMode.CANARY -> {
-                val canary = clinicId in rollout.canaryClinicIds
+                val canary = scope in rollout.canaryScopes
                 if (canary) {
                     route == NotificationDeliveryRoute.OUTBOX_WORKER
                 } else {

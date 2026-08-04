@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCursor
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -81,7 +82,14 @@ class NotificationOutboxDispatcher(
     }
 
     private suspend fun recoverExpired(limit: Int): List<ClaimedNotification> =
-        store.recoverExpired(limit, leaseOwner).also { recovered ->
+        store.recoverExpired(limit, leaseOwner, routeGate.workerScopes)
+            .filter { recovered ->
+                routeGate.allows(
+                    NotificationDeliveryRoute.OUTBOX_WORKER,
+                    TenantClinicScope(recovered.tenantGroupId.value, recovered.clinicId.value),
+                )
+            }
+            .also { recovered ->
             recovered.forEach { metrics?.recordLeaseRecovered(it.channel, it.eventType) }
         }
 
@@ -90,12 +98,15 @@ class NotificationOutboxDispatcher(
             limit = limit,
             cursor = cursor,
             perClinicLimit = perClinicConcurrency,
-            eligibleClinicIds = routeGate.workerClinicIds,
+            eligibleScopes = routeGate.workerScopes,
         )
         cursor = page.nextCursor
         return page.candidates
             .filter { candidate ->
-                routeGate.allows(NotificationDeliveryRoute.OUTBOX_WORKER, candidate.clinicId.value)
+                routeGate.allows(
+                    NotificationDeliveryRoute.OUTBOX_WORKER,
+                    TenantClinicScope(candidate.tenantGroupId.value, candidate.clinicId.value),
+                )
             }
             .mapNotNull { candidate -> store.claim(candidate.id, leaseOwner) }
     }

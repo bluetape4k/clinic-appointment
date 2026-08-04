@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryA
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
+import io.bluetape4k.clinic.appointment.event.AppointmentEventAuditMetrics
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
@@ -25,7 +26,7 @@ import java.util.concurrent.atomic.AtomicLong
 class NotificationOutboxMetrics(
     private val registry: MeterRegistry,
     private val observationStore: NotificationOutboxObservationStore,
-) {
+) : AppointmentEventAuditMetrics {
     private val pendingReady = AtomicLong()
     private val oldestActiveAgeSeconds = AtomicLong()
     private val backlogCapped = AtomicBoolean()
@@ -36,12 +37,17 @@ class NotificationOutboxMetrics(
     private val exhaustedCounters = ConcurrentHashMap<FailureMeterKey, Counter>()
     private val leaseRecoveredCounters = ConcurrentHashMap<ChannelEventMeterKey, Counter>()
     private val reminderRecoveryCounters = ConcurrentHashMap<String, Counter>()
+    private val eventLogWriteFailures = ConcurrentHashMap<String, Counter>()
+    private val directEventScopeRejections = ConcurrentHashMap<String, Counter>()
+    private val eventLogNullTenantRows = AtomicLong()
 
     init {
         Gauge.builder(PENDING, pendingReady) { it.get().toDouble() }
             .register(registry)
         Gauge.builder(OLDEST_AGE, oldestActiveAgeSeconds) { it.get().toDouble() }
             .baseUnit("seconds")
+            .register(registry)
+        Gauge.builder(EVENT_LOG_NULL_TENANT_ROWS, eventLogNullTenantRows) { it.get().toDouble() }
             .register(registry)
     }
 
@@ -59,6 +65,28 @@ class NotificationOutboxMetrics(
             oldestActiveAge = Duration.ofSeconds(oldestActiveAgeSeconds.get()),
             capped = backlogCapped.get(),
         )
+
+    override fun recordEventLogWriteFailure(reasonCode: String) {
+        val bounded = boundedReason(reasonCode, EVENT_LOG_WRITE_FAILED)
+        eventLogWriteFailures.computeIfAbsent(bounded) {
+            Counter.builder(EVENT_LOG_WRITE_FAILURES)
+                .tag("reason_code", bounded)
+                .register(registry)
+        }.increment()
+    }
+
+    fun recordDirectEventScopeRejected(reasonCode: String = DIRECT_EVENT_SCOPE_REJECTED) {
+        val bounded = boundedReason(reasonCode, DIRECT_EVENT_SCOPE_REJECTED)
+        directEventScopeRejections.computeIfAbsent(bounded) {
+            Counter.builder(DIRECT_EVENT_SCOPE_REJECTIONS)
+                .tag("reason_code", bounded)
+                .register(registry)
+        }.increment()
+    }
+
+    fun recordEventLogNullTenantRows(count: Long) {
+        eventLogNullTenantRows.set(count.coerceAtLeast(0L))
+    }
 
     fun recordDeliveryAttempt(
         channel: NotificationChannelType,
@@ -184,6 +212,13 @@ class NotificationOutboxMetrics(
         }.increment(count.toDouble())
     }
 
+    private fun boundedReason(value: String, fallback: String): String =
+        value.takeIf {
+            it == EVENT_LOG_WRITE_FAILED ||
+                it == DIRECT_EVENT_SCOPE_REJECTED ||
+                it == DIRECT_EVENT_CLAIM_SCOPE_MISMATCH
+        } ?: fallback
+
     companion object {
         const val PENDING = "clinic.notification.outbox.pending"
         const val OLDEST_AGE = "clinic.notification.outbox.oldest.age"
@@ -194,6 +229,12 @@ class NotificationOutboxMetrics(
         const val DELIVERY_EXHAUSTED = "clinic.notification.delivery.exhausted"
         const val DELIVERY_LEASE_RECOVERED = "clinic.notification.delivery.lease.recovered"
         const val REMINDER_RECOVERY = "clinic.notification.reminder.recovery"
+        const val EVENT_LOG_WRITE_FAILURES = "clinic.notification.event.log.write.failures"
+        const val DIRECT_EVENT_SCOPE_REJECTIONS = "clinic.notification.direct.event.scope.rejections"
+        const val EVENT_LOG_NULL_TENANT_ROWS = "clinic.notification.event.log.null.tenant.rows"
+        const val EVENT_LOG_WRITE_FAILED = "EVENT_LOG_WRITE_FAILED"
+        const val DIRECT_EVENT_SCOPE_REJECTED = "DIRECT_EVENT_SCOPE_REJECTED"
+        const val DIRECT_EVENT_CLAIM_SCOPE_MISMATCH = "DIRECT_EVENT_CLAIM_SCOPE_MISMATCH"
 
         val METER_NAMES: Set<String> = setOf(
             PENDING,
@@ -205,6 +246,9 @@ class NotificationOutboxMetrics(
             DELIVERY_EXHAUSTED,
             DELIVERY_LEASE_RECOVERED,
             REMINDER_RECOVERY,
+            EVENT_LOG_WRITE_FAILURES,
+            DIRECT_EVENT_SCOPE_REJECTIONS,
+            EVENT_LOG_NULL_TENANT_ROWS,
         )
     }
 }

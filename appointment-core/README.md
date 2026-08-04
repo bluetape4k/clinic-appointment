@@ -114,7 +114,7 @@ Full transition list: [domain model document](../docs/requirements/domain-model.
 
 | Class | Role |
 |--------|------|
-| `SlotQuery` | Slot query parameters: clinicId, doctorId, treatmentTypeId, date. |
+| `SlotQuery` | Slot query parameters: tenant-clinic scope, doctorId, treatmentTypeId, date. |
 | `AvailableSlot` | Calculated available slot result: date, startTime, endTime, doctorId, remainingCapacity. |
 | `TimeRange` | Time range value type plus top-level `subtractRanges` and `computeEffectiveRanges` functions. |
 
@@ -236,3 +236,25 @@ owner predicate, and a repeated confirm is resolved by the durable command recor
 | Completion | `OFFERED` can become `ACCEPTED`, `DECLINED`, `EXPIRED`, or `WITHDRAWN` once; terminal retries are no-op success. |
 
 See the [waitlist delivery API and operations contract](../docs/api/waitlist-delivery.md).
+
+## Tenant query scope
+
+Scheduling reads use the verified `TenantClinicScope` value object. It is database
+authority, not an authentication object, and every Exposed query runs inside the
+caller-owned `transaction {}` boundary.
+
+```kotlin
+val scope = TenantClinicScope(tenantGroupId = 1L, clinicId = 23L)
+val slots = slotCalculationService.findAvailableSlots(
+    SlotQuery(
+        scope = scope,
+        doctorId = 101L,
+        treatmentTypeId = 202L,
+        date = LocalDate.now(),
+    ),
+)
+```
+
+The canonical cache key is `${scope.tenantGroupId}:${scope.clinicId}`. Clinic-only
+queries are not valid scheduling inputs, so cross-tenant rows cannot be selected by
+reusing a clinic ID.

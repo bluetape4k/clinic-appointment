@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.integration
 
 import io.bluetape4k.clinic.appointment.api.migration.NotificationOutboxMigrationTestSupport
+import io.bluetape4k.clinic.appointment.api.migration.TenantQueryIsolationMigrationTestSupport
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import org.junit.jupiter.api.MethodOrderer
@@ -27,6 +28,13 @@ class NotificationOutboxDialectIntegrationTest {
             ),
             "classpath:db/migration/h2",
         )
+        TenantQueryIsolationMigrationTestSupport.verifyV21Migration(
+            SimpleDriverDataSource(
+                driver("org.h2.Driver"),
+                "jdbc:h2:mem:tenant_scope_dialect_${System.nanoTime()};DB_CLOSE_DELAY=-1",
+            ),
+            "classpath:db/migration/h2",
+        )
     }
 
     @Test
@@ -42,6 +50,15 @@ class NotificationOutboxDialectIntegrationTest {
             ),
             "classpath:db/migration/postgresql",
         )
+        TenantQueryIsolationMigrationTestSupport.verifyV21Migration(
+            SimpleDriverDataSource(
+                driver("org.postgresql.Driver"),
+                postgres.jdbcUrl,
+                postgres.username ?: "test",
+                postgres.password ?: "",
+            ),
+            "classpath:db/migration/postgresql",
+        )
     }
 
     @Test
@@ -49,6 +66,15 @@ class NotificationOutboxDialectIntegrationTest {
     fun `MySQL은 알림 outbox lifecycle 계약을 제공한다`() {
         val mysql = Containers.MySql8
         NotificationOutboxMigrationTestSupport.verifyV14Migration(
+            SimpleDriverDataSource(
+                driver("com.mysql.cj.jdbc.Driver"),
+                mysql.jdbcUrl,
+                mysql.username ?: "test",
+                mysql.password ?: "",
+            ),
+            "classpath:db/migration/mysql",
+        )
+        TenantQueryIsolationMigrationTestSupport.verifyV21Migration(
             SimpleDriverDataSource(
                 driver("com.mysql.cj.jdbc.Driver"),
                 mysql.jdbcUrl,

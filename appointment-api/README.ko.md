@@ -375,3 +375,29 @@ delivery 기본값은 `appointment.waitlist.delivery.enabled=false`입니다. cl
 `clinic-allowlist`에서 제거하면 새 dispatch와 notification만 멈추고 expiry, suppression,
 hold recovery는 계속 실행됩니다. [waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)과
 [운영 런북](../docs/runbooks/waitlist-delivery.md)을 참고하세요.
+
+## Tenant 범위 스케줄링 endpoint
+
+API는 `tenantCode`와 path의 `clinicId`를 먼저 검증한 뒤 `TenantClinicScope`를
+만듭니다. slot, reschedule, solver, notification 호출은 이 불변 범위를 전달받으며
+병원 ID만 사용하는 query는 거부합니다. batch reschedule SSE는 emitter timeout을
+제한하고 완료·timeout·오류 시 virtual-thread worker를 interrupt합니다.
+
+V21 rollout 동안 notification canary 설정은 scope 형태를 사용합니다.
+
+```yaml
+clinic:
+  notification:
+    rollout:
+      mode: CANARY
+      canary-scopes:
+        - tenant-group-id: 1
+          clinic-id: 23
+      # rolling 호환용 deprecated bridge이며 clinic 집합이 canary-scopes와 같아야 합니다.
+      canary-clinic-ids: [23]
+```
+
+V21은 구버전 node drain을 위해 event-log tenant column을 nullable로 유지합니다.
+readiness는 Flyway V21, tenant event-log column, tenant 선행 direct outbox index를
+요구합니다. application rollback 전 notification route를 pause하고 schema-down
+migration은 실행하지 않습니다.

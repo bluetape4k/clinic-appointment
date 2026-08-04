@@ -11,6 +11,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRep
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
@@ -66,7 +67,7 @@ class NotificationOutboxLoadIntegrationTest {
             (percentile(suppressionDurations, 0.95) <= CLAIM_P95_MILLIS) shouldBeEqualTo true
 
             val claimed = repository.claimReadyForDirect(
-                clinicId = ClinicId(NotificationOutboxPerformanceTestSupport.TARGET_CLINIC_ID),
+                scope = TenantClinicScope(1L, NotificationOutboxPerformanceTestSupport.TARGET_CLINIC_ID),
                 appointmentId = AppointmentId(NotificationOutboxPerformanceTestSupport.TARGET_APPOINTMENT_ID),
                 eventType = NotificationEventType.CONFIRMED,
                 owner = "load-direct",
@@ -74,7 +75,7 @@ class NotificationOutboxLoadIntegrationTest {
             )
             claimed?.id shouldBeEqualTo NotificationOutboxPerformanceTestSupport.TARGET_ACTIVE_ID
             repository.claimReadyForDirect(
-                clinicId = ClinicId(NotificationOutboxPerformanceTestSupport.TARGET_CLINIC_ID),
+                scope = TenantClinicScope(1L, NotificationOutboxPerformanceTestSupport.TARGET_CLINIC_ID),
                 appointmentId = AppointmentId(NotificationOutboxPerformanceTestSupport.TARGET_APPOINTMENT_ID),
                 eventType = NotificationEventType.CONFIRMED,
                 owner = "load-direct",

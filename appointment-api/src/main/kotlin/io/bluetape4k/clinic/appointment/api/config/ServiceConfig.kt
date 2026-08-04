@@ -403,6 +403,7 @@ class ServiceConfig {
         appointmentStateHistoryRepository: AppointmentStateHistoryRepository,
         doctorRepository: DoctorRepository,
         appointmentNotificationWriter: AppointmentNotificationWriter,
+        clinicRepository: ClinicRepository,
     ): ClosureRescheduleService = ClosureRescheduleService(
         slotCalculationService,
         appointmentRepository,
@@ -417,6 +418,7 @@ class ServiceConfig {
                 version = version,
             )
         },
+        clinicRepository,
     )
 
     @Bean

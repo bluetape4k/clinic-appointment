@@ -49,9 +49,8 @@ Soft (6개): 의사 부하 분산(가중치 100), 스케줄 갭 최소화(가중
 ## Solver 실행 예시
 
 ```kotlin
-val result: SolverResult = solverService.solve(
-    clinicId = 1L,
-    appointmentIds = listOf(10L, 11L, 12L),
+val result: SolverResult = solverService.optimize(
+    scope = TenantClinicScope(tenantGroupId = 1L, clinicId = 23L),
     dateRange = LocalDate.now()..LocalDate.now().plusDays(7)
 )
 // result.assignments: Map<Long, Assignment> — appointmentId → (doctorId, date, startTime)
@@ -81,3 +80,10 @@ val result: SolverResult = solverService.solve(
 ## 설계 문서
 
 - [Solver 설계 전체](../docs/requirements/solver.md)
+
+## Tenant 범위 최적화
+
+`optimize`와 `optimizeReschedule`은 같은 검증된 `TenantClinicScope`를 요구합니다.
+snapshot, fact query, source-version map, 적용 직전 freshness 검사는 모두 이 범위
+안에서 수행하며 thread-local tenant context는 사용하지 않습니다. solver 결과는
+읽기 전용이고, 변경 적용 직전에 `verifySourceVersions`가 성공한 경우에만 사용합니다.

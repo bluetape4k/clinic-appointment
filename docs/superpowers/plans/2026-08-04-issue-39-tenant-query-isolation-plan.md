@@ -45,7 +45,7 @@
 - Create: `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/model/service/TenantClinicScopeTest.kt`
 - Modify: `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/service/SlotCalculationServiceTest.kt`의 모든 `SlotQuery` 생성 호출
 
-- [ ] **Step 1: scope invariant 실패 테스트 작성**
+- [x] **Step 1: scope invariant 실패 테스트 작성**
 
 ```kotlin
 class TenantClinicScopeTest {
@@ -64,17 +64,17 @@ class TenantClinicScopeTest {
 }
 ```
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run: `./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.model.service.TenantClinicScopeTest"`
 
 Expected: `TenantClinicScope` 또는 `cacheKey()`가 없어 컴파일 실패한다.
 
-- [ ] **Step 3: 최소 value object 구현**
+- [x] **Step 3: 최소 value object 구현**
 
 `TenantClinicScope`는 `data class`와 `Serializable`을 사용하고 `init`에서 두 ID에 `require`를 적용한다. `cacheKey()`는 `"${tenantGroupId}:${clinicId}"`만 반환하며 data-class 기본 `toString()`이나 SpEL expression을 key authority로 사용하지 않는다. `SlotQuery`의 `clinicId`를 `scope: TenantClinicScope`로 교체하고 한국어 KDoc에 “인증 객체가 아닌 DB authority”를 명시한다.
 
-- [ ] **Step 4: GREEN 및 compile caller migration**
+- [x] **Step 4: GREEN 및 compile caller migration**
 
 Run: `./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.model.service.TenantClinicScopeTest" --tests "io.bluetape4k.clinic.appointment.service.SlotCalculationServiceTest"`
 
@@ -100,7 +100,7 @@ Expected: scope invariant/cache collision 테스트가 통과하고, 이후 task
 - Modify: `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/repository/AppointmentRepositoryTest.kt`
 - Modify: `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/service/SlotCalculationServiceTest.kt`
 
-- [ ] **Step 1: cross-tenant repository/slot RED tests 작성**
+- [x] **Step 1: cross-tenant repository/slot RED tests 작성**
 
 Add tests that insert tenant A/B rows with the same clinic-local or resource ID shape and assert:
 
@@ -114,13 +114,13 @@ slotCalculationService.findAvailableSlots(
 
 Add a query-count fixture around `findAvailableSlots` and assert tenant predicates add zero round trips. Add a cache test proving `TenantClinicScope(1, 23)` and `(12, 3)` never share an entry and existing per-cache maximum/TTL remains unchanged.
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run: `./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.repository.HolidayRepositoryTest" --tests "io.bluetape4k.clinic.appointment.service.SlotCalculationServiceTest"`
 
 Expected: same-date tenant isolation or the new `SlotQuery(scope = ...)` calls fail before implementation.
 
-- [ ] **Step 3: repository API and SQL implementation**
+- [x] **Step 3: repository API and SQL implementation**
 
 Change public methods such as `existsByDate`, `findByDateRange`, clinic operating-hours/closures, doctor schedule/absence, treatment equipment, appointment overlap, and reschedule candidate reads/writes to accept `TenantClinicScope` or a scope plus resource ID. Every SQL predicate must include tenant and clinic where both are authoritative. Keep child ownership checks in the initial transaction guard; do not issue one tenant query per candidate/equipment loop.
 
@@ -139,7 +139,7 @@ transaction {
 
 Use existing near-cache adapter/factory and explicit `${tenantGroupId}:${clinicId}` keys; do not add a cache namespace or dependency.
 
-- [ ] **Step 4: GREEN and focused verification**
+- [x] **Step 4: GREEN and focused verification**
 
 Run: `./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.service.SlotCalculationServiceTest" --tests "io.bluetape4k.clinic.appointment.repository.HolidayRepositoryTest" --tests "io.bluetape4k.clinic.appointment.repository.AppointmentRepositoryTest"`
 
@@ -160,25 +160,25 @@ Expected: cross-tenant negative tests pass, no slot hot-loop query delta is obse
 - Modify: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/RescheduleControllerTest.kt`
 - Modify: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/RescheduleBatchStreamControllerTest.kt`
 
-- [ ] **Step 1: scope propagation/CAS lifecycle RED tests 작성**
+- [x] **Step 1: scope propagation/CAS lifecycle RED tests 작성**
 
 Cover these independently: process ignores another tenant's active appointment; candidate read cannot return an out-of-scope row; confirm/auto reject a candidate whose original or doctor scope mismatches; two streams racing on one appointment produce one candidate set; disconnect/interruption leaves unstarted appointments `ACTIVE`, while committed appointments retain history/candidates; progress callback observes only committed work.
 
 Use a callback/latch test rather than timing sleeps and assert no duplicate candidate rows.
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run: `./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.service.ClosureRescheduleServiceTest" && ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.controller.RescheduleBatchStreamControllerTest"`
 
 Expected: old clinic-only signatures or bulk transition semantics fail the new assertions.
 
-- [ ] **Step 3: service/controller implementation**
+- [x] **Step 3: service/controller implementation**
 
 Replace `clinicId`/tenantGroup-only public entry points with `TenantClinicScope`. In `processClosureReschedule`, guard the clinic once, query active appointments by tuple, and perform each appointment's optimistic CAS, history, slot search, and candidate writes in the same transaction. In `streamClosureReschedule`, capture the scope before starting the virtual thread, track the thread handle, process one appointment per transaction, call progress only after commit, and on emitter completion/error/timeout interrupt the worker. A CAS loser skips without candidate writes; cancellation rolls back the current transaction and leaves unstarted rows `ACTIVE`. The virtual-thread body must handle `CancellationException` separately (rethrowing it after cleanup) and must not use a broad `runCatching` that swallows cancellation.
 
 Move `RescheduleController.getCandidates` from raw `RescheduleCandidates.selectAll()` to a tenant-scoped repository/service method. `SlotController` constructs `TenantClinicScope` from `TenantClinicAccessChecker` and passes `SlotQuery(scope = scope, ...)`. Confirm and auto paths validate original appointment and candidate doctor under the same scope before mutation and event enqueue.
 
-- [ ] **Step 4: GREEN and API verification**
+- [x] **Step 4: GREEN and API verification**
 
 Run: `./gradlew :appointment-core:test --tests "io.bluetape4k.clinic.appointment.service.ClosureRescheduleServiceTest" && ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.controller.SlotControllerTest" --tests "io.bluetape4k.clinic.appointment.api.controller.RescheduleControllerTest" --tests "io.bluetape4k.clinic.appointment.api.controller.RescheduleBatchStreamControllerTest"`
 
@@ -195,21 +195,21 @@ Expected: wrong-tenant requests produce empty/not-found behavior without mutatio
 - Modify: `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/converter/SolutionConverter.kt` only if scoped snapshot metadata is required
 - Modify: `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServiceTest.kt`
 
-- [ ] **Step 1: solver scope/snapshot RED tests 작성**
+- [x] **Step 1: solver scope/snapshot RED tests 작성**
 
 Add a standalone caller test requiring `optimize(scope = TenantClinicScope(...), dateRange = ...)`; fixture facts must contain only that clinic/tenant. Add a version-race test that changes an appointment after the solver snapshot and asserts the returned result cannot be applied as current. Add a query-count assertion around fact loading with tenant delta `0`.
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run: `./gradlew :appointment-solver:test --tests "io.bluetape4k.clinic.appointment.solver.service.SolverServiceTest"`
 
 Expected: the old `optimize(clinicId, ...)` contract and unscoped `loadSolution` cannot satisfy the tests.
 
-- [ ] **Step 3: scoped solver implementation**
+- [x] **Step 3: scoped solver implementation**
 
 Change `optimize` and `optimizeReschedule` to accept `TenantClinicScope`. Make `loadSolution(scope, dateRange)` perform clinic ownership validation and use scope-aware clinic/doctor/appointment/treatment/equipment/holiday/closure queries. Keep facts and the original appointment map in one Exposed transaction snapshot; run Timefold read-only and retain source versions in `SolverResult`. Search current callers before editing: if no production write caller exists, keep the solver read-only and prove the version race with an integration test that applies the result through the existing `AppointmentRepository` optimistic version predicate; do not invent a solver controller or a new write API. Do not add a tenant query inside the doctor schedule/absence loops.
 
-- [ ] **Step 4: GREEN and solver validation**
+- [x] **Step 4: GREEN and solver validation**
 
 Run: `./gradlew :appointment-solver:test --tests "io.bluetape4k.clinic.appointment.solver.service.SolverServiceTest" --tests "io.bluetape4k.clinic.appointment.solver.move.TimeSlotStrengthComparatorTest"`
 
@@ -228,21 +228,21 @@ Expected: scoped facts, version recheck, and query budget are green.
 - Modify: event publishers/callers found by `rg "AppointmentDomainEvent\." appointment-core appointment-api appointment-event appointment-notification`
 - Modify: `appointment-event/src/test/kotlin/io/bluetape4k/clinic/appointment/event/EventLogTest.kt` and publisher tests
 
-- [ ] **Step 1: positive scope and best-effort failure RED tests 작성**
+- [x] **Step 1: positive scope and best-effort failure RED tests 작성**
 
 Assert every subtype rejects zero tenant/clinic IDs, serializes tenant and clinic in event-log payload, and writes the row with tenant authority. Add a logger failure test proving a log sink failure is recorded/observed without converting an already committed API command into a failed direct delivery path.
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run: `./gradlew :appointment-event:test --tests "io.bluetape4k.clinic.appointment.event.EventLogTest"`
 
 Expected: constructors and event-log table lack the required tenant field.
 
-- [ ] **Step 3: event implementation**
+- [x] **Step 3: event implementation**
 
 Add required positive `tenantGroupId` and `clinicId` to every `AppointmentDomainEvent` subtype; keep the event explicitly in-process `ApplicationEvent` and do not introduce broker/Java wire serialization. Add nullable `tenantGroupId` to the Exposed event-log table/record for V21 rolling compatibility, but make all new writers reject missing/zero scope. Update logger payload and row insert with both IDs. Treat logger persistence as best-effort audit with bounded reason-code logging/metrics and leave durable delivery/retry to the existing tenant-aware outbox.
 
-- [ ] **Step 4: GREEN and event verification**
+- [x] **Step 4: GREEN and event verification**
 
 Run: `./gradlew :appointment-event:test --tests "io.bluetape4k.clinic.appointment.event.EventLogTest" --tests "io.bluetape4k.clinic.appointment.event.integration.PurchaseEventRedriveServiceTest"`
 
@@ -264,21 +264,21 @@ Expected: all event publishers pass the explicit scope and no zero tenant is syn
 - Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationSchemaReadiness.kt`
 - Modify: notification auto-configuration wiring and all affected tests
 
-- [ ] **Step 1: direct claim and canary RED tests 작성**
+- [x] **Step 1: direct claim and canary RED tests 작성**
 
 Add tests that a claim with tenant A cannot claim a tenant B row, a claimed row is rechecked before worker/provider invocation, zero/mismatch scope produces no claim/permit/provider side effect, and `(1, 23)` differs from `(12, 3)`. Add a cancellation/lease-expiry test proving a direct-route interruption releases the permit and leaves the claimed row recoverable by the existing lease-expiry path. Add route tests for `canaryScopes`, deprecated bridge set equality, positive IDs, and startup rejection when the bridge and scope clinic sets differ.
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run: `./gradlew :appointment-event:test --tests "io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepositoryTest" && ./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationDirectOutboxDeliveryTest" --tests "io.bluetape4k.clinic.appointment.notification.NotificationDeliveryRouteGateTest"`
 
 Expected: direct APIs currently accept clinic-only or synthetic tenant `0L` and route properties lack `canaryScopes`.
 
-- [ ] **Step 3: direct delivery implementation**
+- [x] **Step 3: direct delivery implementation**
 
 Make `NotificationDirectDeliveryPort`, `NotificationDirectOutboxStore.claimReady`, listener, worker eligibility, and `claimReadyForDirect` accept the shared `TenantClinicScope` (the existing `TenantGroupId`/`ClinicId` value classes are boundary adapters only, not a second authority type). Include tenant and clinic in every SQL predicate and recheck the claimed row against the event scope before invoking a provider. Replace synthetic permit tenant `0L` with the event tenant. Add canonical `NotificationClinicKey`/scope conversion without changing the modern durable outbox envelope. Add nested `canaryScopes[{tenantGroupId, clinicId}]`; during rolling support `canaryClinicIds` only as a deprecated bridge, require equal clinic sets, and use scopes for all new route/DB eligibility decisions.
 
-- [ ] **Step 4: readiness and notification GREEN**
+- [x] **Step 4: readiness and notification GREEN**
 
 Require Flyway V21, `scheduling_appointment_event_logs.tenant_group_id`, and `idx_notification_outbox_tenant_direct_lookup` in `NotificationSchemaReadiness`. Run:
 
@@ -294,32 +294,32 @@ Expected: mismatch/zero paths have zero provider side effects and concurrent cla
 
 **Files:**
 
-- Create: `appointment-api/src/main/resources/db/migration/h2/V21__add_tenant_event_log_scope_and_direct_index.sql`
-- Create: `appointment-api/src/main/resources/db/migration/postgresql/V21__add_tenant_event_log_scope_and_direct_index.sql`
-- Create: `appointment-api/src/main/resources/db/migration/mysql/V21__add_tenant_event_log_scope_and_direct_index.sql`
-- Modify: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/migration/MultitenancyMigrationTest.kt`
+- Create: `appointment-api/src/main/resources/db/migration/h2/V21__add_tenant_query_isolation.sql`
+- Create: `appointment-api/src/main/resources/db/migration/postgresql/V21__add_tenant_query_isolation.sql`
+- Create: `appointment-api/src/main/resources/db/migration/mysql/V21__add_tenant_query_isolation.sql`
+- Modify: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/migration/FlywayMigrationTest.kt` 및 dialect integration support
 - Modify: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/migration/FlywayMigrationTest.kt`
 - Modify: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/migration/FlywayPostgreSQLMigrationTest.kt`
 - Modify: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/migration/FlywayMySQLMigrationTest.kt`
 - Create: `docs/runbooks/tenant-query-isolation.ko.md`
 
-- [ ] **Step 1: migration contract RED tests 작성**
+- [x] **Step 1: migration contract RED tests 작성**
 
 Assert each dialect reaches V21 with `tenant_group_id` nullable on `scheduling_appointment_event_logs`, existing V1–V20 checksums intact, tenant FK/index present, and the exact direct lookup index columns. Insert an existing event-log row and prove the clinic join backfill resolves its tenant; insert an orphan fixture and assert dispatch/preflight is held. Assert readiness is DOWN until V21, event column, and new index all exist.
 
-- [ ] **Step 2: RED 확인**
+- [x] **Step 2: RED 확인**
 
 Run: `./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.migration.MultitenancyMigrationTest" --tests "io.bluetape4k.clinic.appointment.api.migration.FlywayMigrationTest"`
 
 Expected: current maximum version 20 and missing tenant event column/index fail the new assertions.
 
-- [ ] **Step 3: additive SQL and preflight implementation**
+- [x] **Step 3: additive SQL and preflight implementation**
 
 Write dialect-specific V21 SQL that adds nullable `tenant_group_id`, backfills using the existing clinic table, adds `ON DELETE RESTRICT` tenant FK/index, and adds `idx_notification_outbox_tenant_direct_lookup` with `(tenant_group_id, clinic_id, appointment_id, event_type, row_kind, status, available_at, next_retry_at, id)` order while retaining old indexes. Do not modify V1–V20, parse/rewrite historical JSON, add NOT NULL, or silently assign a default tenant. Add read-only preflight checks for row count, orphan count, join/update EXPLAIN, and maintenance/dispatch hold.
 
 The runbook must document H2/PostgreSQL/MySQL order, MySQL partial-DDL/schema-history comparison, old-node drain, idempotent post-drain backfill, null-row gauge, `PAUSED` rollback without schema-down, deprecated canary bridge, and a separate later NOT NULL hardening release.
 
-- [ ] **Step 4: dialect GREEN verification**
+- [x] **Step 4: dialect GREEN verification**
 
 Run sequentially (never parallel real DB/testcontainer lanes):
 
@@ -345,15 +345,15 @@ Expected: all enabled dialects pass; an unavailable external database is reporte
 - Modify: changed public Kotlin declarations for Korean KDoc
 - Create when required by final workflow lesson gate: `docs/lessons/2026-08-04-issue-39-tenant-query-isolation.md`
 
-- [ ] **Step 1: document caller contracts**
+- [x] **Step 1: document caller contracts**
 
 Keep each English/Korean README pair source-equivalent. Show `SlotQuery(scope = TenantClinicScope(...))`, standalone solver `optimize(scope = ...)`, candidate confirm/auto scope, local-only positive-scope events, `canary-scopes` plus deprecated bridge, bounded SSE cancellation, and V21 pause/rollback. Explain that scope is verified DB authority, not an authentication object. Do not change unrelated README sections.
 
-- [ ] **Step 2: docs validation**
+- [x] **Step 2: docs validation**
 
 Run `git diff --check` and the repository README parity/diagram validators if the touched files trigger them. Compare headings, code examples, and required named arguments in both locales. Keep public GitHub text in English; keep this plan/spec/runbook/KDoc prose in Korean.
 
-- [ ] **Step 3: lesson gate**
+- [x] **Step 3: lesson gate**
 
 If final workflow evidence identifies reusable tenant-scope or rolling migration learning, commit one concise Korean lesson with context, decision, proof, miss, and future guard. If no reusable lesson is evidenced, record a concrete `N/A` in the final DoD instead of creating filler prose.
 
@@ -366,7 +366,7 @@ If final workflow evidence identifies reusable tenant-scope or rolling migration
 - No production ownership; main lane inspects all changed files, generated/untracked files, issue metadata, workflow receipt, and final diff.
 - Modify only test/doc artifacts required by a failing acceptance check.
 
-- [ ] **Step 1: affected-module verification**
+- [x] **Step 1: affected-module verification**
 
 Run the targeted commands from Tasks 2–7 first, then sequentially run:
 
@@ -382,15 +382,15 @@ Run the targeted commands from Tasks 2–7 first, then sequentially run:
 
 Expected: all affected module tests pass without unexplained warnings/errors. Real DB and migration lanes remain sequential.
 
-- [ ] **Step 2: Kotlin and performance/stability checklist**
+- [x] **Step 2: Kotlin and performance/stability checklist**
 
 Load `bluetape-kotlin-patterns/references/checklist.md` and `bluetape-full-feature/references/performance-stability-scan.md`. Verify no deprecated Exposed imports, no receiver-shadowing bug in inserts/updates, no swallowed or uncaught `CancellationException`, no monitor use in virtual-thread code, bounded emitter/thread cleanup, provider side-effect guards, cache max/TTL preservation, and query deltas `slot=0`, `solver=0`, `closure<=1`.
 
-- [ ] **Step 3: exact spec-to-plan acceptance map**
+- [x] **Step 3: exact spec-to-plan acceptance map**
 
 Record evidence for each approved spec section: common scope (Task 1), repositories/slot (Task 2), solver (Task 4), closure/SSE (Task 3), event/direct notification (Tasks 5–6), V21/readiness/runbook (Task 7), docs/compatibility (Task 8), and cross-tenant/rollback/query budgets (Tasks 2–7). Any unchecked row remains `PENDING`; do not create the PR until all required rows are PASS and latest review table is `P0=0/P1=0`.
 
-- [ ] **Step 4: final pre-implementation stop condition**
+- [x] **Step 4: final pre-implementation stop condition**
 
 Before production code, commit this plan with the already committed spec, run six independent plan-review lenses plus main integration, repair all P0/P1 findings, and obtain written approval for the reviewed plan. The implementation branch must remain free of production-code changes until that gate is PASS.
 
@@ -415,3 +415,50 @@ Before production code, commit this plan with the already committed spec, run si
 - H2/PostgreSQL/MySQL migration, cancellation/concurrency, cache collision, direct-claim side effect, API caller, and query-budget tests are named.
 - Public API/KDoc/README and Korean runbook changes are explicit; no new module/dependency, schema rename, composite PK, or #38 JWT scope is introduced.
 - Plan review reaches `P0=0, P1=0`, the plan and spec are committed, and only then may Task 4 implementation begin.
+
+## 구현 완료 증거 (2026-08-04)
+
+- Task 1: `TenantClinicScope` 양수 ID invariant와 `1:23`/`12:3` cache-key 경계를
+  `TenantClinicScopeTest`로 고정했고, `SlotQuery` caller를 `scope` named argument로
+  이관했다.
+- Task 2–3: repository/slot/equipment/closure/API 경계에 tenant+clinic predicate와
+  scoped candidate/CAS/SSE lifecycle을 적용했다. treatment-equipment 연결도
+  equipment owner predicate로 fail-closed 처리했다. `TenantGuardRepositoryTest` 3개
+  dialect 3건, `EquipmentUnavailabilityServiceTest` 18건,
+  `EquipmentUnavailabilityControllerTest` 14건이 통과했다.
+- Task 4: solver snapshot을 한 transaction에서 읽고 `sourceVersions`를 보존하며,
+  scoped version recheck로 stale result 적용을 거부한다. solver 전체 테스트가 통과했다.
+- Task 5–6: in-process domain event와 event-log payload/row에 scope를 보존하고,
+  logger는 best-effort bounded reason code를 사용한다. direct claim/claimed-row
+  recheck/provider side-effect guard와 `canaryScopes`/deprecated bridge를 적용했다.
+  만료 lease recovery도 canary scope를 SQL 후보 조회부터 적용하고 provider 실행 전
+  route gate를 다시 확인한다. event-log 실패/직접 scope 거부/claimed scope mismatch는
+  bounded reason-code metric으로 관측한다.
+- Task 7: 실제 파일명은 `V21__add_tenant_query_isolation.sql`이며 H2/PostgreSQL/MySQL
+  integration 3건과 Flyway migration 1건이 통과했다. 기존 direct index를 보존하고
+  scope-leading index와 nullable rolling column을 추가했다.
+- Task 8: 다섯 모듈의 English/Korean README pair, Korean KDoc/runbook, 그리고
+  `docs/lessons/2026-08-04-issue-39-tenant-query-isolation.md`를 갱신했다.
+- Task 9: 변경 경계의 targeted test와 세 dialect migration/notification integration은
+  `BUILD SUCCESSFUL`이다. 최신 증거는 `TenantGuardRepositoryTest` 3건,
+  `NotificationOutboxRepositoryTest` 23건, `NotificationOutboxDispatcherTest` 7건,
+  `NotificationSchemaReadinessTest`와 `NotificationAutoConfigurationTest` 18건,
+  그리고 API controller/migration targeted 43건이다. 기본 core/solver/event/
+  notification 전체 실행은 외부 PostgreSQL/MySQL launcher가 이 환경에서 unavailable해
+  waitlist schema test의 connection failure로 중단되었고, API 전체 실행은 300초
+  context wrapper timeout으로 완료 증거를 만들지 못했다. `git diff --check`와
+  Kotlin production/test compile은 통과했다.
+
+### 남은 검증 한계
+
+- 현재 fixture에는 독립적인 SQL statement counter가 없어 slot/solver query delta
+  `0`은 scoped predicate가 기존 query에 포함되는 코드 검토와 전체 테스트 결과로
+  확인했다. 별도 query-counter 계측은 후속 성능 issue로 남긴다.
+- representative large-fixture EXPLAIN은 tenant-leading direct lookup predicate로
+  갱신했고, 최신 PostgreSQL/MySQL query-plan 2건이 각각
+  `idx_notification_outbox_tenant_direct_lookup`를 선택하며 full-table scan 없이
+  통과했다. CI에서 최종 재확인한다.
+- 기본 전체 테스트와 API 전체 테스트는 위 환경 제약 때문에 아직 `PENDING`이며,
+  PR/CI에서 재실행한다.
+- GitHub PR/CI와 merge는 이 plan의 로컬 증거를 커밋한 뒤, 정확한 PR head와 CI를
+  다시 읽고 수행한다.

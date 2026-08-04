@@ -15,7 +15,7 @@ import java.time.Duration
 internal class NotificationOutboxMetricsTest {
 
     @Test
-    fun `설계 기준의 9개 metric 이름만 등록하고 태그는 낮은 cardinality 값만 사용한다`() {
+    fun `설계 기준의 metric 이름만 등록하고 태그는 낮은 cardinality 값만 사용한다`() {
         val registry = SimpleMeterRegistry()
         val metrics = NotificationOutboxMetrics(registry, FixedObservationStore())
 
@@ -51,6 +51,15 @@ internal class NotificationOutboxMetricsTest {
         metrics.recordReminderRecovery(
             ReminderRecoveryScanResult(notYetDue = 0, enqueued = 2, suppressed = 1, alreadyExists = 3),
         )
+        metrics.recordEventLogWriteFailure(NotificationOutboxMetrics.EVENT_LOG_WRITE_FAILED)
+        metrics.recordDirectEventScopeRejected(NotificationOutboxMetrics.DIRECT_EVENT_SCOPE_REJECTED)
+
+        registry.get(NotificationOutboxMetrics.EVENT_LOG_WRITE_FAILURES)
+            .tag("reason_code", NotificationOutboxMetrics.EVENT_LOG_WRITE_FAILED)
+            .counter().count() shouldBeEqualTo 1.0
+        registry.get(NotificationOutboxMetrics.DIRECT_EVENT_SCOPE_REJECTIONS)
+            .tag("reason_code", NotificationOutboxMetrics.DIRECT_EVENT_SCOPE_REJECTED)
+            .counter().count() shouldBeEqualTo 1.0
 
         registry.meters.map { it.id.name }.toSet() shouldBeEqualTo NotificationOutboxMetrics.METER_NAMES
 

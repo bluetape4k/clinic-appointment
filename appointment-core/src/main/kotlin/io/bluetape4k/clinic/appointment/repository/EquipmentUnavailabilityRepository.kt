@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.repository
 
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityExceptionRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityRecord
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilities
 import io.bluetape4k.clinic.appointment.model.tables.EquipmentUnavailabilityExceptions
 import io.bluetape4k.clinic.appointment.model.tables.ExceptionType
@@ -26,7 +27,7 @@ import java.time.LocalTime
 class EquipmentUnavailabilityRepository {
     companion object : KLogging()
 
-    fun create(
+    internal fun create(
         equipmentId: Long,
         clinicId: Long,
         unavailableDate: LocalDate?,
@@ -71,7 +72,7 @@ class EquipmentUnavailabilityRepository {
         )
     }
 
-    fun findById(id: Long): EquipmentUnavailabilityRecord? {
+    internal fun findById(id: Long): EquipmentUnavailabilityRecord? {
         id.requirePositiveNumber("id")
         return EquipmentUnavailabilities
             .selectAll()
@@ -83,7 +84,7 @@ class EquipmentUnavailabilityRepository {
     /**
      * Finds an equipment unavailability by ID only when the owning clinic belongs to [tenantGroupId].
      */
-    fun findByIdAndTenant(id: Long, tenantGroupId: Long): EquipmentUnavailabilityRecord? {
+    internal fun findByIdAndTenant(id: Long, tenantGroupId: Long): EquipmentUnavailabilityRecord? {
         id.requirePositiveNumber("id")
         tenantGroupId.requirePositiveNumber("tenantGroupId")
         return EquipmentUnavailabilities
@@ -96,7 +97,21 @@ class EquipmentUnavailabilityRepository {
             .firstOrNull()
     }
 
-    fun findByEquipment(
+    /** 검증된 tenant-clinic 범위에 속한 사용불가 스케줄만 조회합니다. */
+    fun findByIdAndScope(id: Long, scope: TenantClinicScope): EquipmentUnavailabilityRecord? {
+        id.requirePositiveNumber("id")
+        return EquipmentUnavailabilities
+            .selectAll()
+            .where {
+                (EquipmentUnavailabilities.id eq id) and
+                    (EquipmentUnavailabilities.clinicId eq scope.clinicId) and
+                    (EquipmentUnavailabilities.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
+            .map { it.toEquipmentUnavailabilityRecord() }
+            .firstOrNull()
+    }
+
+    internal fun findByEquipment(
         equipmentId: Long,
         from: LocalDate,
         to: LocalDate,
@@ -113,7 +128,30 @@ class EquipmentUnavailabilityRepository {
             .map { it.toEquipmentUnavailabilityRecord() }
     }
 
-    fun findByClinicOnDate(
+    /** 검증된 tenant-clinic 범위의 장비 사용불가 스케줄만 조회합니다. */
+    fun findByEquipment(
+        scope: TenantClinicScope,
+        equipmentId: Long,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<EquipmentUnavailabilityRecord> {
+        equipmentId.requirePositiveNumber("equipmentId")
+        return EquipmentUnavailabilities
+            .selectAll()
+            .where {
+                (EquipmentUnavailabilities.equipmentId eq equipmentId) and
+                    (EquipmentUnavailabilities.clinicId eq scope.clinicId) and
+                    (EquipmentUnavailabilities.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
+            .andWhere { EquipmentUnavailabilities.effectiveFrom lessEq to }
+            .andWhere {
+                (EquipmentUnavailabilities.effectiveUntil.isNull()) or
+                    (EquipmentUnavailabilities.effectiveUntil greaterEq from)
+            }
+            .map { it.toEquipmentUnavailabilityRecord() }
+    }
+
+    internal fun findByClinicOnDate(
         clinicId: Long,
         date: LocalDate,
     ): List<EquipmentUnavailabilityRecord> {
@@ -129,13 +167,45 @@ class EquipmentUnavailabilityRepository {
             .map { it.toEquipmentUnavailabilityRecord() }
     }
 
-    fun delete(id: Long) {
+    fun findByClinicOnDate(
+        scope: TenantClinicScope,
+        date: LocalDate,
+    ): List<EquipmentUnavailabilityRecord> {
+        return EquipmentUnavailabilities
+            .selectAll()
+            .where {
+                (EquipmentUnavailabilities.clinicId eq scope.clinicId) and
+                    (EquipmentUnavailabilities.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
+            .andWhere { EquipmentUnavailabilities.effectiveFrom lessEq date }
+            .andWhere {
+                (EquipmentUnavailabilities.effectiveUntil.isNull()) or
+                    (EquipmentUnavailabilities.effectiveUntil greaterEq date)
+            }
+            .map { it.toEquipmentUnavailabilityRecord() }
+    }
+
+    internal fun delete(id: Long) {
         id.requirePositiveNumber("id")
         EquipmentUnavailabilities.deleteWhere { EquipmentUnavailabilities.id eq id }
         log.debug { "Deleted EquipmentUnavailability id=$id" }
     }
 
-    fun addException(
+    /** tenant-clinic 범위에 속한 스케줄만 삭제합니다. */
+    fun delete(id: Long, scope: TenantClinicScope): Boolean {
+        id.requirePositiveNumber("id")
+        val deleted = EquipmentUnavailabilities.deleteWhere {
+            (EquipmentUnavailabilities.id eq id) and
+                (EquipmentUnavailabilities.clinicId eq scope.clinicId) and
+                (EquipmentUnavailabilities.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+        }
+        if (deleted > 0) {
+            log.debug { "Deleted EquipmentUnavailability id=$id for scope=${scope.cacheKey()}" }
+        }
+        return deleted > 0
+    }
+
+    internal fun addException(
         unavailabilityId: Long,
         originalDate: LocalDate,
         exceptionType: ExceptionType,
@@ -170,7 +240,7 @@ class EquipmentUnavailabilityRepository {
         )
     }
 
-    fun findExceptions(unavailabilityId: Long): List<EquipmentUnavailabilityExceptionRecord> {
+    internal fun findExceptions(unavailabilityId: Long): List<EquipmentUnavailabilityExceptionRecord> {
         unavailabilityId.requirePositiveNumber("unavailabilityId")
         return EquipmentUnavailabilityExceptions
             .selectAll()
@@ -178,11 +248,27 @@ class EquipmentUnavailabilityRepository {
             .map { it.toEquipmentUnavailabilityExceptionRecord() }
     }
 
-    fun deleteException(exceptionId: Long) {
+    internal fun deleteException(exceptionId: Long) {
         exceptionId.requirePositiveNumber("exceptionId")
         EquipmentUnavailabilityExceptions.deleteWhere {
             EquipmentUnavailabilityExceptions.id eq exceptionId
         }
         log.debug { "Deleted EquipmentUnavailabilityException id=$exceptionId" }
+    }
+
+    /** 부모 스케줄이 지정한 예외만 삭제합니다. */
+    internal fun deleteException(unavailabilityId: Long, exceptionId: Long): Boolean {
+        unavailabilityId.requirePositiveNumber("unavailabilityId")
+        exceptionId.requirePositiveNumber("exceptionId")
+        val deleted = EquipmentUnavailabilityExceptions.deleteWhere {
+            (EquipmentUnavailabilityExceptions.id eq exceptionId) and
+                (EquipmentUnavailabilityExceptions.unavailabilityId eq unavailabilityId)
+        }
+        if (deleted > 0) {
+            log.debug {
+                "Deleted EquipmentUnavailabilityException id=$exceptionId for unavailabilityId=$unavailabilityId"
+            }
+        }
+        return deleted > 0
     }
 }

@@ -6,6 +6,7 @@ import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -121,6 +122,7 @@ class NotificationOutboxRepositoryTest {
             "idx_notification_outbox_ready_clinic_cursor",
             "idx_notification_outbox_ready_within_clinic",
             "idx_notification_outbox_direct_lookup",
+            "idx_notification_outbox_tenant_direct_lookup",
             "idx_notification_outbox_reminder_suppression",
             "idx_notification_outbox_lease_recovery",
             "idx_notification_outbox_terminal_retention",
@@ -141,6 +143,11 @@ class NotificationOutboxRepositoryTest {
         NotificationOutboxQueryContracts.directLookup.filters shouldBeEqualTo
             NotificationOutboxIndexes.directLookup.columns.dropLast(1)
         NotificationOutboxQueryContracts.directLookup.orderBy shouldBeEqualTo listOf("available_at", "id")
+        NotificationOutboxQueryContracts.tenantDirectLookup.indexColumns shouldBeEqualTo
+            NotificationOutboxIndexes.tenantDirectLookup.columns
+        NotificationOutboxQueryContracts.tenantDirectLookup.filters shouldBeEqualTo
+            NotificationOutboxIndexes.tenantDirectLookup.columns.dropLast(1)
+        NotificationOutboxQueryContracts.tenantDirectLookup.orderBy shouldBeEqualTo listOf("available_at", "id")
         NotificationOutboxQueryContracts.leaseRecovery.indexColumns shouldBeEqualTo
             NotificationOutboxIndexes.leaseRecovery.columns
         NotificationOutboxQueryContracts.leaseRecovery.filters shouldBeEqualTo
@@ -347,7 +354,7 @@ class NotificationOutboxRepositoryTest {
             )
 
             val claimed = repository.claimReadyForDirect(
-                clinicId = ClinicId(2L),
+                scope = TenantClinicScope(1L, 2L),
                 appointmentId = AppointmentId(3L),
                 eventType = NotificationEventType.CONFIRMED,
                 owner = "notification-direct-event",
@@ -356,12 +363,38 @@ class NotificationOutboxRepositoryTest {
 
             claimed?.id shouldBeEqualTo confirmed.id
             repository.claimReadyForDirect(
-                clinicId = ClinicId(2L),
+                scope = TenantClinicScope(1L, 2L),
                 appointmentId = AppointmentId(3L),
                 eventType = NotificationEventType.CONFIRMED,
                 owner = "notification-direct-event",
                 token = "direct-token-2",
             ).shouldBeNull()
+        }
+    }
+
+    @Test
+    fun `전환기 direct claim은 같은 clinic과 appointment라도 tenant scope가 다른 행을 건너뛴다`() {
+        transaction(database) {
+            val owned = repository.enqueue(
+                sendableDraft(eventId = "direct-tenant-one", digest = "direct-tenant-one", tenantGroupId = 1L),
+            )
+            val foreign = repository.enqueue(
+                sendableDraft(eventId = "direct-tenant-two", digest = "direct-tenant-two", tenantGroupId = 2L),
+            )
+
+            val claimed = repository.claimReadyForDirect(
+                scope = TenantClinicScope(2L, 2L),
+                appointmentId = AppointmentId(3L),
+                eventType = NotificationEventType.CONFIRMED,
+                owner = "notification-direct-event",
+                token = "direct-tenant-token",
+            )
+
+            claimed?.id shouldBeEqualTo foreign.id
+            NotificationOutboxEvents
+                .selectAll()
+                .single { it[NotificationOutboxEvents.id].value == owned.id }
+                .get(NotificationOutboxEvents.status) shouldBeEqualTo NotificationOutboxStatus.PENDING
         }
     }
 
@@ -715,6 +748,29 @@ class NotificationOutboxRepositoryTest {
                 .orderBy(NotificationDeliveryAttempts.attemptNumber)
                 .map { it[NotificationDeliveryAttempts.failureCode] } shouldBeEqualTo
                 listOf(NotificationFailureCode.LEASE_LOST.name, null)
+        }
+    }
+
+    @Test
+    fun `expired recovery lookup applies tenant clinic allowlist before recovery`() {
+        transaction(database) {
+            val owned = repository.enqueue(
+                sendableDraft(eventId = "expired-owned", digest = "expired-owned", tenantGroupId = 1L, clinicId = 2L)
+            )
+            val foreign = repository.enqueue(
+                sendableDraft(eventId = "expired-foreign", digest = "expired-foreign", tenantGroupId = 2L, clinicId = 3L)
+            )
+            repository.claim(owned.id, owner = "old-owned", token = "old-owned-token")
+            repository.claim(foreign.id, owner = "old-foreign", token = "old-foreign-token")
+            NotificationOutboxEvents.update({ NotificationOutboxEvents.id inList listOf(owned.id, foreign.id) }) {
+                it[NotificationOutboxEvents.leaseUntil] = Instant.parse("2020-01-01T00:00:00Z")
+            }
+
+            repository.findExpiredProcessingIds(
+                limit = 10,
+                eligibleScopes = setOf(TenantClinicScope(1L, 2L)),
+            ) shouldBeEqualTo listOf(owned.id)
+            repository.findExpiredProcessingIds(limit = 10, eligibleScopes = emptySet()) shouldBeEqualTo emptyList()
         }
     }
 

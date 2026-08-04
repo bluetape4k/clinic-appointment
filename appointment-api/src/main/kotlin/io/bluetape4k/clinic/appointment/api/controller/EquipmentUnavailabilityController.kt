@@ -11,6 +11,7 @@ import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityExceptionRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityRecord
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.service.EquipmentUnavailabilityService
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
@@ -75,9 +76,10 @@ class EquipmentUnavailabilityController(
     ): ResponseEntity<ApiResponse<List<EquipmentUnavailabilityRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
-        tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        val scope = TenantClinicScope(tenant.id, clinicId)
         log.debug { "GET unavailabilities tenantCode=$tenantCode, clinicId=$clinicId, equipmentId=$equipmentId, from=$from, to=$to" }
-        val records = service.findUnavailabilityRecords(equipmentId, from, to)
+        val records = service.findUnavailabilityRecords(scope, equipmentId, from, to)
         return ResponseEntity.ok(ApiResponse.ok(records))
     }
 
@@ -103,11 +105,12 @@ class EquipmentUnavailabilityController(
     ): ResponseEntity<ApiResponse<EquipmentUnavailabilityRecord>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
-        tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        val scope = TenantClinicScope(tenant.id, clinicId)
         log.debug { "POST unavailability tenantCode=$tenantCode, clinicId=$clinicId, equipmentId=$equipmentId" }
         val record = service.create(
+            scope = scope,
             equipmentId = equipmentId,
-            clinicId = clinicId,
             unavailableDate = request.unavailableDate,
             isRecurring = request.isRecurring,
             recurringDayOfWeek = request.recurringDayOfWeek,
@@ -149,12 +152,13 @@ class EquipmentUnavailabilityController(
         equipmentId.requirePositiveNumber("equipmentId")
         id.requirePositiveNumber("id")
         val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        val scope = TenantClinicScope(tenant.id, clinicId)
         log.debug { "PUT unavailability tenantCode=$tenantCode, id=$id, clinicId=$clinicId, equipmentId=$equipmentId" }
-        requireUnavailability(tenant.id, clinicId, equipmentId, id)
-        service.deleteByTenant(id, tenant.id)
+        requireUnavailability(scope, equipmentId, id)
+        service.delete(scope, id)
         val updated = service.create(
+            scope = scope,
             equipmentId = equipmentId,
-            clinicId = clinicId,
             unavailableDate = request.unavailableDate,
             isRecurring = request.isRecurring,
             recurringDayOfWeek = request.recurringDayOfWeek,
@@ -192,9 +196,10 @@ class EquipmentUnavailabilityController(
         equipmentId.requirePositiveNumber("equipmentId")
         id.requirePositiveNumber("id")
         val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        val scope = TenantClinicScope(tenant.id, clinicId)
         log.debug { "DELETE unavailability tenantCode=$tenantCode, id=$id, clinicId=$clinicId, equipmentId=$equipmentId" }
-        requireUnavailability(tenant.id, clinicId, equipmentId, id)
-        if (!service.deleteByTenant(id, tenant.id)) {
+        requireUnavailability(scope, equipmentId, id)
+        if (!service.delete(scope, id)) {
             throw NoSuchElementException("EquipmentUnavailability not found: $id")
         }
         return ResponseEntity.noContent().build()
@@ -227,9 +232,11 @@ class EquipmentUnavailabilityController(
         equipmentId.requirePositiveNumber("equipmentId")
         id.requirePositiveNumber("id")
         val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
-        requireUnavailability(tenant.id, clinicId, equipmentId, id)
+        val scope = TenantClinicScope(tenant.id, clinicId)
+        requireUnavailability(scope, equipmentId, id)
         log.debug { "POST exception tenantCode=$tenantCode, unavailabilityId=$id, date=${request.originalDate}" }
         val exception = service.addException(
+            scope = scope,
             unavailabilityId = id,
             originalDate = request.originalDate,
             exceptionType = request.exceptionType,
@@ -269,9 +276,12 @@ class EquipmentUnavailabilityController(
         id.requirePositiveNumber("id")
         exId.requirePositiveNumber("exId")
         val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
-        requireUnavailability(tenant.id, clinicId, equipmentId, id)
+        val scope = TenantClinicScope(tenant.id, clinicId)
+        requireUnavailability(scope, equipmentId, id)
         log.debug { "DELETE exception tenantCode=$tenantCode, exId=$exId, unavailabilityId=$id" }
-        service.deleteException(exId)
+        if (!service.deleteException(scope, id, exId)) {
+            throw NoSuchElementException("EquipmentUnavailabilityException not found: $exId")
+        }
         return ResponseEntity.noContent().build()
     }
 
@@ -300,9 +310,10 @@ class EquipmentUnavailabilityController(
         equipmentId.requirePositiveNumber("equipmentId")
         id.requirePositiveNumber("id")
         val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
-        requireUnavailability(tenant.id, clinicId, equipmentId, id)
+        val scope = TenantClinicScope(tenant.id, clinicId)
+        requireUnavailability(scope, equipmentId, id)
         log.debug { "GET conflicts tenantCode=$tenantCode, unavailabilityId=$id" }
-        val conflictingAppointments = service.detectConflictsByTenant(id, tenant.id)
+        val conflictingAppointments = service.detectConflicts(scope, id)
         val response = conflictingAppointments.toConflictResponse(id)
         return ResponseEntity.ok(ApiResponse.ok(response))
     }
@@ -329,9 +340,11 @@ class EquipmentUnavailabilityController(
     ): ResponseEntity<ApiResponse<UnavailabilityConflictResponse>> {
         clinicId.requirePositiveNumber("clinicId")
         equipmentId.requirePositiveNumber("equipmentId")
-        tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        val tenant = tenantClinicAccessChecker.verifyEquipment(tenantCode, clinicId, equipmentId)
+        val scope = TenantClinicScope(tenant.id, clinicId)
         log.debug { "POST preview-conflicts tenantCode=$tenantCode, equipmentId=$equipmentId" }
         val conflictingAppointments = service.previewConflicts(
+            scope = scope,
             equipmentId = equipmentId,
             unavailableDate = request.unavailableDate,
             isRecurring = request.isRecurring,
@@ -346,15 +359,14 @@ class EquipmentUnavailabilityController(
     }
 
     private fun requireUnavailability(
-        tenantGroupId: Long,
-        clinicId: Long,
+        scope: TenantClinicScope,
         equipmentId: Long,
         id: Long,
     ): EquipmentUnavailabilityRecord {
-        val record = service.findByIdAndTenant(id, tenantGroupId)
+        val record = service.findById(scope, id)
             ?: throw NoSuchElementException("EquipmentUnavailability not found: $id")
 
-        if (record.clinicId != clinicId || record.equipmentId != equipmentId) {
+        if (record.equipmentId != equipmentId) {
             throw NoSuchElementException("EquipmentUnavailability not found: $id")
         }
 

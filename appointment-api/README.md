@@ -390,3 +390,30 @@ clinic from `clinic-allowlist` stops new dispatch and notification but leaves
 expiry, suppression, and hold recovery running. See the [waitlist delivery API
 and operations contract](../docs/api/waitlist-delivery.md) and [operations
 runbook](../docs/runbooks/waitlist-delivery.md).
+
+## Tenant-scoped scheduling endpoints
+
+The API verifies `tenantCode` plus the path `clinicId` before constructing a
+`TenantClinicScope`. Slot, reschedule, solver, and notification calls receive
+that immutable scope; a clinic-only query is rejected. Batch reschedule SSE uses
+a bounded emitter timeout and interrupts its virtual-thread worker on completion,
+timeout, or error.
+
+Notification canary configuration is now scope-shaped during the V21 rollout:
+
+```yaml
+clinic:
+  notification:
+    rollout:
+      mode: CANARY
+      canary-scopes:
+        - tenant-group-id: 1
+          clinic-id: 23
+      # Deprecated rolling bridge; its clinic set must match canary-scopes.
+      canary-clinic-ids: [23]
+```
+
+V21 keeps the event-log tenant column nullable for old-node drain. Readiness
+requires Flyway V21, the tenant event-log column, and the tenant-leading direct
+outbox index. Pause notification routes before an application rollback; do not
+run a schema-down migration.

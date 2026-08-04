@@ -13,28 +13,32 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class NotificationDirectOutboxDeliveryTest {
 
+    private fun scope(clinicId: Long, tenantGroupId: Long = 1L) = TenantClinicScope(tenantGroupId, clinicId)
+
     @Test
     fun `전환기 route는 같은 outbox 행을 claim한 경우에만 worker에 전달한다`() {
         var claimCount = 0
         var processCount = 0
         val claimed = claimed()
-        val store = NotificationDirectOutboxStore { clinicId, appointmentId, eventType, _ ->
+        val store = NotificationDirectOutboxStore { eventScope, appointmentId, eventType, _ ->
             claimCount++
             claimed.takeIf {
                 claimCount == 1 &&
-                    clinicId.value == 7L &&
+                    eventScope == scope(7L) &&
                     appointmentId.value == 101L &&
                     eventType == NotificationEventType.CONFIRMED
             }
@@ -49,15 +53,48 @@ internal class NotificationDirectOutboxDeliveryTest {
         )
 
         val first = runBlocking {
-            delivery.deliver(7L, 101L, NotificationEventType.CONFIRMED)
+            delivery.deliver(scope(7L), 101L, NotificationEventType.CONFIRMED)
         }
         val second = runBlocking {
-            delivery.deliver(7L, 101L, NotificationEventType.CONFIRMED)
+            delivery.deliver(scope(7L), 101L, NotificationEventType.CONFIRMED)
         }
 
         first shouldBeEqualTo NotificationDirectDeliveryResult.Processed(NotificationOutboxWorkerResult.COMPLETED)
         second shouldBeEqualTo NotificationDirectDeliveryResult.NotFound
         processCount shouldBeEqualTo 1
+    }
+
+    @Test
+    fun `claimed row의 scope가 event scope와 다르면 worker와 provider를 호출하지 않는다`() {
+        var processCount = 0
+        val registry = SimpleMeterRegistry()
+        val metrics = NotificationOutboxMetrics(
+            registry,
+            NotificationOutboxObservationStore {
+                NotificationOutboxObservationSnapshot(pendingReady = 0, oldestActiveAge = null)
+            },
+        )
+        val delivery = NotificationDirectOutboxDelivery(
+            store = NotificationDirectOutboxStore { _, _, _, _ ->
+                claimed(tenantGroupId = 2L)
+            },
+            worker = NotificationOutboxJobWorker {
+                processCount++
+                NotificationOutboxWorkerResult.COMPLETED
+            },
+            routeGate = NotificationDeliveryRouteGate(NotificationProperties.RolloutProperties()),
+            metrics = metrics,
+        )
+
+        val result = runBlocking {
+            delivery.deliver(scope(7L), 101L, NotificationEventType.CONFIRMED)
+        }
+
+        result shouldBeEqualTo NotificationDirectDeliveryResult.NotFound
+        processCount shouldBeEqualTo 0
+        registry.get(NotificationOutboxMetrics.DIRECT_EVENT_SCOPE_REJECTIONS)
+            .tag("reason_code", NotificationOutboxMetrics.DIRECT_EVENT_CLAIM_SCOPE_MISMATCH)
+            .counter().count() shouldBeEqualTo 1.0
     }
 
     @Test
@@ -72,13 +109,13 @@ internal class NotificationDirectOutboxDeliveryTest {
             routeGate = NotificationDeliveryRouteGate(
                 NotificationProperties.RolloutProperties(
                     mode = NotificationRolloutMode.CANARY,
-                    canaryClinicIds = setOf(7L),
+                    canaryScopes = setOf(scope(7L)),
                 )
             ),
         )
 
         val result = runBlocking {
-            delivery.deliver(7L, 101L, NotificationEventType.CONFIRMED)
+            delivery.deliver(scope(7L), 101L, NotificationEventType.CONFIRMED)
         }
 
         result shouldBeEqualTo NotificationDirectDeliveryResult.RouteRejected
@@ -90,10 +127,10 @@ internal class NotificationDirectOutboxDeliveryTest {
         val active = AtomicInteger()
         val maximum = AtomicInteger()
         val delivery = NotificationDirectOutboxDelivery(
-            store = NotificationDirectOutboxStore { clinicId, appointmentId, _, owner ->
+            store = NotificationDirectOutboxStore { eventScope, appointmentId, _, owner ->
                 claimed(
                     id = appointmentId.value,
-                    clinicId = clinicId.value,
+                    clinicId = eventScope.clinicId,
                     appointmentId = appointmentId.value,
                     owner = owner,
                 )
@@ -112,7 +149,7 @@ internal class NotificationDirectOutboxDeliveryTest {
 
         coroutineScope {
             (1L..6L).map { appointmentId ->
-                async { delivery.deliver(7L, appointmentId, NotificationEventType.CONFIRMED) }
+                async { delivery.deliver(scope(7L), appointmentId, NotificationEventType.CONFIRMED) }
             }.awaitAll()
         }
 
@@ -122,13 +159,14 @@ internal class NotificationDirectOutboxDeliveryTest {
 
     private fun claimed(
         id: Long = 1L,
+        tenantGroupId: Long = 1L,
         clinicId: Long = 7L,
         appointmentId: Long = 101L,
         owner: String = "notification-direct-event",
     ): ClaimedNotification =
         ClaimedNotification(
             id = id,
-            tenantGroupId = TenantGroupId(1L),
+            tenantGroupId = TenantGroupId(tenantGroupId),
             clinicId = ClinicId(clinicId),
             appointmentId = AppointmentId(appointmentId),
             memberId = MemberId("member-101"),

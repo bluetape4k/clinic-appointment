@@ -24,6 +24,10 @@ class FlywayMigrationTest {
             dataSource = h2DataSource("notification"),
             location = "classpath:db/migration/h2",
         )
+        TenantQueryIsolationMigrationTestSupport.verifyV21Migration(
+            dataSource = h2DataSource("tenant-query-isolation"),
+            location = "classpath:db/migration/h2",
+        )
         LegacyAppointmentVersionMigrationTestSupport.verifyV15Migration(
             dataSource = h2DataSource("legacy-version"),
             location = "classpath:db/migration/h2",

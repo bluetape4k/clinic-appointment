@@ -101,6 +101,8 @@ clinic:
         expires-at: 2030-01-01T00:00:00Z
     rollout:
       mode: SHADOW
+      canary-scopes: []
+      # Deprecated rolling bridge; use the same clinic set when present.
       canary-clinic-ids: []
     worker:
       enabled: true
@@ -123,6 +125,13 @@ clinic:
         dummy:
           provider-max-concurrency: 4
           bulkhead-max-concurrent-calls: 4
+
+`canary-scopes` is the authoritative `tenant-group-id`/`clinic-id` pair list for
+`CANARY`; the clinic-only property is a deprecated bridge for old nodes and must
+have the same clinic set. Direct delivery claims and permits use the same pair,
+and `1:23` is intentionally different from `12:3`. During V21 rollout,
+`NotificationSchemaReadiness` requires Flyway V21, the event-log tenant column,
+and the tenant-leading direct lookup index before background traffic starts.
           provider-timeout: 30s
           rate-limit-per-second: 100
           circuit-breaker-failure-rate-threshold: 50

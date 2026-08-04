@@ -136,3 +136,11 @@ core notification draft port를 구현해 canonical outbox payload를 기록하�
 의존하지 않습니다.
 
 [waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)을 참고하세요.
+
+## Appointment event 범위
+
+모든 local `AppointmentDomainEvent`는 양수 ID의 `TenantClinicScope`를 담습니다.
+event는 in-process Spring `ApplicationEvent` 값으로만 유지하며 broker나 Java wire
+메시지로 직렬화하지 않습니다. best-effort event log에는 `tenant_group_id`를 기록하고,
+감사 로그 실패가 이미 commit된 업무 결과를 바꾸지 않게 합니다. 내구성 notification
+전달은 outbox의 tenant 범위를 계속 사용합니다.

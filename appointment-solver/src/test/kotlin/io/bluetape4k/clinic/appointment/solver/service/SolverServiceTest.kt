@@ -22,10 +22,13 @@ import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
+import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.solver.domain.ScheduleSolution
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldHaveSize
 import io.mockk.every
@@ -46,6 +49,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 class SolverServiceTest {
+
+    private fun scope(clinicId: Long) = TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId)
 
     companion object: KLogging() {
 
@@ -216,7 +221,7 @@ class SolverServiceTest {
             }
         }
 
-        val result = solverService.optimize(clinicId, MONDAY..FRIDAY, Duration.ofSeconds(5))
+        val result = solverService.optimize(scope(clinicId), MONDAY..FRIDAY, Duration.ofSeconds(5))
 
         result.isFeasible.shouldBeTrue()
         result.appointments shouldHaveSize 2
@@ -241,7 +246,7 @@ class SolverServiceTest {
             }
         }
 
-        val result = solverService.optimize(clinicId, MONDAY..FRIDAY, Duration.ofSeconds(5))
+        val result = solverService.optimize(scope(clinicId), MONDAY..FRIDAY, Duration.ofSeconds(5))
 
         result.isFeasible.shouldBeTrue()
         val startTimes = result.appointments.map { it.startTime }.toSet()
@@ -266,7 +271,7 @@ class SolverServiceTest {
         }
 
         val result = solverService.optimizeReschedule(
-            clinicId = clinicId,
+            scope = scope(clinicId),
             closureDate = MONDAY,
             searchDays = 5,
             timeLimit = Duration.ofSeconds(5),
@@ -278,10 +283,41 @@ class SolverServiceTest {
     }
 
     @Test
+    fun `최적화 결과는 원본 version이 바뀌면 적용 전에 stale로 판정된다`() {
+        val (clinicId, doctorId, _, treatmentTypeId) = insertBaseData()
+        val appointmentId = transaction {
+            Appointments.insertAndGetId {
+                it[Appointments.clinicId] = clinicId
+                it[Appointments.doctorId] = doctorId
+                it[Appointments.treatmentTypeId] = treatmentTypeId
+                it[patientName] = "Versioned Patient"
+                it[appointmentDate] = MONDAY
+                it[startTime] = LocalTime.of(9, 0)
+                it[endTime] = LocalTime.of(9, 30)
+                it[status] = AppointmentState.REQUESTED
+            }.value
+        }
+
+        val result = solverService.optimize(scope(clinicId), MONDAY..FRIDAY, Duration.ofSeconds(5))
+        solverService.verifySourceVersions(result).shouldBeTrue()
+
+        transaction {
+            AppointmentRepository().updateLegacyStatus(
+                scope = scope(clinicId),
+                appointmentId = appointmentId,
+                expectedVersion = 0L,
+                newStatus = AppointmentState.CONFIRMED,
+            ).shouldBeTrue()
+        }
+
+        solverService.verifySourceVersions(result).shouldBeFalse()
+    }
+
+    @Test
     fun `4 - 예약이 없으면 빈 결과 반환`() {
         val (clinicId, _, _, _) = insertBaseData()
 
-        val result = solverService.optimize(clinicId, MONDAY..FRIDAY, Duration.ofSeconds(5))
+        val result = solverService.optimize(scope(clinicId), MONDAY..FRIDAY, Duration.ofSeconds(5))
 
         result.appointments.shouldBeEmpty()
         result.isFeasible.shouldBeTrue()
@@ -298,7 +334,7 @@ class SolverServiceTest {
         val service = SolverService(solverFactory = factory)
 
         assertFailsWith<IllegalStateException> {
-            service.optimize(clinicId, MONDAY..FRIDAY)
+            service.optimize(scope(clinicId), MONDAY..FRIDAY)
         }
     }
 }

@@ -70,7 +70,7 @@ class NotificationOutboxQueryPlanTest {
                     dialect,
                     """
                     SELECT id FROM clinic_notification_outbox
-                    WHERE clinic_id = ? AND appointment_id = ? AND event_type = 'CONFIRMED'
+                    WHERE tenant_group_id = 1 AND clinic_id = ? AND appointment_id = ? AND event_type = 'CONFIRMED'
                       AND row_kind = 'SENDABLE' AND status IN ('PENDING', 'RETRY_WAIT')
                       AND available_at <= ? AND (next_retry_at IS NULL OR next_retry_at <= ?)
                     ORDER BY available_at, id LIMIT 1
@@ -158,7 +158,7 @@ class NotificationOutboxQueryPlanTest {
 
     private fun expectedIndexes(dialect: Dialect): Map<String, Set<String>> {
         val common = mapOf(
-            "direct lookup" to setOf("idx_notification_outbox_direct_lookup"),
+            "direct lookup" to setOf("idx_notification_outbox_tenant_direct_lookup"),
             "reminder suppression" to setOf(
                 "idx_notification_outbox_reminder_suppression",
                 "idx_notification_outbox_direct_lookup",

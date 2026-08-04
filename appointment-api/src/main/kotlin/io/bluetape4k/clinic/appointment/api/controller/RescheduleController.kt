@@ -7,16 +7,14 @@ import io.bluetape4k.clinic.appointment.api.dto.RescheduleCandidateResponse
 import io.bluetape4k.clinic.appointment.api.dto.toResponse
 import io.bluetape4k.clinic.appointment.api.service.AppointmentService
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
-import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
-import io.bluetape4k.clinic.appointment.repository.toRescheduleCandidateRecord
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
+import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
@@ -43,6 +41,7 @@ class RescheduleController(
     private val closureRescheduleService: ClosureRescheduleService,
     private val appointmentService: AppointmentService,
     private val tenantClinicAccessChecker: TenantClinicAccessChecker,
+    private val rescheduleCandidateRepository: RescheduleCandidateRepository,
 ) {
     companion object : KLogging()
 
@@ -71,9 +70,10 @@ class RescheduleController(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) closureDate: LocalDate,
         @Parameter(description = "Number of days to search for alternative slots") @RequestParam(defaultValue = "7") searchDays: Int,
     ): ResponseEntity<ApiResponse<Map<Long, List<RescheduleCandidateResponse>>>> {
-        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        val tenant = tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        val scope = TenantClinicScope(tenant.id, clinicId)
         log.debug { "POST closure reschedule tenantCode=$tenantCode, appointmentId=$id, clinic=$clinicId, date=$closureDate" }
-        val result = closureRescheduleService.processClosureReschedule(clinicId, closureDate, searchDays)
+        val result = closureRescheduleService.processClosureReschedule(scope, closureDate, searchDays)
         val response = result.mapValues { (_, candidates) ->
             candidates.map { it.toResponse() }
         }
@@ -99,14 +99,12 @@ class RescheduleController(
         @PathVariable id: Long,
     ): ResponseEntity<ApiResponse<List<RescheduleCandidateResponse>>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
-        appointmentService.getById(id, tenant.id)
+        val appointment = appointmentService.getById(id, tenant.id)
+        val scope = TenantClinicScope(tenant.id, appointment.clinicId)
         log.debug { "GET reschedule candidates tenantCode=$tenantCode, appointmentId=$id" }
         val candidates = transaction {
-            RescheduleCandidates
-                .selectAll()
-                .where { RescheduleCandidates.originalAppointmentId eq id }
-                .orderBy(RescheduleCandidates.priority)
-                .map { it.toRescheduleCandidateRecord().toResponse() }
+            rescheduleCandidateRepository.findByOriginalAppointmentId(id, scope)
+                .map { it.toResponse() }
         }
         return ResponseEntity.ok(ApiResponse.ok(candidates))
     }
@@ -134,9 +132,10 @@ class RescheduleController(
         @PathVariable candidateId: Long,
     ): ResponseEntity<ApiResponse<Long>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
-        appointmentService.getById(id, tenant.id)
+        val appointment = appointmentService.getById(id, tenant.id)
+        val scope = TenantClinicScope(tenant.id, appointment.clinicId)
         log.debug { "POST confirm reschedule tenantCode=$tenantCode, appointmentId=$id, candidateId=$candidateId" }
-        val newAppointmentId = closureRescheduleService.confirmReschedule(candidateId, id, tenant.id)
+        val newAppointmentId = closureRescheduleService.confirmReschedule(scope, candidateId, id)
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }
 
@@ -160,9 +159,10 @@ class RescheduleController(
         @PathVariable id: Long,
     ): ResponseEntity<ApiResponse<Long?>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
-        appointmentService.getById(id, tenant.id)
+        val appointment = appointmentService.getById(id, tenant.id)
+        val scope = TenantClinicScope(tenant.id, appointment.clinicId)
         log.debug { "POST auto reschedule tenantCode=$tenantCode, appointmentId=$id" }
-        val newAppointmentId = closureRescheduleService.autoReschedule(id, tenant.id)
+        val newAppointmentId = closureRescheduleService.autoReschedule(scope, id)
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }
 }

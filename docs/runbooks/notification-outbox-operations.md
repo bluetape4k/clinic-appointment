@@ -19,10 +19,15 @@
 
 다음 조건을 모두 확인합니다.
 
-- H2, PostgreSQL, MySQL의 V14 migration에 outbox·attempt table과 필수 index가 있다.
+- H2, PostgreSQL, MySQL의 V21 migration에 event-log tenant column, outbox·attempt table과
+  tenant direct lookup index가 있다.
+- V21 preflight에서 event-log 전체 row 수, clinic orphan 수, tenant null 수, join/update
+  `EXPLAIN`, 예상 DDL lock을 기록했다. orphan 또는 허용 maintenance window 부재 시
+  migration dispatch를 보류한다.
 - readiness가 schema, claim/recovery query, active idempotency key를 통과한다.
 - `clinic.notification.rollout.mode=SHADOW`이고
-  `clinic.notification.rollout.canary-clinic-ids`가 비어 있다.
+  `clinic.notification.rollout.canary-scopes`와 deprecated
+  `canary-clinic-ids`가 비어 있다.
 - 회원 directory, template catalog, provider adapter가 실제 운영 구현으로 연결되어
   있다. 필수 adapter가 없으면 503으로 실패하도록 유지한다.
 - provider adapter의 connect/read/request timeout이 적용 대상
@@ -52,6 +57,7 @@ clinic:
   notification:
     rollout:
       mode: SHADOW
+      canary-scopes: []
       canary-clinic-ids: []
 ```
 
@@ -76,7 +82,11 @@ clinic:
   notification:
     rollout:
       mode: CANARY
-      canary-clinic-ids: [101]
+      canary-scopes:
+        - tenant-group-id: 1
+          clinic-id: 23
+      # Deprecated bridge for old nodes; clinic set must match canary-scopes.
+      canary-clinic-ids: [23]
 ```
 
 허용 목록 병원은 worker가 발송하고, 나머지 병원은 전환기 event 경로를 유지합니다.
@@ -102,6 +112,7 @@ clinic:
   notification:
     rollout:
       mode: ACTIVE
+      canary-scopes: []
       canary-clinic-ids: []
 ```
 
@@ -119,6 +130,29 @@ listener를 제거합니다. 기존 `scheduling_notification_history` 물리 테
 - 새 outbox enqueue를 끄거나 개인정보를 저장하던 legacy 발송 경로를 되살리지
   않습니다.
 - additive schema를 즉시 삭제하지 않습니다.
+- V21 rollback은 schema-down을 실행하지 않습니다. 먼저 route를 `PAUSED`로 전환하고
+  이전 application으로 되돌립니다. 구버전 node drain 뒤 event-log null row를 다시
+  backfill해 0임을 증명하고, `NOT NULL` hardening은 별도 release 승인으로만 진행합니다.
+
+### 3.5 V21 preflight와 partial DDL recovery
+
+배포 전 각 dialect에서 다음 read-only 결과를 저장합니다.
+
+```sql
+SELECT COUNT(*) AS event_log_rows,
+       SUM(CASE WHEN clinic.id IS NULL THEN 1 ELSE 0 END) AS orphan_rows,
+       SUM(CASE WHEN event_log.tenant_group_id IS NULL THEN 1 ELSE 0 END) AS null_tenant_rows
+FROM scheduling_appointment_event_logs event_log
+LEFT JOIN scheduling_clinics clinic ON clinic.id = event_log.clinic_id;
+```
+
+`EXPLAIN`으로 clinic join backfill과 tenant-leading direct claim index 사용을 확인하고,
+DDL lock 대기와 maintenance window를 기록합니다. PostgreSQL/H2는 migration history와
+index/constraint metadata를 대조하고, MySQL은 각 `ALTER`/`CREATE INDEX` 결과와
+`flyway_schema_history`를 대조합니다. MySQL에서 partial DDL이 발생하면 route를
+`PAUSED`로 유지하고 schema history와 실제 metadata를 먼저 복구·검증한 뒤 같은 V21을
+재실행할 수 있는지 판단합니다. 임의 default tenant를 채우거나 schema-down으로
+되돌리지 않습니다.
 
 ## 4. 관측 지표와 경보
 

@@ -54,31 +54,31 @@ class SlotCalculationService(
     fun findAvailableSlots(query: SlotQuery): List<AvailableSlot> =
         transaction {
             // 1. Load Clinic
-            val clinic = clinicRepository.findByIdOrNull(query.clinicId)
+            val clinic = clinicRepository.findByIdAndTenant(query.scope.clinicId, query.scope.tenantGroupId)
                 ?: return@transaction emptyList()
 
             // 1-1. Check if date is a national holiday
-            if (!clinic.openOnHolidays && holidayRepository.existsByDate(query.date)) {
+            if (!clinic.openOnHolidays && holidayRepository.existsByDate(query.scope, query.date)) {
                 return@transaction emptyList()
             }
 
             // 2. Check ClinicClosures for full-day closure
-            val closures = clinicRepository.findClosures(query.clinicId, query.date)
+            val closures = clinicRepository.findClosures(query.scope, query.date)
             if (closures.any { it.isFullDay }) {
                 return@transaction emptyList()
             }
 
             // 3. Get OperatingHours for clinic + dayOfWeek
             val dayOfWeek = query.date.dayOfWeek
-            val opHours = clinicRepository.findOperatingHours(query.clinicId, dayOfWeek)
+            val opHours = clinicRepository.findOperatingHours(query.scope, dayOfWeek)
                 ?: return@transaction emptyList()
 
             // 4. Get BreakTimes for clinic + dayOfWeek
-            val dayBreakRanges = clinicRepository.findBreakTimes(query.clinicId, dayOfWeek)
+            val dayBreakRanges = clinicRepository.findBreakTimes(query.scope, dayOfWeek)
                 .map { TimeRange(it.startTime, it.endTime) }
 
             // 4-1. 병원 기본 휴식시간 (모든 영업일에 동일 적용, 복수 설정 가능)
-            val defaultBreakRanges = clinicRepository.findDefaultBreakTimes(query.clinicId)
+            val defaultBreakRanges = clinicRepository.findDefaultBreakTimes(query.scope)
                 .map { TimeRange(it.startTime, it.endTime) }
 
             val breakTimeRanges = dayBreakRanges + defaultBreakRanges
@@ -93,11 +93,11 @@ class SlotCalculationService(
                 }
 
             // 6. Get DoctorSchedule
-            val doctorSchedule = doctorRepository.findSchedule(query.doctorId, dayOfWeek)
+            val doctorSchedule = doctorRepository.findSchedule(query.scope, query.doctorId, dayOfWeek)
                 ?: return@transaction emptyList()
 
             // 7. Get DoctorAbsences
-            val absences = doctorRepository.findAbsences(query.doctorId, query.date)
+            val absences = doctorRepository.findAbsences(query.scope, query.doctorId, query.date)
             if (absences.any { it.startTime == null }) {
                 return@transaction emptyList()
             }
@@ -120,13 +120,13 @@ class SlotCalculationService(
             if (effectiveRanges.isEmpty()) return@transaction emptyList()
 
             // 9. Get TreatmentType
-            val treatment = treatmentTypeRepository.findByIdOrNull(query.treatmentTypeId)
+            val treatment = treatmentTypeRepository.findByIdAndScope(query.treatmentTypeId, query.scope)
                 ?: return@transaction emptyList()
 
             val duration = query.requestedDurationMinutes ?: treatment.defaultDurationMinutes
 
             // 9-1. Load doctor and validate provider type
-            val doctor = doctorRepository.findByIdOrNull(query.doctorId)
+            val doctor = doctorRepository.findByIdAndScope(query.doctorId, query.scope)
                 ?: return@transaction emptyList()
             if (doctor.providerType != treatment.requiredProviderType) {
                 return@transaction emptyList()
@@ -151,15 +151,15 @@ class SlotCalculationService(
 
             // 14. If treatment requires equipment, load required equipment IDs and quantities
             val requiredEquipment = if (treatment.requiresEquipment) {
-                treatmentTypeRepository.findRequiredEquipmentIds(query.treatmentTypeId)
+                treatmentTypeRepository.findRequiredEquipmentIds(query.treatmentTypeId, query.scope)
             } else emptyList()
 
-            val equipmentQuantities = treatmentTypeRepository.findEquipmentQuantities(requiredEquipment)
+            val equipmentQuantities = treatmentTypeRepository.findEquipmentQuantities(requiredEquipment, query.scope)
 
             // 장비 사용불가 기간 조회 (진료 유형이 장비를 필요로 하는 경우)
             val equipmentUnavailablePeriods: List<UnavailablePeriod> =
                 if (treatment.requiresEquipment && requiredEquipment.isNotEmpty()) {
-                    equipmentUnavailabilityService.findUnavailableOnDate(query.clinicId, query.date)
+                    equipmentUnavailabilityService.findUnavailableOnDate(query.scope, query.date)
                         .filterKeys { it in requiredEquipment }
                         .values.flatten()
                 } else emptyList()
@@ -169,7 +169,7 @@ class SlotCalculationService(
             for (candidate in slotCandidates) {
                 // 11. Count existing appointments that overlap
                 val overlappingCount = appointmentRepository.countOverlapping(
-                    query.doctorId, query.date, candidate.start, candidate.end
+                    query.scope, query.doctorId, query.date, candidate.start, candidate.end
                 )
 
                 // 13. Filter slots where existing count < maxConcurrent
@@ -187,7 +187,9 @@ class SlotCalculationService(
                     for (eqId in requiredEquipment) {
                         val quantity = equipmentQuantities[eqId] ?: 0
                         val usedCount =
-                            appointmentRepository.countEquipmentUsage(eqId, query.date, candidate.start, candidate.end)
+                            appointmentRepository.countEquipmentUsage(
+                                query.scope, eqId, query.date, candidate.start, candidate.end
+                            )
                         if (usedCount < quantity) available.add(eqId)
                     }
                     if (available.isEmpty()) continue
