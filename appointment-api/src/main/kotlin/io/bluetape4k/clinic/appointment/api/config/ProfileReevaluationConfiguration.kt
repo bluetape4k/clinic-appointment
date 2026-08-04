@@ -44,12 +44,12 @@ class ProfileReevaluationConfiguration {
     /**
      * 재평가 worker와 운영 endpoint가 Spring DataSource와 같은 pool을 사용하게 합니다.
      */
-    @Bean
+    @Bean(name = ["profileReevaluationDatabase"])
     @ConditionalOnMissingBean(Database::class)
     fun profileReevaluationDatabase(dataSource: DataSource): Database =
         ExposedDatabaseFactory.connect(dataSource)
 
-    @Bean
+    @Bean(name = ["profileReevaluationDatabaseLifecycle"])
     @ConditionalOnBean(name = ["profileReevaluationDatabase"])
     internal fun profileReevaluationDatabaseLifecycle(database: Database): ExposedDatabaseLifecycle =
         ExposedDatabaseLifecycle(database)

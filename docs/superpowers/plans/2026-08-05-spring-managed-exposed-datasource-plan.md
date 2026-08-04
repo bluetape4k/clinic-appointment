@@ -25,68 +25,41 @@
 | `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/DataSourceOwnershipContractTest.kt` | Production direct-setup guard and allowlist assertions |
 | `docs/runbooks/spring-managed-exposed-datasource.ko.md` | Korean lifecycle, qualifier, and allowlist contract |
 | `docs/lessons/2026-08-05-issue-223-spring-managed-exposed-datasource.md` | Durable decision and future guard |
+| `docs/reviews/2026-08-05-issue-223-spring-managed-exposed-datasource-review.ko.md` | Six-lens review findings and P0/P1 gate |
 
 No module registration, dependency catalog, Flyway schema, README public API, or
 tenant-isolation source change is planned. Existing migration/dialect/Gatling files
 remain unchanged unless the audit finds an ownership defect.
 
-## Task 1: Lock the factory contract with a failing test
+## Task 1: Lock the factory contract with failing tests
 
 **Files:**
 
 - Create: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/ExposedDatabaseFactoryTest.kt`
 
-- [ ] **Step 1: Add the RED test**
+- [x] **Step 1: Add the RED test**
 
-Use a Hikari-backed H2 pool and a marker table created through that pool. Set a
+Use a Hikari-backed H2 pool and a `marker_value` table created through that pool. Set a
 sentinel Exposed default, call the not-yet-created factory, query the marker through
-the returned handle, and assert that the sentinel is restored. The test must close
-only the Hikari pool it created.
+the returned handle, and assert that the sentinel is restored. The completed test
+also covers barrier-bounded concurrent registration, repeated transactions through
+an instrumented `DataSource`, factory lifecycle cleanup, and no-op behavior for an
+externally registered `Database`. Each test closes only resources it created.
 
 ```kotlin
-class ExposedDatabaseFactoryTest {
-    @Test
-    fun `factory reuses injected pool and restores previous default`() {
-        val pool = HikariDataSource(
-            HikariConfig().apply {
-                jdbcUrl = "jdbc:h2:mem:factory_${System.nanoTime()};DB_CLOSE_DELAY=-1"
-                driverClassName = "org.h2.Driver"
-                username = "sa"
-            },
-        )
-        val sentinel = Database.connect(
-            url = "jdbc:h2:mem:sentinel_${System.nanoTime()};DB_CLOSE_DELAY=-1",
-            driver = "org.h2.Driver",
-        )
-        TransactionManager.defaultDatabase = sentinel
-        try {
-            pool.connection.use { connection ->
-                connection.createStatement().use { statement ->
-                    statement.execute("CREATE TABLE datasource_marker (value INT NOT NULL)")
-                    statement.execute("INSERT INTO datasource_marker(value) VALUES (223)")
-                }
-            }
-
-            val database = ExposedDatabaseFactory.connect(pool)
-
-            transaction(database) {
-                exec("SELECT value FROM datasource_marker") { rows ->
-                    rows.next()
-                    rows.getInt(1)
-                } shouldBeEqualTo 223
-            }
-            TransactionManager.defaultDatabase shouldBeEqualTo sentinel
-        } finally {
-            TransactionManager.defaultDatabase = sentinel
-            pool.close()
-        }
+val database = ExposedDatabaseFactory.connect(injectedHikariDataSource)
+transaction(database) {
+    exec("SELECT marker_value FROM datasource_marker") { rows ->
+        rows.next()
+        rows.getInt(1)
     }
-}
+} shouldBeEqualTo 223
+TransactionManager.defaultDatabase shouldBeEqualTo sentinel
 ```
 
 Use `bluetape4k-assertions`; do not add JUnit `assertEquals` or `!!`.
 
-- [ ] **Step 2: Run the RED test**
+- [x] **Step 2: Run the RED test**
 
 Run:
 
@@ -105,36 +78,25 @@ is specifically the missing factory symbol.
 - Create: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ExposedDatabaseFactory.kt`
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/ExposedDatabaseFactoryTest.kt`
 
-- [ ] **Step 1: Add the minimal factory**
+- [x] **Step 1: Add the minimal factory**
 
-```kotlin
-internal object ExposedDatabaseFactory {
-    private val registrationLock = ReentrantLock()
-
-    fun connect(dataSource: DataSource): Database = registrationLock.withLock {
-        val previousDefaultDatabase = TransactionManager.defaultDatabase
-        try {
-            Database.connect(dataSource)
-        } finally {
-            TransactionManager.defaultDatabase = previousDefaultDatabase
-        }
-    }
-}
-```
+The implementation keeps a single registration lock, restores the previous default
+in `finally`, records handles created by the factory, and exposes a guarded release
+operation used by `ExposedDatabaseLifecycle`.
 
 Document in Korean KDoc that Spring owns `DataSource` creation/close and the factory
 only creates an Exposed handle; the global default is restored after registration.
-Register a separate `ExposedDatabaseLifecycle` bean for each factory-owned runtime
-database so context destruction calls `TransactionManager.closeAndUnregister` before
-Spring closes the injected pool. Do not attach that lifecycle to an externally supplied
-`Database` bean.
+Register an `ExposedDatabaseLifecycle` bean for each eligible runtime database so
+context destruction delegates to the factory-owned release guard before Spring closes
+the injected pool. If a context supplies an external `Database`, the lifecycle guard
+is a no-op and does not unregister that external manager.
 
-- [ ] **Step 2: Run the GREEN test**
+- [x] **Step 2: Run the GREEN test**
 
 Run the Task 1 command again. Expected: one test passes with no compilation warning
 or resource-leak failure.
 
-- [ ] **Step 3: Commit the isolated factory**
+- [x] **Step 3: Commit the isolated factory**
 
 ```bash
 git add appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ExposedDatabaseFactory.kt appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/ExposedDatabaseFactoryTest.kt
@@ -148,13 +110,15 @@ git commit -m "Centralize Spring-managed Exposed database creation" -m "Keep one
 - Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ServiceConfig.kt:144,536-542`
 - Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ProfileReevaluationConfiguration.kt:47-65`
 
-- [ ] **Step 1: Remove duplicate registration state**
+- [x] **Step 1: Remove duplicate registration state**
 
 Delete each configuration's private `ReentrantLock`, `withLock` import, and inline
-`TransactionManager.defaultDatabase` save/restore block. Keep bean names, conditional
-annotations, parameter injection, feature flags, and return type unchanged.
+`TransactionManager.defaultDatabase` save/restore block. Keep the database bean
+conditions, parameter injection, feature flags, and return type unchanged. Runtime
+database beans declare explicit Spring bean names so lifecycle conditions do not rely
+on Kotlin `internal` method names, which are compiler-mangled.
 
-- [ ] **Step 2: Delegate to the factory**
+- [x] **Step 2: Delegate to the factory**
 
 The two methods become expression bodies with the existing injected parameter:
 
@@ -168,11 +132,11 @@ fun profileReevaluationDatabase(dataSource: DataSource): Database =
     ExposedDatabaseFactory.connect(dataSource)
 ```
 
-Add a bean-name-scoped lifecycle bean for each runtime handle. Verify that the
-destroy callback unregisters only the factory-owned handle and leaves a separately
-provided `Database` untouched.
+Add a lifecycle bean for each eligible runtime handle. Verify that the destroy callback
+unregisters only the factory-owned handle and leaves a separately provided `Database`
+untouched; production currently has one candidate `Database` per runtime context.
 
-- [ ] **Step 3: Run focused compilation/tests**
+- [x] **Step 3: Run focused compilation/tests**
 
 ```bash
 ./gradlew :appointment-api:test --tests '*ExposedDatabaseFactoryTest' --tests '*AppointmentCommitmentApplicationWiringTest' --tests '*ProfileReevaluationWiringTest' --no-build-cache
@@ -189,7 +153,7 @@ no unrelated tenant or transaction source changes appear.
 - Modify: `ProfileReevaluationWiringTest.kt`
 - Modify: `NotificationReminderRecoveryWiringTest.kt`
 
-- [ ] **Step 1: Replace direct Database suppliers**
+- [x] **Step 1: Replace direct Database suppliers**
 
 Remove each supplier whose body directly calls `Database.connect`.
 Add a named `DataSource` supplier using `HikariDataSource(HikariConfig().apply {
@@ -201,15 +165,16 @@ manually. Seed a scope-unique marker table through the retained Hikari instance 
 assert that the context-created `Database` reads that marker. Retain the supplier
 reference and assert `HikariDataSource.isClosed` after each context closes.
 
-- [ ] **Step 2: Assert the context-created Database**
+- [x] **Step 2: Assert the context-created Database**
 
 Keep existing wiring assertions and add `context.getBean(Database::class.java)` to
 ensure the conditional production bean is created from the injected DataSource.
-For the profile and commitment contexts, use `transaction(database) { exec("SELECT 1") }`
-as the smallest runtime proof. Use existing bluetape assertions and descriptive
-backtick test names.
+For the profile, commitment, and notification contexts, use the injected pool's
+`datasource_marker`/`marker_value` row in `transaction(database) { ... }` as the
+smallest runtime proof. Use existing bluetape assertions and descriptive backtick
+test names.
 
-- [ ] **Step 3: Run the wiring tests**
+- [x] **Step 3: Run the wiring tests**
 
 ```bash
 ./gradlew :appointment-api:test --tests '*AppointmentCommitmentApplicationWiringTest' --tests '*ProfileReevaluationWiringTest' --tests '*NotificationReminderRecoveryWiringTest' --no-build-cache
@@ -226,7 +191,7 @@ must be fixed before proceeding.
 - Create: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/DataSourceOwnershipContractTest.kt`
 - Create: `docs/runbooks/spring-managed-exposed-datasource.ko.md`
 
-- [ ] **Step 1: Write the production-boundary audit assertion**
+- [x] **Step 1: Write the production-boundary audit assertion**
 
 The test reads every `appointment-*/src/main` Kotlin/Java source and asserts that
 `Database.connect(` appears only in `ExposedDatabaseFactory.kt`, and that production
@@ -236,12 +201,12 @@ result naming the two configuration files. If the audit is added after the clean
 keep it as a green guard and record the pre-cleanup RED evidence in the lesson rather
 than pretending the current ordering is executable.
 
-- [ ] **Step 2: Update the source and rerun audit**
+- [x] **Step 2: Update the source and rerun audit**
 
 After Task 3, rerun the same test. The expected result is PASS with two runtime
 factory callers and no direct pool/URL creation in production.
 
-- [ ] **Step 3: Write the Korean runbook**
+- [x] **Step 3: Write the Korean runbook**
 
 Include:
 
@@ -254,7 +219,7 @@ Include:
    resource.
 5. The exact repository audit commands and the expected production-source boundary.
 
-- [ ] **Step 4: Run audit and diff checks**
+- [x] **Step 4: Run audit and diff checks**
 
 ```bash
 ./gradlew :appointment-api:test --tests '*DataSourceOwnershipContractTest' --no-build-cache
@@ -268,7 +233,7 @@ git diff --check
 - Create: `docs/lessons/2026-08-05-issue-223-spring-managed-exposed-datasource.md`
 - Optional modify: no production files outside the approved map
 
-- [ ] **Step 1: Run targeted module proof sequentially**
+- [x] **Step 1: Run targeted module proof sequentially**
 
 ```bash
 ./gradlew :appointment-api:test --tests '*ExposedDatabaseFactoryTest' --tests '*DataSourceOwnershipContractTest' --tests '*AppointmentCommitmentApplicationWiringTest' --tests '*ProfileReevaluationWiringTest' --tests '*NotificationReminderRecoveryWiringTest' --no-build-cache
@@ -279,7 +244,7 @@ Run any Testcontainers/dialect task only after these commands and never in paral
 with another real-DB task. Existing standalone fixtures remain the regression scope;
 do not run the whole multi-backend matrix locally unless the task runner is available.
 
-- [ ] **Step 2: Inspect final inventory**
+- [x] **Step 2: Inspect final inventory**
 
 ```bash
 rg -n 'Database\\.connect|HikariDataSource|SimpleDriverDataSource|DriverManager\\.getConnection|jdbc:' appointment-*/src/main appointment-*/src/test appointment-api/src/gatling
@@ -288,13 +253,13 @@ rg -n 'Database\\.connect|HikariDataSource|SimpleDriverDataSource|DriverManager\
 Record the remaining occurrences by the allowlist table; a new main-source match is
 P1 and blocks delivery.
 
-- [ ] **Step 3: Write the lesson**
+- [x] **Step 3: Write the lesson**
 
 Record context, decision, surprising failure or absence, test evidence, review misses,
 and the future audit guard. If no new lesson remains after reviewing the diff, state
 the concrete N/A evidence rather than filler.
 
-- [ ] **Step 4: Run final checks**
+- [x] **Step 4: Run final checks**
 
 ```bash
 git diff --check
@@ -304,7 +269,7 @@ git log --oneline --decorate -5
 
 Expected: clean diff check, only approved files, P0=0/P1=0, and a tracked lesson.
 
-- [ ] **Step 5: Commit the lesson and verification scope**
+- [x] **Step 5: Commit the lesson and verification scope**
 
 Use a Lore commit whose `Tested` trailer lists the fresh Gradle commands and whose
 `Not-tested` trailer lists any external DB or full matrix gap with evidence.
@@ -316,7 +281,7 @@ Use a Lore commit whose `Tested` trailer lists the fresh Gradle commands and who
 - Review: all approved source, test, runbook, and lesson files in this worktree
 - Evidence: workflow receipts, plan/spec commits, review-lane reports, and fresh test output
 
-- [ ] **Step 1: Apply the plan-review findings**
+- [x] **Step 1: Apply the plan-review findings**
 
 Add a deterministic concurrent factory test that uses a barrier and several
 `connect` calls against the same injected pool. Each returned handle must answer
@@ -326,14 +291,14 @@ Add a bounded pool-reuse validation over repeated transactions with one
 instrumented/injected `DataSource`; record the observed acquisition count and
 state the baseline/threshold or the explicit reason the benchmark is out of scope.
 
-- [ ] **Step 2: Run the six review lenses**
+- [x] **Step 2: Run the six review lenses**
 
 Record independent findings for Performance, Stability, Security, Operator/Ops,
 Developer/API, and User/caller. The main lane deduplicates findings and blocks
 delivery on any P0/P1. A P2 must either be fixed in the approved file map or be
 carried as a documented, bounded follow-up; P3 findings do not expand scope.
 
-- [ ] **Step 3: Re-run the Kotlin/Exposed/workflow checklists**
+- [x] **Step 3: Re-run the Kotlin/Exposed/workflow checklists**
 
 Verify Korean KDoc/runbook/lesson language, explicit transaction boundaries,
 Spring bean lifecycle ownership, Exposed global-default restoration, no new

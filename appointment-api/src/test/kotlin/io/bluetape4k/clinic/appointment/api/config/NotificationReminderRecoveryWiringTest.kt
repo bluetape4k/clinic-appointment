@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.config
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.notification.JdbcAppointmentReminderRecoveryStore
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
@@ -16,6 +17,7 @@ import io.bluetape4k.clinic.appointment.notification.ReminderRecoverySource
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -33,6 +35,7 @@ import java.util.function.Supplier
 internal class NotificationReminderRecoveryWiringTest {
 
     private var lastDataSource: HikariDataSource? = null
+    private var lastDatabase: Database? = null
 
     private val contextRunner = ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
@@ -62,6 +65,15 @@ internal class NotificationReminderRecoveryWiringTest {
     @AfterEach
     fun dataSourceIsClosedBySpringContext() {
         lastDataSource?.isClosed?.shouldBeEqualTo(true)
+        lastDatabase?.let { database ->
+            val unregistered = try {
+                TransactionManager.managerFor(database)
+                false
+            } catch (_: IllegalStateException) {
+                true
+            }
+            unregistered.shouldBeTrue()
+        }
     }
 
     @Test
@@ -69,6 +81,8 @@ internal class NotificationReminderRecoveryWiringTest {
         contextRunner.run { context ->
             context.startupFailure shouldBeEqualTo null
             val database = context.getBean(Database::class.java)
+            lastDatabase = database
+            context.getBeansOfType(ExposedDatabaseLifecycle::class.java).size shouldBeEqualTo 1
             transaction(database) {
                 exec("SELECT marker_value FROM datasource_marker") { rows ->
                     rows.next()
@@ -94,9 +108,9 @@ internal class NotificationReminderRecoveryWiringTest {
 
 @Configuration(proxyBeanMethods = false)
 private class NotificationDatabaseTestConfiguration {
-    @Bean
+    @Bean(name = ["notificationTestDatabase"])
     fun database(dataSource: DataSource): Database = ExposedDatabaseFactory.connect(dataSource)
 
-    @Bean
+    @Bean(name = ["notificationTestDatabaseLifecycle"])
     fun databaseLifecycle(database: Database): ExposedDatabaseLifecycle = ExposedDatabaseLifecycle(database)
 }

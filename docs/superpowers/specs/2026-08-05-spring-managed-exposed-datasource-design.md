@@ -35,9 +35,11 @@ fixture가 섞여 있어, 단순한 전역 치환은 pool 소유권과 schema �
 공용 `ReentrantLock` 안에서 기존 `TransactionManager.defaultDatabase`를 저장한 뒤
 항상 `finally`에서 복원한다. `ServiceConfig`와
 `ProfileReevaluationConfiguration`은 각자의 lock/중복 코드를 제거하고 factory를
-호출한다. 각 configuration은 자신이 생성한 `Database` bean 이름에만 lifecycle bean을
-연결하여 context 종료 시 `TransactionManager.closeAndUnregister(database)`를
-호출한다.
+호출한다. 각 configuration은 명시적 Spring bean name으로 자신이 생성한 database에
+lifecycle bean을 연결하고, context 종료 시 factory ownership guard를 거쳐
+`TransactionManager.closeAndUnregister(database)`를 호출한다. 외부에서 제공한
+`Database`에는 lifecycle 조건이 매칭되지 않으며, 직접 lifecycle을 호출해도 registry에서
+제거하지 않는다.
 
 이 factory는 `DataSource`를 생성하거나 닫지 않는다. Spring이 pool의 생성·설정·종료를
 소유하며, 업무 코드는 선택된 `Database`로 명시적 `transaction(database) {...}`

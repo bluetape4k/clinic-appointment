@@ -11,9 +11,11 @@
 
 - `ExposedDatabaseFactory`가 주입받은 `DataSource`로만 Exposed handle을 만들고 하나의
   `ReentrantLock`과 `finally` 복원으로 global default registration을 직렬화한다.
+  release도 같은 lock을 사용해 startup/shutdown 교차 시 stale default를 남기지 않는다.
 - `ExposedDatabaseLifecycle`이 factory 소유 handle의 Exposed manager를 context destroy
-  시 `closeAndUnregister`한다. pool/connection은 Spring과 명시적 transaction 경계가
-  소유한다.
+  시 `closeAndUnregister`한다. 외부 `Database`에는 ownership guard가 no-op으로
+  동작하며, 명시적 Spring bean name으로 Kotlin `internal` method mangling을 피한다.
+  pool/connection은 Spring과 명시적 transaction 경계가 소유한다.
 - 세 Spring wiring test는 Hikari `DataSource`를 supplier로 만들고 고유 marker를 기록한
   뒤 context의 `Database`로 읽는다. context 종료 후 Hikari `isClosed`를 확인한다.
 - standalone, migration/dialect, Gatling fixture는 목적과 owner/close 규칙을 runbook
@@ -28,13 +30,13 @@
 
 ## Fresh evidence
 
-- `./gradlew :appointment-api:test --tests '*ExposedDatabaseFactoryTest' --no-build-cache`
-  — 4 passing; concurrent registration, exact injected DataSource acquisition, default
-  restoration, lifecycle unregister를 검증했다.
-- `./gradlew :appointment-api:test --tests '*DataSourceOwnershipContractTest' --no-build-cache`
-  — 2 passing; production direct setup 경계를 검증했다.
-- `./gradlew :appointment-api:test --tests '*ExposedDatabaseFactoryTest' --tests '*DataSourceOwnershipContractTest' --tests '*AppointmentCommitmentApplicationWiringTest' --tests '*ProfileReevaluationWiringTest' --tests '*NotificationReminderRecoveryWiringTest' --no-build-cache`
-  — 17 actionable tasks, `BUILD SUCCESSFUL`; marker query와 Hikari close assertion을 포함한다.
+- `./gradlew :appointment-api:compileKotlin :appointment-api:compileTestKotlin --no-build-cache`
+  — `BUILD SUCCESSFUL`; production/test Kotlin compilation을 검증했다.
+- `./gradlew :appointment-api:test --rerun-tasks --tests '*ExposedDatabaseFactoryTest' --tests '*DataSourceOwnershipContractTest' --tests '*AppointmentCommitmentApplicationWiringTest' --tests '*ProfileReevaluationWiringTest' --tests '*NotificationReminderRecoveryWiringTest' --no-build-cache`
+  — 18 passing, `BUILD SUCCESSFUL`; barrier 동시성, repeated acquisition, external
+  handle 보호, marker query, lifecycle manager 제거, Hikari close assertion을 포함한다.
+- `DataSourceOwnershipContractTest` — production five JVM modules와 non-production
+  fixture roots를 검사하며 3개 assertion이 PASS했다.
 - `git diff --check` — PASS.
 - production inventory — `Database.connect(`는 `ExposedDatabaseFactory.kt` 한 곳이며,
   production Kotlin/Java source에 Hikari/SimpleDriver/DriverManager/JDBC literal은 없다.

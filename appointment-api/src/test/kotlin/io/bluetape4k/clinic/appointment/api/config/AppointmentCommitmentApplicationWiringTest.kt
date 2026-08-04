@@ -12,6 +12,7 @@ import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -29,6 +30,7 @@ import java.util.function.Supplier
 class AppointmentCommitmentApplicationWiringTest {
 
     private var lastDataSource: HikariDataSource? = null
+    private var lastDatabase: Database? = null
 
     private val contextRunner =
         ApplicationContextRunner()
@@ -50,6 +52,15 @@ class AppointmentCommitmentApplicationWiringTest {
     @AfterEach
     fun dataSourceIsClosedBySpringContext() {
         lastDataSource?.isClosed?.shouldBeEqualTo(true)
+        lastDatabase?.let { database ->
+            val unregistered = try {
+                TransactionManager.managerFor(database)
+                false
+            } catch (_: IllegalStateException) {
+                true
+            }
+            unregistered.shouldBeTrue()
+        }
     }
 
     @Test
@@ -62,6 +73,8 @@ class AppointmentCommitmentApplicationWiringTest {
             .run { context ->
                 context.startupFailure shouldBeEqualTo null
                 val database = context.getBean(Database::class.java)
+                lastDatabase = database
+                context.getBeansOfType(ExposedDatabaseLifecycle::class.java).size shouldBeEqualTo 1
                 transaction(database) {
                     exec("SELECT marker_value FROM datasource_marker") { rows ->
                         rows.next()
