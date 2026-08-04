@@ -296,15 +296,90 @@ Expected: clean diff check, only approved files, P0=0/P1=0, and a tracked lesson
 Use a Lore commit whose `Tested` trailer lists the fresh Gradle commands and whose
 `Not-tested` trailer lists any external DB or full matrix gap with evidence.
 
+## Task 7: Close the review and workflow gates before delivery
+
+**Files:**
+
+- Review: all approved source, test, runbook, and lesson files in this worktree
+- Evidence: workflow receipts, plan/spec commits, review-lane reports, and fresh test output
+
+- [ ] **Step 1: Apply the plan-review findings**
+
+Add a deterministic concurrent factory test that uses a barrier and several
+`connect` calls against the same injected pool. Each returned handle must answer
+the marker query, each caller must observe its prior default restored, and the
+test must assert bounded completion without sleeping or using a real external DB.
+Add a bounded pool-reuse validation over repeated transactions with one
+instrumented/injected `DataSource`; record the observed acquisition count and
+state the baseline/threshold or the explicit reason the benchmark is out of scope.
+
+- [ ] **Step 2: Run the six review lenses**
+
+Record independent findings for Performance, Stability, Security, Operator/Ops,
+Developer/API, and User/caller. The main lane deduplicates findings and blocks
+delivery on any P0/P1. A P2 must either be fixed in the approved file map or be
+carried as a documented, bounded follow-up; P3 findings do not expand scope.
+
+- [ ] **Step 3: Re-run the Kotlin/Exposed/workflow checklists**
+
+Verify Korean KDoc/runbook/lesson language, explicit transaction boundaries,
+Spring bean lifecycle ownership, Exposed global-default restoration, no new
+dependency or public API surface, workflow receipt evidence, clean diff, and the
+required targeted Gradle commands. Refresh the plan/spec if an API mismatch or
+review finding changes behavior before implementation continues.
+
+## Task 8: Publish the approved change and prove CI readiness
+
+**Files:**
+
+- GitHub issue `#223`
+- Pull request from `issue-223-datasource-standardization` to `develop`
+
+- [ ] **Step 1: Verify delivery authority and exact head**
+
+Confirm the standing user instruction authorizes push/PR/CI closeout for this
+issue, then capture the worktree branch and exact commit SHA after all local
+commits. Do not merge or enable auto-merge in this task.
+
+- [ ] **Step 2: Push and create the English PR**
+
+Push the feature branch, create the PR only after the remote head is verified,
+link `#223`, assign `debop`, and mirror the issue's labels and milestone. The PR
+body must include scope, tests, known gaps, and a final `## DoD Status` section.
+
+- [ ] **Step 3: Verify live PR metadata and CI**
+
+Re-read the live PR body, issue link, assignee, labels, milestone, head SHA,
+review state, and status checks with `gh`. Wait for required CI and address any
+actionable failure or review comment. Capture the final green-check evidence;
+workflow receipts remain part of the delivery record.
+
+## Task 9: Stop at the fresh merge-approval gate
+
+- [ ] **Step 1: Report merge-ready DoD**
+
+Report the exact PR head, green CI/review evidence, local/remote parity, and all
+remaining risks in the final DoD. Ask for a fresh explicit approval tied to that
+exact verified head before running `gh pr merge`.
+
+- [ ] **Step 2: After fresh approval only**
+
+Merge the PR without auto-merge, verify the merged state, synchronize the root
+`develop` checkout, remove only the proven-merged feature worktree/branch, and
+rerun status plus the relevant helper checks. If fresh approval is not present,
+leave the PR open and the worktree intact.
+
 ## Acceptance traceability
 
 | Spec criterion | Plan task | Proof |
 |---|---|---|
 | No eligible production direct setup | Tasks 3 and 5 | `DataSourceOwnershipContractTest` + `rg` inventory |
 | Shared factory and default restoration | Tasks 1–3 | Hikari marker + sentinel default test |
+| Concurrent registration and pool reuse are bounded | Task 7 | Barrier-based factory test + instrumented DataSource validation |
 | Spring wiring uses injected pool | Task 4 | Three context-runner tests and transaction query |
 | Standalone fixtures documented | Task 5 | Korean runbook allowlist |
 | Search and targeted tests | Task 6 | fresh `rg`, Gradle targeted/module compile, diff check |
+| PR/CI metadata and delivery evidence | Tasks 8–9 | Live `gh` head/body/checks plus merge-approval gate |
 | Issue #39 untouched | Tasks 3 and 6 | final diff path review and tenant test scope unchanged |
 
 ## Rollback and stop conditions
