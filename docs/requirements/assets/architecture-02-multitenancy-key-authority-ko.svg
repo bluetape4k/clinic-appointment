@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="520" viewBox="0 0 1400 520" role="img" aria-labelledby="title desc">
+  <title id="title">멀티테넌시 식별자와 키 권위</title>
+  <desc id="desc">외부 tenantCode가 내부 tenantGroupId로 해소되고 clinic과 하위 리소스, 휴일, 비동기 키에 tenant 범위가 전달되는 구조</desc>
+  <defs>
+    <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,1 L12,7 L0,13 Z" fill="#3976d9"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#12233f" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .title { font: 700 30px 'goorm Sans', sans-serif; fill: #14223b; }
+      .subtitle { font: 16px 'goorm Sans', sans-serif; fill: #52627a; }
+      .card-title { font: 700 19px 'goorm Sans Code', 'goorm Sans', monospace; fill: #14223b; }
+      .card-body { font: 15px 'goorm Sans', sans-serif; fill: #42536b; }
+      .edge { fill: none; stroke: #3976d9; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow-blue); }
+      .note { font: 15px 'goorm Sans', sans-serif; fill: #52627a; }
+    </style>
+  </defs>
+  <rect width="1400" height="520" rx="24" fill="#f7f9fc"/>
+  <text class="title" x="700" y="45" text-anchor="middle">멀티테넌시 식별자와 키 권위</text>
+  <text class="subtitle" x="700" y="72" text-anchor="middle">외부 식별자는 내부 범위로 해소하고, 논리 키에는 tenant 경계를 유지한다</text>
+
+  <g filter="url(#shadow)">
+    <rect x="40" y="120" width="250" height="110" rx="18" fill="#e8f3ff" stroke="#5b8def" stroke-width="2"/>
+    <text class="card-title" x="165" y="160" text-anchor="middle">외부 tenant 권위</text>
+    <text class="card-body" x="165" y="190" text-anchor="middle">path 또는 Gateway JWT</text>
+    <text class="card-body" x="165" y="214" text-anchor="middle">lower-case tenantCode</text>
+
+    <rect x="370" y="120" width="250" height="110" rx="18" fill="#f1ecff" stroke="#8a72d6" stroke-width="2"/>
+    <text class="card-title" x="495" y="160" text-anchor="middle">TenantGroup</text>
+    <text class="card-body" x="495" y="190" text-anchor="middle">tenantGroupId: Long</text>
+    <text class="card-body" x="495" y="214" text-anchor="middle">내부 격리 authority</text>
+
+    <rect x="700" y="120" width="250" height="110" rx="18" fill="#eaf7ef" stroke="#58a978" stroke-width="2"/>
+    <text class="card-title" x="825" y="160" text-anchor="middle">Clinics</text>
+    <text class="card-body" x="825" y="190" text-anchor="middle">전역 clinicId PK</text>
+    <text class="card-body" x="825" y="214" text-anchor="middle">tenant 소유권 검증 필수</text>
+
+    <rect x="1080" y="80" width="280" height="105" rx="18" fill="#e9f7f6" stroke="#45a7a1" stroke-width="2"/>
+    <text class="card-title" x="1220" y="120" text-anchor="middle">하위 리소스</text>
+    <text class="card-body" x="1220" y="150" text-anchor="middle">Appointment · Doctor · Equipment</text>
+    <text class="card-body" x="1220" y="173" text-anchor="middle">tenant-aware JOIN guard</text>
+
+    <rect x="1080" y="245" width="280" height="105" rx="18" fill="#fff3d9" stroke="#d6a441" stroke-width="2"/>
+    <text class="card-title" x="1220" y="285" text-anchor="middle">범위가 있는 논리 키</text>
+    <text class="card-body" x="1220" y="315" text-anchor="middle">cache · event · outbox</text>
+    <text class="card-body" x="1220" y="338" text-anchor="middle">idempotency · dedup</text>
+
+    <rect x="700" y="365" width="250" height="105" rx="18" fill="#fdecef" stroke="#dc6b82" stroke-width="2"/>
+    <text class="card-title" x="825" y="405" text-anchor="middle">Holidays</text>
+    <text class="card-body" x="825" y="435" text-anchor="middle">tenantGroupId + holidayDate</text>
+    <text class="card-body" x="825" y="458" text-anchor="middle">tenant별 고유 제약</text>
+  </g>
+
+  <path class="edge" d="M290 175 H370"/>
+  <path class="edge" d="M620 175 H700"/>
+  <path class="edge" d="M950 155 H1035 Q1045 155 1045 145 V143 Q1045 133 1055 133 H1080"/>
+  <path class="edge" d="M950 195 H1015 Q1025 195 1025 205 V287 Q1025 297 1035 297 H1080"/>
+  <path class="edge" d="M495 230 V315 Q495 325 505 325 H815 Q825 325 825 335 V365"/>
+
+  <text class="note" x="700" y="505" text-anchor="middle">DB PK는 전역 surrogate로 유지하고, 외부·비동기 경계의 논리 키는 tenant/clinic 범위를 포함한다.</text>
+</svg>

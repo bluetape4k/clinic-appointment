@@ -236,3 +236,104 @@ abstraction은 Kafka partition/offset/replay 의미를 숨기는 YAGNI이므로 
 
 **근거**: 상세 failure mode, 보안·운영 계약과 검증 gate는
 `docs/superpowers/specs/2026-08-03-issue-40-kafka4-messaging-decision-design.md`를 따른다.
+
+---
+
+### ADR-14: 멀티테넌시 식별자와 Key Authority
+
+**상태**: 채택. PR #118에서 도입한 멀티테넌시 기반을 현재 API·outbox·cache·멱등성
+key까지 확장해 해석하는 권위 계약이다.
+
+#### 식별자 역할
+
+| 식별자 | 역할 | 규칙 |
+|---|---|---|
+| `tenantCode` | 외부 routing·인가 식별자 | 불투명하고 안정적인 lower-case ASCII tenant slug다. 국가 코드나 locale이 아니며 ingress에서 정규형이 아닌 값을 거부한다. 현재 DB collation과 입력 계층은 이 규칙을 완전히 강제하지 않으므로 #37·#38에서 보강한다. |
+| `tenantGroupId: Long` | 내부 DB 관계·격리 authority | `TenantGroups.id`에서 해소한 불변 surrogate ID다. repository, cache, event, outbox, 멱등성 key는 가능한 한 이 값을 사용한다. |
+| `clinicId: Long` | tenant 아래 clinic 식별자 | DB PK는 전역 surrogate로 유지하지만, 외부 입력이나 비동기 경계에서는 단독으로 권위를 갖지 못한다. 항상 `tenantGroupId`와 함께 검증한다. |
+| child resource ID | Doctor, Appointment, Equipment 등의 전역 surrogate PK | composite PK로 재작성하지 않는다. 조회할 때 `tenantGroupId` 또는 `(tenantGroupId, clinicId)` JOIN guard를 강제한다. |
+
+`TenantGroup`은 데이터 격리 단위다. 사용자 locale, clinic timezone, currency, 국가 코드와
+직교한다. 따라서 `KR`, `JP`, `EN`을 tenant identity로 강제하거나 locale을 이용해 기존
+행의 tenant를 추론하지 않는다. 현재 `TenantGroups`의 최소 필드인 `tenantCode`,
+`displayName`, `active`, `createdAt`을 기준 계약으로 유지하고 locale/timezone은 clinic 또는
+별도 configuration이 소유한다.
+
+#### HTTP Tenant Authority
+
+HTTP endpoint는 다음 두 모드 중 정확히 하나를 선언한다. 한 요청에서 두 모드를
+fallback하거나 body의 ID로 tenant를 역추론하지 않는다.
+
+| 모드 | 적용 경로 | Source of truth | 내부 scope 해소 |
+|---|---|---|---|
+| Path-selected | `/api/{tenantCode}/...` | URL `tenantCode`와 JWT `allowedTenants` membership | active `TenantGroup`을 조회해 `tenantGroupId`를 만들고 path `clinicId` 소유권을 검증 |
+| Gateway-selected | `/api/v2/...` | 검증된 JWT의 단일 `allowedTenants`, `clinicId`, `allowedClinicIds` membership | claim 범위를 먼저 검증하고 downstream의 tenant-aware 조회에서 tenant-clinic 관계를 검증해 내부 scope 생성 |
+
+Gateway-selected endpoint는 path-selected endpoint의 예외적인 호환 경계다. 현재 v2 ingress는
+claim membership을 검증하지만 중앙 DB clinic ownership guard를 일괄 수행하지 않으며,
+각 downstream tenant-aware 조회가 관계 검증을 맡는다. 신규 endpoint는 어느 모드를
+사용하는지 KDoc과 security test에 명시해야 한다. 다중 tenant JWT에서 임의의 첫 값을
+선택하거나 `/api/v2`에서 `TenantContext`로 fallback하는 동작은 금지한다.
+
+#### Logical Key 규칙
+
+DB의 전역 surrogate PK와 데이터 격리용 logical key를 구분한다.
+
+| 범위 | 최소 logical key |
+|---|---|
+| tenant 전역 | `(tenantGroupId, businessKey)` |
+| clinic 전역 | `(tenantGroupId, clinicId, businessKey)` |
+| aggregate event/outbox | `(tenantGroupId, clinicId?, aggregateType, aggregateId, eventId)` |
+| cache | authority 범위 + 조회 결과를 바꾸는 모든 입력 |
+| 멱등성/dedup | authority 범위 + stable caller/consumer identity + idempotency/event key |
+
+테이블이 `clinicId` FK로 tenant에 간접 귀속되더라도 신규 API, cache, durable event, outbox,
+idempotency/dedup key에서는 `tenantGroupId`를 생략하지 않는다. 이 규칙은 같은 numeric ID나
+business key가 다른 tenant에서 재사용될 때 충돌·오염·cross-tenant replay가 생기지 않게 한다.
+현재 `DoctorRepository`, `EquipmentRepository`, `TreatmentTypeRepository` cache key와 legacy
+`AppointmentDomainEvent`/`AppointmentEventLogs`는 이 목표 계약보다 좁다. 전역 clinic PK 덕분에
+즉시 충돌이 재현된 상태는 아니지만, 외부화하거나 key 공간을 바꾸기 전에 #39에서 전환한다.
+
+![멀티테넌시 식별자와 key authority](assets/architecture-02-multitenancy-key-authority-ko.png)
+
+[한국어 SVG](assets/architecture-02-multitenancy-key-authority-ko.svg) ·
+[English SVG](assets/architecture-02-multitenancy-key-authority-en.svg) ·
+[English PNG](assets/architecture-02-multitenancy-key-authority-en.png)
+
+#### 생명주기와 전파 규칙
+
+- tenant 삭제는 `RESTRICT`를 기본으로 한다. clinic·holiday 연쇄 삭제를 허용하는 `CASCADE`는
+  별도의 데이터 보존 설계와 승인 없이는 적용하지 않는다.
+- `tenantCode` rename은 Phase 1에서 지원하지 않는다. 향후 허용하려면 URL/JWT/cache/event key
+  migration, alias 만료, 감사 기록을 포함한 별도 설계가 필요하다.
+- `TenantContext`는 동기 HTTP filter와 HTTP-bound adapter/helper의 편의 기능이다. adapter는
+  context를 읽은 즉시 명시적인 scope 값으로 변환한다. core service, coroutine, background job,
+  event consumer에는 `tenantGroupId`와 필요한 `clinicId`를 명시적으로 전달한다.
+- 모든 Exposed 조회는 `transaction {}` 안에서 실행하고, 외부에 노출된 resource ID 조회는
+  tenant-aware repository 메서드 또는 선행 clinic ownership guard로 증명한다.
+
+#### 후속 이슈 경계
+
+| 이슈 | ADR-14 이후 책임 |
+|---|---|
+| #37 | live issue의 지역 필드·seed·`CASCADE` 요구를 이 ADR과 정합화하고 tenant-aware Clinic/Holiday repository 계약을 확정 |
+| #38 | Path-selected/Gateway-selected endpoint 목록, 오류 매트릭스, `TenantContext` 가시성과 coroutine 전파를 검증 |
+| #39 | Holiday·clinic child·solver를 포함한 externally reachable query를 전수 감사하고 cross-tenant negative test로 잠금 |
+
+#### 검토한 대안
+
+| 대안 | 채택하지 않은 이유 |
+|---|---|
+| tenant별 DB schema 분리 | tenant 수만큼 Flyway·connection routing·운영 점검이 갈라지고 기존 단일 schema migration 자산을 직접 재사용하기 어렵다. 현재 규모에는 row-level 격리가 더 단순하다. |
+| tenant별 database 분리 | provisioning·connection pool·backup·관측·장애 복구 비용이 tenant 수에 비례한다. 규제 또는 물리 격리 요구가 생기기 전에는 운영 복잡도가 이득보다 크다. |
+| subdomain만으로 tenant 선택 | DNS/TLS와 local/test 환경을 복잡하게 만들고 API route만으로 scope를 재현하기 어렵다. Phase 1의 canonical 선택은 path다. |
+| JWT만으로 모든 tenant 선택 | path-selected API에서 요청 대상이 URL에 드러나지 않고 routing과 인증 claim이 결합된다. `/api/v2` Gateway-selected mode만 명시적 예외로 유지한다. |
+| 모든 PK를 `(tenantGroupId, id)` composite key로 변경 | 기존 전역 surrogate 참조와 migration 비용이 크고, 조회 authority를 명시하는 JOIN guard로 같은 격리 목적을 달성할 수 있다. |
+| `tenantCode`를 내부 FK와 모든 key에 직접 사용 | rename·alias·문자열 collation이 내부 관계와 비동기 key를 흔든다. 외부 slug는 ingress에서 `tenantGroupId`로 해소한다. |
+| locale/국가 코드를 tenant identity로 사용 | 한 tenant가 여러 locale/clinic timezone을 가질 수 있어 데이터 격리 단위와 표시 설정을 혼동한다. |
+| `clinicId`만으로 모든 logical key 구성 | 현재 PK 전역성에 과도하게 의존하고 외부·비동기 경계에서 tenant authority가 사라진다. |
+| `TenantContext`를 coroutine·background 작업까지 암묵 전파 | thread-local 생명주기와 실행 컨텍스트가 달라 누락·잔존 scope 위험이 있다. 명시 전달이 실패를 더 일찍 드러낸다. |
+
+**근거**: [멀티테넌시 상세 설계](../superpowers/specs/2026-05-19-multitenancy-design.md),
+[아키텍처 blueprint](../superpowers/research/2026-05-19-multitenancy-architecture-blueprint.md),
+[2026-08-04 완료 상태 감사](../reviews/2026-08-04-multitenancy-audit.md)를 따른다.
