@@ -31,20 +31,38 @@ class DataSourceOwnershipContractTest {
         forbiddenMatches shouldBeEqualTo emptyList()
     }
 
-    private fun productionSources(): List<Path> =
-        moduleRoots()
-            .flatMap { root ->
-                Files.walk(root).use { stream ->
-                    stream
-                        .filter(Files::isRegularFile)
-                        .filter { it.fileName.toString().substringAfterLast('.') in setOf("kt", "java") }
-                        .toList()
-                }
-            }
-            .sorted()
+    @Test
+    fun `non production direct setup stays under the documented fixture roots`() {
+        val outOfScopeMatches = nonProductionSources()
+            .filter { path -> FORBIDDEN_PATTERNS.any { (_, pattern) -> pattern in source(path) } }
+            .map(::relativePath)
+            .filterNot { path -> ALLOWLISTED_ROOTS.any(path::startsWith) }
 
-    private fun moduleRoots(): List<Path> =
-        listOf(Path.of("appointment-api/src/main"), Path.of("../appointment-api/src/main"))
+        outOfScopeMatches shouldBeEqualTo emptyList()
+    }
+
+    private fun productionSources(): List<Path> =
+        moduleRoots("src/main")
+            .flatMap(::kotlinAndJavaFiles)
+
+    private fun nonProductionSources(): List<Path> =
+        moduleRoots("src/test")
+            .plus(moduleRoots("src/gatling"))
+            .flatMap(::kotlinAndJavaFiles)
+
+    private fun kotlinAndJavaFiles(root: Path): List<Path> =
+        Files.walk(root).use { stream ->
+            stream
+                .filter(Files::isRegularFile)
+                .filter { it.fileName.toString().substringAfterLast('.') in setOf("kt", "java") }
+                .toList()
+        }
+
+    private fun moduleRoots(sourceSet: String): List<Path> =
+        MODULE_NAMES
+            .flatMap { module ->
+                listOf(Path.of("$module/$sourceSet"), Path.of("../$module/$sourceSet"))
+            }
             .filter(Files::exists)
             .distinct()
 
@@ -55,6 +73,16 @@ class DataSourceOwnershipContractTest {
 
     private companion object {
         const val DATABASE_CONNECT_PATTERN = "Database.connect("
+        val MODULE_NAMES = listOf(
+            "appointment-api",
+            "appointment-core",
+            "appointment-event",
+            "appointment-notification",
+            "appointment-solver",
+        )
+        val ALLOWLISTED_ROOTS = MODULE_NAMES.flatMap { module ->
+            listOf("$module/src/test/", "$module/src/gatling/")
+        }
         val FORBIDDEN_PATTERNS = listOf(
             "HikariDataSource" to "HikariDataSource",
             "SimpleDriverDataSource" to "SimpleDriverDataSource",

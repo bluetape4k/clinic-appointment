@@ -15,8 +15,8 @@ Spring이 pool을 닫는다.
 3. 현재 runtime은 단일 `DataSource`다. 두 개 이상의 pool을 추가할 때는 bean name 또는
    `@Qualifier`를 factory 호출부에 명시하고, 각 pool의 고유 marker를 읽는 wiring test를
    함께 추가한다. 이름 없는 `DataSource` 주입으로 tenant/pool을 추측하지 않는다.
-4. factory가 만든 handle에만 lifecycle bean을 연결한다. 외부에서 제공한 `Database`를
-   임의로 `closeAndUnregister`하지 않는다.
+4. lifecycle bean의 destroy는 factory ownership guard를 거친다. factory가 만든 handle만
+   `closeAndUnregister`하고, 외부에서 제공한 `Database`에는 no-op으로 동작한다.
 5. 직접 만든 standalone fixture는 자신이 만든 connection/pool만 닫는다. Spring bean을
    주입받은 테스트는 동일 인스턴스를 수동으로 닫지 않고 context 종료를 검증한다.
 
@@ -33,6 +33,8 @@ Spring이 pool을 닫는다.
 
 새 direct setup을 추가할 때는 이 표의 정확한 파일/분류/owner/close 방법을 먼저
 갱신하고, production source라면 factory 경계를 우회하지 않는다.
+`DataSourceOwnershipContractTest`는 현재 다섯 JVM 모듈의 `src/main`을 전수 검사하고,
+비운영 `src/test`·`src/gatling` 직접 setup이 위 allowlist root 안에 있는지도 검증한다.
 
 ## 점검 명령
 

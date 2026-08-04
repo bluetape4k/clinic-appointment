@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.config
 
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import javax.sql.DataSource
 import kotlin.concurrent.withLock
@@ -16,13 +17,30 @@ import kotlin.concurrent.withLock
  */
 internal object ExposedDatabaseFactory {
     private val registrationLock = ReentrantLock()
+    private val ownedDatabases = ConcurrentHashMap.newKeySet<Database>()
 
     fun connect(dataSource: DataSource): Database = registrationLock.withLock {
         val previousDefaultDatabase = TransactionManager.defaultDatabase
-        try {
+        val database = try {
             Database.connect(dataSource)
         } finally {
             TransactionManager.defaultDatabase = previousDefaultDatabase
+        }
+        ownedDatabases += database
+        database
+    }
+
+    /**
+     * Factory가 등록한 handle만 Exposed manager에서 해제합니다.
+     *
+     * Spring이 외부에서 제공한 [Database]에는 no-op이므로, 선택적인 설정 조합에서
+     * 외부 handle의 수명과 manager 등록을 침범하지 않습니다.
+     */
+    fun release(database: Database) {
+        registrationLock.withLock {
+            if (ownedDatabases.remove(database)) {
+                TransactionManager.closeAndUnregister(database)
+            }
         }
     }
 }

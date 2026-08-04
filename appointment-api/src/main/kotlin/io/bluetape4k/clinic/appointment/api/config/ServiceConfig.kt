@@ -516,7 +516,7 @@ class ServiceConfig {
      * context 종료 시 manager 해제는 [ExposedDatabaseFactory]와
      * [ExposedDatabaseLifecycle]이 담당한다.
      */
-    @Bean
+    @Bean(name = ["appointmentCommitmentDatabase"])
     @ConditionalOnProperty(
         prefix = "appointment.commitment",
         name = ["api-enabled"],
@@ -531,7 +531,7 @@ class ServiceConfig {
     internal fun appointmentCommitmentDatabase(dataSource: DataSource): Database =
         ExposedDatabaseFactory.connect(dataSource)
 
-    @Bean
+    @Bean(name = ["appointmentCommitmentDatabaseLifecycle"])
     @ConditionalOnBean(name = ["appointmentCommitmentDatabase"])
     internal fun appointmentCommitmentDatabaseLifecycle(database: Database): ExposedDatabaseLifecycle =
         ExposedDatabaseLifecycle(database)

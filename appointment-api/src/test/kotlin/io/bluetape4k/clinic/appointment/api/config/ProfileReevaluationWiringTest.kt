@@ -4,6 +4,7 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.profile.ProfileAssessmentClient
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationAdminService
@@ -40,6 +41,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.AfterEach
@@ -55,6 +57,7 @@ import java.util.function.Supplier
 @ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 class ProfileReevaluationWiringTest {
     private var lastDataSource: HikariDataSource? = null
+    private var lastDatabase: Database? = null
 
     private val runner =
         ApplicationContextRunner()
@@ -77,6 +80,15 @@ class ProfileReevaluationWiringTest {
     @AfterEach
     fun dataSourceIsClosedBySpringContext() {
         lastDataSource?.isClosed?.shouldBeEqualTo(true)
+        lastDatabase?.let { database ->
+            val unregistered = try {
+                TransactionManager.managerFor(database)
+                false
+            } catch (_: IllegalStateException) {
+                true
+            }
+            unregistered.shouldBeTrue()
+        }
     }
 
     @Test
@@ -160,6 +172,8 @@ class ProfileReevaluationWiringTest {
         runner.run { context ->
             context.startupFailure shouldBeEqualTo null
             val database = context.getBean(Database::class.java)
+            lastDatabase = database
+            context.getBeansOfType(ExposedDatabaseLifecycle::class.java).size shouldBeEqualTo 1
             transaction(database) {
                 exec("SELECT marker_value FROM datasource_marker") { rows ->
                     rows.next()

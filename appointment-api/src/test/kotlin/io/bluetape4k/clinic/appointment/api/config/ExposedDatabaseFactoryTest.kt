@@ -47,7 +47,7 @@ class ExposedDatabaseFactoryTest {
                 } shouldBeEqualTo 223
             }
             TransactionManager.defaultDatabase shouldBeEqualTo sentinel
-            TransactionManager.closeAndUnregister(database)
+            ExposedDatabaseFactory.release(database)
         } finally {
             TransactionManager.closeAndUnregister(sentinel)
             TransactionManager.defaultDatabase = originalDefaultDatabase
@@ -68,20 +68,22 @@ class ExposedDatabaseFactoryTest {
         val workerCount = 6
         val barrier = CyclicBarrier(workerCount)
         val executor = Executors.newFixedThreadPool(workerCount)
-        val databases = mutableListOf<Database>()
         try {
             val futures = (0 until workerCount).map {
                 executor.submit<Database> {
                     barrier.await(10, SECONDS)
                     val database = ExposedDatabaseFactory.connect(pool)
-                    markerValue(database) shouldBeEqualTo 223
+                    try {
+                        markerValue(database) shouldBeEqualTo 223
+                    } finally {
+                        ExposedDatabaseFactory.release(database)
+                    }
                     database
                 }
             }
-            futures.forEach { databases += it.get(10, SECONDS) }
+            futures.forEach { it.get(10, SECONDS) }
             TransactionManager.defaultDatabase shouldBeEqualTo sentinel
         } finally {
-            databases.forEach(TransactionManager::closeAndUnregister)
             executor.shutdownNow()
             TransactionManager.closeAndUnregister(sentinel)
             TransactionManager.defaultDatabase = originalDefaultDatabase
@@ -103,7 +105,7 @@ class ExposedDatabaseFactoryTest {
             repeat(5) { markerValue(database) shouldBeEqualTo 223 }
             (acquisitions.get() - warmupAcquisitions) shouldBeEqualTo 5
         } finally {
-            TransactionManager.closeAndUnregister(database)
+            ExposedDatabaseFactory.release(database)
             TransactionManager.defaultDatabase = originalDefaultDatabase
             pool.close()
         }
@@ -127,6 +129,20 @@ class ExposedDatabaseFactoryTest {
             TransactionManager.closeAndUnregister(sentinel)
             TransactionManager.defaultDatabase = originalDefaultDatabase
             pool.close()
+        }
+    }
+
+    @Test
+    fun `lifecycle leaves an externally registered handle untouched`() {
+        val database = Database.connect(
+            url = "jdbc:h2:mem:external_lifecycle_${System.nanoTime()};DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        try {
+            ExposedDatabaseLifecycle(database).destroy()
+            TransactionManager.managerFor(database).shouldNotBeNull()
+        } finally {
+            TransactionManager.closeAndUnregister(database)
         }
     }
 
