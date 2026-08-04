@@ -183,7 +183,7 @@ parameter를 제거합니다.
 |------|------|
 | [요구사항 인덱스](docs/requirements/README.md) | 전체 요구사항 목록 + 구현 상태 |
 | [아키텍처](docs/requirements/architecture.md) | 모듈 의존성, 주요 설계 결정 (ADR) |
-| [도메인 모델](docs/requirements/domain-model.md) | 16개 엔티티, 예약 상태머신, 테이블 관계 |
+| [도메인 모델](docs/requirements/domain-model.md) | tenant 소유권, 도메인 엔티티, 예약 상태머신, 테이블 관계 |
 | [AI 스케줄러](docs/requirements/solver.md) | Timefold Solver 제약조건 설계 |
 | [알림 모듈](docs/requirements/notification.md) | 내구성 outbox 생명주기, 단계별 전환, 회원정보 경계, provider 장애 격리 |
 | [알림 outbox 운영 런북](docs/runbooks/notification-outbox-operations.md) | 카나리 기준, 경보, 재알림, 키 교체, 마이그레이션, 롤백 |

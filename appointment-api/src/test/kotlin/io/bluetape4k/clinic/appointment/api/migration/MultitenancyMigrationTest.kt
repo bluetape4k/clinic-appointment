@@ -19,7 +19,7 @@ import java.sql.SQLException
 class MultitenancyMigrationTest {
 
     @Test
-    fun `V3-V6 applies cleanly and enforces tenant ownership`() {
+    fun `tenant migrations apply cleanly and enforce canonical ownership`() {
         val target = MigrationTarget.fromActiveProfiles()
         migrate(target)
 
@@ -52,6 +52,31 @@ class MultitenancyMigrationTest {
                 VALUES (2, 'tenant-b', 'Tenant B', TRUE)
                 """.trimIndent()
             )
+
+            connection.expectSqlFailure {
+                executeUpdate(
+                    """
+                    INSERT INTO scheduling_tenant_groups (id, tenant_code, display_name, active)
+                    VALUES (3, 'Tenant-C', 'Uppercase Tenant', TRUE)
+                    """.trimIndent()
+                )
+            }
+            connection.expectSqlFailure {
+                executeUpdate(
+                    """
+                    INSERT INTO scheduling_tenant_groups (id, tenant_code, display_name, active)
+                    VALUES (4, 'tenant_c', 'Underscore Tenant', TRUE)
+                    """.trimIndent()
+                )
+            }
+            connection.expectSqlFailure {
+                executeUpdate(
+                    """
+                    INSERT INTO scheduling_tenant_groups (id, tenant_code, display_name, active)
+                    VALUES (5, 'tenant-b', 'Duplicate Tenant', TRUE)
+                    """.trimIndent()
+                )
+            }
 
             connection.executeUpdate(
                 """

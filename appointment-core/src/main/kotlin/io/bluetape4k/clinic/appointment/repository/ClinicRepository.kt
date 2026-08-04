@@ -14,6 +14,7 @@ import io.bluetape4k.clinic.appointment.model.tables.ClinicDefaultBreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
@@ -46,6 +47,18 @@ class ClinicRepository : LongJdbcRepository<ClinicRecord> {
             }
             .firstOrNull()
             ?.toClinicRecord()
+
+    /**
+     * 지정한 tenant group에 속한 병원 목록을 ID 오름차순으로 조회합니다.
+     *
+     * 호출자는 Exposed `transaction {}` 안에서 실행해야 합니다.
+     */
+    fun findByTenant(tenantGroupId: Long): List<ClinicRecord> =
+        Clinics
+            .selectAll()
+            .where { Clinics.tenantGroupId eq tenantGroupId }
+            .orderBy(Clinics.id, SortOrder.ASC)
+            .map { it.toClinicRecord() }
 
     /**
      * 병원의 특정 요일 운영 시간을 조회합니다.

@@ -4,6 +4,7 @@
 
 | Record | Exposed Table | 역할 |
 |--------|--------------|------|
+| `TenantGroupRecord` | `TenantGroups` | 데이터 격리 소유자 — 안정적인 URL tenant code, 표시 이름, 활성 상태 |
 | `ClinicRecord` | `Clinics` | 병원 — slotDurationMinutes, maxConcurrentPatients, openOnHolidays |
 | `DoctorRecord` | `Doctors` | 의사 — clinicId, providerType, maxConcurrentPatients |
 | `AppointmentRecord` | `Appointments` | 예약 — clinicId, doctorId, treatmentTypeId, equipmentId, appointmentDate, startTime, endTime, status |
@@ -27,6 +28,17 @@
 | `EffectiveSchedulingPolicySnapshotRecord` | `EffectiveSchedulingPolicySnapshots` | compiled policy snapshot hash와 source versions |
 | `SchedulingPolicyActivationCommandRecord` | `SchedulingPolicyActivationCommands` | due activation, idempotency, replay, lease 상태 |
 | `SchedulingPolicyPreviewJobRecord` | `SchedulingPolicyPreviewJobs` | bounded impact preview 진행률, cursor, evidence token |
+
+## Tenant 소유권 계약
+
+`TenantGroup`은 clinic과 tenant 범위 holiday의 데이터 격리 소유자다. `tenantCode`는 URL에
+노출되는 1~64자의 안정적인 식별자이며 `^[a-z0-9]+(-[a-z0-9]+)*$` 형식을 따른다. 표시
+언어와 날짜 형식을 정하는 `Clinics.locale`은 tenant 식별자가 아니다.
+
+- 요청 경계에서는 활성 tenant code를 먼저 해석한다.
+- clinic 목록은 `tenant_group_id`로 제한하고 ID 오름차순으로 반환한다.
+- holiday 단건 조회는 `(tenant_group_id, holiday_date)` 조합으로 제한한다.
+- 기존 tenant 미지정 holiday/slot/solver 경로의 전환은 후속 이슈 #39에서 다룬다.
 
 ## 예약 상태머신
 

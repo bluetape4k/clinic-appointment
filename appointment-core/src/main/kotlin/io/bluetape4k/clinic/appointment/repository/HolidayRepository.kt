@@ -23,6 +23,19 @@ class HolidayRepository : LongJdbcRepository<HolidayRecord> {
     fun existsByDate(date: LocalDate): Boolean =
         Holidays.selectAll().where { Holidays.holidayDate eq date }.count() > 0
 
+    /**
+     * 지정한 tenant group과 날짜에 해당하는 공휴일을 조회합니다.
+     *
+     * 호출자는 Exposed `transaction {}` 안에서 실행해야 합니다.
+     */
+    fun findByTenantAndDate(tenantGroupId: Long, date: LocalDate): HolidayRecord? =
+        Holidays
+            .selectAll()
+            .where { Holidays.tenantGroupId eq tenantGroupId }
+            .andWhere { Holidays.holidayDate eq date }
+            .firstOrNull()
+            ?.toHolidayRecord()
+
     fun findByDateRange(dateRange: ClosedRange<LocalDate>): List<HolidayRecord> =
         Holidays
             .selectAll()
