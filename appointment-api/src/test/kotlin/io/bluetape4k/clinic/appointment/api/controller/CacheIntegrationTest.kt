@@ -18,6 +18,7 @@ import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeEmpty
 import io.bluetape4k.assertions.shouldNotBeNull
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -56,12 +57,14 @@ class CacheIntegrationTest @Autowired constructor(
             Clinics.deleteAll()
             TenantGroups.deleteAll()
             TenantGroups.insertAndGetId {
+                it[id] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
                 it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
                 it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
                 it[active] = true
             }
 
             clinicId = Clinics.insertAndGetId {
+                it[tenantGroupId] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
                 it[name] = "Test Clinic"
                 it[slotDurationMinutes] = 30
                 it[timezone] = "Asia/Seoul"
