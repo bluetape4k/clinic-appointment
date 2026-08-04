@@ -151,3 +151,11 @@ core notification draft port and writes the canonical outbox payload without
 making the event module depend on a provider SDK.
 
 See the [waitlist delivery API and operations contract](../docs/api/waitlist-delivery.md).
+
+## Appointment event scope
+
+Every local `AppointmentDomainEvent` carries a positive `TenantClinicScope`.
+Events remain in-process Spring `ApplicationEvent` values; they are not broker or
+Java-wire messages. The best-effort event log records `tenant_group_id` and keeps
+audit failure from changing the already-committed business result. Durable
+notification delivery remains tenant-scoped in the outbox.

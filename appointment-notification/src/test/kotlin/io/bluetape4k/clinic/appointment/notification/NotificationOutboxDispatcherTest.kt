@@ -17,6 +17,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateV
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -28,6 +29,8 @@ import io.mockk.verify
 import org.junit.jupiter.api.Test
 
 internal class NotificationOutboxDispatcherTest {
+
+    private fun scope(clinicId: Long, tenantGroupId: Long = 1L) = TenantClinicScope(tenantGroupId, clinicId)
 
     @Test
     fun `큰 clinic backlog가 있어도 작은 clinic 후보가 첫 두 page 안에 claim된다`() {
@@ -172,7 +175,7 @@ internal class NotificationOutboxDispatcherTest {
                 routeGate = NotificationDeliveryRouteGate(
                     NotificationProperties.RolloutProperties(
                         mode = NotificationRolloutMode.CANARY,
-                        canaryClinicIds = setOf(7L),
+                        canaryScopes = setOf(scope(7L)),
                     )
                 ),
             )
@@ -200,7 +203,7 @@ internal class NotificationOutboxDispatcherTest {
             routeGate = NotificationDeliveryRouteGate(
                 NotificationProperties.RolloutProperties(
                     mode = NotificationRolloutMode.CANARY,
-                    canaryClinicIds = setOf(77L),
+                    canaryScopes = setOf(scope(77L)),
                 )
             ),
         )
@@ -209,6 +212,38 @@ internal class NotificationOutboxDispatcherTest {
 
         store.claimedIds shouldBeEqualTo listOf(100L)
         Unit
+    }
+
+    @Test
+    fun `CANARY 만료 lease 복구도 allowlist 밖 provider 작업을 실행하지 않는다`() = runBlocking {
+        val store = FairFakeWorkStore(
+            candidates = emptyList(),
+            expired = listOf(
+                claimed(id = 900L, clinicId = 8L),
+                claimed(id = 901L, clinicId = 7L),
+            ),
+        )
+        val processedIds = mutableListOf<Long>()
+        val dispatcher = NotificationOutboxDispatcher(
+            store = store,
+            worker = NotificationOutboxJobWorker {
+                processedIds += it.id
+                NotificationOutboxWorkerResult.COMPLETED
+            },
+            leaseOwner = "dispatcher-test",
+            globalConcurrency = 2,
+            perClinicConcurrency = 1,
+            routeGate = NotificationDeliveryRouteGate(
+                NotificationProperties.RolloutProperties(
+                    mode = NotificationRolloutMode.CANARY,
+                    canaryScopes = setOf(scope(7L)),
+                )
+            ),
+        )
+
+        dispatcher.dispatchOnce()
+
+        processedIds shouldBeEqualTo listOf(901L)
     }
 
     @Test
@@ -244,16 +279,26 @@ internal class NotificationOutboxDispatcherTest {
             limit: Int,
             cursor: NotificationFairCursor?,
         ): NotificationCandidatePage =
-            findFairCandidatesForRoute(limit, cursor, perClinicLimit = 1, eligibleClinicIds = null)
+            findFairCandidatesForRoute(
+                limit,
+                cursor,
+                perClinicLimit = 1,
+                eligibleScopes = null,
+            )
 
         override suspend fun findFairCandidatesForRoute(
             limit: Int,
             cursor: NotificationFairCursor?,
             perClinicLimit: Int,
-            eligibleClinicIds: Set<Long>?,
+            eligibleScopes: Set<TenantClinicScope>?,
         ): NotificationCandidatePage {
             operations += "find:$limit"
-            val eligible = remaining.filter { eligibleClinicIds == null || it.clinicId.value in eligibleClinicIds }
+            val eligible = remaining.filter {
+                when {
+                    eligibleScopes != null -> TenantClinicScope(it.tenantGroupId.value, it.clinicId.value) in eligibleScopes
+                    else -> true
+                }
+            }
             val grouped = eligible.groupBy { NotificationClinicKey(it.tenantGroupId, it.clinicId) }
             val keys = grouped.keys.sortedWith(compareBy({ it.tenantGroupId.value }, { it.clinicId.value }))
             val orderedKeys = cursor?.let { fairCursor ->

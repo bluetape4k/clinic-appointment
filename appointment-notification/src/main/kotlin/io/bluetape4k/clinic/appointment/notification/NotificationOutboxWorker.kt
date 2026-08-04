@@ -59,7 +59,7 @@ class NotificationOutboxWorker(
         }
     }
 
-    suspend fun recoverExpiredOnce(limit: Int): List<ClaimedNotification> {
+    internal suspend fun recoverExpiredOnce(limit: Int): List<ClaimedNotification> {
         require(limit > 0) { "limit must be positive" }
         if (readiness?.check()?.available == false) return emptyList()
         return workStore.recoverExpired(limit, leaseOwner).also { recovered ->

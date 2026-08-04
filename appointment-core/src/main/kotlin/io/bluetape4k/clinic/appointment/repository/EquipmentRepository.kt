@@ -1,8 +1,10 @@
 package io.bluetape4k.clinic.appointment.repository
 
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
+import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.support.requireNotNull
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -38,17 +40,33 @@ class EquipmentRepository : LongJdbcRepository<EquipmentRecord> {
             .firstOrNull()
             ?.toEquipmentRecord()
 
-    /**
-     * 병원의 장비 목록을 조회합니다.
-     *
-     * 결과는 Spring Cache 추상화를 통해 NearCache(Caffeine L1 + Redis L2)에 캐싱됩니다.
-     *
-     * @param clinicId 병원 ID
-     * @return 장비 목록 (빈 결과는 캐싱하지 않음)
-     */
-    @Cacheable(cacheNames = ["clinic-equipments"], key = "#clinicId", unless = "#result == null || #result.isEmpty()")
-    fun findByClinicId(clinicId: Long): List<EquipmentRecord> =
-        Equipments.selectAll()
-            .where { Equipments.clinicId eq clinicId }
+    /** 검증된 테넌트-병원 범위에 속한 장비만 조회합니다. */
+    fun findByIdAndScope(equipmentId: Long, scope: TenantClinicScope): EquipmentRecord? =
+        Equipments
+            .selectAll()
+            .where {
+                (Equipments.id eq equipmentId) and
+                    (Equipments.clinicId eq scope.clinicId) and
+                    (Equipments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
+            .firstOrNull()
+            ?.toEquipmentRecord()
+
+    /** 테넌트와 병원을 모두 포함하는 안정적인 캐시 키로 장비 목록을 조회합니다. */
+    @Cacheable(cacheNames = ["clinic-equipments"], key = "#scope.cacheKey()", unless = "#result == null || #result.isEmpty()")
+    fun findByScope(scope: TenantClinicScope): List<EquipmentRecord> =
+        Equipments
+            .selectAll()
+            .where {
+                (Equipments.clinicId eq scope.clinicId) and
+                    (Equipments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
             .map { it.toEquipmentRecord() }
+
+    /** 테넌트-병원 범위를 SQL predicate에 포함한 페이징 목록을 조회합니다. */
+    fun findPage(scope: TenantClinicScope, page: Int, size: Int): ExposedPage<EquipmentRecord> =
+        findPage(page, size) {
+            (Equipments.clinicId eq scope.clinicId) and
+                (Equipments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+        }
 }

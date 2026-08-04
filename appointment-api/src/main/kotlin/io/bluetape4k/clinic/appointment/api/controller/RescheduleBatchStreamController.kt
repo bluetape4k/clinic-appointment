@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -21,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.time.LocalDate
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * SSE endpoint for streaming batch reschedule progress.
@@ -39,6 +42,8 @@ import java.time.LocalDate
 class RescheduleBatchStreamController(
     private val closureRescheduleService: ClosureRescheduleService,
     private val tenantClinicAccessChecker: TenantClinicAccessChecker,
+    @Value("\${appointment.reschedule.sse-timeout-millis:120000}")
+    private val streamTimeoutMillis: Long,
 ) {
     companion object : KLogging()
 
@@ -64,16 +69,31 @@ class RescheduleBatchStreamController(
         @RequestParam(defaultValue = "7") searchDays: Int,
     ): SseEmitter {
         searchDays.requireInRange(1, 30, "searchDays")
-        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        require(streamTimeoutMillis > 0L) { "appointment.reschedule.sse-timeout-millis must be positive" }
+        val tenant = tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        val scope = io.bluetape4k.clinic.appointment.model.service.TenantClinicScope(tenant.id, clinicId)
         log.debug { "GET reschedule batch stream tenantCode=$tenantCode, clinic=$clinicId, date=$closureDate, searchDays=$searchDays" }
 
-        val emitter = SseEmitter(0L) // no timeout — stream length is proportional to affected count
-        Thread.ofVirtual().start {
-            runCatching {
+        val emitter = SseEmitter(streamTimeoutMillis)
+        val workerRef = AtomicReference<Thread?>()
+        val interruptWorker: () -> Unit = {
+            workerRef.get()?.let { worker -> worker.interrupt() }
+        }
+        emitter.onCompletion(interruptWorker)
+        emitter.onTimeout {
+            interruptWorker()
+            emitter.complete()
+        }
+        emitter.onError {
+            interruptWorker()
+        }
+
+        val worker = Thread.ofVirtual().name("reschedule-stream-$clinicId").unstarted {
+            try {
                 var totalProcessed = 0
 
                 val count = closureRescheduleService.streamClosureReschedule(
-                    clinicId = clinicId,
+                    scope = scope,
                     closureDate = closureDate,
                     searchDays = searchDays,
                 ) { appointmentId, candidateCount ->
@@ -98,11 +118,20 @@ class RescheduleBatchStreamController(
                         .data(terminal, MediaType.APPLICATION_JSON)
                 )
                 emitter.complete()
-            }.onFailure { ex ->
+            } catch (ex: CancellationException) {
+                log.debug { "SSE batch reschedule cancelled - clinic=$clinicId, date=$closureDate" }
+                emitter.complete()
+                throw ex
+            } catch (ex: InterruptedException) {
+                log.debug { "SSE batch reschedule interrupted - clinic=$clinicId, date=$closureDate" }
+                emitter.complete()
+            } catch (ex: Exception) {
                 log.warn(ex) { "SSE batch reschedule failed - clinic=$clinicId, date=$closureDate" }
                 emitter.completeWithError(ex)
             }
         }
+        workerRef.set(worker)
+        worker.start()
 
         return emitter
     }

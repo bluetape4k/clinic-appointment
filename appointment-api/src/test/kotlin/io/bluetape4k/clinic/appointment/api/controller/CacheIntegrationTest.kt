@@ -5,6 +5,8 @@ import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.model.tables.Equipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
 import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
@@ -16,6 +18,7 @@ import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeEmpty
 import io.bluetape4k.assertions.shouldNotBeNull
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -37,6 +40,9 @@ class CacheIntegrationTest @Autowired constructor(
 
     private var clinicId: Long = 0
 
+    private fun scope(): TenantClinicScope =
+        TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId)
+
     @BeforeEach
     fun setup() {
         cacheManager.getCache("clinic-doctors")?.clear()
@@ -44,13 +50,21 @@ class CacheIntegrationTest @Autowired constructor(
         cacheManager.getCache("clinic-treatment-types")?.clear()
 
         transaction {
-            SchemaUtils.create(Clinics, Doctors, Equipments, TreatmentTypes)
+            SchemaUtils.create(TenantGroups, Clinics, Doctors, Equipments, TreatmentTypes)
             TreatmentTypes.deleteAll()
             Equipments.deleteAll()
             Doctors.deleteAll()
             Clinics.deleteAll()
+            TenantGroups.deleteAll()
+            TenantGroups.insertAndGetId {
+                it[id] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+                it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
+                it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
+                it[active] = true
+            }
 
             clinicId = Clinics.insertAndGetId {
+                it[tenantGroupId] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
                 it[name] = "Test Clinic"
                 it[slotDurationMinutes] = 30
                 it[timezone] = "Asia/Seoul"
@@ -82,15 +96,15 @@ class CacheIntegrationTest @Autowired constructor(
         }
 
         // 1회 호출 → DB 조회 후 캐시 적재
-        val first = transaction { doctorRepository.findByClinicId(id) }
+        val first = transaction { doctorRepository.findByScope(scope()) }
         first.shouldNotBeEmpty()
 
         // 캐시에 저장됐는지 확인
-        val cached = cacheManager.getCache("clinic-doctors")?.get(id.toString())?.get()
+        val cached = cacheManager.getCache("clinic-doctors")?.get(scope().cacheKey())?.get()
         cached.shouldNotBeNull()
 
         // 2회 호출 → 캐시에서 반환 (결과 동일)
-        val second = transaction { doctorRepository.findByClinicId(id) }
+        val second = transaction { doctorRepository.findByScope(scope()) }
         second.shouldNotBeEmpty()
         second shouldBeEqualTo first
     }
@@ -107,13 +121,13 @@ class CacheIntegrationTest @Autowired constructor(
             }
         }
 
-        val first = transaction { equipmentRepository.findByClinicId(id) }
+        val first = transaction { equipmentRepository.findByScope(scope()) }
         first.shouldNotBeEmpty()
 
-        val cached = cacheManager.getCache("clinic-equipments")?.get(id.toString())?.get()
+        val cached = cacheManager.getCache("clinic-equipments")?.get(scope().cacheKey())?.get()
         cached.shouldNotBeNull()
 
-        val second = transaction { equipmentRepository.findByClinicId(id) }
+        val second = transaction { equipmentRepository.findByScope(scope()) }
         second.shouldNotBeEmpty()
         second shouldBeEqualTo first
     }
@@ -129,23 +143,25 @@ class CacheIntegrationTest @Autowired constructor(
             }
         }
 
-        val first = transaction { treatmentTypeRepository.findByClinicId(id) }
+        val first = transaction { treatmentTypeRepository.findByScope(scope()) }
         first.shouldNotBeEmpty()
 
-        val cached = cacheManager.getCache("clinic-treatment-types")?.get(id.toString())?.get()
+        val cached = cacheManager.getCache("clinic-treatment-types")?.get(scope().cacheKey())?.get()
         cached.shouldNotBeNull()
 
-        val second = transaction { treatmentTypeRepository.findByClinicId(id) }
+        val second = transaction { treatmentTypeRepository.findByScope(scope()) }
         second.shouldNotBeEmpty()
         second shouldBeEqualTo first
     }
 
     @Test
     fun `빈 결과는 캐시에 저장되지 않는다`() {
-        val result = transaction { doctorRepository.findByClinicId(-999L) }
+        val result = transaction {
+            doctorRepository.findByScope(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, 999_999L))
+        }
         result.shouldBeEmpty()
 
-        val cached = cacheManager.getCache("clinic-doctors")?.get("-999")
+        val cached = cacheManager.getCache("clinic-doctors")?.get("${TenantGroups.DEFAULT_TENANT_GROUP_ID}:999999")
         cached.shouldBeNull()
     }
 

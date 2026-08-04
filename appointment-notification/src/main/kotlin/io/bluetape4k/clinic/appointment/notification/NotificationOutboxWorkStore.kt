@@ -11,6 +11,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRep
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxObservation
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -35,12 +36,18 @@ interface NotificationOutboxWorkStore {
         limit: Int,
         cursor: NotificationFairCursor?,
         perClinicLimit: Int,
-        eligibleClinicIds: Set<Long>?,
+        eligibleScopes: Set<TenantClinicScope>?,
     ): NotificationCandidatePage =
         findFairCandidates(limit, cursor).let { page ->
-            val eligible = eligibleClinicIds
-            if (eligible == null) page
-            else page.copy(candidates = page.candidates.filter { it.clinicId.value in eligible })
+            val scopes = eligibleScopes
+            when {
+                scopes != null -> page.copy(
+                    candidates = page.candidates.filter {
+                        TenantClinicScope(it.tenantGroupId.value, it.clinicId.value) in scopes
+                    },
+                )
+                else -> page
+            }
         }
 
     suspend fun claim(
@@ -52,6 +59,16 @@ interface NotificationOutboxWorkStore {
         limit: Int,
         owner: String,
     ): List<ClaimedNotification>
+
+    /**
+     * Recovers only the route's tenant/clinic allowlist. The default keeps custom
+     * stores source-compatible; JDBC stores must push this predicate into SQL.
+     */
+    suspend fun recoverExpired(
+        limit: Int,
+        owner: String,
+        eligibleScopes: Set<TenantClinicScope>?,
+    ): List<ClaimedNotification> = recoverExpired(limit, owner)
 
     suspend fun complete(command: CompleteNotificationCommand): Boolean
 
@@ -88,22 +105,35 @@ class JdbcNotificationOutboxWorkStore(
         limit: Int,
         cursor: NotificationFairCursor?,
     ): NotificationCandidatePage =
-        findFairCandidatesForRoute(limit, cursor, perClinicLimit = 1, eligibleClinicIds = null)
+        findFairCandidatesForRoute(
+            limit,
+            cursor,
+            perClinicLimit = 1,
+            eligibleScopes = null,
+        )
 
     override suspend fun findFairCandidatesForRoute(
         limit: Int,
         cursor: NotificationFairCursor?,
         perClinicLimit: Int,
-        eligibleClinicIds: Set<Long>?,
+        eligibleScopes: Set<TenantClinicScope>?,
     ): NotificationCandidatePage =
         ioTransaction {
             require(limit > 0) { "limit must be positive" }
             require(perClinicLimit > 0) { "perClinicLimit must be positive" }
             val clinicLimit = (limit + perClinicLimit - 1) / perClinicLimit
-            val clinics = repository.findReadyClinicKeys(cursor, clinicLimit, eligibleClinicIds)
+            val clinics = repository.findReadyClinicKeys(
+                cursor = cursor,
+                limit = clinicLimit,
+                eligibleScopes = eligibleScopes,
+            )
                 .ifEmpty {
                     if (cursor == null) emptyList()
-                    else repository.findReadyClinicKeys(null, clinicLimit, eligibleClinicIds)
+                    else repository.findReadyClinicKeys(
+                        cursor = null,
+                        limit = clinicLimit,
+                        eligibleScopes = eligibleScopes,
+                    )
                 }
             val candidates = clinics
                 .asSequence()
@@ -129,14 +159,14 @@ class JdbcNotificationOutboxWorkStore(
         }
 
     override suspend fun claimReady(
-        clinicId: ClinicId,
+        scope: TenantClinicScope,
         appointmentId: AppointmentId,
         eventType: NotificationEventType,
         owner: String,
     ): ClaimedNotification? =
         ioTransaction {
             repository.claimReadyForDirect(
-                clinicId = clinicId,
+                scope = scope,
                 appointmentId = appointmentId,
                 eventType = eventType,
                 owner = owner,
@@ -148,8 +178,15 @@ class JdbcNotificationOutboxWorkStore(
         limit: Int,
         owner: String,
     ): List<ClaimedNotification> =
+        recoverExpired(limit, owner, eligibleScopes = null)
+
+    override suspend fun recoverExpired(
+        limit: Int,
+        owner: String,
+        eligibleScopes: Set<TenantClinicScope>?,
+    ): List<ClaimedNotification> =
         ioTransaction {
-            repository.findExpiredProcessingIds(limit)
+            repository.findExpiredProcessingIds(limit, eligibleScopes)
                 .mapNotNull { id -> repository.recoverExpired(id, owner, tokenGenerator.nextToken()) }
         }
 

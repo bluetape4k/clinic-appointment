@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.solver.service
 
 import ai.timefold.solver.core.api.score.HardSoftScore
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import java.io.Serializable
 
 /**
@@ -21,6 +22,8 @@ data class SolverResult(
     val solveTimeMillis: Long = 0L,
     val entityCount: Int = 0,
     val pinnedCount: Int = 0,
+    val scope: TenantClinicScope,
+    val sourceVersions: Map<Long, Long> = emptyMap(),
 ) : Serializable {
     companion object {
         private const val serialVersionUID = 1L

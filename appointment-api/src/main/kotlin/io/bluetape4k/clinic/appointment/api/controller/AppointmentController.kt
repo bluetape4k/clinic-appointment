@@ -15,6 +15,7 @@ import io.bluetape4k.clinic.appointment.api.service.AppointmentService
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
@@ -69,10 +70,12 @@ class AppointmentController(
         @Parameter(description = "Start date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) startDate: LocalDate,
         @Parameter(description = "End date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) endDate: LocalDate,
     ): ResponseEntity<ApiResponse<List<AppointmentResponse>>> {
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        val scope = TenantClinicScope(tenant.id, clinicId)
         log.debug { "GET appointments tenantCode=$tenantCode, clinicId=$clinicId, startDate=$startDate, endDate=$endDate" }
-        val records = appointmentService.getByDateRange(clinicId, startDate, endDate)
-        val (timezone, locale) = timezoneService.getTimezoneAndLocale(clinicId)
+        val records = appointmentService.getByDateRange(scope, startDate, endDate)
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(scope)
         return ResponseEntity.ok(ApiResponse.ok(records.map { it.toResponse(timezone, locale) }))
     }
 
@@ -89,7 +92,7 @@ class AppointmentController(
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         log.debug { "GET appointment tenantCode=$tenantCode, id=$id" }
         val record = appointmentService.getById(id, tenant.id)
-        val (timezone, locale) = timezoneService.getTimezoneAndLocale(record.clinicId)
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(TenantClinicScope(tenant.id, record.clinicId))
         return ResponseEntity.ok(ApiResponse.ok(record.toResponse(timezone, locale)))
     }
 
@@ -132,7 +135,9 @@ class AppointmentController(
         }
         log.debug { "POST appointment tenantCode=$tenantCode, clinicId=${request.clinicId}" }
         val result = appointmentService.create(tenant.id, normalizedRequest, idempotencyKey, resolution)
-        val (timezone, locale) = timezoneService.getTimezoneAndLocale(result.appointment.clinicId)
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(
+            TenantClinicScope(tenant.id, result.appointment.clinicId)
+        )
         return ResponseEntity.status(if (result.replayed) HttpStatus.OK else HttpStatus.CREATED)
             .body(ApiResponse.ok(result.appointment.toResponse(timezone, locale)))
     }
@@ -169,8 +174,14 @@ class AppointmentController(
     ): ResponseEntity<ApiResponse<AppointmentResponse>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         log.debug { "PATCH appointment status tenantCode=$tenantCode, id=$id, target=${request.status}" }
-        val updated = appointmentService.updateStatus(id, tenant.id, request.status, request.reason)
-        val (timezone, locale) = timezoneService.getTimezoneAndLocale(updated.clinicId)
+        val scope = appointmentService.getScope(id, tenant.id)
+        val updated = appointmentService.updateStatus(
+            scope = scope,
+            id = id,
+            targetStatus = request.status,
+            reason = request.reason,
+        )
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(scope)
         return ResponseEntity.ok(ApiResponse.ok(updated.toResponse(timezone, locale)))
     }
 
@@ -189,8 +200,13 @@ class AppointmentController(
     ): ResponseEntity<ApiResponse<AppointmentResponse>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         log.debug { "DELETE appointment tenantCode=$tenantCode, id=$id, reason=$reason" }
-        val cancelled = appointmentService.cancel(id, tenant.id, reason)
-        val (timezone, locale) = timezoneService.getTimezoneAndLocale(cancelled.clinicId)
+        val scope = appointmentService.getScope(id, tenant.id)
+        val cancelled = appointmentService.cancel(
+            scope = scope,
+            id = id,
+            reason = reason,
+        )
+        val (timezone, locale) = timezoneService.getTimezoneAndLocale(scope)
         return ResponseEntity.ok(ApiResponse.ok(cancelled.toResponse(timezone, locale)))
     }
 }

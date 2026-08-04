@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import org.springframework.boot.context.properties.ConfigurationProperties
 import java.io.Serializable
 import java.time.Duration
@@ -272,13 +273,29 @@ data class NotificationProperties(
      */
     data class RolloutProperties(
         val mode: NotificationRolloutMode = NotificationRolloutMode.SHADOW,
+        /** 신버전 route와 DB eligibility가 사용하는 tenant/clinic scope allowlist입니다. */
+        val canaryScopes: Set<TenantClinicScope> = emptySet(),
+        /**
+         * 구버전 node rolling drain을 위한 임시 호환 필드입니다.
+         * 신버전 route 결정에는 사용하지 않으며 [canaryScopes]와 clinic 집합이 같아야 합니다.
+         */
+        @Deprecated("Use canaryScopes")
         val canaryClinicIds: Set<Long> = emptySet(),
     ) : Serializable {
         fun validate(): RolloutProperties {
+            check(canaryScopes.all { it.tenantGroupId > 0L && it.clinicId > 0L }) {
+                "canaryScopes must contain only positive IDs"
+            }
             check(canaryClinicIds.all { it > 0L }) { "canaryClinicIds must contain only positive IDs" }
+            if (canaryClinicIds.isNotEmpty() && canaryScopes.isNotEmpty()) {
+                check(canaryScopes.mapTo(mutableSetOf()) { it.clinicId } == canaryClinicIds) {
+                    "canaryClinicIds and canaryScopes must contain the same clinic set"
+                }
+            }
             if (mode == NotificationRolloutMode.CANARY) {
-                check(canaryClinicIds.isNotEmpty()) { "CANARY mode requires at least one clinic ID" }
+                check(canaryScopes.isNotEmpty()) { "CANARY mode requires at least one canary scope" }
             } else {
+                check(canaryScopes.isEmpty()) { "canaryScopes are only allowed in CANARY mode" }
                 check(canaryClinicIds.isEmpty()) { "canaryClinicIds are only allowed in CANARY mode" }
             }
             return this

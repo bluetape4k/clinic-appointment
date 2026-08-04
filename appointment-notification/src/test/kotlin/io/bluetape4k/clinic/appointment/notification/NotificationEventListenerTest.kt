@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.notification
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.event.AppointmentDomainEvent
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
@@ -13,34 +14,36 @@ import kotlin.coroutines.suspendCoroutine
 
 internal class NotificationEventListenerTest {
 
+    private fun scope(clinicId: Long, tenantGroupId: Long = 1L) = TenantClinicScope(tenantGroupId, clinicId)
+
     @Test
     fun `legacy domain event는 개인정보 없이 해당 outbox event를 direct port에 전달한다`() {
         val calls = mutableListOf<DirectCall>()
         val listener = NotificationEventListener(
-            delivery = NotificationDirectDeliveryPort { clinicId, appointmentId, eventType ->
-                calls += DirectCall(clinicId, appointmentId, eventType)
+            delivery = NotificationDirectDeliveryPort { eventScope, appointmentId, eventType ->
+                calls += DirectCall(eventScope, appointmentId, eventType)
                 NotificationDirectDeliveryResult.NotFound
             },
             properties = NotificationProperties(),
         )
 
-        listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, clinicId = 7L))
+        listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, scope = scope(7L)))
         listener.onStatusChanged(
             AppointmentDomainEvent.StatusChanged(
                 appointmentId = 2L,
-                clinicId = 7L,
+                scope = scope(7L),
                 fromState = "REQUESTED",
                 toState = "CONFIRMED",
             )
         )
-        listener.onCancelled(AppointmentDomainEvent.Cancelled(appointmentId = 3L, clinicId = 7L, reason = "private"))
-        listener.onRescheduled(AppointmentDomainEvent.Rescheduled(originalId = 4L, newId = 5L, clinicId = 7L))
+        listener.onCancelled(AppointmentDomainEvent.Cancelled(appointmentId = 3L, scope = scope(7L), reason = "private"))
+        listener.onRescheduled(AppointmentDomainEvent.Rescheduled(originalId = 4L, newId = 5L, scope = scope(7L)))
 
         calls shouldBeEqualTo listOf(
-            DirectCall(7L, 1L, NotificationEventType.CREATED),
-            DirectCall(7L, 2L, NotificationEventType.CONFIRMED),
-            DirectCall(7L, 3L, NotificationEventType.CANCELLED),
-            DirectCall(7L, 4L, NotificationEventType.RESCHEDULED),
+            DirectCall(scope(7L), 1L, NotificationEventType.CREATED),
+            DirectCall(scope(7L), 2L, NotificationEventType.CONFIRMED),
+            DirectCall(scope(7L), 3L, NotificationEventType.CANCELLED),
+            DirectCall(scope(7L), 4L, NotificationEventType.RESCHEDULED),
         )
     }
 
@@ -57,11 +60,11 @@ internal class NotificationEventListenerTest {
             ),
         )
 
-        listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, clinicId = 7L))
+        listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, scope = scope(7L)))
         listener.onStatusChanged(
             AppointmentDomainEvent.StatusChanged(
                 appointmentId = 2L,
-                clinicId = 7L,
+                scope = scope(7L),
                 fromState = "REQUESTED",
                 toState = "HELD",
             )
@@ -92,7 +95,7 @@ internal class NotificationEventListenerTest {
         )
 
         try {
-            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, clinicId = 7L))
+            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, scope = scope(7L)))
 
             started.await(1, TimeUnit.SECONDS) shouldBeEqualTo true
             completed.count shouldBeEqualTo 1L
@@ -127,10 +130,10 @@ internal class NotificationEventListenerTest {
         )
 
         try {
-            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, clinicId = 7L))
+            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, scope = scope(7L)))
             started.await(1, TimeUnit.SECONDS) shouldBeEqualTo true
-            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 2L, clinicId = 7L))
-            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 3L, clinicId = 7L))
+            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 2L, scope = scope(7L)))
+            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 3L, scope = scope(7L)))
 
             calls.get() shouldBeEqualTo 1
             release.countDown()
@@ -149,7 +152,7 @@ internal class NotificationEventListenerTest {
             properties = NotificationProperties(),
         )
 
-        listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, clinicId = 7L))
+        listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, scope = scope(7L)))
     }
 
     @Test
@@ -167,14 +170,14 @@ internal class NotificationEventListenerTest {
                 ),
             )
 
-            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, clinicId = 7L))
+            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, scope = scope(7L)))
 
             submitted.get() shouldBeEqualTo 0
         }
     }
 
     private data class DirectCall(
-        val clinicId: Long,
+        val scope: TenantClinicScope,
         val appointmentId: Long,
         val eventType: NotificationEventType,
     )

@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.event.notification
 
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -133,12 +134,14 @@ class NotificationOutboxRepository(
     fun findReadyClinicKeys(
         cursor: NotificationFairCursor?,
         limit: Int,
-        eligibleClinicIds: Set<Long>? = null,
+        eligibleScopes: Set<TenantClinicScope>? = null,
     ): List<NotificationClinicKey> {
         require(limit > 0) { "limit must be positive" }
-        eligibleClinicIds?.let { ids ->
-            require(ids.all { it > 0L }) { "eligibleClinicIds must contain only positive IDs" }
-            if (ids.isEmpty()) return emptyList()
+        eligibleScopes?.let { scopes ->
+            require(scopes.all { it.tenantGroupId > 0L && it.clinicId > 0L }) {
+                "eligibleScopes must contain only positive IDs"
+            }
+            if (scopes.isEmpty()) return emptyList()
         }
         val dbNow = dbCurrentTimestamp()
         val ready = readyPredicate(dbNow)
@@ -147,8 +150,14 @@ class NotificationOutboxRepository(
                 ((NotificationOutboxEvents.tenantGroupId eq it.tenantGroupId.value) and
                     (NotificationOutboxEvents.clinicId greater it.clinicId.value))
         }
-        val eligibilityPredicate = eligibleClinicIds?.let {
-            NotificationOutboxEvents.clinicId inList it
+        val eligibilityPredicate = when {
+            eligibleScopes != null -> eligibleScopes
+                .map { scope ->
+                    (NotificationOutboxEvents.tenantGroupId eq scope.tenantGroupId) and
+                        (NotificationOutboxEvents.clinicId eq scope.clinicId)
+                }
+                .reduce { left, right -> left or right }
+            else -> null
         }
         val filteredReady = if (eligibilityPredicate == null) ready else ready and eligibilityPredicate
 
@@ -219,15 +228,29 @@ class NotificationOutboxRepository(
      * 이 조회는 행 상태를 바꾸지 않는다. caller는 같은 짧은 transaction에서 각 식별자를
      * [recoverExpired]로 조건부 복구해야 한다.
      */
-    fun findExpiredProcessingIds(limit: Int): List<Long> {
+    fun findExpiredProcessingIds(
+        limit: Int,
+        eligibleScopes: Set<TenantClinicScope>? = null,
+    ): List<Long> {
         require(limit > 0) { "limit must be positive" }
+        eligibleScopes?.let { scopes ->
+            require(scopes.all { it.tenantGroupId > 0L && it.clinicId > 0L }) {
+                "eligibleScopes must contain only positive IDs"
+            }
+            if (scopes.isEmpty()) return emptyList()
+        }
         val dbNow = dbCurrentTimestamp()
+        val eligibilityPredicate = eligibleScopes?.map { scope ->
+            (NotificationOutboxEvents.tenantGroupId eq scope.tenantGroupId) and
+                (NotificationOutboxEvents.clinicId eq scope.clinicId)
+        }?.reduce { left, right -> left or right }
         return NotificationOutboxEvents
             .select(NotificationOutboxEvents.id)
             .where {
                 (NotificationOutboxEvents.rowKind eq NotificationOutboxRowKind.SENDABLE) and
                     (NotificationOutboxEvents.status eq NotificationOutboxStatus.PROCESSING) and
-                    (NotificationOutboxEvents.leaseUntil less dbNow)
+                    (NotificationOutboxEvents.leaseUntil less dbNow) and
+                    (eligibilityPredicate ?: org.jetbrains.exposed.v1.core.Op.TRUE)
             }
             .orderBy(
                 NotificationOutboxEvents.leaseUntil to SortOrder.ASC,
@@ -273,7 +296,7 @@ class NotificationOutboxRepository(
      * 실행돼도 [claim]의 상태·attempt 조건을 통과한 한 호출자만 행을 획득합니다.
      */
     fun claimReadyForDirect(
-        clinicId: ClinicId,
+        scope: TenantClinicScope,
         appointmentId: AppointmentId,
         eventType: NotificationEventType,
         owner: String,
@@ -285,7 +308,8 @@ class NotificationOutboxRepository(
             .where {
                 readyPredicate(dbNow) and
                     (NotificationOutboxEvents.rowKind eq NotificationOutboxRowKind.SENDABLE) and
-                    (NotificationOutboxEvents.clinicId eq clinicId.value) and
+                    (NotificationOutboxEvents.tenantGroupId eq scope.tenantGroupId) and
+                    (NotificationOutboxEvents.clinicId eq scope.clinicId) and
                     (NotificationOutboxEvents.appointmentId eq appointmentId.value) and
                     (NotificationOutboxEvents.eventType eq eventType)
             }

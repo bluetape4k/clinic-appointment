@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.model.dto.BreakTimeRecord
 import io.bluetape4k.clinic.appointment.model.dto.ClinicDefaultBreakTimeRecord
 import io.bluetape4k.clinic.appointment.model.dto.ClinicRecord
 import io.bluetape4k.clinic.appointment.model.dto.OperatingHoursRecord
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.exposed.core.ExposedPage
@@ -110,9 +111,11 @@ class ClinicController(
         @PathVariable clinicId: Long,
     ): ResponseEntity<ApiResponse<List<OperatingHoursRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        val scope = TenantClinicScope(tenant.id, clinicId)
         log.debug { "GET operating hours tenantCode=$tenantCode, clinicId=$clinicId" }
-        val hours = transaction { clinicRepository.findAllOperatingHours(clinicId) }
+        val hours = transaction { clinicRepository.findAllOperatingHours(scope) }
         return ResponseEntity.ok(ApiResponse.ok(hours))
     }
 
@@ -133,9 +136,11 @@ class ClinicController(
         @PathVariable clinicId: Long,
     ): ResponseEntity<ApiResponse<List<ClinicDefaultBreakTimeRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
+        val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        val scope = TenantClinicScope(tenant.id, clinicId)
         log.debug { "GET break times tenantCode=$tenantCode, clinicId=$clinicId" }
-        val breakTimes = transaction { clinicRepository.findDefaultBreakTimes(clinicId) }
+        val breakTimes = transaction { clinicRepository.findDefaultBreakTimes(scope) }
         return ResponseEntity.ok(ApiResponse.ok(breakTimes))
     }
 }

@@ -8,6 +8,7 @@ import io.bluetape4k.clinic.appointment.api.dto.toResponse
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.model.service.SlotQuery
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
@@ -66,7 +67,7 @@ class SlotController(
         @Parameter(description = "Target date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
         @Parameter(description = "Requested duration in minutes", required = false) @RequestParam(required = false) requestedDurationMinutes: Int? = null,
     ): ResponseEntity<ApiResponse<List<SlotResponse>>> {
-        tenantClinicAccessChecker.verifySchedulingResources(
+        val tenant = tenantClinicAccessChecker.verifySchedulingResources(
             tenantCode = tenantCode,
             clinicId = clinicId,
             doctorId = doctorId,
@@ -75,7 +76,7 @@ class SlotController(
         )
         log.debug { "GET slots tenantCode=$tenantCode, clinic=$clinicId, doctor=$doctorId, treatment=$treatmentTypeId, date=$date" }
         val query = SlotQuery(
-            clinicId = clinicId,
+            scope = TenantClinicScope(tenant.id, clinicId),
             doctorId = doctorId,
             treatmentTypeId = treatmentTypeId,
             date = date,

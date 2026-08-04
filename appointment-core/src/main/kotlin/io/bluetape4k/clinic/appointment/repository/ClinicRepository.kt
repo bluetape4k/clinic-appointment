@@ -8,6 +8,7 @@ import io.bluetape4k.clinic.appointment.model.dto.ClinicClosureRecord
 import io.bluetape4k.clinic.appointment.model.dto.ClinicDefaultBreakTimeRecord
 import io.bluetape4k.clinic.appointment.model.dto.ClinicRecord
 import io.bluetape4k.clinic.appointment.model.dto.OperatingHoursRecord
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.tables.BreakTimes
 import io.bluetape4k.clinic.appointment.model.tables.ClinicClosures
 import io.bluetape4k.clinic.appointment.model.tables.ClinicDefaultBreakTimes
@@ -19,6 +20,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import java.time.DayOfWeek
@@ -60,87 +62,81 @@ class ClinicRepository : LongJdbcRepository<ClinicRecord> {
             .orderBy(Clinics.id, SortOrder.ASC)
             .map { it.toClinicRecord() }
 
-    /**
-     * 병원의 특정 요일 운영 시간을 조회합니다.
-     *
-     * @param clinicId 병원 ID
-     * @param dayOfWeek 요일
-     * @return 운영 시간 정보 (없으면 null)
-     */
-    fun findOperatingHours(clinicId: Long, dayOfWeek: DayOfWeek): OperatingHoursRecord? =
+    /** 검증된 테넌트-병원 범위의 운영 시간을 조회합니다. */
+    fun findOperatingHours(scope: TenantClinicScope, dayOfWeek: DayOfWeek): OperatingHoursRecord? =
         OperatingHoursTable
             .selectAll()
-            .where { OperatingHoursTable.clinicId eq clinicId }
+            .where {
+                (OperatingHoursTable.clinicId eq scope.clinicId) and
+                    (OperatingHoursTable.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
             .andWhere { OperatingHoursTable.dayOfWeek eq dayOfWeek }
             .andWhere { OperatingHoursTable.isActive eq true }
             .firstOrNull()?.toOperatingHoursRecord()
 
-    /**
-     * 병원의 기본 휴시간을 조회합니다.
-     *
-     * 기본 휴시간은 모든 영업일에 동일하게 적용됩니다 (점심시간 등).
-     *
-     * @param clinicId 병원 ID
-     * @return 휴시간 목록
-     */
-    fun findDefaultBreakTimes(clinicId: Long): List<ClinicDefaultBreakTimeRecord> =
+    /** 검증된 테넌트-병원 범위의 기본 휴식 시간을 조회합니다. */
+    fun findDefaultBreakTimes(scope: TenantClinicScope): List<ClinicDefaultBreakTimeRecord> =
         ClinicDefaultBreakTimes
             .selectAll()
-            .where { ClinicDefaultBreakTimes.clinicId eq clinicId }
+            .where {
+                (ClinicDefaultBreakTimes.clinicId eq scope.clinicId) and
+                    (ClinicDefaultBreakTimes.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
             .map { it.toClinicDefaultBreakTimeRecord() }
 
-    /**
-     * 병원의 특정 요일 휴시간을 조회합니다.
-     *
-     * @param clinicId 병원 ID
-     * @param dayOfWeek 요일
-     * @return 휴시간 목록
-     */
-    fun findBreakTimes(clinicId: Long, dayOfWeek: DayOfWeek): List<BreakTimeRecord> =
+    /** 검증된 테넌트-병원 범위의 요일별 휴식 시간을 조회합니다. */
+    fun findBreakTimes(scope: TenantClinicScope, dayOfWeek: DayOfWeek): List<BreakTimeRecord> =
         BreakTimes
             .selectAll()
-            .where { BreakTimes.clinicId eq clinicId }
+            .where {
+                (BreakTimes.clinicId eq scope.clinicId) and
+                    (BreakTimes.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
             .andWhere { BreakTimes.dayOfWeek eq dayOfWeek }
             .map { it.toBreakTimeRecord() }
 
-    /**
-     * 특정 날짜의 병원 휴진 정보를 조회합니다.
-     *
-     * @param clinicId 병원 ID
-     * @param date 조회 날짜
-     * @return 휴진 정보 목록 (전일 휴진, 부분 휴진 포함)
-     */
-    fun findClosures(clinicId: Long, date: LocalDate): List<ClinicClosureRecord> =
+    /** 검증된 테넌트-병원 범위의 특정 날짜 휴진을 조회합니다. */
+    fun findClosures(scope: TenantClinicScope, date: LocalDate): List<ClinicClosureRecord> =
         ClinicClosures
             .selectAll()
-            .where { ClinicClosures.clinicId eq clinicId }
+            .where {
+                (ClinicClosures.clinicId eq scope.clinicId) and
+                    (ClinicClosures.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
             .andWhere { ClinicClosures.closureDate eq date }
             .map { it.toClinicClosureRecord() }
 
-    fun findAllOperatingHours(clinicId: Long): List<OperatingHoursRecord> =
-        OperatingHoursTable
-            .selectAll()
-            .where { OperatingHoursTable.clinicId eq clinicId }
-            .map { it.toOperatingHoursRecord() }
-
-    fun findAllBreakTimes(clinicId: Long): List<BreakTimeRecord> =
-        BreakTimes
-            .selectAll()
-            .where { BreakTimes.clinicId eq clinicId }
-            .map { it.toBreakTimeRecord() }
-
-    /**
-     * 병원의 기간별 휴진 정보를 조회합니다.
-     *
-     * @param clinicId 병원 ID
-     * @param dateRange 조회 기간
-     * @return 휴진 정보 목록
-     */
-    fun findClosuresByDateRange(clinicId: Long, dateRange: ClosedRange<LocalDate>): List<ClinicClosureRecord> =
+    /** 검증된 테넌트-병원 범위의 기간별 휴진을 조회합니다. */
+    fun findClosuresByDateRange(
+        scope: TenantClinicScope,
+        dateRange: ClosedRange<LocalDate>,
+    ): List<ClinicClosureRecord> =
         ClinicClosures
             .selectAll()
-            .where { ClinicClosures.clinicId eq clinicId }
+            .where {
+                (ClinicClosures.clinicId eq scope.clinicId) and
+                    (ClinicClosures.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
             .andWhere { ClinicClosures.closureDate greaterEq dateRange.start }
             .andWhere { ClinicClosures.closureDate lessEq dateRange.endInclusive }
             .map { it.toClinicClosureRecord() }
+
+    fun findAllOperatingHours(scope: TenantClinicScope): List<OperatingHoursRecord> =
+        OperatingHoursTable
+            .selectAll()
+            .where {
+                (OperatingHoursTable.clinicId eq scope.clinicId) and
+                    (OperatingHoursTable.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
+            .map { it.toOperatingHoursRecord() }
+
+    fun findAllBreakTimes(scope: TenantClinicScope): List<BreakTimeRecord> =
+        BreakTimes
+            .selectAll()
+            .where {
+                (BreakTimes.clinicId eq scope.clinicId) and
+                    (BreakTimes.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
+            .map { it.toBreakTimeRecord() }
+
 }

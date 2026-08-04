@@ -20,6 +20,8 @@ import io.bluetape4k.clinic.appointment.model.tables.ProviderType
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentCategory
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.service.SlotQuery
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
@@ -137,7 +139,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             val (clinicId, doctorId, treatmentTypeId) = insertBaseData()
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 18
@@ -162,7 +164,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 16
@@ -187,7 +189,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots.shouldBeEmpty()
@@ -212,7 +214,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 14
@@ -232,7 +234,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             )
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 12
@@ -258,7 +260,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots.shouldBeEmpty()
@@ -282,7 +284,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 14
@@ -314,7 +316,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             val slot0900 = slots.first { it.startTime == LocalTime.of(9, 0) }
@@ -345,7 +347,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 17
@@ -390,7 +392,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots.none { it.startTime == LocalTime.of(9, 0) }.shouldBeTrue()
@@ -438,7 +440,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             val slot0900 = slots.firstOrNull { it.startTime == LocalTime.of(9, 0) }
@@ -454,7 +456,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             val (clinicId, doctorId, treatmentTypeId) = insertBaseData(treatmentDurationMinutes = 60)
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 17
@@ -478,7 +480,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             )
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots.isEmpty().shouldBeTrue()
@@ -497,7 +499,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             )
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, consultantId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), consultantId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 18
@@ -515,7 +517,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             )
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, consultantId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), consultantId, treatmentTypeId, MONDAY)
             )
 
             slots.isEmpty().shouldBeTrue()
@@ -535,7 +537,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             )
 
             val phoneSlots = service.findAvailableSlots(
-                SlotQuery(clinicId1, consultantId1, phoneConsultationId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId1), consultantId1, phoneConsultationId, MONDAY)
             )
 
             phoneSlots shouldHaveSize 18
@@ -559,7 +561,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots.shouldBeEmpty()
@@ -580,7 +582,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 18
@@ -603,7 +605,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 16
@@ -639,7 +641,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 15
@@ -670,7 +672,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 15
@@ -718,7 +720,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 16
@@ -749,7 +751,7 @@ class SlotCalculationServiceTest : AbstractExposedTest() {
             }
 
             val slots = service.findAvailableSlots(
-                SlotQuery(clinicId, doctorId, treatmentTypeId, MONDAY)
+                SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)
             )
 
             slots shouldHaveSize 18

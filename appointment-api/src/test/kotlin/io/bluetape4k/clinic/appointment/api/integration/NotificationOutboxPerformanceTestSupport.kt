@@ -9,7 +9,9 @@ import javax.sql.DataSource
 internal object NotificationOutboxPerformanceTestSupport {
     const val ACTIVE_ROWS = 10_000
     const val TERMINAL_ROWS = 10_000
-    const val CLINIC_COUNT = 100
+    // Keep many same-clinic/appointment rows so the legacy clinic-leading index
+    // is materially less selective than the V21 tenant-leading lookup index.
+    const val CLINIC_COUNT = 10
     const val TARGET_ACTIVE_ID = 1L
     const val TARGET_CLINIC_ID = 2L
     const val TARGET_APPOINTMENT_ID = 100_001L
@@ -75,8 +77,14 @@ internal object NotificationOutboxPerformanceTestSupport {
             else -> "PENDING"
         }
         val clinicId = (id % CLINIC_COUNT) + 1L
-        bindCommon(statement, id, status, clinicId)
-        statement.setLong(11, 100_000L + id)
+        val tenantGroupId = if (clinicId == TARGET_CLINIC_ID) (id / CLINIC_COUNT.toLong()) % 2L + 1L else 1L
+        val eventType = if (clinicId == TARGET_CLINIC_ID && tenantGroupId == 1L && id != TARGET_ACTIVE_ID) {
+            "CREATED"
+        } else {
+            "CONFIRMED"
+        }
+        bindCommon(statement, id, status, clinicId, tenantGroupId, eventType)
+        statement.setLong(11, if (clinicId == TARGET_CLINIC_ID) TARGET_APPOINTMENT_ID else 100_000L + id)
         statement.setString(12, "member-$id")
         statement.setString(20, "{}")
         statement.setTimestamp(25, if (status == "RETRY_WAIT") OLD_TIME else null)
@@ -89,7 +97,7 @@ internal object NotificationOutboxPerformanceTestSupport {
 
     private fun bindTerminal(statement: PreparedStatement, id: Long) {
         val clinicId = (id % CLINIC_COUNT) + 1L
-        bindCommon(statement, id, "SENT", clinicId)
+        bindCommon(statement, id, "SENT", clinicId, tenantGroupId = 1L, eventType = "CONFIRMED")
         statement.setObject(11, null)
         statement.setString(12, null)
         statement.setString(20, null)
@@ -106,6 +114,8 @@ internal object NotificationOutboxPerformanceTestSupport {
         id: Long,
         status: String,
         clinicId: Long,
+        tenantGroupId: Long,
+        eventType: String,
     ) {
         statement.setLong(1, id)
         statement.setString(2, "SENDABLE")
@@ -116,9 +126,9 @@ internal object NotificationOutboxPerformanceTestSupport {
         statement.setInt(7, 1)
         statement.setString(8, "perf-audit-$id")
         statement.setString(9, "perf-audit-key")
-        statement.setLong(10, 1L)
+        statement.setLong(10, tenantGroupId)
         statement.setString(13, "DUMMY")
-        statement.setString(14, "CONFIRMED")
+        statement.setString(14, eventType)
         statement.setString(15, "CONFIRMED")
         statement.setString(16, "dummy")
         statement.setString(17, "appointment-confirmed")

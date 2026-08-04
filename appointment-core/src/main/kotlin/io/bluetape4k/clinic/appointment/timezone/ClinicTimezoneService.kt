@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.timezone
 
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.clinic.appointment.model.dto.ClinicRecord
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
@@ -111,8 +112,10 @@ class ClinicTimezoneService(
      *
      * @return `timezone` (예: "Asia/Seoul") to `locale` (예: "ko-KR") Pair
      */
-    fun getTimezoneAndLocale(clinicId: Long): Pair<String, String> {
-        val clinic = getClinic(clinicId)
+    /** 검증된 tenant-clinic 범위의 timezone과 locale을 반환합니다. */
+    fun getTimezoneAndLocale(scope: TenantClinicScope): Pair<String, String> {
+        val clinic = transaction { clinicRepository.findByIdAndTenant(scope.clinicId, scope.tenantGroupId) }
+            ?: throw NoSuchElementException("Clinic not found in scope: ${scope.cacheKey()}")
         return clinic.timezone to clinic.locale
     }
 

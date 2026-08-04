@@ -70,8 +70,9 @@ class NotificationAutoConfiguration {
     fun notificationSchemaReadiness(
         database: Database,
         cryptoProperties: NotificationCryptoProperties,
+        metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
     ): NotificationSchemaReadiness =
-        NotificationSchemaReadiness(database, cryptoProperties)
+        NotificationSchemaReadiness(database, cryptoProperties, metricsProvider.ifAvailable)
 
     @Bean
     @ConditionalOnBean(Database::class)
@@ -345,6 +346,7 @@ class NotificationAutoConfiguration {
         worker: NotificationOutboxJobWorker,
         routeGate: NotificationDeliveryRouteGate,
         properties: NotificationProperties,
+        metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
     ): NotificationDirectDeliveryPort =
         properties.worker.validate().let { workerProperties ->
             NotificationDirectOutboxDelivery(
@@ -353,6 +355,7 @@ class NotificationAutoConfiguration {
                 routeGate = routeGate,
                 globalConcurrency = workerProperties.globalConcurrency,
                 perClinicConcurrency = workerProperties.perClinicConcurrency,
+                metrics = metricsProvider.ifAvailable,
             )
         }
 
@@ -364,8 +367,15 @@ class NotificationAutoConfiguration {
         properties: NotificationProperties,
         notificationDirectDeliveryExecutor: NotificationDirectDeliveryExecutor,
         routeGate: NotificationDeliveryRouteGate,
+        metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
     ): NotificationEventListener =
-        NotificationEventListener(delivery, properties, notificationDirectDeliveryExecutor, routeGate)
+        NotificationEventListener(
+            delivery = delivery,
+            properties = properties,
+            executor = notificationDirectDeliveryExecutor,
+            routeGate = routeGate,
+            metrics = metricsProvider.ifAvailable,
+        )
 
     @Bean
     @ConditionalOnBean(NotificationOutboxWorkStore::class)

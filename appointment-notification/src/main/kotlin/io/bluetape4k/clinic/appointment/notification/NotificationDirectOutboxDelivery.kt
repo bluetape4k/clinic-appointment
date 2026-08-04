@@ -2,15 +2,15 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
 import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
-import io.bluetape4k.clinic.appointment.event.notification.ClinicId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 /** 전환기 event route가 동일 outbox 행을 조건부 claim하는 최소 저장소 계약입니다. */
 fun interface NotificationDirectOutboxStore {
     suspend fun claimReady(
-        clinicId: ClinicId,
+        scope: TenantClinicScope,
         appointmentId: AppointmentId,
         eventType: NotificationEventType,
         owner: String,
@@ -20,7 +20,7 @@ fun interface NotificationDirectOutboxStore {
 /** Spring event listener가 사용하는 privacy-safe 전환기 전달 port입니다. */
 fun interface NotificationDirectDeliveryPort {
     suspend fun deliver(
-        clinicId: Long,
+        scope: TenantClinicScope,
         appointmentId: Long,
         eventType: NotificationEventType,
     ): NotificationDirectDeliveryResult
@@ -46,6 +46,7 @@ class NotificationDirectOutboxDelivery(
     private val leaseOwner: String = "notification-direct-event",
     globalConcurrency: Int = 1,
     perClinicConcurrency: Int = 1,
+    private val metrics: NotificationOutboxMetrics? = null,
 ) : NotificationDirectDeliveryPort {
 
     private val globalPermits = Semaphore(globalConcurrency)
@@ -62,21 +63,27 @@ class NotificationDirectOutboxDelivery(
     }
 
     override suspend fun deliver(
-        clinicId: Long,
+        scope: TenantClinicScope,
         appointmentId: Long,
         eventType: NotificationEventType,
     ): NotificationDirectDeliveryResult {
-        if (!routeGate.allows(NotificationDeliveryRoute.DIRECT_EVENT, clinicId)) {
+        if (!routeGate.allows(NotificationDeliveryRoute.DIRECT_EVENT, scope)) {
+            metrics?.recordDirectEventScopeRejected(NotificationOutboxMetrics.DIRECT_EVENT_SCOPE_REJECTED)
             return NotificationDirectDeliveryResult.RouteRejected
         }
         return globalPermits.withPermit {
-            clinicPermits.withPermit(tenantGroupId = 0L, clinicId = clinicId) {
+            clinicPermits.withPermit(scope.tenantGroupId, scope.clinicId) {
                 val claimed = store.claimReady(
-                    clinicId = ClinicId(clinicId),
+                    scope = scope,
                     appointmentId = AppointmentId(appointmentId),
                     eventType = eventType,
                     owner = leaseOwner,
                 ) ?: return@withPermit NotificationDirectDeliveryResult.NotFound
+                if (claimed.tenantGroupId.value != scope.tenantGroupId || claimed.clinicId.value != scope.clinicId) {
+                    // Keep the defensive scope check immediately before worker/provider work.
+                    metrics?.recordDirectEventScopeRejected(NotificationOutboxMetrics.DIRECT_EVENT_CLAIM_SCOPE_MISMATCH)
+                    return@withPermit NotificationDirectDeliveryResult.NotFound
+                }
                 NotificationDirectDeliveryResult.Processed(worker.process(claimed))
             }
         }

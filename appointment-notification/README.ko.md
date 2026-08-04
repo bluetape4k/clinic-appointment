@@ -99,6 +99,8 @@ clinic:
         expires-at: 2030-01-01T00:00:00Z
     rollout:
       mode: SHADOW
+      canary-scopes: []
+      # 구버전 node rolling 호환용 deprecated bridge이며 함께 쓰면 같은 clinic 집합이어야 합니다.
       canary-clinic-ids: []
     worker:
       enabled: true
@@ -121,6 +123,13 @@ clinic:
         dummy:
           provider-max-concurrency: 4
           bulkhead-max-concurrent-calls: 4
+
+`canary-scopes`가 `CANARY`의 권위 있는 `tenant-group-id`/`clinic-id` 쌍 목록입니다.
+clinic만 담는 속성은 구버전 node용 deprecated bridge이며 함께 설정하면 clinic 집합이
+같아야 합니다. direct delivery의 claim과 permit도 같은 쌍을 사용하므로 `1:23`과
+`12:3`은 서로 다른 범위입니다. V21 rollout 동안 `NotificationSchemaReadiness`는
+background traffic을 시작하기 전에 Flyway V21, event-log tenant column, tenant 선행
+direct lookup index를 요구합니다.
           provider-timeout: 30s
           rate-limit-per-second: 100
           circuit-breaker-failure-rate-threshold: 50

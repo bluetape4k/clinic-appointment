@@ -75,11 +75,14 @@ clinic:
   notification:
     rollout:
       mode: SHADOW
+      canary-scopes: []
+      # deprecated rolling bridge; clinic set must match canary-scopes when used
       canary-clinic-ids: []
 ```
 
-`canary-clinic-ids`는 `CANARY`에서만 허용되며 양의 병원 ID가 하나 이상 필요합니다.
-실제 `CANARY`와 `ACTIVE` 전환은 코드 배포와 분리된 운영 작업입니다.
+`canary-scopes`는 `CANARY`에서만 허용되는 양수 `tenant-group-id`/`clinic-id` 쌍입니다.
+`canary-clinic-ids`는 구버전 node를 위한 deprecated bridge이며 함께 설정할 때 clinic
+집합이 같아야 합니다. 실제 `CANARY`와 `ACTIVE` 전환은 코드 배포와 분리된 운영 작업입니다.
 
 ## 리마인더 복구
 

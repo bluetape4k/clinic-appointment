@@ -13,6 +13,7 @@ import io.bluetape4k.clinic.appointment.model.commitment.AppointmentProposalDraf
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecision
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecisionType
 import io.bluetape4k.clinic.appointment.model.commitment.ProposalConsentSubject
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.reliability.BookingReliabilityDecisionStamp
 import org.jetbrains.exposed.v1.core.eq
@@ -177,7 +178,7 @@ class AppointmentCommitmentRepositoryTest {
             appointmentRepository.isCommitmentV2(seed.appointmentId, 1L).shouldBeFalse()
             appointmentRepository
                 .findByClinicAndDateRange(
-                    clinicId = seed.clinicId,
+                    scope = TenantClinicScope(1L, seed.clinicId),
                     dateRange = LocalDate.of(2026, 8, 10)..LocalDate.of(2026, 8, 10),
                 ).map { it.id } shouldBeEqualTo listOf(seed.appointmentId)
         }

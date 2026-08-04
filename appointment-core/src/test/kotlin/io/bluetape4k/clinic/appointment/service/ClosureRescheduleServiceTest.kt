@@ -18,6 +18,7 @@ import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
@@ -45,6 +46,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 class ClosureRescheduleServiceTest : AbstractExposedTest() {
+
+    private fun scope(clinicId: Long) = TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId)
 
     companion object : KLogging() {
         private val slotService = SlotCalculationService()
@@ -135,7 +138,7 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
         withTables(testDB, *allTables) {
             val (clinicId, _, _) = insertDataWithAppointment()
 
-            rescheduleService.processClosureReschedule(clinicId, MONDAY)
+            rescheduleService.processClosureReschedule(scope(clinicId), MONDAY)
 
             val appointments = Appointments.selectAll()
                 .where { Appointments.clinicId eq clinicId }
@@ -152,7 +155,7 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
         withTables(testDB, *allTables) {
             val (clinicId, _, _) = insertDataWithAppointment()
 
-            val result = rescheduleService.processClosureReschedule(clinicId, MONDAY, searchDays = 1)
+            val result = rescheduleService.processClosureReschedule(scope(clinicId), MONDAY, searchDays = 1)
 
             result.size shouldBeEqualTo 1
             val candidates = result.values.first()
@@ -167,10 +170,11 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
         withTables(testDB, *allTables) {
             val (clinicId, _, _) = insertDataWithAppointment()
 
-            val result = rescheduleService.processClosureReschedule(clinicId, MONDAY, searchDays = 1)
+            val result = rescheduleService.processClosureReschedule(scope(clinicId), MONDAY, searchDays = 1)
             val firstCandidate = result.values.first().first()
 
             val newAppointmentId = rescheduleService.confirmReschedule(
+                scope(clinicId),
                 firstCandidate.id.requireNotNull("firstCandidate.id"),
                 firstCandidate.originalAppointmentId,
             )
@@ -196,10 +200,10 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
         withTables(testDB, *allTables) {
             val (clinicId, _, _) = insertDataWithAppointment()
 
-            val result = rescheduleService.processClosureReschedule(clinicId, MONDAY, searchDays = 1)
+            val result = rescheduleService.processClosureReschedule(scope(clinicId), MONDAY, searchDays = 1)
             val originalAppointmentId = result.keys.first()
 
-            val newAppointmentId = rescheduleService.autoReschedule(originalAppointmentId)
+            val newAppointmentId = rescheduleService.autoReschedule(scope(clinicId), originalAppointmentId)
 
             newAppointmentId.shouldNotBeNull()
 
@@ -217,7 +221,7 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
         withTables(testDB, *allTables) {
             val (clinicId, _, _) = insertDataWithAppointment()
 
-            val result = rescheduleService.processClosureReschedule(clinicId, TUESDAY)
+            val result = rescheduleService.processClosureReschedule(scope(clinicId), TUESDAY)
 
             result.shouldBeEmpty()
         }
@@ -270,7 +274,7 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
                 it[status] = AppointmentState.PENDING_RESCHEDULE
             }
 
-            val result = rescheduleService.autoReschedule(appointmentId.value)
+            val result = rescheduleService.autoReschedule(scope(clinicId.value), appointmentId.value)
             (result == null).shouldBeTrue()
         }
     }
@@ -280,13 +284,17 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
     fun `7 - 다른 예약의 candidateId로 confirmReschedule 호출 시 예외 발생`(testDB: TestDB) {
         withTables(testDB, *allTables) {
             val (clinicId, _, _) = insertDataWithAppointment()
-            val result = rescheduleService.processClosureReschedule(clinicId, MONDAY, searchDays = 1)
+            val result = rescheduleService.processClosureReschedule(scope(clinicId), MONDAY, searchDays = 1)
 
             val candidate = result.values.first().first()
             val wrongAppointmentId = candidate.originalAppointmentId + 9999L
 
             assertFailsWith<IllegalArgumentException> {
-                rescheduleService.confirmReschedule(candidate.id.requireNotNull("candidate.id"), wrongAppointmentId)
+                rescheduleService.confirmReschedule(
+                    scope(clinicId),
+                    candidate.id.requireNotNull("candidate.id"),
+                    wrongAppointmentId,
+                )
             }
         }
     }
@@ -328,9 +336,9 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
 
             assertFailsWith<IllegalArgumentException> {
                 rescheduleService.confirmReschedule(
+                    scope(clinicId),
                     candidateId,
                     originalAppointmentId,
-                    TenantGroups.DEFAULT_TENANT_GROUP_ID,
                 )
             }
         }
@@ -355,7 +363,7 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
                 it[patientReferenceFingerprint] = "f".repeat(64)
             }.value
 
-            val result = rescheduleService.processClosureReschedule(clinicId, MONDAY)
+            val result = rescheduleService.processClosureReschedule(scope(clinicId), MONDAY)
 
             result shouldHaveSize 1
             val protectedAppointment = Appointments.selectAll()
@@ -393,15 +401,15 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
 
             assertFailsWith<IllegalArgumentException> {
                 rescheduleService.confirmReschedule(
+                    scope(clinicId),
                     staleCandidateId,
                     commitmentAppointmentId,
-                    TenantGroups.DEFAULT_TENANT_GROUP_ID,
                 )
             }
             assertFailsWith<IllegalArgumentException> {
                 rescheduleService.autoReschedule(
+                    scope(clinicId),
                     commitmentAppointmentId,
-                    TenantGroups.DEFAULT_TENANT_GROUP_ID,
                 )
             }
 

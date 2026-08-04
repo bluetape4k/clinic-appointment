@@ -5,7 +5,7 @@ import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.dto.DoctorAbsenceRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorScheduleRecord
-import io.bluetape4k.clinic.appointment.model.tables.Doctors
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
 import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
@@ -16,7 +16,6 @@ import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
@@ -64,11 +63,11 @@ class DoctorController(
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<ExposedPage<DoctorRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
-        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        val tenant = tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
         val pageNumber = page.coerceAtLeast(0)
         val pageSize = size.coerceIn(1, PaginationDefaults.MAX_PAGE_SIZE)
         log.debug { "GET doctors tenantCode=$tenantCode, clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
-        val result = transaction { doctorRepository.findPage(pageNumber, pageSize) { Doctors.clinicId eq clinicId } }
+        val result = transaction { doctorRepository.findPage(TenantClinicScope(tenant.id, clinicId), pageNumber, pageSize) }
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
 
@@ -115,10 +114,12 @@ class DoctorController(
     ): ResponseEntity<ApiResponse<List<DoctorScheduleRecord>>> {
         doctorId.requirePositiveNumber("doctorId")
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
-        transaction { doctorRepository.findByIdAndTenant(doctorId, tenant.id) }
+        val doctor = transaction { doctorRepository.findByIdAndTenant(doctorId, tenant.id) }
             ?: return ResponseEntity.notFound().build()
         log.debug { "GET schedules tenantCode=$tenantCode, doctorId=$doctorId" }
-        val schedules = transaction { doctorRepository.findAllSchedules(doctorId) }
+        val schedules = transaction {
+            doctorRepository.findAllSchedules(TenantClinicScope(tenant.id, doctor.clinicId), doctorId)
+        }
         return ResponseEntity.ok(ApiResponse.ok(schedules))
     }
 
@@ -144,10 +145,12 @@ class DoctorController(
     ): ResponseEntity<ApiResponse<List<DoctorAbsenceRecord>>> {
         doctorId.requirePositiveNumber("doctorId")
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
-        transaction { doctorRepository.findByIdAndTenant(doctorId, tenant.id) }
+        val doctor = transaction { doctorRepository.findByIdAndTenant(doctorId, tenant.id) }
             ?: return ResponseEntity.notFound().build()
         log.debug { "GET absences tenantCode=$tenantCode, doctorId=$doctorId, from=$from, to=$to" }
-        val absences = transaction { doctorRepository.findAbsencesByDateRange(doctorId, from..to) }
+        val absences = transaction {
+            doctorRepository.findAbsencesByDateRange(TenantClinicScope(tenant.id, doctor.clinicId), doctorId, from..to)
+        }
         return ResponseEntity.ok(ApiResponse.ok(absences))
     }
 }

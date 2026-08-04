@@ -4,8 +4,10 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityExceptionRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentUnavailabilityRecord
 import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.tables.ExceptionType
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
+import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
 import io.bluetape4k.clinic.appointment.repository.EquipmentUnavailabilityRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
@@ -27,10 +29,11 @@ import java.time.LocalTime
 class EquipmentUnavailabilityService(
     private val repo: EquipmentUnavailabilityRepository = EquipmentUnavailabilityRepository(),
     private val appointmentRepository: AppointmentRepository = AppointmentRepository(),
+    private val equipmentRepository: EquipmentRepository = EquipmentRepository(),
 ) {
     companion object : KLogging()
 
-    fun create(
+    internal fun create(
         equipmentId: Long,
         clinicId: Long,
         unavailableDate: LocalDate?,
@@ -68,18 +71,54 @@ class EquipmentUnavailabilityService(
         )
     }
 
-    fun findById(id: Long): EquipmentUnavailabilityRecord? = transaction {
+    /** 검증된 tenant-clinic 범위의 장비에만 사용불가 스케줄을 생성합니다. */
+    fun create(
+        scope: TenantClinicScope,
+        equipmentId: Long,
+        unavailableDate: LocalDate?,
+        isRecurring: Boolean,
+        recurringDayOfWeek: DayOfWeek?,
+        effectiveFrom: LocalDate,
+        effectiveUntil: LocalDate?,
+        startTime: LocalTime,
+        endTime: LocalTime,
+        reason: String?,
+    ): EquipmentUnavailabilityRecord = transaction {
+        requireNotNull(equipmentRepository.findByIdAndScope(equipmentId, scope)) {
+            "Equipment not found in scope: ${scope.cacheKey()}, equipmentId=$equipmentId"
+        }
+        create(
+            equipmentId = equipmentId,
+            clinicId = scope.clinicId,
+            unavailableDate = unavailableDate,
+            isRecurring = isRecurring,
+            recurringDayOfWeek = recurringDayOfWeek,
+            effectiveFrom = effectiveFrom,
+            effectiveUntil = effectiveUntil,
+            startTime = startTime,
+            endTime = endTime,
+            reason = reason,
+        )
+    }
+
+    internal fun findById(id: Long): EquipmentUnavailabilityRecord? = transaction {
         id.requirePositiveNumber("id")
         repo.findById(id)
     }
 
-    fun findByIdAndTenant(id: Long, tenantGroupId: Long): EquipmentUnavailabilityRecord? = transaction {
+    internal fun findByIdAndTenant(id: Long, tenantGroupId: Long): EquipmentUnavailabilityRecord? = transaction {
         id.requirePositiveNumber("id")
         tenantGroupId.requirePositiveNumber("tenantGroupId")
         repo.findByIdAndTenant(id, tenantGroupId)
     }
 
-    fun findUnavailabilityRecords(
+    /** 검증된 tenant-clinic 범위의 사용불가 스케줄만 조회합니다. */
+    fun findById(scope: TenantClinicScope, id: Long): EquipmentUnavailabilityRecord? = transaction {
+        id.requirePositiveNumber("id")
+        repo.findByIdAndScope(id, scope)
+    }
+
+    internal fun findUnavailabilityRecords(
         equipmentId: Long,
         from: LocalDate,
         to: LocalDate,
@@ -88,13 +127,24 @@ class EquipmentUnavailabilityService(
         repo.findByEquipment(equipmentId, from, to)
     }
 
-    fun delete(id: Long) = transaction {
+    /** 검증된 tenant-clinic 범위의 장비 사용불가 스케줄만 조회합니다. */
+    fun findUnavailabilityRecords(
+        scope: TenantClinicScope,
+        equipmentId: Long,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<EquipmentUnavailabilityRecord> = transaction {
+        equipmentId.requirePositiveNumber("equipmentId")
+        repo.findByEquipment(scope, equipmentId, from, to)
+    }
+
+    internal fun delete(id: Long) = transaction {
         id.requirePositiveNumber("id")
         log.debug { "Deleting EquipmentUnavailability id=$id" }
         repo.delete(id)
     }
 
-    fun deleteByTenant(id: Long, tenantGroupId: Long): Boolean = transaction {
+    internal fun deleteByTenant(id: Long, tenantGroupId: Long): Boolean = transaction {
         id.requirePositiveNumber("id")
         tenantGroupId.requirePositiveNumber("tenantGroupId")
         if (repo.findByIdAndTenant(id, tenantGroupId) == null) {
@@ -106,7 +156,12 @@ class EquipmentUnavailabilityService(
         }
     }
 
-    fun addException(
+    /** 지정 scope의 사용불가 스케줄만 삭제합니다. */
+    fun delete(scope: TenantClinicScope, id: Long): Boolean = transaction {
+        repo.delete(id, scope)
+    }
+
+    internal fun addException(
         unavailabilityId: Long,
         originalDate: LocalDate,
         exceptionType: ExceptionType,
@@ -127,13 +182,46 @@ class EquipmentUnavailabilityService(
         )
     }
 
-    fun deleteException(exceptionId: Long) = transaction {
+    /** 지정 scope의 사용불가 스케줄에만 예외를 추가합니다. */
+    fun addException(
+        scope: TenantClinicScope,
+        unavailabilityId: Long,
+        originalDate: LocalDate,
+        exceptionType: ExceptionType,
+        rescheduledDate: LocalDate?,
+        rescheduledStartTime: LocalTime?,
+        rescheduledEndTime: LocalTime?,
+        reason: String?,
+    ): EquipmentUnavailabilityExceptionRecord = transaction {
+        requireNotNull(repo.findByIdAndScope(unavailabilityId, scope)) {
+            "EquipmentUnavailability not found in scope: ${scope.cacheKey()}, id=$unavailabilityId"
+        }
+        addException(
+            unavailabilityId = unavailabilityId,
+            originalDate = originalDate,
+            exceptionType = exceptionType,
+            rescheduledDate = rescheduledDate,
+            rescheduledStartTime = rescheduledStartTime,
+            rescheduledEndTime = rescheduledEndTime,
+            reason = reason,
+        )
+    }
+
+    internal fun deleteException(exceptionId: Long) = transaction {
         exceptionId.requirePositiveNumber("exceptionId")
         log.debug { "Deleting EquipmentUnavailabilityException id=$exceptionId" }
         repo.deleteException(exceptionId)
     }
 
-    fun findUnavailablePeriodsInRange(
+    /** 지정 scope의 부모 스케줄에 속한 예외만 삭제합니다. */
+    fun deleteException(scope: TenantClinicScope, unavailabilityId: Long, exceptionId: Long): Boolean = transaction {
+        requireNotNull(repo.findByIdAndScope(unavailabilityId, scope)) {
+            "EquipmentUnavailability not found in scope: ${scope.cacheKey()}, id=$unavailabilityId"
+        }
+        repo.deleteException(unavailabilityId, exceptionId)
+    }
+
+    internal fun findUnavailablePeriodsInRange(
         equipmentId: Long,
         from: LocalDate,
         to: LocalDate,
@@ -148,7 +236,24 @@ class EquipmentUnavailabilityService(
         }
     }
 
-    fun findUnavailableOnDate(
+    /** 검증된 tenant-clinic 범위의 장비 사용불가 기간만 전개합니다. */
+    fun findUnavailablePeriodsInRange(
+        scope: TenantClinicScope,
+        equipmentId: Long,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<UnavailablePeriod> {
+        equipmentId.requirePositiveNumber("equipmentId")
+        return transaction {
+            val rules = repo.findByEquipment(scope, equipmentId, from, to)
+            rules.flatMap { rule ->
+                val exceptions = repo.findExceptions(rule.id)
+                UnavailabilityExpander.expand(rule, exceptions, from..to)
+            }
+        }
+    }
+
+    internal fun findUnavailableOnDate(
         clinicId: Long,
         date: LocalDate,
     ): Map<Long, List<UnavailablePeriod>> {
@@ -166,53 +271,40 @@ class EquipmentUnavailabilityService(
         }
     }
 
-    /**
-     * 등록된 사용불가 스케줄과 충돌하는 기존 예약을 감지합니다.
-     *
-     * @param unavailabilityId 장비 사용불가 스케줄 ID
-     * @return 충돌하는 예약 목록
-     */
-    fun detectConflicts(unavailabilityId: Long): List<AppointmentRecord> {
+    fun findUnavailableOnDate(
+        scope: TenantClinicScope,
+        date: LocalDate,
+    ): Map<Long, List<UnavailablePeriod>> {
+        return transaction {
+            val rules = repo.findByClinicOnDate(scope, date)
+            rules
+                .groupBy { it.equipmentId }
+                .mapValues { (_, ruleList) ->
+                    ruleList.flatMap { rule ->
+                        val exceptions = repo.findExceptions(rule.id)
+                        UnavailabilityExpander.expand(rule, exceptions, date..date)
+                    }
+                }
+        }
+    }
+
+    /** 지정 scope의 사용불가 스케줄과 겹치는 예약만 조회합니다. */
+    fun detectConflicts(scope: TenantClinicScope, unavailabilityId: Long): List<AppointmentRecord> {
         unavailabilityId.requirePositiveNumber("unavailabilityId")
         return transaction {
-            val record = repo.findById(unavailabilityId)
+            val record = repo.findByIdAndScope(unavailabilityId, scope)
                 ?: return@transaction emptyList()
             val exceptions = repo.findExceptions(unavailabilityId)
             val rangeEnd = record.effectiveUntil ?: record.effectiveFrom.plusYears(1)
             val periods = UnavailabilityExpander.expand(record, exceptions, record.effectiveFrom..rangeEnd)
-            log.debug { "Detecting conflicts for unavailabilityId=$unavailabilityId, periods=${periods.size}" }
-            appointmentRepository.findOverlappingByEquipment(record.equipmentId, periods)
+            log.debug { "Detecting scoped conflicts for unavailabilityId=$unavailabilityId, periods=${periods.size}" }
+            appointmentRepository.findOverlappingByEquipment(scope, record.equipmentId, periods)
         }
     }
 
-    fun detectConflictsByTenant(unavailabilityId: Long, tenantGroupId: Long): List<AppointmentRecord> {
-        unavailabilityId.requirePositiveNumber("unavailabilityId")
-        tenantGroupId.requirePositiveNumber("tenantGroupId")
-        return transaction {
-            val record = repo.findByIdAndTenant(unavailabilityId, tenantGroupId)
-                ?: return@transaction emptyList()
-            val exceptions = repo.findExceptions(unavailabilityId)
-            val rangeEnd = record.effectiveUntil ?: record.effectiveFrom.plusYears(1)
-            val periods = UnavailabilityExpander.expand(record, exceptions, record.effectiveFrom..rangeEnd)
-            log.debug { "Detecting conflicts for unavailabilityId=$unavailabilityId, periods=${periods.size}" }
-            appointmentRepository.findOverlappingByEquipment(record.equipmentId, periods)
-        }
-    }
-
-    /**
-     * 새로운 사용불가 스케줄 등록 전 충돌 미리보기.
-     *
-     * @param equipmentId 장비 ID
-     * @param unavailableDate 사용불가 날짜 (isRecurring=false 시 필수)
-     * @param isRecurring 반복 여부
-     * @param recurringDayOfWeek 반복 요일 (isRecurring=true 시 필수)
-     * @param effectiveFrom 유효 시작일
-     * @param effectiveUntil 유효 종료일
-     * @param startTime 사용불가 시작 시간
-     * @param endTime 사용불가 종료 시간
-     * @return 충돌하는 예약 목록
-     */
+    /** 지정 scope의 장비를 기준으로 새 사용불가 스케줄의 충돌을 미리 조회합니다. */
     fun previewConflicts(
+        scope: TenantClinicScope,
         equipmentId: Long,
         unavailableDate: LocalDate?,
         isRecurring: Boolean,
@@ -223,24 +315,27 @@ class EquipmentUnavailabilityService(
         endTime: LocalTime,
     ): List<AppointmentRecord> {
         equipmentId.requirePositiveNumber("equipmentId")
-        val tempRecord = EquipmentUnavailabilityRecord(
-            id = 0L,
-            equipmentId = equipmentId,
-            clinicId = 0L,
-            unavailableDate = unavailableDate,
-            isRecurring = isRecurring,
-            recurringDayOfWeek = recurringDayOfWeek,
-            effectiveFrom = effectiveFrom,
-            effectiveUntil = effectiveUntil,
-            startTime = startTime,
-            endTime = endTime,
-            reason = null,
-        )
-        val rangeEnd = effectiveUntil ?: effectiveFrom.plusYears(1)
-        val periods = UnavailabilityExpander.expand(tempRecord, emptyList(), effectiveFrom..rangeEnd)
-        log.debug { "Previewing conflicts for equipmentId=$equipmentId, periods=${periods.size}" }
         return transaction {
-            appointmentRepository.findOverlappingByEquipment(equipmentId, periods)
+            requireNotNull(equipmentRepository.findByIdAndScope(equipmentId, scope)) {
+                "Equipment not found in scope: ${scope.cacheKey()}, equipmentId=$equipmentId"
+            }
+            val tempRecord = EquipmentUnavailabilityRecord(
+                id = 0L,
+                equipmentId = equipmentId,
+                clinicId = scope.clinicId,
+                unavailableDate = unavailableDate,
+                isRecurring = isRecurring,
+                recurringDayOfWeek = recurringDayOfWeek,
+                effectiveFrom = effectiveFrom,
+                effectiveUntil = effectiveUntil,
+                startTime = startTime,
+                endTime = endTime,
+                reason = null,
+            )
+            val rangeEnd = effectiveUntil ?: effectiveFrom.plusYears(1)
+            val periods = UnavailabilityExpander.expand(tempRecord, emptyList(), effectiveFrom..rangeEnd)
+            log.debug { "Previewing scoped conflicts for equipmentId=$equipmentId, periods=${periods.size}" }
+            appointmentRepository.findOverlappingByEquipment(scope, equipmentId, periods)
         }
     }
 }

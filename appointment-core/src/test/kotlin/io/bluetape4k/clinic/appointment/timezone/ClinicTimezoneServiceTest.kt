@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.timezone
 
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
+import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
 import io.bluetape4k.clinic.appointment.test.TestDB
@@ -54,6 +56,9 @@ class ClinicTimezoneServiceTest : AbstractExposedTest() {
 
         return Triple(seoulId, nyId, tokyoId)
     }
+
+    private fun scope(clinicId: Long): TenantClinicScope =
+        TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId)
 
     @ParameterizedTest
     @MethodSource(ENABLE_DIALECTS_METHOD)
@@ -166,7 +171,7 @@ class ClinicTimezoneServiceTest : AbstractExposedTest() {
         withTables(testDB, *allTables) {
             val (seoulId, _, _) = setupClinics()
 
-            val (timezone, locale) = service.getTimezoneAndLocale(seoulId)
+            val (timezone, locale) = service.getTimezoneAndLocale(scope(seoulId))
 
             timezone.shouldBeEqualTo("Asia/Seoul")
             locale.shouldBeEqualTo("ko-KR")
@@ -179,11 +184,11 @@ class ClinicTimezoneServiceTest : AbstractExposedTest() {
         withTables(testDB, *allTables) {
             val (_, nyId, tokyoId) = setupClinics()
 
-            val (nyTimezone, nyLocale) = service.getTimezoneAndLocale(nyId)
+            val (nyTimezone, nyLocale) = service.getTimezoneAndLocale(scope(nyId))
             nyTimezone.shouldBeEqualTo("America/New_York")
             nyLocale.shouldBeEqualTo("en-US")
 
-            val (tokyoTimezone, tokyoLocale) = service.getTimezoneAndLocale(tokyoId)
+            val (tokyoTimezone, tokyoLocale) = service.getTimezoneAndLocale(scope(tokyoId))
             tokyoTimezone.shouldBeEqualTo("Asia/Tokyo")
             tokyoLocale.shouldBeEqualTo("ja-JP")
         }
@@ -203,7 +208,7 @@ class ClinicTimezoneServiceTest : AbstractExposedTest() {
                 it[locale] = "ko-KR"
             }.value
 
-            val (timezone, locale) = service.getTimezoneAndLocale(expatId)
+            val (timezone, locale) = service.getTimezoneAndLocale(scope(expatId))
 
             timezone.shouldBeEqualTo("America/Los_Angeles")
             locale.shouldBeEqualTo("ko-KR")

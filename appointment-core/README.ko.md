@@ -111,7 +111,7 @@ val newState = machine.transition(
 
 | 클래스 | 역할 |
 |--------|------|
-| `SlotQuery` | 슬롯 조회 파라미터 (clinicId, doctorId, treatmentTypeId, date) |
+| `SlotQuery` | 슬롯 조회 파라미터 (tenant-clinic scope, doctorId, treatmentTypeId, date) |
 | `AvailableSlot` | 계산된 가용 슬롯 결과 (date, startTime, endTime, doctorId, remainingCapacity) |
 | `TimeRange` | 시간 범위 value type + `subtractRanges`, `computeEffectiveRanges` top-level 함수 |
 
@@ -231,3 +231,25 @@ core는 Spring, Redis, notification provider, 회원 profile 서비스에 직접
 | 완료 | `OFFERED`는 `ACCEPTED`, `DECLINED`, `EXPIRED`, `WITHDRAWN` 중 하나로 한 번만 전이하며 terminal 재시도는 no-op 성공입니다. |
 
 [waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)에서 전체 경계를 확인하세요.
+
+## Tenant query 범위
+
+스케줄링 조회는 검증된 `TenantClinicScope` value object를 사용합니다. 이 객체는
+인증 객체가 아니라 DB 권위이며, 모든 Exposed query는 호출자가 소유한
+`transaction {}` 경계 안에서 실행합니다.
+
+```kotlin
+val scope = TenantClinicScope(tenantGroupId = 1L, clinicId = 23L)
+val slots = slotCalculationService.findAvailableSlots(
+    SlotQuery(
+        scope = scope,
+        doctorId = 101L,
+        treatmentTypeId = 202L,
+        date = LocalDate.now(),
+    ),
+)
+```
+
+표준 cache key는 `${scope.tenantGroupId}:${scope.clinicId}`입니다. 병원 ID만 받는
+스케줄링 query는 유효하지 않으므로 다른 tenant가 같은 clinic ID를 재사용해도 행을
+조회할 수 없습니다.

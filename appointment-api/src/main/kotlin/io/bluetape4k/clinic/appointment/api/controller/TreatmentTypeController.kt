@@ -3,7 +3,7 @@ package io.bluetape4k.clinic.appointment.api.controller
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
-import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
@@ -13,7 +13,6 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -59,11 +58,11 @@ class TreatmentTypeController(
         @RequestParam(defaultValue = "20") size: Int,
     ): ResponseEntity<ApiResponse<ExposedPage<TreatmentTypeRecord>>> {
         clinicId.requirePositiveNumber("clinicId")
-        tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        val tenant = tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
         val pageNumber = page.coerceAtLeast(0)
         val pageSize = size.coerceIn(1, PaginationDefaults.MAX_PAGE_SIZE)
         log.debug { "GET treatment types tenantCode=$tenantCode, clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
-        val result = transaction { treatmentTypeRepository.findPage(pageNumber, pageSize) { TreatmentTypes.clinicId eq clinicId } }
+        val result = transaction { treatmentTypeRepository.findPage(TenantClinicScope(tenant.id, clinicId), pageNumber, pageSize) }
         return ResponseEntity.ok(ApiResponse.ok(result))
     }
 

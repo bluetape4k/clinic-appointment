@@ -2,6 +2,8 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
+import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -21,6 +23,7 @@ import java.io.Serializable
 class NotificationSchemaReadiness(
     private val database: Database,
     private val cryptoProperties: NotificationCryptoProperties,
+    private val metrics: NotificationOutboxMetrics? = null,
 ) {
     fun check(): NotificationReadiness =
         try {
@@ -29,10 +32,20 @@ class NotificationSchemaReadiness(
                 if (missing.isNotEmpty()) {
                     return@transaction NotificationReadiness.down("missing tables: ${missing.joinToString()}")
                 }
+                if (!eventLogTenantColumnReadable()) {
+                    return@transaction NotificationReadiness.down("missing column: ${AppointmentEventLogs.tableName}.tenant_group_id")
+                }
                 val flywayVersion = installedFlywayVersion()
                     ?: return@transaction NotificationReadiness.down("flyway schema version is unavailable")
                 if (flywayVersion < REQUIRED_FLYWAY_VERSION) {
                     return@transaction NotificationReadiness.down("flyway schema version $flywayVersion is below $REQUIRED_FLYWAY_VERSION")
+                }
+                val unresolvedTenantRows = unresolvedEventLogTenantRows()
+                metrics?.recordEventLogNullTenantRows(unresolvedTenantRows)
+                if (unresolvedTenantRows > 0L) {
+                    return@transaction NotificationReadiness.down(
+                        "event-log tenant preflight has $unresolvedTenantRows unresolved rows",
+                    )
                 }
                 val missingIndexes = missingRequiredIndexes()
                 if (missingIndexes.isNotEmpty()) {
@@ -69,7 +82,35 @@ class NotificationSchemaReadiness(
         }
 
     private fun requiredTables(): List<String> =
-        listOf(NotificationOutboxEvents.tableName, NotificationDeliveryAttempts.tableName)
+        listOf(
+            NotificationOutboxEvents.tableName,
+            NotificationDeliveryAttempts.tableName,
+            AppointmentEventLogs.tableName,
+            Clinics.tableName,
+        )
+
+    private fun eventLogTenantColumnReadable(): Boolean =
+        try {
+            TransactionManager.current().exec(
+                "SELECT tenant_group_id FROM ${AppointmentEventLogs.tableName} WHERE 1 = 0",
+            ) { true } == true
+        } catch (e: Exception) {
+            false
+        }
+
+    private fun unresolvedEventLogTenantRows(): Long =
+        TransactionManager.current().exec(
+            """
+            SELECT COUNT(*)
+            FROM ${AppointmentEventLogs.tableName} event_log
+            LEFT JOIN ${Clinics.tableName} clinic ON clinic.id = event_log.clinic_id
+            WHERE event_log.tenant_group_id IS NULL
+               OR clinic.id IS NULL
+               OR clinic.tenant_group_id <> event_log.tenant_group_id
+            """.trimIndent(),
+        ) { resultSet ->
+            if (!resultSet.next()) 0L else resultSet.getLong(1)
+        } ?: 0L
 
     private fun missingRequiredIndexes(): List<String> {
         val migrationStatements = MigrationUtils.statementsRequiredForDatabaseMigration(
@@ -82,11 +123,12 @@ class NotificationSchemaReadiness(
     }
 
     private companion object : KLogging() {
-        const val REQUIRED_FLYWAY_VERSION = 14
+        const val REQUIRED_FLYWAY_VERSION = 21
         val REQUIRED_INDEXES = listOf(
             "idx_notification_outbox_ready_clinic_cursor",
             "idx_notification_outbox_ready_within_clinic",
             "idx_notification_outbox_direct_lookup",
+            "idx_notification_outbox_tenant_direct_lookup",
             "idx_notification_outbox_reminder_suppression",
             "idx_notification_outbox_lease_recovery",
             "idx_notification_outbox_terminal_retention",

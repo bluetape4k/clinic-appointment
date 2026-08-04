@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.ConfirmedAppointmentProjection
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
@@ -97,13 +98,47 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .firstOrNull()
             ?.toAppointmentRecord()
 
+    /** legacy/commitment version과 무관하게 tenant가 소유한 예약의 clinic scope만 반환합니다. */
+    fun findScopeByIdAndTenant(
+        appointmentId: Long,
+        tenantGroupId: Long,
+    ): TenantClinicScope? {
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
+        val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
+        return Appointments
+            .select(Appointments.clinicId)
+            .where {
+                (Appointments.id eq validAppointmentId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(validTenantGroupId))
+            }
+            .firstOrNull()
+            ?.let { TenantClinicScope(validTenantGroupId, it[Appointments.clinicId].value) }
+    }
+
+    /** 검증된 테넌트-병원 범위의 legacy 예약을 조회합니다. */
+    fun findByIdAndScope(
+        appointmentId: Long,
+        scope: TenantClinicScope,
+    ): AppointmentRecord? =
+        Appointments
+            .selectAll()
+            .where {
+                (Appointments.id eq appointmentId) and
+                    (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
+            .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
+            .andWhere { completeAppointmentProjection() }
+            .firstOrNull()
+            ?.toAppointmentRecord()
+
     /**
      * 내부 legacy workflow가 사용할 projection 완성 legacy 예약을 ID로 조회합니다.
      *
      * tenant가 없는 오래된 내부 호출을 위한 호환 경계이며 commitment v2 row는 절대
      * [AppointmentRecord]로 반환하지 않습니다. 외부 API는 [findByIdAndTenant]를 사용해야 합니다.
      */
-    fun findLegacyById(appointmentId: Long): AppointmentRecord? =
+    internal fun findLegacyById(appointmentId: Long): AppointmentRecord? =
         Appointments
             .selectAll()
             .where {
@@ -355,7 +390,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
      * @param slotEnd 시간대 종료
      * @return 겹치는 예약 개수
      */
-    fun countOverlapping(
+    internal fun countOverlapping(
         doctorId: Long,
         date: LocalDate,
         slotStart: LocalTime,
@@ -364,6 +399,29 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         Appointments
             .selectAll()
             .where { Appointments.doctorId eq doctorId }
+            .andWhere { Appointments.appointmentDate eq date }
+            .andWhere { Appointments.startTime less slotEnd }
+            .andWhere { Appointments.endTime greater slotStart }
+            .andWhere { Appointments.status neq AppointmentState.CANCELLED }
+            .andWhere { Appointments.status neq AppointmentState.NO_SHOW }
+            .count()
+            .toInt()
+
+    /** 검증된 테넌트-병원 범위에서 의사와 겹치는 예약 개수를 반환합니다. */
+    fun countOverlapping(
+        scope: TenantClinicScope,
+        doctorId: Long,
+        date: LocalDate,
+        slotStart: LocalTime,
+        slotEnd: LocalTime,
+    ): Int =
+        Appointments
+            .selectAll()
+            .where {
+                (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId)) and
+                    (Appointments.doctorId eq doctorId)
+            }
             .andWhere { Appointments.appointmentDate eq date }
             .andWhere { Appointments.startTime less slotEnd }
             .andWhere { Appointments.endTime greater slotStart }
@@ -381,7 +439,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
      * @param slotEnd 시간대 종료
      * @return 장비 사용 중인 예약 개수
      */
-    fun countEquipmentUsage(
+    internal fun countEquipmentUsage(
         equipmentId: Long,
         date: LocalDate,
         slotStart: LocalTime,
@@ -390,6 +448,29 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         Appointments
             .selectAll()
             .where { Appointments.equipmentId eq equipmentId }
+            .andWhere { Appointments.appointmentDate eq date }
+            .andWhere { Appointments.startTime less slotEnd }
+            .andWhere { Appointments.endTime greater slotStart }
+            .andWhere { Appointments.status neq AppointmentState.CANCELLED }
+            .andWhere { Appointments.status neq AppointmentState.NO_SHOW }
+            .count()
+            .toInt()
+
+    /** 검증된 테넌트-병원 범위에서 장비 사용 중인 예약 개수를 반환합니다. */
+    fun countEquipmentUsage(
+        scope: TenantClinicScope,
+        equipmentId: Long,
+        date: LocalDate,
+        slotStart: LocalTime,
+        slotEnd: LocalTime,
+    ): Int =
+        Appointments
+            .selectAll()
+            .where {
+                (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId)) and
+                    (Appointments.equipmentId eq equipmentId)
+            }
             .andWhere { Appointments.appointmentDate eq date }
             .andWhere { Appointments.startTime less slotEnd }
             .andWhere { Appointments.endTime greater slotStart }
@@ -410,7 +491,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
      * @param activeStatuses 필터링할 상태 목록 (기본값: REQUESTED, CONFIRMED)
      * @return 예약 목록
      */
-    fun findActiveByClinicAndDate(
+    internal fun findActiveByClinicAndDate(
         clinicId: Long,
         date: LocalDate,
         activeStatuses: List<AppointmentState> = AppointmentState.ACTIVE_STATUSES,
@@ -418,6 +499,24 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         Appointments
             .selectAll()
             .where { Appointments.clinicId eq clinicId }
+            .andWhere { Appointments.appointmentDate eq date }
+            .andWhere { Appointments.status inList activeStatuses }
+            .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
+            .andWhere { completeAppointmentProjection() }
+            .map { it.toAppointmentRecord() }
+
+    /** 검증된 테넌트-병원 범위의 legacy 활성 예약을 조회합니다. */
+    fun findActiveByClinicAndDate(
+        scope: TenantClinicScope,
+        date: LocalDate,
+        activeStatuses: List<AppointmentState> = AppointmentState.ACTIVE_STATUSES,
+    ): List<AppointmentRecord> =
+        Appointments
+            .selectAll()
+            .where {
+                (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
             .andWhere { Appointments.appointmentDate eq date }
             .andWhere { Appointments.status inList activeStatuses }
             .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
@@ -436,7 +535,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
      * @param toStatus 변경할 새로운 상태
      * @return 업데이트된 예약 개수
      */
-    fun updateStatusByClinicAndDate(
+    internal fun updateStatusByClinicAndDate(
         clinicId: Long,
         date: LocalDate,
         fromStatuses: List<AppointmentState>,
@@ -453,6 +552,25 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             it[status] = toStatus
         }
 
+    /** 검증된 테넌트-병원 범위의 legacy 예약 상태만 일괄 변경합니다. */
+    fun updateStatusByClinicAndDate(
+        scope: TenantClinicScope,
+        date: LocalDate,
+        fromStatuses: List<AppointmentState>,
+        toStatus: AppointmentState,
+    ): Int =
+        Appointments.update(
+            where = {
+                (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId)) and
+                    (Appointments.appointmentDate eq date) and
+                    (Appointments.status inList fromStatuses) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.LEGACY)
+            },
+        ) {
+            it[status] = toStatus
+        }
+
     /**
      * 특정 날짜의 모든 활성 예약을 조회합니다.
      *
@@ -460,7 +578,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
      * @param activeStatuses 필터링할 상태 목록
      * @return 예약 목록
      */
-    fun findActiveByDate(
+    internal fun findActiveByDate(
         date: LocalDate,
         activeStatuses: List<AppointmentState> = AppointmentState.ACTIVE_STATUSES,
     ): List<AppointmentRecord> =
@@ -659,7 +777,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
      * @param newStatus 새로운 상태
      * @return 업데이트된 행 개수
      */
-    fun updateStatus(
+    internal fun updateStatus(
         appointmentId: Long,
         newStatus: AppointmentState,
     ): Int =
@@ -673,7 +791,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
      * 알림 idempotency가 상태 이력 개수나 시각에 의존하지 않도록 상태 변경과 같은 SQL
      * update에서 단조 증가 version을 소비합니다.
      */
-    fun updateLegacyStatus(
+    internal fun updateLegacyStatus(
         appointmentId: Long,
         expectedVersion: Long,
         newStatus: AppointmentState,
@@ -683,6 +801,30 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         return Appointments.update(
             where = {
                 (Appointments.id eq validAppointmentId) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.LEGACY) and
+                    (Appointments.version eq expectedVersion)
+            },
+        ) {
+            it[status] = newStatus
+            it[version] = expectedVersion + 1L
+            it.update(updatedAt, CurrentTimestamp)
+        } == 1
+    }
+
+    /** 검증된 tenant-clinic 범위와 version이 모두 일치할 때 legacy 상태를 변경합니다. */
+    fun updateLegacyStatus(
+        scope: TenantClinicScope,
+        appointmentId: Long,
+        expectedVersion: Long,
+        newStatus: AppointmentState,
+    ): Boolean {
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
+        require(expectedVersion >= 0L) { "expectedVersion must not be negative" }
+        return Appointments.update(
+            where = {
+                (Appointments.id eq validAppointmentId) and
+                    (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId)) and
                     (Appointments.modelVersion eq AppointmentModelVersion.LEGACY) and
                     (Appointments.version eq expectedVersion)
             },
@@ -704,7 +846,7 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
      * @param periods 사용불가 기간 목록
      * @return 겹치는 예약 목록
      */
-    fun findOverlappingByEquipment(
+    internal fun findOverlappingByEquipment(
         equipmentId: Long,
         periods: List<UnavailablePeriod>,
     ): List<AppointmentRecord> {
@@ -728,6 +870,36 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .map { it.toAppointmentRecord() }
     }
 
+    /** 검증된 tenant-clinic 범위에서만 장비 충돌 예약을 조회합니다. */
+    fun findOverlappingByEquipment(
+        scope: TenantClinicScope,
+        equipmentId: Long,
+        periods: List<UnavailablePeriod>,
+    ): List<AppointmentRecord> {
+        if (periods.isEmpty()) return emptyList()
+
+        val periodConditions =
+            periods
+                .map { period ->
+                    (Appointments.appointmentDate eq period.date) and
+                        (Appointments.startTime less period.endTime) and
+                        (Appointments.endTime greater period.startTime)
+                }.reduce { acc, op -> acc or op }
+
+        return Appointments
+            .selectAll()
+            .where {
+                (Appointments.equipmentId eq equipmentId) and
+                    (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
+            .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
+            .andWhere { Appointments.status neq AppointmentState.CANCELLED }
+            .andWhere { periodConditions }
+            .andWhere { completeAppointmentProjection() }
+            .map { it.toAppointmentRecord() }
+    }
+
     /**
      * 병원의 기간별 예약을 조회합니다.
      *
@@ -737,13 +909,31 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
      * @param dateRange 조회 기간
      * @return 예약 목록
      */
-    fun findByClinicAndDateRange(
+    internal fun findByClinicAndDateRange(
         clinicId: Long,
         dateRange: ClosedRange<LocalDate>,
     ): List<AppointmentRecord> =
         Appointments
             .selectAll()
             .where { Appointments.clinicId eq clinicId }
+            .andWhere { Appointments.appointmentDate greaterEq dateRange.start }
+            .andWhere { Appointments.appointmentDate lessEq dateRange.endInclusive }
+            .andWhere { Appointments.status neq AppointmentState.CANCELLED }
+            .andWhere { Appointments.status neq AppointmentState.NO_SHOW }
+            .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
+            .andWhere { completeAppointmentProjection() }
+            .map { it.toAppointmentRecord() }
+
+    fun findByClinicAndDateRange(
+        scope: TenantClinicScope,
+        dateRange: ClosedRange<LocalDate>,
+    ): List<AppointmentRecord> =
+        Appointments
+            .selectAll()
+            .where {
+                (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
             .andWhere { Appointments.appointmentDate greaterEq dateRange.start }
             .andWhere { Appointments.appointmentDate lessEq dateRange.endInclusive }
             .andWhere { Appointments.status neq AppointmentState.CANCELLED }
