@@ -49,10 +49,22 @@ digest를 반환합니다. `BookingEligibilityPort`가 읽기 계약을 제공�
 
 ## 핵심 클래스
 
+### Tenant 소유권
+
+`TenantGroupRecord`는 데이터 격리의 소유자입니다. `tenantCode`는 URL 경로에서 사용하는
+1~64자의 안정적인 소문자 ASCII slug이며, `a-z`, `0-9`, 구간 사이의 단일 하이픈만
+허용합니다. 병원과 공휴일은 tenant group을 참조합니다. locale은 병원의 표시 설정일 뿐
+tenant를 식별하지 않습니다.
+
+리포지토리 호출자는 `TenantGroupRepository.findActiveByCode()`로 활성 tenant를 확인한 뒤
+`ClinicRepository.findByTenant()`와 `HolidayRepository.findByTenantAndDate()`를 사용해
+조회 범위를 해당 tenant 안으로 제한해야 합니다.
+
 ### 도메인 엔티티 (Record)
 
 | 클래스 | 역할 |
 |--------|------|
+| `TenantGroupRecord` | 안정적인 URL tenant code와 활성 상태를 가진 데이터 격리 소유자 |
 | `AppointmentRecord` | 예약 — clinicId, doctorId, treatmentTypeId, appointmentDate, startTime, endTime, status |
 | `ClinicRecord` | 병원 — slotDurationMinutes, maxConcurrentPatients, openOnHolidays |
 | `DoctorRecord` | 의사 — clinicId, providerType, maxConcurrentPatients |
@@ -82,11 +94,12 @@ val newState = machine.transition(
 
 | 클래스 | 주요 메서드 |
 |--------|-----------|
+| `TenantGroupRepository` | `findActiveByCode()` |
 | `AppointmentRepository` | `findByDateRange()`, `findByStatus()`, `save()`, `updateStatus()` |
-| `ClinicRepository` | `findById()`, `findAll()` |
+| `ClinicRepository` | `findByIdAndTenant()`, `findByTenant()` |
 | `DoctorRepository` | `findByClinic()`, `findByProviderType()` |
 | `TreatmentTypeRepository` | `findAll()`, `findById()` |
-| `HolidayRepository` | `isHoliday(date)`, `findByYear()` |
+| `HolidayRepository` | `findByTenantAndDate()`, `existsByDate()`, `findByDateRange()` |
 | `RescheduleCandidateRepository` | `findPendingByClinic()`, `save()` |
 | `EquipmentUnavailabilityRepository` | `findByEquipment()`, `findOverlapping()`, `save()`, `delete()` |
 | `ProductCatalogRepository` | 불변 카탈로그 버전을 저장하고 동일 버전의 내용 충돌을 감지 |

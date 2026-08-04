@@ -52,10 +52,23 @@ See the [booking reliability policy](../docs/booking-reliability-policy.md),
 
 ## Core Classes
 
+### Tenant Ownership
+
+`TenantGroupRecord` is the data-isolation owner. Its `tenantCode` is a stable,
+1–64 character lower-case ASCII slug (`a-z`, `0-9`, and single hyphens between
+segments) used in URL paths. Clinics and holidays reference a tenant group;
+locale remains a clinic display preference and never identifies a tenant.
+
+Repository callers must resolve an active tenant with
+`TenantGroupRepository.findActiveByCode()`, then keep reads within that tenant
+using `ClinicRepository.findByTenant()` and
+`HolidayRepository.findByTenantAndDate()`.
+
 ### Domain Entities (Record)
 
 | Class | Role |
 |--------|------|
+| `TenantGroupRecord` | Data-isolation owner with a stable URL tenant code and active status. |
 | `AppointmentRecord` | Appointment with clinicId, doctorId, treatmentTypeId, appointmentDate, startTime, endTime, and status. |
 | `ClinicRecord` | Clinic settings such as slotDurationMinutes, maxConcurrentPatients, and openOnHolidays. |
 | `DoctorRecord` | Doctor information such as clinicId, providerType, and maxConcurrentPatients. |
@@ -84,11 +97,12 @@ Full transition list: [domain model document](../docs/requirements/domain-model.
 
 | Class | Main Methods |
 |--------|-----------|
+| `TenantGroupRepository` | `findActiveByCode()` |
 | `AppointmentRepository` | `findByDateRange()`, `findByStatus()`, `save()`, `updateStatus()` |
-| `ClinicRepository` | `findById()`, `findAll()` |
+| `ClinicRepository` | `findByIdAndTenant()`, `findByTenant()` |
 | `DoctorRepository` | `findByClinic()`, `findByProviderType()` |
 | `TreatmentTypeRepository` | `findAll()`, `findById()` |
-| `HolidayRepository` | `isHoliday(date)`, `findByYear()` |
+| `HolidayRepository` | `findByTenantAndDate()`, `existsByDate()`, `findByDateRange()` |
 | `RescheduleCandidateRepository` | `findPendingByClinic()`, `save()` |
 | `EquipmentUnavailabilityRepository` | `findByEquipment()`, `findOverlapping()`, `save()`, `delete()` |
 | `ProductCatalogRepository` | Saves immutable catalog versions and detects same-version content conflicts. |

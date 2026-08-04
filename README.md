@@ -190,7 +190,7 @@ Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seede
 |------|------|
 | [Requirements Index](docs/requirements/README.md) | Complete requirements list and implementation status. |
 | [Architecture](docs/requirements/architecture.md) | Module dependencies and key architecture decisions. |
-| [Domain Model](docs/requirements/domain-model.md) | 16 entities, appointment state machine, and table relationships. |
+| [Domain Model](docs/requirements/domain-model.md) | Tenant ownership, domain entities, appointment state machine, and table relationships. |
 | [AI Scheduler](docs/requirements/solver.md) | Timefold Solver constraint design. |
 | [Notification Module](docs/requirements/notification.md) | Durable outbox lifecycle, rollout routes, member-data boundary, and provider isolation. |
 | [Notification outbox operations](docs/runbooks/notification-outbox-operations.md) | Canary gates, alerts, re-notify, key rotation, migration, and rollback. |
