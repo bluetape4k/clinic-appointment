@@ -95,7 +95,9 @@ Expected: scope invariant/cache collision 테스트가 통과하고, 이후 task
 - Modify: `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/repository/RescheduleCandidateRepository.kt`
 - Modify: `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/service/EquipmentUnavailabilityService.kt`
 - Modify: `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/service/SlotCalculationService.kt`
-- Modify: `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/repository/*RepositoryTest.kt`
+- Create: `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/repository/HolidayRepositoryTest.kt`
+- Create: `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/repository/TenantIsolationRepositoryTest.kt`
+- Modify: `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/repository/AppointmentRepositoryTest.kt`
 - Modify: `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/service/SlotCalculationServiceTest.kt`
 
 - [ ] **Step 1: cross-tenant repository/slot RED tests 작성**
@@ -172,7 +174,7 @@ Expected: old clinic-only signatures or bulk transition semantics fail the new a
 
 - [ ] **Step 3: service/controller implementation**
 
-Replace `clinicId`/tenantGroup-only public entry points with `TenantClinicScope`. In `processClosureReschedule`, guard the clinic once, query active appointments by tuple, and perform each appointment's optimistic CAS, history, slot search, and candidate writes in the same transaction. In `streamClosureReschedule`, capture the scope before starting the virtual thread, track the thread handle, process one appointment per transaction, call progress only after commit, and on emitter completion/error/timeout interrupt the worker. A CAS loser skips without candidate writes; cancellation rolls back the current transaction and leaves unstarted rows `ACTIVE`.
+Replace `clinicId`/tenantGroup-only public entry points with `TenantClinicScope`. In `processClosureReschedule`, guard the clinic once, query active appointments by tuple, and perform each appointment's optimistic CAS, history, slot search, and candidate writes in the same transaction. In `streamClosureReschedule`, capture the scope before starting the virtual thread, track the thread handle, process one appointment per transaction, call progress only after commit, and on emitter completion/error/timeout interrupt the worker. A CAS loser skips without candidate writes; cancellation rolls back the current transaction and leaves unstarted rows `ACTIVE`. The virtual-thread body must handle `CancellationException` separately (rethrowing it after cleanup) and must not use a broad `runCatching` that swallows cancellation.
 
 Move `RescheduleController.getCandidates` from raw `RescheduleCandidates.selectAll()` to a tenant-scoped repository/service method. `SlotController` constructs `TenantClinicScope` from `TenantClinicAccessChecker` and passes `SlotQuery(scope = scope, ...)`. Confirm and auto paths validate original appointment and candidate doctor under the same scope before mutation and event enqueue.
 
@@ -205,7 +207,7 @@ Expected: the old `optimize(clinicId, ...)` contract and unscoped `loadSolution`
 
 - [ ] **Step 3: scoped solver implementation**
 
-Change `optimize` and `optimizeReschedule` to accept `TenantClinicScope`. Make `loadSolution(scope, dateRange)` perform clinic ownership validation and use scope-aware clinic/doctor/appointment/treatment/equipment/holiday/closure queries. Keep facts and the original appointment map in one Exposed transaction snapshot; run Timefold read-only, retain source versions in `SolverResult`, and require the existing write caller to recheck versions before applying results. Do not create a solver controller or add a tenant query inside the doctor schedule/absence loops.
+Change `optimize` and `optimizeReschedule` to accept `TenantClinicScope`. Make `loadSolution(scope, dateRange)` perform clinic ownership validation and use scope-aware clinic/doctor/appointment/treatment/equipment/holiday/closure queries. Keep facts and the original appointment map in one Exposed transaction snapshot; run Timefold read-only and retain source versions in `SolverResult`. Search current callers before editing: if no production write caller exists, keep the solver read-only and prove the version race with an integration test that applies the result through the existing `AppointmentRepository` optimistic version predicate; do not invent a solver controller or a new write API. Do not add a tenant query inside the doctor schedule/absence loops.
 
 - [ ] **Step 4: GREEN and solver validation**
 
@@ -264,7 +266,7 @@ Expected: all event publishers pass the explicit scope and no zero tenant is syn
 
 - [ ] **Step 1: direct claim and canary RED tests 작성**
 
-Add tests that a claim with tenant A cannot claim a tenant B row, a claimed row is rechecked before worker/provider invocation, zero/mismatch scope produces no claim/permit/provider side effect, and `(1, 23)` differs from `(12, 3)`. Add route tests for `canaryScopes`, deprecated bridge set equality, positive IDs, and startup rejection when the bridge and scope clinic sets differ.
+Add tests that a claim with tenant A cannot claim a tenant B row, a claimed row is rechecked before worker/provider invocation, zero/mismatch scope produces no claim/permit/provider side effect, and `(1, 23)` differs from `(12, 3)`. Add a cancellation/lease-expiry test proving a direct-route interruption releases the permit and leaves the claimed row recoverable by the existing lease-expiry path. Add route tests for `canaryScopes`, deprecated bridge set equality, positive IDs, and startup rejection when the bridge and scope clinic sets differ.
 
 - [ ] **Step 2: RED 확인**
 
@@ -274,7 +276,7 @@ Expected: direct APIs currently accept clinic-only or synthetic tenant `0L` and 
 
 - [ ] **Step 3: direct delivery implementation**
 
-Make `NotificationDirectDeliveryPort`, `NotificationDirectOutboxStore.claimReady`, listener, worker eligibility, and `claimReadyForDirect` accept the verified tuple/scope. Include tenant and clinic in every SQL predicate and recheck the claimed row against the event scope before invoking a provider. Replace synthetic permit tenant `0L` with the event tenant. Add canonical `NotificationClinicKey`/scope conversion without changing the modern durable outbox envelope. Add nested `canaryScopes[{tenantGroupId, clinicId}]`; during rolling support `canaryClinicIds` only as a deprecated bridge, require equal clinic sets, and use scopes for all new route/DB eligibility decisions.
+Make `NotificationDirectDeliveryPort`, `NotificationDirectOutboxStore.claimReady`, listener, worker eligibility, and `claimReadyForDirect` accept the shared `TenantClinicScope` (the existing `TenantGroupId`/`ClinicId` value classes are boundary adapters only, not a second authority type). Include tenant and clinic in every SQL predicate and recheck the claimed row against the event scope before invoking a provider. Replace synthetic permit tenant `0L` with the event tenant. Add canonical `NotificationClinicKey`/scope conversion without changing the modern durable outbox envelope. Add nested `canaryScopes[{tenantGroupId, clinicId}]`; during rolling support `canaryClinicIds` only as a deprecated bridge, require equal clinic sets, and use scopes for all new route/DB eligibility decisions.
 
 - [ ] **Step 4: readiness and notification GREEN**
 
@@ -382,7 +384,7 @@ Expected: all affected module tests pass without unexplained warnings/errors. Re
 
 - [ ] **Step 2: Kotlin and performance/stability checklist**
 
-Load `bluetape-kotlin-patterns/references/checklist.md` and `bluetape-full-feature/references/performance-stability-scan.md`. Verify no deprecated Exposed imports, no receiver-shadowing bug in inserts/updates, no uncaught `CancellationException`, no monitor use in virtual-thread code, bounded emitter/thread cleanup, provider side-effect guards, cache max/TTL preservation, and query deltas `slot=0`, `solver=0`, `closure<=1`.
+Load `bluetape-kotlin-patterns/references/checklist.md` and `bluetape-full-feature/references/performance-stability-scan.md`. Verify no deprecated Exposed imports, no receiver-shadowing bug in inserts/updates, no swallowed or uncaught `CancellationException`, no monitor use in virtual-thread code, bounded emitter/thread cleanup, provider side-effect guards, cache max/TTL preservation, and query deltas `slot=0`, `solver=0`, `closure<=1`.
 
 - [ ] **Step 3: exact spec-to-plan acceptance map**
 
