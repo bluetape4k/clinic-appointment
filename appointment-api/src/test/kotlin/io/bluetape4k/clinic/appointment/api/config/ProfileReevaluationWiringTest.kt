@@ -1,7 +1,10 @@
 package io.bluetape4k.clinic.appointment.api.config
 
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.profile.ProfileAssessmentClient
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationAdminService
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationAppointmentProcessor
@@ -39,24 +42,42 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.ResourceAccessMode
+import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import javax.sql.DataSource
 import java.time.Duration
 import java.time.Instant
 import java.util.function.Supplier
 
+@ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 class ProfileReevaluationWiringTest {
+    private var lastDataSource: HikariDataSource? = null
+
     private val runner =
         ApplicationContextRunner()
             .withUserConfiguration(ProfileReevaluationConfiguration::class.java)
             .withBean(MeterRegistry::class.java, Supplier { SimpleMeterRegistry() })
-            .withBean(Database::class.java, Supplier {
-                Database.connect(
-                    "jdbc:h2:mem:profile_wiring_${System.nanoTime()};MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
-                    driver = "org.h2.Driver",
-                )
+            .withBean(DataSource::class.java, Supplier {
+                HikariDataSource(
+                    HikariConfig().apply {
+                        jdbcUrl = "jdbc:h2:mem:profile_wiring_${System.nanoTime()};MODE=PostgreSQL;DB_CLOSE_DELAY=-1"
+                        driverClassName = "org.h2.Driver"
+                        username = "sa"
+                    },
+                ).also { dataSource ->
+                    seedMarker(dataSource)
+                    lastDataSource = dataSource
+                }
             })
             .withBean(AppointmentRepository::class.java, Supplier { AppointmentRepository() })
+
+    @AfterEach
+    fun dataSourceIsClosedBySpringContext() {
+        lastDataSource?.isClosed?.shouldBeEqualTo(true)
+    }
 
     @Test
     fun `기본 비활성 구성도 운영 조회와 health를 제공하지만 worker는 만들지 않는다`() {
@@ -139,6 +160,12 @@ class ProfileReevaluationWiringTest {
         runner.run { context ->
             context.startupFailure shouldBeEqualTo null
             val database = context.getBean(Database::class.java)
+            transaction(database) {
+                exec("SELECT marker_value FROM datasource_marker") { rows ->
+                    rows.next()
+                    rows.getInt(1)
+                }
+            } shouldBeEqualTo 223
             val repository = context.getBean(ProfileReevaluationRepository::class.java)
             val fingerprint = "a".repeat(64)
             val scope = ProfileReevaluationScope(1L, 11L, fingerprint)
@@ -207,6 +234,15 @@ class ProfileReevaluationWiringTest {
                 }
 
             claimed.priorityClass shouldBeEqualTo ProfileReevaluationPriorityClass.PROPOSED_ONLY
+        }
+    }
+
+    private fun seedMarker(dataSource: HikariDataSource) {
+        dataSource.connection.use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute("CREATE TABLE datasource_marker (marker_value INT NOT NULL)")
+                statement.execute("INSERT INTO datasource_marker(marker_value) VALUES (223)")
+            }
         }
     }
 }

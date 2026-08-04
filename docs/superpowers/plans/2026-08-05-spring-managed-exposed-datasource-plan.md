@@ -4,7 +4,7 @@
 
 **Goal:** Make eligible Spring runtime Exposed handles reuse the injected application `DataSource`, while preserving global default restoration and documenting intentional standalone database fixtures.
 
-**Architecture:** Add one internal `ExposedDatabaseFactory` in `appointment-api` that serializes `Database.connect(dataSource)` and restores the previous `TransactionManager.defaultDatabase`. Both runtime configuration classes call it. Spring context wiring tests provide an Hikari-backed `DataSource`; standalone tests, migration/dialect fixtures, and Gatling remain independent and are covered by an explicit allowlist/audit.
+**Architecture:** Add one internal `ExposedDatabaseFactory` plus a destroy-time `ExposedDatabaseLifecycle` in `appointment-api`. The factory serializes `Database.connect(dataSource)` and restores the previous `TransactionManager.defaultDatabase`; the lifecycle unregisters factory-owned managers before Spring closes the pool. Both runtime configuration classes call it. Spring context wiring tests provide an Hikari-backed `DataSource`; standalone tests, migration/dialect fixtures, and Gatling remain independent and are covered by an explicit allowlist/audit.
 
 **Tech Stack:** Kotlin 2.3, Spring Boot 4.1, Exposed JDBC v1, HikariCP, H2, JUnit 5, bluetape4k assertions, Gradle.
 
@@ -15,6 +15,7 @@
 | File | Responsibility |
 |---|---|
 | `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ExposedDatabaseFactory.kt` | Shared runtime connection/lifecycle boundary |
+| `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ExposedDatabaseLifecycle.kt` | Spring destroy hook that unregisters factory-owned Exposed managers |
 | `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ServiceConfig.kt` | Commitment runtime bean delegates to factory |
 | `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ProfileReevaluationConfiguration.kt` | Profile runtime bean delegates to factory |
 | `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/ExposedDatabaseFactoryTest.kt` | RED/GREEN proof for injected pool and default restoration |
@@ -123,6 +124,10 @@ internal object ExposedDatabaseFactory {
 
 Document in Korean KDoc that Spring owns `DataSource` creation/close and the factory
 only creates an Exposed handle; the global default is restored after registration.
+Register a separate `ExposedDatabaseLifecycle` bean for each factory-owned runtime
+database so context destruction calls `TransactionManager.closeAndUnregister` before
+Spring closes the injected pool. Do not attach that lifecycle to an externally supplied
+`Database` bean.
 
 - [ ] **Step 2: Run the GREEN test**
 
@@ -163,6 +168,10 @@ fun profileReevaluationDatabase(dataSource: DataSource): Database =
     ExposedDatabaseFactory.connect(dataSource)
 ```
 
+Add a bean-name-scoped lifecycle bean for each runtime handle. Verify that the
+destroy callback unregisters only the factory-owned handle and leaves a separately
+provided `Database` untouched.
+
 - [ ] **Step 3: Run focused compilation/tests**
 
 ```bash
@@ -188,7 +197,9 @@ jdbcUrl = "jdbc:h2:mem:wiring_<scope>_${System.nanoTime()};DB_CLOSE_DELAY=-1"
 driverClassName = "org.h2.Driver"
 username = "sa"
 })`. The context owns the bean lifecycle; tests must not close the same instance
-manually.
+manually. Seed a scope-unique marker table through the retained Hikari instance and
+assert that the context-created `Database` reads that marker. Retain the supplier
+reference and assert `HikariDataSource.isClosed` after each context closes.
 
 - [ ] **Step 2: Assert the context-created Database**
 
@@ -215,13 +226,15 @@ must be fixed before proceeding.
 - Create: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/DataSourceOwnershipContractTest.kt`
 - Create: `docs/runbooks/spring-managed-exposed-datasource.ko.md`
 
-- [ ] **Step 1: Write the failing audit assertion**
+- [ ] **Step 1: Write the production-boundary audit assertion**
 
 The test reads every `appointment-*/src/main` Kotlin/Java source and asserts that
 `Database.connect(` appears only in `ExposedDatabaseFactory.kt`, and that production
 source contains no `HikariDataSource`, `SimpleDriverDataSource`, `DriverManager.getConnection`,
 or `jdbc:` literals. Run it before the source cleanup to observe the expected RED
-result naming the two configuration files.
+result naming the two configuration files. If the audit is added after the cleanup,
+keep it as a green guard and record the pre-cleanup RED evidence in the lesson rather
+than pretending the current ordering is executable.
 
 - [ ] **Step 2: Update the source and rerun audit**
 
@@ -374,9 +387,9 @@ leave the PR open and the worktree intact.
 | Spec criterion | Plan task | Proof |
 |---|---|---|
 | No eligible production direct setup | Tasks 3 and 5 | `DataSourceOwnershipContractTest` + `rg` inventory |
-| Shared factory and default restoration | Tasks 1–3 | Hikari marker + sentinel default test |
+| Shared factory, default restoration, and manager cleanup | Tasks 1–3 | Hikari marker/sentinel + lifecycle unregister test |
 | Concurrent registration and pool reuse are bounded | Task 7 | Barrier-based factory test + instrumented DataSource validation |
-| Spring wiring uses injected pool | Task 4 | Three context-runner tests and transaction query |
+| Spring wiring uses injected pool and closes it | Task 4 | Three marker queries, context-runner tests, and `isClosed` assertions |
 | Standalone fixtures documented | Task 5 | Korean runbook allowlist |
 | Search and targeted tests | Task 6 | fresh `rg`, Gradle targeted/module compile, diff check |
 | PR/CI metadata and delivery evidence | Tasks 8–9 | Live `gh` head/body/checks plus merge-approval gate |
@@ -386,6 +399,10 @@ leave the PR open and the worktree intact.
 
 - Before commit, revert only the approved files in this feature worktree; never touch
   `develop` or discard unrelated state.
+- If a partial context startup occurs, close the context first, let the lifecycle bean
+  unregister its factory-owned handle, then confirm the retained Hikari reference is
+  closed before retrying. Rollback removes lifecycle beans before deleting the factory,
+  then restores the two original configuration blocks.
 - If Hikari or Exposed API compilation differs from the plan snippets, stop at the
   failing task, inspect the actual dependency source, and revise the plan/spec before
   changing behavior.

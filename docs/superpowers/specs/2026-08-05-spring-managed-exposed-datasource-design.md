@@ -29,11 +29,14 @@ fixture가 섞여 있어, 단순한 전역 치환은 pool 소유권과 schema �
 
 ### 권장안: 내부 공용 factory로 registration/lifecycle 계약 단일화
 
-`appointment-api` production source에 `ExposedDatabaseFactory`를 추가한다. factory는
+`appointment-api` production source에 `ExposedDatabaseFactory`와
+`ExposedDatabaseLifecycle`을 추가한다. factory는
 주입받은 `javax.sql.DataSource`로만 `Database.connect(dataSource)`를 실행하고,
 공용 `ReentrantLock` 안에서 기존 `TransactionManager.defaultDatabase`를 저장한 뒤
 항상 `finally`에서 복원한다. `ServiceConfig`와
 `ProfileReevaluationConfiguration`은 각자의 lock/중복 코드를 제거하고 factory를
+호출한다. 각 configuration은 자신이 생성한 `Database` bean 이름에만 lifecycle bean을
+연결하여 context 종료 시 `TransactionManager.closeAndUnregister(database)`를
 호출한다.
 
 이 factory는 `DataSource`를 생성하거나 닫지 않는다. Spring이 pool의 생성·설정·종료를
@@ -69,8 +72,8 @@ Feature Database bean ──► repository/service transaction(database)
 
 factory 생성 중에만 Exposed 전역 default를 잠그고 복원한다. factory가 반환한
 `Database`는 injected `DataSource`를 통해 connection을 획득하며, factory나
-request/service 코드는 `DataSource` 또는 connection을 닫지 않는다. Spring context
-종료가 pool close를 담당한다.
+request/service 코드는 `DataSource` 또는 connection을 닫지 않는다. context 종료 시
+등록된 Exposed manager를 먼저 해제하고, Spring context 종료가 pool close를 담당한다.
 
 ## 변경 대상
 
@@ -78,6 +81,8 @@ request/service 코드는 `DataSource` 또는 connection을 닫지 않는다. Sp
 
 - `appointment-api/.../config/ExposedDatabaseFactory.kt` 신규: 내부 factory와
   Korean KDoc
+- `appointment-api/.../config/ExposedDatabaseLifecycle.kt` 신규: factory handle의
+  context destroy/unregister 경계
 - `appointment-api/.../config/ServiceConfig.kt`: factory 사용, 중복 lock 제거
 - `appointment-api/.../config/ProfileReevaluationConfiguration.kt`: factory 사용,
   중복 lock 제거
@@ -90,7 +95,8 @@ request/service 코드는 `DataSource` 또는 connection을 닫지 않는다. Sp
 - `NotificationReminderRecoveryWiringTest.kt`: 직접 `Database` fixture를
   Hikari-backed `DataSource` fixture로 교체
 - `ExposedDatabaseFactoryTest.kt` 신규: injected pool marker query와 default
-  database 복원, pool close ownership을 검증
+  database 복원, concurrent registration, repeated acquisition, manager cleanup을
+  검증
 - repository static audit test 신규 또는 기존 compliance test 확장: production
   source에 직접 URL/Hikari/`Database.connect`가 다시 생기지 않는지 검증
 
@@ -127,9 +133,9 @@ test를 통과하지 못하며, standalone fixture 추가는 allowlist와 lifecy
 3. factory가 injected pool 대신 URL로 새 connection을 만든다. Hikari pool에만
    존재하는 marker table을 만든 뒤 반환된 `Database` transaction에서 조회하여
    검증한다.
-4. 테스트 context가 Hikari pool을 닫지 않아 connection leak가 발생한다. context
-   종료와 pool `close` ownership을 검증하고, 독립 fixture는 테스트가 생성한
-   resource만 닫는다.
+4. 테스트 context가 Hikari pool을 닫지 않아 connection leak가 발생하거나 Exposed
+   manager가 stale registry에 남는다. context destroy에서 manager를 해제하고 pool
+   `close` ownership을 검증하며, 독립 fixture는 테스트가 생성한 resource만 닫는다.
 5. Exposed global default 복원 누락으로 다른 테스트의 `transaction {}`가 잘못된
    DB를 사용한다. sentinel default를 설정한 factory test와 wiring test isolation으로
    회귀를 막는다.
@@ -138,12 +144,18 @@ test를 통과하지 못하며, standalone fixture 추가는 allowlist와 lifecy
 
 - database schema, tenant isolation, Exposed transaction API, dependency catalog는
   변경하지 않는다.
+- context 종료 시 factory가 등록한 Exposed manager만 해제하며, Spring이 소유한
+  `DataSource` close 순서와 pool 소유권은 변경하지 않는다.
 - production runtime의 bean 조건과 feature flags는 유지한다.
 - 기존 standalone fixture는 동작을 보존하고, 문서화·audit만 추가한다.
-- 두 wiring test가 직접 `Database` bean을 공급하던 부분만 Spring `DataSource`
-  공급으로 바뀐다. 이 테스트는 실제 production conditional bean path를 확인한다.
-- rollback은 factory 파일 삭제와 두 configuration의 이전 inline block 복원으로
-  제한되며, schema/data migration rollback은 필요하지 않다.
+- 두 production wiring test는 직접 `Database` bean 공급을 Spring `DataSource` 공급으로
+  바꾸고, notification wiring test는 동일한 factory를 호출하는 전용 test configuration을
+  통해 Hikari pool 경계를 확인한다. 세 테스트 모두 실제 context 종료/marker path를
+  검증한다.
+- rollback은 두 configuration의 lifecycle bean 제거, lifecycle/factory 파일 삭제,
+  이전 inline block 복원 순서로 제한되며, schema/data migration rollback은 필요하지
+  않다. 부분 context 실패 시 context close와 manager unregister 및 pool close를 먼저
+  확인한다.
 
 ## 수용 기준
 
@@ -151,7 +163,8 @@ test를 통과하지 못하며, standalone fixture 추가는 allowlist와 lifecy
 2. 두 runtime configuration이 공용 factory를 사용하고 previous default database를
    복원한다.
 3. wiring test가 injected Hikari pool에 기록한 marker를 생성된 Exposed handle로
-   읽고 context가 정상 시작한다.
+   읽고 context가 정상 시작하며, 종료 후 Hikari pool이 닫히고 Exposed manager가
+   registry에서 해제된다.
 4. 독립 fixture, migration, dialect, Gatling 파일은 분류 이유와 pool/connection
    ownership이 allowlist/runbook에 기록된다.
 5. static inventory와 targeted module tests가 위 계약을 재현하며, `git diff --check`
