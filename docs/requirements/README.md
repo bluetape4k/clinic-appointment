@@ -4,7 +4,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 
 ## 구현 상태표
 
-> 최종 갱신: 2026-08-03 (v0.3.0)
+> 최종 갱신: 2026-08-04 (v0.3.0)
 
 ### 완료
 
@@ -24,6 +24,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 | 장비 사용불가 스케줄 CRUD + Solver 제약 | `appointment-core` / `appointment-solver` | v0.2.0 | [domain-model.md](domain-model.md) |
 | `@Profile` 환경 분리 (local/dev/prod) | `appointment-api` | v0.2.0 | — |
 | 마스터 데이터 CRUD API (Clinic/Doctor/TreatmentType/Equipment) | `appointment-api` | v0.3.0 | [architecture.md](architecture.md) |
+| 멀티테넌시 기반 (`TenantGroup`, tenant path/JWT guard, 핵심 resource ID guard) | `appointment-core` / `appointment-api` | v0.3.0 | [architecture.md](architecture.md#adr-14-멀티테넌시-식별자와-key-authority) |
 | Angular 21 웹 UI (30개 엔드포인트 전체 연결) | `appointment-frontend` | v0.1.0 / v0.3.0 | [frontend.md](frontend.md) |
 | Gatling 부하 테스트 (멀티 클리닉 포함) | `appointment-api` | v0.3.0 | — |
 | Solver 벤치마크 baseline | `appointment-solver` | v0.3.0 | — |
@@ -33,7 +34,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 | 요구사항 | 모듈 | 우선순위 | 비고 |
 |---------|------|----------|------|
 | **환자 포털 (자가 예약 웹앱)** | `appointment-patient-portal` (신규) | MEDIUM | TODO 섹션 9.1 |
-| **멀티테넌시 (병원 그룹 데이터 격리)** | `appointment-core` | MEDIUM | TODO 섹션 9.2, clinicId 해소 선행 |
+| **멀티테넌시 계약 정합화** | `appointment-core` / `appointment-api` / `appointment-solver` | HIGH | 기반은 PR #118에서 완료. #37~#39에서 schema·HTTP authority·repository 격리 보강. [감사 기록](../reviews/2026-08-04-multitenancy-audit.md) |
 | **메시지 큐 (Kafka4 비동기)** | `appointment-messaging` (신규) | LOW | broker 결정 #40 완료, 구현 #41/#42 — TODO 섹션 9.3 |
 | **관리자 대시보드 (통계/분석)** | `appointment-dashboard` (신규) | LOW | TODO 섹션 9.4 |
 | **SSE 기반 일괄 재배정 진행 표시** | `appointment-api` / `appointment-frontend` | HIGH | TODO 섹션 3.5 |
@@ -43,6 +44,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 | 문서 | 내용 |
 |------|------|
 | [architecture.md](architecture.md) | 모듈 의존성 그래프, 주요 설계 결정 (ADR 스타일) |
+| [멀티테넌시 감사 기록](../reviews/2026-08-04-multitenancy-audit.md) | PR #118 이후 #36~#39 구현 상태, 키 계약, 후속 순서 |
 | [domain-model.md](domain-model.md) | 17개 도메인 엔티티, 예약 상태머신 전이도, Exposed 테이블 목록 |
 | [solver.md](solver.md) | Timefold Solver Planning Variable, Hard/Soft 제약조건 전체 목록 |
 | [notification.md](notification.md) | 내구성 outbox 생명주기, 병원별 전환, 회원정보 경계, provider 장애 격리 |

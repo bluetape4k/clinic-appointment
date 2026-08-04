@@ -3,10 +3,11 @@
 This directory stores diagram assets for the Mermaid sketches embedded in
 `docs/requirements/*.md`.
 
-Each diagram keeps the extracted Mermaid source (`.mmd`) as the semantic sketch
-plus curated `.svg` and `.png` files. The rendered assets are maintained as
-direct SVG diagrams following the bluetape4k diagram style and Fireworks graph
-layout rules; the Mermaid files are not the final visual source of truth.
+Diagrams extracted from the original Mermaid documents keep their `.mmd`
+semantic sketch plus curated `.svg` and `.png` files. New diagrams may use the
+locale-suffixed `.svg` pair directly as the semantic and visual source when no
+Mermaid source exists. The SVG sources follow the bluetape4k diagram style and
+Fireworks graph layout rules; PNG files are rendered derivatives.
 
 Reader-facing diagrams use explicit locale suffixes:
 
@@ -25,6 +26,7 @@ Reader-facing diagrams use explicit locale suffixes:
 | Source | Diagram | Assets |
 |---|---|---|
 | `architecture.md` | Module dependency graph | `architecture-01-module-dependency.{mmd,svg,png}` |
+| `architecture.md` | Multitenancy identity and key authority | `architecture-02-multitenancy-key-authority-{en,ko}.{svg,png}` |
 | `erd.md` | Table relationships | `erd-01-table-relationships.{mmd,svg,png}` |
 | `domain-model.md` | Appointment state machine | `domain-model-01-appointment-state-machine.{mmd,svg,png}` |
 | `data-flow.md` | Appointment creation flow | `data-flow-01-appointment-create.{mmd,svg,png}` plus locale/theme variants |
