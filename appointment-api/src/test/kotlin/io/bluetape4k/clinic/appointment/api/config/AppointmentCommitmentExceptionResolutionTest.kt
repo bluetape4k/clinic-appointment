@@ -39,7 +39,7 @@ class AppointmentCommitmentExceptionResolutionTest {
     @Test
     fun `missing aggregate fallback uses the stable commitment not found envelope`() {
         mockMvc.perform(
-            get("/api/v2/appointments/404/commitment")
+            get("/api/tenant-a/appointments/404/commitment")
                 .header(CorrelationIdFilter.HEADER_NAME, "commitment-not-found-7")
                 .contentType(MediaType.APPLICATION_JSON)
         )
@@ -55,7 +55,7 @@ class AppointmentCommitmentExceptionResolutionTest {
         val secretMarker = "secret-resource-and-patient-detail"
 
         mockMvc.perform(
-            get("/api/v2/appointments/500/commitment")
+            get("/api/tenant-a/appointments/500/commitment")
                 .header(CorrelationIdFilter.HEADER_NAME, "commitment-internal-7")
                 .contentType(MediaType.APPLICATION_JSON)
         )
@@ -74,7 +74,7 @@ class AppointmentCommitmentExceptionResolutionTest {
     @Test
     fun `proposal computation limit uses the stable plan allowance error`() {
         mockMvc.perform(
-            get("/api/v2/appointments/429/commitment")
+            get("/api/tenant-a/appointments/429/commitment")
                 .header(CorrelationIdFilter.HEADER_NAME, "commitment-limit-7")
                 .contentType(MediaType.APPLICATION_JSON)
         )
@@ -88,7 +88,7 @@ class AppointmentCommitmentExceptionResolutionTest {
     @Test
     fun `proposal without a feasible slot uses the stable resource conflict error`() {
         mockMvc.perform(
-            get("/api/v2/appointments/409/commitment")
+            get("/api/tenant-a/appointments/409/commitment")
                 .header(CorrelationIdFilter.HEADER_NAME, "commitment-slot-7")
                 .contentType(MediaType.APPLICATION_JSON)
         )
@@ -102,24 +102,35 @@ class AppointmentCommitmentExceptionResolutionTest {
     @Test
     fun `unrelated v2 path does not inherit the commitment error registry`() {
         isAppointmentCommitmentRequestPath("/api/v2/other").shouldBeFalse()
+        isAppointmentCommitmentRequestPath("/api/tenant-a/other").shouldBeFalse()
     }
 
     @Test
     fun `all public cancellation and proposal lifecycle paths use the commitment error registry`() {
         listOf(
-            "/api/v2/appointments/11/cancel",
-            "/api/v2/appointments/11/proposals/31/expire",
-            "/api/v2/appointments/11/proposals/31/accept",
-            "/api/v2/appointments/11/proposals/31/decline",
+            "/api/tenant-a/appointment-requests",
+            "/api/tenant-a/admin/appointments",
+            "/api/tenant-a/appointments/11/cancel",
+            "/api/tenant-a/appointments/11/proposals/31/expire",
+            "/api/tenant-a/appointments/11/proposals/31/accept",
+            "/api/tenant-a/appointments/11/proposals/31/decline",
         ).forEach { path ->
             isAppointmentCommitmentRequestPath(path).shouldBeTrue()
+        }
+
+        listOf(
+            "/api/v2/appointment-requests",
+            "/api/v2/admin/appointments",
+            "/api/v2/appointments/11/commitment",
+        ).forEach { path ->
+            isAppointmentCommitmentRequestPath(path).shouldBeFalse()
         }
     }
 
     @RestController
     private class FailingCommitmentController {
 
-        @GetMapping("/api/v2/appointments/{id}/commitment")
+        @GetMapping("/api/{tenantCode}/appointments/{id}/commitment")
         fun fail(@PathVariable id: Long): Nothing =
             when (id) {
                 404L -> throw NoSuchElementException("secret-appointment-$id")

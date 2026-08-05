@@ -94,25 +94,25 @@ authenticated scheduling token, never from the request body. See the
 [reference design](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
 and [operations runbook](../docs/runbooks/profile-reevaluation.md).
 
-### Appointment Commitment v2
+### Appointment Commitment
 
-See [Appointment Commitment v2 API](../docs/api/visit-commitment.md) for the
+See [Appointment Commitment API](../docs/api/visit-commitment.md) for the
 complete state, authentication, and error contract, and the
 [operations runbook](../docs/runbooks/visit-commitment-operations.md) for
 rollout, alerts, retention, and rollback.
 
 | Actor | Method and path | Result |
 |------|------|------|
-| Patient | `POST /api/v2/appointment-requests` | Creates a policy-authorized `PROPOSED` or resource-backed `HELD` provisional appointment (`202`). |
-| Administrator | `POST /api/v2/admin/appointments` | Creates a policy-authorized confirmed appointment (`201`). |
-| Administrator | `POST /api/v2/appointments/{id}/approve` | Approves the exact customer proposal (`200`). |
-| Patient | `POST /api/v2/appointments/{id}/proposals/{proposalId}/accept` | Accepts a current change proposal (`200`). |
-| Patient | `POST /api/v2/appointments/{id}/proposals/{proposalId}/decline` | Declines a proposal while preserving the confirmed booking (`200`). |
-| Administrator | `POST /api/v2/appointments/{id}/confirm` | Confirms a proposal when effective policy and consent permit it (`200`). |
-| Administrator | `POST /api/v2/appointments/{id}/change-proposals` | Creates a replacement proposal without cancelling the current booking (`202`). |
-| Administrator | `POST /api/v2/appointments/{id}/proposals/{proposalId}/expire` | Expires a due proposal and releases an initial hold (`200`). |
-| Administrator | `POST /api/v2/appointments/{id}/cancel` | Cancels the appointment and releases active allocations (`200`). |
-| Patient or administrator | `GET /api/v2/appointments/{id}/commitment` | Reads the commitment-native projection (`200`). |
+| Patient | `POST /api/{tenantCode}/appointment-requests` | Creates a policy-authorized `PROPOSED` or resource-backed `HELD` provisional appointment (`202`). |
+| Administrator | `POST /api/{tenantCode}/admin/appointments` | Creates a policy-authorized confirmed appointment (`201`). |
+| Administrator | `POST /api/{tenantCode}/appointments/{id}/approve` | Approves the exact customer proposal (`200`). |
+| Patient | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/accept` | Accepts a current change proposal (`200`). |
+| Patient | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/decline` | Declines a proposal while preserving the confirmed booking (`200`). |
+| Administrator | `POST /api/{tenantCode}/appointments/{id}/confirm` | Confirms a proposal when effective policy and consent permit it (`200`). |
+| Administrator | `POST /api/{tenantCode}/appointments/{id}/change-proposals` | Creates a replacement proposal without cancelling the current booking (`202`). |
+| Administrator | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/expire` | Expires a due proposal and releases an initial hold (`200`). |
+| Administrator | `POST /api/{tenantCode}/appointments/{id}/cancel` | Cancels the appointment and releases active allocations (`200`). |
+| Patient or administrator | `GET /api/{tenantCode}/appointments/{id}/commitment` | Reads the commitment-native projection (`200`). |
 
 These routes never accept actor, tenant, clinic, patient subject, policy mode,
 terms hash, or resource mapping in the request body. They derive one exact
@@ -144,7 +144,7 @@ For example, an administrator token for clinic `101` contains:
 
 A patient token uses `actorType: "PATIENT"`, includes the matching `PATIENT`
 role and a stable `patientSubject`, and cannot carry an administrator role.
-`clinicId`, when present, must be a member of `allowedClinicIds`; the v2
+`clinicId`, when present, must be a member of `allowedClinicIds`; the commitment
 application still resolves the actual Plan/appointment scope from storage.
 
 | Request kind | Required headers | Example |
@@ -162,7 +162,7 @@ Reusing the same ID for another decision returns a stable `409`.
 
 | Property | Default | Operational meaning |
 |------|------|------|
-| `appointment.commitment.api-enabled` | `false` | Bootstrap gate for all v2 routes; enable only after the production adapters and readiness evidence pass |
+| `appointment.commitment.api-enabled` | `false` | Bootstrap gate for all commitment routes; enable only after the production adapters and readiness evidence pass |
 | `appointment.commitment.ingress-enabled` | `true` | Allows only new patient requests and administrator direct creation |
 | `appointment.commitment.mode` | `OFF` | `OFF` blocks new computation/writes, `SHADOW` compares, and `WRITE` uses the allowlist. |
 | `appointment.commitment.clinic-allowlist` | Empty | Clinic IDs eligible for `WRITE`. |
@@ -170,11 +170,11 @@ Reusing the same ID for another decision returns a stable `409`.
 | `appointment.commitment.retry.max-attempts` | `3` | Bounded attempts including the initial try. |
 | `appointment.commitment.ceiling.resources-per-slot` | `200` | Maximum practitioner, equipment, and space resource entries in one candidate slot. |
 | `appointment.commitment.ceiling.candidate-resource-entries` | `10,000` | Maximum resource entries across one proposal computation request. |
-| `appointment.commitment.idempotency-hash-secret` | None | Required Base64 secret of at least 32 decoded bytes when the v2 API is enabled; never reuse the JWT or policy-command secret. |
+| `appointment.commitment.idempotency-hash-secret` | None | Required Base64 secret of at least 32 decoded bytes when the commitment API is enabled; never reuse the JWT or policy-command secret. |
 | `appointment.commitment.retention-enabled` | `false` | Enables the in-process retention owner; keep one owner per deployment. |
 | `appointment.commitment.retention-interval` | `PT1H` | Fixed delay between bounded retention runs. |
 
-Use `api-enabled=false` only during bootstrap, before any v2 commitment exists.
+Use `api-enabled=false` only during bootstrap, before any commitment exists.
 After commitments exist, rollback must set `ingress-enabled=false` to stop new
 intake only. Reads, approval, confirmation, proposal acceptance or decline, and
 change proposals remain available so existing patients are not stranded.
@@ -205,7 +205,7 @@ resolver does not guess with plain SHA-256; it fails closed for patient access.
 | Stale `If-Match` | `412 VERSION_CONFLICT` | Retry with the latest `ETag`. |
 | Missing required precondition header | `428 PRECONDITION_REQUIRED` | Send `*` for creation or the latest `ETag` for mutation. |
 | New intake disabled | `503 INGRESS_DISABLED` | Preserve existing bookings and defer only the new request. |
-| v2 mutation attempted through a legacy route | `409 NEW_APPOINTMENT_API_REQUIRED` | Use the commitment v2 endpoint. |
+| Commitment mutation attempted through a legacy route | `409 NEW_APPOINTMENT_API_REQUIRED` | Use the tenant-scoped commitment endpoint. |
 | Unexpected internal failure | `500 INTERNAL_ERROR` | Retry with the same idempotency key after `Retry-After: 5`. |
 
 `PREDECESSOR_NOT_COMPLETED` is returned when an authoritative external
@@ -285,8 +285,8 @@ Flyway migration scripts live under `src/main/resources/db/migration/V*.sql`.
 | Class | Role |
 |--------|------|
 | `AppointmentController` | Appointment CRUD and status changes. |
-| `CustomerAppointmentV2Controller` | Patient provisional requests and proposal decisions. |
-| `AdminAppointmentV2Controller` | Administrator creation, approval, confirmation, and change proposals. |
+| `CustomerAppointmentController` | Patient provisional requests and proposal decisions. |
+| `AdminAppointmentController` | Administrator creation, approval, confirmation, and change proposals. |
 | `AppointmentCommitmentQueryController` | Actor-scoped commitment-native reads. |
 | `SlotController` | Available slot lookup. |
 | `RescheduleController` | Temporary clinic closure rescheduling. |

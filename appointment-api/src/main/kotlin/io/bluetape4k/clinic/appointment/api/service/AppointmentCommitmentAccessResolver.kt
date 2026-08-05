@@ -4,6 +4,7 @@ import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiException
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
 import io.bluetape4k.clinic.appointment.api.security.ActorType
+import io.bluetape4k.clinic.appointment.api.tenant.TenantCodeRules
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentPlanRecord
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
@@ -103,7 +104,9 @@ internal class AppointmentCommitmentAccessResolver(
     }
 
     private fun resolveScope(actor: ActorContext): ResolvedActorScope {
-        val tenantCode = actor.allowedTenantCodes.singleOrNull()
+        val tenantCode = actor.selectedTenantCode
+            ?.takeIf(TenantCodeRules::isCanonical)
+            ?.takeIf(actor.allowedTenantCodes::contains)
             ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_MISMATCH)
         val clinicId = actor.selectedClinicId
             ?.takeIf(actor.allowedClinicIds::contains)

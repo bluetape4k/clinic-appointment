@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.api.security.ActorContextResolver
 import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
+import io.bluetape4k.clinic.appointment.api.tenant.TenantCodeRules
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpHeaders
 import org.springframework.http.ResponseEntity
@@ -25,14 +26,16 @@ import java.util.UUID
  */
 internal fun ActorContextResolver.resolveAppointmentActor(
     authentication: Authentication?,
+    tenantCode: String,
     request: HttpServletRequest,
 ): ActorContext {
+    if (!TenantCodeRules.isCanonical(tenantCode)) {
+        throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_MISMATCH)
+    }
     val principal = authentication
         ?.takeIf(Authentication::isAuthenticated)
         ?.principal as? SchedulingUserPrincipal
         ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
-    val tenantCode = principal.allowedTenants.singleOrNull()
-        ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_MISMATCH)
     val clinicId = principal.clinicId
         ?.takeIf(principal.allowedClinicIds::contains)
         ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_MISMATCH)
@@ -58,7 +61,7 @@ internal fun ActorContext.requireAdminActor(): ActorContext {
 }
 
 /**
- * rollback 중 신규 Plan ingress만 닫고 기존 v2 예약의 조회·변경 경로는 유지한다.
+ * rollback 중 신규 Plan ingress만 닫고 기존 commitment 예약의 조회·변경 경로는 유지한다.
  *
  * [enabled]는 `appointment.commitment.ingress-enabled`에서 오며 운영자가 이미 생성된
  * commitment에 접근하려고 `api-enabled`까지 끄는 잘못된 rollback을 피하게 한다.

@@ -40,6 +40,7 @@ import io.bluetape4k.clinic.appointment.api.dto.commitment.ProposalDecisionReque
 import io.bluetape4k.clinic.appointment.api.dto.commitment.toProposalResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.toResponse
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
+import io.bluetape4k.clinic.appointment.api.tenant.TenantCodeRules
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentItemDraft
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecisionType
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentCommitmentRecord
@@ -127,13 +128,13 @@ internal class HmacAppointmentCommitmentIdempotencyKeyHasher(secret: ByteArray) 
 }
 
 /**
- * Gateway actor와 v2 DTO를 내부 commitment command/query 서비스로 변환하는 기본 구현이다.
+ * Gateway actor와 commitment DTO를 내부 commitment command/query 서비스로 변환하는 기본 구현이다.
  *
  * request body는 일정 의도와 opaque 동의 증빙만 제공한다. 이 구현은 먼저
  * [AppointmentCommitmentAccessResolver]로 Gateway tenant·clinic·patient scope를
  * 검증하고, Plan revision·projection FK·proposal hash는 서버 저장소에서 다시 읽어
  * command 입력을 만든다. 신규 commitment 생성만 [AppointmentCommitmentProperties]의
- * `WRITE + clinicAllowlist`를 통과해야 하며, 이미 생성된 v2 row의 조회·승인·수락·거절·
+ * `WRITE + clinicAllowlist`를 통과해야 하며, 이미 생성된 commitment row의 조회·승인·수락·거절·
  * 변경 제안은 rollback 중에도 유지된다.
  */
 internal class DefaultAppointmentCommitmentApplicationService(
@@ -1271,7 +1272,9 @@ internal class DefaultAppointmentCommitmentApplicationService(
         actor: ActorContext,
         tenantGroupId: Long,
     ): String =
-        actor.allowedTenantCodes.singleOrNull() ?: "tenant-$tenantGroupId"
+        actor.selectedTenantCode
+            ?.takeIf(TenantCodeRules::isCanonical)
+            ?: "tenant-$tenantGroupId"
 
     private fun clinicTag(clinicId: Long): String = "clinic-$clinicId"
 

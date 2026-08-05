@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController
  */
 @Tag(name = "Appointment Commitments - Query")
 @RestController
-@RequestMapping("/api/v2/appointments")
+@RequestMapping("/api/{tenantCode}/appointments")
 @ConditionalOnProperty(
     prefix = "appointment.commitment",
     name = ["api-enabled"],
@@ -87,11 +87,12 @@ class AppointmentCommitmentQueryController(
     )
     @GetMapping("/{id}/commitment")
     fun query(
+        @PathVariable tenantCode: String,
         authentication: Authentication?,
         servletRequest: HttpServletRequest,
         @PathVariable id: Long,
     ): ResponseEntity<AppointmentCommitmentResponse> {
-        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
         when (actor.actorType) {
             ActorType.PATIENT -> actor.requirePatientActor()
             ActorType.ADMIN -> actor.requireAdminActor()

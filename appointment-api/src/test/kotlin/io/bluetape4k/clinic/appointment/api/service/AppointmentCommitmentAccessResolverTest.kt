@@ -99,6 +99,16 @@ internal class AppointmentCommitmentAccessResolverTest : VisitCommitmentCommandT
         fingerprintCalls shouldBeEqualTo 0
     }
 
+    @Test
+    fun `selected path tenant is the only tenant authority for multi tenant actor`() {
+        val resolver = accessResolver()
+        val actor = adminActor(selectedTenantCode = "tenant-task6")
+
+        val access = resolver.resolvePlan(actor, clinic.planId)
+
+        access.tenantGroupId shouldBeEqualTo TENANT_ID
+    }
+
     private fun accessResolver(
         fingerprints: Map<String, String> =
             mapOf("patient-subject-ok" to clinic.patientReferenceFingerprint),
@@ -116,16 +126,18 @@ internal class AppointmentCommitmentAccessResolverTest : VisitCommitmentCommandT
             patientSubjectId = patientSubjectId,
         )
 
-    private fun adminActor() =
+    private fun adminActor(selectedTenantCode: String? = "tenant-task6") =
         actor(
             actorType = ActorType.ADMIN,
             roles = setOf(ActorRole.ADMIN),
+            selectedTenantCode = selectedTenantCode,
         )
 
     private fun actor(
         actorType: ActorType,
         roles: Set<ActorRole>,
         patientSubjectId: String? = null,
+        selectedTenantCode: String? = "tenant-task6",
     ) = ActorContext(
         actorId = "actor-${actorType.name.lowercase()}",
         actorType = actorType,
@@ -140,5 +152,6 @@ internal class AppointmentCommitmentAccessResolverTest : VisitCommitmentCommandT
         authenticatedAt = NOW,
         correlationId = "correlation-${actorType.name.lowercase()}",
         selectedClinicId = clinic.clinicId,
+        selectedTenantCode = selectedTenantCode,
     )
 }

@@ -38,4 +38,45 @@ class TenantPathResolverTest {
 
         TenantPathResolver.resolve(request).shouldBeNull()
     }
+
+    @Test
+    fun `resolve only canonical tenant code`() {
+        listOf(
+            "/api/Tenant-A/clinics",
+            "/api/tenant a/clinics",
+            "/api/tenant_a/clinics",
+            "/api/tenant..a/clinics",
+            "/api/-tenant-a/clinics",
+            "/api/tenant-a-/clinics",
+            "/api/tenant--a/clinics",
+            "/api/v1/clinics",
+            "/api/v2/clinics",
+            "/api//clinics",
+        ).forEach { path ->
+            val request = MockHttpServletRequest("GET", path).apply {
+                servletPath = path
+            }
+
+            TenantPathResolver.resolve(request).shouldBeNull()
+        }
+    }
+
+    @Test
+    fun `enforce flyway tenant code length`() {
+        val valid = "a".repeat(64)
+        val invalid = "a".repeat(65)
+
+        TenantCodeRules.isCanonical(valid).shouldBeEqualTo(true)
+        TenantCodeRules.isCanonical(invalid).shouldBeEqualTo(false)
+    }
+
+    @Test
+    fun `combine servlet path and path info before resolving`() {
+        val request = MockHttpServletRequest("GET", "/api/tenant-a/clinics").apply {
+            servletPath = "/api"
+            pathInfo = "/tenant-a/clinics"
+        }
+
+        TenantPathResolver.resolve(request) shouldBeEqualTo "tenant-a"
+    }
 }

@@ -1,4 +1,4 @@
-# 예약 Commitment v2 운영 런북
+# 예약 Commitment 운영 런북
 
 > 이 문서는 운영 `WRITE`를 승인하는 문서가 아니라 사전 배포 훈련과 증거 수집
 > 절차이다. outbox publish·ack·retry/DLQ·alert를 소유한 외부 transport가 실제
@@ -39,8 +39,8 @@ migration rejection, CRM ACK latency는 각각 외부 transport·consumer·CRM a
 
 ## 점진 배포
 
-1. `OFF`에서 API·consumer가 신규 v2 row를 만들지 않는지 확인한다.
-2. `SHADOW`에서 legacy와 v2 계산의 proposal 수, 일정 구간, reason code 차이를
+1. `OFF`에서 API·consumer가 신규 commitment row를 만들지 않는지 확인한다.
+2. `SHADOW`에서 legacy와 commitment 계산의 proposal 수, 일정 구간, reason code 차이를
    집계한다. 환자·상품·event 식별자는 diff tag에 넣지 않는다.
 3. 차이 원인이 설명되고 outbox/quarantine alert가 정상일 때 clinic allowlist를 한
    병원씩 추가한다.
@@ -124,7 +124,7 @@ Quarantine은 metadata row를 삭제하지 않고 암호화 payload만 만료하
 확정 방문의 활성 allocation 해제는 별도의 예약 취소 command가 소유한다. 외부
 transport/consumer가 배포되기 전에는 예약 운영 관리자가 환불 사실의
 `tenant/clinic/plan/treatment` 범위와 취소할 appointment를 확인하고
-`POST /api/v2/appointments/{id}/cancel`을 `reasonCode=REFUND`로 실행한다. command는
+`POST /api/{tenantCode}/appointments/{id}/cancel`을 `reasonCode=REFUND`로 실행한다. command는
 멱등성 key와 최신 `If-Match`를 요구하고, 활성 allocation 해제·legacy projection
 취소·`APPOINTMENT_CANCELLED` outbox를 같은 transaction에서 처리한다.
 
@@ -141,14 +141,14 @@ transport/consumer가 배포되기 전에는 예약 운영 관리자가 환불 �
 
 ## Rollback
 
-`WRITE` 중 생성된 `COMMITMENT_V2` row는 legacy row로 변환하거나 legacy API로
+`WRITE` 중 생성된 commitment row는 legacy row로 변환하거나 legacy API로
 변경하지 않는다.
 
 1. `appointment.commitment.api-enabled=true`는 유지한다.
 2. `appointment.commitment.ingress-enabled=false`로 신규 고객 요청과 관리자 직접
    생성을 차단한다.
 3. 새 계산·write까지 중단해야 할 때만 `appointment.commitment.mode=OFF`로 낮춘다.
-4. 기존 v2 조회, 승인, 확정, 수락·거절, 변경 proposal 경로는 유지한다.
+4. 기존 commitment 조회, 승인, 확정, 수락·거절, 변경 proposal 경로는 유지한다.
 5. 필요하면 `SHADOW` consumer를 유지해 source gap을 관찰한다.
 6. V10·V11·V12 schema/table/index를 삭제하지 않는다.
 7. rollback 전 PostgreSQL backup을 만들고 별도 환경 restore로 row 수, FK,
@@ -169,7 +169,7 @@ DB에 `--clean` restore를 실행하지 않는다.
 
 ## 복구 완료 조건
 
-- 신규 유입 gate와 기존 v2 read/mutation 경로가 의도대로 분리됨
+- 신규 유입 gate와 기존 commitment read/mutation 경로가 의도대로 분리됨
 - duplicate allocation 0, resource conflict 외 미분류 transaction failure 0
 - outbox lag 5분 미만, oldest open quarantine 24시간 미만
 - redrive actor/reason/before-after/original event/inbox key 증거 존재

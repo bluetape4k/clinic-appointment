@@ -62,6 +62,27 @@ class ActorContextResolverTest {
     }
 
     @Test
+    fun `multi tenant principal preserves the selected path tenant`() {
+        val principal = principal(allowedTenants = setOf("tenant-a", "tenant-b"))
+        val authentication = UsernamePasswordAuthenticationToken(
+            principal,
+            null,
+            principal.authorities,
+        )
+
+        val context = resolver.resolve(
+            authentication = authentication,
+            tenantCode = "tenant-b",
+            clinicId = 7L,
+            correlationId = "correlation-b",
+        )
+
+        context.selectedTenantCode shouldBeEqualTo "tenant-b"
+        context.allowedTenantCodes shouldContain "tenant-a"
+        context.allowedTenantCodes shouldContain "tenant-b"
+    }
+
+    @Test
     fun `request supplied actor fields cannot participate in actor context`() {
         ActorContextResolver::class.java.declaredMethods
             .flatMap { it.parameters.toList() }
@@ -70,11 +91,11 @@ class ActorContextResolverTest {
             .shouldBeEqualTo(true)
     }
 
-    private fun principal() = SchedulingUserPrincipal(
+    private fun principal(allowedTenants: Set<String> = setOf("tenant-a")) = SchedulingUserPrincipal(
         userId = "admin-subject",
         clinicId = 7L,
         roles = setOf(SchedulingRole.ADMIN),
-        allowedTenants = setOf("tenant-a"),
+        allowedTenants = allowedTenants,
         scopes = setOf("policy:write"),
         catalogSourceAuthorities = emptySet(),
         actorType = ActorType.ADMIN,

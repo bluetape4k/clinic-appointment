@@ -62,9 +62,10 @@ class AdminAppointmentV2Test {
     @Test
     fun `admin approval forwards If-Match version and returns result ETag`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = AdminAppointmentV2Controller(service, ActorContextResolver())
+        val controller = AdminAppointmentController(service, ActorContextResolver())
 
         val response = controller.approveProposal(
+            tenantCode = "tenant-a",
             authentication = authentication(adminPrincipal()),
             servletRequest = MockHttpServletRequest(),
             id = 11L,
@@ -82,9 +83,10 @@ class AdminAppointmentV2Test {
     @Test
     fun `admin cancellation forwards registered reason with mutation preconditions`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = AdminAppointmentV2Controller(service, ActorContextResolver())
+        val controller = AdminAppointmentController(service, ActorContextResolver())
 
         val response = controller.cancelAppointment(
+            tenantCode = "tenant-a",
             authentication = authentication(adminPrincipal()),
             servletRequest = MockHttpServletRequest(),
             id = 11L,
@@ -101,7 +103,7 @@ class AdminAppointmentV2Test {
     @Test
     fun `rollback closes only direct creation while existing administrator mutation stays available`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = AdminAppointmentV2Controller(
+        val controller = AdminAppointmentController(
             service,
             ActorContextResolver(),
             ingressEnabled = false,
@@ -109,6 +111,7 @@ class AdminAppointmentV2Test {
 
         val exception = assertFailsWith<AppointmentCommitmentApiException> {
             controller.directCreate(
+                tenantCode = "tenant-a",
                 authentication = authentication(adminPrincipal()),
                 servletRequest = MockHttpServletRequest(),
                 idempotencyKey = "direct_01J1M6Y6XRK8N0W2M3P4Q5R6S7",
@@ -128,6 +131,7 @@ class AdminAppointmentV2Test {
         exception.error shouldBeEqualTo AppointmentCommitmentApiError.INGRESS_DISABLED
 
         val existingMutation = controller.approveProposal(
+            tenantCode = "tenant-a",
             authentication = authentication(adminPrincipal()),
             servletRequest = MockHttpServletRequest(),
             id = 11L,
@@ -154,12 +158,13 @@ class AdminAppointmentV2Test {
 
     @Test
     fun `service principal cannot invoke administrator booking`() {
-        val controller = AdminAppointmentV2Controller(
+        val controller = AdminAppointmentController(
             FakeAppointmentCommitmentApplicationService(),
             ActorContextResolver(),
         )
         val exception = assertFailsWith<AppointmentCommitmentApiException> {
             controller.directCreate(
+                tenantCode = "tenant-a",
                 authentication = authentication(systemPrincipal()),
                 servletRequest = MockHttpServletRequest(),
                 idempotencyKey = "direct_01J1M6Y6XRK8N0W2M3P4Q5R6S7",
@@ -181,7 +186,7 @@ class AdminAppointmentV2Test {
 
     @Test
     fun `administrator booking rejects ambiguous clinic scope`() {
-        val controller = AdminAppointmentV2Controller(
+        val controller = AdminAppointmentController(
             FakeAppointmentCommitmentApplicationService(),
             ActorContextResolver(),
         )
@@ -192,6 +197,7 @@ class AdminAppointmentV2Test {
 
         val exception = assertFailsWith<AppointmentCommitmentApiException> {
             controller.approveProposal(
+                tenantCode = "tenant-a",
                 authentication = authentication(principal),
                 servletRequest = MockHttpServletRequest(),
                 id = 11L,
@@ -207,13 +213,14 @@ class AdminAppointmentV2Test {
     @Test
     fun `administrator booking uses the gateway selected clinic within a multi clinic grant`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = AdminAppointmentV2Controller(service, ActorContextResolver())
+        val controller = AdminAppointmentController(service, ActorContextResolver())
         val principal = adminPrincipal().copy(
             clinicId = 7L,
             allowedClinicIds = setOf(7L, 8L),
         )
 
         val response = controller.approveProposal(
+            tenantCode = "tenant-a",
             authentication = authentication(principal),
             servletRequest = MockHttpServletRequest(),
             id = 11L,
@@ -225,6 +232,27 @@ class AdminAppointmentV2Test {
         response.statusCode shouldBeEqualTo HttpStatus.OK
         service.lastActor.shouldNotBeNull().allowedClinicIds shouldContain 7L
         service.lastActor.shouldNotBeNull().selectedClinicId shouldBeEqualTo 7L
+    }
+
+    @Test
+    fun `administrator booking selects the path tenant within a multi tenant grant`() {
+        val service = FakeAppointmentCommitmentApplicationService()
+        val controller = AdminAppointmentController(service, ActorContextResolver())
+        val principal = adminPrincipal().copy(
+            allowedTenants = setOf("tenant-a", "tenant-b"),
+        )
+
+        controller.approveProposal(
+            tenantCode = "tenant-b",
+            authentication = authentication(principal),
+            servletRequest = MockHttpServletRequest(),
+            id = 11L,
+            idempotencyKey = "approval_01J1M6Y6XRK8N0W2M3P4Q5R6S7",
+            ifMatch = "\"1\"",
+            request = ApproveProposalRequest(31L),
+        )
+
+        service.lastActor.shouldNotBeNull().selectedTenantCode shouldBeEqualTo "tenant-b"
     }
 
     private fun authentication(principal: SchedulingUserPrincipal) =

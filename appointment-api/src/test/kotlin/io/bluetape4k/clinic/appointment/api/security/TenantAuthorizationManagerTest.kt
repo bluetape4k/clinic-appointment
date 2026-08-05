@@ -55,6 +55,16 @@ class TenantAuthorizationManagerTest {
         decision.isGranted.shouldBeTrue()
     }
 
+    @Test
+    fun `deny non canonical or reserved matcher tenant values`() {
+        listOf("Tenant-A", "tenant a", "tenant--a", "v1", "v2", "tenant-a%2Fother").forEach { tenantCode ->
+            manager.authorize(
+                { authentication(allowedTenants = listOf(tenantCode)) },
+                requestContext(tenantCode),
+            ).isGranted.shouldBeFalse()
+        }
+    }
+
     private fun requestContext(tenantCode: String): RequestAuthorizationContext {
         val request = MockHttpServletRequest("GET", "/api/$tenantCode/clinics").apply {
             servletPath = "/api/$tenantCode/clinics"

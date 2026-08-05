@@ -54,8 +54,8 @@ class NotificationOpenApiTest {
     fun `예약 진입점은 실제 회원 오류 registry와 privacy-safe 예시를 게시한다`() {
         val root = openApi()
         val legacy = operation(root, "/api/{tenantCode}/appointments", "post")
-        val customer = operation(root, "/api/v2/appointment-requests", "post")
-        val administrator = operation(root, "/api/v2/admin/appointments", "post")
+        val customer = operation(root, "/api/{tenantCode}/appointment-requests", "post")
+        val administrator = operation(root, "/api/{tenantCode}/admin/appointments", "post")
 
         val legacyErrors = mapOf(
             "403" to NotificationMemberApiError.MEMBER_SCOPE_MISMATCH,
