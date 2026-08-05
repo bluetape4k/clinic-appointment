@@ -36,11 +36,13 @@ class ClosureRescheduleService(
     private val rescheduleCandidateRepository: RescheduleCandidateRepository = RescheduleCandidateRepository(),
     private val stateHistoryRepository: AppointmentStateHistoryRepository = AppointmentStateHistoryRepository(),
     private val doctorRepository: DoctorRepository = DoctorRepository(),
-    private val notificationWriter: AppointmentRescheduleNotificationWriter? = null,
+    private val notificationWriter: AppointmentRescheduleNotificationWriter,
     private val clinicRepository: ClinicRepository = ClinicRepository(),
 ) {
     companion object: KLogging() {
         private val ACTIVE_STATUSES = AppointmentState.ACTIVE_STATUSES
+        private const val LEGACY_CONFIRM_CORRELATION_ID = "legacy-reschedule-confirm"
+        private const val LEGACY_AUTO_CORRELATION_ID = "legacy-reschedule-auto"
     }
 
     /**
@@ -227,9 +229,22 @@ class ClosureRescheduleService(
 
     /** 검증된 범위 안에서 재배정 후보를 선택하여 확정합니다. */
     fun confirmReschedule(scope: TenantClinicScope, candidateId: Long, originalAppointmentId: Long): Long =
-        transaction {
-            confirmRescheduleInTransaction(scope, candidateId, originalAppointmentId)
-        }
+        confirmReschedule(
+            scope = scope,
+            candidateId = candidateId,
+            originalAppointmentId = originalAppointmentId,
+            commandContext = AppointmentCommandContext.root(LEGACY_CONFIRM_CORRELATION_ID),
+        )
+
+    /** 검증된 command context와 함께 원본 예약의 재배정을 확정합니다. */
+    fun confirmReschedule(
+        scope: TenantClinicScope,
+        candidateId: Long,
+        originalAppointmentId: Long,
+        commandContext: AppointmentCommandContext,
+    ): Long = transaction {
+        confirmRescheduleInTransaction(scope, candidateId, originalAppointmentId, commandContext)
+    }
 
     /**
      * 자동 재배정: 가장 높은 우선순위(가장 가까운 날짜/시간)의 후보를 자동 선택합니다.
@@ -239,16 +254,33 @@ class ClosureRescheduleService(
      * @return 새로 생성된 예약 ID, 후보가 없으면 null
      */
     fun autoReschedule(scope: TenantClinicScope, originalAppointmentId: Long): Long? =
-        transaction {
-            val best = rescheduleCandidateRepository.findBestCandidate(originalAppointmentId, scope)
-                ?: return@transaction null
-            confirmRescheduleInTransaction(scope, best.id.requireNotNull("best.id"), originalAppointmentId)
-        }
+        autoReschedule(
+            scope = scope,
+            originalAppointmentId = originalAppointmentId,
+            commandContext = AppointmentCommandContext.root(LEGACY_AUTO_CORRELATION_ID),
+        )
+
+    /** 검증된 command context와 함께 가장 우선순위가 높은 후보를 확정합니다. */
+    fun autoReschedule(
+        scope: TenantClinicScope,
+        originalAppointmentId: Long,
+        commandContext: AppointmentCommandContext,
+    ): Long? = transaction {
+        val best = rescheduleCandidateRepository.findBestCandidate(originalAppointmentId, scope)
+            ?: return@transaction null
+        confirmRescheduleInTransaction(
+            scope = scope,
+            candidateId = best.id.requireNotNull("best.id"),
+            originalAppointmentId = originalAppointmentId,
+            commandContext = commandContext,
+        )
+    }
 
     private fun confirmRescheduleInTransaction(
         scope: TenantClinicScope,
         candidateId: Long,
         originalAppointmentId: Long,
+        commandContext: AppointmentCommandContext,
     ): Long {
         val candidate = rescheduleCandidateRepository.findByIdAndScope(candidateId, originalAppointmentId, scope)
             ?: throw IllegalArgumentException("Reschedule candidate not found: $candidateId")
@@ -303,11 +335,12 @@ class ClosureRescheduleService(
         }
         val updatedOriginal = appointmentRepository.findByIdAndScope(originalId, scope)
             ?: error("Original appointment is unavailable after reschedule")
-        notificationWriter?.rescheduled(
+        notificationWriter.rescheduled(
             tenantGroupId = scope.tenantGroupId,
             original = updatedOriginal,
             replacement = newAppointment,
             version = updatedOriginal.version,
+            commandContext = commandContext,
         )
 
         return newAppointment.id.requireNotNull("newAppointment.id")
@@ -324,4 +357,13 @@ fun interface AppointmentRescheduleNotificationWriter {
         replacement: AppointmentRecord,
         version: Long,
     )
+
+    /** 새 command context를 전달하는 확장 경로. 기존 4-인자 구현과 호환됩니다. */
+    fun rescheduled(
+        tenantGroupId: Long,
+        original: AppointmentRecord,
+        replacement: AppointmentRecord,
+        version: Long,
+        commandContext: AppointmentCommandContext,
+    ) = rescheduled(tenantGroupId, original, replacement, version)
 }

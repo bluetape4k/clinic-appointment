@@ -64,4 +64,19 @@ class FlywayMySQLMigrationTest {
             dialect = WaitlistDeliveryMigrationTestSupport.Dialect.MYSQL,
         )
     }
+
+    @Test
+    fun `V22 appointment messaging outbox lease contract remains additive on MySQL 8`() {
+        val mysql = Containers.MySql8
+        val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentMessagingMigrationTestSupport.verifyV22Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                mysql.jdbcUrl,
+                mysql.username ?: "test",
+                mysql.password ?: "",
+            ),
+            location = "classpath:db/migration/mysql",
+        )
+    }
 }

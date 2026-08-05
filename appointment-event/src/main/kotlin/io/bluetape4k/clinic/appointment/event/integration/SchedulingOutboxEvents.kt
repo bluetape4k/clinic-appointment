@@ -19,6 +19,11 @@ import org.jetbrains.exposed.v1.javatime.timestamp
  * event-driven plan row는 [causationEventId], [clinicId], [planId]를 보존한다.
  * command-driven tenant policy row는 세 값이 모두 `null`일 수 있으며, event lineage를
  * 꾸며내지 않고 trace continuity를 위해 [correlationId]를 사용한다.
+ *
+ * V22 appointment row는 [occurredAt], [topic], [partitionKey]와 relay lease metadata를
+ * 함께 채운다. 기존 generic plan/policy row는 이 열들이 `null`인 legacy 상태를 그대로
+ * 보존한다. appointment root command의 causation은 correlation ID를 사용하고, root가
+ * 아닌 row는 실제 upstream event ID를 [causationEventId]에 기록한다.
  */
 object SchedulingOutboxEvents : LongIdTable("scheduling_outbox_events") {
     /** publisher deduplication에 사용하는 안정적인 deterministic event identity. */
@@ -72,6 +77,30 @@ object SchedulingOutboxEvents : LongIdTable("scheduling_outbox_events") {
      */
     val aggregateId = varchar("aggregate_id", 160).nullable()
 
+    /** envelope가 실제로 발생한 UTC instant. legacy row에서는 `null`일 수 있다. */
+    val occurredAt = timestamp("occurred_at").nullable()
+
+    /** relay가 publish할 bounded Kafka topic. legacy row에서는 `null`일 수 있다. */
+    val topic = varchar("topic", 249).nullable()
+
+    /** 같은 aggregate의 순서를 유지하는 bounded partition routing key. */
+    val partitionKey = varchar("partition_key", 512).nullable()
+
+    /** 현재 row를 claim한 relay owner. 미청구 row에서는 `null`이다. */
+    val leaseOwner = varchar("lease_owner", 160).nullable()
+
+    /** lease fencing token. 미청구 row에서는 `null`이다. */
+    val leaseToken = varchar("lease_token", 128).nullable()
+
+    /** DB clock 기준 lease 만료 시각. 미청구 row에서는 `null`이다. */
+    val leaseUntil = timestamp("lease_until").nullable()
+
+    /** 마지막 실패의 bounded stable reason code. 아직 실패하지 않은 row에서는 `null`이다. */
+    val lastFailureCode = varchar("last_failure_code", 64).nullable()
+
+    /** 마지막 retry/failure가 관측된 UTC instant. 아직 실패하지 않은 row에서는 `null`이다. */
+    val lastFailureAt = timestamp("last_failure_at").nullable()
+
     /** [payloadJson]의 양수 wire-schema version. */
     val schemaVersion = integer("schema_version")
 
@@ -114,6 +143,26 @@ object SchedulingOutboxEvents : LongIdTable("scheduling_outbox_events") {
             id,
         )
         index("idx_outbox_aggregate", false, aggregateType, aggregateId, createdAt)
+        index(
+            "idx_outbox_appointment_ready",
+            false,
+            status,
+            aggregateType,
+            eventType,
+            nextAttemptAt,
+            leaseUntil,
+            createdAt,
+            id,
+        )
+        index(
+            "idx_outbox_appointment_lease_recovery",
+            false,
+            status,
+            aggregateType,
+            eventType,
+            leaseUntil,
+            id,
+        )
     }
 }
 

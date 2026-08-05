@@ -32,6 +32,19 @@
 | scope/allow-list/privacy/reschedule | Task 4/6/8 및 파일 지도 | multi-dialect scope negative matrix, persisted topic/key revalidation, log/event/history redaction, 실제 `RescheduleController`/`ClosureRescheduleService` 경로와 테스트를 추가했다. |
 | 운영 artifact | Task 7/8 및 위험 등록부 | concrete alert trigger/clear/owner/escalation/rollback과 English runbook 파일을 추가하고 parity validator를 둔다. |
 
+## 구현 후 reconciliation
+
+- 구현은 fixed-seed mixed 20,000-row H2 backlog에서 실제 `JdbcAppointmentOutboxStore.claim` 경로를
+  사용해 3회 warmup/15회 측정과 2-thread contention sample을 수행했다. V22 index metadata,
+  `EXPLAIN`, due/lease/attempt-version CAS predicate, distinct claim ID 결과와 raw-payload-free
+  report는 `appointment-messaging/build/reports/appointment-messaging/benchmark.json`에 남겼다.
+- 이 결과는 bounded local query/claim contract 증거이며 production SLO 승인이 아니다. PostgreSQL/MySQL
+  lock-wait, p95/p99, heap/thread, serializer, Kafka catch-up 및 배포별 threshold는 rollout 전에
+  deployment evidence로 별도 수집해야 한다. report의 `deploymentSloEvidence=false`가 이 경계를 고정한다.
+- latest focused API regression은 41/41, Kafka4 singleton integration은 1/1로 통과했다. 모듈 전체 실행은
+  66개 테스트 본문이 통과한 뒤 Gradle 결과 수집 단계에서 EOF가 발생했으므로 전체 모듈 green으로 주장하지
+  않고 infrastructure/test-process gap으로 기록한다.
+
 ## 남은 P2 후속 항목
 
 - causation upstream provenance를 server-produced로 제한하는 세부 구현 테스트와 secret-manager provider별 binding은 구현/보안 review에서 fresh 검증한다.

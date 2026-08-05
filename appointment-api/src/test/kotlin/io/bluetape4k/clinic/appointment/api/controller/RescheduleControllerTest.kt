@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -73,9 +74,10 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
                 TreatmentTypes, Equipments, TreatmentEquipments,
                 ConsultationTopics, Holidays,
                 Appointments, AppointmentNotes, AppointmentStateHistory,
-                RescheduleCandidates, AppointmentEventLogs,
+                RescheduleCandidates, AppointmentEventLogs, SchedulingOutboxEvents,
             )
 
+            SchedulingOutboxEvents.deleteAll()
             AppointmentEventLogs.deleteAll()
             AppointmentStateHistory.deleteAll()
             RescheduleCandidates.deleteAll()

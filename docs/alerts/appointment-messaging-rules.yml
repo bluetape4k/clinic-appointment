@@ -1,0 +1,91 @@
+groups:
+  - name: appointment-messaging
+    rules:
+      - alert: AppointmentMessagingLeaseChurn
+        expr: rate(appointment_outbox_lease_lost_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: Appointment outbox lease fencing is churning
+          runbook: docs/runbooks/appointment-messaging-operations.md
+          clear_when: lease_lost rate stays below 0.1 for 10m
+      - alert: AppointmentMessagingContractRejects
+        expr: increase(appointment_outbox_contract_rejected_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: An appointment outbox row failed topic, key, or envelope validation
+          runbook: docs/runbooks/appointment-messaging-operations.md
+          rollback: hold the relay and inspect the stable failure code before redrive
+      - alert: AppointmentMessagingPublishFailed
+        expr: increase(appointment_outbox_failed_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: An appointment outbox row entered terminal FAILED state
+          runbook: docs/runbooks/appointment-messaging-operations.md
+          rollback: hold the relay and inspect the bounded failure code before redrive
+      - alert: AppointmentMessagingBrokerUnavailable
+        expr: increase(appointment_outbox_retry_total{failure_code="BROKER_UNAVAILABLE"}[10m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: Appointment messaging broker retries are increasing
+          runbook: docs/runbooks/appointment-messaging-operations.md
+          clear_when: broker retry increase returns to zero for 10m
+      - alert: AppointmentMessagingBrokerPaused
+        expr: increase(appointment_outbox_broker_pause_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: Appointment messaging relay entered broker pause
+          runbook: docs/runbooks/appointment-messaging-operations.md
+          rollback: keep the relay held until broker readiness and V22 checks pass
+      - alert: AppointmentMessagingBacklogHigh
+        expr: appointment_outbox_pending > 100
+        for: 10m
+        labels:
+          severity: warning
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: Appointment outbox backlog is above the operating threshold
+          runbook: docs/runbooks/appointment-messaging-operations.md
+          clear_when: pending backlog remains at or below 100 for 10m
+      - alert: AppointmentMessagingOldestPendingTooOld
+        expr: appointment_outbox_oldest_age_seconds > 180
+        for: 5m
+        labels:
+          severity: critical
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: The oldest appointment outbox row is outside the delivery SLO
+          runbook: docs/runbooks/appointment-messaging-operations.md
+          rollback: hold the relay before schema or payload redrive changes
+      - alert: AppointmentMessagingPartitionSkew
+        expr: appointment_outbox_partition_skew > 4
+        for: 10m
+        labels:
+          severity: warning
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: Appointment outbox pending work is skewed across partitions
+          runbook: docs/runbooks/appointment-messaging-operations.md
+          clear_when: partition skew remains at or below 4 for 10m

@@ -39,7 +39,11 @@ internal class NotificationReminderRecoveryWiringTest {
 
     private val contextRunner = ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
-        .withUserConfiguration(ServiceConfig::class.java, NotificationDatabaseTestConfiguration::class.java)
+        .withUserConfiguration(
+            ServiceConfig::class.java,
+            AppointmentMessagingTestConfiguration::class.java,
+            NotificationDatabaseTestConfiguration::class.java,
+        )
         .withBean("meterRegistry", MeterRegistry::class.java, Supplier { SimpleMeterRegistry() })
         .withBean("dataSource", DataSource::class.java, Supplier {
             HikariDataSource(

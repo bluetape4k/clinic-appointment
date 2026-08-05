@@ -13,6 +13,7 @@
 | HTTP outcome가 Kafka ack로 오해됨 | broker outage에서 5xx 또는 duplicate row, local listener 5xx | OpenAPI/README outcome table, `2xx=durable intent`, PENDING preservation, stable 503/Retry-After, listener isolation test | API writer 경로 hold; outbox row/eventId는 보존 |
 | privacy/lineage 위반 | raw payload/reason/credential가 log/metric/quarantine에 노출 | typed allow-list, payload hash+bounded failure code, untrusted correlation, redaction tests | relay held, evidence scrub/retention 절차 실행; raw payload 재기록 금지 |
 | 운영 신호·런북 불일치 | alert trigger/clear가 없거나 owner/escalation 미지정, held/redrive 절차 재현 불가 | `docs/runbooks/appointment-messaging-operations.md`와 alert rules의 수치·clear window·owner·rollback link validator | rollout hold; alert/runbook parity 수정 전에는 relay enable 금지 |
+| local benchmark를 production SLO로 오인 | H2 p95/p99를 PostgreSQL/MySQL/Kafka 배포 기준으로 직접 해석 | 실제 `JdbcAppointmentOutboxStore.claim`의 20,000-row fixed-seed 측정과 2-thread contention을 raw-payload-free report로 보존하고, `deploymentSloEvidence=false`를 유지 | 배포별 lock-wait/p95/p99/heap/thread/catch-up evidence가 없으면 rollout hold |
 
 ## 재실행 규칙
 

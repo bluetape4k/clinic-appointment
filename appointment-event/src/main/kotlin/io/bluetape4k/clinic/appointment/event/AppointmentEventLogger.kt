@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.event
 
+import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -20,30 +21,37 @@ class AppointmentEventLogger(
             entityId = event.appointmentId,
             tenantGroupId = event.tenantGroupId,
             clinicId = event.clinicId,
-            payloadJson = """{"appointmentId":${event.appointmentId},"tenantGroupId":${event.tenantGroupId},"clinicId":${event.clinicId}}"""
+            payloadJson = """{"eventType":"Created"}""",
         )
     }
 
     @EventListener
     fun onStatusChanged(event: AppointmentDomainEvent.StatusChanged) {
-        val reasonPart = event.reason?.let { ""","reason":${jsonString(it)}""" } ?: ""
+        val reasonPart = event.reason
+            ?.toRegisteredReasonCode()
+            ?.let { ""","reasonCode":${jsonString(it)}""" }
+            ?: ""
         saveEventLog(
             eventType = "StatusChanged",
             entityId = event.appointmentId,
             tenantGroupId = event.tenantGroupId,
             clinicId = event.clinicId,
-            payloadJson = """{"appointmentId":${event.appointmentId},"tenantGroupId":${event.tenantGroupId},"clinicId":${event.clinicId},"fromState":"${event.fromState}","toState":"${event.toState}"$reasonPart}"""
+            payloadJson = """{"eventType":"StatusChanged","fromState":"${event.fromState}","toState":"${event.toState}"$reasonPart}""",
         )
     }
 
     @EventListener
     fun onCancelled(event: AppointmentDomainEvent.Cancelled) {
+        val reasonPart = event.reason
+            .toRegisteredReasonCode()
+            ?.let { ""","reasonCode":${jsonString(it)}""" }
+            ?: ""
         saveEventLog(
             eventType = "Cancelled",
             entityId = event.appointmentId,
             tenantGroupId = event.tenantGroupId,
             clinicId = event.clinicId,
-            payloadJson = """{"appointmentId":${event.appointmentId},"tenantGroupId":${event.tenantGroupId},"clinicId":${event.clinicId},"reason":${jsonString(event.reason)}}"""
+            payloadJson = """{"eventType":"Cancelled"$reasonPart}""",
         )
     }
 
@@ -54,7 +62,7 @@ class AppointmentEventLogger(
             entityId = event.originalId,
             tenantGroupId = event.tenantGroupId,
             clinicId = event.clinicId,
-            payloadJson = """{"originalId":${event.originalId},"newId":${event.newId},"tenantGroupId":${event.tenantGroupId},"clinicId":${event.clinicId}}"""
+            payloadJson = """{"eventType":"Rescheduled"}""",
         )
     }
 
@@ -102,4 +110,7 @@ class AppointmentEventLogger(
         }
         append('"')
     }
+
+    private fun String.toRegisteredReasonCode(): String? =
+        runCatching { CancellationReasonCode(this).value }.getOrNull()
 }

@@ -5,10 +5,12 @@ import io.bluetape4k.logging.debug
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.RescheduleCandidateResponse
 import io.bluetape4k.clinic.appointment.api.dto.toResponse
+import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.service.AppointmentService
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
+import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -16,6 +18,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse as OApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
@@ -72,7 +75,7 @@ class RescheduleController(
     ): ResponseEntity<ApiResponse<Map<Long, List<RescheduleCandidateResponse>>>> {
         val tenant = tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
         val scope = TenantClinicScope(tenant.id, clinicId)
-        log.debug { "POST closure reschedule tenantCode=$tenantCode, appointmentId=$id, clinic=$clinicId, date=$closureDate" }
+        log.debug { "POST closure reschedule tenantCode=$tenantCode, date=$closureDate" }
         val result = closureRescheduleService.processClosureReschedule(scope, closureDate, searchDays)
         val response = result.mapValues { (_, candidates) ->
             candidates.map { it.toResponse() }
@@ -101,7 +104,7 @@ class RescheduleController(
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         val appointment = appointmentService.getById(id, tenant.id)
         val scope = TenantClinicScope(tenant.id, appointment.clinicId)
-        log.debug { "GET reschedule candidates tenantCode=$tenantCode, appointmentId=$id" }
+        log.debug { "GET reschedule candidates tenantCode=$tenantCode" }
         val candidates = transaction {
             rescheduleCandidateRepository.findByOriginalAppointmentId(id, scope)
                 .map { it.toResponse() }
@@ -130,12 +133,18 @@ class RescheduleController(
         @PathVariable tenantCode: String,
         @PathVariable id: Long,
         @PathVariable candidateId: Long,
+        servletRequest: HttpServletRequest,
     ): ResponseEntity<ApiResponse<Long>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         val appointment = appointmentService.getById(id, tenant.id)
         val scope = TenantClinicScope(tenant.id, appointment.clinicId)
-        log.debug { "POST confirm reschedule tenantCode=$tenantCode, appointmentId=$id, candidateId=$candidateId" }
-        val newAppointmentId = closureRescheduleService.confirmReschedule(scope, candidateId, id)
+        log.debug { "POST confirm reschedule tenantCode=$tenantCode" }
+        val newAppointmentId = closureRescheduleService.confirmReschedule(
+            scope = scope,
+            candidateId = candidateId,
+            originalAppointmentId = id,
+            commandContext = commandContext(servletRequest),
+        )
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }
 
@@ -157,12 +166,22 @@ class RescheduleController(
     fun autoReschedule(
         @PathVariable tenantCode: String,
         @PathVariable id: Long,
+        servletRequest: HttpServletRequest,
     ): ResponseEntity<ApiResponse<Long?>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         val appointment = appointmentService.getById(id, tenant.id)
         val scope = TenantClinicScope(tenant.id, appointment.clinicId)
-        log.debug { "POST auto reschedule tenantCode=$tenantCode, appointmentId=$id" }
-        val newAppointmentId = closureRescheduleService.autoReschedule(scope, id)
+        log.debug { "POST auto reschedule tenantCode=$tenantCode" }
+        val newAppointmentId = closureRescheduleService.autoReschedule(
+            scope = scope,
+            originalAppointmentId = id,
+            commandContext = commandContext(servletRequest),
+        )
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }
+
+    private fun commandContext(request: HttpServletRequest): AppointmentCommandContext =
+        AppointmentCommandContext.root(
+            CorrelationIdFilter.requireCorrelationId(request),
+        )
 }

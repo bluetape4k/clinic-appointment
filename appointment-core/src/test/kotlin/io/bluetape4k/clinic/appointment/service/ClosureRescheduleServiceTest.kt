@@ -51,7 +51,10 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
 
     companion object : KLogging() {
         private val slotService = SlotCalculationService()
-        private val rescheduleService = ClosureRescheduleService(slotService)
+        private val rescheduleService = ClosureRescheduleService(
+            slotCalculationService = slotService,
+            notificationWriter = AppointmentRescheduleNotificationWriter { _, _, _, _ -> },
+        )
 
         private val MONDAY = LocalDate.of(2026, 3, 23)
         private val TUESDAY = LocalDate.of(2026, 3, 24)

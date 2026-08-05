@@ -34,7 +34,7 @@ class AppointmentCommitmentApplicationWiringTest {
 
     private val contextRunner =
         ApplicationContextRunner()
-            .withUserConfiguration(ServiceConfig::class.java)
+            .withUserConfiguration(ServiceConfig::class.java, AppointmentMessagingTestConfiguration::class.java)
             .withBean("meterRegistry", MeterRegistry::class.java, { SimpleMeterRegistry() })
             .withBean("dataSource", DataSource::class.java, Supplier {
                 HikariDataSource(

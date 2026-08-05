@@ -4,7 +4,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 
 ## 구현 상태표
 
-> 최종 갱신: 2026-08-04 (v0.3.0)
+> 최종 갱신: 2026-08-05 (v0.3.0)
 
 ### 완료
 
@@ -35,7 +35,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 |---------|------|----------|------|
 | **환자 포털 (자가 예약 웹앱)** | `appointment-patient-portal` (신규) | MEDIUM | TODO 섹션 9.1 |
 | **멀티테넌시 계약 정합화** | `appointment-core` / `appointment-api` / `appointment-solver` | HIGH | 기반은 PR #118에서 완료. #37~#39에서 schema·HTTP authority·repository 격리 보강. [감사 기록](../reviews/2026-08-04-multitenancy-audit.md) |
-| **메시지 큐 (Kafka4 비동기)** | `appointment-messaging` (신규) | LOW | broker 결정 #40 완료, 구현 #41/#42 — TODO 섹션 9.3 |
+| **Kafka4 transactional outbox 메시징** | `appointment-messaging` | LOW | broker 결정 #40 및 appointment stream 구현 #41 완료; consumer/idempotency 확장은 #42 — TODO 섹션 9.3 |
 | **관리자 대시보드 (통계/분석)** | `appointment-dashboard` (신규) | LOW | TODO 섹션 9.4 |
 | **SSE 기반 일괄 재배정 진행 표시** | `appointment-api` / `appointment-frontend` | HIGH | TODO 섹션 3.5 |
 

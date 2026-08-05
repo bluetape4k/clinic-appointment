@@ -615,11 +615,18 @@ class NoOpSecurityConfig {
     companion object : KLogging()
 
     @Bean
-    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    fun correlationIdFilter(): CorrelationIdFilter = CorrelationIdFilter()
+
+    @Bean
+    fun securityFilterChain(
+        http: HttpSecurity,
+        correlationIdFilter: CorrelationIdFilter,
+    ): SecurityFilterChain {
         log.info { "JWT 보안 비활성화 — 모든 요청 허용" }
         return http
             .csrf { it.disable() }
             .authorizeHttpRequests { it.anyRequest().permitAll() }
+            .addFilterBefore(correlationIdFilter, UsernamePasswordAuthenticationFilter::class.java)
             .build()
     }
 }

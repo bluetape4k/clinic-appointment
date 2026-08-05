@@ -5,8 +5,6 @@ on:
   push:
     branches: [develop]
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
       - '.gitignore'
       - '.editorconfig'
       - '.gitleaks.toml'
@@ -17,8 +15,6 @@ on:
   pull_request:
     branches: [develop]
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
       - '.gitignore'
       - '.editorconfig'
       - '.gitleaks.toml'
@@ -75,6 +71,7 @@ jobs:
       solver: ${{ steps.filter.outputs.solver }}
       api: ${{ steps.filter.outputs.api }}
       notification: ${{ steps.filter.outputs.notification }}
+      messaging: ${{ steps.filter.outputs.messaging }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@v7
@@ -98,6 +95,7 @@ jobs:
               - 'settings.gradle.kts'
             api:
               - 'appointment-api/**'
+              - 'appointment-messaging/**'
               - 'appointment-core/**'
               - 'appointment-event/**'
               - 'buildSrc/**'
@@ -111,6 +109,16 @@ jobs:
               - 'gradle/**'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
+            messaging:
+              - 'appointment-messaging/**'
+              - 'appointment-event/**'
+              - 'appointment-core/**'
+              - 'buildSrc/**'
+              - 'gradle/**'
+              - 'build.gradle.kts'
+              - 'settings.gradle.kts'
+              - 'docs/alerts/appointment-messaging-rules.yml'
+              - 'docs/runbooks/appointment-messaging-operations.md'
             frontend:
               - 'frontend/**'
 
@@ -371,11 +379,69 @@ jobs:
           path: '**/build/reports/kover/'
           retention-days: 7
 
+  # ── 8. Kafka4 transactional outbox messaging ──────────────────────────────
+  test-messaging:
+    name: Test / Appointment Messaging
+    runs-on: ubuntu-latest
+    concurrency:
+      group: appointment-messaging-kafka-${{ github.ref }}
+      cancel-in-progress: false
+    needs: [build, changes]
+    if: needs.changes.outputs.messaging == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5.6.0
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - uses: gradle/actions/setup-gradle@v6.2.0
+        with:
+          gradle-version: wrapper
+          cache-read-only: true
+
+      - name: Test appointment messaging (retry 3)
+        run: |
+          for i in 1 2 3; do
+            ./gradlew :appointment-messaging:test --no-daemon && exit 0
+            echo "::warning::Attempt $i of 3 failed."
+            [ $i -lt 3 ] && sleep 20
+          done
+          exit 1
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+
+      - name: Validate appointment messaging alert/runbook contract
+        run: python3 .github/scripts/validate-appointment-messaging-ops.py
+
+      - name: Generate Kover report
+        if: always()
+        run: ./gradlew :appointment-messaging:koverXmlReport
+        continue-on-error: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-messaging
+          path: '**/build/test-results/test/*.xml'
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-messaging
+          path: '**/build/reports/kover/'
+          retention-days: 7
+
   # ── 8. 커버리지 집계 ─────────────────────────────────────────────────────────
   coverage-report:
     name: Coverage Report
     runs-on: ubuntu-latest
-    needs: [test-core, test-solver, test-api, test-notification]
+    needs: [test-core, test-solver, test-api, test-notification, test-messaging]
     if: always()
     steps:
       - uses: actions/checkout@v7
@@ -493,7 +559,7 @@ jobs:
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
-    needs: [gitleaks, build, build-frontend, flyway-migration, test-core, test-solver, test-api, test-notification]
+    needs: [gitleaks, build, build-frontend, flyway-migration, test-core, test-solver, test-api, test-notification, test-messaging]
     if: always()
     steps:
       - name: Check all jobs
