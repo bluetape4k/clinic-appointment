@@ -18,7 +18,7 @@ import org.springframework.test.context.DynamicPropertySource
 import org.springframework.web.client.RestClient
 
 /**
- * Task 9 wiring 전 기본 설정이 commitment v2 controller와 OpenAPI를 노출하지 않는지 검증한다.
+ * Task 9 wiring 전 기본 설정이 commitment controller와 OpenAPI를 노출하지 않는지 검증한다.
  *
  * 이미 v2 row가 생성된 운영 환경의 rollback은 이 전체 flag를 끄지 않고
  * `appointment.commitment.ingress-enabled=false`만 사용해야 한다.
@@ -40,7 +40,7 @@ class AppointmentCommitmentFeatureOffIntegrationTest {
     private var port: Int = 0
 
     @Test
-    fun `default configuration exposes neither v2 handler nor OpenAPI contract`() {
+    fun `default configuration exposes neither commitment handler nor OpenAPI contract`() {
         val client = RestClient.builder()
             .baseUrl("http://localhost:$port")
             .build()
@@ -54,7 +54,7 @@ class AppointmentCommitmentFeatureOffIntegrationTest {
         )
 
         val route = client.get()
-            .uri("/api/v2/appointments/7/commitment")
+            .uri("/api/tenant-default/appointments/7/commitment")
             .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
             .execute()
         val openApi = client.get()
@@ -63,7 +63,7 @@ class AppointmentCommitmentFeatureOffIntegrationTest {
 
         route.statusCode shouldBeEqualTo HttpStatus.NOT_FOUND
         openApi.statusCode shouldBeEqualTo HttpStatus.OK
-        openApi.body shouldNotContain "/api/v2/appointment-requests"
-        openApi.body shouldNotContain "/api/v2/appointments/{id}/commitment"
+        openApi.body shouldNotContain "/api/{tenantCode}/appointment-requests"
+        openApi.body shouldNotContain "/api/{tenantCode}/appointments/{id}/commitment"
     }
 }

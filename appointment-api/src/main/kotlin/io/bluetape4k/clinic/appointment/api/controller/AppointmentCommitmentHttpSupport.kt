@@ -61,7 +61,7 @@ internal fun ActorContext.requireAdminActor(): ActorContext {
 }
 
 /**
- * rollback 중 신규 Plan ingress만 닫고 기존 v2 예약의 조회·변경 경로는 유지한다.
+ * rollback 중 신규 Plan ingress만 닫고 기존 commitment 예약의 조회·변경 경로는 유지한다.
  *
  * [enabled]는 `appointment.commitment.ingress-enabled`에서 오며 운영자가 이미 생성된
  * commitment에 접근하려고 `api-enabled`까지 끄는 잘못된 rollback을 피하게 한다.

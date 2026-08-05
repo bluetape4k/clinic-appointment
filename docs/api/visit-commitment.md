@@ -1,4 +1,4 @@
-# 방문 확정 약속 v2 API
+# 방문 확정 약속 API
 
 ## 경계와 인증
 
@@ -52,16 +52,16 @@ identity라면 `clinicId`도 `allowedClinicIds`의 원소로 제공한다. 고�
 
 | 행위자 | Method / path | 성공 | 업무 결과 |
 |---|---|---:|---|
-| 고객 | `POST /api/v2/appointment-requests` | 202 | 정책에 따라 `PROPOSED` 또는 자원을 선점한 `HELD` 가예약 생성 |
-| 관리자 | `POST /api/v2/admin/appointments` | 201 | 정책이 허용하면 직접 확정 |
-| 관리자 | `POST /api/v2/appointments/{id}/approve` | 200 | 고객이 동의한 정확한 제안 승인 |
-| 고객 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/accept` | 200 | 현재 제안 수락 |
-| 고객 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/decline` | 200 | 기존 확정을 보존하며 제안 거절 |
-| 관리자 | `POST /api/v2/appointments/{id}/confirm` | 200 | 정책·동의 확인 후 확정 |
-| 관리자 | `POST /api/v2/appointments/{id}/change-proposals` | 202 | 기존 확정을 보존한 대체 제안 생성 |
-| 관리자 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/expire` | 200 | 만료 제안 종결, 최초 `HELD` 자원 점유 해제 |
-| 관리자 | `POST /api/v2/appointments/{id}/cancel` | 200 | 가예약·확정 예약 취소와 활성 자원 점유 해제 |
-| 고객·관리자 | `GET /api/v2/appointments/{id}/commitment` | 200 | 행위자 범위 확정 약속 조회 모델 반환 |
+| 고객 | `POST /api/{tenantCode}/appointment-requests` | 202 | 정책에 따라 `PROPOSED` 또는 자원을 선점한 `HELD` 가예약 생성 |
+| 관리자 | `POST /api/{tenantCode}/admin/appointments` | 201 | 정책이 허용하면 직접 확정 |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/approve` | 200 | 고객이 동의한 정확한 제안 승인 |
+| 고객 | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/accept` | 200 | 현재 제안 수락 |
+| 고객 | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/decline` | 200 | 기존 확정을 보존하며 제안 거절 |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/confirm` | 200 | 정책·동의 확인 후 확정 |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/change-proposals` | 202 | 기존 확정을 보존한 대체 제안 생성 |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/expire` | 200 | 만료 제안 종결, 최초 `HELD` 자원 점유 해제 |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/cancel` | 200 | 가예약·확정 예약 취소와 활성 자원 점유 해제 |
+| 고객·관리자 | `GET /api/{tenantCode}/appointments/{id}/commitment` | 200 | 행위자 범위 확정 약속 조회 모델 반환 |
 
 모든 상태 변경 요청은 `Idempotency-Key`를 요구한다. 신규 생성은
 `If-None-Match: *`, 기존 aggregate 변경은 최신 `ETag`를 담은 `If-Match`를
@@ -73,7 +73,7 @@ identity라면 `clinicId`도 `allowedClinicIds`의 원소로 제공한다. 고�
 Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 정책·자원은 body에
 넣지 않는다. 아래 JSON 외 필드는 strict DTO가 거부한다.
 
-고객 가예약 `POST /api/v2/appointment-requests`:
+고객 가예약 `POST /api/{tenantCode}/appointment-requests`:
 
 ```json
 {
@@ -88,15 +88,15 @@ Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 �
 ```
 
 관리자 직접 생성은 같은 body를
-`POST /api/v2/admin/appointments`에 보낸다.
+`POST /api/{tenantCode}/admin/appointments`에 보낸다.
 
-관리자 승인 `POST /api/v2/appointments/{id}/approve`:
+관리자 승인 `POST /api/{tenantCode}/appointments/{id}/approve`:
 
 ```json
 { "proposalId": 301 }
 ```
 
-고객 수락 `POST /api/v2/appointments/{id}/proposals/{proposalId}/accept`:
+고객 수락 `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/accept`:
 
 ```json
 {
@@ -107,13 +107,13 @@ Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 �
 }
 ```
 
-고객 거절 `POST /api/v2/appointments/{id}/proposals/{proposalId}/decline`:
+고객 거절 `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/decline`:
 
 ```json
 { "reasonCode": "CUSTOMER_DECLINED_SCHEDULE" }
 ```
 
-관리자 확정 `POST /api/v2/appointments/{id}/confirm`:
+관리자 확정 `POST /api/{tenantCode}/appointments/{id}/confirm`:
 
 ```json
 {
@@ -125,7 +125,7 @@ Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 �
 }
 ```
 
-변경 제안 `POST /api/v2/appointments/{id}/change-proposals`:
+변경 제안 `POST /api/{tenantCode}/appointments/{id}/change-proposals`:
 
 ```json
 {
@@ -134,7 +134,7 @@ Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 �
 }
 ```
 
-관리자 취소 `POST /api/v2/appointments/{id}/cancel`:
+관리자 취소 `POST /api/{tenantCode}/appointments/{id}/cancel`:
 
 ```json
 { "reasonCode": "REFUND" }
@@ -150,7 +150,7 @@ Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 �
 
 | 설정 | 기본값 | 의미 |
 |---|---:|---|
-| `appointment.commitment.api-enabled` | `false` | v2 경로의 부트스트랩 노출 게이트 |
+| `appointment.commitment.api-enabled` | `false` | commitment 경로의 부트스트랩 노출 게이트 |
 | `appointment.commitment.ingress-enabled` | `true` | 신규 고객 요청·관리자 직접 생성만 허용 |
 | `appointment.commitment.mode` | `OFF` | `OFF`, 계산 비교만 하는 `SHADOW`, 허용목록 쓰기인 `WRITE` |
 | `appointment.commitment.clinic-allowlist` | 비어 있음 | `WRITE`가 실제 적용될 병원 ID |
@@ -159,7 +159,7 @@ Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 �
 | `appointment.commitment.retry.initial-backoff` | `25ms` | 첫 충돌 재시도 대기 |
 | `appointment.commitment.ceiling.resources-per-slot` | `200` | 한 후보 slot의 의료진·장비·공간 자원 항목 상한 |
 | `appointment.commitment.ceiling.candidate-resource-entries` | `10,000` | 한 요청의 모든 후보 slot 자원 항목 합계 상한 |
-| `appointment.commitment.idempotency-hash-secret` | 없음 | v2 API 활성화 시 필수인 Base64 HMAC 비밀값. 디코딩 후 32바이트 이상이며 JWT·정책 command secret과 분리 |
+| `appointment.commitment.idempotency-hash-secret` | 없음 | commitment API 활성화 시 필수인 Base64 HMAC 비밀값. 디코딩 후 32바이트 이상이며 JWT·정책 command secret과 분리 |
 
 동기 계획 상한은 treatment 500개, 관계 edge 4,000개, 반복 100회, 탐색 365일,
 candidate slot 2,000개, slot당 자원 200개, 요청당 자원 항목 10,000개, 반환
@@ -169,7 +169,7 @@ candidate slot 2,000개, slot당 자원 200개, 요청당 자원 항목 10,000�
 세대, 정책 종류별 원본 version을 함께 제공한다. 고객 수락·관리자 승인·조회는
 현재 상품 카탈로그나 현재 정책을 다시 해석하지 않고 이 영속 스냅숏을 사용한다.
 
-`api-enabled`는 v2 row가 전혀 없는 부트스트랩에서만 전체 경로 노출을 제어한다.
+`api-enabled`는 commitment row가 전혀 없는 부트스트랩에서만 전체 경로 노출을 제어한다.
 활성화 시 전용 idempotency secret이 없거나 짧거나 Base64가 아니면 startup을
 실패시킨다. raw `Idempotency-Key`는 이 secret과 고정 domain으로
 HMAC-SHA-256 처리한 뒤에만 저장한다.
@@ -183,7 +183,7 @@ Gateway patient subject를 구매 Plan의 보호된 환자 fingerprint와 비교
 ingress와 같은 HMAC key·algorithm·domain separation을 구현한
 `PatientSubjectFingerprintResolver` bean도 필요하다. 기본 구현은 일반 SHA-256으로
 추정하지 않고 patient 접근을 fail-closed로 거절한다.
-v2 row 생성 후 롤백은 신규 유입만 차단하고 기존 v2 조회/상태 변경 요청을 유지한다.
+commitment row 생성 후 롤백은 신규 유입만 차단하고 기존 조회/상태 변경 요청을 유지한다.
 구체적인 절차는 [운영 런북](../runbooks/visit-commitment-operations.md)을 따른다.
 
 ## 안정 오류

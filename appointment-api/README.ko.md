@@ -87,24 +87,24 @@ token에서 가져옵니다. 자세한 내용은
 [기준 설계](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
 [운영 런북](../docs/runbooks/profile-reevaluation.ko.md)에 있습니다.
 
-### 방문 확정 약속 v2
+### 방문 확정 약속
 
-전체 상태·인증·오류 계약은 [방문 확정 약속 v2 API](../docs/api/visit-commitment.md),
+전체 상태·인증·오류 계약은 [방문 확정 약속 API](../docs/api/visit-commitment.md),
 점진 배포·경보·보존·롤백은
 [운영 런북](../docs/runbooks/visit-commitment-operations.md)에 정리되어 있습니다.
 
 | 행위자 | 메서드와 경로 | 결과 |
 |------|------|------|
-| 고객 | `POST /api/v2/appointment-requests` | 정책에 따라 `PROPOSED` 또는 자원을 선점한 `HELD` 가예약 생성 (`202`) |
-| 관리자 | `POST /api/v2/admin/appointments` | 정책이 허용한 확정 예약 생성 (`201`) |
-| 관리자 | `POST /api/v2/appointments/{id}/approve` | 고객이 동의한 정확한 제안 승인 (`200`) |
-| 고객 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/accept` | 현재 변경 제안 수락 (`200`) |
-| 고객 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/decline` | 기존 확정을 유지하며 제안 거절 (`200`) |
-| 관리자 | `POST /api/v2/appointments/{id}/confirm` | 유효 정책과 동의가 허용한 제안 확정 (`200`) |
-| 관리자 | `POST /api/v2/appointments/{id}/change-proposals` | 기존 확정을 취소하지 않고 대체 제안 생성 (`202`) |
-| 관리자 | `POST /api/v2/appointments/{id}/proposals/{proposalId}/expire` | 만료 시각에 도달한 제안을 종결하고 최초 선점 해제 (`200`) |
-| 관리자 | `POST /api/v2/appointments/{id}/cancel` | 예약을 취소하고 활성 자원 점유 해제 (`200`) |
-| 고객 또는 관리자 | `GET /api/v2/appointments/{id}/commitment` | 확정 약속 전용 조회 모델 반환 (`200`) |
+| 고객 | `POST /api/{tenantCode}/appointment-requests` | 정책에 따라 `PROPOSED` 또는 자원을 선점한 `HELD` 가예약 생성 (`202`) |
+| 관리자 | `POST /api/{tenantCode}/admin/appointments` | 정책이 허용한 확정 예약 생성 (`201`) |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/approve` | 고객이 동의한 정확한 제안 승인 (`200`) |
+| 고객 | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/accept` | 현재 변경 제안 수락 (`200`) |
+| 고객 | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/decline` | 기존 확정을 유지하며 제안 거절 (`200`) |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/confirm` | 유효 정책과 동의가 허용한 제안 확정 (`200`) |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/change-proposals` | 기존 확정을 취소하지 않고 대체 제안 생성 (`202`) |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/expire` | 만료 시각에 도달한 제안을 종결하고 최초 선점 해제 (`200`) |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/cancel` | 예약을 취소하고 활성 자원 점유 해제 (`200`) |
+| 고객 또는 관리자 | `GET /api/{tenantCode}/appointments/{id}/commitment` | 확정 약속 전용 조회 모델 반환 (`200`) |
 
 이 경로의 요청 본문은 actor, tenant, clinic, patient subject, 정책 mode,
 약관 hash, 자원 mapping을 받지 않습니다. 검증된 Gateway principal에서 정확히 한
@@ -135,7 +135,7 @@ Gateway는 하나의 행위자 불변식을 충족하는 길이 제한 claim을 
 
 고객 token은 `actorType: "PATIENT"`와 `PATIENT` role, 안정적인
 `patientSubject`를 함께 가지며 관리자 role을 포함할 수 없습니다. `clinicId`가
-있다면 반드시 `allowedClinicIds`에 포함되어야 합니다. v2 application은 이 claim을
+있다면 반드시 `allowedClinicIds`에 포함되어야 합니다. commitment application은 이 claim을
 신뢰해 본문의 범위를 받지 않되, 실제 Plan·예약 범위는 저장소에서 다시 확인합니다.
 
 | 요청 종류 | 필수 헤더 | 예 |
@@ -153,7 +153,7 @@ Gateway는 하나의 행위자 불변식을 충족하는 길이 제한 claim을 
 
 | 설정 | 기본값 | 운영 의미 |
 |------|------|------|
-| `appointment.commitment.api-enabled` | `false` | 운영 어댑터와 준비 증거가 통과한 뒤에만 여는 전체 v2 경로 부트스트랩 게이트 |
+| `appointment.commitment.api-enabled` | `false` | 운영 어댑터와 준비 증거가 통과한 뒤에만 여는 전체 commitment 경로 부트스트랩 게이트 |
 | `appointment.commitment.ingress-enabled` | `true` | 신규 고객 가예약과 관리자 직접 생성만 허용 |
 | `appointment.commitment.mode` | `OFF` | 신규 계산·쓰기를 차단하는 `OFF`, 비교만 하는 `SHADOW`, 허용목록 기반 `WRITE` |
 | `appointment.commitment.clinic-allowlist` | 비어 있음 | `WRITE`를 허용할 병원 ID |
@@ -161,11 +161,11 @@ Gateway는 하나의 행위자 불변식을 충족하는 길이 제한 claim을 
 | `appointment.commitment.retry.max-attempts` | `3` | 최초 시도를 포함한 제한 재시도 |
 | `appointment.commitment.ceiling.resources-per-slot` | `200` | 한 후보 slot의 의료진·장비·공간 자원 항목 상한 |
 | `appointment.commitment.ceiling.candidate-resource-entries` | `10,000` | 한 제안 계산 요청 전체의 자원 항목 합계 상한 |
-| `appointment.commitment.idempotency-hash-secret` | 없음 | v2 API 활성화 시 필요한 Base64 비밀값. 디코딩 후 32바이트 이상이어야 하며 JWT·정책 command 비밀값을 재사용하면 안 됨 |
+| `appointment.commitment.idempotency-hash-secret` | 없음 | commitment API 활성화 시 필요한 Base64 비밀값. 디코딩 후 32바이트 이상이어야 하며 JWT·정책 command 비밀값을 재사용하면 안 됨 |
 | `appointment.commitment.retention-enabled` | `false` | 프로세스 내부 보존 작업 소유자 활성화. 배포당 한 소유자에서만 사용 |
 | `appointment.commitment.retention-interval` | `PT1H` | 범위 제한 보존 작업 실행 사이의 고정 지연 |
 
-`api-enabled=false`는 아직 v2 확정 약속이 한 건도 없는 부트스트랩 단계에서만
+`api-enabled=false`는 아직 확정 약속이 한 건도 없는 부트스트랩 단계에서만
 사용합니다. 이미 생성된 확정 약속이 있다면 롤백은
 `ingress-enabled=false`로 신규 유입만 막아야 합니다. 조회, 승인, 확정, 제안
 수락·거절, 변경 제안은 계속 열려 있어 기존 고객을 고립시키지 않습니다.
@@ -195,7 +195,7 @@ resolver는 일반 SHA-256으로 추정하지 않고 patient 접근을 fail-clos
 | 오래된 `If-Match` | `412 VERSION_CONFLICT` | 최신 `ETag`로 다시 시도 |
 | 필수 조건 헤더 누락 | `428 PRECONDITION_REQUIRED` | 생성은 `*`, 변경은 최신 `ETag` 전달 |
 | 신규 유입 중단 | `503 INGRESS_DISABLED` | 기존 예약은 유지하고 신규 요청만 보류 |
-| legacy 경로로 v2 변경 시도 | `409 NEW_APPOINTMENT_API_REQUIRED` | 확정 약속 v2 엔드포인트 사용 |
+| legacy 경로로 확정 약속 변경 시도 | `409 NEW_APPOINTMENT_API_REQUIRED` | tenant-scoped 확정 약속 엔드포인트 사용 |
 | 예상하지 못한 내부 장애 | `500 INTERNAL_ERROR` | `Retry-After: 5` 뒤 같은 멱등키로 재시도 |
 
 `PREDECESSOR_NOT_COMPLETED`는 외부 이행 기준 시스템의 이벤트가 선행 진료의 완료를 아직
@@ -273,8 +273,8 @@ Flyway — `src/main/resources/db/migration/V*.sql`
 | 클래스 | 역할 |
 |--------|------|
 | `AppointmentController` | 예약 CRUD + 상태 변경 |
-| `CustomerAppointmentV2Controller` | 고객 가예약 요청과 제안 수락·거절 |
-| `AdminAppointmentV2Controller` | 관리자 생성·승인·확정·변경 제안 |
+| `CustomerAppointmentController` | 고객 가예약 요청과 제안 수락·거절 |
+| `AdminAppointmentController` | 관리자 생성·승인·확정·변경 제안 |
 | `AppointmentCommitmentQueryController` | 행위자 범위 확정 약속 전용 조회 |
 | `SlotController` | 가용 슬롯 조회 |
 | `RescheduleController` | 임시휴진 재배정 |

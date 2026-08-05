@@ -267,13 +267,12 @@ fallback하거나 body의 ID로 tenant를 역추론하지 않는다.
 | 모드 | 적용 경로 | Source of truth | 내부 scope 해소 |
 |---|---|---|---|
 | Path-selected | `/api/{tenantCode}/...` | URL `tenantCode`와 JWT `allowedTenants` membership | active `TenantGroup`을 조회해 `tenantGroupId`를 만들고 path `clinicId` 소유권을 검증 |
-| Gateway-selected | `/api/v2/...` | 검증된 JWT의 단일 `allowedTenants`, `clinicId`, `allowedClinicIds` membership | claim 범위를 먼저 검증하고 downstream의 tenant-aware 조회에서 tenant-clinic 관계를 검증해 내부 scope 생성 |
+| Reserved version root | `/api/v1/...`, `/api/v2/...` | tenant 선택 경계가 아니므로 허용하지 않음 | tenant-aware controller에 매핑하지 않고 pre-auth path validation에서 404로 종료 |
 
-Gateway-selected endpoint는 path-selected endpoint의 예외적인 호환 경계다. 현재 v2 ingress는
-claim membership을 검증하지만 중앙 DB clinic ownership guard를 일괄 수행하지 않으며,
-각 downstream tenant-aware 조회가 관계 검증을 맡는다. 신규 endpoint는 어느 모드를
-사용하는지 KDoc과 security test에 명시해야 한다. 다중 tenant JWT에서 임의의 첫 값을
-선택하거나 `/api/v2`에서 `TenantContext`로 fallback하는 동작은 금지한다.
+모든 비공개 HTTP endpoint는 path-selected 모드만 사용한다. 다중 tenant JWT에서도
+URL의 canonical `tenantCode`와 `allowedTenants` membership을 함께 검증하며,
+임의의 첫 claim 값을 선택하거나 reserved version root에서 `TenantContext`로
+fallback하는 동작은 금지한다.
 
 #### Logical Key 규칙
 
@@ -327,7 +326,7 @@ business key가 다른 tenant에서 재사용될 때 충돌·오염·cross-tenan
 | tenant별 DB schema 분리 | tenant 수만큼 Flyway·connection routing·운영 점검이 갈라지고 기존 단일 schema migration 자산을 직접 재사용하기 어렵다. 현재 규모에는 row-level 격리가 더 단순하다. |
 | tenant별 database 분리 | provisioning·connection pool·backup·관측·장애 복구 비용이 tenant 수에 비례한다. 규제 또는 물리 격리 요구가 생기기 전에는 운영 복잡도가 이득보다 크다. |
 | subdomain만으로 tenant 선택 | DNS/TLS와 local/test 환경을 복잡하게 만들고 API route만으로 scope를 재현하기 어렵다. Phase 1의 canonical 선택은 path다. |
-| JWT만으로 모든 tenant 선택 | path-selected API에서 요청 대상이 URL에 드러나지 않고 routing과 인증 claim이 결합된다. `/api/v2` Gateway-selected mode만 명시적 예외로 유지한다. |
+| JWT만으로 모든 tenant 선택 | 요청 대상이 URL에 드러나지 않고 routing과 인증 claim이 결합된다. canonical path와 JWT membership을 함께 검증한다. |
 | 모든 PK를 `(tenantGroupId, id)` composite key로 변경 | 기존 전역 surrogate 참조와 migration 비용이 크고, 조회 authority를 명시하는 JOIN guard로 같은 격리 목적을 달성할 수 있다. |
 | `tenantCode`를 내부 FK와 모든 key에 직접 사용 | rename·alias·문자열 collation이 내부 관계와 비동기 key를 흔든다. 외부 slug는 ingress에서 `tenantGroupId`로 해소한다. |
 | locale/국가 코드를 tenant identity로 사용 | 한 tenant가 여러 locale/clinic timezone을 가질 수 있어 데이터 격리 단위와 표시 설정을 혼동한다. |

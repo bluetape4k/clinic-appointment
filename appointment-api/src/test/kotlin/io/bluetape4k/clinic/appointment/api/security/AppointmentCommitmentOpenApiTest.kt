@@ -60,7 +60,7 @@ class AppointmentCommitmentOpenApiTest {
             .orEmpty()
         val root = JsonMapper.builder().build().readTree(content)
 
-        val create = root.at("/paths/${pointer("/api/v2/appointment-requests")}/post")
+        val create = root.at("/paths/${pointer("/api/{tenantCode}/appointment-requests")}/post")
         create.isMissingNode.shouldBeFalse()
         create.path("responses").has("202").shouldBeTrue()
         listOf("400", "401", "403", "409", "422", "428", "500", "503").forEach { code ->
@@ -70,12 +70,12 @@ class AppointmentCommitmentOpenApiTest {
         createHeaders["Idempotency-Key"]?.path("required")?.asBoolean() shouldBeEqualTo true
         createHeaders[HttpHeaders.IF_NONE_MATCH]?.path("required")?.asBoolean() shouldBeEqualTo true
 
-        val directCreate = root.at("/paths/${pointer("/api/v2/admin/appointments")}/post")
+        val directCreate = root.at("/paths/${pointer("/api/{tenantCode}/admin/appointments")}/post")
         directCreate.isMissingNode.shouldBeFalse()
         directCreate.path("responses").has("201").shouldBeTrue()
         directCreate.path("responses").has("503").shouldBeTrue()
 
-        val query = root.at("/paths/${pointer("/api/v2/appointments/{id}/commitment")}/get")
+        val query = root.at("/paths/${pointer("/api/{tenantCode}/appointments/{id}/commitment")}/get")
         query.isMissingNode.shouldBeFalse()
         val querySuccess = query.path("responses").path("200")
         querySuccess.path("headers").has(HttpHeaders.ETAG).shouldBeTrue()
@@ -83,13 +83,13 @@ class AppointmentCommitmentOpenApiTest {
             .endsWith("/AppointmentCommitmentResponse").shouldBeTrue()
 
         listOf(
-            "/api/v2/appointments/{id}/approve",
-            "/api/v2/appointments/{id}/confirm",
-            "/api/v2/appointments/{id}/change-proposals",
-            "/api/v2/appointments/{id}/cancel",
-            "/api/v2/appointments/{id}/proposals/{proposalId}/expire",
-            "/api/v2/appointments/{id}/proposals/{proposalId}/accept",
-            "/api/v2/appointments/{id}/proposals/{proposalId}/decline",
+            "/api/{tenantCode}/appointments/{id}/approve",
+            "/api/{tenantCode}/appointments/{id}/confirm",
+            "/api/{tenantCode}/appointments/{id}/change-proposals",
+            "/api/{tenantCode}/appointments/{id}/cancel",
+            "/api/{tenantCode}/appointments/{id}/proposals/{proposalId}/expire",
+            "/api/{tenantCode}/appointments/{id}/proposals/{proposalId}/accept",
+            "/api/{tenantCode}/appointments/{id}/proposals/{proposalId}/decline",
         ).forEach { path ->
             val operation = root.at("/paths/${pointer(path)}/post")
             operation.isMissingNode.shouldBeFalse()

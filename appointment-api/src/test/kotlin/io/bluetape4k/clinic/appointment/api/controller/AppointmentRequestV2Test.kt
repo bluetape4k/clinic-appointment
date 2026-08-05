@@ -63,7 +63,7 @@ class AppointmentRequestV2Test {
     @Test
     fun `patient request becomes proposed 202 and forwards only gateway actor and headers`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = CustomerAppointmentV2Controller(service, ActorContextResolver())
+        val controller = CustomerAppointmentController(service, ActorContextResolver())
 
         val response = controller.requestAppointment(
             tenantCode = "tenant-a",
@@ -85,7 +85,7 @@ class AppointmentRequestV2Test {
     @Test
     fun `rollback closes only new customer ingress while existing customer mutation stays available`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = CustomerAppointmentV2Controller(
+        val controller = CustomerAppointmentController(
             service,
             ActorContextResolver(),
             ingressEnabled = false,
@@ -126,7 +126,7 @@ class AppointmentRequestV2Test {
 
     @Test
     fun `patient request rejects ambiguous clinic scope before application service`() {
-        val controller = CustomerAppointmentV2Controller(
+        val controller = CustomerAppointmentController(
             FakeAppointmentCommitmentApplicationService(),
             ActorContextResolver(),
         )

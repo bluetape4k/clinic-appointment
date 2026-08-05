@@ -132,7 +132,7 @@ field는 기존 strict deserialization 계약에 따라 400이며, 알려진 con
 
 ### 제거 대상
 
-- `AdminAppointmentV2Controller`, `CustomerAppointmentV2Controller`의
+- `AdminAppointmentController`, `CustomerAppointmentController`의
   `V2` 명명은 route 의미가 없으므로 구현 완료 후 일반 명칭으로 정리한다.
   파일 이동/rename은 동작 변경과 분리 가능한 경우에만 수행한다.
 - `allowedTenants.singleOrNull()`을 tenant 선택 근거로 사용하는 로직

@@ -225,20 +225,28 @@ class SecurityConfig {
                         "/v3/api-docs/**",
                     )
                     .permitAll()
-                    .requestMatchers("/api/v2/admin/**")
-                    .hasRole(SchedulingRole.ADMIN)
-                    .requestMatchers(HttpMethod.POST, "/api/v2/appointment-requests")
-                    .hasRole(SchedulingRole.PATIENT)
+                    // Commitment routes must be evaluated before the generic tenant
+                    // read/write rules. The path tenant is the only selector and the
+                    // tenant manager verifies it against the authenticated grant set.
+                    .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/appointment-requests")
+                    .access(patientTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(
                         HttpMethod.POST,
-                        "/api/v2/appointments/*/proposals/*/accept",
-                        "/api/v2/appointments/*/proposals/*/decline",
+                        "/api/{tenantCode}/appointments/*/proposals/*/accept",
+                        "/api/{tenantCode}/appointments/*/proposals/*/decline",
                     )
-                    .hasRole(SchedulingRole.PATIENT)
-                    .requestMatchers(HttpMethod.GET, "/api/v2/appointments/*/commitment")
-                    .hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.PATIENT)
-                    .requestMatchers("/api/v2/**")
-                    .hasRole(SchedulingRole.ADMIN)
+                    .access(patientTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/appointments/*/commitment")
+                    .access(commitmentReadTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/{tenantCode}/appointments/*/approve",
+                        "/api/{tenantCode}/appointments/*/confirm",
+                        "/api/{tenantCode}/appointments/*/proposals/*/expire",
+                        "/api/{tenantCode}/appointments/*/cancel",
+                        "/api/{tenantCode}/appointments/*/change-proposals",
+                    )
+                    .access(commitmentAdminTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(
                         "/api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/**",
                     )
@@ -324,6 +332,33 @@ class SecurityConfig {
             .build()
 
     private fun adminTenantAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasRole(SchedulingRole.ADMIN),
+            tenantAuthorizationManager,
+        )
+
+    private fun patientTenantAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasRole(SchedulingRole.PATIENT),
+            tenantAuthorizationManager,
+        )
+
+    private fun commitmentReadTenantAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(
+                SchedulingRole.ADMIN,
+                SchedulingRole.PATIENT,
+            ),
+            tenantAuthorizationManager,
+        )
+
+    private fun commitmentAdminTenantAccess(
         tenantAuthorizationManager: TenantAuthorizationManager,
     ): AuthorizationManager<RequestAuthorizationContext> =
         AuthorizationManagers.allOf(

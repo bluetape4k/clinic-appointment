@@ -66,6 +66,9 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.Test
+import io.mockk.clearMocks
+import io.mockk.spyk
+import io.mockk.verify
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.time.Duration
@@ -113,6 +116,20 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
 
         response.appointmentId shouldBeEqualTo created.commitment.appointmentId
         response.commitmentId shouldBeEqualTo created.commitment.id
+    }
+
+    @Test
+    fun `query keeps the single appointment lookup budget`() {
+        val created = confirmDirect(commandService(CLOCK), "single-query-budget")
+        val resolver = spyk(accessResolver())
+        val service = applicationService(
+            AppointmentCommitmentProperties(mode = AppointmentCommitmentMode.OFF),
+            accessResolver = resolver,
+        )
+
+        service.query(adminActor(), created.commitment.appointmentId)
+
+        verify(exactly = 1) { resolver.requireAppointmentAccess(any(), created.commitment.appointmentId) }
     }
 
     @Test
@@ -488,6 +505,45 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
     }
 
     @Test
+    fun `direct create keeps the two lookup budget`() {
+        val directCreateResolver = spyk(accessResolver())
+        val directCreateService = writableApplicationService(accessResolver = directCreateResolver)
+
+        directCreateService.directCreate(adminActor(), "budget-direct-create-01", true, directCreateRequest("budget-direct-create"))
+
+        verify(exactly = 1) { directCreateResolver.resolvePlan(any(), clinic.planId) }
+        verify(exactly = 1) { directCreateResolver.requireConsentAuthority(any(), any()) }
+    }
+
+    @Test
+    fun `direct confirm keeps the two lookup budget`() {
+        val requestResolver = spyk(accessResolver())
+        val requestService = writableApplicationService(accessResolver = requestResolver)
+        val requested =
+            requestService.requestAppointment(
+                patientActor(),
+                "budget-direct-confirm-request-01",
+                true,
+                createAppointmentRequest("budget-direct-confirm-request"),
+            )
+        clearMocks(requestResolver, answers = false)
+
+        requestService.directConfirm(
+            adminActor(),
+            requested.appointmentId,
+            requested.version,
+            "budget-direct-confirm-01",
+            DirectConfirmRequest(
+                proposalId = requested.proposalId,
+                evidence = consentEvidence("budget-direct-confirm-admin"),
+            ),
+        )
+
+        verify(exactly = 1) { requestResolver.requireAppointmentAccess(any(), requested.appointmentId) }
+        verify(exactly = 1) { requestResolver.requireConsentAuthority(any(), any()) }
+    }
+
+    @Test
     fun `direct confirm keeps the policy snapshot pinned when the proposal was created`() {
         val original = CurrentPolicySnapshot(42L, effectivePolicy())
         val newer = CurrentPolicySnapshot(
@@ -694,6 +750,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
         planningResolver: AppointmentCommitmentPlanningResolver = FakePlanningResolver(),
         appointmentMemberResolver: AppointmentMemberResolver = VerifiedMemberResolver,
         consentMutation: ConsentEvidenceMutation = ConsentEvidenceMutation.NONE,
+        accessResolver: AppointmentCommitmentAccessResolver = accessResolver(),
     ) = applicationService(
         properties =
             AppointmentCommitmentProperties(
@@ -705,6 +762,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
         planningResolver = planningResolver,
         appointmentMemberResolver = appointmentMemberResolver,
         consentMutation = consentMutation,
+        accessResolver = accessResolver,
     )
 
     private fun applicationService(
@@ -717,21 +775,11 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
         planningResolver: AppointmentCommitmentPlanningResolver = FakePlanningResolver(),
         appointmentMemberResolver: AppointmentMemberResolver = VerifiedMemberResolver,
         consentMutation: ConsentEvidenceMutation = ConsentEvidenceMutation.NONE,
+        accessResolver: AppointmentCommitmentAccessResolver = accessResolver(),
     ) = DefaultAppointmentCommitmentApplicationService(
         database = database,
         properties = properties,
-        accessResolver =
-            AppointmentCommitmentAccessResolver(
-                database = database,
-                patientSubjectFingerprintResolver =
-                    PatientSubjectFingerprintResolver { _, patientSubjectId ->
-                        if (patientSubjectId == "patient-subject-ok") {
-                            clinic.patientReferenceFingerprint
-                        } else {
-                            "0".repeat(64)
-                        }
-                    },
-            ),
+        accessResolver = accessResolver,
         commandService = commandService(CLOCK),
         policySnapshotResolver = policySnapshotResolver ?: object : AppointmentCommitmentPolicySnapshotResolver {
                 override fun resolve(
@@ -767,6 +815,19 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
     ).also {
         ensurePlanRevisionAggregateTables()
     }
+
+    private fun accessResolver() =
+        AppointmentCommitmentAccessResolver(
+            database = database,
+            patientSubjectFingerprintResolver =
+                PatientSubjectFingerprintResolver { _, patientSubjectId ->
+                    if (patientSubjectId == "patient-subject-ok") {
+                        clinic.patientReferenceFingerprint
+                    } else {
+                        "0".repeat(64)
+                    }
+                },
+        )
 
     private fun ensurePlanRevisionAggregateTables() {
         transaction(database) {
@@ -819,6 +880,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
             authenticatedAt = NOW,
             correlationId = "correlation-admin",
             selectedClinicId = clinic.clinicId,
+            selectedTenantCode = "tenant-task6",
         )
 
     private fun patientActor() =
@@ -836,6 +898,7 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
             authenticatedAt = NOW,
             correlationId = "correlation-patient",
             selectedClinicId = clinic.clinicId,
+            selectedTenantCode = "tenant-task6",
         )
 
     private fun effectivePolicy(

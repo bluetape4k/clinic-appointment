@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * Gateway가 인증한 고객이 가예약을 만들고 변경 proposal을 결정하는 v2 API이다.
+ * Gateway가 인증한 고객이 가예약을 만들고 변경 proposal을 결정하는 commitment API이다.
  *
  * 인증 actor와 SaaS scope는 [ActorContextResolver]에서만 얻는다. body는 일정 의도와
  * opaque 동의 증빙만 표현하며 HTTP 멱등성·version precondition은 header로 분리한다.
@@ -45,7 +45,7 @@ import org.springframework.web.bind.annotation.RestController
     name = ["api-enabled"],
     havingValue = "true",
 )
-class CustomerAppointmentV2Controller(
+class CustomerAppointmentController(
     private val service: AppointmentCommitmentApplicationService,
     private val actorContextResolver: ActorContextResolver,
     @Value("\${appointment.commitment.ingress-enabled:true}")

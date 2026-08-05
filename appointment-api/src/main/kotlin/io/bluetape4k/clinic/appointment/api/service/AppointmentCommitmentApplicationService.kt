@@ -26,7 +26,7 @@ import io.bluetape4k.clinic.appointment.api.security.ActorContext
  * `evidenceAuthority`의 tenant namespace도 검증해야 한다.
  *
  * Task 9의 feature control/wiring이 이 계약의 구현체를 등록하고 API property를 켤 때만
- * v2 controller가 활성화된다.
+ * commitment controller가 활성화된다.
  */
 interface AppointmentCommitmentApplicationService {
 

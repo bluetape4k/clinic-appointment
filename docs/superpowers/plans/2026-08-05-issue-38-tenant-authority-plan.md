@@ -16,7 +16,7 @@
 |---|---|---|
 | Canonical slug and pre-auth guard | Create `TenantCodeRules.kt` and `TenantPathValidationFilter.kt`; modify `TenantPathResolver.kt`, `JwtTokenParser.kt`, `SecurityConfig.kt` | One lower-case ASCII tenant-code rule is shared by path, JWT, matcher, actor, and error classification; malformed/`v1`/`v2` roots fail closed before JWT parsing. |
 | Tenant filter lifecycle | Modify `TenantContextFilter.kt`, `TenantContextFilterTest.kt`, `TenantPathValidationFilterTest.kt` | Active-tenant lookup failures have a privacy-safe stable error, stale ThreadLocal state is cleared at request boundaries, and valid requests restore context after success/error/async dispatch. |
-| Commitment controllers | Modify `AdminAppointmentV2Controller.kt`, `CustomerAppointmentV2Controller.kt`, `AppointmentCommitmentQueryController.kt`; rename controller classes only if compilation proves no external reference | Class mappings use `/api/{tenantCode}` and every actor resolution receives the path tenant. |
+| Commitment controllers | Modify `AdminAppointmentController.kt`, `CustomerAppointmentController.kt`, `AppointmentCommitmentQueryController.kt`; rename controller classes only if compilation proves no external reference | Class mappings use `/api/{tenantCode}` and every actor resolution receives the path tenant. |
 | Actor and service scope boundary | Modify `AppointmentCommitmentHttpSupport.kt`, `ActorContextResolver.kt` (`ActorContext` data class and resolver), `TenantAuthorizationManager.kt`, `AppointmentCommitmentAccessResolver.kt`, `ActorContextResolverTest.kt`, `AppointmentCommitmentAccessResolverTest.kt`, controller unit tests; inspect `DefaultAppointmentCommitmentApplicationService.kt` call sites | Multi-tenant JWTs select one canonical path tenant in `ActorContext.selectedTenantCode`; all downstream scope/consent lookups use it; tenant-authority `singleOrNull()` is removed; clinic claims remain fail-closed. The existing service call graph is used to assert route-specific lookup bounds without adding a cross-layer cache. |
 | Security boundary | Modify `SecurityConfig.kt`, `AppointmentCommitmentSecurityIntegrationTest.kt`, `ProfileReevaluationEndpointSecurityTest.kt` | Commitment-specific patient/admin/read rules are tenant-aware and precede generic tenant writes; all ten routes have role, tenant, invalid-token, and active/inactive-tenant coverage. |
 | Stable error routing | Modify `AppointmentCommitmentApiException.kt`, `AppointmentCommitmentExceptionResolutionTest.kt` | Error registry recognizes only canonical tenant commitment routes and shares reserved-root rejection; scope-hidden resources retain the documented 403 privacy contract. |
@@ -131,8 +131,8 @@ Run the Task 1 command again. Expected: all path and JWT tests pass, including e
 - Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/security/ActorContextResolver.kt`
 - Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/security/TenantAuthorizationManager.kt`
 - Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/service/AppointmentCommitmentAccessResolver.kt`
-- Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/controller/AdminAppointmentV2Controller.kt`
-- Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/controller/CustomerAppointmentV2Controller.kt`
+- Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/controller/AdminAppointmentController.kt`
+- Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/controller/CustomerAppointmentController.kt`
 - Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/controller/AppointmentCommitmentQueryController.kt`
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/security/ActorContextResolverTest.kt`
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/service/AppointmentCommitmentAccessResolverTest.kt`
@@ -169,7 +169,7 @@ Use these class mappings:
 @RequestMapping("/api/{tenantCode}/appointments")
 ```
 
-Add `@PathVariable tenantCode: String` to every commitment handler and pass it to `resolveAppointmentActor`. Keep resource suffixes unchanged so the new paths match the approved spec table. If class renaming is performed, rename `AdminAppointmentV2Controller`/`CustomerAppointmentV2Controller` and their direct unit-test references together; do not keep duplicate beans or legacy route aliases.
+Add `@PathVariable tenantCode: String` to every commitment handler and pass it to `resolveAppointmentActor`. Keep resource suffixes unchanged so the new paths match the approved spec table. If class renaming is performed, rename `AdminAppointmentController`/`CustomerAppointmentController` and their direct unit-test references together; do not keep duplicate beans or legacy route aliases.
 
 - [ ] **Step 4: Run controller/unit tests GREEN**
 

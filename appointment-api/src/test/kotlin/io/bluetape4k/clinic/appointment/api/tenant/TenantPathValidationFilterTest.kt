@@ -91,6 +91,21 @@ class TenantPathValidationFilterTest {
         terminal.called.shouldBeFalse()
     }
 
+    @Test
+    fun `different raw and servlet paths fail closed even when both slugs are canonical`() {
+        val filter = TenantPathValidationFilter()
+        val request = MockHttpServletRequest("GET", "/api/tenant-a/clinics").apply {
+            servletPath = "/api/tenant-b/clinics"
+        }
+        val response = MockHttpServletResponse()
+        val terminal = CapturingFilterChain()
+
+        filter.doFilter(request, response, terminal)
+
+        response.status shouldBeEqualTo HttpStatus.NOT_FOUND.value()
+        terminal.called.shouldBeFalse()
+    }
+
     private data class PathShape(
         val requestUri: String,
         val servletPath: String = requestUri,

@@ -47,7 +47,7 @@ import org.springframework.web.bind.annotation.RestController
     name = ["api-enabled"],
     havingValue = "true",
 )
-class AdminAppointmentV2Controller(
+class AdminAppointmentController(
     private val service: AppointmentCommitmentApplicationService,
     private val actorContextResolver: ActorContextResolver,
     @Value("\${appointment.commitment.ingress-enabled:true}")

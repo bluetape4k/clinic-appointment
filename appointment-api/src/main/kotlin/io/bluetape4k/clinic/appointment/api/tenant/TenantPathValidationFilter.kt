@@ -25,7 +25,9 @@ class TenantPathValidationFilter : OncePerRequestFilter() {
     ) {
         val paths = request.pathRepresentations()
         val apiPaths = paths.filter(::isApiPath)
-        if (apiPaths.any { !isValidApiRepresentation(it) }) {
+        if (apiPaths.isNotEmpty() &&
+            (!request.hasConsistentServletPath() || apiPaths.any { !isValidApiRepresentation(it) })
+        ) {
             SecurityErrorResponseWriter.write(response, PlanFoundationError.RESOURCE_NOT_FOUND)
             return
         }
@@ -69,6 +71,17 @@ class TenantPathValidationFilter : OncePerRequestFilter() {
             add(pathInfo)
         }
     }.distinct().filter(String::isNotBlank)
+
+    private fun HttpServletRequest.hasConsistentServletPath(): Boolean {
+        val requestPath = requestURI.removeContextPath(contextPath.orEmpty())
+        val servletPath = servletPath
+        val pathInfo = pathInfo.orEmpty()
+        return if (servletPath.isBlank()) {
+            pathInfo.isBlank() || pathInfo == requestPath
+        } else {
+            servletPath + pathInfo == requestPath
+        }
+    }
 
     private fun String.removeContextPath(contextPath: String): String =
         if (contextPath.isNotBlank() && contextPath != "/" && startsWith(contextPath)) {

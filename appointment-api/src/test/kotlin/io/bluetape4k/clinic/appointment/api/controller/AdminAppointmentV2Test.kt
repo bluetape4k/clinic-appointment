@@ -62,7 +62,7 @@ class AdminAppointmentV2Test {
     @Test
     fun `admin approval forwards If-Match version and returns result ETag`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = AdminAppointmentV2Controller(service, ActorContextResolver())
+        val controller = AdminAppointmentController(service, ActorContextResolver())
 
         val response = controller.approveProposal(
             tenantCode = "tenant-a",
@@ -83,7 +83,7 @@ class AdminAppointmentV2Test {
     @Test
     fun `admin cancellation forwards registered reason with mutation preconditions`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = AdminAppointmentV2Controller(service, ActorContextResolver())
+        val controller = AdminAppointmentController(service, ActorContextResolver())
 
         val response = controller.cancelAppointment(
             tenantCode = "tenant-a",
@@ -103,7 +103,7 @@ class AdminAppointmentV2Test {
     @Test
     fun `rollback closes only direct creation while existing administrator mutation stays available`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = AdminAppointmentV2Controller(
+        val controller = AdminAppointmentController(
             service,
             ActorContextResolver(),
             ingressEnabled = false,
@@ -158,7 +158,7 @@ class AdminAppointmentV2Test {
 
     @Test
     fun `service principal cannot invoke administrator booking`() {
-        val controller = AdminAppointmentV2Controller(
+        val controller = AdminAppointmentController(
             FakeAppointmentCommitmentApplicationService(),
             ActorContextResolver(),
         )
@@ -186,7 +186,7 @@ class AdminAppointmentV2Test {
 
     @Test
     fun `administrator booking rejects ambiguous clinic scope`() {
-        val controller = AdminAppointmentV2Controller(
+        val controller = AdminAppointmentController(
             FakeAppointmentCommitmentApplicationService(),
             ActorContextResolver(),
         )
@@ -213,7 +213,7 @@ class AdminAppointmentV2Test {
     @Test
     fun `administrator booking uses the gateway selected clinic within a multi clinic grant`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = AdminAppointmentV2Controller(service, ActorContextResolver())
+        val controller = AdminAppointmentController(service, ActorContextResolver())
         val principal = adminPrincipal().copy(
             clinicId = 7L,
             allowedClinicIds = setOf(7L, 8L),
@@ -237,7 +237,7 @@ class AdminAppointmentV2Test {
     @Test
     fun `administrator booking selects the path tenant within a multi tenant grant`() {
         val service = FakeAppointmentCommitmentApplicationService()
-        val controller = AdminAppointmentV2Controller(service, ActorContextResolver())
+        val controller = AdminAppointmentController(service, ActorContextResolver())
         val principal = adminPrincipal().copy(
             allowedTenants = setOf("tenant-a", "tenant-b"),
         )
