@@ -21,7 +21,7 @@ import org.springframework.test.context.TestPropertySource
 )
 @TestPropertySource(
     properties = [
-        "scheduling.security.jwt.secret=dGVzdC1zZWNyZXQta2V5LWZvci1hcHBvaW50bWVudC1zY2hlZHVsaW5nLXN5c3RlbS01MTItYml0LW1hdGVyaWFsIQ==",
+        "scheduling.security.jwt.secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
     ],
 )
 class SecurityConfigFilterOrderTest {
