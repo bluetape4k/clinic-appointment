@@ -13,8 +13,8 @@
 | 관점 | 1차 결과 | 수정 후 판정 | 반영 위치 |
 |---|---|---|---|
 | Security | REQUEST CHANGES: multi-tenant JWT가 `singleOrNull()`에 남음, raw matcher variable 신뢰, spoof header/body와 pre-auth path 부족 | PASS 조건 충족: selected path tenant를 `ActorContext`와 access resolver까지 전달하고, shared canonical rule로 matcher를 재검증 | Spec 권한 흐름/실패 계약, Plan Tasks 1–3, 위험표 |
-| Stability | P1 후보: malformed path가 JWT보다 늦음, filter DB failure가 generic 5xx, stale ThreadLocal, fixture의 process-global Exposed DB, filter 중복 등록 | PASS 조건 충족: pre-auth filter 순서·chain-only registration, 명시적 internal error, request 경계 cleanup, default DB 복구와 resource lock을 계획 | Spec 권한 흐름, Plan Tasks 1/3/5/8 |
-| Performance | P0/P1 없음. route/JWT/context hot path와 duplicate tenant lookup 증거가 부족 | PASS 조건 충족: token/claim/code 상한, 두 번의 의도된 lookup count, no-cache 결정과 bounded focused evidence를 명시 | Plan Tasks 1/2/8, 위험표 |
+| Stability | P1 후보: malformed path가 JWT보다 늦음, filter DB failure가 generic 5xx, stale ThreadLocal, fixture의 process-global Exposed DB, filter 중복 등록, success debug log의 internal tenant ID | PASS 조건 충족: pre-auth filter 순서·chain-only registration, 명시적 internal error, request 경계 cleanup, default DB 복구와 resource lock, success log에서 `tenantGroupId` 제거와 outage log sanitization을 계획 | Spec 권한 흐름/실패 계약, Plan Tasks 1/3/5/8 |
+| Performance | P1 후보: service call graph를 무시한 보편적 lookup count 주장 | PASS 조건 충족: filter 1회와 route-specific service budget(1회 또는 2회), role-denied filter 1/service 0, no-cache 결정과 bounded focused evidence를 명시 | Spec 원칙 8, Plan Tasks 2/8, 위험표 |
 | API contract | P0/P1 없음. 10개 route inventory, error envelope, OpenAPI operation uniqueness가 더 필요 | PASS 조건 충족: exact 10 operations, foundation/commitment envelope 구분, fail-closed 403 scope 계약으로 고정 | Spec 외부 경로/실패 계약, Plan Tasks 3/4 |
 | Kotlin/Spring/testing | REQUEST CHANGES: filter bean registration, ActorContext 생성부 호환성, DB fixture와 실제 security-chain 증거 부족 | PASS 조건 충족: disabled servlet registration, nullable default field, 전체 생성부 inventory, MockMvc/security-chain probe와 순차 실행을 명시 | Plan Tasks 1/2/3/5/8 |
 | Documentation/DoD | P0/P1 없음. active/historical `v2` 분류, bilingual README, rollout, live PR readback 필요 | PASS 조건 충족: active route/example scan, residual allowlist, atomic rollout/rollback, Korean review와 PR head/CI readback을 명시 | Plan Tasks 6/9, 위험표 |
@@ -50,6 +50,19 @@
 - tenant DB lookup exception: 일반 요청 500 `INTERNAL_ERROR`, policy 요청
   `POLICY_INTERNAL_ERROR`; 404/403으로 위장하지 않고 correlation ID와
   sanitized tenant code만 structured log에 남긴다.
+- `TenantContextFilter`의 정상 debug log에는 내부 `tenantGroupId`를 남기지 않고,
+  장애 log도 correlation ID와 sanitized tenant code만 허용한다.
+
+## 조회 예산 결정
+
+filter는 인증된 요청마다 active tenant를 한 번 조회한다. 기존
+`DefaultAppointmentCommitmentApplicationService` call graph를 그대로 기준으로
+삼아 `requestAppointment`, `directCreate`, `decideProposal`, `directConfirm`은
+service 경계에서 두 번, `approveProposal`, `declineProposal`,
+`createChangeProposal`, `query`, `expireProposal`, `cancelAppointment`은 한 번을
+허용한다. role-denied 요청은 filter 한 번/service 0이다. 모든 focused test는
+선택 tenant와 이 route-specific counter를 함께 검증하며, cross-layer cache는
+추가하지 않는다.
 
 ## 안정성·운영 결정
 

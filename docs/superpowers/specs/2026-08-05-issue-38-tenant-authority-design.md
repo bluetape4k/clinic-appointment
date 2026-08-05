@@ -68,8 +68,11 @@ tenant 선택 방식으로 사용한다. 기존 `/api/v2/...` Gateway-selected �
    반환한다. 일반 lookup failure는 privacy-safe `INTERNAL_ERROR`(HTTP 500),
    policy lookup failure는 `POLICY_INTERNAL_ERROR`로 반환하며 404/403으로
    위장하지 않는다. correlation ID와 sanitized tenant code만 structured log에
-   남긴다. 요청 시작과 종료 시 stale `TenantContext`를 지우고,
-   성공·예외·async dispatch 모두에서 context를 복구한다.
+   남긴다. 정상 tenant context debug log에는 내부 `tenantGroupId`를 남기지
+   않는다. 장애 로그도 correlation ID와 sanitized tenant code만 허용하며
+   token, 내부 ID, 원문 식별자는 기록하지 않는다. 요청 시작과 종료 시 stale
+   `TenantContext`를 지우고, 성공·예외·async dispatch 모두에서 context를
+   복구한다.
 5. Spring Security matcher는 raw matcher variable을 신뢰하지 않고
    `TenantCodeRules`로 canonical/reserved 검사를 다시 한 뒤 path tenant
    membership과 endpoint role/scope를 함께 검사한다.
@@ -83,6 +86,12 @@ tenant 선택 방식으로 사용한다. 기존 `/api/v2/...` Gateway-selected �
 7. application service와 repository는 `tenantGroupId` 및 clinic ownership을
    내부 scope로 확인한다. 외부 요청 body/header의 tenant 또는 내부 key는
    권위 값으로 사용하지 않는다.
+8. active tenant lookup budget은 route별 기존 call graph를 보존한다. filter는
+   인증된 요청마다 한 번 조회하고, `requestAppointment`, `directCreate`,
+   `decideProposal`, `directConfirm`은 endpoint scope/consent 경계에서 두 번,
+   나머지 commitment operation은 한 번 조회한다. role-denied 요청은 filter 한
+   번에서 끝나며 service lookup은 없다. 이 이슈에서는 cross-layer cache를
+   추가하지 않는다.
 
 `X-Tenant-Code`, `X-Clinic-Id`, `tenantGroupId` 같은 header는 이 계약에
 추가하지 않는다. 향후 Gateway assertion이 필요해지더라도 서명된 scope와
@@ -171,6 +180,8 @@ security matcher, 문서와 테스트를 하나의 PR에서 함께 갱신한다.
   전파/복구가 테스트된다.
 - [ ] filter foundation error와 endpoint `SCOPE_FORBIDDEN` envelope가
   구분되고, lookup outage가 privacy-safe internal error로 고정된다.
+- [ ] filter와 기존 service call graph의 route-specific lookup budget이
+  focused test counter로 고정되고, 내부 `tenantGroupId`가 로그에 노출되지 않는다.
 - [ ] OpenAPI, API 문서, 운영 runbook에 `/api/v2` 활성 경로가 남지 않는다.
 - [ ] rollout runbook이 mixed old/new pod traffic을 금지하고 atomic cutover,
   smoke, rollback readiness를 명시한다.
