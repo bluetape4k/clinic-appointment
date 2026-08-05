@@ -224,6 +224,45 @@ class JwtTokenParserTest {
         principal.authorities.map { it.authority }.shouldNotContain("SCOPE_policy write")
     }
 
+    @Test
+    fun `allowed tenant claims use the canonical path slug without implicit normalization`() {
+        parser.parse(
+            TestJwtProvider.createToken(allowedTenants = listOf("Tenant-A")),
+        ).shouldBeNull()
+        parser.parse(
+            TestJwtProvider.createToken(allowedTenants = listOf("tenant_a")),
+        ).shouldBeNull()
+        parser.parse(
+            TestJwtProvider.createToken(allowedTenants = listOf("v1")),
+        ).shouldBeNull()
+
+        parser.parse(
+            TestJwtProvider.createToken(allowedTenants = listOf("tenant-a")),
+        ).shouldNotBeNull()
+    }
+
+    @Test
+    fun `allowed tenant claims deduplicate and remain bounded`() {
+        val duplicateValues = List(64) { "tenant-a" }
+        val maximumValues = (0 until 64).map { "tenant-$it" }
+
+        val duplicatePrincipal = parser.parse(
+            TestJwtProvider.createToken(allowedTenants = duplicateValues),
+        )
+        duplicatePrincipal.shouldNotBeNull()
+        duplicatePrincipal.allowedTenants shouldBeEqualTo setOf("tenant-a")
+
+        val maximumPrincipal = parser.parse(
+            TestJwtProvider.createToken(allowedTenants = maximumValues),
+        )
+        maximumPrincipal.shouldNotBeNull()
+        maximumPrincipal.allowedTenants.size shouldBeEqualTo 64
+
+        parser.parse(
+            TestJwtProvider.createToken(allowedTenants = maximumValues + "tenant-overflow"),
+        ).shouldBeNull()
+    }
+
     private fun properties(secret: String): JwtSecurityProperties =
         JwtSecurityProperties(
             enabled = true,

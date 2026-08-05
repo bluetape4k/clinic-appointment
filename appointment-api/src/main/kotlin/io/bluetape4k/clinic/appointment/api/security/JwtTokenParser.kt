@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.security
 
+import io.bluetape4k.clinic.appointment.api.tenant.TenantCodeRules
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
 import io.jsonwebtoken.Claims
@@ -45,7 +46,6 @@ class JwtTokenParser(
         private const val MAX_TOKEN_LENGTH = 8_192
         private const val MAX_COLLECTION_SIZE = 64
         private val SAFE_IDENTIFIER = Regex("[A-Za-z0-9][A-Za-z0-9._:@/-]{0,159}")
-        private val SAFE_TENANT_CODE = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
         private val SAFE_SCOPE = Regex("[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}")
     }
 
@@ -86,7 +86,7 @@ class JwtTokenParser(
             val roles = claims.readRequiredStringSet(CLAIM_ROLES)
                 .onEach { require(it in ALLOWED_ROLES) { "unknown role" } }
             val allowedTenants = claims.readRequiredStringSet(CLAIM_ALLOWED_TENANTS)
-                .onEach { require(SAFE_TENANT_CODE.matches(it)) { "invalid tenant code" } }
+                .onEach { require(TenantCodeRules.isCanonical(it)) { "invalid tenant code" } }
             val allowedClinicIds = claims.readLongSet(CLAIM_ALLOWED_CLINIC_IDS)
             val clinicId = claims[CLAIM_CLINIC_ID]?.let(::readPositiveLong)
             require(clinicId == null || clinicId in allowedClinicIds) {

@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.api.config.isBookingReliabilityRequestPa
 import io.bluetape4k.clinic.appointment.api.config.isWaitlistRequestPath
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiError
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilter
+import io.bluetape4k.clinic.appointment.api.tenant.TenantPathValidationFilter
 import io.bluetape4k.clinic.appointment.api.waitlist.WaitlistApiError
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.logging.KLogging
@@ -109,6 +110,13 @@ class SecurityConfig {
     ): FilterRegistrationBean<TenantContextFilter> =
         securityChainOnlyRegistration(filter)
 
+    /** tenant path 문법 검증은 embedded servlet 등록 없이 Security chain에서 한 번만 수행한다. */
+    @Bean
+    fun tenantPathValidationFilterRegistration(
+        filter: TenantPathValidationFilter,
+    ): FilterRegistrationBean<TenantPathValidationFilter> =
+        securityChainOnlyRegistration(filter)
+
     /** correlation ID도 Security exception boundary의 첫 단계에서 정확히 한 번만 생성한다. */
     @Bean
     fun correlationIdFilterRegistration(
@@ -126,6 +134,11 @@ class SecurityConfig {
         jwtTokenParser: JwtTokenParser,
     ): TenantContextFilter =
         TenantContextFilter(tenantGroupRepository, jwtTokenParser)
+
+    /** JWT parser보다 앞서 raw/decoded tenant path 표현을 검증한다. */
+    @Bean
+    fun tenantPathValidationFilter(): TenantPathValidationFilter =
+        TenantPathValidationFilter()
 
     /**
      * endpoint-specific rule에서 재사용하는 공용 tenant policy authorization manager.
@@ -147,6 +160,7 @@ class SecurityConfig {
         http: HttpSecurity,
         jwtAuthenticationFilter: JwtAuthenticationFilter,
         correlationIdFilter: CorrelationIdFilter,
+        tenantPathValidationFilter: TenantPathValidationFilter,
         tenantContextFilter: TenantContextFilter,
         tenantAuthorizationManager: TenantAuthorizationManager,
     ): SecurityFilterChain =
@@ -304,7 +318,8 @@ class SecurityConfig {
                     .anyRequest().authenticated()
             }
             .addFilterBefore(correlationIdFilter, UsernamePasswordAuthenticationFilter::class.java)
-            .addFilterAfter(jwtAuthenticationFilter, CorrelationIdFilter::class.java)
+            .addFilterAfter(tenantPathValidationFilter, CorrelationIdFilter::class.java)
+            .addFilterAfter(jwtAuthenticationFilter, TenantPathValidationFilter::class.java)
             .addFilterAfter(tenantContextFilter, JwtAuthenticationFilter::class.java)
             .build()
 

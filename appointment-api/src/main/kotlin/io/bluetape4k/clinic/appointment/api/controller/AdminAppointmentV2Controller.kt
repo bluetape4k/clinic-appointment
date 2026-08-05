@@ -41,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController
  */
 @Tag(name = "Appointment Commitments - Administrator")
 @RestController
-@RequestMapping("/api/v2")
+@RequestMapping("/api/{tenantCode}")
 @ConditionalOnProperty(
     prefix = "appointment.commitment",
     name = ["api-enabled"],
@@ -73,6 +73,7 @@ class AdminAppointmentV2Controller(
     )
     @PostMapping("/admin/appointments")
     fun directCreate(
+        @PathVariable tenantCode: String,
         authentication: Authentication?,
         servletRequest: HttpServletRequest,
         @Parameter(required = true, example = "direct_01J1M6Y6XRK8N0W2M3P4Q5R6S7")
@@ -84,7 +85,7 @@ class AdminAppointmentV2Controller(
         @Valid @RequestBody request: DirectCreateAppointmentRequest,
     ): ResponseEntity<AppointmentCommitmentResponse> {
         requireAppointmentIngress(ingressEnabled)
-        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
             .requireAdminActor()
         return service.directCreate(
             actor,
@@ -113,6 +114,7 @@ class AdminAppointmentV2Controller(
     )
     @PostMapping("/appointments/{id}/approve")
     fun approveProposal(
+        @PathVariable tenantCode: String,
         authentication: Authentication?,
         servletRequest: HttpServletRequest,
         @PathVariable id: Long,
@@ -124,7 +126,7 @@ class AdminAppointmentV2Controller(
         ifMatch: String?,
         @Valid @RequestBody request: ApproveProposalRequest,
     ): ResponseEntity<AppointmentCommitmentResponse> {
-        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
             .requireAdminActor()
         return service.approveProposal(
             actor,
@@ -151,6 +153,7 @@ class AdminAppointmentV2Controller(
     )
     @PostMapping("/appointments/{id}/confirm")
     fun directConfirm(
+        @PathVariable tenantCode: String,
         authentication: Authentication?,
         servletRequest: HttpServletRequest,
         @PathVariable id: Long,
@@ -162,7 +165,7 @@ class AdminAppointmentV2Controller(
         ifMatch: String?,
         @Valid @RequestBody request: DirectConfirmRequest,
     ): ResponseEntity<AppointmentCommitmentResponse> {
-        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
             .requireAdminActor()
         return service.directConfirm(
             actor,
@@ -189,6 +192,7 @@ class AdminAppointmentV2Controller(
     )
     @PostMapping("/appointments/{id}/proposals/{proposalId}/expire")
     fun expireProposal(
+        @PathVariable tenantCode: String,
         authentication: Authentication?,
         servletRequest: HttpServletRequest,
         @PathVariable id: Long,
@@ -200,7 +204,7 @@ class AdminAppointmentV2Controller(
         @RequestHeader(HttpHeaders.IF_MATCH, required = false)
         ifMatch: String?,
     ): ResponseEntity<AppointmentCommitmentResponse> {
-        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
             .requireAdminActor()
         return service.expireProposal(
             actor,
@@ -228,6 +232,7 @@ class AdminAppointmentV2Controller(
     )
     @PostMapping("/appointments/{id}/cancel")
     fun cancelAppointment(
+        @PathVariable tenantCode: String,
         authentication: Authentication?,
         servletRequest: HttpServletRequest,
         @PathVariable id: Long,
@@ -239,7 +244,7 @@ class AdminAppointmentV2Controller(
         ifMatch: String?,
         @Valid @RequestBody request: CancelAppointmentRequest,
     ): ResponseEntity<AppointmentCommitmentResponse> {
-        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
             .requireAdminActor()
         return service.cancelAppointment(
             actor,
@@ -268,6 +273,7 @@ class AdminAppointmentV2Controller(
     )
     @PostMapping("/appointments/{id}/change-proposals")
     fun createChangeProposal(
+        @PathVariable tenantCode: String,
         authentication: Authentication?,
         servletRequest: HttpServletRequest,
         @PathVariable id: Long,
@@ -279,7 +285,7 @@ class AdminAppointmentV2Controller(
         ifMatch: String?,
         @Valid @RequestBody request: CreateChangeProposalRequest,
     ): ResponseEntity<AppointmentProposalResponse> {
-        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
             .requireAdminActor()
         return service.createChangeProposal(
             actor,

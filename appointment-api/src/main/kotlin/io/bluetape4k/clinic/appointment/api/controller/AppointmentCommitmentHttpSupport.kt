@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.api.security.ActorContextResolver
 import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
+import io.bluetape4k.clinic.appointment.api.tenant.TenantCodeRules
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpHeaders
 import org.springframework.http.ResponseEntity
@@ -25,14 +26,16 @@ import java.util.UUID
  */
 internal fun ActorContextResolver.resolveAppointmentActor(
     authentication: Authentication?,
+    tenantCode: String,
     request: HttpServletRequest,
 ): ActorContext {
+    if (!TenantCodeRules.isCanonical(tenantCode)) {
+        throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_MISMATCH)
+    }
     val principal = authentication
         ?.takeIf(Authentication::isAuthenticated)
         ?.principal as? SchedulingUserPrincipal
         ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
-    val tenantCode = principal.allowedTenants.singleOrNull()
-        ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_MISMATCH)
     val clinicId = principal.clinicId
         ?.takeIf(principal.allowedClinicIds::contains)
         ?: throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_MISMATCH)

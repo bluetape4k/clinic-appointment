@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.security
 
 import io.bluetape4k.clinic.appointment.api.tenant.TenantPathResolver
+import io.bluetape4k.clinic.appointment.api.tenant.TenantCodeRules
 import org.springframework.security.authorization.AuthorizationDecision
 import org.springframework.security.authorization.AuthorizationManager
 import org.springframework.security.authorization.AuthorizationResult
@@ -21,6 +22,9 @@ class TenantAuthorizationManager : AuthorizationManager<RequestAuthorizationCont
         val tenantCode = context.variables["tenantCode"]
             ?: TenantPathResolver.resolve(context.request)
             ?: return AuthorizationDecision(false)
+        if (!TenantCodeRules.isCanonical(tenantCode)) {
+            return AuthorizationDecision(false)
+        }
 
         val principal = authentication.get().principal as? SchedulingUserPrincipal
             ?: return AuthorizationDecision(false)

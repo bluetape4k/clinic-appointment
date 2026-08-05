@@ -28,6 +28,8 @@ import java.time.Instant
  * @property correlationId 길이가 제한된 request trace ID. causation event ID가 아니다.
  * @property selectedClinicId 이번 command에서 Gateway/path가 선택하고 [allowedClinicIds]로
  * 재검증한 병원이다. tenant-wide command이면 `null`이다.
+ * @property selectedTenantCode 이번 commitment request path에서 선택하고
+ * [allowedTenantCodes]로 재검증한 tenant이다. background/policy actor에는 `null`일 수 있다.
  */
 data class ActorContext(
     val actorId: String,
@@ -43,6 +45,7 @@ data class ActorContext(
     val authenticatedAt: Instant,
     val correlationId: String,
     val selectedClinicId: Long? = null,
+    val selectedTenantCode: String? = null,
 ) : Serializable {
     private companion object {
         const val serialVersionUID = 1L
@@ -101,6 +104,7 @@ class ActorContextResolver {
             authenticatedAt = principal.authenticatedAt,
             correlationId = correlationId,
             selectedClinicId = clinicId,
+            selectedTenantCode = tenantCode,
         )
     }
 }

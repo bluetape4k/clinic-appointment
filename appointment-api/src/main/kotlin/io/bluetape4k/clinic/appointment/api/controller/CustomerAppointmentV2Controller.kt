@@ -39,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController
  */
 @Tag(name = "Appointment Commitments - Customer")
 @RestController
-@RequestMapping("/api/v2")
+@RequestMapping("/api/{tenantCode}")
 @ConditionalOnProperty(
     prefix = "appointment.commitment",
     name = ["api-enabled"],
@@ -72,6 +72,7 @@ class CustomerAppointmentV2Controller(
     )
     @PostMapping("/appointment-requests")
     fun requestAppointment(
+        @PathVariable tenantCode: String,
         authentication: Authentication?,
         servletRequest: HttpServletRequest,
         @Parameter(required = true, example = "request_01J1M6Y6XRK8N0W2M3P4Q5R6S7")
@@ -83,7 +84,7 @@ class CustomerAppointmentV2Controller(
         @Valid @RequestBody request: CreateAppointmentRequestV2,
     ): ResponseEntity<AppointmentProposalResponse> {
         requireAppointmentIngress(ingressEnabled)
-        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
             .requirePatientActor()
         return service.requestAppointment(
             actor = actor,
@@ -112,6 +113,7 @@ class CustomerAppointmentV2Controller(
     )
     @PostMapping("/appointments/{id}/proposals/{proposalId}/accept")
     fun acceptProposal(
+        @PathVariable tenantCode: String,
         authentication: Authentication?,
         servletRequest: HttpServletRequest,
         @PathVariable id: Long,
@@ -124,7 +126,7 @@ class CustomerAppointmentV2Controller(
         ifMatch: String?,
         @Valid @RequestBody request: ProposalDecisionRequest,
     ): ResponseEntity<AppointmentCommitmentResponse> {
-        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
             .requirePatientActor()
         return service.decideProposal(
             actor,
@@ -154,6 +156,7 @@ class CustomerAppointmentV2Controller(
     )
     @PostMapping("/appointments/{id}/proposals/{proposalId}/decline")
     fun declineProposal(
+        @PathVariable tenantCode: String,
         authentication: Authentication?,
         servletRequest: HttpServletRequest,
         @PathVariable id: Long,
@@ -166,7 +169,7 @@ class CustomerAppointmentV2Controller(
         ifMatch: String?,
         @Valid @RequestBody request: DeclineProposalRequest,
     ): ResponseEntity<AppointmentCommitmentResponse> {
-        val actor = actorContextResolver.resolveAppointmentActor(authentication, servletRequest)
+        val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
             .requirePatientActor()
         return service.declineProposal(
             actor,

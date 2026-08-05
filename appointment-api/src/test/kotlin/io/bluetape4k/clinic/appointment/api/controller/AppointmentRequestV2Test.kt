@@ -66,6 +66,7 @@ class AppointmentRequestV2Test {
         val controller = CustomerAppointmentV2Controller(service, ActorContextResolver())
 
         val response = controller.requestAppointment(
+            tenantCode = "tenant-a",
             authentication = authentication(patientPrincipal()),
             servletRequest = MockHttpServletRequest(),
             idempotencyKey = "request_01J1M6Y6XRK8N0W2M3P4Q5R6S7",
@@ -92,6 +93,7 @@ class AppointmentRequestV2Test {
 
         val exception = assertFailsWith<AppointmentCommitmentApiException> {
             controller.requestAppointment(
+                tenantCode = "tenant-a",
                 authentication = authentication(patientPrincipal()),
                 servletRequest = MockHttpServletRequest(),
                 idempotencyKey = "request_01J1M6Y6XRK8N0W2M3P4Q5R6S7",
@@ -103,6 +105,7 @@ class AppointmentRequestV2Test {
         exception.error shouldBeEqualTo AppointmentCommitmentApiError.INGRESS_DISABLED
 
         val existingMutation = controller.acceptProposal(
+            tenantCode = "tenant-a",
             authentication = authentication(patientPrincipal()),
             servletRequest = MockHttpServletRequest(),
             id = 11L,
@@ -129,6 +132,7 @@ class AppointmentRequestV2Test {
         )
         val exception = assertFailsWith<AppointmentCommitmentApiException> {
             controller.requestAppointment(
+                tenantCode = "tenant-a",
                 authentication = authentication(patientPrincipal(setOf(7L, 8L))),
                 servletRequest = MockHttpServletRequest(),
                 idempotencyKey = "request_01J1M6Y6XRK8N0W2M3P4Q5R6S7",
