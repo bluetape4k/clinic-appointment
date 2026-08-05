@@ -13,12 +13,14 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.TestPropertySource
 
 @SpringBootTest(
     classes = [SecurityConfig::class, SecurityConfigFilterOrderTest.Fixture::class],
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
 )
+@ActiveProfiles("test", "integration-test")
 @TestPropertySource(
     properties = [
         "scheduling.security.jwt.secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
