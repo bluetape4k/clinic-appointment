@@ -48,8 +48,8 @@
 - scoped commitment/proposal 부재도 fail-closed 403 `SCOPE_FORBIDDEN`으로 유지한다.
   존재 여부를 구분하기 위한 별도 query는 이번 이슈에 추가하지 않는다.
 - tenant DB lookup exception: 일반 요청 500 `INTERNAL_ERROR`, policy 요청
-  `POLICY_INTERNAL_ERROR`; 404/403으로 위장하지 않고 correlation-only logging을
-  사용한다.
+  `POLICY_INTERNAL_ERROR`; 404/403으로 위장하지 않고 correlation ID와
+  sanitized tenant code만 structured log에 남긴다.
 
 ## 안정성·운영 결정
 
@@ -80,8 +80,10 @@
 - existence-sensitive 404 query 제외: scope-hidden과 absent aggregate를 구분하려면
   별도 조회가 필요하고 data-leak 위험과 범위가 커진다. 현재 fail-closed 403을
   유지한다.
-- JMH/새 dependency 제외: bounded claim/path work와 repository lookup count를
-  focused test로 검증하며 query plan/index는 변경하지 않는다.
+- JMH와 새 외부 dependency 추가 제외: 이미 version catalog에 있는
+  `kotlinx-coroutines-test`만 test scope로 연결하고, bounded claim/path work와
+  repository lookup count를 focused test로 검증하며 query plan/index는 변경하지
+  않는다.
 
 ## 판정
 

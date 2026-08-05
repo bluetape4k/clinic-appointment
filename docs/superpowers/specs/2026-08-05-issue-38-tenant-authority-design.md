@@ -67,7 +67,8 @@ tenant 선택 방식으로 사용한다. 기존 `/api/v2/...` Gateway-selected �
    `allowedTenants`에 없으면 403, 존재하지 않으면 인증된 요청에 404를
    반환한다. 일반 lookup failure는 privacy-safe `INTERNAL_ERROR`(HTTP 500),
    policy lookup failure는 `POLICY_INTERNAL_ERROR`로 반환하며 404/403으로
-   위장하지 않는다. 요청 시작과 종료 시 stale `TenantContext`를 지우고,
+   위장하지 않는다. correlation ID와 sanitized tenant code만 structured log에
+   남긴다. 요청 시작과 종료 시 stale `TenantContext`를 지우고,
    성공·예외·async dispatch 모두에서 context를 복구한다.
 5. Spring Security matcher는 raw matcher variable을 신뢰하지 않고
    `TenantCodeRules`로 canonical/reserved 검사를 다시 한 뒤 path tenant
@@ -140,7 +141,7 @@ field는 기존 strict deserialization 계약에 따라 400이며, 알려진 con
 | 다중 tenant JWT가 path tenant를 명시함 | 해당 membership tenant만 허용 |
 | body/header가 path tenant와 다른 값을 보냄 | header는 authority가 아니며, unknown body field는 400, 알려진 consent namespace 충돌은 403; path+JWT scope만 사용 |
 | tenant/clinic scope가 맞지 않거나 scoped commitment가 없음 | fail-closed 403 `SCOPE_FORBIDDEN`; existence-sensitive 404를 만들기 위한 별도 query는 추가하지 않음 |
-| active tenant lookup이 실패함 | 일반 요청 500 `INTERNAL_ERROR`, policy 요청 `POLICY_INTERNAL_ERROR`; correlation-only log/metric, tenant 404/403로 위장하지 않음 |
+| active tenant lookup이 실패함 | 일반 요청 500 `INTERNAL_ERROR`, policy 요청 `POLICY_INTERNAL_ERROR`; correlation ID와 sanitized tenant code만 structured log에 남기고 tenant 404/403으로 위장하지 않음 |
 | 요청 종료 후 다른 요청/코루틴에서 TenantContext가 남음 | 테스트로 복구 및 coroutine context 전파를 검증 |
 | `/api/v2/...` legacy path 호출 | tenant path controller에 매핑되지 않아 404/보호된 경로 거부 |
 
