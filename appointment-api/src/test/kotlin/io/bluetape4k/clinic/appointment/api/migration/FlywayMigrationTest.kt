@@ -52,6 +52,14 @@ class FlywayMigrationTest {
         )
     }
 
+    @Test
+    fun `V22 appointment messaging outbox lease contract remains additive on H2`() {
+        AppointmentMessagingMigrationTestSupport.verifyV22Migration(
+            dataSource = h2DataSource("appointment-messaging-v22"),
+            location = "classpath:db/migration/h2",
+        )
+    }
+
     private fun h2DataSource(scope: String): SimpleDriverDataSource {
         val driver = Class.forName("org.h2.Driver").getDeclaredConstructor().newInstance() as Driver
         return SimpleDriverDataSource(

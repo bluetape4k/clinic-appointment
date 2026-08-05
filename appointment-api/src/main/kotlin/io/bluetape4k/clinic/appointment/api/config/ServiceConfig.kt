@@ -64,7 +64,10 @@ import io.bluetape4k.clinic.appointment.event.policy.SchedulingPolicyEventReposi
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingContext
+import io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriter
 import io.bluetape4k.clinic.appointment.notification.NotificationProperties
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
@@ -85,6 +88,7 @@ import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
+import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
 import io.bluetape4k.clinic.appointment.service.AppointmentRescheduleNotificationWriter
 import io.bluetape4k.clinic.appointment.service.AppointmentPlanQueryService
 import io.bluetape4k.clinic.appointment.service.PackageExecutionLimits
@@ -96,6 +100,7 @@ import io.bluetape4k.clinic.appointment.service.SchedulingPolicyPayloadCodec
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentStateMachine
 import io.bluetape4k.clinic.appointment.timezone.ClinicTimezoneService
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.policy.ActorRole
 import io.micrometer.core.instrument.MeterRegistry
 import io.bluetape4k.logging.KLogging
@@ -399,6 +404,7 @@ class ServiceConfig {
         appointmentStateHistoryRepository: AppointmentStateHistoryRepository,
         doctorRepository: DoctorRepository,
         appointmentNotificationWriter: AppointmentNotificationWriter,
+        appointmentOutboxWriter: AppointmentOutboxWriter,
         clinicRepository: ClinicRepository,
     ): ClosureRescheduleService = ClosureRescheduleService(
         slotCalculationService,
@@ -406,13 +412,41 @@ class ServiceConfig {
         rescheduleCandidateRepository,
         appointmentStateHistoryRepository,
         doctorRepository,
-        AppointmentRescheduleNotificationWriter { tenantGroupId, original, replacement, version ->
-            appointmentNotificationWriter.rescheduled(
-                tenantGroupId = tenantGroupId,
-                original = original,
-                replacement = replacement,
-                version = version,
-            )
+        object : AppointmentRescheduleNotificationWriter {
+            override fun rescheduled(
+                tenantGroupId: Long,
+                original: AppointmentRecord,
+                replacement: AppointmentRecord,
+                version: Long,
+            ) {
+                appointmentNotificationWriter.rescheduled(
+                    tenantGroupId = tenantGroupId,
+                    original = original,
+                    replacement = replacement,
+                    version = version,
+                )
+            }
+
+            override fun rescheduled(
+                tenantGroupId: Long,
+                original: AppointmentRecord,
+                replacement: AppointmentRecord,
+                version: Long,
+                commandContext: AppointmentCommandContext,
+            ) {
+                appointmentNotificationWriter.rescheduled(
+                    tenantGroupId = tenantGroupId,
+                    original = original,
+                    replacement = replacement,
+                    version = version,
+                )
+                appointmentOutboxWriter.rescheduled(
+                    scope = TenantClinicScope(tenantGroupId, original.clinicId),
+                    original = original,
+                    replacement = replacement,
+                    context = AppointmentMessagingContext.from(commandContext),
+                )
+            }
         },
         clinicRepository,
     )

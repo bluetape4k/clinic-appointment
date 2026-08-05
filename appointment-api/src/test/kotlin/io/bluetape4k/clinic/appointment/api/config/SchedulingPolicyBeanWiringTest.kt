@@ -30,7 +30,7 @@ class SchedulingPolicyBeanWiringTest {
 
     private val contextRunner =
         ApplicationContextRunner()
-            .withUserConfiguration(ServiceConfig::class.java)
+            .withUserConfiguration(ServiceConfig::class.java, AppointmentMessagingTestConfiguration::class.java)
             .withBean("meterRegistry", MeterRegistry::class.java, { SimpleMeterRegistry() })
 
     @Test

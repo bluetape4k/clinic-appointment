@@ -76,6 +76,7 @@ bluetape4k-logging = { module = "io.github.bluetape4k:bluetape4k-logging" }
 bluetape4k-resilience4j = { module = "io.github.bluetape4k:bluetape4k-resilience4j" }
 bluetape4k-states = { module = "io.github.bluetape4k:bluetape4k-states" }
 bluetape4k-testcontainers = { module = "io.github.bluetape4k:bluetape4k-testcontainers" }
+bluetape4k-kafka4 = { module = "io.github.bluetape4k:bluetape4k-kafka4" }
 exposed-core = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-core" }
 exposed-jdbc = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc" }
 exposed-r2dbc-tests = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-r2dbc-tests" }
@@ -122,8 +123,17 @@ jetbrains-exposed-spring7-transaction = { module = "org.jetbrains.exposed:spring
 jetbrains-exposed-spring-boot4-starter = { module = "org.jetbrains.exposed:exposed-spring-boot4-starter" }
 
 # ── Jackson 3 (versions from spring-boot4-dependencies BOM) ───────────────
+jackson3-databind = { module = "tools.jackson.core:jackson-databind" }
 jackson3-module-kotlin = { module = "tools.jackson.module:jackson-module-kotlin" }
 jackson3-module-blackbird = { module = "tools.jackson.module:jackson-module-blackbird" }
+
+# ── Kafka 4 / Spring Kafka 4 (versions from bluetape4k dependencies BOM) ──
+kafka4-clients = { module = "org.apache.kafka:kafka-clients" }
+spring-kafka4 = { module = "org.springframework.kafka:spring-kafka" }
+spring-kafka4-test = { module = "org.springframework.kafka:spring-kafka-test" }
+
+# ── Micrometer (version from spring-boot4-dependencies BOM) ───────────────
+micrometer-core = { module = "io.micrometer:micrometer-core" }
 
 # ── JJWT (project-local version) ──────────────────────────────────────────
 jjwt-api = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }

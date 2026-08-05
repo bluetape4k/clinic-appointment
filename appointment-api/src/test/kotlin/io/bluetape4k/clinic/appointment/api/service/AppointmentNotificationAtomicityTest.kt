@@ -23,6 +23,8 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.RescheduleCandidateRecord
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
+import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingContext
+import io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriter
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -40,6 +42,7 @@ import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
 import io.bluetape4k.clinic.appointment.service.AppointmentRescheduleNotificationWriter
+import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
@@ -148,6 +151,23 @@ internal class AppointmentNotificationAtomicityTest {
             NotificationOutboxEvents.selectAll().single()[NotificationOutboxEvents.notificationSlot] shouldBeEqualTo
                 NotificationSlot.CREATED
         }
+    }
+
+    @Test
+    fun `생성은 검증된 command context를 appointment outbox에 전달한다`() {
+        val outboxWriter = RecordingAppointmentOutboxWriter()
+        val commandContext = AppointmentCommandContext.root("api-context-41")
+
+        service(actualWriter, outboxWriter).create(
+            tenantGroupId = tenantGroupId,
+            request = request(),
+            idempotencyKey = null,
+            resolution = MemberResolution.Resolved(MemberId("member-1")),
+            commandContext = commandContext,
+        )
+
+        outboxWriter.createdScope shouldBeEqualTo TenantClinicScope(tenantGroupId, clinicId)
+        outboxWriter.createdContext shouldBeEqualTo AppointmentMessagingContext.from(commandContext)
     }
 
     @Test
@@ -386,7 +406,10 @@ internal class AppointmentNotificationAtomicityTest {
         }
     }
 
-    private fun service(writer: AppointmentNotificationWriter): AppointmentService =
+    private fun service(
+        writer: AppointmentNotificationWriter,
+        appointmentOutboxWriter: AppointmentOutboxWriter = RecordingAppointmentOutboxWriter(),
+    ): AppointmentService =
         AppointmentService(
             appointmentRepository = appointmentRepository,
             stateMachine = AppointmentStateMachine(),
@@ -397,7 +420,44 @@ internal class AppointmentNotificationAtomicityTest {
             idempotencyClock = clock,
             clinicRepository = clinicRepository,
             notificationWriter = writer,
+            appointmentOutboxWriter = appointmentOutboxWriter,
         )
+
+    private class RecordingAppointmentOutboxWriter : AppointmentOutboxWriter {
+        lateinit var createdScope: TenantClinicScope
+        lateinit var createdContext: AppointmentMessagingContext
+
+        override fun created(
+            scope: TenantClinicScope,
+            appointment: AppointmentRecord,
+            context: AppointmentMessagingContext,
+        ) {
+            createdScope = scope
+            createdContext = context
+        }
+
+        override fun statusChanged(
+            scope: TenantClinicScope,
+            appointment: AppointmentRecord,
+            fromState: AppointmentState,
+            context: AppointmentMessagingContext,
+            reasonCode: CancellationReasonCode?,
+        ) = Unit
+
+        override fun cancelled(
+            scope: TenantClinicScope,
+            appointment: AppointmentRecord,
+            context: AppointmentMessagingContext,
+            reasonCode: CancellationReasonCode?,
+        ) = Unit
+
+        override fun rescheduled(
+            scope: TenantClinicScope,
+            original: AppointmentRecord,
+            replacement: AppointmentRecord,
+            context: AppointmentMessagingContext,
+        ) = Unit
+    }
 
     private fun throwingWriter(): AppointmentNotificationWriter =
         object : AppointmentNotificationWriter {

@@ -48,6 +48,7 @@ import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -73,11 +74,33 @@ internal abstract class VisitCommitmentCommandTestSupport {
     fun setUpCommitmentCommandDatabase() {
         database = createDatabase()
         transaction(database) {
-            SchemaUtils.createMissingTablesAndColumns(*TABLES)
+            // PostgreSQL V22 intentionally uses a partial ready index whose column
+            // order differs from the portable Exposed metadata.  When a preceding
+            // Flyway integration test has already installed that table, asking
+            // SchemaUtils to reconcile the table would issue a duplicate CREATE
+            // INDEX.  Reuse the migrated table and let this fixture only create the
+            // remaining tables; a clean database still follows the normal Exposed
+            // bootstrap path.
+            val tablesToCreate =
+                if (tableReadable(SchedulingOutboxEvents.tableName)) {
+                    TABLES.filterNot { it == SchedulingOutboxEvents }.toTypedArray()
+                } else {
+                    TABLES
+                }
+            SchemaUtils.createMissingTablesAndColumns(*tablesToCreate)
             TABLES.reversed().forEach(Table::deleteAll)
             clinic = seedClinic()
         }
     }
+
+    private fun tableReadable(tableName: String): Boolean =
+        listOf(tableName, tableName.uppercase()).distinct().any { candidate ->
+            val jdbcConnection =
+                TransactionManager.current().connection.connection as java.sql.Connection
+            jdbcConnection.metaData
+                .getTables(null, null, candidate, arrayOf("TABLE"))
+                .use { rows -> rows.next() }
+        }
 
     /**
      * singleton PostgreSQL·MySQL을 사용하는 하위 테스트가 다음 테스트 클래스에 Plan과

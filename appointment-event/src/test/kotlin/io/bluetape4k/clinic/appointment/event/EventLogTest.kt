@@ -48,7 +48,7 @@ class EventLogTest {
             row[AppointmentEventLogs.entityId] shouldBeEqualTo 1L
             row[AppointmentEventLogs.tenantGroupId] shouldBeEqualTo 1L
             row[AppointmentEventLogs.clinicId] shouldBeEqualTo 10L
-            row[AppointmentEventLogs.payloadJson].contains("\"appointmentId\":1").shouldBeTrue()
+            row[AppointmentEventLogs.payloadJson].contains("appointmentId").shouldBeFalse()
         }
     }
 
@@ -59,7 +59,7 @@ class EventLogTest {
             scope = scope(20L),
             fromState = "REQUESTED",
             toState = "CONFIRMED",
-            reason = "의사 승인"
+            reason = "DOCTOR_APPROVED"
         )
 
         logger.onStatusChanged(event)
@@ -75,7 +75,7 @@ class EventLogTest {
             val payload = row[AppointmentEventLogs.payloadJson]
             payload.contains("\"fromState\":\"REQUESTED\"").shouldBeTrue()
             payload.contains("\"toState\":\"CONFIRMED\"").shouldBeTrue()
-            payload.contains("\"reason\":\"의사 승인\"").shouldBeTrue()
+            payload.contains("\"reasonCode\":\"DOCTOR_APPROVED\"").shouldBeTrue()
         }
     }
 
@@ -100,11 +100,11 @@ class EventLogTest {
     }
 
     @Test
-    fun `Cancelled 이벤트가 DB에 저장된다`() {
+    fun `Cancelled 이벤트는 등록된 reason code만 DB에 저장한다`() {
         val event = AppointmentDomainEvent.Cancelled(
                 appointmentId = 4L,
                 scope = scope(40L),
-                reason = "환자 요청 취소"
+                reason = "PATIENT_REQUEST"
             )
 
         logger.onCancelled(event)
@@ -116,12 +116,12 @@ class EventLogTest {
             row[AppointmentEventLogs.eventType] shouldBeEqualTo "Cancelled"
             row[AppointmentEventLogs.entityId] shouldBeEqualTo 4L
             row[AppointmentEventLogs.clinicId] shouldBeEqualTo 40L
-            row[AppointmentEventLogs.payloadJson].contains("\"reason\":\"환자 요청 취소\"").shouldBeTrue()
+            row[AppointmentEventLogs.payloadJson].contains("\"reasonCode\":\"PATIENT_REQUEST\"").shouldBeTrue()
         }
     }
 
     @Test
-    fun `이벤트 reason 문자열은 JSON 이스케이프된다`() {
+    fun `등록되지 않은 이벤트 reason 문자열은 감사 payload에 저장되지 않는다`() {
         val event = AppointmentDomainEvent.Cancelled(
                 appointmentId = 5L,
                 scope = scope(50L),
@@ -133,8 +133,8 @@ class EventLogTest {
 
         transaction {
             val payload = AppointmentEventLogs.selectAll().single()[AppointmentEventLogs.payloadJson]
-            payload.contains("""\"직접\"""").shouldBeTrue()
-            payload.contains("""\n""").shouldBeTrue()
+            payload.contains("직접").shouldBeFalse()
+            payload.contains("다음주").shouldBeFalse()
         }
     }
 
@@ -149,7 +149,7 @@ class EventLogTest {
             row[AppointmentEventLogs.eventType] shouldBeEqualTo "Rescheduled"
             row[AppointmentEventLogs.entityId] shouldBeEqualTo 6L
             row[AppointmentEventLogs.clinicId] shouldBeEqualTo 60L
-            row[AppointmentEventLogs.payloadJson].contains(""""newId":7""").shouldBeTrue()
+            row[AppointmentEventLogs.payloadJson].contains("newId").shouldBeFalse()
         }
     }
 

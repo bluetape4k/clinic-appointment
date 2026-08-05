@@ -64,4 +64,19 @@ class FlywayPostgreSQLMigrationTest {
             dialect = WaitlistDeliveryMigrationTestSupport.Dialect.POSTGRESQL,
         )
     }
+
+    @Test
+    fun `V22 appointment messaging outbox lease contract remains additive on PostgreSQL`() {
+        val postgres = Containers.Postgres
+        val driver = Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentMessagingMigrationTestSupport.verifyV22Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                postgres.jdbcUrl,
+                postgres.username ?: "test",
+                postgres.password ?: "",
+            ),
+            location = "classpath:db/migration/postgresql",
+        )
+    }
 }

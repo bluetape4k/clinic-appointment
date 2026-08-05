@@ -25,6 +25,7 @@ notifications, Spring Boot APIs, and an Angular frontend.
 - **Appointment state machine** - Supports PENDING -> REQUESTED -> CONFIRMED -> CHECKED_IN -> IN_PROGRESS -> COMPLETED transitions, cancellation, and reassignment.
 - **AI schedule optimization** - Uses Timefold Solver to assign appointments while satisfying doctor, equipment, business-hour, 12 hard, and 6 soft constraints.
 - **Durable notifications** - Commits a privacy-minimized notification outbox with the appointment, then uses database leases, fencing, fair clinic scheduling, send-time member lookup, and bounded Resilience4j policies for delivery.
+- **Transactional appointment messaging** - Commits a redacted Kafka 4 appointment event intent with the aggregate, then relays it at-least-once through a lease-fenced, allow-listed publisher.
 - **Tenant-scoped REST API** - Provides Spring Boot 4 MVC APIs under `/api/{tenantCode}/...` with JWT tenant authorization, Flyway migrations, and Swagger UI.
 - **Appointment plan foundation** - Snapshots a purchased product BOM into immutable treatment obligations through catalog sync and trusted purchase-event convergence, before any visit is scheduled.
 - **Scheduling policy foundation** - Version-controls tenant baselines and clinic overrides for provisional booking, consent, overbooking, reconfirmation, disruption recovery, and controlled operating-hour extension.
@@ -142,6 +143,7 @@ The full requirements diagram catalog is maintained in [docs/requirements](docs/
 |------|------|-----------|
 | `appointment-core` | Domain model for appointments, purchased treatment plans, scheduling policies, visit commitments, Exposed ORM repositories, state machines, and slot calculation. | [README](appointment-core/README.md) |
 | `appointment-event` | Domain event publishing/subscription and event log persistence based on Spring ApplicationEvent. | [README](appointment-event/README.md) |
+| `appointment-messaging` | Kafka 4 transactional-outbox contracts, V22 lease metadata, strict envelope codec, and bounded relay. | [README](appointment-messaging/README.md) |
 | `appointment-solver` | Timefold Solver AI optimization for bulk appointment placement using 12 hard and 6 soft constraints. | [README](appointment-solver/README.md) |
 | `appointment-notification` | Durable outbox delivery, send-time member resolution, reminder recovery, privacy-safe retention, and provider isolation. | [README](appointment-notification/README.md) |
 | `appointment-api` | Spring Boot 4 REST API for appointment CRUD, slot lookup, reassignment, JWT authentication, and Swagger. | [README](appointment-api/README.md) |

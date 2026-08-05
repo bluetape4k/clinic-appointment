@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
@@ -131,8 +132,10 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
                 ConsultationTopics, Holidays,
                 Appointments, AppointmentIdempotencies, AppointmentNotes, AppointmentStateHistory,
                 RescheduleCandidates, AppointmentEventLogs, NotificationOutboxEvents, NotificationDeliveryAttempts,
+                SchedulingOutboxEvents,
             )
 
+            SchedulingOutboxEvents.deleteAll()
             NotificationDeliveryAttempts.deleteAll()
             NotificationOutboxEvents.deleteAll()
             AppointmentEventLogs.deleteAll()
@@ -317,6 +320,37 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
             Appointments.selectAll()
                 .where { Appointments.id eq appointmentId }
                 .single()[Appointments.status] shouldBeEqualTo AppointmentState.CONFIRMED
+        }
+    }
+
+    @Test
+    fun `DELETE rejects an unregistered cancellation reason without mutating or echoing it`() {
+        val appointmentId = transaction {
+            Appointments.insertAndGetId {
+                it[Appointments.clinicId] = this@AppointmentControllerTest.clinicId
+                it[Appointments.doctorId] = this@AppointmentControllerTest.doctorId
+                it[Appointments.treatmentTypeId] = this@AppointmentControllerTest.treatmentTypeId
+                it[modelVersion] = AppointmentModelVersion.LEGACY
+                it[patientName] = "Protected patient"
+                it[appointmentDate] = futureDate
+                it[startTime] = LocalTime.of(11, 0)
+                it[endTime] = LocalTime.of(11, 30)
+                it[status] = AppointmentState.REQUESTED
+            }.value
+        }
+        val rawReason = "patient requested a different time"
+
+        val response = client.delete()
+            .uri("$BASE_URL/$appointmentId?reason=patient%20requested%20a%20different%20time")
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+        response.body.contains(rawReason).shouldBeFalse()
+        transaction {
+            Appointments.selectAll()
+                .where { Appointments.id eq appointmentId }
+                .single()[Appointments.status] shouldBeEqualTo AppointmentState.REQUESTED
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
         }
     }
 

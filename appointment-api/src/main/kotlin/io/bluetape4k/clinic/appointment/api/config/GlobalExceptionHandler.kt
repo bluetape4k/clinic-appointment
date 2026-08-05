@@ -17,6 +17,7 @@ import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiExc
 import io.bluetape4k.clinic.appointment.api.dto.WaitlistApiErrorResponse
 import io.bluetape4k.clinic.appointment.api.waitlist.WaitlistApiError
 import io.bluetape4k.clinic.appointment.api.waitlist.WaitlistApiException
+import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingContractException
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
 import jakarta.servlet.http.HttpServletRequest
@@ -91,6 +92,30 @@ class GlobalExceptionHandler(
                 SchedulingApiErrorResponse(
                     error = "Notification enqueue is temporarily unavailable.",
                     errorCode = "NOTIFICATION_ENQUEUE_UNAVAILABLE",
+                    correlationId = correlationId,
+                    retryable = true,
+                    action = "Retry with the same idempotency key after the Retry-After interval.",
+                )
+            )
+    }
+
+    /** 예약 messaging outbox 저장소 장애를 내부 정보 없는 재시도 가능 503으로 변환한다. */
+    @ExceptionHandler(AppointmentMessagingContractException::class)
+    fun handleAppointmentMessagingContract(
+        ex: AppointmentMessagingContractException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.correlationId()
+        log.warn {
+            "Appointment messaging outbox unavailable: " +
+                "failure_code=${ex.failureCode.name}, correlation_id=$correlationId"
+        }
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .header(HttpHeaders.RETRY_AFTER, NOTIFICATION_ENQUEUE_RETRY_AFTER_SECONDS)
+            .body(
+                SchedulingApiErrorResponse(
+                    error = "Appointment messaging is temporarily unavailable.",
+                    errorCode = "APPOINTMENT_MESSAGING_UNAVAILABLE",
                     correlationId = correlationId,
                     retryable = true,
                     action = "Retry with the same idempotency key after the Retry-After interval.",
