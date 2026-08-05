@@ -75,7 +75,7 @@ class RescheduleController(
     ): ResponseEntity<ApiResponse<Map<Long, List<RescheduleCandidateResponse>>>> {
         val tenant = tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
         val scope = TenantClinicScope(tenant.id, clinicId)
-        log.debug { "POST closure reschedule tenantCode=$tenantCode, date=$closureDate" }
+        log.debug { "POST closure reschedule scope=<redacted>, date=$closureDate" }
         val result = closureRescheduleService.processClosureReschedule(scope, closureDate, searchDays)
         val response = result.mapValues { (_, candidates) ->
             candidates.map { it.toResponse() }
@@ -104,7 +104,7 @@ class RescheduleController(
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         val appointment = appointmentService.getById(id, tenant.id)
         val scope = TenantClinicScope(tenant.id, appointment.clinicId)
-        log.debug { "GET reschedule candidates tenantCode=$tenantCode" }
+        log.debug { "GET reschedule candidates scope=<redacted>" }
         val candidates = transaction {
             rescheduleCandidateRepository.findByOriginalAppointmentId(id, scope)
                 .map { it.toResponse() }
@@ -138,7 +138,7 @@ class RescheduleController(
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         val appointment = appointmentService.getById(id, tenant.id)
         val scope = TenantClinicScope(tenant.id, appointment.clinicId)
-        log.debug { "POST confirm reschedule tenantCode=$tenantCode" }
+        log.debug { "POST confirm reschedule scope=<redacted>" }
         val newAppointmentId = closureRescheduleService.confirmReschedule(
             scope = scope,
             candidateId = candidateId,
@@ -171,7 +171,7 @@ class RescheduleController(
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         val appointment = appointmentService.getById(id, tenant.id)
         val scope = TenantClinicScope(tenant.id, appointment.clinicId)
-        log.debug { "POST auto reschedule tenantCode=$tenantCode" }
+        log.debug { "POST auto reschedule scope=<redacted>" }
         val newAppointmentId = closureRescheduleService.autoReschedule(
             scope = scope,
             originalAppointmentId = id,

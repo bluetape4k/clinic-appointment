@@ -137,7 +137,7 @@ class AppointmentController(
             is MemberResolution.Resolved -> request.copy(memberId = resolution.memberId.value)
             MemberResolution.LegacyMissing -> request.copy(memberId = null)
         }
-        log.debug { "POST appointment tenantCode=$tenantCode" }
+        log.debug { "POST appointment scope=<redacted>" }
         val result = appointmentService.create(
             tenantGroupId = tenant.id,
             request = normalizedRequest,
@@ -184,7 +184,7 @@ class AppointmentController(
         servletRequest: HttpServletRequest,
     ): ResponseEntity<ApiResponse<AppointmentResponse>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
-        log.debug { "PATCH appointment status tenantCode=$tenantCode, target=${request.status}" }
+        log.debug { "PATCH appointment status scope=<redacted>, target=${request.status}" }
         val scope = appointmentService.getScope(id, tenant.id)
         val updated = appointmentService.updateStatus(
             scope = scope,
@@ -212,7 +212,7 @@ class AppointmentController(
         servletRequest: HttpServletRequest,
     ): ResponseEntity<ApiResponse<AppointmentResponse>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
-        log.debug { "DELETE appointment tenantCode=$tenantCode, reasonCodePresent=${reason != null}" }
+        log.debug { "DELETE appointment scope=<redacted>, reasonCodePresent=${reason != null}" }
         val scope = appointmentService.getScope(id, tenant.id)
         val cancelled = appointmentService.cancel(
             scope = scope,
