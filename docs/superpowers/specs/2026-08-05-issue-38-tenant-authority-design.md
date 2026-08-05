@@ -1,5 +1,8 @@
 # Issue #38 — 단일 tenant path authority 설계
 
+> 계획 리뷰에서 확인된 보안·안정성 acceptance clarification을 반영한 revised
+> spec이다. 이 revision과 implementation plan은 함께 재승인되어야 한다.
+
 ## 결정 요약
 
 모든 비공개 appointment API는 `/api/{tenantCode}/...`를 유일한 외부
@@ -22,6 +25,9 @@ tenant 선택 방식으로 사용한다. 기존 `/api/v2/...` Gateway-selected �
   JWT membership을 검증할 수 있다.
 - `ActorContextResolver.resolve`는 이미 path tenant를 받아 membership을
   재검증하므로 commitment도 같은 경계를 사용할 수 있다.
+- Flyway V20의 `tenant_code` 제약은 lower-case ASCII alphanumeric segment를
+  single hyphen으로 연결한 최대 64자 slug다. 점(`.`), underscore, 공백,
+  대문자와 `v1`/`v2` reserved root는 외부 path/JWT 모두에서 거부한다.
 - `docs/requirements/architecture.md`의 ADR-14에는 현재 `/api/v2` 예외가
   남아 있어 이번 결정과 함께 갱신해야 한다.
 
@@ -48,25 +54,44 @@ tenant 선택 방식으로 사용한다. 기존 `/api/v2/...` Gateway-selected �
 
 ## 권한 흐름
 
-1. JWT filter가 서명, issuer, audience, time claim과 닫힌 claim 집합을
+1. Correlation filter 뒤의 pre-auth path validation filter가 raw/decoded
+   servlet path를 검사한다. `%2f`, `%2e`, `%5c`, semicolon path parameter,
+   double-encoded separator처럼 정규화 결과가 모호한 요청과 malformed/
+   reserved root는 JWT를 읽기 전에 `RESOURCE_NOT_FOUND`로 종료한다.
+2. JWT filter가 서명, issuer, audience, time claim과 닫힌 claim 집합을
    검증하고 `SchedulingUserPrincipal`을 만든다.
-2. `TenantPathResolver`가 `/api/{tenantCode}/...`의 첫 segment를 읽는다.
-3. `TenantContextFilter`가 활성 tenant를 DB에서 조회하고, 인증 principal의
+3. `TenantPathResolver`가 `/api/{tenantCode}/...`의 첫 canonical segment를
+   읽는다. `TenantPathValidationFilter`와 JWT parser는 동일한
+   `TenantCodeRules`를 사용한다.
+4. `TenantContextFilter`가 활성 tenant를 DB에서 조회하고, 인증 principal의
    `allowedTenants`에 없으면 403, 존재하지 않으면 인증된 요청에 404를
-   반환한다. 요청 종료 시 `TenantContext`를 반드시 복구한다.
-4. Spring Security matcher는 path tenant membership과 endpoint role/scope를
-   함께 검사한다.
-5. commitment controller는 path `tenantCode`를
+   반환한다. 일반 lookup failure는 privacy-safe `INTERNAL_ERROR`(HTTP 500),
+   policy lookup failure는 `POLICY_INTERNAL_ERROR`로 반환하며 404/403으로
+   위장하지 않는다. 요청 시작과 종료 시 stale `TenantContext`를 지우고,
+   성공·예외·async dispatch 모두에서 context를 복구한다.
+5. Spring Security matcher는 raw matcher variable을 신뢰하지 않고
+   `TenantCodeRules`로 canonical/reserved 검사를 다시 한 뒤 path tenant
+   membership과 endpoint role/scope를 함께 검사한다.
+6. commitment controller는 path `tenantCode`를
    `resolveAppointmentActor(authentication, tenantCode, request)`에 전달한다.
    resolver는 `tenantCode in allowedTenants`를 다시 확인하고, JWT의
-   `clinicId`가 `allowedClinicIds`에 포함되는지 검증한다.
-6. application service와 repository는 `tenantGroupId` 및 clinic ownership을
+   `clinicId`가 `allowedClinicIds`에 포함되는지 검증한다. 선택된 path 값은
+   `ActorContext.selectedTenantCode`에 보존되며, downstream access resolver는
+   이 값을 active tenant lookup과 함께 재검증한다. multi-tenant JWT에서
+   `allowedTenants.singleOrNull()`은 tenant authority로 사용하지 않는다.
+7. application service와 repository는 `tenantGroupId` 및 clinic ownership을
    내부 scope로 확인한다. 외부 요청 body/header의 tenant 또는 내부 key는
    권위 값으로 사용하지 않는다.
 
 `X-Tenant-Code`, `X-Clinic-Id`, `tenantGroupId` 같은 header는 이 계약에
 추가하지 않는다. 향후 Gateway assertion이 필요해지더라도 서명된 scope와
 서버 재검증 계약 없이는 header를 신뢰하지 않는다.
+
+body의 tenant/clinic/key 필드는 권위 값으로 사용하지 않는다. DTO의 unknown
+field는 기존 strict deserialization 계약에 따라 400이며, 알려진 consent
+`evidenceAuthority`가 선택된 path tenant namespace와 충돌하면 403
+`SCOPE_FORBIDDEN`이다. 따라서 “무시한다”는 의미는 authority가 아니라는
+뜻이며, unknown field를 조용히 허용한다는 뜻이 아니다.
 
 ## 구현 경계
 
@@ -81,6 +106,7 @@ tenant 선택 방식으로 사용한다. 기존 `/api/v2/...` Gateway-selected �
   변경
 - `TenantPathResolver`/JWT tenant code 검증을 lower-case canonical slug로
   일치시킴
+- pre-auth `TenantPathValidationFilter`와 chain-only Spring registration 추가
 - controller/security/OpenAPI/exception integration tests의 경로와 권한
   matrix 갱신
 - ADR-14, visit commitment API 문서, 운영 runbook의 활성 경로 갱신
@@ -109,10 +135,12 @@ tenant 선택 방식으로 사용한다. 기존 `/api/v2/...` Gateway-selected �
 | JWT 없음/검증 실패 | 401 |
 | path tenant가 JWT `allowedTenants`에 없음 | 403 |
 | 인증된 요청의 tenant가 DB에 없음/inactive | 404 |
-| path tenant가 대문자·공백·허용되지 않은 slug | 인증 전에 거부되어 401/403 경계를 우회하지 않음 |
+| path tenant가 대문자·공백·허용되지 않은 slug | 인증 전에 `RESOURCE_NOT_FOUND`(404)로 거부되어 401/403 경계를 우회하지 않음 |
 | clinic claim이 `allowedClinicIds` 밖임 | 403 scope mismatch |
 | 다중 tenant JWT가 path tenant를 명시함 | 해당 membership tenant만 허용 |
-| body/header가 path tenant와 다른 값을 보냄 | body/header는 무시하며 path+JWT scope만 사용 |
+| body/header가 path tenant와 다른 값을 보냄 | header는 authority가 아니며, unknown body field는 400, 알려진 consent namespace 충돌은 403; path+JWT scope만 사용 |
+| tenant/clinic scope가 맞지 않거나 scoped commitment가 없음 | fail-closed 403 `SCOPE_FORBIDDEN`; existence-sensitive 404를 만들기 위한 별도 query는 추가하지 않음 |
+| active tenant lookup이 실패함 | 일반 요청 500 `INTERNAL_ERROR`, policy 요청 `POLICY_INTERNAL_ERROR`; correlation-only log/metric, tenant 404/403로 위장하지 않음 |
 | 요청 종료 후 다른 요청/코루틴에서 TenantContext가 남음 | 테스트로 복구 및 coroutine context 전파를 검증 |
 | `/api/v2/...` legacy path 호출 | tenant path controller에 매핑되지 않아 404/보호된 경로 거부 |
 
@@ -133,10 +161,18 @@ security matcher, 문서와 테스트를 하나의 PR에서 함께 갱신한다.
 - [ ] 다중 tenant JWT가 path에 선택한 허용 tenant로 정상 동작한다.
 - [ ] path/JWT mismatch, unknown tenant, invalid token의 401/403/404 계약이
   각 endpoint matrix에서 고정된다.
+- [ ] 선택된 path tenant가 `ActorContext`와 commitment access resolver까지
+  보존되고, authority 경로에 `allowedTenants.singleOrNull()`이 없다.
 - [ ] admin/patient role과 clinic membership이 기존보다 약화되지 않는다.
+- [ ] malformed/encoded-ambiguous/reserved path는 JWT parser 전에 404로
+  종료되고, validation filter는 security chain에서 정확히 한 번만 실행된다.
 - [ ] `TenantContext`의 thread-local cleanup와 coroutine context element의
   전파/복구가 테스트된다.
+- [ ] filter foundation error와 endpoint `SCOPE_FORBIDDEN` envelope가
+  구분되고, lookup outage가 privacy-safe internal error로 고정된다.
 - [ ] OpenAPI, API 문서, 운영 runbook에 `/api/v2` 활성 경로가 남지 않는다.
+- [ ] rollout runbook이 mixed old/new pod traffic을 금지하고 atomic cutover,
+  smoke, rollback readiness를 명시한다.
 - [ ] 기존 appointment-api 테스트와 새 tenant authority 테스트가 통과한다.
 - [ ] 내부 key/FK와 Exposed transaction 경계에는 변경이 없다.
 
@@ -150,4 +186,3 @@ security matcher, 문서와 테스트를 하나의 PR에서 함께 갱신한다.
   둔다.
 - CI가 통과하고 exact PR head에 대한 별도 merge 승인을 받은 뒤에만 merge,
   local develop sync, worktree cleanup을 수행한다.
-
