@@ -64,7 +64,9 @@
   exception, async/error dispatch에서 복구한다. 현재 suspend controller는 명시적
   `TenantClinicScope`를 사용하므로 불필요한 ambient propagation은 추가하지 않는다.
 - Exposed fixture는 `SchemaUtils.createMissingTablesAndColumns`와 transaction
-  cleanup을 사용하고, `TransactionManager.defaultDatabase`를 원상복구한다.
+  cleanup을 사용하되 `issue38-a`/`issue38-b` 같은 namespaced row만 삭제한다.
+  공유 Spring context의 `tenant-default` seed를 지우지 않으며,
+  `TransactionManager.defaultDatabase`도 원상복구한다.
 - rollout은 mixed old/new pod traffic을 지원하지 않는다. api-enabled/drain,
   atomic deploy, all-new readiness, 10개 신규 route와 10개 legacy negative smoke,
   rollback readiness를 runbook에 포함한다.

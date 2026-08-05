@@ -218,7 +218,7 @@ Conflicting `X-Tenant-Code`, `X-Clinic-Id`, or `tenantGroupId` headers/body fiel
 
 Use the existing singleton infrastructure and `TestJwtProvider`; create/cleanup tenant rows with `SchemaUtils.createMissingTablesAndColumns` and `Table.deleteAll()` under the repository's `API_INTEGRATION_RESOURCE`/explicit database resource lock. Do not add `@Testcontainers` or a raw container.
 
-The fixture must deterministically seed active A/B tenants, an inactive tenant, and a missing-code case instead of relying on the default `tenant-default` seed. Save and restore `TransactionManager.defaultDatabase` around any Exposed `Database.connect` setup, delete rows in dependency-safe order inside `transaction {}`, and restore the original default even when setup or teardown fails. This prevents parallel integration classes from changing the process-global Exposed database.
+The fixture must deterministically seed namespaced active A/B tenants (for example `issue38-a`/`issue38-b`), an inactive tenant, and a missing-code case instead of relying on the default `tenant-default` seed. Preserve the shared Spring-context seed and delete only these namespaced rows in dependency-safe order; do not clear all tenant/clinic tables because cached integration contexts will not reseed `tenant-default`. Save and restore `TransactionManager.defaultDatabase` around any Exposed `Database.connect` setup, and restore the original default even when setup or teardown fails. This prevents parallel integration classes from changing the process-global Exposed database.
 
 - [ ] **Step 2: Run the matrix and verify RED**
 
