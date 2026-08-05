@@ -269,6 +269,8 @@ class SchedulingPolicyPerformanceIntegrationTest @Autowired constructor(
             val outbox = explainAndRead(
                 connection = connection,
                 indexName = "idx_outbox_status_next_attempt",
+                // MySQL 8.4 may choose the V22 covering index with a bounded skip scan.
+                alternativeIndexNames = setOf("idx_outbox_appointment_ready"),
                 sql = """
                     SELECT id
                       FROM scheduling_outbox_events
