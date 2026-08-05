@@ -81,6 +81,7 @@ Expected: current baseline remains green (previous fresh run: 24 tests passed). 
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/tenant/TenantPathResolverTest.kt`
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/tenant/TenantPathValidationFilterTest.kt`
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/security/JwtTokenParserTest.kt`
+- Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/security/SecurityConfigFilterOrderTest.kt`
 
 - [ ] **Step 1: Write failing canonical-slug and pre-auth tests**
 
@@ -116,7 +117,7 @@ internal object TenantCodeRules {
 
 `TenantPathResolver.resolve` returns only a canonical first `/api/` segment. `JwtTokenParser` uses the same rule for every `allowedTenants` entry. Invalid values are rejected; they are never lower-cased implicitly. `TenantPathValidationFilter` runs after correlation setup but before `JwtAuthenticationFilter`; configure this explicitly as `addFilterAfter(tenantPathValidationFilter, correlationIdFilter)` followed by `addFilterAfter(jwtAuthenticationFilter, tenantPathValidationFilter)` (or the exact equivalent), never as two filters both relative to correlation. It rejects malformed, encoded-ambiguous, and `v1`/`v2` roots with `RESOURCE_NOT_FOUND` without invoking JWT parsing. A syntactically canonical but unknown tenant continues to JWT authentication and is resolved as authenticated `RESOURCE_NOT_FOUND` by `TenantContextFilter`.
 
-Register the new filter as a Spring bean with a disabled servlet `FilterRegistrationBean` (the same `enabled=false` convention used for correlation/JWT/tenant filters) so it runs only once in the `SecurityFilterChain`. Assert the effective order as correlation → tenant-path validation → JWT → tenant-context in the security configuration test. The pre-auth filter must not query the tenant database or inspect JWT claims.
+Register the new filter as a Spring bean with a disabled servlet `FilterRegistrationBean` (the same `enabled=false` convention used for correlation/JWT/tenant filters) so it runs only once in the `SecurityFilterChain`. Add `SecurityConfigFilterOrderTest` to inspect the bean registrations (`enabled == false`) and the effective chain order correlation → tenant-path validation → JWT → tenant-context. The pre-auth filter must not query the tenant database or inspect JWT claims.
 
 - [ ] **Step 4: Run the focused tests GREEN**
 
@@ -384,6 +385,9 @@ Run the complete focused matrix as separate invocations. Keep pure unit classes 
 
 ./gradlew :appointment-api:test \
   --tests 'io.bluetape4k.clinic.appointment.api.tenant.TenantPathValidationFilterTest' \
+  --no-parallel --no-build-cache --rerun-tasks
+./gradlew :appointment-api:test \
+  --tests 'io.bluetape4k.clinic.appointment.api.security.SecurityConfigFilterOrderTest' \
   --no-parallel --no-build-cache --rerun-tasks
 ./gradlew :appointment-api:test \
   --tests 'io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilterTest' \
