@@ -39,6 +39,7 @@ mockk = "1.14.11"              # https://mvnrepository.com/artifact/io.mockk/moc
 random-beans = "3.9.0"        # https://mvnrepository.com/artifact/io.github.benas/random-beans
 datafaker = "2.7.0"           # https://mvnrepository.com/artifact/net.datafaker/datafaker
 resilience4j = "2.4.0"        # https://mvnrepository.com/artifact/io.github.resilience4j/resilience4j-retry
+kotlinx-benchmark = "0.4.17"  # https://github.com/Kotlin/kotlinx-benchmark
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
@@ -57,6 +58,7 @@ kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 gatling = { id = "io.gatling.gradle", version.ref = "gatling" }
 exposed = { id = "org.jetbrains.exposed.plugin", version.ref = "exposed" }
+kotlinx-benchmark = { id = "org.jetbrains.kotlinx.benchmark", version.ref = "kotlinx-benchmark" }
 
 [libraries]
 jetbrains-annotations = { module = "org.jetbrains:annotations" }
@@ -97,6 +99,7 @@ kotlinx-coroutines-reactor = { module = "org.jetbrains.kotlinx:kotlinx-coroutine
 kotlinx-coroutines-slf4j = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-slf4j" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test" }
 kotlinx-coroutines-test-jvm = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test-jvm" }
+kotlinx-benchmark-runtime = { module = "org.jetbrains.kotlinx:kotlinx-benchmark-runtime", version.ref = "kotlinx-benchmark" }
 
 # ── Logging (versions from spring-boot4-dependencies BOM) ─────────────────
 slf4j-api = { module = "org.slf4j:slf4j-api" }

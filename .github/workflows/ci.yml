@@ -111,6 +111,7 @@ jobs:
               - 'settings.gradle.kts'
             messaging:
               - 'appointment-messaging/**'
+              - 'benchmark/appointment-messaging-benchmark/**'
               - 'appointment-event/**'
               - 'appointment-core/**'
               - 'buildSrc/**'
@@ -119,6 +120,11 @@ jobs:
               - 'settings.gradle.kts'
               - 'docs/alerts/appointment-messaging-rules.yml'
               - 'docs/runbooks/appointment-messaging-operations.md'
+              - 'docs/benchmarks/appointment-messaging-postgresql-baseline.json'
+              - 'docs/images/readme-charts/appointment-messaging-postgresql-benchmark-01-*'
+              - 'scripts/*appointment-messaging-benchmark*'
+              - 'README.md'
+              - 'README.ko.md'
             frontend:
               - 'frontend/**'
 
@@ -437,6 +443,73 @@ jobs:
           path: '**/build/reports/kover/'
           retention-days: 7
 
+  # ── 8. PostgreSQL kotlinx-benchmark smoke ─────────────────────────────────
+  benchmark-smoke:
+    name: Benchmark / PostgreSQL Smoke
+    runs-on: ubuntu-latest
+    concurrency:
+      group: appointment-messaging-benchmark-${{ github.ref }}
+      cancel-in-progress: false
+    needs: [build, changes]
+    if: needs.changes.outputs.messaging == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5.6.0
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.3'
+
+      - uses: gradle/actions/setup-gradle@v6.2.0
+        with:
+          gradle-version: wrapper
+          cache-read-only: true
+
+      - name: Run PostgreSQL benchmark smoke task
+        run: ./gradlew :appointment-messaging-benchmark:mainSmokeBenchmark --no-daemon --console=plain
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+
+      - name: Collect and validate benchmark report
+        run: |
+          node scripts/collect-appointment-messaging-benchmark.mjs \
+            --input-dir benchmark/appointment-messaging-benchmark/build/reports/benchmarks \
+            --output build/reports/appointment-messaging-postgresql/benchmark.json \
+            --config smoke
+          node scripts/validate-appointment-messaging-benchmark.mjs \
+            --input build/reports/appointment-messaging-postgresql/benchmark.json
+          node scripts/generate-appointment-messaging-benchmark-chart.mjs \
+            --input build/reports/appointment-messaging-postgresql/benchmark.json \
+            --output-dir build/reports/appointment-messaging-postgresql/charts
+
+      - name: Render and validate benchmark chart artifacts
+        run: |
+          python3 -m venv "$RUNNER_TEMP/cairo"
+          "$RUNNER_TEMP/cairo/bin/pip" install --disable-pip-version-check cairosvg
+          for locale in en ko; do
+            svg="build/reports/appointment-messaging-postgresql/charts/appointment-messaging-postgresql-benchmark-01-${locale}.svg"
+            png="build/reports/appointment-messaging-postgresql/charts/appointment-messaging-postgresql-benchmark-01-${locale}.png"
+            xmllint --noout "$svg"
+            "$RUNNER_TEMP/cairo/bin/cairosvg" "$svg" -o "$png"
+            identify "$png"
+          done
+
+      - name: Upload PostgreSQL benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appointment-messaging-postgresql-benchmark-smoke
+          path: |
+            build/reports/appointment-messaging-postgresql/
+            benchmark/appointment-messaging-benchmark/build/reports/benchmarks/
+          if-no-files-found: error
+          retention-days: 14
+
   # ── 8. 커버리지 집계 ─────────────────────────────────────────────────────────
   coverage-report:
     name: Coverage Report
@@ -559,7 +632,7 @@ jobs:
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
-    needs: [gitleaks, build, build-frontend, flyway-migration, test-core, test-solver, test-api, test-notification, test-messaging]
+    needs: [gitleaks, build, build-frontend, flyway-migration, test-core, test-solver, test-api, test-notification, test-messaging, benchmark-smoke]
     if: always()
     steps:
       - name: Check all jobs

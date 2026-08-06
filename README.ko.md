@@ -137,6 +137,7 @@ parameter를 제거합니다.
 | `appointment-core` | 예약, 구매 시술 플랜, 스케줄 정책, 방문 확정 약속 도메인과 Exposed ORM 리포지토리, 상태머신, 슬롯 계산 서비스 | [README](appointment-core/README.ko.md) |
 | `appointment-event` | Spring ApplicationEvent 기반 도메인 이벤트 발행/구독, 이벤트 로그 저장 | [README](appointment-event/README.ko.md) |
 | `appointment-messaging` | Kafka 4 transactional outbox 계약, V22 lease metadata, strict envelope codec, bounded relay | [README](appointment-messaging/README.ko.md) |
+| `benchmark/appointment-messaging-benchmark` | `kotlinx-benchmark`, Hikari, Flyway를 사용하는 PostgreSQL production schema outbox claim 측정 | [Benchmark source](benchmark/appointment-messaging-benchmark) |
 | `appointment-solver` | Timefold Solver AI 최적화 - 12개 Hard + 6개 Soft 제약으로 대량 예약 최적 배치 | [README](appointment-solver/README.ko.md) |
 | `appointment-notification` | 내구성 outbox 발송, 발송 시점 회원 조회, 리마인더 복구, 개인정보 보존 관리, provider 장애 격리 | [README](appointment-notification/README.ko.md) |
 | `appointment-api` | Spring Boot 4 REST API - 예약 CRUD, 슬롯 조회, 재배정, JWT 인증, Swagger | [README](appointment-api/README.ko.md) |
@@ -167,9 +168,35 @@ parameter를 제거합니다.
 ./gradlew :appointment-solver:build
 ./gradlew :appointment-api:build
 
+# PostgreSQL 예약 outbox benchmark (Docker 필요)
+./gradlew :appointment-messaging-benchmark:mainSmokeBenchmark
+./gradlew :appointment-messaging-benchmark:mainBenchmark
+
 # 특정 테스트 실행
 ./gradlew :appointment-core:test --tests "fully.qualified.ClassName.methodName"
 ```
+
+## PostgreSQL 예약 messaging benchmark
+
+benchmark 모듈은 production PostgreSQL Flyway migration을 적용하고, Hikari와 Exposed로
+실제 `JdbcAppointmentOutboxStore`를 연결한 뒤 `kotlinx-benchmark`로 bounded `claimBatch`
+경로를 측정합니다. bluetape4k PostgreSQL singleton launcher, 고정 seed `41`, synthetic
+row `20,000`건을 사용하며 Docker가 필요합니다.
+
+![PostgreSQL 예약 outbox benchmark](docs/images/readme-charts/appointment-messaging-postgresql-benchmark-01-ko.png)
+
+커밋된 [baseline JSON](docs/benchmarks/appointment-messaging-postgresql-baseline.json)은
+`main` configuration에서 수집했습니다. 수치는 `ops/ms` throughput이며 benchmark
+근거일 뿐 배포 SLO가 아닙니다.
+
+| Percentile | Throughput |
+|------------|------------:|
+| p50 | 0.001783 ops/ms |
+| p95 | 0.001815 ops/ms |
+| p99 | 0.001815 ops/ms |
+
+smoke task는 pull request 확인용이고, full task는 nightly CI에서 직렬 실행되며 JSON과
+생성 chart artifact를 업로드합니다.
 
 ### 사전 준비
 

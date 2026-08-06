@@ -86,7 +86,7 @@ interface AppointmentOutboxStore {
  * appointment allow-list row만 bounded batch로 claim하는 JDBC store다.
  * 모든 SQL은 메서드가 소유한 Exposed transaction 안에서 실행된다.
  */
-class JdbcAppointmentOutboxStore internal constructor(
+class JdbcAppointmentOutboxStore(
     private val maxAttempts: Int = 8,
     private val allowedTopics: Set<AppointmentTopic> = setOf(AppointmentTopic(DefaultAppointmentOutboxWriter.DEFAULT_TOPIC)),
     private val maxClinicBatch: Int = 1,

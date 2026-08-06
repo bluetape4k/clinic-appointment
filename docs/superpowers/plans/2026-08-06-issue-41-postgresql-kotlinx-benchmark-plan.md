@@ -14,23 +14,23 @@
 
 **Files:**
 - Modify: `gradle/libs.versions.toml`
+- Modify: `build.gradle.kts`
 - Modify: `settings.gradle.kts`
 - Modify: `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxStore.kt`
 - Create: `benchmark/appointment-messaging-benchmark/build.gradle.kts`
-- Create: `benchmark/appointment-messaging-benchmark/src/main/kotlin/io/bluetape4k/clinic/appointment/benchmark/BenchmarkSmokeContract.kt`
 
-- [ ] Add version `kotlinx-benchmark = "0.4.17"`, plugin alias
+- [x] Add version `kotlinx-benchmark = "0.4.17"`, plugin alias
   `org.jetbrains.kotlinx.benchmark`, and runtime library alias.
-- [ ] Add `includeBenchmarkModules()` to `settings.gradle.kts` and explicitly map
+- [x] Add `includeBenchmarkModules()` to `settings.gradle.kts` and explicitly map
   `:appointment-messaging-benchmark` to the nested directory; keep automatic
   production module discovery unchanged.
-- [ ] Change only `JdbcAppointmentOutboxStore` constructor visibility from
+- [x] Change only `JdbcAppointmentOutboxStore` constructor visibility from
   `internal` to public. Keep all defaults and validation unchanged.
-- [ ] Configure the benchmark module with `kotlin("plugin.allopen")`, the benchmark
+- [x] Configure the benchmark module with `kotlin("plugin.allopen")`, the benchmark
   plugin, project dependencies, Flyway/PostgreSQL/Hikari/Testcontainers runtime,
   and `benchmark { targets { register("main") } }`.
-- [ ] Add a source-level contract test or compile fixture that references the public
-  store constructor and records the required module API before benchmark code.
+- [x] Compile the benchmark entry point against the public store constructor; the
+  benchmark module itself is the source-level API contract.
 
 Run:
 
@@ -46,21 +46,22 @@ names are visible after the configuration is complete.
 
 **Files:**
 - Create: `benchmark/appointment-messaging-benchmark/src/test/kotlin/io/bluetape4k/clinic/appointment/benchmark/BenchmarkReportContractTest.kt`
+- Create: `benchmark/appointment-messaging-benchmark/src/main/kotlin/io/bluetape4k/clinic/appointment/benchmark/BenchmarkReportContract.kt`
 - Create: `benchmark/appointment-messaging-benchmark/src/main/kotlin/io/bluetape4k/clinic/appointment/benchmark/PostgreSqlAppointmentOutboxBenchmark.kt`
 - Create: `benchmark/appointment-messaging-benchmark/src/main/kotlin/io/bluetape4k/clinic/appointment/benchmark/PostgreSqlBenchmarkFixture.kt`
 
-- [ ] First write a report contract test that rejects missing benchmark name,
+- [x] First write a report contract test that rejects missing benchmark name,
   `postgresql` marker, row count, score, or p50/p95/p99. Run it and observe the
   expected failure before implementing the parser/fixture.
-- [ ] Implement `@State(Scope.Benchmark)` fixture with lazy singleton Postgres,
+- [x] Implement `@State(Scope.Benchmark)` fixture with lazy singleton Postgres,
   Hikari pool, Flyway migration, `Database.connect(dataSource)`, deterministic
   tenant/clinic seed and 20,000 mixed rows. Use JDBC only for setup/reset; every
   Exposed operation remains inside `transaction {}`.
-- [ ] Implement one bounded benchmark method that invokes
+- [x] Implement one bounded benchmark method that invokes
   `JdbcAppointmentOutboxStore(maxClinicBatch = 4).claim("benchmark", 32,
-  Duration.ofSeconds(30))` and consumes the returned list. Reset ready rows at
-  invocation/setup boundaries so measurement does not exhaust its own input.
-- [ ] Configure smoke/full iterations and JSON output in the Gradle benchmark
+  Duration.ofSeconds(30))` and consumes the returned list. Seed a fresh isolated
+  schema per fork; do not reset 20,000 rows inside measured invocations.
+- [x] Configure smoke/full iterations and JSON output in the Gradle benchmark
   configuration. Do not add production SLO thresholds.
 
 Run sequentially:
@@ -82,12 +83,12 @@ contract parsing.
 - Modify: `benchmark/appointment-messaging-benchmark/build.gradle.kts`
 - Create: `docs/benchmarks/appointment-messaging-postgresql-baseline.json`
 
-- [ ] Run the verified smoke task once and inspect the actual plugin output path.
-- [ ] Make the collector select exactly one claim result, preserve plugin metadata,
+- [x] Run the verified smoke task once and inspect the actual plugin output path.
+- [x] Make the collector select exactly one claim result, preserve plugin metadata,
   and write a stable report with image/JVM/seed/row-count/config metadata.
-- [ ] Make the validator fail closed on absent or non-positive score/percentiles and
+- [x] Make the validator fail closed on absent or non-positive score/percentiles and
   reject H2 markers or missing PostgreSQL metadata.
-- [ ] Run the full task once against Docker and use that output as the committed
+- [x] Run the full task once against Docker and use that output as the committed
   baseline; do not hand-edit measured values.
 
 Run:
@@ -116,13 +117,13 @@ message.
 - Modify: `appointment-messaging/README.ko.md`
 - Modify: `AGENTS.md`
 
-- [ ] Generate both locale SVGs from the same baseline JSON with explicit units,
+- [x] Generate both locale SVGs from the same baseline JSON with explicit units,
   p50/p95/p99 labels, PostgreSQL/20,000/seed metadata, and the non-SLO caveat.
-- [ ] Render PNGs with CairoSVG, run `xmllint`, `identify`, chart geometry/endpoint
+- [x] Render PNGs with CairoSVG, run `xmllint`, `identify`, chart geometry/endpoint
   audits, and inspect each PNG at original resolution.
-- [ ] Add equivalent English/Korean module rows, command snippets, metric table and
+- [x] Add equivalent English/Korean module rows, command snippets, metric table and
   chart links; preserve code/identifier/URL text exactly across locales.
-- [ ] Add the benchmark module to the repository module guidance without changing
+- [x] Add the benchmark module to the repository module guidance without changing
   unrelated operating rules.
 
 ## Task 5: CI and nightly artifact lanes
@@ -131,12 +132,12 @@ message.
 - Modify: `.github/workflows/ci.yml`
 - Modify: `.github/workflows/nightly.yml`
 
-- [ ] Add benchmark/docs/chart paths to the messaging change detector.
-- [ ] Add a serialized PR smoke job that runs the verified Gradle smoke task, the
+- [x] Add benchmark/docs/chart paths to the messaging change detector.
+- [x] Add a serialized PR smoke job that runs the verified Gradle smoke task, the
   collector/validator, chart generator, and uploads JSON/SVG/PNG artifacts.
-- [ ] Add a serialized nightly full job with the same validation and upload steps;
+- [x] Add a serialized nightly full job with the same validation and upload steps;
   wire it into the nightly status job, but keep it out of Kover coverage needs.
-- [ ] Run actionlint (or the repository YAML checker if actionlint is unavailable)
+- [x] Run actionlint (or the repository YAML checker if actionlint is unavailable)
   and verify job dependency paths against the actual Gradle task names.
 
 ## Task 6: Review, lesson, and completion evidence

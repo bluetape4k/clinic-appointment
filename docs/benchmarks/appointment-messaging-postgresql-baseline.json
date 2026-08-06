@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "io.bluetape4k.clinic.appointment.benchmark.PostgreSqlAppointmentOutboxBenchmark.claimBatch",
+  "database": "postgresql",
+  "postgresImage": "postgres:18-alpine",
+  "kotlinxBenchmarkVersion": "0.4.17",
+  "seed": 41,
+  "rows": 20000,
+  "configuration": "main",
+  "mode": "thrpt",
+  "score": 0.0017799635210115606,
+  "scoreUnit": "ops/ms",
+  "percentiles": {
+    "p50": 0.0017830891375077216,
+    "p95": 0.0018149702151862626,
+    "p99": 0.0018149702151862626
+  },
+  "deploymentSloEvidence": false,
+  "sourceFile": "benchmark/appointment-messaging-benchmark/build/reports/benchmarks/main/main.json"
+}

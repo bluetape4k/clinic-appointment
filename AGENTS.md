@@ -29,6 +29,7 @@ Prefer module-scoped validation.
 | `:appointment-solver` | Timefold Solver scheduling optimizer |
 | `:appointment-notification` | Notification scheduler with Resilience4j and Redis leader election |
 | `:appointment-api` | Spring Boot MVC API with JWT, Flyway, Swagger, Gatling |
+| `:appointment-messaging-benchmark` | PostgreSQL production-schema outbox claim benchmark using `kotlinx-benchmark` |
 | `:frontend:appointment-frontend` | Angular frontend |
 
 ## Key Files

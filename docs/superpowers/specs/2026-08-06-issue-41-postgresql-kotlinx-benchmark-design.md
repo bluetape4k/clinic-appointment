@@ -32,7 +32,8 @@ kotlinx-benchmark JSON ── validator ── docs baseline ── EN/KO SVG + 
 
 새 Gradle 모듈 `benchmark/appointment-messaging-benchmark`은 production 모듈과
 분리한다. 모듈 경계를 넘는 benchmark 전용 코드가 production test source set에
-섞이지 않으며, CI coverage 집계에도 포함하지 않는다. benchmark는
+섞이지 않으며, root Kover plugin/aggregate에서도 제외해 CI coverage 집계에
+포함하지 않는다. benchmark는
 `implementation(project(":appointment-messaging"))`으로 실제 store를 호출하고,
 `appointment-api`의 production Flyway resource를 classpath에서 읽는다.
 
@@ -49,8 +50,9 @@ benchmark가 재현할 수 있도록 public으로 연다. test-fixtures 변형�
   Exposed `SchemaUtils.create`로 production migration을 대체하지 않는다.
 - seed는 fixed seed `41`, tenant `1`, clinic `31`, mixed legacy/appointment backlog
   `20_000`건을 사용한다. payload는 redacted synthetic data만 포함한다.
-- invocation setup에서 appointment ready row를 deterministic하게 복원하여 claim
-  결과가 다음 iteration의 입력을 바꾸지 않게 한다.
+- 각 benchmark fork가 isolated schema를 새로 만들고 20,000건 backlog를 한 번
+  seed한다. 측정 invocation에서 전체 backlog를 복원하지 않아 measured operation에
+  reset 비용을 섞지 않으며, 설정된 유한 iteration이 backlog를 고갈하지 않도록 한다.
 - 기본 `main` configuration은 full 측정, `smoke` configuration은 CI pull-request
   확인용 단축 측정이다. warmup/iteration/time unit은 Gradle configuration에
   명시하며 benchmark annotation으로 숨기지 않는다.
