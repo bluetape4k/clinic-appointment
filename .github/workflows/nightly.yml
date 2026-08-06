@@ -376,7 +376,7 @@ jobs:
             png="build/reports/appointment-messaging-postgresql/charts/appointment-messaging-postgresql-benchmark-01-${locale}.png"
             python3 -c 'import sys; from xml.etree import ElementTree; ElementTree.parse(sys.argv[1])' "$svg"
             "$RUNNER_TEMP/cairo/bin/cairosvg" "$svg" -o "$png"
-            identify "$png"
+            "$RUNNER_TEMP/cairo/bin/python" -c 'import sys; from PIL import Image; image = Image.open(sys.argv[1]); image.load(); assert image.width > 0 and image.height > 0; print(f"{sys.argv[1]} PNG {image.width}x{image.height}")' "$png"
           done
 
       - name: Upload PostgreSQL benchmark artifacts

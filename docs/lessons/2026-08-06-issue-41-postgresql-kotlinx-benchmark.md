@@ -27,10 +27,11 @@ Flyway schema, Hikari `DataSource` wiring의 비용을 보여주지 못한다. �
 5. percentile 숫자만 문서화하면 throughput과 latency를 혼동할 수 있다. chart와
    README에 `ops/ms`, p50/p95/p99, PostgreSQL image, seed, row 수, 그리고
    `deploymentSloEvidence=false` 경계를 함께 표시했다.
-6. GitHub-hosted `ubuntu-latest`에는 `xmllint`가 보장되지 않았다. artifact 생성은
-   성공했지만 SVG 검증 단계가 exit 127로 실패했으므로, OS package 설치 대신 이미
-   benchmark job에 있는 Python 표준 `xml.etree.ElementTree`로 well-formedness를
-   확인한다. 같은 검증을 PR smoke와 nightly full에 유지한다.
+6. GitHub-hosted `ubuntu-latest`에는 `xmllint`와 `identify`가 보장되지 않았다.
+   artifact 생성은 성공했지만 두 검증 단계가 차례로 exit 127로 실패했으므로,
+   OS package 설치 대신 Python 표준 `xml.etree.ElementTree`와 CairoSVG가 함께
+   설치하는 Pillow로 SVG well-formedness와 PNG decode/size를 검증한다. 같은
+   검증을 PR smoke와 nightly full에 유지한다.
 
 ## 재현 명령
 
