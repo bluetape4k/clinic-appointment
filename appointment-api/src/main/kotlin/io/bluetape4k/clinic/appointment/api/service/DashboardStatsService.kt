@@ -6,8 +6,10 @@ import io.bluetape4k.clinic.appointment.api.dto.DailyAppointmentBucket
 import io.bluetape4k.clinic.appointment.api.dto.DailyCancellationBucket
 import io.bluetape4k.clinic.appointment.api.dto.DoctorBucket
 import io.bluetape4k.clinic.appointment.api.dto.DoctorStatsResponse
+import io.bluetape4k.clinic.appointment.api.stats.AppointmentStatsProjectionRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStatsRepository
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.clinic.appointment.api.tenant.TenantContext
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requirePositiveNumber
@@ -26,6 +28,7 @@ import java.time.temporal.ChronoUnit
  */
 class DashboardStatsService(
     private val statsRepository: AppointmentStatsRepository,
+    private val projectionRepository: AppointmentStatsProjectionRepository? = null,
 ) {
     companion object : KLogging() {
         private const val DEFAULT_DAYS = 29L
@@ -69,7 +72,8 @@ class DashboardStatsService(
         log.debug { "getAppointmentStats: clinicId=$clinicId, $effectiveFrom..$effectiveTo, statuses=$statuses" }
 
         val rows = transaction {
-            statsRepository.countByDateAndStatus(clinicId, effectiveFrom..effectiveTo, statusFilter)
+            projectionRows(clinicId, effectiveFrom..effectiveTo, statusFilter)
+                ?: statsRepository.countByDateAndStatus(clinicId, effectiveFrom..effectiveTo, statusFilter)
         }
 
         val byDate = rows.groupBy { it.first }
@@ -185,7 +189,8 @@ class DashboardStatsService(
         log.debug { "getCancellationStats: clinicId=$clinicId, $effectiveFrom..$effectiveTo" }
 
         val rows = transaction {
-            statsRepository.countByDateAndStatus(clinicId, effectiveFrom..effectiveTo, CANCELLATION_STATUSES)
+            projectionRows(clinicId, effectiveFrom..effectiveTo, CANCELLATION_STATUSES)
+                ?: statsRepository.countByDateAndStatus(clinicId, effectiveFrom..effectiveTo, CANCELLATION_STATUSES)
         }
 
         val countByStatus = rows.groupBy { it.second }
@@ -224,5 +229,18 @@ class DashboardStatsService(
             noShowRate = noShowRate,
             daily = daily,
         )
+    }
+
+    /** tenant context가 있고 projection이 비어 있지 않을 때만 read model을 사용합니다. */
+    private fun projectionRows(
+        clinicId: Long,
+        dateRange: ClosedRange<LocalDate>,
+        statuses: List<AppointmentState>?,
+    ): List<Triple<LocalDate, AppointmentState, Long>>? {
+        val tenantGroupId = TenantContext.current()?.id ?: return null
+        val projection = projectionRepository ?: return null
+        val rows = projection.countByDateAndStatus(tenantGroupId, clinicId, dateRange, statuses)
+        return rows.takeIf { it.isNotEmpty() }
+            ?.map { Triple(it.date, it.status, it.count) }
     }
 }

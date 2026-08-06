@@ -30,6 +30,8 @@ class AppointmentConsumerMigrationContractTest {
             }
             tableNames.contains("SCHEDULING_APPOINTMENT_CONSUMER_INBOX").shouldBeTrue()
             tableNames.contains("SCHEDULING_APPOINTMENT_CONSUMER_QUARANTINE").shouldBeTrue()
+            tableNames.contains("SCHEDULING_APPOINTMENT_STATS_PROJECTION").shouldBeTrue()
+            tableNames.contains("SCHEDULING_APPOINTMENT_CONSUMER_REPLAY_AUDIT").shouldBeTrue()
 
             val columns = mutableSetOf<String>()
             connection.metaData.getColumns(null, null, "SCHEDULING_APPOINTMENT_CONSUMER_INBOX", null).use { rows ->
@@ -49,6 +51,15 @@ class AppointmentConsumerMigrationContractTest {
                 ),
             ).shouldBeTrue()
             columns.contains("PAYLOAD_JSON").shouldBeFalse()
+
+            val projectionColumns = mutableSetOf<String>()
+            connection.metaData.getColumns(null, null, "SCHEDULING_APPOINTMENT_STATS_PROJECTION", null).use { rows ->
+                while (rows.next()) rows.getString("COLUMN_NAME")?.let(projectionColumns::add)
+            }
+            projectionColumns.containsAll(
+                setOf("TENANT_GROUP_ID", "CLINIC_ID", "EVENT_DATE", "STATUS", "APPOINTMENT_COUNT", "LAST_EVENT_VERSION"),
+            ).shouldBeTrue()
+            projectionColumns.contains("PAYLOAD_JSON").shouldBeFalse()
         }
     }
 }
