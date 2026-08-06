@@ -373,7 +373,7 @@ jobs:
           for locale in en ko; do
             svg="build/reports/appointment-messaging-postgresql/charts/appointment-messaging-postgresql-benchmark-01-${locale}.svg"
             png="build/reports/appointment-messaging-postgresql/charts/appointment-messaging-postgresql-benchmark-01-${locale}.png"
-            xmllint --noout "$svg"
+            python3 -c 'import sys; from xml.etree import ElementTree; ElementTree.parse(sys.argv[1])' "$svg"
             "$RUNNER_TEMP/cairo/bin/cairosvg" "$svg" -o "$png"
             identify "$png"
           done
