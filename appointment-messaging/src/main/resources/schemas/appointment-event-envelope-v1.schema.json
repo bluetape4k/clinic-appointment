@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://bluetape4k.io/schemas/appointment-event-envelope-v1.schema.json",
+  "title": "Appointment event envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "eventType",
+    "schemaVersion",
+    "occurredAt",
+    "tenantGroupId",
+    "clinicId",
+    "aggregateType",
+    "aggregateId",
+    "correlationId",
+    "causationId",
+    "payload"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "eventType": {
+      "type": "string",
+      "enum": ["AppointmentCreated", "AppointmentStatusChanged", "AppointmentCancelled", "AppointmentRescheduled"]
+    },
+    "schemaVersion": { "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "tenantGroupId": { "type": "integer", "minimum": 1 },
+    "clinicId": { "type": "integer", "minimum": 1 },
+    "aggregateType": { "const": "APPOINTMENT" },
+    "aggregateId": { "type": "integer", "minimum": 1 },
+    "correlationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "causationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "payload": {
+      "type": "object",
+      "minProperties": 2,
+      "maxProperties": 5,
+      "additionalProperties": false,
+      "properties": {
+        "appointmentId": { "type": "integer", "minimum": 1 },
+        "originalAppointmentId": { "type": "integer", "minimum": 1 },
+        "replacementAppointmentId": { "type": "integer", "minimum": 1 },
+        "version": { "type": "integer", "minimum": 0 },
+        "originalVersion": { "type": "integer", "minimum": 0 },
+        "replacementVersion": { "type": "integer", "minimum": 0 },
+        "fromState": { "type": "string", "minLength": 1 },
+        "toState": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "reasonCode": { "type": ["string", "null"], "maxLength": 128 }
+      }
+    }
+  }
+}
