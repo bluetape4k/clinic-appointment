@@ -72,5 +72,19 @@ fun includeFrontendModules() {
     }
 }
 
+// benchmark 모듈은 Gradle 예약 디렉토리 아래에 있으므로 production 모듈 자동
+// 검색과 분리해 명시적으로 등록한다.
+fun includeBenchmarkModules() {
+    val benchmarkDir = file("benchmark")
+    benchmarkDir.listFiles()
+        ?.filter { it.isDirectory && !it.name.startsWith(".") && File(it, "build.gradle.kts").exists() }
+        ?.forEach { dir ->
+            val moduleName = ":${dir.name}"
+            include(moduleName)
+            project(moduleName).projectDir = dir
+        }
+}
+
 includeModules()
 includeFrontendModules()
+includeBenchmarkModules()

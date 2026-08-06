@@ -323,6 +323,73 @@ jobs:
           path: '**/build/reports/kover/'
           retention-days: 7
 
+  # ── 7. PostgreSQL kotlinx-benchmark full evidence ─────────────────────────
+  benchmark-full:
+    name: Benchmark / PostgreSQL Full
+    runs-on: ubuntu-latest
+    concurrency:
+      group: appointment-messaging-benchmark-nightly
+      cancel-in-progress: false
+    needs: build
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5.6.0
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.3'
+
+      - uses: gradle/actions/setup-gradle@v6.2.0
+        with:
+          gradle-version: wrapper
+          cache-read-only: true
+
+      - name: Run PostgreSQL benchmark full task
+        run: ./gradlew :appointment-messaging-benchmark:mainBenchmark --no-daemon --console=plain
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.daemon=false"
+          TESTCONTAINERS_RYUK_DISABLED: "true"
+
+      - name: Collect and validate benchmark report
+        run: |
+          node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs
+          node scripts/collect-appointment-messaging-benchmark.mjs \
+            --input-dir benchmark/appointment-messaging-benchmark/build/reports/benchmarks \
+            --output build/reports/appointment-messaging-postgresql/benchmark.json \
+            --config main
+          node scripts/validate-appointment-messaging-benchmark.mjs \
+            --input build/reports/appointment-messaging-postgresql/benchmark.json
+          node scripts/generate-appointment-messaging-benchmark-chart.mjs \
+            --input build/reports/appointment-messaging-postgresql/benchmark.json \
+            --output-dir build/reports/appointment-messaging-postgresql/charts
+
+      - name: Render and validate benchmark chart artifacts
+        run: |
+          python3 -m venv "$RUNNER_TEMP/cairo"
+          "$RUNNER_TEMP/cairo/bin/pip" install --disable-pip-version-check cairosvg
+          for locale in en ko; do
+            svg="build/reports/appointment-messaging-postgresql/charts/appointment-messaging-postgresql-benchmark-01-${locale}.svg"
+            png="build/reports/appointment-messaging-postgresql/charts/appointment-messaging-postgresql-benchmark-01-${locale}.png"
+            python3 -c 'import sys; from xml.etree import ElementTree; ElementTree.parse(sys.argv[1])' "$svg"
+            "$RUNNER_TEMP/cairo/bin/cairosvg" "$svg" -o "$png"
+            "$RUNNER_TEMP/cairo/bin/python" -c 'import sys; from PIL import Image; image = Image.open(sys.argv[1]); image.load(); assert image.width > 0 and image.height > 0; print(f"{sys.argv[1]} PNG {image.width}x{image.height}")' "$png"
+          done
+
+      - name: Upload PostgreSQL benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appointment-messaging-postgresql-benchmark-full
+          path: |
+            build/reports/appointment-messaging-postgresql/
+            benchmark/appointment-messaging-benchmark/build/reports/benchmarks/
+          if-no-files-found: error
+          retention-days: 30
+
   # ── 7. 프론트엔드 빌드 ───────────────────────────────────────────────────────
   build-frontend:
     name: Build / Frontend (Angular)
@@ -398,7 +465,7 @@ jobs:
   nightly-status:
     name: Nightly Status
     runs-on: ubuntu-latest
-    needs: [build, build-frontend, test-core, test-solver, test-api, test-notification, test-messaging]
+    needs: [build, build-frontend, test-core, test-solver, test-api, test-notification, test-messaging, benchmark-full]
     if: always()
     steps:
       - name: Check all jobs

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="560" viewBox="0 0 1280 560" role="img" aria-label="PostgreSQL appointment outbox claim percentile benchmark">
+  <title>PostgreSQL appointment outbox claim</title>
+  <desc>postgres:18-alpine / 20,000 rows / seed 41. Benchmark evidence only; it is not a deployment SLO.</desc>
+  <style>
+    .background { fill: #101827; }
+    .title { font: 700 34px "Architects Daughter", "Comic Sans MS", sans-serif; fill: #f6f7fb; }
+    .subtitle, .note, .axis-title, .axis-value, .bar-label { font-family: "Comic Mono", "SFMono-Regular", monospace; fill: #c9d3e5; }
+    .subtitle { font-size: 18px; }
+    .note { font-size: 17px; fill: #ffcf8a; }
+    .axis-title { font-size: 18px; }
+    .axis-value { font-size: 15px; }
+    .bar-label { font-size: 22px; fill: #f6f7fb; font-weight: 700; }
+    .value { font: 700 20px "Comic Mono", "SFMono-Regular", monospace; fill: #f6f7fb; }
+    .grid { stroke: #40506a; stroke-width: 1; stroke-dasharray: 6 8; }
+    .bar { stroke: #f6f7fb; stroke-width: 2; }
+    .bar-0 { fill: #73d2de; }
+    .bar-1 { fill: #f2b880; }
+    .bar-2 { fill: #eb6f92; }
+  </style>
+  <rect width="1280" height="560" rx="26" class="background"/>
+  <text x="64" y="66" class="title">PostgreSQL appointment outbox claim</text>
+  <text x="64" y="101" class="subtitle">postgres:18-alpine / 20,000 rows / seed 41</text>
+  <text x="64" y="132" class="note">Benchmark evidence only; it is not a deployment SLO.</text>
+  <text x="1140" y="132" class="axis-title" text-anchor="end">ops/ms</text>
+  <line x1="230" y1="420.0" x2="1140" y2="420.0" class="grid"/><text x="212" y="426.0" class="axis-value" text-anchor="end">0.000000</text><line x1="230" y1="352.5" x2="1140" y2="352.5" class="grid"/><text x="212" y="358.5" class="axis-value" text-anchor="end">0.000567</text><line x1="230" y1="285.0" x2="1140" y2="285.0" class="grid"/><text x="212" y="291.0" class="axis-value" text-anchor="end">0.001134</text><line x1="230" y1="217.5" x2="1140" y2="217.5" class="grid"/><text x="212" y="223.5" class="axis-value" text-anchor="end">0.001702</text><line x1="230" y1="150.0" x2="1140" y2="150.0" class="grid"/><text x="212" y="156.0" class="axis-value" text-anchor="end">0.002269</text>
+  <rect x="395" y="207.8" width="180" height="212.2" rx="12" class="bar bar-0"/><text x="485" y="191.8" class="value" text-anchor="middle">0.001783</text><text x="485" y="472" class="bar-label" text-anchor="middle">p50</text><rect x="670" y="204.0" width="180" height="216.0" rx="12" class="bar bar-1"/><text x="760" y="188.0" class="value" text-anchor="middle">0.001815</text><text x="760" y="472" class="bar-label" text-anchor="middle">p95</text><rect x="945" y="204.0" width="180" height="216.0" rx="12" class="bar bar-2"/><text x="1035" y="188.0" class="value" text-anchor="middle">0.001815</text><text x="1035" y="472" class="bar-label" text-anchor="middle">p99</text>
+</svg>

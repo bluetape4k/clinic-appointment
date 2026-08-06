@@ -144,6 +144,7 @@ The full requirements diagram catalog is maintained in [docs/requirements](docs/
 | `appointment-core` | Domain model for appointments, purchased treatment plans, scheduling policies, visit commitments, Exposed ORM repositories, state machines, and slot calculation. | [README](appointment-core/README.md) |
 | `appointment-event` | Domain event publishing/subscription and event log persistence based on Spring ApplicationEvent. | [README](appointment-event/README.md) |
 | `appointment-messaging` | Kafka 4 transactional-outbox contracts, V22 lease metadata, strict envelope codec, and bounded relay. | [README](appointment-messaging/README.md) |
+| `benchmark/appointment-messaging-benchmark` | PostgreSQL production-schema outbox claim measurements with `kotlinx-benchmark`, Hikari, and Flyway. | [Benchmark source](benchmark/appointment-messaging-benchmark) |
 | `appointment-solver` | Timefold Solver AI optimization for bulk appointment placement using 12 hard and 6 soft constraints. | [README](appointment-solver/README.md) |
 | `appointment-notification` | Durable outbox delivery, send-time member resolution, reminder recovery, privacy-safe retention, and provider isolation. | [README](appointment-notification/README.md) |
 | `appointment-api` | Spring Boot 4 REST API for appointment CRUD, slot lookup, reassignment, JWT authentication, and Swagger. | [README](appointment-api/README.md) |
@@ -174,9 +175,35 @@ Backend endpoints are tenant-scoped. Use `/api/tenant-default/...` for the seede
 ./gradlew :appointment-solver:build
 ./gradlew :appointment-api:build
 
+# PostgreSQL appointment outbox benchmark (Docker required)
+./gradlew :appointment-messaging-benchmark:mainSmokeBenchmark
+./gradlew :appointment-messaging-benchmark:mainBenchmark
+
 # Run a specific test
 ./gradlew :appointment-core:test --tests "fully.qualified.ClassName.methodName"
 ```
+
+## PostgreSQL Appointment Messaging Benchmark
+
+The benchmark module runs the production PostgreSQL Flyway migrations, connects the
+real `JdbcAppointmentOutboxStore` through Hikari and Exposed, and records the bounded
+`claimBatch` path with `kotlinx-benchmark`. It uses the bluetape4k PostgreSQL singleton
+launcher, a fixed seed of `41`, and `20,000` synthetic rows. Docker is required.
+
+![PostgreSQL appointment outbox benchmark](docs/images/readme-charts/appointment-messaging-postgresql-benchmark-01-en.png)
+
+The committed [baseline JSON](docs/benchmarks/appointment-messaging-postgresql-baseline.json)
+was collected from the `main` configuration. Values are throughput in `ops/ms` and are
+benchmark evidence only; they are not a deployment SLO.
+
+| Percentile | Throughput |
+|------------|------------:|
+| p50 | 0.001783 ops/ms |
+| p95 | 0.001815 ops/ms |
+| p99 | 0.001815 ops/ms |
+
+The smoke task is intended for pull requests; the full task is serialized in nightly
+CI and uploads the JSON and generated chart artifacts.
 
 ### Prerequisites
 

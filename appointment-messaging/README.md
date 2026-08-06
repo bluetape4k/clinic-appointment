@@ -84,6 +84,29 @@ only after the V22 schema/index and broker readiness checks pass. See
 `docs/runbooks/appointment-messaging-operations.md` and the alert rules in
 `docs/alerts/appointment-messaging-rules.yml`.
 
+## PostgreSQL benchmark
+
+The production-schema claim path has a separate `kotlinx-benchmark` module. It applies
+the PostgreSQL Flyway migrations and calls the real store through Hikari and Exposed.
+Run the Docker-backed smoke or full measurement from the repository root:
+
+```bash
+./gradlew :appointment-messaging-benchmark:mainSmokeBenchmark
+./gradlew :appointment-messaging-benchmark:mainBenchmark
+```
+
+![PostgreSQL appointment outbox benchmark](../docs/images/readme-charts/appointment-messaging-postgresql-benchmark-01-en.png)
+
+See the [baseline JSON](../docs/benchmarks/appointment-messaging-postgresql-baseline.json)
+for the fixed seed, row count, and p50/p95/p99 throughput. These values are benchmark
+evidence, not deployment SLOs.
+
+| Percentile | Throughput |
+|------------|------------:|
+| p50 | 0.001783 ops/ms |
+| p95 | 0.001815 ops/ms |
+| p99 | 0.001815 ops/ms |
+
 Run the focused module checks with:
 
 ```bash

@@ -51,7 +51,9 @@ subprojects {
         plugin("io.spring.dependency-management")
         plugin("org.jetbrains.dokka")
         plugin("com.adarshr.test-logger")
-        plugin("org.jetbrains.kotlinx.kover")
+        if (project.path != ":appointment-messaging-benchmark") {
+            plugin("org.jetbrains.kotlinx.kover")
+        }
     }
 
     java {
@@ -221,5 +223,9 @@ subprojects {
 // 루트에서 커버리지 측정 대상 서브모듈을 `kover` 의존성으로 등록하면
 // `./gradlew koverXmlReport` / `koverHtmlReport` 실행 시 집계 리포트를 생성한다.
 dependencies {
-    subprojects.forEach { sub -> kover(project(sub.path)) }
+    // Benchmarks produce their own JSON evidence and must not dilute product
+    // coverage aggregation with generated JMH classes.
+    subprojects
+        .filterNot { it.path == ":appointment-messaging-benchmark" }
+        .forEach { sub -> kover(project(sub.path)) }
 }

@@ -83,6 +83,28 @@ broker readiness 확인 후 hold를 해제합니다. 상세 절차는
 `docs/runbooks/appointment-messaging-operations.md`, alert 규칙은
 `docs/alerts/appointment-messaging-rules.yml`을 확인합니다.
 
+## PostgreSQL benchmark
+
+production schema claim 경로는 별도 `kotlinx-benchmark` 모듈에서 검증합니다. PostgreSQL
+Flyway migration을 적용하고 Hikari와 Exposed를 통해 실제 store를 호출합니다. 저장소
+루트에서 Docker 기반 smoke 또는 full 측정을 실행합니다.
+
+```bash
+./gradlew :appointment-messaging-benchmark:mainSmokeBenchmark
+./gradlew :appointment-messaging-benchmark:mainBenchmark
+```
+
+![PostgreSQL 예약 outbox benchmark](../docs/images/readme-charts/appointment-messaging-postgresql-benchmark-01-ko.png)
+
+고정 seed, row 수, p50/p95/p99 throughput은 [baseline JSON](../docs/benchmarks/appointment-messaging-postgresql-baseline.json)에서
+확인할 수 있습니다. 이 수치는 benchmark 근거이며 배포 SLO가 아닙니다.
+
+| Percentile | Throughput |
+|------------|------------:|
+| p50 | 0.001783 ops/ms |
+| p95 | 0.001815 ops/ms |
+| p99 | 0.001815 ops/ms |
+
 모듈 집중 검증은 다음 명령으로 실행합니다.
 
 ```bash
