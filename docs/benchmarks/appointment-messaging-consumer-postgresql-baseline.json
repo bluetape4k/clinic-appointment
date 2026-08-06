@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "benchmarkFamily": "io.bluetape4k.clinic.appointment.benchmark.PostgreSqlAppointmentConsumerBenchmark",
+  "database": "postgresql",
+  "postgresImage": "postgres:18-alpine",
+  "kotlinxBenchmarkVersion": "0.4.17",
+  "seed": 42,
+  "rowCounts": [10000, 100000],
+  "cleanupBatchSize": 32,
+  "configuration": "main",
+  "mode": "thrpt",
+  "measurements": [
+    {
+      "operation": "boundedCleanup",
+      "rows": 10000,
+      "score": 0.043980327998192154,
+      "scoreUnit": "ops/ms",
+      "percentiles": {
+        "p50": 0.04411507384302239,
+        "p95": 0.045486112324224524,
+        "p99": 0.045486112324224524
+      }
+    },
+    {
+      "operation": "boundedCleanup",
+      "rows": 100000,
+      "score": 0.046155464683045606,
+      "scoreUnit": "ops/ms",
+      "percentiles": {
+        "p50": 0.046691848644780605,
+        "p95": 0.04820547642171327,
+        "p99": 0.04820547642171327
+      }
+    },
+    {
+      "operation": "duplicateInboxLookup",
+      "rows": 10000,
+      "score": 0.5551702378384851,
+      "scoreUnit": "ops/ms",
+      "percentiles": {
+        "p50": 0.567587910961431,
+        "p95": 0.5750336859374242,
+        "p99": 0.5750336859374242
+      }
+    },
+    {
+      "operation": "duplicateInboxLookup",
+      "rows": 100000,
+      "score": 0.5509288370308324,
+      "scoreUnit": "ops/ms",
+      "percentiles": {
+        "p50": 0.5547401995309722,
+        "p95": 0.5714037931921351,
+        "p99": 0.5714037931921351
+      }
+    }
+  ],
+  "deploymentSloEvidence": false,
+  "sourceFile": "benchmark/appointment-messaging-benchmark/build/reports/benchmarks/main/2026-08-06T21.19.05.105256/main.json",
+  "sourceFilePattern": "benchmark/appointment-messaging-benchmark/build/reports/benchmarks/main/main.json"
+}

@@ -105,6 +105,28 @@ Flyway migration을 적용하고 Hikari와 Exposed를 통해 실제 store를 호
 | p95 | 0.001815 ops/ms |
 | p99 | 0.001815 ops/ms |
 
+### PostgreSQL consumer inbox benchmark (Issue #42)
+
+같은 `kotlinx-benchmark` 모듈에서 PostgreSQL V23 schema의 tenant 범위 consumer inbox도
+측정합니다. synthetic tenant `7`, clinic `31`을 사용하고 HikariCP와 Exposed를 통해
+접속하며, JMH fork 1개·warm-up 2회·측정 5회로 실행합니다. duplicate 경로는
+`(logicalConsumerId, logicalStreamId, eventId)` 키를 조회하고 cleanup은 호출당
+처리 완료 metadata row를 최대 32건만 삭제합니다. inbox dataset은 10,000건과
+100,000건으로 고정했습니다. 아래 값은 측정 근거이며 배포 SLO가 아닙니다.
+
+| 작업 | inbox rows | p50 (ops/ms) | p95 (ops/ms) | p99 (ops/ms) |
+|------|-----------:|-------------:|-------------:|-------------:|
+| bounded cleanup | 10,000 | 0.044115 | 0.045486 | 0.045486 |
+| bounded cleanup | 100,000 | 0.046692 | 0.048205 | 0.048205 |
+| duplicate lookup | 10,000 | 0.567588 | 0.575034 | 0.575034 |
+| duplicate lookup | 100,000 | 0.554740 | 0.571404 | 0.571404 |
+
+raw payload를 포함하지 않는 [consumer baseline JSON](../docs/benchmarks/appointment-messaging-consumer-postgresql-baseline.json)에
+PostgreSQL image, row 조건, batch 상한, benchmark 설정과 원본 report 경로를 기록했습니다.
+`./gradlew :appointment-messaging-benchmark:mainBenchmark`로 재현할 수 있습니다.
+위 chart는 outbox claim 시각화로 유지하고, consumer 수치는 이 표와 전용 artifact를
+권위 있는 문서로 사용합니다.
+
 모듈 집중 검증은 다음 명령으로 실행합니다.
 
 ```bash

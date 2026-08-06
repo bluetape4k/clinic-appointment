@@ -20,7 +20,7 @@ class AppointmentStatsProjectionConsumer(
     override fun handle(envelope: AppointmentEventEnvelope, context: AppointmentConsumerContext) {
         check(context.provenance.tenantGroupId == envelope.tenantGroupId) { "consumer tenant scope mismatch" }
         check(context.provenance.clinicId == envelope.clinicId) { "consumer clinic scope mismatch" }
-        val event = projectionEvent(envelope) ?: return
+        val event = projectionEvent(envelope)
         transaction(database) {
             repository.upsert(
                 tenantGroupId = envelope.tenantGroupId,

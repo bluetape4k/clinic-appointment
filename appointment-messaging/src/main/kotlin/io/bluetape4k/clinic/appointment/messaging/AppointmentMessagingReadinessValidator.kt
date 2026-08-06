@@ -58,13 +58,13 @@ class AppointmentMessagingReadinessValidator(
     }.getOrDefault(false)
 
     private fun schemaContractExists(): Boolean = runCatching {
-        dataSource!!.connection.use { connection ->
+        dataSource?.connection?.use { connection ->
             val metadata = connection.metaData
             val schema = connection.schema.takeIf { it.isNotBlank() } ?: return@use false
             val columns = readColumnNames(metadata, connection.catalog, schema)
             val indexes = readIndexNames(metadata, connection.catalog, schema)
             REQUIRED_COLUMNS.all(columns::contains) && REQUIRED_INDEXES.all(indexes::contains)
-        }
+        } ?: false
     }.getOrDefault(false)
 
     private fun readColumnNames(

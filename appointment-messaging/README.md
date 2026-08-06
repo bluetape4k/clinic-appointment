@@ -107,6 +107,28 @@ evidence, not deployment SLOs.
 | p95 | 0.001815 ops/ms |
 | p99 | 0.001815 ops/ms |
 
+### PostgreSQL consumer inbox benchmark (Issue #42)
+
+The same `kotlinx-benchmark` module measures the tenant-scoped consumer inbox on the
+PostgreSQL V23 schema. It uses synthetic tenant `7` and clinic `31`, HikariCP plus Exposed,
+one JMH fork, two warm-up iterations, and five measured iterations. The duplicate path
+looks up the `(logicalConsumerId, logicalStreamId, eventId)` key; cleanup deletes at most
+32 processed metadata rows per call. The dataset is held at 10,000 or 100,000 inbox rows.
+The values below are measured evidence, not deployment SLOs.
+
+| Operation | Inbox rows | p50 (ops/ms) | p95 (ops/ms) | p99 (ops/ms) |
+|-----------|-----------:|-------------:|-------------:|-------------:|
+| bounded cleanup | 10,000 | 0.044115 | 0.045486 | 0.045486 |
+| bounded cleanup | 100,000 | 0.046692 | 0.048205 | 0.048205 |
+| duplicate lookup | 10,000 | 0.567588 | 0.575034 | 0.575034 |
+| duplicate lookup | 100,000 | 0.554740 | 0.571404 | 0.571404 |
+
+The raw-payload-free [consumer baseline JSON](../docs/benchmarks/appointment-messaging-consumer-postgresql-baseline.json)
+records the PostgreSQL image, row scenarios, batch bound, benchmark configuration, and
+source report path. Reproduce it with `./gradlew :appointment-messaging-benchmark:mainBenchmark`;
+the existing chart above remains the outbox claim visualization, while consumer values are
+kept in this table and the dedicated artifact.
+
 Run the focused module checks with:
 
 ```bash
