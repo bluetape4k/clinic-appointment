@@ -50,7 +50,9 @@ smoke) 또는 30일(nightly full) artifact로 보존한다.
 
 ## 후속 작업
 
-- hosted runner의 PR smoke와 nightly full artifact를 실제로 수집한다.
+- PR smoke artifact는 run `31084449489`에서 수집했고 benchmark smoke job의 JSON,
+  EN/KO SVG·PNG 생성·검증과 upload가 통과했다. scheduled nightly full은 다음
+  실제 dispatch artifact가 생길 때까지 관측 대기 상태로 유지한다.
 - 운영 rollout 전에는 PostgreSQL native architecture에서 lock-wait, multi-worker
   contention, connection pool saturation, Kafka catch-up을 별도 측정한다.
 - benchmark 수치를 deployment SLO로 승격하려면 환경별 threshold와 historical

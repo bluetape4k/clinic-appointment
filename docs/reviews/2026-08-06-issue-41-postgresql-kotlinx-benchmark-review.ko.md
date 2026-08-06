@@ -5,7 +5,9 @@
 Issue #41 후속으로 추가한 PostgreSQL production schema benchmark, report
 validator, EN/KO chart, README, CI smoke/nightly lane을 현재 feature worktree에서
 검토했다. 기존 `appointment-messaging` H2 계약과 Kafka 4 outbox 구현은 변경하지
-않고 targeted regression으로 재검증했다.
+않고 targeted regression으로 재검증했다. PR #228 head
+`c406d19cdab94a298325ce87cf4277533bdb8c3e`의 GitHub-hosted PR smoke
+(`run 31084449489`, benchmark job `92562690692`)도 확인했다.
 
 ## 리뷰 렌즈와 결과
 
@@ -40,8 +42,16 @@ validator, EN/KO chart, README, CI smoke/nightly lane을 현재 feature worktree
 - collector → validator → chart generator 실행 성공. JSON은 PostgreSQL marker,
   fixed seed `41`, rows `20,000`, score/p50/p95/p99, `deploymentSloEvidence=false`를
   보존한다.
-- EN/KO SVG는 `xmllint`, PNG는 `identify`(1280x560), geometry audit는 각각
+- EN/KO SVG는 Python 표준 `xml.etree.ElementTree`, PNG는 CairoSVG가 설치한
+  Pillow로 decode/size(1280x560)를 확인했고, geometry audit는 각각
   `geometry_failures=0`; baseline JSON과 SVG 값 대조도 통과했다.
+- 첫 hosted smoke에서는 `xmllint`, 다음 실행에서는 `identify`가 runner에 없어
+  chart validation이 exit 127로 실패했다. 두 의존성을 각각 Python 표준 XML
+  parser와 Pillow 검증으로 교체한 뒤 위 PR smoke가 benchmark task, collector,
+  validator, EN/KO SVG·PNG 생성/검증, artifact upload까지 모두 통과했다.
+- collector는 `--config main|smoke`로 raw output을 먼저 격리하고 실제 timestamp
+  `sourceFile`과 stable `sourceFilePattern`을 함께 보존한다. main/smoke 혼합
+  fixture Node regression test도 통과해 report provenance를 재현했다.
 - `.github/workflows/ci.yml`, `.github/workflows/nightly.yml`는 `actionlint` 통과.
 - `gitleaks detect --source . --redact --no-git --config .gitleaks.toml` 통과.
 - `git diff --check` 통과.
@@ -54,13 +64,14 @@ validator, EN/KO chart, README, CI smoke/nightly lane을 현재 feature worktree
    connection saturation, Kafka catch-up, heap/thread, multi-worker contention은
    별도 운영 benchmark와 rollout gate가 필요하다.
 3. nightly workflow는 actionlint와 local smoke/full equivalent로 정적·기능 경로를
-   검증했지만 GitHub-hosted runner에서 실제 scheduled dispatch가 실행된 증거는
-   PR CI 이후 수집해야 한다.
+   검증했고 PR smoke artifact도 수집했다. 다만 GitHub-hosted runner의 실제
+   scheduled full dispatch는 아직 관측하지 않았으므로 다음 scheduled artifact가
+   별도 증거가 된다.
 4. CI는 chart PNG 생성에 격리 Python venv와 CairoSVG 설치를 사용한다. registry 또는
    PyPI 장애 시 benchmark job만 실패하도록 artifact 경계를 유지한다.
 
 ## 판정
 
-현재 코드 변경은 구현/문서/CI 범위에서 **READY FOR PR CI**다. P2 위험은 문서와
-`deploymentSloEvidence=false` 계약으로 명시했으며, hosted CI/nightly 결과가 없는
-상태에서 배포 성능 보장을 주장하지 않는다.
+현재 코드 변경은 구현/문서/CI 범위에서 **READY FOR MERGE REVIEW**다. P2 위험은
+문서와 `deploymentSloEvidence=false` 계약으로 명시했으며, local emulation 수치와
+아직 관측하지 않은 scheduled nightly full을 배포 성능 보장으로 주장하지 않는다.

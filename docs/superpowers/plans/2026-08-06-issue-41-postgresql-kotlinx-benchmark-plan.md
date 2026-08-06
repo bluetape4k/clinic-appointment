@@ -121,8 +121,8 @@ message.
 - [x] Generate both locale SVGs from the same baseline JSON with explicit units,
   p50/p95/p99 labels, PostgreSQL/20,000/seed metadata, and the non-SLO caveat.
 - [x] Render PNGs with CairoSVG, parse XML with the standard Python library,
-  run `identify`, chart geometry/endpoint audits, and inspect each PNG at original
-  resolution.
+  decode/size-check PNGs with Pillow, run chart geometry/endpoint audits, and
+  inspect each PNG at original resolution.
 - [x] Add equivalent English/Korean module rows, command snippets, metric table and
   chart links; preserve code/identifier/URL text exactly across locales.
 - [x] Add the benchmark module to the repository module guidance without changing
@@ -148,13 +148,14 @@ message.
 - Create: `docs/reviews/2026-08-06-issue-41-postgresql-kotlinx-benchmark-review.ko.md`
 - Create: `docs/lessons/2026-08-06-issue-41-postgresql-kotlinx-benchmark.md`
 
-- [ ] Run targeted messaging tests, benchmark contract tests, compile/build, JSON,
-  chart, YAML, docs parity, and `git diff --check` validations sequentially.
-- [ ] Record independent review lenses (correctness, security/data, performance,
+- [x] Run targeted messaging tests, benchmark contract tests, compile/build, JSON,
+  chart, YAML, docs parity, hosted PR smoke, and `git diff --check` validations
+  sequentially.
+- [x] Record independent review lenses (correctness, security/data, performance,
   operability/CI, docs/API, integration) with P0/P1/P2/P3 counts.
-- [ ] Record what was learned, exact commands, evidence paths, and remaining
+- [x] Record what was learned, exact commands, evidence paths, and remaining
   deployment-gate limitations in Korean.
-- [ ] Commit each coherent batch with the repository Lore commit trailers.
+- [x] Commit each coherent batch with the repository Lore commit trailers.
 
 ## Task 7: PR and merge handoff
 
