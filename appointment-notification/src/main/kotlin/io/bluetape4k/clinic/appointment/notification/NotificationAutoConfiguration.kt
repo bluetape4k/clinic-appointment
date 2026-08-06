@@ -6,6 +6,8 @@ import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
 import io.bluetape4k.leader.lettuce.leaderGroupElection
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRuntime
+import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingProperties
 import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistRepository
 import io.micrometer.core.instrument.MeterRegistry
 import io.lettuce.core.RedisClient
@@ -376,6 +378,26 @@ class NotificationAutoConfiguration {
             routeGate = routeGate,
             metrics = metricsProvider.ifAvailable,
         )
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.messaging.consumer", name = ["enabled"], havingValue = "true")
+    @ConditionalOnBean(AppointmentConsumerRuntime::class, NotificationDirectDeliveryPort::class)
+    @ConditionalOnMissingBean(NotificationAppointmentEventConsumer::class)
+    fun notificationAppointmentEventConsumer(
+        delivery: NotificationDirectDeliveryPort,
+    ): NotificationAppointmentEventConsumer =
+        NotificationAppointmentEventConsumer(delivery)
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.messaging.consumer", name = ["enabled"], havingValue = "true")
+    @ConditionalOnBean(AppointmentConsumerRuntime::class, NotificationAppointmentEventConsumer::class)
+    @ConditionalOnMissingBean(NotificationAppointmentEventKafkaListener::class)
+    fun notificationAppointmentEventKafkaListener(
+        runtime: AppointmentConsumerRuntime,
+        consumer: NotificationAppointmentEventConsumer,
+        properties: AppointmentMessagingProperties,
+    ): NotificationAppointmentEventKafkaListener =
+        NotificationAppointmentEventKafkaListener(runtime, consumer, properties)
 
     @Bean
     @ConditionalOnBean(NotificationOutboxWorkStore::class)
