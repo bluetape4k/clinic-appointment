@@ -24,7 +24,7 @@ Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제�
 - **예약 상태 머신** - PENDING -> REQUESTED -> CONFIRMED -> CHECKED_IN -> IN_PROGRESS -> COMPLETED 전이, 취소/재배정 지원
 - **AI 최적 스케줄링** - Timefold Solver로 의사, 장비, 영업시간을 포함한 12개 Hard + 6개 Soft 제약을 만족하는 최적 배치
 - **내구성 알림** - 예약과 함께 개인정보를 최소화한 알림 outbox를 커밋하고, DB lease와 fencing, 병원 간 공정 처리, 발송 시점 회원 조회, 실행 시간이 제한된 Resilience4j 정책으로 전달
-- **트랜잭션 예약 메시징** - 예약 변경과 개인정보를 최소화한 Kafka 4 이벤트 intent를 함께 커밋하고, lease fencing과 allow-list publisher로 at-least-once 전달
+- **트랜잭션 예약 메시징** - 예약 aggregate와 개인정보를 제거한 Kafka 4 이벤트 intent를 함께 커밋하고, lease fencing과 allow-list를 적용한 at-least-once relay로 전달
 - **테넌트 범위 REST API** - `/api/{tenantCode}/...` 경로, JWT tenant 인가, Flyway 마이그레이션, Swagger UI 제공
 - **예약 플랜 기반** - 구매 상품 BOM을 불변 진료 의무로 스냅숏하고, 카탈로그 동기화와 신뢰된 구매 이벤트를 통해 방문 예약 이전 단계를 관리
 - **예약 정책 기반** - 가예약, 동의, 오버부킹, 재확인, 운영 장애 복구, 통제된 진료 시간 연장에 대한 테넌트 기준 정책과 병원별 재정의를 버전 관리
