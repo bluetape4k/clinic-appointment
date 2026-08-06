@@ -55,7 +55,11 @@ class AppointmentKafkaConsumerIntegrationTest {
                 driver = "org.h2.Driver",
             )
             transaction(database) {
-                SchemaUtils.create(AppointmentConsumerInboxTable, AppointmentConsumerQuarantineTable)
+                SchemaUtils.create(
+                    AppointmentConsumerInboxTable,
+                    AppointmentConsumerQuarantineTable,
+                    AppointmentConsumerRejectedRecordTable,
+                )
             }
             val runtime = AppointmentConsumerRuntime(
                 codec = AppointmentEventEnvelopeCodec(),

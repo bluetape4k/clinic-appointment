@@ -29,8 +29,10 @@ class AppointmentConsumerMigrationContractTest {
                 while (rows.next()) rows.getString("TABLE_NAME")?.let(tableNames::add)
             }
             tableNames.contains("SCHEDULING_APPOINTMENT_CONSUMER_INBOX").shouldBeTrue()
+            tableNames.contains("SCHEDULING_APPOINTMENT_CONSUMER_REJECTED").shouldBeTrue()
             tableNames.contains("SCHEDULING_APPOINTMENT_CONSUMER_QUARANTINE").shouldBeTrue()
             tableNames.contains("SCHEDULING_APPOINTMENT_STATS_PROJECTION").shouldBeTrue()
+            tableNames.contains("SCHEDULING_APPOINTMENT_STATS_PROJECTION_EVENTS").shouldBeTrue()
             tableNames.contains("SCHEDULING_APPOINTMENT_CONSUMER_REPLAY_AUDIT").shouldBeTrue()
 
             val columns = mutableSetOf<String>()
@@ -48,6 +50,7 @@ class AppointmentConsumerMigrationContractTest {
                     "CLINIC_ID",
                     "PAYLOAD_SHA256",
                     "STATUS",
+                    "PROCESSING_LEASE_UNTIL",
                 ),
             ).shouldBeTrue()
             columns.contains("PAYLOAD_JSON").shouldBeFalse()

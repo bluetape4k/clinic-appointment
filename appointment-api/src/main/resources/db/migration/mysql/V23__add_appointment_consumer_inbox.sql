@@ -16,6 +16,7 @@ CREATE TABLE scheduling_appointment_consumer_inbox (
     failure_code        VARCHAR(64),
     received_at         DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) NOT NULL,
     processed_at        DATETIME(6),
+    processing_lease_until DATETIME(6),
     CONSTRAINT pk_appointment_consumer_inbox
         PRIMARY KEY (logical_consumer_id, logical_stream_id, event_id),
     CONSTRAINT ck_consumer_inbox_partition CHECK (partition_number >= 0),
@@ -32,6 +33,27 @@ CREATE INDEX idx_appointment_consumer_inbox_status_received
     ON scheduling_appointment_consumer_inbox(logical_consumer_id, status, received_at);
 CREATE INDEX idx_appointment_consumer_inbox_scope
     ON scheduling_appointment_consumer_inbox(logical_consumer_id, tenant_group_id, clinic_id, received_at);
+CREATE INDEX idx_appointment_consumer_inbox_status_processed
+    ON scheduling_appointment_consumer_inbox(logical_consumer_id, status, processed_at, logical_stream_id, event_id);
+
+CREATE TABLE scheduling_appointment_consumer_rejected (
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
+    logical_consumer_id VARCHAR(128) NOT NULL,
+    logical_stream_id   VARCHAR(128) NOT NULL,
+    failure_code        VARCHAR(64) NOT NULL,
+    topic               VARCHAR(249) NOT NULL,
+    partition_number    INT NOT NULL,
+    offset_value        BIGINT NOT NULL,
+    payload_sha256      VARCHAR(64) NOT NULL,
+    created_at          DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) NOT NULL,
+    CONSTRAINT uq_appointment_consumer_rejected_provenance
+        UNIQUE (logical_consumer_id, logical_stream_id, topic, partition_number, offset_value),
+    CONSTRAINT ck_consumer_rejected_partition CHECK (partition_number >= 0),
+    CONSTRAINT ck_consumer_rejected_offset CHECK (offset_value >= 0)
+);
+
+CREATE INDEX idx_appointment_consumer_rejected_created
+    ON scheduling_appointment_consumer_rejected(created_at);
 
 CREATE TABLE scheduling_appointment_consumer_quarantine (
     id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -79,6 +101,24 @@ CREATE INDEX idx_appointment_stats_projection_scope_date
 CREATE INDEX idx_appointment_stats_projection_scope_status_date
     ON scheduling_appointment_stats_projection(tenant_group_id, clinic_id, status, event_date);
 
+CREATE TABLE scheduling_appointment_stats_projection_events (
+    tenant_group_id     BIGINT NOT NULL,
+    clinic_id           BIGINT NOT NULL,
+    aggregate_id        VARCHAR(128) NOT NULL,
+    event_id            VARCHAR(128) NOT NULL,
+    event_version       BIGINT NOT NULL,
+    event_date          DATE NOT NULL,
+    status              VARCHAR(32) NOT NULL,
+    created_at          DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) NOT NULL,
+    CONSTRAINT pk_appointment_stats_projection_events
+        PRIMARY KEY (tenant_group_id, clinic_id, aggregate_id, event_id),
+    CONSTRAINT ck_appointment_stats_projection_events_scope CHECK (tenant_group_id > 0 AND clinic_id > 0),
+    CONSTRAINT ck_appointment_stats_projection_events_version CHECK (event_version >= 0)
+);
+
+CREATE INDEX idx_appointment_stats_projection_events_scope_date
+    ON scheduling_appointment_stats_projection_events(tenant_group_id, clinic_id, event_date);
+
 CREATE TABLE scheduling_appointment_consumer_replay_audit (
     id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
     request_id          VARCHAR(128) NOT NULL,
@@ -88,6 +128,7 @@ CREATE TABLE scheduling_appointment_consumer_replay_audit (
     clinic_id           BIGINT NOT NULL,
     from_offset         BIGINT NOT NULL,
     to_offset           BIGINT NOT NULL,
+    request_hash        VARCHAR(64) NOT NULL,
     dry_run             BOOLEAN NOT NULL,
     approved_by         VARCHAR(128) NOT NULL,
     status              VARCHAR(32) NOT NULL,

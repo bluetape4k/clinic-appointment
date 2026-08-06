@@ -10,12 +10,18 @@ data class AppointmentConsumerProperties(
     val logicalStreamId: AppointmentLogicalStreamId = AppointmentLogicalStreamId("appointment-events"),
     val topic: AppointmentTopic = AppointmentTopic(DefaultAppointmentOutboxWriter.DEFAULT_TOPIC),
     val maxAttempts: Int = 8,
+    val processingLease: Duration = Duration.ofMinutes(5),
+    val maxPollInterval: Duration = Duration.ofMinutes(5),
+    val maxPollRecords: Int = 1,
     val shutdownTimeout: Duration = Duration.ofSeconds(10),
 ) {
     init {
         require(groupId.length in 1..128) { "consumer group id must be bounded" }
         require(groupId.matches(IDENTIFIER_PATTERN)) { "consumer group id is not canonical" }
         require(maxAttempts in 1..100) { "consumer maxAttempts must be bounded" }
+        require(!processingLease.isNegative && !processingLease.isZero) { "consumer processingLease must be positive" }
+        require(!maxPollInterval.isNegative && !maxPollInterval.isZero) { "consumer maxPollInterval must be positive" }
+        require(maxPollRecords in 1..100) { "consumer maxPollRecords must be bounded" }
         require(!shutdownTimeout.isNegative && !shutdownTimeout.isZero) {
             "consumer shutdownTimeout must be positive"
         }

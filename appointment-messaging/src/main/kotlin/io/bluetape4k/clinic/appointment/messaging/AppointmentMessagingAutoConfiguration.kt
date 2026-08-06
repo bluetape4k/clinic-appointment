@@ -61,6 +61,9 @@ class AppointmentMessagingAutoConfiguration {
                     ?: binding.topic,
             ),
             maxAttempts = binding.consumer.maxAttempts,
+            processingLease = binding.consumer.processingLease,
+            maxPollInterval = binding.consumer.maxPollInterval,
+            maxPollRecords = binding.consumer.maxPollRecords,
             shutdownTimeout = binding.consumer.shutdownTimeout,
         ),
     )
@@ -83,6 +86,7 @@ class AppointmentMessagingAutoConfiguration {
     ): AppointmentConsumerInboxStore = JdbcAppointmentConsumerInboxStore(
         database = database,
         maxAttempts = properties.consumer.maxAttempts,
+        processingLease = properties.consumer.processingLease,
     )
 
     @Bean
@@ -123,10 +127,12 @@ class AppointmentMessagingAutoConfiguration {
     @ConditionalOnMissingBean
     fun appointmentMessagingReadinessValidator(
         codec: AppointmentEventEnvelopeCodec,
+        properties: AppointmentMessagingProperties,
         dataSource: ObjectProvider<DataSource>,
     ): AppointmentMessagingReadinessValidator = AppointmentMessagingReadinessValidator(
         codec = codec,
         dataSource = dataSource.getIfAvailable(),
+        requireConsumerSchema = properties.consumer.enabled,
     )
 
     @Bean

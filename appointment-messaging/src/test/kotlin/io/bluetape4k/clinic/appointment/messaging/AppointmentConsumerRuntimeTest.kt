@@ -25,7 +25,11 @@ class AppointmentConsumerRuntimeTest {
             driver = "org.h2.Driver",
         )
         transaction(database) {
-            SchemaUtils.create(AppointmentConsumerInboxTable, AppointmentConsumerQuarantineTable)
+            SchemaUtils.create(
+                AppointmentConsumerInboxTable,
+                AppointmentConsumerQuarantineTable,
+                AppointmentConsumerRejectedRecordTable,
+            )
         }
         runtime = AppointmentConsumerRuntime(
             codec = codec,
@@ -80,13 +84,18 @@ class AppointmentConsumerRuntimeTest {
     }
 
     @Test
-    fun `invalid envelope fails without exposing raw payload`() {
+    fun `invalid envelope is quarantined and acknowledged without exposing raw payload`() {
         val invalid = record(value = "{\"eventId\":\"secret-patient-payload\"}")
+        val acknowledgment = RecordingAcknowledgment()
 
-        val failure = runCatching { runtime.consume(invalid, identity()) { _, _ -> } }.exceptionOrNull()
+        runtime.consume(invalid, acknowledgment, identity()) { _, _ -> }
+            .shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
 
-        failure.shouldBeInstanceOf<AppointmentConsumerInvalidEnvelopeException>()
-        failure.message?.contains("secret-patient-payload") shouldBeEqualTo false
+        acknowledgment.count shouldBeEqualTo 1
+        transaction(database) {
+            AppointmentConsumerRejectedRecordTable.selectAll().single()[AppointmentConsumerRejectedRecordTable.payloadSha256]
+                .length shouldBeEqualTo 64
+        }
     }
 
     private fun identity() = AppointmentConsumerIdentity(

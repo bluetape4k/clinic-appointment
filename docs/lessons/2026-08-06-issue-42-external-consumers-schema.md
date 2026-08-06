@@ -28,10 +28,10 @@ JMH는 1 fork, warm-up 2회, 측정 5회이며 synthetic tenant `7`, clinic `31`
 
 | 작업 | inbox rows | p50 (ops/ms) | p95 (ops/ms) | p99 (ops/ms) |
 |------|-----------:|-------------:|-------------:|-------------:|
-| bounded cleanup | 10,000 | 0.044115 | 0.045486 | 0.045486 |
-| bounded cleanup | 100,000 | 0.046692 | 0.048205 | 0.048205 |
-| duplicate lookup | 10,000 | 0.567588 | 0.575034 | 0.575034 |
-| duplicate lookup | 100,000 | 0.554740 | 0.571404 | 0.571404 |
+| bounded cleanup | 10,000 | 0.109366 | 0.137452 | 0.137452 |
+| bounded cleanup | 100,000 | 0.043797 | 0.045377 | 0.045377 |
+| duplicate lookup | 10,000 | 0.520153 | 0.545037 | 0.545037 |
+| duplicate lookup | 100,000 | 0.536926 | 0.578639 | 0.578639 |
 
 원본 JSON과 실행 조건은
 [`appointment-messaging-consumer-postgresql-baseline.json`](../benchmarks/appointment-messaging-consumer-postgresql-baseline.json)에
@@ -46,6 +46,11 @@ JMH는 1 fork, warm-up 2회, 측정 5회이며 synthetic tenant `7`, clinic `31`
 - 로컬 benchmark는 단일 thread와 Testcontainers PostgreSQL을 사용한다. 운영 rollout
   전에는 배포 CPU/architecture, connection pool, broker lag, lock wait를 포함한
   capacity run을 별도 수행해야 한다.
-- 잘못된 envelope는 신뢰 가능한 tenant/clinic/event metadata를 만들 수 없으므로
-  현재 runtime에서는 raw payload 없이 예외를 반환한다. 운영 ingest 계층에서 broker
-  provenance를 확보하는 quarantine adapter가 필요하면 후속 issue로 분리한다.
+- 잘못된 envelope·tombstone·schema 거부는 broker topic/partition/offset와 payload
+  SHA-256만 metadata-only rejected ledger에 남기고 ACK한다. 유효 envelope의
+  `PROCESSING` lease가 만료되면 inbox row를 reclaim하며, active lease 중복은 ACK하지
+  않고 bounded error handler retry 경로로 보낸다.
+- replay service는 라이브러리 경계다. 운영 adapter가 별도 request 전용 group, 승인된
+  호출자, source 권한 검사를 연결하기 전에는 production replay endpoint로 노출하지
+  않는다. HTTP Schema Registry 인증/endpoint wiring, rejected ledger retention과
+  consumer lag/lock-wait alert도 환경별 후속 작업이다.

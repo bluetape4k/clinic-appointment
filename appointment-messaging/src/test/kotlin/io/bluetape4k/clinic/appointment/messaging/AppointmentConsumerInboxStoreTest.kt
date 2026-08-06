@@ -24,7 +24,11 @@ class AppointmentConsumerInboxStoreTest {
             driver = "org.h2.Driver",
         )
         transaction(database) {
-            SchemaUtils.create(AppointmentConsumerInboxTable, AppointmentConsumerQuarantineTable)
+            SchemaUtils.create(
+                AppointmentConsumerInboxTable,
+                AppointmentConsumerQuarantineTable,
+                AppointmentConsumerRejectedRecordTable,
+            )
         }
         store = JdbcAppointmentConsumerInboxStore(database, maxAttempts = 2)
     }
@@ -63,6 +67,8 @@ class AppointmentConsumerInboxStoreTest {
 
         store.markFailure(identity(), eventId(), AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
             .shouldBeEqualTo(AppointmentConsumerStatus.RETRYABLE)
+        store.begin(identity(), eventId(), provenance())
+            .shouldBeEqualTo(AppointmentConsumerBeginResult.Acquired(attemptCount = 2))
         store.markFailure(identity(), eventId(), AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
             .shouldBeEqualTo(AppointmentConsumerStatus.QUARANTINED)
 
@@ -75,21 +81,58 @@ class AppointmentConsumerInboxStoreTest {
     }
 
     @Test
-    fun `quarantine stores metadata hash and cleanup never removes processing`() {
+    fun `quarantine stores metadata hash and cleanup retains quarantine and processing`() {
         store.begin(identity(), eventId(), provenance())
         store.quarantine(identity(), eventId(), AppointmentConsumerFailureCode.INVALID_ENVELOPE)
             .shouldBeTrue()
 
         store.begin(identity("second"), AppointmentEventId("event-processing"), provenance())
-        store.cleanupProcessed(Instant.now().plusSeconds(1), 10) shouldBeEqualTo 1
+        store.cleanupProcessed(Instant.now().plusSeconds(1), 10) shouldBeEqualTo 0
         val expectedHash = provenance().payloadSha256
 
         transaction(database) {
-            AppointmentConsumerInboxTable.selectAll().count() shouldBeEqualTo 1L
+            AppointmentConsumerInboxTable.selectAll().count() shouldBeEqualTo 2L
             val quarantineHash = AppointmentConsumerQuarantineTable
                 .selectAll()
                 .single()[AppointmentConsumerQuarantineTable.payloadSha256]
             quarantineHash shouldBeEqualTo expectedHash
+        }
+    }
+
+    @Test
+    fun `expired processing lease is reclaimed instead of acknowledged as duplicate`() {
+        val leaseClock = MutableAppointmentDatabaseClock(Instant.parse("2026-08-06T00:00:00Z"))
+        val leasedStore = JdbcAppointmentConsumerInboxStore(
+            database = database,
+            maxAttempts = 2,
+            clock = leaseClock,
+            processingLease = java.time.Duration.ofSeconds(10),
+        )
+        leasedStore.begin(identity(), eventId(), provenance())
+        leasedStore.begin(identity(), eventId(), provenance())
+            .shouldBeEqualTo(AppointmentConsumerBeginResult.Duplicate(AppointmentConsumerStatus.PROCESSING))
+
+        leaseClock.advance(java.time.Duration.ofSeconds(11))
+        leasedStore.begin(identity(), eventId(), provenance())
+            .shouldBeEqualTo(AppointmentConsumerBeginResult.Acquired(attemptCount = 1))
+    }
+
+    @Test
+    fun `rejected records retain broker metadata and payload hash only`() {
+        val record = org.apache.kafka.clients.consumer.ConsumerRecord<String, String>(
+            "clinic.appointment.events",
+            2,
+            91L,
+            "key",
+            "secret-payload",
+        )
+        store.quarantineRejected(identity(), record, AppointmentConsumerFailureCode.INVALID_ENVELOPE).shouldBeTrue()
+
+        transaction(database) {
+            AppointmentConsumerRejectedRecordTable.selectAll().single().let { row ->
+                row[AppointmentConsumerRejectedRecordTable.payloadSha256].length shouldBeEqualTo 64
+                row[AppointmentConsumerRejectedRecordTable.topic] shouldBeEqualTo record.topic()
+            }
         }
     }
 
@@ -109,4 +152,12 @@ class AppointmentConsumerInboxStoreTest {
         clinicId = 31,
         payloadSha256 = "a".repeat(64),
     )
+
+    private class MutableAppointmentDatabaseClock(private var current: Instant) : AppointmentDatabaseClock {
+        override fun now(): Instant = current
+
+        fun advance(duration: java.time.Duration) {
+            current = current.plus(duration)
+        }
+    }
 }

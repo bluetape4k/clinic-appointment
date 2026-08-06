@@ -13,6 +13,7 @@ object AppointmentConsumerReplayAuditTable : LongIdTable("scheduling_appointment
     val clinicId = long("clinic_id")
     val fromOffset = long("from_offset")
     val toOffset = long("to_offset")
+    val requestHash = varchar("request_hash", 64)
     val dryRun = bool("dry_run")
     val approvedBy = varchar("approved_by", 128)
     val status = enumerationByName("status", 32, AppointmentReplayAuditStatus::class)

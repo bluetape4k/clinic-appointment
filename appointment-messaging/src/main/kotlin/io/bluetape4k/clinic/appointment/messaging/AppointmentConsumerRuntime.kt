@@ -58,21 +58,23 @@ class AppointmentConsumerRuntime(
         handler: AppointmentConsumerHandler,
     ): AppointmentConsumerOutcome {
         val topic = runCatching { AppointmentTopic(record.topic()) }
-            .getOrElse { throw AppointmentConsumerInvalidEnvelopeException("consumer topic is invalid") }
+            .getOrElse {
+                return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.INVALID_ENVELOPE)
+            }
         if (topic !in allowedTopics) {
-            throw AppointmentConsumerInvalidEnvelopeException("consumer topic is not allow-listed")
+            return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.INVALID_ENVELOPE)
         }
         val value = record.value()
-            ?: throw AppointmentConsumerInvalidEnvelopeException("tombstone event is not supported")
+            ?: return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.INVALID_ENVELOPE)
         val envelope = try {
             codec.decode(value)
-        } catch (failure: Exception) {
-            throw AppointmentConsumerInvalidEnvelopeException("appointment event envelope was rejected", failure)
+        } catch (_: Exception) {
+            return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.INVALID_ENVELOPE)
         }
         try {
             schemaRegistry.validate(envelope.schemaVersion)
-        } catch (failure: Exception) {
-            throw AppointmentConsumerInvalidEnvelopeException("appointment event schema was rejected", failure)
+        } catch (_: Exception) {
+            return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.UNSUPPORTED_SCHEMA)
         }
         val provenance = AppointmentConsumerProvenance(
             topic = topic,
@@ -90,6 +92,14 @@ class AppointmentConsumerRuntime(
         ).value
         when (val begin = inboxStore.begin(identity, envelope.eventId, provenance)) {
             is AppointmentConsumerBeginResult.Duplicate -> {
+                if (!begin.provenanceMatches) {
+                    inboxStore.quarantineRejected(identity, record, AppointmentConsumerFailureCode.PROVENANCE_MISMATCH)
+                    acknowledgment?.acknowledge()
+                    return AppointmentConsumerOutcome.QUARANTINED
+                }
+                if (begin.status == AppointmentConsumerStatus.PROCESSING) {
+                    throw AppointmentConsumerRetryableException("appointment event is still being processed")
+                }
                 acknowledgment?.acknowledge()
                 return when (begin.status) {
                     AppointmentConsumerStatus.QUARANTINED -> AppointmentConsumerOutcome.QUARANTINED
@@ -144,4 +154,15 @@ class AppointmentConsumerRuntime(
         MessageDigest.getInstance("SHA-256")
             .digest(value.toByteArray(StandardCharsets.UTF_8))
             .joinToString(separator = "") { byte -> "%02x".format(byte) }
+
+    private fun rejectBeforeDecode(
+        record: ConsumerRecord<String, String>,
+        acknowledgment: Acknowledgment?,
+        identity: AppointmentConsumerIdentity,
+        failureCode: AppointmentConsumerFailureCode,
+    ): AppointmentConsumerOutcome {
+        inboxStore.quarantineRejected(identity, record, failureCode)
+        acknowledgment?.acknowledge()
+        return AppointmentConsumerOutcome.QUARANTINED
+    }
 }

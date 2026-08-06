@@ -2,19 +2,26 @@ package io.bluetape4k.clinic.appointment.messaging
 
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.time.Duration
 import java.time.Instant
 
 sealed interface AppointmentConsumerBeginResult {
     data class Acquired(val attemptCount: Int) : AppointmentConsumerBeginResult
-    data class Duplicate(val status: AppointmentConsumerStatus) : AppointmentConsumerBeginResult
+    data class Duplicate(
+        val status: AppointmentConsumerStatus,
+        val provenanceMatches: Boolean = true,
+    ) : AppointmentConsumerBeginResult
 }
 
 interface AppointmentConsumerInboxStore {
@@ -38,6 +45,12 @@ interface AppointmentConsumerInboxStore {
         failureCode: AppointmentConsumerFailureCode,
     ): Boolean
 
+    fun quarantineRejected(
+        identity: AppointmentConsumerIdentity,
+        record: ConsumerRecord<*, *>,
+        failureCode: AppointmentConsumerFailureCode,
+    ): Boolean
+
     fun cleanupProcessed(cutoff: Instant, batchSize: Int): Int
 }
 
@@ -46,10 +59,12 @@ class JdbcAppointmentConsumerInboxStore(
     private val database: Database,
     private val maxAttempts: Int = 8,
     private val clock: AppointmentDatabaseClock = AppointmentDatabaseClock.current,
+    private val processingLease: Duration = Duration.ofMinutes(5),
 ) : AppointmentConsumerInboxStore {
 
     init {
         require(maxAttempts in 1..100) { "maxAttempts must be bounded" }
+        require(!processingLease.isNegative && !processingLease.isZero) { "processingLease must be positive" }
     }
 
     override fun begin(
@@ -57,6 +72,7 @@ class JdbcAppointmentConsumerInboxStore(
         eventId: AppointmentEventId,
         provenance: AppointmentConsumerProvenance,
     ): AppointmentConsumerBeginResult = transaction(database) {
+        val now = clock.now()
         val inserted = AppointmentConsumerInboxTable.insertIgnore {
             it[logicalConsumerId] = identity.consumerId.value
             it[logicalStreamId] = identity.streamId.value
@@ -70,7 +86,8 @@ class JdbcAppointmentConsumerInboxStore(
             it[payloadSha256] = provenance.payloadSha256
             it[status] = AppointmentConsumerStatus.PROCESSING
             it[attemptCount] = 1
-            it[receivedAt] = clock.now()
+            it[receivedAt] = now
+            it[processingLeaseUntil] = now.plus(processingLease)
         }.insertedCount == 1
         if (inserted) return@transaction AppointmentConsumerBeginResult.Acquired(attemptCount = 1)
 
@@ -79,6 +96,13 @@ class JdbcAppointmentConsumerInboxStore(
             .where { keyPredicate(identity, eventId) }
             .single()
         val status = row[AppointmentConsumerInboxTable.status]
+        val provenanceMatches = row[AppointmentConsumerInboxTable.topic] == provenance.topic.value &&
+            row[AppointmentConsumerInboxTable.partition] == provenance.partition &&
+            row[AppointmentConsumerInboxTable.offset] == provenance.offset &&
+            row[AppointmentConsumerInboxTable.schemaVersion] == provenance.schemaVersion &&
+            row[AppointmentConsumerInboxTable.tenantGroupId] == provenance.tenantGroupId &&
+            row[AppointmentConsumerInboxTable.clinicId] == provenance.clinicId &&
+            row[AppointmentConsumerInboxTable.payloadSha256] == provenance.payloadSha256
         if (status == AppointmentConsumerStatus.RETRYABLE &&
             row[AppointmentConsumerInboxTable.attemptCount] <= this@JdbcAppointmentConsumerInboxStore.maxAttempts
         ) {
@@ -88,6 +112,7 @@ class JdbcAppointmentConsumerInboxStore(
             }) {
                 it[AppointmentConsumerInboxTable.status] = AppointmentConsumerStatus.PROCESSING
                 it[AppointmentConsumerInboxTable.failureCode] = null
+                it[AppointmentConsumerInboxTable.processingLeaseUntil] = now.plus(processingLease)
             }
             if (reclaimed == 1) {
                 return@transaction AppointmentConsumerBeginResult.Acquired(
@@ -95,7 +120,24 @@ class JdbcAppointmentConsumerInboxStore(
                 )
             }
         }
-        AppointmentConsumerBeginResult.Duplicate(status)
+        if (status == AppointmentConsumerStatus.PROCESSING) {
+            val leaseUntil = row[AppointmentConsumerInboxTable.processingLeaseUntil]
+            if (leaseUntil == null || !leaseUntil.isAfter(now)) {
+                val reclaimed = AppointmentConsumerInboxTable.update({
+                    keyPredicate(identity, eventId) and
+                        (AppointmentConsumerInboxTable.status eq AppointmentConsumerStatus.PROCESSING)
+                }) {
+                    it[AppointmentConsumerInboxTable.processingLeaseUntil] = now.plus(processingLease)
+                    it[AppointmentConsumerInboxTable.failureCode] = null
+                }
+                if (reclaimed == 1) {
+                    return@transaction AppointmentConsumerBeginResult.Acquired(
+                        attemptCount = row[AppointmentConsumerInboxTable.attemptCount],
+                    )
+                }
+            }
+        }
+        AppointmentConsumerBeginResult.Duplicate(status, provenanceMatches)
     }
 
     override fun markProcessed(identity: AppointmentConsumerIdentity, eventId: AppointmentEventId): Boolean =
@@ -106,6 +148,7 @@ class JdbcAppointmentConsumerInboxStore(
             }) {
                 it[status] = AppointmentConsumerStatus.PROCESSED
                 it[processedAt] = clock.now()
+                it[processingLeaseUntil] = null
             } == 1
         }
 
@@ -123,6 +166,7 @@ class JdbcAppointmentConsumerInboxStore(
         if (currentStatus == AppointmentConsumerStatus.PROCESSED || currentStatus == AppointmentConsumerStatus.QUARANTINED) {
             return@transaction currentStatus
         }
+        if (currentStatus != AppointmentConsumerStatus.PROCESSING) return@transaction currentStatus
         val currentAttempt = row[AppointmentConsumerInboxTable.attemptCount]
         if (currentAttempt >= this@JdbcAppointmentConsumerInboxStore.maxAttempts) {
             quarantineInTransaction(identity, eventId, failureCode = AppointmentConsumerFailureCode.ATTEMPT_EXHAUSTED, row = row)
@@ -132,6 +176,7 @@ class JdbcAppointmentConsumerInboxStore(
                 it[status] = AppointmentConsumerStatus.RETRYABLE
                 it[attemptCount] = currentAttempt + 1
                 it[this.failureCode] = failureCode.name
+                it[processingLeaseUntil] = null
             }
             AppointmentConsumerStatus.RETRYABLE
         }
@@ -152,15 +197,29 @@ class JdbcAppointmentConsumerInboxStore(
         true
     }
 
+    override fun quarantineRejected(
+        identity: AppointmentConsumerIdentity,
+        record: ConsumerRecord<*, *>,
+        failureCode: AppointmentConsumerFailureCode,
+    ): Boolean = transaction(database) {
+        AppointmentConsumerRejectedRecordTable.insertIgnore {
+            it[logicalConsumerId] = identity.consumerId.value
+            it[logicalStreamId] = identity.streamId.value
+            it[this.failureCode] = failureCode.name
+            it[topic] = record.topic().take(249)
+            it[partition] = record.partition()
+            it[offset] = record.offset()
+            it[payloadSha256] = sha256(record.value()?.toString().orEmpty())
+        }.insertedCount == 1
+    }
+
     override fun cleanupProcessed(cutoff: Instant, batchSize: Int): Int = transaction(database) {
         require(batchSize in 1..1_000) { "batchSize must be bounded" }
         val candidates = AppointmentConsumerInboxTable
             .selectAll()
             .where {
-                (AppointmentConsumerInboxTable.status inList listOf(
-                    AppointmentConsumerStatus.PROCESSED,
-                    AppointmentConsumerStatus.QUARANTINED,
-                )) and (AppointmentConsumerInboxTable.processedAt lessEq cutoff)
+                (AppointmentConsumerInboxTable.status eq AppointmentConsumerStatus.PROCESSED) and
+                    (AppointmentConsumerInboxTable.processedAt lessEq cutoff)
             }
             .limit(batchSize)
             .map {
@@ -170,13 +229,15 @@ class JdbcAppointmentConsumerInboxStore(
                     it[AppointmentConsumerInboxTable.eventId],
                 )
             }
-        candidates.count { (consumerId, streamId, eventId) ->
-            AppointmentConsumerInboxTable.deleteWhere {
-                (logicalConsumerId eq consumerId) and
-                    (logicalStreamId eq streamId) and
-                    (this.eventId eq eventId)
-            } == 1
-        }
+        if (candidates.isEmpty()) return@transaction 0
+        val predicate = candidates
+            .map { (consumerId, streamId, eventId) ->
+                (AppointmentConsumerInboxTable.logicalConsumerId eq consumerId) and
+                    (AppointmentConsumerInboxTable.logicalStreamId eq streamId) and
+                    (AppointmentConsumerInboxTable.eventId eq eventId)
+            }
+            .reduce { left, right -> left or right }
+        AppointmentConsumerInboxTable.deleteWhere { predicate }
     }
 
     private fun quarantineInTransaction(
@@ -189,6 +250,7 @@ class JdbcAppointmentConsumerInboxStore(
             it[status] = AppointmentConsumerStatus.QUARANTINED
             it[this.failureCode] = failureCode.name
             it[processedAt] = clock.now()
+            it[processingLeaseUntil] = null
         }
         AppointmentConsumerQuarantineTable.insertIgnore {
             it[logicalConsumerId] = row[AppointmentConsumerInboxTable.logicalConsumerId]
@@ -211,4 +273,9 @@ class JdbcAppointmentConsumerInboxStore(
     ) = (AppointmentConsumerInboxTable.logicalConsumerId eq identity.consumerId.value) and
         (AppointmentConsumerInboxTable.logicalStreamId eq identity.streamId.value) and
         (AppointmentConsumerInboxTable.eventId eq eventId.value)
+
+    private fun sha256(value: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(StandardCharsets.UTF_8))
+            .joinToString(separator = "") { byte -> "%02x".format(byte) }
 }

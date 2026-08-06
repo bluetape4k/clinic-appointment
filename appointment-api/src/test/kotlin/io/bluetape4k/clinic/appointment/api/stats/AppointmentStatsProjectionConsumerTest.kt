@@ -34,21 +34,23 @@ class AppointmentStatsProjectionConsumerTest {
     fun setUp() {
         transaction(database) {
             SchemaUtils.drop(AppointmentStatsProjectionTable)
-            SchemaUtils.create(AppointmentStatsProjectionTable)
+            SchemaUtils.drop(AppointmentStatsProjectionEventTable)
+            SchemaUtils.create(AppointmentStatsProjectionTable, AppointmentStatsProjectionEventTable)
         }
     }
 
     @Test
-    fun `projection is tenant scoped and ignores duplicate or lower versions`() {
+    fun `projection is tenant scoped and deduplicates by aggregate event`() {
         consumer.handle(envelope("event-2", version = 2, tenant = 11), context(tenant = 11))
         consumer.handle(envelope("event-2", version = 2, tenant = 11), context(tenant = 11))
         consumer.handle(envelope("event-1", version = 1, tenant = 11), context(tenant = 11))
         consumer.handle(envelope("event-3", version = 3, tenant = 11), context(tenant = 11))
         consumer.handle(envelope("event-other", version = 1, tenant = 12), context(tenant = 12))
+        consumer.handle(envelope("event-other-aggregate", version = 1, tenant = 11, aggregateId = 43), context(tenant = 11))
 
         transaction(database) {
             repository.countByDateAndStatus(11, CLINIC_ID, DATE..DATE) shouldBeEqualTo
-                listOf(AppointmentStatsProjectionRow(DATE, AppointmentState.CONFIRMED, 2L))
+                listOf(AppointmentStatsProjectionRow(DATE, AppointmentState.CONFIRMED, 4L))
             repository.countByDateAndStatus(12, CLINIC_ID, DATE..DATE) shouldBeEqualTo
                 listOf(AppointmentStatsProjectionRow(DATE, AppointmentState.CONFIRMED, 1L))
         }
@@ -70,7 +72,7 @@ class AppointmentStatsProjectionConsumerTest {
         ),
     )
 
-    private fun envelope(eventId: String, version: Long, tenant: Long) = AppointmentEventEnvelope(
+    private fun envelope(eventId: String, version: Long, tenant: Long, aggregateId: Long = 42) = AppointmentEventEnvelope(
         eventId = AppointmentEventId(eventId),
         eventType = AppointmentEventType.STATUS_CHANGED,
         schemaVersion = AppointmentEventEnvelope.CURRENT_SCHEMA_VERSION,
@@ -78,11 +80,11 @@ class AppointmentStatsProjectionConsumerTest {
         tenantGroupId = tenant,
         clinicId = CLINIC_ID,
         aggregateType = AppointmentEventEnvelope.AGGREGATE_TYPE,
-        aggregateId = AppointmentAggregateId(42),
+        aggregateId = AppointmentAggregateId(aggregateId),
         correlationId = AppointmentCorrelationId("correlation-$eventId"),
         causationId = AppointmentCausationId("causation-$eventId"),
         payload = AppointmentStatusChangedPayload(
-            appointmentId = AppointmentAggregateId(42),
+            appointmentId = AppointmentAggregateId(aggregateId),
             version = version,
             fromState = AppointmentState.REQUESTED,
             toState = AppointmentState.CONFIRMED,

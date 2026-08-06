@@ -27,12 +27,25 @@ class AppointmentStatsProjectionRepository {
         clinicId: Long,
         eventDate: LocalDate,
         status: AppointmentState,
+        aggregateId: String,
         eventVersion: Long,
         eventId: String,
     ): Boolean {
         require(tenantGroupId > 0 && clinicId > 0) { "projection scope must be positive" }
         require(eventVersion >= 0) { "eventVersion must not be negative" }
+        require(aggregateId.isNotBlank() && aggregateId.length <= 128) { "aggregateId must be bounded" }
         require(eventId.isNotBlank() && eventId.length <= 128) { "eventId must be bounded" }
+
+        val eventInserted = AppointmentStatsProjectionEventTable.insertIgnore {
+            it[AppointmentStatsProjectionEventTable.tenantGroupId] = tenantGroupId
+            it[AppointmentStatsProjectionEventTable.clinicId] = clinicId
+            it[AppointmentStatsProjectionEventTable.aggregateId] = aggregateId
+            it[AppointmentStatsProjectionEventTable.eventId] = eventId
+            it[AppointmentStatsProjectionEventTable.eventVersion] = eventVersion
+            it[AppointmentStatsProjectionEventTable.eventDate] = eventDate
+            it[AppointmentStatsProjectionEventTable.status] = status
+        }.insertedCount == 1
+        if (!eventInserted) return false
 
         val inserted = AppointmentStatsProjectionTable.insertIgnore {
             it[AppointmentStatsProjectionTable.tenantGroupId] = tenantGroupId
@@ -60,16 +73,12 @@ class AppointmentStatsProjectionRepository {
             .forUpdate()
             .single()
 
-        if (existing[AppointmentStatsProjectionTable.lastEventId] == eventId ||
-            eventVersion < existing[AppointmentStatsProjectionTable.lastEventVersion]
-        ) {
-            return false
-        }
-
         AppointmentStatsProjectionTable.update({ predicate }) {
             it[AppointmentStatsProjectionTable.appointmentCount] = existing[AppointmentStatsProjectionTable.appointmentCount] + 1L
-            it[AppointmentStatsProjectionTable.lastEventVersion] = eventVersion
-            it[AppointmentStatsProjectionTable.lastEventId] = eventId
+            if (eventVersion >= existing[AppointmentStatsProjectionTable.lastEventVersion]) {
+                it[AppointmentStatsProjectionTable.lastEventVersion] = eventVersion
+                it[AppointmentStatsProjectionTable.lastEventId] = eventId
+            }
         }
         return true
     }

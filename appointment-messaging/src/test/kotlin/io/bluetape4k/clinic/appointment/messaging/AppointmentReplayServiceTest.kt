@@ -56,14 +56,25 @@ class AppointmentReplayServiceTest {
 
         result.status shouldBeEqualTo AppointmentReplayAuditStatus.EXECUTED
         result.replayedRecords shouldBeEqualTo 3
-        execution?.groupId shouldBeEqualTo "appointment-notification-replay-v1"
-        execution?.identity?.consumerId shouldBeEqualTo AppointmentLogicalConsumerId("notification-replay")
+        execution?.groupId shouldBeEqualTo "appointment-notification-replay-replay-approved-1-v1"
         execution?.identity?.consumerId shouldBeEqualTo request().identity.consumerId
-            .let { AppointmentLogicalConsumerId("notification-replay") }
         transaction(database) {
             AppointmentConsumerReplayAuditTable.selectAll().single()[AppointmentConsumerReplayAuditTable.status]
                 .shouldBeEqualTo(AppointmentReplayAuditStatus.EXECUTED)
         }
+    }
+
+    @Test
+    fun `same request id transitions a completed dry run into execution`() {
+        var calls = 0
+        val service = AppointmentReplayService(database) { _, _ -> calls++; 2 }
+
+        service.replay("replay-transition-1", request(dryRun = true))
+        val result = service.replay("replay-transition-1", request(dryRun = false))
+
+        result.status shouldBeEqualTo AppointmentReplayAuditStatus.EXECUTED
+        result.replayedRecords shouldBeEqualTo 2
+        calls shouldBeEqualTo 1
     }
 
     private fun request(dryRun: Boolean = false) = AppointmentReplayRequest(

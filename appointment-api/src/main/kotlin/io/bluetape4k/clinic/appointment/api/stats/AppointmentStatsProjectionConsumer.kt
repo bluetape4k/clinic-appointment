@@ -27,6 +27,7 @@ class AppointmentStatsProjectionConsumer(
                 clinicId = envelope.clinicId,
                 eventDate = envelope.occurredAt.atZone(ZoneOffset.UTC).toLocalDate(),
                 status = event.status,
+                aggregateId = envelope.aggregateId.value.toString(),
                 eventVersion = event.version,
                 eventId = envelope.eventId.value,
             )

@@ -116,16 +116,21 @@ Flyway migration을 적용하고 Hikari와 Exposed를 통해 실제 store를 호
 
 | 작업 | inbox rows | p50 (ops/ms) | p95 (ops/ms) | p99 (ops/ms) |
 |------|-----------:|-------------:|-------------:|-------------:|
-| bounded cleanup | 10,000 | 0.044115 | 0.045486 | 0.045486 |
-| bounded cleanup | 100,000 | 0.046692 | 0.048205 | 0.048205 |
-| duplicate lookup | 10,000 | 0.567588 | 0.575034 | 0.575034 |
-| duplicate lookup | 100,000 | 0.554740 | 0.571404 | 0.571404 |
+| bounded cleanup | 10,000 | 0.109366 | 0.137452 | 0.137452 |
+| bounded cleanup | 100,000 | 0.043797 | 0.045377 | 0.045377 |
+| duplicate lookup | 10,000 | 0.520153 | 0.545037 | 0.545037 |
+| duplicate lookup | 100,000 | 0.536926 | 0.578639 | 0.578639 |
 
 raw payload를 포함하지 않는 [consumer baseline JSON](../docs/benchmarks/appointment-messaging-consumer-postgresql-baseline.json)에
 PostgreSQL image, row 조건, batch 상한, benchmark 설정과 원본 report 경로를 기록했습니다.
 `./gradlew :appointment-messaging-benchmark:mainBenchmark`로 재현할 수 있습니다.
 위 chart는 outbox claim 시각화로 유지하고, consumer 수치는 이 표와 전용 artifact를
 권위 있는 문서로 사용합니다.
+
+V23 consumer contract에는 5분 processing lease도 저장합니다. 만료된 `PROCESSING` row는
+reclaim할 수 있고, active duplicate는 ACK하지 않고 retry로 보냅니다. malformed/tombstone/
+schema 거부 record는 broker provenance와 payload SHA-256만 rejected ledger에 남기며,
+quarantine된 inbox row는 dedup tombstone으로 유지합니다.
 
 모듈 집중 검증은 다음 명령으로 실행합니다.
 

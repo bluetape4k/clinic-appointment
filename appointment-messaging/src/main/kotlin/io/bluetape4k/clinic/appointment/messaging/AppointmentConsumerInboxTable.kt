@@ -21,6 +21,7 @@ object AppointmentConsumerInboxTable : org.jetbrains.exposed.v1.core.Table("sche
     val failureCode = varchar("failure_code", 64).nullable()
     val receivedAt = timestamp("received_at").defaultExpression(CurrentTimestamp)
     val processedAt = timestamp("processed_at").nullable()
+    val processingLeaseUntil = timestamp("processing_lease_until").nullable()
 
     override val primaryKey = PrimaryKey(
         logicalConsumerId,
@@ -45,6 +46,39 @@ object AppointmentConsumerInboxTable : org.jetbrains.exposed.v1.core.Table("sche
             clinicId,
             receivedAt,
         )
+        index(
+            "idx_appointment_consumer_inbox_status_processed",
+            false,
+            logicalConsumerId,
+            status,
+            processedAt,
+            logicalStreamId,
+            eventId,
+        )
+    }
+}
+
+/** envelope decode 전에도 broker provenance와 payload hash만 보존하는 quarantine입니다. */
+object AppointmentConsumerRejectedRecordTable : LongIdTable("scheduling_appointment_consumer_rejected") {
+    val logicalConsumerId = varchar("logical_consumer_id", 128)
+    val logicalStreamId = varchar("logical_stream_id", 128)
+    val failureCode = varchar("failure_code", 64)
+    val topic = varchar("topic", 249)
+    val partition = integer("partition_number")
+    val offset = long("offset_value")
+    val payloadSha256 = varchar("payload_sha256", 64)
+    val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
+
+    init {
+        uniqueIndex(
+            "uq_appointment_consumer_rejected_provenance",
+            logicalConsumerId,
+            logicalStreamId,
+            topic,
+            partition,
+            offset,
+        )
+        index("idx_appointment_consumer_rejected_created", false, createdAt)
     }
 }
 
