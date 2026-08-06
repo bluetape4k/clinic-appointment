@@ -60,6 +60,32 @@ The database lease and fencing token are the delivery correctness boundary.
 Redis leader election is reserved for a future reminder-recovery trigger; it is
 not required for safe concurrent outbox delivery.
 
+### Kafka appointment-event consumer (Issue #42)
+
+When `appointment.messaging.consumer.enabled=true`, this module also exposes a
+Kafka 4 manual-ack listener for the allow-listed appointment topic. It uses the
+fixed group `appointment-notification-v1` and logical inbox identity
+`notification/appointment-events`; the tenant/clinic scope is taken from the
+validated envelope and stored as metadata only. A duplicate inbox key is
+acknowledged without a second provider call, while retryable handler failures
+leave the record unacknowledged for bounded redelivery. The listener delegates
+to the existing `NotificationDirectDeliveryPort`, so it does not create a
+second delivery or raw-payload history path.
+
+```yaml
+appointment:
+  messaging:
+    consumer:
+      enabled: true
+      topic: clinic.appointment.events
+      max-attempts: 8
+```
+
+Statistics projection is a separate consumer group (`appointment-statistics-v1`)
+and is enabled independently with `appointment.messaging.consumer.statistics.enabled=true`.
+Both consumers use the same Kafka 4 manual-ack container configuration but never
+share a group or inbox identity.
+
 ### Rollout routes
 
 | Mode | Transitional event route | Background worker route |

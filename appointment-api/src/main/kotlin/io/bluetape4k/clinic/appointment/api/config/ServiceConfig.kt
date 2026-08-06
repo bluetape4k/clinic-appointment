@@ -28,6 +28,9 @@ import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyPreviewServic
 import io.bluetape4k.clinic.appointment.api.policy.SchedulingPolicyWorker
 import io.bluetape4k.clinic.appointment.api.policy.TenantEffectiveSchedulingPolicyService
 import io.bluetape4k.clinic.appointment.api.service.DashboardStatsService
+import io.bluetape4k.clinic.appointment.api.stats.AppointmentStatsProjectionConsumer
+import io.bluetape4k.clinic.appointment.api.stats.AppointmentStatsProjectionKafkaListener
+import io.bluetape4k.clinic.appointment.api.stats.AppointmentStatsProjectionRepository
 import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentPlanningResolver
 import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentPolicySnapshotResolver
 import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentApplicationService
@@ -1017,7 +1020,51 @@ class ServiceConfig {
         DefaultBookingReliabilityApiService(port, properties, Clock.systemUTC())
 
     @Bean
+    @ConditionalOnBean(Database::class)
+    @ConditionalOnProperty(
+        prefix = "appointment.messaging.consumer.statistics",
+        name = ["enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnMissingBean
+    fun appointmentStatsProjectionRepository(): AppointmentStatsProjectionRepository =
+        AppointmentStatsProjectionRepository()
+
+    @Bean
+    @ConditionalOnBean(Database::class, io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRuntime::class)
+    @ConditionalOnProperty(
+        prefix = "appointment.messaging.consumer.statistics",
+        name = ["enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnMissingBean
+    fun appointmentStatsProjectionConsumer(
+        database: Database,
+        repository: AppointmentStatsProjectionRepository,
+    ): AppointmentStatsProjectionConsumer = AppointmentStatsProjectionConsumer(database, repository)
+
+    @Bean
+    @ConditionalOnBean(
+        Database::class,
+        io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRuntime::class,
+        AppointmentStatsProjectionConsumer::class,
+    )
+    @ConditionalOnProperty(
+        prefix = "appointment.messaging.consumer.statistics",
+        name = ["enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnMissingBean
+    fun appointmentStatsProjectionKafkaListener(
+        runtime: io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRuntime,
+        consumer: AppointmentStatsProjectionConsumer,
+        properties: io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingProperties,
+    ): AppointmentStatsProjectionKafkaListener =
+        AppointmentStatsProjectionKafkaListener(runtime, consumer, properties)
+
+    @Bean
     fun dashboardStatsService(
         appointmentStatsRepository: AppointmentStatsRepository,
-    ): DashboardStatsService = DashboardStatsService(appointmentStatsRepository)
+        projectionRepository: ObjectProvider<AppointmentStatsProjectionRepository>,
+    ): DashboardStatsService = DashboardStatsService(appointmentStatsRepository, projectionRepository.ifAvailable)
 }

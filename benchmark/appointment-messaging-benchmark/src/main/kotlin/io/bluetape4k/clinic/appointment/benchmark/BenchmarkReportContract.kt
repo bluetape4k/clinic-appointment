@@ -27,6 +27,34 @@ object BenchmarkReportContract {
         }
     }
 
+    fun validateConsumer(json: String) {
+        require(
+            Regex("\\\"benchmarkFamily\\\"\\s*:\\s*\\\"[^\\\"]*PostgreSqlAppointmentConsumerBenchmark\\\"")
+                .containsMatchIn(json),
+        ) {
+            "consumer report must identify the PostgreSQL consumer benchmark family"
+        }
+        require(Regex("\\\"database\\\"\\s*:\\s*\\\"postgresql\\\"").containsMatchIn(json)) {
+            "consumer report must identify PostgreSQL"
+        }
+        require(positiveNumber(json, "cleanupBatchSize")) {
+            "consumer report must contain a positive cleanup batch size"
+        }
+        require(Regex("\\\"rowCounts\\\"\\s*:\\s*\\[[^]]*10000[^]]*100000[^]]*]").containsMatchIn(json)) {
+            "consumer report must contain the 10000 and 100000 row scenarios"
+        }
+        listOf("boundedCleanup", "duplicateInboxLookup").forEach { operation ->
+            require(Regex("\\\"operation\\\"\\s*:\\s*\\\"$operation\\\"").containsMatchIn(json)) {
+                "consumer report must contain $operation"
+            }
+        }
+        listOf("score", "p50", "p95", "p99").forEach { field ->
+            require(positiveNumber(json, field)) {
+                "consumer report must contain positive $field"
+            }
+        }
+    }
+
     private fun positiveNumber(json: String, field: String): Boolean =
         Regex("\\\"$field\\\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)")
             .find(json)

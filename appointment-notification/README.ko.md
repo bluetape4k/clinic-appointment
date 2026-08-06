@@ -59,6 +59,31 @@ Resilience4j 정책을 적용합니다.
 선출은 향후 리마인더 복구 trigger에만 사용하며, outbox의 안전한 병렬 발송에는
 필요하지 않습니다.
 
+### Kafka 예약 이벤트 consumer (Issue #42)
+
+`appointment.messaging.consumer.enabled=true`이면 이 모듈은 allow-list된 예약
+topic을 수신하는 Kafka 4 manual-ack listener도 제공합니다. 고정 group은
+`appointment-notification-v1`이고 logical inbox identity는
+`notification/appointment-events`입니다. tenant/clinic 범위는 검증된 envelope에서
+가져와 metadata만 저장합니다. inbox key가 중복이면 두 번째 provider 호출 없이
+ACK하고, 재시도 가능한 handler 실패는 제한된 redelivery를 위해 ACK하지 않습니다.
+listener는 기존 `NotificationDirectDeliveryPort`를 호출하므로 별도의 발송 경로나
+원본 payload 이력 저장소를 만들지 않습니다.
+
+```yaml
+appointment:
+  messaging:
+    consumer:
+      enabled: true
+      topic: clinic.appointment.events
+      max-attempts: 8
+```
+
+통계 projection은 별도 consumer group(`appointment-statistics-v1`)이며
+`appointment.messaging.consumer.statistics.enabled=true`로 독립적으로 켭니다.
+두 consumer는 같은 Kafka 4 manual-ack container 설정을 사용하지만 group과 inbox
+identity를 공유하지 않습니다.
+
 ### 단계별 발송 경로
 
 | 모드 | 전환기 이벤트 경로 | 백그라운드 worker 경로 |

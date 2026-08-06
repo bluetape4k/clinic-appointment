@@ -31,10 +31,12 @@ data class AppointmentMessagingProperties(
     val producerMetadataTimeout: Duration = Duration.ofSeconds(5),
     val producerSecurityProtocol: String = "PLAINTEXT",
     val producerCredentialReference: String? = null,
+    val consumer: AppointmentConsumerProperties = AppointmentConsumerProperties(),
 ) {
     init {
         require(allowedTopics.isNotEmpty()) { "allowedTopics must not be empty" }
         require(topic in allowedTopics) { "default topic must be allow-listed" }
+        require(consumer.topic in allowedTopics) { "consumer topic must be allow-listed" }
         require(claimSize in 1..32) { "claimSize must be between 1 and 32" }
         require(maxInFlight == 1) { "maxInFlight must be 1 until structured concurrent relay is enabled" }
         require(maxClinicBatch in 1..4) { "maxClinicBatch must be between 1 and 4" }

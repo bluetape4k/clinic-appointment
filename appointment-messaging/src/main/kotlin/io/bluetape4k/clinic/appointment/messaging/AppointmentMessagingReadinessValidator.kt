@@ -9,6 +9,7 @@ import javax.sql.DataSource
 class AppointmentMessagingReadinessValidator(
     private val codec: AppointmentEventEnvelopeCodec,
     private val dataSource: DataSource? = null,
+    private val requireConsumerSchema: Boolean = false,
 ) {
     private val checked = AtomicBoolean(false)
 
@@ -58,39 +59,45 @@ class AppointmentMessagingReadinessValidator(
     }.getOrDefault(false)
 
     private fun schemaContractExists(): Boolean = runCatching {
-        dataSource!!.connection.use { connection ->
+        dataSource?.connection?.use { connection ->
             val metadata = connection.metaData
             val schema = connection.schema.takeIf { it.isNotBlank() } ?: return@use false
-            val columns = readColumnNames(metadata, connection.catalog, schema)
-            val indexes = readIndexNames(metadata, connection.catalog, schema)
-            REQUIRED_COLUMNS.all(columns::contains) && REQUIRED_INDEXES.all(indexes::contains)
-        }
+            REQUIRED_CONTRACTS
+                .filter { requireConsumerSchema || it.table == OUTBOX_TABLE }
+                .all { contract ->
+                    val columns = readColumnNames(metadata, connection.catalog, schema, contract.table)
+                    val indexes = readIndexNames(metadata, connection.catalog, schema, contract.table)
+                    contract.columns.all(columns::contains) && contract.indexes.all(indexes::contains)
+                }
+        } ?: false
     }.getOrDefault(false)
 
     private fun readColumnNames(
         metadata: java.sql.DatabaseMetaData,
         catalog: String?,
         schema: String,
+        table: String,
     ): Set<String> = sequenceOf(catalog, null).distinct()
         .mapNotNull { candidateCatalog ->
             runCatching {
-                metadata.getColumns(candidateCatalog, schema, TABLE_NAME.uppercase(), null).use { result ->
+                metadata.getColumns(candidateCatalog, schema, table.uppercase(), null).use { result ->
                     buildSet {
                         while (result.next()) add(result.getString("COLUMN_NAME").lowercase())
                     }
                 }
             }.getOrNull()
         }
-        .firstOrNull { REQUIRED_COLUMNS.all(it::contains) }
+        .firstOrNull { it.isNotEmpty() }
         ?: emptySet()
 
     private fun readIndexNames(
         metadata: java.sql.DatabaseMetaData,
         catalog: String?,
         schema: String,
+        table: String,
     ): Set<String> = sequenceOf(catalog, null).distinct()
         .flatMap { candidateCatalog ->
-            sequenceOf(TABLE_NAME, TABLE_NAME.uppercase(), TABLE_NAME.lowercase()).asSequence()
+            sequenceOf(table, table.uppercase(), table.lowercase()).asSequence()
             .mapNotNull { tablePattern ->
                 runCatching {
                     metadata.getIndexInfo(candidateCatalog, schema, tablePattern.uppercase(), false, false).use { result ->
@@ -103,24 +110,64 @@ class AppointmentMessagingReadinessValidator(
                 }.getOrNull()
             }
         }
-        .firstOrNull { REQUIRED_INDEXES.all(it::contains) }
+        .firstOrNull { it.isNotEmpty() }
         ?: emptySet()
 
     companion object {
-        private const val TABLE_NAME = "scheduling_outbox_events"
-        private val REQUIRED_COLUMNS = setOf(
-            "occurred_at",
-            "topic",
-            "partition_key",
-            "lease_owner",
-            "lease_token",
-            "lease_until",
-            "last_failure_code",
-            "last_failure_at",
+        private const val OUTBOX_TABLE = "scheduling_outbox_events"
+        private data class SchemaContract(
+            val table: String,
+            val columns: Set<String>,
+            val indexes: Set<String>,
         )
-        private val REQUIRED_INDEXES = setOf(
-            "idx_outbox_appointment_ready",
-            "idx_outbox_appointment_lease_recovery",
+
+        private val REQUIRED_CONTRACTS = listOf(
+            SchemaContract(
+                table = OUTBOX_TABLE,
+                columns = setOf(
+                    "occurred_at",
+                    "topic",
+                    "partition_key",
+                    "lease_owner",
+                    "lease_token",
+                    "lease_until",
+                    "last_failure_code",
+                    "last_failure_at",
+                ),
+                indexes = setOf("idx_outbox_appointment_ready", "idx_outbox_appointment_lease_recovery"),
+            ),
+            SchemaContract(
+                table = "scheduling_appointment_consumer_inbox",
+                columns = setOf(
+                    "logical_consumer_id",
+                    "logical_stream_id",
+                    "event_id",
+                    "status",
+                    "processed_at",
+                    "processing_lease_until",
+                ),
+                indexes = setOf("idx_appointment_consumer_inbox_status_processed"),
+            ),
+            SchemaContract(
+                table = "scheduling_appointment_consumer_rejected",
+                columns = setOf("logical_consumer_id", "topic", "partition_number", "offset_value", "payload_sha256"),
+                indexes = setOf("idx_appointment_consumer_rejected_created"),
+            ),
+            SchemaContract(
+                table = "scheduling_appointment_consumer_quarantine",
+                columns = setOf("logical_consumer_id", "event_id", "failure_code", "payload_sha256"),
+                indexes = setOf("idx_appointment_consumer_quarantine_created"),
+            ),
+            SchemaContract(
+                table = "scheduling_appointment_consumer_replay_audit",
+                columns = setOf("request_id", "request_hash", "status", "completed_at"),
+                indexes = setOf("idx_appointment_consumer_replay_audit_scope_created"),
+            ),
+            SchemaContract(
+                table = "scheduling_appointment_stats_projection_events",
+                columns = setOf("tenant_group_id", "clinic_id", "aggregate_id", "event_id", "event_version"),
+                indexes = setOf("idx_appointment_stats_projection_events_scope_date"),
+            ),
         )
     }
 }

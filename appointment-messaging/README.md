@@ -107,6 +107,33 @@ evidence, not deployment SLOs.
 | p95 | 0.001815 ops/ms |
 | p99 | 0.001815 ops/ms |
 
+### PostgreSQL consumer inbox benchmark (Issue #42)
+
+The same `kotlinx-benchmark` module measures the tenant-scoped consumer inbox on the
+PostgreSQL V23 schema. It uses synthetic tenant `7` and clinic `31`, HikariCP plus Exposed,
+one JMH fork, two warm-up iterations, and five measured iterations. The duplicate path
+looks up the `(logicalConsumerId, logicalStreamId, eventId)` key; cleanup deletes at most
+32 processed metadata rows per call. The dataset is held at 10,000 or 100,000 inbox rows.
+The values below are measured evidence, not deployment SLOs.
+
+| Operation | Inbox rows | p50 (ops/ms) | p95 (ops/ms) | p99 (ops/ms) |
+|-----------|-----------:|-------------:|-------------:|-------------:|
+| bounded cleanup | 10,000 | 0.109366 | 0.137452 | 0.137452 |
+| bounded cleanup | 100,000 | 0.043797 | 0.045377 | 0.045377 |
+| duplicate lookup | 10,000 | 0.520153 | 0.545037 | 0.545037 |
+| duplicate lookup | 100,000 | 0.536926 | 0.578639 | 0.578639 |
+
+The raw-payload-free [consumer baseline JSON](../docs/benchmarks/appointment-messaging-consumer-postgresql-baseline.json)
+records the PostgreSQL image, row scenarios, batch bound, benchmark configuration, and
+source report path. Reproduce it with `./gradlew :appointment-messaging-benchmark:mainBenchmark`;
+the existing chart above remains the outbox claim visualization, while consumer values are
+kept in this table and the dedicated artifact.
+
+The V23 consumer contract also persists a five-minute processing lease. Expired
+`PROCESSING` rows can be reclaimed, active duplicates are retried without acknowledgement,
+and malformed/tombstone/schema-rejected records retain only broker provenance and a SHA-256
+payload hash in the rejected ledger. Quarantined inbox rows remain as deduplication tombstones.
+
 Run the focused module checks with:
 
 ```bash

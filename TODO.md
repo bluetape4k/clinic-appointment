@@ -275,8 +275,8 @@ Kafka4 비동기 메시징으로 확장한다.
 - ✅ Kafka4 도입 결정 (`bluetape4k-kafka4`, Spring Kafka 4, Jackson 3) — [#40](https://github.com/bluetape4k/clinic-appointment/issues/40)
 - ⬜ `appointment-messaging` 신규 모듈 생성 — [#41](https://github.com/bluetape4k/clinic-appointment/issues/41)
 - ⬜ 도메인 이벤트(Created/StatusChanged/Cancelled/Rescheduled) → 메시지 큐 발행
-- ⬜ 외부 시스템(알림, 통계) 구독 컨슈머 구현 — [#42](https://github.com/bluetape4k/clinic-appointment/issues/42)
-- ⬜ 이벤트 schema/version compatibility와 Schema Registry 정책
+- ✅ 외부 시스템(알림, 통계) 구독 컨슈머 구현 — [#42](https://github.com/bluetape4k/clinic-appointment/issues/42)
+- ✅ 이벤트 schema/version compatibility와 Schema Registry 정책
 
 ### 9.4 관리자 대시보드 — 통계/분석 (LOW) — [EPIC #18](https://github.com/bluetape4k/clinic-appointment/issues/18)
 

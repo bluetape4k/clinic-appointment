@@ -15,6 +15,8 @@ exposed {
 dependencies {
     api(project(":appointment-core"))
     api(project(":appointment-event"))
+    implementation(project(":appointment-messaging"))
+    implementation(libs.spring.kafka4)
 
     implementation(libs.jetbrains.exposed.jdbc)
     implementation(libs.exposed.jdbc)

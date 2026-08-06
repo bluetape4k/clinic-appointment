@@ -18,6 +18,7 @@ dependencies {
     api(project(":appointment-core"))
     api(project(":appointment-event"))
     implementation(project(":appointment-messaging"))
+    implementation(libs.spring.kafka4)
     implementation(project(":appointment-notification"))
     api(project(":appointment-solver"))
 

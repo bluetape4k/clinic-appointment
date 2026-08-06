@@ -28,4 +28,22 @@ class BenchmarkReportContractTest {
             )
         }
     }
+
+    @Test
+    fun `consumer report validation accepts both inbox row scenarios`() {
+        BenchmarkReportContract.validateConsumer(
+            """
+            {
+              "benchmarkFamily": "io.bluetape4k.clinic.appointment.benchmark.PostgreSqlAppointmentConsumerBenchmark",
+              "database": "postgresql",
+              "rowCounts": [10000, 100000],
+              "cleanupBatchSize": 32,
+              "measurements": [
+                {"operation":"boundedCleanup","rows":10000,"score":0.04,"percentiles":{"p50":0.04,"p95":0.05,"p99":0.05}},
+                {"operation":"duplicateInboxLookup","rows":100000,"score":0.55,"percentiles":{"p50":0.55,"p95":0.57,"p99":0.57}}
+              ]
+            }
+            """.trimIndent(),
+        )
+    }
 }

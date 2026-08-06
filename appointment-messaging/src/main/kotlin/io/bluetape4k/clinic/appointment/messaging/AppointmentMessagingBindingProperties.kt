@@ -35,4 +35,5 @@ data class AppointmentMessagingBindingProperties(
     val producerMetadataTimeout: Duration = Duration.ofSeconds(5),
     val producerSecurityProtocol: String = "PLAINTEXT",
     val producerCredentialReference: String? = null,
+    val consumer: AppointmentConsumerBindingProperties = AppointmentConsumerBindingProperties(),
 )

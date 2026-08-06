@@ -2,6 +2,14 @@ package io.bluetape4k.clinic.appointment.benchmark
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerInboxStore
+import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerIdentity
+import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerProvenance
+import io.bluetape4k.clinic.appointment.messaging.AppointmentEventId
+import io.bluetape4k.clinic.appointment.messaging.AppointmentLogicalConsumerId
+import io.bluetape4k.clinic.appointment.messaging.AppointmentLogicalStreamId
+import io.bluetape4k.clinic.appointment.messaging.AppointmentTopic
+import io.bluetape4k.clinic.appointment.messaging.JdbcAppointmentConsumerInboxStore
 import io.bluetape4k.clinic.appointment.messaging.JdbcAppointmentOutboxStore
 import io.bluetape4k.testcontainers.database.PostgreSQLServer
 import org.flywaydb.core.Flyway
@@ -17,6 +25,9 @@ class PostgreSqlBenchmarkFixture {
         private set
 
     lateinit var store: JdbcAppointmentOutboxStore
+        private set
+
+    lateinit var consumerInboxStore: AppointmentConsumerInboxStore
         private set
 
     fun start() {
@@ -50,9 +61,10 @@ class PostgreSqlBenchmarkFixture {
                 flyway.migrate()
             }
 
-        Database.connect(dataSource)
+        val database = Database.connect(dataSource)
         seedSchema(dataSource)
         store = JdbcAppointmentOutboxStore(maxClinicBatch = 4)
+        consumerInboxStore = JdbcAppointmentConsumerInboxStore(database, maxAttempts = 8)
     }
 
     fun close() {
@@ -139,8 +151,64 @@ class PostgreSqlBenchmarkFixture {
         }
     }
 
-    private fun String.withCurrentSchema(schema: String): String =
-        "$this${if (contains('?')) '&' else '?'}currentSchema=$schema"
+    fun seedProcessedConsumerRows(rowCount: Int) {
+        require(rowCount in 1..100_000) { "rowCount must be bounded" }
+        dataSource.connection.use { connection ->
+            connection.autoCommit = false
+            connection.prepareStatement(
+                """
+                INSERT INTO scheduling_appointment_consumer_inbox(
+                    logical_consumer_id, logical_stream_id, event_id, topic,
+                    partition_number, offset_value, schema_version, tenant_group_id, clinic_id,
+                    payload_sha256, status, attempt_count, received_at, processed_at
+                )
+                SELECT 'statistics', 'appointment-events', 'benchmark-cleanup-' || series.position::TEXT,
+                       'appointment.events.v1', 0, series.position, 1, ?, ?,
+                       repeat('a', 64), 'PROCESSED', 1, CURRENT_TIMESTAMP - INTERVAL '1 hour',
+                       CURRENT_TIMESTAMP - INTERVAL '1 hour'
+                FROM generate_series(0, ? - 1) AS series(position)
+                ON CONFLICT (logical_consumer_id, logical_stream_id, event_id) DO NOTHING
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setLong(1, TENANT_ID)
+                statement.setLong(2, CLINIC_ID)
+                statement.setInt(3, rowCount)
+                statement.executeUpdate()
+            }
+            connection.commit()
+        }
+    }
+
+    fun seedDuplicateConsumerRow() {
+        dataSource.connection.use { connection ->
+            connection.autoCommit = false
+            connection.prepareStatement(
+                """
+                INSERT INTO scheduling_appointment_consumer_inbox(
+                    logical_consumer_id, logical_stream_id, event_id, topic,
+                    partition_number, offset_value, schema_version, tenant_group_id, clinic_id,
+                    payload_sha256, status, attempt_count, received_at, processed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP - INTERVAL '1 hour', CURRENT_TIMESTAMP)
+                ON CONFLICT (logical_consumer_id, logical_stream_id, event_id) DO NOTHING
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setString(1, DUPLICATE_CONSUMER_IDENTITY.consumerId.value)
+                statement.setString(2, DUPLICATE_CONSUMER_IDENTITY.streamId.value)
+                statement.setString(3, DUPLICATE_EVENT_ID.value)
+                statement.setString(4, "appointment.events.v1")
+                statement.setInt(5, 0)
+                statement.setLong(6, 1)
+                statement.setInt(7, 1)
+                statement.setLong(8, TENANT_ID)
+                statement.setLong(9, CLINIC_ID)
+                statement.setString(10, "a".repeat(64))
+                statement.setString(11, "PROCESSED")
+                statement.setInt(12, 1)
+                statement.executeUpdate()
+            }
+            connection.commit()
+        }
+    }
 
     companion object {
         const val TENANT_ID = 1L
@@ -148,5 +216,23 @@ class PostgreSqlBenchmarkFixture {
         const val ROW_COUNT = 20_000
         const val FIRST_APPOINTMENT_ID = 1_000_000L
         const val SCHEMA = "appointment_messaging_benchmark"
+
+        val DUPLICATE_CONSUMER_IDENTITY = AppointmentConsumerIdentity(
+            AppointmentLogicalConsumerId("statistics"),
+            AppointmentLogicalStreamId("appointment-events"),
+        )
+        val DUPLICATE_EVENT_ID = AppointmentEventId("benchmark-consumer-duplicate")
+        val DUPLICATE_PROVENANCE = AppointmentConsumerProvenance(
+            topic = AppointmentTopic("appointment.events.v1"),
+            partition = 0,
+            offset = 1,
+            schemaVersion = 1,
+            tenantGroupId = TENANT_ID,
+            clinicId = CLINIC_ID,
+            payloadSha256 = "a".repeat(64),
+        )
     }
+
+    private fun String.withCurrentSchema(schema: String): String =
+        "$this${if (contains('?')) '&' else '?'}currentSchema=$schema"
 }
