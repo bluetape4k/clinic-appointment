@@ -82,12 +82,15 @@ data class AppointmentSchemaReadiness(
 /** 승인된 replay의 입력 계약입니다. 운영 group offset rewind는 이 타입으로 표현하지 않습니다. */
 data class AppointmentReplayRequest(
     val identity: AppointmentConsumerIdentity,
+    val tenantGroupId: Long,
+    val clinicId: Long,
     val approver: String,
     val fromOffset: Long,
     val toOffset: Long,
     val dryRun: Boolean,
 ) : Serializable {
     init {
+        require(tenantGroupId > 0 && clinicId > 0) { "replay scope must be positive" }
         require(approver.length in 1..128) { "replay approver must be bounded" }
         require(approver.matches(IDENTIFIER_PATTERN)) { "replay approver is not canonical" }
         require(fromOffset >= 0 && toOffset >= fromOffset) { "replay offsets must be ordered" }
@@ -99,6 +102,13 @@ data class AppointmentReplayRequest(
     companion object {
         private const val MAX_REPLAY_OFFSET_RANGE = 100_000L
     }
+}
+
+enum class AppointmentReplayAuditStatus {
+    REQUESTED,
+    DRY_RUN,
+    EXECUTED,
+    REJECTED,
 }
 
 private val IDENTIFIER_PATTERN = Regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
