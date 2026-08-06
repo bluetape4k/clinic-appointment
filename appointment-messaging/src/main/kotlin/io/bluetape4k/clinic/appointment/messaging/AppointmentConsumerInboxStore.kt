@@ -74,11 +74,28 @@ class JdbcAppointmentConsumerInboxStore(
         }.insertedCount == 1
         if (inserted) return@transaction AppointmentConsumerBeginResult.Acquired(attemptCount = 1)
 
-        AppointmentConsumerInboxTable
+        val row = AppointmentConsumerInboxTable
             .selectAll()
             .where { keyPredicate(identity, eventId) }
-            .single()[AppointmentConsumerInboxTable.status]
-            .let(AppointmentConsumerBeginResult::Duplicate)
+            .single()
+        val status = row[AppointmentConsumerInboxTable.status]
+        if (status == AppointmentConsumerStatus.RETRYABLE &&
+            row[AppointmentConsumerInboxTable.attemptCount] <= this@JdbcAppointmentConsumerInboxStore.maxAttempts
+        ) {
+            val reclaimed = AppointmentConsumerInboxTable.update({
+                keyPredicate(identity, eventId) and
+                    (AppointmentConsumerInboxTable.status eq AppointmentConsumerStatus.RETRYABLE)
+            }) {
+                it[AppointmentConsumerInboxTable.status] = AppointmentConsumerStatus.PROCESSING
+                it[AppointmentConsumerInboxTable.failureCode] = null
+            }
+            if (reclaimed == 1) {
+                return@transaction AppointmentConsumerBeginResult.Acquired(
+                    attemptCount = row[AppointmentConsumerInboxTable.attemptCount],
+                )
+            }
+        }
+        AppointmentConsumerBeginResult.Duplicate(status)
     }
 
     override fun markProcessed(identity: AppointmentConsumerIdentity, eventId: AppointmentEventId): Boolean =

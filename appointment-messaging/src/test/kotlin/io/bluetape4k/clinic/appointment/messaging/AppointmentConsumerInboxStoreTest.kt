@@ -48,6 +48,16 @@ class AppointmentConsumerInboxStoreTest {
     }
 
     @Test
+    fun `retryable row can be acquired again with a bounded next attempt`() {
+        store.begin(identity(), eventId(), provenance())
+        store.markFailure(identity(), eventId(), AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
+
+        val retry = store.begin(identity(), eventId(), provenance())
+
+        retry shouldBeEqualTo AppointmentConsumerBeginResult.Acquired(attemptCount = 2)
+    }
+
+    @Test
     fun `retry is bounded and exhausted attempt becomes quarantine`() {
         store.begin(identity(), eventId(), provenance())
 

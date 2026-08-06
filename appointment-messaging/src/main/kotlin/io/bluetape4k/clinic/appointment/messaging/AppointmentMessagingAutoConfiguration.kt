@@ -4,19 +4,23 @@ import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
 import org.springframework.kafka.core.KafkaAdmin
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.core.ProducerFactory
 import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitialization
 import io.micrometer.core.instrument.MeterRegistry
 import javax.sql.DataSource
+import org.jetbrains.exposed.v1.jdbc.Database
 
 /** appointment-messaging 기본 contract와 DB store를 Spring Boot 4에 등록한다. */
 @AutoConfiguration
 @EnableConfigurationProperties(AppointmentMessagingBindingProperties::class)
+@Import(AppointmentKafkaConsumerConfiguration::class)
 class AppointmentMessagingAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -47,11 +51,58 @@ class AppointmentMessagingAutoConfiguration {
         producerMetadataTimeout = binding.producerMetadataTimeout,
         producerSecurityProtocol = binding.producerSecurityProtocol,
         producerCredentialReference = binding.producerCredentialReference,
+        consumer = AppointmentConsumerProperties(
+            enabled = binding.consumer.enabled,
+            groupId = binding.consumer.groupId,
+            logicalConsumerId = AppointmentLogicalConsumerId(binding.consumer.logicalConsumerId),
+            logicalStreamId = AppointmentLogicalStreamId(binding.consumer.logicalStreamId),
+            topic = AppointmentTopic(
+                binding.consumer.topic.takeUnless { it == DefaultAppointmentOutboxWriter.DEFAULT_TOPIC }
+                    ?: binding.topic,
+            ),
+            maxAttempts = binding.consumer.maxAttempts,
+            shutdownTimeout = binding.consumer.shutdownTimeout,
+        ),
     )
 
     @Bean
     @ConditionalOnMissingBean
     fun appointmentEventEnvelopeCodec(): AppointmentEventEnvelopeCodec = AppointmentEventEnvelopeCodec()
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun appointmentSchemaRegistry(): AppointmentSchemaRegistry = StaticAppointmentSchemaRegistry()
+
+    @Bean
+    @ConditionalOnBean(Database::class)
+    @ConditionalOnMissingBean
+    @DependsOnDatabaseInitialization
+    fun appointmentConsumerInboxStore(
+        database: Database,
+        properties: AppointmentMessagingProperties,
+    ): AppointmentConsumerInboxStore = JdbcAppointmentConsumerInboxStore(
+        database = database,
+        maxAttempts = properties.consumer.maxAttempts,
+    )
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.messaging.consumer", name = ["enabled"], havingValue = "true")
+    @ConditionalOnBean(AppointmentConsumerInboxStore::class)
+    @ConditionalOnMissingBean
+    fun appointmentConsumerRuntime(
+        properties: AppointmentMessagingProperties,
+        codec: AppointmentEventEnvelopeCodec,
+        schemaRegistry: AppointmentSchemaRegistry,
+        inboxStore: AppointmentConsumerInboxStore,
+    ): AppointmentConsumerRuntime {
+        schemaRegistry.validate(AppointmentEventEnvelope.CURRENT_SCHEMA_VERSION)
+        return AppointmentConsumerRuntime(
+            codec = codec,
+            inboxStore = inboxStore,
+            allowedTopics = properties.allowedTopics,
+            schemaRegistry = schemaRegistry,
+        )
+    }
 
     @Bean
     @ConditionalOnMissingBean
