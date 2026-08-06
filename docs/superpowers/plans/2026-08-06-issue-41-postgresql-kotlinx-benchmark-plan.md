@@ -84,8 +84,9 @@ contract parsing.
 - Create: `docs/benchmarks/appointment-messaging-postgresql-baseline.json`
 
 - [x] Run the verified smoke task once and inspect the actual plugin output path.
-- [x] Make the collector select exactly one claim result, preserve plugin metadata,
-  and write a stable report with image/JVM/seed/row-count/config metadata.
+- [x] Make the collector select exactly one claim result from the requested
+  `main`/`smoke` directory, preserve plugin metadata, and write report metadata
+  with the actual timestamped `sourceFile` plus a stable `sourceFilePattern`.
 - [x] Make the validator fail closed on absent or non-positive score/percentiles and
   reject H2 markers or missing PostgreSQL metadata.
 - [x] Run the full task once against Docker and use that output as the committed
@@ -95,7 +96,7 @@ Run:
 
 ```bash
 ./gradlew :appointment-messaging-benchmark:mainSmokeBenchmark --no-daemon --console=plain
-node scripts/collect-appointment-messaging-benchmark.mjs --input-dir benchmark/appointment-messaging-benchmark/build/benchmarks --output build/reports/appointment-messaging-postgresql.json
+node scripts/collect-appointment-messaging-benchmark.mjs --input-dir benchmark/appointment-messaging-benchmark/build/reports/benchmarks --output build/reports/appointment-messaging-postgresql.json --config smoke
 node scripts/validate-appointment-messaging-benchmark.mjs --input build/reports/appointment-messaging-postgresql.json
 ```
 
@@ -119,8 +120,9 @@ message.
 
 - [x] Generate both locale SVGs from the same baseline JSON with explicit units,
   p50/p95/p99 labels, PostgreSQL/20,000/seed metadata, and the non-SLO caveat.
-- [x] Render PNGs with CairoSVG, run `xmllint`, `identify`, chart geometry/endpoint
-  audits, and inspect each PNG at original resolution.
+- [x] Render PNGs with CairoSVG, parse XML with the standard Python library,
+  run `identify`, chart geometry/endpoint audits, and inspect each PNG at original
+  resolution.
 - [x] Add equivalent English/Korean module rows, command snippets, metric table and
   chart links; preserve code/identifier/URL text exactly across locales.
 - [x] Add the benchmark module to the repository module guidance without changing

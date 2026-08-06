@@ -123,6 +123,7 @@ jobs:
               - 'docs/benchmarks/appointment-messaging-postgresql-baseline.json'
               - 'docs/images/readme-charts/appointment-messaging-postgresql-benchmark-01-*'
               - 'scripts/*appointment-messaging-benchmark*'
+              - 'tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs'
               - 'README.md'
               - 'README.ko.md'
             frontend:
@@ -477,6 +478,7 @@ jobs:
 
       - name: Collect and validate benchmark report
         run: |
+          node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs
           node scripts/collect-appointment-messaging-benchmark.mjs \
             --input-dir benchmark/appointment-messaging-benchmark/build/reports/benchmarks \
             --output build/reports/appointment-messaging-postgresql/benchmark.json \

@@ -59,6 +59,10 @@ benchmark가 재현할 수 있도록 public으로 연다. test-fixtures 변형�
 - 결과는 `reportFormat = "json"`으로 만들고 validator가 benchmark name,
   PostgreSQL marker, row count, score, p50/p95/p99 존재 여부와 양수 값을 검증한다.
   percentile이 JMH raw output에 없는 경우 성공으로 처리하지 않는다.
+- collector는 `--config`와 일치하는 raw output directory만 선택하고, 실제
+  timestamp 경로를 `sourceFile`에 보존하며 문서용 stable 경로는
+  `sourceFilePattern`으로 분리한다. main/smoke raw output을 섞어 보고하거나
+  존재하지 않는 경로를 provenance로 남기지 않는다.
 
 ## Chart와 문서
 

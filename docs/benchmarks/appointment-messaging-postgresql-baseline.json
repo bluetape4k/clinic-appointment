@@ -16,5 +16,6 @@
     "p99": 0.0018149702151862626
   },
   "deploymentSloEvidence": false,
-  "sourceFile": "benchmark/appointment-messaging-benchmark/build/reports/benchmarks/main/main.json"
+  "sourceFile": "benchmark/appointment-messaging-benchmark/build/reports/benchmarks/main/2026-08-06T16.42.51.116663/main.json",
+  "sourceFilePattern": "benchmark/appointment-messaging-benchmark/build/reports/benchmarks/main/main.json"
 }

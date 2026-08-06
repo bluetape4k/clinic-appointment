@@ -16,15 +16,21 @@ Flyway schema, Hikari `DataSource` wiring의 비용을 보여주지 못한다. �
    과도하게 느려질 수 있다. 20,000건 synthetic backlog는 PostgreSQL
    `generate_series` 한 번으로 seed하고, measured invocation에는 reset을 넣지 않아
    fixture 비용이 throughput에 섞이지 않게 했다.
-3. benchmark raw JSON의 timestamp output path는 커밋할 수 없다. collector가
-   `.../benchmarks/{configuration}/main.json`으로 안정화한 report를 만들고, chart와
-   README는 그 report만 소비해야 한다.
+3. benchmark raw JSON의 timestamp output path는 커밋할 수 없지만 provenance에서는
+   잃으면 안 된다. collector는 `--config`와 일치하는 directory만 고른 뒤 실제
+   timestamp 경로를 `sourceFile`에 보존하고, chart/README용 stable 경로는
+   `sourceFilePattern`으로 분리한다. main/smoke 혼합 output을 고르는 회귀 test를
+   함께 둔다.
 4. root `subprojects`의 Kover 자동 적용은 benchmark generated JMH class를 제품
    coverage에 섞을 수 있다. benchmark module을 Kover plugin/aggregate에서 명시적으로
    제외해야 CI coverage 의미가 보존된다.
 5. percentile 숫자만 문서화하면 throughput과 latency를 혼동할 수 있다. chart와
    README에 `ops/ms`, p50/p95/p99, PostgreSQL image, seed, row 수, 그리고
    `deploymentSloEvidence=false` 경계를 함께 표시했다.
+6. GitHub-hosted `ubuntu-latest`에는 `xmllint`가 보장되지 않았다. artifact 생성은
+   성공했지만 SVG 검증 단계가 exit 127로 실패했으므로, OS package 설치 대신 이미
+   benchmark job에 있는 Python 표준 `xml.etree.ElementTree`로 well-formedness를
+   확인한다. 같은 검증을 PR smoke와 nightly full에 유지한다.
 
 ## 재현 명령
 

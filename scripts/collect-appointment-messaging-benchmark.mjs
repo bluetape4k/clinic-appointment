@@ -6,7 +6,13 @@ import path from "node:path";
 const args = parseArgs(process.argv.slice(2));
 const inputDir = required(args, "input-dir");
 const output = required(args, "output");
+const requestedConfiguration = args.config;
+if (requestedConfiguration && !["main", "smoke"].includes(requestedConfiguration)) {
+  fail(`--config must be main or smoke, received ${requestedConfiguration}`);
+}
+
 const files = jsonFiles(inputDir)
+  .filter((file) => !requestedConfiguration || inferConfiguration(file) === requestedConfiguration)
   .map((file) => ({ file, mtime: fs.statSync(file).mtimeMs }))
   .sort((left, right) => right.mtime - left.mtime);
 
@@ -29,7 +35,7 @@ if (candidates.length === 0) {
 const { entry, file } = candidates[0];
 const metric = entry.primaryMetric;
 const percentiles = metric?.scorePercentiles;
-const configuration = args.config ?? inferConfiguration(file);
+const configuration = requestedConfiguration ?? inferConfiguration(file);
 const report = {
   schemaVersion: 1,
   benchmark: entry.benchmark,
@@ -48,7 +54,8 @@ const report = {
     p99: percentiles?.["99.0"],
   },
   deploymentSloEvidence: false,
-  sourceFile: stableSourceFile(configuration),
+  sourceFile: relativeSourceFile(file),
+  sourceFilePattern: stableSourceFile(configuration),
 };
 
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -91,6 +98,10 @@ function inferConfiguration(file) {
 
 function stableSourceFile(configuration) {
   return `benchmark/appointment-messaging-benchmark/build/reports/benchmarks/${configuration}/main.json`;
+}
+
+function relativeSourceFile(file) {
+  return path.relative(process.cwd(), file).replaceAll(path.sep, "/");
 }
 
 function jsonFiles(directory) {
