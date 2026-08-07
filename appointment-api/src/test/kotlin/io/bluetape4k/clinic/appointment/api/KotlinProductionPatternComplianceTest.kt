@@ -58,11 +58,13 @@ class KotlinProductionPatternComplianceTest {
     }
 
     @Test
-    fun `reminder recovery cursor는 suspend 친화 lock과 IO boundary를 사용한다`() {
+    fun `reminder recovery cursor는 suspend 친화 lock과 IO boundary guard를 사용한다`() {
         val source = source("notification/JdbcAppointmentReminderRecoveryStore.kt")
 
         source.contains("synchronized(").shouldBeFalse()
         source.contains("Mutex(").shouldBeTrue()
+        // The JDBC execution-thread test is authoritative for each materializer path;
+        // keep this source check as a lightweight guard against removing the IO boundary entirely.
         source.contains("withContext(ioDispatcher)").shouldBeTrue()
     }
 

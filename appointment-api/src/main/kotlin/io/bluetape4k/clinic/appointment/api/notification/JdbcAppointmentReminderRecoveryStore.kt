@@ -139,47 +139,51 @@ class JdbcAppointmentReminderRecoveryStore(
     }
 
     override suspend fun enqueue(candidate: ReminderRecoveryCandidate): ReminderRecoveryMaterializationResult =
-        transaction(database) {
-            lockCheckpoint(candidate.progress)
-            val payload = requireNotNull(candidate.payload) { "recovery candidate payload is required" }
-            val draft = payload.sendableDraft
-            val result = if (draft == null) {
-                val existed = repository.containsIdempotency(payload.suppressionDraft.idempotencyDigest)
-                repository.suppressLegacy(payload.suppressionDraft)
-                if (existed) {
+        withContext(ioDispatcher) {
+            transaction(database) {
+                lockCheckpoint(candidate.progress)
+                val payload = requireNotNull(candidate.payload) { "recovery candidate payload is required" }
+                val draft = payload.sendableDraft
+                val result = if (draft == null) {
+                    val existed = repository.containsIdempotency(payload.suppressionDraft.idempotencyDigest)
+                    repository.suppressLegacy(payload.suppressionDraft)
+                    if (existed) {
+                        ReminderRecoveryMaterializationResult.ALREADY_EXISTS
+                    } else {
+                        ReminderRecoveryMaterializationResult.SUPPRESSED
+                    }
+                } else {
+                    val existed = repository.containsIdempotency(draft.idempotencyDigest)
+                    repository.enqueue(draft)
+                    if (existed) {
+                        ReminderRecoveryMaterializationResult.ALREADY_EXISTS
+                    } else {
+                        ReminderRecoveryMaterializationResult.ENQUEUED
+                    }
+                }
+                advanceCheckpoint(candidate.progress)
+                result
+            }
+        }
+
+    override suspend fun suppressMissed(candidate: ReminderRecoveryCandidate): ReminderRecoveryMaterializationResult =
+        withContext(ioDispatcher) {
+            transaction(database) {
+                lockCheckpoint(candidate.progress)
+                val payload = requireNotNull(candidate.payload) { "recovery candidate payload is required" }
+                val missed = payload.suppressionDraft.copy(
+                    suppressionReason = NotificationSuppressionReasonCode.REMINDER_WINDOW_MISSED,
+                )
+                val existed = repository.containsIdempotency(missed.idempotencyDigest)
+                repository.suppressLegacy(missed)
+                val result = if (existed) {
                     ReminderRecoveryMaterializationResult.ALREADY_EXISTS
                 } else {
                     ReminderRecoveryMaterializationResult.SUPPRESSED
                 }
-            } else {
-                val existed = repository.containsIdempotency(draft.idempotencyDigest)
-                repository.enqueue(draft)
-                if (existed) {
-                    ReminderRecoveryMaterializationResult.ALREADY_EXISTS
-                } else {
-                    ReminderRecoveryMaterializationResult.ENQUEUED
-                }
+                advanceCheckpoint(candidate.progress)
+                result
             }
-            advanceCheckpoint(candidate.progress)
-            result
-        }
-
-    override suspend fun suppressMissed(candidate: ReminderRecoveryCandidate): ReminderRecoveryMaterializationResult =
-        transaction(database) {
-            lockCheckpoint(candidate.progress)
-            val payload = requireNotNull(candidate.payload) { "recovery candidate payload is required" }
-            val missed = payload.suppressionDraft.copy(
-                suppressionReason = NotificationSuppressionReasonCode.REMINDER_WINDOW_MISSED,
-            )
-            val existed = repository.containsIdempotency(missed.idempotencyDigest)
-            repository.suppressLegacy(missed)
-            val result = if (existed) {
-                ReminderRecoveryMaterializationResult.ALREADY_EXISTS
-            } else {
-                ReminderRecoveryMaterializationResult.SUPPRESSED
-            }
-            advanceCheckpoint(candidate.progress)
-            result
         }
 
     override suspend fun scheduleFuture(candidate: ReminderRecoveryCandidate): ReminderRecoveryMaterializationResult =
