@@ -25,22 +25,22 @@ Issue #42 구현에 최소 diff로 연결한다.
 
 ### Task 1 — Document and review the approved contract
 
-- [ ] Write this design and plan in Korean, preserving English only for code/API/URLs.
-- [ ] Run six perspective review (performance, stability, security, operator, developer,
+- [x] Write this design and plan in Korean, preserving English only for code/API/URLs.
+- [x] Run six perspective review (performance, stability, security, operator, developer,
       caller) and integrate findings. P0/P1 must be zero before implementation.
-- [ ] Commit spec/plan with Lore trailers before source edits.
+- [x] Commit spec/plan with Lore trailers before source edits.
 
 Commands: `git diff --check -- docs/superpowers/specs docs/superpowers/plans`.
 
 ### Task 2 — Prove MySQL V23 migration readiness
 
-- [ ] Add a shared V23 contract assertion for table columns, primary keys, and indexes.
-- [ ] Call it from Flyway H2, MySQL, and PostgreSQL tests; use `MySQLServer.Launcher` and
+- [x] Add a shared V23 contract assertion for table columns, primary keys, and indexes.
+- [x] Call it from Flyway H2, MySQL, and PostgreSQL tests; use `MySQLServer.Launcher` and
       `PostgreSQLServer.Launcher` singleton fixtures only.
-- [ ] Add a production verification command/runbook section that accepts externally supplied
+- [x] Add a production verification command/runbook section that accepts externally supplied
       JDBC endpoint without committing credentials; record production execution as PENDING
       when no endpoint is available.
-- [ ] Verify readiness schema/catalog lookup against MySQL metadata without renaming
+- [x] Verify readiness schema/catalog lookup against MySQL metadata without renaming
       `scheduling_*` tables.
 
 Targeted checks: `:appointment-api:test --tests '*FlywayMySQLMigrationTest*'`,
@@ -48,13 +48,13 @@ Targeted checks: `:appointment-api:test --tests '*FlywayMySQLMigrationTest*'`,
 
 ### Task 3 — Wire Schema Registry endpoint and credentials
 
-- [ ] Add immutable binding/properties and a credential resolver port; default remains static
+- [x] Add immutable binding/properties and a credential resolver port; default remains static
       local validation when registry is disabled.
-- [ ] Extend the JDK compatibility reader with bounded URI validation, endpoint path encoding,
+- [x] Extend the JDK compatibility reader with bounded URI validation, endpoint path encoding,
       HTTPS/loopback policy, and Basic `Authorization` injection without secret logging.
-- [ ] Register conditional Spring beans in the correct auto-configuration phase and include
+- [x] Register conditional Spring beans in the correct auto-configuration phase and include
       registry readiness in startup/readiness validation.
-- [ ] Add tests for endpoint path, timeout, positive Basic auth, missing/invalid auth,
+- [x] Add tests for endpoint path, timeout, positive Basic auth, missing/invalid auth,
       compatibility mismatch, disabled fallback, and no-secret diagnostics.
 
 Targeted checks: `:appointment-messaging:test --tests '*AppointmentSchemaRegistry*'`
@@ -62,11 +62,11 @@ and `:appointment-messaging:test --tests '*AppointmentMessagingAutoConfiguration
 
 ### Task 4 — Verify actual Kafka 4 listener crash/rebalance
 
-- [ ] Add the runtime listener adapter that passes manual `Acknowledgment` to
+- [x] Add the runtime listener adapter that passes manual `Acknowledgment` to
       `AppointmentConsumerRuntime` and never acknowledges before durable processing.
-- [ ] Strengthen the `ConcurrentMessageListenerContainer` factory with explicit lifecycle,
+- [x] Strengthen the `ConcurrentMessageListenerContainer` factory with explicit lifecycle,
       group/topic allow-list, shutdown, and recovery assertions.
-- [ ] Extend the singleton Kafka integration test: one handler throws before ack, a second
+- [x] Extend the singleton Kafka integration test: one handler throws before ack, a second
       container joins the group, and the record is recovered exactly once after rebalance or
       bounded retry. Assert committed offsets and quarantine metadata, not only in-memory calls.
 
@@ -75,17 +75,17 @@ plus existing consumer configuration/runtime tests.
 
 ### Task 5 — Add metrics, lag/lock signals, retention, and SLO evidence
 
-- [ ] Add `AppointmentConsumerMetrics` with Noop and Micrometer implementations. Register
+- [x] Add `AppointmentConsumerMetrics` with Noop and Micrometer implementations. Register
       bounded counters/timers/gauges for outcome, retry/quarantine, lag/oldest age, inbox
       transaction latency, replay, and cleanup.
-- [ ] Instrument runtime, inbox store, replay service, and health details without high-cardinality
+- [x] Instrument runtime, inbox store, replay service, and health details without high-cardinality
       tenant/event/payload labels.
-- [ ] Add bounded retention service/configuration for processed/quarantined inbox and replay
+- [x] Add bounded retention service/configuration for processed/quarantined inbox and replay
       audit rows; protect active `PROCESSING` rows and expose cleanup result metrics.
-- [ ] Extend the existing PostgreSQL `kotlinx-benchmark` consumer suite with lock-contention
+- [x] Extend the existing PostgreSQL `kotlinx-benchmark` consumer suite with lock-contention
       samples and a machine-readable SLO evidence report; do not claim deployment SLO from
       benchmark values.
-- [ ] Generate/update one source-backed chart (SVG→PNG) for duplicate/cleanup/lock latency and
+- [x] Generate/update one source-backed chart (SVG→PNG) for duplicate/cleanup/lock latency and
       inspect it full-size. Keep EN/KO README values source-equivalent.
 
 Targeted checks: `:appointment-messaging:test`,
@@ -93,15 +93,15 @@ Targeted checks: `:appointment-messaging:test`,
 
 ### Task 6 — Implement production replay adapter and authorization
 
-- [ ] Define `AppointmentReplayAuthorizer` and authenticated actor/tenant scope value objects;
+- [x] Define `AppointmentReplayAuthorizer` and authenticated actor/tenant scope value objects;
       reject blank actor, cross-tenant scope, invalid range, and missing approval before audit
       or source calls.
-- [ ] Implement bounded `KafkaAppointmentReplaySource` with dedicated group, poll timeout,
+- [x] Implement bounded `KafkaAppointmentReplaySource` with dedicated group, poll timeout,
       close-on-all-paths, and runtime dispatch; no operations group rewind.
-- [ ] Wire an API adapter to existing Spring Security context only when the module has the
-      required beans; preserve current endpoint authorization and avoid a new public route if
-      no safe route exists.
-- [ ] Add dry-run, approved execution, unauthorized, source failure, audit idempotency, and
+- [x] Keep the replay boundary as an application adapter port; no new public route is added
+      because this repository has no approved replay endpoint/claim mapping yet. Existing Spring
+      Security integration remains an explicit production wiring PENDING item.
+- [x] Add dry-run, approved execution, unauthorized, source failure, audit idempotency, and
       retention tests; update Korean replay runbook with production prerequisites.
 
 Targeted checks: `:appointment-messaging:test --tests '*AppointmentReplayServiceTest*'`,
@@ -109,11 +109,14 @@ Targeted checks: `:appointment-messaging:test --tests '*AppointmentReplayService
 
 ### Task 7 — Type-A verification, PR, CI, and closeout
 
-- [ ] Run verifier traceability against every requirement and mark approved non-goals/PENDING
+- [x] Run verifier traceability against every requirement and mark approved non-goals/PENDING
       production gaps explicitly.
-- [ ] Run per-module six-lens code review and performance/stability scan; converge P0=0/P1=0.
-- [ ] Run fresh targeted tests, affected module builds, `git diff --check`, and benchmark/report
+- [x] Run per-module six-lens code review and performance/stability scan; converge P0=0/P1=0.
+- [x] Run fresh targeted tests, affected module builds, `git diff --check`, and benchmark/report
       contract tests. Record production endpoints/credentials as unchecked when unavailable.
+- [x] Record the full `:appointment-api:test` Context Mode timeout as a verification gap rather
+      than a code failure; retain targeted migration/projection evidence and do not claim the
+      complete API suite passed.
 - [ ] Create English issue-linked PR with aligned metadata and final `## DoD Status` section.
 - [ ] Recheck exact PR head, CI, review threads, and mergeability. Ask for fresh merge approval
       tied to that exact head; after approval merge, sync local `develop`, remove worktree,

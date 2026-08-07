@@ -6,6 +6,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
@@ -35,6 +36,19 @@ class AppointmentStatsProjectionRepository {
         require(eventVersion >= 0) { "eventVersion must not be negative" }
         require(aggregateId.isNotBlank() && aggregateId.length <= 128) { "aggregateId must be bounded" }
         require(eventId.isNotBlank() && eventId.length <= 128) { "eventId must be bounded" }
+
+        val latestAggregateVersion = AppointmentStatsProjectionEventTable
+            .select(AppointmentStatsProjectionEventTable.eventVersion)
+            .where {
+                (AppointmentStatsProjectionEventTable.tenantGroupId eq tenantGroupId) and
+                    (AppointmentStatsProjectionEventTable.clinicId eq clinicId) and
+                    (AppointmentStatsProjectionEventTable.aggregateId eq aggregateId)
+            }
+            .orderBy(AppointmentStatsProjectionEventTable.eventVersion to org.jetbrains.exposed.v1.core.SortOrder.DESC)
+            .limit(1)
+            .singleOrNull()
+            ?.get(AppointmentStatsProjectionEventTable.eventVersion)
+        if (latestAggregateVersion != null && eventVersion <= latestAggregateVersion) return false
 
         val eventInserted = AppointmentStatsProjectionEventTable.insertIgnore {
             it[AppointmentStatsProjectionEventTable.tenantGroupId] = tenantGroupId
@@ -72,6 +86,23 @@ class AppointmentStatsProjectionRepository {
             .where { predicate }
             .forUpdate()
             .single()
+
+        // 같은 aggregate의 더 높거나 같은 version이 먼저 반영된 경우에는
+        // dashboard bucket을 다시 증가시키지 않습니다. 다른 aggregate의 version과
+        // bucket-level lastEventVersion을 비교하면 정상 event를 잃으므로 aggregate로
+        // 한정한 ledger 조회를 사용합니다.
+        val newerAggregateEventExists = AppointmentStatsProjectionEventTable
+            .select(AppointmentStatsProjectionEventTable.eventId)
+            .where {
+                (AppointmentStatsProjectionEventTable.tenantGroupId eq tenantGroupId) and
+                    (AppointmentStatsProjectionEventTable.clinicId eq clinicId) and
+                    (AppointmentStatsProjectionEventTable.aggregateId eq aggregateId) and
+                    (AppointmentStatsProjectionEventTable.eventVersion greaterEq eventVersion) and
+                    (AppointmentStatsProjectionEventTable.eventId neq eventId)
+            }
+            .limit(1)
+            .singleOrNull() != null
+        if (newerAggregateEventExists) return false
 
         AppointmentStatsProjectionTable.update({ predicate }) {
             it[AppointmentStatsProjectionTable.appointmentCount] = existing[AppointmentStatsProjectionTable.appointmentCount] + 1L

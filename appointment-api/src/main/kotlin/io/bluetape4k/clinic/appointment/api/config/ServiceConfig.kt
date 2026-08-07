@@ -1059,8 +1059,9 @@ class ServiceConfig {
         runtime: io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRuntime,
         consumer: AppointmentStatsProjectionConsumer,
         properties: io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingProperties,
+        metrics: io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerMetrics,
     ): AppointmentStatsProjectionKafkaListener =
-        AppointmentStatsProjectionKafkaListener(runtime, consumer, properties)
+        AppointmentStatsProjectionKafkaListener(runtime, consumer, properties, metrics)
 
     @Bean
     fun dashboardStatsService(

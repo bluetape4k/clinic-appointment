@@ -46,33 +46,45 @@ internal object AppointmentMessagingMigrationTestSupport {
             "Expected only V23 after target 22, executed=${result.migrationsExecuted}"
         }
 
-        dataSource.connection.use { connection ->
-            V23_TABLES.forEach { (table, expectedColumns) ->
-                check(tableExists(connection, table)) { "Missing V23 table $table" }
-                val actualColumns = columns(connection, table)
-                check(actualColumns == expectedColumns) {
-                    "Unexpected V23 columns for $table: expected=$expectedColumns actual=$actualColumns"
+        verifyV23Metadata(dataSource)
+    }
+
+    /**
+     * Verifies only the already-applied V23 metadata without running Flyway or mutating rows.
+     *
+     * This is the safe hook for a production/staging endpoint smoke test. Applying a migration
+     * to a production database remains an operator-controlled change-window action.
+     */
+    fun verifyV23Metadata(dataSource: DataSource) {
+        dataSource.connection.use(::assertV23Metadata)
+    }
+
+    private fun assertV23Metadata(connection: Connection) {
+        V23_TABLES.forEach { (table, expectedColumns) ->
+            check(tableExists(connection, table)) { "Missing V23 table $table" }
+            val actualColumns = columns(connection, table)
+            check(actualColumns == expectedColumns) {
+                "Unexpected V23 columns for $table: expected=$expectedColumns actual=$actualColumns"
+            }
+        }
+        V23_PRIMARY_KEYS.forEach { (table, expected) ->
+            check(primaryKeyColumns(connection, table) == expected) {
+                "Unexpected V23 primary key for $table: ${primaryKeyColumns(connection, table)}"
+            }
+        }
+        V23_INDEXES.forEach { (table, indexes) ->
+            indexes.forEach { (name, expectedColumns) ->
+                check(indexColumns(connection, table, name) == expectedColumns) {
+                    "Unexpected V23 index $name on $table: " +
+                        indexColumns(connection, table, name)
                 }
             }
-            V23_PRIMARY_KEYS.forEach { (table, expected) ->
-                check(primaryKeyColumns(connection, table) == expected) {
-                    "Unexpected V23 primary key for $table: ${primaryKeyColumns(connection, table)}"
-                }
-            }
-            V23_INDEXES.forEach { (table, indexes) ->
-                indexes.forEach { (name, expectedColumns) ->
-                    check(indexColumns(connection, table, name) == expectedColumns) {
-                        "Unexpected V23 index $name on $table: " +
-                            indexColumns(connection, table, name)
-                    }
-                }
-            }
-            if (connection.metaData.databaseProductName.contains("MySQL", ignoreCase = true)) {
-                connection.createStatement().use { statement ->
-                    statement.executeQuery("SELECT DATABASE()").use { rows ->
-                        check(rows.next() && !rows.getString(1).isNullOrBlank()) {
-                            "MySQL V23 verification must run against a selected catalog"
-                        }
+        }
+        if (connection.metaData.databaseProductName.contains("MySQL", ignoreCase = true)) {
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT DATABASE()").use { rows ->
+                    check(rows.next() && !rows.getString(1).isNullOrBlank()) {
+                        "MySQL V23 verification must run against a selected catalog"
                     }
                 }
             }

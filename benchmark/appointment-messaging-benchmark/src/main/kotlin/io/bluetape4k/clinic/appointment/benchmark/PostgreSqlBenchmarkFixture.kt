@@ -15,11 +15,18 @@ import io.bluetape4k.testcontainers.database.PostgreSQLServer
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.sql.DriverManager
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Owns the isolated PostgreSQL schema and the actual production outbox store used by the benchmark.
  */
 class PostgreSqlBenchmarkFixture {
+
+    private val contentionExecutor = Executors.newFixedThreadPool(2)
+    private val contentionSequence = AtomicLong()
 
     lateinit var dataSource: HikariDataSource
         private set
@@ -68,9 +75,44 @@ class PostgreSqlBenchmarkFixture {
     }
 
     fun close() {
+        contentionExecutor.shutdownNow()
+        contentionExecutor.awaitTermination(5, TimeUnit.SECONDS)
         if (::dataSource.isInitialized) {
             dataSource.close()
         }
+    }
+
+    fun measureDuplicateInsertContention(): Long {
+        val eventId = "benchmark-contention-${contentionSequence.incrementAndGet()}"
+        val barrier = CyclicBarrier(2)
+        val futures = (0 until 2).map {
+            contentionExecutor.submit<Long> {
+                barrier.await(5, TimeUnit.SECONDS)
+                val startedAt = System.nanoTime()
+                consumerInboxStore.begin(
+                    identity = DUPLICATE_CONSUMER_IDENTITY,
+                    eventId = AppointmentEventId(eventId),
+                    provenance = DUPLICATE_PROVENANCE.copy(offset = contentionSequence.get()),
+                )
+                System.nanoTime() - startedAt
+            }
+        }
+        val samples = futures.map { it.get(30, TimeUnit.SECONDS) }
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """
+                DELETE FROM scheduling_appointment_consumer_inbox
+                WHERE logical_consumer_id = ? AND logical_stream_id = ? AND event_id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setString(1, DUPLICATE_CONSUMER_IDENTITY.consumerId.value)
+                statement.setString(2, DUPLICATE_CONSUMER_IDENTITY.streamId.value)
+                statement.setString(3, eventId)
+                statement.executeUpdate()
+            }
+            connection.commit()
+        }
+        return samples.maxOrNull() ?: error("contention sample did not complete")
     }
 
     private fun createSchema(postgres: PostgreSQLServer, schema: String) {

@@ -10,6 +10,7 @@ class AppointmentMessagingReadinessValidator(
     private val codec: AppointmentEventEnvelopeCodec,
     private val dataSource: DataSource? = null,
     private val requireConsumerSchema: Boolean = false,
+    private val schemaRegistry: AppointmentSchemaRegistry = StaticAppointmentSchemaRegistry(),
 ) {
     private val checked = AtomicBoolean(false)
 
@@ -19,6 +20,7 @@ class AppointmentMessagingReadinessValidator(
 
         val serializerValid = serializerSelfCheck()
         val schemaValid = dataSource != null && schemaContractExists()
+        val registryValid = !requireConsumerSchema || schemaRegistry.readiness().ready
         if (serializerValid) {
             probe.markSerializerAvailable()
         } else {
@@ -30,7 +32,12 @@ class AppointmentMessagingReadinessValidator(
         } else {
             probe.markSchemaInvalid()
         }
-        if (serializerValid && schemaValid) checked.set(true)
+        if (registryValid) {
+            probe.markRegistryAvailable()
+        } else {
+            probe.markRegistryInvalid()
+        }
+        if (serializerValid && schemaValid && registryValid) checked.set(true)
     }
 
     private fun serializerSelfCheck(): Boolean = runCatching {
@@ -61,7 +68,11 @@ class AppointmentMessagingReadinessValidator(
     private fun schemaContractExists(): Boolean = runCatching {
         dataSource?.connection?.use { connection ->
             val metadata = connection.metaData
-            val schema = connection.schema.takeIf { it.isNotBlank() } ?: return@use false
+            // PostgreSQL/H2 expose a schema while MySQL exposes the selected catalog.
+            // Do not reject an otherwise valid MySQL V23 database because getSchema() is blank.
+            val schema = connection.schema.takeIf { it.isNotBlank() }
+            val catalog = connection.catalog.takeIf { it.isNotBlank() }
+            if (schema == null && catalog == null) return@use false
             REQUIRED_CONTRACTS
                 .filter { requireConsumerSchema || it.table == OUTBOX_TABLE }
                 .all { contract ->
@@ -75,7 +86,7 @@ class AppointmentMessagingReadinessValidator(
     private fun readColumnNames(
         metadata: java.sql.DatabaseMetaData,
         catalog: String?,
-        schema: String,
+        schema: String?,
         table: String,
     ): Set<String> = sequenceOf(catalog, null).distinct()
         .mapNotNull { candidateCatalog ->
@@ -93,7 +104,7 @@ class AppointmentMessagingReadinessValidator(
     private fun readIndexNames(
         metadata: java.sql.DatabaseMetaData,
         catalog: String?,
-        schema: String,
+        schema: String?,
         table: String,
     ): Set<String> = sequenceOf(catalog, null).distinct()
         .flatMap { candidateCatalog ->

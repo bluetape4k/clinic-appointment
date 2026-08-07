@@ -9,6 +9,8 @@ import { test } from "node:test";
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(import.meta.dirname, "../..");
 const collector = path.join(repositoryRoot, "scripts/collect-appointment-messaging-benchmark.mjs");
+const consumerCollector = path.join(repositoryRoot, "scripts/collect-appointment-messaging-consumer-benchmark.mjs");
+const consumerValidator = path.join(repositoryRoot, "scripts/validate-appointment-messaging-consumer-benchmark.mjs");
 
 test("collector selects the requested configuration from mixed raw reports", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "appointment-messaging-benchmark-"));
@@ -50,4 +52,45 @@ function rawReport(score) {
       },
     },
   ]);
+}
+
+test("consumer collector preserves throughput and contention measurements", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "appointment-messaging-consumer-benchmark-"));
+  try {
+    const smokeDir = path.join(root, "smoke", "2026-08-07T00.00.00.000000");
+    await mkdir(smokeDir, { recursive: true });
+    await writeFile(path.join(smokeDir, "main.json"), JSON.stringify([
+      rawConsumer("boundedCleanup", "10000", "thrpt", "ops/ms", 0.1),
+      rawConsumer("boundedCleanup", "100000", "thrpt", "ops/ms", 0.04),
+      rawConsumer("duplicateInboxLookup", "10000", "thrpt", "ops/ms", 0.2),
+      rawConsumer("duplicateInboxLookup", "100000", "thrpt", "ops/ms", 0.3),
+      rawConsumer("duplicateInboxInsertContention", "10000", "sample", "ms/op", 5),
+      rawConsumer("duplicateInboxInsertContention", "100000", "sample", "ms/op", 6),
+    ]));
+
+    const output = path.join(root, "stable", "consumer.json");
+    await execFileAsync(process.execPath, [consumerCollector, "--input-dir", root, "--output", output, "--config", "smoke"], {
+      cwd: repositoryRoot,
+    });
+    await execFileAsync(process.execPath, [consumerValidator, "--input", output], { cwd: repositoryRoot });
+    const report = JSON.parse(await readFile(output, "utf8"));
+    assert.equal(report.measurements.length, 6);
+    assert.equal(report.lockContentionEvidence, true);
+    assert.equal(report.measurements.find((measurement) => measurement.operation === "duplicateInboxInsertContention").scoreUnit, "ms/op");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+function rawConsumer(operation, rows, mode, scoreUnit, score) {
+  return {
+    benchmark: `io.bluetape4k.clinic.appointment.benchmark.PostgreSqlAppointmentConsumerBenchmark.${operation}`,
+    mode,
+    params: { consumerRows: rows },
+    primaryMetric: {
+      score,
+      scoreUnit,
+      scorePercentiles: { "50.0": score, "95.0": score * 1.1, "99.0": score * 1.2 },
+    },
+  };
 }

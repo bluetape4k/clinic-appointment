@@ -136,8 +136,8 @@ parameter를 제거합니다.
 |------|------|-----------|
 | `appointment-core` | 예약, 구매 시술 플랜, 스케줄 정책, 방문 확정 약속 도메인과 Exposed ORM 리포지토리, 상태머신, 슬롯 계산 서비스 | [README](appointment-core/README.ko.md) |
 | `appointment-event` | Spring ApplicationEvent 기반 도메인 이벤트 발행/구독, 이벤트 로그 저장 | [README](appointment-event/README.ko.md) |
-| `appointment-messaging` | Kafka 4 transactional outbox 계약, V22 lease metadata, strict envelope codec, bounded relay | [README](appointment-messaging/README.ko.md) |
-| `benchmark/appointment-messaging-benchmark` | `kotlinx-benchmark`, Hikari, Flyway를 사용하는 PostgreSQL production schema outbox claim 측정 | [Benchmark source](benchmark/appointment-messaging-benchmark) |
+| `appointment-messaging` | Kafka 4 transactional outbox 계약, V23 consumer inbox/quarantine/replay audit, strict envelope codec, bounded relay, lag/retention metrics | [README](appointment-messaging/README.ko.md) |
+| `benchmark/appointment-messaging-benchmark` | `kotlinx-benchmark`, Hikari, Flyway를 사용하는 PostgreSQL production schema outbox·consumer inbox 측정 | [Benchmark source](benchmark/appointment-messaging-benchmark) |
 | `appointment-solver` | Timefold Solver AI 최적화 - 12개 Hard + 6개 Soft 제약으로 대량 예약 최적 배치 | [README](appointment-solver/README.ko.md) |
 | `appointment-notification` | 내구성 outbox 발송, 발송 시점 회원 조회, 리마인더 복구, 개인정보 보존 관리, provider 장애 격리 | [README](appointment-notification/README.ko.md) |
 | `appointment-api` | Spring Boot 4 REST API - 예약 CRUD, 슬롯 조회, 재배정, JWT 인증, Swagger | [README](appointment-api/README.ko.md) |
@@ -198,6 +198,32 @@ row `20,000`건을 사용하며 Docker가 필요합니다.
 smoke task는 pull request 확인용이고, full task는 nightly CI에서 직렬 실행되며 JSON과
 생성 chart artifact를 업로드합니다.
 
+### PostgreSQL 예약 consumer benchmark
+
+같은 `kotlinx-benchmark` 모듈에서 PostgreSQL production V23 consumer schema도 실행합니다.
+bounded terminal-row cleanup, duplicate inbox lookup, 두 참여자가 동일 key를 insert하는
+경로를 측정해 transaction lock contention을 드러냅니다. 처리량 단위는 `ops/ms`,
+contention 단위는 `ms/op`입니다.
+
+![PostgreSQL 예약 consumer benchmark](docs/images/readme-charts/appointment-messaging-consumer-postgresql-benchmark-01-ko.png)
+
+커밋된 [consumer baseline JSON](docs/benchmarks/appointment-messaging-consumer-postgresql-baseline.json)은
+`postgres:18-alpine`, seed `42`, 10,000/100,000건 시나리오의 `smoke` configuration에서
+수집했습니다.
+
+| 작업 | 행 수 | p50 | p95 | p99 | 단위 |
+|------|------:|----:|----:|----:|------|
+| bounded cleanup | 10,000 | 0.118795 | 0.118795 | 0.118795 | ops/ms |
+| bounded cleanup | 100,000 | 0.040776 | 0.040776 | 0.040776 | ops/ms |
+| duplicate lookup | 10,000 | 0.264357 | 0.264357 | 0.264357 | ops/ms |
+| duplicate lookup | 100,000 | 0.356833 | 0.356833 | 0.356833 | ops/ms |
+| same-key insert contention | 10,000 | 5.013504 | 6.983680 | 8.216576 | ms/op |
+| same-key insert contention | 100,000 | 5.087232 | 6.188237 | 6.234112 | ms/op |
+
+이 수치는 로컬 PostgreSQL benchmark와 lock-contention 근거이며 report의
+`deploymentSloEvidence=false`를 유지합니다. 배포 SLO, broker lag, lock-wait 근거는
+rollout gate를 닫기 전에 대상 운영 환경에서 별도로 수집해야 합니다.
+
 ### 사전 준비
 
 - JDK 25
@@ -216,6 +242,8 @@ smoke task는 pull request 확인용이고, full task는 nightly CI에서 직렬
 | [AI 스케줄러](docs/requirements/solver.md) | Timefold Solver 제약조건 설계 |
 | [알림 모듈](docs/requirements/notification.md) | 내구성 outbox 생명주기, 단계별 전환, 회원정보 경계, provider 장애 격리 |
 | [알림 outbox 운영 런북](docs/runbooks/notification-outbox-operations.md) | 카나리 기준, 경보, 재알림, 키 교체, 마이그레이션, 롤백 |
+| [예약 messaging 운영 런북](docs/runbooks/appointment-messaging-operations.md) | consumer readiness, MySQL V23 metadata smoke, lag/SLO 경계, replay, 보존·삭제, 롤백 |
+| [예약 consumer replay 런북](docs/operations/appointment-consumer-replay-runbook.md) | tenant/clinic 범위 replay 권한, 제한된 Kafka source, audit claim, 보존·삭제 |
 | [프론트엔드](docs/requirements/frontend.md) | Angular 구성, 페이지 구조 |
 | [예약 플랜 시각 동반 문서](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 예약 약속, 장애 재조정, 수용량의 시뮬레이션과 결정 이력 |
 | [예약 정책 시각 동반 문서](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html) | 정책 컴파일, 승인, 활성화, 복구의 시뮬레이션과 결정 이력 |

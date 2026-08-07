@@ -25,18 +25,20 @@ class AppointmentKafkaConsumerConfiguration {
         consumerFactory: ConsumerFactory<String, String>,
         properties: AppointmentMessagingProperties,
         inboxStore: ObjectProvider<AppointmentConsumerInboxStore>,
+        metrics: ObjectProvider<AppointmentConsumerMetrics>,
     ): ConcurrentKafkaListenerContainerFactory<String, String> =
-        createFactory(consumerFactory, properties, inboxStore.getIfAvailable())
+        createFactory(consumerFactory, properties, inboxStore.getIfAvailable(), metrics.getIfAvailable())
 
     fun appointmentKafkaConsumerContainerFactory(
         consumerFactory: ConsumerFactory<String, String>,
     ): ConcurrentKafkaListenerContainerFactory<String, String> =
-        createFactory(consumerFactory, AppointmentMessagingProperties(), null)
+        createFactory(consumerFactory, AppointmentMessagingProperties(), null, null)
 
     private fun createFactory(
         consumerFactory: ConsumerFactory<String, String>,
         properties: AppointmentMessagingProperties,
         inboxStore: AppointmentConsumerInboxStore?,
+        metrics: AppointmentConsumerMetrics?,
     ): ConcurrentKafkaListenerContainerFactory<String, String> {
         consumerFactory.updateConfigs(
             mapOf(
@@ -54,18 +56,20 @@ class AppointmentKafkaConsumerConfiguration {
             factory.containerProperties.setShutdownTimeout(properties.consumer.shutdownTimeout.toMillis())
             factory.containerProperties.setMissingTopicsFatal(true)
             val recoverer = ConsumerRecordRecoverer { record, exception ->
+                val failureCode = if (exception is AppointmentConsumerInvalidEnvelopeException) {
+                    AppointmentConsumerFailureCode.INVALID_ENVELOPE
+                } else {
+                    AppointmentConsumerFailureCode.HANDLER_FAILED
+                }
                 inboxStore?.quarantineRejected(
                     AppointmentConsumerIdentity(
                         properties.consumer.logicalConsumerId,
                         properties.consumer.logicalStreamId,
                     ),
                     record,
-                    if (exception is AppointmentConsumerInvalidEnvelopeException) {
-                        AppointmentConsumerFailureCode.INVALID_ENVELOPE
-                    } else {
-                        AppointmentConsumerFailureCode.HANDLER_FAILED
-                    },
+                    failureCode,
                 )
+                metrics?.quarantined(failureCode)
             }
             factory.setCommonErrorHandler(
                 DefaultErrorHandler(

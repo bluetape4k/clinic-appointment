@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-label="PostgreSQL 예약 consumer throughput과 lock contention benchmark">
+  <title>PostgreSQL 예약 consumer benchmark</title>
+  <desc>postgres:18-alpine / smoke configuration / seed 42. 로컬 benchmark 근거이며 배포 SLO가 아닙니다.</desc>
+  <style>
+    .background { fill: #101827; }
+    .title { font: 700 38px "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #f6f7fb; }
+    .subtitle, .note, .axis-title, .axis-value, .group-label, .legend-label { font-family: "goorm Sans Code", "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #c9d3e5; }
+    .subtitle { font-size: 19px; }
+    .note { font-size: 17px; fill: #ffcf8a; }
+    .panel-title { font: 700 25px "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #f6f7fb; }
+    .panel-note { font: 16px "goorm Sans Code", "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #aab8ce; }
+    .axis-title { font-size: 16px; }
+    .axis-value { font-size: 14px; }
+    .group-label { font-size: 15px; fill: #f6f7fb; font-weight: 700; }
+    .legend-label { font-size: 14px; }
+    .value { font: 700 13px "goorm Sans Code", "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #f6f7fb; }
+    .grid { stroke: #40506a; stroke-width: 1; stroke-dasharray: 6 8; }
+    .panel { fill: #172236; stroke: #2f405c; stroke-width: 2; }
+    .bar { stroke: #f6f7fb; stroke-width: 1.5; }
+    .bar-0 { fill: #73d2de; }
+    .bar-1 { fill: #f2b880; }
+    .bar-2 { fill: #eb6f92; }
+  </style>
+  <rect width="1440" height="900" rx="28" class="background"/>
+  <text x="64" y="68" class="title">PostgreSQL 예약 consumer benchmark</text>
+  <text x="64" y="106" class="subtitle">postgres:18-alpine / smoke configuration / seed 42</text>
+  <text x="64" y="137" class="note">로컬 benchmark 근거이며 배포 SLO가 아닙니다.</text>
+  <rect x="180" y="148" width="1160" height="392" rx="20" class="panel"/>
+  <text x="208" y="184" class="panel-title">처리량</text>
+  <text x="610" y="212" class="panel-note">bounded cleanup and duplicate lookup</text>
+  <text x="1320" y="184" class="axis-title" text-anchor="end">ops/ms</text>
+  <rect x="730" y="169" width="16" height="16" rx="3" class="bar bar-0"/><text x="754" y="183" class="legend-label">p50</text><rect x="822" y="169" width="16" height="16" rx="3" class="bar bar-1"/><text x="846" y="183" class="legend-label">p95</text><rect x="914" y="169" width="16" height="16" rx="3" class="bar bar-2"/><text x="938" y="183" class="legend-label">p99</text>
+  <line x1="260" y1="490.0" x2="1320" y2="490.0" class="grid"/><text x="242" y="495.0" class="axis-value" text-anchor="end">0.0000</text><line x1="260" y1="425.0" x2="1320" y2="425.0" class="grid"/><text x="242" y="430.0" class="axis-value" text-anchor="end">0.1115</text><line x1="260" y1="360.0" x2="1320" y2="360.0" class="grid"/><text x="242" y="365.0" class="axis-value" text-anchor="end">0.2230</text><line x1="260" y1="295.0" x2="1320" y2="295.0" class="grid"/><text x="242" y="300.0" class="axis-value" text-anchor="end">0.3345</text><line x1="260" y1="230.0" x2="1320" y2="230.0" class="grid"/><text x="242" y="235.0" class="axis-value" text-anchor="end">0.4460</text>
+  <rect x="321.5" y="420.8" width="42" height="69.2" rx="5" class="bar bar-0"/><text x="342.5" y="412.8" class="value" text-anchor="middle">0.1188</text><rect x="371.5" y="420.8" width="42" height="69.2" rx="5" class="bar bar-1"/><text x="392.5" y="412.8" class="value" text-anchor="middle">0.1188</text><rect x="421.5" y="420.8" width="42" height="69.2" rx="5" class="bar bar-2"/><text x="442.5" y="412.8" class="value" text-anchor="middle">0.1188</text><text x="392.5" y="527" class="group-label" text-anchor="middle">bounded cleanup / 10,000</text><rect x="586.5" y="466.2" width="42" height="23.8" rx="5" class="bar bar-0"/><text x="607.5" y="458.2" class="value" text-anchor="middle">0.0408</text><rect x="636.5" y="466.2" width="42" height="23.8" rx="5" class="bar bar-1"/><text x="657.5" y="458.2" class="value" text-anchor="middle">0.0408</text><rect x="686.5" y="466.2" width="42" height="23.8" rx="5" class="bar bar-2"/><text x="707.5" y="458.2" class="value" text-anchor="middle">0.0408</text><text x="657.5" y="527" class="group-label" text-anchor="middle">bounded cleanup / 100,000</text><rect x="851.5" y="335.9" width="42" height="154.1" rx="5" class="bar bar-0"/><text x="872.5" y="327.9" class="value" text-anchor="middle">0.2644</text><rect x="901.5" y="335.9" width="42" height="154.1" rx="5" class="bar bar-1"/><text x="922.5" y="327.9" class="value" text-anchor="middle">0.2644</text><rect x="951.5" y="335.9" width="42" height="154.1" rx="5" class="bar bar-2"/><text x="972.5" y="327.9" class="value" text-anchor="middle">0.2644</text><text x="922.5" y="527" class="group-label" text-anchor="middle">duplicate lookup / 10,000</text><rect x="1116.5" y="282.0" width="42" height="208.0" rx="5" class="bar bar-0"/><text x="1137.5" y="274.0" class="value" text-anchor="middle">0.3568</text><rect x="1166.5" y="282.0" width="42" height="208.0" rx="5" class="bar bar-1"/><text x="1187.5" y="274.0" class="value" text-anchor="middle">0.3568</text><rect x="1216.5" y="282.0" width="42" height="208.0" rx="5" class="bar bar-2"/><text x="1237.5" y="274.0" class="value" text-anchor="middle">0.3568</text><text x="1187.5" y="527" class="group-label" text-anchor="middle">duplicate lookup / 100,000</text>
+<rect x="180" y="548" width="1160" height="322" rx="20" class="panel"/>
+  <text x="208" y="584" class="panel-title">중복 insert contention</text>
+  <text x="610" y="612" class="panel-note">same-key two-participant transaction latency</text>
+  <text x="1320" y="584" class="axis-title" text-anchor="end">ms/op</text>
+  <rect x="730" y="569" width="16" height="16" rx="3" class="bar bar-0"/><text x="754" y="583" class="legend-label">p50</text><rect x="822" y="569" width="16" height="16" rx="3" class="bar bar-1"/><text x="846" y="583" class="legend-label">p95</text><rect x="914" y="569" width="16" height="16" rx="3" class="bar bar-2"/><text x="938" y="583" class="legend-label">p99</text>
+  <line x1="260" y1="820.0" x2="1320" y2="820.0" class="grid"/><text x="242" y="825.0" class="axis-value" text-anchor="end">0.0000</text><line x1="260" y1="772.5" x2="1320" y2="772.5" class="grid"/><text x="242" y="777.5" class="axis-value" text-anchor="end">2.5677</text><line x1="260" y1="725.0" x2="1320" y2="725.0" class="grid"/><text x="242" y="730.0" class="axis-value" text-anchor="end">5.1354</text><line x1="260" y1="677.5" x2="1320" y2="677.5" class="grid"/><text x="242" y="682.5" class="axis-value" text-anchor="end">7.7030</text><line x1="260" y1="630.0" x2="1320" y2="630.0" class="grid"/><text x="242" y="635.0" class="axis-value" text-anchor="end">10.3</text>
+  <rect x="454.0" y="727.3" width="42" height="92.7" rx="5" class="bar bar-0"/><text x="475.0" y="719.3" class="value" text-anchor="middle">5.0135</text><rect x="504.0" y="690.8" width="42" height="129.2" rx="5" class="bar bar-1"/><text x="525.0" y="682.8" class="value" text-anchor="middle">6.9837</text><rect x="554.0" y="668.0" width="42" height="152.0" rx="5" class="bar bar-2"/><text x="575.0" y="660.0" class="value" text-anchor="middle">8.2166</text><text x="525.0" y="857" class="group-label" text-anchor="middle">10,000 rows</text><rect x="984.0" y="725.9" width="42" height="94.1" rx="5" class="bar bar-0"/><text x="1005.0" y="717.9" class="value" text-anchor="middle">5.0872</text><rect x="1034.0" y="705.5" width="42" height="114.5" rx="5" class="bar bar-1"/><text x="1055.0" y="697.5" class="value" text-anchor="middle">6.1882</text><rect x="1084.0" y="704.7" width="42" height="115.3" rx="5" class="bar bar-2"/><text x="1105.0" y="696.7" class="value" text-anchor="middle">6.2341</text><text x="1055.0" y="857" class="group-label" text-anchor="middle">100,000 rows</text>
+</svg>

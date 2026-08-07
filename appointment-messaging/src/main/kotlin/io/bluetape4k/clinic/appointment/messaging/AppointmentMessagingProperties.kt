@@ -31,7 +31,9 @@ data class AppointmentMessagingProperties(
     val producerMetadataTimeout: Duration = Duration.ofSeconds(5),
     val producerSecurityProtocol: String = "PLAINTEXT",
     val producerCredentialReference: String? = null,
+    val schemaRegistry: AppointmentSchemaRegistryProperties = AppointmentSchemaRegistryProperties(),
     val consumer: AppointmentConsumerProperties = AppointmentConsumerProperties(),
+    val retention: AppointmentConsumerRetentionProperties = AppointmentConsumerRetentionProperties(),
 ) {
     init {
         require(allowedTopics.isNotEmpty()) { "allowedTopics must not be empty" }
@@ -106,11 +108,12 @@ data class AppointmentMessagingReadiness(
     val relayPaused: Boolean,
     val relayHeld: Boolean = false,
     val schemaValid: Boolean = true,
+    val registryValid: Boolean = true,
     val serializerValid: Boolean = true,
 ) {
     val ready: Boolean
         get() = enabled && configurationValid && brokerAvailable && !relayPaused && !relayHeld &&
-            schemaValid && serializerValid
+            schemaValid && registryValid && serializerValid
 }
 
 /** relay lifecycle이 broker와 pause 상태를 bounded하게 노출하는 mutable probe다. */
@@ -139,6 +142,9 @@ class AppointmentMessagingReadinessProbe(
 
     @Volatile
     private var schemaValid: Boolean = true
+
+    @Volatile
+    private var registryValid: Boolean = true
 
     @Volatile
     private var serializerValid: Boolean = true
@@ -198,6 +204,14 @@ class AppointmentMessagingReadinessProbe(
         schemaValid = true
     }
 
+    fun markRegistryInvalid() {
+        registryValid = false
+    }
+
+    fun markRegistryAvailable() {
+        registryValid = true
+    }
+
     fun markSerializerInvalid() {
         serializerValid = false
     }
@@ -213,6 +227,7 @@ class AppointmentMessagingReadinessProbe(
         relayPaused = operatorPaused || automaticPause,
         relayHeld = relayHeld,
         schemaValid = schemaValid,
+        registryValid = registryValid,
         serializerValid = serializerValid,
     )
 }

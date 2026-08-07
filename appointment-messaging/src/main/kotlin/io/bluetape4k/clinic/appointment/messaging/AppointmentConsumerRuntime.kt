@@ -40,6 +40,7 @@ class AppointmentConsumerRuntime(
     private val inboxStore: AppointmentConsumerInboxStore,
     private val allowedTopics: Set<AppointmentTopic>,
     private val schemaRegistry: AppointmentSchemaRegistry = StaticAppointmentSchemaRegistry(),
+    private val metrics: AppointmentConsumerMetrics = NoopAppointmentConsumerMetrics,
 ) {
     init {
         require(allowedTopics.isNotEmpty()) { "allowedTopics must not be empty" }
@@ -49,13 +50,22 @@ class AppointmentConsumerRuntime(
         record: ConsumerRecord<String, String>,
         identity: AppointmentConsumerIdentity,
         handler: AppointmentConsumerHandler,
-    ): AppointmentConsumerOutcome = consume(record, null, identity, handler)
+    ): AppointmentConsumerOutcome = consume(record, null, identity, handler, null)
 
     fun consume(
         record: ConsumerRecord<String, String>,
         acknowledgment: Acknowledgment?,
         identity: AppointmentConsumerIdentity,
         handler: AppointmentConsumerHandler,
+    ): AppointmentConsumerOutcome = consume(record, acknowledgment, identity, handler, null)
+
+    /** replay source가 decode한 envelope의 tenant/clinic 범위를 runtime 경계에서 재확인합니다. */
+    fun consume(
+        record: ConsumerRecord<String, String>,
+        acknowledgment: Acknowledgment?,
+        identity: AppointmentConsumerIdentity,
+        handler: AppointmentConsumerHandler,
+        expectedScope: AppointmentReplayScope?,
     ): AppointmentConsumerOutcome {
         val topic = runCatching { AppointmentTopic(record.topic()) }
             .getOrElse {
@@ -73,8 +83,16 @@ class AppointmentConsumerRuntime(
         }
         try {
             schemaRegistry.validate(envelope.schemaVersion)
+        } catch (failure: AppointmentSchemaRegistryUnavailableException) {
+            metrics.retry(AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
+            throw AppointmentConsumerRetryableException("appointment schema registry is unavailable", failure)
         } catch (_: Exception) {
             return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.UNSUPPORTED_SCHEMA)
+        }
+        if (expectedScope != null &&
+            (envelope.tenantGroupId != expectedScope.tenantGroupId || envelope.clinicId != expectedScope.clinicId)
+        ) {
+            return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.SCOPE_MISMATCH)
         }
         val provenance = AppointmentConsumerProvenance(
             topic = topic,
@@ -90,62 +108,78 @@ class AppointmentConsumerRuntime(
             clinicId = envelope.clinicId,
             appointmentId = envelope.aggregateId.value,
         ).value
-        when (val begin = inboxStore.begin(identity, envelope.eventId, provenance)) {
+        val acquisition = when (val begin = inboxStore.begin(identity, envelope.eventId, provenance)) {
             is AppointmentConsumerBeginResult.Duplicate -> {
                 if (!begin.provenanceMatches) {
                     inboxStore.quarantineRejected(identity, record, AppointmentConsumerFailureCode.PROVENANCE_MISMATCH)
                     acknowledgment?.acknowledge()
+                    metrics.quarantined(AppointmentConsumerFailureCode.PROVENANCE_MISMATCH)
                     return AppointmentConsumerOutcome.QUARANTINED
                 }
                 if (begin.status == AppointmentConsumerStatus.PROCESSING) {
+                    metrics.retry(AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
                     throw AppointmentConsumerRetryableException("appointment event is still being processed")
                 }
                 acknowledgment?.acknowledge()
                 return when (begin.status) {
-                    AppointmentConsumerStatus.QUARANTINED -> AppointmentConsumerOutcome.QUARANTINED
-                    else -> AppointmentConsumerOutcome.DUPLICATE
+                    AppointmentConsumerStatus.QUARANTINED -> {
+                        metrics.quarantined(AppointmentConsumerFailureCode.ATTEMPT_EXHAUSTED)
+                        AppointmentConsumerOutcome.QUARANTINED
+                    }
+                    else -> {
+                        metrics.duplicate()
+                        AppointmentConsumerOutcome.DUPLICATE
+                    }
                 }
             }
 
-            is AppointmentConsumerBeginResult.Acquired -> Unit
+            is AppointmentConsumerBeginResult.Acquired -> begin
         }
         if (!keyMatches) {
             inboxStore.quarantine(identity, envelope.eventId, AppointmentConsumerFailureCode.PARTITION_KEY_MISMATCH)
             acknowledgment?.acknowledge()
+            metrics.quarantined(AppointmentConsumerFailureCode.PARTITION_KEY_MISMATCH)
             return AppointmentConsumerOutcome.QUARANTINED
         }
 
         val context = AppointmentConsumerContext(identity, provenance)
         try {
             handler.handle(envelope, context)
-            return if (inboxStore.markProcessed(identity, envelope.eventId)) {
+            return if (inboxStore.markProcessed(identity, envelope.eventId, acquisition.leaseUntil)) {
                 acknowledgment?.acknowledge()
+                metrics.processed()
                 AppointmentConsumerOutcome.PROCESSED
             } else {
-                acknowledgment?.acknowledge()
-                AppointmentConsumerOutcome.DUPLICATE
+                metrics.retry(AppointmentConsumerFailureCode.LEASE_EXPIRED)
+                throw AppointmentConsumerRetryableException("appointment inbox lease was fenced")
             }
         } catch (failure: AppointmentConsumerRetryableException) {
             val status = inboxStore.markFailure(
                 identity,
                 envelope.eventId,
                 AppointmentConsumerFailureCode.HANDLER_RETRYABLE,
+                acquisition.leaseUntil,
             )
             if (status == AppointmentConsumerStatus.QUARANTINED) {
                 acknowledgment?.acknowledge()
+                metrics.quarantined(AppointmentConsumerFailureCode.ATTEMPT_EXHAUSTED)
                 return AppointmentConsumerOutcome.QUARANTINED
             }
+            metrics.retry(AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
             throw failure
         } catch (failure: Exception) {
             val status = inboxStore.markFailure(
                 identity,
                 envelope.eventId,
                 AppointmentConsumerFailureCode.HANDLER_FAILED,
+                acquisition.leaseUntil,
             )
             if (status == AppointmentConsumerStatus.QUARANTINED) {
                 acknowledgment?.acknowledge()
+                metrics.quarantined(AppointmentConsumerFailureCode.ATTEMPT_EXHAUSTED)
                 return AppointmentConsumerOutcome.QUARANTINED
             }
+            metrics.retry(AppointmentConsumerFailureCode.HANDLER_FAILED)
             throw failure
         }
     }
@@ -163,6 +197,7 @@ class AppointmentConsumerRuntime(
     ): AppointmentConsumerOutcome {
         inboxStore.quarantineRejected(identity, record, failureCode)
         acknowledgment?.acknowledge()
+        metrics.quarantined(failureCode)
         return AppointmentConsumerOutcome.QUARANTINED
     }
 }

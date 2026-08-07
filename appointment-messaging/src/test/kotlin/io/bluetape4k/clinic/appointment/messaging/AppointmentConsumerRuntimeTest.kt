@@ -9,6 +9,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.kafka.support.Acknowledgment
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
@@ -95,6 +96,56 @@ class AppointmentConsumerRuntimeTest {
         transaction(database) {
             AppointmentConsumerRejectedRecordTable.selectAll().single()[AppointmentConsumerRejectedRecordTable.payloadSha256]
                 .length shouldBeEqualTo 64
+        }
+    }
+
+    @Test
+    fun `schema registry outage is retried without quarantine or acknowledgement`() {
+        val unavailableRuntime = AppointmentConsumerRuntime(
+            codec = codec,
+            inboxStore = JdbcAppointmentConsumerInboxStore(database),
+            allowedTopics = setOf(AppointmentTopic("clinic.appointment.events")),
+            schemaRegistry = object : AppointmentSchemaRegistry {
+                override val subject: String = "appointment-events-value"
+                override fun validate(schemaVersion: Int) {
+                    throw AppointmentSchemaRegistryUnavailableException("registry unavailable")
+                }
+                override fun readiness(): AppointmentSchemaReadiness = AppointmentSchemaReadiness(
+                    subject = subject,
+                    localSchemaValid = true,
+                    registryReachable = false,
+                    compatibilityLevel = "UNAVAILABLE",
+                )
+            },
+        )
+        val acknowledgment = RecordingAcknowledgment()
+
+        assertThrows<AppointmentConsumerRetryableException> {
+            unavailableRuntime.consume(record(), acknowledgment, identity()) { _, _ -> }
+        }
+
+        acknowledgment.count shouldBeEqualTo 0
+        transaction(database) {
+            AppointmentConsumerRejectedRecordTable.selectAll().count() shouldBeEqualTo 0L
+        }
+    }
+
+    @Test
+    fun `replay scope mismatch is quarantined before handler side effect`() {
+        var calls = 0
+
+        runtime.consume(
+            record = record(),
+            acknowledgment = null,
+            identity = identity(),
+            handler = { _, _ -> calls++ },
+            expectedScope = AppointmentReplayScope(tenantGroupId = 99, clinicId = 31),
+        ).shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
+
+        calls shouldBeEqualTo 0
+        transaction(database) {
+            AppointmentConsumerRejectedRecordTable.selectAll().single()[AppointmentConsumerRejectedRecordTable.failureCode]
+                .shouldBeEqualTo(AppointmentConsumerFailureCode.SCOPE_MISMATCH.name)
         }
     }
 

@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.migration
 
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -13,6 +14,28 @@ import java.sql.Driver
  */
 @ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 class FlywayMySQLMigrationTest {
+
+    /**
+     * Optional, read-only metadata smoke test for a deployed/staging MySQL endpoint.
+     *
+     * The test deliberately does not run Flyway against the endpoint: applying or cleaning a
+     * production schema belongs to an approved change window and must not be hidden in CI.
+     */
+    @Test
+    fun `production MySQL metadata readiness is verified when endpoint is configured`() {
+        val url = System.getenv("APPOINTMENT_PRODUCTION_MYSQL_JDBC_URL")
+        val user = System.getenv("APPOINTMENT_PRODUCTION_MYSQL_USER")
+        val password = System.getenv("APPOINTMENT_PRODUCTION_MYSQL_PASSWORD")
+        assumeTrue(
+            !url.isNullOrBlank() && !user.isNullOrBlank() && password != null,
+            "Set APPOINTMENT_PRODUCTION_MYSQL_JDBC_URL/USER/PASSWORD for the read-only endpoint smoke test",
+        )
+
+        val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentMessagingMigrationTestSupport.verifyV23Metadata(
+            dataSource = SimpleDriverDataSource(driver, requireNotNull(url), requireNotNull(user), password),
+        )
+    }
 
     @Test
     fun `V9 contract remains valid and V10 through V19 add durable scheduling schema on MySQL 8`() {
