@@ -10,6 +10,29 @@ Spring Boot 4, and Exposed ORM.
 
 Use `bluetape-kotlin-patterns` for all Kotlin implementation and review work.
 
+## Repository-local Korean artifact policy
+
+`clinic-appointment` is a Korean-only example application. This section is a
+repo-local override of the workspace audience-language table and applies only
+inside this repository.
+
+- Write all project documentation in Korean, including `README*`, work
+  documents, specifications, plans, research notes, lessons, KDoc, and
+  documentation comments.
+- Write all GitHub-facing artifacts in Korean, including Issue and PR titles,
+  bodies, comments, review replies, release notes, and changelog entries.
+- Write repository-controlled commit messages and other user-facing delivery
+  notes in Korean.
+- Do not require an English README or bilingual companion for this repository;
+  README and documentation variants are Korean artifacts unless a technical
+  identifier or an externally required exact string must remain unchanged.
+- Preserve code, identifiers, API names, commands, URLs, required metadata keys,
+  machine-readable syntax, and exact error text as written. Translate the
+  surrounding prose, not those technical values.
+- This exception is scoped to `clinic-appointment`; do not propagate it to the
+  workspace guide or sibling repositories. Agent-facing operating files such
+  as `AGENTS.md` remain concise English so the tooling contract stays readable.
+
 ## Commands
 
 Prefer module-scoped validation.
