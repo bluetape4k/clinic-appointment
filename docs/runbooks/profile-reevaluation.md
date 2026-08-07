@@ -294,6 +294,8 @@ release blocker이자 사고입니다.
 - 5분과 30분 값은 p95 queue 목표이며, 모든 개별 job이 해당 시간 안에 완료된다는
   보장이 아닙니다.
 - automatic retry/redrive limit을 소진한 뒤의 unattended redrive는 지원하지 않습니다.
+- bilingual 운영 계약에서 보존하는 exact token은 `raw profile`, `feature`, `score`,
+  `explanation`, `5 minutes`, `30 minutes`, `unattended redrive`입니다.
 - 직접 SQL status 재작성, cursor reset, lease-owner 수정, redrive selector를
   “all failed”로 확장하는 동작은 지원하지 않습니다.
 
