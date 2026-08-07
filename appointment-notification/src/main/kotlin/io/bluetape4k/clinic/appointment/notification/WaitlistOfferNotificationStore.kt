@@ -199,7 +199,7 @@ class JdbcWaitlistOfferNotificationStore(
             return@transaction null
         }
 
-        // canonical lock order after the outbox claim: offer -> entry -> hold
+// outbox claim 이후 canonical lock 순서: offer -> entry -> hold
         val entry = waitlistRepository.findEntryForUpdate(offer.scope, offer.waitlistEntryId)
         val hold = waitlistRepository.findHoldByOfferForUpdate(offer.scope, offer.id)
         val payloadMatches = envelope?.let {
@@ -295,8 +295,8 @@ class JdbcWaitlistOfferNotificationStore(
                 terminal = true
             }
             WaitlistNotificationDeliveryResult.Unknown -> {
-                // provider outcome is not safe to replay automatically; EXHAUSTED is the
-                // durable manual-review marker until a dedicated history table is introduced.
+// provider 결과는 자동 replay하기에 안전하지 않다. 전용 history 테이블이 도입될 때까지
+// EXHAUSTED를 지속적인 manual-review marker로 사용한다.
                 nextStatus = WaitlistNotificationOutboxStatus.EXHAUSTED
                 nextAvailableAt = row.availableAt
                 terminal = true

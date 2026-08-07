@@ -1,4 +1,4 @@
-# Tenant query isolation V21 운영 런북
+# Tenant query 격리 V21 운영 런북
 
 이 런북은 Issue #39의 tenant/clinic query 격리와 V21 additive migration을 운영할 때
 사용합니다. `TenantClinicScope`는 인증 객체가 아니라 검증된 DB 권위이며, 모든

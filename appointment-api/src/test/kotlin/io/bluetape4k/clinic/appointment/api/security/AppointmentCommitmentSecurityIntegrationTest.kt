@@ -196,7 +196,7 @@ class AppointmentCommitmentSecurityIntegrationTest {
             token = patientToken,
         )
 
-        // Authorization must pass before DTO/header validation produces the client error.
+// DTO/header validation이 client error를 만들기 전에 Authorization을 통과해야 한다.
         response.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
     }
 
@@ -538,7 +538,7 @@ class AppointmentCommitmentSecurityIntegrationTest {
         }
     }
 
-    /** RFC 6901 JSON pointer segment escaping for an OpenAPI path key. */
+    /** OpenAPI 경로 키에 적용하는 RFC 6901 JSON Pointer 세그먼트 이스케이프. */
     private fun pointer(value: String): String =
         value.replace("~", "~0").replace("/", "~1")
 

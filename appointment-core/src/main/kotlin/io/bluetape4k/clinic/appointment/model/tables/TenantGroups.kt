@@ -5,10 +5,10 @@ import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.timestamp
 
 /**
- * Tenant group table.
+ * Tenant group 테이블입니다.
  *
- * A tenant group is the data-isolation owner for clinics and tenant-scoped
- * holidays. User locale and tenant identity are intentionally separate.
+ * Tenant group는 clinic과 tenant scope holiday의 데이터 격리를 소유합니다.
+ * 사용자 locale과 tenant 식별자는 의도적으로 분리합니다.
  */
 object TenantGroups : LongIdTable("scheduling_tenant_groups") {
     const val DEFAULT_TENANT_GROUP_ID = 1L

@@ -1,132 +1,123 @@
 # appointment-api
 
-[English](README.md) | [한국어](README.ko.md)
+[한국어 본문](README.md) | [한국어 참고본](README.ko.md)
 
-Spring Boot 4 tenant-scoped REST API server with JWT authentication, Flyway migrations, Swagger UI, and Gatling load tests.
+Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레이션, Swagger UI, Gatling 부하 테스트.
 
-## Responsibilities
+## 책임
 
-- **Does**: exposes HTTP APIs, handles authentication/authorization, runs DB migrations, and publishes domain events.
-- **Does not**: call notification providers. Appointment commands persist a
-  minimal notification outbox in the same transaction; the notification module
-  resolves current member data and performs delivery. It may call Solver for
-  scheduling workflows.
+- **하는 것**: HTTP API 제공, 인증/인가, DB 마이그레이션, 도메인 이벤트 발행
+- **하지 않는 것**: 알림 provider 직접 호출. 예약 명령은 같은 트랜잭션에서 최소
+  알림 outbox를 저장하고, 최신 회원정보 조회와 실제 발송은 알림 모듈이 담당합니다.
+  스케줄링 업무에서는 Solver를 호출할 수 있습니다.
 
-## API Endpoints
+## API 엔드포인트
 
-| Group | Path | Description |
+| 그룹 | 경로 | 설명 |
 |------|------|------|
-| Appointments | `GET /api/{tenantCode}/appointments` | List appointments by period. |
-| Appointments | `POST /api/{tenantCode}/appointments` | Create an appointment. Default `ENFORCE` requires a verified `memberId`; omission is allowed only by an expiring clinic-scoped `OBSERVE` transition exception. |
-| Appointments | `PATCH /api/{tenantCode}/appointments/{id}/status` | Change status, such as Confirm, CheckIn, Complete. |
-| Appointments | `DELETE /api/{tenantCode}/appointments/{id}` | Cancel an appointment. |
-| Slots | `GET /api/{tenantCode}/clinics/{clinicId}/slots` | Query available slots by doctor, date, and treatment type. |
-| Reschedule | `POST /api/{tenantCode}/appointments/{id}/reschedule/closure` | Reschedule appointments affected by a temporary clinic closure. |
-| Reschedule | `GET /api/{tenantCode}/appointments/{id}/reschedule/candidates` | List reschedule candidates. |
-| Reschedule stream | `GET /api/{tenantCode}/reschedule/batch/stream` | Stream batch reschedule progress with SSE. |
-| Equipment unavailability | `GET /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities` | List equipment unavailability windows. |
-| Equipment unavailability | `POST /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities` | Register an unavailability window. |
-| Equipment unavailability | `PUT /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}` | Update an unavailability window. |
-| Equipment unavailability | `DELETE /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}` | Delete an unavailability window. |
-| Clinics | `GET /api/{tenantCode}/clinics`, `/{id}`, `/{id}/operating-hours`, `/{id}/break-times` | Query clinic information. |
-| Doctors | `GET /api/{tenantCode}/clinics/{id}/doctors`, `/doctors/{id}`, `/{id}/schedules`, `/{id}/absences` | Query doctor information. |
-| Treatment types | `GET /api/{tenantCode}/clinics/{id}/treatment-types`, `/treatment-types/{id}` | Query treatment types. |
-| Equipment | `GET /api/{tenantCode}/clinics/{id}/equipments`, `/equipments/{id}` | Query equipment. |
-| Dashboard stats | `GET /api/{tenantCode}/admin/stats/{appointments,doctors,cancellations}` | Query admin dashboard aggregates. |
-| Catalog plan input | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}` | Synchronize one immutable catalog BOM version. |
-| Appointment plans | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | Read one purchased treatment plan. |
-| Appointment plans | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{authority}/{purchaseId}` | Read by authority-qualified source purchase. |
-| Scheduling policies | `/api/{tenantCode}/admin/**/scheduling-policies` | Manage tenant baselines and clinic overrides with preview and activation evidence. |
-| Notification status | `GET /api/{tenantCode}/clinics/{clinicId}/notifications/**` | Read privacy-safe delivery status with `SCOPE_notification:read`. |
-| Re-notify | `POST /api/{tenantCode}/clinics/{clinicId}/notifications/re-notify` | Dry-run or enqueue a bounded, dual-approved re-notification generation. |
-| Booking reliability decision | `GET /api/{tenantCode}/clinics/{clinicId}/members/{memberId}/booking-reliability/decision` | Read a bounded, privacy-safe eligibility decision for staff preview. |
-| Booking reliability override/clear | `POST .../booking-reliability/override`, `POST .../booking-reliability/clear` | Apply or clear an expiring staff decision with capability and clinic scope. |
-| Booking reliability audit | `GET .../booking-reliability/audit` | Read bounded decision, event, and override history without profile fields. |
+| 예약 | `GET /api/{tenantCode}/appointments` | 기간별 예약 목록 조회 |
+| 예약 | `POST /api/{tenantCode}/appointments` | 예약 생성. 기본 `ENFORCE`에서는 검증된 `memberId`가 필수이며, 누락은 만료 시각이 있는 병원 범위 `OBSERVE` 전환 예외에서만 허용됩니다. |
+| 예약 | `PATCH /api/{tenantCode}/appointments/{id}/status` | 상태 변경 (Confirm, CheckIn, Complete 등) |
+| 예약 | `DELETE /api/{tenantCode}/appointments/{id}` | 예약 취소 |
+| 슬롯 | `GET /api/{tenantCode}/clinics/{clinicId}/slots` | 가용 슬롯 조회 (의사/날짜/진료유형) |
+| 재배정 | `POST /api/{tenantCode}/appointments/{id}/reschedule/closure` | 임시휴진 날짜 재배정 실행 |
+| 재배정 | `GET /api/{tenantCode}/appointments/{id}/reschedule/candidates` | 재배정 후보 목록 조회 |
+| 재배정 스트림 | `GET /api/{tenantCode}/reschedule/batch/stream` | SSE 일괄 재배정 진행 상황 조회 |
+| 장비 사용불가 | `GET /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities` | 목록 조회 |
+| 장비 사용불가 | `POST /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities` | 등록 |
+| 장비 사용불가 | `PUT /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}` | 수정 |
+| 장비 사용불가 | `DELETE /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}` | 삭제 |
+| 클리닉 | `GET /api/{tenantCode}/clinics`, `/{id}`, `/{id}/operating-hours`, `/{id}/break-times` | 클리닉 조회 |
+| 의사 | `GET /api/{tenantCode}/clinics/{id}/doctors`, `/doctors/{id}`, `/{id}/schedules`, `/{id}/absences` | 의사 조회 |
+| 진료유형 | `GET /api/{tenantCode}/clinics/{id}/treatment-types`, `/treatment-types/{id}` | 진료유형 조회 |
+| 장비 | `GET /api/{tenantCode}/clinics/{id}/equipments`, `/equipments/{id}` | 장비 조회 |
+| 대시보드 통계 | `GET /api/{tenantCode}/admin/stats/{appointments,doctors,cancellations}` | 관리자 집계 조회 |
+| 플랜용 카탈로그 입력 | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}` | 불변 상품 BOM 버전 동기화 |
+| 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | 구매 진료 플랜 한 건 조회 |
+| 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{authority}/{purchaseId}` | `authority` 경로 변수로 한정된 원천 구매 조회 |
+| 예약 정책 | `/api/{tenantCode}/admin/**/scheduling-policies` | 미리보기와 활성화 증거를 사용해 테넌트 기준 정책과 병원별 재정의 관리 |
+| 알림 상태 | `GET /api/{tenantCode}/clinics/{clinicId}/notifications/**` | `SCOPE_notification:read` 권한으로 개인정보가 제거된 발송 상태 조회 |
+| 재알림 | `POST /api/{tenantCode}/clinics/{clinicId}/notifications/re-notify` | 범위와 수량이 제한되고 이중 승인된 재알림을 미리 확인하거나 새 generation으로 등록 |
+| 예약 신뢰도 결정 | `GET /api/{tenantCode}/clinics/{clinicId}/members/{memberId}/booking-reliability/decision` | 직원 preview용 제한적·개인정보 안전 자격 결정 조회 |
+| 예약 신뢰도 override/clear | `POST .../booking-reliability/override`, `POST .../booking-reliability/clear` | capability와 병원 범위 검증 뒤 만료되는 직원 결정을 적용·해제 |
+| 예약 신뢰도 감사 | `GET .../booking-reliability/audit` | 프로필 필드 없이 제한된 결정·사건·override 이력 조회 |
 
-The complete scheduling-policy request, lifecycle, effective-read, and error
-contract is documented in [Scheduling Policy API](../docs/api/scheduling-policy.md).
+전체 예약 정책 요청, 생명주기, 유효 정책 조회, 오류 계약은
+[Scheduling Policy API](../docs/api/scheduling-policy.md)에 정리되어 있습니다.
 
-### Booking Reliability
+### 예약 신뢰도
 
-The reliability API consumes only an opaque `MemberId`; the member database
-remains the source of names and phone numbers. `OFF` is the default mode,
-`SHADOW` records decisions without blocking, and `ENFORCE` gates new
-`PROPOSED`/`HELD` paths after schema readiness and clinic allowlist checks.
-Existing `CONFIRMED` commitments are never cancelled or moved by this policy.
-See the [API contract](../docs/api/booking-reliability.md),
-[English runbook](../docs/runbooks/booking-reliability.md), and
-[한국어 기준/런북](../docs/booking-reliability-policy.ko.md).
+신뢰도 API는 불투명한 `MemberId`만 사용하며 이름·전화번호는 회원 DB가 소유합니다. 기본 모드는
+`OFF`이고 `SHADOW`에서는 차단 없이 결정을 기록하며, `ENFORCE`에서는 schema readiness와 clinic
+allowlist가 확인된 뒤 신규 `PROPOSED`·`HELD` 경로를 제한합니다. 이미 `CONFIRMED`인 약속은 이
+정책으로 취소하거나 이동하지 않습니다. [API 계약](../docs/api/booking-reliability.md),
+[영문 런북](../docs/runbooks/booking-reliability.md), [한국어 기준 문서](../docs/booking-reliability-policy.ko.md)를 참고하세요.
 
-Notification requests store only the member ID needed to resolve the current
-profile at send time. Names, phone numbers, email addresses, rendered bodies,
-and raw provider errors are not written to the outbox. Re-notify requires a
-platform service principal with `SCOPE_notification:renotify`, exact clinic
-membership, and an independent MFA clinic approval. See the
-[notification operations runbook](../docs/runbooks/notification-outbox-operations.md).
+알림 요청에는 발송 시점에 최신 프로필을 조회하는 데 필요한 회원 ID만 저장합니다.
+이름·전화번호·이메일·렌더링 본문·provider 원본 오류는 outbox에 기록하지 않습니다.
+재알림에는 `SCOPE_notification:renotify` 권한과 정확한 병원 범위를 가진 플랫폼
+서비스 주체, 별도의 MFA 병원 담당자 승인이 모두 필요합니다. 자세한 절차는
+[알림 outbox 운영 런북](../docs/runbooks/notification-outbox-operations.md)에 있습니다.
 
 <a id="profile-reevaluation"></a>
-### Profile Change Reevaluation
+### 프로필 변경 예약 재평가
 
-Profile change handling is an internal worker and actuator workflow, not a
-patient-facing endpoint. It reevaluates `PROPOSED` and `HELD`, skips
-`CONFIRMED`, and fetches the current minimal assessment from CRM only at
-processing time. Rollout is fail-closed:
+프로필 변경 처리는 고객용 API가 아니라 내부 worker와 actuator로 실행합니다.
+`PROPOSED`와 `HELD`만 다시 평가하고 `CONFIRMED`는 건너뜁니다. 현재 시점의 최소
+assessment는 실제 처리할 때 CRM에서 조회합니다. 배포는 병원 허용 목록을 명시하고
+다음 순서로만 진행합니다.
 
 `DISABLED` → `DRY_RUN` → `APPLY_PROPOSED` →
-`APPLY_PROPOSED_AND_HELD`, with an explicit clinic allowlist.
+`APPLY_PROPOSED_AND_HELD`
 
-Enabling the feature also requires a production
-`ProfileReevaluationAppointmentProcessor` bean. Startup fails closed when the
-processor is missing, so profile events cannot accumulate behind a worker graph
-that was silently omitted.
+기능을 활성화하려면 운영용 `ProfileReevaluationAppointmentProcessor` bean도 있어야
+합니다. processor가 없으면 시작 단계에서 실패하므로, worker가 빠진 상태로 프로필
+이벤트만 계속 쌓이는 상황을 막습니다.
 
-`GET` and `POST /actuator/profileReevaluation` require both `ADMIN` and
-`SCOPE_profile-reevaluation:operate`. The read operation reports backlog,
-leases, failures, and drain state. The write operation supports bounded
-`PREVIEW` and duplicate-safe `EXECUTE` redrive only when both `tenantGroupId`
-and `clinicId` are present and the authenticated principal is allowed to
-access that clinic. A same-process retry with the same idempotency key replays
-the exact response. After a process restart, persisted lineage/CAS still
-prevents duplicate attempts, but the prior response is not replayed and the
-result may report `created=0`. Its audit actor always comes from the
-authenticated scheduling token, never from the request body. See the
-[workflow](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html),
-[reference design](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
-and [operations runbook](../docs/runbooks/profile-reevaluation.md).
+`GET`·`POST /actuator/profileReevaluation`은 `ADMIN` 역할과
+`SCOPE_profile-reevaluation:operate` 권한을 모두 가진 주체만 호출할 수 있습니다.
+조회는 backlog, lease, 실패와 drain 상태를 제공합니다. 쓰기는 `tenantGroupId`와
+`clinicId`를 모두 지정하고, 인증 주체가 해당 병원에 접근할 수 있을 때만 범위가 제한된
+`PREVIEW`와 중복 방지 `EXECUTE` redrive를 수행합니다. 동일 프로세스에서는 같은
+idempotency key로 재시도하면 이전 응답을 그대로 반환합니다. 프로세스가 재시작된 뒤에도
+저장된 lineage와 CAS가 attempt 중복 생성을 막지만, 이전 응답은 재생하지 않으므로
+`created=0`이 반환될 수 있습니다. 감사 주체는 요청 본문이 아니라 인증된 스케줄링
+token에서 가져옵니다. 자세한 내용은
+[업무 흐름](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html),
+[기준 설계](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation-design.md),
+[운영 런북](../docs/runbooks/profile-reevaluation.ko.md)에 있습니다.
 
-### Appointment Commitment
+### 방문 확정 약속
 
-See [Appointment Commitment API](../docs/api/visit-commitment.md) for the
-complete state, authentication, and error contract, and the
-[operations runbook](../docs/runbooks/visit-commitment-operations.md) for
-rollout, alerts, retention, and rollback.
+전체 상태·인증·오류 계약은 [방문 확정 약속 API](../docs/api/visit-commitment.md),
+점진 배포·경보·보존·롤백은
+[운영 런북](../docs/runbooks/visit-commitment-operations.md)에 정리되어 있습니다.
 
-| Actor | Method and path | Result |
+| 행위자 | 메서드와 경로 | 결과 |
 |------|------|------|
-| Patient | `POST /api/{tenantCode}/appointment-requests` | Creates a policy-authorized `PROPOSED` or resource-backed `HELD` provisional appointment (`202`). |
-| Administrator | `POST /api/{tenantCode}/admin/appointments` | Creates a policy-authorized confirmed appointment (`201`). |
-| Administrator | `POST /api/{tenantCode}/appointments/{id}/approve` | Approves the exact customer proposal (`200`). |
-| Patient | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/accept` | Accepts a current change proposal (`200`). |
-| Patient | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/decline` | Declines a proposal while preserving the confirmed booking (`200`). |
-| Administrator | `POST /api/{tenantCode}/appointments/{id}/confirm` | Confirms a proposal when effective policy and consent permit it (`200`). |
-| Administrator | `POST /api/{tenantCode}/appointments/{id}/change-proposals` | Creates a replacement proposal without cancelling the current booking (`202`). |
-| Administrator | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/expire` | Expires a due proposal and releases an initial hold (`200`). |
-| Administrator | `POST /api/{tenantCode}/appointments/{id}/cancel` | Cancels the appointment and releases active allocations (`200`). |
-| Patient or administrator | `GET /api/{tenantCode}/appointments/{id}/commitment` | Reads the commitment-native projection (`200`). |
+| 고객 | `POST /api/{tenantCode}/appointment-requests` | 정책에 따라 `PROPOSED` 또는 자원을 선점한 `HELD` 가예약 생성 (`202`) |
+| 관리자 | `POST /api/{tenantCode}/admin/appointments` | 정책이 허용한 확정 예약 생성 (`201`) |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/approve` | 고객이 동의한 정확한 제안 승인 (`200`) |
+| 고객 | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/accept` | 현재 변경 제안 수락 (`200`) |
+| 고객 | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/decline` | 기존 확정을 유지하며 제안 거절 (`200`) |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/confirm` | 유효 정책과 동의가 허용한 제안 확정 (`200`) |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/change-proposals` | 기존 확정을 취소하지 않고 대체 제안 생성 (`202`) |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/proposals/{proposalId}/expire` | 만료 시각에 도달한 제안을 종결하고 최초 선점 해제 (`200`) |
+| 관리자 | `POST /api/{tenantCode}/appointments/{id}/cancel` | 예약을 취소하고 활성 자원 점유 해제 (`200`) |
+| 고객 또는 관리자 | `GET /api/{tenantCode}/appointments/{id}/commitment` | 확정 약속 전용 조회 모델 반환 (`200`) |
 
-These routes never accept actor, tenant, clinic, patient subject, policy mode,
-terms hash, or resource mapping in the request body. They derive one exact
-tenant and clinic from the verified Gateway principal; ambiguous or service
-principals fail closed. Every mutation requires `Idempotency-Key`; creation
-also requires `If-None-Match: *`, and existing-aggregate mutations require the
-latest `ETag` in `If-Match`.
+이 경로의 요청 본문은 actor, tenant, clinic, patient subject, 정책 mode,
+약관 hash, 자원 mapping을 받지 않습니다. 검증된 Gateway principal에서 정확히 한
+테넌트와 병원을 도출하며 다중 범위나 서비스 principal은 fail-closed로 거절합니다.
+모든 상태 변경 요청은 `Idempotency-Key`가 필요하고, 생성은 `If-None-Match: *`, 기존
+aggregate 변경은 최신 `ETag`를 담은 `If-Match`가 추가로 필요합니다.
 
-Proposal and commitment responses expose the immutable policy snapshot ID,
-hash, generation, and source versions used for the decision. Later policy
-changes do not reinterpret an existing proposal.
+제안과 확정 약속 응답은 판단에 고정된 불변 정책 스냅숏 ID, hash, 세대,
+원본 version을 제공합니다. 이후 정책이 바뀌어도 기존 제안을 새 정책으로 재해석하지
+않습니다.
 
-The Gateway must issue bounded claims that satisfy one actor invariant set.
-For example, an administrator token for clinic `101` contains:
+Gateway는 하나의 행위자 불변식을 충족하는 길이 제한 claim을 발행해야 합니다.
+예를 들어 병원 `101`의 관리자 token은 다음 claim을 포함합니다.
 
 ```json
 {
@@ -142,88 +133,86 @@ For example, an administrator token for clinic `101` contains:
 }
 ```
 
-A patient token uses `actorType: "PATIENT"`, includes the matching `PATIENT`
-role and a stable `patientSubject`, and cannot carry an administrator role.
-`clinicId`, when present, must be a member of `allowedClinicIds`; the commitment
-application still resolves the actual Plan/appointment scope from storage.
+고객 token은 `actorType: "PATIENT"`와 `PATIENT` role, 안정적인
+`patientSubject`를 함께 가지며 관리자 role을 포함할 수 없습니다. `clinicId`가
+있다면 반드시 `allowedClinicIds`에 포함되어야 합니다. commitment application은 이 claim을
+신뢰해 본문의 범위를 받지 않되, 실제 Plan·예약 범위는 저장소에서 다시 확인합니다.
 
-| Request kind | Required headers | Example |
+| 요청 종류 | 필수 헤더 | 예 |
 |------|------|------|
-| New provisional or administrator direct creation | `Idempotency-Key`, `If-None-Match` | `request_01J1M6Y6XRK8N0W2M3P4Q5R6S7`, `*` |
-| Existing commitment mutation | `Idempotency-Key`, `If-Match` | `approve_01J1M6Y6XRK8N0W2M3P4Q5R6S7`, `"3"` |
+| 신규 가예약·관리자 직접 생성 | `Idempotency-Key`, `If-None-Match` | `request_01J1M6Y6XRK8N0W2M3P4Q5R6S7`, `*` |
+| 기존 확정 약속 상태 변경 | `Idempotency-Key`, `If-Match` | `approve_01J1M6Y6XRK8N0W2M3P4Q5R6S7`, `"3"` |
 
-Consent-bearing requests send only `evidenceAuthority` and `evidenceId`. The
-authority must start with the current tenant namespace, such as
-`tenant-default:consent-service`. The evidence ID must be an unguessable
-20-to-128-character opaque reference, never consent text or personal data.
-Reusing the same ID for another decision returns a stable `409`.
+동의가 필요한 요청은 `evidenceAuthority`와 `evidenceId`만 전달합니다.
+`evidenceAuthority`는 현재 테넌트 네임스페이스로 시작해야 하며
+(예: `tenant-default:consent-service`), `evidenceId`는 원문 동의나 개인정보가 아닌
+20~128자의 추측 불가능한 불투명 참조여야 합니다. 같은 ID를 다른 결정에 재사용하면
+안정적인 `409`로 거절됩니다.
 
-#### Enablement and rollback
+#### 활성화와 롤백
 
-| Property | Default | Operational meaning |
+| 설정 | 기본값 | 운영 의미 |
 |------|------|------|
-| `appointment.commitment.api-enabled` | `false` | Bootstrap gate for all commitment routes; enable only after the production adapters and readiness evidence pass |
-| `appointment.commitment.ingress-enabled` | `true` | Allows only new patient requests and administrator direct creation |
-| `appointment.commitment.mode` | `OFF` | `OFF` blocks new computation/writes, `SHADOW` compares, and `WRITE` uses the allowlist. |
-| `appointment.commitment.clinic-allowlist` | Empty | Clinic IDs eligible for `WRITE`. |
-| `appointment.commitment.proposal-ttl` | `30m` | Proposal approval expiry. |
-| `appointment.commitment.retry.max-attempts` | `3` | Bounded attempts including the initial try. |
-| `appointment.commitment.ceiling.resources-per-slot` | `200` | Maximum practitioner, equipment, and space resource entries in one candidate slot. |
-| `appointment.commitment.ceiling.candidate-resource-entries` | `10,000` | Maximum resource entries across one proposal computation request. |
-| `appointment.commitment.idempotency-hash-secret` | None | Required Base64 secret of at least 32 decoded bytes when the commitment API is enabled; never reuse the JWT or policy-command secret. |
-| `appointment.commitment.retention-enabled` | `false` | Enables the in-process retention owner; keep one owner per deployment. |
-| `appointment.commitment.retention-interval` | `PT1H` | Fixed delay between bounded retention runs. |
+| `appointment.commitment.api-enabled` | `false` | 운영 어댑터와 준비 증거가 통과한 뒤에만 여는 전체 commitment 경로 부트스트랩 게이트 |
+| `appointment.commitment.ingress-enabled` | `true` | 신규 고객 가예약과 관리자 직접 생성만 허용 |
+| `appointment.commitment.mode` | `OFF` | 신규 계산·쓰기를 차단하는 `OFF`, 비교만 하는 `SHADOW`, 허용목록 기반 `WRITE` |
+| `appointment.commitment.clinic-allowlist` | 비어 있음 | `WRITE`를 허용할 병원 ID |
+| `appointment.commitment.proposal-ttl` | `30m` | 제안 승인 대기 만료 |
+| `appointment.commitment.retry.max-attempts` | `3` | 최초 시도를 포함한 제한 재시도 |
+| `appointment.commitment.ceiling.resources-per-slot` | `200` | 한 후보 slot의 의료진·장비·공간 자원 항목 상한 |
+| `appointment.commitment.ceiling.candidate-resource-entries` | `10,000` | 한 제안 계산 요청 전체의 자원 항목 합계 상한 |
+| `appointment.commitment.idempotency-hash-secret` | 없음 | commitment API 활성화 시 필요한 Base64 비밀값. 디코딩 후 32바이트 이상이어야 하며 JWT·정책 command 비밀값을 재사용하면 안 됨 |
+| `appointment.commitment.retention-enabled` | `false` | 프로세스 내부 보존 작업 소유자 활성화. 배포당 한 소유자에서만 사용 |
+| `appointment.commitment.retention-interval` | `PT1H` | 범위 제한 보존 작업 실행 사이의 고정 지연 |
 
-Use `api-enabled=false` only during bootstrap, before any commitment exists.
-After commitments exist, rollback must set `ingress-enabled=false` to stop new
-intake only. Reads, approval, confirmation, proposal acceptance or decline, and
-change proposals remain available so existing patients are not stranded.
-`WRITE` permits new rows only when both the mode and clinic allowlist match.
-The API refuses to start without its dedicated idempotency HMAC secret when
-`api-enabled=true`.
+`api-enabled=false`는 아직 확정 약속이 한 건도 없는 부트스트랩 단계에서만
+사용합니다. 이미 생성된 확정 약속이 있다면 롤백은
+`ingress-enabled=false`로 신규 유입만 막아야 합니다. 조회, 승인, 확정, 제안
+수락·거절, 변경 제안은 계속 열려 있어 기존 고객을 고립시키지 않습니다.
+`WRITE`는 mode와 병원 허용목록이 모두 일치할 때만 신규 row를 허용합니다.
+`api-enabled=true`인데 예약 전용 idempotency HMAC 비밀값이 없으면 API는 시작을
+거부합니다.
 
-Production enablement also requires an `AppointmentCommitmentPlanningResolver`
-adapter that supplies the authoritative patient identity, candidate inventory
-slots, stored-proposal resource mappings, and confirmed projection target.
-The built-in resolver rejects every planning request, so enabling the route
-without that adapter never fabricates customer or resource data.
-Provide a `PatientSubjectFingerprintResolver` that uses the same HMAC key,
-algorithm, and domain separation as the purchase Plan ingress. The built-in
-resolver does not guess with plain SHA-256; it fails closed for patient access.
+운영 활성화 전에는 신뢰된 환자 identity, 후보 inventory slot, 저장된 제안의
+자원 mapping, 확정 조회 모델 대상을 제공하는 `AppointmentCommitmentPlanningResolver`
+어댑터도 연결해야 합니다. 기본 resolver는 모든 계획 요청을 거절하므로 어댑터 없이
+경로를 열어도 고객이나 자원 정보를 임의로 만들지 않습니다.
+Gateway patient subject는 구매 Plan ingress와 같은 HMAC key·algorithm·domain으로
+fingerprint하는 `PatientSubjectFingerprintResolver`를 별도 제공해야 합니다. 기본
+resolver는 일반 SHA-256으로 추정하지 않고 patient 접근을 fail-closed로 거절합니다.
 
-#### Stable error contract
+#### 안정 오류 계약
 
-| Condition | HTTP / `errorCode` | Caller action |
+| 상황 | HTTP / `errorCode` | 호출자 조치 |
 |------|------|------|
-| Invalid body or path value | `400 PAYLOAD_INVALID` | Correct the request using the published schema. |
-| Actor, tenant, or clinic scope mismatch | `403 SCOPE_MISMATCH` or `SCOPE_FORBIDDEN` | Use an exact clinic-scoped Gateway token. |
-| Remaining plan allowance exceeded | `422 PLAN_LIMIT_EXCEEDED` | Check the remaining allowance before retrying. |
-| Missing or invalid current consent | `422 CONSENT_REQUIRED` | Use evidence issued by the current authority. |
-| Expired proposal | `410 PROPOSAL_EXPIRED` | Request a new proposal. |
-| Reused idempotency key or consent evidence | `409 IDEMPOTENCY_KEY_REUSED` or `CONSENT_EVIDENCE_REUSED` | Replay the original request or obtain a new reference. |
-| Resource or current-proposal conflict | `409 RESOURCE_CONFLICT` or `PROPOSAL_NOT_CURRENT` | Reload the commitment and request a new proposal. |
-| Stale `If-Match` | `412 VERSION_CONFLICT` | Retry with the latest `ETag`. |
-| Missing required precondition header | `428 PRECONDITION_REQUIRED` | Send `*` for creation or the latest `ETag` for mutation. |
-| New intake disabled | `503 INGRESS_DISABLED` | Preserve existing bookings and defer only the new request. |
-| Commitment mutation attempted through a legacy route | `409 NEW_APPOINTMENT_API_REQUIRED` | Use the tenant-scoped commitment endpoint. |
-| Unexpected internal failure | `500 INTERNAL_ERROR` | Retry with the same idempotency key after `Retry-After: 5`. |
+| body·경로 값 오류 | `400 PAYLOAD_INVALID` | 공개 schema에 맞게 수정 |
+| actor·tenant·clinic 범위 불일치 | `403 SCOPE_MISMATCH` 또는 `SCOPE_FORBIDDEN` | 정확한 clinic-scoped Gateway token 사용 |
+| 잔여 plan 상한 초과 | `422 PLAN_LIMIT_EXCEEDED` | 잔여 회차를 확인한 뒤 다시 요청 |
+| 현재 동의 증빙 누락·불일치 | `422 CONSENT_REQUIRED` | 동의 상태의 책임 시스템이 발행한 증빙 사용 |
+| 만료된 제안 | `410 PROPOSAL_EXPIRED` | 새 제안 요청 |
+| 멱등키·동의 증빙 재사용 | `409 IDEMPOTENCY_KEY_REUSED` 또는 `CONSENT_EVIDENCE_REUSED` | 원 요청을 재시도하거나 새 reference 발급 |
+| 자원·현재 제안 충돌 | `409 RESOURCE_CONFLICT` 또는 `PROPOSAL_NOT_CURRENT` | 확정 약속을 다시 읽고 새 제안 요청 |
+| 오래된 `If-Match` | `412 VERSION_CONFLICT` | 최신 `ETag`로 다시 시도 |
+| 필수 조건 헤더 누락 | `428 PRECONDITION_REQUIRED` | 생성은 `*`, 변경은 최신 `ETag` 전달 |
+| 신규 유입 중단 | `503 INGRESS_DISABLED` | 기존 예약은 유지하고 신규 요청만 보류 |
+| legacy 경로로 확정 약속 변경 시도 | `409 NEW_APPOINTMENT_API_REQUIRED` | tenant-scoped 확정 약속 엔드포인트 사용 |
+| 예상하지 못한 내부 장애 | `500 INTERNAL_ERROR` | `Retry-After: 5` 뒤 같은 멱등키로 재시도 |
 
-`PREDECESSOR_NOT_COMPLETED` is returned when an authoritative external
-fulfillment event has not yet proved completion of a blocking predecessor.
-The reservation API never infers clinical completion from appointment state.
+`PREDECESSOR_NOT_COMPLETED`는 외부 이행 기준 시스템의 이벤트가 선행 진료의 완료를 아직
+증명하지 못했을 때 반환합니다. 예약 API는 예약 상태만으로 임상 완료를 추론하지 않습니다.
 
-### Plan Foundation Flags
+### 플랜 기반 기능 플래그
 
-| Property | Default | Meaning |
+| 설정 | 기본값 | 의미 |
 |------|------|------|
-| `appointment.plan-foundation.catalog-sync-enabled` | `false` | Enables the catalog sync route. |
-| `appointment.plan-foundation.plan-read-enabled` | `false` | Enables clinic-operator plan reads. |
-| `appointment.plan-foundation.purchase-consumer-mode` | `OFF` | `OFF`, `SHADOW`, or gated `WRITE`; production `WRITE` requires an outbox transport capability. |
+| `appointment.plan-foundation.catalog-sync-enabled` | `false` | 카탈로그 동기화 경로 활성화 |
+| `appointment.plan-foundation.plan-read-enabled` | `false` | 병원 운영자용 플랜 조회 활성화 |
+| `appointment.plan-foundation.purchase-consumer-mode` | `OFF` | `OFF`, `SHADOW`, 제한된 `WRITE`; 운영 `WRITE`에는 outbox 전송 기능 필요 |
 
-`appointment.plan-foundation.scope-overrides[*]` can override those three
-values for one exact `(tenant-group-id, clinic-id)` pair. Nullable fields inherit
-the global value; a specified field wins only in that exact scope. This supports
-clinic-by-clinic canaries and rollback without changing sibling clinics.
+`appointment.plan-foundation.scope-overrides[*]`는 정확한
+`(tenant-group-id, clinic-id)` 한 쌍에 대해 위 세 값을 덮어쓸 수 있습니다.
+nullable 필드는 전역 값을 상속하고, 지정한 필드만 해당 scope에서 우선합니다.
+따라서 다른 병원에 영향을 주지 않고 병원별 canary와 rollback을 수행할 수 있습니다.
 
 ```yaml
 appointment:
@@ -236,92 +225,91 @@ appointment:
         purchase-consumer-mode: OFF
 ```
 
-The YAML form is for local Foundation proof. Production control must provide
-append-only actor/reason/old/new/expiry/correlation audit and effective-value
-readback; without that provider, production `WRITE` remains blocked.
+이 YAML 형태는 로컬 Foundation 증명용입니다. 운영 control은 actor, reason,
+이전/새 값, expiry, correlation ID의 append-only audit와 effective-value
+readback을 제공해야 하며, 그 provider가 없으면 운영 `WRITE`는 계속 차단됩니다.
 
-Plan reads require `ADMIN`, `STAFF`, or `DOCTOR`, a matching tenant claim, and
-an exact matching clinic claim. `PATIENT` access is deferred. Disabled routes
-remain visible in OpenAPI and return sanitized `404 FEATURE_DISABLED`.
-Catalog writers must compute `payloadHash` from the
-[canonical typed hash contract](../docs/api/catalog-payload-hash.md).
+플랜 조회는 `ADMIN`, `STAFF`, `DOCTOR` 역할, 일치하는 tenant claim, 정확히 일치하는
+clinic claim이 모두 필요합니다. `PATIENT` 조회는 보류했습니다. 비활성 경로도 OpenAPI에는
+남아 있으며 정제된 `404 FEATURE_DISABLED`를 반환합니다.
+카탈로그 writer는 [canonical typed hash 계약](../docs/api/catalog-payload-hash.md)에
+따라 `payloadHash`를 계산해야 합니다.
 
-Use `tenant-default` for the local seed tenant. JWTs must include the requested tenant in the `allowedTenants` claim.
+로컬 seed tenant는 `tenant-default` 입니다. JWT의 `allowedTenants` claim에는 요청 URL의 `tenantCode`가 포함되어야 합니다.
 
-**Swagger UI**: `http://localhost:8080/swagger-ui.html` after the server starts.
+**Swagger UI**: 서버 기동 후 `http://localhost:8080/swagger-ui.html`
 
-## Appointment Creation Flow
+## 예약 생성 요청 흐름
 
-![Appointment API write path sequence diagram](../docs/images/readme-diagrams/appointment-api-sequence-01-en.png)
+![예약 API 쓰기 경로 시퀀스 다이어그램](../docs/images/readme-diagrams/appointment-api-sequence-01-ko.png)
 
-![Appointment creation data flow](../docs/requirements/assets/data-flow-01-appointment-create-en.png)
+![예약 생성 데이터 흐름](../docs/requirements/assets/data-flow-01-appointment-create-ko.png)
 
-Full data flow: [data-flow.md](../docs/requirements/data-flow.md)
+→ 전체 데이터 흐름: [data-flow.md](../docs/requirements/data-flow.md)
 
-## User Scenario Coverage
+## 사용자 시나리오 범위
 
-![Patient booking scenario sequence](../docs/requirements/assets/user-scenarios-01-patient-booking-en.png)
+![환자 예약 시나리오 시퀀스](../docs/requirements/assets/user-scenarios-01-patient-booking-ko.png)
 
-![Appointment status lifecycle scenario](../docs/requirements/assets/user-scenarios-02-status-lifecycle-en.png)
+![예약 상태 라이프사이클 시나리오](../docs/requirements/assets/user-scenarios-02-status-lifecycle-ko.png)
 
-## Authentication
+## 인증
 
 JWT Bearer Token:
-
-- Header: `Authorization: Bearer <token>`
+- 헤더: `Authorization: Bearer <token>`
 - Tenant path: `/api/{tenantCode}/...`
-- Tenant claim: `allowedTenants` must contain the URL `tenantCode`
-- Properties: `JwtSecurityProperties` (`scheduling.security.jwt.*`)
-- Filter: `JwtAuthenticationFilter` -> `SchedulingUserPrincipal`
+- Tenant claim: `allowedTenants`에 URL `tenantCode` 포함 필요
+- 설정: `JwtSecurityProperties` (`scheduling.security.jwt.*`)
+- 필터: `JwtAuthenticationFilter` → `SchedulingUserPrincipal`
 
-## DB Migration
+## DB 마이그레이션
 
-Flyway migration scripts live under `src/main/resources/db/migration/V*.sql`.
+Flyway — `src/main/resources/db/migration/V*.sql`
 
-> **Important**: `scheduling_*` table names are fixed in Flyway scripts. Do not rename them.
+> **주의**: `scheduling_*` 테이블명은 Flyway 스크립트에 고정되어 있으므로 변경 금지.
 
-## Core Classes
+## 핵심 클래스
 
-| Class | Role |
+| 클래스 | 역할 |
 |--------|------|
-| `AppointmentController` | Appointment CRUD and status changes. |
-| `CustomerAppointmentController` | Patient provisional requests and proposal decisions. |
-| `AdminAppointmentController` | Administrator creation, approval, confirmation, and change proposals. |
-| `AppointmentCommitmentQueryController` | Actor-scoped commitment-native reads. |
-| `SlotController` | Available slot lookup. |
-| `RescheduleController` | Temporary clinic closure rescheduling. |
-| `EquipmentUnavailabilityController` | Equipment unavailability CRUD and conflict detection. |
-| `ClinicController` | Clinic lookup, including operating hours and break times. |
-| `DoctorController` | Doctor lookup, including schedules and absences. |
-| `TreatmentTypeController` | Treatment type lookup. |
-| `EquipmentController` | Equipment lookup. |
-| `SecurityConfig` | JWT-based Spring Security configuration. |
-| `GlobalExceptionHandler` | Global exception handling that returns `ApiResponse`. |
-| `CatalogProductSyncController` | Bounded immutable catalog version synchronization. |
-| `AppointmentPlanController` | Tenant/clinic-scoped, patient-reference-free plan reads. |
-| `TestDataSeeder` | Automatic development/test seed data insertion. |
+| `AppointmentController` | 예약 CRUD + 상태 변경 |
+| `CustomerAppointmentController` | 고객 가예약 요청과 제안 수락·거절 |
+| `AdminAppointmentController` | 관리자 생성·승인·확정·변경 제안 |
+| `AppointmentCommitmentQueryController` | 행위자 범위 확정 약속 전용 조회 |
+| `SlotController` | 가용 슬롯 조회 |
+| `RescheduleController` | 임시휴진 재배정 |
+| `EquipmentUnavailabilityController` | 장비 사용불가 구간 CRUD + 충돌 감지 |
+| `ClinicController` | 클리닉 조회 (영업시간, 휴식시간 포함) |
+| `DoctorController` | 의사 조회 (스케줄, 부재 포함) |
+| `TreatmentTypeController` | 진료유형 조회 |
+| `EquipmentController` | 장비 조회 |
+| `SecurityConfig` | JWT 기반 Spring Security 설정 |
+| `GlobalExceptionHandler` | 전역 예외 처리 → `ApiResponse` 반환 |
+| `CatalogProductSyncController` | 제한 검증을 거치는 불변 카탈로그 버전 동기화 |
+| `AppointmentPlanController` | tenant/clinic 범위, 환자 참조 미포함 플랜 조회 |
+| `TestDataSeeder` | 개발/테스트 초기 데이터 자동 삽입 |
 
-## Dependencies
+## 의존성
 
-- **Internal**: `appointment-core`, `appointment-event`, `appointment-solver`
-- **External**: Spring Boot 4 Web/Security, `jjwt`, Flyway, springdoc-openapi, `exposed-jdbc`
+- **내부**: `appointment-core`, `appointment-event`, `appointment-solver`
+- **외부**: Spring Boot 4 Web/Security, `jjwt`, Flyway, springdoc-openapi, `exposed-jdbc`
 
-## Run
+## 실행
 
 ```bash
-# Start the server (requires PostgreSQL + Redis)
+# 기동 (PostgreSQL + Redis 필요)
 ./gradlew :appointment-api:bootRun
 
-# Build
+# 빌드
 ./gradlew :appointment-api:build
 
-# Gatling load tests
+# Gatling 부하 테스트
 ./gradlew :appointment-api:gatlingRun
 ```
 
-## Timezone Model
+## 타임존
 
-API responses such as `AppointmentResponse` always include `timezone` and `locale`.
+API 응답(`AppointmentResponse`)에는 항상 `timezone` 과 `locale` 필드가 포함됩니다.
 
 ```json
 {
@@ -333,17 +321,17 @@ API responses such as `AppointmentResponse` always include `timezone` and `local
 }
 ```
 
-- `appointmentDate`, `startTime`, and `endTime` are based on the clinic's local time.
-- The frontend can reconstruct `ZonedDateTime` using the `timezone` field.
-- The server does not convert appointment dates/times to UTC, which avoids date-boundary bugs.
-- `locale` is for date/time display formatting and is independent from timezone.
+- `appointmentDate` / `startTime` / `endTime` 은 **클리닉 현지 시간** 기준입니다.
+- 프론트엔드는 `timezone` 필드를 이용해 `ZonedDateTime` 으로 복원할 수 있습니다.
+- UTC 변환은 서버에서 수행하지 않습니다 — 날짜 경계 문제 방지.
+- `locale` 은 날짜/시간 표시 형식 전용으로, timezone과 독립적입니다.
 
-Detailed design: [appointment-core timezone design](../appointment-core/README.md#timezone-design)
+상세 설계: [appointment-core 타임존 설계](../appointment-core/README.ko.md#타임존-설계)
 
-## Tests
+## 테스트 실행
 
 ```bash
-# H2 in-memory, default
+# H2 in-memory (기본)
 ./gradlew :appointment-api:test
 
 # PostgreSQL Testcontainer
@@ -353,53 +341,49 @@ Detailed design: [appointment-core timezone design](../appointment-core/README.m
 ./gradlew :appointment-api:test -Dspring.profiles.active=test,test-mysql
 ```
 
-### Test Structure
+### 테스트 구조
 
-| Class | Role |
+| 클래스 | 역할 |
 |--------|------|
-| `AbstractApiIntegrationTest` | Abstract class based on `@SpringBootTest(RANDOM_PORT)` and `@DynamicPropertySource`. |
-| `Containers` | PostgreSQL / MySQL8 Testcontainer singleton. |
+| `AbstractApiIntegrationTest` | `@SpringBootTest(RANDOM_PORT)` + `@DynamicPropertySource` 기반 추상 클래스 |
+| `Containers` | PostgreSQL / MySQL8 Testcontainer singleton |
 
-- DataSource is injected dynamically by Spring profile with `@DynamicPropertySource`.
-- Controller tests use `RestClient`, not MockMvc.
-- CI verifies H2, PostgreSQL, and MySQL8 in parallel.
+- Spring Profile에 따라 DataSource를 동적으로 주입 (`@DynamicPropertySource`)
+- Controller 테스트는 `RestClient` 방식 사용. MockMvc 미사용
+- CI에서 H2 / PostgreSQL / MySQL8 세 환경을 병렬로 검증
 
-## Staff waitlist API
+## 직원용 Waitlist API
 
-The phase-two staff API is rooted at
-`/api/{tenantCode}/clinics/{clinicId}/waitlist`. Every mutation requires a
-printable ASCII `Idempotency-Key` (16–128 characters) and a body
-`expectedVersion` where a resource precondition is needed. Public entry, offer,
-policy, adjustment, and appointment references are versioned opaque strings; the
-tenant/clinic scope is checked before the internal numeric ID is used.
+phase-two 직원 API의 기본 경로는
+`/api/{tenantCode}/clinics/{clinicId}/waitlist`입니다. 모든 mutation은 출력 가능한 ASCII
+`Idempotency-Key`(16~128자)가 필요하며 resource precondition이 있는 요청은 본문에
+`expectedVersion`을 담습니다. 외부 entry, offer, policy, adjustment, appointment reference는
+versioned opaque string이고 내부 숫자 ID를 사용하기 전에 tenant/clinic 범위를 다시 확인합니다.
 
-| Operation | Path | Capability |
+| 작업 | 경로 | 권한 |
 |---|---|---|
-| Entries | `POST/GET /entries`, `GET /entries/{entryRef}`, `POST /entries/{entryRef}/withdraw` | `waitlist:read` or `waitlist:write` |
-| Offers | `GET /offers`, `GET /offers/{offerRef}`, `POST /offers/{offerRef}/confirm`, `/decline`, `GET .../decision` | `waitlist:read` or `waitlist:write` |
+| Entry | `POST/GET /entries`, `GET /entries/{entryRef}`, `POST /entries/{entryRef}/withdraw` | `waitlist:read` 또는 `waitlist:write` |
+| Offer | `GET /offers`, `GET /offers/{offerRef}`, `POST /offers/{offerRef}/confirm`, `/decline`, `GET .../decision` | `waitlist:read` 또는 `waitlist:write` |
 | Policy | `GET /policies/active`, `GET /policies/{policyRef}`, `POST /policies`, `POST /policies/{policyRef}/activate` | `waitlist:policy` |
-| Adjustments | `POST /restrictions`, `/recovery-credits`, `/benefit-grants` and their release/revoke paths | `waitlist:adjustment` |
+| 조정 | `POST /restrictions`, `/recovery-credits`, `/benefit-grants`와 release/revoke 경로 | `waitlist:adjustment` |
 
-Responses contain only bounded status/reason data and correlation IDs. `403`
-scope denial, `404` hidden cross-clinic references, `409` stale/expired/occupied
-conflicts, and `503` dependency failures use the stable waitlist error registry.
-Patient self-service and public magic-link acceptance are out of scope.
+응답에는 제한된 상태·사유와 correlation ID만 포함합니다. `403` 범위 거부, `404` 숨겨진
+교차 병원 reference, `409` stale/expired/occupied 충돌, `503` 의존성 장애는 waitlist의
+안정된 오류 registry를 사용합니다. 환자 self-service와 public magic-link 수락은 범위 밖입니다.
 
-Delivery defaults to `appointment.waitlist.delivery.enabled=false`; removing a
-clinic from `clinic-allowlist` stops new dispatch and notification but leaves
-expiry, suppression, and hold recovery running. See the [waitlist delivery API
-and operations contract](../docs/api/waitlist-delivery.md) and [operations
-runbook](../docs/runbooks/waitlist-delivery.md).
+delivery 기본값은 `appointment.waitlist.delivery.enabled=false`입니다. clinic을
+`clinic-allowlist`에서 제거하면 새 dispatch와 notification만 멈추고 expiry, suppression,
+hold recovery는 계속 실행됩니다. [waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)과
+[운영 런북](../docs/runbooks/waitlist-delivery.md)을 참고하세요.
 
-## Tenant-scoped scheduling endpoints
+## Tenant 범위 스케줄링 endpoint
 
-The API verifies `tenantCode` plus the path `clinicId` before constructing a
-`TenantClinicScope`. Slot, reschedule, solver, and notification calls receive
-that immutable scope; a clinic-only query is rejected. Batch reschedule SSE uses
-a bounded emitter timeout and interrupts its virtual-thread worker on completion,
-timeout, or error.
+API는 `tenantCode`와 path의 `clinicId`를 먼저 검증한 뒤 `TenantClinicScope`를
+만듭니다. slot, reschedule, solver, notification 호출은 이 불변 범위를 전달받으며
+병원 ID만 사용하는 query는 거부합니다. batch reschedule SSE는 emitter timeout을
+제한하고 완료·timeout·오류 시 virtual-thread worker를 interrupt합니다.
 
-Notification canary configuration is now scope-shaped during the V21 rollout:
+V21 rollout 동안 notification canary 설정은 scope 형태를 사용합니다.
 
 ```yaml
 clinic:
@@ -409,11 +393,11 @@ clinic:
       canary-scopes:
         - tenant-group-id: 1
           clinic-id: 23
-      # Deprecated rolling bridge; its clinic set must match canary-scopes.
+      # rolling 호환용 deprecated bridge이며 clinic 집합이 canary-scopes와 같아야 합니다.
       canary-clinic-ids: [23]
 ```
 
-V21 keeps the event-log tenant column nullable for old-node drain. Readiness
-requires Flyway V21, the tenant event-log column, and the tenant-leading direct
-outbox index. Pause notification routes before an application rollback; do not
-run a schema-down migration.
+V21은 구버전 node drain을 위해 event-log tenant column을 nullable로 유지합니다.
+readiness는 Flyway V21, tenant event-log column, tenant 선행 direct outbox index를
+요구합니다. application rollback 전 notification route를 pause하고 schema-down
+migration은 실행하지 않습니다.

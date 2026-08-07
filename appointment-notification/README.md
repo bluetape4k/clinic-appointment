@@ -1,76 +1,74 @@
 # appointment-notification
 
-[English](README.md) | [한국어](README.ko.md)
+[한국어 본문](README.md) | [한국어 참고본](README.ko.md)
 
-Durable notification delivery runtime for committed appointment outbox records.
-It claims work with database leases, resolves the member's current notification
-profile at send time, renders a versioned template, and isolates provider calls
-with bounded Resilience4j policies.
+커밋된 예약 알림 outbox를 안정적으로 발송하는 실행 모듈입니다. 데이터베이스
+lease로 작업을 선점하고, 발송 직전에 회원의 최신 알림 프로필을 조회한 다음,
+버전이 지정된 템플릿을 렌더링합니다. 외부 provider 호출에는 실행 시간이 제한된
+Resilience4j 정책을 적용합니다.
 
-## Responsibilities
+## 책임
 
-- **Does**: fair database claiming, lease recovery and fencing, send-time member
-  profile resolution, typed template rendering, provider isolation, terminal
-  data minimization, and bounded retention.
-- **Does not**: perform appointment CRUD or persist names, contact details,
-  rendered bodies, provider payloads, or raw exception messages in the outbox.
-  During rollout, the transitional Spring event listener may claim the exact
-  outbox row and execute the same privacy-safe delivery pipeline; it is not an
-  independent raw delivery or history path.
+- **하는 일**: 공정한 데이터베이스 선점, 만료 lease 복구와 fencing, 발송 시점
+  회원 프로필 조회, 타입이 지정된 템플릿 렌더링, provider 장애 격리, 종료
+  데이터 최소화, 보존 기간에 따른 제한된 단위의 삭제
+- **하지 않는 일**: 예약 CRUD, outbox에 이름·연락처·렌더링 본문·provider
+  payload·원본 예외 메시지 저장. 전환 기간에는 Spring 예약 이벤트 listener가
+  정확히 같은 outbox 행을 선점해 동일한 개인정보 보호 발송 절차를 실행할 수 있지만,
+  별도 원본 발송 경로나 이력 저장소를 만들지는 않습니다.
 
-## Core Classes
+## 핵심 클래스
 
-| Class | Role |
+| 클래스 | 역할 |
 |---|---|
-| `NotificationOutboxDispatcher` | Claims ready records fairly and enforces global and per-clinic concurrency. |
-| `NotificationOutboxSchedulingRunner` | Runs the dispatcher after application readiness and at the worker interval. |
-| `NotificationObservationSchedulingRunner` | Refreshes a bounded observation snapshot at a lower frequency independent of worker polling. |
-| `NotificationOutboxWorker` | Applies fenced completion, retry, exhaustion, and expired-lease recovery. |
-| `NotificationOutboxWorkStore` | Defines the transactional database boundary for outbox work. |
-| `NotificationDeliveryRouteGate` | Maps `SHADOW`, `CANARY`, `ACTIVE`, and `PAUSED` to one provider route per clinic. |
-| `NotificationDirectOutboxDelivery` | Lets the transitional event route conditionally claim the exact outbox row. |
-| `MemberNotificationProfileResolver` | Resolves current contact, locale, and consent within bounded runtime policies. |
-| `NotificationTemplateCatalog` | Owns supported template keys, versions, and channel-specific definitions. |
-| `NotificationTemplateRenderer` | Renders typed parameters and runtime profile data with fail-closed validation. |
-| `NotificationChannel` | Sends a provider-ready request and returns a privacy-safe result. |
-| `ResilientNotificationChannel` | Applies CircuitBreaker, Retry, and Bulkhead without retrying coroutine cancellation. |
-| `NotificationRetentionRunner` | Deletes terminal records in bounded pages using status-specific retention. |
-| `NotificationSchemaReadiness` | Fails readiness when required schema, indexes, or crypto references are unavailable. |
+| `NotificationOutboxDispatcher` | 발송 대상을 공정하게 선점하고 전체 및 병원별 동시성을 제한합니다. |
+| `NotificationOutboxSchedulingRunner` | 애플리케이션 준비 직후와 worker 주기마다 dispatcher를 실행합니다. |
+| `NotificationObservationSchedulingRunner` | worker와 분리된 낮은 빈도로 상한 있는 관측 snapshot을 갱신합니다. |
+| `NotificationOutboxWorker` | fencing된 완료·재시도·소진 처리와 만료 lease 복구를 수행합니다. |
+| `NotificationOutboxWorkStore` | outbox 작업의 트랜잭션 기반 데이터베이스 경계를 정의합니다. |
+| `NotificationDeliveryRouteGate` | `SHADOW`, `CANARY`, `ACTIVE`, `PAUSED`를 병원별 단일 provider 경로로 변환합니다. |
+| `NotificationDirectOutboxDelivery` | 전환기 이벤트 경로가 정확한 outbox 행을 조건부 선점하게 합니다. |
+| `MemberNotificationProfileResolver` | 실행 시간이 제한된 정책 안에서 최신 연락처·언어·동의를 조회합니다. |
+| `NotificationTemplateCatalog` | 허용된 템플릿 키·버전·채널별 정의를 관리합니다. |
+| `NotificationTemplateRenderer` | 타입이 지정된 매개변수와 실행 시점 프로필을 검증 실패 시 차단하는 방식으로 렌더링합니다. |
+| `NotificationChannel` | provider가 처리할 수 있는 요청을 발송하고 개인정보가 없는 결과를 반환합니다. |
+| `ResilientNotificationChannel` | 코루틴 취소를 재시도하지 않으면서 CircuitBreaker·Retry·Bulkhead를 적용합니다. |
+| `NotificationRetentionRunner` | 상태별 보존 기간에 따라 종료 레코드를 제한된 단위로 삭제합니다. |
+| `NotificationSchemaReadiness` | 필수 스키마·인덱스·암호화 참조가 없으면 readiness를 실패시킵니다. |
 
-## Delivery Flow
+## 발송 흐름
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../docs/requirements/assets/data-flow-05-notification-events-en-dark.png">
-  <img src="../docs/requirements/assets/data-flow-05-notification-events-en.png" alt="Durable notification outbox route and privacy boundary">
+  <source media="(prefers-color-scheme: dark)" srcset="../docs/requirements/assets/data-flow-05-notification-events-ko-dark.png">
+  <img src="../docs/requirements/assets/data-flow-05-notification-events-ko.png" alt="내구성 알림 outbox 발송 경로와 개인정보 경계">
 </picture>
 
-1. The appointment transaction commits a minimal outbox record containing
-   member and appointment identifiers plus typed template parameters.
-2. The dispatcher finds fair candidates and claims each record with a database
-   lease and fencing token.
-3. The delivery adapter resolves the member's current contact, locale, and
-   consent. Missing contact or withdrawn consent is suppressed without sending.
-4. The renderer selects an approved template version and produces the
-   provider-ready body in memory.
-5. The channel sends with a deterministic provider idempotency key.
-6. The worker records only a fenced terminal result or a bounded retry
-   decision. Terminal rows are later removed by the retention runner.
+1. 예약 트랜잭션이 회원·예약 식별자와 타입이 지정된 템플릿 매개변수만 담은
+   최소 outbox 레코드를 커밋합니다.
+2. dispatcher가 발송 대상을 공정하게 찾고 데이터베이스 lease와 fencing
+   token으로 레코드를 선점합니다.
+3. 발송 adapter가 회원의 최신 연락처·언어·동의를 조회합니다. 연락처가 없거나
+   동의를 철회한 경우에는 발송하지 않고 억제 처리합니다.
+4. renderer가 승인된 템플릿 버전을 선택해 provider용 본문을 메모리에서
+   생성합니다.
+5. channel이 결정적인 provider 멱등성 키와 함께 발송합니다.
+6. worker는 fencing된 종료 결과 또는 제한된 재시도 결정만 저장합니다.
+   종료 레코드는 이후 retention runner가 삭제합니다.
 
-The database lease and fencing token are the delivery correctness boundary.
-Redis leader election is reserved for a future reminder-recovery trigger; it is
-not required for safe concurrent outbox delivery.
+데이터베이스 lease와 fencing token이 발송 정합성의 기준입니다. Redis 리더
+선출은 향후 리마인더 복구 trigger에만 사용하며, outbox의 안전한 병렬 발송에는
+필요하지 않습니다.
 
-### Kafka appointment-event consumer (Issue #42)
+### Kafka 예약 이벤트 consumer (Issue #42)
 
-When `appointment.messaging.consumer.enabled=true`, this module also exposes a
-Kafka 4 manual-ack listener for the allow-listed appointment topic. It uses the
-fixed group `appointment-notification-v1` and logical inbox identity
-`notification/appointment-events`; the tenant/clinic scope is taken from the
-validated envelope and stored as metadata only. A duplicate inbox key is
-acknowledged without a second provider call, while retryable handler failures
-leave the record unacknowledged for bounded redelivery. The listener delegates
-to the existing `NotificationDirectDeliveryPort`, so it does not create a
-second delivery or raw-payload history path.
+`appointment.messaging.consumer.enabled=true`이면 이 모듈은 allow-list된 예약
+topic을 수신하는 Kafka 4 manual-ack listener도 제공합니다. 고정 group은
+`appointment-notification-v1`이고 logical inbox identity는
+`notification/appointment-events`입니다. tenant/clinic 범위는 검증된 envelope에서
+가져와 metadata만 저장합니다. inbox key가 중복이면 두 번째 provider 호출 없이
+ACK하고, 재시도 가능한 handler 실패는 제한된 redelivery를 위해 ACK하지 않습니다.
+listener는 기존 `NotificationDirectDeliveryPort`를 호출하므로 별도의 발송 경로나
+원본 payload 이력 저장소를 만들지 않습니다.
 
 ```yaml
 appointment:
@@ -81,39 +79,38 @@ appointment:
       max-attempts: 8
 ```
 
-Statistics projection is a separate consumer group (`appointment-statistics-v1`)
-and is enabled independently with `appointment.messaging.consumer.statistics.enabled=true`.
-Both consumers use the same Kafka 4 manual-ack container configuration but never
-share a group or inbox identity.
+통계 projection은 별도 consumer group(`appointment-statistics-v1`)이며
+`appointment.messaging.consumer.statistics.enabled=true`로 독립적으로 켭니다.
+두 consumer는 같은 Kafka 4 manual-ack container 설정을 사용하지만 group과 inbox
+identity를 공유하지 않습니다.
 
-### Rollout routes
+### 단계별 발송 경로
 
-| Mode | Transitional event route | Background worker route |
+| 모드 | 전환기 이벤트 경로 | 백그라운드 worker 경로 |
 |---|---|---|
-| `SHADOW` (default) | All clinics | Disabled |
-| `CANARY` | Clinics outside the allowlist | Allowlisted clinics only |
-| `ACTIVE` | Disabled | All clinics |
-| `PAUSED` | Disabled | Disabled |
+| `SHADOW` (기본값) | 모든 병원 | 사용 안 함 |
+| `CANARY` | 허용 목록 밖의 병원 | 허용 목록 병원만 사용 |
+| `ACTIVE` | 사용 안 함 | 모든 병원 |
+| `PAUSED` | 사용 안 함 | 사용 안 함 |
 
-Every route must conditionally claim the same database row before invoking a
-provider. `PAUSED` stops provider calls but keeps enqueue, recovery, and
-retention active. Production canary activation is intentionally tracked outside
-the code-transition PR; see the operations runbook before changing the mode.
+어느 경로든 provider를 호출하기 전에 같은 데이터베이스 행을 조건부 선점해야 합니다.
+`PAUSED`도 provider 호출만 멈추며 enqueue·복구·보존 처리는 유지합니다. 운영
+카나리 활성화는 코드 전환 PR과 분리되어 있으므로 모드를 바꾸기 전에 운영 런북의
+통과 기준을 확인합니다.
 
-## Privacy and Reliability Boundaries
+## 개인정보 및 신뢰성 경계
 
-- Contact details and consent remain owned by the member service and are
-  resolved immediately before sending.
-- Template parameters are sealed domain types, not arbitrary maps or stored
-  rendered text.
-- Runtime objects redact their string representation, and persisted failures use
-  stable codes instead of provider messages or stack traces.
-- Retry count, elapsed time, provider attempts per lease, lease duration, and
-  concurrency are validated as one bounded configuration.
-- Coroutine cancellation is propagated after one provider invocation and is
-  never converted into a provider failure.
+- 연락처와 동의 정보는 회원 서비스가 소유하며 발송 직전에 조회합니다.
+- 템플릿 매개변수는 임의의 map이나 저장된 렌더링 문자열이 아니라 제한된 도메인
+  타입입니다.
+- 실행 객체의 문자열 표현은 민감 정보를 가리고, 저장하는 실패 정보는 provider
+  메시지나 stack trace 대신 안정적인 코드만 사용합니다.
+- 재시도 횟수·총 경과 시간·lease당 provider 시도 횟수·lease 시간·동시성을
+  하나의 제한된 설정으로 함께 검증합니다.
+- 코루틴 취소는 provider를 한 번만 호출한 뒤 그대로 전파하며 provider 실패로
+  변환하지 않습니다.
 
-## Configuration Example
+## 설정 예시
 
 ```yaml
 clinic:
@@ -128,7 +125,7 @@ clinic:
     rollout:
       mode: SHADOW
       canary-scopes: []
-      # Deprecated rolling bridge; use the same clinic set when present.
+      # 구버전 node rolling 호환용 deprecated bridge이며 함께 쓰면 같은 clinic 집합이어야 합니다.
       canary-clinic-ids: []
     worker:
       enabled: true
@@ -152,12 +149,12 @@ clinic:
           provider-max-concurrency: 4
           bulkhead-max-concurrent-calls: 4
 
-`canary-scopes` is the authoritative `tenant-group-id`/`clinic-id` pair list for
-`CANARY`; the clinic-only property is a deprecated bridge for old nodes and must
-have the same clinic set. Direct delivery claims and permits use the same pair,
-and `1:23` is intentionally different from `12:3`. During V21 rollout,
-`NotificationSchemaReadiness` requires Flyway V21, the event-log tenant column,
-and the tenant-leading direct lookup index before background traffic starts.
+`canary-scopes`가 `CANARY`의 권위 있는 `tenant-group-id`/`clinic-id` 쌍 목록입니다.
+clinic만 담는 속성은 구버전 node용 deprecated bridge이며 함께 설정하면 clinic 집합이
+같아야 합니다. direct delivery의 claim과 permit도 같은 쌍을 사용하므로 `1:23`과
+`12:3`은 서로 다른 범위입니다. V21 rollout 동안 `NotificationSchemaReadiness`는
+background traffic을 시작하기 전에 Flyway V21, event-log tenant column, tenant 선행
+direct lookup index를 요구합니다.
           provider-timeout: 30s
           rate-limit-per-second: 100
           circuit-breaker-failure-rate-threshold: 50
@@ -183,47 +180,43 @@ and the tenant-leading direct lookup index before background traffic starts.
         max-concurrent-calls: 10
 ```
 
-The worker configuration is rejected at startup when a lease cannot cover the
-bounded in-process provider call or when worker concurrency exceeds database,
-member resolver, or provider capacity. A configured
-`channels.<lowercase-channel-type>.provider-timeout` overrides the global
-`worker.provider-timeout` for that channel; otherwise the global value applies.
-`provider-timeout` bounds the actual
-provider-call future; an overrun is cancelled and mapped to the stable
-`PROVIDER_UNAVAILABLE` failure. Provider adapters must also configure native
-connect/read/request timeouts no greater than this value; an SDK that ignores
-interrupts must terminate through its own timeout. A missing or invalid active crypto key reference
-makes notification readiness DOWN and blocks worker processing. Store only an
-external secret location in `secret-reference`, never key material.
+lease가 제한된 provider 호출 시간을 감당하지 못하거나 worker 동시성이
+데이터베이스·회원 조회·provider 용량을 초과하면 시작 단계에서 설정을
+거부합니다. `channels.<채널 유형 소문자>.provider-timeout`이 있으면 해당 채널에
+우선 적용하고, 없으면 `worker.provider-timeout`을 사용합니다. `provider-timeout`은
+실제 provider 호출 future의 상한이며, 초과한
+작업은 취소하고 안정적인 `PROVIDER_UNAVAILABLE` 실패로 처리합니다. provider
+adapter 자체의 connect/read/request timeout도 이 값 이하로 설정해야 하며, interrupt를
+무시하는 SDK는 adapter의 자체 timeout으로 종료해야 합니다. active crypto
+key reference가 없거나 유효하지 않으면 알림 readiness가 DOWN이 되고 worker 처리를
+차단합니다. `secret-reference`에는 key material이 아니라 외부 secret 위치만 둡니다.
 
-## Dependencies
+## 의존성
 
-- **Internal**: `appointment-core`, `appointment-event`
-- **External**: Exposed JDBC, Resilience4j, Lettuce, and `bluetape4k-leader`
+- **내부**: `appointment-core`, `appointment-event`
+- **외부**: Exposed JDBC, Resilience4j, Lettuce, `bluetape4k-leader`
 
-## Tests
+## 테스트 실행
 
 ```bash
 ./gradlew :appointment-notification:test
 ```
 
-## Design Documents
+## 설계 문서
 
-- [Durable Notification Outbox Design](../docs/superpowers/specs/2026-07-31-issue-172-notification-outbox-design.md)
-- [Implementation Plan](../docs/superpowers/plans/2026-07-31-issue-172-notification-outbox-plan.md)
-- [Operations Runbook](../docs/runbooks/notification-outbox-operations.md)
-- [Notification Data Flow](../docs/requirements/data-flow.md#5-알림-outbox-발송-흐름)
+- [내구성 알림 outbox 설계](../docs/superpowers/specs/2026-07-31-issue-172-notification-outbox-design.md)
+- [구현 계획](../docs/superpowers/plans/2026-07-31-issue-172-notification-outbox-plan.md)
+- [운영 런북](../docs/runbooks/notification-outbox-operations.md)
+- [알림 데이터 흐름](../docs/requirements/data-flow.md#5-알림-outbox-발송-흐름)
 
 ## Waitlist offer notification
 
-Waitlist offer delivery uses the same durable notification lifecycle as other
-channels. The worker claims a bounded row, resolves the current member profile,
-performs a final offer-expiry CAS immediately before provider I/O, and records
-the result with another fenced update. Provider latency is never held inside an
-appointment transaction. An expired or terminal offer is suppressed; an unknown
-provider result is manual-review state and never accepts or revives an offer.
+waitlist offer 전달은 기존 durable notification lifecycle을 재사용합니다. worker가 제한된
+row를 claim하고 현재 회원 profile을 조회한 뒤 provider I/O 직전에 offer expiry CAS를 마지막으로
+확인하고 fenced update로 결과를 기록합니다. provider latency를 appointment transaction 안에
+가두지 않습니다. 만료·terminal offer는 suppression하고, provider 결과를 알 수 없으면
+manual-review 상태로 남기며 offer를 accept하거나 되살리지 않습니다.
 
-Rollout is controlled by `appointment.waitlist.delivery.enabled` and the optional
-`clinic-allowlist`. The default is global-off, while expiry, suppression, and
-stuck-hold recovery remain active. See the [waitlist delivery API and operations
-contract](../docs/api/waitlist-delivery.md).
+rollout은 `appointment.waitlist.delivery.enabled`와 선택적인 `clinic-allowlist`로 제어합니다.
+기본값은 global-off이지만 expiry, suppression, stuck-hold recovery는 계속 실행됩니다.
+[waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)을 참고하세요.

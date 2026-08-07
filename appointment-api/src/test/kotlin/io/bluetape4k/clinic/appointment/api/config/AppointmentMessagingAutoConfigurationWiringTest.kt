@@ -13,7 +13,7 @@ import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitializat
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import java.util.function.Supplier
 
-/** API wiring must use the messaging auto-configured writer and retain database-init ordering. */
+/** API 연결은 메시징 자동 구성 writer를 사용하고 데이터베이스 초기화 순서를 유지해야 한다. */
 internal class AppointmentMessagingAutoConfigurationWiringTest {
 
     private val contextRunner = ApplicationContextRunner()

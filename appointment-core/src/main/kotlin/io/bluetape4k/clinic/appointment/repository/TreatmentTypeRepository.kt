@@ -35,7 +35,7 @@ class TreatmentTypeRepository : LongJdbcRepository<TreatmentTypeRecord> {
     override fun ResultRow.toEntity(): TreatmentTypeRecord = toTreatmentTypeRecord()
 
     /**
-     * Finds a treatment type by ID only when the owning clinic belongs to [tenantGroupId].
+     * 소유 clinic이 [tenantGroupId]에 속할 때만 ID로 진료 유형을 조회합니다.
      */
     fun findByIdAndTenant(treatmentTypeId: Long, tenantGroupId: Long): TreatmentTypeRecord? =
         TreatmentTypes

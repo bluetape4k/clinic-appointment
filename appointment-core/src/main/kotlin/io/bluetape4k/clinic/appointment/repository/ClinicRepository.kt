@@ -39,7 +39,7 @@ class ClinicRepository : LongJdbcRepository<ClinicRecord> {
     override fun ResultRow.toEntity(): ClinicRecord = toClinicRecord()
 
     /**
-     * Finds a clinic only when it belongs to [tenantGroupId].
+     * [tenantGroupId]에 속한 clinic만 조회합니다.
      */
     fun findByIdAndTenant(clinicId: Long, tenantGroupId: Long): ClinicRecord? =
         Clinics

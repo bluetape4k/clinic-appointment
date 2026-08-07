@@ -1,22 +1,21 @@
-# Dependencies 1.2.0 Sync
+# Dependencies 1.2.0 동기화
 
-## Context
+## 배경
 
-`bluetape4k-dependencies:1.2.0` was published after the final upstream BOM
-matrix became Maven Central-visible.
+최종 upstream BOM matrix가 Maven Central에서 확인 가능해진 뒤
+`bluetape4k-dependencies:1.2.0`이 게시되었습니다.
 
-## Decision
+## 결정
 
-Move the clinic appointment shared catalog from `1.1.4` to `1.2.0`.
+clinic appointment 공유 catalog를 `1.1.4`에서 `1.2.0`으로 올립니다.
 
-## Outcome
+## 결과
 
-The example app now consumes the published 1.2.0 dependency-governance baseline.
+예제 앱은 이제 게시된 1.2.0 dependency-governance 기준을 사용합니다.
 
-## Verification
+## 검증
 
-- `sync-shared-versions.py --workspace .. --write --check --summary` updated
-  the catalog line.
-- Maven Central returned HTTP 200 for
-  `io.github.bluetape4k:bluetape4k-dependencies:1.2.0`.
-
+- `sync-shared-versions.py --workspace .. --write --check --summary`가 catalog
+  라인을 갱신했습니다.
+- Maven Central이 `io.github.bluetape4k:bluetape4k-dependencies:1.2.0`에 대해
+  HTTP 200을 반환했습니다.

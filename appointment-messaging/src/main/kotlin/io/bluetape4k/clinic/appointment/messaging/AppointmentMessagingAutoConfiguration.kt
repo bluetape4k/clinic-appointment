@@ -211,8 +211,8 @@ class AppointmentMessagingAutoConfiguration {
         codec: AppointmentEventEnvelopeCodec,
         startupValidator: ObjectProvider<AppointmentMessagingStartupValidator>,
     ): AppointmentOutboxWriter {
-        // The prerequisite is resolved before constructing the writer. A schema or
-        // serializer contract failure therefore aborts startup without exposing a writer bean.
+        // prerequisite를 writer 생성 전에 확인합니다. 따라서 schema 또는 serializer 계약이
+        // 실패하면 writer bean을 노출하지 않고 startup을 중단합니다.
         startupValidator.getIfAvailable()?.afterSingletonsInstantiated()
         return DefaultAppointmentOutboxWriter(
             codec = codec,

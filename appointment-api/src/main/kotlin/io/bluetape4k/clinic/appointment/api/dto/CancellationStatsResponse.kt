@@ -5,14 +5,14 @@ import java.io.Serializable
 import java.time.LocalDate
 
 /**
- * Response for GET /api/{tenantCode}/admin/stats/cancellations.
+ * GET /api/{tenantCode}/admin/stats/cancellations 응답입니다.
  *
- * ## Behavior / Contract
- * - Denominator for rate calculations: CANCELLED + COMPLETED + NO_SHOW + RESCHEDULED (terminal statuses only).
- *   In-progress statuses (REQUESTED, CONFIRMED, etc.) are excluded to avoid noise.
- * - [cancellationRate] = CANCELLED / denominator; 0.0 when denominator is 0.
- * - [noShowRate] = NO_SHOW / denominator; 0.0 when denominator is 0.
- * - [daily] contains one entry per date that has at least one tracked appointment.
+ * ## 동작 / 계약
+ * - 비율 계산의 분모는 CANCELLED + COMPLETED + NO_SHOW + RESCHEDULED입니다(종결 상태만 포함).
+ *   진행 중인 상태(REQUESTED, CONFIRMED 등)는 잡음을 줄이기 위해 제외합니다.
+ * - [cancellationRate] = CANCELLED / 분모이며, 분모가 0이면 0.0입니다.
+ * - [noShowRate] = NO_SHOW / 분모이며, 분모가 0이면 0.0입니다.
+ * - [daily]에는 추적한 예약이 하나 이상 있는 날짜마다 항목 하나를 포함합니다.
  */
 @Schema(description = "Cancellation and no-show trends for the given clinic and date range")
 data class CancellationStatsResponse(
@@ -43,11 +43,11 @@ data class CancellationStatsResponse(
 }
 
 /**
- * Per-day counts of terminal-status appointments.
+ * 종결 상태 예약의 일일 건수입니다.
  *
- * ## Behavior / Contract
- * - COMPLETED is not tracked here; this bucket focuses on negative outcomes.
- * - A date appears only if at least one of [cancelled], [noShow], or [rescheduled] is > 0.
+ * ## 동작 / 계약
+ * - COMPLETED는 여기서 추적하지 않으며, 이 bucket은 부정적인 결과에 초점을 둡니다.
+ * - [cancelled], [noShow], [rescheduled] 중 하나 이상이 0보다 큰 날짜만 나타납니다.
  */
 @Schema(description = "Daily cancellation, no-show, and rescheduled counts")
 data class DailyCancellationBucket(

@@ -53,27 +53,27 @@ class SlotCalculationService(
      */
     fun findAvailableSlots(query: SlotQuery): List<AvailableSlot> =
         transaction {
-            // 1. Load Clinic
+            // 1. Clinic 조회
             val clinic = clinicRepository.findByIdAndTenant(query.scope.clinicId, query.scope.tenantGroupId)
                 ?: return@transaction emptyList()
 
-            // 1-1. Check if date is a national holiday
+            // 1-1. 해당 날짜가 공휴일인지 확인
             if (!clinic.openOnHolidays && holidayRepository.existsByDate(query.scope, query.date)) {
                 return@transaction emptyList()
             }
 
-            // 2. Check ClinicClosures for full-day closure
+            // 2. 종일 휴진 여부를 위해 ClinicClosures 조회
             val closures = clinicRepository.findClosures(query.scope, query.date)
             if (closures.any { it.isFullDay }) {
                 return@transaction emptyList()
             }
 
-            // 3. Get OperatingHours for clinic + dayOfWeek
+            // 3. clinic + dayOfWeek의 OperatingHours 조회
             val dayOfWeek = query.date.dayOfWeek
             val opHours = clinicRepository.findOperatingHours(query.scope, dayOfWeek)
                 ?: return@transaction emptyList()
 
-            // 4. Get BreakTimes for clinic + dayOfWeek
+            // 4. clinic + dayOfWeek의 BreakTimes 조회
             val dayBreakRanges = clinicRepository.findBreakTimes(query.scope, dayOfWeek)
                 .map { TimeRange(it.startTime, it.endTime) }
 
@@ -83,7 +83,7 @@ class SlotCalculationService(
 
             val breakTimeRanges = dayBreakRanges + defaultBreakRanges
 
-            // 5. Get partial closures (isFullDay=false)
+            // 5. 부분 휴진 조회(isFullDay=false)
             val partialClosureRanges = closures
                 .filter { !it.isFullDay }
                 .mapNotNull { closure ->
@@ -92,11 +92,11 @@ class SlotCalculationService(
                     if (start != null && end != null) TimeRange(start, end) else null
                 }
 
-            // 6. Get DoctorSchedule
+            // 6. DoctorSchedule 조회
             val doctorSchedule = doctorRepository.findSchedule(query.scope, query.doctorId, dayOfWeek)
                 ?: return@transaction emptyList()
 
-            // 7. Get DoctorAbsences
+            // 7. DoctorAbsences 조회
             val absences = doctorRepository.findAbsences(query.scope, query.doctorId, query.date)
             if (absences.any { it.startTime == null }) {
                 return@transaction emptyList()
@@ -107,7 +107,7 @@ class SlotCalculationService(
                 if (start != null && end != null) TimeRange(start, end) else null
             }
 
-            // 8. Compute effective ranges
+            // 8. 유효 시간 범위 계산
             val effectiveRanges = computeEffectiveRanges(
                 clinicOpen = opHours.openTime,
                 clinicClose = opHours.closeTime,
@@ -119,25 +119,25 @@ class SlotCalculationService(
             )
             if (effectiveRanges.isEmpty()) return@transaction emptyList()
 
-            // 9. Get TreatmentType
+            // 9. TreatmentType 조회
             val treatment = treatmentTypeRepository.findByIdAndScope(query.treatmentTypeId, query.scope)
                 ?: return@transaction emptyList()
 
             val duration = query.requestedDurationMinutes ?: treatment.defaultDurationMinutes
 
-            // 9-1. Load doctor and validate provider type
+            // 9-1. 의사를 조회하고 provider type 검증
             val doctor = doctorRepository.findByIdAndScope(query.doctorId, query.scope)
                 ?: return@transaction emptyList()
             if (doctor.providerType != treatment.requiredProviderType) {
                 return@transaction emptyList()
             }
 
-            // 12. Resolve maxConcurrent
+            // 12. maxConcurrent 해석
             val maxConcurrent = resolveMaxConcurrent(
                 clinic.maxConcurrentPatients, doctor.maxConcurrentPatients, treatment.maxConcurrentPatients
             )
 
-            // 10. Generate slot candidates from effective ranges at slotDurationMinutes intervals
+            // 10. 유효 시간 범위에서 slotDurationMinutes 간격으로 slot 후보 생성
             val slotCandidates = mutableListOf<TimeRange>()
             for (range in effectiveRanges) {
                 var current = range.start
@@ -149,7 +149,7 @@ class SlotCalculationService(
                 }
             }
 
-            // 14. If treatment requires equipment, load required equipment IDs and quantities
+            // 14. 진료에 장비가 필요하면 필요한 장비 ID와 수량 조회
             val requiredEquipment = if (treatment.requiresEquipment) {
                 treatmentTypeRepository.findRequiredEquipmentIds(query.treatmentTypeId, query.scope)
             } else emptyList()
@@ -164,15 +164,15 @@ class SlotCalculationService(
                         .values.flatten()
                 } else emptyList()
 
-            // Process each candidate slot
+            // 각 slot 후보 처리
             val availableSlots = mutableListOf<AvailableSlot>()
             for (candidate in slotCandidates) {
-                // 11. Count existing appointments that overlap
+                // 11. 겹치는 기존 예약 건수 계산
                 val overlappingCount = appointmentRepository.countOverlapping(
                     query.scope, query.doctorId, query.date, candidate.start, candidate.end
                 )
 
-                // 13. Filter slots where existing count < maxConcurrent
+                // 13. 기존 건수가 maxConcurrent보다 작은 slot만 필터링
                 if (overlappingCount >= maxConcurrent) continue
 
                 // 장비 사용불가 시간과 겹치는 슬롯 제외
@@ -181,7 +181,7 @@ class SlotCalculationService(
                 }
                 if (blockedByEquipment) continue
 
-                // 14-15. Check equipment availability
+                // 14-15. 장비 가용성 확인
                 val availableEquipmentIds = if (treatment.requiresEquipment && requiredEquipment.isNotEmpty()) {
                     val available = mutableListOf<Long>()
                     for (eqId in requiredEquipment) {

@@ -18,7 +18,7 @@ class AppointmentStateMachineTest {
     private val stateMachine = AppointmentStateMachine()
 
     // ========================================
-    // Valid transitions
+// 유효한 transition
     // ========================================
 
     @Test
@@ -78,7 +78,7 @@ class AppointmentStateMachineTest {
     }
 
     // ========================================
-    // Cancel transitions
+// cancel transition 검증
     // ========================================
 
     @Test
@@ -106,7 +106,7 @@ class AppointmentStateMachineTest {
     }
 
     // ========================================
-    // Reschedule transition
+// reschedule transition 검증
     // ========================================
 
     @Test
@@ -116,7 +116,7 @@ class AppointmentStateMachineTest {
     }
 
     // ========================================
-    // Invalid transitions
+// 유효하지 않은 transition
     // ========================================
 
     @Test
@@ -155,7 +155,7 @@ class AppointmentStateMachineTest {
     }
 
     // ========================================
-    // canTransition
+// canTransition 검증
     // ========================================
 
     @Test
@@ -175,7 +175,7 @@ class AppointmentStateMachineTest {
     }
 
     // ========================================
-    // allowedEvents
+// allowedEvents 검증
     // ========================================
 
     @Test
@@ -209,7 +209,7 @@ class AppointmentStateMachineTest {
     }
 
     // ========================================
-    // onTransition callback
+// onTransition callback 검증
     // ========================================
 
     @Test

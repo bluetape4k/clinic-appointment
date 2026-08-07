@@ -177,7 +177,7 @@ class EquipmentUnavailabilityController(
      * @param clinicId 병원 ID
      * @param equipmentId 장비 ID
      * @param id 사용불가 스케줄 ID
-     * @return 204 No Content
+     * @return 204 No Content를 반환합니다.
      */
     @Operation(summary = "Delete equipment unavailability schedule")
     @ApiResponses(
@@ -255,7 +255,7 @@ class EquipmentUnavailabilityController(
      * @param equipmentId 장비 ID
      * @param id 사용불가 스케줄 ID
      * @param exId 예외 ID
-     * @return 204 No Content
+     * @return 204 No Content를 반환합니다.
      */
     @Operation(summary = "Delete unavailability exception")
     @ApiResponses(

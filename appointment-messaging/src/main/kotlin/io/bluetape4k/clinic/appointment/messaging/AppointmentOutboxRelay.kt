@@ -180,11 +180,11 @@ class AppointmentOutboxRelay internal constructor(
                 }
                 consecutiveBrokerFailures = 0
             } catch (_: InterruptedException) {
-                // Cancellation must leave the lease for expiry/reclaim; do not write a terminal state.
+                // cancellation 시 lease는 만료/reclaim을 위해 남겨야 하므로 terminal state를 쓰지 않습니다.
                 Thread.currentThread().interrupt()
                 break
             } catch (_: CancellationException) {
-                // A cancelled future has the same lease-recovery contract as an interrupted relay.
+                // 취소된 future도 중단된 relay와 동일한 lease recovery 계약을 따릅니다.
                 throw CancellationException("appointment outbox publish was cancelled")
             } catch (ex: Exception) {
                 val failureCode = publishFailureCode(ex)

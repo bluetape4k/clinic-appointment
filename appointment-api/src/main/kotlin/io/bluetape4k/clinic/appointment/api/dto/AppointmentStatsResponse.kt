@@ -5,12 +5,12 @@ import java.io.Serializable
 import java.time.LocalDate
 
 /**
- * Response for GET /api/{tenantCode}/admin/stats/appointments.
+ * GET /api/{tenantCode}/admin/stats/appointments 응답입니다.
  *
- * ## Behavior / Contract
- * - [daily] is ordered by date ascending.
- * - [totals] keys are [AppointmentState][io.bluetape4k.clinic.appointment.statemachine.AppointmentState] names.
- * - When no appointments exist for the period, [daily] is empty and all [totals] values are 0.
+ * ## 동작 / 계약
+ * - [daily]는 날짜 오름차순입니다.
+ * - [totals]의 키는 [AppointmentState][io.bluetape4k.clinic.appointment.statemachine.AppointmentState] 이름입니다.
+ * - 해당 기간에 예약이 없으면 [daily]는 비어 있고 [totals]의 모든 값은 0입니다.
  */
 @Schema(description = "Daily appointment counts grouped by status for the given clinic and date range")
 data class AppointmentStatsResponse(
@@ -31,11 +31,11 @@ data class AppointmentStatsResponse(
 }
 
 /**
- * Per-day appointment counts broken down by status.
+ * 상태별 일일 예약 건수입니다.
  *
- * ## Behavior / Contract
- * - [countsByStatus] contains only statuses that have count > 0 for this date.
- * - [total] equals the sum of all values in [countsByStatus].
+ * ## 동작 / 계약
+ * - [countsByStatus]에는 해당 날짜에 건수가 0보다 큰 상태만 포함합니다.
+ * - [total]은 [countsByStatus]의 모든 값의 합과 같습니다.
  */
 @Schema(description = "Appointment counts for a single day, broken down by status")
 data class DailyAppointmentBucket(

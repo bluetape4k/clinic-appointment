@@ -1,4 +1,4 @@
-# Issue #94 — OpenAPI Annotations
+# Issue #94 — OpenAPI 어노테이션
 
 ## 날짜: 2026-05-18
 
@@ -8,7 +8,7 @@
 
 ## 주요 교훈
 
-### 1. Import 충돌 해결
+### 1. import 충돌 해결
 
 프로젝트에 이미 `io.bluetape4k.clinic.appointment.api.dto.ApiResponse`가 존재하므로
 Swagger의 `io.swagger.v3.oas.annotations.responses.ApiResponse`를 `OApiResponse`로
@@ -25,7 +25,7 @@ fun method(...)
 
 기존 KDoc은 유지. `@Tag`는 클래스 레벨에서 `@RestController` 위에 배치.
 
-### 3. @Parameter 선별적 적용
+### 3. `@Parameter` 선별 적용
 
-모든 파라미터에 `@Parameter`를 붙이면 noise. 날짜(ISO format), searchDays, 
-optional reason 등 의미가 불분명한 것에만 적용.
+모든 파라미터에 `@Parameter`를 붙이면 불필요한 잡음이 생깁니다. 날짜(ISO format),
+`searchDays`, 선택적 `reason`처럼 의미가 불분명한 항목에만 적용합니다.

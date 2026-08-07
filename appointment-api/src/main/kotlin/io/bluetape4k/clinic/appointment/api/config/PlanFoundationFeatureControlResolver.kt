@@ -1,11 +1,11 @@
 package io.bluetape4k.clinic.appointment.api.config
 
 /**
- * Resolves the effective Foundation controls for one tenant/clinic scope.
+ * 하나의 tenant/clinic scope에 적용할 Foundation 제어값을 해석합니다.
  *
- * Global values are fail-safe defaults. An exact tenant/clinic override can
- * change only that scope, so canary activation and rollback do not widen the
- * blast radius to every clinic in the process.
+ * 전역 값은 fail-safe 기본값입니다. 정확히 일치하는 tenant/clinic override는
+ * 해당 scope만 변경하므로 canary 활성화와 rollback이 프로세스의 모든 clinic으로
+ * 영향 범위를 넓히지 않습니다.
  */
 class PlanFoundationFeatureControlResolver(
     private val properties: PlanFoundationProperties,

@@ -24,7 +24,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
-/** H2 fixture with two clinics in one tenant and one clinic in another tenant. */
+/** 하나의 tenant에 clinic 두 개와 다른 tenant에 clinic 하나를 둔 H2 fixture. */
 internal object AppointmentOutboxWriterScopeTestSupport {
     const val TENANT_ONE = 1L
     const val TENANT_TWO = 2L

@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 import kotlin.system.measureNanoTime
 
-/** Deterministic, payload-free backlog fixture for bounded query/claim contracts. */
+/** 범위가 제한된 query/claim 계약을 위한 결정적 payload-free backlog fixture. */
 internal object AppointmentOutboxPerformanceTestSupport {
     const val SEED = 41
     const val ROW_COUNT = 20_000
@@ -189,9 +189,9 @@ internal object AppointmentOutboxPerformanceTestSupport {
     }
 
     /**
-     * Runs the production Exposed claim path against the fixed mixed backlog. The profile is
-     * intentionally short enough for a unit-test lane; deployment SLO evidence remains a
-     * separate PostgreSQL/MySQL/Kafka rollout gate.
+     * 고정된 혼합 backlog에 운영 Exposed claim 경로를 실행한다. 이 profile은 unit-test
+     * lane에서 충분히 짧게 유지하며, 배포 SLO 증거는 별도의 PostgreSQL/MySQL/Kafka rollout
+     * gate로 남긴다.
      */
     fun benchmarkClaim(
         connection: Connection,
@@ -235,7 +235,7 @@ internal object AppointmentOutboxPerformanceTestSupport {
         )
     }
 
-    /** Writes only bounded benchmark metadata; payload JSON and identifiers are never persisted. */
+    /** 범위가 제한된 benchmark 메타데이터만 기록하며 payload JSON과 식별자는 저장하지 않는다. */
     fun writeBenchmarkReport(
         benchmark: BoundedPageBenchmark,
         path: Path = Paths.get("build/reports/appointment-messaging/benchmark.json"),

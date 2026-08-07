@@ -16,9 +16,8 @@ import javax.sql.DataSource
 import kotlin.system.measureTimeMillis
 
 /**
- * Verifies that the production PostgreSQL/MySQL schemas can use the named
- * appointment-plan read indexes for the hot purchase, dependency, inbox, and
- * outbox access paths.
+ * 운영 PostgreSQL/MySQL 스키마가 이름이 지정된 appointment-plan 읽기 인덱스를
+ * 구매, dependency, inbox, outbox의 주요 접근 경로에 사용할 수 있는지 검증한다.
  */
 class AppointmentPlanReadExplainIntegrationTest @Autowired constructor(
     private val dataSource: DataSource,

@@ -4,8 +4,8 @@ import java.io.Serializable
 import java.time.Instant
 
 /**
- * Bounded proof that a producer-authoritative aggregate version is current for
- * one exact tenant, clinic, producer, and source authority.
+ * 정확히 하나의 tenant, clinic, producer, source authority에 대해 producer가
+ * 권위를 가진 aggregate version이 최신임을 증명하는 제한된 기록입니다.
  */
 data class SourceAuthorityVersionProof(
     val tenantGroupId: Long,

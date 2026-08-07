@@ -59,8 +59,8 @@ class TenantGuardRepositoryTest : AbstractExposedTest() {
         withTables(testDB, *allTables) {
             val tenantRows = setupTenantRows()
 
-            // A corrupt cross-clinic link must not turn another tenant's equipment
-            // into a solver fact for the requested scope.
+// 손상된 cross-clinic link가 다른 tenant의 equipment를 요청한 scope의
+// solver fact로 바꾸어서는 안 된다.
             TreatmentEquipments.insert {
                 it[TreatmentEquipments.treatmentTypeId] = tenantRows.tenantA.treatmentTypeId
                 it[TreatmentEquipments.equipmentId] = tenantRows.tenantB.equipmentId

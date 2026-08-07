@@ -1,7 +1,7 @@
 package io.bluetape4k.clinic.appointment.event.integration
 
 /**
- * Normalizes the current and immediately previous purchase schemas.
+ * 현재 구매 스키마와 바로 이전 구매 스키마를 정규화합니다.
  */
 class PurchaseCompletedEventAdapter(
     private val currentSchemaVersion: Int = CURRENT_SCHEMA_VERSION,

@@ -56,8 +56,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Runs through the API module's H2/PostgreSQL/MySQL database matrix without
- * creating containers independently from the shared singleton launchers.
+ * API 모듈의 H2/PostgreSQL/MySQL 데이터베이스 매트릭스를 실행하되,
+ * 공유 singleton launcher와 별도로 컨테이너를 생성하지 않는다.
  */
 class PurchaseCompletedDialectIntegrationTest : AbstractApiIntegrationTest() {
 

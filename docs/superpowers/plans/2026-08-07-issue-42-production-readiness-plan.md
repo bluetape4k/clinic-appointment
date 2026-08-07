@@ -1,6 +1,6 @@
-# Issue #42 production readiness follow-up 구현 계획
+# 이슈 #42 production readiness follow-up 구현 계획
 
-> **Execution contract:** 이 계획은 승인된 Type-A 후속 범위를 실행한다. 각 단계는
+> **실행 계약:** 이 계획은 승인된 Type-A 후속 범위를 실행한다. 각 단계에서
 > 먼저 실패하는 테스트/검증을 만들고, 영향을 받은 모듈을 순차적으로 검증한다.
 
 ## 목표
@@ -21,113 +21,122 @@ Issue #42 구현에 최소 diff로 연결한다.
 | retention | `AppointmentConsumerInboxStore*`, V23 index/migration tests, scheduled service | bounded cleanup and lock evidence |
 | benchmark/docs | `benchmark/appointment-messaging-benchmark`, `docs/benchmarks`, `docs/images/readme-charts`, `appointment-messaging/README*`, runbook | PostgreSQL chart and production verification notes |
 
-## Ordered tasks
+## 작업 순서
 
-### Task 1 — Document and review the approved contract
+### 작업 1 — 승인된 계약 문서화 및 검토
 
-- [x] Write this design and plan in Korean, preserving English only for code/API/URLs.
-- [x] Run six perspective review (performance, stability, security, operator, developer,
-      caller) and integrate findings. P0/P1 must be zero before implementation.
-- [x] Commit spec/plan with Lore trailers before source edits.
+- [x] code/API/URL만 영문으로 보존하면서 이 design과 plan을 한국어로 작성한다.
+- [x] 여섯 관점(performance, stability, security, operator, developer, caller) review를
+      실행하고 finding을 통합한다. 구현 전에 P0/P1을 0으로 만든다.
+- [x] source를 편집하기 전에 Lore trailer가 있는 spec/plan을 commit한다.
 
-Commands: `git diff --check -- docs/superpowers/specs docs/superpowers/plans`.
+명령: `git diff --check -- docs/superpowers/specs docs/superpowers/plans`.
 
-### Task 2 — Prove MySQL V23 migration readiness
+### 작업 2 — MySQL V23 migration readiness 증명
 
-- [x] Add a shared V23 contract assertion for table columns, primary keys, and indexes.
-- [x] Call it from Flyway H2, MySQL, and PostgreSQL tests; use `MySQLServer.Launcher` and
-      `PostgreSQLServer.Launcher` singleton fixtures only.
-- [x] Add a production verification command/runbook section that accepts externally supplied
-      JDBC endpoint without committing credentials; record production execution as PENDING
-      when no endpoint is available.
-- [x] Verify readiness schema/catalog lookup against MySQL metadata without renaming
-      `scheduling_*` tables.
+- [x] table column, primary key, index를 검증하는 공용 V23 contract assertion을 추가한다.
+- [x] Flyway H2, MySQL, PostgreSQL test에서 이를 호출한다. `MySQLServer.Launcher`와
+      `PostgreSQLServer.Launcher` singleton fixture만 사용한다.
+- [x] credential를 commit하지 않고 외부에서 제공한 JDBC endpoint를 받는 production
+      verification command/runbook section을 추가한다. endpoint가 없으면 production
+      실행을 PENDING으로 기록한다.
+- [x] `scheduling_*` table 이름을 바꾸지 않고 MySQL metadata에서 readiness
+      schema/catalog lookup을 검증한다.
 
-Targeted checks: `:appointment-api:test --tests '*FlywayMySQLMigrationTest*'`,
+대상 검증: `:appointment-api:test --tests '*FlywayMySQLMigrationTest*'`,
 `:appointment-api:test --tests '*AppointmentConsumerMigrationContractTest*'`.
 
-### Task 3 — Wire Schema Registry endpoint and credentials
+### 작업 3 — Schema Registry endpoint와 credential 연결
 
-- [x] Add immutable binding/properties and a credential resolver port; default remains static
-      local validation when registry is disabled.
-- [x] Extend the JDK compatibility reader with bounded URI validation, endpoint path encoding,
-      HTTPS/loopback policy, and Basic `Authorization` injection without secret logging.
-- [x] Register conditional Spring beans in the correct auto-configuration phase and include
-      registry readiness in startup/readiness validation.
-- [x] Add tests for endpoint path, timeout, positive Basic auth, missing/invalid auth,
-      compatibility mismatch, disabled fallback, and no-secret diagnostics.
+- [x] immutable binding/properties와 credential resolver port를 추가한다. registry가
+      비활성화된 경우 기본 동작은 static local validation으로 유지한다.
+- [x] bounded URI validation, endpoint path encoding, HTTPS/loopback policy,
+      secret을 logging하지 않는 Basic `Authorization` injection을 JDK compatibility
+      reader에 추가한다.
+- [x] 올바른 auto-configuration phase에 conditional Spring bean을 등록하고 startup/
+      readiness validation에 registry readiness를 포함한다.
+- [x] endpoint path, timeout, positive Basic auth, missing/invalid auth,
+      compatibility mismatch, disabled fallback, no-secret diagnostic test를 추가한다.
 
-Targeted checks: `:appointment-messaging:test --tests '*AppointmentSchemaRegistry*'`
-and `:appointment-messaging:test --tests '*AppointmentMessagingAutoConfigurationTest*'`.
+대상 검증: `:appointment-messaging:test --tests '*AppointmentSchemaRegistry*'` 및
+`:appointment-messaging:test --tests '*AppointmentMessagingAutoConfigurationTest*'`.
 
-### Task 4 — Verify actual Kafka 4 listener crash/rebalance
+### 작업 4 — 실제 Kafka 4 listener crash/rebalance 검증
 
-- [x] Add the runtime listener adapter that passes manual `Acknowledgment` to
-      `AppointmentConsumerRuntime` and never acknowledges before durable processing.
-- [x] Strengthen the `ConcurrentMessageListenerContainer` factory with explicit lifecycle,
-      group/topic allow-list, shutdown, and recovery assertions.
-- [x] Extend the singleton Kafka integration test: one handler throws before ack, a second
-      container joins the group, and the record is recovered exactly once after rebalance or
-      bounded retry. Assert committed offsets and quarantine metadata, not only in-memory calls.
+- [x] manual `Acknowledgment`를 `AppointmentConsumerRuntime`에 전달하고 durable
+      processing 전에 acknowledge하지 않는 runtime listener adapter를 추가한다.
+- [x] 명시적 lifecycle, group/topic allow-list, shutdown, recovery assertion으로
+      `ConcurrentMessageListenerContainer` factory를 강화한다.
+- [x] singleton Kafka integration test를 확장한다. 한 handler가 ack 전에 throw하고,
+      두 번째 container가 group에 합류하며, rebalance 또는 bounded retry 후 record가
+      정확히 한 번 복구되는지 확인한다. in-memory call만 보지 말고 committed offset과
+      quarantine metadata를 assertion한다.
 
-Targeted check: sequential `:appointment-messaging:test --tests '*AppointmentKafkaConsumerIntegrationTest*'`
-plus existing consumer configuration/runtime tests.
+대상 검증: sequential `:appointment-messaging:test --tests '*AppointmentKafkaConsumerIntegrationTest*'`
+및 기존 consumer configuration/runtime test.
 
-### Task 5 — Add metrics, lag/lock signals, retention, and SLO evidence
+### 작업 5 — metric·lag/lock signal·retention·SLO 증거 추가
 
-- [x] Add `AppointmentConsumerMetrics` with Noop and Micrometer implementations. Register
-      bounded counters/timers/gauges for outcome, retry/quarantine, lag/oldest age, inbox
-      transaction latency, replay, and cleanup.
-- [x] Instrument runtime, inbox store, replay service, and health details without high-cardinality
-      tenant/event/payload labels.
-- [x] Add bounded retention service/configuration for processed/quarantined inbox and replay
-      audit rows; protect active `PROCESSING` rows and expose cleanup result metrics.
-- [x] Extend the existing PostgreSQL `kotlinx-benchmark` consumer suite with lock-contention
-      samples and a machine-readable SLO evidence report; do not claim deployment SLO from
-      benchmark values.
-- [x] Generate/update one source-backed chart (SVG→PNG) for duplicate/cleanup/lock latency and
-      inspect it full-size. Keep EN/KO README values source-equivalent.
+- [x] Noop과 Micrometer 구현을 포함한 `AppointmentConsumerMetrics`를 추가한다.
+      outcome, retry/quarantine, lag/oldest age, inbox transaction latency, replay,
+      cleanup에 대해 bounded counter/timer/gauge를 등록한다.
+- [x] high-cardinality tenant/event/payload label 없이 runtime, inbox store, replay
+      service, health detail을 계측한다.
+- [x] processed/quarantined inbox와 replay audit row를 위한 bounded retention
+      service/configuration을 추가한다. active `PROCESSING` row를 보호하고 cleanup
+      result metric을 노출한다.
+- [x] 기존 PostgreSQL `kotlinx-benchmark` consumer suite에 lock-contention sample과
+      machine-readable SLO evidence report를 추가한다. benchmark 값으로 deployment
+      SLO를 주장하지 않는다.
+- [x] duplicate/cleanup/lock latency를 나타내는 source-backed chart(SVG→PNG)를
+      하나 생성/갱신하고 full-size로 검사한다. EN/KO README 값은 source-equivalent로
+      유지한다.
 
-Targeted checks: `:appointment-messaging:test`,
+대상 검증: `:appointment-messaging:test`,
 `:appointment-messaging-benchmark:test`, `:appointment-messaging-benchmark:mainSmokeBenchmark`.
 
-### Task 6 — Implement production replay adapter and authorization
+### 작업 6 — production replay adapter와 authorization 구현
 
-- [x] Define `AppointmentReplayAuthorizer` and authenticated actor/tenant scope value objects;
-      reject blank actor, cross-tenant scope, invalid range, and missing approval before audit
-      or source calls.
-- [x] Implement bounded `KafkaAppointmentReplaySource` with dedicated group, poll timeout,
-      close-on-all-paths, and runtime dispatch; no operations group rewind.
-- [x] Keep the replay boundary as an application adapter port; no new public route is added
-      because this repository has no approved replay endpoint/claim mapping yet. Existing Spring
-      Security integration remains an explicit production wiring PENDING item.
-- [x] Add dry-run, approved execution, unauthorized, source failure, audit idempotency, and
-      retention tests; update Korean replay runbook with production prerequisites.
+- [x] `AppointmentReplayAuthorizer`와 인증된 actor/tenant scope value object를 정의한다.
+      audit 또는 source call 전에 blank actor, cross-tenant scope, invalid range,
+      missing approval을 거부한다.
+- [x] dedicated group, poll timeout, close-on-all-paths, runtime dispatch를 갖춘 bounded
+      `KafkaAppointmentReplaySource`를 구현한다. operations group rewind는 사용하지 않는다.
+- [x] replay 경계를 application adapter port로 유지한다. 아직 승인된 replay endpoint/
+      claim mapping이 없으므로 새 public route는 추가하지 않는다. 기존 Spring Security
+      integration은 명시적인 production wiring PENDING 항목으로 남긴다.
+- [x] dry-run, approved execution, unauthorized, source failure, audit idempotency,
+      retention test를 추가하고 production prerequisite를 한국어 replay runbook에
+      갱신한다.
 
-Targeted checks: `:appointment-messaging:test --tests '*AppointmentReplayServiceTest*'`,
+대상 검증: `:appointment-messaging:test --tests '*AppointmentReplayServiceTest*'`,
 `:appointment-api:test --tests '*Security*'` for touched adapter paths.
 
-### Task 7 — Type-A verification, PR, CI, and closeout
+### 작업 7 — Type-A 검증·PR·CI·종료
 
-- [x] Run verifier traceability against every requirement and mark approved non-goals/PENDING
-      production gaps explicitly.
-- [x] Run per-module six-lens code review and performance/stability scan; converge P0=0/P1=0.
-- [x] Run fresh targeted tests, affected module builds, `git diff --check`, and benchmark/report
-      contract tests. Record production endpoints/credentials as unchecked when unavailable.
-- [x] Record the full `:appointment-api:test` Context Mode timeout as a verification gap rather
-      than a code failure; retain targeted migration/projection evidence and do not claim the
-      complete API suite passed.
-- [ ] Create English issue-linked PR with aligned metadata and final `## DoD Status` section.
-- [ ] Recheck exact PR head, CI, review threads, and mergeability. Ask for fresh merge approval
-      tied to that exact head; after approval merge, sync local `develop`, remove worktree,
-      verify clean parity, and close the workflow receipt.
+- [x] 모든 requirement에 대해 verifier traceability를 실행하고 승인된 non-goal과
+      PENDING production gap을 명시적으로 표시한다.
+- [x] module별 여섯 관점 code review와 performance/stability scan을 실행하고
+      P0=0/P1=0으로 수렴한다.
+- [x] 새 targeted test, 영향받은 module build, `git diff --check`, benchmark/report
+      contract test를 실행한다. 사용할 수 없는 production endpoint/credential는
+      unchecked로 기록한다.
+- [x] 전체 `:appointment-api:test` Context Mode timeout을 code failure가 아니라
+      verification gap으로 기록한다. targeted migration/projection 증거를 보존하고
+      complete API suite가 통과했다고 주장하지 않는다.
+- [ ] metadata를 맞춘 issue-linked 영문 PR을 생성하고 마지막에 `## DoD Status`
+      섹션을 둔다.
+- [ ] 정확한 PR head, CI, review thread, mergeability를 다시 확인한다. 해당 head에
+      연결된 새 merge approval을 받은 뒤 merge하고 local `develop`을 sync하며,
+      worktree를 제거하고 clean parity를 검증한 다음 workflow receipt를 종료한다.
 
-## Rollback and risk controls
+## Rollback 및 위험 통제
 
-- No destructive database operation or production dispatch is performed by this branch.
-- Registry wiring is opt-in and fail-closed; disabling it preserves the existing static schema
-  contract for local/test environments.
-- Listener changes preserve manual ack and existing bounded recovery; if integration behavior
-  is unstable, keep the test-only lifecycle harness and mark production crash evidence PENDING.
-- Benchmark/chart artifacts are evidence, not SLO commitments; values and environment are
-  recorded in the JSON source.
+- 이 branch에서는 destructive database operation이나 production dispatch를 수행하지 않는다.
+- Registry wiring은 opt-in이며 fail-closed다. 비활성화하면 local/test environment의
+  기존 static schema contract를 보존한다.
+- Listener 변경은 manual ack와 기존 bounded recovery를 보존한다. integration 동작이
+  불안정하면 test-only lifecycle harness를 유지하고 production crash evidence를 PENDING으로
+  표시한다.
+- Benchmark/chart artifact는 증거이지 SLO commitment가 아니다. 값과 환경은 JSON
+  source에 기록한다.

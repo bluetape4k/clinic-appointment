@@ -5,7 +5,7 @@ import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
 /**
- * Coroutine context element that propagates [TenantContext] across dispatcher hops.
+ * dispatcher 전환 사이에서 [TenantContext]를 전파하는 coroutine context element입니다.
  */
 class TenantContextElement(
     private val tenantInfo: TenantInfo?,

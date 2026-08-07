@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration
  * OpenAPI / Swagger UI 설정.
  *
  * Swagger UI: http://localhost:8080/swagger-ui/index.html
- * API Docs:   http://localhost:8080/v3/api-docs
+ * API 문서:   http://localhost:8080/v3/api-docs
  */
 @Configuration(proxyBeanMethods = false)
 class OpenApiConfig {

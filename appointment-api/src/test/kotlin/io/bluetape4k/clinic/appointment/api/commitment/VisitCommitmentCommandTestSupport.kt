@@ -74,13 +74,11 @@ internal abstract class VisitCommitmentCommandTestSupport {
     fun setUpCommitmentCommandDatabase() {
         database = createDatabase()
         transaction(database) {
-            // PostgreSQL V22 intentionally uses a partial ready index whose column
-            // order differs from the portable Exposed metadata.  When a preceding
-            // Flyway integration test has already installed that table, asking
-            // SchemaUtils to reconcile the table would issue a duplicate CREATE
-            // INDEX.  Reuse the migrated table and let this fixture only create the
-            // remaining tables; a clean database still follows the normal Exposed
-            // bootstrap path.
+// PostgreSQL V22는 portable Exposed 메타데이터와 컬럼 순서가 다른 partial ready
+// index를 의도적으로 사용한다. 앞선 Flyway integration test가 해당 테이블을 이미
+// 설치했다면 SchemaUtils에 테이블 조정을 요청할 때 중복 CREATE INDEX가 발생한다.
+// 마이그레이션된 테이블을 재사용하고 이 fixture는 나머지 테이블만 생성한다.
+// 빈 데이터베이스에서는 여전히 일반 Exposed bootstrap 경로를 따른다.
             val tablesToCreate =
                 if (tableReadable(SchedulingOutboxEvents.tableName)) {
                     TABLES.filterNot { it == SchedulingOutboxEvents }.toTypedArray()

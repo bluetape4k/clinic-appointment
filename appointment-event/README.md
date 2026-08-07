@@ -1,85 +1,76 @@
 # appointment-event
 
-[English](README.md) | [한국어](README.ko.md)
+[한국어 본문](README.md) | [한국어 참고본](README.ko.md)
 
-Domain event publishing, subscription, and event-log persistence based on Spring `ApplicationEvent`.
+Spring `ApplicationEvent` 기반 도메인 이벤트 발행/구독 + 이벤트 로그 DB 저장.
 
-## Responsibilities
+## 책임
 
-- **Does**: defines domain event types, publishes events, persists event logs, and converges trusted purchase events into appointment plans.
-- **Does not**: send notifications or publish the appointment-plan outbox directly.
+- **하는 것**: 도메인 이벤트 타입 정의, 이벤트 발행, 이벤트 로그 저장, 신뢰된 구매 이벤트를 예약 플랜으로 수렴
+- **하지 않는 것**: 알림 직접 발송과 appointment-plan outbox 직접 발행
 
-## Purchase Event Convergence
+## 구매 이벤트 수렴
 
-`PurchaseCompletedIngress` verifies producer, signature, issuer, audience,
-payload hash, replay window, and bounded payload shape before protecting the
-patient reference. In `WRITE` mode, `PurchaseCompletedHandler` claims the inbox,
-creates the immutable plan, and inserts one pending `AppointmentPlanCreated`
-outbox row in the same transaction.
+`PurchaseCompletedIngress`는 환자 참조를 보호하기 전에 producer, signature, issuer,
+audience, payload hash, replay window, payload 제한을 검증합니다. `WRITE` 모드의
+`PurchaseCompletedHandler`는 동일 transaction에서 inbox를 선점하고, 불변 플랜을
+생성하고, 대기 상태의 `AppointmentPlanCreated` outbox 한 건을 기록합니다.
 
-Duplicate event IDs and source purchases converge. Aggregate-version gaps retry
-with bounded backoff and end in quarantine after attempt 5. `SHADOW` evaluates
-without writes. Production `WRITE` remains prohibited until an external
-transport deployment owns outbox publish, acknowledgement, retry/DLQ, and
-alerts. The visit commitment runbook defines a pre-production drill and the
-evidence required before that prohibition can be lifted; it does not authorize
-`WRITE` by itself.
+중복 event ID와 동일 구매는 하나로 수렴합니다. aggregate version gap은 제한된
+백오프로 재시도하고 5회째 격리됩니다. `SHADOW`는 쓰기 없이 평가합니다. outbox
+발행·ack·retry/DLQ·alert 책임을 가진 외부 전송 배포가 완성되기 전에는 운영
+`WRITE`를 허용하지 않습니다. 방문 확정 약속 런북은 이 금지를 해제하기 전에 필요한
+사전 운영 훈련과 증거를 정의할 뿐, 그 문서만으로 `WRITE`를 승인하지 않습니다.
 
 <a id="profile-reevaluation"></a>
-## Profile Change Reevaluation Event
+## 프로필 변경 재평가 이벤트
 
-`PatientSchedulingAssessmentChanged` is the only accepted profile-change
-schema. Its fields are `eventId`, `tenantGroupId`, `clinicId`,
-`patientReferenceFingerprint`, `profileRevision`, `materialChange`,
-`assessmentRef`, `assessmentHash`, and `occurredAt`. It does not carry the
-patient identifier, profile body, derived feature, score, explanation, or
-correction detail.
+프로필 변경에는 `PatientSchedulingAssessmentChanged` schema만 허용합니다. 필드는
+`eventId`, `tenantGroupId`, `clinicId`, `patientReferenceFingerprint`,
+`profileRevision`, `materialChange`, `assessmentRef`, `assessmentHash`,
+`occurredAt`입니다. 환자 식별자, 프로필 본문, 파생 특징, 점수, 설명, 보정 상세는
+담지 않습니다.
 
-`ProfileReevaluationEventService` verifies producer, signature, issuer,
-audience, payload hash, schema, replay window, fingerprint shape, and
-tenant/clinic membership before writing the inbox and latest-revision job in
-one transaction. Duplicate events converge, a non-material change ends at the
-inbox, and a newer revision makes older ready work stale. Untrusted input is
-stored only as a bounded encrypted quarantine envelope in a separate
-transaction.
+`ProfileReevaluationEventService`는 inbox와 최신 revision 작업을 한 transaction에
+기록하기 전에 producer, signature, issuer, audience, payload hash, schema,
+replay window, fingerprint 형식, tenant/clinic 소속을 검증합니다. 중복 이벤트는
+하나로 수렴하고 중요하지 않은 변경은 inbox 처리로 끝냅니다. 더 최신 revision이
+오면 이전 대기 작업은 stale이 됩니다. 신뢰할 수 없는 입력은 별도 transaction에서
+크기가 제한된 암호화 quarantine envelope로만 보존합니다.
 
-The event module emits work; it does not decide the reservation mutation.
-The API worker reevaluates `PROPOSED` and `HELD`, while `CONFIRMED` is always
-skipped. See the
-[workflow](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.html)
-and [operations runbook](../docs/runbooks/profile-reevaluation.md).
+event module은 작업을 만들 뿐 예약 변경을 판단하지 않습니다. API worker가
+`PROPOSED`와 `HELD`를 다시 평가하며 `CONFIRMED`는 항상 건너뜁니다. 자세한 흐름은
+[업무 흐름](../docs/superpowers/specs/2026-07-30-profile-change-reservation-reevaluation.ko.html)과
+[운영 런북](../docs/runbooks/profile-reevaluation.ko.md)을 참고합니다.
 
-## Booking Reliability Event Ingress
+## 예약 신뢰도 이벤트 ingress
 
-`BookingReliabilityEventIngress` accepts a strict typed schema for
-`NO_SHOW`/`CANCELLED` outcomes, verifies the trusted producer envelope, and
-quarantines malformed or untrusted input without copying profile data. The
-event carries only tenant/clinic/member scope, responsibility, source version,
-correlation, and a payload hash. The core evaluator decides eligibility; this
-module only validates and persists the fact.
+`BookingReliabilityEventIngress`는 `NO_SHOW`·`CANCELLED` 결과의 strict typed schema를 받고,
+신뢰된 producer envelope를 검증하며, 잘못되거나 신뢰할 수 없는 입력은 회원 프로필을 복제하지
+않고 quarantine합니다. 이벤트에는 tenant/clinic/member 범위, 책임, source version, correlation,
+payload hash만 담습니다. 자격 판단은 core evaluator의 책임이고 이 모듈은 사실을 검증·저장합니다.
 
-See the [reliability policy](../docs/booking-reliability-policy.md),
-[persistence ERD](../docs/images/readme-diagrams/booking-reliability-erd-01-en.png),
-and [event ingress API notes](../docs/api/booking-reliability.md).
+[예약 신뢰도 기준 문서](../docs/booking-reliability-policy.ko.md),
+[영속 ERD](../docs/images/readme-diagrams/booking-reliability-erd-01-ko.png),
+[event ingress API 메모](../docs/api/booking-reliability.md)를 참고하세요.
 
-## External Scheduling Facts
+## 외부 예약 사실
 
-The reservation service consumes facts without taking ownership of commerce or
-clinical fulfillment:
+예약서비스는 상품·구매·시술 이행의 소유권을 가져오지 않고 다음 사실만 수신합니다.
 
-- `VisitPlanningEventIngress` and `VisitPlanningEventHandler` validate an
-  immutable package execution BOM and create or revise only future plan work.
-- `ProductVersionMigrationHandler` applies an authority-approved product
-  version mapping while preserving completed treatment provenance.
-- `ProductVersionMigrationDeclinedHandler` preserves the current version and
-  records the customer-declined operational exception.
-- `TreatmentFulfillmentHandler` marks exact items completed or partially
-  fulfilled and dirties only blocking future dependants.
-- `ExternalFactEventConsumer` routes the closed event-type allowlist and
-  quarantines bounded, redacted failures. Product, purchase, consent, refund,
-  and fulfillment ownership remain in their source services.
+- `VisitPlanningEventIngress`와 `VisitPlanningEventHandler`는 불변 패키지 실행 BOM을
+  검증하고 아직 진행하지 않은 미래 Plan 작업만 생성·개정합니다.
+- `ProductVersionMigrationHandler`는 신뢰된 상품 version mapping과 고객 동의를
+  확인하고 완료 시술 provenance를 보존합니다.
+- `ProductVersionMigrationDeclinedHandler`는 현재 version을 유지한 채 고객 거부 운영
+  예외를 기록합니다.
+- `TreatmentFulfillmentHandler`는 정확한 item의 완료·부분 이행을 반영하고
+  `BLOCKING` 미래 의존 항목만 dirty-set으로 만듭니다.
+- `ExternalFactEventConsumer`는 닫힌 event type 허용목록만 routing하고 제한된
+  redacted 실패를 격리합니다. 상품·구매·동의·환불·이행의 상태 변경 책임은 원천 서비스에
+  그대로 남습니다.
 
-## Event Types
+## 이벤트 타입
 
 ```kotlin
 sealed class AppointmentDomainEvent : ApplicationEvent {
@@ -96,66 +87,65 @@ sealed class AppointmentDomainEvent : ApplicationEvent {
 }
 ```
 
-## Publishing Pattern
+## 발행 패턴
 
 ```kotlin
-// Publish from appointment-api or appointment-core integration code.
+// 발행 (appointment-api, appointment-core에서 사용)
 eventPublisher.publishEvent(AppointmentDomainEvent.Created(id, clinicId))
 
-// Subscribe from application modules.
+// 구독
 @EventListener
 fun on(event: AppointmentDomainEvent.Created) { ... }
 ```
 
-## Core Classes
+## 핵심 클래스
 
-| Class | Role |
+| 클래스 | 역할 |
 |--------|------|
-| `AppointmentDomainEvent` | Sealed event hierarchy: Created, StatusChanged, Cancelled, Rescheduled. |
-| `AppointmentEventLogger` | `@EventListener` that stores every event in `AppointmentEventLogs`. |
-| `AppointmentEventLogRecord` | Event log DTO. |
-| `AppointmentEventLogs` | Exposed table with event_type, appointment_id, payload_json, and occurred_at. |
-| `PurchaseCompletedIngress` | Trust, bounds, version-proof, and patient-reference protection boundary. |
-| `PurchaseCompletedHandler` | Atomic inbox/plan/outbox convergence with duplicate and gap classification. |
-| `PurchaseEventRedriveService` | Exact-quarantine dry-run and approved redrive with full identity confirmation, actor/reason, release approval references, and append-only audit. |
-| `VisitPlanningEventIngress` | Strict package execution payload decoding, bounds, and trust verification. |
-| `VisitPlanningEventHandler` | Immutable execution-plan creation and future-only revision. |
-| `ProductVersionMigrationHandler` | Authority- and consent-bound product-version migration. |
-| `ProductVersionMigrationDeclinedHandler` | Declined migration convergence without changing the active version. |
-| `TreatmentFulfillmentHandler` | Exact fulfillment facts, partial completion, and blocking dirty-set propagation. |
-| `ExternalFactEventConsumer` | Closed routing boundary for migration, decline, and fulfillment facts. |
+| `AppointmentDomainEvent` | 이벤트 sealed class — Created, StatusChanged, Cancelled, Rescheduled |
+| `AppointmentEventLogger` | `@EventListener` — 모든 이벤트를 `AppointmentEventLogs` 테이블에 저장 |
+| `AppointmentEventLogRecord` | 이벤트 로그 DTO |
+| `AppointmentEventLogs` | Exposed 테이블 — event_type, appointment_id, payload_json, occurred_at |
+| `PurchaseCompletedIngress` | 신뢰, 입력 제한, version proof, 환자 참조 보호 경계 |
+| `PurchaseCompletedHandler` | 중복·gap 판정을 포함한 inbox/plan/outbox 원자 수렴 |
+| `PurchaseEventRedriveService` | 전체 identity 확인, 행위자/사유, release 승인 참조, append-only audit를 강제하는 exact-quarantine dry-run·승인 redrive |
+| `VisitPlanningEventIngress` | 엄격한 패키지 실행 payload decoding, 상한, 신뢰 검증 |
+| `VisitPlanningEventHandler` | 불변 실행 Plan 생성과 미래 작업만 대상으로 하는 revision |
+| `ProductVersionMigrationHandler` | 신뢰된 원천과 동의에 결합된 상품 version 전환 |
+| `ProductVersionMigrationDeclinedHandler` | 활성 version을 바꾸지 않는 전환 거부 수렴 |
+| `TreatmentFulfillmentHandler` | 정확한 이행 사실, 부분 완료, `BLOCKING` dirty-set 전파 |
+| `ExternalFactEventConsumer` | 전환·거부·이행 사실의 닫힌 routing 경계 |
 
-## Event Flow
+## 이벤트 발행/구독 흐름
 
-![Appointment event architecture diagram](../docs/images/readme-diagrams/appointment-event-architecture-01-en.png)
+![예약 이벤트 아키텍처 다이어그램](../docs/images/readme-diagrams/appointment-event-architecture-01-ko.png)
 
-## Dependencies
+## 의존성
 
-- **Internal**: `appointment-core`
-- **External**: Spring Context
+- **내부**: `appointment-core`
+- **외부**: Spring Context
 
-## Tests
+## 테스트 실행
 
 ```bash
 ./gradlew :appointment-event:test
 ```
 
-## Waitlist vacancy signal
+## Waitlist vacancy 신호
 
-`SlotAvailable` is an opaque, after-commit fast signal containing only the
-vacancy job, tenant/clinic scope, correlation token, and occurrence time. The
-event publisher never carries member, appointment, doctor, or treatment details.
-The durable vacancy job in `appointment-core` remains authoritative when event
-delivery is delayed or lost. `WaitlistNotificationOutboxAdapter` implements the
-core notification draft port and writes the canonical outbox payload without
-making the event module depend on a provider SDK.
+`SlotAvailable`은 commit 이후 발행되는 opaque fast signal이며 vacancy job, tenant/clinic
+범위, correlation token, 발생 시각만 담습니다. event publisher는 member, appointment, 의사,
+진료유형 세부정보를 전달하지 않습니다. event가 지연되거나 유실되어도
+`appointment-core`의 durable vacancy job이 권위입니다. `WaitlistNotificationOutboxAdapter`는
+core notification draft port를 구현해 canonical outbox payload를 기록하며 provider SDK에
+의존하지 않습니다.
 
-See the [waitlist delivery API and operations contract](../docs/api/waitlist-delivery.md).
+[waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)을 참고하세요.
 
-## Appointment event scope
+## Appointment event 범위
 
-Every local `AppointmentDomainEvent` carries a positive `TenantClinicScope`.
-Events remain in-process Spring `ApplicationEvent` values; they are not broker or
-Java-wire messages. The best-effort event log records `tenant_group_id` and keeps
-audit failure from changing the already-committed business result. Durable
-notification delivery remains tenant-scoped in the outbox.
+모든 local `AppointmentDomainEvent`는 양수 ID의 `TenantClinicScope`를 담습니다.
+event는 in-process Spring `ApplicationEvent` 값으로만 유지하며 broker나 Java wire
+메시지로 직렬화하지 않습니다. best-effort event log에는 `tenant_group_id`를 기록하고,
+감사 로그 실패가 이미 commit된 업무 결과를 바꾸지 않게 합니다. 내구성 notification
+전달은 outbox의 tenant 범위를 계속 사용합니다.

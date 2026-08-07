@@ -13,7 +13,7 @@ enum class CardinalitySignal {
 }
 
 /**
- * Low-cardinality metric label contract for purchase-to-plan processing.
+ * 구매에서 plan으로 이어지는 처리의 low-cardinality metric label 계약입니다.
  */
 object PurchasePlanMetricsContract {
     const val SERIES_BUDGET = 1_000

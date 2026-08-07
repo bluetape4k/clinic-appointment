@@ -21,11 +21,11 @@ sealed interface BookingReliabilityIngressResult {
 }
 
 /**
- * Booking reliability signal ingress.
+ * 예약 신뢰도 신호 수신 경계입니다.
  *
- * Raw JSON is strict-decoded before hash/signature validation, then accepted facts
- * are stored without PII. Trust failures and source-version conflicts are recorded
- * as both terminal rejections and quarantine rows in the caller-owned transaction.
+ * 원시 JSON을 엄격하게 디코딩한 뒤 hash/signature를 검증하고, 승인된 사실만
+ * PII 없이 저장합니다. 신뢰성 실패와 source-version 충돌은 호출자가 소유한
+ * 트랜잭션에서 terminal rejection과 quarantine 행으로 함께 기록합니다.
  */
 class BookingReliabilityEventIngress(
     private val trustVerifier: SchedulingEventTrustVerifier,

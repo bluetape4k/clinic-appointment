@@ -306,7 +306,7 @@ internal object NotificationOutboxMigrationTestSupport {
                 NotificationDeliveryAttempts,
                 withLogs = false,
             ).filter(::isAdditiveSchemaChange)
-                // The model includes the V21 tenant-leading direct index; V14 intentionally does not.
+// 모델에는 V21 tenant-leading direct index가 포함되며 V14에는 의도적으로 포함하지 않는다.
                 .filterNot { it.contains("idx_notification_outbox_tenant_direct_lookup", ignoreCase = true) }
         }
         check(additiveDrift.isEmpty()) {

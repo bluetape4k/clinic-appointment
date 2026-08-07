@@ -1,6 +1,6 @@
 # appointment-frontend
 
-[English](README.md) | [한국어](README.ko.md)
+[한국어 본문](README.md) | [한국어 참고본](README.ko.md)
 
 Angular 18 기반 병원 예약 관리 웹 UI.
 

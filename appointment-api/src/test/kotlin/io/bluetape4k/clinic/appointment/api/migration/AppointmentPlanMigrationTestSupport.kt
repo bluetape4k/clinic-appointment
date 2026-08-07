@@ -153,9 +153,9 @@ internal object AppointmentPlanMigrationTestSupport {
         statement.contains("idx_appointment_profile_reevaluation", ignoreCase = true)
 
     /**
-     * Proves the repository's documented 256 KiB canonical JSON limit on every
-     * supported dialect. MySQL must use `MEDIUMTEXT`; plain `TEXT` reports only
-     * 65,535 bytes and would accept repository validation before failing SQL.
+     * 지원하는 모든 dialect에서 저장소가 문서화한 256 KiB canonical JSON 제한을 증명한다.
+     * MySQL은 `MEDIUMTEXT`를 사용해야 한다. 일반 `TEXT`는 65,535바이트만 보고하므로
+     * SQL에서 실패하기 전에 저장소 검증을 통과시키게 된다.
      */
     private fun verifyPolicyJsonCapacity(connection: Connection) {
         listOf(

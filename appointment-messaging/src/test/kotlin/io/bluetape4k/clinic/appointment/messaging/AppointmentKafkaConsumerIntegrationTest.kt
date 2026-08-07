@@ -164,8 +164,8 @@ class AppointmentKafkaConsumerIntegrationTest {
             template.send(topicName, key, value).get(10, TimeUnit.SECONDS)
             firstContainer.start()
             check(firstCrashed.await(20, TimeUnit.SECONDS)) { "first container did not reach crash handler" }
-            // Stop the failed member before its error-handler retry; the uncommitted offset
-            // must be reassigned to the second member in the same group.
+// error-handler retry 전에 실패한 member를 중지한다. commit되지 않은 offset은
+// 같은 group의 두 번째 member에 재할당되어야 한다.
             firstContainer.stop()
             secondContainer.start()
             check(recovered.await(30, TimeUnit.SECONDS)) { "second member did not recover record" }

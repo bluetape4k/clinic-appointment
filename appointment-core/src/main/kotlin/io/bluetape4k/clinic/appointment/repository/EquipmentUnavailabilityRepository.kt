@@ -82,7 +82,7 @@ class EquipmentUnavailabilityRepository {
     }
 
     /**
-     * Finds an equipment unavailability by ID only when the owning clinic belongs to [tenantGroupId].
+     * 소유 clinic이 [tenantGroupId]에 속할 때만 ID로 장비 사용 불가 일정을 조회합니다.
      */
     internal fun findByIdAndTenant(id: Long, tenantGroupId: Long): EquipmentUnavailabilityRecord? {
         id.requirePositiveNumber("id")

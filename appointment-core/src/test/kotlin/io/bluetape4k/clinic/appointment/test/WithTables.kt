@@ -82,11 +82,11 @@ fun withTables(
 private val withTablesSchemaLock = Any()
 
 /**
- * Tables introduced by the waitlist delivery contract all reference [Clinics].
- * They may be left behind by schema-contract tests that intentionally keep their
- * tables between assertions, so a narrower fixture must remove these children
- * before dropping a shared clinic parent. The list is H2-test cleanup only; it
- * never changes production schema or application transactions.
+ * waitlist delivery 계약으로 추가된 테이블은 모두 [Clinics]를 참조한다.
+ * schema-contract 테스트가 assertion 사이에 테이블을 의도적으로 유지하면 테이블이
+ * 남을 수 있으므로, 더 좁은 fixture는 공유 clinic parent를 삭제하기 전에 이 자식들을
+ * 제거해야 한다. 이 목록은 H2 테스트 정리 전용이며 운영 스키마나 애플리케이션 transaction을
+ * 변경하지 않는다.
  */
 private val sharedClinicDependentWaitlistTables = arrayOf(
     WaitlistOfferEvents,
@@ -117,11 +117,10 @@ private fun org.jetbrains.exposed.v1.jdbc.JdbcTransaction.dropTestTables(
 }
 
 /**
- * Shared in-memory H2 databases may retain tables created by another test while a
- * narrower fixture is being torn down. H2 refuses to drop a parent table while
- * those foreign keys exist, even when the child table is outside the fixture.
- * Disable only H2's test-database referential checks for the bounded DDL cleanup;
- * production databases keep their normal constraint enforcement.
+ * 공유 in-memory H2 데이터베이스는 더 좁은 fixture를 해제하는 동안 다른 테스트가 만든
+ * 테이블을 유지할 수 있다. 자식 테이블이 fixture 밖에 있더라도 해당 foreign key가 존재하면
+ * H2는 parent 테이블 삭제를 거부한다. 범위를 제한한 DDL 정리에서만 H2 테스트 데이터베이스의
+ * 참조 무결성 검사를 비활성화하고, 운영 데이터베이스는 정상적인 제약 조건 적용을 유지한다.
  */
 private inline fun <T> org.jetbrains.exposed.v1.jdbc.JdbcTransaction.withReferentialIntegrityDisabled(
     testDB: TestDB,

@@ -43,7 +43,7 @@ class RescheduleBatchStreamControllerTest @Autowired constructor() : AbstractApi
 
     companion object : KLogging() {
         private const val STREAM_URL = "/api/tenant-default/reschedule/batch/stream"
-        // 2026-04-06 is Monday — in operating hours window
+// 2026-04-06은 월요일이며 운영 시간 window 안에 있다.
         private val CLOSURE_DATE: LocalDate = LocalDate.of(2026, 4, 6)
     }
 
@@ -161,7 +161,7 @@ class RescheduleBatchStreamControllerTest @Autowired constructor() : AbstractApi
 
     @Test
     fun `no affected appointments emits only terminal done event`() {
-        // No appointment inserted on CLOSURE_DATE
+// CLOSURE_DATE에는 appointment를 삽입하지 않는다.
         val response = client.get()
             .uri("$STREAM_URL?clinicId=$clinicId&closureDate=$CLOSURE_DATE&searchDays=3")
             .execute()
@@ -192,9 +192,9 @@ class RescheduleBatchStreamControllerTest @Autowired constructor() : AbstractApi
             .execute()
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
-        // progress event emitted for the appointment
+// appointment에 대해 progress event가 발생한다.
         response.body shouldContain "event:progress"
-        // terminal complete event
+// terminal complete event가 발생한다.
         response.body shouldContain "event:complete"
         response.body shouldContain "\"done\":true"
         response.body shouldContain "\"totalProcessed\":1"

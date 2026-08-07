@@ -8,12 +8,12 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
 /**
- * Produces a canonical SHA-256 hash for a validated catalog definition.
+ * 검증한 catalog definition의 canonical SHA-256 hash를 생성합니다.
  */
 object CatalogPayloadHasher {
 
     /**
-     * Validates and hashes [definition] using named, length-framed fields.
+     * 이름과 길이를 함께 프레임화한 필드로 [definition]을 검증하고 hash를 계산합니다.
      */
     fun hash(definition: ProductCatalogDefinition): String {
         val valid = CatalogDefinitionValidator.validate(definition)

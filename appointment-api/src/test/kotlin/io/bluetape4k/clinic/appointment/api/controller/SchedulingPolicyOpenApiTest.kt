@@ -207,7 +207,7 @@ class SchedulingPolicyOpenApiTest {
         }
     }
 
-    /** RFC 6901 JSON pointer segment escaping for an OpenAPI path key. */
+    /** OpenAPI 경로 키에 적용하는 RFC 6901 JSON Pointer 세그먼트 이스케이프. */
     private fun pointer(value: String): String =
         value.replace("~", "~0").replace("/", "~1")
 

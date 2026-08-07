@@ -68,9 +68,9 @@ class DashboardStatsServiceTest {
             TenantGroups.deleteAll()
             seedDefaultTenant()
 
-            // Extract locals to avoid implicit-receiver shadowing inside insertAndGetId lambdas.
-            // Inside Clinics.insertAndGetId {}, the implicit receiver is Clinics, so local names
-            // like clinicId/doctorId would resolve to columns rather than the class property.
+// insertAndGetId lambda 안에서 implicit receiver가 가려지는 것을 피하도록 local을 추출한다.
+// Clinics.insertAndGetId {} 안의 implicit receiver는 Clinics이므로 clinicId/doctorId 같은
+// local 이름이 클래스 property가 아니라 column으로 해석된다.
             val cId = Clinics.insertAndGetId {
                 it[name] = "Test Clinic"
                 it[slotDurationMinutes] = 30
@@ -120,7 +120,7 @@ class DashboardStatsServiceTest {
         }
     }
 
-    // =================== getAppointmentStats ===================
+// =================== getAppointmentStats 검증 ===================
 
     @Test
     fun `getAppointmentStats - 정상 bucket 조립 및 totals 계산`() {
@@ -198,7 +198,7 @@ class DashboardStatsServiceTest {
         result.from shouldBeEqualTo today.minusDays(29)
     }
 
-    // =================== getDoctorStats ===================
+// =================== getDoctorStats 검증 ===================
 
     @Test
     fun `getDoctorStats - totalAppointments 기준 내림차순 정렬`() {
@@ -265,7 +265,7 @@ class DashboardStatsServiceTest {
         }
     }
 
-    // =================== getCancellationStats ===================
+// =================== getCancellationStats 검증 ===================
 
     @Test
     fun `getCancellationStats - rate 계산 정확성 검증`() {
@@ -280,7 +280,7 @@ class DashboardStatsServiceTest {
         result.totalCancelled shouldBeEqualTo 2L
         result.totalNoShow shouldBeEqualTo 1L
         result.totalCompleted shouldBeEqualTo 1L
-        // denominator = 2+1+0+1 = 4; cancellationRate = 2/4 = 0.5
+// denominator = 2+1+0+1 = 4; cancellationRate = 2/4 = 0.5이다.
         result.cancellationRate shouldBeEqualTo 0.5
         result.noShowRate shouldBeEqualTo 0.25
     }

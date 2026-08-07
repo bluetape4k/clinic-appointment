@@ -126,21 +126,21 @@ class ClosureRescheduleService(
         }
 
     /**
-     * Processes closure reschedule one appointment at a time and reports progress via callback.
+     * 휴진 재배정을 예약 하나씩 처리하고 callback으로 진행률을 알립니다.
      *
-     * ## Behavior / Contract
-     * - Each appointment is processed in its own transaction so the DB connection is released
-     *   between appointments. [onProgress] is called AFTER each per-appointment transaction commits,
-     *   never while a DB connection is held. This is safe for callers that perform network I/O
-     *   (e.g. SSE flush) inside the callback.
-     * - Does NOT emit a terminal signal; the caller is responsible for signalling completion.
-     * - Status-update and state-history writes use a single shared transaction before per-appointment processing.
+     * ## 동작 / 계약
+     * - 예약마다 별도 transaction에서 처리하므로 예약 사이에 DB connection을 해제합니다.
+     *   [onProgress]는 각 예약 transaction이 commit된 후에 호출하며 DB connection을
+     *   보유한 동안에는 호출하지 않습니다. 따라서 callback 안에서 network I/O(예: SSE flush)를
+     *   수행하는 호출자도 안전하게 사용할 수 있습니다.
+     * - 종결 신호는 내보내지 않으며, 완료 신호는 호출자가 책임집니다.
+     * - 상태 업데이트와 상태 이력 기록은 예약별 처리 전에 하나의 공유 transaction에서 수행합니다.
      *
-     * @param scope verified tenant-clinic scope
-     * @param closureDate date of the clinic closure
-     * @param searchDays number of days to search for alternative slots (default 7)
-     * @param onProgress called AFTER each appointment's transaction commits, with (appointmentId, candidateCount)
-     * @return total number of appointments processed
+     * @param scope 검증된 tenant-clinic scope
+     * @param closureDate clinic 휴진 날짜
+     * @param searchDays 대체 slot을 탐색할 일수(기본값 7)
+     * @param onProgress 각 예약 transaction이 commit된 후에 (appointmentId, candidateCount)와 함께 호출하는 callback
+     * @return 처리한 예약의 총 건수
      */
     fun streamClosureReschedule(
         scope: TenantClinicScope,
@@ -162,7 +162,7 @@ class ClosureRescheduleService(
         for (appointment in affected) {
             ensureNotInterrupted()
             val appointmentId = appointment.id.requireNotNull("appointment.id")
-            // Per-appointment transaction — releases DB connection before onProgress callback
+            // 예약별 트랜잭션으로 처리하여 onProgress callback 전에 DB connection을 반환합니다.
             val candidateCount = transaction {
                 ensureNotInterrupted()
                 if (!appointmentRepository.updateLegacyStatus(
@@ -214,7 +214,7 @@ class ClosureRescheduleService(
                 count
             }
             if (candidateCount == null) continue
-            // DB connection released — safe to call onProgress with network I/O
+            // DB connection을 반환했으므로 network I/O를 포함한 onProgress를 안전하게 호출할 수 있습니다.
             onProgress(appointmentId, candidateCount)
             processed++
         }

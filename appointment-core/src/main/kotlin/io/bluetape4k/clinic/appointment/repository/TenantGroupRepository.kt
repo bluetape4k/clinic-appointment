@@ -11,7 +11,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /**
- * Tenant group repository.
+ * Tenant group repository입니다.
  */
 class TenantGroupRepository : LongJdbcRepository<TenantGroupRecord> {
     companion object : KLogging()
@@ -21,9 +21,9 @@ class TenantGroupRepository : LongJdbcRepository<TenantGroupRecord> {
     override fun ResultRow.toEntity(): TenantGroupRecord = toTenantGroupRecord()
 
     /**
-     * Finds an active tenant group by URL tenant code.
+     * URL tenant code로 활성 tenant group을 조회합니다.
      *
-     * Callers must execute this method inside an Exposed `transaction {}`.
+     * 호출자는 Exposed `transaction {}` 안에서 이 메서드를 실행해야 합니다.
      */
     fun findActiveByCode(tenantCode: String): TenantGroupRecord? =
         TenantGroups

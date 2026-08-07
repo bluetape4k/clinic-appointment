@@ -9,12 +9,12 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
- * Normalizes customer-entered local scheduling preferences without choosing an appointment date.
+ * 고객이 입력한 현지 일정 선호를 정규화하되 예약 날짜는 선택하지 않습니다.
  */
 object BookingPreferenceNormalizer {
 
     /**
-     * Normalizes an exact local date-time using the supplied clinic zone rules.
+     * 제공된 clinic zone 규칙으로 정확한 현지 날짜-시간을 정규화합니다.
      */
     fun exactDateTime(
         localDateTime: LocalDateTime,
@@ -43,7 +43,7 @@ object BookingPreferenceNormalizer {
     }
 
     /**
-     * Validates and preserves an inclusive date-range preference.
+     * 양끝을 포함하는 날짜 범위 선호를 검증하고 보존합니다.
      */
     fun dateRange(
         startDate: LocalDate,
@@ -55,7 +55,7 @@ object BookingPreferenceNormalizer {
     }
 
     /**
-     * Validates and preserves weekday and local-window preferences.
+     * 요일 및 현지 시간대 선호를 검증하고 보존합니다.
      */
     fun preferredWeekdaysAndWindows(
         weekdays: List<DayOfWeek>,

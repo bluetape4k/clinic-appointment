@@ -18,13 +18,13 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 /**
- * Admin dashboard aggregation service.
+ * 관리자 대시보드 집계 서비스입니다.
  *
- * ## Behavior / Contract
- * - All three methods validate `clinicId > 0`, `from <= to`, and period `<= 366` days.
- * - Default period when `from`/`to` are null: `[today-29, today]` (30 days inclusive).
- * - Registered as a Spring bean via [io.bluetape4k.clinic.appointment.api.config.ServiceConfig];
- *   no `@Service` annotation — do not add it.
+ * ## 동작 / 계약
+ * - 세 메서드 모두 `clinicId > 0`, `from <= to`, 기간 `<= 366`일을 검증합니다.
+ * - `from`/`to`가 null이면 `[today-29, today]`(양끝 포함 30일)를 기본 기간으로 사용합니다.
+ * - [io.bluetape4k.clinic.appointment.api.config.ServiceConfig]를 통해 Spring bean으로 등록하며,
+ *   `@Service` annotation은 사용하지 않습니다.
  */
 class DashboardStatsService(
     private val statsRepository: AppointmentStatsRepository,
@@ -44,13 +44,13 @@ class DashboardStatsService(
     }
 
     /**
-     * Returns daily appointment counts grouped by status.
+     * 상태별 일일 예약 건수를 반환합니다.
      *
-     * ## Behavior / Contract
-     * - `statuses` filters which statuses are counted; null means all statuses.
-     * - Unknown status name in `statuses` throws [IllegalArgumentException] (propagated from
-     *   [AppointmentState.fromName]).
-     * - An unknown `clinicId` returns an empty response (HTTP 200), not an error.
+     * ## 동작 / 계약
+     * - `statuses`는 집계할 상태를 필터링하며, null이면 모든 상태를 사용합니다.
+     * - `statuses`에 알 수 없는 상태 이름이 있으면 [IllegalArgumentException]을 던집니다
+     *   ([AppointmentState.fromName]에서 전파됩니다).
+     * - 알 수 없는 `clinicId`에는 오류가 아닌 빈 응답(HTTP 200)을 반환합니다.
      */
     fun getAppointmentStats(
         clinicId: Long,
@@ -101,14 +101,13 @@ class DashboardStatsService(
     }
 
     /**
-     * Returns per-doctor appointment metrics, sorted by total appointments descending.
+     * 의사별 예약 지표를 전체 예약 건수 내림차순으로 정렬해 반환합니다.
      *
-     * ## Behavior / Contract
-     * - `limit` must be in `1..100`; otherwise throws [IllegalArgumentException].
-     * - `completionRate` = completed / (completed + cancelled + noShow); 0.0 when denominator is 0.
-     * - Sorting and `take(limit)` happen in Kotlin after DB aggregation — SQL LIMIT is not applied
-     *   at the query level because SQL LIMIT would operate on (doctorId, status) rows, not on
-     *   doctor-level totals.
+     * ## 동작 / 계약
+     * - `limit`은 `1..100` 범위여야 하며, 그렇지 않으면 [IllegalArgumentException]을 던집니다.
+     * - `completionRate` = completed / (completed + cancelled + noShow)이며, 분모가 0이면 0.0입니다.
+     * - 정렬과 `take(limit)`은 DB 집계 후 Kotlin에서 수행합니다. SQL LIMIT은
+     *   의사별 전체 합계가 아닌 (doctorId, status) 행에 적용되므로 query level에서 사용하지 않습니다.
      */
     fun getDoctorStats(
         clinicId: Long,
@@ -163,14 +162,14 @@ class DashboardStatsService(
     }
 
     /**
-     * Returns cancellation and no-show trends.
+     * 취소 및 no-show 추이를 반환합니다.
      *
-     * ## Behavior / Contract
-     * - Denominator for rates: CANCELLED + NO_SHOW + RESCHEDULED + COMPLETED (terminal statuses).
-     *   In-progress statuses are excluded to avoid noise.
-     * - `cancellationRate` = CANCELLED / denominator; 0.0 when denominator is 0.
-     * - `noShowRate` = NO_SHOW / denominator; 0.0 when denominator is 0.
-     * - Daily buckets contain only dates with at least one of CANCELLED, NO_SHOW, or RESCHEDULED > 0.
+     * ## 동작 / 계약
+     * - 비율의 분모는 CANCELLED + NO_SHOW + RESCHEDULED + COMPLETED(종결 상태)입니다.
+     *   진행 중인 상태는 잡음을 줄이기 위해 제외합니다.
+     * - `cancellationRate` = CANCELLED / 분모이며, 분모가 0이면 0.0입니다.
+     * - `noShowRate` = NO_SHOW / 분모이며, 분모가 0이면 0.0입니다.
+     * - 일일 bucket에는 CANCELLED, NO_SHOW, RESCHEDULED 중 하나 이상이 0보다 큰 날짜만 포함합니다.
      */
     fun getCancellationStats(
         clinicId: Long,

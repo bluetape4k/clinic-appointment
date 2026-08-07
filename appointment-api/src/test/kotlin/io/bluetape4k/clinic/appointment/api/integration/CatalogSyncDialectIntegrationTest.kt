@@ -29,8 +29,8 @@ import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 
 /**
- * Proves immutable catalog-version convergence on each enabled database dialect
- * while reusing the API module's singleton database launchers.
+ * 활성화된 각 데이터베이스 dialect에서 불변 catalog-version이 수렴하는지 증명하고,
+ * API 모듈의 singleton 데이터베이스 launcher를 재사용한다.
  */
 class CatalogSyncDialectIntegrationTest : AbstractApiIntegrationTest() {
 

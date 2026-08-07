@@ -18,7 +18,7 @@ fun interface AppointmentKafkaCredentialResolver {
 class AppointmentKafkaProducerConfiguration private constructor(
     /** credential 값이 제거된 effective producer configuration snapshot이다. */
     val kafkaProperties: Map<String, Any>,
-    /** broker/admin contract; this consumer-side key is not sent to a producer factory. */
+    /** broker/admin 계약이며 이 consumer-side 키는 producer factory로 전송하지 않는다. */
     val contractProperties: Map<String, Any>,
     /** secret-manager에서 적용된 credential key 이름만 남긴 bounded evidence다. */
     val appliedCredentialKeys: Set<String>,

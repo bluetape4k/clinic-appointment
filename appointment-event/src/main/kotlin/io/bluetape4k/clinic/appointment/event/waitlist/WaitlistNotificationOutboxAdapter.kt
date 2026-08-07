@@ -90,7 +90,7 @@ data class WaitlistNotificationOutboxEnvelope(
     }
 }
 
-/** strict canonical codec for waitlist notification payloads. */
+/** waitlist notification payload를 위한 strict canonical codec. */
 class WaitlistNotificationOutboxCodec {
     private val mapper = tools.jackson.module.kotlin.jsonMapper {
         addModule(

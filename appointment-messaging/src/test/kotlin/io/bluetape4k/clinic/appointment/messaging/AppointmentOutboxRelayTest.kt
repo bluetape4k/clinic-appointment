@@ -170,7 +170,7 @@ class AppointmentOutboxRelayTest {
         try {
             relay.tick("relay-a")
         } catch (_: CancellationException) {
-            // A cancelled send deliberately leaves the leased row for expiry/reclaim.
+// 취소된 send는 lease된 행을 expiry/reclaim을 위해 의도적으로 남긴다.
         }
 
         store.published shouldBeEqualTo 0

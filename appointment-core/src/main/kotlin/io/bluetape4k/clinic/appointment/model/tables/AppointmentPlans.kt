@@ -7,7 +7,7 @@ import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.timestamp
 
 /**
- * Immutable purchase-derived appointment plans.
+ * 구매 정보에서 파생한 불변 appointment plan입니다.
  */
 object AppointmentPlans : LongIdTable("scheduling_appointment_plans") {
     val tenantGroupId = reference("tenant_group_id", TenantGroups, onDelete = ReferenceOption.RESTRICT)

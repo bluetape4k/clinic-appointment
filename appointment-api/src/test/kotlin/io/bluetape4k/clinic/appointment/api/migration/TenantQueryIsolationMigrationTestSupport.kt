@@ -4,7 +4,7 @@ import org.flywaydb.core.Flyway
 import java.sql.Connection
 import javax.sql.DataSource
 
-/** V21 tenant event-log backfill, FK, and direct-lookup index contract. */
+/** V21 tenant event-log backfill, FK, direct-lookup 인덱스 계약. */
 internal object TenantQueryIsolationMigrationTestSupport {
 
     fun verifyV21Migration(

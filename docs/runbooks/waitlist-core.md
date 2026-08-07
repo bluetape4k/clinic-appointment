@@ -1,4 +1,4 @@
-# 대기 목록 코어 운영 runbook
+# 대기 목록 코어 운영 런북
 
 이 문서는 Issue #170 대기 목록 코어와 V18 migration을 운영할 때 사용하는
 기준 절차다. 이 코어의 운영 권위는 appointment DB와

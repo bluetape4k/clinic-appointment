@@ -68,7 +68,7 @@ class TimeRangeTest {
     }
 
     // ========================================
-    // subtractRanges
+// subtractRanges 검증
     // ========================================
 
     @Test
@@ -160,7 +160,7 @@ class TimeRangeTest {
     }
 
     // ========================================
-    // computeEffectiveRanges
+// computeEffectiveRanges 검증
     // ========================================
 
     @Test

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
-/** Scope/identity forgery must fail before an appointment outbox row is written. */
+/** appointment outbox 행을 쓰기 전에 scope/identity 위조가 실패해야 한다. */
 class AppointmentOutboxWriterScopeTest {
     private val support = AppointmentOutboxWriterScopeTestSupport
 

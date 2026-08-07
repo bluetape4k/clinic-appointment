@@ -177,8 +177,8 @@ class WaitlistOfferNotificationWorker(
             return record(claim, WaitlistNotificationDeliveryResult.Unknown, WaitlistDeliveryAttempt.Unknown)
         }
 
-        // Rendering may be non-trivial, so the durable fence is acquired immediately before
-        // crossing into provider IO rather than before rendering.
+// Rendering이 복잡할 수 있으므로 durable fence는 rendering 전에 획득하지 않고
+// provider IO로 진입하기 직전에 획득한다.
         val authorized = store.authorizeSend(claim, clock.instant())
         if (!authorized) return WaitlistDeliveryAttempt.Suppressed(
             NotificationSuppressionReasonCode.WAITLIST_OFFER_NOT_ACTIVE,

@@ -9,7 +9,7 @@ import java.util.ArrayDeque
 import java.util.Locale
 
 /**
- * Validates immutable catalog definitions before hashing or persistence.
+ * hash 계산이나 영속화 전에 불변 catalog definition을 검증합니다.
  */
 object CatalogDefinitionValidator {
     const val MAX_PAYLOAD_BYTES = 256 * 1024
@@ -28,7 +28,7 @@ object CatalogDefinitionValidator {
     private val safeIdentifier = Regex("[A-Za-z0-9][A-Za-z0-9._:-]*")
 
     /**
-     * Returns [definition] when every identity, bound, interval, and DAG invariant is valid.
+     * 모든 식별자, 경계, 간격, DAG invariant가 유효하면 [definition]을 반환합니다.
      */
     fun validate(definition: ProductCatalogDefinition): ProductCatalogDefinition {
         require(definition.tenantGroupId > 0L) { "tenantGroupId must be positive" }
@@ -264,10 +264,9 @@ object CatalogDefinitionValidator {
         var bytes = 0L
 
         fun add(name: String, value: Any?) {
-            // Count a conservative JSON-shaped representation. Property paths
-            // and array indexes are not transmitted in the wire payload, so
-            // including them would reject valid compact graphs long before the
-            // actual 256 KiB boundary.
+            // 보수적인 JSON 형태의 표현 크기를 센다. property 경로와 배열 index는
+            // wire payload로 전송되지 않으므로 이를 포함하면 실제 256 KiB 경계보다 훨씬
+            // 전에 유효한 compact graph를 거부하게 된다.
             bytes += jsonStringBytes(name) + 2L
             bytes += when (value) {
                 null -> 4L

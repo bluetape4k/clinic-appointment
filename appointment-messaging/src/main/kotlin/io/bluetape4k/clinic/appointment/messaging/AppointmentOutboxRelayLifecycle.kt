@@ -80,8 +80,8 @@ class AppointmentOutboxRelayLifecycle(
                 if (tick != null && tick.isActive) {
                     val completed = withTimeoutOrNull(remainingMillis(deadline)) { tick.join() }
                     if (completed == null && tick.isActive) {
-                        // Do not join after the hard deadline: a JDBC driver or Kafka future
-                        // that ignores interruption must not hold SmartLifecycle.stop forever.
+                        // hard deadline 이후에는 join하지 않습니다. interruption을 무시하는 JDBC driver나
+                        // Kafka future가 SmartLifecycle.stop을 영원히 붙잡으면 안 됩니다.
                         tick.cancel(CancellationException("appointment relay shutdown timeout"))
                     }
                 }

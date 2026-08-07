@@ -9,11 +9,12 @@ import java.io.Serializable
 import java.time.Instant
 
 /**
- * Terminal rejection store for envelopes that failed trust verification or
- * claimed a tenant/clinic scope that does not exist in this service.
+ * 신뢰성 검증에 실패했거나 이 서비스에 존재하지 않는 tenant/clinic 범위를
+ * 주장한 envelope의 terminal rejection 저장소입니다.
  *
- * Claimed tenant and clinic identifiers intentionally have no foreign keys:
- * untrusted or unknown scope must not prevent durable poison-event capture.
+ * 주장된 tenant·clinic 식별자에는 의도적으로 foreign key를 두지 않습니다.
+ * 신뢰할 수 없거나 알 수 없는 범위 때문에 poison event를 내구성 있게
+ * 수집하지 못하는 일이 없어야 합니다.
  */
 object UntrustedSchedulingEventRejections : LongIdTable("scheduling_untrusted_event_rejections") {
     val eventId = varchar("event_id", 128).uniqueIndex("uq_untrusted_rejection_event_id")

@@ -30,7 +30,7 @@ data class ProtectedQuarantineEnvelope(
 
 fun interface QuarantineEnvelopeProtector {
     /**
-     * Encrypts the bounded original envelope before any persistence transaction.
+     * persistence transaction이 시작되기 전에 제한된 원본 envelope를 암호화한다.
      */
     fun protect(
         envelope: UntrustedSchedulingEventEnvelope<*>,

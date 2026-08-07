@@ -592,7 +592,7 @@ internal object WaitlistCoreMigrationTestSupport {
             block()
             error("Expected SQL constraint violation")
         } catch (_: SQLException) {
-            // expected
+// 예상 결과
         }
     }
 

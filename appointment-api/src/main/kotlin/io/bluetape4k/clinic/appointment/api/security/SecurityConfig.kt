@@ -218,16 +218,16 @@ class SecurityConfig {
                     .permitAll()
                     .requestMatchers(EndpointRequest.to(ProfileReevaluationEndpoint::class.java))
                     .access(profileReevaluationAccess())
-                    // OpenAPI / Swagger remain public; operational endpoints
-                    // stay authenticated unless a deployment adds an explicit policy.
+                    // OpenAPI / Swagger는 공개로 유지하며, 운영 endpoint는 배포 환경이
+                    // 명시적인 정책을 추가하지 않는 한 인증을 요구한다.
                     .requestMatchers(
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
                     )
                     .permitAll()
-                    // Commitment routes must be evaluated before the generic tenant
-                    // read/write rules. The path tenant is the only selector and the
-                    // tenant manager verifies it against the authenticated grant set.
+                    // Commitment route는 일반 tenant 읽기/쓰기 규칙보다 먼저 평가해야 한다.
+                    // 경로의 tenant만 selector로 사용하며, tenant manager가 인증된 grant 집합과
+                    // 대조해 검증한다.
                     .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/appointment-requests")
                     .access(patientTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(

@@ -9,8 +9,8 @@ import javax.sql.DataSource
 internal object NotificationOutboxPerformanceTestSupport {
     const val ACTIVE_ROWS = 10_000
     const val TERMINAL_ROWS = 10_000
-    // Keep many same-clinic/appointment rows so the legacy clinic-leading index
-    // is materially less selective than the V21 tenant-leading lookup index.
+// 동일 clinic/appointment 행을 충분히 유지해 legacy clinic-leading index가
+// V21 tenant-leading lookup index보다 유의미하게 덜 선택적이 되도록 한다.
     const val CLINIC_COUNT = 10
     const val TARGET_ACTIVE_ID = 1L
     const val TARGET_CLINIC_ID = 2L

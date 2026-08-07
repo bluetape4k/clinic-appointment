@@ -80,7 +80,7 @@ class NotificationDirectOutboxDelivery(
                     owner = leaseOwner,
                 ) ?: return@withPermit NotificationDirectDeliveryResult.NotFound
                 if (claimed.tenantGroupId.value != scope.tenantGroupId || claimed.clinicId.value != scope.clinicId) {
-                    // Keep the defensive scope check immediately before worker/provider work.
+// worker/provider 작업 직전에 defensive scope check를 유지한다.
                     metrics?.recordDirectEventScopeRejected(NotificationOutboxMetrics.DIRECT_EVENT_CLAIM_SCOPE_MISMATCH)
                     return@withPermit NotificationDirectDeliveryResult.NotFound
                 }

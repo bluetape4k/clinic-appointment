@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Owns the isolated PostgreSQL schema and the actual production outbox store used by the benchmark.
+ * benchmark가 사용하는 격리 PostgreSQL schema와 실제 production outbox store를 소유합니다.
  */
 class PostgreSqlBenchmarkFixture {
 
