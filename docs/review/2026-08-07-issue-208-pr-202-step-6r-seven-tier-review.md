@@ -1,7 +1,7 @@
 # PR #202 clinic permit registry 구현 6-R 및 seven-tier 수렴 검토
 
 검토일: 2026-08-07
-대상 PR exact head: `1baad5cfeb09279292c7ae92eac79d51f465972fad`
+대상 PR exact head: `1baad5cfeb092792c7ae92eac79d51f465972fad`
 검토 기준: PR #202 merge 이후 현재 `develop`에 남은 구현과 관련 테스트
 검토 단계: Type A Step 6-R + seven-tier
 

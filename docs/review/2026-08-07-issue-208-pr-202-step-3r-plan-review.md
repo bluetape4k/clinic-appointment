@@ -2,7 +2,7 @@
 
 검토일: 2026-08-07
 대상 PR: [#202](https://github.com/bluetape4k/clinic-appointment/pull/202)
-기준 exact head: `1baad5cfeb09279292c7ae92eac79d51f465972fad`
+기준 exact head: `1baad5cfeb092792c7ae92eac79d51f465972fad`
 검토 단계: Type A Step 3-R (계획)
 
 ## 근거와 여섯 관점
