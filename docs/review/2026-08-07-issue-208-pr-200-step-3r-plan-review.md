@@ -11,7 +11,7 @@
 - 계획: `docs/superpowers/plans/2026-07-30-profile-change-reservation-reevaluation-plan.md`
 - 2-R: [PR #200 2-R 기록](2026-08-07-issue-208-pr-200-step-2r-spec-review.md)
 
-2-R PASS 이후 계획의 task-to-file/test 매핑, bounded dispatcher, policy snapshot, hold CAS, privacy boundary, 운영 redrive를 여섯 관점으로 검토했다. 계획에 embedded table만 있던 상태를 이 독립 artifact로 보강한다.
+retrospective review sequence에서 계획의 task-to-file/test 매핑, bounded dispatcher, policy snapshot, hold CAS, privacy boundary, 운영 redrive를 여섯 관점으로 검토했다. 계획에 embedded table만 있던 상태를 이 독립 artifact로 보강한다. 이 문서는 merge 전 historical independent gate의 증거가 아니다.
 
 | 관점 | 확인 결과 | P0/P1 | 계획 반영 |
 |---|---|---:|---|
@@ -24,7 +24,7 @@
 
 ## 실행 순서 검증
 
-`specification → plan → implementation → 6-R` 의존성이 유지된다. 명세 변경 시 계획과 downstream review를 무효화해야 하며, 이 backfill에서는 명세 계약을 변경하지 않았다. PR #215의 구현 remediation은 이 계획 gate 이후의 별도 historical correction으로 기록한다.
+`specification → plan → implementation → 6-R` 의존성은 평가 기준으로 유지된다. 명세 변경 시 계획과 downstream review를 무효화해야 하며, 이 backfill에서는 명세 계약을 변경하지 않았다. PR #215 remediation과 본 retrospective assessment의 실제 시간 순서는 별도 provenance로 보존하며, 어느 쪽도 historical gate를 소급 증명하지 않는다.
 
 ## 판정
 

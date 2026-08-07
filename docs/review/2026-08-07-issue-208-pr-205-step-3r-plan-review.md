@@ -5,7 +5,7 @@
 historical exact head: `cb8c093ff77289242093b4e1c832e95e73b46870`
 검토 단계: Type A Step 3-R
 
-2-R PASS 후 작성한 [계획](../superpowers/plans/2026-08-07-issue-208-pr-205-reminder-recovery-plan.md)을 six-lens로 검토했다.
+retrospective review sequence에서 [계획](../superpowers/plans/2026-08-07-issue-208-pr-205-reminder-recovery-plan.md)을 six-lens로 검토했다. 이 평가는 merge 전 historical independent gate를 소급 증명하지 않는다.
 
 | 관점 | 확인 결과 | P0/P1 |
 |---|---|---:|
