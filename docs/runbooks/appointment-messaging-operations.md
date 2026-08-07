@@ -13,7 +13,7 @@ durable outbox write를 사용할 수 없으면 API는 제한된 `Retry-After` h
 `503`을 반환합니다. 안내된 간격이 지난 뒤 동일한 idempotency key로 재시도하며,
 대체 예약이나 event ID를 만들지 않습니다.
 
-## Hold와 복구
+## Hold and recovery (보류와 복구)
 
 1. relay를 **paused**와 **held** 상태로 설정합니다. 두 gate가 새 claim을 멈춥니다.
 2. 진행 중인 전송이 최대 10초 동안 drain되도록 기다립니다. 취소되었거나 lease를
@@ -38,7 +38,7 @@ durable outbox write를 사용할 수 없으면 API는 제한된 `Retry-After` h
    `ssl.*`/`sasl.*` 출력을 확인하되 secret 값을 로그에 복사하지 않습니다.
 6. 기존 `event_id`로 claim을 재개합니다. payload를 수정하거나 대체 ID를 만들지 않습니다.
 
-## Redrive와 rollback
+## Redrive and rollback (재처리와 롤백)
 
 수동 redrive는 운영자 작업입니다. row의 event ID를 보존하고 reason code를 change
 log에 기록합니다. V22 rollback 전에 relay를 pause합니다. V22 column은 additive이므로
