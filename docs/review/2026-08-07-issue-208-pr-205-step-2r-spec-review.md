@@ -18,4 +18,4 @@ historical exact head: `cb8c093ff77289242093b4e1c832e95e73b46870`
 
 명세 P1은 없다. 다만 구현 exact head의 JVM monitor 문제는 명세 PASS로 상쇄되지 않으며 후속 remediation finding이다.
 
-**Step 2-R: PASS — P0=0, P1=0.**
+**Retrospective Step 2-R assessment: PASS — P0=0, P1=0; historical independent gate: NOT PROVEN.**

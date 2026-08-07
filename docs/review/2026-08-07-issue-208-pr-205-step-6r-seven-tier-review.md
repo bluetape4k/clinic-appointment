@@ -27,4 +27,4 @@ P2/P3: 별도 blocker 없음. 다중 인스턴스 leader semantics와 full aggre
 
 PR #215 focused evidence: API 155, core 9, event 27 tests; CI run `30763178105`는 15 successful checks였다.
 
-**6-R/seven-tier: PASS — P0=0, P1=0.** 원래 exact head는 P1 FAIL이고 최종 PASS는 remediation head에만 부여한다.
+**Current remediation verification: PASS — P0=0, P1=0, P2=0, P3=0.** Historical 6-R/seven-tier independent gate is **NOT PROVEN**; 원래 exact head는 P1 FAIL이고 현재 verdict는 remediation head에만 부여한다.

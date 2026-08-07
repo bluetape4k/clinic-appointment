@@ -28,4 +28,4 @@
 
 ## 판정
 
-**Step 3-R: PASS — P0=0, P1=0.** 구현 검토는 remediation head에서 다시 수행한다.
+**Retrospective Step 3-R assessment: PASS — P0=0, P1=0; historical independent gate: NOT PROVEN.** 구현 검토는 remediation head에서 다시 수행한다.

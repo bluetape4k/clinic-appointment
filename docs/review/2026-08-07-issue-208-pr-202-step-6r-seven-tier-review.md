@@ -23,4 +23,4 @@ P2/P3: process-local registry라는 제한은 명세의 비목표이며 blocker�
 
 ## 판정
 
-**6-R/seven-tier: PASS — P0=0, P1=0.**
+**Current implementation assessment: PASS — P0=0, P1=0, P2=0, P3=0; historical independent gate: NOT PROVEN.**

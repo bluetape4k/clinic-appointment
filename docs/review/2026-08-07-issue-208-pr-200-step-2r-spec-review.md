@@ -31,4 +31,4 @@ PR 본문에 있던 일반적인 “six perspectives” 문구는 durable review
 
 ## 판정
 
-**Step 2-R: PASS — P0=0, P1=0.** 이 PASS는 명세 gate에 한정된다. 구현 gate는 아래 3-R과 remediation 후 6-R 기록을 함께 참조해야 한다.
+**Retrospective Step 2-R assessment: PASS — P0=0, P1=0; historical independent gate: NOT PROVEN.** 이 평가는 명세 내용에 한정되며, merge 전 독립 gate가 수행됐다는 증거로 소급하지 않는다. 구현 gate는 아래 3-R과 remediation 후 6-R 기록을 함께 참조해야 한다.

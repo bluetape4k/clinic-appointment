@@ -30,4 +30,4 @@ holder와 waiter를 모두 참조 수에 포함하지 않으면 서로 다른 se
 
 ## 판정
 
-**Step 2-R: PASS — P0=0, P1=0.**
+**Retrospective Step 2-R assessment: PASS — P0=0, P1=0; historical independent gate: NOT PROVEN.**

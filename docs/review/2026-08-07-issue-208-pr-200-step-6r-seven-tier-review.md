@@ -32,4 +32,4 @@ P2/P3: 별도 blocker 없음. aggregate API 전체 테스트는 PR #200 당시�
 
 ## 판정
 
-**6-R/seven-tier: PASS — P0=0, P1=0.** historical exact head는 P1이 있었고, 최종 verdict는 remediation head에만 부여한다.
+**Current remediation verification: PASS — P0=0, P1=0, P2=0, P3=0.** Historical 6-R/seven-tier independent gate is **NOT PROVEN**; historical exact head에는 P1이 있었고, 현재 verdict는 remediation head에만 부여한다.

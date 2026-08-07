@@ -27,4 +27,4 @@ P2/P3: historical generic assertions는 remediation으로 해소됐다. #170 int
 
 PR #215 focused evidence와 CI `30763178105`를 확인했고, current source scan에서 해당 touched production 경로의 unsafe `runBlocking`/persisted-ID `!!`는 재발하지 않았다.
 
-**6-R/seven-tier: PASS — P0=0, P1=0.**
+**Current remediation verification: PASS — P0=0, P1=0, P2=0, P3=0.** Historical 6-R/seven-tier independent gate is **NOT PROVEN**; 현재 verdict는 remediation head에만 부여한다.

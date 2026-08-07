@@ -18,4 +18,4 @@ historical exact head: `cb8c093ff77289242093b4e1c832e95e73b46870`
 
 계획은 non-blocking coroutine 경계를 명시적으로 포함한다. 이 계약은 구현 단계에서 검증·수정해야 하며, historical exact head의 monitor 사용을 PASS로 간주하지 않는다.
 
-**Step 3-R: PASS — P0=0, P1=0.**
+**Retrospective Step 3-R assessment: PASS — P0=0, P1=0; historical independent gate: NOT PROVEN.**

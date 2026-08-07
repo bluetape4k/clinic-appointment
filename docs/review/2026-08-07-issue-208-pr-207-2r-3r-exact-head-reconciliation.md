@@ -22,4 +22,4 @@ exact head: `18f3007e2c3c82f072c9934f27041f0846ffa285`
 
 2-R/3-R의 초기 finding은 문서에 수정 후 PASS로 기록되어 있고, exact head의 변경 파일 목록과 모순되는 후속 spec change는 확인되지 않았다. implementation-stage P2 assertion finding은 별도 6-R 기록에 남긴다.
 
-**2-R: PASS. 3-R: PASS.** 두 gate 모두 implementation remediation 전제 조건을 만족한다.
+**Retrospective assessment: 2-R content PASS, 3-R content PASS; historical independent gates: NOT PROVEN.** 문서 내용은 implementation remediation 전제 조건을 검토했지만, merge 전에 독립 gate가 수행됐다는 증거를 복원하지는 못한다.

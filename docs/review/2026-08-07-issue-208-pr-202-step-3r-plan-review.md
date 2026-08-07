@@ -23,4 +23,4 @@
 
 ## 판정
 
-**Step 3-R: PASS — P0=0, P1=0.**
+**Retrospective Step 3-R assessment: PASS — P0=0, P1=0; historical independent gate: NOT PROVEN.**
