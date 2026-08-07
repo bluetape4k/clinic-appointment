@@ -1,11 +1,15 @@
 package io.bluetape4k.clinic.appointment.api.stats
 
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerIdentity
+import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerMetrics
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRuntime
+import io.bluetape4k.clinic.appointment.messaging.AppointmentKafkaConsumerListener
+import io.bluetape4k.clinic.appointment.messaging.NoopAppointmentConsumerMetrics
 import io.bluetape4k.clinic.appointment.messaging.AppointmentLogicalConsumerId
 import io.bluetape4k.clinic.appointment.messaging.AppointmentLogicalStreamId
 import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingProperties
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.clients.consumer.Consumer
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.kafka.support.Acknowledgment
 
@@ -14,20 +18,26 @@ class AppointmentStatsProjectionKafkaListener(
     private val runtime: AppointmentConsumerRuntime,
     private val handler: AppointmentStatsProjectionConsumer,
     properties: AppointmentMessagingProperties,
+    metrics: AppointmentConsumerMetrics = NoopAppointmentConsumerMetrics,
 ) {
     private val topic = properties.consumer.topic.value
     private val identity = AppointmentConsumerIdentity(
         consumerId = AppointmentLogicalConsumerId(LOGICAL_CONSUMER_ID),
         streamId = AppointmentLogicalStreamId(LOGICAL_STREAM_ID),
     )
+    private val delegate = AppointmentKafkaConsumerListener(runtime, identity, handler, metrics)
 
     @KafkaListener(
         topics = ["\${appointment.messaging.consumer.topic:clinic.appointment.events}"],
         groupId = GROUP_ID,
         containerFactory = "appointmentKafkaConsumerContainerFactory",
     )
-    fun onMessage(record: ConsumerRecord<String, String>, acknowledgment: Acknowledgment) {
-        runtime.consume(record, acknowledgment, identity, handler)
+    fun onMessage(
+        record: ConsumerRecord<String, String>,
+        acknowledgment: Acknowledgment,
+        consumer: Consumer<*, *>?,
+    ) {
+        delegate.onMessage(record, acknowledgment, consumer)
     }
 
     init {

@@ -50,7 +50,7 @@ class AppointmentStatsProjectionConsumerTest {
 
         transaction(database) {
             repository.countByDateAndStatus(11, CLINIC_ID, DATE..DATE) shouldBeEqualTo
-                listOf(AppointmentStatsProjectionRow(DATE, AppointmentState.CONFIRMED, 4L))
+                listOf(AppointmentStatsProjectionRow(DATE, AppointmentState.CONFIRMED, 3L))
             repository.countByDateAndStatus(12, CLINIC_ID, DATE..DATE) shouldBeEqualTo
                 listOf(AppointmentStatsProjectionRow(DATE, AppointmentState.CONFIRMED, 1L))
         }

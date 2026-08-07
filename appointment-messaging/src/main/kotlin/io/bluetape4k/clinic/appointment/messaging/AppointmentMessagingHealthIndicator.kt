@@ -17,7 +17,7 @@ class AppointmentMessagingHealthIndicator(
         val state = readiness.snapshot()
         val builder = when {
             !state.enabled -> Health.outOfService()
-            !state.configurationValid || !state.schemaValid || !state.serializerValid -> Health.down()
+            !state.configurationValid || !state.schemaValid || !state.registryValid || !state.serializerValid -> Health.down()
             !state.brokerAvailable || state.relayPaused || state.relayHeld -> Health.outOfService()
             else -> Health.up()
         }
@@ -28,6 +28,7 @@ class AppointmentMessagingHealthIndicator(
             .withDetail("relayPaused", state.relayPaused)
             .withDetail("relayHeld", state.relayHeld)
             .withDetail("schemaValid", state.schemaValid)
+            .withDetail("registryValid", state.registryValid)
             .withDetail("serializerValid", state.serializerValid)
             .build()
     }

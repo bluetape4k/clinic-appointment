@@ -21,6 +21,9 @@ data class AppointmentConsumerProperties(
         require(maxAttempts in 1..100) { "consumer maxAttempts must be bounded" }
         require(!processingLease.isNegative && !processingLease.isZero) { "consumer processingLease must be positive" }
         require(!maxPollInterval.isNegative && !maxPollInterval.isZero) { "consumer maxPollInterval must be positive" }
+        require(maxPollInterval >= processingLease) {
+            "consumer maxPollInterval must cover the processing lease"
+        }
         require(maxPollRecords in 1..100) { "consumer maxPollRecords must be bounded" }
         require(!shutdownTimeout.isNegative && !shutdownTimeout.isZero) {
             "consumer shutdownTimeout must be positive"

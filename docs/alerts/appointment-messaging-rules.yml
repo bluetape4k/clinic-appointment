@@ -89,3 +89,66 @@ groups:
           summary: Appointment outbox pending work is skewed across partitions
           runbook: docs/runbooks/appointment-messaging-operations.md
           clear_when: partition skew remains at or below 4 for 10m
+      - alert: AppointmentConsumerLagHigh
+        expr: appointment_consumer_lag > 100
+        for: 10m
+        labels:
+          severity: warning
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: Appointment consumer lag is above the operating threshold
+          runbook: docs/runbooks/appointment-messaging-operations.md
+          clear_when: aggregate consumer lag remains at or below 100 for 10m
+      - alert: AppointmentConsumerOldestAgeTooHigh
+        expr: appointment_consumer_oldest_age_seconds > 180
+        for: 5m
+        labels:
+          severity: critical
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: The oldest appointment consumer processing row is outside the SLO
+          runbook: docs/runbooks/appointment-messaging-operations.md
+          rollback: hold replay and inspect broker lag and database locks
+      - alert: AppointmentConsumerRetryRateHigh
+        expr: increase(appointment_consumer_retry_total[10m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: Appointment consumer retries are increasing
+          runbook: docs/runbooks/appointment-messaging-operations.md
+      - alert: AppointmentConsumerQuarantineEntered
+        expr: increase(appointment_consumer_quarantined_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: An appointment consumer event entered quarantine
+          runbook: docs/operations/appointment-consumer-replay-runbook.md
+          rollback: hold replay and inspect the metadata-only quarantine row
+      - alert: AppointmentConsumerInboxTransactionP95High
+        expr: histogram_quantile(0.95, sum(rate(appointment_consumer_inbox_transaction_seconds_bucket[10m])) by (le, operation)) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: Appointment consumer inbox transaction p95 exceeds 50ms
+          runbook: docs/runbooks/appointment-messaging-operations.md
+      - alert: AppointmentConsumerReplayRejected
+        expr: increase(appointment_consumer_replay_total{status="REJECTED"}[10m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          owner: scheduling-platform
+          escalation: oncall
+        annotations:
+          summary: An appointment consumer replay was rejected
+          runbook: docs/operations/appointment-consumer-replay-runbook.md

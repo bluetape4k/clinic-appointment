@@ -143,8 +143,8 @@ The full requirements diagram catalog is maintained in [docs/requirements](docs/
 |------|------|-----------|
 | `appointment-core` | Domain model for appointments, purchased treatment plans, scheduling policies, visit commitments, Exposed ORM repositories, state machines, and slot calculation. | [README](appointment-core/README.md) |
 | `appointment-event` | Domain event publishing/subscription and event log persistence based on Spring ApplicationEvent. | [README](appointment-event/README.md) |
-| `appointment-messaging` | Kafka 4 transactional-outbox contracts, V22 lease metadata, strict envelope codec, and bounded relay. | [README](appointment-messaging/README.md) |
-| `benchmark/appointment-messaging-benchmark` | PostgreSQL production-schema outbox claim measurements with `kotlinx-benchmark`, Hikari, and Flyway. | [Benchmark source](benchmark/appointment-messaging-benchmark) |
+| `appointment-messaging` | Kafka 4 transactional-outbox contracts, V23 consumer inbox/quarantine/replay audit, strict envelope codec, bounded relay, and lag/retention metrics. | [README](appointment-messaging/README.md) |
+| `benchmark/appointment-messaging-benchmark` | PostgreSQL production-schema outbox and consumer inbox measurements with `kotlinx-benchmark`, Hikari, and Flyway. | [Benchmark source](benchmark/appointment-messaging-benchmark) |
 | `appointment-solver` | Timefold Solver AI optimization for bulk appointment placement using 12 hard and 6 soft constraints. | [README](appointment-solver/README.md) |
 | `appointment-notification` | Durable outbox delivery, send-time member resolution, reminder recovery, privacy-safe retention, and provider isolation. | [README](appointment-notification/README.md) |
 | `appointment-api` | Spring Boot 4 REST API for appointment CRUD, slot lookup, reassignment, JWT authentication, and Swagger. | [README](appointment-api/README.md) |
@@ -205,6 +205,33 @@ benchmark evidence only; they are not a deployment SLO.
 The smoke task is intended for pull requests; the full task is serialized in nightly
 CI and uploads the JSON and generated chart artifacts.
 
+### PostgreSQL appointment consumer benchmark
+
+The same `kotlinx-benchmark` module also runs the production V23 consumer schema against
+PostgreSQL. It measures bounded terminal-row cleanup, duplicate inbox lookup, and a
+two-participant same-key insert to expose transaction lock contention. Throughput is
+reported in `ops/ms`; contention is reported in `ms/op`.
+
+![PostgreSQL appointment consumer benchmark](docs/images/readme-charts/appointment-messaging-consumer-postgresql-benchmark-01-en.png)
+
+The committed [consumer baseline JSON](docs/benchmarks/appointment-messaging-consumer-postgresql-baseline.json)
+was collected from the `smoke` configuration with `postgres:18-alpine`, seed `42`, and
+10,000/100,000-row scenarios.
+
+| Operation | Rows | p50 | p95 | p99 | Unit |
+|-----------|-----:|----:|----:|----:|------|
+| bounded cleanup | 10,000 | 0.118795 | 0.118795 | 0.118795 | ops/ms |
+| bounded cleanup | 100,000 | 0.040776 | 0.040776 | 0.040776 | ops/ms |
+| duplicate lookup | 10,000 | 0.264357 | 0.264357 | 0.264357 | ops/ms |
+| duplicate lookup | 100,000 | 0.356833 | 0.356833 | 0.356833 | ops/ms |
+| same-key insert contention | 10,000 | 5.013504 | 6.983680 | 8.216576 | ms/op |
+| same-key insert contention | 100,000 | 5.087232 | 6.188237 | 6.234112 | ms/op |
+
+These are local PostgreSQL benchmark measurements and lock-contention evidence; the
+report deliberately keeps `deploymentSloEvidence=false`. Production deployment SLO,
+broker lag, and lock-wait evidence must be collected from the target environment before
+the rollout gate is closed.
+
 ### Prerequisites
 
 - JDK 25
@@ -223,6 +250,8 @@ CI and uploads the JSON and generated chart artifacts.
 | [AI Scheduler](docs/requirements/solver.md) | Timefold Solver constraint design. |
 | [Notification Module](docs/requirements/notification.md) | Durable outbox lifecycle, rollout routes, member-data boundary, and provider isolation. |
 | [Notification outbox operations](docs/runbooks/notification-outbox-operations.md) | Canary gates, alerts, re-notify, key rotation, migration, and rollback. |
+| [Appointment messaging operations](docs/runbooks/appointment-messaging-operations.md) | Consumer readiness, MySQL V23 metadata smoke, lag/SLO boundaries, replay, retention, and rollback. |
+| [Appointment consumer replay runbook](docs/operations/appointment-consumer-replay-runbook.md) | Tenant/clinic-scoped replay authorization, bounded Kafka source, audit claims, and retention. |
 | [Frontend](docs/requirements/frontend.md) | Angular structure and page design. |
 | [Appointment plan visual companion](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.en.html) | English simulation and decision history for plans, booking commitments, disruption, and capacity. |
 | [Scheduling policy visual companion](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.en.html) | English simulation and decision history for policy compilation, approval, activation, and recovery. |

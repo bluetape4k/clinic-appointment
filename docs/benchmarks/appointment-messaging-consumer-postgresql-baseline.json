@@ -5,57 +5,89 @@
   "postgresImage": "postgres:18-alpine",
   "kotlinxBenchmarkVersion": "0.4.17",
   "seed": 42,
-  "rowCounts": [10000, 100000],
+  "rowCounts": [
+    10000,
+    100000
+  ],
   "cleanupBatchSize": 32,
-  "configuration": "main",
-  "mode": "thrpt",
+  "configuration": "smoke",
+  "mode": "mixed",
   "measurements": [
     {
       "operation": "boundedCleanup",
       "rows": 10000,
-      "score": 0.11315498304504916,
+      "mode": "thrpt",
+      "score": 0.11879528128511396,
       "scoreUnit": "ops/ms",
       "percentiles": {
-        "p50": 0.10936620221529171,
-        "p95": 0.13745212177896465,
-        "p99": 0.13745212177896465
+        "p50": 0.11879528128511396,
+        "p95": 0.11879528128511396,
+        "p99": 0.11879528128511396
       }
     },
     {
       "operation": "boundedCleanup",
       "rows": 100000,
-      "score": 0.04350313807560679,
+      "mode": "thrpt",
+      "score": 0.04077635471833761,
       "scoreUnit": "ops/ms",
       "percentiles": {
-        "p50": 0.04379651740341993,
-        "p95": 0.0453769794503985,
-        "p99": 0.0453769794503985
+        "p50": 0.04077635471833761,
+        "p95": 0.04077635471833761,
+        "p99": 0.04077635471833761
+      }
+    },
+    {
+      "operation": "duplicateInboxInsertContention",
+      "rows": 10000,
+      "mode": "sample",
+      "score": 5.046644363636363,
+      "scoreUnit": "ms/op",
+      "percentiles": {
+        "p50": 5.013504,
+        "p95": 6.983679999999994,
+        "p99": 8.216576
+      }
+    },
+    {
+      "operation": "duplicateInboxInsertContention",
+      "rows": 100000,
+      "mode": "sample",
+      "score": 5.000471272727273,
+      "scoreUnit": "ms/op",
+      "percentiles": {
+        "p50": 5.087232,
+        "p95": 6.188236799999999,
+        "p99": 6.234112
       }
     },
     {
       "operation": "duplicateInboxLookup",
       "rows": 10000,
-      "score": 0.5142172198661799,
+      "mode": "thrpt",
+      "score": 0.264356643900762,
       "scoreUnit": "ops/ms",
       "percentiles": {
-        "p50": 0.520152745974772,
-        "p95": 0.5450374492018728,
-        "p99": 0.5450374492018728
+        "p50": 0.264356643900762,
+        "p95": 0.264356643900762,
+        "p99": 0.264356643900762
       }
     },
     {
       "operation": "duplicateInboxLookup",
       "rows": 100000,
-      "score": 0.5322718910430868,
+      "mode": "thrpt",
+      "score": 0.3568332000723528,
       "scoreUnit": "ops/ms",
       "percentiles": {
-        "p50": 0.5369260162880034,
-        "p95": 0.5786392916275392,
-        "p99": 0.5786392916275392
+        "p50": 0.3568332000723528,
+        "p95": 0.3568332000723528,
+        "p99": 0.3568332000723528
       }
     }
   ],
   "deploymentSloEvidence": false,
-  "sourceFile": "benchmark/appointment-messaging-benchmark/build/reports/benchmarks/main/2026-08-06T21.19.05.105256/main.json",
-  "sourceFilePattern": "benchmark/appointment-messaging-benchmark/build/reports/benchmarks/main/main.json"
+  "lockContentionEvidence": true,
+  "sourceFile": "benchmark/appointment-messaging-benchmark/build/reports/benchmarks/smoke/2026-08-07T04.18.03.343491/main.json",
+  "sourceFilePattern": "benchmark/appointment-messaging-benchmark/build/reports/benchmarks/smoke/main.json"
 }

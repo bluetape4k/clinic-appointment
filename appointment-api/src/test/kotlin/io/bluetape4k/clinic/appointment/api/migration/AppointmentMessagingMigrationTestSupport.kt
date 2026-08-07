@@ -11,6 +11,86 @@ import javax.sql.DataSource
 /** V22 appointment envelope/lease columns and dialect-specific index contract. */
 internal object AppointmentMessagingMigrationTestSupport {
 
+    /**
+     * V23 consumer metadata contract is checked against the real JDBC metadata.
+     *
+     * The same helper is intentionally used by H2, MySQL, and PostgreSQL tests so a
+     * dialect-specific migration cannot silently omit a table, key, or retention index.
+     */
+    fun verifyV23Migration(
+        dataSource: DataSource,
+        location: String,
+    ) {
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .cleanDisabled(false)
+            .load()
+            .clean()
+
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .target("22")
+            .load()
+            .migrate()
+
+        val result = Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .target("23")
+            .load()
+            .migrate()
+        check(result.success) { "V23 migration failed: ${result.warnings.joinToString()}" }
+        check(result.migrationsExecuted == 1) {
+            "Expected only V23 after target 22, executed=${result.migrationsExecuted}"
+        }
+
+        verifyV23Metadata(dataSource)
+    }
+
+    /**
+     * Verifies only the already-applied V23 metadata without running Flyway or mutating rows.
+     *
+     * This is the safe hook for a production/staging endpoint smoke test. Applying a migration
+     * to a production database remains an operator-controlled change-window action.
+     */
+    fun verifyV23Metadata(dataSource: DataSource) {
+        dataSource.connection.use(::assertV23Metadata)
+    }
+
+    private fun assertV23Metadata(connection: Connection) {
+        V23_TABLES.forEach { (table, expectedColumns) ->
+            check(tableExists(connection, table)) { "Missing V23 table $table" }
+            val actualColumns = columns(connection, table)
+            check(actualColumns == expectedColumns) {
+                "Unexpected V23 columns for $table: expected=$expectedColumns actual=$actualColumns"
+            }
+        }
+        V23_PRIMARY_KEYS.forEach { (table, expected) ->
+            check(primaryKeyColumns(connection, table) == expected) {
+                "Unexpected V23 primary key for $table: ${primaryKeyColumns(connection, table)}"
+            }
+        }
+        V23_INDEXES.forEach { (table, indexes) ->
+            indexes.forEach { (name, expectedColumns) ->
+                check(indexColumns(connection, table, name) == expectedColumns) {
+                    "Unexpected V23 index $name on $table: " +
+                        indexColumns(connection, table, name)
+                }
+            }
+        }
+        if (connection.metaData.databaseProductName.contains("MySQL", ignoreCase = true)) {
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT DATABASE()").use { rows ->
+                    check(rows.next() && !rows.getString(1).isNullOrBlank()) {
+                        "MySQL V23 verification must run against a selected catalog"
+                    }
+                }
+            }
+        }
+    }
+
     fun verifyV22Migration(
         dataSource: DataSource,
         location: String,
@@ -367,6 +447,37 @@ internal object AppointmentMessagingMigrationTestSupport {
         return rows.sortedBy { it.first }.map { it.second }
     }
 
+    private fun tableExists(connection: Connection, table: String): Boolean =
+        tableCandidates(table).any { candidate ->
+            connection.metaData.getTables(null, null, candidate, arrayOf("TABLE")).use { rows ->
+                rows.next()
+            }
+        }
+
+    private fun columns(connection: Connection, table: String): Set<String> {
+        val result = linkedSetOf<String>()
+        tableCandidates(table).forEach { candidate ->
+            connection.metaData.getColumns(null, null, candidate, "%").use { rows ->
+                while (rows.next()) rows.getString("COLUMN_NAME")?.lowercase()?.let(result::add)
+            }
+            if (result.isNotEmpty()) return@forEach
+        }
+        return result
+    }
+
+    private fun primaryKeyColumns(connection: Connection, table: String): List<String> {
+        val rows = mutableListOf<Pair<Short, String>>()
+        tableCandidates(table).forEach { candidate ->
+            if (rows.isNotEmpty()) return@forEach
+            connection.metaData.getPrimaryKeys(null, null, candidate).use { keys ->
+                while (keys.next()) {
+                    rows += keys.getShort("KEY_SEQ") to keys.getString("COLUMN_NAME").lowercase()
+                }
+            }
+        }
+        return rows.sortedBy { it.first }.map { it.second }
+    }
+
     private fun findColumn(connection: Connection, table: String, column: String): ColumnMetadata? {
         tableCandidates(table).forEach { tableName ->
             connection.metaData.getColumns(null, null, tableName, "%").use { columns ->
@@ -408,5 +519,83 @@ internal object AppointmentMessagingMigrationTestSupport {
         "lease_until" to null,
         "last_failure_code" to 64L,
         "last_failure_at" to null,
+    )
+
+    private val V23_TABLES = linkedMapOf(
+        "scheduling_appointment_consumer_inbox" to setOf(
+            "logical_consumer_id", "logical_stream_id", "event_id", "topic",
+            "partition_number", "offset_value", "schema_version", "tenant_group_id",
+            "clinic_id", "payload_sha256", "status", "attempt_count", "failure_code",
+            "received_at", "processed_at", "processing_lease_until",
+        ),
+        "scheduling_appointment_consumer_rejected" to setOf(
+            "id", "logical_consumer_id", "logical_stream_id", "failure_code", "topic",
+            "partition_number", "offset_value", "payload_sha256", "created_at",
+        ),
+        "scheduling_appointment_consumer_quarantine" to setOf(
+            "id", "logical_consumer_id", "logical_stream_id", "event_id", "failure_code",
+            "topic", "partition_number", "offset_value", "schema_version", "tenant_group_id",
+            "clinic_id", "payload_sha256", "created_at",
+        ),
+        "scheduling_appointment_stats_projection" to setOf(
+            "tenant_group_id", "clinic_id", "event_date", "status", "appointment_count",
+            "last_event_version", "last_event_id", "updated_at",
+        ),
+        "scheduling_appointment_stats_projection_events" to setOf(
+            "tenant_group_id", "clinic_id", "aggregate_id", "event_id", "event_version",
+            "event_date", "status", "created_at",
+        ),
+        "scheduling_appointment_consumer_replay_audit" to setOf(
+            "id", "request_id", "logical_consumer_id", "logical_stream_id", "tenant_group_id",
+            "clinic_id", "from_offset", "to_offset", "request_hash", "dry_run", "approved_by",
+            "status", "created_at", "completed_at",
+        ),
+    )
+
+    private val V23_PRIMARY_KEYS = mapOf(
+        "scheduling_appointment_consumer_inbox" to listOf(
+            "logical_consumer_id", "logical_stream_id", "event_id",
+        ),
+        "scheduling_appointment_consumer_rejected" to listOf("id"),
+        "scheduling_appointment_consumer_quarantine" to listOf("id"),
+        "scheduling_appointment_stats_projection" to listOf(
+            "tenant_group_id", "clinic_id", "event_date", "status",
+        ),
+        "scheduling_appointment_stats_projection_events" to listOf(
+            "tenant_group_id", "clinic_id", "aggregate_id", "event_id",
+        ),
+        "scheduling_appointment_consumer_replay_audit" to listOf("id"),
+    )
+
+    private val V23_INDEXES = mapOf(
+        "scheduling_appointment_consumer_inbox" to mapOf(
+            "idx_appointment_consumer_inbox_status_received" to
+                listOf("logical_consumer_id", "status", "received_at"),
+            "idx_appointment_consumer_inbox_scope" to
+                listOf("logical_consumer_id", "tenant_group_id", "clinic_id", "received_at"),
+            "idx_appointment_consumer_inbox_status_processed" to listOf(
+                "logical_consumer_id", "status", "processed_at", "logical_stream_id", "event_id",
+            ),
+        ),
+        "scheduling_appointment_consumer_rejected" to mapOf(
+            "idx_appointment_consumer_rejected_created" to listOf("created_at"),
+        ),
+        "scheduling_appointment_consumer_quarantine" to mapOf(
+            "idx_appointment_consumer_quarantine_created" to listOf("created_at"),
+        ),
+        "scheduling_appointment_stats_projection" to mapOf(
+            "idx_appointment_stats_projection_scope_date" to
+                listOf("tenant_group_id", "clinic_id", "event_date"),
+            "idx_appointment_stats_projection_scope_status_date" to
+                listOf("tenant_group_id", "clinic_id", "status", "event_date"),
+        ),
+        "scheduling_appointment_stats_projection_events" to mapOf(
+            "idx_appointment_stats_projection_events_scope_date" to
+                listOf("tenant_group_id", "clinic_id", "event_date"),
+        ),
+        "scheduling_appointment_consumer_replay_audit" to mapOf(
+            "idx_appointment_consumer_replay_audit_scope_created" to
+                listOf("tenant_group_id", "clinic_id", "created_at"),
+        ),
     )
 }

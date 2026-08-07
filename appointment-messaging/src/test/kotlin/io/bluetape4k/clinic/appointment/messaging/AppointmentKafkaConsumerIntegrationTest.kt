@@ -9,13 +9,18 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.ConsumerRecords
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.kafka.core.KafkaAdmin
 import org.springframework.kafka.core.KafkaTemplate
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory
+import org.springframework.kafka.listener.AcknowledgingMessageListener
 import org.springframework.kafka.support.Acknowledgment
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -83,6 +88,117 @@ class AppointmentKafkaConsumerIntegrationTest {
             template.destroy()
         }
     }
+
+    @Test
+    fun `container crash before ack is recovered by a second group member after rebalance`() {
+        val kafka = AppointmentMessagingKafkaServerLauncher.kafka
+        val topicName = "clinic.appointment.consumer.rebalance.${UUID.randomUUID()}"
+        val topic = AppointmentTopic(topicName)
+        val key = AppointmentPartitionKeyFactory.create(7, 31, 42).value
+        val value = AppointmentEventEnvelopeCodec().encode(envelope())
+        val adminProperties = KafkaServer.Launcher.getProducerProperties(kafka)
+            .mapNotNull { (property, propertyValue) -> propertyValue?.let { property to it } }
+            .toMap()
+        val kafkaAdmin = KafkaAdmin(adminProperties).apply {
+            setAutoCreate(false)
+            setOperationTimeout(5)
+        }
+        val producerFactory = KafkaServer.Launcher.Spring.getStringProducerFactory(kafka)
+        val template = KafkaTemplate(producerFactory, true)
+        val groupId = "appointment-consumer-rebalance-${UUID.randomUUID()}"
+        val firstCrashed = CountDownLatch(1)
+        val recovered = CountDownLatch(1)
+        val recoveredRuntimeReturned = CountDownLatch(1)
+        val handlerCalls = AtomicInteger()
+        val identity = AppointmentConsumerIdentity(
+            consumerId = AppointmentLogicalConsumerId("notification"),
+            streamId = AppointmentLogicalStreamId("appointment-events"),
+        )
+        val database = Database.connect(
+            "jdbc:h2:mem:appointment_consumer_rebalance_${System.nanoTime()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+            driver = "org.h2.Driver",
+        )
+        transaction(database) {
+            SchemaUtils.create(
+                AppointmentConsumerInboxTable,
+                AppointmentConsumerQuarantineTable,
+                AppointmentConsumerRejectedRecordTable,
+            )
+        }
+        val runtime = AppointmentConsumerRuntime(
+            codec = AppointmentEventEnvelopeCodec(),
+            inboxStore = JdbcAppointmentConsumerInboxStore(database, maxAttempts = 3),
+            allowedTopics = setOf(topic),
+        )
+        val firstFactory = listenerFactory(kafka, groupId)
+        val secondFactory = listenerFactory(kafka, groupId)
+        val firstContainer = firstFactory.createContainer(topicName).apply {
+            containerProperties.setGroupId(groupId)
+            containerProperties.setMessageListener(
+                AcknowledgingMessageListener<String, String> { record, acknowledgment ->
+                    runtime.consume(record, acknowledgment, identity) { _, _ ->
+                        if (handlerCalls.getAndIncrement() == 0) {
+                            firstCrashed.countDown()
+                            throw AppointmentConsumerRetryableException("simulated consumer crash")
+                        }
+                    }
+                },
+            )
+        }
+        val secondContainer = secondFactory.createContainer(topicName).apply {
+            containerProperties.setGroupId(groupId)
+            containerProperties.setMessageListener(
+                AcknowledgingMessageListener<String, String> { record, acknowledgment ->
+                    AppointmentKafkaConsumerListener(
+                        runtime = runtime,
+                        identity = identity,
+                        handler = { _, _ -> recovered.countDown() },
+                    ).onMessage(record, acknowledgment)
+                    recoveredRuntimeReturned.countDown()
+                },
+            )
+        }
+
+        try {
+            kafkaAdmin.createOrModifyTopics(NewTopic(topicName, 1, 1.toShort()))
+            template.send(topicName, key, value).get(10, TimeUnit.SECONDS)
+            firstContainer.start()
+            check(firstCrashed.await(20, TimeUnit.SECONDS)) { "first container did not reach crash handler" }
+            // Stop the failed member before its error-handler retry; the uncommitted offset
+            // must be reassigned to the second member in the same group.
+            firstContainer.stop()
+            secondContainer.start()
+            check(recovered.await(30, TimeUnit.SECONDS)) { "second member did not recover record" }
+            check(recoveredRuntimeReturned.await(30, TimeUnit.SECONDS)) {
+                "recovered runtime did not return after processing"
+            }
+
+            transaction(database) {
+                AppointmentConsumerInboxTable
+                    .selectAll()
+                    .single()[AppointmentConsumerInboxTable.status]
+                    .shouldBeEqualTo(AppointmentConsumerStatus.PROCESSED)
+            }
+            handlerCalls.get().shouldBeEqualTo(1)
+        } finally {
+            if (firstContainer.isRunning) firstContainer.stop()
+            if (secondContainer.isRunning) secondContainer.stop()
+            template.destroy()
+        }
+    }
+
+    private fun listenerFactory(
+        kafka: KafkaServer,
+        groupId: String,
+    ): ConcurrentKafkaListenerContainerFactory<String, String> =
+        AppointmentKafkaConsumerConfiguration().appointmentKafkaConsumerContainerFactory(
+            KafkaServer.Launcher.Spring.getStringConsumerFactory(
+                KafkaServer.Launcher.getConsumerProperties(kafka).apply {
+                    this[org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG] = groupId
+                    this[org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG] = false
+                },
+            ),
+        )
 
     private fun pollOne(kafka: KafkaServer, topic: String): ConsumerRecord<String, String>? {
         KafkaServer.Launcher.createStringConsumer(kafka).use { consumer ->

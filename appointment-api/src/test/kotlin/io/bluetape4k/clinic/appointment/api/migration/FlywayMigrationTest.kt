@@ -60,6 +60,14 @@ class FlywayMigrationTest {
         )
     }
 
+    @Test
+    fun `V23 consumer metadata contract is complete on H2`() {
+        AppointmentMessagingMigrationTestSupport.verifyV23Migration(
+            dataSource = h2DataSource("appointment-messaging-v23"),
+            location = "classpath:db/migration/h2",
+        )
+    }
+
     private fun h2DataSource(scope: String): SimpleDriverDataSource {
         val driver = Class.forName("org.h2.Driver").getDeclaredConstructor().newInstance() as Driver
         return SimpleDriverDataSource(

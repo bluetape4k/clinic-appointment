@@ -40,7 +40,8 @@ class BenchmarkReportContractTest {
               "cleanupBatchSize": 32,
               "measurements": [
                 {"operation":"boundedCleanup","rows":10000,"score":0.04,"percentiles":{"p50":0.04,"p95":0.05,"p99":0.05}},
-                {"operation":"duplicateInboxLookup","rows":100000,"score":0.55,"percentiles":{"p50":0.55,"p95":0.57,"p99":0.57}}
+                {"operation":"duplicateInboxLookup","rows":100000,"score":0.55,"percentiles":{"p50":0.55,"p95":0.57,"p99":0.57}},
+                {"operation":"duplicateInboxInsertContention","rows":100000,"score":0.12,"percentiles":{"p50":0.12,"p95":0.14,"p99":0.15}}
               ]
             }
             """.trimIndent(),

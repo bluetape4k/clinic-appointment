@@ -4,7 +4,12 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
+import com.sun.net.httpserver.HttpServer
 import org.junit.jupiter.api.Test
+import java.net.InetSocketAddress
+import java.net.URI
+import java.time.Duration
+import java.util.Base64
 
 class AppointmentSchemaRegistryTest {
 
@@ -72,6 +77,55 @@ class AppointmentSchemaRegistryTest {
                 fromOffset = 2,
                 toOffset = 1,
                 dryRun = true,
+            )
+        }
+    }
+
+    @Test
+    fun `jdk reader requests the exact subject endpoint with basic authentication`() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        var requestPath: String? = null
+        var authorization: String? = null
+        server.createContext("/registry/config/appointment-events-value") { exchange ->
+            requestPath = exchange.requestURI.path
+            authorization = exchange.requestHeaders.getFirst("Authorization")
+            val body = "{\"compatibilityLevel\":\"BACKWARD_TRANSITIVE\"}".toByteArray()
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+        try {
+            val credentials = AppointmentSchemaRegistryBasicCredentials("registry-user", "registry-pass")
+            val reader = JdkSchemaRegistryCompatibilityReader(
+                baseUri = URI("http://127.0.0.1:${server.address.port}/registry"),
+                subject = "appointment-events-value",
+                timeout = Duration.ofSeconds(2),
+                credentials = credentials,
+            )
+
+            reader() shouldBeEqualTo "BACKWARD_TRANSITIVE"
+            requestPath shouldBeEqualTo "/registry/config/appointment-events-value"
+            authorization shouldBeEqualTo "Basic " + Base64.getEncoder().encodeToString(
+                "registry-user:registry-pass".toByteArray(),
+            )
+            credentials.toString().contains("registry-pass").shouldBeFalse()
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `jdk reader rejects non loopback http and uri userinfo`() {
+        assertFailsWith<IllegalArgumentException> {
+            JdkSchemaRegistryCompatibilityReader(
+                baseUri = URI("http://registry.example.com"),
+                subject = "appointment-events-value",
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            JdkSchemaRegistryCompatibilityReader(
+                baseUri = URI("https://user:pass@registry.example.com"),
+                subject = "appointment-events-value",
             )
         }
     }

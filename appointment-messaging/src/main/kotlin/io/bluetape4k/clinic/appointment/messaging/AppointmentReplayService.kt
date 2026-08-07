@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.messaging
 
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -31,12 +33,32 @@ data class AppointmentReplayResult(
 class AppointmentReplayService(
     private val database: Database,
     private val source: AppointmentReplaySource,
+    private val authorizer: AppointmentReplayAuthorizer = TenantScopedAppointmentReplayAuthorizer(),
+    private val metrics: AppointmentConsumerMetrics = NoopAppointmentConsumerMetrics,
 ) {
-    fun replay(requestId: String, request: AppointmentReplayRequest): AppointmentReplayResult {
+    constructor(database: Database, source: AppointmentReplaySource) : this(
+        database = database,
+        source = source,
+        authorizer = TenantScopedAppointmentReplayAuthorizer(),
+        metrics = NoopAppointmentConsumerMetrics,
+    )
+
+    fun replay(
+        requestId: String,
+        request: AppointmentReplayRequest,
+        actor: AppointmentReplayActor,
+    ): AppointmentReplayResult {
         require(requestId.matches(REQUEST_ID_PATTERN)) { "replay requestId is not canonical" }
+        try {
+            authorizer.authorize(actor, request)
+        } catch (failure: IllegalArgumentException) {
+            metrics.replay(AppointmentReplayAuditStatus.REJECTED)
+            throw AppointmentReplayAuthorizationException("appointment replay is not authorized")
+        }
         val requestHash = requestHash(request)
         val initialStatus = if (request.dryRun) AppointmentReplayAuditStatus.DRY_RUN
         else AppointmentReplayAuditStatus.REQUESTED
+        val claimAt = Instant.now()
 
         val shouldExecute = transaction(database) {
             val existing = AppointmentConsumerReplayAuditTable
@@ -44,7 +66,7 @@ class AppointmentReplayService(
                 .where { AppointmentConsumerReplayAuditTable.requestId eq requestId }
                 .singleOrNull()
             if (existing == null) {
-                AppointmentConsumerReplayAuditTable.insertIgnore {
+                val inserted = AppointmentConsumerReplayAuditTable.insertIgnore {
                     it[AppointmentConsumerReplayAuditTable.requestId] = requestId
                     it[logicalConsumerId] = request.identity.consumerId.value
                     it[logicalStreamId] = request.identity.streamId.value
@@ -56,8 +78,10 @@ class AppointmentReplayService(
                     it[dryRun] = request.dryRun
                     it[approvedBy] = request.approver
                     it[status] = initialStatus
-                }
-                !request.dryRun
+                    // REQUESTED + completedAt는 실행 claim timestamp로 사용합니다.
+                    it[completedAt] = claimAt.takeUnless { request.dryRun }
+                }.insertedCount == 1
+                inserted && !request.dryRun
             } else {
                 require(existing[AppointmentConsumerReplayAuditTable.requestHash] == requestHash) {
                     "replay requestId is already bound to a different scope or range"
@@ -65,27 +89,38 @@ class AppointmentReplayService(
                 val status = existing[AppointmentConsumerReplayAuditTable.status]
                 when {
                     status == AppointmentReplayAuditStatus.DRY_RUN && !request.dryRun -> {
-                        AppointmentConsumerReplayAuditTable.update({ AppointmentConsumerReplayAuditTable.requestId eq requestId }) {
+                        AppointmentConsumerReplayAuditTable.update({
+                            (AppointmentConsumerReplayAuditTable.requestId eq requestId) and
+                                (AppointmentConsumerReplayAuditTable.status eq AppointmentReplayAuditStatus.DRY_RUN) and
+                                AppointmentConsumerReplayAuditTable.completedAt.isNull()
+                        }) {
                             it[AppointmentConsumerReplayAuditTable.dryRun] = false
                             it[AppointmentConsumerReplayAuditTable.status] = AppointmentReplayAuditStatus.REQUESTED
-                            it[AppointmentConsumerReplayAuditTable.completedAt] = null
-                        }
-                        true
+                            it[AppointmentConsumerReplayAuditTable.completedAt] = claimAt
+                        } == 1
                     }
 
-                    status == AppointmentReplayAuditStatus.REQUESTED && !request.dryRun -> true
+                    status == AppointmentReplayAuditStatus.REQUESTED && !request.dryRun &&
+                        existing[AppointmentConsumerReplayAuditTable.completedAt] == null ->
+                        AppointmentConsumerReplayAuditTable.update({
+                            (AppointmentConsumerReplayAuditTable.requestId eq requestId) and
+                                (AppointmentConsumerReplayAuditTable.status eq AppointmentReplayAuditStatus.REQUESTED) and
+                                AppointmentConsumerReplayAuditTable.completedAt.isNull()
+                        }) {
+                            it[AppointmentConsumerReplayAuditTable.completedAt] = claimAt
+                        } == 1
                     else -> false
                 }
             }
         }
 
         if (!shouldExecute) {
-            return auditResult(requestId)
+            return auditResult(requestId).also { metrics.replay(it.status) }
         }
 
         val execution = AppointmentReplayExecution(
             groupId = replayGroupId(request.identity.consumerId.value, requestId),
-            // Keep the original logical inbox identity so replay cannot bypass consumer deduplication.
+            // 원래 logical inbox identity를 유지해 replay가 consumer dedup 경계를 우회하지 않게 합니다.
             identity = request.identity,
         )
         return try {
@@ -98,6 +133,7 @@ class AppointmentReplayService(
                 }
             }
             AppointmentReplayResult(requestId, AppointmentReplayAuditStatus.EXECUTED, execution.groupId, replayed)
+                .also { metrics.replay(it.status) }
         } catch (failure: Exception) {
             transaction(database) {
                 AppointmentConsumerReplayAuditTable.update({ AppointmentConsumerReplayAuditTable.requestId eq requestId }) {
@@ -105,6 +141,7 @@ class AppointmentReplayService(
                     it[completedAt] = Instant.now()
                 }
             }
+            metrics.replay(AppointmentReplayAuditStatus.REJECTED)
             throw AppointmentReplayException("approved appointment replay failed", failure)
         }
     }
@@ -135,6 +172,7 @@ class AppointmentReplayService(
                     request.identity.streamId.value,
                     request.tenantGroupId,
                     request.clinicId,
+                    request.approver,
                     request.fromOffset,
                     request.toOffset,
                 ).joinToString("|").toByteArray(StandardCharsets.UTF_8),

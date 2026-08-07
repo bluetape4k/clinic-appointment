@@ -16,11 +16,15 @@ import org.springframework.boot.sql.init.dependency.DependsOnDatabaseInitializat
 import io.micrometer.core.instrument.MeterRegistry
 import javax.sql.DataSource
 import org.jetbrains.exposed.v1.jdbc.Database
+import java.net.URI
 
 /** appointment-messaging 기본 contract와 DB store를 Spring Boot 4에 등록한다. */
 @AutoConfiguration
 @EnableConfigurationProperties(AppointmentMessagingBindingProperties::class)
-@Import(AppointmentKafkaConsumerConfiguration::class)
+@Import(
+    AppointmentKafkaConsumerConfiguration::class,
+    AppointmentConsumerRetentionSchedulingConfiguration::class,
+)
 class AppointmentMessagingAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -51,6 +55,13 @@ class AppointmentMessagingAutoConfiguration {
         producerMetadataTimeout = binding.producerMetadataTimeout,
         producerSecurityProtocol = binding.producerSecurityProtocol,
         producerCredentialReference = binding.producerCredentialReference,
+        schemaRegistry = AppointmentSchemaRegistryProperties(
+            enabled = binding.schemaRegistry.enabled,
+            baseUri = binding.schemaRegistry.baseUri?.let(URI::create),
+            subject = binding.schemaRegistry.subject,
+            timeout = binding.schemaRegistry.timeout,
+            credentialReference = binding.schemaRegistry.credentialReference,
+        ),
         consumer = AppointmentConsumerProperties(
             enabled = binding.consumer.enabled,
             groupId = binding.consumer.groupId,
@@ -66,6 +77,7 @@ class AppointmentMessagingAutoConfiguration {
             maxPollRecords = binding.consumer.maxPollRecords,
             shutdownTimeout = binding.consumer.shutdownTimeout,
         ),
+        retention = binding.retention,
     )
 
     @Bean
@@ -74,7 +86,29 @@ class AppointmentMessagingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun appointmentSchemaRegistry(): AppointmentSchemaRegistry = StaticAppointmentSchemaRegistry()
+    fun appointmentSchemaRegistry(
+        properties: AppointmentMessagingProperties,
+        credentialResolver: ObjectProvider<AppointmentSchemaRegistryCredentialResolver>,
+    ): AppointmentSchemaRegistry {
+        val registry = properties.schemaRegistry
+        if (!registry.enabled) return StaticAppointmentSchemaRegistry(subject = registry.subject)
+
+        val credentials = registry.credentialReference
+            ?.let { reference ->
+                requireNotNull(credentialResolver.getIfAvailable()) {
+                    "AppointmentSchemaRegistryCredentialResolver is required for credentialReference"
+                }.resolve(reference)
+            }
+        return HttpAppointmentSchemaRegistry(
+            subject = registry.subject,
+            compatibilityReader = JdkSchemaRegistryCompatibilityReader(
+                baseUri = requireNotNull(registry.baseUri),
+                subject = registry.subject,
+                timeout = registry.timeout,
+                credentials = credentials,
+            ),
+        )
+    }
 
     @Bean
     @ConditionalOnBean(Database::class)
@@ -83,10 +117,12 @@ class AppointmentMessagingAutoConfiguration {
     fun appointmentConsumerInboxStore(
         database: Database,
         properties: AppointmentMessagingProperties,
+        metrics: AppointmentConsumerMetrics,
     ): AppointmentConsumerInboxStore = JdbcAppointmentConsumerInboxStore(
         database = database,
         maxAttempts = properties.consumer.maxAttempts,
         processingLease = properties.consumer.processingLease,
+        metrics = metrics,
     )
 
     @Bean
@@ -98,6 +134,7 @@ class AppointmentMessagingAutoConfiguration {
         codec: AppointmentEventEnvelopeCodec,
         schemaRegistry: AppointmentSchemaRegistry,
         inboxStore: AppointmentConsumerInboxStore,
+        metrics: AppointmentConsumerMetrics,
     ): AppointmentConsumerRuntime {
         schemaRegistry.validate(AppointmentEventEnvelope.CURRENT_SCHEMA_VERSION)
         return AppointmentConsumerRuntime(
@@ -105,6 +142,7 @@ class AppointmentMessagingAutoConfiguration {
             inboxStore = inboxStore,
             allowedTopics = properties.allowedTopics,
             schemaRegistry = schemaRegistry,
+            metrics = metrics,
         )
     }
 
@@ -129,10 +167,12 @@ class AppointmentMessagingAutoConfiguration {
         codec: AppointmentEventEnvelopeCodec,
         properties: AppointmentMessagingProperties,
         dataSource: ObjectProvider<DataSource>,
+        schemaRegistry: AppointmentSchemaRegistry,
     ): AppointmentMessagingReadinessValidator = AppointmentMessagingReadinessValidator(
         codec = codec,
         dataSource = dataSource.getIfAvailable(),
         requireConsumerSchema = properties.consumer.enabled,
+        schemaRegistry = schemaRegistry,
     )
 
     @Bean
@@ -255,6 +295,45 @@ class AppointmentMessagingAutoConfiguration {
     fun micrometerAppointmentOutboxMetrics(
         registry: MeterRegistry,
     ): AppointmentOutboxMetrics = MicrometerAppointmentOutboxMetrics(registry)
+
+    @Bean
+    @ConditionalOnMissingBean(value = [MeterRegistry::class, AppointmentConsumerMetrics::class])
+    fun appointmentConsumerMetrics(): AppointmentConsumerMetrics = NoopAppointmentConsumerMetrics
+
+    @Bean
+    @ConditionalOnBean(MeterRegistry::class)
+    @ConditionalOnMissingBean(AppointmentConsumerMetrics::class)
+    fun micrometerAppointmentConsumerMetrics(
+        registry: MeterRegistry,
+    ): AppointmentConsumerMetrics = MicrometerAppointmentConsumerMetrics(registry)
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.messaging.retention", name = ["enabled"], havingValue = "true")
+    @ConditionalOnBean(value = [Database::class, AppointmentConsumerInboxStore::class])
+    @ConditionalOnMissingBean
+    fun appointmentConsumerRetentionService(
+        database: Database,
+        inboxStore: AppointmentConsumerInboxStore,
+        properties: AppointmentMessagingProperties,
+        metrics: AppointmentConsumerMetrics,
+    ): AppointmentConsumerRetentionService = AppointmentConsumerRetentionService(
+        database = database,
+        inboxStore = inboxStore,
+        properties = properties.retention,
+        metrics = metrics,
+    )
+
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "appointment.messaging.retention",
+        name = ["scheduler-enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnBean(AppointmentConsumerRetentionService::class)
+    @ConditionalOnMissingBean
+    fun appointmentConsumerRetentionScheduler(
+        service: AppointmentConsumerRetentionService,
+    ): AppointmentConsumerRetentionScheduler = AppointmentConsumerRetentionScheduler(service)
 
     @Bean
     @ConditionalOnBean(AppointmentOutboxRelay::class)

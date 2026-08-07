@@ -103,6 +103,25 @@ class AppointmentMessagingReadinessValidatorTest {
     }
 
     @Test
+    fun `consumer readiness fails closed when schema registry compatibility is unavailable`() {
+        val dataSource = JdbcDataSource().apply {
+            setURL("jdbc:h2:mem:appointment_readiness_registry_missing_${System.nanoTime()};DB_CLOSE_DELAY=-1")
+        }
+        val probe = AppointmentMessagingReadinessProbe(brokerAvailable = true)
+        AppointmentMessagingReadinessValidator(
+            codec = AppointmentEventEnvelopeCodec(),
+            dataSource = dataSource,
+            requireConsumerSchema = true,
+            schemaRegistry = HttpAppointmentSchemaRegistry(
+                compatibilityReader = { throw IllegalStateException("registry unavailable") },
+            ),
+        ).validate(probe)
+
+        probe.snapshot().registryValid.shouldBeFalse()
+        probe.snapshot().ready.shouldBeFalse()
+    }
+
+    @Test
     fun `startup validator fails fast when V22 metadata is unavailable`() {
         val dataSource = JdbcDataSource().apply {
             setURL("jdbc:h2:mem:appointment_readiness_startup_missing_${System.nanoTime()};DB_CLOSE_DELAY=-1")

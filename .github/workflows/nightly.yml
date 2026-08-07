@@ -366,17 +366,32 @@ jobs:
           node scripts/generate-appointment-messaging-benchmark-chart.mjs \
             --input build/reports/appointment-messaging-postgresql/benchmark.json \
             --output-dir build/reports/appointment-messaging-postgresql/charts
+          node scripts/collect-appointment-messaging-consumer-benchmark.mjs \
+            --input-dir benchmark/appointment-messaging-benchmark/build/reports/benchmarks \
+            --output build/reports/appointment-messaging-consumer-postgresql/benchmark.json \
+            --config main
+          node scripts/validate-appointment-messaging-consumer-benchmark.mjs \
+            --input build/reports/appointment-messaging-consumer-postgresql/benchmark.json
+          node scripts/generate-appointment-messaging-consumer-benchmark-chart.mjs \
+            --input build/reports/appointment-messaging-consumer-postgresql/benchmark.json \
+            --output-dir build/reports/appointment-messaging-consumer-postgresql/charts
 
       - name: Render and validate benchmark chart artifacts
         run: |
           python3 -m venv "$RUNNER_TEMP/cairo"
           "$RUNNER_TEMP/cairo/bin/pip" install --disable-pip-version-check cairosvg
-          for locale in en ko; do
-            svg="build/reports/appointment-messaging-postgresql/charts/appointment-messaging-postgresql-benchmark-01-${locale}.svg"
-            png="build/reports/appointment-messaging-postgresql/charts/appointment-messaging-postgresql-benchmark-01-${locale}.png"
+          for chart in \
+            "appointment-messaging-postgresql:appointment-messaging-postgresql-benchmark-01" \
+            "appointment-messaging-consumer-postgresql:appointment-messaging-consumer-postgresql-benchmark-01"; do
+            report_dir="${chart%%:*}"
+            prefix="${chart##*:}"
+            for locale in en ko; do
+            svg="build/reports/${report_dir}/charts/${prefix}-${locale}.svg"
+            png="build/reports/${report_dir}/charts/${prefix}-${locale}.png"
             python3 -c 'import sys; from xml.etree import ElementTree; ElementTree.parse(sys.argv[1])' "$svg"
             "$RUNNER_TEMP/cairo/bin/cairosvg" "$svg" -o "$png"
             "$RUNNER_TEMP/cairo/bin/python" -c 'import sys; from PIL import Image; image = Image.open(sys.argv[1]); image.load(); assert image.width > 0 and image.height > 0; print(f"{sys.argv[1]} PNG {image.width}x{image.height}")' "$png"
+            done
           done
 
       - name: Upload PostgreSQL benchmark artifacts
@@ -386,6 +401,7 @@ jobs:
           name: appointment-messaging-postgresql-benchmark-full
           path: |
             build/reports/appointment-messaging-postgresql/
+            build/reports/appointment-messaging-consumer-postgresql/
             benchmark/appointment-messaging-benchmark/build/reports/benchmarks/
           if-no-files-found: error
           retention-days: 30

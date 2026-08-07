@@ -17,6 +17,7 @@ class AppointmentMessagingStartupValidator(
         validator.validate(readiness)
         val state = readiness.snapshot()
         check(state.schemaValid) { "appointment messaging V22/V23 schema contract is unavailable" }
+        check(state.registryValid) { "appointment messaging Schema Registry compatibility is unavailable" }
         check(state.serializerValid) { "appointment messaging serializer contract is unavailable" }
     }
 }

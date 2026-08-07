@@ -58,6 +58,7 @@ enum class AppointmentConsumerFailureCode {
     PROVENANCE_MISMATCH,
     HANDLER_RETRYABLE,
     HANDLER_FAILED,
+    LEASE_EXPIRED,
     ATTEMPT_EXHAUSTED,
 }
 
@@ -89,6 +90,8 @@ data class AppointmentReplayRequest(
     val fromOffset: Long,
     val toOffset: Long,
     val dryRun: Boolean,
+    /** null이면 허용된 scope의 모든 partition을 bounded range로 읽습니다. */
+    val partition: Int? = null,
 ) : Serializable {
     init {
         require(tenantGroupId > 0 && clinicId > 0) { "replay scope must be positive" }
@@ -98,10 +101,21 @@ data class AppointmentReplayRequest(
         require(toOffset - fromOffset <= MAX_REPLAY_OFFSET_RANGE) {
             "replay range is too large"
         }
+        require(partition == null || partition >= 0) { "replay partition must not be negative" }
     }
 
     companion object {
         private const val MAX_REPLAY_OFFSET_RANGE = 100_000L
+    }
+}
+
+/** replay source가 decode한 envelope에 적용하는 tenant/clinic 경계입니다. */
+data class AppointmentReplayScope(
+    val tenantGroupId: Long,
+    val clinicId: Long,
+) : Serializable {
+    init {
+        require(tenantGroupId > 0 && clinicId > 0) { "replay scope must be positive" }
     }
 }
 

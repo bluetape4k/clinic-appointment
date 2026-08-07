@@ -66,8 +66,34 @@ internal class AppointmentMessagingAutoConfigurationTest {
                 health.status shouldBeEqualTo Status.OUT_OF_SERVICE
                 health.details["brokerAvailable"] shouldBeEqualTo false
                 health.details["schemaValid"] shouldBeEqualTo true
+                health.details["registryValid"] shouldBeEqualTo true
                 health.details["serializerValid"] shouldBeEqualTo true
                 (health.status != Status.DOWN).shouldBeTrue()
+            }
+    }
+
+    @Test
+    fun `schema registry binding creates authenticated http registry without contacting endpoint`() {
+        contextRunner
+            .withPropertyValues(
+                "appointment.messaging.enabled=false",
+                "appointment.messaging.schema-registry.enabled=true",
+                "appointment.messaging.schema-registry.base-uri=https://registry.example.com",
+                "appointment.messaging.schema-registry.subject=appointment-events-value",
+                "appointment.messaging.schema-registry.credential-reference=secret/schema-registry",
+            )
+            .withBean(
+                AppointmentSchemaRegistryCredentialResolver::class.java,
+                Supplier {
+                    AppointmentSchemaRegistryCredentialResolver {
+                        AppointmentSchemaRegistryBasicCredentials("user", "password")
+                    }
+                },
+            )
+            .run { context ->
+                context.startupFailure shouldBeEqualTo null
+                context.getBean(AppointmentSchemaRegistry::class.java)::class shouldBeEqualTo
+                    HttpAppointmentSchemaRegistry::class
             }
     }
 

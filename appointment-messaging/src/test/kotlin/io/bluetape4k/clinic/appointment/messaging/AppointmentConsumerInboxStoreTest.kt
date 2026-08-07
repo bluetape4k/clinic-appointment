@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.messaging
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldBeInstanceOf
 import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -58,7 +59,8 @@ class AppointmentConsumerInboxStoreTest {
 
         val retry = store.begin(identity(), eventId(), provenance())
 
-        retry shouldBeEqualTo AppointmentConsumerBeginResult.Acquired(attemptCount = 2)
+        retry.shouldBeInstanceOf<AppointmentConsumerBeginResult.Acquired>().attemptCount
+            .shouldBeEqualTo(2)
     }
 
     @Test
@@ -68,7 +70,8 @@ class AppointmentConsumerInboxStoreTest {
         store.markFailure(identity(), eventId(), AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
             .shouldBeEqualTo(AppointmentConsumerStatus.RETRYABLE)
         store.begin(identity(), eventId(), provenance())
-            .shouldBeEqualTo(AppointmentConsumerBeginResult.Acquired(attemptCount = 2))
+            .shouldBeInstanceOf<AppointmentConsumerBeginResult.Acquired>().attemptCount
+            .shouldBeEqualTo(2)
         store.markFailure(identity(), eventId(), AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
             .shouldBeEqualTo(AppointmentConsumerStatus.QUARANTINED)
 
@@ -114,7 +117,47 @@ class AppointmentConsumerInboxStoreTest {
 
         leaseClock.advance(java.time.Duration.ofSeconds(11))
         leasedStore.begin(identity(), eventId(), provenance())
-            .shouldBeEqualTo(AppointmentConsumerBeginResult.Acquired(attemptCount = 1))
+            .shouldBeInstanceOf<AppointmentConsumerBeginResult.Acquired>().attemptCount
+            .shouldBeEqualTo(2)
+    }
+
+    @Test
+    fun `stale handler cannot complete after lease reclaim`() {
+        val leaseClock = MutableAppointmentDatabaseClock(Instant.parse("2026-08-06T00:00:00Z"))
+        val leasedStore = JdbcAppointmentConsumerInboxStore(
+            database = database,
+            maxAttempts = 3,
+            clock = leaseClock,
+            processingLease = java.time.Duration.ofSeconds(10),
+        )
+        val first = leasedStore.begin(identity(), eventId(), provenance())
+            .shouldBeInstanceOf<AppointmentConsumerBeginResult.Acquired>()
+        leaseClock.advance(java.time.Duration.ofSeconds(11))
+        val reclaimed = leasedStore.begin(identity(), eventId(), provenance())
+            .shouldBeInstanceOf<AppointmentConsumerBeginResult.Acquired>()
+
+        leasedStore.markProcessed(identity(), eventId(), first.leaseUntil).shouldBeFalse()
+        leasedStore.markProcessed(identity(), eventId(), reclaimed.leaseUntil).shouldBeTrue()
+    }
+
+    @Test
+    fun `repeated crash lease expiry reaches the attempt bound`() {
+        val leaseClock = MutableAppointmentDatabaseClock(Instant.parse("2026-08-06T00:00:00Z"))
+        val leasedStore = JdbcAppointmentConsumerInboxStore(
+            database = database,
+            maxAttempts = 2,
+            clock = leaseClock,
+            processingLease = java.time.Duration.ofSeconds(10),
+        )
+        leasedStore.begin(identity(), eventId(), provenance())
+        leaseClock.advance(java.time.Duration.ofSeconds(11))
+        leasedStore.begin(identity(), eventId(), provenance())
+            .shouldBeInstanceOf<AppointmentConsumerBeginResult.Acquired>().attemptCount
+            .shouldBeEqualTo(2)
+        leaseClock.advance(java.time.Duration.ofSeconds(11))
+
+        leasedStore.begin(identity(), eventId(), provenance())
+            .shouldBeEqualTo(AppointmentConsumerBeginResult.Duplicate(AppointmentConsumerStatus.QUARANTINED))
     }
 
     @Test

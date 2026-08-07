@@ -43,7 +43,7 @@ object BenchmarkReportContract {
         require(Regex("\\\"rowCounts\\\"\\s*:\\s*\\[[^]]*10000[^]]*100000[^]]*]").containsMatchIn(json)) {
             "consumer report must contain the 10000 and 100000 row scenarios"
         }
-        listOf("boundedCleanup", "duplicateInboxLookup").forEach { operation ->
+        listOf("boundedCleanup", "duplicateInboxLookup", "duplicateInboxInsertContention").forEach { operation ->
             require(Regex("\\\"operation\\\"\\s*:\\s*\\\"$operation\\\"").containsMatchIn(json)) {
                 "consumer report must contain $operation"
             }
