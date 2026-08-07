@@ -1,7 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
-import io.bluetape4k.assertions.shouldBeGreaterThan
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentReminderParameters
 import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
@@ -45,25 +44,112 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.jdbc.datasource.SimpleDriverDataSource
+import java.io.PrintWriter
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
+import java.lang.reflect.Proxy
+import java.sql.Connection
+import java.sql.Driver
+import java.sql.Statement
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.logging.Logger
+import javax.sql.DataSource
 import kotlin.coroutines.CoroutineContext
+
+private class JdbcExecutionTracker {
+
+    private val executionThreads = CopyOnWriteArrayList<String>()
+
+    fun recordExecution() {
+        executionThreads += Thread.currentThread().name
+    }
+
+    fun snapshot(): List<String> = executionThreads.toList()
+
+    fun clear() {
+        executionThreads.clear()
+    }
+}
+
+private class TrackingDataSource(
+    private val delegate: DataSource,
+    private val tracker: JdbcExecutionTracker,
+) : DataSource {
+
+    override fun getConnection(): Connection = trackConnection(delegate.getConnection())
+
+    override fun getConnection(username: String?, password: String?): Connection =
+        trackConnection(delegate.getConnection(username, password))
+
+    override fun <T : Any?> unwrap(iface: Class<T>): T = delegate.unwrap(iface)
+
+    override fun isWrapperFor(iface: Class<*>): Boolean = delegate.isWrapperFor(iface)
+
+    override fun getLogWriter(): PrintWriter? = delegate.logWriter
+
+    override fun setLogWriter(out: PrintWriter?) {
+        delegate.logWriter = out
+    }
+
+    override fun setLoginTimeout(seconds: Int) {
+        delegate.loginTimeout = seconds
+    }
+
+    override fun getLoginTimeout(): Int = delegate.loginTimeout
+
+    override fun getParentLogger(): Logger = delegate.parentLogger
+
+    private fun trackConnection(connection: Connection): Connection =
+        Proxy.newProxyInstance(
+            Connection::class.java.classLoader,
+            arrayOf(Connection::class.java),
+            InvocationHandler { _, method, args ->
+                val result = invoke(connection, method, args)
+                if (result != null && Statement::class.java.isAssignableFrom(method.returnType)) {
+                    trackStatement(result, method.returnType)
+                } else {
+                    result
+                }
+            },
+        ) as Connection
+
+    private fun trackStatement(statement: Any, statementType: Class<*>): Any =
+        Proxy.newProxyInstance(
+            statementType.classLoader,
+            arrayOf(statementType),
+            InvocationHandler { _, method, args ->
+                if (method.name.startsWith("execute")) {
+                    tracker.recordExecution()
+                }
+                invoke(statement, method, args)
+            },
+        )
+
+    private fun invoke(target: Any, method: Method, args: Array<out Any?>?): Any? =
+        try {
+            method.invoke(target, *(args ?: emptyArray()))
+        } catch (ex: InvocationTargetException) {
+            throw ex.targetException
+        }
+}
 
 private class RecordingDispatcher : CoroutineDispatcher(), AutoCloseable {
 
+    val threadName = "reminder-recovery-io"
+
     private val delegate = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "reminder-recovery-io").apply { isDaemon = true }
+        Thread(runnable, threadName).apply { isDaemon = true }
     }.asCoroutineDispatcher()
 
-    val dispatchCount = AtomicInteger()
-
     override fun dispatch(context: CoroutineContext, block: Runnable) {
-        dispatchCount.incrementAndGet()
         delegate.dispatch(context, block)
     }
 
@@ -121,6 +207,7 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
                 it[defaultDurationMinutes] = 30
             }.value
         }
+        jdbcExecutionTracker.clear()
     }
 
     @Test
@@ -291,6 +378,7 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
     @Test
     fun `세 materializer 경로는 blocking transaction을 주입된 IO dispatcher에서 실행한다`(): Unit = runBlocking {
         insertConfirmedAppointment(LocalDate.of(2026, 8, 2), LocalTime.of(8, 50), "member-dispatcher")
+        jdbcExecutionTracker.clear()
         val ioDispatcher = RecordingDispatcher()
         try {
             store = recoveryStore(
@@ -299,21 +387,24 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
                 ioDispatcher = ioDispatcher,
             )
             val candidate = store.findCandidates(now, 1).single()
-            val afterFind = ioDispatcher.dispatchCount.get()
+            assertJdbcStatementsRanOn(ioDispatcher)
 
             store.enqueue(candidate)
-            val afterEnqueue = ioDispatcher.dispatchCount.get()
+            assertJdbcStatementsRanOn(ioDispatcher)
             store.suppressMissed(candidate)
-            val afterSuppressMissed = ioDispatcher.dispatchCount.get()
+            assertJdbcStatementsRanOn(ioDispatcher)
             store.scheduleFuture(candidate)
-            val afterScheduleFuture = ioDispatcher.dispatchCount.get()
-
-            afterEnqueue shouldBeGreaterThan afterFind
-            afterSuppressMissed shouldBeGreaterThan afterEnqueue
-            afterScheduleFuture shouldBeGreaterThan afterSuppressMissed
+            assertJdbcStatementsRanOn(ioDispatcher)
         } finally {
             ioDispatcher.close()
         }
+    }
+
+    private fun assertJdbcStatementsRanOn(ioDispatcher: RecordingDispatcher) {
+        val executionThreads = jdbcExecutionTracker.snapshot()
+        executionThreads.isNotEmpty() shouldBeEqualTo true
+        executionThreads.all { it.startsWith(ioDispatcher.threadName) } shouldBeEqualTo true
+        jdbcExecutionTracker.clear()
     }
 
     private fun scanner(catchUpWindow: Duration): NotificationReminderRecoveryScanner =
@@ -396,14 +487,19 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
 
     companion object {
         private lateinit var database: Database
+        private lateinit var jdbcExecutionTracker: JdbcExecutionTracker
 
         @JvmStatic
         @BeforeAll
         fun connectDatabase() {
-            database = Database.connect(
-                url = "jdbc:h2:mem:reminder-recovery-${UUID.randomUUID()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
-                driver = "org.h2.Driver",
+            jdbcExecutionTracker = JdbcExecutionTracker()
+            val dataSource = SimpleDriverDataSource(
+                Class.forName("org.h2.Driver").getDeclaredConstructor().newInstance() as Driver,
+                "jdbc:h2:mem:reminder-recovery-${UUID.randomUUID()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+                "sa",
+                "",
             )
+            database = Database.connect(TrackingDataSource(dataSource, jdbcExecutionTracker))
             transaction(database) {
                 SchemaUtils.createMissingTablesAndColumns(
                     TenantGroups,
