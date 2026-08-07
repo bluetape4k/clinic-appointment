@@ -19,6 +19,8 @@
 
 P2/P3: process-local registry라는 제한은 명세의 비목표이며 blocker가 아니다. 다중 API 인스턴스 합산 상한이 필요해질 때 별도 설계·issue가 필요하다.
 
+최종 집계: `P0=0`, `P1=0`, `P2=0`, `P3=0`.
+
 ## 판정
 
 **6-R/seven-tier: PASS — P0=0, P1=0.**

@@ -28,6 +28,8 @@
 
 P2/P3: 별도 blocker 없음. aggregate API 전체 테스트는 PR #200 당시의 운영 증거가 아니므로 PR #215의 focused 155 API tests와 CI run `30763178105`(15 successful checks)를 사용했다.
 
+최종 집계: `P0=0`, `P1=0`, `P2=0`, `P3=0`.
+
 ## 판정
 
 **6-R/seven-tier: PASS — P0=0, P1=0.** historical exact head는 P1이 있었고, 최종 verdict는 remediation head에만 부여한다.

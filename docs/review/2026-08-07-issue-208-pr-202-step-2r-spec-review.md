@@ -11,6 +11,10 @@
 - 관련 계획: `docs/superpowers/plans/2026-07-31-issue-201-clinic-permit-registry-lifecycle-plan.md`
 - lesson: `docs/lessons/2026-07-31-coroutine-keyed-resource-lifecycle.md`
 
+`gh pr view 202 --json headRefOid,mergeCommit`로 live metadata를 재확인했다. `headRefOid`는
+`1baad5cfeb092792c7ae92eac79d51f465972fad`이고, 이슈 댓글의 `f10e2c2...`는 merge commit이다.
+따라서 이 artifact는 merge SHA가 아니라 PR head SHA를 exact-head 기준으로 사용한다.
+
 | 관점 | 판단 | P0/P1 |
 |---|---|---:|
 | 성능 | active holder/waiter 수에 비례하는 registry와 process-local 상한 | 0/0 |

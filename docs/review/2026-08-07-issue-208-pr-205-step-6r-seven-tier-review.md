@@ -23,6 +23,8 @@ PR #205 exact head는 `synchronized(cursorLock)`로 suspend `findCandidates`와 
 
 P2/P3: 별도 blocker 없음. 다중 인스턴스 leader semantics와 full aggregate API test는 기존 운영 follow-up 범위이며 이 backfill에서 새 contract를 만들지 않는다.
 
+최종 집계: `P0=0`, `P1=0`, `P2=0`, `P3=0`.
+
 PR #215 focused evidence: API 155, core 9, event 27 tests; CI run `30763178105`는 15 successful checks였다.
 
 **6-R/seven-tier: PASS — P0=0, P1=0.** 원래 exact head는 P1 FAIL이고 최종 PASS는 remediation head에만 부여한다.
