@@ -376,7 +376,7 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
     }
 
     @Test
-    fun `세 materializer 경로는 blocking transaction을 주입된 IO dispatcher에서 실행한다`(): Unit = runBlocking {
+    fun `세 materializer 경로는 blocking JDBC statements를 주입된 IO dispatcher에서 실행한다`(): Unit = runBlocking {
         insertConfirmedAppointment(LocalDate.of(2026, 8, 2), LocalTime.of(8, 50), "member-dispatcher")
         jdbcExecutionTracker.clear()
         val ioDispatcher = RecordingDispatcher()
