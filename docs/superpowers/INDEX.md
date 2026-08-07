@@ -8,8 +8,9 @@
 | 4 | 2026-07-27 | 예약 정책 기반 구현 | ✅ 완료 | [spec](specs/2026-07-27-scheduling-policy-foundation-design.md) / [plan](plans/2026-07-27-scheduling-policy-foundation-plan.md) / [API](../api/scheduling-policy.md) / [runbook](../runbooks/scheduling-policy-activation.md) / [review](../review/2026-07-28-scheduling-policy-task10-review.md) |
 | 5 | 2026-07-29 | 설계 시각 동반 문서 이력 | 🚧 clinic 공개 준비 | [spec](specs/2026-07-29-visual-companion-history-design.md) / [plan](plans/2026-07-29-visual-companion-history-plan.md) |
 | 6 | 2026-07-30 | 프로필 변경 기반 진행 중 예약 재평가 | 📝 구현 계획 완료 | [spec](specs/2026-07-30-profile-change-reservation-reevaluation-design.md) / [plan](plans/2026-07-30-profile-change-reservation-reevaluation-plan.md) |
+| 7 | 2026-08-07 | Issue #208 Type A review gate 백필 | ⚠️ 차단: historical gate 미증명 | [status](../review/2026-08-07-issue-208-retrospective-gate-status.md) / [lesson](../lessons/2026-08-07-issue-208-type-a-review-gate-backfill.md) / [reviews](../review/2026-08-07-issue-208-pr-200-step-2r-spec-review.md) |
 
-✅ 완료: 4  📝 계획 완료: 1  🚧 진행 중: 1
+✅ 완료: 4  📝 계획 완료: 1  ⚠️ 차단: 1  🚧 진행 중: 1
 
 ## 공개 시각 동반 문서
 
