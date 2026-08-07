@@ -126,7 +126,7 @@ object SchedulingPolicyPreviewJobs : LongIdTable("scheduling_policy_preview_jobs
     /**
      * sanitized stable retry 또는 terminal error code입니다. 실패가 기록되지 않았으면 `null`입니다.
      *
-     * raw exception text, appointment data, policy/request payload, credential,
+     * 원시 exception text, appointment data, policy/request payload, credential,
      * authentication claim을 포함하면 안 됩니다.
      */
     val lastErrorCode = varchar("last_error_code", 96).nullable()

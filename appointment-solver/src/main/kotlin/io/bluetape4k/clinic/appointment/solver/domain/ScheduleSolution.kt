@@ -86,7 +86,7 @@ class ScheduleSolution(
     @field:ProblemFactCollectionProperty
     val equipmentUnavailabilities: List<EquipmentUnavailabilityFact> = emptyList(),
 
-    // --- Value Range Providers ---
+// --- Value Range Provider 정의 ---
 
     @field:ValueRangeProvider(id = "doctorRange")
     @field:ProblemFactCollectionProperty
@@ -100,7 +100,7 @@ class ScheduleSolution(
     @field:ProblemFactCollectionProperty
     val timeSlots: List<LocalTime> = emptyList(),
 
-    // --- Planning Entities ---
+// --- Planning Entity 정의 ---
 
     @field:PlanningEntityCollectionProperty
     val appointments: List<AppointmentPlanning> = emptyList(),
@@ -108,7 +108,7 @@ class ScheduleSolution(
     @field:PlanningScore
     var score: HardSoftScore? = null,
 ) {
-    /** Timefold requires no-arg constructor */
+    /** Timefold가 no-arg constructor를 요구한다. */
     @Suppress("unused")
     constructor() : this(clinic = ClinicFact(0, 30, 1, false))
 }

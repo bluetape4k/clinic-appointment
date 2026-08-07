@@ -196,18 +196,18 @@ class AppointmentStatsRepositoryTest : AbstractExposedTest() {
 
             val date = LocalDate.of(2026, 5, 1)
 
-            // doc1: CONFIRMED×2, CANCELLED×1
+// doc1: CONFIRMED×2, CANCELLED×1인 데이터
             insertAppointment(clinicId, doctorId1, treatmentTypeId, date, AppointmentState.CONFIRMED)
             insertAppointment(clinicId, doctorId1, treatmentTypeId, date, AppointmentState.CONFIRMED)
             insertAppointment(clinicId, doctorId1, treatmentTypeId, date, AppointmentState.CANCELLED)
-            // doc2: COMPLETED×1
+// doc2: COMPLETED×1인 데이터
             insertAppointment(clinicId, doctorId2, treatmentTypeId, date, AppointmentState.COMPLETED)
-            // doc3: NO_SHOW×1
+// doc3: NO_SHOW×1인 데이터
             insertAppointment(clinicId, doctorId3, treatmentTypeId, date, AppointmentState.NO_SHOW)
 
             val results = repo.countByDoctorAndStatus(clinicId, date..date)
 
-            // (doc1,CONFIRMED,2), (doc1,CANCELLED,1), (doc2,COMPLETED,1), (doc3,NO_SHOW,1)
+// (doc1,CONFIRMED,2), (doc1,CANCELLED,1), (doc2,COMPLETED,1), (doc3,NO_SHOW,1) 조합
             results shouldHaveSize 4
             val doc1Confirmed = results.first { it.doctorId == doctorId1 && it.status == AppointmentState.CONFIRMED }
             doc1Confirmed.count shouldBeEqualTo 2L
@@ -231,7 +231,7 @@ class AppointmentStatsRepositoryTest : AbstractExposedTest() {
 
             val results = repo.countByDoctorAndStatus(clinicId, date..date)
 
-            // 5 doctors × 1 status each = 5 rows; no limit applied at SQL level
+// doctor 5명 × status 1개씩 = 5행이며 SQL 수준에서는 limit을 적용하지 않는다.
             results shouldHaveSize 5
         }
     }

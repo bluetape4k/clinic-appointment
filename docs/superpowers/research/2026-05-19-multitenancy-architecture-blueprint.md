@@ -1,81 +1,81 @@
-# Architecture Blueprint — EPIC #16 Multitenancy
+# 아키텍처 청사진 — EPIC #16 Multitenancy
 
-> Source: Step 2-A feature-dev:code-architect output (Opus)
-> Date: 2026-05-19
-> Purpose: Codex CLI second-opinion review input
+> 출처: Step 2-A feature-dev:code-architect output (Opus)
+> 날짜: 2026-05-19
+> 목적: Codex CLI second-opinion review input
 
-## Confirmed user decisions
+## 확인된 사용자 결정
 
-1. Shallow isolation (A): `TenantGroup` → `Clinics` + `Holidays` FK only; 20 other tables inherit via Clinic FK
-2. URL `/api/{tenantCode}/...` full rewrite (10 controllers + all tests; Angular = Phase 2)
-3. JWT `allowedTenants` claim; URL tenantCode mismatch → 403
-4. Tenant ≠ user locale (orthogonal)
-5. Repository requires explicit `tenantGroupId` parameter (Exposed `StatementInterceptor` does NOT support auto-WHERE injection — verified via Exposed 1.3.0 sources jar)
-6. `TenantContext` = ThreadLocal + `CoroutineContext.Element` for suspend boundary
-7. `AuthorizationManager<RequestAuthorizationContext>` with `requestMatchers("/api/{tenantCode}/**").access(...)`
-8. Flyway 4-step (V3 schema+nullable, V4 backfill, V5 NOT NULL, V6 FK+composite UNIQUE) × 3 DB (h2/mysql/postgresql)
-9. `Holidays.holidayDate` global UNIQUE → `(tenant_group_id, holiday_date)` composite
-10. New `integration-test` profile activates real `SecurityConfig` (dev/test keep `NoOpSecurityConfig`)
-11. `TenantContextFilter` runs in ALL profiles (dev/test included) to keep service code uniform
-12. `TenantClinicAccessChecker` (service-layer) verifies `clinicId → tenantGroupId` (Caffeine cache); guards against clinicId spoofing
-13. Admin endpoints also tenant-scoped: `/api/{tenantCode}/admin/stats`
-14. `suspend` paths MUST NOT use `TenantContext.current()` after coroutine boundary; pass `tenantGroupId` explicitly
-15. Frontend i18n / data translation / cross-module (notification/event/solver) = Phase 2
+1. Shallow isolation (A): `TenantGroup` → `Clinics` + `Holidays` FK만 사용하고, 나머지 20개 table은 Clinic FK를 통해 상속
+2. URL `/api/{tenantCode}/...` 전체 rewrite(10개 controller + 모든 test; Angular는 Phase 2)
+3. JWT `allowedTenants` claim을 사용하고 URL tenantCode mismatch는 403
+4. Tenant와 user locale은 서로 다름(orthogonal)
+5. Repository는 명시적 `tenantGroupId` parameter를 요구함(Exposed `StatementInterceptor`는 auto-WHERE injection을 지원하지 않음 — Exposed 1.3.0 sources jar로 확인)
+6. Suspend 경계의 `TenantContext`는 ThreadLocal + `CoroutineContext.Element`
+7. `requestMatchers("/api/{tenantCode}/**").access(...)`를 사용하는 `AuthorizationManager<RequestAuthorizationContext>`
+8. Flyway 4-step(V3 schema+nullable, V4 backfill, V5 NOT NULL, V6 FK+composite UNIQUE) × 3 DB(h2/mysql/postgresql)
+9. `Holidays.holidayDate` global UNIQUE를 `(tenant_group_id, holiday_date)` composite으로 변경
+10. 새 `integration-test` profile은 실제 `SecurityConfig`를 활성화함(dev/test는 `NoOpSecurityConfig` 유지)
+11. Service code를 uniform하게 유지하기 위해 `TenantContextFilter`는 ALL profile(dev/test 포함)에서 실행
+12. `TenantClinicAccessChecker`(service-layer)는 `clinicId → tenantGroupId`를 확인(Caffeine cache)하고 clinicId spoofing을 방어
+13. Admin endpoint도 tenant-scoped: `/api/{tenantCode}/admin/stats`
+14. `suspend` path는 coroutine boundary 이후 `TenantContext.current()`를 사용하면 MUST NOT 함. `tenantGroupId`를 명시적으로 전달
+15. Frontend i18n / data translation / cross-module(notification/event/solver)은 Phase 2
 
-## Environment (verified)
+## 환경(확인됨)
 
 - Kotlin 2.3.21
-- Java **21** (not 25 as header claimed)
+- Java **21**(header에 기재된 25가 아님)
 - Spring Boot 4.0.6 / Spring Security 6.x
 - Exposed 1.3.0
 
-## Component map (new + modified)
+## Component map(신규 + 수정)
 
-### New (appointment-core)
+### 신규(appointment-core)
 - `model/tables/TenantGroups.kt` — LongIdTable `scheduling_tenant_groups`: `tenantCode` UNIQUE, `displayName`, `active`, `createdAt`
 - `model/dto/TenantGroupRecord.kt` — Serializable + serialVersionUID
 - `repository/TenantGroupRepository.kt` — `LongJdbcRepository<TenantGroupRecord>` + `findByCode` / `findIdByCode`
 
-### New (appointment-api/tenant)
+### 신규(appointment-api/tenant)
 - `tenant/TenantInfo.kt` — `data class(tenantGroupId, tenantCode)`
 - `tenant/TenantContext.kt` — ThreadLocal + `asContextElement()`
 - `tenant/TenantContextElement.kt` — `ThreadContextElement<TenantInfo?>`
-- `tenant/TenantContextFilter.kt` — `OncePerRequestFilter`, extracts path segment, Caffeine cache `tenantCode → tenantGroupId` (256, 5m), `try/finally clear()`, all profiles
-- `tenant/TenantClinicAccessChecker.kt` — service-layer guard, Caffeine `clinicId → tenantGroupId` (1024, 10m)
+- `tenant/TenantContextFilter.kt` — `OncePerRequestFilter`, path segment 추출, Caffeine cache `tenantCode → tenantGroupId`(256, 5m), `try/finally clear()`, 모든 profile
+- `tenant/TenantClinicAccessChecker.kt` — service-layer guard, Caffeine `clinicId → tenantGroupId`(1024, 10m)
 - `tenant/TenantNotAllowedException.kt` — RuntimeException → 403
-- `tenant/TenantConfig.kt` — `@Configuration` bean registrations
+- `tenant/TenantConfig.kt` — `@Configuration` bean registration
 
-### New (appointment-api/security)
-- `security/TenantAuthorizationManager.kt` — `AuthorizationManager<RequestAuthorizationContext>`; reads `ctx.variables["tenantCode"]`, checks against `principal.allowedTenants`
+### 신규(appointment-api/security)
+- `security/TenantAuthorizationManager.kt` — `AuthorizationManager<RequestAuthorizationContext>`; `ctx.variables["tenantCode"]`를 읽고 `principal.allowedTenants`와 비교
 
-### Modified
-- `security/SchedulingUserPrincipal.kt` — add `allowedTenants: List<String>`, bump `serialVersionUID = 2L`
-- `security/JwtTokenParser.kt` — add `CLAIM_ALLOWED_TENANTS`, parse list
-- `security/SecurityConfig.kt` — DSL rebuild with `requestMatchers("/api/{tenantCode}/...").access(allOf(tenantAuthorizationManager, roleManager))`, `anyRequest().denyAll()`
-- `model/tables/Clinics.kt` — add `tenantGroupId = long("tenant_group_id").references(TenantGroups.id)`
-- `model/tables/Holidays.kt` — add `tenantGroupId`, remove `holidayDate.uniqueIndex()`, add composite `uniqueIndex(tenantGroupId, holidayDate)`
-- `model/dto/{ClinicRecord,HolidayRecord}.kt` — add `tenantGroupId: Long`, bump serialVersionUID
-- `repository/ClinicRepository.kt` — add `findByTenant`, `findByIdAndTenant`, `findTenantGroupId`, `findPage(tenantGroupId, …)`
-- `repository/HolidayRepository.kt` — all methods take `tenantGroupId` first parameter
-- All 10 controllers — `@RequestMapping` path rewrite + `tenantClinicAccessChecker.verify(clinicId)` insertion
-- `TestJwtProvider.kt` — add `allowedTenants` parameter, default `["tenant-default"]` (backward compat for 100+ tests)
+### 수정
+- `security/SchedulingUserPrincipal.kt` — `allowedTenants: List<String>` 추가, `serialVersionUID = 2L`로 증가
+- `security/JwtTokenParser.kt` — `CLAIM_ALLOWED_TENANTS` 추가, list parse
+- `security/SecurityConfig.kt` — `requestMatchers("/api/{tenantCode}/...").access(allOf(tenantAuthorizationManager, roleManager))`, `anyRequest().denyAll()`을 사용하는 DSL 재구성
+- `model/tables/Clinics.kt` — `tenantGroupId = long("tenant_group_id").references(TenantGroups.id)` 추가
+- `model/tables/Holidays.kt` — `tenantGroupId` 추가, `holidayDate.uniqueIndex()` 제거, composite `uniqueIndex(tenantGroupId, holidayDate)` 추가
+- `model/dto/{ClinicRecord,HolidayRecord}.kt` — `tenantGroupId: Long` 추가, serialVersionUID 증가
+- `repository/ClinicRepository.kt` — `findByTenant`, `findByIdAndTenant`, `findTenantGroupId`, `findPage(tenantGroupId, …)` 추가
+- `repository/HolidayRepository.kt` — 모든 method가 `tenantGroupId`를 첫 parameter로 받음
+- 모든 10개 controller — `@RequestMapping` path rewrite + `tenantClinicAccessChecker.verify(clinicId)` 삽입
+- `TestJwtProvider.kt` — `allowedTenants` parameter 추가, default는 `["tenant-default"]`(100개 이상 test의 backward compat)
 - `GlobalExceptionHandler.kt` — `TenantNotAllowedException → 403`
 
-### Flyway (12 files: 4 versions × 3 DB)
-- V3: `add_tenant_groups.sql` — create `scheduling_tenant_groups`, add `tenant_group_id BIGINT NULL` to clinics + holidays, drop global UNIQUE on `holiday_date` (DB-specific syntax)
-- V4: `seed_default_tenant.sql` — insert `tenant-default`, backfill existing rows
-- V5: `tenant_group_not_null.sql` — `ALTER COLUMN SET NOT NULL` (H2/PG) / `MODIFY` (MySQL)
-- V6: `tenant_constraints.sql` — FK + composite UNIQUE `(tenant_group_id, holiday_date)` + indexes
+### Flyway(12개 file: 4 version × 3 DB)
+- V3: `add_tenant_groups.sql` — `scheduling_tenant_groups` 생성, clinics + holidays에 `tenant_group_id BIGINT NULL` 추가, `holiday_date` global UNIQUE 제거(DB별 syntax)
+- V4: `seed_default_tenant.sql` — `tenant-default` 삽입, 기존 row backfill
+- V5: `tenant_group_not_null.sql` — `ALTER COLUMN SET NOT NULL`(H2/PG) / `MODIFY`(MySQL)
+- V6: `tenant_constraints.sql` — FK + composite UNIQUE `(tenant_group_id, holiday_date)` + index
 
-### New profile
-- `application-integration-test.yml` (main + test) — JWT enabled, H2, Flyway on; activates `SecurityConfig` (matches `!dev & !test`)
+### 신규 profile
+- `application-integration-test.yml`(main + test) — JWT enabled, H2, Flyway on; `SecurityConfig` 활성화(`!dev & !test`와 일치)
 
 ### Test infra
-- `integration/AbstractIntegrationApiTest.kt` — `@SpringBootTest`, `@AutoConfigureMockMvc`, `@ActiveProfiles("integration-test")`, seeds `tenant-a` / `tenant-b` + 2 clinics
-- `integration/MultitenancyIntegrationTest.kt` — 6 cases: 200, URL-vs-claim 403, clinic-vs-tenant 403, 404 unknown tenant, 401 no JWT, holiday cross-tenant isolation
+- `integration/AbstractIntegrationApiTest.kt` — `@SpringBootTest`, `@AutoConfigureMockMvc`, `@ActiveProfiles("integration-test")`, `tenant-a` / `tenant-b`와 clinic 2개 seed
+- `integration/MultitenancyIntegrationTest.kt` — 6개 case: 200, URL-vs-claim 403, clinic-vs-tenant 403, unknown tenant 404, JWT 없음 401, holiday cross-tenant isolation
 - `tenant/TenantContextFilterTest.kt`, `tenant/TenantClinicAccessCheckerTest.kt`, `security/TenantAuthorizationManagerTest.kt`
 
-## Data flow (HTTP request)
+## Data flow(HTTP request)
 
 ```
 Client → SecurityFilterChain
@@ -91,43 +91,43 @@ Client → SecurityFilterChain
 
 ## Error matrix
 
-| Situation | HTTP | Source |
+| 상황 | HTTP | 출처 |
 |---|---|---|
 | JWT missing/expired | 401 | Spring default |
-| Unknown tenantCode in path | 404 | `TenantContextFilter.sendError(NOT_FOUND)` |
-| tenantCode vs allowedTenants mismatch | 403 | `TenantAuthorizationManager` |
-| clinicId belongs to other tenant | 403 | `TenantClinicAccessChecker → TenantNotAllowedException` |
-| Insufficient role | 403 | `AuthorityAuthorizationManager` |
+| Path의 unknown tenantCode | 404 | `TenantContextFilter.sendError(NOT_FOUND)` |
+| tenantCode와 allowedTenants mismatch | 403 | `TenantAuthorizationManager` |
+| clinicId가 다른 tenant에 속함 | 403 | `TenantClinicAccessChecker → TenantNotAllowedException` |
+| Role 부족 | 403 | `AuthorityAuthorizationManager` |
 
-## Build sequence (phases A→B→C→D)
+## Build sequence(phases A→B→C→D)
 
-- A: Domain (TenantGroups + repo + Flyway V3-V6 × 3 DB + Clinic/Holiday table/DTO/repo updates + unit tests)
-- B: Security + Tenant (TenantInfo/Context/Element/Filter/AccessChecker/Exception/Config + TenantAuthorizationManager + JwtTokenParser/SchedulingUserPrincipal/SecurityConfig + TestJwtProvider)
-- C: Controller URL rewrite (10 files) + verify(clinicId) insertion + existing controller test URL updates
-- D: integration-test profile + AbstractIntegrationApiTest + MultitenancyIntegrationTest + suspend path verification
+- A: Domain(TenantGroups + repo + Flyway V3-V6 × 3 DB + Clinic/Holiday table/DTO/repo update + unit test)
+- B: Security + Tenant(TenantInfo/Context/Element/Filter/AccessChecker/Exception/Config + TenantAuthorizationManager + JwtTokenParser/SchedulingUserPrincipal/SecurityConfig + TestJwtProvider)
+- C: Controller URL rewrite(10개 file) + verify(clinicId) 삽입 + 기존 controller test URL 갱신
+- D: integration-test profile + AbstractIntegrationApiTest + MultitenancyIntegrationTest + suspend path 검증
 
-## Key risks (from blueprint Section 8)
+## 주요 위험(blueprint Section 8에서 도출)
 
-| # | Risk | Mitigation |
+| # | 위험 | 완화책 |
 |---|---|---|
-| R1 | 10 controller URL change breaks all tests + Frontend | Phase C single-commit sed-style; Frontend = Phase 2 |
-| R2 | V4 backfill failure → V5 NOT NULL fails | V4 ends with `SELECT COUNT(*) WHERE tenant_group_id IS NULL` validation, Flyway `afterMigrate` callback |
-| R3 | H2 holiday_date UNIQUE auto-name unpredictable → V3 H2 fails | Pre-verify with `INFORMATION_SCHEMA`, fallback `DROP CONSTRAINT IF EXISTS` + index drop |
-| R4 | ThreadLocal leak (coroutine, virtual thread reuse) | try/finally clear; decision #14 explicit-arg rule for suspend |
-| R5 | clinicId spoofing across tenant | `TenantClinicAccessChecker.verify` mandatory at service entry; PR review checklist |
-| R6 | bluetape4k has no multitenancy module → self-built | Simple <300 LOC; 100% unit-tested |
-| R7 | `appointment-notification` / `appointment-event` / `appointment-solver` lack HTTP context | Out of scope; Phase 2 separate issue |
-| R8 | SecurityConfig DSL first-match wins → admin endpoint may leak | DSL unit tests with MockMvc per matcher case; code review |
-| R9 | Caffeine cache stale on clinic tenant move | Currently no clinic-move API; future requires invalidate hook; KDoc warning |
-| R10 | `TestJwtProvider` change ripples to 100+ tests | Default `allowedTenants=["tenant-default"]` for backward compat |
+| R1 | 10개 controller URL 변경으로 모든 test와 Frontend가 깨짐 | Phase C를 sed-style single-commit으로 처리; Frontend는 Phase 2 |
+| R2 | V4 backfill failure로 V5 NOT NULL 실패 | V4 마지막에 `SELECT COUNT(*) WHERE tenant_group_id IS NULL` validation과 Flyway `afterMigrate` callback 실행 |
+| R3 | H2 holiday_date UNIQUE auto-name이 예측 불가해 V3 H2 실패 | `INFORMATION_SCHEMA`로 사전 확인하고 `DROP CONSTRAINT IF EXISTS` + index drop으로 fallback |
+| R4 | ThreadLocal leak(coroutine, virtual thread reuse) | try/finally clear; decision #14의 suspend explicit-arg rule |
+| R5 | Tenant 간 clinicId spoofing | Service entry에서 `TenantClinicAccessChecker.verify`를 mandatory로 실행; PR review checklist |
+| R6 | bluetape4k에 multitenancy module이 없어 자체 구현 필요 | 300 LOC 미만의 단순 구현; 100% unit-tested |
+| R7 | `appointment-notification` / `appointment-event` / `appointment-solver`에 HTTP context가 없음 | Scope 밖; Phase 2 별도 issue |
+| R8 | SecurityConfig DSL의 first-match wins로 admin endpoint가 노출될 수 있음 | Matcher case별 MockMvc DSL unit test; code review |
+| R9 | Clinic tenant 이동 시 Caffeine cache stale | 현재 clinic-move API 없음; 향후 invalidate hook 필요; KDoc warning |
+| R10 | `TestJwtProvider` 변경이 100개 이상 test에 ripple | `allowedTenants=["tenant-default"]`를 default로 사용해 backward compat 유지 |
 
-## Decisions intentionally rejected
+## 의도적으로 거부한 결정
 
-- Schema-per-tenant / DB-per-tenant — discarded (Flyway operational cost)
-- subdomain tenant identification — discarded (URL path more explicit, cache-friendly)
-- PostgreSQL RLS — discarded (H2/MySQL don't support; breaks test compat)
-- Exposed `StatementInterceptor` auto-WHERE — discarded (Exposed 1.3.0 does NOT provide WHERE-clause hook; statement-lifecycle only)
-- JWT-only tenant resolution — discarded (URL path is source of truth; JWT is the guard)
+- Schema-per-tenant / DB-per-tenant — 폐기(Flyway operational cost)
+- Subdomain tenant identification — 폐기(URL path가 더 명시적이고 cache-friendly)
+- PostgreSQL RLS — 폐기(H2/MySQL이 지원하지 않아 test compat를 깨뜨림)
+- Exposed `StatementInterceptor` auto-WHERE — 폐기(Exposed 1.3.0은 WHERE-clause hook을 제공하지 않고 statement-lifecycle만 제공)
+- JWT-only tenant resolution — 폐기(URL path가 source of truth이고 JWT는 guard임)
 
 ---
 END OF BLUEPRINT

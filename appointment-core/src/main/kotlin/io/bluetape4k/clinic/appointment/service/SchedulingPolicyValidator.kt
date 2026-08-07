@@ -49,7 +49,7 @@ object SchedulingPolicyValidator {
      * 완전한 definition envelope와 payload를 validate합니다.
      *
      * 검사 범위는 tenant/clinic identity coupling, 양수 version/revision, schema 지원,
-     * effective interval, canonical SHA-256 syntax, envelope/payload kind equality,
+     * effective interval, canonical SHA-256 구문, envelope/payload kind equality,
      * audit reason bounds, payload별 safety rule입니다.
      *
      * @return 같은 [definition] instance입니다. 호출자는 validated expression으로 이어서 사용할 수 있습니다.

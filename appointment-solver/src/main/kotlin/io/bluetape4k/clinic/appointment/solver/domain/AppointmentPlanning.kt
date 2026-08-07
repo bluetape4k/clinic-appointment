@@ -58,7 +58,7 @@ class AppointmentPlanning(
     val endTime: LocalTime?
         get() = startTime?.plusMinutes(durationMinutes.toLong())
 
-    /** Timefold requires no-arg constructor */
+    /** Timefold가 no-arg constructor를 요구한다. */
     @Suppress("unused")
     constructor() : this(id = 0L)
 

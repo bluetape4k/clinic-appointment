@@ -1,44 +1,43 @@
-# Changelog
+# 변경 이력
 
-All notable changes to this project will be documented in this file.
+이 파일에는 프로젝트의 주요 변경 사항을 기록합니다.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+기록 형식은 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)를 따릅니다.
 
 ## [Unreleased]
 
-### Added
+### 추가
 
-- Root README hero image plus refreshed project-purpose entrypoint documentation.
-- `WIP.md` snapshot synced with currently assigned GitHub issues.
-- MIT `LICENSE` file.
+- 루트 README 대표 이미지와 프로젝트 목적 진입 문서를 갱신했습니다.
+- 현재 할당된 GitHub 이슈에 맞춰 `WIP.md` 스냅숏을 동기화했습니다.
+- MIT `LICENSE` 파일을 추가했습니다.
 - `Libs.bluetape4k_lingua`, `Libs.bluetape4k_mock_web_server`, `Libs.bluetape4k_mock_webflux_server` 모듈 참조 추가 (BOM 1.7.0 신규 모듈)
 - `appointment-api`: `NearCacheCacheManager` + `NearCacheAdapter` — Spring `CacheManager` 구현으로 NearCache 통합 ([#52](https://github.com/bluetape4k/clinic-appointment/issues/52))
 - `appointment-api`: `CacheIntegrationTest` — Spring `@Cacheable` 통합 테스트 추가
 - CI: `paths-filter` 기반 모듈별 selective test job 적용 ([#60](https://github.com/bluetape4k/clinic-appointment/issues/60))
 - CI: `nightly-tests.yml` — 전체 테스트 + 프론트엔드 빌드 야간 워크플로우 추가
 
-### Changed
+### 변경
 
-- **Dependency governance**: `bluetape4k-dependencies` aligned to the published
-  `1.2.0` BOM.
+- **의존성 관리**: `bluetape4k-dependencies`를 공개된 `1.2.0` BOM에 맞췄습니다.
 - **Bluetape4k**: `1.6.2` → `1.7.0`
 - **Kotlin**: `2.3.20` → `2.3.21`
 - **Java baseline**: Java 25 toolchain → Java 21 (`.java-version`, `build.gradle.kts` 정렬)
 - **Cache**: `DoctorRepository`, `EquipmentRepository`, `TreatmentTypeRepository` 캐시 구현을 manual `NearCacheOperations` → Spring `@Cacheable`/`@CacheEvict` 선언적 방식으로 전환 ([#52](https://github.com/bluetape4k/clinic-appointment/issues/52))
 - **Tests**: `kluent` assertion → `bluetape4k-assertions` 전면 마이그레이션 ([#61](https://github.com/bluetape4k/clinic-appointment/issues/61))
-- **Dependency governance**: `bluetape4k-bom` explicit import removed — covered transitively by `bluetape4k-dependencies`. Removed standalone `bluetape4k` version entry and `bluetape4k-bom` alias from `libs.versions.toml`.
-- **Dependabot**: `dependabot.yml` — Kotlin/Spring/lettuce compatibility-line major upgrade guards 추가
+- **의존성 관리**: `bluetape4k-dependencies`가 전이적으로 제공하므로 `bluetape4k-bom` 명시적 import를 제거했습니다. `libs.versions.toml`에서 독립 `bluetape4k` 버전 항목과 `bluetape4k-bom` 별칭도 제거했습니다.
+- **Dependabot**: `dependabot.yml`에 Kotlin/Spring/lettuce 호환 계열의 주요 버전 업그레이드 보호 규칙을 추가했습니다.
 
-### Fixed
+### 버그 수정
 
 - `appointment-api`: `CacheConfig` — `@EnableCaching` 누락 및 `NearCacheOperations` bean 복구
 - `appointment-api`: `NearCacheAdapterTest` 직접 주입 테스트 제거 (Spring Context 통합 테스트로 대체)
 - CI: coveralls token 파라미터 수정
 
-### Removed
+### 제거
 
 - `Libs.bluetape4k_crypto`, `Libs.bluetape4k_exposed_jasypt` 참조 제거 (BOM 1.7.0에서 제외됨)
-- `bluetape4k-bom` library alias and `bluetape4k` version entry from version catalog (redundant with `bluetape4k-dependencies`).
+- 버전 카탈로그에서 `bluetape4k-bom` 라이브러리 별칭과 `bluetape4k` 버전 항목을 제거했습니다(`bluetape4k-dependencies`와 중복).
 
 ---
 

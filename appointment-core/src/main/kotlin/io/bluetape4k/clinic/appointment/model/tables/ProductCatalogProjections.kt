@@ -7,7 +7,7 @@ import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.timestamp
 
 /**
- * Immutable product-catalog versions projected into the appointment service.
+ * appointment service로 projection한 불변 product catalog version입니다.
  */
 object ProductCatalogProjections : LongIdTable("scheduling_product_catalog_projections") {
     val tenantGroupId = reference("tenant_group_id", TenantGroups, onDelete = ReferenceOption.RESTRICT)

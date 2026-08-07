@@ -6,7 +6,7 @@
 당시 version을 예약 생성 시 수정불가한 실행 스냅숏으로 보관하고, 이후 변경은
 신뢰된 broker event로만 받는다.
 
-Public API는 API Gateway가 검증한 JWT principal을 사용한다. request body에서 actor,
+공개 API는 API Gateway가 검증한 JWT principal을 사용한다. 요청 본문에서 actor,
 tenant, clinic, patient subject, 정책 mode, 자원 mapping을 받지 않는다. 고객 요청은
 항상 가예약에서 시작하고, 관리자 직접 확정도 유효 병원 정책과 동의 규칙을 통과해야
 한다.
@@ -32,7 +32,7 @@ identity라면 `clinicId`도 `allowedClinicIds`의 원소로 제공한다. 고�
 }
 ```
 
-이 claim은 body 입력을 대체하지만 저장된 Plan·appointment의 tenant·clinic·patient
+이 claim은 요청 본문 입력을 대체하지만 저장된 Plan·appointment의 tenant·clinic·patient
 범위 검사를 대체하지 않는다. 범위가 다중이거나 모호하면 command를 fail-closed로
 거절한다.
 
@@ -50,7 +50,7 @@ identity라면 `clinicId`도 `allowedClinicIds`의 원소로 제공한다. 고�
 
 ## 엔드포인트
 
-| 행위자 | Method / path | 성공 | 업무 결과 |
+| 행위자 | 메서드 / 경로 | 성공 | 업무 결과 |
 |---|---|---:|---|
 | 고객 | `POST /api/{tenantCode}/appointment-requests` | 202 | 정책에 따라 `PROPOSED` 또는 자원을 선점한 `HELD` 가예약 생성 |
 | 관리자 | `POST /api/{tenantCode}/admin/appointments` | 201 | 정책이 허용하면 직접 확정 |
@@ -68,9 +68,9 @@ identity라면 `clinicId`도 `allowedClinicIds`의 원소로 제공한다. 고�
 추가로 요구한다. 동의 payload는 원문이 아니라 `evidenceAuthority`와 추측하기
 어려운 불투명 `evidenceId`만 전달한다.
 
-### 요청 body 예제
+### 요청 본문 예제
 
-Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 정책·자원은 body에
+Gateway가 인증한 actor·tenant·clinic·patient와 서버가 해석하는 정책·자원은 요청 본문에
 넣지 않는다. 아래 JSON 외 필드는 strict DTO가 거부한다.
 
 고객 가예약 `POST /api/{tenantCode}/appointment-requests`:
@@ -171,7 +171,7 @@ candidate slot 2,000개, slot당 자원 200개, 요청당 자원 항목 10,000�
 
 `api-enabled`는 commitment row가 전혀 없는 부트스트랩에서만 전체 경로 노출을 제어한다.
 활성화 시 전용 idempotency secret이 없거나 짧거나 Base64가 아니면 startup을
-실패시킨다. raw `Idempotency-Key`는 이 secret과 고정 domain으로
+실패시킨다. 원본 `Idempotency-Key`는 이 secret과 고정 domain으로
 HMAC-SHA-256 처리한 뒤에만 저장한다.
 
 운영 `api-enabled`에는 `AppointmentCommitmentPlanningResolver` 운영
@@ -186,7 +186,7 @@ ingress와 같은 HMAC key·algorithm·domain separation을 구현한
 commitment row 생성 후 롤백은 신규 유입만 차단하고 기존 조회/상태 변경 요청을 유지한다.
 구체적인 절차는 [운영 런북](../runbooks/visit-commitment-operations.md)을 따른다.
 
-## 안정 오류
+## 안정적 오류 계약
 
 | HTTP | `errorCode` 예 | 호출자 조치 |
 |---:|---|---|

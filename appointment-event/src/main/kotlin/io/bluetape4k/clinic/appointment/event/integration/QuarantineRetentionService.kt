@@ -9,7 +9,7 @@ data class QuarantineRetentionResult(
 ) : Serializable
 
 /**
- * Applies quarantine payload retention without deleting immutable metadata or audit history.
+ * 불변 metadata나 audit history를 삭제하지 않고 quarantine payload 보존 정책을 적용합니다.
  */
 class QuarantineRetentionService(
     private val repository: SchedulingQuarantineRepository,

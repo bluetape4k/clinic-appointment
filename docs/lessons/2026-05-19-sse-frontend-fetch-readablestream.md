@@ -1,17 +1,17 @@
-# Lesson: SSE with fetch + ReadableStream in Angular (Issues #30, #31)
+# 교훈: Angular에서 fetch + ReadableStream으로 SSE 처리 (Issues #30, #31)
 
-## Root Cause / Context
+## 원인과 배경
 
-`EventSource` (the browser's built-in SSE API) does not support custom headers.
-This makes it incompatible with JWT Bearer token authentication, which requires
-`Authorization: Bearer <token>` on every request.
+`EventSource`(브라우저 내장 SSE API)는 사용자 정의 header를 지원하지 않는다.
+따라서 모든 요청에 `Authorization: Bearer <token>`이 필요한 JWT Bearer token
+인증과 함께 사용할 수 없다.
 
-## Decision
+## 결정
 
-Use `fetch + ReadableStream` instead of `EventSource` to maintain JWT auth header
-support without modifying the backend or switching to query-parameter token passing.
+backend를 수정하거나 query parameter로 token을 전달하는 방식으로 바꾸지 않고 JWT
+auth header를 유지하기 위해 `EventSource` 대신 `fetch + ReadableStream`을 사용한다.
 
-## Implementation Pattern
+## 구현 패턴
 
 ```typescript
 streamBatchReschedule(params): Observable<RescheduleProgressEvent> {
@@ -39,30 +39,30 @@ streamBatchReschedule(params): Observable<RescheduleProgressEvent> {
 }
 ```
 
-## Key Invariants
+## 핵심 불변 조건
 
-- **`buffer.split('\n\n')` + `pop()`**: Retains the incomplete trailing block across
-  chunk boundaries. This is mandatory for correct SSE parsing over streaming HTTP.
-- **`TextDecoder({ stream: true })`**: Required for multi-byte UTF-8 character
-  boundaries to not corrupt characters split across chunks.
-- **`AbortController` teardown**: Registered as the Observable's return function so
-  `unsubscribe()` always aborts the underlying fetch, preventing connection leaks.
-- **`ngOnDestroy` calls `stopBatchStream()`**: Ensures the Subscription and the
-  underlying AbortController are cleaned up when the component is destroyed.
+- **`buffer.split('\n\n')` + `pop()`**: chunk 경계에서 잘린 마지막 block을 다음
+  chunk까지 유지한다. streaming HTTP에서 SSE를 올바르게 파싱하려면 반드시 필요하다.
+- **`TextDecoder({ stream: true })`**: 여러 바이트로 구성된 UTF-8 문자가 chunk
+  경계에서 잘려도 손상되지 않도록 반드시 사용한다.
+- **`AbortController` teardown**: Observable의 return function으로 등록하므로
+  `unsubscribe()`가 항상 underlying fetch를 중단해 connection leak를 막는다.
+- **`ngOnDestroy`가 `stopBatchStream()` 호출**: component가 destroy될 때
+  Subscription과 underlying AbortController를 정리한다.
 
-## Pitfalls Caught in Review
+## 리뷰에서 발견한 함정
 
-1. **Hard-coded URL**: Initial implementation used `/api/reschedule/batch/stream`
-   directly. Must use `environment.apiUrl` prefix to match all other service methods
-   and support environment-specific API base URLs.
-2. **`response.body!` non-null assertion**: Replaced with explicit null guard:
+1. **하드코딩한 URL**: 초기 구현은 `/api/reschedule/batch/stream`을 직접 사용했다.
+   다른 service method와 맞추고 환경별 API base URL을 지원하려면
+   `environment.apiUrl` prefix를 사용해야 한다.
+2. **`response.body!` non-null assertion**: 명시적인 null guard로 교체했다.
    `if (!response.body) { observer.error(...); return; }`.
-3. **401 not distinguished**: Added explicit `response.status === 401` check with
-   a Korean user-facing message, distinct from generic `SSE failed: N` errors.
-4. **`fetch` bypasses Angular interceptors**: Acknowledged trade-off — SSE cannot
-   use `HttpClient`. 401 and error handling must be implemented inline.
+3. **401을 구분하지 않음**: 일반 `SSE failed: N` 오류와 구분되는 한국어 사용자
+   메시지와 함께 `response.status === 401` 검사를 명시적으로 추가했다.
+4. **`fetch`는 Angular interceptor를 우회함**: SSE는 `HttpClient`를 사용할 수
+   없다는 trade-off를 인정했다. 401과 오류 처리는 inline으로 구현해야 한다.
 
-## Test Pattern for fetch-based SSE
+## fetch 기반 SSE 테스트 패턴
 
 ```typescript
 // Mock fetch with a ReadableStream SSE payload
@@ -77,9 +77,10 @@ vi.spyOn(globalThis, 'AbortController').mockImplementation(
 { provide: AuthService, useValue: { getToken: () => 'test-token' } }
 ```
 
-## Outcome
+## 결과
 
-- 11/11 service tests passing
-- `streamBatchReschedule()` emits progress events in real-time, completes on terminal event
-- Component cleans up Subscription in `ngOnDestroy`
-- CI: all checks pass
+- service test 11/11 통과
+- `streamBatchReschedule()`이 progress event를 실시간으로 방출하고 terminal
+  event에서 완료한다.
+- component가 `ngOnDestroy`에서 Subscription을 정리한다.
+- CI: 모든 검사 통과

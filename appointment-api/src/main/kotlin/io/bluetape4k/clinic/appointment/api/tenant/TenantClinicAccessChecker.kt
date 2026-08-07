@@ -10,8 +10,7 @@ import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /**
- * Resolves request tenants and verifies clinic ownership against the resolved
- * tenant group.
+ * 요청 tenant를 해석하고, 해석한 tenant group을 기준으로 clinic 소유권을 검증합니다.
  */
 class TenantClinicAccessChecker(
     private val tenantGroupRepository: TenantGroupRepository,
@@ -22,9 +21,9 @@ class TenantClinicAccessChecker(
 ) {
 
     /**
-     * Resolves [tenantCode] to an active tenant. The current [TenantContext] is
-     * reused when available, and a DB lookup is used as a fallback for local
-     * no-op security tests and non-filtered execution paths.
+     * [tenantCode]를 활성 tenant로 해석합니다. 현재 [TenantContext]를 사용할 수 있으면
+     * 재사용하고, local no-op 보안 테스트와 filter를 거치지 않는 실행 경로에서는
+     * DB 조회를 fallback으로 사용합니다.
      */
     fun requireTenant(tenantCode: String): TenantInfo {
         tenantCode.requireNotBlank("tenantCode")
@@ -40,7 +39,7 @@ class TenantClinicAccessChecker(
     }
 
     /**
-     * Verifies that [clinicId] belongs to the active [tenantCode].
+     * [clinicId]가 활성 [tenantCode]에 속하는지 검증합니다.
      */
     fun verifyClinic(tenantCode: String, clinicId: Long): TenantInfo {
         clinicId.requirePositiveNumber("clinicId")
@@ -58,8 +57,7 @@ class TenantClinicAccessChecker(
     }
 
     /**
-     * Verifies that appointment-scoped resources all belong to [clinicId] in
-     * the active [tenantCode].
+     * 예약 범위 resource가 모두 활성 [tenantCode]의 [clinicId]에 속하는지 검증합니다.
      */
     fun verifySchedulingResources(
         tenantCode: String,
@@ -92,7 +90,7 @@ class TenantClinicAccessChecker(
     }
 
     /**
-     * Verifies that [equipmentId] belongs to [clinicId] in the active tenant.
+     * [equipmentId]가 활성 tenant의 [clinicId]에 속하는지 검증합니다.
      */
     fun verifyEquipment(tenantCode: String, clinicId: Long, equipmentId: Long): TenantInfo {
         clinicId.requirePositiveNumber("clinicId")

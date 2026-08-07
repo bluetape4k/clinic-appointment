@@ -54,7 +54,7 @@ data class CreateSchedulingPolicyDraftCommand(
  *
  * @property definitionId [scope] 내부에서 해석된 양수 데이터베이스 식별자.
  * @property expectedDraftRevision 교체 대상인 양수 optimistic revision.
- * @property expectedScopeRevision non-negative administrative head revision.
+ * @property expectedScopeRevision 음수가 아닌 관리자 head revision입니다.
  * 나머지 필드는 [CreateSchedulingPolicyDraftCommand]와 같은 canonical/time-bound 의미를 가진다.
  */
 data class ReviseSchedulingPolicyDraftCommand(

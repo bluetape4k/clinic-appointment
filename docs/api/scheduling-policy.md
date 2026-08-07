@@ -7,9 +7,9 @@
 ## 신뢰 경계
 
 모든 경로는 `/api/{tenantCode}/...` 아래에 있다. `tenantCode`와 `clinicId`는
-request body가 아니라 path와 기준 데이터베이스에서 확인한다.
+요청 본문이 아니라 path와 기준 데이터베이스에서 확인한다.
 
-actor 정보도 request body에서 받지 않는다. API Gateway가 검증한 JWT principal을
+actor 정보도 요청 본문에서 받지 않는다. API Gateway가 검증한 JWT principal을
 `ActorContextResolver`가 `ActorContext`로 바꾼다. 정책 명령은 다음 값을 신뢰된
 principal에서만 사용한다.
 
@@ -27,7 +27,7 @@ principal에서만 사용한다.
 | `correlationId` | correlation filter | 응답 추적 ID |
 
 정책 request DTO는 선언되지 않은 JSON 필드를 fail-closed로 거절한다. `actor`,
-`tenant`, `clinic`, `assurance`, token evidence를 body에 넣어도 권한 상승으로
+`tenant`, `clinic`, `assurance`, token evidence를 요청 본문에 넣어도 권한 상승으로
 사용하지 않는다.
 
 `policy:scheduled-activation`은 Gateway를 통과하는 사람 운영자 권한이 아니다.
@@ -40,7 +40,7 @@ service assurance와 함께 사용하는 전용 capability다. 외부 JWT에 이
 모든 scheduling-policy 기능은 기본값이 `false`다. 운영자는 아래 순서를 지켜야 한다.
 후행 플래그가 선행 플래그 없이 켜지면 애플리케이션 시작이 실패한다.
 
-| 순서 | Property | 노출되는 기능 |
+| 순서 | 속성 | 노출되는 기능 |
 |---:|---|---|
 | 1 | `scheduling.policy.shadow-compile-enabled` | 활성 예약에는 적용하지 않고 컴파일만 검증 |
 | 2 | `scheduling.policy.effective-read-enabled` | tenant/clinic 유효 정책 스냅숏 조회 |
@@ -79,7 +79,7 @@ service assurance와 함께 사용하는 전용 capability다. 외부 JWT에 이
 
 ## 정책 범위
 
-| 범위 | Base path | 의미 |
+| 범위 | 기본 경로 | 의미 |
 |---|---|---|
 | Tenant baseline | `/api/{tenantCode}/admin/scheduling-policies` | tenant group 전체가 공유하는 기준 정책 |
 | Clinic override | `/api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies` | 특정 clinic의 부분 재정의 |
@@ -108,9 +108,9 @@ ACTIVE -> RETIRED
 6. 즉시 활성화 또는 미래 활성화 예약
 7. 필요하면 retire 또는 missed command replay
 
-## Tenant Endpoints
+## 테넌트 엔드포인트
 
-| Method | Path | 정상 응답 | 설명 |
+| 메서드 | 경로 | 정상 응답 | 설명 |
 |---|---|---|---|
 | `POST` | `/drafts` | `201` | tenant baseline draft 생성 |
 | `POST` | `/{id}/validate` | `200` | 현재 draft revision 검증 |
@@ -123,7 +123,7 @@ ACTIVE -> RETIRED
 | `GET` | `/effective?decisionAt=...&serviceAt=...` | `200` | tenant baseline 유효 정책 스냅숏 조회 |
 | `GET` | `/preview-jobs/{jobId}` | `200` | tenant 미리보기 작업 폴링 |
 
-## Clinic Endpoints
+## 병원 엔드포인트
 
 clinic endpoint는 tenant endpoint와 같은 동사를 사용하지만 base path가 다음과 같다.
 
@@ -137,7 +137,7 @@ clinic endpoint는 tenant endpoint와 같은 동사를 사용하지만 base path
 GET /api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/preview-jobs/{jobId}
 ```
 
-## Request Shapes
+## 요청 형식
 
 ### Draft 생성
 
@@ -176,7 +176,7 @@ GET /api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/preview-jobs/
 다시 기대값으로 사용하지 않으므로 임의의 64자리 hash나 현재 카탈로그 버전으로 과거
 구매·proposal의 동의 범위를 대신할 수 없다.
 
-### Admin 예약 정책 예시
+### 관리자 예약 정책 예시
 
 관리자가 고객 대신 예약을 바로 확정하려면 정책상
 `DIRECT_CONFIRM_WITH_CONSENT_EVIDENCE`와 신선한 외부 동의 증빙이 필요하다. 이 API는
@@ -209,7 +209,7 @@ GET /api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/preview-jobs/
 ```
 <!-- booking-draft-example:end -->
 
-### Customer 예약 정책 예시
+### 고객 예약 정책 예시
 
 고객이 직접 등록하는 예약은 먼저 가예약 요청으로 들어오고, 권한 있는 병원 담당자가
 승인한 뒤 확정된다. 확정 예약 변경도 고객 동의 없이 조용히 이동하지 않는다.
@@ -335,11 +335,11 @@ tenant generation `7`을 기준으로 한다. clinic route라면
 }
 ```
 
-## Preview와 Polling
+## 미리보기와 폴링
 
 `POST /{id}/preview`는 같은 API에서 동기 완료와 비동기 접수를 모두 표현한다.
 
-| 응답 | 의미 | Caller 동작 |
+| 응답 | 의미 | 호출자 동작 |
 |---|---|---|
 | `200` | preview가 동기 예산 안에서 완료됨 | `activationEvidenceToken`을 승인/활성화에 사용 |
 | `202` | durable preview job으로 접수됨 | `Location`을 polling하고 `Retry-After`를 지킴 |
@@ -349,12 +349,12 @@ tenant generation `7`을 기준으로 한다. clinic route라면
 `Retry-After` 헤더를 포함한 `200`을 반환한다. `COMPLETED`에서만
 `activationEvidenceToken`과 `resultHash`가 공개된다.
 
-## Idempotency
+## 멱등성
 
 즉시 activation과 missed command replay는 `Idempotency-Key` header가 필요하다.
-raw key는 body에 넣지 않는다.
+원본 key는 요청 본문에 넣지 않는다.
 
-| Endpoint | Key 의미 | Replay 결과 |
+| 엔드포인트 | Key 의미 | Replay 결과 |
 |---|---|---|
 | `POST /{id}/activate` | 하나의 즉시 activation 의도 | 같은 key와 같은 fingerprint는 기존 command 재사용 |
 | `POST /activation-commands/{commandId}/replay` | `MISSED` command의 새 replay 의도 | fresh key로 새 durable command 생성 |
@@ -362,7 +362,7 @@ raw key는 body에 넣지 않는다.
 같은 key가 다른 command fingerprint와 충돌하면 `POLICY_IDEMPOTENCY_CONFLICT`와
 HTTP `409`를 반환한다.
 
-## Effective Read
+## 유효 정책 조회
 
 effective read는 두 시간 축을 받는다.
 
@@ -392,7 +392,7 @@ GET /api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/effective?dec
 generation을 확인한다. 두 번의 권위 read가 달라지면 stale snapshot을 반환하지 않고
 `POLICY_EFFECTIVE_READ_CONFLICT`를 반환한다.
 
-## Error Contract
+## 오류 계약
 
 정책 오류는 `SchedulingApiErrorResponse`로 반환된다.
 
@@ -408,7 +408,7 @@ generation을 확인한다. 두 번의 권위 read가 달라지면 stale snapsho
 }
 ```
 
-| Error code | HTTP | Retryable |
+| 오류 코드 | HTTP | 재시도 가능 |
 |---|---:|---|
 | `POLICY_PAYLOAD_INVALID` | `400` | `false` |
 | `POLICY_OVERRIDE_FORBIDDEN` | `400` | `false` |

@@ -27,7 +27,7 @@ class StrictJsonPayloadDecoder(
      *
      * @param rawPayload raw ingress의 크기·깊이 검사를 통과한 JSON bytes입니다.
      * @param targetType event type/schema allowlist가 선택한 concrete DTO class입니다.
-     * @throws IllegalArgumentException malformed JSON, unknown/missing field, type mismatch,
+     * @throws IllegalArgumentException JSON 형식 오류, 알 수 없거나 누락된 필드, 타입 불일치,
      * constructor invariant 실패가 있으면 raw 원문을 노출하지 않고 발생합니다.
      */
     fun <T : Any> decode(

@@ -1,25 +1,25 @@
-# Dependabot ignore sync
+# Dependabot ignore 동기화
 
-## Context
+## 배경
 
-`bluetape4k-dependencies` added more centrally managed dependencies to the
-downstream Dependabot ignore block.
+`bluetape4k-dependencies`가 하위 저장소 Dependabot ignore block에 중앙 관리
+의존성을 더 추가했다.
 
-## Decision
+## 결정
 
-Propagate the generated ignore list to this repository so Dependabot does not
-open repo-local PRs for dependencies governed by the central catalog.
+생성된 ignore list를 이 저장소에 전파해 Dependabot이 중앙 catalog에서 관리하는
+의존성에 대해 repo-local PR을 열지 않도록 한다.
 
-## Outcome
+## 결과
 
-The local `.github/dependabot.yml` now ignores the new centrally managed
-Bouncy Castle, ClassGraph, and Tomcat coordinates.
+로컬 `.github/dependabot.yml`이 이제 중앙에서 관리하는 새 Bouncy Castle,
+ClassGraph, Tomcat 좌표를 ignore한다.
 
-## Verification
+## 검증
 
 - `git diff --check`
 
-## Future note
+## 향후 참고
 
-After central dependency waves, run `sync-dependabot-ignores.py` along with
-shared version sync before rerunning the central downstream CI gate.
+중앙 의존성 변경이 끝나면 shared version sync와 함께
+`sync-dependabot-ignores.py`를 실행한 뒤 중앙 downstream CI gate를 다시 실행한다.

@@ -8,7 +8,7 @@ import org.openjdk.jmh.annotations.State
 import org.openjdk.jmh.annotations.TearDown
 import java.time.Duration
 
-/** PostgreSQL production-schema claim benchmark for the appointment outbox relay. */
+/** appointment outbox relay의 PostgreSQL production-schema claim benchmark입니다. */
 @State(Scope.Benchmark)
 open class PostgreSqlAppointmentOutboxBenchmark {
 

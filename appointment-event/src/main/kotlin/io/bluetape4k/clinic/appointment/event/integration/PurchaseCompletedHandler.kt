@@ -41,7 +41,7 @@ data class PurchaseHandleResult(
 
 fun interface AtomicPlanWriteObserver {
     /**
-     * Transaction-local test/diagnostic hook. Implementations must not perform external I/O.
+     * 트랜잭션 내부 테스트/진단 hook입니다. 구현체는 외부 I/O를 수행하면 안 됩니다.
      */
     fun afterPlanSaved(planId: Long)
 
@@ -60,7 +60,7 @@ fun interface PurchasePlanMetrics {
 
 fun interface InboxInsertObserver {
     /**
-     * Transaction-local diagnostic hook used to exercise read-before-insert races.
+     * read-before-insert 경합을 재현하는 트랜잭션 내부 진단 hook입니다.
      */
     fun beforeInsert(eventId: String)
 
@@ -71,8 +71,8 @@ fun interface InboxInsertObserver {
 
 fun interface PurchaseTransactionObserver {
     /**
-     * Transaction-local diagnostic hook invoked before the first happy-path read.
-     * Implementations must not perform external I/O.
+     * 정상 경로의 첫 read 전에 호출되는 트랜잭션 내부 진단 hook입니다.
+     * 구현체는 외부 I/O를 수행하면 안 됩니다.
      */
     fun afterTransactionStarted()
 
@@ -155,8 +155,8 @@ class PurchaseCompletedHandler(
     }
 
     /**
-     * Evaluates the same ownership, source-version, catalog, and plan-factory
-     * decisions as WRITE without creating inbox, plan, outbox, or quarantine rows.
+     * WRITE와 동일한 ownership, source-version, catalog, plan-factory 판정을
+     * 평가하지만 inbox, plan, outbox, quarantine 행은 생성하지 않습니다.
      */
     fun preview(
         envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,
@@ -233,8 +233,8 @@ class PurchaseCompletedHandler(
     }
 
     /**
-     * Persists only bounded retry state after the external source-authority
-     * adapter times out or opens its circuit. No plan-write transaction starts.
+     * 외부 source-authority adapter가 timeout되거나 circuit을 열었을 때 제한된
+     * retry 상태만 저장합니다. plan-write 트랜잭션은 시작하지 않습니다.
      */
     fun stageAuthorityUnavailable(
         envelope: TrustedSchedulingEventEnvelope<PurchaseCompletedEvent>,

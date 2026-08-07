@@ -6,7 +6,7 @@ import java.io.Serializable
  * 병원 레코드.
  *
  * @property id 병원 ID
- * @property tenantGroupId tenant group ID
+ * @property tenantGroupId tenant group ID입니다.
  * @property name 병원 이름
  * @property slotDurationMinutes 예약 슬롯 단위(분)
  * @property timezone 병원 타임존 ID

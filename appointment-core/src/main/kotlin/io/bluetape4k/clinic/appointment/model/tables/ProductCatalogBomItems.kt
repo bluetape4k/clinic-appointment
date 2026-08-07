@@ -4,7 +4,7 @@ import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 
 /**
- * BOM items owned by one immutable catalog projection.
+ * 하나의 불변 catalog projection이 소유하는 BOM item입니다.
  */
 object ProductCatalogBomItems : LongIdTable("scheduling_product_catalog_bom_items") {
     val catalogProjectionId = reference(

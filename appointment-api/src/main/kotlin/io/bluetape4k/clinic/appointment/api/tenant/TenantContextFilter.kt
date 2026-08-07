@@ -19,8 +19,8 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.filter.OncePerRequestFilter
 
 /**
- * Resolves the tenant path segment after JWT authentication and exposes it
- * through [TenantContext] for downstream request handling.
+ * JWT 인증 후 tenant 경로 segment를 해석하고, 이후 요청 처리를 위해
+ * [TenantContext]로 노출합니다.
  */
 class TenantContextFilter(
     private val tenantGroupRepository: TenantGroupRepository,
@@ -34,9 +34,9 @@ class TenantContextFilter(
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        // A servlet thread may be reused after an error or async dispatch. Never inherit a
-        // previous request's tenant; the request boundary owns cleanup, while withTenant
-        // still preserves nested scopes inside a single request.
+        // 오류나 비동기 dispatch 뒤에 servlet thread를 재사용할 수 있다. 이전 요청의
+        // tenant를 절대 상속하지 않는다. 요청 경계가 정리를 담당하고, withTenant은
+        // 단일 요청 안의 중첩 scope를 계속 보존한다.
         TenantContext.clear()
         try {
             val tenantCode = TenantPathResolver.resolve(request)

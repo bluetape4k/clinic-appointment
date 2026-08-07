@@ -193,7 +193,7 @@ object HardConstraints {
 
     // ----------------------------------------------------------------
     // H7: 같은 의사의 동시 환자 수 제한
-    //     resolveMaxConcurrent = treatmentMax ?: doctorMax ?: clinicMax
+//     동시성 상한 우선순위: resolveMaxConcurrent = treatmentMax ?: doctorMax ?: clinicMax
     //
     //     maxConcurrent가 1인 의사에 대해 시간이 겹치는 예약 쌍이 있으면 위반.
     //     Timefold Quad(4-way join) 제한으로 ClinicFact는 ifExists로 처리.

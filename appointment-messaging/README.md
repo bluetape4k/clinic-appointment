@@ -1,32 +1,32 @@
 # appointment-messaging
 
-`appointment-messaging` owns the Kafka 4 transactional-outbox delivery path for the
-legacy appointment mutation stream.
+`appointment-messaging`는 legacy 예약 mutation stream을 Kafka 4 transactional outbox로
+전달하는 경로를 소유합니다.
 
-## Contract
+## 계약
 
-- `AppointmentOutboxWriter` is called inside the caller's Exposed `transaction {}`.
-- The aggregate and the `scheduling_outbox_events` intent commit or roll back together.
-- `AppointmentOutboxRelay` performs Kafka I/O outside a database transaction and uses a
-  lease owner/token fence for terminal updates.
-- Delivery is at-least-once. A broker acknowledgement followed by a database failure can
-  publish the same immutable `eventId` again.
-- The current stream is partial: create/status/cancel and final reschedule mutations are
-  covered. Commitment-v2 controllers and the closure `PENDING_RESCHEDULE` transition are
-  intentionally outside Issue #41.
+- `AppointmentOutboxWriter`는 caller가 소유한 Exposed `transaction {}` 안에서 호출합니다.
+- aggregate와 `scheduling_outbox_events` intent는 함께 commit되거나 함께 rollback됩니다.
+- `AppointmentOutboxRelay`는 DB transaction 밖에서 Kafka I/O를 수행하고 lease owner/token
+  fence로 terminal update를 보호합니다.
+- 전달 모델은 at-least-once입니다. broker ACK 뒤 DB update가 실패하면 동일한 불변
+  `eventId`가 다시 발행될 수 있습니다.
+- 현재 stream은 부분 범위입니다. create/status/cancel과 최종 reschedule mutation만
+  포함하며, commitment-v2 controller와 closure의 `PENDING_RESCHEDULE` 중간 전이는
+  Issue #41 범위 밖입니다.
 
-## Installation
+## 설치
 
 ```kotlin
 implementation(project(":appointment-messaging"))
 ```
 
-Spring Boot discovers `AppointmentMessagingAutoConfiguration` from
-`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`.
-The default topic is `clinic.appointment.events`; only explicitly allow-listed topics are
-accepted. Invalid lease, timeout, claim, or topic settings fail before a writer is built.
+Spring Boot는 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`에서
+`AppointmentMessagingAutoConfiguration`을 자동 발견합니다. 기본 topic은
+`clinic.appointment.events`이며 명시적으로 allow-list된 topic만 허용합니다. lease, timeout,
+claim, topic 설정이 유효하지 않으면 writer를 만들기 전에 fail-fast합니다.
 
-The external binding prefix is `appointment.messaging`:
+외부 설정 prefix는 `appointment.messaging`입니다.
 
 ```yaml
 appointment:
@@ -45,96 +45,94 @@ appointment:
     producer-credential-reference: secret://kafka/appointment-producer
 ```
 
-`PLAINTEXT` is intended only for local development. Production must use `SSL` or
-`SASL_SSL` and provide a secret-manager reference; credential values are never stored in
-the outbox or emitted in logs. The producer contract is fail-closed at `acks=all`, idempotence,
-auto-create disabled, and bounded request/delivery timeouts. The broker must also set
-`auto.create.topics.enable=false`; Kafka producer metadata has no client-side override for that
-broker policy. The application disables Spring Kafka admin topic creation and uses its
-non-creating describe path before the relay is created. For `SSL`/`SASL_SSL`, the application must
-provide an `AppointmentKafkaCredentialResolver` bean; it resolves the reference into only
-`ssl.*`/`sasl.*` client properties without exposing the secret value to logs or the outbox.
-When the Spring Kafka publisher is active, the relay uses the required `KafkaAdmin` non-creating
-metadata path before claiming any outbox rows. The probe is bounded by
-`producer-metadata-timeout` and checks every allow-listed topic before claiming. This keeps
-missing topics and ACL/TLS/SASL failures from turning into lease churn. Custom publishers must
-implement the readiness contract; a publisher without it is fail-closed and cannot claim rows.
-Readiness also exposes `enabled`, `schemaValid`, and `serializerValid`; the relay remains
-not-ready until the V22 columns/indexes and codec self-check pass.
-When Spring Boot Actuator is present, the module registers the
-`appointmentMessagingHealthIndicator` health component. Broker outage, operator pause, or a
-held relay reports `OUT_OF_SERVICE` for readiness while application liveness remains independent;
-invalid configuration, schema, or serializer state reports `DOWN`. Configure the Actuator
-readiness group to include this component (for example,
-`management.endpoint.health.group.readiness.include=readinessState,appointmentMessagingHealthIndicator`).
-The health details contain only bounded readiness booleans.
+`PLAINTEXT`는 로컬 개발에만 사용합니다. 운영에서는 `SSL` 또는 `SASL_SSL`과
+secret-manager reference를 사용하며 credential 값은 outbox나 로그에 저장하지 않습니다.
+producer 계약은 `acks=all`, idempotence 활성화, topic 자동 생성 금지, bounded request/delivery
+timeout을 fail-closed로 강제합니다. broker도 `auto.create.topics.enable=false`로 설정해야
+합니다. Kafka producer metadata에는 broker 정책을 덮어쓸 client 설정이 없기 때문입니다.
+Spring Kafka admin의 topic 자동 생성을 끄고 자동 생성 없는 describe 경로를 relay 생성 전에
+사용합니다. `SSL`/`SASL_SSL`에서는
+`AppointmentKafkaCredentialResolver` bean이
+필요하며, reference를 `ssl.*`/`sasl.*` client property로만 변환합니다. secret 값은 로그나
+outbox에 노출하지 않습니다.
+Spring Kafka publisher가 활성화되면 relay는 `KafkaAdmin`의 topic 자동 생성 없는 metadata
+경로를 사용해 outbox row를 claim하기 전에 allow-list의 모든 topic을
+`producer-metadata-timeout` 안에 probe합니다. topic 미생성이나 ACL/TLS/SASL 실패를 lease
+churn으로 바꾸지 않습니다. custom publisher도 readiness 계약을 구현해야 하며, 구현하지
+않으면 fail-closed되어 row를 claim하지 않습니다.
+readiness에는 `enabled`, `schemaValid`, `serializerValid`도 포함되며, V22 column/index와
+codec self-check가 통과하기 전에는 relay가 ready가 되지 않습니다.
+Spring Boot Actuator가 있으면 `appointmentMessagingHealthIndicator` health component를
+등록합니다. broker 장애, operator pause, relay hold는 readiness를 `OUT_OF_SERVICE`로
+표시하고 애플리케이션 liveness와 분리하며, 잘못된 configuration/schema/serializer는
+`DOWN`으로 표시합니다. Actuator readiness group에 이 component를 포함하도록
+예를 들어 `management.endpoint.health.group.readiness.include=readinessState,appointmentMessagingHealthIndicator`
+를 설정해야 합니다. health detail에는 제한된 readiness boolean만 포함됩니다.
 
-Micrometer integration publishes low-cardinality `appointment_outbox_pending`,
-`appointment_outbox_oldest_age_seconds`, and `appointment_outbox_partition_skew` gauges alongside
-publish/retry/failure counters. No tenant, clinic, appointment, partition key, payload, or credential
-value is used as a metric label.
+Micrometer 연동은 `appointment_outbox_pending`, `appointment_outbox_oldest_age_seconds`,
+`appointment_outbox_partition_skew` gauge와 publish/retry/failure counter를 제공합니다.
+tenant, clinic, appointment, partition key, payload, credential 값은 metric label에 넣지 않습니다.
 
-An HTTP `2xx` means the aggregate and durable outbox intent committed. It does not mean
-Kafka acknowledgement; broker outage leaves the row `PENDING` for the relay.
+HTTP `2xx`는 aggregate와 durable outbox intent가 커밋되었다는 뜻입니다. Kafka ACK를
+의미하지 않으며, broker 장애에서는 row를 `PENDING`으로 보존해 relay가 재처리합니다.
 
-## Operations
+## 운영
 
-The relay must be paused and held before schema rollback or manual redrive. Release the hold
-only after the V22 schema/index and broker readiness checks pass. See
-`docs/runbooks/appointment-messaging-operations.md` and the alert rules in
-`docs/alerts/appointment-messaging-rules.yml`.
+schema rollback이나 수동 redrive 전에 relay를 pause하고 hold해야 합니다. V22 schema/index와
+broker readiness 확인 후 hold를 해제합니다. 상세 절차는
+`docs/runbooks/appointment-messaging-operations.md`, alert 규칙은
+`docs/alerts/appointment-messaging-rules.yml`을 확인합니다.
 
-## PostgreSQL benchmark
+## PostgreSQL 벤치마크
 
-The production-schema claim path has a separate `kotlinx-benchmark` module. It applies
-the PostgreSQL Flyway migrations and calls the real store through Hikari and Exposed.
-Run the Docker-backed smoke or full measurement from the repository root:
+production schema claim 경로는 별도 `kotlinx-benchmark` 모듈에서 검증합니다. PostgreSQL
+Flyway migration을 적용하고 Hikari와 Exposed를 통해 실제 store를 호출합니다. 저장소
+루트에서 Docker 기반 smoke 또는 full 측정을 실행합니다.
 
 ```bash
 ./gradlew :appointment-messaging-benchmark:mainSmokeBenchmark
 ./gradlew :appointment-messaging-benchmark:mainBenchmark
 ```
 
-![PostgreSQL appointment outbox benchmark](../docs/images/readme-charts/appointment-messaging-postgresql-benchmark-01-en.png)
+![PostgreSQL 예약 outbox benchmark](../docs/images/readme-charts/appointment-messaging-postgresql-benchmark-01-ko.png)
 
-See the [baseline JSON](../docs/benchmarks/appointment-messaging-postgresql-baseline.json)
-for the fixed seed, row count, and p50/p95/p99 throughput. These values are benchmark
-evidence, not deployment SLOs.
+고정 seed, row 수, p50/p95/p99 throughput은 [baseline JSON](../docs/benchmarks/appointment-messaging-postgresql-baseline.json)에서
+확인할 수 있습니다. 이 수치는 benchmark 근거이며 배포 SLO가 아닙니다.
 
-| Percentile | Throughput |
+| 백분위 | 처리량 |
 |------------|------------:|
 | p50 | 0.001783 ops/ms |
 | p95 | 0.001815 ops/ms |
 | p99 | 0.001815 ops/ms |
 
-### PostgreSQL consumer inbox benchmark (Issue #42)
+### PostgreSQL consumer inbox 벤치마크 (Issue #42)
 
-The same `kotlinx-benchmark` module measures the tenant-scoped consumer inbox on the
-PostgreSQL V23 schema. It uses synthetic tenant `7` and clinic `31`, HikariCP plus Exposed,
-one JMH fork, two warm-up iterations, and five measured iterations. The duplicate path
-looks up the `(logicalConsumerId, logicalStreamId, eventId)` key; cleanup deletes at most
-32 processed metadata rows per call. The dataset is held at 10,000 or 100,000 inbox rows.
-The values below are measured evidence, not deployment SLOs.
+같은 `kotlinx-benchmark` 모듈에서 PostgreSQL V23 schema의 tenant 범위 consumer inbox도
+측정합니다. synthetic tenant `7`, clinic `31`을 사용하고 HikariCP와 Exposed를 통해
+접속하며, JMH fork 1개·warm-up 2회·측정 5회로 실행합니다. duplicate 경로는
+`(logicalConsumerId, logicalStreamId, eventId)` 키를 조회하고 cleanup은 호출당
+처리 완료 metadata row를 최대 32건만 삭제합니다. inbox dataset은 10,000건과
+100,000건으로 고정했습니다. 아래 값은 측정 근거이며 배포 SLO가 아닙니다.
 
-| Operation | Inbox rows | p50 (ops/ms) | p95 (ops/ms) | p99 (ops/ms) |
-|-----------|-----------:|-------------:|-------------:|-------------:|
+| 작업 | inbox row 수 | p50 (ops/ms) | p95 (ops/ms) | p99 (ops/ms) |
+|------|-----------:|-------------:|-------------:|-------------:|
 | bounded cleanup | 10,000 | 0.109366 | 0.137452 | 0.137452 |
 | bounded cleanup | 100,000 | 0.043797 | 0.045377 | 0.045377 |
 | duplicate lookup | 10,000 | 0.520153 | 0.545037 | 0.545037 |
 | duplicate lookup | 100,000 | 0.536926 | 0.578639 | 0.578639 |
 
-The raw-payload-free [consumer baseline JSON](../docs/benchmarks/appointment-messaging-consumer-postgresql-baseline.json)
-records the PostgreSQL image, row scenarios, batch bound, benchmark configuration, and
-source report path. Reproduce it with `./gradlew :appointment-messaging-benchmark:mainBenchmark`;
-the existing chart above remains the outbox claim visualization, while consumer values are
-kept in this table and the dedicated artifact.
+raw payload를 포함하지 않는 [consumer baseline JSON](../docs/benchmarks/appointment-messaging-consumer-postgresql-baseline.json)에
+PostgreSQL image, row 조건, batch 상한, benchmark 설정과 원본 report 경로를 기록했습니다.
+`./gradlew :appointment-messaging-benchmark:mainBenchmark`로 재현할 수 있습니다.
+위 chart는 outbox claim 시각화로 유지하고, consumer 수치는 이 표와 전용 artifact를
+권위 있는 문서로 사용합니다.
 
-The V23 consumer contract also persists a five-minute processing lease. Expired
-`PROCESSING` rows can be reclaimed, active duplicates are retried without acknowledgement,
-and malformed/tombstone/schema-rejected records retain only broker provenance and a SHA-256
-payload hash in the rejected ledger. Quarantined inbox rows remain as deduplication tombstones.
+V23 consumer contract에는 5분 processing lease도 저장합니다. 만료된 `PROCESSING` row는
+reclaim할 수 있고, active duplicate는 ACK하지 않고 retry로 보냅니다. malformed/tombstone/
+schema 거부 record는 broker provenance와 payload SHA-256만 rejected ledger에 남기며,
+quarantine된 inbox row는 dedup tombstone으로 유지합니다.
 
-Run the focused module checks with:
+모듈 집중 검증은 다음 명령으로 실행합니다.
 
 ```bash
 ./gradlew :appointment-messaging:test

@@ -20,11 +20,11 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 
 /**
- * Stores and loads complete immutable catalog projections inside a caller-owned transaction.
+ * 호출자가 소유한 transaction 안에서 완전한 불변 catalog projection을 저장하고 조회합니다.
  */
 fun interface CatalogSyncWriteObserver {
     /**
-     * Transaction-local race-test hook. Implementations must not perform external I/O.
+     * Transaction-local race-test hook입니다. 구현체는 외부 I/O를 수행하면 안 됩니다.
      */
     fun afterVersionAbsent()
 
@@ -38,8 +38,8 @@ class ProductCatalogRepository(
 ) {
 
     /**
-     * Resolves an immutable catalog synchronization against the latest version
-     * in the same tenant, clinic, and product scope.
+     * 동일한 tenant, clinic, product scope의 최신 version을 기준으로 불변 catalog 동기화를
+     * 해석합니다.
      */
     fun resolveSync(
         definition: ProductCatalogDefinition,
@@ -121,7 +121,7 @@ class ProductCatalogRepository(
     }
 
     /**
-     * Re-reads and classifies the immutable version after a concurrent unique-key conflict.
+     * 동시 unique-key 충돌 뒤 불변 version을 다시 읽고 분류합니다.
      */
     fun classifyExistingSync(
         definition: ProductCatalogDefinition,
@@ -153,7 +153,7 @@ class ProductCatalogRepository(
         )
 
     /**
-     * Inserts a catalog root and all of its BOM children atomically in the current transaction.
+     * 현재 transaction에서 catalog root와 모든 BOM 하위 항목을 원자적으로 삽입합니다.
      */
     fun saveAggregate(record: ProductCatalogProjectionRecord): ProductCatalogProjectionRecord {
         val definition = CatalogDefinitionValidator.validate(record.definition)
@@ -231,7 +231,7 @@ class ProductCatalogRepository(
     }
 
     /**
-     * Finds one catalog projection by its tenant, clinic, product, and immutable version.
+     * tenant, clinic, product, 불변 version으로 catalog projection 하나를 조회합니다.
      */
     fun findByScopeVersion(
         tenantGroupId: Long,
@@ -253,7 +253,7 @@ class ProductCatalogRepository(
             ?.let(::mapAggregate)
 
     /**
-     * Finds one catalog projection by its internal identifier.
+     * 내부 식별자로 catalog projection 하나를 조회합니다.
      */
     fun findById(id: Long): ProductCatalogProjectionRecord? =
         ProductCatalogProjections
@@ -263,7 +263,7 @@ class ProductCatalogRepository(
             ?.let(::mapAggregate)
 
     /**
-     * Deletes an unreferenced projection. Database ancestry constraints reject referenced versions.
+     * 참조되지 않은 projection을 삭제합니다. DB 조상 제약이 참조된 version을 거부합니다.
      */
     fun deleteProjection(id: Long): Int =
         ProductCatalogProjections.deleteWhere { ProductCatalogProjections.id eq id }

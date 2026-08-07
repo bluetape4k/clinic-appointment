@@ -1,23 +1,23 @@
-# Central Dependabot Ignore Sync
+# 중앙 Dependabot ignore 동기화
 
-## Context
+## 배경
 
-`bluetape4k-dependencies` now owns Dependabot alert routing for BouncyCastle,
-ClassGraph, and Tomcat lines. Leaf repositories should not receive direct
-Dependabot version PRs for those centrally governed packages.
+이제 `bluetape4k-dependencies`가 BouncyCastle, ClassGraph, Tomcat 계열의
+Dependabot alert routing을 소유한다. 하위 저장소는 중앙에서 관리하는 이 패키지들에
+대해 Dependabot version PR을 직접 받지 않아야 한다.
 
-## Decision
+## 결정
 
-Sync the generated central ignore block from `bluetape4k-dependencies` instead
-of maintaining local ignore entries by hand.
+로컬 ignore entry를 수동으로 관리하지 말고 `bluetape4k-dependencies`에서 생성한
+중앙 ignore block을 동기화한다.
 
-## Outcome
+## 결과
 
-The repository Dependabot configuration now ignores the new centrally governed
-dependency names. Future version changes should start in `bluetape4k-dependencies`
-and be propagated by its sync scripts.
+이 저장소의 Dependabot 설정이 이제 새로 중앙 관리 대상이 된 의존성 이름을
+ignore한다. 이후 버전 변경은 `bluetape4k-dependencies`에서 시작하고 해당 저장소의
+sync script로 전파한다.
 
-## Verification
+## 검증
 
 - `scripts/sync-dependabot-ignores.py --workspace .. --write --check --summary`
 - `git diff --check`

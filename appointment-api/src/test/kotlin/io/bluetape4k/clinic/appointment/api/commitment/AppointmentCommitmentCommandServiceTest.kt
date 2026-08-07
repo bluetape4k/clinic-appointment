@@ -419,7 +419,7 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
                 supersedesProposalId = valid.supersedesProposalId,
             )
 
-        // When
+// 실행 조건
         val failure =
             assertFailsWith<AppointmentCommitmentCommandException> {
                 service.confirmDirectAppointment(

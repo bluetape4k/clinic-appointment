@@ -458,8 +458,8 @@ class ResourceAllocationRepository {
                         it[ResourceCapacityBuckets.maximumCapacity] = RESOURCE_MUTEX_CAPACITY
                     }
                 } catch (failure: ExposedSQLException) {
-                    // Two H2 transactions may observe the missing mutex row together. The
-                    // unique key is the arbitration point; only that expected race is ignored.
+                    // 두 H2 transaction이 누락된 mutex row를 동시에 관찰할 수 있다. unique key가
+                    // 조정 지점이므로, 예상된 이 경쟁만 무시한다.
                     if (!failure.isUniqueConstraintViolation()) {
                         throw failure
                     }

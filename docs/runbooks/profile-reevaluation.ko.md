@@ -24,7 +24,7 @@ CRM이 관리한다. 예약서비스에는 opaque reference, fingerprint, hash, 
 목록에 포함되어야 한다.
 
 <a id="rollout"></a>
-## 단계적 적용: 비활성에서 선택안 B까지
+## 단계적 전환: 비활성에서 전체 option B까지
 
 다음 순서만 지원한다.
 
@@ -245,7 +245,7 @@ tenant 전체 또는 여러 병원을 한 번에 redrive하는 기능은 이 end
 계속 CRM 팀이 책임진다.
 
 <a id="rollback"></a>
-## Rollback과 불변 조건 확인
+## 롤백과 불변 조건 확인
 
 rollback은 새 mutation을 멈추는 절차다. 이미 정상적으로 끝난 예약 transaction을
 일괄 되돌리지 않는다.

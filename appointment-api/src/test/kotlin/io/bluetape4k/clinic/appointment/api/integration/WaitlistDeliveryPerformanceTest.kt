@@ -46,7 +46,7 @@ class WaitlistDeliveryPerformanceTest {
 
     private fun measure(workload: WaitlistScaleWorkload): WaitlistScaleResult {
         val candidates = IntArray(workload.activeEntries) { index ->
-            // Stable score tuple surrogate: lower rank wins and entry id is the final tie-break.
+// 안정적인 score tuple 대체값이다. rank가 낮을수록 우선하며 entry id가 최종 tie-break다.
             (index * 17) xor (index ushr 3)
         }
         val offerSamplesNanos = LongArray(workload.pendingVacancies)
@@ -68,7 +68,7 @@ class WaitlistDeliveryPerformanceTest {
         var processedNotifications = 0
         var notificationChecksum = 0
         repeat(workload.notificationBacklog) { index ->
-            // Keep the queue work bounded while retaining deterministic payload access.
+// 결정적인 payload 접근을 유지하면서 queue 작업 범위를 제한한다.
             notificationChecksum = notificationChecksum xor candidates[index % candidates.size]
             processedNotifications++
         }

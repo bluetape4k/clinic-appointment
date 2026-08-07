@@ -5,7 +5,7 @@ import java.io.Serializable
 import java.time.Instant
 
 /**
- * Persisted immutable catalog aggregate.
+ * 영속화된 불변 catalog aggregate입니다.
  */
 data class ProductCatalogProjectionRecord(
     val id: Long? = null,

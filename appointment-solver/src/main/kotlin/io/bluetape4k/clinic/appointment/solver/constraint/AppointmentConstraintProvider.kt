@@ -13,7 +13,7 @@ import ai.timefold.solver.core.api.score.stream.ConstraintProvider
 class AppointmentConstraintProvider : ConstraintProvider {
 
     override fun defineConstraints(factory: ConstraintFactory): Array<Constraint> = arrayOf(
-        // Hard Constraints
+// Hard constraint 정의
         HardConstraints.withinOperatingHours(factory),
         HardConstraints.withinDoctorSchedule(factory),
         HardConstraints.noDoctorAbsenceConflict(factory),
@@ -27,7 +27,7 @@ class AppointmentConstraintProvider : ConstraintProvider {
         HardConstraints.doctorBelongsToClinic(factory),
         HardConstraints.equipmentUnavailabilityConflict(factory),
 
-        // Soft Constraints
+// Soft constraint 정의
         SoftConstraints.doctorLoadBalance(factory),
         SoftConstraints.minimizeGaps(factory),
         SoftConstraints.preferOriginalDoctor(factory),

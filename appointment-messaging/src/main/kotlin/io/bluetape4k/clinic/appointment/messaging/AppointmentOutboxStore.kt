@@ -104,8 +104,8 @@ class JdbcAppointmentOutboxStore(
         require(limit in 1..MAX_CLAIM_SIZE) { "limit must be between 1 and $MAX_CLAIM_SIZE" }
         require(!leaseDuration.isNegative && !leaseDuration.isZero) { "leaseDuration must be positive" }
         return transaction {
-            // Lease predicates and timestamps must share the database clock. A worker clock
-            // can be skewed, while CURRENT_TIMESTAMP is the authority used by all claimers.
+            // lease predicate와 timestamp는 database clock을 공유해야 합니다. worker clock은
+            // 어긋날 수 있지만 CURRENT_TIMESTAMP가 모든 claimer의 권위입니다.
             val now = AppointmentDatabaseClock.current.now()
             val leaseUntil = now.plus(leaseDuration)
             val predecessor = SchedulingOutboxEvents.alias("appointment_outbox_predecessor")
@@ -129,10 +129,9 @@ class JdbcAppointmentOutboxStore(
                 .forUpdate(readyClaimLockOption())
                 .map { InvalidRow(it[SchedulingOutboxEvents.id].value, AppointmentOutboxRelay.FAILURE_INVALID_METADATA) }
             markInvalidRows(invalidReadyRows, now)
-            // Preserve the existing one-cycle invalid-row contract: terminalize the bad
-            // metadata first, then let the next claim observe a valid successor. This
-            // prevents an invalid predecessor from being skipped and its successor from
-            // being claimed in the same transaction.
+            // 기존 one-cycle invalid-row 계약을 유지합니다. 잘못된 metadata를 먼저 terminalize한
+            // 다음 다음 claim이 유효한 successor를 보게 합니다. 이 방식으로 invalid predecessor를
+            // 건너뛰고 같은 트랜잭션에서 successor를 claim하는 일을 막습니다.
             if (invalidReadyRows.isNotEmpty()) return@transaction emptyList()
 
             val candidates = SchedulingOutboxEvents
@@ -239,10 +238,9 @@ class JdbcAppointmentOutboxStore(
 
             if (candidatesToClaim.isEmpty()) return@transaction emptyList()
 
-            // The claim is one bounded conditional UPDATE. CASE expressions preserve a
-            // random fencing token and the per-row attempt increment without falling back
-            // to N row-level updates. H2 uses the same bounded IN CAS; it simply omits
-            // SKIP LOCKED because its dialect does not support that option.
+            // claim은 하나의 제한된 conditional UPDATE입니다. CASE expression으로 random fencing
+            // token과 행별 attempt 증가를 유지하며 N번의 row-level update로 되돌아가지 않습니다.
+            // H2도 같은 bounded IN CAS를 사용하지만 dialect가 지원하지 않으므로 SKIP LOCKED만 생략합니다.
             val candidateIds = candidatesToClaim.map { it.id }
             val candidateAttemptPredicate = candidatesToClaim
                 .map { candidate ->
@@ -281,8 +279,8 @@ class JdbcAppointmentOutboxStore(
                 it[SchedulingOutboxEvents.attemptCount] = attemptExpression
             }
 
-            // Re-read only the bounded candidate page so a concurrent CAS loss cannot
-            // escape as a fabricated claim. No per-row update is performed here.
+// concurrent CAS 손실이 조작된 claim으로 빠져나가지 않도록 범위가 제한된 candidate
+// page만 다시 읽는다. 여기서는 행별 update를 수행하지 않는다.
             val candidateById = candidatesToClaim.associateBy { it.id }
             SchedulingOutboxEvents
                 .selectAll()

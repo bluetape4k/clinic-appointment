@@ -8,7 +8,7 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /**
- * Tenant and clinic scoped read boundary for appointment plans.
+ * appointment plan 조회를 위한 tenant 및 clinic scope 읽기 경계입니다.
  */
 class AppointmentPlanQueryService(
     private val repository: AppointmentPlanRepository,

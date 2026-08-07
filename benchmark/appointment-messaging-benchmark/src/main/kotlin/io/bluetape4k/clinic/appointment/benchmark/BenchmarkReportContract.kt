@@ -1,10 +1,10 @@
 package io.bluetape4k.clinic.appointment.benchmark
 
 /**
- * Stable fields required by the repository's PostgreSQL benchmark evidence.
+ * 저장소의 PostgreSQL benchmark 증거에 필요한 안정적인 필드입니다.
  *
- * The Gradle plugin owns the raw JSON schema. This small contract deliberately
- * validates only the fields that downstream documentation and charts consume.
+ * raw JSON schema의 소유권은 Gradle plugin에 있습니다. 이 작은 계약은
+ * downstream 문서와 chart가 사용하는 필드만 의도적으로 검증합니다.
  */
 object BenchmarkReportContract {
 

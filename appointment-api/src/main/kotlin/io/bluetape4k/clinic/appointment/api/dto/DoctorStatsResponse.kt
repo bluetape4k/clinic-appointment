@@ -5,11 +5,11 @@ import java.io.Serializable
 import java.time.LocalDate
 
 /**
- * Response for GET /api/{tenantCode}/admin/stats/doctors.
+ * GET /api/{tenantCode}/admin/stats/doctors 응답입니다.
  *
- * ## Behavior / Contract
- * - [doctors] is sorted by [DoctorBucket.totalAppointments] descending (service layer responsibility).
- * - The list is limited to the top N doctors as specified by the `limit` query parameter.
+ * ## 동작 / 계약
+ * - [doctors]는 [DoctorBucket.totalAppointments] 내림차순으로 정렬합니다(서비스 계층의 책임).
+ * - 목록은 `limit` query parameter로 지정한 상위 N명의 의사로 제한합니다.
  * - Doctor names are not included; callers resolve ID→name via DoctorService.
  */
 @Schema(description = "Per-doctor appointment counts and completion rates for the given clinic and date range")
@@ -29,12 +29,12 @@ data class DoctorStatsResponse(
 }
 
 /**
- * Appointment metrics for a single doctor over the query period.
+ * 조회 기간 동안 한 명의 의사에 대한 예약 지표입니다.
  *
- * ## Behavior / Contract
- * - [completionRate] = completed / (completed + cancelled + noShow).
- * - When the denominator is 0 (no terminal appointments), [completionRate] is 0.0.
- * - [totalAppointments] includes all statuses, not only terminal ones.
+ * ## 동작 / 계약
+ * - [completionRate] = completed / (completed + cancelled + noShow)입니다.
+ * - 분모가 0이면(종결 예약이 없으면) [completionRate]는 0.0입니다.
+ * - [totalAppointments]에는 종결 상태뿐 아니라 모든 상태가 포함됩니다.
  */
 @Schema(description = "Appointment metrics for a single doctor")
 data class DoctorBucket(

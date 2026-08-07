@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** H2 evidence for V22 ready-index selection and fenced lease predicates. */
+/** V22 ready-index 선택과 fenced lease predicate에 대한 H2 증거. */
 class AppointmentOutboxQueryPlanTest {
     private lateinit var jdbcUrl: String
 
@@ -125,7 +125,7 @@ class AppointmentOutboxQueryPlanTest {
             assertEquals(null, readString(connection, futureId, "lease_owner"))
             assertEquals(0, readInt(connection, futureId, "attempt_count"))
 
-            // A stale candidate version cannot overwrite the fenced lease.
+// 오래된 candidate version은 fenced lease를 덮어쓸 수 없다.
             val staleUpdate = connection.prepareStatement(CONDITIONAL_LEASE_UPDATE_SQL).use { statement ->
                 statement.setString(1, "stale-relay")
                 statement.setString(2, "stale-token")

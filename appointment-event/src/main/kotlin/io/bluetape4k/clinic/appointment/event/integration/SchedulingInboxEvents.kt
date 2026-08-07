@@ -7,7 +7,7 @@ import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.javatime.timestamp
 
 /**
- * Durable, redacted convergence record for trusted inbound scheduling events.
+ * 신뢰된 inbound scheduling event의 내구성·비식별 수렴 기록입니다.
  */
 object SchedulingInboxEvents : LongIdTable("scheduling_inbox_events") {
     val eventId = varchar("event_id", 128)

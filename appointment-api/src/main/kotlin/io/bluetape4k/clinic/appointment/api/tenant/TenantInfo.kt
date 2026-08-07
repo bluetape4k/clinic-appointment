@@ -5,11 +5,11 @@ import io.bluetape4k.support.requireNotNull
 import java.io.Serializable
 
 /**
- * Resolved tenant identity for the current API request.
+ * 현재 API 요청에 대해 해석한 tenant 식별자입니다.
  *
- * @property id tenant group ID used by database rows
- * @property tenantCode stable tenant code from the request path
- * @property displayName human-readable tenant name
+ * @property id DB row에서 사용하는 tenant group ID
+ * @property tenantCode 요청 경로에서 가져온 안정적인 tenant code
+ * @property displayName 사람이 읽을 수 있는 tenant 이름
  */
 data class TenantInfo(
     val id: Long,

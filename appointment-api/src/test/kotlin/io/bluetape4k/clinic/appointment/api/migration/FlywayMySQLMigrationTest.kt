@@ -16,10 +16,10 @@ import java.sql.Driver
 class FlywayMySQLMigrationTest {
 
     /**
-     * Optional, read-only metadata smoke test for a deployed/staging MySQL endpoint.
+     * 배포된/스테이징 MySQL endpoint를 대상으로 하는 선택적 읽기 전용 메타데이터 smoke test.
      *
-     * The test deliberately does not run Flyway against the endpoint: applying or cleaning a
-     * production schema belongs to an approved change window and must not be hidden in CI.
+     * endpoint에 대해 Flyway를 의도적으로 실행하지 않는다. 운영 스키마를 적용하거나
+     * 정리하는 작업은 승인된 변경 창에 속하며 CI에 숨겨서는 안 된다.
      */
     @Test
     fun `production MySQL metadata readiness is verified when endpoint is configured`() {

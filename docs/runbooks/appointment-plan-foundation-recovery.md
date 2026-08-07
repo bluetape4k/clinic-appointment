@@ -22,7 +22,7 @@
 않습니다. `eventId`, `correlationId`, producer, schema/version, tenant/clinic,
 result, reason code만 사용합니다.
 
-## Bounded 진단 selector
+## 제한된 진단 selector
 
 운영 DB의 read-only console에서 먼저 정확한 scope/event를 고정합니다. 모든 목록
 조회는 `LIMIT 100` 이하이며 결과를 티켓에 복사할 때는 허용된 식별자만 남깁니다.

@@ -14,7 +14,7 @@ import org.openjdk.jmh.annotations.TearDown
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
-/** PostgreSQL V23 consumer inbox duplicate and cleanup benchmark. */
+/** PostgreSQL V23 consumer inbox 중복 조회와 정리 benchmark입니다. */
 @State(Scope.Benchmark)
 open class PostgreSqlAppointmentConsumerBenchmark {
     private lateinit var fixture: PostgreSqlBenchmarkFixture
@@ -51,9 +51,9 @@ open class PostgreSqlAppointmentConsumerBenchmark {
     )
 
     /**
-     * Same-key inbox inserts intentionally race on the composite primary key.
-     * The returned sample is the slower participant's transaction time, which
-     * keeps the unique-index/row-lock wait visible without using production data.
+     * 동일 key inbox insert는 composite primary key에서 의도적으로 경합합니다.
+     * 반환 sample은 더 느린 참여자의 트랜잭션 시간이며, 운영 데이터를 사용하지
+     * 않고도 unique-index/row-lock 대기를 드러냅니다.
      */
     @Benchmark
     @BenchmarkMode(Mode.SampleTime)

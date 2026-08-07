@@ -103,7 +103,7 @@ class WaitlistDeliverySchedulingRunner(
         }
 
         return try {
-            // Safety work is deliberately outside the dispatch flag.
+            // 안전 작업은 의도적으로 dispatch flag 바깥에서 수행한다.
             val expiry = offerExpiryRunner.expire(properties.batchSize, now)
             val suppression = notificationSuppressionRunner.suppress(properties.batchSize, now)
             val reconciled = holdReconciler.reconcile(properties.batchSize, now)
@@ -129,12 +129,12 @@ class WaitlistDeliverySchedulingRunner(
 
     companion object {
         const val DEFAULT_OWNER = "waitlist-delivery-scheduler"
-        /** clinic-independent scheduled tick sentinel; it never reaches a repository predicate. */
+        /** clinic과 무관한 예약 tick sentinel이며 repository predicate까지 도달하지 않습니다. */
         const val ALLOW_ALL_CLINICS = 0L
     }
 }
 
-/** Correlation id factory for scheduled recovery commands. */
+/** 예약된 recovery command를 위한 Correlation id factory입니다. */
 fun waitlistSchedulerCorrelation(now: Instant): CorrelationId =
     CorrelationId("waitlist-scheduler:${now.epochSecond}")
 

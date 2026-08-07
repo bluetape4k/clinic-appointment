@@ -9,11 +9,10 @@ import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /**
- * Synchronizes immutable product-catalog versions for appointment planning.
+ * appointment planning에 사용하는 불변 product catalog version을 동기화합니다.
  *
- * Validation and canonical hashing deliberately run before acquiring a
- * database connection. The repository comparison and aggregate insert share
- * one transaction.
+ * 검증과 canonical hash 계산은 의도적으로 DB connection을 획득하기 전에 수행합니다.
+ * repository 비교와 aggregate 삽입은 하나의 transaction을 공유합니다.
  */
 class CatalogSyncApplicationService(
     private val repository: ProductCatalogRepository,

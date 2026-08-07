@@ -1,84 +1,83 @@
-# Waitlist delivery API contract
+# 대기 목록 전달 API 계약
 
-This document describes the phase-two staff boundary for issue #170. Patient
-self-service, public magic links, payment, CRM attribution, and external
-messaging brokers are not part of this contract.
+이 문서는 이슈 #170의 2단계 직원용 경계를 설명한다. 환자 셀프서비스, 공개
+magic link, 결제, CRM attribution, 외부 메시징 broker는 이 계약에 포함하지 않는다.
 
-## Scope and headers
+## 범위와 헤더
 
-The base path is `/api/{tenantCode}/clinics/{clinicId}/waitlist`. The JWT
-principal, tenant membership, clinic membership, and capability are authoritative;
-request bodies cannot override them. Every mutation requires
-`Idempotency-Key` with 16–128 printable ASCII characters. Commands that change an
-existing row also require `expectedVersion` in the JSON body.
+기본 경로는 `/api/{tenantCode}/clinics/{clinicId}/waitlist`다. JWT principal,
+tenant membership, clinic membership, capability가 권위 있는 값이며 요청 본문으로
+이 값을 덮어쓸 수 없다. 모든 mutation에는 16–128자의 출력 가능한 ASCII 문자를 담은
+`Idempotency-Key`가 필요하다. 기존 row를 변경하는 command는 JSON 본문에
+`expectedVersion`도 담아야 한다.
 
-Entry, offer, policy, adjustment, and appointment references are opaque strings.
-The API decodes and scope-checks them before calling the internal `Long` ID port.
-Malformed, wrong-kind, and wrong-clinic references are intentionally returned as
-`404 WAITLIST_REFERENCE_NOT_FOUND`.
+entry, offer, policy, adjustment, appointment reference는 opaque 문자열이다. API는
+내부 `Long` ID port를 호출하기 전에 reference를 디코딩하고 scope를 검증한다.
+형식이 잘못되었거나 종류가 다르거나 다른 병원에 속한 reference는 의도적으로
+`404 WAITLIST_REFERENCE_NOT_FOUND`로 반환한다.
 
-## Routes
+## 라우트
 
-| Method | Path | Capability | Result |
+| 메서드 | 경로 | capability | 결과 |
 |---|---|---|---|
-| `POST` | `/entries` | `waitlist:write` | Create a scoped waiting entry (`201`). |
-| `GET` | `/entries`, `/entries/{entryRef}` | `waitlist:read` | Keyset page or one entry (`200`). |
-| `POST` | `/entries/{entryRef}/withdraw` | `waitlist:write` | Versioned withdrawal (`200`). |
-| `GET` | `/offers`, `/offers/{offerRef}`, `/offers/{offerRef}/decision` | `waitlist:read` | Offer or decision view (`200`). |
-| `POST` | `/offers/{offerRef}/confirm` | `waitlist:write` | One replacement appointment (`201`). |
-| `POST` | `/offers/{offerRef}/decline` | `waitlist:write` | Decline and release (`200`). |
-| `GET` | `/policies/active`, `/policies/{policyRef}` | `waitlist:read` | Effective policy view (`200`). |
-| `POST` | `/policies`, `/policies/{policyRef}/activate` | `waitlist:policy` | Versioned policy write/activation (`201`/`200`). |
-| `POST` | `/restrictions`, `/restrictions/{restrictionRef}/release` | `waitlist:adjustment` | Bounded restriction change. |
-| `POST` | `/recovery-credits`, `/recovery-credits/{recoveryCreditRef}/revoke` | `waitlist:adjustment` | Bounded recovery credit change. |
-| `POST` | `/benefit-grants`, `/benefit-grants/{benefitGrantRef}/revoke` | `waitlist:adjustment` | Approved, capped benefit change. |
+| `POST` | `/entries` | `waitlist:write` | 범위가 지정된 waiting entry 생성 (`201`). |
+| `GET` | `/entries`, `/entries/{entryRef}` | `waitlist:read` | Keyset 페이지 또는 단일 entry 조회 (`200`). |
+| `POST` | `/entries/{entryRef}/withdraw` | `waitlist:write` | 버전 조건부 철회 (`200`). |
+| `GET` | `/offers`, `/offers/{offerRef}`, `/offers/{offerRef}/decision` | `waitlist:read` | Offer 또는 decision 뷰 조회 (`200`). |
+| `POST` | `/offers/{offerRef}/confirm` | `waitlist:write` | 대체 appointment 하나 생성 (`201`). |
+| `POST` | `/offers/{offerRef}/decline` | `waitlist:write` | 거절하고 자원 해제 (`200`). |
+| `GET` | `/policies/active`, `/policies/{policyRef}` | `waitlist:read` | 유효 policy 뷰 조회 (`200`). |
+| `POST` | `/policies`, `/policies/{policyRef}/activate` | `waitlist:policy` | 버전이 있는 policy 저장/활성화 (`201`/`200`). |
+| `POST` | `/restrictions`, `/restrictions/{restrictionRef}/release` | `waitlist:adjustment` | 제한을 정해진 범위에서 변경. |
+| `POST` | `/recovery-credits`, `/recovery-credits/{recoveryCreditRef}/revoke` | `waitlist:adjustment` | recovery credit을 정해진 범위에서 변경. |
+| `POST` | `/benefit-grants`, `/benefit-grants/{benefitGrantRef}/revoke` | `waitlist:adjustment` | 승인되고 상한이 적용된 benefit 변경. |
 
-List responses use `{ "items": [...], "nextCursor": "..." }`. The default
-page size is 50 and the maximum is 100. A cursor is bound to its filter, scope,
-and ordering; a tampered or stale cursor returns `400 INVALID_CURSOR`.
+목록 응답은 `{ "items": [...], "nextCursor": "..." }` 형식이다. 기본 페이지 크기는
+50이고 최대값은 100이다. cursor는 filter, scope, ordering에 묶인다. 변조되었거나
+오래된 cursor는 `400 INVALID_CURSOR`를 반환한다.
 
-## Confirm and replay contract
+## Confirm과 replay 계약
 
-The confirm path reserves the idempotency command in a short transaction, then
-locks and revalidates the offer, entry, hold, policy decision, and appointment
-capacity in a separate business transaction. The result record is completed in a
-third transaction. A process loss after appointment creation leaves the command
-`PROCESSING`; a retry reconciles the existing replacement appointment by command
-scope and request digest instead of creating another one.
+confirm 경로는 짧은 transaction에서 idempotency command를 먼저 예약한 뒤, 별도의
+업무 transaction에서 offer, entry, hold, policy decision, appointment capacity를
+lock하고 다시 검증한다. 결과 기록은 세 번째 transaction에서 완료한다. appointment
+생성 직후 프로세스가 중단되면 command는 `PROCESSING` 상태로 남는다. 재시도는 새
+appointment를 만들지 않고 command scope와 request digest를 기준으로 기존 대체
+appointment를 대조·복구한다.
 
-| Situation | Status | Reason |
+| 상황 | 상태 | 사유 |
 |---|---:|---|
-| First confirm | `201` | `ACCEPTED` with opaque `appointmentRef`. |
-| Same key and same request after success | `201` | Original result with `Idempotent-Replay: true`. |
-| Same key while processing | `202` | `IDEMPOTENCY_IN_PROGRESS`, `Retry-After: 1`. |
-| Expired/stale/occupied offer | `409` | `OFFER_EXPIRED`, `DECISION_STALE`, or `SLOT_OCCUPIED`. |
-| Same key with another request digest | `409` | Stable idempotency conflict. |
+| 최초 confirm | `201` | opaque `appointmentRef`를 담은 `ACCEPTED`. |
+| 성공 후 같은 key와 같은 요청 | `201` | `Idempotent-Replay: true`를 담은 원래 결과. |
+| 처리 중 같은 key | `202` | `IDEMPOTENCY_IN_PROGRESS`, `Retry-After: 1`. |
+| 만료·stale·점유된 offer | `409` | `OFFER_EXPIRED`, `DECISION_STALE`, `SLOT_OCCUPIED` 중 하나. |
+| 다른 request digest와 같은 key 사용 | `409` | 안정적인 idempotency 충돌. |
 
-Notification delivery is not acceptance. A provider failure or unknown result
-records delivery state and cannot revive or accept an offer.
+notification delivery는 acceptance가 아니다. provider 실패 또는 알 수 없는 결과는
+delivery 상태로 기록할 뿐이며 offer를 되살리거나 수락할 수 없다.
 
-## Error and redaction contract
+## 오류와 비식별화 계약
 
-Errors contain only a safe message, `reasonCode`, `correlationId`, `retryable`,
-and optional `retryAfterSeconds` (plus the compatibility `errorCode` alias). They
-never include raw member IDs, contact details, clinical notes, policy score
-vectors, JWT claims, SQL, or provider exception text.
+오류에는 안전한 메시지, `reasonCode`, `correlationId`, `retryable`, 선택적인
+`retryAfterSeconds`(호환성을 위한 `errorCode` alias 포함)만 담는다. 원본 member ID,
+연락처, clinical note, policy score vector, JWT claim, SQL, provider exception text는
+절대 포함하지 않는다.
 
-| Status | Reason families |
+| 상태 | 사유 계열 |
 |---:|---|
 | `400` | `INVALID_IDEMPOTENCY_KEY`, `PAYLOAD_INVALID`, `INVALID_CURSOR` |
-| `401` | `AUTH_UNAUTHENTICATED` from the shared security envelope |
+| `401` | 공통 security envelope의 `AUTH_UNAUTHENTICATED` |
 | `403` | `WAITLIST_FORBIDDEN` / `AUTH_SCOPE_DENIED` |
 | `404` | `WAITLIST_REFERENCE_NOT_FOUND` |
-| `409` | stale version, terminal state, expiry, capacity, or idempotency conflict |
-| `503` | `WAITLIST_UNAVAILABLE`, with `Retry-After` when retryable |
+| `409` | stale version, terminal state, expiry, capacity 또는 idempotency 충돌 |
+| `503` | `WAITLIST_UNAVAILABLE`; 재시도 가능하면 `Retry-After` 포함 |
 
-## Rollout
+## 롤아웃
 
-`appointment.waitlist.delivery.enabled=false` is the safe default. An optional
-`clinic-allowlist` enables dispatch only for selected clinics. Turning the flag
-off or removing a clinic stops new vacancy dispatch and notification delivery;
-expiry, suppression, and stuck-hold reconciliation continue. Database fencing,
-not the Redis leader lease, authorizes terminal writes.
+`appointment.waitlist.delivery.enabled=false`가 안전한 기본값이다. 선택적인
+`clinic-allowlist`를 사용하면 지정한 병원에만 dispatch를 활성화한다. flag를 끄거나
+병원을 제거하면 새로운 vacancy dispatch와 notification delivery를 중지하지만, expiry,
+suppression, stuck-hold reconciliation은 계속 수행한다. terminal write를 승인하는
+기준은 Redis leader lease가 아니라 database fencing이다.
 
-Operational commands and evidence are in the [waitlist delivery runbook](../runbooks/waitlist-delivery.md).
+운영 명령과 증거는 [대기 목록 전달 런북](../runbooks/waitlist-delivery.md)에서 확인한다.

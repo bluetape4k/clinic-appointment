@@ -37,8 +37,8 @@ class SpringKafkaAppointmentPublisher(
 
     init {
         require(!metadataTimeout.isNegative && !metadataTimeout.isZero) { "metadataTimeout must be positive" }
-        // The admin client is the non-creating metadata path. Producer metadata requests
-        // may allow topic creation, so readiness must never use KafkaTemplate.partitionsFor.
+        // admin client는 topic을 생성하지 않는 metadata 경로입니다. producer metadata request는
+        // topic 생성을 허용할 수 있으므로 readiness에서 KafkaTemplate.partitionsFor를 사용하면 안 됩니다.
         kafkaAdmin.setAutoCreate(false)
         kafkaAdmin.setOperationTimeout(metadataTimeout.toKafkaTimeoutSeconds())
     }

@@ -46,7 +46,7 @@ data class AppointmentPlanResponse(
 }
 
 /**
- * Concrete OpenAPI schema for the successful appointment plan envelope.
+ * 성공한 appointment plan envelope를 위한 구체적인 OpenAPI 스키마입니다.
  */
 data class AppointmentPlanApiResponse(
     val success: Boolean,

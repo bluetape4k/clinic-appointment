@@ -38,7 +38,7 @@ class DoctorRepository : LongJdbcRepository<DoctorRecord> {
     override fun ResultRow.toEntity(): DoctorRecord = toDoctorRecord()
 
     /**
-     * Finds a doctor by ID only when the owning clinic belongs to [tenantGroupId].
+     * 소유 clinic이 [tenantGroupId]에 속할 때만 ID로 의사를 조회합니다.
      */
     fun findByIdAndTenant(doctorId: Long, tenantGroupId: Long): DoctorRecord? =
         Doctors

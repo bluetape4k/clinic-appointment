@@ -26,15 +26,15 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * SSE endpoint for streaming batch reschedule progress.
+ * 일괄 재배정 진행률을 스트리밍하는 SSE endpoint입니다.
  *
- * ## Behavior / Contract
- * - One SSE event is sent per appointment as it completes candidate search.
- * - A terminal event with [RescheduleProgressEvent.done] = true signals completion.
- * - If no appointments are affected, only the terminal event is sent.
- * - On error, the SSE stream is completed with an error state.
+ * ## 동작 / 계약
+ * - 예약마다 후보 탐색을 완료할 때 SSE event 하나를 전송합니다.
+ * - [RescheduleProgressEvent.done] = true인 종결 event가 완료를 알립니다.
+ * - 영향을 받는 예약이 없으면 종결 event만 전송합니다.
+ * - 오류가 발생하면 오류 상태로 SSE stream을 완료합니다.
  *
- * @param closureRescheduleService batch reschedule service
+ * @param closureRescheduleService 일괄 재배정 서비스
  */
 @Tag(name = "Reschedule", description = "Appointment rescheduling")
 @RestController
@@ -48,11 +48,11 @@ class RescheduleBatchStreamController(
     companion object : KLogging()
 
     /**
-     * Streams batch closure reschedule progress as Server-Sent Events.
+     * 병원 휴진 일괄 재배정 진행률을 Server-Sent Events로 스트리밍합니다.
      *
-     * @param clinicId clinic to reschedule
-     * @param closureDate date of the clinic closure
-     * @param searchDays number of days to search for alternative slots (default 7)
+     * @param clinicId 재배정할 clinic
+     * @param closureDate clinic 휴진 날짜
+     * @param searchDays 대체 slot을 탐색할 일수(기본값 7)
      * @return SSE stream of [RescheduleProgressEvent] — one per appointment plus a terminal event
      */
     @Operation(summary = "Stream batch closure reschedule progress via SSE")

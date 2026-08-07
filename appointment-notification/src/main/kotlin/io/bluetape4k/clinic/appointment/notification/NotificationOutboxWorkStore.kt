@@ -61,8 +61,8 @@ interface NotificationOutboxWorkStore {
     ): List<ClaimedNotification>
 
     /**
-     * Recovers only the route's tenant/clinic allowlist. The default keeps custom
-     * stores source-compatible; JDBC stores must push this predicate into SQL.
+     * route의 tenant/clinic allowlist만 복구한다. 기본 구현은 custom store의 source
+     * 호환성을 유지하며, JDBC store는 이 predicate를 SQL에 반영해야 한다.
      */
     suspend fun recoverExpired(
         limit: Int,

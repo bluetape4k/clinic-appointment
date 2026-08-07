@@ -7,7 +7,7 @@ import java.time.LocalDate
  * 휴일 레코드.
  *
  * @property id 휴일 ID
- * @property tenantGroupId tenant group ID
+ * @property tenantGroupId tenant group ID입니다.
  * @property holidayDate 휴일 날짜
  * @property name 휴일 이름
  * @property recurring 매년 반복 여부

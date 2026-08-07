@@ -26,9 +26,9 @@ class RescheduleCandidateRepository : LongJdbcRepository<RescheduleCandidateReco
     override fun ResultRow.toEntity(): RescheduleCandidateRecord = toRescheduleCandidateRecord()
 
     /**
-     * Persists a candidate inside the caller's already verified [scope] transaction.
-     * The closure service guards the original appointment once before its candidate
-     * loop, so this method deliberately does not add one ownership query per row.
+     * 호출자가 이미 검증한 [scope] transaction 안에서 후보를 영속화합니다.
+     * closure service가 후보 loop 전에 원본 예약을 한 번 검증하므로, 이 메서드는 의도적으로
+     * 행마다 소유권 query를 추가하지 않습니다.
      */
     fun save(record: RescheduleCandidateRecord, scope: TenantClinicScope): RescheduleCandidateRecord {
         require(scope.tenantGroupId > 0L && scope.clinicId > 0L) { "candidate scope must be positive" }

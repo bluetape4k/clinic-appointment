@@ -23,13 +23,13 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
 /**
- * Admin dashboard statistics REST controller.
+ * 관리자 대시보드 통계 REST 컨트롤러입니다.
  *
- * ## Behavior / Contract
- * - All endpoints require `clinicId > 0`; invalid values return HTTP 400.
- * - `from` / `to` default to [today-29, today] (30 days) when omitted.
- * - Period exceeding 366 days returns HTTP 400.
- * - Unknown `clinicId` returns HTTP 200 with empty data.
+ * ## 동작 / 계약
+ * - 모든 endpoint는 `clinicId > 0`을 요구하며, 잘못된 값은 HTTP 400을 반환합니다.
+ * - `from` / `to`를 생략하면 [today-29, today] (30일)를 기본값으로 사용합니다.
+ * - 기간이 366일을 초과하면 HTTP 400을 반환합니다.
+ * - 알 수 없는 `clinicId`에는 데이터가 빈 HTTP 200 응답을 반환합니다.
  */
 @Tag(name = "Admin - Dashboard Stats", description = "Appointment statistics for admin dashboard")
 @RestController
@@ -41,12 +41,12 @@ class DashboardStatsController(
     companion object : KLogging()
 
     /**
-     * Returns daily appointment counts grouped by status.
+     * 상태별 일일 예약 건수를 반환합니다.
      *
-     * @param clinicId Target clinic ID (must be > 0)
-     * @param from Inclusive start date; defaults to today-29 when null
-     * @param to Inclusive end date; defaults to today when null
-     * @param statuses Optional status name filter; null means all statuses
+     * @param clinicId 대상 clinic ID입니다(0보다 커야 합니다).
+     * @param from 포함할 시작 날짜이며, null이면 today-29를 사용합니다.
+     * @param to 포함할 종료 날짜이며, null이면 today를 사용합니다.
+     * @param statuses 선택적 상태 이름 필터이며, null이면 모든 상태를 사용합니다.
      */
     @Operation(summary = "Daily appointment counts grouped by status")
     @ApiResponses(
@@ -68,12 +68,12 @@ class DashboardStatsController(
     }
 
     /**
-     * Returns per-doctor appointment metrics sorted by total appointments descending.
+     * 의사별 예약 지표를 전체 예약 건수 내림차순으로 정렬해 반환합니다.
      *
-     * @param clinicId Target clinic ID (must be > 0)
-     * @param from Inclusive start date; defaults to today-29 when null
-     * @param to Inclusive end date; defaults to today when null
-     * @param limit Max number of doctors to return (1..100, default 20)
+     * @param clinicId 대상 clinic ID입니다(0보다 커야 합니다).
+     * @param from 포함할 시작 날짜이며, null이면 today-29를 사용합니다.
+     * @param to 포함할 종료 날짜이며, null이면 today를 사용합니다.
+     * @param limit 반환할 최대 의사 수이며, 범위는 1..100이고 기본값은 20입니다.
      */
     @Operation(summary = "Per-doctor appointment metrics")
     @ApiResponses(
@@ -95,11 +95,11 @@ class DashboardStatsController(
     }
 
     /**
-     * Returns cancellation and no-show trends.
+     * 취소 및 no-show 추이를 반환합니다.
      *
-     * @param clinicId Target clinic ID (must be > 0)
-     * @param from Inclusive start date; defaults to today-29 when null
-     * @param to Inclusive end date; defaults to today when null
+     * @param clinicId 대상 clinic ID입니다(0보다 커야 합니다).
+     * @param from 포함할 시작 날짜이며, null이면 today-29를 사용합니다.
+     * @param to 포함할 종료 날짜이며, null이면 today를 사용합니다.
      */
     @Operation(summary = "Cancellation and no-show trends")
     @ApiResponses(

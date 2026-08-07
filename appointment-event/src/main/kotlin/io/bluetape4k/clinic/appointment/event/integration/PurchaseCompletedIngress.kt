@@ -5,10 +5,10 @@ fun interface SourceAuthorityVersionProofProvider {
 }
 
 /**
- * Trust and preparation boundary for raw purchase envelopes.
+ * 원시 구매 envelope의 신뢰성 검증·준비 경계입니다.
  *
- * Signature checks, authority proof lookup, and patient protection complete
- * before the handler opens its atomic inbox/plan/outbox transaction.
+ * handler가 atomic inbox/plan/outbox 트랜잭션을 열기 전에 signature 검사,
+ * authority proof 조회, patient protection을 모두 완료합니다.
  */
 class PurchaseCompletedIngress(
     private val trustVerifier: SchedulingEventTrustVerifier,

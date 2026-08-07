@@ -29,7 +29,7 @@ class EquipmentRepository : LongJdbcRepository<EquipmentRecord> {
     override fun ResultRow.toEntity(): EquipmentRecord = toEquipmentRecord()
 
     /**
-     * Finds equipment by ID only when the owning clinic belongs to [tenantGroupId].
+     * 소유 clinic이 [tenantGroupId]에 속할 때만 ID로 장비를 조회합니다.
      */
     fun findByIdAndTenant(equipmentId: Long, tenantGroupId: Long): EquipmentRecord? =
         Equipments

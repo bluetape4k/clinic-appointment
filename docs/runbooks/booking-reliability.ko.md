@@ -34,7 +34,7 @@
 
 ## 장애 대응
 
-### Decision unavailable/stale
+### Decision unavailable 또는 stale
 
 `BOOKING_DECISION_UNAVAILABLE`은 DB/policy readiness 또는 저장 장애다. 먼저 health와
 correlation ID로 범위를 확인한 뒤 worker를 멈추고 `SHADOW`/`OFF`로 낮춘다. 같은 intent의
@@ -62,7 +62,7 @@ cursor를 안전하게 재생할 수 있을 때만 `resume`한다.
 복사하거나 수동으로 decision에 붙이지 않는다. 회원관리시스템의 보안 사고 절차와 함께 처리하고,
 이 저장소에는 bounded actor/correlation/reference만 남긴다.
 
-## 직원 override/clear
+## 직원 override와 clear
 
 1. 현재 decision을 조회한다.
 2. `Idempotency-Key`, `decisionId`, `evaluationDigest`를 고정한다.

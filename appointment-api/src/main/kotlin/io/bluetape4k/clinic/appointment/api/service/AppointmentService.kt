@@ -334,9 +334,9 @@ class AppointmentService(
                 scope = scope,
                 fromState = transition.from.name,
                 toState = transition.to.name,
-                // Legacy listeners receive only the bounded code. Free text remains a
-                // state-machine input for non-cancellation transitions and is never
-                // copied to the durable event or audit payload.
+                // Legacy listener에는 제한된 code만 전달한다. 자유 텍스트는 취소가 아닌
+                // 전이에서 state-machine 입력으로만 사용하며 durable event나 audit payload에는
+                // 절대 복사하지 않는다.
                 reason = reasonCode?.value,
             )
         )
@@ -541,7 +541,7 @@ private fun String.toRegisteredCancellationReasonCode(): CancellationReasonCode?
 private fun requireRegisteredCancellationReasonCode(value: String): CancellationReasonCode =
     value.toRegisteredCancellationReasonCode() ?: throw InvalidAppointmentReasonCodeException()
 
-/** Public appointment mutations reject free-form cancellation reasons without echoing them. */
+/** 공개 예약 변경은 자유 형식 취소 사유를 거부하며 입력값을 그대로 반환하지 않습니다. */
 private class InvalidAppointmentReasonCodeException : IllegalArgumentException(
     "Appointment cancellation reason must be a registered uppercase code",
 )

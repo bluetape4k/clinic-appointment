@@ -3,7 +3,7 @@ package io.bluetape4k.clinic.appointment.api.tenant
 import jakarta.servlet.http.HttpServletRequest
 
 /**
- * Extracts URL tenant codes from API paths.
+ * API 경로에서 URL tenant code를 추출합니다.
  */
 object TenantPathResolver {
     private const val API_PREFIX = "/api/"

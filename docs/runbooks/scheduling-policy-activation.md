@@ -1,10 +1,10 @@
-# Scheduling Policy Activation Runbook
+# 스케줄링 정책 활성화 운영 런북
 
 이 런북은 scheduling-policy preview worker와 activation worker를 운영할 때 사용하는
 진단, 완화, 복구 절차를 정리한다. 정책 row를 직접 고치지 말고 API 명령과 replay/retire
 경로를 사용한다.
 
-## Rollout Checklist
+## 단계적 전환 체크리스트
 
 모든 flag는 기본값이 `false`다. 운영자는 다음 순서로만 켠다.
 
@@ -17,7 +17,7 @@
 후행 flag가 선행 flag 없이 켜지면 애플리케이션 시작이 실패한다. 이 foundation PR에는
 booking consumer flag가 없다.
 
-## Activation Timing Contract
+## 활성화 시점 계약
 
 ```text
 60s lateness warning -> inspect lease/DB clock/head conflict
@@ -37,9 +37,9 @@ forbidden -> direct DB edits or terminal-row rewrites
 | `scheduling.policy.max-preview-jobs-per-tick` | `10` | 한 tick의 preview claim 상한 |
 | `scheduling.policy.preview-job-deadline` | `PT5M` | durable preview hard deadline |
 
-## Alert Matrix
+## Alert 매트릭스
 
-| Alert | 기본 임계값 | 첫 진단 metric/query | Owner action | Degradation / escalation | Recovery |
+| Alert | 기본 임계값 | 첫 진단 metric/query | 담당자 작업 | Degradation / escalation | Recovery |
 |---|---:|---|---|---|---|
 | Outbox oldest pending | oldest pending age > 60s | `scheduling_outbox_events`의 `MIN(created_at)` pending query; occurrence 보조 신호는 `clinic.scheduling.policy.outbox{result="oldest_pending_age"}` | publisher 상태와 DB lock 확인 | 5m 이상이면 발행 지연을 변경 공지로 격상 | publisher 재기동 후 failed row는 outbox redrive |
 | Outbox failed | failed row > 0 | `scheduling_outbox_events` failed count query; occurrence 보조 신호는 `clinic.scheduling.policy.outbox{result="failed"}` | error classification 확인 | 반복 실패면 downstream event consumer 격리 | 원인 제거 후 outbox redrive |
@@ -56,7 +56,7 @@ payload hash, correlation ID를 metric label에 넣지 않는다.
 `clinic.scheduling.policy.outbox`는 발생 횟수 counter이므로 현재 backlog age나 row count의
 권위값으로 해석하지 않는다. 현재 상태 판정은 위 SQL query를 사용한다.
 
-## First Diagnostics
+## 초기 진단
 
 ### Outbox backlog
 
@@ -73,7 +73,7 @@ WHERE status = 'FAILED';
 DB 현재 시각과 `oldest_pending_created_at`의 차이가 60초를 넘으면 publisher와 lock을
 확인한다. 5분 이상이면 변경 전파 지연으로 격상한다.
 
-### Due activation 지연
+### 예정된 activation 지연
 
 ```sql
 SELECT id, status, effective_from, next_attempt_at, lease_owner, lease_until, attempt
@@ -109,7 +109,7 @@ effective read는 generation을 두 번 읽는다. 두 read 사이에 활성 정
 반환하지 않고 `POLICY_EFFECTIVE_READ_CONFLICT`를 반환한다. 권위 저장소가 읽히지 않으면
 `POLICY_EFFECTIVE_READ_UNAVAILABLE`과 HTTP `503`을 반환한다.
 
-## Recovery Actions
+## 복구 작업
 
 | 상황 | 허용된 복구 | 금지된 복구 |
 |---|---|---|
@@ -119,7 +119,7 @@ effective read는 generation을 두 번 읽는다. 두 read 사이에 활성 정
 | idempotency conflict | 의도 확인 후 새 key 사용 | 기존 key hash나 fingerprint 수정 |
 | aggregate-null | writer/version 점검, 필요 시 backfill 후 재검증 | null row를 임의 aggregate로 채우기 |
 
-## V10 Readiness Gate
+## V10 Readiness gate
 
 V10 전환 전 운영자는 아래 세 가지를 모두 확인한다.
 
@@ -138,7 +138,7 @@ WHERE aggregate_type IS NULL OR aggregate_id IS NULL;
 parity query는 V10 migration의 실제 legacy/new column 쌍을 기준으로 작성한다. 이
 foundation 문서는 V9/V10 split을 고정하지만 V10 schema 이름을 선점하지 않는다.
 
-## Operator Rules
+## 운영자 규칙
 
 - 확정 예약 변경은 고객 동의 후 적용한다. 운영 장애 복구는 새 제안을 만들고 기존 확정
   예약을 조용히 덮어쓰지 않는다.

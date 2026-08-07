@@ -10,8 +10,7 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import java.util.function.Supplier
 
 /**
- * Authorizes a request when the URL tenant code is present in the JWT
- * `allowedTenants` claim.
+ * URL tenant code가 JWT의 `allowedTenants` claim에 포함될 때 요청을 허가합니다.
  */
 class TenantAuthorizationManager : AuthorizationManager<RequestAuthorizationContext> {
 

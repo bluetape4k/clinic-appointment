@@ -8,14 +8,14 @@ import java.sql.Timestamp
 import java.sql.Types
 import javax.sql.DataSource
 
-/** V22 appointment envelope/lease columns and dialect-specific index contract. */
+/** V22 appointment envelope/lease 컬럼과 dialect별 인덱스 계약. */
 internal object AppointmentMessagingMigrationTestSupport {
 
     /**
-     * V23 consumer metadata contract is checked against the real JDBC metadata.
+     * V23 consumer metadata 계약을 실제 JDBC 메타데이터와 대조한다.
      *
-     * The same helper is intentionally used by H2, MySQL, and PostgreSQL tests so a
-     * dialect-specific migration cannot silently omit a table, key, or retention index.
+     * dialect별 마이그레이션에서 테이블, 키, retention 인덱스가 조용히 누락되지 않도록
+     * H2, MySQL, PostgreSQL 테스트가 의도적으로 같은 helper를 사용한다.
      */
     fun verifyV23Migration(
         dataSource: DataSource,
@@ -50,10 +50,10 @@ internal object AppointmentMessagingMigrationTestSupport {
     }
 
     /**
-     * Verifies only the already-applied V23 metadata without running Flyway or mutating rows.
+     * Flyway를 실행하거나 행을 변경하지 않고 이미 적용된 V23 메타데이터만 검증한다.
      *
-     * This is the safe hook for a production/staging endpoint smoke test. Applying a migration
-     * to a production database remains an operator-controlled change-window action.
+     * 운영/스테이징 endpoint smoke test에서 사용할 수 있는 안전한 진입점이다. 운영
+     * 데이터베이스에 마이그레이션을 적용하는 작업은 여전히 운영자가 통제하는 변경 창에서 수행한다.
      */
     fun verifyV23Metadata(dataSource: DataSource) {
         dataSource.connection.use(::assertV23Metadata)

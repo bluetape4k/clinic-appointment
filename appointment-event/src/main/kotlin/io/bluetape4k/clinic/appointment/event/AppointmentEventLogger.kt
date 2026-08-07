@@ -85,8 +85,8 @@ class AppointmentEventLogger(
                 }
             }
         } catch (_: Exception) {
-            // event log is best-effort audit only; it must not change the committed API result.
-            // Keep the diagnostic bounded: raw SQL/driver messages can contain tenant data.
+            // event log는 best-effort audit일 뿐이며 이미 commit된 API 결과를 바꾸면 안 됩니다.
+            // raw SQL/driver 메시지에 tenant 데이터가 포함될 수 있으므로 진단 정보의 크기를 제한합니다.
             metrics?.recordEventLogWriteFailure("EVENT_LOG_WRITE_FAILED")
             log.warn {
                 "예약 이벤트 감사 로그 저장에 실패했습니다: reason=EVENT_LOG_WRITE_FAILED, eventType=$eventType"

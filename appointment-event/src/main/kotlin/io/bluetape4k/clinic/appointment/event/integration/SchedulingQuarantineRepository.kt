@@ -56,7 +56,7 @@ object SchedulingQuarantineEvents : LongIdTable("scheduling_quarantine_events") 
 }
 
 /**
- * Append-only privileged activity log for quarantine inspection, redrive, release, and retention actions.
+ * quarantine 검사, redrive, release, retention 작업을 기록하는 append-only 권한 활동 로그.
  */
 object SchedulingQuarantineAuditEvents : LongIdTable("scheduling_quarantine_audit_events") {
     val quarantineId = reference("quarantine_id", SchedulingQuarantineEvents, onDelete = ReferenceOption.RESTRICT)

@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.jdbc.datasource.SimpleDriverDataSource
 import java.sql.Driver
 
-/** H2 migration proof for the metadata-only consumer inbox and quarantine tables. */
+/** 메타데이터 전용 consumer inbox와 quarantine 테이블에 대한 H2 마이그레이션 증명. */
 class AppointmentConsumerMigrationContractTest {
     @Test
     fun `V23 creates bounded tenant scoped consumer metadata tables`() {

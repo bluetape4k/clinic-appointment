@@ -177,7 +177,7 @@ class SchedulingPolicyCommandService(
      *
      * @return 이 actor/revision에 대한 기존 또는 신규 approval.
      * @throws SchedulingPolicyApiException scope, role, revision, MFA, creator-separation
-     * 규칙을 만족하지 못한 경우.
+     * 규칙을 만족하지 못한 경우입니다.
      */
     fun approve(command: ApproveSchedulingPolicyCommand): SchedulingPolicyApprovalRecord {
         authorizeHumanWrite(command.actor, command.scope)
@@ -398,7 +398,7 @@ class SchedulingPolicyCommandService(
      *
      * @return 새로 commit된 activation 또는 저장되어 있던 completed idempotent result.
      * @throws SchedulingPolicyApiException stale preview/approval/head, interval overlap,
-     * authority, lease, missed-replay, idempotency intent conflict가 발생한 경우.
+     * authority, lease, missed-replay, idempotency intent conflict가 발생한 경우입니다.
      */
     fun activate(command: ActivateSchedulingPolicyCommand): SchedulingPolicyActivationResult {
         if (command.actor.actorType == ActorType.SYSTEM) {

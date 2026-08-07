@@ -63,8 +63,8 @@ class KotlinProductionPatternComplianceTest {
 
         source.contains("synchronized(").shouldBeFalse()
         source.contains("Mutex(").shouldBeTrue()
-        // The JDBC execution-thread test is authoritative for each materializer path;
-        // keep this source check as a lightweight guard against removing the IO boundary entirely.
+// JDBC 실행 스레드 테스트가 각 materializer 경로의 기준 검증이다.
+// 이 source check는 IO 경계가 완전히 제거되는 것을 막는 가벼운 guard로 유지한다.
         source.contains("withContext(ioDispatcher)").shouldBeTrue()
     }
 

@@ -1,41 +1,45 @@
-# README Diagram Layout Fixes
+# README 다이어그램 레이아웃 수정
 
-## Context
+## 배경
 
-Follow-up visual QA found two layout defects in generated README diagrams:
+후속 visual QA에서 생성한 README 다이어그램의 레이아웃 결함 두 가지를 발견했다.
 
-- some architecture connectors were rendered as very short line segments where only the arrow head was visible
-- sequence participant header labels were vertically biased toward the top of the header box
+- 일부 architecture connector가 매우 짧은 선분으로 렌더링되어 arrow head만 보였다.
+- sequence participant header label이 header box 위쪽으로 치우쳐 세로로 배치되었다.
 
-A related sequence issue was also fixed: self-calls previously rendered as zero-length arrows, which looked like a standalone arrow head.
+관련된 sequence 문제도 함께 수정했다. 이전에는 self-call이 길이 0인 arrow로
+렌더링되어 standalone arrow head처럼 보였다.
 
-## Decision
+## 결정
 
-Keep the existing diagram style and update only geometry in the generated SVG/PNG assets. Architecture connector line segments must span the visible gap between adjacent cards. Sequence participant labels must use the same vertical-centering baseline as architecture cards. Sequence self-calls should render as a small loop instead of a zero-length line.
+기존 다이어그램 스타일을 유지하고 생성한 SVG/PNG asset의 geometry만 수정한다.
+Architecture connector 선분은 인접한 card 사이의 보이는 간격을 가로질러야 한다.
+Sequence participant label은 architecture card와 같은 vertical-centering baseline을
+사용해야 한다. Sequence self-call은 길이 0인 선 대신 작은 loop로 렌더링한다.
 
-## Verification
+## 검증
 
-- README image link check: missing=0, localSvgImageLinks=0, mermaidResidue=0
-- PNG/SVG shape check: shapeCandidates=0
-- architecture short connector check: shortArch=0
-- sequence header alignment check: seqTop=0
-- sequence zero-length arrow check: zeroSeq=0
+- README 이미지 링크 검사: missing=0, localSvgImageLinks=0, mermaidResidue=0
+- PNG/SVG shape 검사: shapeCandidates=0
+- architecture short connector 검사: shortArch=0
+- sequence header alignment 검사: seqTop=0
+- sequence zero-length arrow 검사: zeroSeq=0
 - `git diff --check`
-- visual samples reviewed for exposed root architecture and representative sequence diagrams
+- exposed root architecture와 대표 sequence 다이어그램의 visual sample 검토
 
-## Future Guidance
+## 향후 지침
 
-Treat arrow head-only connectors as a failed rendering even when the SVG is syntactically valid. Geometry checks should cover architecture connector length, sequence header baseline, and sequence self-call arrows before PR creation.
+SVG 문법이 유효하더라도 arrow head만 보이는 connector는 렌더링 실패로 판단한다.
+PR을 만들기 전에 geometry 검사가 architecture connector 길이, sequence header
+baseline, sequence self-call arrow를 모두 확인해야 한다.
 
-## 2026-05-20 ERD Layout Follow-up
+## 2026-05-20 ERD 레이아웃 후속 수정
 
-`appointment-core-erd-01` was regenerated from the current Exposed table set
-and `docs/requirements/erd.md`, not from the old compact image snapshot. The
-new layout includes the scheduling tables that were missing from the previous
-image and routes repeated `clinicId` references through a named FK lane instead
-of drawing many long crossing arrows.
+`appointment-core-erd-01`은 기존 compact image snapshot이 아니라 현재 Exposed table
+set과 `docs/requirements/erd.md`에서 다시 생성했다. 새 레이아웃에는 이전 이미지에
+빠졌던 scheduling table이 포함되며, 반복되는 `clinicId` reference는 긴 교차 arrow를
+여러 개 그리는 대신 이름이 있는 FK lane으로 라우팅한다.
 
-Future ERD diagrams should place parent, child, and bridge tables by
-relationship cluster, then route FKs with orthogonal lanes. Reject any layout
-where relationship lines pass through table interiors or where repeated parent
-FKs turn the diagram into a dense center-crossing bundle.
+향후 ERD 다이어그램에서는 관계 cluster에 따라 parent, child, bridge table을 배치한
+뒤 orthogonal lane으로 FK를 라우팅한다. 관계선이 table 내부를 통과하거나 반복되는
+parent FK가 다이어그램 중앙을 빽빽하게 가로지르는 묶음이 되는 레이아웃은 거부한다.
