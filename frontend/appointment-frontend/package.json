@@ -21,7 +21,7 @@
     "@angular/platform-browser": "^22.0.8",
     "@angular/router": "^22.0.8",
     "chart.js": "^4.5.1",
-    "hono": "^4.12.32",
+    "hono": "^4.13.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
