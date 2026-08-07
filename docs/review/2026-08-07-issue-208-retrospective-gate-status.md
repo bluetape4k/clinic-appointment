@@ -1,7 +1,7 @@
 # Issue #208 historical Type A review gate status
 
-검토일: 2026-08-07  
-대상: PR #200, #202, #205, #207  
+검토일: 2026-08-07
+대상: PR #200, #202, #205, #207
 최종 상태: **BLOCKED — historical independent gate 미증명**
 
 ## 결론
