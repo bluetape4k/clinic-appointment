@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api
 
 import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -63,7 +64,7 @@ class KotlinProductionPatternComplianceTest {
 
         source.contains("synchronized(").shouldBeFalse()
         source.contains("Mutex(").shouldBeTrue()
-        source.contains("withContext(ioDispatcher)").shouldBeTrue()
+        (source.split("withContext(ioDispatcher)").size - 1) shouldBeEqualTo 3
     }
 
     @Test

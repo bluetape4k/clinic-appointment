@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeGreaterThan
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentReminderParameters
 import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
@@ -26,11 +27,13 @@ import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.notification.NotificationReminderRecoveryScanner
 import io.bluetape4k.clinic.appointment.notification.AppointmentReminderScheduler
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -47,6 +50,27 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.CoroutineContext
+
+private class RecordingDispatcher : CoroutineDispatcher(), AutoCloseable {
+
+    private val delegate = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "reminder-recovery-io").apply { isDaemon = true }
+    }.asCoroutineDispatcher()
+
+    val dispatchCount = AtomicInteger()
+
+    override fun dispatch(context: CoroutineContext, block: Runnable) {
+        dispatchCount.incrementAndGet()
+        delegate.dispatch(context, block)
+    }
+
+    override fun close() {
+        delegate.close()
+    }
+}
 
 internal class JdbcAppointmentReminderRecoveryStoreTest {
 
@@ -264,6 +288,34 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
         }
     }
 
+    @Test
+    fun `세 materializer 경로는 blocking transaction을 주입된 IO dispatcher에서 실행한다`(): Unit = runBlocking {
+        insertConfirmedAppointment(LocalDate.of(2026, 8, 2), LocalTime.of(8, 50), "member-dispatcher")
+        val ioDispatcher = RecordingDispatcher()
+        try {
+            store = recoveryStore(
+                dayBeforeEnabled = true,
+                sameDayEnabled = false,
+                ioDispatcher = ioDispatcher,
+            )
+            val candidate = store.findCandidates(now, 1).single()
+            val afterFind = ioDispatcher.dispatchCount.get()
+
+            store.enqueue(candidate)
+            val afterEnqueue = ioDispatcher.dispatchCount.get()
+            store.suppressMissed(candidate)
+            val afterSuppressMissed = ioDispatcher.dispatchCount.get()
+            store.scheduleFuture(candidate)
+            val afterScheduleFuture = ioDispatcher.dispatchCount.get()
+
+            afterEnqueue shouldBeGreaterThan afterFind
+            afterSuppressMissed shouldBeGreaterThan afterEnqueue
+            afterScheduleFuture shouldBeGreaterThan afterSuppressMissed
+        } finally {
+            ioDispatcher.close()
+        }
+    }
+
     private fun scanner(catchUpWindow: Duration): NotificationReminderRecoveryScanner =
         NotificationReminderRecoveryScanner(
             source = store,
@@ -275,6 +327,7 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
     private fun recoveryStore(
         dayBeforeEnabled: Boolean,
         sameDayEnabled: Boolean,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ): JdbcAppointmentReminderRecoveryStore =
         JdbcAppointmentReminderRecoveryStore(
             database = database,
@@ -283,6 +336,7 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
             sameDayReminderLeadTime = Duration.ofHours(2),
             dayBeforeEnabled = dayBeforeEnabled,
             sameDayEnabled = sameDayEnabled,
+            ioDispatcher = ioDispatcher,
         )
 
     private fun insertConfirmedAppointment(date: LocalDate, time: LocalTime, memberId: String?) {
