@@ -9,6 +9,7 @@ Issue #208에서 PR #200, #202, #205, #207의 historical review evidence를 재�
 - upstream contract가 바뀌면 downstream evidence를 무효화하고 다시 실행한다.
 - historical exact head의 결함은 원래 head에 소급해 PASS하지 않는다. 결함, remediation commit, focused validation을 각각 연결한 뒤 remediation head에만 최종 verdict를 부여한다.
 - seven-tier는 performance, stability, security/privacy, operations, developer/API, user/caller의 여섯 관점과 main-session integration을 모두 이름으로 남긴다.
+- 사후에 작성한 retrospective assessment는 merge 전 independent gate의 증거가 아니다. reviewer identity와 당시 receipt가 없으면 historical gate는 `NOT PROVEN` 또는 reviewed `N/A`로 남긴다.
 
 ## 이 저장소 적용 결과
 
@@ -26,3 +27,4 @@ Issue #208에서 PR #200, #202, #205, #207의 historical review evidence를 재�
 3. 명세와 계획의 PASS를 구현 PASS로 혼동하지 않는다.
 4. remediation 후 source scan, focused tests, `git diff --check`를 새로 실행한다.
 5. issue/PR에는 P0/P1/P2/P3와 follow-up을 명시한다.
+6. retrospective PASS와 current remediation PASS를 분리하고, local index와 issue DoD를 같은 blocked/pending 상태로 유지한다.
