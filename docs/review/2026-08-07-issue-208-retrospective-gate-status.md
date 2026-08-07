@@ -19,16 +19,21 @@
 
 Issue #208의 구현 결함 하나는 별도 Type C bugfix로 수정했지만, 이 변경은 과거 Type A gate를 소급해 통과시키거나 Issue #208을 닫는 근거가 아니다.
 
-- exact implementation head: `569e5bc28863d94d3a7fe6bb9028d5443fc98489`
+- production fix commit: `569e5bc28863d94d3a7fe6bb9028d5443fc98489`
+- exact current implementation/evidence head: `936e62d7af98a82f4db147813fcd1c41e44498fe`
+- evidence commits after the production fix: `e666bfc` (JDBC statement execution observation), `936e62d` (test scope and static-guard cleanup)
 - branch/worktree: `fix/issue-208-reminder-io-boundary` / `.worktrees/issue-208-reminder-io-boundary`
 - changed production path: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/notification/JdbcAppointmentReminderRecoveryStore.kt`
 - boundary: `enqueue`, `suppressMissed`, `scheduleFuture`가 주입된 `ioDispatcher` 안의 blocking Exposed `transaction(database)`으로 수렴한다.
-- Type C receipt: `20260807T095731Z-df47e975` (completed, sequence 14)
-- Type D receipt: `20260807T101233Z-627082d3` (completed, sequence 16)
-- code-quality review: `PASS`, P0=0/P1=0/P2=0/P3=0
-- architecture review: `WATCH`, P0=0/P1=0/P2=3/P3=0
+- Type C implementation receipt: `20260807T095731Z-df47e975` (completed, sequence 14)
+- Type C JDBC-observation receipt: `20260807T104518Z-e20d367f` (completed, sequence 14)
+- Type C scope-cleanup receipt: `20260807T110236Z-066e6995` (completed, sequence 13)
+- Type D prior receipt: `20260807T101233Z-627082d3` (completed, sequence 16)
+- Type D final receipt: `20260807T110653Z-59c55dc7` (completed, sequence 16)
+- final code-quality review: P0=0/P1=0/P2=0/P3=0; recommendation `COMMENT` only because `lsp_diagnostics` is unavailable
+- final architecture review: implementation `CLEAR`; the pre-refresh `WATCH` P2=1 was metadata-only and is resolved by this exact-head documentation refresh
 
-Architecture `WATCH`의 P2는 (1) dispatcher hop이 실제 JDBC statement 실행 thread를 직접 증명하지 못하는 테스트 계약, (2) exact source-occurrence count에 의존하는 정적 검사, (3) exact head `569e5bc`를 아직 반영하지 못한 현재 review metadata다. 구현상의 P0/P1 차단은 없다. 이 local follow-up에는 PR/push/merge가 없으므로 외부 delivery와 Issue closure는 여전히 PENDING이다.
+The local follow-up now observes actual `Statement.execute*` calls on the injected IO thread for the three materializer paths, and the compliance test keeps only a lightweight `withContext(ioDispatcher)` guard rather than a brittle source-occurrence count. The review artifact is now anchored to `936e62d`; historical Type-A evidence remains `NOT PROVEN`. This local follow-up includes no PR/push/merge, so external delivery and Issue closure remain PENDING.
 
 ## Independent review receipt
 
@@ -40,15 +45,19 @@ Architecture `WATCH`의 P2는 (1) dispatcher hop이 실제 JDBC statement 실행
 
 ### Current local follow-up
 
-- code-quality lane: `PASS`, P0=0/P1=0/P2=0/P3=0. exact head `569e5bc`의 세 materializer 경계, scanner caller, targeted tests, compile, `git diff --check`를 확인했다.
-- architecture lane: `WATCH`, P0=0/P1=0/P2=3/P3=0. 구현은 안전하지만 transaction-thread 증명, brittle source count, exact-head metadata가 후속 과제다.
-- main-session synthesis: 구현 P0/P1은 0으로 수렴했으나, Issue acceptance가 요구하는 과거 six-lens identity/count와 historical gate를 이 두 lane이 대체하지 않는다.
+- code-quality lane: exact head `936e62d`, P0=0/P1=0/P2=0/P3=0. JDBC `Statement.execute*` 관찰, targeted tests, compile, `git diff --check`, lightweight static scans를 확인했다.
+- architecture lane: implementation `CLEAR`; pre-refresh `WATCH` P0=0/P1=0/P2=1/P3=0은 stale exact-head metadata 하나였고 Type E 문서 갱신으로 정합화했다.
+- main-session synthesis: current remediation P0/P1/P2/P3는 0/0/0/0으로 수렴했으나, Issue acceptance가 요구하는 과거 six-lens identity/count와 historical gate를 이 두 lane이 대체하지 않는다.
 
 ## Receipt authority
 
 - prior backfill review receipt: `.bluetape` run `20260807T091252Z-206acf29` (historical P1로 BLOCKED)
 - current Type C implementation receipt: `.bluetape` run `20260807T095731Z-df47e975` (completed)
+- current Type C JDBC-observation receipt: `.bluetape` run `20260807T104518Z-e20d367f` (completed)
+- current Type C scope-cleanup receipt: `.bluetape` run `20260807T110236Z-066e6995` (completed)
 - current Type D review receipt: `.bluetape` run `20260807T101233Z-627082d3` (completed)
+- final Type D review receipt: `.bluetape` run `20260807T110653Z-59c55dc7` (completed)
+- final Type E documentation receipt: `.bluetape` run `20260807T111534Z-be30bc6b` (completed after this document commit)
 - worktree에 남아 있는 이전 `.omx/issue-208-*` 파일은 stale 보조 산출물이므로 현재 exact-head와 lane topology의 근거로 사용하지 않는다.
 - receipt는 local workflow evidence이며 GitHub PR head/CI/merge authority를 대체하지 않는다.
 
@@ -57,6 +66,6 @@ Architecture `WATCH`의 P2는 (1) dispatcher hop이 실제 JDBC statement 실행
 1. Issue #208의 historical gate를 `reviewed N/A` 또는 `NOT PROVEN`으로 명시하고, 현재 remediation 검토와 분리한다.
 2. 여섯 독립 관점별 reviewer identity, exact head, P0/P1/P2/P3와 main-session integration을 새 current review artifact에 남긴다.
 3. Issue/PR metadata와 local index의 #202 및 PR #215 SHA 매핑을 정합화하고, remediation artifact는 PR head `a1fcb1c...`와 merge `9899dac...`를 분리 기록한다.
-4. `enqueue`, `suppressMissed`, `scheduleFuture`의 실제 JDBC 실행 thread를 관찰하는 검증과 exact-head current review artifact를 보완한다.
+4. `enqueue`, `suppressMissed`, `scheduleFuture`의 실제 JDBC statement 실행 thread 관찰 검증과 exact-head current review artifact를 보완한다. (현재 local remediation에서 충족)
 5. six independent perspectives, main-session integration, exact head, 일관된 P0/P1/P2/P3를 포함한 current seven-tier artifact를 별도로 기록한다.
 6. 위 조건을 충족하는 follow-up review/PR 없이 Issue #208을 완료로 닫지 않는다.

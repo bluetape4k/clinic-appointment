@@ -16,16 +16,19 @@
 
 ## 적용 결과
 
-commit `569e5bc28863d94d3a7fe6bb9028d5443fc98489`에서 `enqueue`와 `suppressMissed`를 `withContext(ioDispatcher) { transaction(database) { ... } }`로 감싸고, `scheduleFuture`는 수정된 `enqueue`로 위임하게 했다. `findCandidates`의 기존 IO 경계와 scanner의 due/future/missed 호출 경로도 함께 확인했다.
+production fix commit `569e5bc28863d94d3a7fe6bb9028d5443fc98489`에서 `enqueue`와 `suppressMissed`를 `withContext(ioDispatcher) { transaction(database) { ... } }`로 감싸고, `scheduleFuture`는 수정된 `enqueue`로 위임하게 했다. `findCandidates`의 기존 IO 경계와 scanner의 due/future/missed 호출 경로도 함께 확인했다.
+
+후속 evidence commits `e666bfc`와 `936e62d`는 실제 JDBC statement 실행을 관찰하는 proxy 회귀 테스트를 추가하고, 테스트명을 statement 범위에 맞게 조정했으며, source-occurrence 개수에 의존하던 정적 검사를 `withContext(ioDispatcher)` 존재 여부만 확인하는 보조 guard로 줄였다. 현재 exact head는 `936e62d7af98a82f4db147813fcd1c41e44498fe`다.
 
 ## 검증
 
 - 수정 전 dispatcher-boundary 회귀 테스트: RED
 - 수정 후 targeted `JdbcAppointmentReminderRecoveryStoreTest` 및 `KotlinProductionPatternComplianceTest`: 14 passing
 - 영향 범위 profile/notification/reliability/commitment 테스트: 171 passing
-- 독립 code-quality review: P0=0/P1=0
-- 독립 architecture review: P0=0/P1=0, P2=3 (`WATCH`)
+- 독립 final code-quality review: P0=0/P1=0/P2=0/P3=0 (`COMMENT` only because `lsp_diagnostics` is unavailable)
+- 독립 final architecture review: implementation `CLEAR`; pre-refresh metadata `WATCH` P0=0/P1=0/P2=1/P3=0, resolved by the exact-head documentation refresh
+- `git diff --check`: passing
 
 ## 후속
 
-현재 local fix는 구현 P1을 해소했지만, Issue #208의 historical Type A gate를 소급 증명하지 않는다. 후속 review artifact는 exact implementation head와 six-lens identity/count를 명시하고, transaction-thread 관찰 테스트와 review metadata 정합화를 포함해야 한다.
+현재 local fix는 구현 P1을 해소했고 exact-head current metadata도 정합화했지만, Issue #208의 historical Type A gate를 소급 증명하지 않는다. `Statement.execute*` 관찰은 JDBC statement 실행 context를 증명하며, connection lifecycle 전체를 증명하는 주장은 아니다. 외부 PR/push/CI/merge와 Issue closure는 별도 승인 및 historical six-lens artifact가 필요하다.
