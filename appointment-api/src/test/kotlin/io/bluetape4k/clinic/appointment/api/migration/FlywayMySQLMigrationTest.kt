@@ -38,6 +38,9 @@ class FlywayMySQLMigrationTest {
         AppointmentMessagingMigrationTestSupport.verifyV24Metadata(
             dataSource = SimpleDriverDataSource(driver, requireNotNull(url), requireNotNull(user), password),
         )
+        AppointmentMessagingMigrationTestSupport.verifyV25Metadata(
+            dataSource = SimpleDriverDataSource(driver, requireNotNull(url), requireNotNull(user), password),
+        )
     }
 
     @Test
@@ -126,6 +129,21 @@ class FlywayMySQLMigrationTest {
         val mysql = Containers.MySql8
         val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
         AppointmentMessagingMigrationTestSupport.verifyV24Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                mysql.jdbcUrl,
+                mysql.username ?: "test",
+                mysql.password ?: "",
+            ),
+            location = "classpath:db/migration/mysql",
+        )
+    }
+
+    @Test
+    fun `V25 replay audit hash contract is additive on MySQL 8`() {
+        val mysql = Containers.MySql8
+        val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentMessagingMigrationTestSupport.verifyV25Migration(
             dataSource = SimpleDriverDataSource(
                 driver,
                 mysql.jdbcUrl,

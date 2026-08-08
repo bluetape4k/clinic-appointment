@@ -14,6 +14,8 @@ object AppointmentConsumerReplayAuditTable : LongIdTable("scheduling_appointment
     val fromOffset = long("from_offset")
     val toOffset = long("to_offset")
     val requestHash = varchar("request_hash", 64)
+    val hashVersion = integer("hash_version").default(2)
+    val partitionNumber = integer("partition_number").nullable()
     val dryRun = bool("dry_run")
     val approvedBy = varchar("approved_by", 128)
     val status = enumerationByName("status", 32, AppointmentReplayAuditStatus::class)

@@ -75,6 +75,8 @@ class AppointmentReplayService(
                     it[fromOffset] = request.fromOffset
                     it[toOffset] = request.toOffset
                     it[AppointmentConsumerReplayAuditTable.requestHash] = requestHash
+                    it[AppointmentConsumerReplayAuditTable.hashVersion] = CURRENT_HASH_VERSION
+                    it[AppointmentConsumerReplayAuditTable.partitionNumber] = request.partition
                     it[dryRun] = request.dryRun
                     it[approvedBy] = request.approver
                     it[status] = initialStatus
@@ -83,8 +85,14 @@ class AppointmentReplayService(
                 }.insertedCount == 1
                 inserted && !request.dryRun
             } else {
+                require(existing[AppointmentConsumerReplayAuditTable.hashVersion] == CURRENT_HASH_VERSION) {
+                    "replay requestId is bound to a legacy hash; issue a new requestId"
+                }
                 require(existing[AppointmentConsumerReplayAuditTable.requestHash] == requestHash) {
                     "replay requestId is already bound to a different scope or range"
+                }
+                require(existing[AppointmentConsumerReplayAuditTable.partitionNumber] == request.partition) {
+                    "replay requestId is already bound to a different partition scope"
                 }
                 val status = existing[AppointmentConsumerReplayAuditTable.status]
                 when {
@@ -181,6 +189,7 @@ class AppointmentReplayService(
             .joinToString(separator = "") { byte -> "%02x".format(byte) }
 
     companion object {
+        private const val CURRENT_HASH_VERSION = 2
         private val REQUEST_ID_PATTERN = Regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     }
 }

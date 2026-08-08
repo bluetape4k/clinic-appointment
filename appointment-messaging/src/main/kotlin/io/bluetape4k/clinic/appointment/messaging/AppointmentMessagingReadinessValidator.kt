@@ -5,7 +5,7 @@ import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.sql.DataSource
 
-/** V22~V24 schema와 serializer 계약을 relay claim 전에 한 번 검증하는 fail-closed gate다. */
+/** V22~V25 schema와 serializer 계약을 relay claim 전에 한 번 검증하는 fail-closed gate다. */
 class AppointmentMessagingReadinessValidator(
     private val codec: AppointmentEventEnvelopeCodec,
     private val dataSource: DataSource? = null,
@@ -171,7 +171,14 @@ class AppointmentMessagingReadinessValidator(
             ),
             SchemaContract(
                 table = "scheduling_appointment_consumer_replay_audit",
-                columns = setOf("request_id", "request_hash", "status", "completed_at"),
+                columns = setOf(
+                    "request_id",
+                    "request_hash",
+                    "hash_version",
+                    "partition_number",
+                    "status",
+                    "completed_at",
+                ),
                 indexes = setOf("idx_appointment_consumer_replay_audit_scope_created"),
             ),
             SchemaContract(

@@ -84,7 +84,8 @@ replay-audit row만 삭제합니다. `PROCESSING` inbox row와 `REQUESTED` repla
 
 ## MySQL 운영 metadata readiness
 
-API migration suite는 H2, PostgreSQL, MySQL singleton fixture에서 V23 계약을 검증합니다.
+API migration suite는 H2, PostgreSQL, MySQL singleton fixture에서 V23 consumer metadata,
+V24 aggregate lock, V25 replay hash 계약을 검증합니다.
 배포 또는 staging MySQL endpoint는 credential을 별도 경로로 제공하면 동일한 계약을
 **read-only metadata smoke test**로 실행할 수 있습니다.
 
@@ -96,13 +97,17 @@ APPOINTMENT_PRODUCTION_MYSQL_PASSWORD='provided-by-secret-manager' \
   --tests 'io.bluetape4k.clinic.appointment.api.migration.FlywayMySQLMigrationTest.production MySQL metadata readiness is verified when endpoint is configured'
 ```
 
-테스트는 JDBC metadata, V23 column, primary key, index, 선택한 MySQL catalog를 읽으며
-`Flyway.clean()`을 실행하거나 migration을 적용하지 않습니다. 운영에 V23을 적용하는
+테스트는 JDBC metadata, V23~V25 column, primary key, index, 선택한 MySQL catalog를 읽으며
+`Flyway.clean()`을 실행하거나 migration을 적용하지 않습니다. 운영에 V23~V25를 적용하는
 것은 별도의 change-window 작업입니다. 먼저 migration preflight를 실행하고 Flyway
 history와 DDL 출력을 수집한 뒤, 배포에서 승인한 account로 적용하고 metadata smoke
 test를 다시 실행합니다. endpoint, username, password, tenant, clinic, patient 값은
 source, CI log, metric에 넣지 않습니다. 해당 endpoint 증거를 rollout record에 첨부하기
 전까지 운영 MySQL migration 검증은 `PENDING`입니다.
+
+V25 적용 뒤에도 기존 replay audit row는 `hash_version=1`/`partition_number=NULL`로
+남습니다. 이 row는 partition 범위를 복원할 수 없으므로 자동 재실행하지 않고, 대상
+provenance를 다시 확인한 뒤 새 승인과 새 request id를 발급합니다.
 
 애플리케이션이 인증된 `AppointmentReplayActor`를 제공하기 전까지 Replay는 library
 boundary입니다. actor는 approver와 일치하고 요청한 tenant·clinic allow-list를 포함하며

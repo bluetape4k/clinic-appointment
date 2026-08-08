@@ -98,12 +98,62 @@ internal object AppointmentMessagingMigrationTestSupport {
         dataSource.connection.use(::assertV24Metadata)
     }
 
-    private fun assertV23Metadata(connection: Connection) {
+    /** V25 replay audit hash 계약을 V24 이후 additive migration으로 검증합니다. */
+    fun verifyV25Migration(
+        dataSource: DataSource,
+        location: String,
+    ) {
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .cleanDisabled(false)
+            .load()
+            .clean()
+
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .target("24")
+            .load()
+            .migrate()
+
+        val result = Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .target("25")
+            .load()
+            .migrate()
+        check(result.success) { "V25 migration failed: ${result.warnings.joinToString()}" }
+        check(result.migrationsExecuted == 1) {
+            "Expected only V25 after target 24, executed=${result.migrationsExecuted}"
+        }
+
+        dataSource.connection.use { connection ->
+            assertV23Metadata(connection, V25_REPLAY_AUDIT_COLUMNS)
+        }
+        verifyV24Metadata(dataSource)
+        verifyV25Metadata(dataSource)
+    }
+
+    /** Flyway를 실행하지 않고 V25 replay audit metadata만 검증합니다. */
+    fun verifyV25Metadata(dataSource: DataSource) {
+        dataSource.connection.use(::assertV25Metadata)
+    }
+
+    private fun assertV23Metadata(
+        connection: Connection,
+        replayAuditAdditiveColumns: Set<String> = emptySet(),
+    ) {
         V23_TABLES.forEach { (table, expectedColumns) ->
             check(tableExists(connection, table)) { "Missing V23 table $table" }
             val actualColumns = columns(connection, table)
-            check(actualColumns == expectedColumns) {
-                "Unexpected V23 columns for $table: expected=$expectedColumns actual=$actualColumns"
+            val expected = if (table == "scheduling_appointment_consumer_replay_audit") {
+                expectedColumns + replayAuditAdditiveColumns
+            } else {
+                expectedColumns
+            }
+            check(actualColumns == expected) {
+                "Unexpected V23 columns for $table: expected=$expected actual=$actualColumns"
             }
         }
         V23_PRIMARY_KEYS.forEach { (table, expected) ->
@@ -142,6 +192,31 @@ internal object AppointmentMessagingMigrationTestSupport {
             check(primaryKeyColumns(connection, table) == expected) {
                 "Unexpected V24 primary key for $table: ${primaryKeyColumns(connection, table)}"
             }
+        }
+    }
+
+    private fun assertV25Metadata(connection: Connection) {
+        val table = "scheduling_appointment_consumer_replay_audit"
+        check(tableExists(connection, table)) { "Missing V25 table $table" }
+        val expectedColumns = requireNotNull(V23_TABLES[table]) + setOf("hash_version", "partition_number")
+        val actualColumns = columns(connection, table)
+        check(actualColumns == expectedColumns) {
+            "Unexpected V25 columns for $table: expected=$expectedColumns actual=$actualColumns"
+        }
+        val hashVersion = requireNotNull(findColumn(connection, table, "hash_version")) {
+            "Missing V25 hash_version column"
+        }
+        check(!hashVersion.nullable) {
+            "V25 hash_version must be NOT NULL"
+        }
+        val partitionNumber = requireNotNull(findColumn(connection, table, "partition_number")) {
+            "Missing V25 partition_number column"
+        }
+        check(partitionNumber.nullable) {
+            "V25 partition_number must remain nullable for legacy audit rows"
+        }
+        check(hashVersion.defaultValue?.contains("1") == true) {
+            "V25 hash_version must default legacy rows to 1: ${hashVersion.defaultValue}"
         }
     }
 
@@ -540,6 +615,7 @@ internal object AppointmentMessagingMigrationTestSupport {
                         return ColumnMetadata(
                             nullable = columns.getInt("NULLABLE") == DatabaseMetaData.columnNullable,
                             size = columns.getLong("COLUMN_SIZE"),
+                            defaultValue = columns.getString("COLUMN_DEF"),
                         )
                     }
                 }
@@ -554,6 +630,7 @@ internal object AppointmentMessagingMigrationTestSupport {
     private data class ColumnMetadata(
         val nullable: Boolean,
         val size: Long,
+        val defaultValue: String?,
     )
 
     private const val OUTBOX_TABLE = "scheduling_outbox_events"
@@ -563,6 +640,7 @@ internal object AppointmentMessagingMigrationTestSupport {
     private const val FIXTURE_CLINIC_ID = 91_002L
     private const val LEGACY_OUTBOX_ID = 91_003L
     private const val APPOINTMENT_OUTBOX_ID = 91_004L
+    private val V25_REPLAY_AUDIT_COLUMNS = setOf("hash_version", "partition_number")
 
     private val EXPECTED_COLUMNS = linkedMapOf(
         "occurred_at" to null,
