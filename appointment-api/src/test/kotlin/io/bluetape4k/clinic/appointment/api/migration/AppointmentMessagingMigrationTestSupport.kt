@@ -117,7 +117,7 @@ internal object AppointmentMessagingMigrationTestSupport {
             .load()
             .migrate()
 
-        insertV25LegacyReplayAudit(dataSource)
+        val legacySnapshot = insertV25LegacyReplayAudit(dataSource)
 
         val result = Flyway.configure()
             .dataSource(dataSource)
@@ -135,7 +135,7 @@ internal object AppointmentMessagingMigrationTestSupport {
         }
         verifyV24Metadata(dataSource)
         verifyV25Metadata(dataSource)
-        verifyV25LegacyReplayAudit(dataSource)
+        verifyV25LegacyReplayAudit(dataSource, legacySnapshot)
     }
 
     /** Flyway를 실행하지 않고 V25 replay audit metadata만 검증합니다. */
@@ -223,7 +223,7 @@ internal object AppointmentMessagingMigrationTestSupport {
         }
     }
 
-    private fun insertV25LegacyReplayAudit(dataSource: DataSource) {
+    private fun insertV25LegacyReplayAudit(dataSource: DataSource): V25LegacyReplayAuditSnapshot {
         dataSource.connection.use { connection ->
             val h2 = connection.metaData.databaseProductName.contains("H2", ignoreCase = true)
             if (h2) {
@@ -267,16 +267,40 @@ internal object AppointmentMessagingMigrationTestSupport {
                     )
                 }
             }
+            return readV25LegacyReplayAuditSnapshot(connection)
         }
     }
 
-    private fun verifyV25LegacyReplayAudit(dataSource: DataSource) {
+    private fun readV25LegacyReplayAuditSnapshot(connection: Connection): V25LegacyReplayAuditSnapshot {
+        connection.prepareStatement(
+            """
+            SELECT id, created_at, completed_at
+            FROM scheduling_appointment_consumer_replay_audit
+            WHERE request_id = ?
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setString(1, V25_LEGACY_REQUEST_ID)
+            statement.executeQuery().use { rows ->
+                check(rows.next()) { "Missing V25 legacy fixture after insert" }
+                return V25LegacyReplayAuditSnapshot(
+                    id = rows.getLong(1),
+                    createdAt = checkNotNull(rows.getTimestamp(2)) { "Missing V25 legacy created_at" },
+                    completedAt = rows.getTimestamp(3),
+                )
+            }
+        }
+    }
+
+    private fun verifyV25LegacyReplayAudit(
+        dataSource: DataSource,
+        snapshot: V25LegacyReplayAuditSnapshot,
+    ) {
         dataSource.connection.use { connection ->
             connection.prepareStatement(
                 """
-                SELECT request_id, logical_consumer_id, logical_stream_id, tenant_group_id, clinic_id,
+                SELECT id, request_id, logical_consumer_id, logical_stream_id, tenant_group_id, clinic_id,
                        from_offset, to_offset, request_hash, dry_run, approved_by, status,
-                       hash_version, partition_number
+                       created_at, completed_at, hash_version, partition_number
                 FROM scheduling_appointment_consumer_replay_audit
                 WHERE request_id = ?
                 """.trimIndent(),
@@ -284,19 +308,22 @@ internal object AppointmentMessagingMigrationTestSupport {
                 statement.setString(1, V25_LEGACY_REQUEST_ID)
                 statement.executeQuery().use { rows ->
                     check(rows.next()) { "Missing V25 legacy fixture" }
-                    check(rows.getString(1) == V25_LEGACY_REQUEST_ID)
-                    check(rows.getString(2) == "notification")
-                    check(rows.getString(3) == "appointment-events")
-                    check(rows.getLong(4) == 91_001L)
-                    check(rows.getLong(5) == 91_002L)
-                    check(rows.getLong(6) == 10L)
-                    check(rows.getLong(7) == 12L)
-                    check(rows.getString(8) == "0".repeat(64))
-                    check(!rows.getBoolean(9))
-                    check(rows.getString(10) == "operator-1")
-                    check(rows.getString(11) == "REQUESTED")
-                    check(rows.getInt(12) == 1)
-                    check(rows.getObject(13) == null)
+                    check(rows.getLong(1) == snapshot.id)
+                    check(rows.getString(2) == V25_LEGACY_REQUEST_ID)
+                    check(rows.getString(3) == "notification")
+                    check(rows.getString(4) == "appointment-events")
+                    check(rows.getLong(5) == 91_001L)
+                    check(rows.getLong(6) == 91_002L)
+                    check(rows.getLong(7) == 10L)
+                    check(rows.getLong(8) == 12L)
+                    check(rows.getString(9) == "0".repeat(64))
+                    check(!rows.getBoolean(10))
+                    check(rows.getString(11) == "operator-1")
+                    check(rows.getString(12) == "REQUESTED")
+                    check(rows.getTimestamp(13)?.toLocalDateTime() == snapshot.createdAt.toLocalDateTime())
+                    check(rows.getTimestamp(14)?.toLocalDateTime() == snapshot.completedAt?.toLocalDateTime())
+                    check(rows.getInt(15) == 1)
+                    check(rows.getObject(16) == null)
                 }
             }
         }
@@ -723,6 +750,11 @@ internal object AppointmentMessagingMigrationTestSupport {
     private const val LEGACY_OUTBOX_ID = 91_003L
     private const val APPOINTMENT_OUTBOX_ID = 91_004L
     private const val V25_LEGACY_REQUEST_ID = "v25-legacy-replay-fixture"
+    private data class V25LegacyReplayAuditSnapshot(
+        val id: Long,
+        val createdAt: Timestamp,
+        val completedAt: Timestamp?,
+    )
     private val V25_REPLAY_AUDIT_COLUMNS = setOf("hash_version", "partition_number")
 
     private val EXPECTED_COLUMNS = linkedMapOf(
