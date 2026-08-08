@@ -173,6 +173,7 @@ class AppointmentReplayService(
                     request.tenantGroupId,
                     request.clinicId,
                     request.approver,
+                    request.partition,
                     request.fromOffset,
                     request.toOffset,
                 ).joinToString("|").toByteArray(StandardCharsets.UTF_8),

@@ -86,6 +86,21 @@ class AppointmentReplayServiceTest {
     }
 
     @Test
+    fun `same request id rejects a different partition scope`() {
+        var calls = 0
+        val service = AppointmentReplayService(database) { _, _ -> calls++; 1 }
+        val first = request().copy(partition = 1)
+        val differentPartition = request().copy(partition = 2)
+
+        service.replay("replay-partition-binding-1", first, actor())
+
+        assertThrows<IllegalArgumentException> {
+            service.replay("replay-partition-binding-1", differentPartition, actor())
+        }
+        calls shouldBeEqualTo 1
+    }
+
+    @Test
     fun `replay rejects an actor outside tenant scope or without operator role`() {
         var calls = 0
         val service = AppointmentReplayService(database) { _, _ -> calls++ }
