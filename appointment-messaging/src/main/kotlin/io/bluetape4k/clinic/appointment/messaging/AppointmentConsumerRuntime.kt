@@ -108,7 +108,12 @@ class AppointmentConsumerRuntime(
             clinicId = envelope.clinicId,
             appointmentId = envelope.aggregateId.value,
         ).value
-        val acquisition = when (val begin = inboxStore.begin(identity, envelope.eventId, provenance)) {
+        val acquisition = when (val begin = inboxStore.begin(
+            identity = identity,
+            eventId = envelope.eventId,
+            provenance = provenance,
+            allowQuarantinedReplay = expectedScope != null,
+        )) {
             is AppointmentConsumerBeginResult.Duplicate -> {
                 if (!begin.provenanceMatches) {
                     inboxStore.quarantineRejected(identity, record, AppointmentConsumerFailureCode.PROVENANCE_MISMATCH)

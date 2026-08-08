@@ -33,8 +33,11 @@ quarantine event를 승인된 별도 replay group으로 재처리하는 절차�
    승인된 `dryRun=false` 요청을 실행한다. 서비스는 원자적인 execution claim을 기록한 뒤
    source를 호출한다. 같은 request id의 동시 실행은 두 번째 호출이 side effect 없이
    현재 audit 상태를 반환한다.
-5. 결과가 `EXECUTED`인지 확인하고 `replayedRecords`를 기록한다. 실패하면 audit가
-   `REJECTED`가 되며 예외 메시지에는 raw payload가 포함되지 않는다.
+5. 결과가 `EXECUTED`인지 확인하고 `replayedRecords`를 기록한다. 이 수치는 handler가
+   실제로 실행되어 `PROCESSED`가 된 record만 포함하며, 이미 처리된 `DUPLICATE`는
+   재처리 수에서 제외한다. scope/provenance/handler 실패로 `QUARANTINED` 또는
+   retryable outcome이 발생하면 audit가 `REJECTED`가 되며 예외 메시지에는 raw payload가
+   포함되지 않는다.
 
 ## 중단·복구
 

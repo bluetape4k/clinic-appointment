@@ -84,6 +84,21 @@ class AppointmentConsumerInboxStoreTest {
     }
 
     @Test
+    fun `quarantined row is only reclaimed when replay is explicitly allowed`() {
+        store.begin(identity(), eventId(), provenance())
+        store.markFailure(identity(), eventId(), AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
+        store.begin(identity(), eventId(), provenance())
+        store.markFailure(identity(), eventId(), AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
+            .shouldBeEqualTo(AppointmentConsumerStatus.QUARANTINED)
+
+        store.begin(identity(), eventId(), provenance())
+            .shouldBeEqualTo(AppointmentConsumerBeginResult.Duplicate(AppointmentConsumerStatus.QUARANTINED))
+        store.begin(identity(), eventId(), provenance(), allowQuarantinedReplay = true)
+            .shouldBeInstanceOf<AppointmentConsumerBeginResult.Acquired>().attemptCount
+            .shouldBeEqualTo(1)
+    }
+
+    @Test
     fun `quarantine stores metadata hash and cleanup retains quarantine and processing`() {
         store.begin(identity(), eventId(), provenance())
         store.quarantine(identity(), eventId(), AppointmentConsumerFailureCode.INVALID_ENVELOPE)
