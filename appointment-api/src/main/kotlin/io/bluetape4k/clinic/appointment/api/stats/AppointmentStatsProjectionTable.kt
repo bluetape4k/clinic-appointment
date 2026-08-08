@@ -7,7 +7,7 @@ import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.date
 import org.jetbrains.exposed.v1.javatime.timestamp
 
-/** Kafka 통계 consumer가 tenant/date/status별로 누적하는 read-model table입니다. */
+/** Kafka 통계 consumer가 tenant/date/status별 최신 aggregate 상태를 materialize하는 table입니다. */
 object AppointmentStatsProjectionTable : Table("scheduling_appointment_stats_projection") {
     val tenantGroupId = long("tenant_group_id")
     val clinicId = long("clinic_id")

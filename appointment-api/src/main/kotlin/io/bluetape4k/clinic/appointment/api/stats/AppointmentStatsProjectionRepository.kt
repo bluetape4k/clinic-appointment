@@ -1,14 +1,15 @@
 package io.bluetape4k.clinic.appointment.api.stats
 
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import org.jetbrains.exposed.v1.core.Op
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.lessEq
-import org.jetbrains.exposed.v1.core.greaterEq
-import org.jetbrains.exposed.v1.core.neq
-import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.jdbc.andWhere
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.update
@@ -20,7 +21,7 @@ data class AppointmentStatsProjectionRow(
     val count: Long,
 )
 
-/** Tenant-scoped stats projection의 fenced upsert와 dashboard read를 제공합니다. */
+/** Tenant-scoped stats projection의 fenced upsert와 event-state read를 제공합니다. */
 class AppointmentStatsProjectionRepository {
     /** 호출자는 반드시 Exposed [org.jetbrains.exposed.v1.jdbc.transactions.transaction] 안에서 실행해야 합니다. */
     fun upsert(
@@ -37,18 +38,8 @@ class AppointmentStatsProjectionRepository {
         require(aggregateId.isNotBlank() && aggregateId.length <= 128) { "aggregateId must be bounded" }
         require(eventId.isNotBlank() && eventId.length <= 128) { "eventId must be bounded" }
 
-        val latestAggregateVersion = AppointmentStatsProjectionEventTable
-            .select(AppointmentStatsProjectionEventTable.eventVersion)
-            .where {
-                (AppointmentStatsProjectionEventTable.tenantGroupId eq tenantGroupId) and
-                    (AppointmentStatsProjectionEventTable.clinicId eq clinicId) and
-                    (AppointmentStatsProjectionEventTable.aggregateId eq aggregateId)
-            }
-            .orderBy(AppointmentStatsProjectionEventTable.eventVersion to org.jetbrains.exposed.v1.core.SortOrder.DESC)
-            .limit(1)
-            .singleOrNull()
-            ?.get(AppointmentStatsProjectionEventTable.eventVersion)
-        if (latestAggregateVersion != null && eventVersion <= latestAggregateVersion) return false
+        val previous = latestEvent(tenantGroupId, clinicId, aggregateId)
+        if (previous != null && eventVersion <= previous.eventVersion) return false
 
         val eventInserted = AppointmentStatsProjectionEventTable.insertIgnore {
             it[AppointmentStatsProjectionEventTable.tenantGroupId] = tenantGroupId
@@ -61,6 +52,53 @@ class AppointmentStatsProjectionRepository {
         }.insertedCount == 1
         if (!eventInserted) return false
 
+        val bucketChanged = previous == null || previous.eventDate != eventDate || previous.status != status
+        if (previous != null && bucketChanged) {
+            decrementBucket(tenantGroupId, clinicId, previous.eventDate, previous.status)
+        }
+        if (bucketChanged) {
+            incrementBucket(tenantGroupId, clinicId, eventDate, status, eventVersion, eventId)
+        } else {
+            touchBucket(tenantGroupId, clinicId, eventDate, status, eventVersion, eventId)
+        }
+        return true
+    }
+
+    private fun latestEvent(
+        tenantGroupId: Long,
+        clinicId: Long,
+        aggregateId: String,
+    ): LatestProjectionEvent? = AppointmentStatsProjectionEventTable
+        .select(
+            AppointmentStatsProjectionEventTable.eventDate,
+            AppointmentStatsProjectionEventTable.status,
+            AppointmentStatsProjectionEventTable.eventVersion,
+        )
+        .where {
+            (AppointmentStatsProjectionEventTable.tenantGroupId eq tenantGroupId) and
+                (AppointmentStatsProjectionEventTable.clinicId eq clinicId) and
+                (AppointmentStatsProjectionEventTable.aggregateId eq aggregateId)
+        }
+        .orderBy(AppointmentStatsProjectionEventTable.eventVersion to SortOrder.DESC)
+        .limit(1)
+        .singleOrNull()
+        ?.let {
+            LatestProjectionEvent(
+                eventDate = it[AppointmentStatsProjectionEventTable.eventDate],
+                status = it[AppointmentStatsProjectionEventTable.status],
+                eventVersion = it[AppointmentStatsProjectionEventTable.eventVersion],
+            )
+        }
+
+    private fun incrementBucket(
+        tenantGroupId: Long,
+        clinicId: Long,
+        eventDate: LocalDate,
+        status: AppointmentState,
+        eventVersion: Long,
+        eventId: String,
+    ) {
+        val predicate = bucketPredicate(tenantGroupId, clinicId, eventDate, status)
         val inserted = AppointmentStatsProjectionTable.insertIgnore {
             it[AppointmentStatsProjectionTable.tenantGroupId] = tenantGroupId
             it[AppointmentStatsProjectionTable.clinicId] = clinicId
@@ -70,40 +108,16 @@ class AppointmentStatsProjectionRepository {
             it[AppointmentStatsProjectionTable.lastEventVersion] = eventVersion
             it[AppointmentStatsProjectionTable.lastEventId] = eventId
         }.insertedCount == 1
-        if (inserted) return true
+        if (inserted) return
 
-        val predicate: Op<Boolean> =
-            (AppointmentStatsProjectionTable.tenantGroupId eq tenantGroupId) and
-                (AppointmentStatsProjectionTable.clinicId eq clinicId) and
-                (AppointmentStatsProjectionTable.eventDate eq eventDate) and
-                (AppointmentStatsProjectionTable.status eq status)
         val existing = AppointmentStatsProjectionTable
             .select(
                 AppointmentStatsProjectionTable.appointmentCount,
                 AppointmentStatsProjectionTable.lastEventVersion,
-                AppointmentStatsProjectionTable.lastEventId,
             )
             .where { predicate }
             .forUpdate()
             .single()
-
-        // 같은 aggregate의 더 높거나 같은 version이 먼저 반영된 경우에는
-        // dashboard bucket을 다시 증가시키지 않습니다. 다른 aggregate의 version과
-        // bucket-level lastEventVersion을 비교하면 정상 event를 잃으므로 aggregate로
-        // 한정한 ledger 조회를 사용합니다.
-        val newerAggregateEventExists = AppointmentStatsProjectionEventTable
-            .select(AppointmentStatsProjectionEventTable.eventId)
-            .where {
-                (AppointmentStatsProjectionEventTable.tenantGroupId eq tenantGroupId) and
-                    (AppointmentStatsProjectionEventTable.clinicId eq clinicId) and
-                    (AppointmentStatsProjectionEventTable.aggregateId eq aggregateId) and
-                    (AppointmentStatsProjectionEventTable.eventVersion greaterEq eventVersion) and
-                    (AppointmentStatsProjectionEventTable.eventId neq eventId)
-            }
-            .limit(1)
-            .singleOrNull() != null
-        if (newerAggregateEventExists) return false
-
         AppointmentStatsProjectionTable.update({ predicate }) {
             it[AppointmentStatsProjectionTable.appointmentCount] = existing[AppointmentStatsProjectionTable.appointmentCount] + 1L
             if (eventVersion >= existing[AppointmentStatsProjectionTable.lastEventVersion]) {
@@ -111,8 +125,61 @@ class AppointmentStatsProjectionRepository {
                 it[AppointmentStatsProjectionTable.lastEventId] = eventId
             }
         }
-        return true
     }
+
+    private fun touchBucket(
+        tenantGroupId: Long,
+        clinicId: Long,
+        eventDate: LocalDate,
+        status: AppointmentState,
+        eventVersion: Long,
+        eventId: String,
+    ) {
+        val predicate = bucketPredicate(tenantGroupId, clinicId, eventDate, status)
+        AppointmentStatsProjectionTable.update({ predicate }) {
+            it[AppointmentStatsProjectionTable.lastEventVersion] = eventVersion
+            it[AppointmentStatsProjectionTable.lastEventId] = eventId
+        }
+    }
+
+    private fun decrementBucket(
+        tenantGroupId: Long,
+        clinicId: Long,
+        eventDate: LocalDate,
+        status: AppointmentState,
+    ) {
+        val predicate = bucketPredicate(tenantGroupId, clinicId, eventDate, status)
+        val existing = AppointmentStatsProjectionTable
+            .select(AppointmentStatsProjectionTable.appointmentCount)
+            .where { predicate }
+            .forUpdate()
+            .singleOrNull() ?: return
+        val count = existing[AppointmentStatsProjectionTable.appointmentCount]
+        if (count <= 1L) {
+            AppointmentStatsProjectionTable.deleteWhere { predicate }
+        } else {
+            AppointmentStatsProjectionTable.update({ predicate }) {
+                it[AppointmentStatsProjectionTable.appointmentCount] = count - 1L
+            }
+        }
+    }
+
+    private fun bucketPredicate(
+        tenantGroupId: Long,
+        clinicId: Long,
+        eventDate: LocalDate,
+        status: AppointmentState,
+    ): Op<Boolean> =
+        (AppointmentStatsProjectionTable.tenantGroupId eq tenantGroupId) and
+            (AppointmentStatsProjectionTable.clinicId eq clinicId) and
+            (AppointmentStatsProjectionTable.eventDate eq eventDate) and
+            (AppointmentStatsProjectionTable.status eq status)
+
+    private data class LatestProjectionEvent(
+        val eventDate: LocalDate,
+        val status: AppointmentState,
+        val eventVersion: Long,
+    )
 
     fun countByDateAndStatus(
         tenantGroupId: Long,

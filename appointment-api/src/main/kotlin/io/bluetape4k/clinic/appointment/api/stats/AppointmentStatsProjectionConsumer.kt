@@ -12,7 +12,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.ZoneOffset
 
-/** appointment event를 tenant/date/status read model로 투영하는 통계 consumer입니다. */
+/** appointment event의 최신 aggregate 상태를 tenant/date/status read model로 투영하는 통계 consumer입니다. */
 class AppointmentStatsProjectionConsumer(
     private val database: Database,
     private val repository: AppointmentStatsProjectionRepository,

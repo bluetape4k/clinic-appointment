@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.stats
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.clinic.appointment.messaging.AppointmentAggregateId
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerContext
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerIdentity
@@ -50,9 +51,39 @@ class AppointmentStatsProjectionConsumerTest {
 
         transaction(database) {
             repository.countByDateAndStatus(11, CLINIC_ID, DATE..DATE) shouldBeEqualTo
-                listOf(AppointmentStatsProjectionRow(DATE, AppointmentState.CONFIRMED, 3L))
+                listOf(AppointmentStatsProjectionRow(DATE, AppointmentState.CONFIRMED, 2L))
             repository.countByDateAndStatus(12, CLINIC_ID, DATE..DATE) shouldBeEqualTo
                 listOf(AppointmentStatsProjectionRow(DATE, AppointmentState.CONFIRMED, 1L))
+        }
+    }
+
+    @Test
+    fun `projection moves an aggregate to its latest state and event date`() {
+        consumer.handle(
+            envelope(
+                eventId = "event-confirmed",
+                version = 1,
+                tenant = 11,
+                status = AppointmentState.CONFIRMED,
+                occurredAt = Instant.parse("2026-08-06T12:00:00Z"),
+            ),
+            context(tenant = 11),
+        )
+        consumer.handle(
+            envelope(
+                eventId = "event-cancelled",
+                version = 2,
+                tenant = 11,
+                status = AppointmentState.CANCELLED,
+                occurredAt = Instant.parse("2026-08-07T12:00:00Z"),
+            ),
+            context(tenant = 11),
+        )
+
+        transaction(database) {
+            repository.countByDateAndStatus(11, CLINIC_ID, DATE..DATE).shouldBeEmpty()
+            repository.countByDateAndStatus(11, CLINIC_ID, NEXT_DATE..NEXT_DATE) shouldBeEqualTo
+                listOf(AppointmentStatsProjectionRow(NEXT_DATE, AppointmentState.CANCELLED, 1L))
         }
     }
 
@@ -72,11 +103,18 @@ class AppointmentStatsProjectionConsumerTest {
         ),
     )
 
-    private fun envelope(eventId: String, version: Long, tenant: Long, aggregateId: Long = 42) = AppointmentEventEnvelope(
+    private fun envelope(
+        eventId: String,
+        version: Long,
+        tenant: Long,
+        aggregateId: Long = 42,
+        status: AppointmentState = AppointmentState.CONFIRMED,
+        occurredAt: Instant = Instant.parse("2026-08-06T12:00:00Z"),
+    ) = AppointmentEventEnvelope(
         eventId = AppointmentEventId(eventId),
         eventType = AppointmentEventType.STATUS_CHANGED,
         schemaVersion = AppointmentEventEnvelope.CURRENT_SCHEMA_VERSION,
-        occurredAt = Instant.parse("2026-08-06T12:00:00Z"),
+        occurredAt = occurredAt,
         tenantGroupId = tenant,
         clinicId = CLINIC_ID,
         aggregateType = AppointmentEventEnvelope.AGGREGATE_TYPE,
@@ -87,12 +125,13 @@ class AppointmentStatsProjectionConsumerTest {
             appointmentId = AppointmentAggregateId(aggregateId),
             version = version,
             fromState = AppointmentState.REQUESTED,
-            toState = AppointmentState.CONFIRMED,
+            toState = status,
         ),
     )
 
     companion object {
         private val DATE = java.time.LocalDate.of(2026, 8, 6)
+        private val NEXT_DATE = java.time.LocalDate.of(2026, 8, 7)
         private const val CLINIC_ID = 31L
     }
 }
