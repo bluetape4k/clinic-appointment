@@ -9,8 +9,9 @@
 | 5 | 2026-07-29 | 설계 시각 동반 문서 이력 | 🚧 clinic 공개 준비 | [spec](specs/2026-07-29-visual-companion-history-design.md) / [plan](plans/2026-07-29-visual-companion-history-plan.md) |
 | 6 | 2026-07-30 | 프로필 변경 기반 진행 중 예약 재평가 | 📝 구현 계획 완료 | [spec](specs/2026-07-30-profile-change-reservation-reevaluation-design.md) / [plan](plans/2026-07-30-profile-change-reservation-reevaluation-plan.md) |
 | 7 | 2026-08-08 | Issue #208 Type A review gate 백필 및 현재 remediation 정합화 | ⚠️ 차단: historical gate 미증명 / current remediation PASS | [status](../review/2026-08-07-issue-208-retrospective-gate-status.md) / [current seven-tier](../review/2026-08-08-issue-208-current-remediation-seven-tier.md) / [lesson](../lessons/2026-08-07-issue-208-type-a-review-gate-backfill.md) / [reviews](../review/2026-08-07-issue-208-pr-200-step-2r-spec-review.md) |
+| 8 | 2026-08-08 | Issue #204 notification outbox readiness와 외부 rollout 경계 | ⚠️ 외부 rollout HOLD / local readiness PASS | [readiness](../review/2026-08-08-issue-204-notification-outbox-readiness.md) / [lesson](../lessons/2026-08-08-issue-204-readiness-boundary.md) / [runbook](../runbooks/notification-outbox-operations.md) |
 
-✅ 완료: 4  📝 계획 완료: 1  ⚠️ 차단: 1  🚧 진행 중: 1
+✅ 완료: 4  📝 계획 완료: 1  ⚠️ 차단/HOLD: 2  🚧 진행 중: 1
 
 ## 공개 시각 동반 문서
 
