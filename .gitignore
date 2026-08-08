@@ -45,5 +45,6 @@ dist/
 
 .profileconfig.json
 .omx/
+.bluetape/
 
 .codegraph/
