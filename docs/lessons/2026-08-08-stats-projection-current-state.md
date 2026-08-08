@@ -22,6 +22,10 @@ tenant/clinic/date/status bucket에 누적하면, 같은 예약 aggregate의 상
 - event projection에 행이 있다는 사실만으로 대시보드 집계를 대체하지 않는다.
   `appointmentDate`와 completeness를 증명하는 별도 read model이 준비된 뒤에만
   대체 경로를 재검토한다.
+- consumer가 활성화된 환경의 readiness validator는 projection bucket, event ledger,
+  V24 aggregate lock table까지 모두 확인한다. Flyway를 우회하는 로컬 schema-init은
+  messaging consumer 운영 계약을 대신하지 않으며, 필요한 migration이 없으면
+  startup을 fail-closed한다.
 
 ## 재발 방지 검증
 
