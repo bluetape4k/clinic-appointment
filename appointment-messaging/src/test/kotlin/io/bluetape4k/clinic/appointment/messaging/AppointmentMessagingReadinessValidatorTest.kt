@@ -1,8 +1,8 @@
 package io.bluetape4k.clinic.appointment.messaging
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
-import io.bluetape4k.assertions.assertFailsWith
 import org.h2.jdbcx.JdbcDataSource
 import org.junit.jupiter.api.Test
 
@@ -144,6 +144,30 @@ class AppointmentMessagingReadinessValidatorTest {
     }
 
     @Test
+    fun `consumer readiness fails closed when V25 replay hash contract is unavailable`() {
+        val dataSource = JdbcDataSource().apply {
+            setURL("jdbc:h2:mem:appointment_readiness_v25_missing_${System.nanoTime()};DB_CLOSE_DELAY=-1")
+        }
+        dataSource.connection.use { connection ->
+            createConsumerSchema(
+                connection,
+                includeV24AggregateLock = true,
+                includeV25ReplayHashContract = false,
+            )
+        }
+
+        val probe = AppointmentMessagingReadinessProbe(brokerAvailable = true)
+        AppointmentMessagingReadinessValidator(
+            codec = AppointmentEventEnvelopeCodec(),
+            dataSource = dataSource,
+            requireConsumerSchema = true,
+        ).validate(probe)
+
+        probe.snapshot().schemaValid.shouldBeFalse()
+        probe.snapshot().ready.shouldBeFalse()
+    }
+
+    @Test
     fun `consumer readiness fails closed when schema registry compatibility is unavailable`() {
         val dataSource = JdbcDataSource().apply {
             setURL("jdbc:h2:mem:appointment_readiness_registry_missing_${System.nanoTime()};DB_CLOSE_DELAY=-1")
@@ -225,6 +249,7 @@ class AppointmentMessagingReadinessValidatorTest {
     private fun createConsumerSchema(
         connection: java.sql.Connection,
         includeV24AggregateLock: Boolean,
+        includeV25ReplayHashContract: Boolean = true,
     ) {
         connection.createStatement().use { statement ->
             statement.execute(
@@ -288,13 +313,20 @@ class AppointmentMessagingReadinessValidatorTest {
                 "CREATE INDEX idx_appointment_consumer_quarantine_created " +
                     "ON scheduling_appointment_consumer_quarantine(logical_consumer_id)",
             )
+            val replayAuditColumns = buildString {
+                appendLine("request_id VARCHAR(128),")
+                appendLine("request_hash VARCHAR(64),")
+                if (includeV25ReplayHashContract) {
+                    appendLine("hash_version INTEGER,")
+                    appendLine("partition_number INTEGER,")
+                }
+                appendLine("status VARCHAR(32),")
+                appendLine("completed_at TIMESTAMP")
+            }
             statement.execute(
                 """
                 CREATE TABLE scheduling_appointment_consumer_replay_audit (
-                    request_id VARCHAR(128),
-                    request_hash VARCHAR(64),
-                    status VARCHAR(32),
-                    completed_at TIMESTAMP
+                    $replayAuditColumns
                 )
                 """.trimIndent(),
             )

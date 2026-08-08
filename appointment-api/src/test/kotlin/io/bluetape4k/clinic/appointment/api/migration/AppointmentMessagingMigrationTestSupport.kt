@@ -98,12 +98,65 @@ internal object AppointmentMessagingMigrationTestSupport {
         dataSource.connection.use(::assertV24Metadata)
     }
 
-    private fun assertV23Metadata(connection: Connection) {
+    /** V25 replay audit hash 계약을 V24 이후 additive migration으로 검증합니다. */
+    fun verifyV25Migration(
+        dataSource: DataSource,
+        location: String,
+    ) {
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .cleanDisabled(false)
+            .load()
+            .clean()
+
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .target("24")
+            .load()
+            .migrate()
+
+        val legacySnapshot = insertV25LegacyReplayAudit(dataSource)
+
+        val result = Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .target("25")
+            .load()
+            .migrate()
+        check(result.success) { "V25 migration failed: ${result.warnings.joinToString()}" }
+        check(result.migrationsExecuted == 1) {
+            "Expected only V25 after target 24, executed=${result.migrationsExecuted}"
+        }
+
+        dataSource.connection.use { connection ->
+            assertV23Metadata(connection, V25_REPLAY_AUDIT_COLUMNS)
+        }
+        verifyV24Metadata(dataSource)
+        verifyV25Metadata(dataSource)
+        verifyV25LegacyReplayAudit(dataSource, legacySnapshot)
+    }
+
+    /** Flyway를 실행하지 않고 V25 replay audit metadata만 검증합니다. */
+    fun verifyV25Metadata(dataSource: DataSource) {
+        dataSource.connection.use(::assertV25Metadata)
+    }
+
+    private fun assertV23Metadata(
+        connection: Connection,
+        replayAuditAdditiveColumns: Set<String> = emptySet(),
+    ) {
         V23_TABLES.forEach { (table, expectedColumns) ->
             check(tableExists(connection, table)) { "Missing V23 table $table" }
             val actualColumns = columns(connection, table)
-            check(actualColumns == expectedColumns) {
-                "Unexpected V23 columns for $table: expected=$expectedColumns actual=$actualColumns"
+            val expected = if (table == "scheduling_appointment_consumer_replay_audit") {
+                expectedColumns + replayAuditAdditiveColumns
+            } else {
+                expectedColumns
+            }
+            check(actualColumns == expected) {
+                "Unexpected V23 columns for $table: expected=$expected actual=$actualColumns"
             }
         }
         V23_PRIMARY_KEYS.forEach { (table, expected) ->
@@ -141,6 +194,137 @@ internal object AppointmentMessagingMigrationTestSupport {
         V24_PRIMARY_KEYS.forEach { (table, expected) ->
             check(primaryKeyColumns(connection, table) == expected) {
                 "Unexpected V24 primary key for $table: ${primaryKeyColumns(connection, table)}"
+            }
+        }
+    }
+
+    private fun assertV25Metadata(connection: Connection) {
+        val table = "scheduling_appointment_consumer_replay_audit"
+        check(tableExists(connection, table)) { "Missing V25 table $table" }
+        val expectedColumns = requireNotNull(V23_TABLES[table]) + setOf("hash_version", "partition_number")
+        val actualColumns = columns(connection, table)
+        check(actualColumns == expectedColumns) {
+            "Unexpected V25 columns for $table: expected=$expectedColumns actual=$actualColumns"
+        }
+        val hashVersion = requireNotNull(findColumn(connection, table, "hash_version")) {
+            "Missing V25 hash_version column"
+        }
+        check(!hashVersion.nullable) {
+            "V25 hash_version must be NOT NULL"
+        }
+        val partitionNumber = requireNotNull(findColumn(connection, table, "partition_number")) {
+            "Missing V25 partition_number column"
+        }
+        check(partitionNumber.nullable) {
+            "V25 partition_number must remain nullable for legacy audit rows"
+        }
+        check(hashVersion.defaultValue?.contains("1") == true) {
+            "V25 hash_version must default legacy rows to 1: ${hashVersion.defaultValue}"
+        }
+    }
+
+    private fun insertV25LegacyReplayAudit(dataSource: DataSource): V25LegacyReplayAuditSnapshot {
+        dataSource.connection.use { connection ->
+            val h2 = connection.metaData.databaseProductName.contains("H2", ignoreCase = true)
+            if (h2) {
+                // H2의 check-list 상수가 대상 migration 이후 Flyway 세션을 유지할 수 있으므로,
+                // 현재 connection에서 테스트 전용 제약 조건을 다시 생성한다.
+                connection.createStatement().use { statement ->
+                    statement.execute(
+                        "ALTER TABLE scheduling_appointment_consumer_replay_audit " +
+                            "DROP CONSTRAINT ck_appointment_consumer_replay_status",
+                    )
+                }
+            }
+            connection.prepareStatement(
+                """
+                INSERT INTO scheduling_appointment_consumer_replay_audit(
+                    request_id, logical_consumer_id, logical_stream_id, tenant_group_id, clinic_id,
+                    from_offset, to_offset, request_hash, dry_run, approved_by, status,
+                    created_at, completed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL)
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setString(1, V25_LEGACY_REQUEST_ID)
+                statement.setString(2, "notification")
+                statement.setString(3, "appointment-events")
+                statement.setLong(4, 91_001L)
+                statement.setLong(5, 91_002L)
+                statement.setLong(6, 10L)
+                statement.setLong(7, 12L)
+                statement.setString(8, "0".repeat(64))
+                statement.setBoolean(9, false)
+                statement.setString(10, "operator-1")
+                statement.setString(11, "REQUESTED")
+                check(statement.executeUpdate() == 1) { "V25 legacy fixture insert failed" }
+            }
+            if (h2) {
+                connection.createStatement().use { statement ->
+                    statement.execute(
+                        "ALTER TABLE scheduling_appointment_consumer_replay_audit " +
+                            "ADD CONSTRAINT ck_appointment_consumer_replay_status " +
+                            "CHECK (status IN ('REQUESTED', 'DRY_RUN', 'EXECUTED', 'REJECTED'))",
+                    )
+                }
+            }
+            return readV25LegacyReplayAuditSnapshot(connection)
+        }
+    }
+
+    private fun readV25LegacyReplayAuditSnapshot(connection: Connection): V25LegacyReplayAuditSnapshot {
+        connection.prepareStatement(
+            """
+            SELECT id, created_at, completed_at
+            FROM scheduling_appointment_consumer_replay_audit
+            WHERE request_id = ?
+            """.trimIndent(),
+        ).use { statement ->
+            statement.setString(1, V25_LEGACY_REQUEST_ID)
+            statement.executeQuery().use { rows ->
+                check(rows.next()) { "Missing V25 legacy fixture after insert" }
+                return V25LegacyReplayAuditSnapshot(
+                    id = rows.getLong(1),
+                    createdAt = checkNotNull(rows.getTimestamp(2)) { "Missing V25 legacy created_at" },
+                    completedAt = rows.getTimestamp(3),
+                )
+            }
+        }
+    }
+
+    private fun verifyV25LegacyReplayAudit(
+        dataSource: DataSource,
+        snapshot: V25LegacyReplayAuditSnapshot,
+    ) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT id, request_id, logical_consumer_id, logical_stream_id, tenant_group_id, clinic_id,
+                       from_offset, to_offset, request_hash, dry_run, approved_by, status,
+                       created_at, completed_at, hash_version, partition_number
+                FROM scheduling_appointment_consumer_replay_audit
+                WHERE request_id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setString(1, V25_LEGACY_REQUEST_ID)
+                statement.executeQuery().use { rows ->
+                    check(rows.next()) { "Missing V25 legacy fixture" }
+                    check(rows.getLong(1) == snapshot.id)
+                    check(rows.getString(2) == V25_LEGACY_REQUEST_ID)
+                    check(rows.getString(3) == "notification")
+                    check(rows.getString(4) == "appointment-events")
+                    check(rows.getLong(5) == 91_001L)
+                    check(rows.getLong(6) == 91_002L)
+                    check(rows.getLong(7) == 10L)
+                    check(rows.getLong(8) == 12L)
+                    check(rows.getString(9) == "0".repeat(64))
+                    check(!rows.getBoolean(10))
+                    check(rows.getString(11) == "operator-1")
+                    check(rows.getString(12) == "REQUESTED")
+                    check(rows.getTimestamp(13)?.toLocalDateTime() == snapshot.createdAt.toLocalDateTime())
+                    check(rows.getTimestamp(14)?.toLocalDateTime() == snapshot.completedAt?.toLocalDateTime())
+                    check(rows.getInt(15) == 1)
+                    check(rows.getObject(16) == null)
+                }
             }
         }
     }
@@ -540,6 +724,7 @@ internal object AppointmentMessagingMigrationTestSupport {
                         return ColumnMetadata(
                             nullable = columns.getInt("NULLABLE") == DatabaseMetaData.columnNullable,
                             size = columns.getLong("COLUMN_SIZE"),
+                            defaultValue = columns.getString("COLUMN_DEF"),
                         )
                     }
                 }
@@ -554,6 +739,7 @@ internal object AppointmentMessagingMigrationTestSupport {
     private data class ColumnMetadata(
         val nullable: Boolean,
         val size: Long,
+        val defaultValue: String?,
     )
 
     private const val OUTBOX_TABLE = "scheduling_outbox_events"
@@ -563,6 +749,13 @@ internal object AppointmentMessagingMigrationTestSupport {
     private const val FIXTURE_CLINIC_ID = 91_002L
     private const val LEGACY_OUTBOX_ID = 91_003L
     private const val APPOINTMENT_OUTBOX_ID = 91_004L
+    private const val V25_LEGACY_REQUEST_ID = "v25-legacy-replay-fixture"
+    private data class V25LegacyReplayAuditSnapshot(
+        val id: Long,
+        val createdAt: Timestamp,
+        val completedAt: Timestamp?,
+    )
+    private val V25_REPLAY_AUDIT_COLUMNS = setOf("hash_version", "partition_number")
 
     private val EXPECTED_COLUMNS = linkedMapOf(
         "occurred_at" to null,

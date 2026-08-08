@@ -109,4 +109,19 @@ class FlywayPostgreSQLMigrationTest {
             location = "classpath:db/migration/postgresql",
         )
     }
+
+    @Test
+    fun `V25 replay audit hash contract is additive on PostgreSQL`() {
+        val postgres = Containers.Postgres
+        val driver = Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentMessagingMigrationTestSupport.verifyV25Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                postgres.jdbcUrl,
+                postgres.username ?: "test",
+                postgres.password ?: "",
+            ),
+            location = "classpath:db/migration/postgresql",
+        )
+    }
 }

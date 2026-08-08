@@ -1,13 +1,16 @@
 package io.bluetape4k.clinic.appointment.messaging
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
@@ -86,11 +89,53 @@ class AppointmentReplayServiceTest {
     }
 
     @Test
+    fun `same request id rejects a different partition scope`() {
+        var calls = 0
+        val service = AppointmentReplayService(database) { _, _ -> calls++; 1 }
+        val first = request()
+        val differentPartition = request().copy(partition = 1)
+
+        service.replay("replay-partition-binding-1", first, actor())
+
+        assertFailsWith<IllegalArgumentException> {
+            service.replay("replay-partition-binding-1", differentPartition, actor())
+        }
+        calls shouldBeEqualTo 1
+    }
+
+    @Test
+    fun `legacy audit hash requires a new request id after hash contract upgrade`() {
+        val legacyRequest = request(dryRun = true)
+        transaction(database) {
+            AppointmentConsumerReplayAuditTable.insert {
+                it[requestId] = "replay-legacy-hash-1"
+                it[logicalConsumerId] = legacyRequest.identity.consumerId.value
+                it[logicalStreamId] = legacyRequest.identity.streamId.value
+                it[tenantGroupId] = legacyRequest.tenantGroupId
+                it[clinicId] = legacyRequest.clinicId
+                it[fromOffset] = legacyRequest.fromOffset
+                it[toOffset] = legacyRequest.toOffset
+                it[requestHash] = legacyRequestHash(legacyRequest)
+                it[hashVersion] = 1
+                it[dryRun] = true
+                it[approvedBy] = legacyRequest.approver
+                it[status] = AppointmentReplayAuditStatus.DRY_RUN
+            }
+        }
+
+        val failure = assertFailsWith<IllegalArgumentException> {
+            AppointmentReplayService(database) { _, _ -> 1 }
+                .replay("replay-legacy-hash-1", legacyRequest, actor())
+        }
+        failure.message shouldBeEqualTo "replay requestId is bound to a legacy hash; issue a new requestId"
+    }
+
+    @Test
     fun `replay rejects an actor outside tenant scope or without operator role`() {
         var calls = 0
         val service = AppointmentReplayService(database) { _, _ -> calls++ }
 
-        assertThrows<AppointmentReplayAuthorizationException> {
+        assertFailsWith<AppointmentReplayAuthorizationException> {
             service.replay(
                 requestId = "replay-unauthorized-1",
                 request = request(),
@@ -111,7 +156,7 @@ class AppointmentReplayServiceTest {
     fun `replay rejects an actor outside clinic scope`() {
         val service = AppointmentReplayService(database) { _, _ -> 1 }
 
-        assertThrows<AppointmentReplayAuthorizationException> {
+        assertFailsWith<AppointmentReplayAuthorizationException> {
             service.replay(
                 requestId = "replay-unauthorized-clinic-1",
                 request = request().copy(clinicId = 99),
@@ -196,4 +241,19 @@ class AppointmentReplayServiceTest {
         roles = setOf(TenantScopedAppointmentReplayAuthorizer.REPLAY_OPERATOR_ROLE),
         clinicIdsByTenant = mapOf(7L to setOf(31L)),
     )
+
+    private fun legacyRequestHash(request: AppointmentReplayRequest): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(
+                listOf(
+                    request.identity.consumerId.value,
+                    request.identity.streamId.value,
+                    request.tenantGroupId,
+                    request.clinicId,
+                    request.approver,
+                    request.fromOffset,
+                    request.toOffset,
+                ).joinToString("|").toByteArray(StandardCharsets.UTF_8),
+            )
+            .joinToString(separator = "") { byte -> "%02x".format(byte) }
 }

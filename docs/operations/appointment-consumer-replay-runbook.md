@@ -22,6 +22,9 @@ quarantine event를 승인된 별도 replay group으로 재처리하는 절차�
   record는 handler를 호출하지 않는다.
 - replay audit에는 request id, scope, offset, 승인자, 상태와 시간만 저장한다.
   원문 Kafka value, 환자 식별자, recipient/provider payload는 저장하거나 출력하지 않는다.
+- replay audit의 `hash_version`과 `partition_number`는 request id가 검증한 hash 계약을
+  함께 고정한다. V25 이전에 생성된 row는 `hash_version=1`, `partition_number=NULL`로
+  남으며 partition 범위를 복원할 수 없으므로 자동 실행 대상이 아니다.
 
 ## 실행 순서
 
@@ -51,6 +54,9 @@ quarantine event를 승인된 별도 replay group으로 재처리하는 절차�
   프로세스가 종료되어 `REQUESTED`에 남은 경우 중복 실행을 막기 위해 자동 재실행하지
   않는다. 운영자는 원래 inbox dedup과 장애 원인을 확인하고 새 승인/request id를 발급한다.
   이미 `EXECUTED` 또는 `REJECTED`인 요청은 재실행하지 않는다.
+- `hash_version=1`인 legacy audit row는 V25 이후 partition을 안전하게 판별할 수 없으므로
+  fail-closed 한다. 기존 row를 수정하거나 hash를 재계산해 재사용하지 말고, quarantine
+  provenance와 대상 범위를 다시 확인한 뒤 새 승인과 새 request id를 발급한다.
 - 범위가 잘못되었거나 다른 tenant/clinic이면 새 request id를 만들지 말고 요청을 폐기한
   뒤 접근 권한과 quarantine provenance를 재확인한다.
 
