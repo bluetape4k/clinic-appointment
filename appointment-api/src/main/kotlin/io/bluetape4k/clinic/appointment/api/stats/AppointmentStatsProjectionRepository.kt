@@ -21,7 +21,7 @@ data class AppointmentStatsProjectionRow(
     val count: Long,
 )
 
-/** Tenant-scoped stats projection의 fenced upsert와 event-state read를 제공합니다. */
+/** Tenant-scoped stats projection의 aggregate-locking upsert와 event-state read를 제공합니다. */
 class AppointmentStatsProjectionRepository {
     /** 호출자는 반드시 Exposed [org.jetbrains.exposed.v1.jdbc.transactions.transaction] 안에서 실행해야 합니다. */
     fun upsert(
@@ -38,6 +38,7 @@ class AppointmentStatsProjectionRepository {
         require(aggregateId.isNotBlank() && aggregateId.length <= 128) { "aggregateId must be bounded" }
         require(eventId.isNotBlank() && eventId.length <= 128) { "eventId must be bounded" }
 
+        lockAggregate(tenantGroupId, clinicId, aggregateId)
         val previous = latestEvent(tenantGroupId, clinicId, aggregateId)
         if (previous != null && eventVersion <= previous.eventVersion) return false
 
@@ -62,6 +63,28 @@ class AppointmentStatsProjectionRepository {
             touchBucket(tenantGroupId, clinicId, eventDate, status, eventVersion, eventId)
         }
         return true
+    }
+
+    /** 같은 aggregate의 최초 event도 경합하지 않도록 durable lock row를 먼저 확보합니다. */
+    private fun lockAggregate(
+        tenantGroupId: Long,
+        clinicId: Long,
+        aggregateId: String,
+    ) {
+        val predicate =
+            (AppointmentStatsProjectionAggregateLockTable.tenantGroupId eq tenantGroupId) and
+                (AppointmentStatsProjectionAggregateLockTable.clinicId eq clinicId) and
+                (AppointmentStatsProjectionAggregateLockTable.aggregateId eq aggregateId)
+        AppointmentStatsProjectionAggregateLockTable.insertIgnore {
+            it[AppointmentStatsProjectionAggregateLockTable.tenantGroupId] = tenantGroupId
+            it[AppointmentStatsProjectionAggregateLockTable.clinicId] = clinicId
+            it[AppointmentStatsProjectionAggregateLockTable.aggregateId] = aggregateId
+        }
+        AppointmentStatsProjectionAggregateLockTable
+            .select(AppointmentStatsProjectionAggregateLockTable.aggregateId)
+            .where { predicate }
+            .forUpdate()
+            .single()
     }
 
     private fun latestEvent(
@@ -136,9 +159,13 @@ class AppointmentStatsProjectionRepository {
         eventId: String,
     ) {
         val predicate = bucketPredicate(tenantGroupId, clinicId, eventDate, status)
-        AppointmentStatsProjectionTable.update({ predicate }) {
+        val updated = AppointmentStatsProjectionTable.update({ predicate }) {
             it[AppointmentStatsProjectionTable.lastEventVersion] = eventVersion
             it[AppointmentStatsProjectionTable.lastEventId] = eventId
+        }
+        check(updated == 1) {
+            "projection bucket missing for aggregate state: tenantGroupId=$tenantGroupId, " +
+                "clinicId=$clinicId, eventDate=$eventDate, status=$status"
         }
     }
 
@@ -153,7 +180,11 @@ class AppointmentStatsProjectionRepository {
             .select(AppointmentStatsProjectionTable.appointmentCount)
             .where { predicate }
             .forUpdate()
-            .singleOrNull() ?: return
+            .singleOrNull()
+            ?: error(
+                "projection bucket missing for aggregate state: tenantGroupId=$tenantGroupId, " +
+                    "clinicId=$clinicId, eventDate=$eventDate, status=$status",
+            )
         val count = existing[AppointmentStatsProjectionTable.appointmentCount]
         if (count <= 1L) {
             AppointmentStatsProjectionTable.deleteWhere { predicate }

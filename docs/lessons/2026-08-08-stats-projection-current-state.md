@@ -11,8 +11,12 @@ tenant/clinic/date/status bucket에 누적하면, 같은 예약 aggregate의 상
 ## 수정 규칙
 
 - aggregate별 최신 event만 projection bucket에 반영한다.
+- V24 aggregate lock row를 먼저 `FOR UPDATE`해 동일 aggregate의 최초 event와
+  후속 event도 DB transaction 안에서 직렬화한다.
 - 최신 event가 날짜 또는 상태 bucket을 바꾸면 이전 bucket을 1건 감소시키고 새
   bucket을 1건 증가시킨다.
+- 이전 bucket이 사라진 불변식 위반은 조용히 성공시키지 않고 transaction 실패로
+  표면화해 retry/repair 신호로 남긴다.
 - 대시보드의 current-state 집계는 `Appointments.appointmentDate`와
   `Appointments.status`를 읽는 기존 repository를 권위 저장소로 유지한다.
 - event projection에 행이 있다는 사실만으로 대시보드 집계를 대체하지 않는다.
@@ -25,8 +29,12 @@ tenant/clinic/date/status bucket에 누적하면, 같은 예약 aggregate의 상
   bucket만 남는지 확인한다.
 - projection row가 의도적으로 현재 DB 집계와 다를 때도 대시보드가 현재 예약 row를
   반환하는 격리 테스트를 유지한다.
+- 동시 event pair가 같은 aggregate를 처리해도 최신 bucket 하나만 남는지
+  `MultithreadingTester` 회귀 테스트로 확인한다.
 
 ## 범위 경계
 
-이 규칙은 Issue #17 P1-01 통계 projection 의미 오류에 대한 수정이다. replay/inbox
-격리, partition fencing, 실제 broker·registry 운영 검증은 별도 작업으로 남긴다.
+이 규칙은 Issue #17 P1-01 통계 projection 의미 오류와 aggregate 경합 보강에 대한
+수정이다. replay/inbox 격리, partition fencing, 실제 broker·registry 운영 검증은
+별도 작업으로 남긴다. V24 lock table의 production 적용과 backfill은 운영 변경 창에서
+별도 확인한다.

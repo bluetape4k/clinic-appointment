@@ -94,4 +94,19 @@ class FlywayPostgreSQLMigrationTest {
             location = "classpath:db/migration/postgresql",
         )
     }
+
+    @Test
+    fun `V24 stats projection aggregate lock is additive on PostgreSQL`() {
+        val postgres = Containers.Postgres
+        val driver = Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentMessagingMigrationTestSupport.verifyV24Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                postgres.jdbcUrl,
+                postgres.username ?: "test",
+                postgres.password ?: "",
+            ),
+            location = "classpath:db/migration/postgresql",
+        )
+    }
 }
