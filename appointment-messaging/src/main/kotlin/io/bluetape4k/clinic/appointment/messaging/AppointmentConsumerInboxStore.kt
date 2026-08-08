@@ -34,10 +34,15 @@ sealed interface AppointmentConsumerBeginResult {
 }
 
 interface AppointmentConsumerInboxStore {
+    /**
+     * 정상 broker delivery는 terminal quarantine를 다시 점유하지 않습니다.
+     * 승인된 replay source만 provenance가 일치하는 quarantine row를 새 bounded attempt로 재개할 수 있습니다.
+     */
     fun begin(
         identity: AppointmentConsumerIdentity,
         eventId: AppointmentEventId,
         provenance: AppointmentConsumerProvenance,
+        allowQuarantinedReplay: Boolean = false,
     ): AppointmentConsumerBeginResult
 
     fun markProcessed(
@@ -92,6 +97,7 @@ class JdbcAppointmentConsumerInboxStore(
         identity: AppointmentConsumerIdentity,
         eventId: AppointmentEventId,
         provenance: AppointmentConsumerProvenance,
+        allowQuarantinedReplay: Boolean,
     ): AppointmentConsumerBeginResult = measured("begin") { transaction(database) {
         val now = clock.now()
         val leaseUntil = now.plus(processingLease)
@@ -128,6 +134,24 @@ class JdbcAppointmentConsumerInboxStore(
             row[AppointmentConsumerInboxTable.tenantGroupId] == provenance.tenantGroupId &&
             row[AppointmentConsumerInboxTable.clinicId] == provenance.clinicId &&
             row[AppointmentConsumerInboxTable.payloadSha256] == provenance.payloadSha256
+        if (status == AppointmentConsumerStatus.QUARANTINED && allowQuarantinedReplay && provenanceMatches) {
+            val reclaimed = AppointmentConsumerInboxTable.update({
+                keyPredicate(identity, eventId) and
+                    (AppointmentConsumerInboxTable.status eq AppointmentConsumerStatus.QUARANTINED)
+            }) {
+                it[AppointmentConsumerInboxTable.status] = AppointmentConsumerStatus.PROCESSING
+                it[AppointmentConsumerInboxTable.attemptCount] = 1
+                it[AppointmentConsumerInboxTable.failureCode] = null
+                it[AppointmentConsumerInboxTable.processedAt] = null
+                it[AppointmentConsumerInboxTable.processingLeaseUntil] = leaseUntil
+            }
+            if (reclaimed == 1) {
+                return@transaction AppointmentConsumerBeginResult.Acquired(
+                    attemptCount = 1,
+                    leaseUntil = leaseUntil,
+                )
+            }
+        }
         if (status == AppointmentConsumerStatus.RETRYABLE &&
             row[AppointmentConsumerInboxTable.attemptCount] <= this@JdbcAppointmentConsumerInboxStore.maxAttempts
         ) {

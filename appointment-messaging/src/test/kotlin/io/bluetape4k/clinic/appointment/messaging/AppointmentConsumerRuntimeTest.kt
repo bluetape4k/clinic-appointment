@@ -149,6 +149,37 @@ class AppointmentConsumerRuntimeTest {
         }
     }
 
+    @Test
+    fun `replay scope reclaims quarantined inbox and invokes handler again`() {
+        val calls = AtomicInteger()
+        val record = record()
+        val failingHandler = AppointmentConsumerHandler { _, _ ->
+            calls.incrementAndGet()
+            throw AppointmentConsumerRetryableException("provider unavailable")
+        }
+
+        assertThrows<AppointmentConsumerRetryableException> {
+            runtime.consume(record, identity(), failingHandler)
+        }
+        runtime.consume(record, identity(), failingHandler)
+            .shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
+
+        val replayOutcome = runtime.consume(
+            record = record,
+            acknowledgment = null,
+            identity = identity(),
+            handler = { _, _ -> calls.incrementAndGet() },
+            expectedScope = AppointmentReplayScope(tenantGroupId = 7, clinicId = 31),
+        )
+
+        replayOutcome shouldBeEqualTo AppointmentConsumerOutcome.PROCESSED
+        calls.get() shouldBeEqualTo 3
+        transaction(database) {
+            AppointmentConsumerInboxTable.selectAll().single()[AppointmentConsumerInboxTable.status]
+                .shouldBeEqualTo(AppointmentConsumerStatus.PROCESSED)
+        }
+    }
+
     private fun identity() = AppointmentConsumerIdentity(
         consumerId = AppointmentLogicalConsumerId("notification"),
         streamId = AppointmentLogicalStreamId("appointment-events"),

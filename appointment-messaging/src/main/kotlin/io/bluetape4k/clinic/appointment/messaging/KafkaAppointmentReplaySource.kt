@@ -7,6 +7,7 @@ import java.time.Duration
 /**
  * 운영 consumer group offset을 건드리지 않는 bounded replay adapter입니다.
  * 각 partition을 request range에 assign하고, 동일 logical inbox identity로 runtime을 호출합니다.
+ * 실제로 `PROCESSED`된 record만 반환 count에 포함하며, duplicate는 건너뛰고 실패 outcome은 reject합니다.
  */
 class KafkaAppointmentReplaySource(
     private val consumerFactory: ConsumerFactory<String, String>,
@@ -54,20 +55,27 @@ class KafkaAppointmentReplaySource(
                 consumer.seek(partition, requestedOffset.coerceAtMost(targetExclusive))
             }
 
+            var scanned = 0
             var replayed = 0
             while (System.nanoTime() < deadline) {
                 val records = consumer.poll(pollTimeout)
                 records.forEach { record ->
                     if (record.offset() < request.fromOffset || record.offset() > request.toOffset) return@forEach
-                    runtime.consume(
+                    scanned++
+                    require(scanned <= maxRecords) { "replay record limit exceeded" }
+                    when (runtime.consume(
                         record = record,
                         acknowledgment = null,
                         identity = execution.identity,
                         handler = handler,
                         expectedScope = AppointmentReplayScope(request.tenantGroupId, request.clinicId),
-                    )
-                    replayed++
-                    require(replayed <= maxRecords) { "replay record limit exceeded" }
+                    )) {
+                        AppointmentConsumerOutcome.PROCESSED -> replayed++
+                        AppointmentConsumerOutcome.DUPLICATE -> Unit
+                        AppointmentConsumerOutcome.RETRYABLE,
+                        AppointmentConsumerOutcome.QUARANTINED,
+                        -> throw AppointmentReplayException("replay record was not processed")
+                    }
                 }
                 if (partitions.all { partition ->
                         consumer.position(partition) >= targetExclusiveOffsets.getValue(partition)
@@ -75,9 +83,9 @@ class KafkaAppointmentReplaySource(
                 ) {
                     return replayed
                 }
-                if (replayed >= maxRecords) throw AppointmentReplayException("replay record limit exceeded")
+                if (scanned >= maxRecords) throw AppointmentReplayException("replay record limit exceeded")
             }
-            if (replayed >= maxRecords) throw AppointmentReplayException("replay record limit exceeded")
+            if (scanned >= maxRecords) throw AppointmentReplayException("replay record limit exceeded")
             throw AppointmentReplayException("replay did not reach the requested offset range before timeout")
         }
     }
