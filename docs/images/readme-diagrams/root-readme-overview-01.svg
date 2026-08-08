@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="2000" height="960" viewBox="0 0 2000 960" role="img" aria-label="Clinic Appointment Module Overview">
 <defs>
   <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#27415f" flood-opacity="0.12"/></filter>
-  <marker id="arrow-blue" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#4f77c9" stroke="#4f77c9"/></marker>
+  <marker id="arrow-blue" markerWidth="14" markerHeight="14" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 15 15" data-role="primary" data-tip-direction="positive-x"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#4f77c9" stroke="#4f77c9" stroke-dasharray="none"/></marker>
 <marker id="arrow-cyan" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#4aa6b5" stroke="#4aa6b5"/></marker>
 <marker id="arrow-teal" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#2f9f93" stroke="#2f9f93"/></marker>
-<marker id="arrow-green" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#3c987e" stroke="#3c987e"/></marker>
-<marker id="arrow-amber" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d28a28" stroke="#d28a28"/></marker>
+<marker id="arrow-green" markerWidth="14" markerHeight="14" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 15 15" data-role="primary" data-tip-direction="positive-x"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#3c987e" stroke="#3c987e" stroke-dasharray="none"/></marker>
+<marker id="arrow-amber" markerWidth="14" markerHeight="14" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 15 15" data-role="primary" data-tip-direction="positive-x"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d28a28" stroke="#d28a28" stroke-dasharray="none"/></marker>
 <marker id="arrow-orange" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d9823b" stroke="#d9823b"/></marker>
 <marker id="arrow-pink" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#d85f8d" stroke="#d85f8d"/></marker>
-<marker id="arrow-purple" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#8a65d8" stroke="#8a65d8"/></marker>
-<marker id="arrow-red" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#ca5f66" stroke="#ca5f66"/></marker>
+<marker id="arrow-purple" markerWidth="14" markerHeight="14" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 15 15" data-role="primary" data-tip-direction="positive-x"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#8a65d8" stroke="#8a65d8" stroke-dasharray="none"/></marker>
+<marker id="arrow-red" markerWidth="14" markerHeight="14" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 15 15" data-role="primary" data-tip-direction="positive-x"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#ca5f66" stroke="#ca5f66" stroke-dasharray="none"/></marker>
 <marker id="arrow-slate" markerWidth="15" markerHeight="15" refX="13.5" refY="7.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L 15 7.5 L 0 15 Z" fill="#718096" stroke="#718096"/></marker>
   <style>
     svg{font-family:"Comic Mono","Comic Sans MS",ui-sans-serif,system-ui,sans-serif}
