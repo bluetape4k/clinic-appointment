@@ -35,6 +35,9 @@ class FlywayMySQLMigrationTest {
         AppointmentMessagingMigrationTestSupport.verifyV23Metadata(
             dataSource = SimpleDriverDataSource(driver, requireNotNull(url), requireNotNull(user), password),
         )
+        AppointmentMessagingMigrationTestSupport.verifyV24Metadata(
+            dataSource = SimpleDriverDataSource(driver, requireNotNull(url), requireNotNull(user), password),
+        )
     }
 
     @Test
@@ -108,6 +111,21 @@ class FlywayMySQLMigrationTest {
         val mysql = Containers.MySql8
         val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
         AppointmentMessagingMigrationTestSupport.verifyV23Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                mysql.jdbcUrl,
+                mysql.username ?: "test",
+                mysql.password ?: "",
+            ),
+            location = "classpath:db/migration/mysql",
+        )
+    }
+
+    @Test
+    fun `V24 stats projection aggregate lock is additive on MySQL 8`() {
+        val mysql = Containers.MySql8
+        val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentMessagingMigrationTestSupport.verifyV24Migration(
             dataSource = SimpleDriverDataSource(
                 driver,
                 mysql.jdbcUrl,

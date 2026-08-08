@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.service
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.api.stats.AppointmentStatsProjectionEventTable
+import io.bluetape4k.clinic.appointment.api.stats.AppointmentStatsProjectionAggregateLockTable
 import io.bluetape4k.clinic.appointment.api.stats.AppointmentStatsProjectionRepository
 import io.bluetape4k.clinic.appointment.api.stats.AppointmentStatsProjectionTable
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContext
@@ -52,9 +53,11 @@ class DashboardStatsProjectionIsolationTest {
                 TreatmentTypes,
                 ConsultationTopics,
                 Appointments,
+                AppointmentStatsProjectionAggregateLockTable,
                 AppointmentStatsProjectionTable,
                 AppointmentStatsProjectionEventTable,
             )
+            AppointmentStatsProjectionAggregateLockTable.deleteAll()
             AppointmentStatsProjectionTable.deleteAll()
             AppointmentStatsProjectionEventTable.deleteAll()
             Appointments.deleteAll()

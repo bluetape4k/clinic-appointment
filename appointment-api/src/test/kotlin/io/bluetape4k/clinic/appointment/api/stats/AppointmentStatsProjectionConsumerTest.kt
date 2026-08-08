@@ -16,12 +16,15 @@ import io.bluetape4k.clinic.appointment.messaging.AppointmentStatusChangedPayloa
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.service.AppointmentCausationId
 import io.bluetape4k.clinic.appointment.service.AppointmentCorrelationId
+import io.bluetape4k.junit5.concurrency.MultithreadingTester
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Instant
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.atomic.AtomicInteger
 
 class AppointmentStatsProjectionConsumerTest {
     private val database = Database.connect(
@@ -34,9 +37,14 @@ class AppointmentStatsProjectionConsumerTest {
     @BeforeEach
     fun setUp() {
         transaction(database) {
+            SchemaUtils.drop(AppointmentStatsProjectionAggregateLockTable)
             SchemaUtils.drop(AppointmentStatsProjectionTable)
             SchemaUtils.drop(AppointmentStatsProjectionEventTable)
-            SchemaUtils.create(AppointmentStatsProjectionTable, AppointmentStatsProjectionEventTable)
+            SchemaUtils.create(
+                AppointmentStatsProjectionAggregateLockTable,
+                AppointmentStatsProjectionTable,
+                AppointmentStatsProjectionEventTable,
+            )
         }
     }
 
@@ -84,6 +92,56 @@ class AppointmentStatsProjectionConsumerTest {
             repository.countByDateAndStatus(11, CLINIC_ID, DATE..DATE).shouldBeEmpty()
             repository.countByDateAndStatus(11, CLINIC_ID, NEXT_DATE..NEXT_DATE) shouldBeEqualTo
                 listOf(AppointmentStatsProjectionRow(NEXT_DATE, AppointmentState.CANCELLED, 1L))
+        }
+    }
+
+    @Test
+    fun `projection serializes concurrent events for the same aggregate`() {
+        val rounds = 32
+        val round = AtomicInteger()
+        val barrier = CyclicBarrier(2) { round.incrementAndGet() }
+
+        MultithreadingTester()
+            .workers(2)
+            .rounds(rounds)
+            .addAll(
+                {
+                    barrier.await()
+                    val aggregateId = 1_000L + round.get()
+                    consumer.handle(
+                        envelope(
+                            eventId = "concurrent-confirmed-$aggregateId",
+                            version = 1,
+                            tenant = 11,
+                            aggregateId = aggregateId,
+                            status = AppointmentState.CONFIRMED,
+                            occurredAt = Instant.parse("2026-08-06T12:00:00Z"),
+                        ),
+                        context(tenant = 11),
+                    )
+                },
+                {
+                    barrier.await()
+                    val aggregateId = 1_000L + round.get()
+                    consumer.handle(
+                        envelope(
+                            eventId = "concurrent-cancelled-$aggregateId",
+                            version = 2,
+                            tenant = 11,
+                            aggregateId = aggregateId,
+                            status = AppointmentState.CANCELLED,
+                            occurredAt = Instant.parse("2026-08-07T12:00:00Z"),
+                        ),
+                        context(tenant = 11),
+                    )
+                },
+            )
+            .run()
+
+        transaction(database) {
+            repository.countByDateAndStatus(11, CLINIC_ID, DATE..DATE).shouldBeEmpty()
+            repository.countByDateAndStatus(11, CLINIC_ID, NEXT_DATE..NEXT_DATE) shouldBeEqualTo
+                listOf(AppointmentStatsProjectionRow(NEXT_DATE, AppointmentState.CANCELLED, rounds.toLong()))
         }
     }
 

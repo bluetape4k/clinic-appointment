@@ -59,6 +59,45 @@ internal object AppointmentMessagingMigrationTestSupport {
         dataSource.connection.use(::assertV23Metadata)
     }
 
+    /** V24 aggregate lock table을 V23 이후 additive migration으로 검증합니다. */
+    fun verifyV24Migration(
+        dataSource: DataSource,
+        location: String,
+    ) {
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .cleanDisabled(false)
+            .load()
+            .clean()
+
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .target("23")
+            .load()
+            .migrate()
+
+        val result = Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .target("24")
+            .load()
+            .migrate()
+        check(result.success) { "V24 migration failed: ${result.warnings.joinToString()}" }
+        check(result.migrationsExecuted == 1) {
+            "Expected only V24 after target 23, executed=${result.migrationsExecuted}"
+        }
+
+        verifyV23Metadata(dataSource)
+        verifyV24Metadata(dataSource)
+    }
+
+    /** Flyway를 실행하지 않고 V24 aggregate lock table metadata만 검증합니다. */
+    fun verifyV24Metadata(dataSource: DataSource) {
+        dataSource.connection.use(::assertV24Metadata)
+    }
+
     private fun assertV23Metadata(connection: Connection) {
         V23_TABLES.forEach { (table, expectedColumns) ->
             check(tableExists(connection, table)) { "Missing V23 table $table" }
@@ -87,6 +126,21 @@ internal object AppointmentMessagingMigrationTestSupport {
                         "MySQL V23 verification must run against a selected catalog"
                     }
                 }
+            }
+        }
+    }
+
+    private fun assertV24Metadata(connection: Connection) {
+        V24_TABLES.forEach { (table, expectedColumns) ->
+            check(tableExists(connection, table)) { "Missing V24 table $table" }
+            val actualColumns = columns(connection, table)
+            check(actualColumns == expectedColumns) {
+                "Unexpected V24 columns for $table: expected=$expectedColumns actual=$actualColumns"
+            }
+        }
+        V24_PRIMARY_KEYS.forEach { (table, expected) ->
+            check(primaryKeyColumns(connection, table) == expected) {
+                "Unexpected V24 primary key for $table: ${primaryKeyColumns(connection, table)}"
             }
         }
     }
@@ -596,6 +650,18 @@ internal object AppointmentMessagingMigrationTestSupport {
         "scheduling_appointment_consumer_replay_audit" to mapOf(
             "idx_appointment_consumer_replay_audit_scope_created" to
                 listOf("tenant_group_id", "clinic_id", "created_at"),
+        ),
+    )
+
+    private val V24_TABLES = linkedMapOf(
+        "scheduling_appointment_stats_projection_aggregate_locks" to setOf(
+            "tenant_group_id", "clinic_id", "aggregate_id",
+        ),
+    )
+
+    private val V24_PRIMARY_KEYS = mapOf(
+        "scheduling_appointment_stats_projection_aggregate_locks" to listOf(
+            "tenant_group_id", "clinic_id", "aggregate_id",
         ),
     )
 }
