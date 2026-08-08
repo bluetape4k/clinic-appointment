@@ -1,6 +1,6 @@
 # Issue #208 historical Type A review gate status
 
-검토일: 2026-08-07
+검토일: 2026-08-08 (현재 remediation exact-head 정합화 갱신)
 대상: PR #200, #202, #205, #207
 최종 상태: **BLOCKED — historical independent gate 미증명**
 
@@ -10,19 +10,20 @@
 
 | PR | live exact head | retrospective content | historical gate | current implementation/remediation |
 |---|---|---|---|---|
-| #200 | `4f7b41a498dd1c0b4dc9fea41ed1721fe9e8d53f` | 2-R/3-R PASS, P0=0/P1=0 | NOT PROVEN | PR #215 head `a1fcb1c128c7ee6e2e324989fd4119e9ba6c5035` current verification BLOCKED by P1; merge `9899dac...` |
+| #200 | `4f7b41a498dd1c0b4dc9fea41ed1721fe9e8d53f` | 2-R/3-R PASS, P0=0/P1=0 | NOT PROVEN | PR #232 head `936e62d7af98a82f4db147813fcd1c41e44498fe` current verification PASS; merge `addff531...` |
 | #202 | `1baad5cfeb092792c7ae92eac79d51f465972fad` | 2-R/3-R PASS, P0=0/P1=0 | NOT PROVEN | current implementation assessment PASS; issue comment의 `f10e2...`는 merge SHA |
-| #205 | `cb8c093ff77289242093b4e1c832e95e73b46870` | 2-R/3-R PASS, P0=0/P1=0 | NOT PROVEN | PR #215 head `a1fcb1c128c7ee6e2e324989fd4119e9ba6c5035` current verification BLOCKED by P1; merge `9899dac...` |
-| #207 | `18f3007e2c3c82f072c9934f27041f0846ffa285` | 2-R/3-R PASS, P0=0/P1=0 | NOT PROVEN | PR #215 head `a1fcb1c128c7ee6e2e324989fd4119e9ba6c5035` current verification BLOCKED by P1; merge `9899dac...` |
+| #205 | `cb8c093ff77289242093b4e1c832e95e73b46870` | 2-R/3-R PASS, P0=0/P1=0 | NOT PROVEN | PR #232 head `936e62d7af98a82f4db147813fcd1c41e44498fe` current verification PASS; merge `addff531...` |
+| #207 | `18f3007e2c3c82f072c9934f27041f0846ffa285` | 2-R/3-R PASS, P0=0/P1=0 | NOT PROVEN | PR #232 head `936e62d7af98a82f4db147813fcd1c41e44498fe` current verification PASS; merge `addff531...` |
 
-## Current narrow remediation (local only)
+## Current remediation (PR #232 merge 후)
 
-Issue #208의 구현 결함 하나는 별도 Type C bugfix로 수정했지만, 이 변경은 과거 Type A gate를 소급해 통과시키거나 Issue #208을 닫는 근거가 아니다.
+Issue #208의 구현 결함 하나는 별도 Type C bugfix PR #232로 수정·병합했지만, 이 변경은 과거 Type A gate를 소급해 통과시키거나 Issue #208을 닫는 근거가 아니다.
 
 - production fix commit: `569e5bc28863d94d3a7fe6bb9028d5443fc98489`
 - exact current implementation/evidence head: `936e62d7af98a82f4db147813fcd1c41e44498fe`
 - evidence commits after the production fix: `e666bfc` (JDBC statement execution observation), `936e62d` (test scope and static-guard cleanup)
-- branch/worktree: `fix/issue-208-reminder-io-boundary` / `.worktrees/issue-208-reminder-io-boundary`
+- PR: [#232](https://github.com/bluetape4k/clinic-appointment/pull/232), head `936e62d7af98a82f4db147813fcd1c41e44498fe`, merge `addff53107a5fc3d9e30e160bb66e253f809f5b7`
+- evidence PR: [#233](https://github.com/bluetape4k/clinic-appointment/pull/233), head `2ba8b854fa8fbf911276fd684bd41f4162c1cd64`, merge `8807bc08cdf84300e12180b326a1f0a6c1b64040`
 - changed production path: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/notification/JdbcAppointmentReminderRecoveryStore.kt`
 - boundary: `enqueue`, `suppressMissed`, `scheduleFuture`가 주입된 `ioDispatcher` 안의 blocking Exposed `transaction(database)`으로 수렴한다.
 - Type C implementation receipt: `20260807T095731Z-df47e975` (completed, sequence 14)
@@ -33,7 +34,7 @@ Issue #208의 구현 결함 하나는 별도 Type C bugfix로 수정했지만, �
 - final code-quality review: P0=0/P1=0/P2=0/P3=0; recommendation `COMMENT` only because `lsp_diagnostics` is unavailable
 - final architecture review: implementation `CLEAR`; the pre-refresh `WATCH` P2=1 was metadata-only and is resolved by this exact-head documentation refresh
 
-The local follow-up now observes actual `Statement.execute*` calls on the injected IO thread for the three materializer paths, and the compliance test keeps only a lightweight `withContext(ioDispatcher)` guard rather than a brittle source-occurrence count. The review artifact is now anchored to `936e62d`; historical Type-A evidence remains `NOT PROVEN`. This local follow-up includes no PR/push/merge, so external delivery and Issue closure remain PENDING.
+현재 follow-up은 세 materializer 경로에서 실제 `Statement.execute*` 호출이 주입된 IO thread에서 실행되는지 관찰하고, compliance test는 brittle source-occurrence count 대신 lightweight `withContext(ioDispatcher)` guard만 유지한다. 구현 review anchor는 PR #232 head `936e62d`로, 문서 review anchor는 PR #233 head `2ba8b85`로 고정했다. 두 PR의 push/CI/merge는 완료됐지만 historical Type-A evidence는 계속 `NOT PROVEN`이므로 Issue closure는 PENDING이다.
 
 ## Independent review receipt
 
@@ -47,7 +48,7 @@ The local follow-up now observes actual `Statement.execute*` calls on the inject
 
 - code-quality lane: exact head `936e62d`, P0=0/P1=0/P2=0/P3=0. JDBC `Statement.execute*` 관찰, targeted tests, compile, `git diff --check`, lightweight static scans를 확인했다.
 - architecture lane: implementation `CLEAR`; pre-refresh `WATCH` P0=0/P1=0/P2=1/P3=0은 stale exact-head metadata 하나였고 Type E 문서 갱신으로 정합화했다.
-- main-session synthesis: current remediation P0/P1/P2/P3는 0/0/0/0으로 수렴했으나, Issue acceptance가 요구하는 과거 six-lens identity/count와 historical gate를 이 두 lane이 대체하지 않는다.
+- main-session synthesis: 현재 remediation P0/P1/P2/P3는 0/0/0/0으로 수렴했고, [현재 seven-tier artifact](2026-08-08-issue-208-current-remediation-seven-tier.md)가 PR #232/#233 exact head를 고정한다. 그러나 Issue acceptance가 요구하는 과거 six-lens identity/count와 historical gate를 현재 검토가 대체하지 않는다.
 
 ## Receipt authority
 
@@ -65,7 +66,7 @@ The local follow-up now observes actual `Statement.execute*` calls on the inject
 
 1. Issue #208의 historical gate를 `reviewed N/A` 또는 `NOT PROVEN`으로 명시하고, 현재 remediation 검토와 분리한다.
 2. 여섯 독립 관점별 reviewer identity, exact head, P0/P1/P2/P3와 main-session integration을 새 current review artifact에 남긴다.
-3. Issue/PR metadata와 local index의 #202 및 PR #215 SHA 매핑을 정합화하고, remediation artifact는 PR head `a1fcb1c...`와 merge `9899dac...`를 분리 기록한다.
-4. `enqueue`, `suppressMissed`, `scheduleFuture`의 실제 JDBC statement 실행 thread 관찰 검증과 exact-head current review artifact를 보완한다. (현재 local remediation에서 충족)
-5. six independent perspectives, main-session integration, exact head, 일관된 P0/P1/P2/P3를 포함한 current seven-tier artifact를 별도로 기록한다.
-6. 위 조건을 충족하는 follow-up review/PR 없이 Issue #208을 완료로 닫지 않는다.
+3. Issue/PR metadata와 local index의 #202 및 PR #215 SHA 매핑을 정합화하고, 현재 remediation artifact는 PR #232 head `936e62d...`와 merge `addff531...`를 분리 기록한다.
+4. `enqueue`, `suppressMissed`, `scheduleFuture`의 실제 JDBC statement 실행 thread 관찰 검증과 exact-head current review artifact를 보완한다. (PR #232/#233과 현재 seven-tier artifact에서 충족)
+5. 현재 remediation의 six perspectives, main-session integration, exact head, 일관된 P0/P1/P2/P3를 [current seven-tier artifact](2026-08-08-issue-208-current-remediation-seven-tier.md)에 기록한다. (historical independent identity/count는 여전히 NOT PROVEN)
+6. historical gate를 `reviewed N/A`로 명시하거나 당시 receipt를 추가하기 전에는 Issue #208을 완료로 닫지 않는다.
