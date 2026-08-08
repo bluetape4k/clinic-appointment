@@ -49,3 +49,12 @@ audit hash와 같다고 판단해 새 범위를 거부하지 않았다. 이 동�
    고정한다.
 3. audit/idempotency 계약을 수정할 때는 문서의 hash 입력 목록과 구현·회귀 테스트를
    같은 변경 단위에서 교차 검토한다.
+
+## 추가 보강
+
+- additive migration은 column/default metadata만 확인하면 기존 audit 값의 보존을
+  증명하지 못한다. V25 전 schema에 legacy row를 넣고 migration 후 기존 필드와
+  `hash_version=1`/`partition_number=NULL`을 모두 읽어 검증한다.
+- 새 hash 계약은 구버전 writer와 mixed-version으로 실행하지 않는다. replay 기능을
+  먼저 hold/disable하고 migration·readiness를 확인한 뒤 old node를 drain하고 새
+  code를 활성화하는 rollout 순서를 runbook에 고정한다.

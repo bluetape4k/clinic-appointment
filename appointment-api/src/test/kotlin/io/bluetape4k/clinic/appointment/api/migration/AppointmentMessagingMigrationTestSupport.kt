@@ -117,6 +117,8 @@ internal object AppointmentMessagingMigrationTestSupport {
             .load()
             .migrate()
 
+        insertV25LegacyReplayAudit(dataSource)
+
         val result = Flyway.configure()
             .dataSource(dataSource)
             .locations(location)
@@ -133,6 +135,7 @@ internal object AppointmentMessagingMigrationTestSupport {
         }
         verifyV24Metadata(dataSource)
         verifyV25Metadata(dataSource)
+        verifyV25LegacyReplayAudit(dataSource)
     }
 
     /** Flyway를 실행하지 않고 V25 replay audit metadata만 검증합니다. */
@@ -217,6 +220,85 @@ internal object AppointmentMessagingMigrationTestSupport {
         }
         check(hashVersion.defaultValue?.contains("1") == true) {
             "V25 hash_version must default legacy rows to 1: ${hashVersion.defaultValue}"
+        }
+    }
+
+    private fun insertV25LegacyReplayAudit(dataSource: DataSource) {
+        dataSource.connection.use { connection ->
+            val h2 = connection.metaData.databaseProductName.contains("H2", ignoreCase = true)
+            if (h2) {
+                // H2의 check-list 상수가 대상 migration 이후 Flyway 세션을 유지할 수 있으므로,
+                // 현재 connection에서 테스트 전용 제약 조건을 다시 생성한다.
+                connection.createStatement().use { statement ->
+                    statement.execute(
+                        "ALTER TABLE scheduling_appointment_consumer_replay_audit " +
+                            "DROP CONSTRAINT ck_appointment_consumer_replay_status",
+                    )
+                }
+            }
+            connection.prepareStatement(
+                """
+                INSERT INTO scheduling_appointment_consumer_replay_audit(
+                    request_id, logical_consumer_id, logical_stream_id, tenant_group_id, clinic_id,
+                    from_offset, to_offset, request_hash, dry_run, approved_by, status,
+                    created_at, completed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL)
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setString(1, V25_LEGACY_REQUEST_ID)
+                statement.setString(2, "notification")
+                statement.setString(3, "appointment-events")
+                statement.setLong(4, 91_001L)
+                statement.setLong(5, 91_002L)
+                statement.setLong(6, 10L)
+                statement.setLong(7, 12L)
+                statement.setString(8, "0".repeat(64))
+                statement.setBoolean(9, false)
+                statement.setString(10, "operator-1")
+                statement.setString(11, "REQUESTED")
+                check(statement.executeUpdate() == 1) { "V25 legacy fixture insert failed" }
+            }
+            if (h2) {
+                connection.createStatement().use { statement ->
+                    statement.execute(
+                        "ALTER TABLE scheduling_appointment_consumer_replay_audit " +
+                            "ADD CONSTRAINT ck_appointment_consumer_replay_status " +
+                            "CHECK (status IN ('REQUESTED', 'DRY_RUN', 'EXECUTED', 'REJECTED'))",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun verifyV25LegacyReplayAudit(dataSource: DataSource) {
+        dataSource.connection.use { connection ->
+            connection.prepareStatement(
+                """
+                SELECT request_id, logical_consumer_id, logical_stream_id, tenant_group_id, clinic_id,
+                       from_offset, to_offset, request_hash, dry_run, approved_by, status,
+                       hash_version, partition_number
+                FROM scheduling_appointment_consumer_replay_audit
+                WHERE request_id = ?
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setString(1, V25_LEGACY_REQUEST_ID)
+                statement.executeQuery().use { rows ->
+                    check(rows.next()) { "Missing V25 legacy fixture" }
+                    check(rows.getString(1) == V25_LEGACY_REQUEST_ID)
+                    check(rows.getString(2) == "notification")
+                    check(rows.getString(3) == "appointment-events")
+                    check(rows.getLong(4) == 91_001L)
+                    check(rows.getLong(5) == 91_002L)
+                    check(rows.getLong(6) == 10L)
+                    check(rows.getLong(7) == 12L)
+                    check(rows.getString(8) == "0".repeat(64))
+                    check(!rows.getBoolean(9))
+                    check(rows.getString(10) == "operator-1")
+                    check(rows.getString(11) == "REQUESTED")
+                    check(rows.getInt(12) == 1)
+                    check(rows.getObject(13) == null)
+                }
+            }
         }
     }
 
@@ -640,6 +722,7 @@ internal object AppointmentMessagingMigrationTestSupport {
     private const val FIXTURE_CLINIC_ID = 91_002L
     private const val LEGACY_OUTBOX_ID = 91_003L
     private const val APPOINTMENT_OUTBOX_ID = 91_004L
+    private const val V25_LEGACY_REQUEST_ID = "v25-legacy-replay-fixture"
     private val V25_REPLAY_AUDIT_COLUMNS = setOf("hash_version", "partition_number")
 
     private val EXPECTED_COLUMNS = linkedMapOf(

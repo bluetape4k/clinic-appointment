@@ -109,6 +109,13 @@ V25 적용 뒤에도 기존 replay audit row는 `hash_version=1`/`partition_numb
 남습니다. 이 row는 partition 범위를 복원할 수 없으므로 자동 재실행하지 않고, 대상
 provenance를 다시 확인한 뒤 새 승인과 새 request id를 발급합니다.
 
+V25 replay 계약은 구버전 writer와의 mixed-version 실행을 지원하지 않습니다. rollout은
+(1) replay 요청과 구버전 node의 replay 기능을 hold/disable하고, (2) V25 migration을
+적용하고, (3) V25 readiness를 확인하고, (4) 구버전 node를 drain한 뒤 새 code를
+활성화하는 순서로 진행합니다. migration과 readiness를 확인하기 전에는 old node가
+생성한 v1 audit row를 새 code가 실행하지 않으며, 이 순서를 지킬 수 없는 배포는
+rollout gate를 통과하지 못합니다.
+
 애플리케이션이 인증된 `AppointmentReplayActor`를 제공하기 전까지 Replay는 library
 boundary입니다. actor는 approver와 일치하고 요청한 tenant·clinic allow-list를 포함하며
 `APPOINTMENT_REPLAY_OPERATOR` 권한을 가져야 합니다. 권한 없는 request는 audit row를
