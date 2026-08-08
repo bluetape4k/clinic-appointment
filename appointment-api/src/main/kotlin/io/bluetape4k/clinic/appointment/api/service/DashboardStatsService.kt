@@ -9,7 +9,6 @@ import io.bluetape4k.clinic.appointment.api.dto.DoctorStatsResponse
 import io.bluetape4k.clinic.appointment.api.stats.AppointmentStatsProjectionRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStatsRepository
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
-import io.bluetape4k.clinic.appointment.api.tenant.TenantContext
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import io.bluetape4k.support.requirePositiveNumber
@@ -230,16 +229,20 @@ class DashboardStatsService(
         )
     }
 
-    /** tenant context가 있고 projection이 비어 있지 않을 때만 read model을 사용합니다. */
+    /**
+     * 대시보드의 권위 있는 집계는 현재 예약 row의 `Appointments.appointmentDate`와
+     * `Appointments.status`를 읽는 `AppointmentStatsRepository`입니다.
+     *
+     * Kafka 통계 projection은 envelope의 `occurredAt` 날짜와 마지막 event 상태만
+     * 보유하며 현재 예약의 appointmentDate를 증명하지 않습니다. 따라서 projection
+     * row가 하나라도 있다는 이유로 current-state 집계를 대체하지 않습니다. 이
+     * fail-closed 경계는 향후 appointmentDate를 포함한 권위 있는 read model이
+     * 준비될 때까지 유지합니다.
+     */
+    @Suppress("UNUSED_PARAMETER")
     private fun projectionRows(
         clinicId: Long,
         dateRange: ClosedRange<LocalDate>,
         statuses: List<AppointmentState>?,
-    ): List<Triple<LocalDate, AppointmentState, Long>>? {
-        val tenantGroupId = TenantContext.current()?.id ?: return null
-        val projection = projectionRepository ?: return null
-        val rows = projection.countByDateAndStatus(tenantGroupId, clinicId, dateRange, statuses)
-        return rows.takeIf { it.isNotEmpty() }
-            ?.map { Triple(it.date, it.status, it.count) }
-    }
+    ): List<Triple<LocalDate, AppointmentState, Long>>? = null
 }
