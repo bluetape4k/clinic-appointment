@@ -1,6 +1,7 @@
 # Type A review gate 백필 lesson
 
-Issue #208에서 PR #200, #202, #205, #207의 historical review evidence를 재구성했다.
+Issue #208에서 PR #200, #202, #205, #207의 historical review evidence를 재구성하고,
+PR #232/#233의 현재 remediation exact head를 정합화했다.
 
 ## 결정
 
@@ -22,6 +23,13 @@ Issue #208에서 PR #200, #202, #205, #207의 historical review evidence를 재�
 | #205 | JVM monitor 안 suspend Exposed 작업 P1 | PR #215 merge `9899dac...`, Mutex + IO dispatcher |
 | #207 | touched test generic assertions P2 | PR #215의 28개 테스트 정리와 compliance test |
 
+현재 remediation은 PR #232 head `936e62d7af98a82f4db147813fcd1c41e44498fe`와
+merge `addff53107a5fc3d9e30e160bb66e253f809f5b7`에 고정한다. 현재 문서·review
+정합화는 PR #233 head `2ba8b854fa8fbf911276fd684bd41f4162c1cd64`와 merge
+`8807bc08cdf84300e12180b326a1f0a6c1b64040`에 고정한다. 현재 remediation 검토는
+`P0=0/P1=0/P2=0/P3=0`이지만, merge 전 historical independent gate는 계속
+`NOT PROVEN`이다.
+
 ## 재사용 체크
 
 1. live GitHub exact head와 changed-file list를 먼저 고정한다.
@@ -30,4 +38,5 @@ Issue #208에서 PR #200, #202, #205, #207의 historical review evidence를 재�
 4. remediation 후 source scan, focused tests, `git diff --check`를 새로 실행한다.
 5. issue/PR에는 P0/P1/P2/P3와 follow-up을 명시한다.
 6. retrospective PASS와 current remediation PASS를 분리하고, local index와 issue DoD를 같은 blocked/pending 상태로 유지한다.
-7. receipt authority를 현재 `.bluetape` run에 고정하고, stale `.omx` checkpoint를 현재 lane·검증 결과의 증거로 재사용하지 않는다.
+7. remediation PR과 문서 PR의 head/merge SHA 및 CI run을 별도 필드로 기록하고, current seven-tier artifact를 historical receipt 대체물로 취급하지 않는다.
+8. receipt authority를 현재 `.bluetape` run에 고정하고, stale `.omx` checkpoint를 현재 lane·검증 결과의 증거로 재사용하지 않는다.
