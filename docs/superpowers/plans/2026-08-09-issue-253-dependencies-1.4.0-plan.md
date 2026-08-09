@@ -252,10 +252,16 @@ Commit intent: `변경 전 캐시 wire payload를 회귀 기준으로 고정한�
 - [ ] **Step 0: executable resolved-graph contract를 먼저 작성해 RED를 확인한다**
 
 Create `scripts/verify-dependency-1.4.0.sh`. It must run the exact-coordinate commands from
-Step 4, capture each result in a temporary directory created by `mktemp -d`, and fail unless these
-coordinates resolve only to the target selected version: Timefold 2.4.0, Springdoc 3.1.0, JetBrains Exposed
-1.4.0, Fory core/Kotlin 1.5.0, Leader Redis Lettuce 0.5.0, Kafka clients 4.2.1. It must also fail
-when `2.2.0`, `3.0.3`, or JetBrains Exposed `1.3.0` remains, and remove the temporary directory by
+Step 4 and capture each coordinate in its own file under a temporary directory created by `mktemp -d`.
+Every `dependencyInsight` call passes the full `group:artifact` value. The assertion reads only that
+coordinate's file, requires an exact selected-component header matching
+`^<group:artifact>:<target>( |$)`, and rejects exact headers for forbidden versions of the same
+`group:artifact`. It must never grep a bare version across combined output. The script fails unless
+these coordinates resolve only to the target selected version: Timefold 2.4.0, Springdoc 3.1.0,
+JetBrains Exposed 1.4.0, Fory core/Kotlin 1.5.0, Leader Redis Lettuce 0.5.0, Kafka clients 4.2.1.
+It separately asserts the exact `exposed = "1.4.0"` version-catalog entry because a BOM cannot manage
+the Exposed Gradle plugin version. It must also fail when the same coordinates have exact headers for
+Timefold 2.2.0, Springdoc 3.0.3, or JetBrains Exposed 1.3.0, and remove the temporary directory by
 `trap`.
 
 Run before catalog modification:
@@ -339,7 +345,7 @@ Run sequentially:
   --dependency 'org.apache.kafka:kafka-clients' \
   --configuration runtimeClasspath --no-daemon --console=plain
 ./gradlew :appointment-notification:dependencyInsight \
-  --dependency 'io.github.bluetape4k:bluetape4k-leader-redis-lettuce' \
+  --dependency 'io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce' \
   --configuration runtimeClasspath --no-daemon --console=plain
 bash scripts/verify-dependency-1.4.0.sh
 ```
@@ -390,7 +396,8 @@ factory로 같은 검증을 반복한다. 각 family를 독립적으로 검증�
 두 exact key만 삭제한다. 각 cache의 `close()`와 각 `RedisClient.shutdown()`은 서로 독립된
 `runCatching`으로 실행하되 모든 exception을 수집해 마지막에 하나의 `AssertionError`에
 suppressed exception으로 추가하고 test를 실패시킨다. 첫 close 실패가 나머지 정리를 막거나
-cleanup 실패가 숨겨져서는 안 된다.
+cleanup 실패가 숨겨져서는 안 된다. assertion 또는 setup이 실패해도 cleanup이 반드시 실행되도록
+resource 생성 뒤 test body 전체를 `try`로 감싸고 cleanup 실패 집계는 `finally`에서 수행한다.
 `@Testcontainers`는 사용하지 않고 기존 singleton launcher만 사용한다.
 
 ```kotlin
@@ -527,16 +534,30 @@ frontend를 제외한 모든 module build/test, Exposed migrations, Kafka target
 - [ ] **Step 1: 정적 build를 실행한다**
 
 ```bash
-./gradlew :appointment-core:build :appointment-event:build :appointment-solver:build \
-  :appointment-notification:build :appointment-messaging:build :appointment-api:build \
-  :appointment-messaging-benchmark:build -x test \
+non_frontend_build_tasks=(
+  :appointment-core:build
+  :appointment-event:build
+  :appointment-solver:build
+  :appointment-notification:build
+  :appointment-messaging:build
+  :appointment-api:build
+  :appointment-messaging-benchmark:build
+)
+non_frontend_dry_run="$(mktemp)"
+trap 'rm -f "$non_frontend_dry_run"' EXIT
+./gradlew "${non_frontend_build_tasks[@]}" -x test --dry-run \
+  --no-daemon --console=plain | tee "$non_frontend_dry_run"
+if rg -n '^:frontend:' "$non_frontend_dry_run"; then
+  echo 'frontend task was scheduled' >&2
+  exit 1
+fi
+./gradlew "${non_frontend_build_tasks[@]}" -x test \
   --refresh-dependencies --no-daemon --console=plain
-./gradlew build -x test -x :frontend:appointment-frontend:build \
-  --no-daemon --console=plain
 ./gradlew detekt --parallel --no-daemon --console=plain
 ```
 
-Expected: explicit module build, frontend-excluded root build와 detekt 모두 successful.
+Expected: dry-run의 `:frontend:` task가 0개이고, 명시적 7개 non-frontend module aggregate build와
+detekt가 모두 successful.
 
 - [ ] **Step 2: singleton container 충돌을 피하도록 module tests를 순차 실행한다**
 

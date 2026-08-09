@@ -133,8 +133,8 @@ deployment 안전성을 증명한다.
 2. legacy LZ4+Fory fixture의 provenance·SHA-256과 신규 runtime decode 결과를 보존한다.
    실제 Redis raw key가 v2에만 생성되는지와 운영 rollback 절차를 테스트한다.
 3. `appointment-solver` 전체 테스트와 benchmark를 반복 실행해 score와 시간을 기록한다.
-4. 각 non-frontend module을 개별 test/build하고 마지막에 frontend task를 제외한 root build를
-   실행한다.
+4. 각 non-frontend module을 개별 test/build하고, 같은 7개 module의 `build` task만 명시한
+   aggregate build를 실행한다. `--dry-run` 출력에 `:frontend:` task가 0개인지 먼저 확인한다.
 5. Kafka/Exposed/Springdoc/Flyway 관련 integration test와 messaging benchmark smoke를 실행한다.
 6. dependency vulnerability report가 저장소에 구성되어 있으면 실행하고, 없으면 resolved
    graph와 GitHub advisory/Dependabot 상태를 검토 근거로 남긴다.
@@ -148,6 +148,7 @@ deployment 안전성을 증명한다.
 - 직접 override의 유지·제거 근거가 이 문서와 version catalog 주석에 일치한다.
 - Redis cache payload의 provenance, v2 raw-key 격리와 rollback 계약이 실행 가능한 테스트와
   runbook으로 증명된다.
-- solver score 하한과 시간 상한을 유지하고 module별 테스트 및 전체 build가 통과한다.
+- solver score 하한과 시간 상한을 유지하고 module별 테스트 및 명시적 non-frontend aggregate
+  build가 통과한다.
 - #249, #250, #254의 기능·아키텍처 변경을 이 PR에 포함하지 않는다.
 - 독립 검토에 P0/P1 blocker가 없고 exact PR head의 CI 상태가 확인된다.
