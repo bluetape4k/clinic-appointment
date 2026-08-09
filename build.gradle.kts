@@ -177,7 +177,6 @@ subprojects {
         imports {
             mavenBom(rootLibs.bluetape4k.dependencies.get().toString())
             mavenBom(rootLibs.spring.boot4.dependencies.get().toString())
-            mavenBom(rootLibs.timefold.solver.bom.get().toString())
             // Override Spring Boot's lower Kotlin/Coroutines versions
             mavenBom(rootLibs.kotlin.bom.get().toString())
             mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())

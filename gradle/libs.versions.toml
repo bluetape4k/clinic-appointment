@@ -13,7 +13,7 @@
 
 [versions]
 # ── BOM (source of truth) ──────────────────────────────────────────────────
-bluetape4k-dependencies = "1.3.1"
+bluetape4k-dependencies = "1.4.0"
 
 # ── Plugin versions (always required) ─────────────────────────────────────
 kotlin = "2.4.0"
@@ -25,15 +25,13 @@ kover = "0.9.8"
 test-logger = "4.0.0"
 shadow = "9.4.2"
 gatling = "3.15.1"
-exposed = "1.3.1"
+exposed = "1.4.0"
 
 # ── Override versions (project uses newer than Spring Boot provides) ───────
 kotlinx-coroutines = "1.11.0" # https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
 
 # ── Project-local versions (NOT in any BOM) ───────────────────────────────
-springdoc-openapi = "3.0.3"   # https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-starter-webmvc-ui
 jjwt = "0.13.0"               # https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api
-timefold-solver = "2.2.0"     # https://mvnrepository.com/artifact/ai.timefold.solver/timefold-solver-bom
 lz4-java = "1.8.0"            # https://mvnrepository.com/artifact/org.lz4/lz4-java
 mockk = "1.14.11"              # https://mvnrepository.com/artifact/io.mockk/mockk
 random-beans = "3.9.0"        # https://mvnrepository.com/artifact/io.github.benas/random-beans
@@ -146,8 +144,8 @@ jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
 # ── Spring Boot (version from BOM) ────────────────────────────────────────
 spring-boot4-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot4" }
 
-# ── Springdoc (project-local version) ─────────────────────────────────────
-springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc-openapi" }
+# ── Springdoc (version from bluetape4k-dependencies BOM) ───────────────────
+springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui" }
 
 # ── Resilience4j (project-local version) ──────────────────────────────────
 resilience4j-bulkhead = { module = "io.github.resilience4j:resilience4j-bulkhead", version.ref = "resilience4j" }
@@ -155,8 +153,7 @@ resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-ci
 resilience4j-kotlin = { module = "io.github.resilience4j:resilience4j-kotlin", version.ref = "resilience4j" }
 resilience4j-retry = { module = "io.github.resilience4j:resilience4j-retry", version.ref = "resilience4j" }
 
-# ── Timefold (project-local version) ──────────────────────────────────────
-timefold-solver-bom = { module = "ai.timefold.solver:timefold-solver-bom", version.ref = "timefold-solver" }
+# ── Timefold (version from bluetape4k-dependencies BOM) ────────────────────
 timefold-solver-core = { module = "ai.timefold.solver:timefold-solver-core" }
 timefold-solver-benchmark = { module = "ai.timefold.solver:timefold-solver-benchmark" }
 
