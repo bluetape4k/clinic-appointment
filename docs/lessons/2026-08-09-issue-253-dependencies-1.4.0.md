@@ -6,10 +6,11 @@
 통과했다. Redis 캐시는 Spring 논리 이름을 유지하면서 remote namespace를 `-v2`로 분리했고,
 Kafka·Exposed·solver·benchmark 경로도 목표 버전으로 컴파일·실행됐다.
 
-다만 `:appointment-api:test` 전체 704건에서 `ProfileReevaluationConcurrencyIntegrationTest`의
-lease 재선점 시나리오가 1건 실패했다. 해당 클래스만 같은 환경에서 3회 재실행하면 모두
-통과하므로 이번 의존성 전환의 직접 원인으로 단정하지 않았지만, 전체 aggregate가 green이
-아니므로 이 delivery lane은 `PENDING`이다. PostgreSQL scheduling policy와 security 대상
+초기 전체 aggregate에서 `ProfileReevaluationConcurrencyIntegrationTest`의 lease 재선점
+시나리오가 고정 `Thread.sleep(1_200)` 타이밍에 의존해 1건 실패했다. 저장소 코어 테스트와
+동일하게 첫 claim 뒤 `leaseExpiresAt = Instant.EPOCH`을 DB transaction에서 명시하도록
+통합 테스트를 안정화했고, 수정 후 대상 5건과 전체 API aggregate를 다시 통과시켰다.
+최종 API aggregate는 704건 통과, 3건 skip이다. PostgreSQL scheduling policy와 security 대상
 회귀 10건은 통과했으며, #256·#257 수정 커밋을 이 worktree에 통합해 재검증했다.
 
 ## resolved graph
@@ -84,13 +85,19 @@ JMH report에 포함됐다. benchmark module의 API 역의존 제거는 #250 범
 
 ## 전체 API aggregate와 후속 조치
 
-전체 `:appointment-api:test --rerun-tasks`는 704건 중 1건 실패, 3건 skip이었다.
-실패는 `ProfileReevaluationConcurrencyIntegrationTest.kt:366`의
-`만료된 lease만 다른 worker가 같은 작업을 다시 선점한다()`에서 `List.single()`이 빈 목록을
-받은 `NoSuchElementException`이다. 동일 클래스만 별도 실행한 3회는 각각 5건 통과했다.
-따라서 #253 diff가 만든 dependency graph failure로 분류하지 않고, 전체 suite의 실행 순서·
-격리 결함 후보로 남긴다. 이 항목을 별도 이슈로 추적하고 aggregate 재실행이 green인지 확인한
-뒤에만 PR readiness를 갱신한다.
+초기 전체 실행에서는 `ProfileReevaluationConcurrencyIntegrationTest.kt:366`의
+`만료된 lease만 다른 worker가 같은 작업을 다시 선점한다()`가 고정 sleep 경계에서
+`NoSuchElementException`으로 실패했다. 이 테스트는 코어 repository 테스트의 명시적 만료
+fixture 패턴으로 바꾸어 wall-clock과 suite load에 의존하지 않게 했다.
+
+| 검증 | 결과 |
+| --- | --- |
+| 수정 후 `*ProfileReevaluationConcurrencyIntegrationTest` | 5건 통과, 59초 |
+| 수정 후 `:appointment-api:test --rerun-tasks` fresh aggregate | `SUCCESS: Executed 704 tests in 5m 34s (3 skipped)`, `BUILD SUCCESSFUL in 6m 14s` |
+| 중간 재실행에서 관찰한 `AppointmentCommitmentFeatureOffIntegrationTest` | 단독·security aggregate 통과; fresh 전체 aggregate 최종 통과 |
+
+따라서 현재 로컬 검증 gate는 green이다. 다만 production Redis/PostgreSQL, GitHub CI,
+push/PR/merge는 아직 실행하지 않았으므로 원격 전달 상태는 `PENDING`으로 유지한다.
 
 ## 보안과 운영 범위
 

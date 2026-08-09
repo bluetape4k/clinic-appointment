@@ -11,11 +11,12 @@
 | --- | --- |
 | 의존성 diff 자체 P0 | 0 |
 | 의존성 diff 자체 P1 | 0 |
-| 전체 API aggregate | `PENDING`: 704건 중 1건의 기존 concurrency/order 후보 실패 |
+| 전체 API aggregate | `PASS`: 704건 통과, 3건 skip |
 | production/CI/PR | 미실행 |
 
-P1이 없는 것은 full suite가 모두 green이라는 뜻이 아니다. aggregate 실패는 dependency
-coordinate나 변경된 cache/solver 경로와 연결되는 증거가 없어 별도 후속 결함으로 분리했다.
+초기 aggregate의 lease 재선점 실패는 dependency coordinate나 production 경로가 아니라
+고정 sleep에 의존한 테스트 fixture 문제로 확인했다. 첫 claim 뒤 `leaseExpiresAt`을 DB에서
+과거로 바꾸도록 수정한 뒤 대상 테스트와 전체 aggregate가 통과했다.
 
 ## 1-tier 성능
 
@@ -36,9 +37,9 @@ coordinate나 변경된 cache/solver 경로와 연결되는 증거가 없어 별
 - 1.3.1 fixture 3종을 1.4.0 runtime으로 복원하는 임시 diagnostic도 1건 통과했다. 새
   payload를 구 classpath로 읽는 역방향 검증은 하지 않았고, namespace 분리로 그 경로를
   운영 계약에서 제거했다.
-- 전체 API는 `ProfileReevaluationConcurrencyIntegrationTest.kt:366`에서 1건 실패했지만,
-  해당 클래스 단독 3회는 각각 5건 통과했다. 따라서 aggregate readiness는 PENDING이며 이
-  결과를 “전체 안정성 통과”로 표현하지 않는다.
+- `ProfileReevaluationConcurrencyIntegrationTest`의 lease 만료 fixture는 고정 sleep 대신
+  `ProfileReevaluationJobs.update`로 `Instant.EPOCH`을 기록해 DB 시간과 suite load에 대한
+  타이밍 의존을 제거했다. 수정 후 해당 클래스 5건과 API aggregate 704건이 통과했다.
 
 ## 3-tier 보안
 
@@ -93,15 +94,17 @@ coordinate나 변경된 cache/solver 경로와 연결되는 증거가 없어 별
   report test 3건 및 Node collector test 2건 통과.
 - `git diff --check origin/develop...HEAD`: PASS; 금지된 2.2.0/3.0.3 alias 검색 결과 없음.
 - root `detekt`: `NO-SOURCE`, `BUILD SUCCESSFUL`.
+- 수정 후 `:appointment-api:test --rerun-tasks`: `SUCCESS: Executed 704 tests in 5m 34s
+  (3 skipped)`, `BUILD SUCCESSFUL in 6m 14s`.
 - PR head/CI/review thread는 push 권한과 별도 승인 전이므로 확인하지 않았다.
 
 ## 결론과 unchecked 항목
 
-의존성 좌표 정렬, cache namespace 경계, solver 성능, Exposed/Kafka/benchmark 통합에서 P0/P1
-diff blocker는 발견하지 않았다. 하지만 full API aggregate의 단일 concurrency/order 실패와
-미실행 production·CI 때문에 이 구현은 `PENDING`이다.
+의존성 좌표 정렬, cache namespace 경계, solver 성능, Exposed/Kafka/benchmark 통합과 수정 후
+전체 API aggregate에서 P0/P1 diff blocker는 발견하지 않았다. production·CI·원격 전달 게이트가
+아직 실행되지 않았으므로 이 구현은 `PENDING`이다.
 
-- [ ] `ProfileReevaluationConcurrencyIntegrationTest` 전체 suite order 재현 원인 분리 및 이슈화
+- [x] `ProfileReevaluationConcurrencyIntegrationTest` lease 만료 fixture의 wall-clock 의존 제거
 - [ ] PR 생성 후 exact head, required CI, unresolved review thread 확인
 - [ ] production Redis/PostgreSQL SLO와 rollback drill
 - [ ] 별도 승인 후 push/PR/merge
