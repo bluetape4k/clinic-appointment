@@ -3,7 +3,7 @@
 ## 목적
 
 `bluetape4k-dependencies`를 1.4.0으로 올리면서 Timefold Solver 2.4.0,
-bluetape4k projects 1.12.1, Leader 0.5.0, Exposed 1.12.1과 관련 전이 의존성을
+bluetape4k projects 1.12.1, Leader 0.5.0, JetBrains Exposed runtime/plugin 1.4.0과 관련 전이 의존성을
 하나의 검증 가능한 resolved graph로 정렬한다. 버전 문자열 변경만으로 성공을 판단하지
 않고 solver 품질·실행시간, Redis 캐시 wire payload, Kafka4와 Exposed 통합까지 모듈 단위로
 검증한다.
@@ -133,7 +133,8 @@ deployment 안전성을 증명한다.
 2. legacy LZ4+Fory fixture의 provenance·SHA-256과 신규 runtime decode 결과를 보존한다.
    실제 Redis raw key가 v2에만 생성되는지와 운영 rollback 절차를 테스트한다.
 3. `appointment-solver` 전체 테스트와 benchmark를 반복 실행해 score와 시간을 기록한다.
-4. 각 non-frontend module을 개별 test/build하고 마지막에 root build를 실행한다.
+4. 각 non-frontend module을 개별 test/build하고 마지막에 frontend task를 제외한 root build를
+   실행한다.
 5. Kafka/Exposed/Springdoc/Flyway 관련 integration test와 messaging benchmark smoke를 실행한다.
 6. dependency vulnerability report가 저장소에 구성되어 있으면 실행하고, 없으면 resolved
    graph와 GitHub advisory/Dependabot 상태를 검토 근거로 남긴다.

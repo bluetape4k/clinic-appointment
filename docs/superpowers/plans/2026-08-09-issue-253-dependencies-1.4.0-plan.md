@@ -6,7 +6,7 @@
 
 **Architecture:** 좌표마다 하나의 버전 권한만 둔다. Timefold와 Springdoc 직접 override는 제거하고 Exposed Gradle plugin은 1.4.0으로 명시한다. 캐시는 변경 전 payload fixture의 provenance를 보존하되 Fory의 임의 버전 호환성에 의존하지 않고 remote namespace를 `-v2`로 분리한다.
 
-**Tech Stack:** Gradle 9.6.1, Kotlin 2.4.0, Spring Boot 4.1.0, bluetape4k-dependencies 1.4.0, Timefold Solver 2.4.0, Exposed 1.4.0, Redis/Lettuce, Apache Fory, Kafka4, JUnit 5, Kluent.
+**Tech Stack:** Gradle 9.6.1, Kotlin 2.4.0, Spring Boot 4.1.0, bluetape4k-dependencies 1.4.0, Timefold Solver 2.4.0, Exposed 1.4.0, Redis/Lettuce, Apache Fory, Kafka4, JUnit 5, bluetape4k assertions.
 
 ---
 
@@ -21,8 +21,12 @@
 
 ### 캐시 회귀와 운영 계약
 
+- Create: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/NearCacheFixtureIntegrityTest.kt`
+  - 1.3.1 fixture provenance와 SHA-256을 영구 검증한다.
+- Temporary only: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/LegacyNearCacheDecodeDiagnosticTest.kt`
+  - 변경 전후 legacy decode 결과를 기록하고 commit 전에 삭제한다.
 - Create: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/NearCacheWireCompatibilityTest.kt`
-  - 1.3.1 legacy LZ4+Fory fixture decode와 새 runtime Redis writer/reader를 검증한다.
+  - production `CacheConfig` bean과 새 runtime Redis writer/reader/raw key를 검증한다.
 - Create: `appointment-api/src/test/resources/cache/issue-253/*.base64`
   - 변경 전 실제 DTO 목록 payload를 보존한다.
 - Create: `appointment-api/src/test/resources/cache/issue-253/fixture-provenance.properties`
@@ -35,9 +39,9 @@
 ### benchmark와 증거
 
 - Modify: `appointment-solver/README.md`
-  - 존재하지 않는 `SolverBenchmarkTest` 명령을 실제 `BenchmarkTest`로 수정한다.
+  - 존재하지 않는 `SolverBenchmarkTest`와 잘못된 report path를 실제 class/path로 수정한다.
 - Modify: `appointment-solver/README.ko.md`
-  - 한국어 variant의 같은 잘못된 class selector를 함께 수정한다.
+  - 한국어 variant의 같은 잘못된 class selector와 report path를 함께 수정한다.
 - Create: `scripts/verify-dependency-1.4.0.sh`
   - 정확한 resolved 좌표와 목표 버전을 executable contract로 검증한다.
 - Create: `docs/lessons/2026-08-09-issue-253-dependencies-1.4.0.md`
@@ -127,7 +131,7 @@ Run:
 Expected: `BUILD SUCCESSFUL`이고 세 `ISSUE253_FIXTURE[...]` 값이 test XML의
 `system-out`에 기록된다.
 
-- [ ] **Step 3: base64 fixture와 영구 compatibility test를 작성한다**
+- [ ] **Step 3: base64 fixture, provenance와 영구 integrity test를 작성한다**
 
 각 출력값을 다음 resource에 한 줄로 저장한다.
 
@@ -151,68 +155,88 @@ treatment-types.sha256=<actual sha256>
 ```
 
 `shasum -a 256 appointment-api/src/test/resources/cache/issue-253/*.base64`로 실제 hash를
-구하고 compatibility test에서도 provenance의 hash와 resource bytes가 일치하는지 검증한다.
+구하고 integrity test에서도 provenance의 hash와 resource bytes가 일치하는지 검증한다.
 
 Create:
-`appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/NearCacheWireCompatibilityTest.kt`
+`appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/NearCacheFixtureIntegrityTest.kt`
 
 ```kotlin
 package io.bluetape4k.clinic.appointment.api.config
 
-import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
-import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
-import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
-import io.bluetape4k.redis.lettuce.codec.LettuceBinaryCodecs
 import io.bluetape4k.assertions.shouldBeEqualTo
 import org.junit.jupiter.api.Test
-import java.nio.ByteBuffer
-import java.util.Base64
+import java.security.MessageDigest
+import java.util.Properties
 
-class NearCacheWireCompatibilityTest {
+class NearCacheFixtureIntegrityTest {
     @Test
-    fun `1_3_1 doctor payload를 읽는다`() {
-        decode<List<DoctorRecord>>("doctors-1.3.1.base64") shouldBeEqualTo
-            listOf(DoctorRecord(11L, 7L, "김의사", "내과", "DOCTOR", 2))
+    fun `1_3_1 fixture provenance와 SHA_256이 일치한다`() {
+        val provenance = Properties().apply {
+            checkNotNull(
+                NearCacheFixtureIntegrityTest::class.java
+                    .getResourceAsStream("/cache/issue-253/fixture-provenance.properties")
+            )
+                .use { load(it) }
+        }
+        provenance.getProperty("base.commit") shouldBeEqualTo
+            "e790793a2e8eccf4269eba97f3faad084b7c568d"
+        provenance.getProperty("bluetape4k.dependencies") shouldBeEqualTo "1.3.1"
+        provenance.getProperty("fory.core") shouldBeEqualTo "1.1.0"
+        provenance.getProperty("fory.kotlin") shouldBeEqualTo "1.3.0"
+        provenance.getProperty("codec") shouldBeEqualTo
+            "io.bluetape4k.redis.lettuce.codec.LettuceBinaryCodecs.default"
+
+        mapOf(
+            "doctors" to "doctors-1.3.1.base64",
+            "equipments" to "equipments-1.3.1.base64",
+            "treatment-types" to "treatment-types-1.3.1.base64",
+        ).forEach { (family, resourceName) ->
+            val bytes = checkNotNull(
+                NearCacheFixtureIntegrityTest::class.java.getResourceAsStream(
+                    "/cache/issue-253/$resourceName"
+                )
+            )
+                .use { it.readAllBytes() }
+            sha256(bytes) shouldBeEqualTo provenance.getProperty("$family.sha256")
+        }
     }
 
-    @Test
-    fun `1_3_1 equipment payload를 읽는다`() {
-        decode<List<EquipmentRecord>>("equipments-1.3.1.base64") shouldBeEqualTo
-            listOf(EquipmentRecord(21L, 7L, "MRI", 30, 1))
-    }
-
-    @Test
-    fun `1_3_1 treatment payload를 읽는다`() {
-        decode<List<TreatmentTypeRecord>>("treatment-types-1.3.1.base64") shouldBeEqualTo
-            listOf(TreatmentTypeRecord(31L, 7L, "일반 진료", defaultDurationMinutes = 30))
-    }
-
-    private inline fun <reified T> decode(name: String): T {
-        val encoded = checkNotNull(javaClass.getResource("/cache/issue-253/$name"))
-            .readText()
-            .trim()
-        val bytes = Base64.getDecoder().decode(encoded)
-        return checkNotNull(LettuceBinaryCodecs.default<T>().decodeValue(ByteBuffer.wrap(bytes)))
-    }
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") {
+            "%02x".format(it.toInt() and 0xff)
+        }
 }
 ```
 
-- [ ] **Step 4: 임시 generator를 삭제하고 baseline fixture test를 통과시킨다**
+- [ ] **Step 4: 임시 decode diagnostic으로 baseline을 확인한 뒤 임시 test를 삭제한다**
+
+Create temporarily `LegacyNearCacheDecodeDiagnosticTest.kt` using the three DTO equality assertions
+and the nullable-safe decoder below:
+
+```kotlin
+private inline fun <reified T> decode(name: String): T {
+    val encoded = checkNotNull(javaClass.getResource("/cache/issue-253/$name")).readText().trim()
+    return checkNotNull(
+        LettuceBinaryCodecs.default<T>().decodeValue(ByteBuffer.wrap(Base64.getDecoder().decode(encoded)))
+    )
+}
+```
 
 Run:
 
 ```bash
 ./gradlew :appointment-api:test --no-daemon --console=plain \
-  --tests '*NearCacheWireCompatibilityTest'
+  --tests '*NearCacheFixtureIntegrityTest' \
+  --tests '*LegacyNearCacheDecodeDiagnosticTest'
 ```
 
-Expected: payload decode 3건과 provenance checksum assertions passing. 이 성공은 fixture가
-현재 1.3.1 runtime에서 생성·복원됨을 증명한다.
+Expected: integrity와 payload decode 3건 passing. 이 성공은 fixture가 현재 1.3.1 runtime에서
+생성·복원됨을 증명한다. 그 뒤 generator와 diagnostic test를 모두 `apply_patch`로 삭제한다.
 
 - [ ] **Step 5: baseline fixture를 커밋한다**
 
 ```bash
-git add appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/NearCacheWireCompatibilityTest.kt \
+git add appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/NearCacheFixtureIntegrityTest.kt \
   appointment-api/src/test/resources/cache/issue-253
 git commit
 ```
@@ -279,17 +303,20 @@ imports {
 
 - [ ] **Step 3: 변경 후 legacy fixture diagnostic을 먼저 실행한다**
 
+Task 1의 `LegacyNearCacheDecodeDiagnosticTest.kt`를 같은 내용으로 임시 재생성한다.
+
 Run:
 
 ```bash
 ./gradlew :appointment-api:test --no-daemon --console=plain \
   --refresh-dependencies \
-  --tests '*NearCacheWireCompatibilityTest'
+  --tests '*NearCacheFixtureIntegrityTest' \
+  --tests '*LegacyNearCacheDecodeDiagnosticTest'
 ```
 
 Expected decision: 성공/실패를 lesson에 기록한다. 어느 결과든 reverse compatibility를
-가정하지 않고 Task 3의 v2 remote namespace를 적용한다. decode가 실패하면 payload equality
-assertion을 provenance/checksum integrity assertion으로 축소하고 실패 사실을 숨기지 않는다.
+가정하지 않고 Task 3의 v2 remote namespace를 적용한다. fixture integrity test는 결과와
+무관하게 그대로 유지하고, diagnostic test는 결과를 기록한 뒤 `apply_patch`로 다시 삭제한다.
 
 - [ ] **Step 4: resolved graph를 확인한다**
 
@@ -339,34 +366,43 @@ rollback runbook이 검증된다.
 
 - [ ] **Step 1: v2 remote-name contract를 먼저 추가해 RED를 확인한다**
 
-Extend `NearCacheWireCompatibilityTest` with a singleton Redis container from
+Create `NearCacheWireCompatibilityTest` with a singleton Redis container from
 `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/test/Containers.kt`.
 production constant가 아직 없는 상태에서 test가 `clinic-doctors-v2`, `clinic-equipments-v2`,
 `clinic-treatment-types-v2`를 요구하도록 작성하고 targeted test의 compile/assertion RED를
-관찰한다. 그 다음 동일 remote name을 가진 writer와 reader를 서로 다른 `RedisClient`와
-NearCache instance로 만들어 다음 순서를 검증한다.
+관찰한다. hard-coded test-only `LettuceCaches.nearCache`를 만들지 말고 실제 `CacheConfig` bean
+factory를 서로 다른 `RedisClient`로 두 번 호출해 production wiring을 검증한다.
 
 ```kotlin
-val writer = LettuceCaches.nearCache<List<DoctorRecord>>(writerClient) {
-    cacheName = remoteName
-    maxLocalSize = 10
-    redisTtl = Duration.ofMinutes(5)
-}
-val reader = LettuceCaches.nearCache<List<DoctorRecord>>(readerClient) {
-    cacheName = remoteName
-    maxLocalSize = 10
-    redisTtl = Duration.ofMinutes(5)
-}
+val config = CacheConfig()
+val writer = config.clinicDoctorsCache(writerClient)
+val reader = config.clinicDoctorsCache(readerClient)
 
 writer.put("1:7", expectedDoctors)
 reader.get("1:7") shouldBeEqualTo expectedDoctors
+rawCommands.exists("${CacheConfig.DOCTORS_REMOTE_CACHE_NAME}:1:7") shouldBeEqualTo 1L
+rawCommands.exists("${CacheConfig.DOCTORS_CACHE_NAME}:1:7") shouldBeEqualTo 0L
 ```
 
-각 family를 독립적으로 검증하고 raw Redis connection으로
+equipment/treatment는 각각 `clinicEquipmentsCache`, `clinicTreatmentTypesCache` production
+factory로 같은 검증을 반복한다. 각 family를 독립적으로 검증하고 raw Redis connection으로
 `$remoteName:1:7`이 존재하며 `$logicalName:1:7`이 존재하지 않는지 확인한다. test 전후에는
 두 exact key만 삭제한다. 각 cache의 `close()`와 각 `RedisClient.shutdown()`은 서로 독립된
-`runCatching` cleanup으로 실행해 첫 close 실패가 나머지 정리를 막지 않게 한다.
+`runCatching`으로 실행하되 모든 exception을 수집해 마지막에 하나의 `AssertionError`에
+suppressed exception으로 추가하고 test를 실패시킨다. 첫 close 실패가 나머지 정리를 막거나
+cleanup 실패가 숨겨져서는 안 된다.
 `@Testcontainers`는 사용하지 않고 기존 singleton launcher만 사용한다.
+
+```kotlin
+val cleanupFailures = cleanupActions.mapNotNull { action ->
+    runCatching(action).exceptionOrNull()
+}
+if (cleanupFailures.isNotEmpty()) {
+    throw AssertionError("Redis cache test cleanup failed").also { failure ->
+        cleanupFailures.forEach(failure::addSuppressed)
+    }
+}
+```
 
 - [ ] **Step 2: CacheConfig를 v2 remote namespace로 분리해 GREEN으로 만든다**
 
@@ -469,6 +505,9 @@ Modify `appointment-solver/README.md` and `appointment-solver/README.ko.md`:
 ./gradlew :appointment-solver:test --tests "*solver.benchmark.BenchmarkTest"
 ```
 
+두 문서의 결과 path도 `BenchmarkConfig.BENCHMARK_DIR`과 일치하는 `local/benchmark/`로
+수정한다.
+
 - [ ] **Step 4: solver 검증을 커밋한다**
 
 ```bash
@@ -492,10 +531,12 @@ frontend를 제외한 모든 module build/test, Exposed migrations, Kafka target
   :appointment-notification:build :appointment-messaging:build :appointment-api:build \
   :appointment-messaging-benchmark:build -x test \
   --refresh-dependencies --no-daemon --console=plain
+./gradlew build -x test -x :frontend:appointment-frontend:build \
+  --no-daemon --console=plain
 ./gradlew detekt --parallel --no-daemon --console=plain
 ```
 
-Expected: both successful.
+Expected: explicit module build, frontend-excluded root build와 detekt 모두 successful.
 
 - [ ] **Step 2: singleton container 충돌을 피하도록 module tests를 순차 실행한다**
 
@@ -582,7 +623,7 @@ Create `docs/lessons/2026-08-09-issue-253-dependencies-1.4.0.md` with:
 git status --short
 git diff --stat origin/develop...HEAD
 git diff --check origin/develop...HEAD
-rg -n '2\.2\.0|timefold-solver-bom|springdoc-openapi = "' \
+rg -n 'timefold-solver\s*=\s*"2\.2\.0"|timefold-solver-bom|springdoc-openapi\s*=\s*"3\.0\.3"' \
   gradle/libs.versions.toml build.gradle.kts
 ```
 
@@ -658,6 +699,7 @@ PR metadata:
 - labels: `dependencies`, `test`, `build`
 - milestone: none
 - body: Issue #253 연결, resolved graph·cache·benchmark evidence, production unchecked 항목
+- body closing keyword: `Closes #253`
 - final section: `## DoD Status`
 
 - [ ] **Step 4: live PR body와 CI를 재확인한다**
@@ -668,9 +710,11 @@ git ls-remote origin refs/heads/codex/issue-253-dependencies-1.4.0
 gh pr view --json number,url,headRefOid,body,assignees,labels,milestone,mergeStateStatus,reviewDecision,statusCheckRollup
 gh pr checks --required
 issue253_pr_number="$(gh pr view --json number --jq .number)"
-gh api graphql -F owner=bluetape4k -F name=clinic-appointment -F number="$issue253_pr_number" \
-  -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' \
-  --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length'
+gh api graphql --paginate -F owner=bluetape4k -F name=clinic-appointment \
+  -F number="$issue253_pr_number" \
+  -f query='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){nodes{isResolved}pageInfo{hasNextPage endCursor}}}}}' \
+  --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' \
+  | awk '{ total += $1 } END { print total + 0 }'
 ```
 
 Expected: local HEAD, remote branch SHA와 `headRefOid`가 동일하고 required checks successful,
@@ -680,7 +724,7 @@ unresolved thread count 0, blocking `reviewDecision` 없음. exact `headRefOid`�
 ## 9. 계획 자체 검토
 
 - 설계의 버전 권한, Redis wire/rollback, solver 품질, module/benchmark, review/CI 기준이
-  각각 Task 2~8에 연결된다.
+  각각 Task 2~7에 연결된다.
 - Timefold 공개 API 노출이나 benchmark module 역의존은 #253에서 변경하지 않는다.
 - legacy fixture는 구현 변경 전에 생성·검증되고 BOM 변경 뒤 RED/GREEN 결정 근거가 된다.
 - cache는 logical name을 유지하고 v2 remote namespace로 격리되며 rollback 조건이 명시되어 있다.
