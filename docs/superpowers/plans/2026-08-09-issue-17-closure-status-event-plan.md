@@ -113,6 +113,12 @@
    - status writer 예외는 status/version/history/candidate를 모두 원복한다.
    - 기존 `AppointmentService` caller가 새 `toState` 인자와 함께 정상 동작한다.
 
+   service의 `KLogging` 구조화 code도 검증한다. `affected_limit_rejected`,
+   `slot_calculation_limit_rejected`, `candidate_limit_rejected`, `snapshot_conflict`,
+   `rollback`, `committed`만 허용하며 log에는 tenant/clinic/appointment/patient 값을
+   기록하지 않는다. affected/candidate count, searchDays, precompute/write duration만
+   남긴다.
+
 6. GREEN 실행:
 
    ```bash
@@ -184,6 +190,11 @@
    - key당 slot calculation 1회, preflight returned rows <= 101, write-phase SQL은 status/history/candidate insert 합계 2,000 candidate limit에 맞춘 명시 상한.
    - `CountDownLatch` 두 transaction: 한 thread는 precompute 중이고 다른 thread는 같은 clinic 다른 appointment를 갱신한다. precompute 구간에 write lock이 잡히지 않고 mutation lock duration p95 <= 2s를 검증한다.
    - candidate 2,001 path 3회 반복에서 mutation row 0.
+
+   `ClosureRescheduleService`의 저카디널리티 log code와 precompute/write duration을
+   capture해 운영 lesson 표에 함께 기록한다. Micrometer를 연결하는 API adapter가
+   존재할 때는 동일 code의 counter/timer를 검증하고 clinic·appointment 식별자 tag는
+   사용하지 않는다.
 
 4. 실행 명령은 다음 하나로 고정한다.
 
