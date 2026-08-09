@@ -233,6 +233,6 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
             }
 
         private fun Table.hasCheckConstraint(name: String): Boolean =
-            checkConstraints().any { it.checkName == name }
+            checkConstraints().any { it.checkName.equals(name, ignoreCase = true) }
     }
 }
