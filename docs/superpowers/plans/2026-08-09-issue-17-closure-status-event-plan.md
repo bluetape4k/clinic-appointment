@@ -1,338 +1,240 @@
 # Issue #17 closure `PENDING_RESCHEDULE` 상태 이벤트 구현 계획
 
-> 에이전트 실행 참고: 이 계획은 승인된 설계서의 작업 순서를 그대로 따른다. 각 단계는 체크박스로 진행 상태를 기록하고, RED 테스트가 실패하는 것을 확인한 뒤 최소 구현을 추가한다.
+> 승인된 설계의 구현 순서다. 각 단계는 RED 테스트를 먼저 만들고 최소 구현으로 GREEN을 만든다. 모든 범위·권한·성능 계약은 현재 Issue #17의 legacy 동기 closure endpoint에만 적용한다.
 
-**목표:** legacy 동기 closure 재배정 endpoint가 `PENDING_RESCHEDULE` 상태 전이와 `STATUS_CHANGED` durable outbox intent를 하나의 transaction에서 원자적으로 기록하도록 보강한다.
+**목표:** 동기 closure 재배정이 `PENDING_RESCHEDULE` 상태 전이, 상태 이력, 후보, `STATUS_CHANGED` durable outbox intent를 한 caller transaction에서 원자적으로 기록한다.
 
-**구조:** `appointment-core`는 messaging 모듈을 참조하지 않고 fail-closed callback port와 bounded batch 계약만 제공한다. `appointment-api`의 composite callback은 알림 writer와 `AppointmentOutboxWriter`를 같은 caller transaction에서 호출하며, `appointment-messaging`은 canonical appointment row를 재확인해 payload를 만든다. SSE batch stream, commitment-v2, 실제 broker/Schema Registry 운영 검증은 이 계획에서 변경하지 않는다.
+**제외:** `streamClosureReschedule` SSE lifecycle/status event, commitment-v2, broker/Schema Registry 실제 연동, 배포 SLO. 이 항목은 Issue #17의 별도 follow-up으로 등록하고 이번 PR에서 닫지 않는다.
 
-**기술 스택:** Kotlin 2.3, Spring Boot 4, Exposed JDBC v1, JUnit 5, bluetape4k assertions, H2/PostgreSQL TestDB dialects, Gradle module-scoped tests.
+**공통 계약:** `appointment-core`는 messaging을 의존하지 않는다. 재배정 알림 port와 상태 이벤트 intent port를 분리한다. 상태 이벤트 port는 생성자 필수 의존성으로 구성하며 기본 no-op 또는 런타임 `UnsupportedOperationException`을 제공하지 않는다.
 
----
+## 1. 변경 파일과 소유권
 
-## 1. 변경 경계와 파일 책임
-
-### 구현 파일
+### 구현
 
 - `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/repository/AppointmentRepository.kt`
-  - legacy active appointment ID preflight를 `LIMIT 101`로 조회하는 scoped query를 추가한다.
-  - 동기 write transaction의 affected 재조회도 동일한 bounded limit을 사용하도록 기존 조회 API에 limit 경계를 추가한다.
+  - `findActiveByClinicAndDate`에 nullable limit을 추가하고 bounded ID probe `probeActiveIdsByClinicAndDate`를 제공한다.
+- `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/service/AppointmentCommandContext.kt`
+  - `httpRoot(correlationId)`를 추가해 client correlation과 server causation을 분리한다.
 - `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/service/ClosureRescheduleService.kt`
-  - callback의 `statusChanged` fail-closed 기본 메서드와 command context 인자를 추가한다.
-  - service 경계의 `searchDays` 검증, preflight, affected 100건/후보 2,000건 상한을 구현한다.
-  - optimistic update 직후 canonical row를 읽고 callback을 transaction 안에서 호출한다.
+  - `AppointmentStatusEventWriter` 필수 port, `commandContext`, 1..30 검증, affected 100/slot calculation 3,000/candidate 2,000 bounds를 구현한다.
+  - 슬롯 후보를 write transaction 밖에서 계산·캐시하고, write 직전에 ID/version/status snapshot을 재검증한다.
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ServiceConfig.kt`
-  - production composite의 `statusChanged`를 알림 writer와 messaging writer에 순서대로 위임한다.
+  - 알림 writer와 `AppointmentOutboxWriter`를 `AppointmentStatusEventWriter` adapter로 조합한다.
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/controller/RescheduleController.kt`
-  - REST request correlation을 command context로 만들어 동기 closure service에 전달한다.
-  - `searchDays` 1..30 검증 오류가 mutation 전에 반환되도록 한다.
+  - authenticated `SchedulingUserPrincipal`의 non-empty `allowedClinicIds`에 query clinic이 포함되는지 직접 검증하고 `httpRoot`를 전달한다.
+- `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/security/SecurityConfig.kt`
+  - `/api/{tenantCode}/appointments/*/reschedule/closure` exact matcher를 generic POST matcher 앞에 둔다. matcher는 query `clinicId`와 principal allow-list를 검사한다.
+- `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/tenant/TenantClinicAccessChecker.kt`
+  - tenant ownership와 principal clinic membership 검사를 재사용 가능한 `verifyClinicForPrincipal`로 묶는다.
 - `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxWriter.kt`
-  - status event 입력 appointment를 tenant/clinic/version/status canonical row와 비교하고 canonical payload만 insert한다.
+  - `toState`를 명시 인자로 받고 canonical appointment 및 최신 history의 from/to를 검증한다.
 
-### 테스트 파일
+### 테스트
 
+- `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/service/AppointmentCommandContextTest.kt`
 - `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/service/ClosureRescheduleServiceTest.kt`
-  - callback 성공, fail-closed rollback, optimistic conflict, searchDays/affected/candidate limits, context 전달을 검증한다.
+- `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/service/ClosureRescheduleServicePerformanceTest.kt`
 - `appointment-messaging/src/test/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxWriterTest.kt`
-  - `STATUS_CHANGED` envelope와 canonical mismatch rollback을 검증한다.
+- `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/service/AppointmentNotificationAtomicityTest.kt`
 - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/RescheduleControllerTest.kt`
-  - REST closure 성공 결과의 상태, outbox event type/payload/context를 검증한다.
 - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/RescheduleControllerPrivacyTest.kt`
-  - controller mock signature 변경에 맞춰 `HttpServletRequest`와 command context 전달을 검증한다.
-
-### 문서 파일
-
-- `README.md` 또는 closure 범위를 설명하는 현재 README 섹션
-  - synchronous closure만 `PENDING_RESCHEDULE` event를 포함하고 commitment-v2는 제외한다고 수정한다.
-- `docs/runbooks/appointment-messaging-operations.md`
-  - legacy closure event의 bounded read-only 대조 절차와 SSE/commitment-v2 후속 범위를 명시한다.
-- `docs/lessons/2026-08-09-issue-17-closure-status-event.md`
-  - fail-closed callback과 bounded preflight에서 얻은 재사용 가능한 교훈을 기록한다.
-
-변경하지 않는 파일은 `RescheduleBatchStreamController.kt`, `RescheduleProgressEvent.kt`,
-`streamClosureReschedule` 호출부, commitment-v2 proposal/closure 경로다. 이 범위는 SSE lifecycle과
-부분 진행 계약을 별도 설계로 남긴 승인된 명세에 따른다.
-
-## 2. Task 1 — repository bounded query와 core RED 테스트
-
-**파일:** 위 책임 목록의 `AppointmentRepository.kt`, `ClosureRescheduleServiceTest.kt`
-
-- [ ] **Step 1: 실패하는 callback 계약 테스트 작성**
-
-`ClosureRescheduleServiceTest`에 recorder writer를 추가하고 다음 행위를 검증하는 테스트를 먼저 작성한다.
-
-```kotlin
-val observed = mutableListOf<StatusChangeCall>()
-val writer = object : AppointmentRescheduleNotificationWriter {
-    override fun rescheduled(tenantGroupId: Long, original: AppointmentRecord,
-                              replacement: AppointmentRecord, version: Long) = Unit
+- `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/security/RescheduleClosureSecurityIntegrationTest.kt`
+- `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/AppointmentMessagingFailureTestConfiguration.kt`
+- `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/service/AppointmentServiceStatusEventRegressionTest.kt`
 
-    override fun statusChanged(scope: TenantClinicScope, appointment: AppointmentRecord,
-                               fromState: AppointmentState, toState: AppointmentState,
-                               commandContext: AppointmentCommandContext) {
-        observed += StatusChangeCall(scope, appointment, fromState, toState, commandContext)
-    }
-}
-val result = service(writer).processClosureReschedule(
-    scope(clinicId), MONDAY, searchDays = 1,
-    commandContext = AppointmentCommandContext.root("closure-request-1"),
-)
-observed.single().appointment.version shouldBeEqualTo 1L
-observed.single().fromState shouldBeEqualTo AppointmentState.CONFIRMED
-observed.single().toState shouldBeEqualTo AppointmentState.PENDING_RESCHEDULE
-observed.single().commandContext.correlationId shouldBeEqualTo "closure-request-1"
-```
+### 문서와 운영 후속
 
-- [ ] **Step 2: RED 테스트 실행**
+- `appointment-api/README.ko.md` — closure endpoint의 중간 상태 outbox와 bounds를 명시한다.
+- `docs/runbooks/appointment-messaging-operations.md` — legacy closure 대조 절차와 SSE/commitment-v2 제외를 명시한다.
+- `docs/lessons/2026-08-09-issue-17-closure-status-event.md` — 결정, 실패 주입, 성능/lock evidence를 기록한다.
+- GitHub Issue #17에 SSE `PENDING_RESCHEDULE` lifecycle follow-up 체크 항목과 owner를 추가한다. 이번 PR은 Issue #17을 자동 종료하지 않는다.
 
-실행:
+## 2. Task 1 — RED: port, context, bounded query 계약
 
-```bash
-./gradlew :appointment-core:test --no-daemon --console=plain \
-  --tests 'io.bluetape4k.clinic.appointment.service.ClosureRescheduleServiceTest'
-```
+1. `AppointmentCommandContextTest`에 다음을 추가한다.
 
-예상 결과: `statusChanged` 메서드와 command context가 없어 컴파일 또는 테스트가 실패한다. 기존 테스트가 즉시 통과하면 새 assertion이 실제 동작을 잡는지 확인하고 테스트를 수정한다.
+   - `httpRoot("client-41")`의 `correlationId.value == "client-41"`.
+   - `causationId.value`가 `http-command-`로 시작하고 correlation과 다름.
+   - invalid/blank client correlation은 기존 metadata validation으로 거절.
 
-- [ ] **Step 3: bounded repository query 추가**
+2. `ClosureRescheduleServiceTest`에 필수 `AppointmentStatusEventWriter` recorder를 만들고 다음을 검증한다.
 
-기존 scoped active query의 공통 조건을 유지하면서 ID만 읽는 bounded method를 추가한다.
+   - `scope`가 요청 tenant/clinic과 동일하다.
+   - `appointment.version == 이전 version + 1`.
+   - `fromState == 원래 상태`, `toState == PENDING_RESCHEDULE`.
+   - `commandContext.correlationId.value`는 client 값이고 `causationId.value`는 server 값이다.
+   - writer가 없는 생성 fixture는 컴파일되지 않도록 모든 fixture를 명시적 no-op status writer로 바꾼다.
 
-```kotlin
-fun countActiveByClinicAndDate(
-    scope: TenantClinicScope,
-    date: LocalDate,
-    activeStatuses: List<AppointmentState> = AppointmentState.ACTIVE_STATUSES,
-    limit: Int,
-): Int {
-    require(limit > 0) { "limit must be positive" }
-    return Appointments
-        .select(Appointments.id)
-        .where { (Appointments.clinicId eq scope.clinicId) and
-            (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId)) }
-        .andWhere { Appointments.appointmentDate eq date }
-        .andWhere { Appointments.status inList activeStatuses }
-        .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
-        .andWhere { completeAppointmentProjection() }
-        .limit(limit)
-        .count()
-        .toInt()
-}
-```
+3. `AppointmentRepository`에 `probeActiveIdsByClinicAndDate(scope, date, activeStatuses, limit)`를 추가한다. method 이름은 정확한 count가 아닌 bounded ID probe 의미를 표현해야 한다. `limit`은 `limit.requireInRange(1, MAX_AFFECTED_APPOINTMENTS + 1, "limit")`로 검증한다.
 
-`findActiveByClinicAndDate`에는 `limit: Int? = null`을 추가하고 query 생성 뒤 `limit?.let(query::limit)`을 적용한다. 동기 service는 preflight와 write transaction 모두 `limit = MAX_AFFECTED_APPOINTMENTS + 1`을 사용한다. 기존 SSE caller는 limit을 전달하지 않아 기존 조회 의미를 유지한다.
+4. RED 실행:
 
-- [ ] **Step 4: RED 테스트 재실행 후 최소 query 구현 확인**
+   ```bash
+   ./gradlew :appointment-core:test --no-daemon --console=plain \
+     --tests 'io.bluetape4k.clinic.appointment.service.AppointmentCommandContextTest' \
+     --tests 'io.bluetape4k.clinic.appointment.service.ClosureRescheduleServiceTest'
+   ```
 
-다시 같은 targeted test를 실행하고, query API 컴파일 실패가 있으면 Exposed v1의 `select(Appointments.id).limit(limit)` 형태에 맞춰 수정한다. SQL이 101개 이상을 materialize하지 않는지 테스트 fixture에서 101개 ID를 넣고 반환 count가 101인지 확인한다.
+   기대 결과는 새 context factory, port signature, bounded probe가 없어 컴파일 또는 assertion이 실패하는 것이다.
 
-## 3. Task 2 — core service의 fail-closed callback과 bounded all-or-nothing 구현
+## 3. Task 2 — GREEN: core closure two-phase transaction
 
-**파일:** `ClosureRescheduleService.kt`, `ClosureRescheduleServiceTest.kt`
+1. `ClosureRescheduleService`의 생성자에 다음 port를 필수로 추가한다.
 
-- [ ] **Step 1: fail-closed 및 limit RED 테스트 추가**
+   ```kotlin
+   fun interface AppointmentStatusEventWriter {
+       fun statusChanged(
+           scope: TenantClinicScope,
+           appointment: AppointmentRecord,
+           fromState: AppointmentState,
+           toState: AppointmentState,
+           commandContext: AppointmentCommandContext,
+       )
+   }
+   ```
 
-다음 테스트를 기존 fixture에 추가한다.
+   기존 `AppointmentRescheduleNotificationWriter`는 rescheduled 알림만 유지한다. `statusChanged` capability를 default method로 합치지 않는다.
 
-```kotlin
-assertFailsWith<IllegalArgumentException> {
-    service(writer).processClosureReschedule(scope(clinicId), MONDAY, searchDays = 0)
-}
-assertFailsWith<IllegalArgumentException> {
-    service(writer).processClosureReschedule(scope(clinicId), MONDAY, searchDays = -1)
-}
-assertFailsWith<IllegalArgumentException> {
-    service(writer).processClosureReschedule(scope(clinicId), MONDAY, searchDays = 31)
-}
-```
+2. `processClosureReschedule(scope, closureDate, searchDays, commandContext)`에서 `searchDays.requireInRange(1, MAX_SEARCH_DAYS, "searchDays")`를 transaction 진입 전에 실행한다. closure clinic ownership을 한 번 확인하고 `probeActiveIdsByClinicAndDate(..., limit = 101)`로 preflight한다. 결과가 101이면 첫 mutation 전에 `IllegalArgumentException`을 던진다.
 
-4-인자 lambda만 구현한 writer로 process를 호출하는 테스트는 `UnsupportedOperationException`을 기대하고, transaction 밖에서 `Appointments.status == CONFIRMED`, history/candidate count가 0인지 확인한다. 101 affected 예약 fixture는 동일 clinic/date에 서로 다른 start/end를 넣고 preflight가 mutation 전에 실패하는지 확인한다. fake slot service가 날짜마다 2,001개를 반환하도록 하여 후보 상한 초과 시 status/history/candidate가 모두 rollback되는 테스트도 추가한다.
+3. preflight 결과를 snapshot으로 보관하고 write transaction 밖에서 각 `(scope, doctorId, treatmentTypeId, candidateDate)` key를 한 번만 `slotCalculationService.findAvailableSlots`로 계산한다. call counter를 테스트에서 노출할 수 있도록 계산 함수를 constructor에 주입하거나 recorder fake를 사용한다. `affectedCount * searchDays > MAX_SLOT_CALCULATIONS (3_000)`이면 계산과 mutation 모두 실행하지 않는다. 모든 후보를 materialize한 뒤 총합이 `MAX_TOTAL_CANDIDATES (2_000)`를 넘으면 write transaction에 진입하지 않는다.
 
-- [ ] **Step 2: limit RED 실행**
+4. write transaction에서 동일 조건 `findActiveByClinicAndDate(..., limit = 101)`를 재조회한다. ID 집합, version, status가 preflight snapshot과 다르면 mutation 없이 optimistic-concurrency 오류를 던진다. 일치할 때만 각 row를 CAS update하고, canonical reread → history save → `statusEventWriter.statusChanged` → precomputed candidate insert 순서를 지킨다. callback/DB/codec 예외는 상태·history·candidate 전체 rollback이다.
 
-```bash
-./gradlew :appointment-core:test --no-daemon --console=plain \
-  --tests 'io.bluetape4k.clinic.appointment.service.ClosureRescheduleServiceTest'
-```
+5. `ClosureRescheduleServiceTest`에 다음 RED→GREEN 행위를 고정한다.
 
-예상 결과: 새 callback/limit 동작이 없어 테스트가 실패한다. `searchDays` 검증 실패가 transaction 내부 SQL 오류가 아닌 명시적 `IllegalArgumentException`인지 읽는다.
+   - `searchDays` 0, -1, 31은 `IllegalArgumentException`이고 DB mutation 0.
+   - affected 101은 preflight row 101에서 종료하고 status/history/candidate 0.
+   - preflight와 write 사이 version drift는 mutation 0.
+   - 동일 slot key가 여러 appointment에 걸쳐 있어도 fake calculation call은 key당 1회.
+   - `affected * searchDays == 3_001`은 calculation call 0, mutation 0.
+   - candidate 2,001은 mutation 0.
+   - status writer 예외는 status/version/history/candidate를 모두 원복한다.
+   - 기존 `AppointmentService` caller가 새 `toState` 인자와 함께 정상 동작한다.
 
-- [ ] **Step 3: 최소 service 구현**
+6. GREEN 실행:
 
-service 경계에서 먼저 `require(searchDays in 1..MAX_SEARCH_DAYS)`를 수행하고, 별도 read transaction에서 clinic scope를 확인한 뒤 `countActiveByClinicAndDate(..., limit = MAX_AFFECTED_APPOINTMENTS + 1)`를 실행한다. 반환값이 101이면 즉시 실패시킨다. 이후 write transaction 안에서 `findActiveByClinicAndDate(..., limit = MAX_AFFECTED_APPOINTMENTS + 1)`를 다시 조회하고 100건 초과를 mutation 전에 거부한다.
+   ```bash
+   ./gradlew :appointment-core:test --no-daemon --console=plain \
+     --tests 'io.bluetape4k.clinic.appointment.service.ClosureRescheduleServiceTest' \
+     --tests 'io.bluetape4k.clinic.appointment.service.AppointmentCommandContextTest'
+   ```
 
-callback port는 다음 형태로 추가한다.
+## 4. Task 3 — GREEN: messaging canonical writer와 기존 caller 회귀
 
-```kotlin
-fun statusChanged(
-    scope: TenantClinicScope,
-    appointment: AppointmentRecord,
-    fromState: AppointmentState,
-    toState: AppointmentState,
-    commandContext: AppointmentCommandContext,
-) = throw UnsupportedOperationException("Appointment status event writer is not configured")
-```
+1. `AppointmentOutboxWriter.statusChanged` signature를
+   `(scope, appointment, fromState, toState, context, reasonCode)`로 바꾼다. `AppointmentService.updateStatus`와 closure adapter를 포함한 모든 caller를 컴파일 검색으로 갱신한다.
 
-각 appointment에 대해 기존 version으로 update한 뒤 canonical row를 재조회하고, `updated.version == appointment.version + 1`, `updated.status == PENDING_RESCHEDULE`를 `check`로 검증한다. 상태 이력과 callback은 canonical row 및 `fromState`를 사용해 같은 transaction에서 호출한다. 후보 누적 counter가 2,000을 초과하기 전에 예외를 던지고 일부 후보를 반환하지 않는다. companion constants는 `MAX_SEARCH_DAYS = 30`, `MAX_AFFECTED_APPOINTMENTS = 100`, `MAX_TOTAL_CANDIDATES = 2_000`, `LEGACY_CLOSURE_CORRELATION_ID`로 둔다.
+2. `DefaultAppointmentOutboxWriter.statusChanged`에서 caller record의 ID/clinic/version/status와 scope를 검증한 뒤 `findByIdAndScope` canonical row를 읽는다. `canonical.version == appointment.version`, `canonical.status == toState`, `fromState != toState`를 확인한다. `AppointmentStateHistoryRepository.findByAppointmentId(id).firstOrNull()`의 from/to가 입력 from/to와 다르면 거부한다. payload는 canonical row와 명시된 from/to로만 생성한다.
 
-기존 3-인자 호출을 보존하기 위해 새 `commandContext`는 마지막 default 인자로 추가하고 legacy overload는 고정 correlation root를 사용한다. SSE method와 constants 사용은 변경하지 않는다.
+3. `AppointmentOutboxWriterTest` fixture에 상태 history table/record를 준비한다. 정상 event의 version/from/to/correlation/causation을 확인하고, stale version, forged toState, forged fromState, cross-clinic row는 `IllegalArgumentException`과 outbox 0을 기대한다.
 
-- [ ] **Step 4: GREEN core targeted test**
+4. `AppointmentServiceStatusEventRegressionTest`는 기존 status update path가 `AppointmentOutboxWriter.statusChanged(..., fromState, toState, ...)`를 한 번 호출하고 정상 payload를 남기는지 확인한다.
 
-```bash
-./gradlew :appointment-core:test --no-daemon --console=plain \
-  --tests 'io.bluetape4k.clinic.appointment.service.ClosureRescheduleServiceTest'
-```
+5. 실행:
 
-성공 callback, fail-closed rollback, searchDays 0/음수/31, affected 101, candidate 2,001, optimistic conflict가 모두 PASS여야 한다.
+   ```bash
+   ./gradlew :appointment-messaging:test --no-daemon --console=plain \
+     --tests 'io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriterTest'
+   ./gradlew :appointment-api:test --no-daemon --console=plain \
+     --tests 'io.bluetape4k.clinic.appointment.api.service.AppointmentServiceStatusEventRegressionTest'
+   ```
 
-## 4. Task 3 — messaging canonical status outbox writer
+## 5. Task 4 — GREEN: API adapter, exact clinic authorization, lineage
 
-**파일:** `AppointmentOutboxWriter.kt`, `AppointmentOutboxWriterTest.kt`
+1. `ServiceConfig.closureRescheduleService`에서 `AppointmentStatusEventWriter` anonymous adapter를 구성한다. `statusChanged` 호출은 `appointmentNotificationWriter.statusChanged` 후 `appointmentOutboxWriter.statusChanged(..., fromState, toState, AppointmentMessagingContext.from(commandContext))` 순서다. 모든 closure service constructor call과 `AppointmentNotificationAtomicityTest` fixture를 갱신한다.
 
-- [ ] **Step 1: `STATUS_CHANGED` RED 테스트 작성 및 실행**
+2. `RescheduleController.processClosureReschedule`에 `HttpServletRequest`와 `@AuthenticationPrincipal SchedulingUserPrincipal`을 받는다. `TenantClinicAccessChecker.verifyClinicForPrincipal(tenantCode, clinicId, principal)`은 tenant DB ownership, role, non-empty allow-list, exact clinic membership을 모두 확인한다. 다른 clinic 또는 empty allow-list는 403이며 service 호출은 0회다. context는 `AppointmentCommandContext.httpRoot(CorrelationIdFilter.requireCorrelationId(request))`로 만든다.
 
-기존 appointment fixture를 canonical pending row로 갱신한 뒤 다음을 검증한다.
+3. `SecurityConfig`에 closure exact matcher를 generic `POST /api/{tenantCode}/**` 앞에 둔다. matcher는 query parameter `clinicId`를 양수로 파싱하고 `SchedulingUserPrincipal.allowedClinicIds` membership을 확인한다. `clinicPolicyAccess`의 path-variable 전용 구현을 재사용하지 않는다.
 
-```kotlin
-val appointment = repository.findByIdAndScope(appointmentId, scope)!!.copy(
-    status = AppointmentState.PENDING_RESCHEDULE,
-    version = 1L,
-)
-writer.statusChanged(
-    scope, appointment, AppointmentState.CONFIRMED,
-    AppointmentMessagingContext.from(AppointmentCommandContext.root("closure-1")),
-)
-```
+4. `RescheduleControllerTest`와 `RescheduleControllerPrivacyTest`에 request/principal 인자를 반영하고, valid clinic에서는 service에 server causation context가 전달되는지 확인한다.
 
-outbox row의 `eventType == "AppointmentStatusChanged"`, `aggregateId == "924"`, pending status, partition key, correlation/causation을 확인하고 payload JSON에 `version:1`, `fromState:CONFIRMED`, `toState:PENDING_RESCHEDULE`가 있는지 확인한다. stale version/status 또는 다른 clinic record를 전달하는 테스트는 `IllegalArgumentException`과 outbox row 0을 기대한다.
+5. `RescheduleClosureSecurityIntegrationTest`는 authenticated ADMIN/STAFF principal에 대해 다음 matrix를 실행한다.
 
-```bash
-./gradlew :appointment-messaging:test --no-daemon --console=plain \
-  --tests 'io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriterTest'
-```
+   | case | expected | service call |
+   |---|---:|---:|
+   | allowed clinic in non-empty allow-list | 200/handler result | 1 |
+   | cross-clinic in same tenant | 403 | 0 |
+   | empty allow-list | 403 | 0 |
+   | another tenant | 403 | 0 |
+   | non ADMIN/STAFF role | 403 | 0 |
 
-예상 RED: 현재 writer가 caller record를 그대로 쓰므로 canonical mismatch 테스트가 실패한다.
+6. 실행:
 
-- [ ] **Step 2: canonical 검증 구현**
+   ```bash
+   ./gradlew :appointment-api:test --no-daemon --console=plain \
+     --tests 'io.bluetape4k.clinic.appointment.api.controller.RescheduleControllerTest' \
+     --tests 'io.bluetape4k.clinic.appointment.api.controller.RescheduleControllerPrivacyTest' \
+     --tests 'io.bluetape4k.clinic.appointment.api.security.RescheduleClosureSecurityIntegrationTest'
+   ```
 
-`statusChanged`에서 `appointment.requireId()` 후 `appointmentRepository.findByIdAndScope(id, scope)`를 한 번만 호출한다. canonical row가 없거나 clinic이 다르면 거부하고, `canonical.version == appointment.version`, `canonical.status == appointment.status`, `fromState != canonical.status`를 검증한다. payload는 caller record가 아니라 canonical row로 생성한다. 기존 created/cancelled/rescheduled 경로의 `proveScope` 동작은 변경하지 않는다.
+## 6. Task 5 — API composite rollback 주입과 성능/lock harness
 
-- [ ] **Step 3: GREEN messaging test**
+1. `AppointmentMessagingFailureTestConfiguration.kt`에 `@TestConfiguration` bean을 둔다. closure test profile에서 `AppointmentOutboxWriter`의 `statusChanged`만 `AppointmentMessagingContractException`을 던지는 `FailingAppointmentOutboxWriter`로 교체한다. 테스트 소유 파일은 `AppointmentNotificationAtomicityTest.kt`의 `closureOutboxFailureRollsBackStateHistoryAndCandidates` method다.
 
-동일 targeted test를 재실행해 정상 payload, scope mismatch, version/status mismatch, transaction rollback을 확인한다.
+2. `./gradlew :appointment-api:test --tests '*AppointmentNotificationAtomicityTest.closureOutboxFailureRollsBackStateHistoryAndCandidates'`를 실행해 HTTP 503, appointment status/version 원복, history/candidate/outbox row 0을 확인한다. 주입 bean이 없거나 test context가 기본 writer를 사용하면 테스트를 통과시키지 않고 configuration을 고친다.
 
-## 5. Task 4 — API composite와 REST context wiring
+3. `ClosureRescheduleServicePerformanceTest.kt`에는 다음 harness를 구현한다.
 
-**파일:** `ServiceConfig.kt`, `RescheduleController.kt`, `RescheduleControllerTest.kt`, `RescheduleControllerPrivacyTest.kt`
+   - 100 affected appointment와 searchDays 30 fixture.
+   - `CountingSlotCalculationService`의 key별 call counter와 Exposed statement counter.
+   - 2 warm-up + 10 measured run, 측정 8회의 p95 <= 10s.
+   - key당 slot calculation 1회, preflight returned rows <= 101, write-phase SQL은 status/history/candidate insert 합계 2,000 candidate limit에 맞춘 명시 상한.
+   - `CountDownLatch` 두 transaction: 한 thread는 precompute 중이고 다른 thread는 같은 clinic 다른 appointment를 갱신한다. precompute 구간에 write lock이 잡히지 않고 mutation lock duration p95 <= 2s를 검증한다.
+   - candidate 2,001 path 3회 반복에서 mutation row 0.
 
-- [ ] **Step 1: API RED 테스트 작성**
+4. 실행 명령은 다음 하나로 고정한다.
 
-closure 요청에 `X-Correlation-Id: closure-api-1`을 넣고 응답 후 transaction에서 appointment status/version과 scheduling outbox를 조회한다. event type, payload from/to/version, correlation/causation이 일치해야 한다. controller privacy test mock은 `processClosureReschedule(scope, date, searchDays, commandContext)` 호출을 verify하도록 바꾼다.
+   ```bash
+   ./gradlew :appointment-core:test --no-daemon --console=plain \
+     --tests 'io.bluetape4k.clinic.appointment.service.ClosureRescheduleServicePerformanceTest'
+   ```
 
-```kotlin
-restClient.post()
-    .uri("/api/{tenant}/appointments/{id}/reschedule/closure?clinicId={clinic}&closureDate={date}", tenant, id, clinic, MONDAY)
-    .header("X-Correlation-Id", "closure-api-1")
-    .retrieve()
-    .toBodilessEntity()
-```
+   측정값과 SQL/lock counter를 lesson 표에 저장한다. 실제 PostgreSQL lock-wait/SLO는 이 로컬 harness가 증명하지 않으며 운영 검증 항목으로 남긴다.
 
-`searchDays=0` 및 `31` 요청은 400이고 `Appointments.status`가 CONFIRMED로 남는지 확인한다. writer가 예외를 던지는 atomicity test는 status/history/candidates/outbox가 모두 rollback되는지 확인한다.
+## 7. Task 6 — 문서와 follow-up
 
-- [ ] **Step 2: RED 실행**
+1. `appointment-api/README.ko.md`의 endpoint 표와 reschedule 설명에 legacy 동기 closure가 `PENDING_RESCHEDULE` `STATUS_CHANGED` outbox를 기록하고 `searchDays 1..30`, affected 100, slot calculation 3,000, candidate 2,000, preflight/write `LIMIT 101`을 넘으면 mutation 없이 실패한다고 적는다.
+2. `docs/runbooks/appointment-messaging-operations.md`의 현재 “closure 전이가 포함되지 않는다” 문장을 “legacy 동기 closure는 포함되며 SSE batch와 commitment-v2는 포함되지 않는다”로 교체한다. 대조 query는 row/event ID를 수정하지 않는 bounded read-only 절차로 적는다.
+3. `docs/lessons/2026-08-09-issue-17-closure-status-event.md`에 설계 선택, 권한/lineage 검증, two-phase snapshot trade-off, rollback 주입, performance/lock 결과를 한국어로 기록한다.
+4. Issue #17에 SSE status/lifecycle follow-up의 owner와 acceptance criteria를 추가하고, 이 PR body에는 `Closes #17`을 쓰지 않는다.
 
-```bash
-./gradlew :appointment-api:test --no-daemon --console=plain \
-  --tests 'io.bluetape4k.clinic.appointment.api.controller.RescheduleControllerTest' \
-  --tests 'io.bluetape4k.clinic.appointment.api.controller.RescheduleControllerPrivacyTest'
-```
+## 8. Task 7 — 최종 검증과 PR readiness
 
-예상 RED: controller가 request context를 전달하지 않고 ServiceConfig callback이 status event를 위임하지 않는다.
+1. 순차 검증:
 
-- [ ] **Step 3: 최소 wiring 구현**
+   ```bash
+   ./gradlew :appointment-core:test --no-daemon --console=plain
+   ./gradlew :appointment-messaging:test --no-daemon --console=plain
+   ./gradlew :appointment-api:test --no-daemon --console=plain
+   git diff --check
+   ```
 
-anonymous `AppointmentRescheduleNotificationWriter.statusChanged`에서 먼저 `appointmentNotificationWriter.statusChanged`를 호출하고, 이어 `appointmentOutboxWriter.statusChanged(scope, appointment, fromState, AppointmentMessagingContext.from(commandContext))`를 호출한다. REST controller에 `HttpServletRequest`를 추가하고 `AppointmentCommandContext.root(CorrelationIdFilter.requireCorrelationId(request))`를 전달한다. 기존 rescheduled overload와 SSE controller signature는 유지한다.
+2. 설계 acceptance와 현재 diff를 대조한다. six-lens 재검토 결과 `P0=0/P1=0`이 아니면 PR을 만들지 않는다. 특히 SecurityConfig exact matcher, `AppointmentService` 기존 caller, API failure injection, performance harness 파일과 명령이 실제 diff에 있어야 한다.
+3. flow evidence에 targeted/full tests, security matrix, SQL/lock 측정값, unchecked production checks를 기록한다. 실제 broker/registry/SLO와 SSE는 `PENDING`으로 남긴다.
+4. Lore commit을 한국어로 만든다.
 
-- [ ] **Step 4: GREEN API targeted test**
+   ```text
+   동기 closure 상태 이벤트를 canonical transaction 경계로 보강한다
 
-위 API targeted command를 재실행하고 status/version, outbox row, payload, context, invalid searchDays mutation 부재를 읽는다.
+   Constraint: legacy closure만 포함하고 SSE lifecycle과 commitment-v2는 별도 운영 계약으로 유지해야 한다.
+   Rejected: notification port에 상태 이벤트 capability를 숨기는 기본 메서드와 write transaction 내부의 무제한 slot fan-out은 substitutability와 lock 안전성을 해치므로 채택하지 않는다.
+   Confidence: high
+   Scope-risk: moderate
+   Directive: 다음 status event adapter도 exact clinic scope, server causation, canonical history 검증을 유지한다.
+   Tested: core/messaging/api targeted 및 full tests, security matrix, performance harness, git diff --check.
+   Not-tested: 실제 broker/Schema Registry/SLO와 SSE lifecycle.
+   ```
 
-## 6. Task 5 — 통합 원자성 및 성능 smoke
-
-- [ ] **Step 1: callback/outbox failure RED fixture**
-
-core recorder가 callback에서 `AppointmentMessagingContractException`을 던지도록 하고, process 호출 후 transaction 밖에서 appointment status, version, history, candidates가 원복되는 테스트를 작성한다. API test는 동일 transaction 경계에서 outbox insert failure를 주입할 수 있을 때 같은 assertion을 유지한다.
-
-- [ ] **Step 2: 성능 smoke 실행**
-
-동일한 로컬 TestDB dialect에서 affected 100건/searchDays 30을 준비하고 2회 warm-up 후 10회를 순차 실행한다. 각 실행의 preflight 반환 count, SQL count, transaction duration, lock-wait, 결과 row를 기록한다. 나머지 8회의 p95가 10초 이하, preflight row가 101 이하, lock-wait 0이면 PASS다. 후보 2,001건 rollback은 같은 조건에서 3회 실행해 mutation row 0과 rollback 시간이 성공 p95의 2배 이하인지 확인한다. 측정은 별도 프로세스/worker와 병렬로 실행하지 않는다.
-
-- [ ] **Step 3: smoke 결과 기록**
-
-실측값과 command를 `docs/lessons/2026-08-09-issue-17-closure-status-event.md`의 검증 표에 기록한다. 임계치 미달이면 구현을 되돌아가 query/candidate fan-out을 줄이고 targeted test와 smoke를 처음부터 재실행한다.
-
-## 7. Task 6 — README/runbook과 lesson
-
-- [ ] **Step 1: 문서 RED 점검**
-
-`rg`로 closure `PENDING_RESCHEDULE`가 여전히 “제외”로만 기술된 위치를 찾고, SSE status event를 이번 PR이 보장한다고 오인하게 만드는 문구가 없는지 확인한다.
-
-- [ ] **Step 2: 문서 수정**
-
-README와 `docs/runbooks/appointment-messaging-operations.md`에 다음 계약을 반영한다.
-
-1. legacy 동기 closure endpoint는 `PENDING_RESCHEDULE` `STATUS_CHANGED` outbox를 기록한다.
-2. `searchDays 1..30`, affected 최대 100, 후보 전체 최대 2,000, preflight/write `LIMIT 101`을 넘으면 mutation 없이 실패한다.
-3. 상태·history·candidate·outbox를 bounded read-only query로 대조하고 event ID는 삭제/수정하지 않는다.
-4. SSE batch lifecycle/status event와 commitment-v2는 별도 후속 작업이며 이번 PR의 DoD가 아니다.
-
-- [ ] **Step 3: lesson 작성**
-
-lesson에는 context, 결정(fail-closed callback/canonical row/bounded preflight), 발견된 성능 P1과 수정, 검증 command/측정값, correlation provenance 후속 작업을 한국어로 기록한다.
-
-## 8. Task 7 — 최종 검증과 PR 준비
-
-- [ ] **Step 1: 전체 affected module 검증**
-
-순차 실행:
-
-```bash
-./gradlew :appointment-core:test --no-daemon --console=plain
-./gradlew :appointment-messaging:test --no-daemon --console=plain
-./gradlew :appointment-api:test --no-daemon --console=plain
-git diff --check
-```
-
-실패 시 raw output의 최초 원인을 기준으로 해당 task로 돌아가 RED/GREEN부터 재검증한다. TestDB/실제 DB 검사는 module 간 병렬 실행하지 않는다.
-
-- [ ] **Step 2: final diff/review**
-
-설계서와 계획의 각 수용 기준을 현재 diff 및 테스트 결과와 대조한다. six-lens review에서 P0/P1이 나오면 PR 생성을 중단하고 해당 task·테스트·review를 다시 수행한다. SSE 미변경과 commitment-v2 제외가 diff에 실제로 보이는지 확인한다.
-
-- [ ] **Step 3: Lore commit**
-
-변경 목적과 검증을 담은 한국어 commit message를 사용한다.
-
-```text
-동기 closure 상태 이벤트 범위와 bounded 계약을 확정한다
-
-Constraint: SSE lifecycle과 commitment-v2는 별도 운영 계약으로 범위를 제한해야 한다.
-Rejected: 무제한 affected/candidate 조회와 callback no-op은 원자성과 운영 안전성을 훼손하므로 채택하지 않는다.
-Confidence: high
-Scope-risk: moderate
-Directive: 다음 status event adapter도 canonical row와 bounded preflight 계약을 유지한다.
-Tested: core/messaging/api targeted 및 affected-module tests, git diff --check, 성능 smoke.
-Not-tested: 실제 broker/Schema Registry/SLO 및 SSE lifecycle.
-```
-
-- [ ] **Step 4: PR readiness**
-
-Issue #17의 milestone/labels/assignee를 읽어 PR metadata를 맞추고, 한국어 PR body의 마지막 `## DoD Status`에 동기 closure 포함, SSE/commitment-v2 제외, 테스트/성능/운영 미검증 항목을 기록한다. exact head SHA와 CI readiness를 확인한 뒤 merge approval을 요청한다. merge는 별도 fresh approval 전에는 실행하지 않는다.
+5. PR body는 한국어로 작성하고 마지막 section을 `## DoD Status`로 둔다. Issue/PR metadata parity와 CI readiness를 확인한 뒤 exact head SHA를 보고한다. merge는 별도 fresh approval 이후에만 수행한다.
 
 ## 9. 계획 자체 검토
 
-- **명세 커버리지:** callback fail-closed(2, 3), canonical row(3), REST context(5), affected/search/candidate bounds(2, 3, 6), atomicity(2, 4, 5), docs/DoD(7), SSE 제외(1, 7, 8)를 모두 작업으로 연결했다.
-- **placeholder 검사:** 미완성 표식이나 비어 있는 단계를 사용하지 않았고, 모든 구현 단계에 파일·메서드·검증 명령·예상 결과를 적었다.
-- **타입 일관성:** `statusChanged(scope, appointment, fromState, toState, commandContext)`와 `processClosureReschedule(..., commandContext)`를 core, API, test 단계에서 동일하게 사용한다.
-- **범위 누수 방지:** SSE controller/worker, commitment-v2, broker/registry/SLO는 구현 파일·테스트·DoD에서 후속/N/A로 명시했다.
+- 모든 P1 review finding에 구현 파일, 테스트 method, 실행 명령을 연결했다.
+- `countActiveByClinicAndDate`처럼 정확한 count를 암시하는 이름을 사용하지 않고 bounded ID probe semantics를 명시했다.
+- caller value class는 `.value`로 비교하고 input 범위는 `requireInRange`를 사용한다.
+- API 권한은 tenant ownership과 principal exact clinic membership을 모두 검증하며 empty allow-list를 허용하지 않는다.
+- client correlation과 server causation의 provenance를 core test와 API test에서 분리한다.
+- write transaction은 precomputed snapshot을 재검증한 뒤에만 mutation하며, SQL/lock budget을 executable harness로 고정한다.
