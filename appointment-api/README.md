@@ -45,6 +45,30 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 전체 예약 정책 요청, 생명주기, 유효 정책 조회, 오류 계약은
 [Scheduling Policy API](../docs/api/scheduling-policy.md)에 정리되어 있습니다.
 
+### 임시휴진 동기 재배정
+
+`POST /api/{tenantCode}/appointments/{id}/reschedule/closure`는 legacy 예약만 대상으로
+검증된 `TenantClinicScope` 안에서 `PENDING_RESCHEDULE` 상태 전이, 상태 이력, 재배정 후보와
+`STATUS_CHANGED` outbox를 하나의 write transaction으로 기록합니다. 요청의 correlation 값은
+trace 용도로만 보존하고 causation 값은 서버가 생성합니다. outbox 저장에 실패하면 `503`과
+`APPOINTMENT_MESSAGING_UNAVAILABLE`을 반환하며 상태·이력·후보·outbox를 함께 rollback합니다.
+candidate GET과 closure/confirm/auto mutation은 canonical clinic이 principal의 비어 있지 않은
+`allowedClinicIds`에 포함될 때만 허용하므로 tenant 내부 sibling clinic 접근도 거부합니다.
+이 세 mutation에는 durable idempotency key가 없으므로 `503` 또는 응답 유실 뒤에는
+correlation ID로 상태·이력·outbox를 제한 조회하고 commit된 mutation이 없을 때만 재시도합니다.
+
+다음 bounded 계약을 넘는 요청은 preflight 또는 write 직전 검증에서 mutation 없이 거부합니다.
+
+| 계약 | 상한 |
+|---|---:|
+| 후보 탐색 기간 `searchDays` | `1..30`일 |
+| 영향 예약 | 최대 `100`건 (`LIMIT 101` probe) |
+| 슬롯 계산 | 최대 `3,000`회 |
+| 후보 저장 수 | 최대 `2,000`건 |
+
+슬롯 계산은 write transaction 밖에서 key별로 캐시하고, write 직전에 같은 `LIMIT 101` snapshot을
+재검증합니다. write transaction은 snapshot 재검증과 상태 전이·이력·outbox·후보 저장만 수행합니다.
+
 ### 예약 신뢰도
 
 신뢰도 API는 불투명한 `MemberId`만 사용하며 이름·전화번호는 회원 DB가 소유합니다. 기본 모드는

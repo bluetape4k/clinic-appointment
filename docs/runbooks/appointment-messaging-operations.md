@@ -29,20 +29,31 @@ state history, 후보와 `STATUS_CHANGED` outbox를 함께 commit합니다. outb
 
 운영 중 대조가 필요하면 event ID와 aggregate version만 사용하는 bounded read-only 조회를
 수행합니다. patient payload, raw reason, tenant·clinic 식별자를 metric이나 일반 log에
-복사하지 않습니다. 아래 smoke 명령은 로컬 H2 fixture의 경계만 확인하며 production
+복사하지 않습니다. 아래 smoke 명령은 로컬 H2 fixture와 singleton PostgreSQL row-lock
+경계만 확인하며 production
 broker/registry/SLO 증거를 대신하지 않습니다.
 
 ```bash
-./gradlew :appointment-core:test --no-daemon --console=plain -PuseFastDB=true \
+./gradlew :appointment-core:test --no-daemon --console=plain \
   --tests 'io.bluetape4k.clinic.appointment.service.ClosureRescheduleServicePerformanceTest'
+./gradlew :appointment-messaging:test --no-daemon --console=plain \
+  --tests 'io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriterTest'
+./gradlew :appointment-api:test --no-daemon --console=plain \
+  --tests 'io.bluetape4k.clinic.appointment.api.controller.RescheduleControllerTest' \
+  --tests 'io.bluetape4k.clinic.appointment.api.security.RescheduleClosureSecurityIntegrationTest' \
+  --tests 'io.bluetape4k.clinic.appointment.api.service.AppointmentNotificationAtomicityTest'
 ```
 
 SSE batch에서 동일한 상태 이벤트를 기록하려면 별도 후속 설계와 owner/acceptance criteria가
 필요합니다. 이 문서의 동기 closure 계약을 SSE 경로에 소급 적용하지 않습니다.
 
-durable outbox write를 사용할 수 없으면 API는 제한된 `Retry-After` header와 함께
-`503`을 반환합니다. 안내된 간격이 지난 뒤 동일한 idempotency key로 재시도하며,
-대체 예약이나 event ID를 만들지 않습니다.
+durable outbox write를 사용할 수 없으면 API는 제한된 `Retry-After` header와 correlation
+ID를 포함한 `503`을 반환합니다. closure/confirm/auto에는 durable idempotency key 계약이
+없으므로 동일 응답 replay를 가정하지 않습니다. 안내된 간격 뒤 exact tenant-clinic 범위에서
+appointment status/version, 최신 state history와 correlation ID의 outbox 존재를 bounded
+read-only 조회로 대조합니다. mutation/outbox가 없고 예약이 여전히 command 대상 상태일 때만
+재시도합니다. timeout이나 응답 유실로 commit 여부가 모호한 경우에도 먼저 같은 대조를
+수행하며, 새 event ID나 대체 예약을 임의로 만들지 않습니다.
 
 ## Hold and recovery (보류와 복구)
 

@@ -491,13 +491,12 @@ internal class AppointmentNotificationAtomicityTest {
             scope: TenantClinicScope,
             appointment: AppointmentRecord,
             fromState: AppointmentState,
-            toState: AppointmentState,
             context: AppointmentMessagingContext,
             reasonCode: CancellationReasonCode?,
         ) {
             statusChangedCalls++
             statusChangedFrom = fromState
-            statusChangedTo = toState
+            statusChangedTo = appointment.status
         }
 
         override fun cancelled(

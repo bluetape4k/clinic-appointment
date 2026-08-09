@@ -109,9 +109,11 @@ class RescheduleController(
     fun getCandidates(
         @PathVariable tenantCode: String,
         @PathVariable id: Long,
+        @AuthenticationPrincipal principal: SchedulingUserPrincipal,
     ): ResponseEntity<ApiResponse<List<RescheduleCandidateResponse>>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         val appointment = appointmentService.getById(id, tenant.id)
+        tenantClinicAccessChecker.requirePrincipalClinicAccess(tenantCode, appointment.clinicId, principal)
         val scope = TenantClinicScope(tenant.id, appointment.clinicId)
         log.debug { "GET reschedule candidates scope=<redacted>" }
         val candidates = transaction {
@@ -143,16 +145,18 @@ class RescheduleController(
         @PathVariable id: Long,
         @PathVariable candidateId: Long,
         servletRequest: HttpServletRequest,
+        @AuthenticationPrincipal principal: SchedulingUserPrincipal,
     ): ResponseEntity<ApiResponse<Long>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         val appointment = appointmentService.getById(id, tenant.id)
+        tenantClinicAccessChecker.requirePrincipalClinicAccess(tenantCode, appointment.clinicId, principal)
         val scope = TenantClinicScope(tenant.id, appointment.clinicId)
         log.debug { "POST confirm reschedule scope=<redacted>" }
         val newAppointmentId = closureRescheduleService.confirmReschedule(
             scope = scope,
             candidateId = candidateId,
             originalAppointmentId = id,
-            commandContext = commandContext(servletRequest),
+            commandContext = httpCommandContext(servletRequest),
         )
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }
@@ -176,23 +180,20 @@ class RescheduleController(
         @PathVariable tenantCode: String,
         @PathVariable id: Long,
         servletRequest: HttpServletRequest,
+        @AuthenticationPrincipal principal: SchedulingUserPrincipal,
     ): ResponseEntity<ApiResponse<Long?>> {
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         val appointment = appointmentService.getById(id, tenant.id)
+        tenantClinicAccessChecker.requirePrincipalClinicAccess(tenantCode, appointment.clinicId, principal)
         val scope = TenantClinicScope(tenant.id, appointment.clinicId)
         log.debug { "POST auto reschedule scope=<redacted>" }
         val newAppointmentId = closureRescheduleService.autoReschedule(
             scope = scope,
             originalAppointmentId = id,
-            commandContext = commandContext(servletRequest),
+            commandContext = httpCommandContext(servletRequest),
         )
         return ResponseEntity.ok(ApiResponse.ok(newAppointmentId))
     }
-
-    private fun commandContext(request: HttpServletRequest): AppointmentCommandContext =
-        AppointmentCommandContext.root(
-            CorrelationIdFilter.requireCorrelationId(request),
-        )
 
     private fun httpCommandContext(request: HttpServletRequest): AppointmentCommandContext =
         AppointmentCommandContext.httpRoot(

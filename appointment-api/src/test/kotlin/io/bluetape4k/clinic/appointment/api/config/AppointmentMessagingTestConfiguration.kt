@@ -28,7 +28,6 @@ private object NoopAppointmentOutboxWriter : AppointmentOutboxWriter {
         scope: TenantClinicScope,
         appointment: AppointmentRecord,
         fromState: AppointmentState,
-        toState: AppointmentState,
         context: AppointmentMessagingContext,
         reasonCode: CancellationReasonCode?,
     ) = Unit

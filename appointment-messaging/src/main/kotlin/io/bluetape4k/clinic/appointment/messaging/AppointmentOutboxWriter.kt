@@ -24,7 +24,6 @@ interface AppointmentOutboxWriter {
         scope: TenantClinicScope,
         appointment: AppointmentRecord,
         fromState: AppointmentState,
-        toState: AppointmentState,
         context: AppointmentMessagingContext,
         reasonCode: CancellationReasonCode? = null,
     )
@@ -77,12 +76,14 @@ class DefaultAppointmentOutboxWriter(
         scope: TenantClinicScope,
         appointment: AppointmentRecord,
         fromState: AppointmentState,
-        toState: AppointmentState,
         context: AppointmentMessagingContext,
         reasonCode: CancellationReasonCode?,
     ) {
         val appointmentId = appointment.requireId()
-        proveScope(scope, appointment)
+        val toState = appointment.status
+        require(appointment.clinicId == scope.clinicId) {
+            "appointment does not belong to requested clinic"
+        }
         val canonical = appointmentRepository.findByIdAndScope(appointmentId, scope)
             ?: throw IllegalArgumentException("appointment does not belong to requested scope")
         require(canonical.version == appointment.version) {
@@ -92,7 +93,7 @@ class DefaultAppointmentOutboxWriter(
             "status event toState does not match canonical row"
         }
         require(fromState != toState) { "status event must change state" }
-        val latestHistory = stateHistoryRepository.findByAppointmentId(appointmentId).firstOrNull()
+        val latestHistory = stateHistoryRepository.findLatestByAppointmentId(appointmentId)
             ?: throw IllegalArgumentException("status event history is required")
         require(latestHistory.fromState == fromState && latestHistory.toState == toState) {
             "status event does not match latest state history"

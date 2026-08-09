@@ -112,8 +112,10 @@ legacy 내부 호출자는 고정된 root correlation을 사용하여 기존 호
    않는다.
 2. `AppointmentOutboxWriter.statusChanged`는 같은 caller transaction에서 scope와 ID로
    canonical row와 최신 상태 이력을 다시 읽고 입력 record의 ID/clinic/version/status 및
-   `fromState/toState`를 비교한 뒤 payload를 canonical row로 생성한다. `toState`는
-   interface 인자로 명시해 caller가 payload 상태를 위조하지 못하게 한다.
+   `fromState/toState`를 비교한 뒤 payload를 canonical row로 생성한다. 기존 public port의
+   source/binary 호환성을 유지하기 위해 `toState`는 별도 인자로 추가하지 않고 검증된
+   `appointment.status`에서 도출한다. closure adapter는 core port의 `toState`와
+   `appointment.status` 일치를 먼저 검증한다.
    scope는 callback으로 전달받은 검증된 `TenantClinicScope`를 그대로 사용하고,
    `appointment.clinicId`는 canonical scope equality 검증에만 사용한다. context는
    `AppointmentMessagingContext.from(commandContext)`로 변환한다.
@@ -122,7 +124,9 @@ REST closure endpoint는 `HttpServletRequest`에서 correlation을 읽고 인증
 `allowedClinicIds`에 query `clinicId`가 포함되는지 확인한 뒤 service에 전달한다. 빈
 allow-list와 다른 clinic은 거부한다. `SecurityConfig`에는 closure 정확 경로용 matcher를
 generic tenant POST rule보다 앞에 둬 동일한 clinic 정책을 적용한다. SSE endpoint의 worker
-context 전달은 이번 범위에서 변경하지 않는다.
+context 전달은 이번 범위에서 변경하지 않는다. 같은 controller의 confirm/auto mutation은
+appointment의 canonical clinic을 조회한 뒤 같은 principal allow-list를 재검증하고,
+closure와 동일한 `httpRoot` context를 사용한다.
 
 ### 오류와 원자성
 
@@ -142,6 +146,9 @@ context 전달은 이번 범위에서 변경하지 않는다.
 - request correlation은 trace continuity용 metadata일 뿐 auth/audit/idempotency나
   causation의 권한 근거가 아니다. client header는 검증된 correlation으로만 사용하고
   HTTP command causation은 서버 생성 값으로 보존한다.
+- closure/confirm/auto는 durable idempotency key와 응답 replay를 제공하지 않는다. `503`
+  또는 응답 유실 뒤에는 exact scope, appointment status/version, 최신 history와 correlation
+  ID outbox를 bounded 조회하고 mutation이 없을 때만 재시도한다.
 
 ## 검증 계획
 
@@ -159,15 +166,15 @@ context 전달은 이번 범위에서 변경하지 않는다.
 5. API wiring/통합 테스트로 동기 closure 상태와 outbox row가 같은 transaction에서
    commit되고, 구성된 `AppointmentOutboxWriter` 실패 주입 시 HTTP 503과 함께
    상태·이력·후보·outbox가 모두 0건으로 rollback되는지 확인한다.
-6. `ClosureRescheduleServicePerformanceTest`에 100건/30일 fixture, 슬롯 계산 call/cache
+6. `ClosureRescheduleServicePerformanceTest`에 100건/30일/후보 2,000건 fixture, 슬롯 계산 call/cache
    counter, SQL statement counter를 두고 `./gradlew :appointment-core:test --tests
    '*ClosureRescheduleServicePerformanceTest'`로 실행한다. 2회 warm-up 뒤 10회 측정의
-   나머지 8회 p95는 10초 이하, slot calculation은 cache key당 1회, preflight row는
-   최대 101, write transaction SQL은 `MAX_WRITE_SQL_STATEMENTS = 2_700` 이하이어야
-   한다( bounded requery 1회 + affected당 canonical/history/status 검증 최대 5회 × 100 +
-   candidate insert 최대 2,000 + outbox 여유분). 두 transaction과 `CountDownLatch`를 이용한 competing writer 시나리오에서
-   precompute 동안 write lock을 잡지 않고, mutation lock duration p95를 2초 이하로
-   측정한다. 후보 2,001건 경로는 3회 실행해 mutation row 0을 확인한다. 이 값은 배포
+   p95는 10초 이하, slot calculation은 cache key당 1회, preflight row는 최대 101이어야
+   한다. core write는 2,400 statements 이하, 실제 status writer는 event당 3 statements
+   이하로 고정하여 합성 write budget 2,700 이하를 증명한다. PostgreSQL singleton과
+   `CountDownLatch`를 이용한 competing writer 시나리오는 mutation 중 row lock을 관찰하고
+   latch 해제 뒤 2초 안에 service와 경쟁 CAS가 수렴하는지 확인한다. 후보 2,001건 경로는
+   3회 실행해 mutation row 0을 확인한다. 이 값은 배포
    SLO가 아니라 bounded transaction 회귀를 감지하는 smoke threshold다.
 7. 영향을 받은 Gradle module targeted test와 `git diff --check`를 실행하고 README/runbook
    문구가 실제 stream 범위와 일치하는지 확인한다.

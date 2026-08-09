@@ -48,6 +48,16 @@ class AppointmentStateHistoryRepository {
             .orderBy(AppointmentStateHistory.changedAt to SortOrder.DESC, AppointmentStateHistory.id to SortOrder.DESC)
             .map { it.toRecord() }
 
+    /** 예약의 최신 상태 변경 이력 한 건만 조회합니다. */
+    fun findLatestByAppointmentId(appointmentId: Long): AppointmentStateHistoryRecord? =
+        AppointmentStateHistory
+            .selectAll()
+            .where { AppointmentStateHistory.appointmentId eq appointmentId }
+            .orderBy(AppointmentStateHistory.changedAt to SortOrder.DESC, AppointmentStateHistory.id to SortOrder.DESC)
+            .limit(1)
+            .firstOrNull()
+            ?.toRecord()
+
     private fun ResultRow.toRecord() = AppointmentStateHistoryRecord(
         id = this[AppointmentStateHistory.id].value,
         appointmentId = this[AppointmentStateHistory.appointmentId].value,

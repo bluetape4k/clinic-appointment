@@ -274,12 +274,19 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
 
         val response = client.post()
             .uri("$BASE_URL/{id}/reschedule/confirm/{candidateId}", appointmentId, candidateId)
+            .header(CorrelationIdFilter.HEADER_NAME, "confirm-client-correlation")
             .contentType(MediaType.APPLICATION_JSON)
             .execute()
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
         response.jsonPath<Int>("$.data").shouldNotBeNull().shouldBePositive()
+        transaction {
+            val outbox = SchedulingOutboxEvents.selectAll().single()
+            outbox[SchedulingOutboxEvents.correlationId] shouldBeEqualTo "confirm-client-correlation"
+            outbox[SchedulingOutboxEvents.causationEventId].orEmpty().startsWith("http-command-").shouldBeTrue()
+            (outbox[SchedulingOutboxEvents.causationEventId] == "confirm-client-correlation").shouldBeFalse()
+        }
     }
 
     @Test
@@ -323,6 +330,7 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
     fun `POST auto - 자동 재배정 (후보 없을 때 null)`() {
         val response = client.post()
             .uri("$BASE_URL/{id}/reschedule/auto", appointmentId)
+            .header(CorrelationIdFilter.HEADER_NAME, "auto-client-correlation")
             .contentType(MediaType.APPLICATION_JSON)
             .execute()
 
@@ -347,11 +355,18 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
 
         val response = client.post()
             .uri("$BASE_URL/{id}/reschedule/auto", appointmentId)
+            .header(CorrelationIdFilter.HEADER_NAME, "auto-client-correlation")
             .contentType(MediaType.APPLICATION_JSON)
             .execute()
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
         response.jsonPath<Int>("$.data").shouldNotBeNull().shouldBePositive()
+        transaction {
+            val outbox = SchedulingOutboxEvents.selectAll().single()
+            outbox[SchedulingOutboxEvents.correlationId] shouldBeEqualTo "auto-client-correlation"
+            outbox[SchedulingOutboxEvents.causationEventId].orEmpty().startsWith("http-command-").shouldBeTrue()
+            (outbox[SchedulingOutboxEvents.causationEventId] == "auto-client-correlation").shouldBeFalse()
+        }
     }
 }

@@ -12,9 +12,9 @@
 
 | 관점 | 확인 결과 | 근거 |
 |---|---|---|
-| Architecture | PASS | `AppointmentStatusEventWriter`를 notification port와 분리하고 생성자 필수 의존성으로 구성한다. core는 messaging을 참조하지 않으며 callback scope를 재구성하지 않는다. |
-| Security | PASS | closure exact matcher가 generic POST보다 앞서고, controller/checker가 tenant ownership·role·non-empty `allowedClinicIds`·exact clinic membership을 함께 검증한다. client correlation은 trace metadata로만 사용하고 `httpRoot`가 server causation을 만든다. |
-| Performance | PASS | precompute/write two-phase, slot key cache, `MAX_SLOT_CALCULATIONS=3_000`, candidate `2_000`, preflight/write `LIMIT 101`, SQL `<=2_700`, 2-thread latch lock harness가 계획에 있다. |
+| Architecture | PASS | `AppointmentStatusEventWriter`를 notification port와 분리하고 생성자 필수 의존성으로 구성한다. core는 messaging을 참조하지 않으며 callback scope를 재구성하지 않는다. messaging public port의 기존 signature를 유지해 외부 구현체 호환성도 보존한다. |
+| Security | PASS | closure exact matcher가 generic POST보다 앞서고, controller/checker가 closure·candidate GET·confirm·auto 모두에서 tenant ownership·role·non-empty `allowedClinicIds`·canonical appointment의 exact clinic membership을 함께 검증한다. client correlation은 trace metadata로만 사용하고 `httpRoot`가 server causation을 만든다. |
+| Performance | PASS | precompute/write two-phase, slot key cache, `MAX_SLOT_CALCULATIONS=3_000`, candidate `2_000`, preflight/write `LIMIT 101`, core `<=2,400` + 실제 status writer `<=3/event`의 합성 SQL `<=2,700`, PostgreSQL 2-thread latch lock harness가 계획에 있다. |
 | Stability | PASS | write transaction은 snapshot ID/version/status를 재검증한 뒤 mutation하며 writer/history/codec/DB 오류를 전부 rollback한다. competing writer와 candidate overflow의 no-mutation assertion이 있다. |
 | Testability | PASS | core context/closure RED-GREEN, messaging canonical/history, existing `AppointmentService` caller regression, API 503 failure-injection test configuration과 exact test method가 지정되어 있다. |
 | Operations | PASS | bounded read-only runbook, low-cardinality log code와 duration/count telemetry, README 범위, SSE follow-up owner/acceptance task가 지정되어 있다. broker/registry/SLO는 명시적으로 PENDING이다. |

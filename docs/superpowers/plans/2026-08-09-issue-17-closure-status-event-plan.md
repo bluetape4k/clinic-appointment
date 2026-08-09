@@ -28,7 +28,7 @@
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/tenant/TenantClinicAccessChecker.kt`
   - tenant ownership와 principal clinic membership 검사를 재사용 가능한 `verifyClinicForPrincipal`로 묶는다.
 - `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxWriter.kt`
-  - `toState`를 명시 인자로 받고 `AppointmentStateHistoryRepository`를 통해 canonical appointment 및 최신 history의 from/to를 검증한다.
+  - 기존 public signature를 유지하고 `toState`를 canonical `appointment.status`에서 도출한 뒤 `AppointmentStateHistoryRepository`를 통해 canonical appointment 및 최신 history의 from/to를 검증한다.
 
 ### 테스트
 
@@ -112,7 +112,7 @@
    - `affected * searchDays == 3_001`은 calculation call 0, mutation 0.
    - candidate 2,001은 mutation 0.
    - status writer 예외는 status/version/history/candidate를 모두 원복한다.
-   - 기존 `AppointmentService` caller가 새 `toState` 인자와 함께 정상 동작한다.
+   - 기존 `AppointmentService` caller가 호환 signature로 정상 동작한다.
 
    service의 `KLogging` 구조화 code도 검증한다. `affected_limit_rejected`,
    `slot_calculation_limit_rejected`, `candidate_limit_rejected`, `snapshot_conflict`,
@@ -130,16 +130,16 @@
 
 ## 4. Task 3 — GREEN: messaging canonical writer와 기존 caller 회귀
 
-1. `AppointmentOutboxWriter.statusChanged` signature를
-   `(scope, appointment, fromState, toState, context, reasonCode)`로 바꾼다. `AppointmentService.updateStatus`와 closure adapter를 포함한 모든 caller를 컴파일 검색으로 갱신한다.
+1. `AppointmentOutboxWriter.statusChanged`의 기존
+   `(scope, appointment, fromState, context, reasonCode)` signature를 유지한다. 외부 구현체의 source/binary 호환성을 깨뜨리는 `toState` 인자 추가는 하지 않는다.
 
-2. `DefaultAppointmentOutboxWriter.statusChanged`에서 caller record의 ID/clinic/version/status와 scope를 검증한 뒤 `findByIdAndScope` canonical row를 읽는다. `canonical.version == appointment.version`, `canonical.status == toState`, `fromState != toState`를 확인한다. `AppointmentStateHistoryRepository.findByAppointmentId(id).firstOrNull()`의 from/to가 입력 from/to와 다르면 거부한다. payload는 canonical row와 명시된 from/to로만 생성한다.
+2. `DefaultAppointmentOutboxWriter.statusChanged`에서 caller record의 ID/clinic/version/status와 scope를 검증한 뒤 `findByIdAndScope` canonical row를 읽는다. `toState = appointment.status`로 도출하고 `canonical.version == appointment.version`, `canonical.status == toState`, `fromState != toState`를 확인한다. `AppointmentStateHistoryRepository.findLatestByAppointmentId(id)`의 from/to가 입력 from/도출된 to와 다르면 거부한다. payload는 canonical row와 검증된 from/to로만 생성한다.
 
-3. `AppointmentOutboxWriterTest` fixture에 상태 history table/record를 준비한다. 정상 event의 version/from/to/correlation/causation을 확인하고, stale version, forged toState, forged fromState, cross-clinic row는 `IllegalArgumentException`과 outbox 0을 기대한다.
+3. `AppointmentOutboxWriterTest` fixture에 상태 history table/record를 준비한다. 정상 event의 version/from/to/correlation/causation을 확인하고, stale version, forged appointment status, forged fromState, cross-clinic row는 `IllegalArgumentException`과 outbox 0을 기대한다.
 
 4. `AppointmentNotificationAtomicityTest.확정은 상태 이력과 확정 및 두 리마인더를 같은 transaction에 기록한다`는
-   기존 `AppointmentService.updateStatus` caller가 `AppointmentOutboxWriter.statusChanged(..., fromState, toState, ...)`를
-   한 번 호출하는지 확인해 명시적인 `toState` 전달 회귀를 고정한다.
+   기존 `AppointmentService.updateStatus` caller가 호환 `AppointmentOutboxWriter.statusChanged(..., fromState, ...)`를
+   한 번 호출하고 `appointment.status`가 기대 상태인지 확인한다.
 
 5. 실행:
 
@@ -152,15 +152,15 @@
 
 ## 5. Task 4 — GREEN: API adapter, exact clinic authorization, lineage
 
-1. `ServiceConfig.closureRescheduleService`에서 `AppointmentStatusEventWriter` anonymous adapter를 구성한다. `statusChanged` 호출은 `appointmentNotificationWriter.statusChanged` 후 `appointmentOutboxWriter.statusChanged(..., fromState, toState, AppointmentMessagingContext.from(commandContext))` 순서다. 모든 closure service constructor call과 `AppointmentNotificationAtomicityTest` fixture를 갱신한다.
+1. `ServiceConfig.closureRescheduleService`에서 `AppointmentStatusEventWriter` anonymous adapter를 구성한다. adapter는 `appointment.status == toState`를 검증하고, `statusChanged` 호출은 `appointmentNotificationWriter.statusChanged` 후 호환 `appointmentOutboxWriter.statusChanged(..., fromState, AppointmentMessagingContext.from(commandContext))` 순서다. 모든 closure service constructor call과 `AppointmentNotificationAtomicityTest` fixture를 갱신한다.
 
-2. `RescheduleController.processClosureReschedule`에 `HttpServletRequest`와 `@AuthenticationPrincipal SchedulingUserPrincipal`을 받는다. `TenantClinicAccessChecker.verifyClinicForPrincipal(tenantCode, clinicId, principal)`은 tenant DB ownership, role, non-empty allow-list, exact clinic membership을 모두 확인한다. 다른 clinic 또는 empty allow-list는 403이며 service 호출은 0회다. context는 `AppointmentCommandContext.httpRoot(CorrelationIdFilter.requireCorrelationId(request))`로 만든다.
+2. `RescheduleController.processClosureReschedule`에 `HttpServletRequest`와 `@AuthenticationPrincipal SchedulingUserPrincipal`을 받는다. `TenantClinicAccessChecker.verifyClinicForPrincipal(tenantCode, clinicId, principal)`은 tenant DB ownership, role, non-empty allow-list, exact clinic membership을 모두 확인한다. candidate GET·confirm·auto도 canonical appointment clinic을 읽은 뒤 같은 allow-list를 재검증한다. 다른 clinic 또는 empty allow-list는 403이며 candidate query 또는 service 호출은 0회다. 세 HTTP mutation context는 모두 `AppointmentCommandContext.httpRoot(CorrelationIdFilter.requireCorrelationId(request))`로 만든다.
 
 3. `SecurityConfig`에 closure exact matcher를 generic `POST /api/{tenantCode}/**` 앞에 둔다. matcher는 query parameter `clinicId`를 양수로 파싱하고 `SchedulingUserPrincipal.allowedClinicIds` membership을 확인한다. `clinicPolicyAccess`의 path-variable 전용 구현을 재사용하지 않는다.
 
 4. `RescheduleControllerTest`와 `RescheduleControllerPrivacyTest`에 request/principal 인자를 반영하고, valid clinic에서는 service에 server causation context가 전달되는지 확인한다.
 
-5. `RescheduleClosureSecurityIntegrationTest`는 authenticated ADMIN/STAFF principal에 대해 다음 matrix를 실행한다.
+5. `RescheduleClosureSecurityIntegrationTest`는 closure/candidate GET/confirm/auto의 authenticated ADMIN/STAFF principal에 대해 다음 matrix를 실행한다.
 
    | case | expected | service call |
    |---|---:|---:|
@@ -192,16 +192,16 @@
      --tests '*AppointmentNotificationAtomicityTest.closureStatusWriterFailureRollsBackStateHistoryAndCandidates'
    ```
 
-   API test는 HTTP 503, appointment status/version 원복, history/candidate/outbox row 0을 확인한다. direct test는 HTTP 없이 동일한 transaction rollback을 확인한다. 주입 bean이 없거나 test context가 기본 writer를 사용하면 테스트를 통과시키지 않고 configuration을 고친다.
+   API test는 HTTP 503, appointment status/version 원복, history/candidate/outbox row 0을 확인한다. 503 action은 존재하지 않는 idempotency key replay를 안내하지 않고 correlation ID 기반 bounded reconciliation 후 mutation이 없을 때만 재시도하도록 고정한다. direct test는 HTTP 없이 동일한 transaction rollback을 확인한다. 주입 bean이 없거나 test context가 기본 writer를 사용하면 테스트를 통과시키지 않고 configuration을 고친다.
 
 3. `ClosureRescheduleServicePerformanceTest.kt`에는 다음 harness를 구현한다. 슬롯 계산기는
    production `SlotCalculationService`를 직접 호출하지 않고 주입 가능한 함수 counter로 감싼다.
 
-   - 100 affected appointment와 searchDays 30 fixture.
+   - 100 affected appointment, searchDays 30, 정확히 2,000 candidate fixture.
    - key별 slot query call counter와 Exposed statement counter.
    - 2 warm-up + 10 measured run, 측정 10회의 p95 <= 10s.
-   - key당 slot calculation 1회, preflight returned rows <= 101, write-phase SQL statement count <= 2,700. 이 수치는 bounded requery 1회 + affected당 canonical/history/status 검증 최대 5회 × 100 + candidate insert 최대 2,000 + outbox 여유분으로 고정한다.
-   - `CountDownLatch` 두 transaction: 한 thread는 precompute 중이고 다른 thread는 같은 clinic 다른 appointment를 갱신한다. precompute 구간에 write lock이 잡히지 않고 mutation lock duration p95 <= 2s를 검증한다.
+   - key당 slot calculation 1회, preflight returned rows <= 101, core write statement <= 2,400. `AppointmentOutboxWriterTest`가 실제 status writer를 event당 <= 3 statements로 고정하여 100건 합성 write budget <= 2,700을 증명한다.
+   - PostgreSQL singleton과 `CountDownLatch` 두 transaction: 한 thread는 mutation 내부 status writer에서 row lock을 보유하고 다른 thread는 같은 appointment를 CAS 갱신한다. lock 대기를 관찰한 뒤 latch 해제 후 service와 경쟁 writer가 2초 안에 수렴하는지 검증한다.
    - candidate 2,001 path 3회 반복에서 mutation row 0.
 
    `ClosureRescheduleService`의 저카디널리티 log code와 precompute/write duration을
@@ -214,9 +214,12 @@
    ```bash
    ./gradlew :appointment-core:test --no-daemon --console=plain \
      --tests 'io.bluetape4k.clinic.appointment.service.ClosureRescheduleServicePerformanceTest'
+   ./gradlew :appointment-messaging:test --no-daemon --console=plain \
+     --tests 'io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriterTest'
    ```
 
-   측정값과 SQL/lock counter를 lesson 표에 저장한다. 실제 PostgreSQL lock-wait/SLO는 이 로컬 harness가 증명하지 않으며 운영 검증 항목으로 남긴다.
+   측정값과 SQL/lock counter를 lesson 표에 저장한다. singleton PostgreSQL의 제한된 row-lock
+   의미만 증명하며 production PostgreSQL lock-wait/SLO는 운영 검증 항목으로 남긴다.
 
 ## 7. Task 6 — 문서와 follow-up
 

@@ -4,7 +4,7 @@ import java.io.Serializable
 import java.util.UUID
 
 /**
- * 예약 mutation을 추적하는 서버 생성 correlation 식별자다.
+ * 예약 mutation을 추적하는 검증된 correlation 식별자다.
  *
  * 이 값은 trace continuity만 표현하며 tenant 권한, audit 주체, 중복 제거 키로
  * 사용하지 않는다. HTTP header의 원문을 그대로 신뢰하지 않고 application 경계에서

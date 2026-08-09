@@ -55,7 +55,6 @@ class AppointmentOutboxWriterScopeTest {
                     support.validScope,
                     forgedRecord,
                     AppointmentState.REQUESTED,
-                    AppointmentState.PENDING_RESCHEDULE,
                     support.context("forged-record-status"),
                 )
             },

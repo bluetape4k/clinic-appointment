@@ -12,7 +12,9 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import jakarta.servlet.http.HttpServletRequest
 import org.junit.jupiter.api.Test
@@ -44,10 +46,18 @@ class RescheduleControllerPrivacyTest {
             endTime = LocalTime.of(9, 30),
             status = AppointmentState.CONFIRMED,
         )
+        val principal = SchedulingUserPrincipal(
+            userId = "privacy-operator",
+            clinicId = clinicId,
+            roles = setOf(SchedulingRole.ADMIN),
+            allowedTenants = setOf(tenantCode),
+            allowedClinicIds = setOf(clinicId),
+        )
         val accessChecker = mockk<TenantClinicAccessChecker>()
         every { accessChecker.verifyClinic(tenantCode, clinicId) } returns tenant
         every { accessChecker.verifyClinicForPrincipal(tenantCode, clinicId, any()) } returns tenant
         every { accessChecker.requireTenant(tenantCode) } returns tenant
+        every { accessChecker.requirePrincipalClinicAccess(tenantCode, clinicId, principal) } just Runs
         val appointmentService = mockk<AppointmentService>()
         every { appointmentService.getById(appointmentId, tenantId) } returns record
         val closureService = mockk<ClosureRescheduleService>()
@@ -57,13 +67,6 @@ class RescheduleControllerPrivacyTest {
         val candidates = mockk<RescheduleCandidateRepository>()
         val request = mockk<HttpServletRequest>()
         every { request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) } returns "privacy-reschedule-correlation"
-        val principal = SchedulingUserPrincipal(
-            userId = "privacy-operator",
-            clinicId = clinicId,
-            roles = setOf(SchedulingRole.ADMIN),
-            allowedTenants = setOf(tenantCode),
-            allowedClinicIds = setOf(clinicId),
-        )
 
         val controller = RescheduleController(
             closureRescheduleService = closureService,
@@ -83,11 +86,11 @@ class RescheduleControllerPrivacyTest {
                 principal = principal,
             )
         }
-        kotlin.runCatching { controller.getCandidates(tenantCode, appointmentId) }
+        kotlin.runCatching { controller.getCandidates(tenantCode, appointmentId, principal) }
         kotlin.runCatching {
-            controller.confirmReschedule(tenantCode, appointmentId, candidateId, request)
+            controller.confirmReschedule(tenantCode, appointmentId, candidateId, request, principal)
         }
-        kotlin.runCatching { controller.autoReschedule(tenantCode, appointmentId, request) }
+        kotlin.runCatching { controller.autoReschedule(tenantCode, appointmentId, request, principal) }
 
         output.out.shouldContain("POST closure reschedule scope=<redacted>")
         output.out.shouldContain("GET reschedule candidates scope=<redacted>")
