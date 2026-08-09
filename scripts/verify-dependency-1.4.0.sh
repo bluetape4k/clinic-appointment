@@ -2,10 +2,14 @@
 
 set -euo pipefail
 
-readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-readonly REPOSITORY_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-readonly CATALOG_FILE="$REPOSITORY_ROOT/gradle/libs.versions.toml"
-readonly TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/issue253-dependency.XXXXXX")"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+REPOSITORY_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+readonly REPOSITORY_ROOT
+CATALOG_FILE="$REPOSITORY_ROOT/gradle/libs.versions.toml"
+readonly CATALOG_FILE
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/issue253-dependency.XXXXXX")"
+readonly TEMP_DIR
 
 cleanup() {
     rm -rf -- "$TEMP_DIR"
@@ -118,7 +122,12 @@ assert_selected_version \
     io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce \
     0.5.0
 assert_selected_version \
-    kafka-clients \
+    kafka-clients-messaging \
+    :appointment-messaging \
+    org.apache.kafka:kafka-clients \
+    4.2.1
+assert_selected_version \
+    kafka-clients-benchmark \
     :appointment-messaging-benchmark \
     org.apache.kafka:kafka-clients \
     4.2.1
