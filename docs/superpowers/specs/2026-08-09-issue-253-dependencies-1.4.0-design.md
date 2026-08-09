@@ -79,16 +79,24 @@ LZ4+Fory wire format을 사용한다. 같은 classpath에서 쓰고 읽는 round
 Fory upgrade 호환성을 증명할 수 없다.
 
 변경 전 dependency graph로 실제 `DoctorRecord`, `EquipmentRecord`,
-`TreatmentTypeRecord` 목록의 legacy payload를 생성해 고정 fixture로 보존한다. 변경 후
-기본 codec이 이 fixture를 읽고 값과 타입을 복원하는지 테스트한다. 새 payload를 구버전
-codec으로 읽는 rollback 방향도 별도 classpath 검증으로 확인한다.
+`TreatmentTypeRecord` 목록의 legacy payload를 생성해 고정 fixture로 보존한다. fixture와 함께
+기준 commit, `fory-core`/`fory-kotlin` resolved version, codec 이름, 파일별 SHA-256을
+machine-readable provenance로 남긴다. 변경 후 기본 codec이 이 fixture를 읽을 수 있는지
+진단하고 결과를 lesson에 기록한다.
 
-양방향 호환성이 증명되면 기존 remote cache name을 유지한다. 어느 방향이든 실패하면
-Spring `Cache`의 논리 이름은 유지하되 Redis remote name만 `clinic-doctors-v2`,
-`clinic-equipments-v2`, `clinic-treatment-types-v2`로 분리한다. 배포 전에는 v2만 비우고,
-rollback 전에는 v1을 비워 stale payload 재노출을 막는다. 캐시 TTL은 최대 1시간이므로
-구 namespace 삭제는 배포 성공 뒤 TTL 경과 후 수행한다. cache name에는 Redis Cluster
-hash-slot 의미를 바꾸는 `:` 또는 동적 tenant 식별자를 추가하지 않는다.
+Fory가 임의 버전 사이의 binary compatibility를 보장하지 않고 rollback reader를 현재
+classpath에서 지속적으로 재현할 수 없으므로, 이번 전환은 호환 결과와 무관하게 Redis remote
+name을 `clinic-doctors-v2`, `clinic-equipments-v2`, `clinic-treatment-types-v2`로 분리한다.
+Spring `Cache`의 논리 이름은 유지한다. rolling deployment 동안 구 binary는 v1만, 새 binary는
+v2만 읽고 쓰므로 새 payload를 구 codec이 읽는 경로 자체를 차단한다. 배포 전에는 v2만 비우고,
+rollback 전에는 v1을 비워 stale payload 재노출을 막는다. 캐시 TTL은 최대 1시간이므로 구
+namespace 삭제는 배포 성공 뒤 TTL 경과 후 수행한다. cache name에는 Redis Cluster hash-slot
+의미를 바꾸는 `:` 또는 동적 tenant 식별자를 추가하지 않는다.
+
+Redis integration test는 서로 다른 client/cache instance의 round trip뿐 아니라 raw Redis
+key가 `clinic-*-v2:<logical-key>`에만 생성되고 `clinic-*:<logical-key>`에는 생성되지 않는지
+확인한다. 이 raw-key 계약과 rollback targeted clear 절차가 역방향 decode 대신 rolling
+deployment 안전성을 증명한다.
 
 ### Solver 품질과 성능
 
@@ -100,7 +108,8 @@ hash-slot 의미를 바꾸는 `:` 또는 동적 tenant 식별자를 추가하지
 
 ### 모듈 호환성
 
-- `appointment-core`, `appointment-event`: Exposed plugin/runtime과 JDBC/R2DBC 컴파일·테스트.
+- `appointment-core`, `appointment-event`: Exposed plugin/runtime과 JDBC/R2DBC 컴파일·테스트,
+  두 모듈의 `generateMigrations` task 등록·실행.
 - `appointment-solver`: Timefold 2.4.0 단일 해석, planning model validation, score와 시간.
 - `appointment-notification`: Leader 0.5.0과 Kafka4/Redis 연동 회귀. 신규 관측성 도입은 #254.
 - `appointment-messaging`: Kafka clients/Spring Kafka 및 replay/outbox 테스트. lifecycle 변경은 #249.
@@ -113,16 +122,16 @@ hash-slot 의미를 바꾸는 `:` 또는 동적 tenant 식별자를 추가하지
   실패로 처리한다.
 - Timefold 2.4.0 validation이 planning model 오류를 드러내면 validation을 우회하지 않고
   모델 또는 fixture의 실제 계약 오류만 최소 수정한다.
-- Redis legacy payload decode가 실패하면 예외를 삼키는 adapter 동작에 기대지 않고 v2
-  namespace로 분리한다.
+- Redis legacy payload decode 성공 여부에 기대지 않고 v2 namespace로 분리하며, 실패를
+  예외를 삼키는 adapter 동작으로 숨기지 않는다.
 - module test 또는 benchmark가 실패하면 1.4.0 전환과 동작 변경을 한 PR에 섞지 않는다.
   범위를 벗어난 결함은 별도 이슈로 남기고 이 lane을 merge-ready로 표시하지 않는다.
 
 ## 검증 계획
 
 1. 변경 전후 핵심 좌표의 `dependencyInsight`를 비교한다.
-2. legacy LZ4+Fory fixture의 양방향 호환성을 검증한다. 실패하면 v2 namespace와 운영
-   rollback 절차를 적용하고 테스트한다.
+2. legacy LZ4+Fory fixture의 provenance·SHA-256과 신규 runtime decode 결과를 보존한다.
+   실제 Redis raw key가 v2에만 생성되는지와 운영 rollback 절차를 테스트한다.
 3. `appointment-solver` 전체 테스트와 benchmark를 반복 실행해 score와 시간을 기록한다.
 4. 각 non-frontend module을 개별 test/build하고 마지막에 root build를 실행한다.
 5. Kafka/Exposed/Springdoc/Flyway 관련 integration test와 messaging benchmark smoke를 실행한다.
@@ -136,9 +145,8 @@ hash-slot 의미를 바꾸는 `:` 또는 동적 tenant 식별자를 추가하지
 - Timefold core/benchmark는 BOM이 관리하는 2.4.0 하나로 해석되고 2.2.0이 남지 않는다.
 - Springdoc 직접 version과 별도 Timefold BOM이 제거된다.
 - 직접 override의 유지·제거 근거가 이 문서와 version catalog 주석에 일치한다.
-- Redis cache payload의 양방향 호환성 또는 v2 namespace rollback 계약이 실행 가능한
-  테스트와 runbook으로 증명된다.
+- Redis cache payload의 provenance, v2 raw-key 격리와 rollback 계약이 실행 가능한 테스트와
+  runbook으로 증명된다.
 - solver score 하한과 시간 상한을 유지하고 module별 테스트 및 전체 build가 통과한다.
 - #249, #250, #254의 기능·아키텍처 변경을 이 PR에 포함하지 않는다.
 - 독립 검토에 P0/P1 blocker가 없고 exact PR head의 CI 상태가 확인된다.
-
