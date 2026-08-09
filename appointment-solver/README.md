@@ -70,10 +70,10 @@ val result: SolverResult = solverService.optimize(
 ## 벤치마크
 
 ```bash
-./gradlew :appointment-solver:test --tests "*.SolverBenchmarkTest"
+./gradlew :appointment-solver:test --tests "*solver.benchmark.BenchmarkTest"
 ```
 
-결과는 `build/reports/solver-benchmark/` 에 HTML 리포트로 생성됩니다.
+결과는 `local/benchmark/`에 생성됩니다.
 
 → 상세: [solver-benchmark-report.md](../docs/requirements/solver.md#벤치마크)
 
