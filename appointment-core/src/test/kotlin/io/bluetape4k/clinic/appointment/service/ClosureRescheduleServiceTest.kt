@@ -17,6 +17,7 @@ import io.bluetape4k.clinic.appointment.model.tables.OperatingHoursTable
 import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentModelVersion
@@ -47,6 +48,14 @@ import java.time.LocalTime
 
 class ClosureRescheduleServiceTest : AbstractExposedTest() {
 
+    private data class StatusChangeObservation(
+        val scope: TenantClinicScope,
+        val appointment: AppointmentRecord,
+        val fromState: AppointmentState,
+        val toState: AppointmentState,
+        val commandContext: AppointmentCommandContext,
+    )
+
     private fun scope(clinicId: Long) = TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId)
 
     companion object : KLogging() {
@@ -54,6 +63,7 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
         private val rescheduleService = ClosureRescheduleService(
             slotCalculationService = slotService,
             notificationWriter = AppointmentRescheduleNotificationWriter { _, _, _, _ -> },
+            statusEventWriter = AppointmentStatusEventWriter { _, _, _, _, _ -> },
         )
 
         private val MONDAY = LocalDate.of(2026, 3, 23)
@@ -133,6 +143,39 @@ class ClosureRescheduleServiceTest : AbstractExposedTest() {
         }
 
         return Triple(clinicId.value, doctorId.value, treatmentTypeId.value)
+    }
+
+    @ParameterizedTest
+    @MethodSource(ENABLE_DIALECTS_METHOD)
+    fun `상태 이벤트 writer에 canonical 상태와 lineage를 전달한다`(testDB: TestDB) {
+        withTables(testDB, *allTables) {
+            val (clinicId, _, _) = insertDataWithAppointment()
+            val observed = mutableListOf<StatusChangeObservation>()
+            val service = ClosureRescheduleService(
+                slotCalculationService = slotService,
+                notificationWriter = AppointmentRescheduleNotificationWriter { _, _, _, _ -> },
+                statusEventWriter = AppointmentStatusEventWriter { scope, appointment, fromState, toState, commandContext ->
+                    observed += StatusChangeObservation(scope, appointment, fromState, toState, commandContext)
+                },
+            )
+
+            service.processClosureReschedule(
+                scope(clinicId),
+                MONDAY,
+                searchDays = 1,
+                commandContext = AppointmentCommandContext.httpRoot("client-correlation-41"),
+            )
+
+            observed shouldHaveSize 1
+            val event = observed.single()
+            event.scope shouldBeEqualTo scope(clinicId)
+            event.appointment.version shouldBeEqualTo 1L
+            event.appointment.status shouldBeEqualTo AppointmentState.PENDING_RESCHEDULE
+            event.fromState shouldBeEqualTo AppointmentState.CONFIRMED
+            event.toState shouldBeEqualTo AppointmentState.PENDING_RESCHEDULE
+            event.commandContext.correlationId.value shouldBeEqualTo "client-correlation-41"
+            event.commandContext.causationId.value.startsWith("http-command-").shouldBeTrue()
+        }
     }
 
     @ParameterizedTest

@@ -42,6 +42,27 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 | 예약 신뢰도 override/clear | `POST .../booking-reliability/override`, `POST .../booking-reliability/clear` | capability와 병원 범위 검증 뒤 만료되는 직원 결정을 적용·해제 |
 | 예약 신뢰도 감사 | `GET .../booking-reliability/audit` | 프로필 필드 없이 제한된 결정·사건·override 이력 조회 |
 
+### 임시휴진 동기 재배정
+
+`POST /api/{tenantCode}/appointments/{id}/reschedule/closure`는 legacy 예약만 대상으로
+검증된 `TenantClinicScope` 안에서 `PENDING_RESCHEDULE` 상태 전이, 상태 이력, 재배정 후보와
+`STATUS_CHANGED` outbox를 하나의 write transaction으로 기록합니다. 요청의 correlation 값은
+trace 용도로만 보존하고 causation 값은 서버가 생성합니다. outbox 저장에 실패하면 `503`과
+`APPOINTMENT_MESSAGING_UNAVAILABLE`을 반환하며 상태·이력·후보·outbox를 함께 rollback합니다.
+
+다음 bounded 계약을 넘는 요청은 preflight 또는 write 직전 검증에서 mutation 없이 거부합니다.
+
+| 제한 | 값 |
+|---|---:|
+| 후보 탐색 기간 `searchDays` | `1..30`일 |
+| 영향 예약 수 | 최대 `100`건 (`LIMIT 101` probe) |
+| 슬롯 계산 횟수 | `affected × searchDays <= 3,000` |
+| 후보 저장 수 | 최대 `2,000`건 |
+
+동일한 tenant·clinic·의사·진료유형·날짜의 슬롯 조회는 precompute 단계에서 cache하며,
+write transaction은 snapshot 재검증과 상태 전이·이력·outbox·후보 저장만 수행합니다.
+SSE 일괄 재배정과 commitment-v2 예약은 이 동기 endpoint의 범위가 아니며 별도 후속 작업입니다.
+
 전체 예약 정책 요청, 생명주기, 유효 정책 조회, 오류 계약은
 [Scheduling Policy API](../docs/api/scheduling-policy.md)에 정리되어 있습니다.
 

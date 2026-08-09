@@ -8,10 +8,14 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryReposi
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.repository.DoctorRepository
 import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
+import io.bluetape4k.clinic.appointment.model.service.AvailableSlot
 import io.bluetape4k.clinic.appointment.model.service.SlotQuery
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.logging.KLogging
+import io.bluetape4k.logging.info
+import io.bluetape4k.logging.warn
+import io.bluetape4k.support.requireInRange
 import io.bluetape4k.support.requireNotNull
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.LocalDate
@@ -29,6 +33,9 @@ import kotlin.coroutines.cancellation.CancellationException
  * @param rescheduleCandidateRepository 재배정 후보 Repository
  * @param stateHistoryRepository 예약 상태 이력 Repository
  * @param notificationWriter tenant-scoped 재배정 command의 알림 outbox 연결 port
+ * @param statusEventWriter 상태 전이 event intent를 기록하는 필수 port
+ * @param clinicRepository 병원 소유권 검증 Repository
+ * @param findAvailableSlots 후보 계산 함수. 기본값은 [slotCalculationService]를 사용합니다.
  */
 class ClosureRescheduleService(
     private val slotCalculationService: SlotCalculationService,
@@ -37,13 +44,26 @@ class ClosureRescheduleService(
     private val stateHistoryRepository: AppointmentStateHistoryRepository = AppointmentStateHistoryRepository(),
     private val doctorRepository: DoctorRepository = DoctorRepository(),
     private val notificationWriter: AppointmentRescheduleNotificationWriter,
+    private val statusEventWriter: AppointmentStatusEventWriter,
     private val clinicRepository: ClinicRepository = ClinicRepository(),
+    private val findAvailableSlots: (SlotQuery) -> List<AvailableSlot> = slotCalculationService::findAvailableSlots,
 ) {
     companion object: KLogging() {
         private val ACTIVE_STATUSES = AppointmentState.ACTIVE_STATUSES
+        private const val MAX_SEARCH_DAYS = 30
+        private const val MAX_AFFECTED_APPOINTMENTS = 100
+        private const val MAX_SLOT_CALCULATIONS = 3_000
+        private const val MAX_TOTAL_CANDIDATES = 2_000
         private const val LEGACY_CONFIRM_CORRELATION_ID = "legacy-reschedule-confirm"
         private const val LEGACY_AUTO_CORRELATION_ID = "legacy-reschedule-auto"
     }
+
+    private data class SlotCacheKey(
+        val scope: TenantClinicScope,
+        val doctorId: Long,
+        val treatmentTypeId: Long,
+        val date: LocalDate,
+    )
 
     /**
      * 임시휴진 선언 시 해당 날짜의 활성 예약을 PENDING_RESCHEDULE로 전환하고
@@ -58,71 +78,170 @@ class ClosureRescheduleService(
         scope: TenantClinicScope,
         closureDate: LocalDate,
         searchDays: Int = 7,
+        commandContext: AppointmentCommandContext = AppointmentCommandContext.root("legacy-closure-reschedule"),
     ): Map<Long, List<RescheduleCandidateRecord>> =
-        transaction {
-            require(searchDays > 0) { "searchDays must be positive" }
-            requireNotNull(clinicRepository.findByIdAndTenant(scope.clinicId, scope.tenantGroupId)) {
-                "Clinic ${scope.clinicId} does not belong to tenant ${scope.tenantGroupId}"
-            }
-            val affected = appointmentRepository.findActiveByClinicAndDate(scope, closureDate, ACTIVE_STATUSES)
-            if (affected.isEmpty()) return@transaction emptyMap()
-
-            for (appointment in affected) {
-                check(
-                    appointmentRepository.updateLegacyStatus(
-                        scope = scope,
-                        appointmentId = appointment.id.requireNotNull("appointment.id"),
-                        expectedVersion = appointment.version,
-                        newStatus = AppointmentState.PENDING_RESCHEDULE,
-                    )
-                ) {
-                    "Appointment changed concurrently during closure reschedule"
+        run {
+            searchDays.requireInRange(1, MAX_SEARCH_DAYS, "searchDays")
+            val preflightStarted = System.nanoTime()
+            val affected = transaction {
+                requireNotNull(clinicRepository.findByIdAndTenant(scope.clinicId, scope.tenantGroupId)) {
+                    "Clinic ${scope.clinicId} does not belong to tenant ${scope.tenantGroupId}"
                 }
-                stateHistoryRepository.save(
-                    AppointmentStateHistoryRecord(
-                        appointmentId = appointment.id.requireNotNull("appointment.id"),
-                        fromState = appointment.status,
-                        toState = AppointmentState.PENDING_RESCHEDULE,
-                        reason = "임시휴진으로 인한 재배정",
-                    )
+                val ids = appointmentRepository.probeActiveIdsByClinicAndDate(
+                    scope = scope,
+                    date = closureDate,
+                    activeStatuses = ACTIVE_STATUSES,
+                    limit = MAX_AFFECTED_APPOINTMENTS + 1,
                 )
-            }
-
-            val result = mutableMapOf<Long, List<RescheduleCandidateRecord>>()
-
-            for (appointment in affected) {
-                val appointmentId = appointment.id.requireNotNull("appointment.id")
-                val candidates = mutableListOf<RescheduleCandidateRecord>()
-                var priority = 0
-
-                for (dayOffset in 1..searchDays) {
-                    val candidateDate = closureDate.plusDays(dayOffset.toLong())
-                    val slots = slotCalculationService.findAvailableSlots(
-                        SlotQuery(
-                            scope = scope,
-                            doctorId = appointment.doctorId,
-                            treatmentTypeId = appointment.treatmentTypeId,
-                            date = candidateDate,
-                        )
-                    )
-
-                    for (slot in slots) {
-                        val rcRecord = RescheduleCandidateRecord(
-                            originalAppointmentId = appointmentId,
-                            candidateDate = candidateDate,
-                            startTime = slot.startTime,
-                            endTime = slot.endTime,
-                            doctorId = appointment.doctorId,
-                            priority = priority,
-                        )
-                        val saved = rescheduleCandidateRepository.save(rcRecord, scope)
-                        candidates.add(saved)
-                        priority++
+                if (ids.size > MAX_AFFECTED_APPOINTMENTS) {
+                    log.warn { "closure_reschedule code=affected_limit_rejected affected=${ids.size} searchDays=$searchDays" }
+                    throw IllegalArgumentException("Affected appointment limit exceeded")
+                }
+                appointmentRepository.findActiveByClinicAndDate(
+                    scope = scope,
+                    date = closureDate,
+                    activeStatuses = ACTIVE_STATUSES,
+                    limit = MAX_AFFECTED_APPOINTMENTS + 1,
+                ).also { snapshot ->
+                    check(snapshot.mapNotNull { it.id }.toSet() == ids.toSet()) {
+                        "Affected appointment snapshot changed during preflight"
                     }
                 }
-                result[appointmentId] = candidates
             }
-            result
+            if (affected.isEmpty()) return@run emptyMap()
+
+            val slotCalculationCount = affected.size.toLong() * searchDays
+            if (slotCalculationCount > MAX_SLOT_CALCULATIONS) {
+                log.warn {
+                    "closure_reschedule code=slot_calculation_limit_rejected " +
+                        "affected=${affected.size} searchDays=$searchDays calculations=$slotCalculationCount"
+                }
+                throw IllegalArgumentException("Slot calculation limit exceeded")
+            }
+
+            val slotCache = mutableMapOf<SlotCacheKey, List<AvailableSlot>>()
+            val precomputed = linkedMapOf<Long, List<RescheduleCandidateRecord>>()
+            var totalCandidates = 0
+            val precomputeStarted = System.nanoTime()
+            for (appointment in affected) {
+                val appointmentId = appointment.id.requireNotNull("appointment.id")
+                var priority = 0
+                val candidates = buildList {
+                    for (dayOffset in 1..searchDays) {
+                        val candidateDate = closureDate.plusDays(dayOffset.toLong())
+                        val key = SlotCacheKey(scope, appointment.doctorId, appointment.treatmentTypeId, candidateDate)
+                        val slots = slotCache.getOrPut(key) {
+                            findAvailableSlots(
+                                SlotQuery(
+                                    scope = scope,
+                                    doctorId = appointment.doctorId,
+                                    treatmentTypeId = appointment.treatmentTypeId,
+                                    date = candidateDate,
+                                )
+                            )
+                        }
+                        for (slot in slots) {
+                            totalCandidates++
+                            if (totalCandidates > MAX_TOTAL_CANDIDATES) {
+                                log.warn {
+                                    "closure_reschedule code=candidate_limit_rejected " +
+                                        "affected=${affected.size} searchDays=$searchDays candidates=$totalCandidates"
+                                }
+                                throw IllegalArgumentException("Reschedule candidate limit exceeded")
+                            }
+                            add(
+                                RescheduleCandidateRecord(
+                                    originalAppointmentId = appointmentId,
+                                    candidateDate = candidateDate,
+                                    startTime = slot.startTime,
+                                    endTime = slot.endTime,
+                                    doctorId = appointment.doctorId,
+                                    priority = priority++,
+                                )
+                            )
+                        }
+                    }
+                }
+                precomputed[appointmentId] = candidates
+            }
+            val precomputeDurationMillis = (System.nanoTime() - precomputeStarted) / 1_000_000
+
+            try {
+                val result = transaction {
+                    val current = appointmentRepository.findActiveByClinicAndDate(
+                        scope = scope,
+                        date = closureDate,
+                        activeStatuses = ACTIVE_STATUSES,
+                        limit = MAX_AFFECTED_APPOINTMENTS + 1,
+                    )
+                    check(current.size <= MAX_AFFECTED_APPOINTMENTS) {
+                        "Affected appointment limit exceeded during write validation"
+                    }
+                    val currentById = current.associateBy { it.id.requireNotNull("appointment.id") }
+                    check(current.size == affected.size && affected.all { snapshot ->
+                        val id = snapshot.id.requireNotNull("appointment.id")
+                        currentById[id]?.let { it.version == snapshot.version && it.status == snapshot.status } == true
+                    }) {
+                        log.warn { "closure_reschedule code=snapshot_conflict affected=${affected.size}" }
+                        "Appointment snapshot changed before closure mutation"
+                    }
+
+                    val committed = linkedMapOf<Long, List<RescheduleCandidateRecord>>()
+                    for (appointment in affected) {
+                        val appointmentId = appointment.id.requireNotNull("appointment.id")
+                        check(
+                            appointmentRepository.updateLegacyStatus(
+                                scope = scope,
+                                appointmentId = appointmentId,
+                                expectedVersion = appointment.version,
+                                newStatus = AppointmentState.PENDING_RESCHEDULE,
+                            )
+                        ) { "Appointment changed concurrently during closure reschedule" }
+
+                        val updated = appointmentRepository.findByIdAndScope(appointmentId, scope)
+                            ?: error("Appointment is unavailable after closure status update")
+                        check(updated.version == appointment.version + 1L) {
+                            "Appointment version did not advance during closure reschedule"
+                        }
+                        check(updated.status == AppointmentState.PENDING_RESCHEDULE) {
+                            "Appointment status did not advance during closure reschedule"
+                        }
+                        stateHistoryRepository.save(
+                            AppointmentStateHistoryRecord(
+                                appointmentId = appointmentId,
+                                fromState = appointment.status,
+                                toState = AppointmentState.PENDING_RESCHEDULE,
+                                reason = "임시휴진으로 인한 재배정",
+                            )
+                        )
+                        statusEventWriter.statusChanged(
+                            scope = scope,
+                            appointment = updated,
+                            fromState = appointment.status,
+                            toState = AppointmentState.PENDING_RESCHEDULE,
+                            commandContext = commandContext,
+                        )
+                        committed[appointmentId] = precomputed.getValue(appointmentId).map {
+                            rescheduleCandidateRepository.save(it, scope)
+                        }
+                    }
+                    committed
+                }
+                val totalDurationMillis = (System.nanoTime() - preflightStarted) / 1_000_000
+                log.info {
+                    "closure_reschedule code=committed affected=${result.size} candidates=$totalCandidates " +
+                        "searchDays=$searchDays precomputeDurationMs=$precomputeDurationMillis " +
+                        "totalDurationMs=$totalDurationMillis"
+                }
+                result
+            } catch (failure: RuntimeException) {
+                val totalDurationMillis = (System.nanoTime() - preflightStarted) / 1_000_000
+                log.warn {
+                    "closure_reschedule code=rollback affected=${affected.size} candidates=$totalCandidates " +
+                        "searchDays=$searchDays totalDurationMs=$totalDurationMillis"
+                }
+                throw failure
+            }
         }
 
     /**
@@ -366,4 +485,15 @@ fun interface AppointmentRescheduleNotificationWriter {
         version: Long,
         commandContext: AppointmentCommandContext,
     ) = rescheduled(tenantGroupId, original, replacement, version)
+}
+
+/** 상태 전이와 durable event intent를 caller transaction에 연결하는 dependency-neutral port다. */
+fun interface AppointmentStatusEventWriter {
+    fun statusChanged(
+        scope: TenantClinicScope,
+        appointment: AppointmentRecord,
+        fromState: AppointmentState,
+        toState: AppointmentState,
+        commandContext: AppointmentCommandContext,
+    )
 }

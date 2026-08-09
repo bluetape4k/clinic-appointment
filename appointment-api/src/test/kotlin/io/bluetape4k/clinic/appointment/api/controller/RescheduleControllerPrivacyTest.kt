@@ -3,6 +3,8 @@ package io.bluetape4k.clinic.appointment.api.controller
 import io.bluetape4k.assertions.shouldContain
 import io.bluetape4k.assertions.shouldNotContain
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
+import io.bluetape4k.clinic.appointment.api.security.SchedulingRole
+import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
 import io.bluetape4k.clinic.appointment.api.service.AppointmentService
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.api.tenant.TenantInfo
@@ -44,6 +46,7 @@ class RescheduleControllerPrivacyTest {
         )
         val accessChecker = mockk<TenantClinicAccessChecker>()
         every { accessChecker.verifyClinic(tenantCode, clinicId) } returns tenant
+        every { accessChecker.verifyClinicForPrincipal(tenantCode, clinicId, any()) } returns tenant
         every { accessChecker.requireTenant(tenantCode) } returns tenant
         val appointmentService = mockk<AppointmentService>()
         every { appointmentService.getById(appointmentId, tenantId) } returns record
@@ -54,6 +57,13 @@ class RescheduleControllerPrivacyTest {
         val candidates = mockk<RescheduleCandidateRepository>()
         val request = mockk<HttpServletRequest>()
         every { request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) } returns "privacy-reschedule-correlation"
+        val principal = SchedulingUserPrincipal(
+            userId = "privacy-operator",
+            clinicId = clinicId,
+            roles = setOf(SchedulingRole.ADMIN),
+            allowedTenants = setOf(tenantCode),
+            allowedClinicIds = setOf(clinicId),
+        )
 
         val controller = RescheduleController(
             closureRescheduleService = closureService,
@@ -69,6 +79,8 @@ class RescheduleControllerPrivacyTest {
                 clinicId = clinicId,
                 closureDate = LocalDate.of(2099, 8, 6),
                 searchDays = 1,
+                servletRequest = request,
+                principal = principal,
             )
         }
         kotlin.runCatching { controller.getCandidates(tenantCode, appointmentId) }

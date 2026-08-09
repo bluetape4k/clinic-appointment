@@ -44,6 +44,7 @@ import io.bluetape4k.clinic.appointment.repository.RescheduleCandidateRepository
 import io.bluetape4k.clinic.appointment.service.AppointmentRescheduleNotificationWriter
 import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
+import io.bluetape4k.clinic.appointment.service.AppointmentStatusEventWriter
 import io.bluetape4k.clinic.appointment.service.SlotCalculationService
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentStateMachine
@@ -235,8 +236,9 @@ internal class AppointmentNotificationAtomicityTest {
     fun `확정은 상태 이력과 확정 및 두 리마인더를 같은 transaction에 기록한다`() {
         runBlocking {
             val appointmentId = saveRequestedAppointment()
+            val appointmentOutboxWriter = RecordingAppointmentOutboxWriter()
 
-            val updated = service(actualWriter).updateStatus(
+            val updated = service(actualWriter, appointmentOutboxWriter).updateStatus(
                 id = appointmentId,
                 tenantGroupId = tenantGroupId,
                 targetStatus = "CONFIRMED",
@@ -245,6 +247,9 @@ internal class AppointmentNotificationAtomicityTest {
 
             updated.status shouldBeEqualTo AppointmentState.CONFIRMED
             updated.version shouldBeEqualTo 1L
+            appointmentOutboxWriter.statusChangedCalls shouldBeEqualTo 1
+            appointmentOutboxWriter.statusChangedFrom shouldBeEqualTo AppointmentState.REQUESTED
+            appointmentOutboxWriter.statusChangedTo shouldBeEqualTo AppointmentState.CONFIRMED
             transaction {
                 AppointmentStateHistory.selectAll().count() shouldBeEqualTo 1L
                 NotificationOutboxEvents.selectAll()
@@ -402,7 +407,50 @@ internal class AppointmentNotificationAtomicityTest {
                 }
                 .forEach {
                     it[NotificationOutboxEvents.status] shouldBeEqualTo NotificationOutboxStatus.PENDING
-                }
+            }
+        }
+    }
+
+    @Test
+    fun `휴진 status event 실패는 상태와 이력 및 candidate를 rollback한다`() {
+        val appointmentId = runBlocking {
+            saveRequestedAppointment().also {
+                service(actualWriter).updateStatus(it, tenantGroupId, "CONFIRMED", null)
+            }
+        }
+        val closureDate = transaction {
+            requireNotNull(appointmentRepository.findByIdOrNull(appointmentId)).appointmentDate
+        }
+        val failingStatusEventWriter = AppointmentStatusEventWriter { _, _, _, _, _ ->
+            error("forced closure status event failure")
+        }
+        val closureService = ClosureRescheduleService(
+            slotCalculationService = SlotCalculationService(),
+            appointmentRepository = appointmentRepository,
+            rescheduleCandidateRepository = rescheduleCandidateRepository,
+            stateHistoryRepository = stateHistoryRepository,
+            doctorRepository = DoctorRepository(),
+            notificationWriter = AppointmentRescheduleNotificationWriter { _, _, _, _ -> },
+            statusEventWriter = failingStatusEventWriter,
+            clinicRepository = clinicRepository,
+            findAvailableSlots = { emptyList() },
+        )
+
+        assertFailsWith<IllegalStateException> {
+            closureService.processClosureReschedule(
+                scope = TenantClinicScope(tenantGroupId, clinicId),
+                closureDate = closureDate,
+                searchDays = 1,
+                commandContext = AppointmentCommandContext.root("closure-atomicity-test"),
+            )
+        }
+
+        transaction {
+            val appointment = requireNotNull(appointmentRepository.findByIdOrNull(appointmentId))
+            appointment.status shouldBeEqualTo AppointmentState.CONFIRMED
+            appointment.version shouldBeEqualTo 1L
+            AppointmentStateHistory.selectAll().count() shouldBeEqualTo 1L
+            RescheduleCandidates.selectAll().count() shouldBeEqualTo 0L
         }
     }
 
@@ -426,6 +474,9 @@ internal class AppointmentNotificationAtomicityTest {
     private class RecordingAppointmentOutboxWriter : AppointmentOutboxWriter {
         lateinit var createdScope: TenantClinicScope
         lateinit var createdContext: AppointmentMessagingContext
+        var statusChangedCalls: Int = 0
+        lateinit var statusChangedFrom: AppointmentState
+        lateinit var statusChangedTo: AppointmentState
 
         override fun created(
             scope: TenantClinicScope,
@@ -440,9 +491,14 @@ internal class AppointmentNotificationAtomicityTest {
             scope: TenantClinicScope,
             appointment: AppointmentRecord,
             fromState: AppointmentState,
+            toState: AppointmentState,
             context: AppointmentMessagingContext,
             reasonCode: CancellationReasonCode?,
-        ) = Unit
+        ) {
+            statusChangedCalls++
+            statusChangedFrom = fromState
+            statusChangedTo = toState
+        }
 
         override fun cancelled(
             scope: TenantClinicScope,
@@ -517,6 +573,7 @@ internal class AppointmentNotificationAtomicityTest {
             notificationWriter = AppointmentRescheduleNotificationWriter { tenant, original, replacement, version ->
                 writer.rescheduled(tenant, original, replacement, version)
             },
+            statusEventWriter = AppointmentStatusEventWriter { _, _, _, _, _ -> },
         )
 
     private fun confirmedPendingRescheduleAppointment(): Long {

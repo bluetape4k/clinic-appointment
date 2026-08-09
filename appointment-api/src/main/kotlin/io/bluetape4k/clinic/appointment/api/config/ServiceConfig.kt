@@ -93,6 +93,7 @@ import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
 import io.bluetape4k.clinic.appointment.service.AppointmentRescheduleNotificationWriter
+import io.bluetape4k.clinic.appointment.service.AppointmentStatusEventWriter
 import io.bluetape4k.clinic.appointment.service.AppointmentPlanQueryService
 import io.bluetape4k.clinic.appointment.service.PackageExecutionLimits
 import io.bluetape4k.clinic.appointment.service.CatalogSyncApplicationService
@@ -410,12 +411,12 @@ class ServiceConfig {
         appointmentOutboxWriter: AppointmentOutboxWriter,
         clinicRepository: ClinicRepository,
     ): ClosureRescheduleService = ClosureRescheduleService(
-        slotCalculationService,
-        appointmentRepository,
-        rescheduleCandidateRepository,
-        appointmentStateHistoryRepository,
-        doctorRepository,
-        object : AppointmentRescheduleNotificationWriter {
+        slotCalculationService = slotCalculationService,
+        appointmentRepository = appointmentRepository,
+        rescheduleCandidateRepository = rescheduleCandidateRepository,
+        stateHistoryRepository = appointmentStateHistoryRepository,
+        doctorRepository = doctorRepository,
+        notificationWriter = object : AppointmentRescheduleNotificationWriter {
             override fun rescheduled(
                 tenantGroupId: Long,
                 original: AppointmentRecord,
@@ -451,7 +452,23 @@ class ServiceConfig {
                 )
             }
         },
-        clinicRepository,
+        statusEventWriter = AppointmentStatusEventWriter { scope, appointment, fromState, toState, commandContext ->
+            appointmentNotificationWriter.statusChanged(
+                tenantGroupId = scope.tenantGroupId,
+                record = appointment,
+                version = appointment.version,
+                from = fromState,
+                to = toState,
+            )
+            appointmentOutboxWriter.statusChanged(
+                scope = scope,
+                appointment = appointment,
+                fromState = fromState,
+                toState = toState,
+                context = AppointmentMessagingContext.from(commandContext),
+            )
+        },
+        clinicRepository = clinicRepository,
     )
 
     @Bean

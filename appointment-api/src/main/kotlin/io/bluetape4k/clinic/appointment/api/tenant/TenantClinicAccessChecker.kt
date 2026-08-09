@@ -7,6 +7,9 @@ import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.support.requireNotBlank
 import io.bluetape4k.support.requirePositiveNumber
+import io.bluetape4k.clinic.appointment.api.security.SchedulingRole
+import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
+import org.springframework.security.access.AccessDeniedException
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /**
@@ -53,6 +56,25 @@ class TenantClinicAccessChecker(
             throw NoSuchElementException("Clinic not found")
         }
 
+        return tenant
+    }
+
+    /** tenant ownership와 인증 principal의 정확한 clinic allow-list를 함께 검증합니다. */
+    fun verifyClinicForPrincipal(
+        tenantCode: String,
+        clinicId: Long,
+        principal: SchedulingUserPrincipal,
+    ): TenantInfo {
+        val tenant = verifyClinic(tenantCode, clinicId)
+        if (tenantCode !in principal.allowedTenants) {
+            throw AccessDeniedException("Tenant scope is not authorized")
+        }
+        if (principal.roles.none { it == SchedulingRole.ADMIN || it == SchedulingRole.STAFF }) {
+            throw AccessDeniedException("Clinic mutation role is not authorized")
+        }
+        if (principal.allowedClinicIds.isEmpty() || clinicId !in principal.allowedClinicIds) {
+            throw AccessDeniedException("Clinic scope is not authorized")
+        }
         return tenant
     }
 

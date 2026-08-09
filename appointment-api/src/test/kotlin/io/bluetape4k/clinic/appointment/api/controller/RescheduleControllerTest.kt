@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
+import io.bluetape4k.clinic.appointment.messaging.AppointmentEventType
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentNotes
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -20,6 +21,10 @@ import io.bluetape4k.clinic.appointment.model.tables.RescheduleCandidates
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.clinic.appointment.api.security.TestJwtProvider
+import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
+import io.bluetape4k.clinic.appointment.api.config.AppointmentMessagingFailureTestConfiguration
+import io.bluetape4k.clinic.appointment.api.config.AppointmentMessagingFailureSwitch
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.assertions.shouldBeEmpty
@@ -33,18 +38,24 @@ import io.bluetape4k.assertions.shouldNotBeNull
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.context.annotation.Import
+import org.springframework.test.context.ActiveProfiles
 import org.springframework.web.client.RestClient
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 
+@ActiveProfiles("test", "integration-test")
+@Import(AppointmentMessagingFailureTestConfiguration::class)
 class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegrationTest() {
 
     companion object : KLogging() {
@@ -53,6 +64,9 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
 
     @LocalServerPort
     private var port: Int = 0
+
+    @Autowired
+    private lateinit var messagingFailureSwitch: AppointmentMessagingFailureSwitch
 
     private lateinit var client: RestClient
 
@@ -63,10 +77,7 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
 
     @BeforeEach
     fun setup() {
-        client = RestClient.builder()
-            .baseUrl("http://localhost:$port")
-            .build()
-
+        messagingFailureSwitch.failStatusChanged = false
         transaction {
             SchemaUtils.create(
                 Clinics, OperatingHoursTable, ClinicDefaultBreakTimes, BreakTimes, ClinicClosures,
@@ -153,6 +164,43 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
                 it[Appointments.status] = AppointmentState.CONFIRMED
             }.value
         }
+
+        client = RestClient.builder()
+            .baseUrl("http://localhost:$port")
+            .defaultHeader(
+                HttpHeaders.AUTHORIZATION,
+                "Bearer ${TestJwtProvider.createToken(clinicId = clinicId, allowedClinicIds = setOf(clinicId))}",
+            )
+            .build()
+    }
+
+    @Test
+    fun `closureOutboxFailureReturns503AndRollsBack`() {
+        messagingFailureSwitch.failStatusChanged = true
+
+        val response = client.post()
+            .uri(
+                "$BASE_URL/{id}/reschedule/closure?clinicId={clinicId}&closureDate={date}",
+                appointmentId,
+                clinicId,
+                "2026-04-06",
+            )
+            .header(CorrelationIdFilter.HEADER_NAME, "closure-failure-1")
+            .contentType(MediaType.APPLICATION_JSON)
+            .execute()
+
+        response.statusCode shouldBeEqualTo HttpStatus.SERVICE_UNAVAILABLE
+        response.jsonPath<String>("$.errorCode") shouldBeEqualTo "APPOINTMENT_MESSAGING_UNAVAILABLE"
+        response.jsonPath<String>("$.correlationId") shouldBeEqualTo "closure-failure-1"
+
+        transaction {
+            val appointment = Appointments.selectAll().single()
+            appointment[Appointments.status] shouldBeEqualTo AppointmentState.CONFIRMED
+            appointment[Appointments.version] shouldBeEqualTo 0L
+            AppointmentStateHistory.selectAll().count() shouldBeEqualTo 0L
+            RescheduleCandidates.selectAll().count() shouldBeEqualTo 0L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L
+        }
     }
 
     @Test
@@ -165,6 +213,14 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.jsonPath<Boolean>("$.success").shouldBeTrue()
+
+        transaction {
+            Appointments.selectAll().single()[Appointments.status] shouldBeEqualTo AppointmentState.PENDING_RESCHEDULE
+            AppointmentStateHistory.selectAll().count() shouldBeEqualTo 1L
+            SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 1L
+            SchedulingOutboxEvents.selectAll().single()[SchedulingOutboxEvents.eventType] shouldBeEqualTo
+                AppointmentEventType.STATUS_CHANGED.wireName
+        }
     }
 
     @Test

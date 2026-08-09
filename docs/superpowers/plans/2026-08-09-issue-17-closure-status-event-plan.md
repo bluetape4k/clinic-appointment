@@ -41,7 +41,8 @@
 - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/RescheduleControllerPrivacyTest.kt`
 - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/security/RescheduleClosureSecurityIntegrationTest.kt`
 - `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/AppointmentMessagingFailureTestConfiguration.kt`
-- `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/service/AppointmentServiceStatusEventRegressionTest.kt`
+- `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/service/AppointmentNotificationAtomicityTest.kt`의
+  `확정은 상태 이력과 확정 및 두 리마인더를 같은 transaction에 기록한다` 회귀 method
 
 ### 문서와 운영 후속
 
@@ -136,7 +137,9 @@
 
 3. `AppointmentOutboxWriterTest` fixture에 상태 history table/record를 준비한다. 정상 event의 version/from/to/correlation/causation을 확인하고, stale version, forged toState, forged fromState, cross-clinic row는 `IllegalArgumentException`과 outbox 0을 기대한다.
 
-4. `AppointmentServiceStatusEventRegressionTest`는 기존 status update path가 `AppointmentOutboxWriter.statusChanged(..., fromState, toState, ...)`를 한 번 호출하고 정상 payload를 남기는지 확인한다.
+4. `AppointmentNotificationAtomicityTest.확정은 상태 이력과 확정 및 두 리마인더를 같은 transaction에 기록한다`는
+   기존 `AppointmentService.updateStatus` caller가 `AppointmentOutboxWriter.statusChanged(..., fromState, toState, ...)`를
+   한 번 호출하는지 확인해 명시적인 `toState` 전달 회귀를 고정한다.
 
 5. 실행:
 
@@ -191,11 +194,12 @@
 
    API test는 HTTP 503, appointment status/version 원복, history/candidate/outbox row 0을 확인한다. direct test는 HTTP 없이 동일한 transaction rollback을 확인한다. 주입 bean이 없거나 test context가 기본 writer를 사용하면 테스트를 통과시키지 않고 configuration을 고친다.
 
-3. `ClosureRescheduleServicePerformanceTest.kt`에는 다음 harness를 구현한다.
+3. `ClosureRescheduleServicePerformanceTest.kt`에는 다음 harness를 구현한다. 슬롯 계산기는
+   production `SlotCalculationService`를 직접 호출하지 않고 주입 가능한 함수 counter로 감싼다.
 
    - 100 affected appointment와 searchDays 30 fixture.
-   - `CountingSlotCalculationService`의 key별 call counter와 Exposed statement counter.
-   - 2 warm-up + 10 measured run, 측정 8회의 p95 <= 10s.
+   - key별 slot query call counter와 Exposed statement counter.
+   - 2 warm-up + 10 measured run, 측정 10회의 p95 <= 10s.
    - key당 slot calculation 1회, preflight returned rows <= 101, write-phase SQL statement count <= 2,700. 이 수치는 bounded requery 1회 + affected당 canonical/history/status 검증 최대 5회 × 100 + candidate insert 최대 2,000 + outbox 여유분으로 고정한다.
    - `CountDownLatch` 두 transaction: 한 thread는 precompute 중이고 다른 thread는 같은 clinic 다른 appointment를 갱신한다. precompute 구간에 write lock이 잡히지 않고 mutation lock duration p95 <= 2s를 검증한다.
    - candidate 2,001 path 3회 반복에서 mutation row 0.

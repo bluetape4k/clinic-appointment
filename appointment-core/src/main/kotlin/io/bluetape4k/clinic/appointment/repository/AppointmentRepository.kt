@@ -19,6 +19,7 @@ import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.support.requirePositiveNumber
+import io.bluetape4k.support.requireInRange
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -495,14 +496,16 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         clinicId: Long,
         date: LocalDate,
         activeStatuses: List<AppointmentState> = AppointmentState.ACTIVE_STATUSES,
+        limit: Int? = null,
     ): List<AppointmentRecord> =
-        Appointments
+        (Appointments
             .selectAll()
             .where { Appointments.clinicId eq clinicId }
             .andWhere { Appointments.appointmentDate eq date }
             .andWhere { Appointments.status inList activeStatuses }
             .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
             .andWhere { completeAppointmentProjection() }
+            .let { query -> limit?.let(query::limit) ?: query })
             .map { it.toAppointmentRecord() }
 
     /** 검증된 테넌트-병원 범위의 legacy 활성 예약을 조회합니다. */
@@ -510,8 +513,9 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         scope: TenantClinicScope,
         date: LocalDate,
         activeStatuses: List<AppointmentState> = AppointmentState.ACTIVE_STATUSES,
+        limit: Int? = null,
     ): List<AppointmentRecord> =
-        Appointments
+        (Appointments
             .selectAll()
             .where {
                 (Appointments.clinicId eq scope.clinicId) and
@@ -521,7 +525,30 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             .andWhere { Appointments.status inList activeStatuses }
             .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
             .andWhere { completeAppointmentProjection() }
+            .let { query -> limit?.let(query::limit) ?: query })
             .map { it.toAppointmentRecord() }
+
+    /** 검증된 범위의 legacy 활성 예약 ID를 상한까지 조회하는 probe입니다. */
+    fun probeActiveIdsByClinicAndDate(
+        scope: TenantClinicScope,
+        date: LocalDate,
+        activeStatuses: List<AppointmentState> = AppointmentState.ACTIVE_STATUSES,
+        limit: Int,
+    ): List<Long> {
+        limit.requireInRange(1, 101, "limit")
+        return Appointments
+            .select(Appointments.id)
+            .where {
+                (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
+            }
+            .andWhere { Appointments.appointmentDate eq date }
+            .andWhere { Appointments.status inList activeStatuses }
+            .andWhere { Appointments.modelVersion eq AppointmentModelVersion.LEGACY }
+            .andWhere { completeAppointmentProjection() }
+            .limit(limit)
+            .map { it[Appointments.id].value }
+    }
 
     /**
      * 병원의 특정 날짜 legacy 예약 상태를 일괄 변경합니다.

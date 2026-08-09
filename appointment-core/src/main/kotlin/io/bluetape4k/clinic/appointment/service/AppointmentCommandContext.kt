@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.service
 
 import java.io.Serializable
+import java.util.UUID
 
 /**
  * 예약 mutation을 추적하는 서버 생성 correlation 식별자다.
@@ -49,6 +50,14 @@ class AppointmentCommandContext private constructor(
                 causationId = AppointmentCausationId(correlation.value),
             )
         }
+
+        /** HTTP caller correlation은 보존하고 command causation은 서버에서 새로 만든다. */
+        @JvmStatic
+        fun httpRoot(correlationId: String): AppointmentCommandContext =
+            derived(
+                correlationId = correlationId,
+                causationId = "http-command-${UUID.randomUUID()}",
+            )
 
         /** upstream event/command가 직접 원인이 된 child command context를 만든다. */
         @JvmStatic
