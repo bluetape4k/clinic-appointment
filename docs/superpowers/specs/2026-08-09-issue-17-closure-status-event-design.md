@@ -157,8 +157,8 @@ context 전달은 이번 범위에서 변경하지 않는다.
    payload의 appointment version, `fromState`, `toState`, context 및 pending row를
    확인한다.
 5. API wiring/통합 테스트로 동기 closure 상태와 outbox row가 같은 transaction에서
-   commit되고, 구성된 outbox codec 실패 주입 시 HTTP 503과 함께 상태·이력·후보·outbox가
-   모두 0건으로 rollback되는지 확인한다.
+   commit되고, 구성된 `AppointmentOutboxWriter` 실패 주입 시 HTTP 503과 함께
+   상태·이력·후보·outbox가 모두 0건으로 rollback되는지 확인한다.
 6. `ClosureRescheduleServicePerformanceTest`에 100건/30일 fixture, 슬롯 계산 call/cache
    counter, SQL statement counter를 두고 `./gradlew :appointment-core:test --tests
    '*ClosureRescheduleServicePerformanceTest'`로 실행한다. 2회 warm-up 뒤 10회 측정의

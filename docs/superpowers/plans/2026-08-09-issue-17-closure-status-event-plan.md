@@ -178,9 +178,18 @@
 
 ## 6. Task 5 — API composite rollback 주입과 성능/lock harness
 
-1. `AppointmentMessagingFailureTestConfiguration.kt`에 `@TestConfiguration` bean을 둔다. closure test profile에서 `AppointmentOutboxWriter`의 `statusChanged`만 `AppointmentMessagingContractException`을 던지는 `FailingAppointmentOutboxWriter`로 교체한다. 테스트 소유 파일은 `AppointmentNotificationAtomicityTest.kt`의 `closureOutboxFailureRollsBackStateHistoryAndCandidates` method다.
+1. `AppointmentMessagingFailureTestConfiguration.kt`에 `@TestConfiguration` bean을 둔다. closure integration test profile에서 `AppointmentOutboxWriter`의 `statusChanged`만 `AppointmentMessagingContractException`을 던지는 `FailingAppointmentOutboxWriter`로 교체한다. API 테스트 소유 method는 `RescheduleControllerTest.closureOutboxFailureReturns503AndRollsBack`이고, direct core transaction 회귀 method는 `AppointmentNotificationAtomicityTest.closureStatusWriterFailureRollsBackStateHistoryAndCandidates`다.
 
-2. `./gradlew :appointment-api:test --tests '*AppointmentNotificationAtomicityTest.closureOutboxFailureRollsBackStateHistoryAndCandidates'`를 실행해 HTTP 503, appointment status/version 원복, history/candidate/outbox row 0을 확인한다. 주입 bean이 없거나 test context가 기본 writer를 사용하면 테스트를 통과시키지 않고 configuration을 고친다.
+2. 다음 두 명령을 실행해 경계를 각각 증명한다.
+
+   ```bash
+   ./gradlew :appointment-api:test --no-daemon --console=plain \
+     --tests '*RescheduleControllerTest.closureOutboxFailureReturns503AndRollsBack'
+   ./gradlew :appointment-api:test --no-daemon --console=plain \
+     --tests '*AppointmentNotificationAtomicityTest.closureStatusWriterFailureRollsBackStateHistoryAndCandidates'
+   ```
+
+   API test는 HTTP 503, appointment status/version 원복, history/candidate/outbox row 0을 확인한다. direct test는 HTTP 없이 동일한 transaction rollback을 확인한다. 주입 bean이 없거나 test context가 기본 writer를 사용하면 테스트를 통과시키지 않고 configuration을 고친다.
 
 3. `ClosureRescheduleServicePerformanceTest.kt`에는 다음 harness를 구현한다.
 
