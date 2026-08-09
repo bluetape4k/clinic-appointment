@@ -28,7 +28,7 @@
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/tenant/TenantClinicAccessChecker.kt`
   - tenant ownership와 principal clinic membership 검사를 재사용 가능한 `verifyClinicForPrincipal`로 묶는다.
 - `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxWriter.kt`
-  - `toState`를 명시 인자로 받고 canonical appointment 및 최신 history의 from/to를 검증한다.
+  - `toState`를 명시 인자로 받고 `AppointmentStateHistoryRepository`를 통해 canonical appointment 및 최신 history의 from/to를 검증한다.
 
 ### 테스트
 
@@ -196,7 +196,7 @@
    - 100 affected appointment와 searchDays 30 fixture.
    - `CountingSlotCalculationService`의 key별 call counter와 Exposed statement counter.
    - 2 warm-up + 10 measured run, 측정 8회의 p95 <= 10s.
-   - key당 slot calculation 1회, preflight returned rows <= 101, write-phase SQL은 status/history/candidate insert 합계 2,000 candidate limit에 맞춘 명시 상한.
+   - key당 slot calculation 1회, preflight returned rows <= 101, write-phase SQL statement count <= 2,700. 이 수치는 bounded requery 1회 + affected당 canonical/history/status 검증 최대 5회 × 100 + candidate insert 최대 2,000 + outbox 여유분으로 고정한다.
    - `CountDownLatch` 두 transaction: 한 thread는 precompute 중이고 다른 thread는 같은 clinic 다른 appointment를 갱신한다. precompute 구간에 write lock이 잡히지 않고 mutation lock duration p95 <= 2s를 검증한다.
    - candidate 2,001 path 3회 반복에서 mutation row 0.
 
