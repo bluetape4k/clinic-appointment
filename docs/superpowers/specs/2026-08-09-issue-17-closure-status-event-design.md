@@ -90,6 +90,14 @@ affected row를 `LIMIT 101`로 재조회해 preflight의 ID/version/status snaps
 계산 시점 snapshot을 의미하며 stale snapshot을 허용하지 않는 후속 재검증이 필요한 경우
 별도 운영 설계로 다룬다.
 
+closure service는 `affected_limit_rejected`, `slot_calculation_limit_rejected`,
+`candidate_limit_rejected`, `snapshot_conflict`, `rollback`, `committed`의 저카디널리티
+구조화 log code를 기록한다. log에는 tenant, clinic, appointment ID, patient 정보와
+원문 reason을 넣지 않고 affected count, candidate count, searchDays, precompute 및
+write duration만 기록한다. 운영 adapter가 Micrometer를 제공하는 경우 같은 code를
+counter와 transaction timer로 연결하되, 이번 PR은 broker/SLO alert threshold를 확정하지
+않는다.
+
 서비스의 `commandContext`는 마지막 선택 인자로 추가한다. API caller는 요청 correlation을
 검증한 뒤 `AppointmentCommandContext.httpRoot(correlationId)`로 context를 만든다. 이때
 client 값은 correlation에만 보존하고 causation은 `http-command-<UUID>`로 서버가 생성한다.
