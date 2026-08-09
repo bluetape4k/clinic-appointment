@@ -163,8 +163,9 @@ context 전달은 이번 범위에서 변경하지 않는다.
    counter, SQL statement counter를 두고 `./gradlew :appointment-core:test --tests
    '*ClosureRescheduleServicePerformanceTest'`로 실행한다. 2회 warm-up 뒤 10회 측정의
    나머지 8회 p95는 10초 이하, slot calculation은 cache key당 1회, preflight row는
-   최대 101, write transaction SQL은 상태·이력·후보 insert 예산을 명시한 상한 이하이어야
-   한다. 두 transaction과 `CountDownLatch`를 이용한 competing writer 시나리오에서
+   최대 101, write transaction SQL은 `MAX_WRITE_SQL_STATEMENTS = 2_700` 이하이어야
+   한다( bounded requery 1회 + affected당 canonical/history/status 검증 최대 5회 × 100 +
+   candidate insert 최대 2,000 + outbox 여유분). 두 transaction과 `CountDownLatch`를 이용한 competing writer 시나리오에서
    precompute 동안 write lock을 잡지 않고, mutation lock duration p95를 2초 이하로
    측정한다. 후보 2,001건 경로는 3회 실행해 mutation row 0을 확인한다. 이 값은 배포
    SLO가 아니라 bounded transaction 회귀를 감지하는 smoke threshold다.
@@ -181,7 +182,8 @@ context 전달은 이번 범위에서 변경하지 않는다.
   검출된다.
 - 이벤트는 canonical row의 version/status와 요청 command context를 보존한다.
 - 상태·이력·후보·outbox의 transaction 원자성이 테스트로 증명된다.
-- `searchDays <= 30`, affected `<= 100`, slot calculation `<= 3,000`, 후보 `<= 2,000`
+- `searchDays <= 30`, affected `<= 100`, slot calculation `<= 3,000`, 후보 `<= 2,000`,
+  write SQL `<= 2,700`
   bounded 계약과 성능 smoke 증거가 있다. precompute cache hit, 상태/history/candidate
   write SQL 예산, competing writer의 lock duration 관찰값을 기록한다.
 - README와 운영 runbook은 closure 중간 상태가 포함되고 commitment-v2는 여전히 제외됨을
