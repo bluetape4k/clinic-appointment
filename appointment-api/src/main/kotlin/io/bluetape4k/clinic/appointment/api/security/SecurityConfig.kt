@@ -236,6 +236,14 @@ class SecurityConfig {
                         "/api/{tenantCode}/appointments/*/proposals/*/decline",
                     )
                     .access(patientTenantAccess(tenantAuthorizationManager))
+                    // query clinic selector를 사용하는 closure mutation은 tenant-wide POST 규칙으로
+                    // 흘러가면 안 된다. controller 호출 전에 tenant grant와 principal의 정확한
+                    // clinic allow-list를 모두 확인한다.
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/{tenantCode}/appointments/*/reschedule/closure",
+                    )
+                    .access(closureRescheduleAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/appointments/*/commitment")
                     .access(commitmentReadTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(
@@ -412,6 +420,24 @@ class SecurityConfig {
                     requestedClinicId != null &&
                         requestedClinicId > 0 &&
                         requestedClinicId in principal?.allowedClinicIds.orEmpty()
+                )
+            },
+        )
+
+    private fun closureRescheduleAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(SchedulingRole.ADMIN, SchedulingRole.STAFF),
+            tenantAuthorizationManager,
+            AuthorizationManager { authentication, context ->
+                val principal = authentication.get().principal as? SchedulingUserPrincipal
+                val requestedClinicId = context.request.getParameter("clinicId")?.toLongOrNull()
+                AuthorizationDecision(
+                    requestedClinicId != null &&
+                        requestedClinicId > 0 &&
+                        principal?.allowedClinicIds?.isNotEmpty() == true &&
+                        requestedClinicId in principal.allowedClinicIds,
                 )
             },
         )

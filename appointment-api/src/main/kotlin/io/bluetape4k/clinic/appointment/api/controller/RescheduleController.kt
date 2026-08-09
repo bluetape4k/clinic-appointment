@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
 import io.bluetape4k.clinic.appointment.api.dto.RescheduleCandidateResponse
 import io.bluetape4k.clinic.appointment.api.dto.toResponse
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
+import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
 import io.bluetape4k.clinic.appointment.api.service.AppointmentService
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import java.time.LocalDate
 
 /**
@@ -72,11 +74,18 @@ class RescheduleController(
         @RequestParam clinicId: Long,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) closureDate: LocalDate,
         @Parameter(description = "Number of days to search for alternative slots") @RequestParam(defaultValue = "7") searchDays: Int,
+        servletRequest: HttpServletRequest,
+        @AuthenticationPrincipal principal: SchedulingUserPrincipal,
     ): ResponseEntity<ApiResponse<Map<Long, List<RescheduleCandidateResponse>>>> {
-        val tenant = tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        val tenant = tenantClinicAccessChecker.verifyClinicForPrincipal(tenantCode, clinicId, principal)
         val scope = TenantClinicScope(tenant.id, clinicId)
         log.debug { "POST closure reschedule scope=<redacted>, date=$closureDate" }
-        val result = closureRescheduleService.processClosureReschedule(scope, closureDate, searchDays)
+        val result = closureRescheduleService.processClosureReschedule(
+            scope = scope,
+            closureDate = closureDate,
+            searchDays = searchDays,
+            commandContext = httpCommandContext(servletRequest),
+        )
         val response = result.mapValues { (_, candidates) ->
             candidates.map { it.toResponse() }
         }
@@ -182,6 +191,11 @@ class RescheduleController(
 
     private fun commandContext(request: HttpServletRequest): AppointmentCommandContext =
         AppointmentCommandContext.root(
+            CorrelationIdFilter.requireCorrelationId(request),
+        )
+
+    private fun httpCommandContext(request: HttpServletRequest): AppointmentCommandContext =
+        AppointmentCommandContext.httpRoot(
             CorrelationIdFilter.requireCorrelationId(request),
         )
 }

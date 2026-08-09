@@ -6,8 +6,39 @@ writer는 legacy mutation과 동일한 database transaction에서 비식별화�
 이벤트를 기록합니다. relay는 at-least-once 방식이므로 `eventId`를 다시 보낼 수
 있으며, consumer는 자체 idempotency 처리에 event ID를 사용해야 합니다(Issue #42).
 
-Issue #41의 stream은 의도적으로 부분 범위만 다룹니다. commitment-v2나 closure의
-`PENDING_RESCHEDULE` 전이가 포함된 것으로 해석하지 않습니다.
+Issue #41의 stream은 의도적으로 부분 범위만 다룹니다. legacy 동기 closure endpoint는
+`PENDING_RESCHEDULE` 전이와 `STATUS_CHANGED` outbox를 포함하지만, SSE batch stream과
+commitment-v2 예약은 이 경로에 포함되지 않습니다.
+
+## Legacy closure 상태 이벤트
+
+`POST /api/{tenantCode}/appointments/{id}/reschedule/closure`는 요청의 tenant·clinic
+allow-list를 확인한 뒤 preflight에서 영향 예약을 `LIMIT 101` probe로 확인합니다. 다음
+상한을 넘으면 write transaction에 진입하지 않습니다.
+
+- `searchDays`: `1..30`
+- 영향 예약: 최대 `100`건
+- 슬롯 계산: `affected × searchDays <= 3,000`
+- 재배정 후보: 최대 `2,000`건
+
+precompute 단계는 동일 scope·의사·진료유형·날짜 key를 cache하고 write lock을 잡지
+않습니다. write 단계는 snapshot의 ID/version/status를 다시 확인한 뒤 예약 상태,
+state history, 후보와 `STATUS_CHANGED` outbox를 함께 commit합니다. outbox adapter가
+계약 예외를 던지면 API는 `503 APPOINTMENT_MESSAGING_UNAVAILABLE`을 반환하고 네 행을
+모두 rollback합니다.
+
+운영 중 대조가 필요하면 event ID와 aggregate version만 사용하는 bounded read-only 조회를
+수행합니다. patient payload, raw reason, tenant·clinic 식별자를 metric이나 일반 log에
+복사하지 않습니다. 아래 smoke 명령은 로컬 H2 fixture의 경계만 확인하며 production
+broker/registry/SLO 증거를 대신하지 않습니다.
+
+```bash
+./gradlew :appointment-core:test --no-daemon --console=plain -PuseFastDB=true \
+  --tests 'io.bluetape4k.clinic.appointment.service.ClosureRescheduleServicePerformanceTest'
+```
+
+SSE batch에서 동일한 상태 이벤트를 기록하려면 별도 후속 설계와 owner/acceptance criteria가
+필요합니다. 이 문서의 동기 closure 계약을 SSE 경로에 소급 적용하지 않습니다.
 
 durable outbox write를 사용할 수 없으면 API는 제한된 `Retry-After` header와 함께
 `503`을 반환합니다. 안내된 간격이 지난 뒤 동일한 idempotency key로 재시도하며,

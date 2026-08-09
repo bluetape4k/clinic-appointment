@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCod
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
+import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
@@ -23,6 +24,7 @@ interface AppointmentOutboxWriter {
         scope: TenantClinicScope,
         appointment: AppointmentRecord,
         fromState: AppointmentState,
+        toState: AppointmentState,
         context: AppointmentMessagingContext,
         reasonCode: CancellationReasonCode? = null,
     )
@@ -48,6 +50,7 @@ interface AppointmentOutboxWriter {
  */
 class DefaultAppointmentOutboxWriter(
     private val appointmentRepository: AppointmentRepository = AppointmentRepository(),
+    private val stateHistoryRepository: AppointmentStateHistoryRepository = AppointmentStateHistoryRepository(),
     private val clinicRepository: ClinicRepository = ClinicRepository(),
     private val codec: AppointmentEventEnvelopeCodec = AppointmentEventEnvelopeCodec(),
     private val eventTopic: AppointmentTopic = AppointmentTopic(DEFAULT_TOPIC),
@@ -74,16 +77,31 @@ class DefaultAppointmentOutboxWriter(
         scope: TenantClinicScope,
         appointment: AppointmentRecord,
         fromState: AppointmentState,
+        toState: AppointmentState,
         context: AppointmentMessagingContext,
         reasonCode: CancellationReasonCode?,
     ) {
         val appointmentId = appointment.requireId()
         proveScope(scope, appointment)
+        val canonical = appointmentRepository.findByIdAndScope(appointmentId, scope)
+            ?: throw IllegalArgumentException("appointment does not belong to requested scope")
+        require(canonical.version == appointment.version) {
+            "appointment version does not match canonical row"
+        }
+        require(canonical.status == toState) {
+            "status event toState does not match canonical row"
+        }
+        require(fromState != toState) { "status event must change state" }
+        val latestHistory = stateHistoryRepository.findByAppointmentId(appointmentId).firstOrNull()
+            ?: throw IllegalArgumentException("status event history is required")
+        require(latestHistory.fromState == fromState && latestHistory.toState == toState) {
+            "status event does not match latest state history"
+        }
         val payload = AppointmentStatusChangedPayload(
             appointmentId = AppointmentAggregateId(appointmentId),
-            version = appointment.version,
+            version = canonical.version,
             fromState = fromState,
-            toState = appointment.status,
+            toState = toState,
             reasonCode = reasonCode,
         )
         insert(scope, appointmentId, context, AppointmentEventType.STATUS_CHANGED, payload)

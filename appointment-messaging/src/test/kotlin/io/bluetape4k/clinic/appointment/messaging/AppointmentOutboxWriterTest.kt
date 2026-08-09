@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxStatus
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlans
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.ConsultationTopics
@@ -18,12 +19,14 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -50,6 +53,7 @@ class AppointmentOutboxWriterTest {
                 Appointments,
                 ProductCatalogProjections,
                 AppointmentPlans,
+                AppointmentStateHistory,
                 SchedulingOutboxEvents,
             )
             TenantGroups.insert {
@@ -120,6 +124,41 @@ class AppointmentOutboxWriterTest {
         }
 
         transaction { SchedulingOutboxEvents.selectAll().count() shouldBeEqualTo 0L }
+    }
+
+    @Test
+    fun `status writer uses canonical row and latest history`() {
+        val writer = writer()
+        transaction {
+            Appointments.update({ Appointments.id eq appointmentId }) {
+                it[status] = AppointmentState.PENDING_RESCHEDULE
+                it[version] = 1L
+            }
+            AppointmentStateHistory.insert {
+                it[appointmentId] = this@AppointmentOutboxWriterTest.appointmentId
+                it[fromState] = AppointmentState.CONFIRMED
+                it[toState] = AppointmentState.PENDING_RESCHEDULE
+                it[reason] = "closure"
+            }
+            val canonical = repository.findByIdAndScope(appointmentId, scope)!!
+            writer.statusChanged(
+                scope = scope,
+                appointment = canonical.copy(version = 1L),
+                fromState = AppointmentState.CONFIRMED,
+                toState = AppointmentState.PENDING_RESCHEDULE,
+                context = AppointmentMessagingContext.from(AppointmentCommandContext.httpRoot("client-41")),
+            )
+        }
+
+        transaction {
+            val row = SchedulingOutboxEvents.selectAll().single()
+            row[SchedulingOutboxEvents.eventType] shouldBeEqualTo "AppointmentStatusChanged"
+            row[SchedulingOutboxEvents.payloadJson].orEmpty().contains("\"version\":1").shouldBeEqualTo(true)
+            row[SchedulingOutboxEvents.payloadJson].orEmpty().contains("\"fromState\":\"CONFIRMED\"").shouldBeEqualTo(true)
+            row[SchedulingOutboxEvents.payloadJson].orEmpty().contains("\"toState\":\"PENDING_RESCHEDULE\"").shouldBeEqualTo(true)
+            row[SchedulingOutboxEvents.correlationId] shouldBeEqualTo "client-41"
+            row[SchedulingOutboxEvents.causationEventId].orEmpty().startsWith("http-command-").shouldBeEqualTo(true)
+        }
     }
 
     private fun writer(): DefaultAppointmentOutboxWriter = DefaultAppointmentOutboxWriter(
