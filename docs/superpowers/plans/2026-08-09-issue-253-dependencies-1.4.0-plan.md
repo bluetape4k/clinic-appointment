@@ -394,19 +394,41 @@ equipment/treatment는 각각 `clinicEquipmentsCache`, `clinicTreatmentTypesCach
 factory로 같은 검증을 반복한다. 각 family를 독립적으로 검증하고 raw Redis connection으로
 `$remoteName:1:7`이 존재하며 `$logicalName:1:7`이 존재하지 않는지 확인한다. test 전후에는
 두 exact key만 삭제한다. 각 cache의 `close()`와 각 `RedisClient.shutdown()`은 서로 독립된
-`runCatching`으로 실행하되 모든 exception을 수집해 마지막에 하나의 `AssertionError`에
-suppressed exception으로 추가하고 test를 실패시킨다. 첫 close 실패가 나머지 정리를 막거나
-cleanup 실패가 숨겨져서는 안 된다. assertion 또는 setup이 실패해도 cleanup이 반드시 실행되도록
-resource 생성 뒤 test body 전체를 `try`로 감싸고 cleanup 실패 집계는 `finally`에서 수행한다.
+`runCatching`으로 실행하되 모든 exception을 수집한다. 기존 primary failure가 없을 때는 하나의
+`AssertionError`에 suppressed exception으로 추가하고 test를 실패시킨다. 첫 close 실패가 나머지 정리를 막거나
+cleanup 실패가 숨겨져서는 안 된다. `StatefulRedisConnection.close()`와 test 후 exact-key 삭제도
+cleanup 목록에 포함한다. cleanup 목록은 첫 자원을 만들기 전부터 활성화하고, 자원이 생성될 때마다
+즉시 action을 등록해 부분 초기화 실패도 이미 만든 자원을 역순으로 정리한다. test/setup 실패는
+primary failure로 유지하고 cleanup failure를 그 예외의 suppressed exception으로 추가한다. primary
+failure가 없을 때만 cleanup용 `AssertionError`를 새로 던진다.
 `@Testcontainers`는 사용하지 않고 기존 singleton launcher만 사용한다.
 
 ```kotlin
-val cleanupFailures = cleanupActions.mapNotNull { action ->
-    runCatching(action).exceptionOrNull()
-}
-if (cleanupFailures.isNotEmpty()) {
-    throw AssertionError("Redis cache test cleanup failed").also { failure ->
-        cleanupFailures.forEach(failure::addSuppressed)
+val cleanupActions = mutableListOf<() -> Unit>()
+var primaryFailure: Throwable? = null
+try {
+    val writerClient = RedisClient.create(redisUrl).also { client ->
+        cleanupActions += { client.shutdown() }
+    }
+    // reader client, production caches, raw connection 순으로 생성 즉시 cleanup을 등록한다.
+    val rawConnection = writerClient.connect().also { connection ->
+        cleanupActions += { connection.close() }
+    }
+    cleanupActions += { rawConnection.sync().unlink(v2Key, v1Key) }
+    // exact-key 사전 삭제와 test assertion을 실행한다.
+} catch (failure: Throwable) {
+    primaryFailure = failure
+    throw failure
+} finally {
+    val cleanupFailures = cleanupActions.asReversed().mapNotNull { action ->
+        runCatching(action).exceptionOrNull()
+    }
+    if (cleanupFailures.isNotEmpty()) {
+        primaryFailure?.let { primary ->
+            cleanupFailures.forEach(primary::addSuppressed)
+        } ?: throw AssertionError("Redis cache test cleanup failed").also { failure ->
+            cleanupFailures.forEach(failure::addSuppressed)
+        }
     }
 }
 ```
