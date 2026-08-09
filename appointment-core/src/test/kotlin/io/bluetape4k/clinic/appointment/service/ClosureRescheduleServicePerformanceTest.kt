@@ -52,13 +52,15 @@ import java.time.LocalTime
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.ceil
 
 /** 동기 closure의 계산·쓰기 경계와 상한을 측정하는 H2 smoke harness입니다. */
 class ClosureRescheduleServicePerformanceTest : AbstractExposedTest() {
 
     @Test
-    fun `100건 30일 closure는 cache와 SQL budget 및 p95를 지킨다`() {
+    fun `100건 30일 2000후보 closure는 cache와 합성 SQL budget 및 p95를 지킨다`() {
         withTables(TestDB.H2, *ALL_TABLES) {
             val fixture = insertFixture(APPOINTMENT_COUNT)
             val capture = SqlStatementCapture()
@@ -72,7 +74,11 @@ class ClosureRescheduleServicePerformanceTest : AbstractExposedTest() {
                 val slotQueries = mutableListOf<SlotQuery>()
                 val service = closureService { query ->
                     slotQueries += query
-                    emptyList()
+                    if (query.date < CLOSURE_DATE.plusDays(MAX_CANDIDATES_PER_APPOINTMENT + 1L)) {
+                        listOf(availableSlot(query.date, fixture.doctorId))
+                    } else {
+                        emptyList()
+                    }
                 }
                 val startedAt = System.nanoTime()
                 val result = service.processClosureReschedule(
@@ -83,10 +89,13 @@ class ClosureRescheduleServicePerformanceTest : AbstractExposedTest() {
                 val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000
 
                 result.size shouldBeEqualTo APPOINTMENT_COUNT
+                result.values.sumOf { it.size } shouldBeEqualTo MAX_TOTAL_CANDIDATES
                 slotQueries.distinctBy { it.scope to Triple(it.doctorId, it.treatmentTypeId, it.date) }
                     .size shouldBeEqualTo SEARCH_DAYS
                 slotQueries.size shouldBeEqualTo SEARCH_DAYS
-                capture.statements.size shouldBeLessOrEqualTo MAX_WRITE_SQL_STATEMENTS
+                capture.statements.size shouldBeLessOrEqualTo MAX_CORE_WRITE_SQL_STATEMENTS
+                (capture.statements.size + APPOINTMENT_COUNT * MAX_STATUS_WRITER_STATEMENTS)
+                    .shouldBeLessOrEqualTo(MAX_COMPOSITE_WRITE_SQL_STATEMENTS)
                 statementCounts += capture.statements.size
                 if (runIndex >= WARMUP_RUNS) {
                     samplesMillis += elapsedMillis
@@ -140,21 +149,29 @@ class ClosureRescheduleServicePerformanceTest : AbstractExposedTest() {
     }
 
     @Test
-    fun `precompute 중 경쟁 writer는 mutation lock 없이 완료된다`() {
-        withTables(TestDB.H2, *ALL_TABLES) {
+    fun `PostgreSQL write transaction의 row lock은 release 후 제한 시간 안에 수렴한다`() {
+        withTables(TestDB.POSTGRESQL, *ALL_TABLES) {
             val fixture = insertFixture(2)
             commit()
 
-            val precomputeStarted = CountDownLatch(1)
-            val releasePrecompute = CountDownLatch(1)
+            val mutationStarted = CountDownLatch(1)
+            val releaseMutation = CountDownLatch(1)
+            val competingUpdateStarted = CountDownLatch(1)
+            val lockedAppointmentId = AtomicLong()
             val executor = Executors.newFixedThreadPool(2)
+            // MultithreadingTester는 예외 수집에는 적합하지만 phase latch와 Future timeout을
+            // 노출하지 않으므로, row-lock 진입/해제 순서를 증명하는 이 테스트는 bounded executor를 사용한다.
             val serviceFuture = executor.submit<Throwable?> {
                 try {
-                    closureService { _ ->
-                        precomputeStarted.countDown()
-                        releasePrecompute.await(5, TimeUnit.SECONDS).shouldBeTrue()
-                        emptyList()
-                    }.processClosureReschedule(
+                    closureService(
+                        findAvailableSlots = { emptyList() },
+                        statusEventWriter = AppointmentStatusEventWriter { _, appointment, _, _, _ ->
+                            if (lockedAppointmentId.compareAndSet(0L, appointment.id ?: error("appointment.id"))) {
+                                mutationStarted.countDown()
+                                releaseMutation.await(5, TimeUnit.SECONDS).shouldBeTrue()
+                            }
+                        },
+                    ).processClosureReschedule(
                         scope = fixture.scope,
                         closureDate = CLOSURE_DATE,
                         searchDays = 1,
@@ -166,25 +183,38 @@ class ClosureRescheduleServicePerformanceTest : AbstractExposedTest() {
             }
 
             try {
-                precomputeStarted.await(5, TimeUnit.SECONDS).shouldBeTrue()
-                val writerStartedAt = System.nanoTime()
+                mutationStarted.await(5, TimeUnit.SECONDS).shouldBeTrue()
                 val writerFuture = executor.submit<Boolean> {
-                    transaction(TestDB.H2.db ?: error("H2 database is not connected")) {
+                    transaction(TestDB.POSTGRESQL.db ?: error("PostgreSQL database is not connected")) {
+                        registerInterceptor(object : StatementInterceptor {
+                            override fun beforeExecution(transaction: Transaction, context: StatementContext) {
+                                if (context.sql(transaction).trimStart().startsWith("UPDATE", ignoreCase = true)) {
+                                    competingUpdateStarted.countDown()
+                                }
+                            }
+                        })
                         AppointmentRepository().updateLegacyStatus(
                             scope = fixture.scope,
-                            appointmentId = fixture.appointmentIds.last(),
+                            appointmentId = lockedAppointmentId.get(),
                             expectedVersion = 0L,
                             newStatus = AppointmentState.REQUESTED,
                         )
                     }
                 }
-                writerFuture.get(2, TimeUnit.SECONDS).shouldBeTrue()
-                val writerMillis = (System.nanoTime() - writerStartedAt) / 1_000_000
-                writerMillis shouldBeLessOrEqualTo LOCK_DURATION_MILLIS
+                competingUpdateStarted.await(5, TimeUnit.SECONDS).shouldBeTrue()
+                assertFailsWith<TimeoutException> {
+                    writerFuture.get(LOCK_OBSERVATION_MILLIS, TimeUnit.MILLISECONDS)
+                }
+                val releasedAt = System.nanoTime()
+                releaseMutation.countDown()
+                val serviceFailure = serviceFuture.get(LOCK_RELEASE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                (serviceFailure == null).shouldBeTrue()
+                writerFuture.get(LOCK_RELEASE_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS).shouldBeEqualTo(false)
+                val releaseMillis = (System.nanoTime() - releasedAt) / 1_000_000
+                releaseMillis shouldBeLessOrEqualTo LOCK_RELEASE_TIMEOUT_MILLIS
             } finally {
-                releasePrecompute.countDown()
-                val serviceFailure = serviceFuture.get(10, TimeUnit.SECONDS)
-                (serviceFailure is IllegalStateException).shouldBeTrue()
+                releaseMutation.countDown()
+                serviceFuture.cancel(true)
                 executor.shutdownNow()
                 executor.awaitTermination(10, TimeUnit.SECONDS).shouldBeTrue()
             }
@@ -192,6 +222,7 @@ class ClosureRescheduleServicePerformanceTest : AbstractExposedTest() {
     }
 
     private fun closureService(
+        statusEventWriter: AppointmentStatusEventWriter = AppointmentStatusEventWriter { _, _, _, _, _ -> },
         findAvailableSlots: (SlotQuery) -> List<AvailableSlot>,
     ): ClosureRescheduleService =
         ClosureRescheduleService(
@@ -201,9 +232,18 @@ class ClosureRescheduleServicePerformanceTest : AbstractExposedTest() {
             stateHistoryRepository = AppointmentStateHistoryRepository(),
             doctorRepository = DoctorRepository(),
             notificationWriter = AppointmentRescheduleNotificationWriter { _, _, _, _ -> },
-            statusEventWriter = AppointmentStatusEventWriter { _, _, _, _, _ -> },
+            statusEventWriter = statusEventWriter,
             clinicRepository = ClinicRepository(),
             findAvailableSlots = findAvailableSlots,
+        )
+
+    private fun availableSlot(date: LocalDate, doctorId: Long): AvailableSlot =
+        AvailableSlot(
+            date = date,
+            startTime = LocalTime.of(9, 0),
+            endTime = LocalTime.of(9, 30),
+            doctorId = doctorId,
+            remainingCapacity = 1,
         )
 
     private fun JdbcTransaction.insertFixture(count: Int): Fixture {
@@ -281,9 +321,14 @@ class ClosureRescheduleServicePerformanceTest : AbstractExposedTest() {
         private const val SEARCH_DAYS = 30
         private const val WARMUP_RUNS = 2
         private const val MEASURED_RUNS = 10
-        private const val MAX_WRITE_SQL_STATEMENTS = 2_700
+        private const val MAX_CANDIDATES_PER_APPOINTMENT = 20
+        private const val MAX_TOTAL_CANDIDATES = APPOINTMENT_COUNT * MAX_CANDIDATES_PER_APPOINTMENT
+        private const val MAX_CORE_WRITE_SQL_STATEMENTS = 2_400
+        private const val MAX_STATUS_WRITER_STATEMENTS = 3
+        private const val MAX_COMPOSITE_WRITE_SQL_STATEMENTS = 2_700
         private const val P95_MILLIS = 10_000L
-        private const val LOCK_DURATION_MILLIS = 2_000L
+        private const val LOCK_OBSERVATION_MILLIS = 250L
+        private const val LOCK_RELEASE_TIMEOUT_MILLIS = 2_000L
         private const val CANDIDATE_LIMIT_REPETITIONS = 3
         private val CLOSURE_DATE = LocalDate.of(2026, 8, 3)
         private val ALL_TABLES = arrayOf(

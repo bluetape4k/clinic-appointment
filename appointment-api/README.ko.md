@@ -49,6 +49,10 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 `STATUS_CHANGED` outbox를 하나의 write transaction으로 기록합니다. 요청의 correlation 값은
 trace 용도로만 보존하고 causation 값은 서버가 생성합니다. outbox 저장에 실패하면 `503`과
 `APPOINTMENT_MESSAGING_UNAVAILABLE`을 반환하며 상태·이력·후보·outbox를 함께 rollback합니다.
+candidate GET과 closure/confirm/auto mutation은 canonical clinic이 principal의 비어 있지 않은
+`allowedClinicIds`에 포함될 때만 허용하므로 tenant 내부 sibling clinic 접근도 거부합니다.
+이 세 mutation에는 durable idempotency key가 없으므로 `503` 또는 응답 유실 뒤에는
+correlation ID로 상태·이력·outbox를 제한 조회하고 commit된 mutation이 없을 때만 재시도합니다.
 
 다음 bounded 계약을 넘는 요청은 preflight 또는 write 직전 검증에서 mutation 없이 거부합니다.
 

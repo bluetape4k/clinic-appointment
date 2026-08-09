@@ -52,7 +52,6 @@ private class FailingAppointmentOutboxWriter(
         scope: TenantClinicScope,
         appointment: AppointmentRecord,
         fromState: AppointmentState,
-        toState: AppointmentState,
         context: AppointmentMessagingContext,
         reasonCode: CancellationReasonCode?,
     ) {
@@ -61,7 +60,7 @@ private class FailingAppointmentOutboxWriter(
                 failureCode = AppointmentMessagingFailureCode.OUTBOX_PERSISTENCE_UNAVAILABLE,
             )
         }
-        delegate.statusChanged(scope, appointment, fromState, toState, context, reasonCode)
+        delegate.statusChanged(scope, appointment, fromState, context, reasonCode)
     }
 
     override fun cancelled(

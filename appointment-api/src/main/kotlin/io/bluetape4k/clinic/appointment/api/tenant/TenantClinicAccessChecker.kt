@@ -66,16 +66,25 @@ class TenantClinicAccessChecker(
         principal: SchedulingUserPrincipal,
     ): TenantInfo {
         val tenant = verifyClinic(tenantCode, clinicId)
+        requirePrincipalClinicAccess(tenantCode, clinicId, principal)
+        return tenant
+    }
+
+    /** 이미 조회한 resource의 clinic을 인증 principal의 정확한 allow-list와 대조합니다. */
+    fun requirePrincipalClinicAccess(
+        tenantCode: String,
+        clinicId: Long,
+        principal: SchedulingUserPrincipal,
+    ) {
         if (tenantCode !in principal.allowedTenants) {
             throw AccessDeniedException("Tenant scope is not authorized")
         }
         if (principal.roles.none { it == SchedulingRole.ADMIN || it == SchedulingRole.STAFF }) {
-            throw AccessDeniedException("Clinic mutation role is not authorized")
+            throw AccessDeniedException("Clinic operation role is not authorized")
         }
         if (principal.allowedClinicIds.isEmpty() || clinicId !in principal.allowedClinicIds) {
             throw AccessDeniedException("Clinic scope is not authorized")
         }
-        return tenant
     }
 
     /**

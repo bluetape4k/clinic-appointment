@@ -321,7 +321,6 @@ class AppointmentService(
                     scope = scope,
                     appointment = updated,
                     fromState = currentState,
-                    toState = nextState,
                     context = AppointmentMessagingContext.from(commandContext),
                     reasonCode = reasonCode,
                 )

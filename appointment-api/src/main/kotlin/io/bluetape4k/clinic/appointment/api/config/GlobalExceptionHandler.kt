@@ -118,7 +118,8 @@ class GlobalExceptionHandler(
                     errorCode = "APPOINTMENT_MESSAGING_UNAVAILABLE",
                     correlationId = correlationId,
                     retryable = true,
-                    action = "Retry with the same idempotency key after the Retry-After interval.",
+                    action = "After the Retry-After interval, reconcile appointment state and outbox " +
+                        "using the correlation ID; retry only when no mutation was committed.",
                 )
             )
     }

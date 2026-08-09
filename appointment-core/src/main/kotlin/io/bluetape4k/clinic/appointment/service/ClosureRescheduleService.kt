@@ -237,7 +237,9 @@ class ClosureRescheduleService(
             } catch (failure: RuntimeException) {
                 val totalDurationMillis = (System.nanoTime() - preflightStarted) / 1_000_000
                 log.warn {
-                    "closure_reschedule code=rollback affected=${affected.size} candidates=$totalCandidates " +
+                    "closure_reschedule code=rollback failure_code=closure_transaction_failed " +
+                        "correlation_id=${commandContext.correlationId.value} " +
+                        "affected=${affected.size} candidates=$totalCandidates " +
                         "searchDays=$searchDays totalDurationMs=$totalDurationMillis"
                 }
                 throw failure

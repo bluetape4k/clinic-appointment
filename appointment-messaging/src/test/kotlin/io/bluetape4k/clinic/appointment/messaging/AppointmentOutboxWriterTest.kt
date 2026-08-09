@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.messaging
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeLessOrEqualTo
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxStatus
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
@@ -20,6 +21,10 @@ import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.Transaction
+import org.jetbrains.exposed.v1.core.statements.StatementContext
+import org.jetbrains.exposed.v1.core.statements.StatementInterceptor
+import org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -140,14 +145,16 @@ class AppointmentOutboxWriterTest {
                 it[toState] = AppointmentState.PENDING_RESCHEDULE
                 it[reason] = "closure"
             }
-            val canonical = repository.findByIdAndScope(appointmentId, scope)!!
+            val canonical = requireNotNull(repository.findByIdAndScope(appointmentId, scope))
+            val capture = SqlStatementCapture()
+            registerInterceptor(capture)
             writer.statusChanged(
                 scope = scope,
                 appointment = canonical.copy(version = 1L),
                 fromState = AppointmentState.CONFIRMED,
-                toState = AppointmentState.PENDING_RESCHEDULE,
                 context = AppointmentMessagingContext.from(AppointmentCommandContext.httpRoot("client-41")),
             )
+            capture.statements.size shouldBeLessOrEqualTo MAX_STATUS_WRITER_STATEMENTS
         }
 
         transaction {
@@ -165,4 +172,22 @@ class AppointmentOutboxWriterTest {
         databaseClock = AppointmentDatabaseClock { Instant.parse("2026-08-05T08:30:00Z") },
         eventIdFactory = { AppointmentEventId("writer-event-1") },
     )
+
+    private class SqlStatementCapture : StatementInterceptor {
+        val statements = mutableListOf<String>()
+
+        override fun afterExecution(
+            transaction: Transaction,
+            contexts: List<StatementContext>,
+            executedStatement: PreparedStatementApi,
+        ) {
+            contexts.firstOrNull()?.let { context ->
+                statements += context.sql(transaction).lowercase()
+            }
+        }
+    }
+
+    private companion object {
+        private const val MAX_STATUS_WRITER_STATEMENTS = 3
+    }
 }

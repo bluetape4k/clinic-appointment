@@ -453,6 +453,7 @@ class ServiceConfig {
             }
         },
         statusEventWriter = AppointmentStatusEventWriter { scope, appointment, fromState, toState, commandContext ->
+            require(appointment.status == toState) { "status event toState must match appointment status" }
             appointmentNotificationWriter.statusChanged(
                 tenantGroupId = scope.tenantGroupId,
                 record = appointment,
@@ -464,7 +465,6 @@ class ServiceConfig {
                 scope = scope,
                 appointment = appointment,
                 fromState = fromState,
-                toState = toState,
                 context = AppointmentMessagingContext.from(commandContext),
             )
         },

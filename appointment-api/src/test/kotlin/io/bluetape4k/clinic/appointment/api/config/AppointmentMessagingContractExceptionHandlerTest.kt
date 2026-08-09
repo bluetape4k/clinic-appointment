@@ -35,5 +35,7 @@ internal class AppointmentMessagingContractExceptionHandlerTest {
         body.retryable.shouldBeTrue()
         body.error.contains(secretMarker).shouldBeFalse()
         body.action.orEmpty().contains(secretMarker).shouldBeFalse()
+        body.action.orEmpty().contains("correlation ID").shouldBeTrue()
+        body.action.orEmpty().contains("idempotency key").shouldBeFalse()
     }
 }
