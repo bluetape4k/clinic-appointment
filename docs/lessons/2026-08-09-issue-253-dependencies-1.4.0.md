@@ -54,14 +54,18 @@ Coroutines BOM은 서로 다른 좌표군의 권한이므로 유지했고, Maven
 동일 dataset·seed·time limit로 `:appointment-solver:test` 68건과 `BenchmarkTest`를 두 번
 실행했다. baseline은 설계 문서의 기준값이며 production SLO가 아니다.
 
-| 시나리오 | 기준 score/time | 1차 | 2차 |
+| 시나리오 | 기준 score/time | 1차 (2026-08-10T06:47:49Z) | 2차 (2026-08-10T06:49:02Z) |
 | --- | --- | --- | --- |
-| 소규모 | `0hard/0soft`, 5,027 ms | `0hard/0soft`, 5.0 s | `0hard/0soft`, 5.0 s |
-| 중규모 | `0hard/-500soft`, 8,075 ms | `0hard/-500soft`, 8.2 s | `0hard/-500soft`, 8.2 s |
-| 대규모 | `0hard/-2000soft`, 15,922 ms | `0hard/-2000soft`, 15.7 s | `0hard/-2000soft`, 15.7 s |
+| 소규모 | `0hard/0soft`, 5,027 ms | `0hard/0soft`, 5,033 ms | `0hard/0soft`, 5,072 ms |
+| 중규모 | `0hard/-500soft`, 8,075 ms | `0hard/-500soft`, 7,929 ms | `0hard/-500soft`, 8,198 ms |
+| 대규모 | `0hard/-2000soft`, 15,922 ms | `0hard/-2000soft`, 15,715 ms | `0hard/-2000soft`, 15,836 ms |
 
 반복 25% 회귀는 관찰되지 않았다. README의 실제 selector는
-`*solver.benchmark.BenchmarkTest`, 결과 경로는 `local/benchmark/`로 정정했다.
+`*solver.benchmark.BenchmarkTest`로 정정했고, 이 JUnit 경로의 결과가 생성되는
+`appointment-solver/build/reports/tests/test/`와 XML `system-out`을 README에 명시했다.
+`local/benchmark/`은 별도 `BenchmarkConfig.createBenchmarkFactory` 실행 경로의 산출물이다.
+두 실행의 raw XML timestamp와 testcase time은 위 표에 보존했으며, 두 실행 모두
+`SUCCESS: Executed 3 tests`, failures/errors `0/0`이었다.
 
 ## 모듈별 검증
 
@@ -83,7 +87,8 @@ JMH report에 포함됐다. benchmark module의 API 역의존 제거는 #250 범
 
 모든 non-frontend build task의 `--dry-run`은 132개 `:appointment-*` task를 확인했고
 `:frontend:` 누수는 없었다. `build -x test --refresh-dependencies` aggregate는 2분 43초에
-성공했으며, root `detekt`는 `NO-SOURCE` 성공이었다.
+성공했으며, root `detekt`는 `NO-SOURCE` 성공이었다. dependency verifier는 CI와 nightly
+build job에 연결했고 `actionlint`도 통과했다.
 
 ## 전체 API aggregate와 후속 조치
 
@@ -109,5 +114,7 @@ push/PR/merge는 아직 실행하지 않았으므로 원격 전달 상태는 `PE
 
 production Redis, production PostgreSQL, GitHub CI, push/PR/merge는 실행하지 않았다. live GitHub
 기준 #254(Leader/Micrometer), #255(bounded-wait conformance), #256(durable replay), #257(security
-response isolation)는 모두 OPEN인 독립 이슈이며 이 PR은 해당 동작을 변경하지 않는다. 사용자의
+response isolation)는 모두 OPEN인 독립 이슈이며 이 PR은 해당 동작을 변경하지 않는다. 독립
+security review가 지적한 기존 Fory trusted-payload/Redis ACL·TLS 경계도 이 PR의 diff가 만든
+변경이 아니므로 해결을 주장하지 않고 production hardening follow-up으로 남긴다. 사용자의
 현재 승인은 구현·검증 범위이며, 원격 변경과 merge 승인은 별도 게이트다.

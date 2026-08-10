@@ -89,7 +89,9 @@ classpath에서 지속적으로 재현할 수 없으므로, 이번 전환은 호
 name을 `clinic-doctors-v2`, `clinic-equipments-v2`, `clinic-treatment-types-v2`로 분리한다.
 Spring `Cache`의 논리 이름은 유지한다. rolling deployment 동안 구 binary는 v1만, 새 binary는
 v2만 읽고 쓰므로 새 payload를 구 codec이 읽는 경로 자체를 차단한다. 배포 전에는 v2만 비우고,
-rollback 전에는 v1을 비워 stale payload 재노출을 막는다. 캐시 TTL은 최대 1시간이므로 구
+rollback 전에는 traffic을 drain하고 구 binary pod를 재기동해 process-local L1을 먼저 비운 뒤
+v1을 exact-key로 삭제한다. 새로 시작한 구 binary의 warm-up 뒤 v1 재생성이 없는지 rescan한
+뒤 traffic을 재개해야 stale payload 재노출을 막을 수 있다. 캐시 TTL은 최대 1시간이므로 구
 namespace 삭제는 배포 성공 뒤 TTL 경과 후 수행한다. cache name에는 Redis Cluster hash-slot
 의미를 바꾸는 `:` 또는 동적 tenant 식별자를 추가하지 않는다.
 
@@ -138,7 +140,9 @@ deployment 안전성을 증명한다.
 5. Kafka/Exposed/Springdoc/Flyway 관련 integration test와 messaging benchmark smoke를 실행한다.
 6. dependency vulnerability report가 저장소에 구성되어 있으면 실행하고, 없으면 resolved
    graph와 GitHub advisory/Dependabot 상태를 검토 근거로 남긴다.
-7. 독립 7-tier와 Kotlin 패턴 검토에서 `P0=0`, `P1=0`을 확인한다.
+7. `scripts/verify-dependency-1.4.0.sh`를 daily CI와 nightly build job에서 실행해 resolved
+   graph 계약이 로컬 검증에만 머물지 않게 한다.
+8. 독립 7-tier와 Kotlin 패턴 검토에서 dependency diff 기준 `P0=0`, `P1=0`을 확인한다.
 
 ## 수용 기준과 DoD
 

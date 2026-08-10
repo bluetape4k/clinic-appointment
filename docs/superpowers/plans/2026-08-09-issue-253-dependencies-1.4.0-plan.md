@@ -534,8 +534,10 @@ Modify `appointment-solver/README.md` and `appointment-solver/README.ko.md`:
 ./gradlew :appointment-solver:test --tests "*solver.benchmark.BenchmarkTest"
 ```
 
-두 문서의 결과 path도 `BenchmarkConfig.BENCHMARK_DIR`과 일치하는 `local/benchmark/`로
-수정한다.
+두 문서는 `BenchmarkTest`가 실제로 생성하는 `appointment-solver/build/reports/tests/test/`와
+test XML `system-out`을 결과 경로로 안내한다. `BenchmarkConfig.BENCHMARK_DIR`의
+`local/benchmark/`은 해당 factory를 호출하는 별도 Planner Benchmark 실행에서만 사용된다고
+명시하며, JUnit test가 생성한다고 주장하지 않는다.
 
 - [x] **Step 4: solver 검증을 커밋한다**
 

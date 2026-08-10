@@ -38,14 +38,19 @@ cursor 기반 `SCAN`이 반환한 exact key 목록을 제한된 batch로 나누�
 
 ## Rollback
 
-1. 먼저 application traffic을 중단한다.
-2. 각 primary shard에서 다음 v1 pattern을 각각 `SCAN ... COUNT 500`으로 순회한다.
+1. 먼저 application traffic을 중단하고 readiness가 0이 될 때까지 drain한다. 구 binary의
+   writer가 더 이상 실행 중이 아닌지 deployment 상태와 로그로 확인한다.
+2. 구 binary pod를 모두 종료하거나 재기동해 process-local L1(Caffeine) 캐시를 비운다. Redis
+   v1 삭제만으로는 이미 메모리에 남은 10분 L1 payload를 무효화할 수 없다.
+3. 각 primary shard에서 다음 v1 pattern을 각각 `SCAN ... COUNT 500`으로 순회한다.
    - `clinic-doctors:*`
    - `clinic-equipments:*`
    - `clinic-treatment-types:*`
-3. 각 cursor 응답의 exact key만 batch `UNLINK`하고, cursor가 `0`이 될 때까지 반복한다.
-4. 세 v1 prefix의 `SCAN` count가 0인지 확인한 뒤 구 binary를 배포한다.
-5. traffic을 재개하고 serialization/decode 오류와 Redis hit/miss delta를 확인한다.
+4. 각 cursor 응답의 exact key만 batch `UNLINK`하고, cursor가 `0`이 될 때까지 반복한다.
+5. 세 v1 prefix의 `SCAN` count가 0인지 확인한 뒤 새로 시작한 구 binary를 배포한다. 배포된
+   모든 pod가 새 process-local L1로 시작했는지 readiness와 rollout 상태를 확인한다.
+6. 짧은 warm-up 동안 v1 prefix가 재생성되지 않는지 최종 `SCAN`으로 확인하고 traffic을
+   재개한다. serialization/decode 오류와 Redis hit/miss delta도 함께 확인한다.
 
 구 binary 배포 전에 v1을 비우는 이유는 upgrade 이전에 남은 stale payload가 rollback 후 다시
 노출되는 것을 막기 위해서다. v2 namespace만 삭제하고 rollback하면 이 위험이 제거되지 않는다.

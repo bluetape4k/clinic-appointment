@@ -73,7 +73,10 @@ val result: SolverResult = solverService.optimize(
 ./gradlew :appointment-solver:test --tests "*solver.benchmark.BenchmarkTest"
 ```
 
-결과는 `local/benchmark/`에 생성됩니다.
+이 명령은 고정 dataset의 score/time 임계값을 검증하는 JUnit 테스트이며, 결과는
+`appointment-solver/build/reports/tests/test/`와 테스트 XML의 `system-out`에 기록됩니다.
+`local/benchmark/` 보고서는 `BenchmarkConfig.createBenchmarkFactory`를 호출하는 별도
+Planner Benchmark 실행 경로에서만 생성되며 이 테스트 명령은 해당 factory를 호출하지 않습니다.
 
 → 상세: [solver-benchmark-report.md](../docs/requirements/solver.md#벤치마크)
 

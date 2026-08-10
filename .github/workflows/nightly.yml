@@ -31,6 +31,11 @@ jobs:
         with:
           gradle-version: wrapper
 
+      - name: Verify bluetape4k-dependencies 1.4.0 contract
+        run: bash scripts/verify-dependency-1.4.0.sh
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
       - name: Build (compile only, frontend 제외)
         run: ./gradlew build -x test -x :frontend:appointment-frontend:build --parallel
         env:
