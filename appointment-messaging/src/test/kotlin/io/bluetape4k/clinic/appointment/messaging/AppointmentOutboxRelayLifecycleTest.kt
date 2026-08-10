@@ -4,9 +4,9 @@ import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.Test
 import java.time.Duration
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class AppointmentOutboxRelayLifecycleTest {
     @Test
@@ -41,7 +41,9 @@ class AppointmentOutboxRelayLifecycleTest {
 
         lifecycle.start()
         lifecycle.isRunning.shouldBeTrue()
-        lifecycle.stop()
+        val stopped = CompletableFuture<Unit>()
+        lifecycle.stop { stopped.complete(Unit) }
+        stopped.get(2, TimeUnit.SECONDS)
 
         lifecycle.isRunning.shouldBeFalse()
         executor.isTerminated.shouldBeTrue()

@@ -9,7 +9,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeoutOrNull
 import org.springframework.context.SmartLifecycle
@@ -40,6 +39,7 @@ class AppointmentOutboxRelayLifecycle(
     private val running = AtomicBoolean(false)
     private val tickInFlight = AtomicBoolean(false)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val shutdownScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var scheduledTask: ScheduledFuture<*>? = null
     private var activeTick: Job? = null
 
@@ -65,35 +65,37 @@ class AppointmentOutboxRelayLifecycle(
             scheduledTask = null
             scheduler.shutdownNow()
             scope.cancel()
+            shutdownScope.cancel()
             callback.run()
             return
         }
         scheduledTask?.cancel(false)
         scheduledTask = null
         scheduler.shutdown()
-        try {
-            val timeoutMillis = properties.shutdownTimeout.toMillis().coerceAtLeast(1)
-            val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
-            awaitTermination(scheduler, remainingMillis(deadline))
-            runBlocking {
+        val timeoutMillis = properties.shutdownTimeout.toMillis().coerceAtLeast(1)
+        shutdownScope.launch {
+            try {
+                val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+                awaitTermination(scheduler, remainingMillis(deadline))
                 val tick = activeTick
                 if (tick != null && tick.isActive) {
                     val completed = withTimeoutOrNull(remainingMillis(deadline)) { tick.join() }
                     if (completed == null && tick.isActive) {
                         // hard deadline 이후에는 join하지 않습니다. interruption을 무시하는 JDBC driver나
-                        // Kafka future가 SmartLifecycle.stop을 영원히 붙잡으면 안 됩니다.
+                        // Kafka future가 SmartLifecycle.stop callback을 영원히 붙잡으면 안 됩니다.
                         tick.cancel(CancellationException("appointment relay shutdown timeout"))
                     }
                 }
                 scope.cancel()
+            } catch (ex: InterruptedException) {
+                Thread.currentThread().interrupt()
+                scheduler.shutdownNow()
+                scope.cancel()
+                log.warn(ex) { "Appointment outbox relay shutdown was interrupted" }
+            } finally {
+                callback.run()
+                shutdownScope.cancel()
             }
-        } catch (ex: InterruptedException) {
-            Thread.currentThread().interrupt()
-            scheduler.shutdownNow()
-            scope.cancel()
-            log.warn(ex) { "Appointment outbox relay shutdown was interrupted" }
-        } finally {
-            callback.run()
         }
     }
 
