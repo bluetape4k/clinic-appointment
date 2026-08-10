@@ -42,6 +42,10 @@ data class PolicyScopeRef(
             }
         }
     }
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
 }
 
 /**
@@ -89,7 +93,11 @@ data class SchedulingPolicyDefinitionRecord(
     val createdByActorRole: ActorRole,
     val changeReason: String,
     val createdAt: Instant = Instant.EPOCH,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 정확한 draft revision 하나에 bind되는 승인 증빙입니다.
@@ -112,7 +120,11 @@ data class SchedulingPolicyApprovalRecord(
     val actorRole: ActorRole,
     val assuranceLevel: String,
     val approvedAt: Instant,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 하나의 scope 안에서 모든 policy-kind activation을 직렬화하는 지점입니다.
@@ -139,7 +151,11 @@ data class SchedulingPolicyScopeHeadRecord(
     val generation: Long,
     val clinicGenerationEpoch: Long,
     val updatedAt: Instant,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 하나의 clinic에 대해 저장된 immutable compiled policy snapshot입니다.
@@ -176,7 +192,11 @@ data class EffectiveSchedulingPolicySnapshotRecord(
     val payloadJson: String,
     val snapshotHash: String,
     val createdAt: Instant,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /** 예약된 policy activation command의 durable state입니다. */
 enum class PolicyActivationCommandStatus {
@@ -299,7 +319,11 @@ enum class PolicyPreviewJobStatus {
 data class PolicyPreviewCursor(
     val partition: Int,
     val lastAppointmentId: Long?,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * preview checkpoint와 함께 기록되는 단조 증가 counter입니다.
@@ -310,7 +334,11 @@ data class PolicyPreviewCursor(
 data class PolicyPreviewProgress(
     val scannedCount: Long,
     val affectedCount: Long,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * durable asynchronous preview job입니다.

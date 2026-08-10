@@ -109,7 +109,7 @@ data class BookingCommitmentPolicy(
     val approvalRoles: Set<ActorRole>,
     val adminConsentEvidence: ConsentEvidenceRequirement,
     val confirmedChangeMode: ConfirmedChangeMode,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.BOOKING_COMMITMENT
 
     companion object {
@@ -150,7 +150,7 @@ data class BookingCommitmentOverride(
     val approvalRoles: OverrideValue<Set<ActorRole>>,
     val adminConsentEvidence: OverrideValue<ConsentEvidenceRequirement>,
     val confirmedChangeMode: OverrideValue<ConfirmedChangeMode>,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.BOOKING_COMMITMENT
 
     companion object {

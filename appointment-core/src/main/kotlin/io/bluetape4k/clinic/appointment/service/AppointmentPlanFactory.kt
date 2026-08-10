@@ -10,6 +10,7 @@ import io.bluetape4k.clinic.appointment.model.dto.TreatmentDependencyRecord
 import io.bluetape4k.clinic.appointment.model.plan.AppointmentPlanStatus
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
 import io.bluetape4k.clinic.appointment.model.plan.PlannedTreatmentStatus
+import java.io.Serializable
 
 /**
  * 예약 계획 생성에 필요한 구매 소유 사실입니다.
@@ -38,7 +39,11 @@ data class AppointmentPlanFactoryInput(
     val patientReferenceKeyId: String,
     val patientReferenceFingerprint: String,
     val bookingPreference: BookingPreferenceSnapshot,
-)
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 하나의 불변 카탈로그 스냅샷을 영속화 가능한 예약 계획 draft로 확장합니다.

@@ -133,7 +133,7 @@ class CatalogSyncApplicationServiceTest {
             driver = "org.h2.Driver",
         )
         val clinicId = transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 io.bluetape4k.clinic.appointment.model.tables.TenantGroups,
                 Clinics,
                 ProductCatalogProjections,
@@ -175,7 +175,7 @@ class CatalogSyncApplicationServiceTest {
             driver = "org.h2.Driver",
         )
         val clinicId = transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 io.bluetape4k.clinic.appointment.model.tables.TenantGroups,
                 Clinics,
                 ProductCatalogProjections,

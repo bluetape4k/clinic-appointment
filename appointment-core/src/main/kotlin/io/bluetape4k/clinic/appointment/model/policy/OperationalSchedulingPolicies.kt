@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.model.policy
 
+import java.io.Serializable
+
 /**
  * 예약 수용량이 hold된 동안 적용되는 동의 증빙 규칙입니다.
  *
@@ -12,7 +14,7 @@ package io.bluetape4k.clinic.appointment.model.policy
 data class HoldAndConsentPolicy(
     val consentEvidenceRequired: Boolean,
     val maximumConsentAgeSeconds: Long,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.HOLD_AND_CONSENT
     companion object { private const val serialVersionUID = 1L }
 }
@@ -28,7 +30,7 @@ data class HoldAndConsentPolicy(
 data class HoldAndConsentOverride(
     val consentEvidenceRequired: OverrideValue<Boolean>,
     val maximumConsentAgeSeconds: OverrideValue<Long>,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.HOLD_AND_CONSENT
     companion object { private const val serialVersionUID = 1L }
 }
@@ -46,7 +48,7 @@ data class ReconfirmationPolicy(
     val required: Boolean,
     val leadTimeSeconds: Long,
     val maximumAttempts: Int,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.RECONFIRMATION
     companion object { private const val serialVersionUID = 1L }
 }
@@ -65,7 +67,7 @@ data class ReconfirmationOverride(
     val required: OverrideValue<Boolean>,
     val leadTimeSeconds: OverrideValue<Long>,
     val maximumAttempts: OverrideValue<Int>,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.RECONFIRMATION
     companion object { private const val serialVersionUID = 1L }
 }
@@ -89,7 +91,7 @@ data class DisruptionRecoveryPolicy(
     val automaticProposalEnabled: Boolean,
     val maximumProposalDelaySeconds: Long,
     val preserveConfirmedAppointment: Boolean,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.DISRUPTION_RECOVERY
     companion object { private const val serialVersionUID = 1L }
 }
@@ -108,7 +110,7 @@ data class DisruptionRecoveryPolicy(
 data class DisruptionRecoveryOverride(
     val automaticProposalEnabled: OverrideValue<Boolean>,
     val maximumProposalDelaySeconds: OverrideValue<Long>,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.DISRUPTION_RECOVERY
     companion object { private const val serialVersionUID = 1L }
 }
@@ -127,7 +129,7 @@ data class OperatingExtensionPolicy(
     val extensionEnabled: Boolean,
     val maximumExtensionMinutes: Int,
     val legalSafetyCeilingMinutes: Int,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.OPERATING_EXTENSION
     companion object { private const val serialVersionUID = 1L }
 }
@@ -143,7 +145,7 @@ data class OperatingExtensionPolicy(
 data class OperatingExtensionOverride(
     val extensionEnabled: OverrideValue<Boolean>,
     val maximumExtensionMinutes: OverrideValue<Int>,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.OPERATING_EXTENSION
     companion object { private const val serialVersionUID = 1L }
 }
@@ -169,7 +171,7 @@ data class NotificationAndSlaPolicy(
     val mandatoryResponseSeconds: Long,
     val profileReevaluationHeldTargetSeconds: Long? = null,
     val profileReevaluationProposedTargetSeconds: Long? = null,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.NOTIFICATION_AND_SLA
     companion object { private const val serialVersionUID = 1L }
 }
@@ -194,7 +196,7 @@ data class NotificationAndSlaOverride(
     val disruptionNoticeSeconds: OverrideValue<Long>,
     val profileReevaluationHeldTargetSeconds: OverrideValue<Long> = OverrideValue.Inherit,
     val profileReevaluationProposedTargetSeconds: OverrideValue<Long> = OverrideValue.Inherit,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.NOTIFICATION_AND_SLA
     companion object { private const val serialVersionUID = 1L }
 }

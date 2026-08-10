@@ -35,7 +35,7 @@ sealed interface BookingPreferenceSnapshot : Serializable {
         val originalOffset: ZoneOffset,
         val zoneId: ZoneId,
         val normalizedInstant: Instant,
-    ) : BookingPreferenceSnapshot {
+    ) : BookingPreferenceSnapshot, Serializable {
         companion object {
             private const val serialVersionUID = 1L
         }
@@ -54,7 +54,7 @@ sealed interface BookingPreferenceSnapshot : Serializable {
         val startDate: LocalDate,
         val endDate: LocalDate,
         val zoneId: ZoneId,
-    ) : BookingPreferenceSnapshot {
+    ) : BookingPreferenceSnapshot, Serializable {
         companion object {
             private const val serialVersionUID = 1L
         }
@@ -74,7 +74,7 @@ sealed interface BookingPreferenceSnapshot : Serializable {
         val weekdays: List<DayOfWeek>,
         val localTimeWindows: List<LocalTimeWindow>,
         val zoneId: ZoneId,
-    ) : BookingPreferenceSnapshot {
+    ) : BookingPreferenceSnapshot, Serializable {
         companion object {
             private const val serialVersionUID = 1L
         }

@@ -960,11 +960,29 @@ sealed interface CommandReservation : Serializable {
         init {
             recordId.requirePositiveNumber("recordId")
         }
+
+        private companion object {
+            const val serialVersionUID: Long = 1L
+        }
     }
 
-    data class InProgress(val retryAfterSeconds: Long = 1L) : CommandReservation
-    data class ReplaySucceeded(val status: Int, val resultBody: String) : CommandReservation
-    data class ReplayFailed(val status: Int, val errorBody: String) : CommandReservation
+    data class InProgress(val retryAfterSeconds: Long = 1L) : CommandReservation {
+        private companion object {
+            const val serialVersionUID: Long = 1L
+        }
+    }
+
+    data class ReplaySucceeded(val status: Int, val resultBody: String) : CommandReservation {
+        private companion object {
+            const val serialVersionUID: Long = 1L
+        }
+    }
+
+    data class ReplayFailed(val status: Int, val errorBody: String) : CommandReservation {
+        private companion object {
+            const val serialVersionUID: Long = 1L
+        }
+    }
 }
 
 private data class CommandRecord(

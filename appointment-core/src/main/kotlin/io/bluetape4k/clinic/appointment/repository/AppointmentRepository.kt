@@ -6,8 +6,10 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.ConfirmedAppointmentProjection
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
-import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScopeResolver
+import io.bluetape4k.clinic.appointment.model.service.VerifiedTenantClinicScope
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -40,6 +42,7 @@ import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
+import java.io.Serializable
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -57,7 +60,11 @@ data class ProfileReevaluationAppointmentCandidate(
     val commitmentStatus: AppointmentCommitmentStatus,
     val commitmentVersion: Long,
     val effectivePolicySnapshotId: Long,
-)
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 예약 정보 저장소.
@@ -114,6 +121,26 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             }
             .firstOrNull()
             ?.let { TenantClinicScope(validTenantGroupId, it[Appointments.clinicId].value) }
+    }
+
+    /** 예약 row의 소속을 database에서 확인한 뒤에만 verified scope를 반환합니다. */
+    fun findVerifiedScopeByIdAndTenant(
+        appointmentId: Long,
+        tenantGroupId: Long,
+    ): VerifiedTenantClinicScope? {
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
+        val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
+        return Appointments
+            .select(Appointments.clinicId)
+            .where {
+                (Appointments.id eq validAppointmentId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(validTenantGroupId))
+            }
+            .firstOrNull()
+            ?.let { row ->
+                TenantClinicScopeResolver(::isClinicInTenant)
+                    .resolve(validTenantGroupId, row[Appointments.clinicId].value)
+            }
     }
 
     /** 검증된 테넌트-병원 범위의 legacy 예약을 조회합니다. */
@@ -190,6 +217,19 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
                     (Clinics.tenantGroupId eq validTenantGroupId)
             }.count() == 1L
     }
+
+    /** raw tenant/clinic ID를 소속 검사 뒤 verified scope로 변환합니다. */
+    fun findVerifiedScope(
+        tenantGroupId: Long,
+        clinicId: Long,
+    ): VerifiedTenantClinicScope? =
+        TenantClinicScopeResolver(::isClinicInTenant).resolve(tenantGroupId, clinicId)
+
+    /** verified scope만 받는 예약 조회 경계입니다. */
+    fun findByIdAndVerifiedScope(
+        appointmentId: Long,
+        scope: VerifiedTenantClinicScope,
+    ): AppointmentRecord? = findByIdAndScope(appointmentId, scope.toScope())
 
     /**
      * legacy projection이 참조할 담당자와 대표 진료 유형이 같은 병원에 속하는지 검증합니다.
