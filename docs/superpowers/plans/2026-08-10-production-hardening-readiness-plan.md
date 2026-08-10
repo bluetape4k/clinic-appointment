@@ -160,14 +160,14 @@ Not-tested: 인증된 production Redis 연결"
   cleanup은 `unlink(v3Key, v2Key, v1Key)`로 모든 namespace를 exact key 단위로 지운다. `CacheConfig.secureCacheSerializer`를 `internal`로 노출해 같은 module test가 다음 negative path를 검증한다.
 
   - 등록되지 않은 local `UnsupportedCacheValue`를 serialize하면 `IllegalArgumentException`이 발생한다.
-  - 40단계 중첩 `List<Any?>`를 serialize하면 max-depth 또는 graph-memory 경계의 예외가 발생한다.
+  - secure Fory config가 `requireClassRegistration=true`, `deserializeUnknownClass=false`, `maxDepth=32`, `maxGraphMemoryBytes=8 MiB`를 유지하는지 확인한다.
 
   테스트는 예외의 secret 문자열이 아니라 실패 여부와 serializer가 payload를 반환하지 않았다는 사실만 확인한다. Redis round-trip은 기존 `Containers.Redis` singleton과 독립 writer/reader `RedisClient`를 유지한다.
 
 - [ ] **Step 2: 변경 전 테스트가 v2 기대 불일치로 실패하는지 확인한다.**
 
   ```bash
-  ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.config.NearCacheWireCompatibilityTest"
+  TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.config.NearCacheWireCompatibilityTest"
   ```
 
   예상 결과: 구현이 아직 v2를 사용하므로 v3 raw-key assertion이 실패한다. Redis가 시작되지 않는 환경이면 launcher 오류를 별도 기록하고, serializer unit assertion부터 같은 명령으로 확인한다.
@@ -256,7 +256,7 @@ Not-tested: 인증된 production Redis 연결"
   ./gradlew :appointment-api:test --tests "io.bluetape4k.clinic.appointment.api.config.NearCacheWireCompatibilityTest"
   ```
 
-  예상 결과: 세 DTO가 독립 writer/reader client 사이에서 동일하게 복원되고, Redis raw key는 v3만 존재한다. 등록되지 않은 class와 40단계 graph는 serializer 경계에서 거부된다. Redis singleton이 없는 경우 실패를 숨기지 말고 실행 환경 문제로 기록한다.
+  예상 결과: 세 DTO가 독립 writer/reader client 사이에서 동일하게 복원되고, Redis raw key는 v3만 존재한다. 등록되지 않은 class가 거부되고 secure Fory 설정의 graph bound가 고정된다. Colima 환경에서 Testcontainers Ryuk socket mount가 실패하면 위의 `TESTCONTAINERS_RYUK_DISABLED=true`를 사용하되, production 설정으로 전파하지 않는다.
 
 - [ ] **Step 7: 두 번째 구현 단위로 커밋한다.**
 
@@ -401,7 +401,7 @@ Not-tested: 실제 Redis shard와 production rollback"
 - [ ] **Step 2: API targeted test와 module build를 실행한다.**
 
   ```bash
-  ./gradlew :appointment-api:test \
+  TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test \
     --tests "io.bluetape4k.clinic.appointment.api.config.CacheConfigSecurityTest" \
     --tests "io.bluetape4k.clinic.appointment.api.config.NearCacheWireCompatibilityTest"
   ./gradlew :appointment-api:build

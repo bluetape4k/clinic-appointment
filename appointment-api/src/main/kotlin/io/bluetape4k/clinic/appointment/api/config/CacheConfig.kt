@@ -15,6 +15,7 @@ import io.bluetape4k.redis.lettuce.codec.LettuceBinaryCodecs
 import io.lettuce.core.RedisClient
 import io.lettuce.core.codec.RedisCodec
 import org.apache.fory.Fory
+import org.apache.fory.ThreadSafeFory
 import org.apache.fory.config.CompatibleMode
 import org.apache.fory.config.Language
 import org.springframework.beans.factory.annotation.Value
@@ -41,8 +42,8 @@ class CacheConfig {
         internal const val EQUIPMENT_REGISTRATION_ID = 1002
         internal const val TREATMENT_TYPE_REGISTRATION_ID = 1003
 
-        internal val secureCacheSerializer: BinarySerializer by lazy {
-            val fory = Fory.builder()
+        internal val secureThreadSafeFory: ThreadSafeFory by lazy {
+            Fory.builder()
                 .withLanguage(Language.JAVA)
                 .withCompatibleMode(CompatibleMode.COMPATIBLE)
                 .withRefTracking(true)
@@ -63,6 +64,10 @@ class CacheConfig {
                         TREATMENT_TYPE_REGISTRATION_ID,
                     )
                 }
+        }
+
+        internal val secureCacheSerializer: BinarySerializer by lazy {
+            val fory = secureThreadSafeFory
             CompressableBinarySerializer(ForyBinarySerializer(fory), LZ4Compressor())
         }
 
