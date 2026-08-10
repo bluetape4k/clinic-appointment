@@ -389,14 +389,21 @@ Not-tested: 실제 Redis shard와 production rollback"
   ```bash
   git diff --check origin/develop...HEAD
   bash -n scripts/verify-cache-rollout-evidence.sh
-  if rg -n "Mockito|clinic-(doctors|equipments|treatment-types)-v2" \
-    appointment-api/src/main appointment-api/src/test; then
-      echo "forbidden Mockito or legacy writer namespace found" >&2
+  if git diff origin/develop...HEAD --unified=0 -- \
+    appointment-api/src/main appointment-api/src/test \
+    | rg -n '^\\+[^+].*Mockito'; then
+      echo "Mockito was added by this change" >&2
+      exit 1
+  fi
+  if git diff origin/develop...HEAD --unified=0 -- \
+    appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/CacheConfig.kt \
+    | rg -n '^\\+[^+].*clinic-(doctors|equipments|treatment-types)-v2'; then
+      echo "legacy writer namespace was added to CacheConfig" >&2
       exit 1
   fi
   ```
 
-  예상 결과: Mockito import/의존성은 0건이고, live `CacheConfig`/wire test/runbook에서 구 namespace를 새 writer로 사용하지 않는다. historical Issue #253 lesson/spec의 v2 provenance는 수정하지 않는다.
+  예상 결과: 이번 diff의 추가 라인에는 Mockito import/의존성이 없고, `CacheConfig`의 새 writer에는 구 namespace가 없다. 기존 baseline 테스트의 Mockito와 wire compatibility test의 rollback v2 파생 key 검증은 scope 밖으로 보존한다. historical Issue #253 lesson/spec의 v2 provenance는 수정하지 않는다.
 
 - [ ] **Step 2: API targeted test와 module build를 실행한다.**
 

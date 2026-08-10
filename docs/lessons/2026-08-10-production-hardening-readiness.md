@@ -32,6 +32,13 @@ v3 namespace로 격리했다. 알림 리더 계측(#254), 멱등성(#255), repla
   `Status 500 ... '/Users/debop/.colima/default/docker.sock' ... operation not supported`
   로 실패했다. Ryuk 비활성화는 테스트 실행 환경 workaround이며 production 설정으로
   전파하지 않는다.
+- `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:build --no-build-cache`의
+  결과 XML은 707 tests, failures 0, errors 0, skipped 3이었다. 이후 cached
+  `:appointment-api:build`도 `BUILD SUCCESSFUL`로 확인했다.
+- 정적 검사에서 기존 `appointment-api` 테스트의 Mockito baseline 7건이 확인됐다. 이번
+  diff의 추가 라인에는 Mockito가 없고, `CacheConfig` 새 writer에는 v2 namespace가 없도록
+  diff 추가 라인 기준으로 검사한다. wire test가 rollback v2 파생 key를 확인하는 것은
+  의도된 호환성 경계다.
 - `scripts/verify-cache-rollout-evidence.sh`: `bash -n`, local positive, live 조건 부족
   negative, production+threshold positive, threshold 초과 negative를 통과했다.
 
