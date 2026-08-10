@@ -244,6 +244,8 @@ rollout gate를 닫기 전에 대상 운영 환경에서 별도로 수집해야 
 | [알림 outbox 운영 런북](docs/runbooks/notification-outbox-operations.md) | 카나리 기준, 경보, 재알림, 키 교체, 마이그레이션, 롤백 |
 | [예약 messaging 운영 런북](docs/runbooks/appointment-messaging-operations.md) | consumer readiness, MySQL V23 metadata smoke, lag/SLO 경계, replay, 보존·삭제, 롤백 |
 | [예약 consumer replay 런북](docs/operations/appointment-consumer-replay-runbook.md) | tenant/clinic 범위 replay 권한, 제한된 Kafka source, audit claim, 보존·삭제 |
+| [의존성 1.4.0 캐시 migration 런북](docs/runbooks/dependency-1.4.0-cache-migration.md) | Redis TLS/ACL, Fory v2→v3 canary, exact-key 정리, rollback |
+| [캐시 rollout evidence validator](scripts/verify-cache-rollout-evidence.sh) | local/live evidence JSON과 PostgreSQL·broker threshold 검증 |
 | [프론트엔드](docs/requirements/frontend.md) | Angular 구성, 페이지 구조 |
 | [예약 플랜 시각 동반 문서](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 예약 약속, 장애 재조정, 수용량의 시뮬레이션과 결정 이력 |
 | [예약 정책 시각 동반 문서](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html) | 정책 컴파일, 승인, 활성화, 복구의 시뮬레이션과 결정 이력 |
