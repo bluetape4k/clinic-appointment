@@ -38,7 +38,7 @@
 
 **Files:** 위 테스트 4개와 `gradle/libs.versions.toml`, `appointment-notification/build.gradle.kts`.
 
-- [ ] **Step 1: 현재 테스트를 baseline으로 실행한다.**
+- [x] **Step 1: 현재 테스트를 baseline으로 실행한다.**
 
   Run:
 
@@ -48,7 +48,7 @@
 
   Expected: 현재 branch에서 모든 notification 테스트 PASS. 실패하면 기존 실패를 기록하고 새 실패와 섞지 않는다.
 
-- [ ] **Step 2: leader decorator contract RED를 작성한다.**
+- [x] **Step 2: leader decorator contract RED를 작성한다.**
 
   `NotificationLeaderMicrometerTest`에 다음 동작을 먼저 작성한다.
 
@@ -72,7 +72,7 @@
 
   같은 파일에 not-acquired counter와 action failure 후 active 0 검증도 작성한다. `fakeElector`는 `LeaderGroupElector`의 `runIfLeader` action만 실행/skip하도록 MockK로 구성하고 나머지 interface 메서드는 relaxed mock으로 둔다.
 
-- [ ] **Step 3: runner leader boundary RED를 작성한다.**
+- [x] **Step 3: runner leader boundary RED를 작성한다.**
 
   `NotificationSchedulingRunnersTest`에 다음 네 시나리오를 추가한다.
 
@@ -83,14 +83,14 @@
 
   leader mock expectation은 `runIfLeader(REMINDER_RECOVERY_LOCK_NAME, any<() -> ReminderRecoveryScanResult?>())`로 고정해 lock name drift를 막는다.
 
-- [ ] **Step 4: scheduled guard injection 제거 후 RED를 확인한다.**
+- [x] **Step 4: scheduled guard injection 제거 후 RED를 확인한다.**
 
   기존 `ReminderRecoveryTriggerGuard { false }` 테스트는 deprecated direct-call
   호환 테스트로 유지한다. auto-configuration이 더 이상 guard provider를
   주입하지 않고 runner가 elector action을 사용하는 새 테스트가 아직
   implementation을 바꿔야 실패하는지 확인한다.
 
-- [ ] **Step 5: dependency alias를 추가하고 dependency graph를 확인한다.**
+- [x] **Step 5: dependency alias를 추가하고 dependency graph를 확인한다.**
 
   `gradle/libs.versions.toml`의 bluetape leader alias 옆에
 
@@ -110,7 +110,7 @@
 
 ## Task 2: 순수 scheduler와 leader-aware runner 구현
 
-- [ ] **Step 1: scheduled path의 Boolean guard injection을 제거한다.**
+- [x] **Step 1: scheduled path의 Boolean guard injection을 제거한다.**
 
   기존 primary constructor의 `triggerGuard: ReminderRecoveryTriggerGuard?` 위치와
   `triggerOnce()`의 false 반환은 direct-call 호환을 위해 유지하되
@@ -120,37 +120,27 @@
   `batchSize`와 `maxCandidatesPerRun`의 require 및
   `ReminderRecoveryScanResult.plus`는 유지한다.
 
-- [ ] **Step 2: runner에 optional elector와 고정 lock을 추가한다.**
+- [x] **Step 2: runner에 optional elector와 고정 lock을 추가한다.**
 
   `NotificationSchedulingRunners.kt`에 다음 형태를 적용한다.
 
   ```kotlin
-  class NotificationReminderSchedulingRunner(
-      private val scheduler: AppointmentReminderScheduler,
-      private val metrics: NotificationOutboxMetrics? = null,
-      private val leaderElector: LeaderGroupElector? = null,
-  ) {
-      fun poll() {
-          try {
-              val result = runSynchronously {
-                  leaderElector?.runIfLeader(REMINDER_RECOVERY_LOCK_NAME) {
-                      scheduler.triggerOnce()
-                  } ?: scheduler.triggerOnce()
-              } ?: return
-              metrics?.recordReminderRecovery(result)
-              // 기존 낮은 cardinality 완료 log 유지
-          } catch (e: CancellationException) {
-              throw e
-          } catch (e: Exception) {
-              log.warn { "리마인더 보정에 실패했습니다: failure=${e.javaClass.simpleName}" }
-          }
+  val result = if (leaderElector == null) {
+      runSynchronously { scheduler.triggerOnce() }
+  } else {
+      leaderElector.runIfLeader(REMINDER_RECOVERY_LOCK_NAME) {
+          runSynchronously { scheduler.triggerOnce() }
       }
-  }
+  } ?: return
   ```
+
+  blocking `LeaderGroupElector.runIfLeader`의 action 안에 기존
+  `runSynchronously`를 배치한다. nullable Elvis로 `null` 결과를 direct path로
+  잘못 해석하지 않도록 elector 유무를 명시적으로 분기한다.
 
   `REMINDER_RECOVERY_LOCK_NAME`은 `internal const val`로 `appointment-reminder-recovery`를 사용한다. `runSynchronously`는 기존 동기 Spring 경계 helper를 재사용하며 새 `runBlocking`을 도입하지 않는다.
 
-- [ ] **Step 3: targeted runner tests를 GREEN으로 만든다.**
+- [x] **Step 3: targeted runner tests를 GREEN으로 만든다.**
 
   Run:
 
@@ -162,7 +152,7 @@
 
 ## Task 3: Spring auto-configuration에 raw/decorated elector 연결
 
-- [ ] **Step 1: leader bean을 interface + optional meter registry로 변경한다.**
+- [x] **Step 1: leader bean을 interface + optional meter registry로 변경한다.**
 
   `NotificationAutoConfiguration.kt`에 `LeaderGroupElector`, `InstrumentedLeaderGroupElector`, `ObjectProvider<MeterRegistry>`를 import한다. 기존 bean은 다음 계약을 따른다.
 
@@ -184,11 +174,11 @@
 
   `@ConditionalOnClass(RedisClient::class)`는 Redis backend classpath 보호를 위해 유지하되, decorator class를 method signature에 노출하지 않는다. bean method의 반환 타입은 interface 하나로 고정하여 raw/decorated 두 bean 후보를 만들지 않는다.
 
-- [ ] **Step 2: reminder runner bean에 elector provider를 연결한다.**
+- [x] **Step 2: reminder runner bean에 elector provider를 연결한다.**
 
   `notificationReminderSchedulingRunner`에 `ObjectProvider<LeaderGroupElector>`를 추가하고 `leaderElectorProvider.ifAvailable`을 세 번째 constructor 인자로 전달한다. Redis가 없는 기존 context는 `null` path로 유지한다.
 
-- [ ] **Step 3: auto-configuration regression을 GREEN으로 만든다.**
+- [x] **Step 3: auto-configuration regression을 GREEN으로 만든다.**
 
   `NotificationAutoConfigurationTest`에 DB + reminder source/materializer context에서 runner bean이 생성되고, `LeaderGroupElector`가 없을 때 startup failure가 없음을 확인한다. `SimpleMeterRegistry`가 있는 observability context에서도 decorator class 부재/Redis connection 부재로 startup이 깨지지 않는지 확인한다.
 
@@ -200,11 +190,11 @@
 
 ## Task 4: decorator/실패 lifecycle 검증과 7-tier 통합 review
 
-- [ ] **Step 1: 공식 metric contract와 sanitization을 GREEN으로 만든다.**
+- [x] **Step 1: 공식 metric contract와 sanitization을 GREEN으로 만든다.**
 
   `NotificationLeaderMicrometerTest`를 실행해 acquired, not-acquired, duration timer 존재, action exception 후 active gauge 0, 기본 `redacted-lock` tag를 모두 확인한다. raw lock name이 registry에 tag로 나타나지 않는 assertion을 추가한다.
 
-- [ ] **Step 2: 전체 notification test를 실행한다.**
+- [x] **Step 2: 전체 notification test를 실행한다.**
 
   ```bash
   ./gradlew :appointment-notification:test --no-daemon --console=plain
@@ -212,7 +202,7 @@
 
   Expected: 기존 baseline 대비 새 failure 0, 전체 test PASS.
 
-- [ ] **Step 3: module build와 dependency verification을 실행한다.**
+- [x] **Step 3: module build와 dependency verification을 실행한다.**
 
   ```bash
   ./gradlew :appointment-notification:build --no-daemon --console=plain
@@ -221,21 +211,21 @@
 
   Expected: compile/test/checkstyle류 task와 dependency verifier가 PASS, resolved version 0.5.0.
 
-- [ ] **Step 4: spec/plan traceability와 7-tier review를 기록한다.**
+- [x] **Step 4: spec/plan traceability와 7-tier review를 기록한다.**
 
   `docs/reviews/2026-08-10-issue-254-implementation-review.md`에 성능·안정성·보안·운영·개발자/API·사용자/호출자·통합 관점의 최신 diff 증거를 표로 남긴다. P0/P1은 0이어야 하며, P2/P3는 수정 또는 후속 issue 근거를 적는다. `git diff --check`와 Kotlin pattern checklist의 cancellation/null safety/constructor compatibility 항목을 함께 기록한다.
 
 ## Task 5: 문서·lesson·workflow evidence와 issue 갱신
 
-- [ ] **Step 0: 모듈 README의 운영 계약을 갱신한다.**
+- [x] **Step 0: 모듈 README의 운영 계약을 갱신한다.**
 
   `README.md`와 `README.ko.md`의 기존 “Redis 리더 선출은 향후 리마인더 복구 trigger에만 사용” 문장을 현재 계약에 맞게 고치고, 다음을 추가한다: reminder recovery scan 한 tick은 leader action 안에서 실행되며, Redis가 없으면 single-instance direct path를 사용하고, `MeterRegistry`가 있으면 `shedlock.leader.acquired`, `shedlock.leader.not_acquired`, `shedlock.leader.duration`, `shedlock.leader.active`를 `lock.name=redacted-lock` 기본값으로 관측한다. outbox 발송 정확성은 DB lease/fencing이 계속 소유한다.
 
-- [ ] **Step 1: lesson을 작성한다.**
+- [x] **Step 1: lesson을 작성한다.**
 
   `docs/lessons/2026-08-10-issue-254-leader-micrometer.md`에 문제, 선택한 공식 decorator, Boolean guard에서 action boundary로 바꾼 이유, cancellation/active gauge 검증, 남은 Redis 실환경 gap과 향후 guard를 한국어로 기록한다.
 
-- [ ] **Step 2: diff/documentation 검증을 실행한다.**
+- [x] **Step 2: diff/documentation 검증을 실행한다.**
 
   ```bash
   git diff --check
@@ -247,15 +237,15 @@
   deprecated compatibility declaration과 alias/lock/documentation anchor가
   모두 존재한다.
 
-- [ ] **Step 3: workflow component checks와 lane completion을 기록한다.**
+- [x] **Step 3: workflow component checks와 lane completion을 기록한다.**
 
   appointment-notification test, workflow review, diff-check 각각의 실제 명령 결과를 `.bluetape` evidence JSON으로 남기고 `check-result`/`component-evidence`/`completion-check`를 순서대로 실행한다. main lane은 변경 파일 목록을 포함해 complete 처리한다.
 
-- [ ] **Step 4: issue #254에 Korean 구현 증거 댓글을 남긴다.**
+- [x] **Step 4: issue #254에 Korean 구현 증거 댓글을 남긴다.**
 
   PR/merge 없이도 `gh issue comment 254 --repo bluetape4k/clinic-appointment --body-file <한국어 증거>`로 변경 파일, 테스트 결과, resolved artifact version, production/CI/push 미실행 경계를 명시한다. 댓글 전후 live issue state를 확인한다.
 
-- [ ] **Step 5: no-PR DoD를 보고한다.**
+- [x] **Step 5: no-PR DoD를 보고한다.**
 
   local branch/worktree/commit, tests, docs, workflow receipts, known gaps를 정리한다. PR creation, CI, production Redis, merge는 사용자 권한/외부 상태가 필요한 N/A 또는 PENDING으로 남기고 완료라고 주장하지 않는다.
 

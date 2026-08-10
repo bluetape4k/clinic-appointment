@@ -12,7 +12,12 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateV
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
+import io.bluetape4k.leader.LeaderGroupElector
+import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
+import io.bluetape4k.leader.micrometer.InstrumentedLeaderGroupElector
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.lettuce.core.api.StatefulRedisConnection
+import io.mockk.mockk
 import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -292,6 +297,50 @@ internal class NotificationAutoConfigurationTest {
                 runBlocking {
                     applicationContext.getBean(AppointmentReminderScheduler::class.java).triggerOnce()
                 } shouldBeEqualTo ReminderRecoveryScanResult(0, 0, 0)
+        }
+    }
+
+    @Test
+    fun `Redis connection과 meter registry가 있으면 reminder leader는 instrumented elector로 구성된다`() {
+        val database = database("auto_reminder_leader", version = "21")
+        val connection = mockk<StatefulRedisConnection<String, String>>(relaxed = true)
+        context(database, withKey = true)
+            .withBean("statefulRedisConnection", StatefulRedisConnection::class.java, { connection })
+            .withBean("meterRegistry", SimpleMeterRegistry::class.java, ::SimpleMeterRegistry)
+            .withBean(
+                "reminderRecoverySource",
+                ReminderRecoverySource::class.java,
+                { ReminderRecoverySource { _, _ -> emptyList() } },
+            )
+            .withBean(
+                "reminderRecoveryMaterializer",
+                ReminderRecoveryMaterializer::class.java,
+                {
+                    object : ReminderRecoveryMaterializer {
+                        override suspend fun enqueue(candidate: ReminderRecoveryCandidate) =
+                            ReminderRecoveryMaterializationResult.ENQUEUED
+
+                        override suspend fun suppressMissed(candidate: ReminderRecoveryCandidate) =
+                            ReminderRecoveryMaterializationResult.SUPPRESSED
+                    }
+                },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(LeaderGroupElector::class.java).size shouldBeEqualTo 1
+                applicationContext.getBean(LeaderGroupElector::class.java)::class shouldBeEqualTo InstrumentedLeaderGroupElector::class
+            }
+    }
+
+    @Test
+    fun `Redis connection만 있고 meter registry가 없으면 raw leader elector를 유지한다`() {
+        val database = database("auto_reminder_leader_without_meter", version = "21")
+        val connection = mockk<StatefulRedisConnection<String, String>>(relaxed = true)
+        context(database, withKey = true)
+            .withBean("statefulRedisConnection", StatefulRedisConnection::class.java, { connection })
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBean(LeaderGroupElector::class.java)::class shouldBeEqualTo LettuceLeaderGroupElector::class
             }
     }
 

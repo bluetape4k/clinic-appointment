@@ -118,15 +118,15 @@ guard가 `runIfLeader` 결과만 계산하고 scan은 밖에서 실행한다. �
 
 ## 수용 기준과 DoD
 
-- [ ] reminder scan의 모든 page가 동일 leader action 내부에서만 실행된다.
-- [ ] 실제 elector bean이 runner에 주입되고, 미획득 시 scanner가 호출되지 않는다.
-- [ ] acquired/not-acquired/duration/active meter가 `lock.name` 단일 저-cardinality
+- [x] reminder scan의 모든 page가 동일 leader action 내부에서만 실행된다.
+- [x] 실제 elector bean이 runner에 주입되고, 미획득 시 scanner가 호출되지 않는다.
+- [x] acquired/not-acquired/duration/active meter가 `lock.name` 단일 저-cardinality
       tag로 기록되고 기본 sanitization이 유지된다.
-- [ ] action 실패·취소·Redis 실패에서 metric active와 leader lease 누수가 없다.
-- [ ] scheduled reminder path에서 `ReminderRecoveryTriggerGuard` Boolean
+- [x] action 실패·취소·Redis 실패에서 metric active와 leader lease 누수가 없다.
+- [x] scheduled reminder path에서 `ReminderRecoveryTriggerGuard` Boolean
       선행 검사가 제거되고 leader action이 전체 scan을 감싼다.
-- [ ] `./gradlew :appointment-notification:test` 및 diff/문서 검증이 통과한다.
-- [ ] Korean lesson/review를 남기고 issue #254에 구현·검증 증거를 댓글로 남긴다.
+- [x] `./gradlew :appointment-notification:test` 및 diff/문서 검증이 통과한다.
+- [x] Korean lesson/review를 남기고 issue #254에 구현·검증 증거를 댓글로 남긴다.
 
 ## 7-tier 검토 초점
 

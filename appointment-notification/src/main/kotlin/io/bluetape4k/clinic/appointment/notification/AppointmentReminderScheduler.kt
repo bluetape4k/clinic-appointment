@@ -3,12 +3,15 @@ package io.bluetape4k.clinic.appointment.notification
 /**
  * reminder recovery scanner를 주기적으로 깨우는 얇은 trigger입니다.
  *
- * leader guard는 중복 trigger를 줄이는 최적화일 뿐이다. 발송·suppression 정확성은
- * outbox unique key, repository CAS, worker lease/fencing이 보장한다.
+ * scheduled runner가 leader action으로 전체 scan을 감싼다. 발송·suppression
+ * 정확성은 outbox unique key, repository CAS, worker lease/fencing이 보장한다.
+ * deprecated trigger guard는 기존 direct caller 호환용으로만 남아 있다.
  */
 class AppointmentReminderScheduler(
     private val scanner: NotificationReminderRecoveryScanner,
-    private val triggerGuard: ReminderRecoveryTriggerGuard = ReminderRecoveryTriggerGuard { true },
+    @Suppress("DEPRECATION")
+    @Deprecated("scheduled path는 leaderElector action 경계를 사용합니다")
+    private val triggerGuard: ReminderRecoveryTriggerGuard? = null,
     private val batchSize: Int = 100,
     private val maxCandidatesPerRun: Int = batchSize,
 ) {
@@ -19,7 +22,8 @@ class AppointmentReminderScheduler(
     }
 
     suspend fun triggerOnce(): ReminderRecoveryScanResult? {
-        if (!triggerGuard.shouldTrigger()) return null
+        // 기존 direct caller의 호환성만 보존하며, scheduled path는 runner의 leader action이 경계를 소유합니다.
+        if (triggerGuard?.shouldTrigger() == false) return null
         var aggregate = ReminderRecoveryScanResult(0, 0, 0)
         while (aggregate.scanned < maxCandidatesPerRun) {
             val pageLimit = minOf(batchSize, maxCandidatesPerRun - aggregate.scanned)
@@ -40,6 +44,7 @@ class AppointmentReminderScheduler(
         )
 }
 
+@Deprecated("scheduled path는 ReminderRecoveryTriggerGuard 대신 LeaderGroupElector action을 사용합니다")
 fun interface ReminderRecoveryTriggerGuard {
     fun shouldTrigger(): Boolean
 }

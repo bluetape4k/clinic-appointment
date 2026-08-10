@@ -1,8 +1,10 @@
 package io.bluetape4k.clinic.appointment.notification
 
+import io.bluetape4k.leader.LeaderGroupElector
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
 import io.bluetape4k.logging.warn
+import kotlinx.coroutines.CancellationException
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
@@ -72,6 +74,7 @@ class NotificationRetentionSchedulingRunner(
 class NotificationReminderSchedulingRunner(
     private val scheduler: AppointmentReminderScheduler,
     private val metrics: NotificationOutboxMetrics? = null,
+    private val leaderElector: LeaderGroupElector? = null,
 ) {
     companion object : KLogging()
 
@@ -83,7 +86,13 @@ class NotificationReminderSchedulingRunner(
     @Scheduled(fixedDelayString = "\${clinic.notification.worker.reminder-recovery-interval:PT1H}")
     fun poll() {
         try {
-            val result = runSynchronously { scheduler.triggerOnce() } ?: return
+            val result = if (leaderElector == null) {
+                runSynchronously { scheduler.triggerOnce() }
+            } else {
+                leaderElector.runIfLeader(REMINDER_RECOVERY_LOCK_NAME) {
+                    runSynchronously { scheduler.triggerOnce() }
+                }
+            } ?: return
             metrics?.recordReminderRecovery(result)
             if (result.scanned > 0) {
                 log.info {
@@ -91,8 +100,12 @@ class NotificationReminderSchedulingRunner(
                         "alreadyExists=${result.alreadyExists}, notYetDue=${result.notYetDue}, scanned=${result.scanned}"
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             log.warn { "리마인더 보정에 실패했습니다: failure=${e.javaClass.simpleName}" }
         }
     }
 }
+
+internal const val REMINDER_RECOVERY_LOCK_NAME = "appointment-reminder-recovery"
