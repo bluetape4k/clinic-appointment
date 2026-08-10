@@ -122,7 +122,7 @@ class TableSchemaTest : AbstractExposedTest() {
             WaitlistOfferEvents,
         ) {
             constraints.forEach { (table, expected) ->
-                table.checkConstraints().map { it.checkName }.toSet() shouldContainAll expected
+                table.checkConstraints().map { it.checkName.lowercase() }.toSet() shouldContainAll expected
             }
         }
     }

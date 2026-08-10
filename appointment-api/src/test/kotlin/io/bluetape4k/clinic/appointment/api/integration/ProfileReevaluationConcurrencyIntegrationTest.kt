@@ -27,11 +27,13 @@ import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentReposito
 import io.bluetape4k.clinic.appointment.repository.ProfileReevaluationRepository
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationRepository
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -354,7 +356,11 @@ internal abstract class AbstractProfileReevaluationConcurrencyIntegrationTest :
                     ),
                 ).single()
             }
-        Thread.sleep(1_200)
+        transaction(database) {
+            ProfileReevaluationJobs.update({ ProfileReevaluationJobs.id eq first.id }) {
+                it[leaseExpiresAt] = Instant.EPOCH
+            }
+        }
         val reclaimed =
             transaction(database) {
                 repository.claimFairJobs(

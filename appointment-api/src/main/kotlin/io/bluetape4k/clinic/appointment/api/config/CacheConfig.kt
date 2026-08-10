@@ -19,6 +19,14 @@ import java.time.Duration
 class CacheConfig {
 
     companion object : KLogging() {
+        internal const val DOCTORS_CACHE_NAME = "clinic-doctors"
+        internal const val EQUIPMENTS_CACHE_NAME = "clinic-equipments"
+        internal const val TREATMENT_TYPES_CACHE_NAME = "clinic-treatment-types"
+
+        internal const val DOCTORS_REMOTE_CACHE_NAME = "clinic-doctors-v2"
+        internal const val EQUIPMENTS_REMOTE_CACHE_NAME = "clinic-equipments-v2"
+        internal const val TREATMENT_TYPES_REMOTE_CACHE_NAME = "clinic-treatment-types-v2"
+
         private const val MASTER_CACHE_LOCAL_SIZE = 500L
         private val MASTER_CACHE_LOCAL_TTL: Duration = Duration.ofMinutes(10)
         private val MASTER_CACHE_REDIS_TTL: Duration = Duration.ofHours(1)
@@ -32,7 +40,7 @@ class CacheConfig {
     @Bean(destroyMethod = "close")
     fun clinicDoctorsCache(redisClient: RedisClient): NearCacheOperations<List<DoctorRecord>> =
         LettuceCaches.nearCache(redisClient) {
-            cacheName = "clinic-doctors"
+            cacheName = DOCTORS_REMOTE_CACHE_NAME
             maxLocalSize = MASTER_CACHE_LOCAL_SIZE
             frontExpireAfterWrite = MASTER_CACHE_LOCAL_TTL
             redisTtl = MASTER_CACHE_REDIS_TTL
@@ -41,7 +49,7 @@ class CacheConfig {
     @Bean(destroyMethod = "close")
     fun clinicEquipmentsCache(redisClient: RedisClient): NearCacheOperations<List<EquipmentRecord>> =
         LettuceCaches.nearCache(redisClient) {
-            cacheName = "clinic-equipments"
+            cacheName = EQUIPMENTS_REMOTE_CACHE_NAME
             maxLocalSize = MASTER_CACHE_LOCAL_SIZE
             frontExpireAfterWrite = MASTER_CACHE_LOCAL_TTL
             redisTtl = MASTER_CACHE_REDIS_TTL
@@ -50,7 +58,7 @@ class CacheConfig {
     @Bean(destroyMethod = "close")
     fun clinicTreatmentTypesCache(redisClient: RedisClient): NearCacheOperations<List<TreatmentTypeRecord>> =
         LettuceCaches.nearCache(redisClient) {
-            cacheName = "clinic-treatment-types"
+            cacheName = TREATMENT_TYPES_REMOTE_CACHE_NAME
             maxLocalSize = MASTER_CACHE_LOCAL_SIZE
             frontExpireAfterWrite = MASTER_CACHE_LOCAL_TTL
             redisTtl = MASTER_CACHE_REDIS_TTL
@@ -63,9 +71,9 @@ class CacheConfig {
         clinicTreatmentTypesCache: NearCacheOperations<List<TreatmentTypeRecord>>,
     ): CacheManager = NearCacheCacheManager(
         listOf(
-            NearCacheAdapter("clinic-doctors", clinicDoctorsCache),
-            NearCacheAdapter("clinic-equipments", clinicEquipmentsCache),
-            NearCacheAdapter("clinic-treatment-types", clinicTreatmentTypesCache),
+            NearCacheAdapter(DOCTORS_CACHE_NAME, clinicDoctorsCache),
+            NearCacheAdapter(EQUIPMENTS_CACHE_NAME, clinicEquipmentsCache),
+            NearCacheAdapter(TREATMENT_TYPES_CACHE_NAME, clinicTreatmentTypesCache),
         )
     )
 }
