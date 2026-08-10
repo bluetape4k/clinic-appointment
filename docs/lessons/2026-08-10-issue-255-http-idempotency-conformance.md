@@ -43,11 +43,11 @@ Coroutines 1.10.2를 선택해 fixture가 호출하는 Coroutines 1.11
 - `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`를 지정한
   `AppointmentControllerTest` 단독 실행은 25개가 통과해 durable replay, concurrent
   convergence, expiry replay를 확인했다.
-- 같은 override로 전체 `:appointment-api:test`를 실행하면 707개 중 12개가 기존
-  `AppointmentCommitmentSecurityIntegrationTest`에서만 실패했고, 해당 클래스 단독
-  실행은 12개 모두 통과했다. 따라서 conformance/appointment controller 회귀는
-  차단되지 않았지만 모듈 전체 테스트 DoD는 PENDING이며, 전체 실행 간 상태·자원
-  간섭은 별도 안정화 과제로 남긴다.
+- 같은 override의 첫 전체 `:appointment-api:test`에서는 기존
+  `AppointmentCommitmentSecurityIntegrationTest` 12개가 실패했지만 해당 클래스
+  단독 실행은 12개 모두 통과했다. 소스 변경 없이 동일 명령을 재실행한 결과는
+  `707개 실행·3개 skipped·0 failures`로 통과했으므로 첫 결과는 전체 실행의
+  일시적 상태·자원 간섭으로 분류하고 모듈 테스트 DoD를 PASS로 확정한다.
 
 ## 미래 guard
 

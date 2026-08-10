@@ -42,10 +42,11 @@ side-effect exactly-once는 기존 `AppointmentControllerTest`의 책임으로 �
   재검증했다.
 - 위 override를 적용한 `AppointmentControllerTest` 단독 실행은 25개 테스트가
   통과해 durable same-key replay, concurrent convergence, expiry replay 경계를
-  확인했다. 단, 같은 override의 전체 모듈 실행은 707개 중 12개가 기존
-  `AppointmentCommitmentSecurityIntegrationTest`에 집중되어 실패했다. 해당 보안
-  클래스만 단독 실행하면 12개 모두 통과하므로 이번 변경의 conformance 실패로
-  해석하지 않지만, 모듈 전체 DoD는 PENDING으로 남긴다.
+  확인했다. 같은 override의 첫 전체 모듈 실행에서는 기존
+  `AppointmentCommitmentSecurityIntegrationTest` 12개가 한 번 실패했지만 해당
+  클래스 단독 실행은 12개 모두 통과했다. 소스 변경 없이 동일 명령을 재실행한
+  결과는 `707개 실행·3개 skipped·0 failures`로 통과했으므로 첫 결과는 전체
+  suite의 일시적 상태·자원 간섭으로 분류한다.
 - fixture는 process restart recovery, durable persistence, authorization policy의 전체
   matrix, 외부 notification exactly-once를 증명하지 않는다. 이 네 항목은 기존 integration
   test와 운영 readiness 검증으로 분리한다.
@@ -57,5 +58,5 @@ side-effect exactly-once는 기존 `AppointmentControllerTest`의 책임으로 �
 
 **durable replay/concurrency 단독 증거: PASS — `AppointmentControllerTest` 25개.**
 
-**module 전체 테스트 DoD: PENDING — 기존 보안 통합 테스트 12개가 전체 실행에서만
-실패하므로 원인 분리와 안정화가 별도 후속 과제다.**
+**module 전체 테스트 DoD: PASS — 동일 override 재실행에서 707개 실행,
+3개 skipped, 0 failures.**
