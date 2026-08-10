@@ -1,7 +1,8 @@
 package io.bluetape4k.clinic.appointment.benchmark
 
+import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldNotBeNull
 import org.junit.jupiter.api.Test
-import kotlin.test.assertFailsWith
 
 class BenchmarkReportContractTest {
 
@@ -46,5 +47,15 @@ class BenchmarkReportContractTest {
             }
             """.trimIndent(),
         )
+    }
+
+    @Test
+    fun `production PostgreSQL migrations remain available to the isolated benchmark`() {
+        javaClass.classLoader
+            .getResource("db/migration/postgresql/V1__init_schema.sql")
+            .shouldNotBeNull()
+        javaClass.classLoader
+            .getResource("db/migration/postgresql/V25__bind_appointment_replay_hash_to_partition.sql")
+            .shouldNotBeNull()
     }
 }
