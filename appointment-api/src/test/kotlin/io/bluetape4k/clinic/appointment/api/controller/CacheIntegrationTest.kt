@@ -50,7 +50,7 @@ class CacheIntegrationTest @Autowired constructor(
         cacheManager.getCache("clinic-treatment-types")?.clear()
 
         transaction {
-            SchemaUtils.create(TenantGroups, Clinics, Doctors, Equipments, TreatmentTypes)
+            SchemaUtils.createMissingTablesAndColumns(TenantGroups, Clinics, Doctors, Equipments, TreatmentTypes)
             TreatmentTypes.deleteAll()
             Equipments.deleteAll()
             Doctors.deleteAll()

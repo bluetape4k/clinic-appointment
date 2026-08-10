@@ -79,7 +79,7 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
     fun setup() {
         messagingFailureSwitch.failStatusChanged = false
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 Clinics, OperatingHoursTable, ClinicDefaultBreakTimes, BreakTimes, ClinicClosures,
                 Doctors, DoctorSchedules, DoctorAbsences,
                 TreatmentTypes, Equipments, TreatmentEquipments,

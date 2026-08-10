@@ -51,7 +51,7 @@ class ExposedSchedulingPolicyPreviewStoreTest {
             driver = "org.h2.Driver",
         )
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 TenantGroups,
                 Clinics,
                 SchedulingPolicyScopeHeads,
@@ -138,7 +138,7 @@ class ExposedSchedulingPolicyPreviewStoreTest {
             driver = "org.h2.Driver",
         )
         transaction {
-            SchemaUtils.create(SchedulingPolicyScopeHeads, SchedulingPolicyPreviewJobs)
+            SchemaUtils.createMissingTablesAndColumns(SchedulingPolicyScopeHeads, SchedulingPolicyPreviewJobs)
         }
         val store = ExposedSchedulingPolicyPreviewStore(
             SchedulingPolicyJobRepository("preview-store-test-secret-32-bytes".toByteArray()),
@@ -192,7 +192,7 @@ class ExposedSchedulingPolicyPreviewStoreTest {
             driver = "org.h2.Driver",
         )
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 TenantGroups,
                 Clinics,
                 SchedulingPolicyDefinitions,

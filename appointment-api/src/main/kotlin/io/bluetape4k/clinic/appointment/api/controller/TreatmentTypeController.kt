@@ -86,8 +86,8 @@ class TreatmentTypeController(
         treatmentTypeId.requirePositiveNumber("treatmentTypeId")
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         log.debug { "GET treatment type tenantCode=$tenantCode, id=$treatmentTypeId" }
-        val type = runCatching { transaction { treatmentTypeRepository.findByIdAndTenant(treatmentTypeId, tenant.id) } }
-            .getOrNull() ?: return ResponseEntity.notFound().build()
+        val type = transaction { treatmentTypeRepository.findByIdAndTenant(treatmentTypeId, tenant.id) }
+            ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(ApiResponse.ok(type))
     }
 }

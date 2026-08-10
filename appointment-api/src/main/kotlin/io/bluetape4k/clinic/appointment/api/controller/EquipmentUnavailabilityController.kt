@@ -377,7 +377,7 @@ class EquipmentUnavailabilityController(
 private fun List<AppointmentRecord>.toConflictResponse(unavailabilityId: Long): UnavailabilityConflictResponse {
     val conflicts = map { appointment ->
         ConflictingAppointmentResponse(
-            appointmentId = appointment.id!!,
+            appointmentId = checkNotNull(appointment.id) { "AppointmentRecord.id must not be null" },
             patientName = appointment.patientName,
             appointmentDate = appointment.appointmentDate,
             startTime = appointment.startTime,

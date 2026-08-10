@@ -33,7 +33,7 @@ data class RescheduleCandidateResponse(
 }
 
 fun RescheduleCandidateRecord.toResponse(): RescheduleCandidateResponse = RescheduleCandidateResponse(
-    id = id!!,
+    id = checkNotNull(id) { "RescheduleCandidateRecord.id must not be null" },
     originalAppointmentId = originalAppointmentId,
     candidateDate = candidateDate,
     startTime = startTime,

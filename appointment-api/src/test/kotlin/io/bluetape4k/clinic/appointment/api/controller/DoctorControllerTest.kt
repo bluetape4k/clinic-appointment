@@ -47,7 +47,7 @@ class DoctorControllerTest @Autowired constructor() : AbstractApiIntegrationTest
             .build()
 
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 Clinics, Doctors, DoctorSchedules, DoctorAbsences,
             )
 
