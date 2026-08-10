@@ -640,22 +640,7 @@ class SchedulingPolicyCommandService(
         val definition = requireDefinition(command.scope, command.definitionId)
         val expectedLifecycle =
             if (command.replayOfCommandId == null) PolicyLifecycle.DRAFT else PolicyLifecycle.SCHEDULED
-        try {
-            requireDraftRevision(definition, command.expectedDraftRevision, expectedLifecycle)
-        } catch (stale: SchedulingPolicyApiException) {
-            if (stale.errorCode != SchedulingPolicyErrorCode.POLICY_DRAFT_STALE || keyHash == null) {
-                throw stale
-            }
-            // READ COMMITTED에서는 winner가 command와 ACTIVE lifecycle을 함께 commit한 뒤
-            // loser의 첫 idempotency 조회가 아직 이전 snapshot을 볼 수 있다. 같은 key의
-            // durable command가 이제 보이면 intent/preview를 다시 검증하고 completed replay로
-            // 수렴시킨다. command가 없으면 원래 stale 오류를 보존한다.
-            val committedReplay = jobRepository.findActivation(command.scope, keyHash)
-                ?: throw stale
-            requireSameIntent(committedReplay, fingerprint)
-            requireSamePreviewEvidence(committedReplay, command.preview)
-            return committedReplay
-        }
+        requireDraftRevision(definition, command.expectedDraftRevision, expectedLifecycle)
         if (definition.effectiveFrom > now) {
             reject(
                 SchedulingPolicyErrorCode.POLICY_ACTIVATION_CONFLICT,

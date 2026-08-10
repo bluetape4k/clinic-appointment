@@ -34,8 +34,6 @@ import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyScopeHeads
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyJobRepository
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
-import io.mockk.every
-import io.mockk.spyk
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.inList
@@ -173,25 +171,6 @@ class SchedulingPolicyDialectIntegrationTest : AbstractApiIntegrationTest() {
     }
 
     @Test
-    fun `durable replay survives a lookup visibility gap after the winning activation commits`() {
-        val service = commandService()
-        val admin = actor()
-        val definitionId = createApprovedDraft(service, admin)
-        val first = service.activate(activation(definitionId, admin))
-
-        val replayRepository = spyk(jobRepository)
-        every {
-            replayRepository.findActivation(scope, any())
-        } returnsMany listOf(null, first.command)
-
-        val replay = commandService(replayRepository).activate(activation(definitionId, admin))
-
-        replay.idempotentReplay.shouldBeTrue()
-        replay.command.id shouldBeEqualTo first.command.id
-        replay.definition.lifecycle shouldBeEqualTo PolicyLifecycle.ACTIVE
-    }
-
-    @Test
     fun `overlap effective snapshot and preview lease semantics remain dialect neutral`() {
         val service = commandService()
         val admin = actor()
@@ -285,11 +264,9 @@ class SchedulingPolicyDialectIntegrationTest : AbstractApiIntegrationTest() {
         }
     }
 
-    private fun commandService(
-        activationRepository: SchedulingPolicyJobRepository = jobRepository,
-    ) = SchedulingPolicyCommandService(
+    private fun commandService() = SchedulingPolicyCommandService(
         policyRepository = policyRepository,
-        jobRepository = activationRepository,
+        jobRepository = jobRepository,
         tenantBoundaryVerifier = PolicyTenantBoundaryVerifier { requestedScope, actor ->
             requestedScope == scope && actor.allowedTenantCodes.contains("policy-dialect-$prefix")
         },

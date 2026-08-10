@@ -15,8 +15,7 @@ import org.springframework.web.filter.OncePerRequestFilter
  * 이 서비스의 stateless request authentication은 이 filter에서 검증한 bearer token만
  * 권위로 사용한다. servlet thread에 남아 있거나 upstream에서 수립된 이전 authentication은
  * 요청 시작 시 제거하며, token이 없거나 유효하지 않으면 anonymous 상태를 유지한다.
- * 검증에 성공한 경우에만 [SecurityContextHolder]에 새 인증 정보를 설정하고, downstream
- * filter가 context를 변경했더라도 요청이 끝나면 다시 제거한다.
+ * 검증에 성공한 경우에만 [SecurityContextHolder]에 새 인증 정보를 설정한다.
  *
  * @param jwtTokenParser JWT 토큰 검증 및 Claims 파서
  */
@@ -36,27 +35,21 @@ class JwtAuthenticationFilter(
     ) {
         SecurityContextHolder.clearContext()
 
-        try {
-            val token = extractToken(request)
-            if (token != null) {
-                val principal = jwtTokenParser.parse(token)
-                if (principal != null) {
-                    val authentication = UsernamePasswordAuthenticationToken(
-                        principal,
-                        null,
-                        principal.authorities,
-                    )
-                    SecurityContextHolder.getContext().authentication = authentication
-                    log.debug { "JWT 인증 성공: userId=${principal.userId}, roles=${principal.roles}" }
-                }
+        val token = extractToken(request)
+        if (token != null) {
+            val principal = jwtTokenParser.parse(token)
+            if (principal != null) {
+                val authentication = UsernamePasswordAuthenticationToken(
+                    principal,
+                    null,
+                    principal.authorities,
+                )
+                SecurityContextHolder.getContext().authentication = authentication
+                log.debug { "JWT 인증 성공: userId=${principal.userId}, roles=${principal.roles}" }
             }
-
-            filterChain.doFilter(request, response)
-        } finally {
-            // downstream filter가 context를 덮어써도 servlet thread 재사용 시 다음 요청으로
-            // 인증이 전파되지 않도록 이 filter의 요청 범위에서 마지막으로 비운다.
-            SecurityContextHolder.clearContext()
         }
+
+        filterChain.doFilter(request, response)
     }
 
     private fun extractToken(request: HttpServletRequest): String? {
