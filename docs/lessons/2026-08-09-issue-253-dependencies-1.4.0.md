@@ -10,8 +10,10 @@ Kafka·Exposed·solver·benchmark 경로도 목표 버전으로 컴파일·실�
 시나리오가 고정 `Thread.sleep(1_200)` 타이밍에 의존해 1건 실패했다. 저장소 코어 테스트와
 동일하게 첫 claim 뒤 `leaseExpiresAt = Instant.EPOCH`을 DB transaction에서 명시하도록
 통합 테스트를 안정화했고, 수정 후 대상 5건과 전체 API aggregate를 다시 통과시켰다.
-최종 API aggregate는 704건 통과, 3건 skip이다. PostgreSQL scheduling policy와 security 대상
-회귀 10건은 통과했으며, #256·#257 수정 커밋을 이 worktree에 통합해 재검증했다.
+범위 정리 전 aggregate는 704건 통과, 3건 skip이었지만 그 안에 분리된 #256·#257 테스트가
+포함되어 있었다. 두 동작 변경을 최종 diff에서 제거한 뒤 현재 브랜치에서 다시 실행한 API
+aggregate는 702건 통과, 3건 skip이며 실패·오류는 0건이다. PostgreSQL scheduling policy와
+security 대상 회귀 10건 및 범위 정리 후 API 보안·정책 targeted 9건도 통과했다.
 
 ## resolved graph
 
@@ -93,8 +95,8 @@ fixture 패턴으로 바꾸어 wall-clock과 suite load에 의존하지 않게 �
 | 검증 | 결과 |
 | --- | --- |
 | 수정 후 `*ProfileReevaluationConcurrencyIntegrationTest` | 5건 통과, 59초 |
-| 수정 후 `:appointment-api:test --rerun-tasks` fresh aggregate | `SUCCESS: Executed 704 tests in 5m 34s (3 skipped)`, `BUILD SUCCESSFUL in 6m 14s` |
-| 중간 재실행에서 관찰한 `AppointmentCommitmentFeatureOffIntegrationTest` | 단독·security aggregate 통과; fresh 전체 aggregate 최종 통과 |
+| 범위 정리 후 `:appointment-api:test --rerun-tasks` fresh aggregate | `SUCCESS: Executed 702 tests in 4m 51s (3 skipped)`, `BUILD SUCCESSFUL in 5m 38s`; XML failures/errors 0/0 |
+| 범위 정리 후 API 보안·정책 targeted | 9건 통과, `BUILD SUCCESSFUL` |
 
 따라서 현재 로컬 검증 gate는 green이다. 다만 production Redis/PostgreSQL, GitHub CI,
 push/PR/merge는 아직 실행하지 않았으므로 원격 전달 상태는 `PENDING`으로 유지한다.
@@ -105,5 +107,7 @@ push/PR/merge는 아직 실행하지 않았으므로 원격 전달 상태는 `PE
 `ip-address` 3건과 `@hono/node-server` 1건뿐이며 모두 frontend manifest 범위다. 이를 근거로
 전체 취약점이 없다고 주장하지 않으며, JVM dependency 전환과 무관한 것으로 분리했다.
 
-production Redis, production PostgreSQL, GitHub CI, push/PR/merge는 실행하지 않았다. 사용자의
+production Redis, production PostgreSQL, GitHub CI, push/PR/merge는 실행하지 않았다. live GitHub
+기준 #254(Leader/Micrometer), #255(bounded-wait conformance), #256(durable replay), #257(security
+response isolation)는 모두 OPEN인 독립 이슈이며 이 PR은 해당 동작을 변경하지 않는다. 사용자의
 현재 승인은 구현·검증 범위이며, 원격 변경과 merge 승인은 별도 게이트다.
