@@ -4,8 +4,10 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.awaitCancellation
 import io.mockk.verify
 import org.junit.jupiter.api.Test
+import java.time.Duration
 
 internal class NotificationSchedulingRunnersTest {
 
@@ -69,6 +71,19 @@ internal class NotificationSchedulingRunnersTest {
         coEvery { dispatcher.dispatchOnce() } throws IllegalStateException("temporary database error")
 
         NotificationOutboxSchedulingRunner(dispatcher).poll()
+
+        coVerify(exactly = 1) { dispatcher.dispatchOnce() }
+    }
+
+    @Test
+    fun `never-resuming outbox poll은 설정된 deadline에서 취소되어 다음 tick을 막지 않는다`() {
+        val dispatcher = mockk<NotificationOutboxDispatcher>()
+        coEvery { dispatcher.dispatchOnce() } coAnswers {
+            awaitCancellation()
+            emptyList()
+        }
+
+        NotificationOutboxSchedulingRunner(dispatcher, Duration.ofMillis(100)).poll()
 
         coVerify(exactly = 1) { dispatcher.dispatchOnce() }
     }

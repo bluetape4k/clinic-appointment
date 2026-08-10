@@ -17,6 +17,7 @@ import java.time.Duration
  *       enabled: true
  *       max-attempts: 6
  *       lease-duration: 60s
+ *       suspend-bridge-timeout: 30s
  *       global-concurrency: 4
  *       per-clinic-concurrency: 1
  * ```
@@ -97,6 +98,7 @@ data class NotificationProperties(
         val reminderRecoveryMaxCandidatesPerRun: Int = 1_000,
         val leaseDuration: Duration = Duration.ofSeconds(60),
         val providerTimeout: Duration = Duration.ofSeconds(30),
+        val suspendBridgeTimeout: Duration = Duration.ofSeconds(30),
         val pollInterval: Duration = Duration.ofSeconds(1),
         val batchSize: Int = 100,
         val globalConcurrency: Int = 4,
@@ -138,6 +140,9 @@ data class NotificationProperties(
             }
             check(!providerTimeout.isNegative && !providerTimeout.isZero) {
                 "providerTimeout must be positive"
+            }
+            check(!suspendBridgeTimeout.isNegative && !suspendBridgeTimeout.isZero) {
+                "suspendBridgeTimeout must be positive"
             }
             check(!pollInterval.isNegative && !pollInterval.isZero) {
                 "pollInterval must be positive"

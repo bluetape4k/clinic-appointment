@@ -1,16 +1,29 @@
 package io.bluetape4k.clinic.appointment.notification
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeInstanceOf
 import io.bluetape4k.clinic.appointment.event.AppointmentDomainEvent
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.ObjectInputStream
+import java.io.ObjectOutputStream
+import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import kotlin.system.measureTimeMillis
 
 internal class NotificationEventListenerTest {
 
@@ -153,6 +166,97 @@ internal class NotificationEventListenerTest {
         )
 
         listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, scope = scope(7L)))
+    }
+
+    @Test
+    fun `never-resuming suspend bridge는 bounded deadline 안에 취소되어야 한다`() {
+        val task = CompletableFuture.supplyAsync<NotificationDirectDeliveryResult> {
+            runSynchronously(Duration.ofMillis(100)) { awaitCancellation() }
+        }
+
+        try {
+            val failure = assertFailsWith<ExecutionException> {
+                task.get(2, TimeUnit.SECONDS)
+            }
+            failure.cause.shouldBeInstanceOf<NotificationSuspendBridgeTimeoutException>()
+        } finally {
+            task.cancel(true)
+        }
+    }
+
+    @Test
+    fun `suspend bridge는 실제 cancellation을 domain timeout으로 변환하지 않는다`() {
+        val cancellation = CancellationException("caller cancelled")
+
+        val failure = assertFailsWith<CancellationException> {
+            runSynchronously(Duration.ofSeconds(1)) {
+                throw cancellation
+            }
+        }
+
+        check(failure::class.java == cancellation::class.java)
+        check(failure.message == cancellation.message)
+    }
+
+    @Test
+    fun `interrupted suspend bridge는 InterruptedException과 interrupt flag를 보존한다`() {
+        val started = CountDownLatch(1)
+        val interrupted = AtomicBoolean(false)
+        val worker = Thread.ofPlatform()
+            .name("notification-suspend-bridge-interrupt-test")
+            .start {
+                try {
+                    started.countDown()
+                    runSynchronously(Duration.ofSeconds(5)) { awaitCancellation() }
+                } catch (e: InterruptedException) {
+                    interrupted.set(Thread.currentThread().isInterrupted)
+                }
+            }
+
+        try {
+            check(started.await(1, TimeUnit.SECONDS)) { "bridge test worker did not start" }
+            worker.interrupt()
+            worker.join(2_000L)
+            check(!worker.isAlive) { "interrupted bridge worker did not terminate" }
+            check(interrupted.get()) { "bridge did not preserve the interrupt flag" }
+        } finally {
+            if (worker.isAlive) worker.interrupt()
+        }
+    }
+
+    @Test
+    fun `event listener는 worker 설정의 suspend bridge deadline을 사용한다`() {
+        val listener = NotificationEventListener(
+            delivery = NotificationDirectDeliveryPort { _, _, _ -> awaitCancellation() },
+            properties = NotificationProperties(
+                worker = NotificationProperties.WorkerProperties(
+                    suspendBridgeTimeout = Duration.ofMillis(100),
+                )
+            ),
+        )
+
+        val elapsed = measureTimeMillis {
+            listener.onCreated(AppointmentDomainEvent.Created(appointmentId = 1L, scope = scope(7L)))
+        }
+
+        check(elapsed < 500L) { "configured suspend bridge timeout was not applied: elapsed=${elapsed}ms" }
+    }
+
+    @Test
+    fun `Kafka notification route는 Java serialization 계약을 유지한다`() {
+        val routeClass = NotificationAppointmentEventConsumer::class.java.declaredClasses
+            .single { it.simpleName == "NotificationRoute" }
+        check(java.io.Serializable::class.java.isAssignableFrom(routeClass))
+
+        val constructor = routeClass.getDeclaredConstructor(Long::class.javaPrimitiveType, NotificationEventType::class.java)
+            .apply { isAccessible = true }
+        val route = constructor.newInstance(42L, NotificationEventType.CREATED)
+        val bytes = ByteArrayOutputStream().also { output ->
+            ObjectOutputStream(output).use { it.writeObject(route) }
+        }.toByteArray()
+        val restored = ObjectInputStream(ByteArrayInputStream(bytes)).use { it.readObject() }
+
+        restored shouldBeEqualTo route
     }
 
     @Test

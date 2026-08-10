@@ -204,6 +204,16 @@ internal class NotificationAutoConfigurationTest {
     }
 
     @Test
+    fun `notification auto configuration은 host scheduling opt-in 없이 global scheduler를 활성화하지 않는다`() {
+        val database = database("auto_scheduler_opt_in", version = "21")
+
+        context(database, withKey = true).run { applicationContext ->
+            applicationContext.startupFailure shouldBeEqualTo null
+            applicationContext.containsBean("org.springframework.context.annotation.internalScheduledAnnotationProcessor") shouldBeEqualTo false
+        }
+    }
+
+    @Test
     fun `ACTIVE는 runtime delivery dispatcher를 구성한다`() {
         val database = database("auto_runtime_active", version = "21")
         context(database, withKey = true)
@@ -401,7 +411,14 @@ internal class NotificationAutoConfigurationTest {
             driver = "org.h2.Driver",
         ).also { database ->
             transaction(database) {
-                SchemaUtils.create(TenantGroups, Clinics, AppointmentEventLogs, NotificationOutboxEvents, NotificationDeliveryAttempts, FlywaySchemaHistory)
+                SchemaUtils.createMissingTablesAndColumns(
+                    TenantGroups,
+                    Clinics,
+                    AppointmentEventLogs,
+                    NotificationOutboxEvents,
+                    NotificationDeliveryAttempts,
+                    FlywaySchemaHistory,
+                )
                 FlywaySchemaHistory.insert {
                     it[installedRank] = 1
                     it[FlywaySchemaHistory.version] = version
