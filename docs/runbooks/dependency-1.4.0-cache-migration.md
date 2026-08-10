@@ -1,70 +1,93 @@
-# bluetape4k-dependencies 1.4.0 캐시 전환 runbook
+# bluetape4k-dependencies 1.4.0 캐시 보안·namespace 전환 runbook
 
 ## 목적
 
-`bluetape4k-dependencies` 1.4.0 전환으로 기본 LZ4+Fory codec 버전이 바뀌어도 구 binary와 새
-binary가 서로의 Redis payload를 읽지 않도록 remote namespace를 분리한다. Spring Cache의 논리
-이름은 그대로 유지하고 Redis key prefix만 다음과 같이 변경한다.
+현재 binary의 Fory/LZ4 payload는 `v2` namespace에 남겨 rollback reader로 보존한다. 새
+binary는 등록 강제·depth/graph memory bound를 가진 codec으로 `v3`에만 읽고 쓴다. Spring
+Cache의 논리 이름은 유지하고 Redis remote prefix만 다음처럼 분리한다.
 
-| 논리 cache 이름 | 구 remote prefix | 새 remote prefix |
+| 논리 cache 이름 | rollback binary prefix | 새 binary prefix |
 | --- | --- | --- |
-| `clinic-doctors` | `clinic-doctors:*` | `clinic-doctors-v2:*` |
-| `clinic-equipments` | `clinic-equipments:*` | `clinic-equipments-v2:*` |
-| `clinic-treatment-types` | `clinic-treatment-types:*` | `clinic-treatment-types-v2:*` |
+| `clinic-doctors` | `clinic-doctors-v2:*` | `clinic-doctors-v3:*` |
+| `clinic-equipments` | `clinic-equipments-v2:*` | `clinic-equipments-v3:*` |
+| `clinic-treatment-types` | `clinic-treatment-types-v2:*` | `clinic-treatment-types-v3:*` |
 
-Redis 작업은 cluster의 각 primary shard에서 실행한다. replica에는 직접 쓰지 않는다. 모든 삭제는
-cursor 기반 `SCAN`이 반환한 exact key 목록을 제한된 batch로 나누어 `UNLINK`한다. `KEYS`,
-`FLUSHALL`, glob 문자열을 직접 넘긴 `DEL` 또는 `UNLINK`는 사용하지 않는다.
+`v2` payload를 새 codec으로 역방향 decode할 수 있다는 가정은 하지 않는다. v2는 전체
+rollout과 observation window가 끝날 때까지 삭제하지 않는다. 운영 gate는 다음 validator로
+JSON evidence의 형식과 live 조건을 확인한다.
 
-## 배포 전 준비
+```bash
+scripts/verify-cache-rollout-evidence.sh <report.json|-> [--require-live] [--thresholds <thresholds.json>]
+```
 
-1. 배포 전 Redis `INFO stats`의 `keyspace_hits`, `keyspace_misses`를 저장한다.
-2. 각 primary shard에서 아래 pattern을 각각 `SCAN ... COUNT 500`으로 순회한다.
-   - `clinic-doctors-v2:*`
-   - `clinic-equipments-v2:*`
-   - `clinic-treatment-types-v2:*`
-3. 각 cursor 응답의 exact key만 운영 환경의 허용 batch 크기로 나누어 `UNLINK key1 key2 ...`로
-   삭제한다. cursor가 `0`으로 돌아올 때까지 반복한다.
-4. 세 v2 prefix의 `SCAN` count가 0인지 확인한다.
+## 사전 준비
+
+1. 운영 Redis URI가 `rediss://username:password@host:6380` 형식이고 API 설정
+   `scheduling.cache.redis.require-tls=true`인지 확인한다. password는 채팅·로그·evidence에
+   기록하지 않는다.
+2. 각 primary shard에서 다음 prefix를 `SCAN ... COUNT 500`으로 관찰한다.
+   `clinic-doctors-v2:*`, `clinic-equipments-v2:*`, `clinic-treatment-types-v2:*`.
+   새 배포 전에 v2를 삭제하지 않는다.
+3. Redis `INFO stats`의 `keyspace_hits`, `keyspace_misses`, v2 key count와 애플리케이션
+   decode-error count를 저장한다.
+4. PostgreSQL lock-wait, broker lag, cache hit/miss, rollback 계획을 evidence 생성기에
+   연결한다. local benchmark report의 `deploymentSloEvidence=false`는 이 절차의 live
+   근거가 아니다.
+5. `deploymentSloEvidence=false`인 local/staging 점검은 다음처럼 형식만 확인할 수 있다.
+
+   ```bash
+   scripts/verify-cache-rollout-evidence.sh local-report.json
+   ```
 
 ## Canary와 점진 배포
 
-1. 새 binary 한 개를 canary로 배포한다.
-2. application log에서 serialization/decode 오류를 확인한다.
-3. 세 v2 prefix의 `SCAN` count가 실제 cache 사용과 함께 증가하는지 확인한다.
-4. Redis `INFO stats`의 hit/miss delta를 배포 전 snapshot과 비교한다.
-5. 오류율과 hit/miss가 허용 범위이면 새 binary를 점진 배포한다. 구 binary는 v1만, 새 binary는
-   v2만 읽고 쓰므로 rolling deployment 중 payload가 교차하지 않는다.
+1. 새 binary 한 pod만 canary로 배포한다. 기존 pod는 v2 writer로 유지한다.
+2. canary에서 세 cache의 독립 client read/write round-trip을 수행하고 raw key가
+   `clinic-*-v3:<logical-key>`에만 생성되는지 확인한다. v1 및 v2 key를 새 writer가 만들면
+   즉시 canary를 drain한다.
+3. Fory unknown-class/depth/graph memory decode error가 0인지 확인한다. cache adapter가
+   miss로 fallback하더라도 decode error count를 별도 evidence에 기록한다.
+4. Redis TLS/ACL 연결, v3 key 증가, hit/miss delta, PostgreSQL lock-wait, broker lag를
+   report에 기록한다.
+5. production report는 `--require-live`로 검증한다. 이때 production environment,
+   `deploymentSloEvidence=true`, Redis TLS/ACL=true, `rollback.result=PASS`가 모두 필요하다.
+
+   ```bash
+   scripts/verify-cache-rollout-evidence.sh production-report.json --require-live --thresholds production-thresholds.json
+   ```
+
+6. validator와 canary 수치가 승인된 범위이면 새 binary를 점진 배포한다. v2 namespace는
+   rollback window 동안 보존한다.
 
 ## Rollback
 
-1. 먼저 application traffic을 중단하고 readiness가 0이 될 때까지 drain한다. 구 binary의
-   writer가 더 이상 실행 중이 아닌지 deployment 상태와 로그로 확인한다.
-2. 구 binary pod를 모두 종료하거나 재기동해 process-local L1(Caffeine) 캐시를 비운다. Redis
-   v1 삭제만으로는 이미 메모리에 남은 10분 L1 payload를 무효화할 수 없다.
-3. 각 primary shard에서 다음 v1 pattern을 각각 `SCAN ... COUNT 500`으로 순회한다.
-   - `clinic-doctors:*`
-   - `clinic-equipments:*`
-   - `clinic-treatment-types:*`
-4. 각 cursor 응답의 exact key만 batch `UNLINK`하고, cursor가 `0`이 될 때까지 반복한다.
-5. 세 v1 prefix의 `SCAN` count가 0인지 확인한 뒤 새로 시작한 구 binary를 배포한다. 배포된
-   모든 pod가 새 process-local L1로 시작했는지 readiness와 rollout 상태를 확인한다.
-6. 짧은 warm-up 동안 v1 prefix가 재생성되지 않는지 최종 `SCAN`으로 확인하고 traffic을
-   재개한다. serialization/decode 오류와 Redis hit/miss delta도 함께 확인한다.
+1. 새 binary traffic을 중단하고 readiness가 0이 될 때까지 drain한다. 새 v3 writer가 더
+   이상 실행 중이 아닌지 deployment 상태와 로그로 확인한다.
+2. rollback binary pod를 모두 재기동해 process-local L1(Caffeine) payload를 비운다. Redis
+   key만 지워서는 기존 10분 L1 entry가 무효화되지 않는다.
+3. rollback binary를 배포하고 v2 namespace의 exact key만 `SCAN ... COUNT 500`으로 확인한다.
+   v2를 삭제하지 말고 warm-up read/write를 수행한다.
+4. v3는 즉시 삭제하지 않는다. 조사에 필요한 payload와 decode/error evidence를 보존한다.
+5. rollback 결과, pod 재기동, v2 warm-up, Redis TLS/ACL 상태를 report에 기록하고
+   `rollback.result=PASS`가 된 뒤에만 복구 완료로 표시한다.
+6. rollback 중 v2 payload 오류가 발생하면 traffic을 계속 drain하고 v3/v2를 임의로 섞지
+   않는다. 원인을 해결한 뒤 canary 절차를 다시 수행한다.
 
-구 binary 배포 전에 v1을 비우는 이유는 upgrade 이전에 남은 stale payload가 rollback 후 다시
-노출되는 것을 막기 위해서다. v2 namespace만 삭제하고 rollback하면 이 위험이 제거되지 않는다.
+## 전환 완료 후 namespace 정리
 
-## 배포 완료 후 정리
+1. 전체 v3 rollout 성공, TTL 최대 1시간, 승인된 observation window가 모두 지날 때까지
+   v2를 보존한다.
+2. 각 primary shard에서 v2 prefix를 cursor 기반 `SCAN ... COUNT 500`으로 순회한다.
+3. 각 cursor 응답의 exact key만 제한된 batch로 나누어 `UNLINK key1 key2 ...`한다.
+4. cursor가 `0`이 되고 세 v2 prefix count가 0인지 확인한다.
+5. 최종 report에서 v3 hit/miss와 애플리케이션 오류율을 확인한다. live SLO 값이나 실제
+   rollback 결과가 없으면 구현이 통과했어도 운영 상태는 `PENDING`이다.
 
-1. 전체 rollout 성공 후 cache TTL 1시간과 별도의 관찰 window가 모두 지날 때까지 기다린다.
-2. 각 primary shard에서 v1 세 prefix를 cursor 기반 `SCAN ... COUNT 500`으로 순회한다.
-3. 반환된 exact key만 batch `UNLINK`한다.
-4. v1 count가 0이고 v2 hit/miss와 application 오류율이 정상인지 확인해 전환을 종료한다.
+## 안전 규칙
 
-## 금지 사항
-
-- `FLUSHALL`, `FLUSHDB`, `KEYS`를 사용하지 않는다.
+- `KEYS`, `FLUSHALL`, `FLUSHDB`를 사용하지 않는다.
 - glob pattern을 `DEL` 또는 `UNLINK` 인자로 직접 전달하지 않는다.
 - cache name에 tenant별 동적 suffix나 `:`를 추가하지 않는다.
-- rollback 과정에서 database schema-down을 수행하지 않는다.
+- rollback 과정에서 database schema-down이나 무관한 cache namespace 삭제를 수행하지 않는다.
+- Redis password, JWT, raw payload를 로그·README·evidence에 기록하지 않는다.
+- `deploymentSloEvidence=false`인 local benchmark를 production SLO로 표현하지 않는다.

@@ -1,28 +1,22 @@
 package io.bluetape4k.clinic.appointment.api.config
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.cache.nearcache.NearCacheOperations
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
+import io.bluetape4k.io.serializer.BinarySerializationException
 import io.lettuce.core.RedisClient
-import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class NearCacheWireCompatibilityTest {
 
-    private lateinit var redisUrl: String
-
-    @BeforeAll
-    fun startRedis() {
-        redisUrl = Containers.Redis.url
-    }
-
     @Test
-    fun `의사 캐시는 v2 Redis namespace에서 독립 client로 round-trip 한다`() {
+    fun `의사 캐시는 v3 Redis namespace에서 독립 client로 round-trip 한다`() {
         verifyRoundTrip(
             logicalName = CacheConfig.DOCTORS_CACHE_NAME,
             remoteName = CacheConfig.DOCTORS_REMOTE_CACHE_NAME,
@@ -40,7 +34,7 @@ class NearCacheWireCompatibilityTest {
     }
 
     @Test
-    fun `장비 캐시는 v2 Redis namespace에서 독립 client로 round-trip 한다`() {
+    fun `장비 캐시는 v3 Redis namespace에서 독립 client로 round-trip 한다`() {
         verifyRoundTrip(
             logicalName = CacheConfig.EQUIPMENTS_CACHE_NAME,
             remoteName = CacheConfig.EQUIPMENTS_REMOTE_CACHE_NAME,
@@ -58,7 +52,7 @@ class NearCacheWireCompatibilityTest {
     }
 
     @Test
-    fun `진료 유형 캐시는 v2 Redis namespace에서 독립 client로 round-trip 한다`() {
+    fun `진료 유형 캐시는 v3 Redis namespace에서 독립 client로 round-trip 한다`() {
         verifyRoundTrip(
             logicalName = CacheConfig.TREATMENT_TYPES_CACHE_NAME,
             remoteName = CacheConfig.TREATMENT_TYPES_REMOTE_CACHE_NAME,
@@ -75,14 +69,31 @@ class NearCacheWireCompatibilityTest {
         )
     }
 
+    @Test
+    fun `secure serializer는 등록되지 않은 타입을 거부하고 graph bound를 고정한다`() {
+        val serializer = CacheConfig.secureCacheSerializer
+
+        assertFailsWith<BinarySerializationException> {
+            serializer.serialize(UnsupportedCacheValue("등록되지 않은 타입"))
+        }
+
+        val config = CacheConfig.secureThreadSafeFory.execute { it.config }
+        config.requireClassRegistration().shouldBeTrue()
+        config.deserializeUnknownClass().shouldBeFalse()
+        config.maxDepth() shouldBeEqualTo 32
+        config.maxGraphMemoryBytes() shouldBeEqualTo 8L * 1024 * 1024
+    }
+
     private fun <T : Any> verifyRoundTrip(
         logicalName: String,
         remoteName: String,
         expected: List<T>,
         cacheFactory: (CacheConfig, RedisClient) -> NearCacheOperations<List<T>>,
     ) {
+        val redisUrl = Containers.Redis.url
         val cacheKey = "1:7"
-        val v2Key = "$remoteName:$cacheKey"
+        val v3Key = "$remoteName:$cacheKey"
+        val v2Key = "${remoteName.removeSuffix("-v3")}-v2:$cacheKey"
         val v1Key = "$logicalName:$cacheKey"
         val cleanupActions = mutableListOf<() -> Unit>()
         var primaryFailure: Throwable? = null
@@ -105,13 +116,14 @@ class NearCacheWireCompatibilityTest {
                 cleanupActions += { connection.close() }
             }
             val rawCommands = rawConnection.sync()
-            cleanupActions += { rawCommands.unlink(v2Key, v1Key) }
+            cleanupActions += { rawCommands.unlink(v3Key, v2Key, v1Key) }
 
-            rawCommands.unlink(v2Key, v1Key)
+            rawCommands.unlink(v3Key, v2Key, v1Key)
             writerCache.put(cacheKey, expected)
 
             readerCache.get(cacheKey) shouldBeEqualTo expected
-            rawCommands.exists(v2Key) shouldBeEqualTo 1L
+            rawCommands.exists(v3Key) shouldBeEqualTo 1L
+            rawCommands.exists(v2Key) shouldBeEqualTo 0L
             rawCommands.exists(v1Key) shouldBeEqualTo 0L
         } catch (failure: Throwable) {
             primaryFailure = failure
@@ -129,4 +141,6 @@ class NearCacheWireCompatibilityTest {
             }
         }
     }
+
+    private data class UnsupportedCacheValue(val value: String)
 }
