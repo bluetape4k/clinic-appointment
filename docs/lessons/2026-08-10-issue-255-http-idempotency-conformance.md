@@ -40,8 +40,14 @@ Coroutines 1.10.2를 선택해 fixture가 호출하는 Coroutines 1.11
   - blocking MockMvc 취소와 caller-owned thread 회수
 - dependency evidence: `dependencyInsight`가 `kotlinx-coroutines-core-jvm:1.11.0`을
   선택하고 ABI 오류가 사라졌다.
-- 실제 `AppointmentControllerTest`는 Redis Testcontainer가
-  `~/.colima/default/docker.sock`를 mount하지 못해 context 초기화 단계에서 PENDING이다.
+- `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`를 지정한
+  `AppointmentControllerTest` 단독 실행은 25개가 통과해 durable replay, concurrent
+  convergence, expiry replay를 확인했다.
+- 같은 override로 전체 `:appointment-api:test`를 실행하면 707개 중 12개가 기존
+  `AppointmentCommitmentSecurityIntegrationTest`에서만 실패했고, 해당 클래스 단독
+  실행은 12개 모두 통과했다. 따라서 conformance/appointment controller 회귀는
+  차단되지 않았지만 모듈 전체 테스트 DoD는 PENDING이며, 전체 실행 간 상태·자원
+  간섭은 별도 안정화 과제로 남긴다.
 
 ## 미래 guard
 

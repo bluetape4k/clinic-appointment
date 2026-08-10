@@ -35,10 +35,17 @@ side-effect exactly-once는 기존 `AppointmentControllerTest`의 책임으로 �
 
 ## 검증 한계와 후속 경계
 
-- 실제 `AppointmentControllerTest`는 테스트 context 초기화 중 Redis Testcontainer가
-  `~/.colima/default/docker.sock` mount 오류를 내어 실행되지 않았다. 이는 이번 변경의
-  compile/conformance 실패가 아니며, Docker runtime 복구 후 durable replay/concurrent
-  regression을 다시 실행해야 한다.
+- 기본 명령의 전체 `:appointment-api:test`는 Colima Docker socket 경로를
+  `~/.colima/default/docker.sock`로 전달하는 Testcontainers Ryuk mount 오류로
+  `AppointmentControllerTest` context 초기화에서 실패했다. Docker daemon 자체는
+  정상이므로 `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`를 지정해
+  재검증했다.
+- 위 override를 적용한 `AppointmentControllerTest` 단독 실행은 25개 테스트가
+  통과해 durable same-key replay, concurrent convergence, expiry replay 경계를
+  확인했다. 단, 같은 override의 전체 모듈 실행은 707개 중 12개가 기존
+  `AppointmentCommitmentSecurityIntegrationTest`에 집중되어 실패했다. 해당 보안
+  클래스만 단독 실행하면 12개 모두 통과하므로 이번 변경의 conformance 실패로
+  해석하지 않지만, 모듈 전체 DoD는 PENDING으로 남긴다.
 - fixture는 process restart recovery, durable persistence, authorization policy의 전체
   matrix, 외부 notification exactly-once를 증명하지 않는다. 이 네 항목은 기존 integration
   test와 운영 readiness 검증으로 분리한다.
@@ -48,4 +55,7 @@ side-effect exactly-once는 기존 `AppointmentControllerTest`의 책임으로 �
 
 **현재 로컬 conformance 구현: PASS — P0=0, P1=0, P2=0, P3=0.**
 
-**module durable integration 증거: PENDING — Docker socket 복구 후 재실행 필요.**
+**durable replay/concurrency 단독 증거: PASS — `AppointmentControllerTest` 25개.**
+
+**module 전체 테스트 DoD: PENDING — 기존 보안 통합 테스트 12개가 전체 실행에서만
+실패하므로 원인 분리와 안정화가 별도 후속 과제다.**
