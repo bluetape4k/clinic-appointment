@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.event.waitlist
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.assertFailsWith
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.springframework.context.ApplicationEventPublisher
@@ -55,6 +56,53 @@ class SlotAvailableTest {
 
         (failure != null).shouldBeTrue()
         failure?.message shouldBeEqualTo "listener failed"
+    }
+
+    @Test
+    fun `fatal Error는 fast signal 격리 경계를 넘어 전파된다`() {
+        val publisher = WaitlistSlotAvailableSpringPublisher(
+            eventPublisher = ApplicationEventPublisher { throw AssertionError("fatal listener failure") },
+        )
+
+        TransactionSynchronizationManager.initSynchronization()
+        publisher.publishAfterCommit(slotAvailable())
+
+        assertFailsWith<AssertionError> {
+            TransactionSynchronizationManager.getSynchronizations().single().afterCommit()
+        }.message shouldBeEqualTo "fatal listener failure"
+    }
+
+    @Test
+    fun `failure hook의 일반 예외는 원래 fast signal 실패를 보존하고 전파하지 않는다`() {
+        var observed: Throwable? = null
+        val publisher = WaitlistSlotAvailableSpringPublisher(
+            eventPublisher = ApplicationEventPublisher { error("listener failed") },
+            onFailure = {
+                observed = it
+                error("failure hook failed")
+            },
+        )
+
+        TransactionSynchronizationManager.initSynchronization()
+        publisher.publishAfterCommit(slotAvailable())
+        TransactionSynchronizationManager.getSynchronizations().single().afterCommit()
+
+        observed?.message shouldBeEqualTo "listener failed"
+    }
+
+    @Test
+    fun `failure hook의 fatal Error는 삼키지 않는다`() {
+        val publisher = WaitlistSlotAvailableSpringPublisher(
+            eventPublisher = ApplicationEventPublisher { error("listener failed") },
+            onFailure = { throw AssertionError("fatal failure hook") },
+        )
+
+        TransactionSynchronizationManager.initSynchronization()
+        publisher.publishAfterCommit(slotAvailable())
+
+        assertFailsWith<AssertionError> {
+            TransactionSynchronizationManager.getSynchronizations().single().afterCommit()
+        }.message shouldBeEqualTo "fatal failure hook"
     }
 
     @Test

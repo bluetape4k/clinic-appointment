@@ -6,7 +6,11 @@ import java.time.Clock
 
 data class QuarantineRetentionResult(
     val expiredCount: Int,
-) : Serializable
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 불변 metadata나 audit history를 삭제하지 않고 quarantine payload 보존 정책을 적용합니다.

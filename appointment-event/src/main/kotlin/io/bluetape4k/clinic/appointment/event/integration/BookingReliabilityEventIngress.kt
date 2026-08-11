@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.event.integration
 
 import io.bluetape4k.clinic.appointment.service.StrictJsonPayloadDecoder
+import java.io.Serializable
 import java.time.Clock
 import java.time.Duration
 
@@ -15,9 +16,18 @@ class StrictBookingReliabilitySignalEventDecoder(
         decoder.decode(rawPayload, BookingReliabilitySignalEvent::class.java)
 }
 
-sealed interface BookingReliabilityIngressResult {
-    data class Accepted(val eventRecordId: Long) : BookingReliabilityIngressResult
-    data class Quarantined(val quarantineId: Long, val reasonCode: String) : BookingReliabilityIngressResult
+sealed interface BookingReliabilityIngressResult : Serializable {
+    data class Accepted(val eventRecordId: Long) : BookingReliabilityIngressResult {
+        private companion object {
+            private const val serialVersionUID: Long = 1L
+        }
+    }
+
+    data class Quarantined(val quarantineId: Long, val reasonCode: String) : BookingReliabilityIngressResult {
+        private companion object {
+            private const val serialVersionUID: Long = 1L
+        }
+    }
 }
 
 /**

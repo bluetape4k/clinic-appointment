@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.event.profile
 
 import io.bluetape4k.clinic.appointment.event.integration.CanonicalFrameWriter
 import java.security.MessageDigest
+import java.io.Serializable
 import java.time.Instant
 
 /**
@@ -21,7 +22,11 @@ data class PatientSchedulingAssessmentChanged(
     val assessmentRef: String,
     val assessmentHash: String,
     val occurredAt: Instant,
-)
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 프로필 변경 payload의 field 순서와 타입을 고정한 SHA-256 계산기입니다.

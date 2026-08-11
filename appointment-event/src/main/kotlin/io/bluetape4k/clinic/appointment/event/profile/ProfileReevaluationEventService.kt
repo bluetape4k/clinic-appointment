@@ -18,6 +18,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.io.Serializable
 import java.time.Clock
 import java.time.Duration
 
@@ -45,7 +46,11 @@ fun interface ProfileReevaluationEventObserver {
 data class ProfileReevaluationEventResult(
     val status: ProfileReevaluationEventStatus,
     val reasonCode: String? = null,
-)
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 신뢰 검증된 CRM 프로필 변경 신호를 최신 재평가 작업으로 병합합니다.

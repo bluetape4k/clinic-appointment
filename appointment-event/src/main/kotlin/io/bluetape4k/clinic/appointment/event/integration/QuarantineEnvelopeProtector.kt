@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.event.integration
 
 import io.bluetape4k.clinic.appointment.event.profile.PatientSchedulingAssessmentChanged
 import io.bluetape4k.clinic.appointment.event.profile.PatientSchedulingAssessmentChangedHasher
+import java.io.Serializable
 import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.nio.charset.StandardCharsets
@@ -26,7 +27,11 @@ data class ProtectedQuarantineEnvelope(
     val ciphertext: String?,
     val keyId: String,
     val envelopeHash: String,
-)
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 fun interface QuarantineEnvelopeProtector {
     /**

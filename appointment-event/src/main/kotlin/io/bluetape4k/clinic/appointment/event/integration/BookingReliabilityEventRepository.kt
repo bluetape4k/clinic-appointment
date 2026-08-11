@@ -18,7 +18,11 @@ data class BookingReliabilityEventRecord(
     val eventId: String,
     val sourceVersion: Long,
     val payloadHash: String,
-) : Serializable
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 신뢰된 event를 core append-only 원장에 기록합니다.
