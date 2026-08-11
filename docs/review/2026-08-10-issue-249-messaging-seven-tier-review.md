@@ -71,4 +71,3 @@ Spring lifecycle 종료 호출 스레드를 coroutine 작업 완료까지 직접
 override 없이 실행한 전체 테스트는 코드 실패가 아니라 이 머신의 Colima
 Docker socket mount 오류(`/Users/debop/.colima/default/docker.sock`)로 중단됐다.
 원격 CI, PR/merge, production broker 검증은 이 실행에 포함하지 않았다.
-

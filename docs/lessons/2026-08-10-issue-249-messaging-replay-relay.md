@@ -26,4 +26,3 @@ consumer side effect와 inbox 완료 기록의 원자성, public handler의 멱�
 2. lifecycle 종료 callback이 bounded cleanup 이후에만 실행되는가?
 3. production coroutine 코드에 `runBlocking`이 다시 들어오지 않았는가?
 4. Testcontainers 환경 오류와 애플리케이션 테스트 실패를 로그에서 구분했는가?
-
