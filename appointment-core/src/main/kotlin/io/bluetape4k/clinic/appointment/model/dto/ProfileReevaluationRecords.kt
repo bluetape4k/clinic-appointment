@@ -23,6 +23,10 @@ data class ProfileReevaluationScope(
             "patientReferenceFingerprint must be lowercase SHA-256"
         }
     }
+
+    companion object {
+        private const val serialVersionUID = 1L
+    }
 }
 
 /**
@@ -52,7 +56,11 @@ data class ProfileReevaluationHeadRecord(
     val occurredAt: Instant,
     val createdAt: Instant,
     val updatedAt: Instant,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 프로필 revision 하나를 재평가하는 durable 작업입니다.
@@ -90,7 +98,11 @@ data class ProfileReevaluationJobRecord(
     val lastFailureCode: String?,
     val createdAt: Instant,
     val updatedAt: Instant,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 작업 행에 제한된 크기로 누적하는 결과별 개수입니다.
@@ -115,6 +127,10 @@ data class ProfileReevaluationOutcomeCounts(
         skippedIneligible,
         skippedUnchanged,
     )
+
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
 }
 
 /**
@@ -137,6 +153,10 @@ data class ProfileReevaluationCursor(
         require(outcomeDeltas.values().sum() <= scannedDelta) {
             "outcome deltas cannot exceed scannedDelta"
         }
+    }
+
+    private companion object {
+        const val serialVersionUID: Long = 1L
     }
 }
 
@@ -169,6 +189,10 @@ data class UpsertProfileChange(
         }
         require(targetPolicyGeneration > 0) { "targetPolicyGeneration must be positive" }
     }
+
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
 }
 
 /**
@@ -186,6 +210,10 @@ data class ClaimProfileReevaluationJobs(
         }
         require(limit in 1..64) { "limit must be between 1 and 64" }
         require(perClinicLimit in 1..limit) { "perClinicLimit must be between 1 and limit" }
+    }
+
+    private companion object {
+        const val serialVersionUID: Long = 1L
     }
 }
 
@@ -209,6 +237,10 @@ data class ProfileReevaluationClinicCursor(
             ProfileReevaluationClinicCursor::tenantGroupId,
             ProfileReevaluationClinicCursor::clinicId,
         )
+
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
 }
 
 /**
@@ -226,6 +258,10 @@ data class RedriveProfileReevaluationJob(
             "expectedRedriveCount must be non-negative"
         }
     }
+
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
 }
 
 /**
@@ -238,6 +274,10 @@ data class ProfileReevaluationOutcomeRecord(
     val appointmentId: Long,
     val outcomeType: ProfileReevaluationOutcomeType,
     val createdAt: Instant,
-) : Serializable
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 private val SHA256_REGEX = Regex("^[0-9a-f]{64}$")

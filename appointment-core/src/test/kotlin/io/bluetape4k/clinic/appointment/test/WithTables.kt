@@ -19,6 +19,7 @@ import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.inTopLevelTransaction
@@ -46,7 +47,7 @@ fun withTables(
                 }
             }
 
-            SchemaUtils.create(*tablesToUse)
+            SchemaUtils.createMissingTablesAndColumns(*tablesToUse)
             seedDefaultTenantIfNeeded(tablesToUse)
             commit()
 
@@ -57,6 +58,7 @@ fun withTables(
                 if (dropTables) {
                     try {
                         withReferentialIntegrityDisabled(testDB) {
+                            clearTestRows(tablesToUse)
                             dropTestTables(testDB, tablesToUse)
                         }
                         commit()
@@ -69,6 +71,7 @@ fun withTables(
                         ) {
                             maxAttempts = 1
                             withReferentialIntegrityDisabled(testDB) {
+                                clearTestRows(tablesToUse)
                                 dropTestTables(testDB, tablesToUse)
                             }
                         }
@@ -77,6 +80,20 @@ fun withTables(
             }
         }
     }
+}
+
+/**
+ * 일반 fixture가 만든 row를 FK 자식부터 정리합니다. schema-contract 테스트의 명시적
+ * DDL 재생성은 이 helper 밖에서만 허용하고, 일반 테스트는 row 정리를 기본 경로로 둡니다.
+ */
+private fun org.jetbrains.exposed.v1.jdbc.JdbcTransaction.clearTestRows(
+    tables: Array<out Table>,
+) {
+    tables
+        .toList()
+        .asReversed()
+        .distinctBy { it.tableName }
+        .forEach { it.deleteAll() }
 }
 
 private val withTablesSchemaLock = Any()
