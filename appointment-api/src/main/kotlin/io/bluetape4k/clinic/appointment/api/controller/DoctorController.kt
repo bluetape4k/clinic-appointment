@@ -91,8 +91,8 @@ class DoctorController(
         doctorId.requirePositiveNumber("doctorId")
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         log.debug { "GET doctor tenantCode=$tenantCode, id=$doctorId" }
-        val doctor = runCatching { transaction { doctorRepository.findByIdAndTenant(doctorId, tenant.id) } }
-            .getOrNull() ?: return ResponseEntity.notFound().build()
+        val doctor = transaction { doctorRepository.findByIdAndTenant(doctorId, tenant.id) }
+            ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(ApiResponse.ok(doctor))
     }
 

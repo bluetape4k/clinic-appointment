@@ -358,7 +358,9 @@ internal abstract class AbstractProfileReevaluationConcurrencyIntegrationTest :
             }
         transaction(database) {
             ProfileReevaluationJobs.update({ ProfileReevaluationJobs.id eq first.id }) {
-                it[leaseExpiresAt] = Instant.EPOCH
+                // MySQL DATETIME는 1000년 이전을 저장할 수 없으므로 모든 지원 dialect에서
+                // 만료 상태로 해석되는 안전한 과거 시각을 사용한다.
+                it[leaseExpiresAt] = Instant.parse("2000-01-01T00:00:00Z")
             }
         }
         val reclaimed =

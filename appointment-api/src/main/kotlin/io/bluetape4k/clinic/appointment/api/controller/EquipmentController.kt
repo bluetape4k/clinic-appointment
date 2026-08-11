@@ -86,8 +86,8 @@ class EquipmentController(
         equipmentId.requirePositiveNumber("equipmentId")
         val tenant = tenantClinicAccessChecker.requireTenant(tenantCode)
         log.debug { "GET equipment tenantCode=$tenantCode, id=$equipmentId" }
-        val equipment = runCatching { transaction { equipmentRepository.findByIdAndTenant(equipmentId, tenant.id) } }
-            .getOrNull() ?: return ResponseEntity.notFound().build()
+        val equipment = transaction { equipmentRepository.findByIdAndTenant(equipmentId, tenant.id) }
+            ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(ApiResponse.ok(equipment))
     }
 }

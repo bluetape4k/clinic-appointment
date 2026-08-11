@@ -44,7 +44,7 @@ class ClinicControllerTest @Autowired constructor() : AbstractApiIntegrationTest
             .build()
 
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 Clinics, OperatingHoursTable, ClinicDefaultBreakTimes, BreakTimes,
             )
 

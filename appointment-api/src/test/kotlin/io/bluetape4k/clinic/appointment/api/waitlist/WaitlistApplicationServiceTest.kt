@@ -40,7 +40,7 @@ class WaitlistApplicationServiceTest {
             driver = "org.h2.Driver",
         )
         transaction(database) {
-            SchemaUtils.create(RollbackProbe)
+            SchemaUtils.createMissingTablesAndColumns(RollbackProbe)
         }
         reservationPort = FakeReservationPort()
         claimCalls.set(0)

@@ -19,6 +19,7 @@ import io.bluetape4k.clinic.appointment.service.AppointmentCorrelationId
 import io.bluetape4k.junit5.concurrency.MultithreadingTester
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -37,14 +38,14 @@ class AppointmentStatsProjectionConsumerTest {
     @BeforeEach
     fun setUp() {
         transaction(database) {
-            SchemaUtils.drop(AppointmentStatsProjectionAggregateLockTable)
-            SchemaUtils.drop(AppointmentStatsProjectionTable)
-            SchemaUtils.drop(AppointmentStatsProjectionEventTable)
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 AppointmentStatsProjectionAggregateLockTable,
                 AppointmentStatsProjectionTable,
                 AppointmentStatsProjectionEventTable,
             )
+            AppointmentStatsProjectionAggregateLockTable.deleteAll()
+            AppointmentStatsProjectionTable.deleteAll()
+            AppointmentStatsProjectionEventTable.deleteAll()
         }
     }
 

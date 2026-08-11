@@ -58,7 +58,7 @@ class DashboardStatsServiceTest {
     @BeforeEach
     fun setup() {
         transaction {
-            SchemaUtils.create(TenantGroups, Clinics, Doctors, Equipments, TreatmentTypes, ConsultationTopics, Appointments)
+            SchemaUtils.createMissingTablesAndColumns(TenantGroups, Clinics, Doctors, Equipments, TreatmentTypes, ConsultationTopics, Appointments)
             Appointments.deleteAll()
             ConsultationTopics.deleteAll()
             TreatmentTypes.deleteAll()

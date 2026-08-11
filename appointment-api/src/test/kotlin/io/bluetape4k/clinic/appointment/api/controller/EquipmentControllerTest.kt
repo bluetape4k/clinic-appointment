@@ -42,7 +42,7 @@ class EquipmentControllerTest @Autowired constructor() : AbstractApiIntegrationT
             .build()
 
         transaction {
-            SchemaUtils.create(Clinics, Equipments)
+            SchemaUtils.createMissingTablesAndColumns(Clinics, Equipments)
 
             Equipments.deleteAll()
             Clinics.deleteAll()

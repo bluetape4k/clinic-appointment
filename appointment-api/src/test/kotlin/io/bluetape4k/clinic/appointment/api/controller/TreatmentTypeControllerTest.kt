@@ -42,7 +42,7 @@ class TreatmentTypeControllerTest @Autowired constructor() : AbstractApiIntegrat
             .build()
 
         transaction {
-            SchemaUtils.create(Clinics, TreatmentTypes)
+            SchemaUtils.createMissingTablesAndColumns(Clinics, TreatmentTypes)
 
             TreatmentTypes.deleteAll()
             Clinics.deleteAll()
