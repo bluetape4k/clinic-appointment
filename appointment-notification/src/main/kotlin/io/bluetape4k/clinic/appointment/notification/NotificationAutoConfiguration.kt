@@ -21,7 +21,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
-import org.springframework.scheduling.annotation.EnableScheduling
 
 /**
  * 알림 모듈 Auto-Configuration.
@@ -30,9 +29,10 @@ import org.springframework.scheduling.annotation.EnableScheduling
  * [NotificationChannel] 빈이 없으면 [DummyNotificationChannel]을 등록합니다.
  * 데이터베이스가 있으면 내구성 outbox worker·dispatcher·retention runner를 구성하고,
  * Redis가 있으면 향후 리마인더 복구 trigger용 리더 선출 빈을 등록합니다.
+ * 스케줄러는 호스트 애플리케이션이 [org.springframework.scheduling.annotation.EnableScheduling]을
+ * 명시적으로 선택한 경우에만 동작합니다.
  */
 @AutoConfiguration
-@EnableScheduling
 @ConditionalOnProperty(
     prefix = "clinic.notification",
     name = ["enabled"],
@@ -385,8 +385,12 @@ class NotificationAutoConfiguration {
     @ConditionalOnMissingBean(NotificationAppointmentEventConsumer::class)
     fun notificationAppointmentEventConsumer(
         delivery: NotificationDirectDeliveryPort,
+        properties: NotificationProperties,
     ): NotificationAppointmentEventConsumer =
-        NotificationAppointmentEventConsumer(delivery)
+        NotificationAppointmentEventConsumer(
+            delivery = delivery,
+            suspendBridgeTimeout = properties.worker.validate().suspendBridgeTimeout,
+        )
 
     @Bean
     @ConditionalOnProperty(prefix = "appointment.messaging.consumer", name = ["enabled"], havingValue = "true")
@@ -404,16 +408,24 @@ class NotificationAutoConfiguration {
     @ConditionalOnMissingBean(NotificationOutboxSchedulingRunner::class)
     fun notificationOutboxSchedulingRunner(
         dispatcherProvider: ObjectProvider<NotificationOutboxDispatcher>,
+        properties: NotificationProperties,
     ): NotificationOutboxSchedulingRunner =
-        NotificationOutboxSchedulingRunner(dispatcherProvider.ifAvailable)
+        NotificationOutboxSchedulingRunner(
+            dispatcher = dispatcherProvider.ifAvailable,
+            suspendBridgeTimeout = properties.worker.validate().suspendBridgeTimeout,
+        )
 
     @Bean
     @ConditionalOnBean(NotificationOutboxMetrics::class)
     @ConditionalOnMissingBean(NotificationObservationSchedulingRunner::class)
     fun notificationObservationSchedulingRunner(
         metrics: NotificationOutboxMetrics,
+        properties: NotificationProperties,
     ): NotificationObservationSchedulingRunner =
-        NotificationObservationSchedulingRunner(metrics)
+        NotificationObservationSchedulingRunner(
+            metrics = metrics,
+            suspendBridgeTimeout = properties.worker.validate().suspendBridgeTimeout,
+        )
 
     @Bean
     @ConditionalOnBean(
@@ -461,8 +473,13 @@ class NotificationAutoConfiguration {
     fun notificationReminderSchedulingRunner(
         scheduler: AppointmentReminderScheduler,
         metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
+        properties: NotificationProperties,
     ): NotificationReminderSchedulingRunner =
-        NotificationReminderSchedulingRunner(scheduler, metricsProvider.ifAvailable)
+        NotificationReminderSchedulingRunner(
+            scheduler = scheduler,
+            metrics = metricsProvider.ifAvailable,
+            suspendBridgeTimeout = properties.worker.validate().suspendBridgeTimeout,
+        )
 
     @Bean
     @ConditionalOnBean(NotificationOutboxWorkStore::class)
@@ -491,8 +508,13 @@ class NotificationAutoConfiguration {
     fun notificationRetentionSchedulingRunner(
         runner: NotificationRetentionRunner,
         healthSignals: NotificationRuntimeHealthSignals,
+        properties: NotificationProperties,
     ): NotificationRetentionSchedulingRunner =
-        NotificationRetentionSchedulingRunner(runner, healthSignals)
+        NotificationRetentionSchedulingRunner(
+            runner = runner,
+            healthSignals = healthSignals,
+            suspendBridgeTimeout = properties.worker.validate().suspendBridgeTimeout,
+        )
 
     @Bean
     @ConditionalOnMissingBean(NotificationChannel::class)
