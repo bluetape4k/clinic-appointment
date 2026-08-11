@@ -17,8 +17,11 @@ fun interface PatientLoginAttemptLimiter {
             configured: PatientLoginAttemptLimiter?,
         ): PatientLoginAttemptLimiter {
             configured?.let { return it }
-            val isDevelopmentOrTestProfile = activeProfiles.any { it == "dev" || it == "test" }
-            if (!isDevelopmentOrTestProfile) {
+            // Spring의 기본 profile이 비어 있는 ApplicationContextRunner와 로컬 예제 실행은
+            // 명시적인 보호 배포가 아니다. prod/staging/integration-test 같은 profile을
+            // 명시한 환경에서만 외부 limiter를 반드시 주입하도록 한다.
+            val isLocalOrTestProfile = activeProfiles.isEmpty() || activeProfiles.any { it == "dev" || it == "test" }
+            if (!isLocalOrTestProfile) {
                 throw IllegalStateException("A real PatientLoginAttemptLimiter is required in protected profiles")
             }
             return BoundedNoopPatientLoginAttemptLimiter

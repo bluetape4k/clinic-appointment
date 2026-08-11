@@ -30,4 +30,11 @@ class PatientAuthenticationWiringTest {
         limiter.allow(tenantGroupId = 1L, identifierKey = "LOGIN_ID", clientFingerprint = "test")
             .shouldBeTrue()
     }
+
+    @Test
+    fun `an unprofiled local context uses the bounded adapter`() {
+        val limiter = PatientLoginAttemptLimiter.resolve(activeProfiles = emptySet(), configured = null)
+        limiter.allow(tenantGroupId = 1L, identifierKey = "LOGIN_ID", clientFingerprint = "test")
+            .shouldBeTrue()
+    }
 }
