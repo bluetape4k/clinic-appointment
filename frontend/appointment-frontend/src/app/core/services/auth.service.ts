@@ -2,9 +2,10 @@ import { Injectable, computed, signal } from '@angular/core';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly TOKEN_KEY = 'auth_token';
+  private readonly LEGACY_TOKEN_KEY = 'auth_token';
+  private _token: string | null = null;
 
-  private readonly _decodedToken = signal<Record<string, unknown> | null>(this._parseToken());
+  private readonly _decodedToken = signal<Record<string, unknown> | null>(null);
 
   readonly roles = computed<string[]>(() => {
     const payload = this._decodedToken();
@@ -26,35 +27,71 @@ export class AuthService {
   readonly isDoctor = computed(() => this.roles().includes('ROLE_DOCTOR'));
   readonly isPatient = computed(() => this.roles().includes('ROLE_PATIENT'));
 
+  constructor() {
+    this._clearLegacyTokens();
+  }
+
   getToken(): string | null {
-    return this._storage()?.getItem(this.TOKEN_KEY) ?? null;
+    return this._token;
   }
 
   setToken(token: string): void {
-    this._storage()?.setItem(this.TOKEN_KEY, token);
-    this._decodedToken.set(this._parseToken());
+    const decodedToken = this._parseToken(token);
+    if (decodedToken === null) {
+      this.removeToken();
+      return;
+    }
+
+    this._token = token;
+    this._decodedToken.set(decodedToken);
   }
 
   removeToken(): void {
-    this._storage()?.removeItem(this.TOKEN_KEY);
+    this._token = null;
     this._decodedToken.set(null);
   }
 
-  private _parseToken(): Record<string, unknown> | null {
-    const token = this.getToken();
+  private _parseToken(token: string): Record<string, unknown> | null {
     if (!token) return null;
     try {
-      return JSON.parse(atob(token.split('.')[1])) as Record<string, unknown>;
+      const payloadPart = token.split('.')[1];
+      if (!payloadPart) return null;
+
+      const payload = JSON.parse(this._decodeBase64Url(payloadPart)) as Record<string, unknown>;
+      if (!this._hasValidTimeClaims(payload)) return null;
+      return payload;
     } catch {
       return null;
     }
   }
 
-  private _storage(): Storage | null {
+  private _hasValidTimeClaims(payload: Record<string, unknown>): boolean {
+    const now = Math.floor(Date.now() / 1000);
+    const exp = payload['exp'];
+    if (typeof exp !== 'number' || !Number.isFinite(exp) || now >= exp) return false;
+
+    const nbf = payload['nbf'];
+    return nbf === undefined
+      || (typeof nbf === 'number' && Number.isFinite(nbf) && now >= nbf);
+  }
+
+  private _decodeBase64Url(value: string): string {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = (4 - (normalized.length % 4)) % 4;
+    return atob(normalized.padEnd(normalized.length + padding, '='));
+  }
+
+  private _clearLegacyTokens(): void {
     try {
-      return typeof globalThis.localStorage === 'undefined' ? null : globalThis.localStorage;
+      globalThis.localStorage?.removeItem(this.LEGACY_TOKEN_KEY);
     } catch {
-      return null;
+      // Storage access can be denied by browser privacy settings.
+    }
+
+    try {
+      globalThis.sessionStorage?.removeItem(this.LEGACY_TOKEN_KEY);
+    } catch {
+      // Storage access can be denied by browser privacy settings.
     }
   }
 }

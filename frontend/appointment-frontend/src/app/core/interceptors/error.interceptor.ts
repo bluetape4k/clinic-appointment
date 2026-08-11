@@ -4,6 +4,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { catchError, throwError } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { ApiResponse } from '../models/api-response.model';
+import { AuthService } from '../services/auth.service';
 
 const STATUS_MESSAGES: Record<number, string> = {
   0: '서버에 연결할 수 없습니다',
@@ -19,6 +20,7 @@ const STATUS_MESSAGES: Record<number, string> = {
 
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const snackBar = inject(MatSnackBar);
+  const authService = inject(AuthService);
 
   const show = (message: string) =>
     snackBar.open(message, '닫기', { duration: 3000 });
@@ -35,6 +37,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       },
     }),
     catchError((error: HttpErrorResponse) => {
+      if (error.status === 401) {
+        authService.removeToken();
+      }
+
       // status 200 + JSON parse error: 백엔드 미실행 시 SPA fallback 응답
       if (error.status === 200 || error.status === 0) {
         show('서버에 연결할 수 없습니다. 백엔드가 실행 중인지 확인해 주세요.');

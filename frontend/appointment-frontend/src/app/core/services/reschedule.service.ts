@@ -102,6 +102,7 @@ export class RescheduleService {
       })
         .then(async response => {
           if (response.status === 401) {
+            this.authService.removeToken();
             observer.error(new Error('SSE: 인증이 필요합니다.'));
             return;
           }

@@ -7,7 +7,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { RescheduleService } from './reschedule.service';
 import { AuthService } from './auth.service';
 
-const mockAuthService = { getToken: () => 'test-token' };
+const mockAuthService = { getToken: () => 'test-token', removeToken: vi.fn() };
 
 describe('RescheduleService', () => {
   let service: RescheduleService;
@@ -163,6 +163,15 @@ describe('RescheduleService', () => {
 
       const params = { clinicId: 1, closureDate: '2026-05-19', searchDays: 7 };
       await expect(firstValueFrom(service.streamBatchReschedule(params))).rejects.toThrow('SSE failed: 403');
+    });
+
+    it('401 응답에서 현재 세션을 제거한다', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 401 } as Response);
+
+      const params = { clinicId: 1, closureDate: '2026-05-19', searchDays: 7 };
+      await expect(firstValueFrom(service.streamBatchReschedule(params))).rejects.toThrow('SSE: 인증이 필요합니다.');
+
+      expect(mockAuthService.removeToken).toHaveBeenCalledOnce();
     });
 
     it('구독 취소 시 fetch를 abort한다', () => {

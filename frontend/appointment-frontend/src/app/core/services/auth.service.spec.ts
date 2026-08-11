@@ -6,13 +6,14 @@ import { AuthService } from './auth.service';
 /** Build a minimal JWT with given payload. */
 function makeJwt(payload: Record<string, unknown>): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const body = btoa(JSON.stringify(payload));
+  const body = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 60, ...payload }));
   return `${header}.${body}.signature`;
 }
 
 describe('AuthService', () => {
   let store: Record<string, string>;
   let originalLocalStorage: Storage;
+  let originalSessionStorage: Storage;
 
   function makeMockStorage(): Storage {
     return {
@@ -29,17 +30,20 @@ describe('AuthService', () => {
   function createService(initialStore: Record<string, string> = {}): AuthService {
     store = { ...initialStore };
     (globalThis as any).localStorage = makeMockStorage();
+    (globalThis as any).sessionStorage = makeMockStorage();
     TestBed.configureTestingModule({});
     return TestBed.inject(AuthService);
   }
 
   beforeEach(() => {
     originalLocalStorage = (globalThis as any).localStorage;
+    originalSessionStorage = (globalThis as any).sessionStorage;
     store = {};
   });
 
   afterEach(() => {
     (globalThis as any).localStorage = originalLocalStorage;
+    (globalThis as any).sessionStorage = originalSessionStorage;
     vi.restoreAllMocks();
     TestBed.resetTestingModule();
   });
@@ -50,16 +54,38 @@ describe('AuthService', () => {
   });
 
   describe('setToken() / getToken() / removeToken()', () => {
-    it('setToken()으로 저장된 토큰을 getToken()으로 가져올 수 있다', () => {
+    it('기존 localStorage·sessionStorage의 JWT를 초기화하고 인증하지 않는다', () => {
+      const service = createService({ auth_token: makeJwt({ roles: [] }) });
+
+      expect(store).toEqual({});
+      expect(service.getToken()).toBeNull();
+      expect(service.isAuthenticated()).toBe(false);
+    });
+
+    it('JWT를 브라우저 저장소에 기록하지 않고 메모리 세션으로만 유지한다', () => {
       const service = createService();
-      const token = makeJwt({ roles: [] });
+      (globalThis as any).sessionStorage = makeMockStorage();
+      const token = makeJwt({ roles: [], exp: Math.floor(Date.now() / 1000) + 60 });
+
+      service.setToken(token);
+
+      expect(store).toEqual({});
+      expect((globalThis as any).sessionStorage.length).toBe(0);
+      expect(service.getToken()).toBe(token);
+      TestBed.resetTestingModule();
+      expect(createService().getToken()).toBeNull();
+    });
+
+    it('setToken()으로 보관된 토큰을 getToken()으로 가져올 수 있다', () => {
+      const service = createService();
+      const token = makeJwt({ roles: [], exp: Math.floor(Date.now() / 1000) + 60 });
       service.setToken(token);
       expect(service.getToken()).toBe(token);
     });
 
     it('removeToken() 후 getToken()은 null을 반환한다', () => {
       const service = createService();
-      service.setToken(makeJwt({ roles: [] }));
+      service.setToken(makeJwt({ roles: [], exp: Math.floor(Date.now() / 1000) + 60 }));
       service.removeToken();
       expect(service.getToken()).toBeNull();
     });
@@ -78,7 +104,7 @@ describe('AuthService', () => {
 
     expect(service.getToken()).toBeNull();
     expect(() => service.setToken(makeJwt({ roles: ['ROLE_PATIENT'] }))).not.toThrow();
-    expect(service.isAuthenticated()).toBe(false);
+    expect(service.isAuthenticated()).toBe(true);
     expect(() => service.removeToken()).not.toThrow();
   });
 
@@ -104,8 +130,8 @@ describe('AuthService', () => {
     });
 
     it('잘못된 형식의 토큰은 빈 배열로 처리한다', () => {
-      // Seed a malformed token before service initializes
-      const service = createService({ 'auth_token': 'header.!!!invalid!!!.sig' });
+      const service = createService();
+      service.setToken('header.!!!invalid!!!.sig');
       expect(service.roles()).toEqual([]);
     });
 
@@ -158,8 +184,29 @@ describe('AuthService', () => {
   });
 
   describe('isAuthenticated', () => {
+    it('exp가 지난 JWT는 authenticated로 인정하지 않는다', () => {
+      const service = createService();
+      service.setToken(makeJwt({ roles: [], exp: Math.floor(Date.now() / 1000) - 1 }));
+
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.getToken()).toBeNull();
+    });
+
+    it('nbf가 미래인 JWT는 authenticated로 인정하지 않는다', () => {
+      const service = createService();
+      service.setToken(makeJwt({
+        roles: [],
+        exp: Math.floor(Date.now() / 1000) + 60,
+        nbf: Math.floor(Date.now() / 1000) + 60,
+      }));
+
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.getToken()).toBeNull();
+    });
+
     it('토큰이 있으면 isAuthenticated()가 true이다', () => {
-      const service = createService({ 'auth_token': makeJwt({ roles: [] }) });
+      const service = createService();
+      service.setToken(makeJwt({ roles: [], exp: Math.floor(Date.now() / 1000) + 60 }));
       expect(service.isAuthenticated()).toBe(true);
     });
 
