@@ -38,7 +38,7 @@ class PatientAuthenticationServiceTest {
     private val now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val password = "correct horse battery staple"
-    private val testSecret = "dGVzdC1zZWNyZXQta2V5LWZvci1hcHBvaW50bWVudC1zY2hlZHVsaW5nLXN5c3RlbS01MTItYml0LW1hdGVyaWFsIQ=="
+    private val testSecret = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
     private lateinit var database: Database
     private lateinit var passwordEncoder: CountingPasswordEncoder
     private lateinit var service: PatientAuthenticationService
