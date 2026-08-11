@@ -79,13 +79,15 @@ class RescheduleControllerTest @Autowired constructor() : AbstractApiIntegration
     fun setup() {
         messagingFailureSwitch.failStatusChanged = false
         transaction {
+            // Flyway/SchemaInit가 이미 생성하며 PostgreSQL V22 partial index와
+            // Exposed 모델 metadata가 다르므로 이 테이블은 증분 생성 대상에서 제외한다.
             SchemaUtils.createMissingTablesAndColumns(
                 Clinics, OperatingHoursTable, ClinicDefaultBreakTimes, BreakTimes, ClinicClosures,
                 Doctors, DoctorSchedules, DoctorAbsences,
                 TreatmentTypes, Equipments, TreatmentEquipments,
                 ConsultationTopics, Holidays,
                 Appointments, AppointmentNotes, AppointmentStateHistory,
-                RescheduleCandidates, AppointmentEventLogs, SchedulingOutboxEvents,
+                RescheduleCandidates, AppointmentEventLogs,
             )
 
             SchedulingOutboxEvents.deleteAll()
