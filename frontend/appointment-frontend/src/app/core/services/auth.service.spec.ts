@@ -70,6 +70,18 @@ describe('AuthService', () => {
     });
   });
 
+  it('localStorage가 제공되지 않아도 인증 서비스가 예외 없이 초기화된다', () => {
+    (globalThis as any).localStorage = undefined;
+    TestBed.configureTestingModule({});
+
+    const service = TestBed.inject(AuthService);
+
+    expect(service.getToken()).toBeNull();
+    expect(() => service.setToken(makeJwt({ roles: ['ROLE_PATIENT'] }))).not.toThrow();
+    expect(service.isAuthenticated()).toBe(false);
+    expect(() => service.removeToken()).not.toThrow();
+  });
+
   describe('JWT 역할 파싱', () => {
     it('roles 배열이 있는 JWT를 파싱하여 roles signal에 반영한다', () => {
       const service = createService();

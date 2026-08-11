@@ -1,14 +1,6 @@
 <div class="portal-frame">
-  <header class="portal-header">
-    <div>
-      <p class="portal-eyebrow">PATIENT PORTAL</p>
-      <h1>임상 포털</h1>
-      <p class="portal-subtitle">예약의 현재 상태와 다음 행동을 한 곳에서 확인하세요.</p>
-    </div>
-    <span class="portal-scope" aria-label="현재 tenant">병원 예약 서비스</span>
-  </header>
-
   <nav class="portal-nav" aria-label="환자 포털">
+    <strong class="portal-brand">임상 포털</strong>
     @for (item of navItems; track item.route) {
       <a
         [routerLink]="item.route"
