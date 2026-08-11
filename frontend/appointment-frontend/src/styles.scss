@@ -39,6 +39,18 @@ body {
 /* You can add global styles to this file, and also import other style files */
 
 :root {
+  --portal-surface: #f5f6f8;
+  --portal-surface-raised: #ffffff;
+  --portal-ink: #20242a;
+  --portal-muted: #69717d;
+  --portal-line: #d9dde3;
+  --portal-focus: #4f7cff;
+  --portal-status-proposed: #6b7ca8;
+  --portal-status-held: #8b6f47;
+  --portal-status-confirmed: #3e7b63;
+  --portal-status-expired: #8a5960;
+  --portal-status-reschedule: #765fa3;
+
   --status-requested: #2196f3;
   --status-confirmed: #4caf50;
   --status-checked-in: #00bcd4;
@@ -48,4 +60,14 @@ body {
   --status-no-show: #9e9e9e;
   --status-pending-reschedule: #ffc107;
   --status-rescheduled: #673ab7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --portal-surface: #17191d;
+    --portal-surface-raised: #202329;
+    --portal-ink: #f0f2f4;
+    --portal-muted: #a7afbb;
+    --portal-line: #3a404a;
+  }
 }
