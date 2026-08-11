@@ -1,0 +1,20 @@
+<div class="portal-frame">
+  <nav class="portal-nav" aria-label="환자 포털">
+    <strong class="portal-brand">임상 포털</strong>
+    @for (item of navItems; track item.route) {
+      <a
+        [routerLink]="item.route"
+        routerLinkActive="is-active"
+        #active="routerLinkActive"
+        [routerLinkActiveOptions]="{ exact: false }"
+        [attr.aria-current]="active.isActive ? 'page' : null"
+      >
+        <span class="nav-label">{{ item.label }}</span>
+      </a>
+    }
+  </nav>
+
+  <main class="portal-main">
+    <router-outlet />
+  </main>
+</div>

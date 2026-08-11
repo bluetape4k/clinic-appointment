@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>환자 임상 포털 참조 화면</title>
+    <style>
+      :root { color-scheme: light; --surface: #f5f6f8; --raised: #fff; --ink: #20242a; --muted: #69717d; --line: #d9dde3; --accent: #4f7cff; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--surface); color: var(--ink); font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; }
+      main { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 720px); gap: 24px; max-width: 1120px; margin: 0 auto; padding: 32px; }
+      nav, article { background: var(--raised); border: 1px solid var(--line); }
+      nav { padding: 20px; align-self: start; }
+      nav a { display: block; padding: 10px 12px; color: var(--muted); text-decoration: none; }
+      nav a[aria-current="page"] { color: var(--ink); border-left: 3px solid var(--accent); padding-left: 9px; }
+      article { padding: 24px; }
+      .eyebrow { color: var(--muted); font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; }
+      .card { margin-top: 24px; padding: 20px; border: 1px solid var(--line); }
+      .meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); }
+      .status { display: inline-flex; gap: 8px; align-items: center; color: #3e7b63; }
+      button { border: 1px solid var(--ink); background: var(--ink); color: var(--raised); padding: 10px 14px; cursor: pointer; }
+      button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+      @media (max-width: 720px) { main { display: block; padding: 16px; } nav { margin-bottom: 16px; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav aria-label="환자 포털">
+        <strong>임상 포털</strong>
+        <a href="#appointments" aria-current="page">예약 현황</a>
+        <a href="#notifications">알림</a>
+        <a href="#profile">내 정보</a>
+      </nav>
+      <article id="appointments">
+        <span class="eyebrow">다음 방문</span>
+        <h1>피부 재생 관리</h1>
+        <div class="meta"><span>2026년 8월 20일 10:30</span><span>3회차 / 10회</span><span class="status">● 확정</span></div>
+        <p>담당 의료진과 방문 준비사항을 확인하세요.</p>
+        <button type="button">예약 상세 보기</button>
+      </article>
+    </main>
+  </body>
+</html>

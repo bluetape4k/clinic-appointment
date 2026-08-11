@@ -5,6 +5,11 @@
   overflow: hidden;
 }
 
+.portal-root {
+  height: 100%;
+  overflow: auto;
+}
+
 .app-toolbar {
   flex-shrink: 0;
   z-index: 100;

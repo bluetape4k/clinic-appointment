@@ -27,24 +27,32 @@ export class AuthService {
   readonly isPatient = computed(() => this.roles().includes('ROLE_PATIENT'));
 
   getToken(): string | null {
-    return localStorage.getItem(this.TOKEN_KEY);
+    return this._storage()?.getItem(this.TOKEN_KEY) ?? null;
   }
 
   setToken(token: string): void {
-    localStorage.setItem(this.TOKEN_KEY, token);
+    this._storage()?.setItem(this.TOKEN_KEY, token);
     this._decodedToken.set(this._parseToken());
   }
 
   removeToken(): void {
-    localStorage.removeItem(this.TOKEN_KEY);
+    this._storage()?.removeItem(this.TOKEN_KEY);
     this._decodedToken.set(null);
   }
 
   private _parseToken(): Record<string, unknown> | null {
-    const token = localStorage.getItem(this.TOKEN_KEY);
+    const token = this.getToken();
     if (!token) return null;
     try {
       return JSON.parse(atob(token.split('.')[1])) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  private _storage(): Storage | null {
+    try {
+      return typeof globalThis.localStorage === 'undefined' ? null : globalThis.localStorage;
     } catch {
       return null;
     }
