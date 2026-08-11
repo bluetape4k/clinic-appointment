@@ -3,10 +3,12 @@ package io.bluetape4k.clinic.appointment.api.security
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.mockk.mockk
 import jakarta.servlet.FilterChain
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
@@ -24,6 +26,8 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -137,6 +141,31 @@ class SchedulingPolicySecurityIntegrationTest {
         (observed == attackerValue).shouldBeFalse()
         observed.matches(Regex("[0-9a-f-]{36}")).shouldBeTrue()
         response.getHeader(CorrelationIdFilter.HEADER_NAME) shouldBeEqualTo observed
+    }
+
+    @Test
+    fun `request completion clears authentication installed by downstream filters`() {
+        val downstreamPrincipal = SchedulingUserPrincipal(
+            userId = "downstream-admin",
+            clinicId = 7L,
+            roles = listOf(SchedulingRole.ADMIN),
+            allowedTenants = listOf("tenant-a"),
+        )
+
+        JwtAuthenticationFilter(mockk(relaxed = true)).doFilter(
+            MockHttpServletRequest(),
+            MockHttpServletResponse(),
+            FilterChain { _, _ ->
+                SecurityContextHolder.getContext().authentication =
+                    UsernamePasswordAuthenticationToken(
+                        downstreamPrincipal,
+                        null,
+                        downstreamPrincipal.authorities,
+                    )
+            },
+        )
+
+        SecurityContextHolder.getContext().authentication.shouldBeNull()
     }
 
     @Test
