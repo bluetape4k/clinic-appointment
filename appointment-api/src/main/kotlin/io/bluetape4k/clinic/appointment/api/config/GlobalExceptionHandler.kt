@@ -17,6 +17,11 @@ import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiExc
 import io.bluetape4k.clinic.appointment.api.dto.WaitlistApiErrorResponse
 import io.bluetape4k.clinic.appointment.api.waitlist.WaitlistApiError
 import io.bluetape4k.clinic.appointment.api.waitlist.WaitlistApiException
+import io.bluetape4k.clinic.appointment.api.auth.PatientAuthenticationValidationException
+import io.bluetape4k.clinic.appointment.api.auth.PatientDuplicateIdentifierException
+import io.bluetape4k.clinic.appointment.api.auth.PatientInvalidCredentialsException
+import io.bluetape4k.clinic.appointment.api.auth.PatientLoginRateLimitedException
+import io.bluetape4k.clinic.appointment.api.auth.PatientTenantNotFoundException
 import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingContractException
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
@@ -172,6 +177,69 @@ class GlobalExceptionHandler(
         request: HttpServletRequest,
     ): ResponseEntity<WaitlistApiErrorResponse> =
         waitlistResponse(ex.error, request)
+
+    /** 환자 credential 실패는 존재 여부와 원인을 구분하지 않는 401로 축약합니다. */
+    @ExceptionHandler(PatientInvalidCredentialsException::class)
+    fun handlePatientInvalidCredentials(
+        ex: PatientInvalidCredentialsException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> = patientAuthResponse(
+        request = request,
+        status = HttpStatus.UNAUTHORIZED,
+        errorCode = "PATIENT_INVALID_CREDENTIALS",
+        error = "Patient credentials are invalid.",
+    )
+
+    /** 환자 입력 validation은 raw request를 반사하지 않는 400으로 처리합니다. */
+    @ExceptionHandler(PatientAuthenticationValidationException::class)
+    fun handlePatientValidation(
+        ex: PatientAuthenticationValidationException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> = patientAuthResponse(
+        request = request,
+        status = HttpStatus.BAD_REQUEST,
+        errorCode = "PATIENT_AUTHENTICATION_INVALID",
+        error = "Patient authentication request is invalid.",
+    )
+
+    /** identifier 충돌은 값이나 기존 account를 공개하지 않는 409입니다. */
+    @ExceptionHandler(PatientDuplicateIdentifierException::class)
+    fun handlePatientDuplicate(
+        ex: PatientDuplicateIdentifierException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> = patientAuthResponse(
+        request = request,
+        status = HttpStatus.CONFLICT,
+        errorCode = "PATIENT_IDENTIFIER_UNAVAILABLE",
+        error = "Patient identifier is unavailable.",
+    )
+
+    /** edge/application limiter 거절은 bounded retry 안내와 함께 429로 응답합니다. */
+    @ExceptionHandler(PatientLoginRateLimitedException::class)
+    fun handlePatientRateLimited(
+        ex: PatientLoginRateLimitedException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> = patientAuthResponse(
+        request = request,
+        status = HttpStatus.TOO_MANY_REQUESTS,
+        errorCode = "PATIENT_LOGIN_RATE_LIMITED",
+        error = "Patient login is temporarily unavailable.",
+        retryable = true,
+        action = "Retry after the Retry-After interval.",
+        retryAfter = "60",
+    )
+
+    /** 활성 tenant가 아닌 path는 공개하지 않고 404로 숨깁니다. */
+    @ExceptionHandler(PatientTenantNotFoundException::class)
+    fun handlePatientTenantNotFound(
+        ex: PatientTenantNotFoundException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> = patientAuthResponse(
+        request = request,
+        status = HttpStatus.NOT_FOUND,
+        errorCode = "PATIENT_TENANT_NOT_FOUND",
+        error = "Patient tenant was not found.",
+    )
 
     @ExceptionHandler(PlanFoundationApiException::class)
     fun handlePlanFoundation(
@@ -660,6 +728,30 @@ class GlobalExceptionHandler(
     private fun HttpServletRequest.correlationId(): String =
         getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) as? String
             ?: UUID.randomUUID().toString()
+
+    private fun patientAuthResponse(
+        request: HttpServletRequest,
+        status: HttpStatus,
+        errorCode: String,
+        error: String,
+        retryable: Boolean = false,
+        action: String? = null,
+        retryAfter: String? = null,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.correlationId()
+        log.warn { "Patient authentication request rejected: error_code=$errorCode, correlation_id=$correlationId" }
+        val builder = ResponseEntity.status(status)
+        retryAfter?.let { builder.header(HttpHeaders.RETRY_AFTER, it) }
+        return builder.body(
+            SchedulingApiErrorResponse(
+                error = error,
+                errorCode = errorCode,
+                correlationId = correlationId,
+                retryable = retryable,
+                action = action,
+            )
+        )
+    }
 
     /** retryable policy 오류가 요구하는 정수 초 backoff를 구성된 polling 간격에서 올림한다. */
     private fun retryAfterSeconds(): String =

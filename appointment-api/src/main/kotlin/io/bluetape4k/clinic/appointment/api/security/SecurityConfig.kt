@@ -37,6 +37,8 @@ import org.springframework.security.web.SecurityFilterChain
 import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest
 import io.bluetape4k.clinic.appointment.api.profile.ProfileReevaluationEndpoint
 import io.bluetape4k.clinic.appointment.api.profile.PROFILE_REEVALUATION_OPERATE_SCOPE
+import io.bluetape4k.clinic.appointment.api.auth.PatientAuthenticationProperties
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
@@ -77,8 +79,15 @@ class SecurityConfig {
 
     /** principal을 context에 붙이기 전에 bearer token을 검증한다. */
     @Bean
-    fun jwtAuthenticationFilter(jwtTokenParser: JwtTokenParser): JwtAuthenticationFilter =
-        JwtAuthenticationFilter(jwtTokenParser)
+    fun jwtAuthenticationFilter(
+        jwtTokenParser: JwtTokenParser,
+        patientProperties: ObjectProvider<PatientAuthenticationProperties>,
+        patientSessionCookies: ObjectProvider<PatientSessionCookie>,
+    ): JwtAuthenticationFilter {
+        val properties = patientProperties.getIfAvailable { PatientAuthenticationProperties() }
+        val cookie = patientSessionCookies.getIfAvailable { PatientSessionCookie(properties) }
+        return JwtAuthenticationFilter(jwtTokenParser, properties, cookie)
+    }
 
     /** 검증된 principal을 불변 command audit context로 변환한다. */
     @Bean
@@ -163,9 +172,20 @@ class SecurityConfig {
         tenantPathValidationFilter: TenantPathValidationFilter,
         tenantContextFilter: TenantContextFilter,
         tenantAuthorizationManager: TenantAuthorizationManager,
+        patientProperties: ObjectProvider<PatientAuthenticationProperties>,
     ): SecurityFilterChain =
         http
-            .csrf { it.disable() }
+            // 환자 JWT는 HttpOnly cookie로 전송되므로 bearer-only API의 예외를 두지 않고
+            // Angular가 읽는 XSRF-TOKEN cookie/header 계약을 활성화한다. SPA 전략은
+            // authentication/logout 뒤 지워진 token을 다음 GET에서 재발급한다.
+            .csrf {
+                it.spa()
+                it.requireCsrfProtectionMatcher(
+                    PatientCsrfRequestMatcher(
+                        patientProperties.getIfAvailable { PatientAuthenticationProperties() }.cookieName,
+                    ),
+                )
+            }
             .exceptionHandling {
                 it.authenticationEntryPoint { _, response, _ ->
                     SecurityErrorResponseWriter.write(response, PlanFoundationError.UNAUTHORIZED)
@@ -225,6 +245,26 @@ class SecurityConfig {
                         "/v3/api-docs/**",
                     )
                     .permitAll()
+                    // 환자 account 생성/login은 active tenant 확인을 TenantContextFilter가
+                    // 담당하고, credential 자체는 controller/service에서 검증한다.
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/{tenantCode}/auth/csrf",
+                    )
+                    .permitAll()
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/{tenantCode}/auth/register",
+                        "/api/{tenantCode}/auth/login",
+                    )
+                    .permitAll()
+                    // session/logout은 HttpOnly patient cookie에서 수립된 PATIENT만
+                    // 동일 tenant에서 사용할 수 있다. generic tenant read/write rule보다
+                    // 먼저 두어 workforce role이 환자 session 경계를 우회하지 못하게 한다.
+                    .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/auth/session")
+                    .access(patientTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/auth/logout")
+                    .access(patientTenantAccess(tenantAuthorizationManager))
                     // Commitment route는 일반 tenant 읽기/쓰기 규칙보다 먼저 평가해야 한다.
                     // 경로의 tenant만 selector로 사용하며, tenant manager가 인증된 grant 집합과
                     // 대조해 검증한다.

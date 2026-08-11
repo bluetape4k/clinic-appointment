@@ -49,7 +49,10 @@ class TenantContextFilter(
             val principal = SecurityContextHolder.getContext().authentication?.principal as? SchedulingUserPrincipal
                 ?: bearerToken?.let(jwtTokenParser::parse)
 
-            if (principal == null) {
+            // 회원가입/login/CSRF bootstrap은 아직 principal이 없지만 tenant 자체가
+            // active인지 확인한 뒤에만 controller로 전달한다. 반면 일반 tenant API는
+            // 인증 filter가 401을 작성할 수 있도록 기존처럼 lookup을 생략한다.
+            if (principal == null && !request.isPublicPatientAuthRequest()) {
                 filterChain.doFilter(request, response)
                 return
             }
@@ -85,7 +88,7 @@ class TenantContextFilter(
                 return
             }
 
-            if (tenantCode !in principal.allowedTenants) {
+            if (principal != null && tenantCode !in principal.allowedTenants) {
                 if (request.isSchedulingPolicyRequest()) {
                     SecurityErrorResponseWriter.write(
                         response,
@@ -110,6 +113,17 @@ class TenantContextFilter(
         getHeader("Authorization")
             ?.takeIf { it.startsWith("Bearer ") }
             ?.substring("Bearer ".length)
+
+    private fun HttpServletRequest.isPublicPatientAuthRequest(): Boolean {
+        val tenantCode = TenantPathResolver.resolve(this) ?: return false
+        val path = requestURI.removePrefix(contextPath.orEmpty())
+        val suffix = path.removePrefix("/api/$tenantCode/")
+        return when (method) {
+            "GET" -> suffix == "auth/csrf"
+            "POST" -> suffix == "auth/register" || suffix == "auth/login"
+            else -> false
+        }
+    }
 
     /** tenant filter가 controller 전에도 policy 전용 안정 오류 계약을 선택하게 한다. */
     private fun HttpServletRequest.isSchedulingPolicyRequest(): Boolean =

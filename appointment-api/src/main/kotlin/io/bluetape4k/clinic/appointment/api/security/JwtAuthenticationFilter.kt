@@ -1,10 +1,12 @@
 package io.bluetape4k.clinic.appointment.api.security
 
+import io.bluetape4k.clinic.appointment.api.auth.PatientAuthenticationProperties
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.debug
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.http.HttpHeaders
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.filter.OncePerRequestFilter
@@ -22,6 +24,8 @@ import org.springframework.web.filter.OncePerRequestFilter
  */
 class JwtAuthenticationFilter(
     private val jwtTokenParser: JwtTokenParser,
+    private val patientAuthenticationProperties: PatientAuthenticationProperties = PatientAuthenticationProperties(),
+    private val patientSessionCookie: PatientSessionCookie = PatientSessionCookie(patientAuthenticationProperties),
 ) : OncePerRequestFilter() {
 
     companion object : KLogging() {
@@ -37,9 +41,17 @@ class JwtAuthenticationFilter(
         SecurityContextHolder.clearContext()
 
         try {
-            val token = extractToken(request)
-            if (token != null) {
-                val principal = jwtTokenParser.parse(token)
+            val bearerHeader = request.getHeader(AUTHORIZATION_HEADER)
+            val bearerToken = bearerHeader
+                ?.takeIf { it.startsWith(BEARER_PREFIX) }
+                ?.substring(BEARER_PREFIX.length)
+                ?.takeIf(String::isNotBlank)
+            val cookieToken = if (bearerHeader == null) extractPatientCookie(request) else null
+            val token = bearerToken ?: cookieToken?.value
+            if (token != null || cookieToken != null) {
+                val principal = token
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(jwtTokenParser::parse)
                 if (principal != null) {
                     val authentication = UsernamePasswordAuthenticationToken(
                         principal,
@@ -48,6 +60,10 @@ class JwtAuthenticationFilter(
                     )
                     SecurityContextHolder.getContext().authentication = authentication
                     log.debug { "JWT 인증 성공: userId=${principal.userId}, roles=${principal.roles}" }
+                } else if (cookieToken != null) {
+                    // malformed/expired browser session은 다음 요청에서 재전송되지 않도록
+                    // token 값을 절대 포함하지 않는 deletion cookie만 반환한다.
+                    response.addHeader(HttpHeaders.SET_COOKIE, patientSessionCookie.delete())
                 }
             }
 
@@ -59,12 +75,13 @@ class JwtAuthenticationFilter(
         }
     }
 
-    private fun extractToken(request: HttpServletRequest): String? {
-        val header = request.getHeader(AUTHORIZATION_HEADER)
-        return if (header != null && header.startsWith(BEARER_PREFIX)) {
-            header.substring(BEARER_PREFIX.length)
-        } else {
-            null
-        }
+    private fun extractPatientCookie(request: HttpServletRequest): PatientCookieToken? {
+        val cookies = request.cookies
+            ?.filter { it.name == patientAuthenticationProperties.cookieName }
+            .orEmpty()
+        if (cookies.size != 1) return null
+        return PatientCookieToken(cookies.single().value)
     }
+
+    private data class PatientCookieToken(val value: String)
 }

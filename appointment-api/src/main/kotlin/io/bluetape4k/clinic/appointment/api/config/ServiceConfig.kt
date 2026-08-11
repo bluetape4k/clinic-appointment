@@ -58,6 +58,12 @@ import io.bluetape4k.clinic.appointment.api.reliability.DefaultBookingReliabilit
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilitySchemaReadiness
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilitySchemaProbe
 import io.bluetape4k.clinic.appointment.api.waitlist.WaitlistDeliveryProperties
+import io.bluetape4k.clinic.appointment.api.auth.PatientAuthenticationProperties
+import io.bluetape4k.clinic.appointment.api.auth.PatientAuthenticationService
+import io.bluetape4k.clinic.appointment.api.security.JwtSecurityProperties
+import io.bluetape4k.clinic.appointment.api.security.PatientJwtIssuer
+import io.bluetape4k.clinic.appointment.api.security.PatientLoginAttemptLimiter
+import io.bluetape4k.clinic.appointment.api.security.PatientSessionCookie
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
 import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
@@ -145,6 +151,8 @@ import java.time.Duration
     NotificationProperties::class,
     BookingReliabilityProperties::class,
     WaitlistDeliveryProperties::class,
+    PatientAuthenticationProperties::class,
+    JwtSecurityProperties::class,
 )
 class ServiceConfig {
 
@@ -204,6 +212,45 @@ class ServiceConfig {
 
     @Bean
     fun patientLoginIdentityRepository(): PatientLoginIdentityRepository = PatientLoginIdentityRepository()
+
+    @Bean
+    @ConditionalOnMissingBean(PatientLoginAttemptLimiter::class)
+    fun patientLoginAttemptLimiter(environment: Environment): PatientLoginAttemptLimiter =
+        PatientLoginAttemptLimiter.resolve(environment.activeProfiles.toSet(), configured = null)
+
+    @Bean
+    fun patientPasswordEncoder(): org.springframework.security.crypto.password.PasswordEncoder =
+        org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder()
+
+    @Bean
+    fun patientJwtIssuer(jwtSecurityProperties: JwtSecurityProperties): PatientJwtIssuer =
+        PatientJwtIssuer(jwtSecurityProperties)
+
+    @Bean
+    fun patientSessionCookie(properties: PatientAuthenticationProperties): PatientSessionCookie =
+        PatientSessionCookie(properties)
+
+    @Bean
+    @ConditionalOnBean(Database::class)
+    fun patientAuthenticationService(
+        database: Database,
+        tenantGroupRepository: TenantGroupRepository,
+        patientAccountRepository: PatientAccountRepository,
+        patientLoginIdentityRepository: PatientLoginIdentityRepository,
+        passwordEncoder: org.springframework.security.crypto.password.PasswordEncoder,
+        patientJwtIssuer: PatientJwtIssuer,
+        patientLoginAttemptLimiter: PatientLoginAttemptLimiter,
+        properties: PatientAuthenticationProperties,
+    ): PatientAuthenticationService = PatientAuthenticationService(
+        database = database,
+        tenantGroupRepository = tenantGroupRepository,
+        patientAccountRepository = patientAccountRepository,
+        patientLoginIdentityRepository = patientLoginIdentityRepository,
+        passwordEncoder = passwordEncoder,
+        patientJwtIssuer = patientJwtIssuer,
+        loginAttemptLimiter = patientLoginAttemptLimiter,
+        properties = properties,
+    )
 
     @Bean
     fun productCatalogRepository(): ProductCatalogRepository = ProductCatalogRepository()

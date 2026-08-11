@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.auth
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
+import io.bluetape4k.clinic.appointment.api.security.PatientSessionCookie
 import io.bluetape4k.clinic.appointment.api.security.SchedulingRole
 import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
 import io.bluetape4k.clinic.appointment.model.identity.PatientLoginIdentifierKey
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import org.springframework.security.web.method.annotation.CsrfTokenArgumentResolver
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -42,6 +44,7 @@ class PatientAuthenticationControllerTest {
         mockMvc = MockMvcBuilders
             .standaloneSetup(PatientAuthenticationController(service, cookie))
             .setControllerAdvice(io.bluetape4k.clinic.appointment.api.config.GlobalExceptionHandler())
+            .setCustomArgumentResolvers(CsrfTokenArgumentResolver())
             .addFilters<org.springframework.test.web.servlet.setup.StandaloneMockMvcBuilder>(CorrelationIdFilter())
             .build()
     }

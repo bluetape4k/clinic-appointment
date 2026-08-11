@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.security
 
+import io.bluetape4k.clinic.appointment.api.tenant.TenantCodeRules
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import java.time.Clock
@@ -13,7 +14,13 @@ class PatientJwtIssuer(
     private val properties: JwtSecurityProperties,
     private val clock: Clock = Clock.systemUTC(),
 ) {
-    private val signingKey = Keys.hmacShaKeyFor(Base64.getDecoder().decode(properties.secret))
+    companion object {
+        private val SAFE_PATIENT_SUBJECT = Regex("[A-Za-z0-9][A-Za-z0-9._:@/-]{0,159}")
+    }
+
+    private val signingKey by lazy {
+        Keys.hmacShaKeyFor(Base64.getDecoder().decode(properties.secret))
+    }
 
     /** opaque patient subject와 단일 tenant grant를 가진 token을 발급합니다. */
     fun issue(
@@ -21,8 +28,8 @@ class PatientJwtIssuer(
         patientSubject: String,
         expiresAt: Instant,
     ): String {
-        require(tenantCode.isNotBlank()) { "tenantCode must not be blank" }
-        require(patientSubject.isNotBlank()) { "patientSubject must not be blank" }
+        require(TenantCodeRules.isCanonical(tenantCode)) { "tenantCode must be canonical" }
+        require(SAFE_PATIENT_SUBJECT.matches(patientSubject)) { "patientSubject must be safe" }
         val issuedAt = Instant.now(clock)
         require(expiresAt.isAfter(issuedAt)) { "patient token expiration must be in the future" }
         return Jwts.builder()

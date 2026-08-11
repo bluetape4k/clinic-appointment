@@ -13,6 +13,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.csrf.CsrfFilter
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.TestPropertySource
 
@@ -71,6 +72,11 @@ class SecurityConfigFilterOrderTest {
             filterTypes.indexOfFirst { it == filterType }.also { (it >= 0).shouldBeTrue() }
         }
         positions shouldBeEqualTo positions.sorted()
+    }
+
+    @Test
+    fun `security chain enables csrf protection for browser session cookies`() {
+        securityFilterChains.single().filters.any { it is CsrfFilter }.shouldBeTrue()
     }
 
     @Configuration(proxyBeanMethods = false)

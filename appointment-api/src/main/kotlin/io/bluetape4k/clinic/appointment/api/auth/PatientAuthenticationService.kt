@@ -2,7 +2,9 @@ package io.bluetape4k.clinic.appointment.api.auth
 
 import io.bluetape4k.clinic.appointment.api.security.PatientJwtIssuer
 import io.bluetape4k.clinic.appointment.api.security.PatientLoginAttemptLimiter
+import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.security.SchedulingRole
+import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
 import io.bluetape4k.clinic.appointment.model.dto.PatientAccountRecord
 import io.bluetape4k.clinic.appointment.model.dto.PatientLoginIdentityRecord
 import io.bluetape4k.clinic.appointment.model.identity.PatientLoginIdentifier
@@ -122,6 +124,38 @@ class PatientAuthenticationService(
                 displayName = account.displayName,
                 expiresAt = expiresAt,
             ),
+        )
+    }
+
+    /** 검증된 PATIENT principal과 현재 tenant를 다시 대조해 session summary를 만듭니다. */
+    fun session(
+        tenantCode: String,
+        principal: SchedulingUserPrincipal,
+    ): PatientSessionSummary {
+        if (
+            principal.actorType != ActorType.PATIENT ||
+            principal.roles != setOf(SchedulingRole.PATIENT) ||
+            principal.patientSubjectId.isNullOrBlank() ||
+            principal.userId != principal.patientSubjectId ||
+            tenantCode !in principal.allowedTenants
+        ) {
+            throw org.springframework.security.access.AccessDeniedException("patient session scope is invalid")
+        }
+        val expiresAt = principal.expiresAt
+        if (!expiresAt.isAfter(clock.instant())) {
+            throw PatientInvalidCredentialsException()
+        }
+        val account = transaction(database) {
+            val tenant = tenantGroupRepository.findActiveByCode(tenantCode)
+                ?: throw PatientTenantNotFoundException()
+            val tenantId = tenant.id ?: throw PatientTenantNotFoundException()
+            patientAccountRepository.findActiveBySubject(tenantId, principal.patientSubjectId)
+        } ?: throw PatientInvalidCredentialsException()
+        return PatientSessionSummary(
+            tenantCode = tenantCode,
+            role = SchedulingRole.PATIENT,
+            displayName = account.displayName,
+            expiresAt = expiresAt,
         )
     }
 

@@ -78,7 +78,7 @@ class JwtTokenParser(
             val userId = claims.subject.requireSafeIdentifier("subject")
             val tokenId = claims.id.requireSafeIdentifier("jti")
             val issuedAt = requireNotNull(claims.issuedAt) { "iat is required" }.toInstant()
-            requireNotNull(claims.expiration) { "exp is required" }
+            val expiration = requireNotNull(claims.expiration) { "exp is required" }
             val authenticatedAt = claims.readEpochSeconds(CLAIM_AUTH_TIME)
             validateTimes(issuedAt, authenticatedAt)
 
@@ -113,6 +113,7 @@ class JwtTokenParser(
                 issuer = claims.issuer,
                 tokenId = tokenId,
                 authenticatedAt = authenticatedAt,
+                expiresAt = expiration.toInstant(),
             )
         } catch (_: Exception) {
             log.warn { "Gateway JWT authentication rejected" }

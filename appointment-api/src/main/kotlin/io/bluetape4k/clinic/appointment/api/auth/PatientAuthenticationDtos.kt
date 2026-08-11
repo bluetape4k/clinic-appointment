@@ -38,6 +38,11 @@ data class PatientRegistrationResult(
     val identifierKeys: Set<PatientLoginIdentifierKey>,
 )
 
+/** 등록 성공을 나타내는 최소 public response입니다. */
+data class PatientRegistrationResponse(
+    val registered: Boolean = true,
+)
+
 /** 로그인 성공 결과입니다. token은 controller가 HttpOnly cookie로만 전달합니다. */
 data class PatientLoginResult(
     val token: String,
