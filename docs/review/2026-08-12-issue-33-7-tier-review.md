@@ -1,7 +1,7 @@
 # Issue #33 환자 인증 7-tier code review
 
-검토일: 2026-08-12  
-검토 브랜치: `feat/issue-33-patient-auth`  
+검토일: 2026-08-12
+검토 브랜치: `feat/issue-33-patient-auth`
 검토 범위: `appointment-core`, `appointment-api`, `frontend/appointment-frontend`, V26 migration, 운영 문서
 
 ## 결론
