@@ -27,7 +27,7 @@ const STATUS_LABELS: Record<CommitmentStatus, string> = {
   standalone: true,
   template: `
     <article class="appointment-card" [attr.aria-labelledby]="'appointment-' + appointment.appointmentId">
-      <p class="appointment-card__eyebrow">다음 방문</p>
+      <span class="appointment-card__eyebrow">다음 방문</span>
       <h3 [id]="'appointment-' + appointment.appointmentId">{{ title }}</h3>
       <div class="appointment-card__meta">
         <time [attr.datetime]="appointment.startsAt">{{ dateTimeLabel }}</time>
@@ -42,17 +42,17 @@ const STATUS_LABELS: Record<CommitmentStatus, string> = {
   `,
   styles: [`
     :host { display: block; }
-    .appointment-card { display: grid; gap: 24px; }
-    .appointment-card__eyebrow { margin: 0; color: var(--portal-muted); font-size: .8rem; }
-    h3 { margin: 0; font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -.03em; }
+    .appointment-card { display: block; }
+    .appointment-card__eyebrow { color: var(--portal-muted); font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; }
+    h3 { margin: 21.44px 0; font-size: 2rem; line-height: 1.5; }
     .appointment-status { display: inline-flex; align-items: center; gap: 6px; color: var(--portal-status-proposed); }
     .appointment-status::before { content: '●'; }
     .appointment-status[data-status="HELD"] { color: var(--portal-status-held); }
     .appointment-status[data-status="CONFIRMED"] { color: var(--portal-status-confirmed); }
     .appointment-status[data-status="EXPIRED"], .appointment-status[data-status="CANCELLED"] { color: var(--portal-status-expired); }
     .appointment-card__meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--portal-muted); font-size: 1rem; }
-    .appointment-card__description { margin: 0; }
-    .text-button { justify-self: start; border: 0; background: var(--portal-ink); color: var(--portal-surface-raised); cursor: pointer; padding: 10px 14px; font: inherit; }
+    .appointment-card__description { margin: 16px 0; }
+    .text-button { border: 1px solid var(--portal-ink); background: var(--portal-ink); color: var(--portal-surface-raised); cursor: pointer; padding: 10px 14px; }
     .text-button:focus-visible { outline: 3px solid var(--portal-focus); outline-offset: 3px; }
   `],
 })
@@ -72,6 +72,8 @@ export class AppointmentCardComponent {
   }
 
   get dateTimeLabel(): string {
-    return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(this.appointment.startsAt));
+    const date = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'long' }).format(new Date(this.appointment.startsAt));
+    const time = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(this.appointment.startsAt));
+    return `${date} ${time}`;
   }
 }
