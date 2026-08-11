@@ -1,11 +1,15 @@
 package io.bluetape4k.clinic.appointment.notification
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.leader.LeaderGroupElector
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.awaitCancellation
 import io.mockk.verify
+import kotlinx.coroutines.CancellationException
 import org.junit.jupiter.api.Test
 import java.time.Duration
 
@@ -99,6 +103,89 @@ internal class NotificationSchedulingRunnersTest {
 
         coVerify(exactly = 1) { scheduler.triggerOnce() }
         verify(exactly = 1) { metrics.recordReminderRecovery(result) }
+    }
+
+    @Test
+    fun `reminder poll은 leader action 안에서 scheduler를 실행한다`() {
+        val scheduler = mockk<AppointmentReminderScheduler>()
+        val elector = mockk<LeaderGroupElector>(relaxed = true)
+        val metrics = mockk<NotificationOutboxMetrics>(relaxed = true)
+        val result = ReminderRecoveryScanResult(
+            notYetDue = 0,
+            enqueued = 1,
+            suppressed = 0,
+            alreadyExists = 0,
+            scanned = 1,
+        )
+        coEvery { scheduler.triggerOnce() } returns result
+        every {
+            elector.runIfLeader(
+                REMINDER_RECOVERY_LOCK_NAME,
+                any<() -> ReminderRecoveryScanResult?>(),
+            )
+        } answers { secondArg<() -> ReminderRecoveryScanResult?>().invoke() }
+
+        NotificationReminderSchedulingRunner(scheduler, metrics, elector).poll()
+
+        coVerify(exactly = 1) { scheduler.triggerOnce() }
+        verify(exactly = 1) {
+            elector.runIfLeader(
+                REMINDER_RECOVERY_LOCK_NAME,
+                any<() -> ReminderRecoveryScanResult?>(),
+            )
+        }
+        verify(exactly = 1) { metrics.recordReminderRecovery(result) }
+    }
+
+    @Test
+    fun `leader를 획득하지 못하면 reminder scheduler를 호출하지 않는다`() {
+        val scheduler = mockk<AppointmentReminderScheduler>()
+        val elector = mockk<LeaderGroupElector>(relaxed = true)
+        val metrics = mockk<NotificationOutboxMetrics>(relaxed = true)
+        every {
+            elector.runIfLeader(
+                REMINDER_RECOVERY_LOCK_NAME,
+                any<() -> ReminderRecoveryScanResult?>(),
+            )
+        } returns null
+
+        NotificationReminderSchedulingRunner(scheduler, metrics, elector).poll()
+
+        coVerify(exactly = 0) { scheduler.triggerOnce() }
+        verify(exactly = 0) { metrics.recordReminderRecovery(any()) }
+    }
+
+    @Test
+    fun `Redis leader failure는 scheduler action을 호출하지 않고 tick 경계에서 흡수한다`() {
+        val scheduler = mockk<AppointmentReminderScheduler>()
+        val elector = mockk<LeaderGroupElector>(relaxed = true)
+        every {
+            elector.runIfLeader(
+                REMINDER_RECOVERY_LOCK_NAME,
+                any<() -> ReminderRecoveryScanResult?>(),
+            )
+        } throws IllegalStateException("redis unavailable")
+
+        NotificationReminderSchedulingRunner(scheduler, leaderElector = elector).poll()
+
+        coVerify(exactly = 0) { scheduler.triggerOnce() }
+    }
+
+    @Test
+    fun `reminder cancellation은 scheduled runner가 흡수하지 않고 전파한다`() {
+        val scheduler = mockk<AppointmentReminderScheduler>()
+        val elector = mockk<LeaderGroupElector>(relaxed = true)
+        coEvery { scheduler.triggerOnce() } throws CancellationException("cancelled")
+        every {
+            elector.runIfLeader(
+                REMINDER_RECOVERY_LOCK_NAME,
+                any<() -> ReminderRecoveryScanResult?>(),
+            )
+        } answers { secondArg<() -> ReminderRecoveryScanResult?>().invoke() }
+
+        assertFailsWith<CancellationException> {
+            NotificationReminderSchedulingRunner(scheduler, leaderElector = elector).poll()
+        }
     }
 
     @Test

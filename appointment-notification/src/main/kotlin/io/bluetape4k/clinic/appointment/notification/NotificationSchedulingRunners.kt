@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.notification
 
+import io.bluetape4k.leader.LeaderGroupElector
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
 import io.bluetape4k.logging.warn
@@ -83,6 +84,7 @@ class NotificationRetentionSchedulingRunner(
 class NotificationReminderSchedulingRunner(
     private val scheduler: AppointmentReminderScheduler,
     private val metrics: NotificationOutboxMetrics? = null,
+    private val leaderElector: LeaderGroupElector? = null,
     private val suspendBridgeTimeout: Duration = Duration.ofSeconds(30),
 ) {
     companion object : KLogging()
@@ -95,7 +97,13 @@ class NotificationReminderSchedulingRunner(
     @Scheduled(fixedDelayString = "\${clinic.notification.worker.reminder-recovery-interval:PT1H}")
     fun poll() {
         try {
-            val result = runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() } ?: return
+            val result = if (leaderElector == null) {
+                runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() }
+            } else {
+                leaderElector.runIfLeader(REMINDER_RECOVERY_LOCK_NAME) {
+                    runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() }
+                }
+            } ?: return
             metrics?.recordReminderRecovery(result)
             if (result.scanned > 0) {
                 log.info {
@@ -110,3 +118,5 @@ class NotificationReminderSchedulingRunner(
         }
     }
 }
+
+internal const val REMINDER_RECOVERY_LOCK_NAME = "appointment-reminder-recovery"

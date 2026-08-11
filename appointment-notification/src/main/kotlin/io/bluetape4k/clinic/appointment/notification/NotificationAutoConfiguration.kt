@@ -2,8 +2,10 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
+import io.bluetape4k.leader.LeaderGroupElector
 import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
 import io.bluetape4k.leader.lettuce.leaderGroupElection
+import io.bluetape4k.leader.micrometer.InstrumentedLeaderGroupElector
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRuntime
@@ -28,7 +30,7 @@ import org.springframework.context.annotation.Bean
  * `clinic.notification.enabled=true` (기본값)일 때 활성화됩니다.
  * [NotificationChannel] 빈이 없으면 [DummyNotificationChannel]을 등록합니다.
  * 데이터베이스가 있으면 내구성 outbox worker·dispatcher·retention runner를 구성하고,
- * Redis가 있으면 향후 리마인더 복구 trigger용 리더 선출 빈을 등록합니다.
+ * Redis가 있으면 리마인더 복구 한 tick 전체를 감싸는 리더 선출 빈을 등록합니다.
  * 스케줄러는 호스트 애플리케이션이 [org.springframework.scheduling.annotation.EnableScheduling]을
  * 명시적으로 선택한 경우에만 동작합니다.
  */
@@ -473,11 +475,13 @@ class NotificationAutoConfiguration {
     fun notificationReminderSchedulingRunner(
         scheduler: AppointmentReminderScheduler,
         metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
+        leaderElectorProvider: ObjectProvider<LeaderGroupElector>,
         properties: NotificationProperties,
     ): NotificationReminderSchedulingRunner =
         NotificationReminderSchedulingRunner(
             scheduler = scheduler,
             metrics = metricsProvider.ifAvailable,
+            leaderElector = leaderElectorProvider.ifAvailable,
             suspendBridgeTimeout = properties.worker.validate().suspendBridgeTimeout,
         )
 
@@ -544,15 +548,31 @@ class NotificationAutoConfiguration {
 
     /**
      * Redis가 있을 때 리더 선출 빈 등록.
-     * 향후 리마인더 복구 trigger를 단일 인스턴스에서 실행할 때 사용합니다.
+     * 리마인더 복구 한 tick 전체를 단일 리더 action 안에서 실행할 때 사용합니다.
      * outbox 발송 정합성은 데이터베이스 lease와 fencing이 보장합니다.
      */
     @Bean
-    @ConditionalOnClass(RedisClient::class)
+    @ConditionalOnClass(
+        value = [RedisClient::class],
+        name = ["io.bluetape4k.leader.micrometer.InstrumentedLeaderGroupElector"],
+    )
     @ConditionalOnBean(StatefulRedisConnection::class)
-    fun notificationLeaderElection(connection: StatefulRedisConnection<String, String>): LettuceLeaderGroupElector {
-        log.info { "HA 리더 선출 활성화: LettuceLeaderGroupElector" }
-        return connection.leaderGroupElection()
+    fun notificationLeaderElection(
+        connection: StatefulRedisConnection<String, String>,
+        meterRegistryProvider: ObjectProvider<MeterRegistry>,
+    ): LeaderGroupElector {
+        val delegate: LettuceLeaderGroupElector = connection.leaderGroupElection()
+        val registry = meterRegistryProvider.ifAvailable
+        if (registry == null) {
+            log.info { "HA 리더 선출 활성화: LettuceLeaderGroupElector" }
+            return delegate
+        }
+        log.info { "HA 리더 선출 활성화: InstrumentedLeaderGroupElector" }
+        return InstrumentedLeaderGroupElector(
+            delegate = delegate,
+            registry = registry,
+            lockName = REMINDER_RECOVERY_LOCK_NAME,
+        )
     }
 
 }

@@ -25,6 +25,7 @@ dependencies {
 
     // Reminder recovery trigger leader election (delivery correctness uses DB lease/fencing)
     implementation(libs.bluetape4k.leader)
+    implementation(libs.bluetape4k.leader.micrometer)
     implementation(libs.bluetape4k.lettuce)
     implementation(libs.lettuce.core)
 

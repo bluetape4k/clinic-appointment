@@ -55,9 +55,13 @@ Resilience4j 정책을 적용합니다.
 6. worker는 fencing된 종료 결과 또는 제한된 재시도 결정만 저장합니다.
    종료 레코드는 이후 retention runner가 삭제합니다.
 
-데이터베이스 lease와 fencing token이 발송 정합성의 기준입니다. Redis 리더
-선출은 향후 리마인더 복구 trigger에만 사용하며, outbox의 안전한 병렬 발송에는
-필요하지 않습니다.
+데이터베이스 lease와 fencing token이 발송 정합성의 기준입니다. 리마인더 복구
+scan 한 tick은 Redis leader action이 전체 page를 감싼 동안에만 실행합니다.
+Redis가 없으면 single-instance direct path를 사용하며, `MeterRegistry`가 있으면
+`shedlock.leader.acquired`, `shedlock.leader.not_acquired`,
+`shedlock.leader.duration`, `shedlock.leader.active`를 `lock.name=redacted-lock`
+기본값으로 관측합니다. Redis leader 선출은 outbox의 안전한 병렬 발송을 대체하지
+않습니다.
 
 ### Kafka 예약 이벤트 consumer (Issue #42)
 
