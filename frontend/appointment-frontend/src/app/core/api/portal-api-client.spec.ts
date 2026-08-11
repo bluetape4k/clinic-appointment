@@ -129,6 +129,15 @@ describe('PortalApiClient', () => {
     await expect(promise).resolves.toMatchObject({ body: [{ doctorId: 4 }] });
   });
 
+  it('알림 snapshot도 tenant-scoped envelope에서 typed 목록으로 변환한다', async () => {
+    const promise = client.getNotifications();
+    const request = httpMock.expectOne('/api/clinic-a/notifications');
+    expect(request.request.method).toBe('GET');
+    request.flush({ success: true, data: [{ eventId: 'event-1', appointmentId: 42, sequence: 1, status: 'PROPOSED', title: '예약 제안', message: '확인하세요.', createdAt: '2026-08-20T01:30:00Z', read: false }] });
+
+    await expect(promise).resolves.toMatchObject({ body: [{ eventId: 'event-1', appointmentId: 42 }] });
+  });
+
   it('412 오류와 Retry-After를 재동기화 가능한 error state로 매핑한다', async () => {
     const promise = client.getCommitment(42);
     const request = httpMock.expectOne('/api/clinic-a/appointments/42/commitment');

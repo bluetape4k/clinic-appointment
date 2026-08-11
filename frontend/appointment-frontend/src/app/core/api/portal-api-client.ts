@@ -14,6 +14,7 @@ import {
   ProposalDecisionRequest,
 } from './portal-api.models';
 import { mapPortalApiError, PortalApiException } from './portal-api-error';
+import type { PortalNotification } from './portal-event-stream.adapter';
 import { TenantContextService } from './tenant-context.service';
 
 @Injectable({ providedIn: 'root' })
@@ -78,6 +79,11 @@ export class PortalApiClient {
       ? params
       : params.set('requestedDurationMinutes', requestedDurationMinutes);
     const response = await this.send<ApiEnvelope<AvailableSlot[]>>('GET', `/clinics/${this.requirePositiveId(clinicId)}/slots`, undefined, {}, requestParams);
+    return { ...response, body: response.body?.data ?? [] };
+  }
+
+  async getNotifications(): Promise<PortalResponse<PortalNotification[]>> {
+    const response = await this.send<ApiEnvelope<PortalNotification[]>>('GET', '/notifications');
     return { ...response, body: response.body?.data ?? [] };
   }
 
