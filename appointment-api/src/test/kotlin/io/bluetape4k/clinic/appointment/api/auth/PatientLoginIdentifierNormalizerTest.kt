@@ -31,12 +31,12 @@ class PatientLoginIdentifierNormalizerTest {
 
     @Test
     fun `control characters and malformed identifier values are rejected`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<PatientAuthenticationValidationException> {
             PatientLoginIdentifierNormalizer.normalize(
                 PatientLoginIdentifierRequest(PatientLoginIdentifierKey.EMAIL, "patient@example.com\n"),
             )
         }
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<PatientAuthenticationValidationException> {
             PatientLoginIdentifierNormalizer.normalize(
                 PatientLoginIdentifierRequest(PatientLoginIdentifierKey.LOGIN_ID, "ab"),
             )

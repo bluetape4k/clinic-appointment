@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /** tenant-scoped 환자 계정, multi-identifier login, dummy verification 계약입니다. */
 class PatientAuthenticationServiceTest {
 
-    private val now = Instant.parse("2026-08-12T00:00:00Z")
+    private val now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val password = "correct horse battery staple"
     private val testSecret = "dGVzdC1zZWNyZXQta2V5LWZvci1hcHBvaW50bWVudC1zY2hlZHVsaW5nLXN5c3RlbS01MTItYml0LW1hdGVyaWFsIQ=="
@@ -55,6 +55,12 @@ class PatientAuthenticationServiceTest {
                 PatientAccounts,
                 PatientLoginIdentities,
             )
+            TenantGroups.insert {
+                it[id] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+                it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
+                it[displayName] = "기본 병원"
+                it[active] = true
+            }
             TenantGroups.insert {
                 it[id] = EntityID(2L, TenantGroups)
                 it[tenantCode] = "tenant-two"
@@ -78,7 +84,7 @@ class PatientAuthenticationServiceTest {
             patientJwtIssuer = PatientJwtIssuer(jwtProperties, clock),
             loginAttemptLimiter = PatientLoginAttemptLimiter { _, _, _ -> true },
             properties = PatientAuthenticationProperties(
-                dummyPasswordHash = passwordEncoder.encode("dummy password") ,
+                dummyPasswordHash = passwordEncoder.encodeRequired("dummy password"),
                 cookieSecure = false,
             ),
             clock = clock,
@@ -177,7 +183,7 @@ class PatientAuthenticationServiceTest {
                 it[tenantGroupId] = TenantGroups.DEFAULT_TENANT_GROUP_ID
                 it[patientSubject] = "inactive-subject"
                 it[displayName] = "비활성 환자"
-                it[passwordHash] = passwordEncoder.encode(password)
+                it[passwordHash] = passwordEncoder.encodeRequired(password)
                 it[active] = false
             }
             PatientLoginIdentities.insert {
@@ -306,7 +312,7 @@ class PatientAuthenticationServiceTest {
         ),
         loginAttemptLimiter = loginAttemptLimiter,
         properties = PatientAuthenticationProperties(
-            dummyPasswordHash = passwordEncoder.encode("dummy password"),
+            dummyPasswordHash = passwordEncoder.encodeRequired("dummy password"),
             cookieSecure = false,
         ),
         clock = clock,
@@ -317,13 +323,17 @@ class PatientAuthenticationServiceTest {
     ) : PasswordEncoder {
         val matchesCalls = AtomicInteger()
 
-        override fun encode(rawPassword: CharSequence): String = delegate.encode(rawPassword)
+        override fun encode(rawPassword: CharSequence?): String? = rawPassword?.let(delegate::encode)
 
-        override fun matches(rawPassword: CharSequence, encodedPassword: String): Boolean {
+        override fun matches(rawPassword: CharSequence?, encodedPassword: String?): Boolean {
             matchesCalls.incrementAndGet()
-            return delegate.matches(rawPassword, encodedPassword)
+            return rawPassword != null && encodedPassword != null && delegate.matches(rawPassword, encodedPassword)
         }
 
-        override fun upgradeEncoding(encodedPassword: String): Boolean = delegate.upgradeEncoding(encodedPassword)
+        override fun upgradeEncoding(encodedPassword: String?): Boolean =
+            encodedPassword != null && delegate.upgradeEncoding(encodedPassword)
+
+        fun encodeRequired(rawPassword: CharSequence): String =
+            requireNotNull(encode(rawPassword)) { "test password encoder returned no hash" }
     }
 }

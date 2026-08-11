@@ -49,9 +49,12 @@ data class PatientLoginIdentifier(
 
         /** key에 맞는 canonical value를 반환합니다. */
         fun normalize(key: PatientLoginIdentifierKey, rawValue: String): String {
+            require(rawValue.none(Char::isISOControl)) {
+                "identifier value contains control characters"
+            }
             val value = Normalizer.normalize(rawValue.trim(), Normalizer.Form.NFC)
-            require(value.isNotEmpty() && value.none(Char::isISOControl)) {
-                "identifier value is blank or contains control characters"
+            require(value.isNotEmpty()) {
+                "identifier value is blank"
             }
             return when (key) {
                 PatientLoginIdentifierKey.PHONE -> normalizePhone(value)
