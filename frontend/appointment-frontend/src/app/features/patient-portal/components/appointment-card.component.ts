@@ -37,22 +37,22 @@ const STATUS_LABELS: Record<CommitmentStatus, string> = {
         <span class="appointment-status" [attr.data-status]="appointment.status">{{ statusLabel }}</span>
       </div>
       <p class="appointment-card__description">담당 의료진과 방문 준비사항을 확인하세요.</p>
-      <button type="button" class="text-button">예약 상세 보기<span aria-hidden="true"> ↗</span></button>
+      <button type="button" class="text-button">예약 상세 보기</button>
     </article>
   `,
   styles: [`
     :host { display: block; }
-    .appointment-card { display: grid; gap: 16px; }
+    .appointment-card { display: grid; gap: 24px; }
     .appointment-card__eyebrow { margin: 0; color: var(--portal-muted); font-size: .8rem; }
-    h3 { margin: 0; font-size: clamp(1.35rem, 3vw, 1.75rem); letter-spacing: -.03em; }
+    h3 { margin: 0; font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -.03em; }
     .appointment-status { display: inline-flex; align-items: center; gap: 6px; color: var(--portal-status-proposed); }
     .appointment-status::before { content: '●'; }
     .appointment-status[data-status="HELD"] { color: var(--portal-status-held); }
     .appointment-status[data-status="CONFIRMED"] { color: var(--portal-status-confirmed); }
     .appointment-status[data-status="EXPIRED"], .appointment-status[data-status="CANCELLED"] { color: var(--portal-status-expired); }
-    .appointment-card__meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--portal-muted); }
+    .appointment-card__meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--portal-muted); font-size: 1rem; }
     .appointment-card__description { margin: 0; }
-    .text-button { border: 0; background: transparent; color: var(--portal-ink); cursor: pointer; font: inherit; text-decoration: underline; text-underline-offset: 3px; }
+    .text-button { justify-self: start; border: 0; background: var(--portal-ink); color: var(--portal-surface-raised); cursor: pointer; padding: 10px 14px; font: inherit; }
     .text-button:focus-visible { outline: 3px solid var(--portal-focus); outline-offset: 3px; }
   `],
 })

@@ -37,4 +37,15 @@ test.describe('환자 포털 브라우저 계약', () => {
       await expect(appointmentsLink).toBeFocused();
     }
   });
+
+  test('승인된 C 참조 상태용 확정 예약 visual fixture를 렌더링한다', async ({ page }) => {
+    await page.goto('/portal/appointments/visual-fixture');
+
+    await expect(page.getByRole('heading', { name: '환자 포털 확정 예약 참조 상태' })).toBeAttached();
+    await expect(page.getByRole('heading', { name: '피부 재생 관리' })).toBeVisible();
+    await expect(page.getByText('2026년 8월 20일 오전 10:30')).toBeVisible();
+    await expect(page.getByText('3회차 / 10회')).toBeVisible();
+    await expect(page.getByText('확정', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /예약 상세 보기/ })).toBeVisible();
+  });
 });

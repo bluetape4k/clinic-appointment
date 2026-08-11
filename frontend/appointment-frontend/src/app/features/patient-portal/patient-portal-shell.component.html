@@ -6,11 +6,10 @@
         [routerLink]="item.route"
         routerLinkActive="is-active"
         #active="routerLinkActive"
-        [routerLinkActiveOptions]="{ exact: true }"
+        [routerLinkActiveOptions]="{ exact: false }"
         [attr.aria-current]="active.isActive ? 'page' : null"
       >
         <span class="nav-label">{{ item.label }}</span>
-        <span class="nav-arrow" aria-hidden="true">↗</span>
       </a>
     }
   </nav>

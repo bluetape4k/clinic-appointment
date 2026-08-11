@@ -9,9 +9,10 @@
   display: grid;
   grid-template-columns: minmax(180px, 240px) minmax(0, 720px);
   gap: 24px;
+  box-sizing: border-box;
   width: min(1120px, 100%);
   margin: 0 auto;
-  padding: clamp(16px, 4vw, 40px);
+  padding: clamp(16px, 4vw, 32px);
 }
 
 .portal-nav {
@@ -30,6 +31,7 @@
 }
 
 .portal-nav a {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -56,13 +58,9 @@
   outline-offset: 2px;
 }
 
-.nav-arrow {
-  color: var(--portal-muted);
-}
-
 .portal-main {
   min-width: 0;
-  padding: 24px;
+  padding: 32px 24px;
   border: 1px solid var(--portal-line);
   background: var(--portal-surface-raised);
 }

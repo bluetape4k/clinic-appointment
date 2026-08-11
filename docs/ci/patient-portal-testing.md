@@ -27,6 +27,11 @@ npm run build
 자동으로 실행하므로 별도 개발 서버를 띄우지 않는다. CI에서는 Chromium만
 설치하고 worker를 하나로 고정하며 실패 시 trace와 screenshot을 보존한다.
 
+`/portal/appointments/visual-fixture`는 production build에서 제외되는 개발 전용
+참조 route다.
+승인된 C 화면의 확정 예약 상태(상품명, 방문 일시, `3회차 / 10회`, `확정`)를
+재현해 시각 회귀를 고정하며, 실제 환자 데이터나 backend 응답을 사용하지 않는다.
+
 ## 계약 범위
 
 - 모든 환자 API 요청은 `/api/{tenantCode}` 경로를 사용한다.
