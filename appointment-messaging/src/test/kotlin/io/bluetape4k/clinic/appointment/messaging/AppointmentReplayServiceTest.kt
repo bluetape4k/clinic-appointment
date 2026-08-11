@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -26,8 +27,8 @@ class AppointmentReplayServiceTest {
     @BeforeEach
     fun setUp() {
         transaction(database) {
-            SchemaUtils.drop(AppointmentConsumerReplayAuditTable)
-            SchemaUtils.create(AppointmentConsumerReplayAuditTable)
+            SchemaUtils.createMissingTablesAndColumns(AppointmentConsumerReplayAuditTable)
+            AppointmentConsumerReplayAuditTable.deleteAll()
         }
     }
 
@@ -217,6 +218,35 @@ class AppointmentReplayServiceTest {
                 it.status == AppointmentReplayAuditStatus.EXECUTED ||
                     it.status == AppointmentReplayAuditStatus.REQUESTED
             })
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `concurrent insert conflict rejects a different partition binding`() {
+        val start = CyclicBarrier(2)
+        val first = request()
+        val differentPartition = request().copy(partition = 1)
+        val service = AppointmentReplayService(database) { _, _ -> 1 }
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            val firstResult = executor.submit<Result<AppointmentReplayResult>> {
+                runCatching {
+                    start.await(5, TimeUnit.SECONDS)
+                    service.replay("replay-concurrent-partition-1", first, actor())
+                }
+            }
+            val secondResult = executor.submit<Result<AppointmentReplayResult>> {
+                runCatching {
+                    start.await(5, TimeUnit.SECONDS)
+                    service.replay("replay-concurrent-partition-1", differentPartition, actor())
+                }
+            }
+
+            val results = listOf(firstResult.get(5, TimeUnit.SECONDS), secondResult.get(5, TimeUnit.SECONDS))
+            results.count { it.isSuccess } shouldBeEqualTo 1
+            results.count { it.exceptionOrNull() is IllegalArgumentException } shouldBeEqualTo 1
         } finally {
             executor.shutdownNow()
         }

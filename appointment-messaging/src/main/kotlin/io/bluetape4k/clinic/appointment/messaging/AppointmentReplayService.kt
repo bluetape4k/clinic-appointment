@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.messaging
 
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.isNull
@@ -83,17 +84,20 @@ class AppointmentReplayService(
                     // REQUESTED + completedAt는 실행 claim timestamp로 사용합니다.
                     it[completedAt] = claimAt.takeUnless { request.dryRun }
                 }.insertedCount == 1
-                inserted && !request.dryRun
+                if (inserted) {
+                    !request.dryRun
+                } else {
+                    // 같은 requestId를 먼저 읽지 못한 concurrent writer가 unique key 충돌을
+                    // 일으킨 경우에도 승자 row의 전체 binding을 재검증해야 합니다.
+                    AppointmentConsumerReplayAuditTable
+                        .selectAll()
+                        .where { AppointmentConsumerReplayAuditTable.requestId eq requestId }
+                        .single()
+                        .requireBinding(requestHash, request.partition)
+                    false
+                }
             } else {
-                require(existing[AppointmentConsumerReplayAuditTable.hashVersion] == CURRENT_HASH_VERSION) {
-                    "replay requestId is bound to a legacy hash; issue a new requestId"
-                }
-                require(existing[AppointmentConsumerReplayAuditTable.requestHash] == requestHash) {
-                    "replay requestId is already bound to a different scope or range"
-                }
-                require(existing[AppointmentConsumerReplayAuditTable.partitionNumber] == request.partition) {
-                    "replay requestId is already bound to a different partition scope"
-                }
+                existing.requireBinding(requestHash, request.partition)
                 val status = existing[AppointmentConsumerReplayAuditTable.status]
                 when {
                     status == AppointmentReplayAuditStatus.DRY_RUN && !request.dryRun -> {
@@ -171,6 +175,18 @@ class AppointmentReplayService(
 
     private fun replayGroupId(consumerId: String, requestId: String): String =
         "appointment-$consumerId-replay-$requestId-v1"
+
+    private fun ResultRow.requireBinding(requestHash: String, partition: Int?) {
+        require(this[AppointmentConsumerReplayAuditTable.hashVersion] == CURRENT_HASH_VERSION) {
+            "replay requestId is bound to a legacy hash; issue a new requestId"
+        }
+        require(this[AppointmentConsumerReplayAuditTable.requestHash] == requestHash) {
+            "replay requestId is already bound to a different scope or range"
+        }
+        require(this[AppointmentConsumerReplayAuditTable.partitionNumber] == partition) {
+            "replay requestId is already bound to a different partition scope"
+        }
+    }
 
     private fun requestHash(request: AppointmentReplayRequest): String =
         MessageDigest.getInstance("SHA-256")
