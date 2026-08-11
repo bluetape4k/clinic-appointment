@@ -40,9 +40,19 @@ class WaitlistSlotAvailableSpringPublisher(
     private fun publishSafely(event: SlotAvailable) {
         try {
             eventPublisher.publishEvent(event)
-        } catch (failure: Throwable) {
-            runCatching { onFailure(failure) }
-            logger.warn("waitlist SlotAvailable fast signal failed; durable vacancy recovery remains authoritative")
+        } catch (failure: Exception) {
+            try {
+                onFailure(failure)
+            } catch (hookFailure: Exception) {
+                logger.error(
+                    "waitlist SlotAvailable fast signal failure hook failed; original failure is preserved",
+                    hookFailure,
+                )
+            }
+            logger.warn(
+                "waitlist SlotAvailable fast signal failed; durable vacancy recovery remains authoritative",
+                failure,
+            )
         }
     }
 

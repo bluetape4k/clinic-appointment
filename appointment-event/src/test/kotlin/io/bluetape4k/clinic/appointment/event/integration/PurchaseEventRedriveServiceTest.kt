@@ -22,6 +22,7 @@ import io.bluetape4k.clinic.appointment.service.AppointmentPlanFactory
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -51,7 +52,7 @@ class PurchaseEventRedriveServiceTest {
             driver = "org.h2.Driver",
         )
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 TenantGroups,
                 Clinics,
                 ProductCatalogProjections,
@@ -66,6 +67,19 @@ class PurchaseEventRedriveServiceTest {
                 SchedulingQuarantineEvents,
                 SchedulingQuarantineAuditEvents,
             )
+            SchedulingQuarantineAuditEvents.deleteAll()
+            SchedulingQuarantineEvents.deleteAll()
+            UntrustedSchedulingEventRejections.deleteAll()
+            SchedulingOutboxEvents.deleteAll()
+            SchedulingInboxEvents.deleteAll()
+            TreatmentDependencies.deleteAll()
+            PlannedTreatments.deleteAll()
+            AppointmentPlans.deleteAll()
+            ProductCatalogBomDependencies.deleteAll()
+            ProductCatalogBomItems.deleteAll()
+            ProductCatalogProjections.deleteAll()
+            Clinics.deleteAll()
+            TenantGroups.deleteAll()
             TenantGroups.insert {
                 it[id] = EntityID(1L, TenantGroups)
                 it[tenantCode] = "tenant-one"

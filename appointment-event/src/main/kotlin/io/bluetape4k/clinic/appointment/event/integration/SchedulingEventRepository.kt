@@ -9,6 +9,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.nio.charset.StandardCharsets
+import java.io.Serializable
 import java.time.Instant
 import java.util.UUID
 
@@ -31,7 +32,11 @@ data class SchedulingInboxRecord(
     val attemptCount: Int,
     val failureCode: String?,
     val replayAfter: Instant?,
-)
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 같은 source aggregate version으로 처리된 event와 요청 hash의 관계이다.
@@ -66,7 +71,7 @@ data class OutboxDualWriteConvergence(
     val aggregateIdentityMissingCount: Long,
     val legacyPlanRowCount: Long,
     val legacyPlanMismatchCount: Long,
-) {
+) : Serializable {
     /** 현재 모든 row가 V9 writer contract를 만족할 때만 true. */
     val converged: Boolean
         get() = aggregateIdentityMissingCount == 0L && legacyPlanMismatchCount == 0L
@@ -78,6 +83,10 @@ data class OutboxDualWriteConvergence(
         } else {
             (legacyPlanRowCount - legacyPlanMismatchCount).toDouble() / legacyPlanRowCount
         }
+
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
 }
 
 /**

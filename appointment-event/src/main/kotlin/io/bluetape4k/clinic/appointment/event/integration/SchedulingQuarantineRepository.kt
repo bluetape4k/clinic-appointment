@@ -123,7 +123,11 @@ data class QuarantineDetection(
     val correlationId: String,
     val retentionClass: QuarantineRetentionClass,
     val payloadExpiresAt: Instant,
-) : Serializable
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 격리 상세 조회에 반환하는 최소 운영 projection입니다.
@@ -142,7 +146,11 @@ data class QuarantineRecord(
     val payloadExpiresAt: Instant,
     val legalHold: Boolean,
     val status: QuarantineStatus,
-) : Serializable
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 data class QuarantineAuditRecord(
     val id: Long,
@@ -155,13 +163,21 @@ data class QuarantineAuditRecord(
     val afterStatus: QuarantineStatus?,
     val approvalReferences: String?,
     val createdAt: Instant,
-) : Serializable
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 data class QuarantineReleaseEvidence(
     val approvalReferences: List<String>,
     val sourceCorrectionReference: String? = null,
     val trustRevalidated: Boolean = false,
-) : Serializable
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 fun interface QuarantineExpiryObserver {
     /**

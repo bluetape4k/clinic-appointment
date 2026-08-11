@@ -14,6 +14,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Clock
 import java.time.Duration
+import java.io.Serializable
 import kotlin.math.pow
 
 enum class PurchaseHandlingMode {
@@ -37,7 +38,11 @@ data class PurchaseHandleResult(
     val reasonCode: String? = null,
     val planId: Long? = null,
     val replayAfter: java.time.Instant? = null,
-)
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 fun interface AtomicPlanWriteObserver {
     /**

@@ -4,7 +4,11 @@ import java.io.Serializable
 
 data class PurchasePlanMetricLabels(
     val values: Map<String, String>,
-) : Serializable
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 enum class CardinalitySignal {
     OK,
