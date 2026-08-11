@@ -22,6 +22,8 @@ const STATUS_LABELS: Record<CommitmentStatus, string> = {
   CANCELLED: '취소됨',
 };
 
+const PORTAL_TIME_ZONE = 'Asia/Seoul';
+
 @Component({
   selector: 'app-appointment-card',
   standalone: true,
@@ -72,8 +74,14 @@ export class AppointmentCardComponent {
   }
 
   get dateTimeLabel(): string {
-    const date = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'long' }).format(new Date(this.appointment.startsAt));
-    const time = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(this.appointment.startsAt));
+    const startsAt = new Date(this.appointment.startsAt);
+    const date = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'long', timeZone: PORTAL_TIME_ZONE }).format(startsAt);
+    const time = new Intl.DateTimeFormat('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: PORTAL_TIME_ZONE,
+    }).format(startsAt);
     return `${date} ${time}`;
   }
 }

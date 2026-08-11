@@ -47,4 +47,13 @@ describe('AppointmentCardComponent', () => {
     expect(status?.textContent?.trim()).toBe('만료');
     expect(status?.getAttribute('data-status')).toBe('EXPIRED');
   });
+
+  it('한국어 포털 시간은 실행 환경 timezone과 무관하게 서울 현지 시각으로 표시한다', async () => {
+    await TestBed.configureTestingModule({ imports: [AppointmentCardComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(AppointmentCardComponent);
+    fixture.componentInstance.appointment = baseAppointment;
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.dateTimeLabel).toBe('2026년 8월 20일 10:30');
+  });
 });
