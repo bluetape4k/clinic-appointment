@@ -68,7 +68,7 @@
 contract는 RED로 유지하고 1.3.1 fixture round-trip은 GREEN으로 고정한다. **Task DoD:** 기준 graph,
 benchmark task 존재, fixture provenance/SHA-256과 baseline decode가 모두 증명된다.
 
-- [ ] **Step 0: 변경 전 resolved graph와 task 존재를 기록한다**
+- [x] **Step 0: 변경 전 resolved graph와 task 존재를 기록한다**
 
 Run the exact-coordinate `dependencyInsight` commands from Task 2 Step 4 before any catalog edit,
 and record the selected versions in the working evidence. Then run:
@@ -84,7 +84,7 @@ Expected: baseline versions are Timefold 2.2.0, Springdoc 3.0.3, Exposed runtime
 Fory core 1.1.0/Kotlin 1.3.0, Leader 0.4.0, Kafka clients 4.2.1. The benchmark task and both
 Exposed `generateMigrations` tasks exist.
 
-- [ ] **Step 1: legacy fixture 생성용 임시 테스트를 작성한다**
+- [x] **Step 1: legacy fixture 생성용 임시 테스트를 작성한다**
 
 Create temporarily:
 `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/LegacyNearCacheFixtureGeneratorTest.kt`
@@ -119,7 +119,7 @@ class LegacyNearCacheFixtureGeneratorTest {
 }
 ```
 
-- [ ] **Step 2: baseline runtime에서 fixture를 생성한다**
+- [x] **Step 2: baseline runtime에서 fixture를 생성한다**
 
 Run:
 
@@ -131,7 +131,7 @@ Run:
 Expected: `BUILD SUCCESSFUL`이고 세 `ISSUE253_FIXTURE[...]` 값이 test XML의
 `system-out`에 기록된다.
 
-- [ ] **Step 3: base64 fixture, provenance와 영구 integrity test를 작성한다**
+- [x] **Step 3: base64 fixture, provenance와 영구 integrity test를 작성한다**
 
 각 출력값을 다음 resource에 한 줄로 저장한다.
 
@@ -208,7 +208,7 @@ class NearCacheFixtureIntegrityTest {
 }
 ```
 
-- [ ] **Step 4: 임시 decode diagnostic으로 baseline을 확인한 뒤 임시 test를 삭제한다**
+- [x] **Step 4: 임시 decode diagnostic으로 baseline을 확인한 뒤 임시 test를 삭제한다**
 
 Create temporarily `LegacyNearCacheDecodeDiagnosticTest.kt` using the three DTO equality assertions
 and the nullable-safe decoder below:
@@ -233,7 +233,7 @@ Run:
 Expected: integrity와 payload decode 3건 passing. 이 성공은 fixture가 현재 1.3.1 runtime에서
 생성·복원됨을 증명한다. 그 뒤 generator와 diagnostic test를 모두 `apply_patch`로 삭제한다.
 
-- [ ] **Step 5: baseline fixture를 커밋한다**
+- [x] **Step 5: baseline fixture를 커밋한다**
 
 ```bash
 git add appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/NearCacheFixtureIntegrityTest.kt \
@@ -249,7 +249,7 @@ Commit intent: `변경 전 캐시 wire payload를 회귀 기준으로 고정한�
 목표 version contract를 catalog 변경 전에 실패시키고 변경 뒤 통과시킨다. **Task DoD:** exact
 좌표가 목표 버전 하나로 해석되고 구 Timefold/Springdoc authority가 사라진다.
 
-- [ ] **Step 0: executable resolved-graph contract를 먼저 작성해 RED를 확인한다**
+- [x] **Step 0: executable resolved-graph contract를 먼저 작성해 RED를 확인한다**
 
 Create `scripts/verify-dependency-1.4.0.sh`. It must run the exact-coordinate commands from
 Step 4 and capture each coordinate in its own file under a temporary directory created by `mktemp -d`.
@@ -273,7 +273,7 @@ bash scripts/verify-dependency-1.4.0.sh
 Expected: non-zero RED caused by the known baseline versions. Record the failed assertion; do not
 weaken the expected versions.
 
-- [ ] **Step 1: version catalog를 최소 수정한다**
+- [x] **Step 1: version catalog를 최소 수정한다**
 
 Modify `gradle/libs.versions.toml`:
 
@@ -294,7 +294,7 @@ timefold-solver-benchmark = { module = "ai.timefold.solver:timefold-solver-bench
 
 Kotlin, Coroutines와 project-local version은 변경하지 않는다.
 
-- [ ] **Step 2: root의 별도 Timefold BOM import를 제거한다**
+- [x] **Step 2: root의 별도 Timefold BOM import를 제거한다**
 
 Modify `build.gradle.kts`의 `dependencyManagement.imports`:
 
@@ -307,7 +307,7 @@ imports {
 }
 ```
 
-- [ ] **Step 3: 변경 후 legacy fixture diagnostic을 먼저 실행한다**
+- [x] **Step 3: 변경 후 legacy fixture diagnostic을 먼저 실행한다**
 
 Task 1의 `LegacyNearCacheDecodeDiagnosticTest.kt`를 같은 내용으로 임시 재생성한다.
 
@@ -324,7 +324,7 @@ Expected decision: 성공/실패를 lesson에 기록한다. 어느 결과든 rev
 가정하지 않고 Task 3의 v2 remote namespace를 적용한다. fixture integrity test는 결과와
 무관하게 그대로 유지하고, diagnostic test는 결과를 기록한 뒤 `apply_patch`로 다시 삭제한다.
 
-- [ ] **Step 4: resolved graph를 확인한다**
+- [x] **Step 4: resolved graph를 확인한다**
 
 Run sequentially:
 
@@ -354,7 +354,7 @@ Expected: Timefold 2.4.0, Exposed 1.4.0, Springdoc 3.1.0, Fory 1.5.0,
 Leader 0.5.0과 Kafka clients 4.2.1. Timefold 2.2.0, Springdoc 3.0.3와 JetBrains Exposed
 1.3.0은 없어야 한다. `gradle/libs.versions.toml`의 Exposed plugin도 1.4.0이어야 한다.
 
-- [ ] **Step 5: build 권한 변경을 커밋한다**
+- [x] **Step 5: build 권한 변경을 커밋한다**
 
 ```bash
 git add gradle/libs.versions.toml build.gradle.kts scripts/verify-dependency-1.4.0.sh
@@ -370,7 +370,7 @@ v2 remote-name/raw-key contract를 먼저 실패시키고 `CacheConfig`만 최�
 **Task DoD:** logical cache name은 유지되고 v2 raw keys만 생성되며 독립 cache/client round-trip과
 rollback runbook이 검증된다.
 
-- [ ] **Step 1: v2 remote-name contract를 먼저 추가해 RED를 확인한다**
+- [x] **Step 1: v2 remote-name contract를 먼저 추가해 RED를 확인한다**
 
 Create `NearCacheWireCompatibilityTest` with a singleton Redis container from
 `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/test/Containers.kt`.
@@ -433,7 +433,7 @@ try {
 }
 ```
 
-- [ ] **Step 2: CacheConfig를 v2 remote namespace로 분리해 GREEN으로 만든다**
+- [x] **Step 2: CacheConfig를 v2 remote namespace로 분리해 GREEN으로 만든다**
 
 Modify `CacheConfig.kt`:
 
@@ -456,7 +456,7 @@ Use `*_REMOTE_CACHE_NAME` only for `LettuceCaches.nearCache { cacheName = ... }`
 하므로 새 payload를 구 decoder로 읽는 경로를 제거한다. legacy decode diagnostic의 성공 여부는
 namespace 유지 조건으로 사용하지 않는다.
 
-- [ ] **Step 3: targeted cache tests를 GREEN으로 만든다**
+- [x] **Step 3: targeted cache tests를 GREEN으로 만든다**
 
 Run:
 
@@ -470,7 +470,7 @@ Run:
 Expected: all passing. `CacheIntegrationTest`는 logical cache name을 계속 사용하고, raw Redis에는
 세 v2 key만 존재하며 같은 logical key의 v1 key는 없어야 한다.
 
-- [ ] **Step 4: 운영 runbook을 작성한다**
+- [x] **Step 4: 운영 runbook을 작성한다**
 
 Create `docs/runbooks/dependency-1.4.0-cache-migration.md` with this exact order:
 
@@ -485,7 +485,7 @@ Create `docs/runbooks/dependency-1.4.0-cache-migration.md` with this exact order
 4. rollout 성공 뒤 1시간 TTL과 관찰 window가 지난 후 v1 key를 삭제한다.
 5. `FLUSHALL`, tenant 동적 suffix, schema-down은 사용하지 않는다.
 
-- [ ] **Step 5: cache migration을 커밋한다**
+- [x] **Step 5: cache migration을 커밋한다**
 
 ```bash
 git add appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/CacheConfig.kt \
@@ -500,7 +500,7 @@ git commit
 gate를 그대로 유지하고 dependency upgrade 후 같은 dataset으로 GREEN을 재확인한다. **Task DoD:**
 전체 solver test, 두 번의 benchmark와 두 README selector가 통과한다.
 
-- [ ] **Step 1: solver 전체 테스트로 2.4.0 validation을 실행한다**
+- [x] **Step 1: solver 전체 테스트로 2.4.0 validation을 실행한다**
 
 Run:
 
@@ -512,7 +512,7 @@ Expected: 68 tests passing. 새 fail-fast 오류가 나오면 임의 수정하�
 `AppointmentPlanning.kt`, solver config와 해당 failing fixture를 근거로 계획 검토 단계로 돌아간다.
 validation disable 또는 범위 밖 model 변경은 재승인 전 수행하지 않는다.
 
-- [ ] **Step 2: 실제 benchmark class를 두 번 반복한다**
+- [x] **Step 2: 실제 benchmark class를 두 번 반복한다**
 
 Run twice:
 
@@ -526,7 +526,7 @@ Run twice:
 `5,027/8,075/15,922ms`보다 반복해서 25% 이상 나빠지면 원인을 분석하고 merge-ready로
 표시하지 않는다.
 
-- [ ] **Step 3: 두 README의 잘못된 benchmark class를 수정한다**
+- [x] **Step 3: 두 README의 잘못된 benchmark class를 수정한다**
 
 Modify `appointment-solver/README.md` and `appointment-solver/README.ko.md`:
 
@@ -534,10 +534,12 @@ Modify `appointment-solver/README.md` and `appointment-solver/README.ko.md`:
 ./gradlew :appointment-solver:test --tests "*solver.benchmark.BenchmarkTest"
 ```
 
-두 문서의 결과 path도 `BenchmarkConfig.BENCHMARK_DIR`과 일치하는 `local/benchmark/`로
-수정한다.
+두 문서는 `BenchmarkTest`가 실제로 생성하는 `appointment-solver/build/reports/tests/test/`와
+test XML `system-out`을 결과 경로로 안내한다. `BenchmarkConfig.BENCHMARK_DIR`의
+`local/benchmark/`은 해당 factory를 호출하는 별도 Planner Benchmark 실행에서만 사용된다고
+명시하며, JUnit test가 생성한다고 주장하지 않는다.
 
-- [ ] **Step 4: solver 검증을 커밋한다**
+- [x] **Step 4: solver 검증을 커밋한다**
 
 ```bash
 git add appointment-solver/README.md appointment-solver/README.ko.md
@@ -553,7 +555,7 @@ README가 이미 정확하면 문서 커밋은 생략하고 lesson에 검증 결
 frontend를 제외한 모든 module build/test, Exposed migrations, Kafka target, benchmark smoke/validator가
 통과한다.
 
-- [ ] **Step 1: 정적 build를 실행한다**
+- [x] **Step 1: 정적 build를 실행한다**
 
 ```bash
 non_frontend_build_tasks=(
@@ -581,7 +583,7 @@ fi
 Expected: dry-run의 `:frontend:` task가 0개이고, 명시적 7개 non-frontend module aggregate build와
 detekt가 모두 successful.
 
-- [ ] **Step 2: singleton container 충돌을 피하도록 module tests를 순차 실행한다**
+- [x] **Step 2: singleton container 충돌을 피하도록 module tests를 순차 실행한다**
 
 ```bash
 ./gradlew :appointment-core:test --no-daemon --console=plain
@@ -595,7 +597,7 @@ detekt가 모두 successful.
 ./gradlew :appointment-messaging-benchmark:test --no-daemon --console=plain
 ```
 
-- [ ] **Step 3: Exposed plugin migration task를 실제 실행한다**
+- [x] **Step 3: Exposed plugin migration task를 실제 실행한다**
 
 ```bash
 ./gradlew :appointment-core:generateMigrations --no-daemon --console=plain
@@ -606,7 +608,7 @@ git status --short
 Expected: both tasks registered and successful. Generated output이 tracked source를 예상 밖으로
 변경하면 commit하지 말고 plugin/runtime regression으로 분류해 Task 2 계획 검토로 돌아간다.
 
-- [ ] **Step 4: Kafka4 targeted integration을 확인한다**
+- [x] **Step 4: Kafka4 targeted integration을 확인한다**
 
 ```bash
 ./gradlew :appointment-messaging:test --no-daemon --console=plain \
@@ -616,7 +618,7 @@ Expected: both tasks registered and successful. Generated output이 tracked sour
 
 Expected: readiness, broker ack, duplicate redelivery와 rebalance recovery tests passing.
 
-- [ ] **Step 5: PostgreSQL messaging benchmark smoke와 validator를 실행한다**
+- [x] **Step 5: PostgreSQL messaging benchmark smoke와 validator를 실행한다**
 
 ```bash
 ./gradlew :appointment-messaging-benchmark:mainSmokeBenchmark --no-daemon --console=plain
@@ -631,7 +633,7 @@ node scripts/validate-appointment-messaging-benchmark.mjs \
 
 Expected: smoke task and JSON validator successful. benchmark API 역의존은 수정하지 않는다.
 
-- [ ] **Step 6: security evidence를 확인한다**
+- [x] **Step 6: security evidence를 확인한다**
 
 ```bash
 gh api repos/bluetape4k/clinic-appointment/dependabot/alerts \
@@ -649,7 +651,7 @@ Open alert가 있으면 #253 diff와 관련된 좌표인지 분리한다. 권한
 독립 관점의 P0/P1을 RED backlog로 수집하고 수정 후 같은 관점 재검토로 GREEN을 증명한다.
 **Task DoD:** lesson과 통합 review artifact가 exact diff를 반영하고 모든 관점 P0=0/P1=0이다.
 
-- [ ] **Step 1: lesson을 작성한다**
+- [x] **Step 1: lesson을 작성한다**
 
 Create `docs/lessons/2026-08-09-issue-253-dependencies-1.4.0.md` with:
 
@@ -660,7 +662,7 @@ Create `docs/lessons/2026-08-09-issue-253-dependencies-1.4.0.md` with:
 - module/static/Kafka/benchmark command와 결과
 - production에서 실행하지 않은 항목
 
-- [ ] **Step 2: 계획과 실제 diff를 대조한다**
+- [x] **Step 2: 계획과 실제 diff를 대조한다**
 
 ```bash
 git status --short
@@ -672,7 +674,7 @@ rg -n 'timefold-solver\s*=\s*"2\.2\.0"|timefold-solver-bom|springdoc-openapi\s*=
 
 Expected: forbidden version/alias matches absent and diff check clean.
 
-- [ ] **Step 3: 여섯 독립 관점과 main integration review를 실행한다**
+- [x] **Step 3: 여섯 독립 관점과 main integration review를 실행한다**
 
 Fresh read-only reviewers report JSON evidence under `.bluetape/tmp/issue-253-review/`:
 
@@ -717,7 +719,7 @@ Commit intent: `의존성 전환의 resolved graph와 복구 증거를 남긴다
 checks, review decision와 unresolved thread count를 각각 검증한다. **Task DoD:** exact local/remote/PR
 head가 같고 required CI GREEN, unresolved thread 0이며 merge는 수행하지 않는다.
 
-- [ ] **Step 1: fresh local verification을 요약한다**
+- [x] **Step 1: fresh local verification을 요약한다**
 
 ```bash
 git status --short --branch

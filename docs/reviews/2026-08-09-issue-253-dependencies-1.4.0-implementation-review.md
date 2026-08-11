@@ -2,27 +2,31 @@
 
 ## 검토 대상과 판정
 
-대상은 `codex/issue-253-dependencies-1.4.0`의 `origin/develop...HEAD` diff이며,
+대상은 `codex/issue-253-dependencies-1.4.0`의 `origin/develop...HEAD` 최종 diff이며,
 `bluetape-kotlin-patterns`의 null safety·불변 fixture·singleton container·resource close·
-예외 경계 규칙을 함께 적용했다. 로컬 HEAD는 #256 durable replay와 #257 security context
-격리 수정도 포함한다.
+예외 경계 규칙을 함께 적용했다. 범위를 벗어난 #256 durable replay와 #257 security context
+격리 수정은 병합 전 추적성을 위해 최종 diff에서 제거했다.
 
 | 최종 게이트 | 판정 |
 | --- | --- |
 | 의존성 diff 자체 P0 | 0 |
 | 의존성 diff 자체 P1 | 0 |
-| 전체 API aggregate | `PASS`: 704건 통과, 3건 skip |
+| 전체 API aggregate | `PASS`: 범위 정리 후 702건 통과, 3건 skip; failures/errors 0/0 |
 | production/CI/PR | 미실행 |
 
 초기 aggregate의 lease 재선점 실패는 dependency coordinate나 production 경로가 아니라
 고정 sleep에 의존한 테스트 fixture 문제로 확인했다. 첫 claim 뒤 `leaseExpiresAt`을 DB에서
-과거로 바꾸도록 수정한 뒤 대상 테스트와 전체 aggregate가 통과했다.
+과거로 바꾸도록 수정한 뒤 대상 테스트와 aggregate가 통과했다. 이후 #256·#257 동작 변경을
+최종 diff에서 제거하고 API aggregate를 다시 실행해 702건 통과·3건 skip, failures/errors 0/0을
+확인했으며, API 보안·정책 targeted 9건도 다시 통과했다.
 
 ## 1-tier 성능
 
 - **확인:** `appointment-solver` 68 tests와 `BenchmarkTest` 3건을 같은 dataset/seed로 2회 실행했다.
-- **증거:** 소 5.0 s, 중 8.2 s, 대 15.7 s가 두 실행에서 동일했고 baseline 대비 반복 25%
-  악화가 없다. score는 각각 `0hard/0soft`, `0hard/-500soft`, `0hard/-2000soft`다.
+- **증거:** 현재 HEAD에서 2026-08-10T06:47:49Z와 06:49:02Z에 순차 실행했다. 소
+  `5,033/5,072ms`, 중 `7,929/8,198ms`, 대 `15,715/15,836ms`이며 두 실행 모두
+  `SUCCESS: Executed 3 tests`, failures/errors `0/0`이다. score는 각각
+  `0hard/0soft`, `0hard/-500soft`, `0hard/-2000soft`다.
 - **확인:** messaging PostgreSQL smoke가 JMH report와 collector/validator를 통과했다.
 - **리스크:** messaging smoke는 production SLO 증거가 아니며 report의 `deploymentSloEvidence`는
   `false`다.
@@ -39,7 +43,8 @@
   운영 계약에서 제거했다.
 - `ProfileReevaluationConcurrencyIntegrationTest`의 lease 만료 fixture는 고정 sleep 대신
   `ProfileReevaluationJobs.update`로 `Instant.EPOCH`을 기록해 DB 시간과 suite load에 대한
-  타이밍 의존을 제거했다. 수정 후 해당 클래스 5건과 API aggregate 704건이 통과했다.
+  타이밍 의존을 제거했다. 수정 후 해당 클래스 5건과 범위 정리 후 API aggregate 702건이
+  통과했다.
 
 ## 3-tier 보안
 
@@ -50,8 +55,12 @@
   허용한다.
 - Dependabot 열린 경고 4건은 npm frontend manifest뿐이다. 이것을 JVM 전체 무취약성으로
   확대 해석하지 않았다.
-- JWT request-end context cleanup은 #257에서 통합됐고, 보안 integration 5건 및 H2/PG/MySQL
-  security package 각 62건 증거가 있다.
+- 독립 security review가 Fory `requireClassRegistration(false)`와 Redis 기본 URL의 신뢰 경계를
+  production 위험으로 지적했다. 이 설정은 `origin/develop`에도 동일하고 #253 diff는 codec,
+  serializer, Redis URL을 변경하지 않으므로 이 PR에서 해결됐다고 주장하지 않는다. production
+  Redis ACL/TLS, trusted payload allow-list와 JVM SCA는 별도 보안 hardening gate로 남긴다.
+- JWT request-end context cleanup은 #257의 독립 작업으로 분리했으며, 이 dependency PR은
+  해당 production 동작을 변경하지 않는다. 범위 정리 후 JWT filter·정책 targeted 9건이 통과했다.
 
 ## 4-tier 운영·복구
 
@@ -62,8 +71,9 @@
   stale v1 payload 재노출을 막기 위한 것이다.
 - `redisClient`, cache, raw connection과 명시적 cleanup action은 Kotlin `finally` 경계에서
   역순으로 닫고 cleanup 실패를 원래 예외에 suppressed로 붙인다.
-- production Redis/rollback drill은 실행하지 않았으므로 운영 readiness는 local contract
-  수준이다.
+- rollback runbook은 traffic drain, 구 binary pod 재기동으로 process-local L1을 비운 뒤 v1
+  exact-key 삭제, 재시작 후 warm-up/rescan 순서를 요구한다. production drill은 실행하지
+  않았으므로 운영 readiness는 local contract 수준이다.
 
 ## 5-tier 개발자/API와 의존성 권한
 
@@ -72,7 +82,8 @@
   별도 Timefold BOM과 Springdoc/Timefold 직접 version은 제거했다.
 - `scripts/verify-dependency-1.4.0.sh`는 각 `group:artifact`의 exact selected header와 금지
   이전 버전을 별도 출력 파일에서 검사한다.
-- README selector는 실제 `BenchmarkTest`와 `local/benchmark/` 경로를 가리킨다.
+- README selector는 실제 `BenchmarkTest`와 JUnit report/XML 경로를 가리키며,
+  `local/benchmark/`은 별도 Planner Benchmark 실행 경로로 구분한다.
 
 ## 6-tier 사용자·호출자 계약
 
@@ -80,8 +91,8 @@
   Spring Cache key 계약을 보존한다.
 - remote v2 분리는 rolling deployment에서 새 Fory payload를 구 binary가 읽는 경로를
   차단한다. Fory 임의 버전의 reverse decode 성공은 보장된다고 주장하지 않는다.
-- solver README의 실행 명령은 존재하지 않는 class selector를 제거하고 실제 benchmark class를
-  사용한다.
+- solver README의 실행 명령은 실제 `BenchmarkTest` selector와 JUnit report/XML 산출물 경로를
+  안내하며, `local/benchmark/`이 이 테스트 명령에서 생성된다고 오인시키지 않는다.
 - Exposed identifier 대소문자 차이는 1.4.0 schema metadata의 case-normalized assertion으로
   좁게 보정했으며 schema/table 이름을 변경하지 않았다.
 
@@ -94,8 +105,16 @@
   report test 3건 및 Node collector test 2건 통과.
 - `git diff --check origin/develop...HEAD`: PASS; 금지된 2.2.0/3.0.3 alias 검색 결과 없음.
 - root `detekt`: `NO-SOURCE`, `BUILD SUCCESSFUL`.
-- 수정 후 `:appointment-api:test --rerun-tasks`: `SUCCESS: Executed 704 tests in 5m 34s
-  (3 skipped)`, `BUILD SUCCESSFUL in 6m 14s`.
+- `.github/workflows/ci.yml`와 `.github/workflows/nightly.yml`의 build job이
+  `scripts/verify-dependency-1.4.0.sh`를 호출하도록 연결했고 `actionlint`가 통과했다.
+- 범위 정리 후 `:appointment-api:test --rerun-tasks`: `SUCCESS: Executed 702 tests in 4m 51s
+  (3 skipped)`, `BUILD SUCCESSFUL in 5m 38s`; XML aggregate failures/errors `0/0`.
+- 독립 code review: 최신 `origin/develop...HEAD` 기준 dependency diff 자체 P0/P1/P2 `0/0/0`,
+  판정 `PASS`. Baseline-only Fory trust boundary와 production SLO는 해결 주장 없이
+  unchecked로 유지한다.
+- Issue #254(Leader/Micrometer)와 #255(bounded-wait conformance)는 live GitHub에서 OPEN이고,
+  #253 diff에는 해당 observability/API conformance 변경이 없다. #256 durable replay와 #257
+  security 응답 격리도 각각 OPEN인 독립 이슈이며 이 PR의 최종 diff에서 제외했다.
 - PR head/CI/review thread는 push 권한과 별도 승인 전이므로 확인하지 않았다.
 
 ## 결론과 unchecked 항목
@@ -105,6 +124,8 @@
 아직 실행되지 않았으므로 이 구현은 `PENDING`이다.
 
 - [x] `ProfileReevaluationConcurrencyIntegrationTest` lease 만료 fixture의 wall-clock 의존 제거
+- [x] README benchmark selector/result-path 계약과 solver 2회 raw XML 측정 증거 보강
+- [x] dependency verifier를 CI/nightly build gate에 연결하고 `actionlint` 통과
 - [ ] PR 생성 후 exact head, required CI, unresolved review thread 확인
-- [ ] production Redis/PostgreSQL SLO와 rollback drill
+- [ ] production Redis ACL/TLS·Fory trusted payload hardening, PostgreSQL SLO와 rollback drill
 - [ ] 별도 승인 후 push/PR/merge

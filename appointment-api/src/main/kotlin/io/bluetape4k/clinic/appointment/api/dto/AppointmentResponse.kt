@@ -53,7 +53,7 @@ fun AppointmentRecord.toResponse(
     timezone: String? = null,
     locale: String? = null,
 ): AppointmentResponse = AppointmentResponse(
-    id = id!!,
+    id = checkNotNull(id) { "AppointmentRecord.id must not be null" },
     clinicId = clinicId,
     doctorId = doctorId,
     treatmentTypeId = treatmentTypeId,

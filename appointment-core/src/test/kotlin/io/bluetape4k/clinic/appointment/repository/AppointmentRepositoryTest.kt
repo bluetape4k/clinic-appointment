@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
@@ -214,6 +215,56 @@ class AppointmentRepositoryTest {
                 clinicId = CLINIC_ID + 1,
             )
         }.shouldBeNull()
+    }
+
+    @Test
+    fun `verified scope는 서로 다른 tenant의 유효한 clinic 조합을 거부한다`() {
+        transaction(database) {
+            TenantGroups.insert {
+                it[id] = EntityID(2L, TenantGroups)
+                it[tenantCode] = "other"
+                it[displayName] = "Other Tenant"
+                it[active] = true
+            }
+            Clinics.insert {
+                it[id] = EntityID(2L, Clinics)
+                it[tenantGroupId] = EntityID(2L, TenantGroups)
+                it[name] = "Other Clinic"
+                it[slotDurationMinutes] = 30
+                it[maxConcurrentPatients] = 1
+            }
+        }
+
+        transaction(database) {
+            repository.findVerifiedScope(
+                tenantGroupId = TenantGroups.DEFAULT_TENANT_GROUP_ID,
+                clinicId = 2L,
+            )
+        }.shouldBeNull()
+
+        transaction(database) {
+            repository.findVerifiedScope(tenantGroupId = 2L, clinicId = 2L)
+        }.shouldNotBeNull().cacheKey() shouldBeEqualTo "2:2"
+    }
+
+    @Test
+    fun `repository는 소속을 확인한 verified scope만 legacy 예약 조회에 사용한다`() {
+        val saved = transaction(database) {
+            repository.save(appointment(memberId = MemberId("verified-member")))
+        }
+        val appointmentId = saved.id.requireNotNull("saved.id")
+
+        val verifiedScope = transaction(database) {
+            repository.findVerifiedScopeByIdAndTenant(
+                appointmentId = appointmentId,
+                tenantGroupId = TenantGroups.DEFAULT_TENANT_GROUP_ID,
+            )
+        }.shouldNotBeNull()
+
+        verifiedScope.cacheKey() shouldBeEqualTo "${TenantGroups.DEFAULT_TENANT_GROUP_ID}:$CLINIC_ID"
+        transaction(database) {
+            repository.findByIdAndVerifiedScope(appointmentId, verifiedScope)
+        }?.id shouldBeEqualTo appointmentId
     }
 
     private fun appointment(memberId: MemberId?) =

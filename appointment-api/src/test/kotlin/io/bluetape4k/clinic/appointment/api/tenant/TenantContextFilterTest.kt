@@ -62,7 +62,7 @@ class TenantContextFilterTest {
         )
 
         transaction {
-            SchemaUtils.create(TenantGroups)
+            SchemaUtils.createMissingTablesAndColumns(TenantGroups)
             TenantGroups.insert {
                 it[id] = EntityID(1L, TenantGroups)
                 it[tenantCode] = "tenant-a"

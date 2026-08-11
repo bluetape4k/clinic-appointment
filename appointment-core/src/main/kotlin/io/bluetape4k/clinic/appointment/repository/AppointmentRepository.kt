@@ -6,8 +6,10 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentVisitIdentityDraft
 import io.bluetape4k.clinic.appointment.model.dto.ConfirmedAppointmentProjection
 import io.bluetape4k.clinic.appointment.model.dto.ProfileReevaluationScope
-import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.model.dto.UnavailablePeriod
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScopeResolver
+import io.bluetape4k.clinic.appointment.model.service.VerifiedTenantClinicScope
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -40,6 +42,7 @@ import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
+import java.io.Serializable
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -57,7 +60,11 @@ data class ProfileReevaluationAppointmentCandidate(
     val commitmentStatus: AppointmentCommitmentStatus,
     val commitmentVersion: Long,
     val effectivePolicySnapshotId: Long,
-)
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /**
  * 예약 정보 저장소.
@@ -114,6 +121,26 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
             }
             .firstOrNull()
             ?.let { TenantClinicScope(validTenantGroupId, it[Appointments.clinicId].value) }
+    }
+
+    /** 예약 row의 소속을 database에서 확인한 뒤에만 verified scope를 반환합니다. */
+    fun findVerifiedScopeByIdAndTenant(
+        appointmentId: Long,
+        tenantGroupId: Long,
+    ): VerifiedTenantClinicScope? {
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
+        val validTenantGroupId = tenantGroupId.requirePositiveNumber("tenantGroupId")
+        return Appointments
+            .select(Appointments.clinicId)
+            .where {
+                (Appointments.id eq validAppointmentId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(validTenantGroupId))
+            }
+            .firstOrNull()
+            ?.let { row ->
+                TenantClinicScopeResolver(::isClinicInTenant)
+                    .resolve(validTenantGroupId, row[Appointments.clinicId].value)
+            }
     }
 
     /** 검증된 테넌트-병원 범위의 legacy 예약을 조회합니다. */
@@ -190,6 +217,19 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
                     (Clinics.tenantGroupId eq validTenantGroupId)
             }.count() == 1L
     }
+
+    /** raw tenant/clinic ID를 소속 검사 뒤 verified scope로 변환합니다. */
+    fun findVerifiedScope(
+        tenantGroupId: Long,
+        clinicId: Long,
+    ): VerifiedTenantClinicScope? =
+        TenantClinicScopeResolver(::isClinicInTenant).resolve(tenantGroupId, clinicId)
+
+    /** verified scope만 받는 예약 조회 경계입니다. */
+    fun findByIdAndVerifiedScope(
+        appointmentId: Long,
+        scope: VerifiedTenantClinicScope,
+    ): AppointmentRecord? = findByIdAndScope(appointmentId, scope.toScope())
 
     /**
      * legacy projection이 참조할 담당자와 대표 진료 유형이 같은 병원에 속하는지 검증합니다.
@@ -811,6 +851,78 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         Appointments.update(where = { Appointments.id eq appointmentId }) {
             it[status] = newStatus
         }
+
+    /**
+     * Solver 결과의 source rows를 caller transaction에서 잠그고 version을 검증합니다.
+     *
+     * 조회와 후속 assignment CAS 사이에 다른 writer가 끼어들지 않도록 모든 source row를
+     * 같은 transaction에서 `FOR UPDATE`로 잠급니다. legacy projection이 아니거나 scope 밖
+     * row가 하나라도 빠지면 `false`를 반환합니다.
+     */
+    fun lockLegacySourceVersions(
+        scope: TenantClinicScope,
+        sourceVersions: Map<Long, Long>,
+    ): Boolean {
+        if (sourceVersions.isEmpty()) return true
+
+        val appointmentIds = sourceVersions.keys.map { it.requirePositiveNumber("appointmentId") }
+        sourceVersions.values.forEach { require(it >= 0L) { "source version must not be negative" } }
+
+        val rows = Appointments
+            .selectAll()
+            .where {
+                (Appointments.id inList appointmentIds) and
+                    (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId)) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.LEGACY)
+            }
+            .orderBy(Appointments.id to SortOrder.ASC)
+            .forUpdate()
+
+        val currentVersions = rows.associate { row -> row[Appointments.id].value to row[Appointments.version] }
+        return currentVersions.size == sourceVersions.size &&
+            sourceVersions.all { (appointmentId, expectedVersion) ->
+                currentVersions[appointmentId] == expectedVersion
+            }
+    }
+
+    /**
+     * Solver assignment를 source version CAS로 반영합니다.
+     *
+     * 이 메서드는 transaction을 열지 않습니다. caller가 [lockLegacySourceVersions]와
+     * 함께 같은 transaction에서 호출해야 version 확인과 모든 assignment가 원자적으로
+     * 커밋됩니다. 하나라도 예상 version과 다르면 `false`를 반환하므로 caller는 전체
+     * transaction을 rollback해야 합니다.
+     */
+    fun updateLegacyAssignment(
+        scope: TenantClinicScope,
+        appointmentId: Long,
+        expectedVersion: Long,
+        doctorId: Long,
+        appointmentDate: LocalDate,
+        startTime: LocalTime,
+        endTime: LocalTime,
+    ): Boolean {
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
+        require(expectedVersion >= 0L) { "expectedVersion must not be negative" }
+        val validDoctorId = doctorId.requirePositiveNumber("doctorId")
+        return Appointments.update(
+            where = {
+                (Appointments.id eq validAppointmentId) and
+                    (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId)) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.LEGACY) and
+                    (Appointments.version eq expectedVersion)
+            },
+        ) {
+            it[Appointments.doctorId] = validDoctorId
+            it[Appointments.appointmentDate] = appointmentDate
+            it[Appointments.startTime] = startTime
+            it[Appointments.endTime] = endTime
+            it[Appointments.version] = expectedVersion + 1L
+            it.update(Appointments.updatedAt, CurrentTimestamp)
+        } == 1
+    }
 
     /**
      * legacy 예약 상태를 예상 version과 일치할 때만 변경하고 version을 한 번 증가시킵니다.

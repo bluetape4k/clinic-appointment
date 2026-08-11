@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.model.policy
 
+import java.io.Serializable
+
 /** schema-one에서 threshold가 없을 때 재현 가능한 compatibility 값입니다. */
 internal object BookingReliabilityPolicyDefaults {
     const val LOOKBACK_DAYS: Int = 180
@@ -32,7 +34,7 @@ data class CapacityAndOverbookingPolicy(
     val overbookingQuota: Int,
     val absoluteBookingLimit: Int,
     val automaticReductionEnabled: Boolean,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.CAPACITY_AND_OVERBOOKING
 
     companion object {
@@ -56,7 +58,7 @@ data class CapacityAndOverbookingOverride(
     val nominalCapacity: OverrideValue<Int>,
     val overbookingQuota: OverrideValue<Int>,
     val automaticReductionEnabled: OverrideValue<Boolean>,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.CAPACITY_AND_OVERBOOKING
 
     companion object {
@@ -104,7 +106,7 @@ data class PriorityAndReliabilityPolicy(
         BookingReliabilityPolicyDefaults.LATE_CANCELLATION_THRESHOLD,
     val coolingOffHours: Int = BookingReliabilityPolicyDefaults.COOLING_OFF_HOURS,
     val thresholdsPresent: Boolean = true,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.PRIORITY_AND_RELIABILITY
 
     companion object {
@@ -143,7 +145,7 @@ data class PriorityAndReliabilityOverride(
     val noShowThreshold: OverrideValue<Int> = OverrideValue.Inherit,
     val lateCancellationThreshold: OverrideValue<Int> = OverrideValue.Inherit,
     val coolingOffHours: OverrideValue<Int> = OverrideValue.Inherit,
-) : SchedulingPolicyPayload {
+) : SchedulingPolicyPayload, Serializable {
     override val kind: SchedulingPolicyKind = SchedulingPolicyKind.PRIORITY_AND_RELIABILITY
 
     companion object {

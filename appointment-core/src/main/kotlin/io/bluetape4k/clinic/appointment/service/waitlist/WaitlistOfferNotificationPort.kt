@@ -111,6 +111,10 @@ sealed interface WaitlistDeliveryResult : Serializable {
             holdId?.requirePositiveNumber("holdId")
             vacancyJobId?.requirePositiveNumber("vacancyJobId")
         }
+
+        private companion object {
+            const val serialVersionUID: Long = 1L
+        }
     }
 
     data class NoCandidate(
@@ -119,6 +123,10 @@ sealed interface WaitlistDeliveryResult : Serializable {
         init {
             vacancyJobId.requirePositiveNumber("vacancyJobId")
         }
+
+        private companion object {
+            const val serialVersionUID: Long = 1L
+        }
     }
 
     data class Expired(
@@ -126,6 +134,10 @@ sealed interface WaitlistDeliveryResult : Serializable {
     ) : WaitlistDeliveryResult {
         init {
             vacancyJobId.requirePositiveNumber("vacancyJobId")
+        }
+
+        private companion object {
+            const val serialVersionUID: Long = 1L
         }
     }
 }
@@ -141,5 +153,9 @@ data class WaitlistGenerationProgression(
         require(previousGeneration > 0L) { "previousGeneration must be positive" }
         nextGeneration?.let { require(it > previousGeneration) { "nextGeneration must be later" } }
         vacancyJobId?.requirePositiveNumber("vacancyJobId")
+    }
+
+    private companion object {
+        const val serialVersionUID: Long = 1L
     }
 }

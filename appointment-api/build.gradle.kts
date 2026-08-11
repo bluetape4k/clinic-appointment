@@ -29,6 +29,7 @@ dependencies {
 
     // Cache: Lettuce NearCache (Caffeine local + Redis remote)
     implementation(libs.bluetape4k.cache.lettuce)
+    implementation(libs.bluetape4k.io)
     implementation(libs.bluetape4k.lettuce)
     implementation(libs.lettuce.core)
     // NearCache 기본 코덱(LZ4 + Fory)이 optional 의존성이므로 명시적 추가 필요.
@@ -84,6 +85,18 @@ dependencies {
     gatling(libs.gatling.charts.highcharts)
     gatling(libs.gatling.http.java)
     gatlingRuntimeOnly(libs.h2.v2)
+}
+
+// bluetape4k-junit5 1.12.1의 bounded-wait fixture는 Coroutines 1.11 ABI를 사용한다.
+// Spring Boot BOM이 test runtime에 1.10.2를 강제하면 cancel$default 링크가 깨지므로,
+// 이 모듈의 모든 구성에서 프로젝트가 선언한 Coroutines BOM 버전을 유지한다.
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.kotlinx" && requested.name.startsWith("kotlinx-coroutines-")) {
+            useVersion(libs.versions.kotlinx.coroutines.get())
+            because("bluetape4k-junit5 bounded-wait fixture와 Coroutines ABI를 일치시킨다")
+        }
+    }
 }
 
 // spring.profiles.active 시스템 프로퍼티를 테스트 JVM에 전달 (multi-DB 테스트 지원)

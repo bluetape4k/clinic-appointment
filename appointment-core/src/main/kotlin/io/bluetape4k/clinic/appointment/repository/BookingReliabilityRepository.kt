@@ -25,6 +25,7 @@ import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import java.io.Serializable
 import java.time.Duration
 import java.time.Instant
 
@@ -475,7 +476,11 @@ data class BookingReliabilityOperationalSummary(
     val oldestBacklogAge: Duration,
     val unavailableDecisions: Long,
     val deadLetterJobs: Long,
-)
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 /** 동일 idempotency identity에 서로 다른 bounded payload가 제출되었습니다. */
 class BookingReliabilityIdempotencyConflictException(message: String) : RuntimeException(message)

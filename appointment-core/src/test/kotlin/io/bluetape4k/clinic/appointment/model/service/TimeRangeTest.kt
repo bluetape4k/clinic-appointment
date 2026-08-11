@@ -1,10 +1,10 @@
 package io.bluetape4k.clinic.appointment.model.service
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.time.LocalTime
 
@@ -15,14 +15,14 @@ class TimeRangeTest {
 
     @Test
     fun `start가 end보다 이후이면 예외 발생`() {
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             TimeRange(LocalTime.of(17, 0), LocalTime.of(9, 0))
         }
     }
 
     @Test
     fun `start와 end가 같으면 예외 발생`() {
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             TimeRange(LocalTime.of(9, 0), LocalTime.of(9, 0))
         }
     }

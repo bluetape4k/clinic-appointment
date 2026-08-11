@@ -54,7 +54,7 @@ class PurchaseCompletedHandlerTest {
             driver = "org.h2.Driver",
         )
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 TenantGroups,
                 Clinics,
                 ProductCatalogProjections,
@@ -69,6 +69,19 @@ class PurchaseCompletedHandlerTest {
                 SchedulingQuarantineEvents,
                 SchedulingQuarantineAuditEvents,
             )
+            SchedulingQuarantineAuditEvents.deleteAll()
+            SchedulingQuarantineEvents.deleteAll()
+            UntrustedSchedulingEventRejections.deleteAll()
+            SchedulingOutboxEvents.deleteAll()
+            SchedulingInboxEvents.deleteAll()
+            TreatmentDependencies.deleteAll()
+            PlannedTreatments.deleteAll()
+            AppointmentPlans.deleteAll()
+            ProductCatalogBomDependencies.deleteAll()
+            ProductCatalogBomItems.deleteAll()
+            ProductCatalogProjections.deleteAll()
+            Clinics.deleteAll()
+            TenantGroups.deleteAll()
             TenantGroups.insert {
                 it[id] = EntityID(1L, TenantGroups)
                 it[tenantCode] = "tenant-one"

@@ -10,6 +10,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.OutputStream
 import java.io.OutputStreamWriter
+import java.io.Serializable
 import java.nio.charset.StandardCharsets
 import java.security.DigestOutputStream
 import java.security.MessageDigest
@@ -40,13 +41,17 @@ data class ExternalFactRoutingMetadata(
     val sourceAggregateVersion: Long,
     val tenantGroupId: Long,
     val clinicId: Long,
-) {
+) : Serializable {
     init {
         require(sourceAuthority.isNotEmpty()) { "sourceAuthority must not be empty" }
         require(sourceAggregateId.isNotEmpty()) { "sourceAggregateId must not be empty" }
         require(sourceAggregateVersion > 0) { "sourceAggregateVersion must be positive" }
         require(tenantGroupId > 0) { "tenantGroupId must be positive" }
         require(clinicId > 0) { "clinicId must be positive" }
+    }
+
+    private companion object {
+        private const val serialVersionUID: Long = 1L
     }
 }
 

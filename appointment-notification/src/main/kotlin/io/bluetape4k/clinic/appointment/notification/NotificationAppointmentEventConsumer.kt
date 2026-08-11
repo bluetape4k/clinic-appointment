@@ -10,16 +10,19 @@ import io.bluetape4k.clinic.appointment.messaging.AppointmentRescheduledPayload
 import io.bluetape4k.clinic.appointment.messaging.AppointmentStatusChangedPayload
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import java.io.Serializable
+import java.time.Duration
 
 /** Kafka appointment event를 이미 존재하는 durable notification outbox 전달 경계로 변환합니다. */
 class NotificationAppointmentEventConsumer(
     private val delivery: NotificationDirectDeliveryPort,
+    private val suspendBridgeTimeout: Duration = Duration.ofSeconds(30),
 ) : AppointmentConsumerHandler {
 
     override fun handle(envelope: AppointmentEventEnvelope, context: AppointmentConsumerContext) {
         val route = routeFor(envelope) ?: return
         val scope = TenantClinicScope(envelope.tenantGroupId, envelope.clinicId)
-        runSynchronously {
+        runSynchronously(suspendBridgeTimeout) {
             delivery.deliver(scope, route.appointmentId, route.eventType)
         }
     }
@@ -42,5 +45,9 @@ class NotificationAppointmentEventConsumer(
     private data class NotificationRoute(
         val appointmentId: Long,
         val eventType: NotificationEventType,
-    )
+    ) : Serializable {
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
 }

@@ -8,7 +8,6 @@ allOpen {
 }
 
 dependencies {
-    implementation(project(":appointment-api"))
     implementation(project(":appointment-messaging"))
     implementation(libs.kotlinx.benchmark.runtime)
     implementation(libs.flyway.core)

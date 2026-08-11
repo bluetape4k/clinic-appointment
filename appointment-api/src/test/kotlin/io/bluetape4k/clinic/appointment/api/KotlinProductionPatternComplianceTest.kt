@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api
 
 import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
@@ -86,6 +87,39 @@ class KotlinProductionPatternComplianceTest {
             }
     }
 
+    @Test
+    fun `all API production sources avoid unsafe non null assertions`() {
+        val violations = productionSources()
+            .filter { (_, source) -> source.contains("!!") }
+            .map { (path, _) -> path.toString() }
+
+        violations.shouldBeEmpty()
+    }
+
+    @Test
+    fun `all API test sources use bluetape assertion helpers`() {
+        val violations = testSources()
+            .filterNot { (path, _) -> path.fileName.toString() == "KotlinProductionPatternComplianceTest.kt" }
+            .filter { (_, source) ->
+                source.contains("org.junit.jupiter.api.Assertions") ||
+                    source.contains("org.junit.jupiter.api.assertThrows") ||
+                    source.contains("kotlin.test.assertFailsWith")
+            }
+            .map { (path, _) -> path.toString() }
+
+        violations.shouldBeEmpty()
+    }
+
+    @Test
+    fun `all API test sources use migration safe schema creation`() {
+        val violations = testSources()
+            .filterNot { (path, _) -> path.fileName.toString() == "KotlinProductionPatternComplianceTest.kt" }
+            .filter { (_, source) -> source.contains("SchemaUtils.create(") }
+            .map { (path, _) -> path.toString() }
+
+        violations.shouldBeEmpty()
+    }
+
     private fun source(relativePath: String): String {
         val moduleRelative = Path.of("src/main/kotlin/io/bluetape4k/clinic/appointment/api", relativePath)
         val rootRelative = Path.of("appointment-api").resolve(moduleRelative)
@@ -99,5 +133,31 @@ class KotlinProductionPatternComplianceTest {
             .firstOrNull(Files::exists)
             ?: error("Test source not found: $relativePath")
         return Files.readString(path)
+    }
+
+    private fun productionSources(): List<Pair<Path, String>> {
+        val root = listOf(
+            Path.of("appointment-api/src/main/kotlin"),
+            Path.of("src/main/kotlin"),
+        ).firstOrNull(Files::exists) ?: error("API production source root not found")
+        val sources = mutableListOf<Pair<Path, String>>()
+        Files.walk(root).use { paths ->
+            paths.filter { Files.isRegularFile(it) && it.toString().endsWith(".kt") }
+                .forEach { path -> sources += path to Files.readString(path) }
+        }
+        return sources
+    }
+
+    private fun testSources(): List<Pair<Path, String>> {
+        val root = listOf(
+            Path.of("appointment-api/src/test/kotlin"),
+            Path.of("src/test/kotlin"),
+        ).firstOrNull(Files::exists) ?: error("API test source root not found")
+        val sources = mutableListOf<Pair<Path, String>>()
+        Files.walk(root).use { paths ->
+            paths.filter { Files.isRegularFile(it) && it.toString().endsWith(".kt") }
+                .forEach { path -> sources += path to Files.readString(path) }
+        }
+        return sources
     }
 }

@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.event.integration
 
+import java.io.Serializable
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import javax.crypto.Cipher
@@ -12,7 +13,11 @@ data class ProtectedPatientReference(
     val ciphertext: String,
     val keyId: String,
     val fingerprint: String,
-)
+) : Serializable {
+    private companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 fun interface PatientReferenceProtector {
     fun protect(tenantGroupId: Long, patientReferenceToken: String): ProtectedPatientReference

@@ -30,6 +30,7 @@ import io.bluetape4k.clinic.appointment.model.policy.SchedulingPolicyPayload
 import tools.jackson.databind.DeserializationFeature
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.KotlinModule
+import java.io.Serializable
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 
@@ -145,13 +146,17 @@ class SchedulingPolicyPayloadCodec(
         val approvalRoles: Set<ActorRole>,
         val adminConsentEvidence: ConsentEvidenceWire,
         val confirmedChangeMode: ConfirmedChangeMode,
-    )
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+    }
 
     private data class ConsentEvidenceWire(
         val allowedEvidenceTypes: Set<String>,
         val maximumAgeSeconds: Long,
         val termsHashRequired: Boolean,
-    )
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+    }
 
     private enum class OverrideMode {
         INHERIT,
@@ -162,7 +167,9 @@ class SchedulingPolicyPayloadCodec(
     private data class OverrideWire<T>(
         val mode: OverrideMode,
         val value: T? = null,
-    ) {
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+
         fun toDomain(fieldName: String): OverrideValue<T> = when (mode) {
             OverrideMode.INHERIT -> {
                 require(value == null) { "$fieldName INHERIT must not contain value" }
@@ -187,18 +194,24 @@ class SchedulingPolicyPayloadCodec(
         val approvalRoles: OverrideWire<Set<ActorRole>>,
         val adminConsentEvidence: OverrideWire<ConsentEvidenceWire>,
         val confirmedChangeMode: OverrideWire<ConfirmedChangeMode>,
-    )
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+    }
 
     private data class HoldAndConsentOverrideWire(
         val consentEvidenceRequired: OverrideWire<Boolean>,
         val maximumConsentAgeSeconds: OverrideWire<Long>,
-    )
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+    }
 
     private data class CapacityAndOverbookingOverrideWire(
         val nominalCapacity: OverrideWire<Int>,
         val overbookingQuota: OverrideWire<Int>,
         val automaticReductionEnabled: OverrideWire<Boolean>,
-    )
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+    }
 
     private data class PriorityAndReliabilityWire(
         val priorityWeights: Map<String, Int>,
@@ -210,7 +223,9 @@ class SchedulingPolicyPayloadCodec(
         val noShowThreshold: Int? = null,
         val lateCancellationThreshold: Int? = null,
         val coolingOffHours: Int? = null,
-    ) {
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+
         fun toPolicy(schemaVersion: Int): PriorityAndReliabilityPolicy {
             val thresholds = listOf(
                 lookbackDays,
@@ -253,7 +268,9 @@ class SchedulingPolicyPayloadCodec(
         val lateCancellationThreshold: OverrideWire<Int>? = null,
         val coolingOffHours: OverrideWire<Int>? = null,
 
-    ) {
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+
         fun toPolicy(schemaVersion: Int): PriorityAndReliabilityOverride {
             if (schemaVersion >= CURRENT_SCHEMA_VERSION) {
                 require(
@@ -289,17 +306,23 @@ class SchedulingPolicyPayloadCodec(
         val required: OverrideWire<Boolean>,
         val leadTimeSeconds: OverrideWire<Long>,
         val maximumAttempts: OverrideWire<Int>,
-    )
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+    }
 
     private data class DisruptionRecoveryOverrideWire(
         val automaticProposalEnabled: OverrideWire<Boolean>,
         val maximumProposalDelaySeconds: OverrideWire<Long>,
-    )
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+    }
 
     private data class OperatingExtensionOverrideWire(
         val extensionEnabled: OverrideWire<Boolean>,
         val maximumExtensionMinutes: OverrideWire<Int>,
-    )
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+    }
 
     private data class NotificationAndSlaOverrideWire(
         val notificationChannels: OverrideWire<Set<String>>,
@@ -308,7 +331,9 @@ class SchedulingPolicyPayloadCodec(
             OverrideWire(OverrideMode.INHERIT),
         val profileReevaluationProposedTargetSeconds: OverrideWire<Long> =
             OverrideWire(OverrideMode.INHERIT),
-    )
+    ) : Serializable {
+        private companion object { const val serialVersionUID: Long = 1L }
+    }
 
     private fun BookingCommitmentWire.toPolicy() = BookingCommitmentPolicy(
         adminBookingMode = adminBookingMode,

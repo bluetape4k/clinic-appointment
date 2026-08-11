@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.config
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.cache.nearcache.NearCacheOperations
 import io.mockk.every
 import io.mockk.justRun
@@ -12,7 +13,6 @@ import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import org.springframework.cache.Cache
 
 /**
@@ -217,7 +217,7 @@ class NearCacheAdapterTest {
         val key = "error-key"
         every { delegate.get(key) } returns null
 
-        assertThrows<Cache.ValueRetrievalException> {
+        assertFailsWith<Cache.ValueRetrievalException> {
             adapter.get(key) { throw RuntimeException("로드 실패") }
         }
     }

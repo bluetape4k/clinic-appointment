@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: gradle/actions/wrapper-validation@v6.2.0
+      - uses: gradle/actions/wrapper-validation@v6.3.0
 
   # ── 2. 변경 모듈 감지 ──────────────────────────────────────────────────────
   changes:
@@ -140,15 +140,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5.6.0
+      - uses: actions/setup-java@v5.7.0
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
-      - uses: gradle/actions/setup-gradle@v6.2.0
+      - uses: gradle/actions/setup-gradle@v6.3.0
         with:
           gradle-version: wrapper
           cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Verify bluetape4k-dependencies 1.4.0 contract
+        run: bash scripts/verify-dependency-1.4.0.sh
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
       - name: Build (compile only, frontend 제외)
         run: ./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies
@@ -175,12 +180,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5.6.0
+      - uses: actions/setup-java@v5.7.0
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
-      - uses: gradle/actions/setup-gradle@v6.2.0
+      - uses: gradle/actions/setup-gradle@v6.3.0
         with:
           gradle-version: wrapper
           cache-read-only: true
@@ -231,12 +236,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5.6.0
+      - uses: actions/setup-java@v5.7.0
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
-      - uses: gradle/actions/setup-gradle@v6.2.0
+      - uses: gradle/actions/setup-gradle@v6.3.0
         with:
           gradle-version: wrapper
           cache-read-only: true
@@ -292,12 +297,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5.6.0
+      - uses: actions/setup-java@v5.7.0
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
-      - uses: gradle/actions/setup-gradle@v6.2.0
+      - uses: gradle/actions/setup-gradle@v6.3.0
         with:
           gradle-version: wrapper
           cache-read-only: true
@@ -346,12 +351,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5.6.0
+      - uses: actions/setup-java@v5.7.0
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
-      - uses: gradle/actions/setup-gradle@v6.2.0
+      - uses: gradle/actions/setup-gradle@v6.3.0
         with:
           gradle-version: wrapper
           cache-read-only: true
@@ -401,12 +406,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5.6.0
+      - uses: actions/setup-java@v5.7.0
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
-      - uses: gradle/actions/setup-gradle@v6.2.0
+      - uses: gradle/actions/setup-gradle@v6.3.0
         with:
           gradle-version: wrapper
           cache-read-only: true
@@ -459,7 +464,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5.6.0
+      - uses: actions/setup-java@v5.7.0
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
@@ -468,7 +473,7 @@ jobs:
         with:
           node-version: '22.22.3'
 
-      - uses: gradle/actions/setup-gradle@v6.2.0
+      - uses: gradle/actions/setup-gradle@v6.3.0
         with:
           gradle-version: wrapper
           cache-read-only: true
@@ -626,12 +631,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5.6.0
+      - uses: actions/setup-java@v5.7.0
         with:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
-      - uses: gradle/actions/setup-gradle@v6.2.0
+      - uses: gradle/actions/setup-gradle@v6.3.0
         with:
           gradle-version: wrapper
           cache-read-only: true

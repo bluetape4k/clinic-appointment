@@ -68,7 +68,7 @@ class ConcurrentBookingIntegrationTest {
                 driver = "org.h2.Driver"
             )
             transaction {
-                SchemaUtils.create(
+                SchemaUtils.createMissingTablesAndColumns(
                     TenantGroups,
                     Holidays,
                     Clinics,

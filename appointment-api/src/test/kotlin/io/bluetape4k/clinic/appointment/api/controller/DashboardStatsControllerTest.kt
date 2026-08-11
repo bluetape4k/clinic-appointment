@@ -47,7 +47,7 @@ class DashboardStatsControllerTest @Autowired constructor() : AbstractApiIntegra
             .build()
 
         transaction {
-            SchemaUtils.create(Clinics, Doctors, Equipments, TreatmentTypes, ConsultationTopics, Appointments)
+            SchemaUtils.createMissingTablesAndColumns(Clinics, Doctors, Equipments, TreatmentTypes, ConsultationTopics, Appointments)
             Appointments.deleteAll()
             ConsultationTopics.deleteAll()
             TreatmentTypes.deleteAll()

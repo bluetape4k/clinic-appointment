@@ -7,8 +7,8 @@ Timefold Solver 기반 AI 예약 최적화 스케줄러.
 
 ## 책임
 
-- **하는 것**: Planning Variable(의사, 날짜, 시작시간) 최적 배정, Hard 제약 전부 충족, Soft 제약 최소화
-- **하지 않는 것**: 실시간 단건 슬롯 조회 (→ `SlotCalculationService`), DB 직접 쓰기 (→ `SolverService`가 결과 반환 후 호출자가 저장)
+- **하는 것**: Planning Variable(의사, 날짜, 시작시간) 최적 배정, Hard 제약 전부 충족, Soft 제약 최소화, source version CAS 기반 결과 반영
+- **하지 않는 것**: 실시간 단건 슬롯 조회 (→ `SlotCalculationService`), Solver가 소유하지 않은 DB 변경
 
 ## 제약조건 요약
 
@@ -53,7 +53,9 @@ val result: SolverResult = solverService.optimize(
     scope = TenantClinicScope(tenantGroupId = 1L, clinicId = 23L),
     dateRange = LocalDate.now()..LocalDate.now().plusDays(7),
 )
-// result.assignments: Map<Long, Assignment> — appointmentId → (doctorId, date, startTime)
+check(solverService.applyOptimizedAssignments(result)) {
+    "Solver 결과가 stale하여 반영되지 않았습니다."
+}
 ```
 
 ## 의존성
@@ -73,7 +75,10 @@ val result: SolverResult = solverService.optimize(
 ./gradlew :appointment-solver:test --tests "*solver.benchmark.BenchmarkTest"
 ```
 
-결과는 `local/benchmark/`에 생성됩니다.
+이 명령은 고정 dataset의 score/time 임계값을 검증하는 JUnit 테스트이며, 결과는
+`appointment-solver/build/reports/tests/test/`와 테스트 XML의 `system-out`에 기록됩니다.
+`local/benchmark/` 보고서는 `BenchmarkConfig.createBenchmarkFactory`를 호출하는 별도
+Planner Benchmark 실행 경로에서만 생성되며 이 테스트 명령은 해당 factory를 호출하지 않습니다.
 
 → 상세: [solver-benchmark-report.md](../docs/requirements/solver.md#벤치마크)
 
@@ -85,5 +90,7 @@ val result: SolverResult = solverService.optimize(
 
 `optimize`와 `optimizeReschedule`은 같은 검증된 `TenantClinicScope`를 요구합니다.
 snapshot, fact query, source-version map, 적용 직전 freshness 검사는 모두 이 범위
-안에서 수행하며 thread-local tenant context는 사용하지 않습니다. solver 결과는
-읽기 전용이고, 변경 적용 직전에 `verifySourceVersions`가 성공한 경우에만 사용합니다.
+안에서 수행하며 thread-local tenant context는 사용하지 않습니다. `SolverResult`는
+읽기 전용이며 `applyOptimizedAssignments`가 source row 잠금과 version CAS를 같은
+transaction으로 묶어 stale 결과를 거부합니다. `isSourceVersionCurrentAdvisory`는 advisory
+확인일 뿐 실제 반영 경계로 사용하지 않습니다.

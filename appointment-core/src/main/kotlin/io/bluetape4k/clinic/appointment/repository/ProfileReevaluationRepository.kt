@@ -37,6 +37,7 @@ import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.update
+import java.io.Serializable
 import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
@@ -1129,7 +1130,11 @@ data class ProfileReevaluationRepositorySummary(
     val failedJobs: Long,
     val activeLeases: Long,
     val oldestBacklogAge: Duration,
-)
+) : Serializable {
+    private companion object {
+        const val serialVersionUID: Long = 1L
+    }
+}
 
 private fun JdbcTransaction.dbCurrentTimestamp(): Instant =
     exec("SELECT CURRENT_TIMESTAMP") { resultSet ->
