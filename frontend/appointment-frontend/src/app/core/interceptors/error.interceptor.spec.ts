@@ -3,9 +3,11 @@ import { HttpRequest, HttpHandlerFn, HttpErrorResponse } from '@angular/common/h
 import { throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { errorInterceptor } from './error.interceptor';
+import { AuthService } from '../services/auth.service';
 
 describe('errorInterceptor', () => {
   let snackBar: { open: ReturnType<typeof vi.fn> };
+  let authService: { removeToken: ReturnType<typeof vi.fn> };
 
   const runInterceptor = (next: HttpHandlerFn) => {
     const req = new HttpRequest('GET', '/api/test');
@@ -18,9 +20,22 @@ describe('errorInterceptor', () => {
 
   beforeEach(() => {
     snackBar = { open: vi.fn() };
+    authService = { removeToken: vi.fn() };
     TestBed.configureTestingModule({
-      providers: [{ provide: MatSnackBar, useValue: snackBar }],
+      providers: [
+        { provide: MatSnackBar, useValue: snackBar },
+        { provide: AuthService, useValue: authService },
+      ],
     });
+  });
+
+  it('401 응답에서 현재 세션을 제거한다', () => {
+    const next: HttpHandlerFn = () =>
+      throwError(() => new HttpErrorResponse({ status: 401 }));
+
+    runInterceptor(next);
+
+    expect(authService.removeToken).toHaveBeenCalledTimes(1);
   });
 
   it('400 상태코드에서 스낵바에 "잘못된 요청" 표시', () => {
