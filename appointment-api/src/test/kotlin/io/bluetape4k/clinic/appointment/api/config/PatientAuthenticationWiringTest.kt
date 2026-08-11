@@ -20,4 +20,14 @@ class PatientAuthenticationWiringTest {
         limiter.allow(tenantGroupId = 1L, identifierKey = "LOGIN_ID", clientFingerprint = "test")
             .shouldBeTrue()
     }
+
+    @Test
+    fun `integration tests retain the bounded adapter when the test profile is active`() {
+        val limiter = PatientLoginAttemptLimiter.resolve(
+            activeProfiles = setOf("test", "integration-test"),
+            configured = null,
+        )
+        limiter.allow(tenantGroupId = 1L, identifierKey = "LOGIN_ID", clientFingerprint = "test")
+            .shouldBeTrue()
+    }
 }

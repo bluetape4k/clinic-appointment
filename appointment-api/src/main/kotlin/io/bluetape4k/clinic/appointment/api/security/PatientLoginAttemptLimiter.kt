@@ -17,8 +17,8 @@ fun interface PatientLoginAttemptLimiter {
             configured: PatientLoginAttemptLimiter?,
         ): PatientLoginAttemptLimiter {
             configured?.let { return it }
-            val isDevelopmentProfile = activeProfiles.any { it == "dev" || it == "test" }
-            if (!isDevelopmentProfile || "integration-test" in activeProfiles) {
+            val isDevelopmentOrTestProfile = activeProfiles.any { it == "dev" || it == "test" }
+            if (!isDevelopmentOrTestProfile) {
                 throw IllegalStateException("A real PatientLoginAttemptLimiter is required in protected profiles")
             }
             return BoundedNoopPatientLoginAttemptLimiter
