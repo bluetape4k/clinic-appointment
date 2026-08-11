@@ -22,6 +22,11 @@ class PatientAuthenticationRepositoryTest : AbstractExposedTest() {
     @Test
     fun `identifier lookup is tenant scoped and excludes inactive accounts`() {
         withTables(TestDB.H2, PatientAccounts, PatientLoginIdentities) {
+            TenantGroups.insert {
+                it[id] = 2L
+                it[tenantCode] = "tenant-two"
+                it[displayName] = "두 번째 Tenant"
+            }
             val activeAccountId = PatientAccounts.insertAndGetId {
                 it[tenantGroupId] = TenantGroups.DEFAULT_TENANT_GROUP_ID
                 it[patientSubject] = "patient-subject-active"
@@ -39,13 +44,13 @@ class PatientAuthenticationRepositoryTest : AbstractExposedTest() {
             PatientLoginIdentities.insert {
                 it[tenantGroupId] = TenantGroups.DEFAULT_TENANT_GROUP_ID
                 it[patientAccountId] = activeAccountId
-                it[key] = PatientLoginIdentifierKey.EMAIL.name
+                it[key] = PatientLoginIdentifierKey.EMAIL
                 it[normalizedValue] = "active@example.com"
             }
             PatientLoginIdentities.insert {
                 it[tenantGroupId] = 2L
                 it[patientAccountId] = inactiveAccountId
-                it[key] = PatientLoginIdentifierKey.EMAIL.name
+                it[key] = PatientLoginIdentifierKey.EMAIL
                 it[normalizedValue] = "inactive@example.com"
             }
 
@@ -54,7 +59,7 @@ class PatientAuthenticationRepositoryTest : AbstractExposedTest() {
                 key = PatientLoginIdentifierKey.EMAIL,
                 normalizedValue = "active@example.com",
             )
-            identity.shouldNotBeNull().patientAccountId.value.shouldBeEqualTo(activeAccountId.value)
+            identity.shouldNotBeNull().patientAccountId.shouldBeEqualTo(activeAccountId.value)
             accountRepository.findActiveById(TenantGroups.DEFAULT_TENANT_GROUP_ID, activeAccountId.value)
                 .shouldNotBeNull()
                 .patientSubject.shouldBeEqualTo("patient-subject-active")
@@ -70,6 +75,11 @@ class PatientAuthenticationRepositoryTest : AbstractExposedTest() {
     @Test
     fun `same identifier value is independent across tenants`() {
         withTables(TestDB.H2, PatientAccounts, PatientLoginIdentities) {
+            TenantGroups.insert {
+                it[id] = 2L
+                it[tenantCode] = "tenant-two"
+                it[displayName] = "두 번째 Tenant"
+            }
             val first = PatientAccounts.insertAndGetId {
                 it[tenantGroupId] = TenantGroups.DEFAULT_TENANT_GROUP_ID
                 it[patientSubject] = "patient-subject-one"
@@ -89,7 +99,7 @@ class PatientAuthenticationRepositoryTest : AbstractExposedTest() {
                 PatientLoginIdentities.insert {
                     it[tenantGroupId] = tenantId
                     it[patientAccountId] = accountId
-                    it[key] = PatientLoginIdentifierKey.PHONE.name
+                    it[key] = PatientLoginIdentifierKey.PHONE
                     it[normalizedValue] = "+821012345678"
                 }
             }
@@ -98,12 +108,12 @@ class PatientAuthenticationRepositoryTest : AbstractExposedTest() {
                 TenantGroups.DEFAULT_TENANT_GROUP_ID,
                 PatientLoginIdentifierKey.PHONE,
                 "+821012345678",
-            )?.patientAccountId?.value.shouldBeEqualTo(first.value)
+            )?.patientAccountId.shouldBeEqualTo(first.value)
             identityRepository.findActiveByIdentifier(
                 2L,
                 PatientLoginIdentifierKey.PHONE,
                 "+821012345678",
-            )?.patientAccountId?.value.shouldBeEqualTo(second.value)
+            )?.patientAccountId.shouldBeEqualTo(second.value)
         }
     }
 }
