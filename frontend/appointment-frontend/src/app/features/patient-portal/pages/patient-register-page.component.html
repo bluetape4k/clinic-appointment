@@ -1,0 +1,62 @@
+<main class="auth-page" aria-labelledby="register-title">
+  <section class="auth-card">
+    <div class="auth-brand">PATIENT PORTAL</div>
+    <p class="auth-eyebrow">환자 계정</p>
+    <h1 id="register-title">나에게 맞는 로그인 키를 등록하세요</h1>
+    <p class="auth-intro">전화번호·이메일·로그인 ID를 각각 독립적인 key=value 식별자로 등록할 수 있습니다.</p>
+
+    <form #registerForm="ngForm" (ngSubmit)="submit()" novalidate>
+      <label>
+        <span>Tenant</span>
+        <input name="tenantCode" [ngModel]="tenantCode()" (ngModelChange)="tenantCode.set($event)" autocomplete="organization" required />
+      </label>
+      <label>
+        <span>이름</span>
+        <input name="displayName" [ngModel]="displayName()" (ngModelChange)="displayName.set($event)" autocomplete="name" required />
+      </label>
+
+      <fieldset>
+        <legend>로그인 식별자</legend>
+        @for (identifier of identifiers(); track $index; let index = $index) {
+          <div class="identifier-row">
+            <select
+              [name]="'identifier-key-' + index"
+              [ngModel]="identifier.key"
+              (ngModelChange)="updateIdentifier(index, { key: $event })"
+              aria-label="식별자 종류"
+            >
+              @for (option of identifierOptions; track option.key) {
+                <option [value]="option.key">{{ option.label }}</option>
+              }
+            </select>
+            <input
+              [name]="'identifier-value-' + index"
+              [ngModel]="identifier.value"
+              (ngModelChange)="updateIdentifier(index, { value: $event })"
+              [autocomplete]="identifier.key === 'EMAIL' ? 'email' : identifier.key === 'PHONE' ? 'tel' : 'username'"
+              placeholder="값을 입력하세요"
+              required
+            />
+            <button type="button" class="text-button" (click)="removeIdentifier(index)" [disabled]="identifiers().length === 1">제거</button>
+          </div>
+        }
+        <button type="button" class="add-button" (click)="addIdentifier()" [disabled]="!availableOptions().length">+ 다른 로그인 키 추가</button>
+      </fieldset>
+
+      <label>
+        <span>비밀번호</span>
+        <input name="password" type="password" [ngModel]="password()" (ngModelChange)="password.set($event)" autocomplete="new-password" minlength="12" required />
+      </label>
+
+      @if (errorMessage(); as message) {
+        <p class="auth-error" role="alert">{{ message }}</p>
+      }
+
+      <button type="submit" [disabled]="auth.loading() || registerForm.invalid">
+        {{ auth.loading() ? '등록 중…' : '환자 계정 등록' }}
+      </button>
+    </form>
+
+    <p class="auth-footer">이미 계정이 있나요? <a routerLink="/portal/login">로그인으로 돌아가기</a></p>
+  </section>
+</main>

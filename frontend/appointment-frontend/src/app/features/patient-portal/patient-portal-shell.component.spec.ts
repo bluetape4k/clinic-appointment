@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { provideRouter } from '@angular/router';
 import { provideLocationMocks } from '@angular/common/testing';
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
 
 import { PatientPortalShellComponent } from './patient-portal-shell.component';
 
@@ -9,7 +10,7 @@ describe('PatientPortalShellComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [PatientPortalShellComponent],
-      providers: [provideRouter([]), provideLocationMocks()],
+      providers: [provideRouter([]), provideLocationMocks(), provideHttpClient()],
     }).compileComponents();
   });
 

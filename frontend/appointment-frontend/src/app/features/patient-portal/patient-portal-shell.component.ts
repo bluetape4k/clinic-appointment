@@ -1,5 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { PatientAuthService } from '../../core/services/patient-auth.service';
+import { TenantContextService } from '../../core/api/tenant-context.service';
 
 export interface PatientPortalNavItem {
   label: string;
@@ -14,9 +16,16 @@ export interface PatientPortalNavItem {
   styleUrl: './patient-portal-shell.component.scss',
 })
 export class PatientPortalShellComponent {
+  readonly auth = inject(PatientAuthService);
+  private readonly tenant = inject(TenantContextService);
   readonly navItems: PatientPortalNavItem[] = [
     { label: '예약 현황', route: '/portal/appointments' },
     { label: '알림', route: '/portal/notifications' },
     { label: '내 정보', route: '/portal/profile' },
   ];
+
+  async logout(): Promise<void> {
+    const tenantCode = this.tenant.tenantCode();
+    if (tenantCode) await this.auth.logout(tenantCode);
+  }
 }
