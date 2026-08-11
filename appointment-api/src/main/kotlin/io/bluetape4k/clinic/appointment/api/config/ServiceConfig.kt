@@ -89,6 +89,8 @@ import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyImpactReposit
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyJobRepository
 import io.bluetape4k.clinic.appointment.repository.SchedulingPolicyRepository
 import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
+import io.bluetape4k.clinic.appointment.repository.PatientAccountRepository
+import io.bluetape4k.clinic.appointment.repository.PatientLoginIdentityRepository
 import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.service.ClosureRescheduleService
 import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
@@ -196,6 +198,12 @@ class ServiceConfig {
 
     @Bean
     fun tenantGroupRepository(): TenantGroupRepository = TenantGroupRepository()
+
+    @Bean
+    fun patientAccountRepository(): PatientAccountRepository = PatientAccountRepository()
+
+    @Bean
+    fun patientLoginIdentityRepository(): PatientLoginIdentityRepository = PatientLoginIdentityRepository()
 
     @Bean
     fun productCatalogRepository(): ProductCatalogRepository = ProductCatalogRepository()

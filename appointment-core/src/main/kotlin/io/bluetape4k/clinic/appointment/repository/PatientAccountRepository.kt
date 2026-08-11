@@ -8,12 +8,24 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 
 /** 환자 계정 repository입니다. 모든 method는 caller의 Exposed transaction을 요구합니다. */
 class PatientAccountRepository : LongJdbcRepository<PatientAccountRecord> {
     override val table = PatientAccounts
     override fun extractId(entity: PatientAccountRecord): Long = entity.id.requireNotNull("id")
     override fun ResultRow.toEntity(): PatientAccountRecord = toPatientAccountRecord()
+
+    fun save(record: PatientAccountRecord): PatientAccountRecord {
+        val id = PatientAccounts.insertAndGetId {
+            it[tenantGroupId] = record.tenantGroupId
+            it[patientSubject] = record.patientSubject
+            it[displayName] = record.displayName
+            it[passwordHash] = record.passwordHash
+            it[active] = record.active
+        }.value
+        return record.copy(id = id)
+    }
 
     fun findActiveById(tenantGroupId: Long, accountId: Long): PatientAccountRecord? =
         PatientAccounts

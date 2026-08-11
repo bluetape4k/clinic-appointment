@@ -56,21 +56,32 @@ internal object PatientAuthenticationMigrationTestSupport {
             listOf("patient_account_id", "identifier_key"))
     }
 
-    private fun columns(connection: Connection, table: String): Set<String> =
-        connection.metaData.getColumns(null, null, table, null).use { rows ->
-            buildSet {
-                while (rows.next()) add(rows.getString("COLUMN_NAME").lowercase())
+    private fun columns(connection: Connection, table: String): Set<String> {
+        val result = linkedSetOf<String>()
+        tableCandidates(table).forEach { candidate ->
+            connection.metaData.getColumns(null, null, candidate, "%").use { rows ->
+                while (rows.next()) rows.getString("COLUMN_NAME")?.lowercase()?.let(result::add)
             }
         }
+        return result
+    }
 
-    private fun indexColumns(connection: Connection, table: String, index: String): List<String> =
-        connection.metaData.getIndexInfo(null, null, table, true, false).use { rows ->
-            buildList {
-                while (rows.next()) {
-                    if (rows.getString("INDEX_NAME")?.equals(index, ignoreCase = true) == true) {
-                        add(rows.getString("COLUMN_NAME").lowercase())
+    private fun indexColumns(connection: Connection, table: String, index: String): List<String> {
+        val rows = mutableListOf<Pair<Short, String>>()
+        tableCandidates(table).forEach { candidate ->
+            if (rows.isNotEmpty()) return@forEach
+            connection.metaData.getIndexInfo(null, null, candidate, false, false).use { indexes ->
+                while (indexes.next()) {
+                    if (!indexes.getString("INDEX_NAME").equals(index, ignoreCase = true)) continue
+                    indexes.getString("COLUMN_NAME")?.let { column ->
+                        rows += indexes.getShort("ORDINAL_POSITION") to column.lowercase()
                     }
                 }
             }
         }
+        return rows.sortedBy { it.first }.map { it.second }
+    }
+
+    private fun tableCandidates(table: String): List<String> =
+        listOf(table, table.uppercase(), table.lowercase()).distinct()
 }

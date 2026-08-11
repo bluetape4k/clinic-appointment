@@ -153,4 +153,19 @@ class FlywayMySQLMigrationTest {
             location = "classpath:db/migration/mysql",
         )
     }
+
+    @Test
+    fun `V26 patient authentication schema is additive on MySQL 8`() {
+        val mysql = Containers.MySql8
+        val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
+        PatientAuthenticationMigrationTestSupport.verifyV26Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                mysql.jdbcUrl,
+                mysql.username ?: "test",
+                mysql.password ?: "",
+            ),
+            location = "classpath:db/migration/mysql",
+        )
+    }
 }
