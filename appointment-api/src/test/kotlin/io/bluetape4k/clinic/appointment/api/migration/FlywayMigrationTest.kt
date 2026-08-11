@@ -84,6 +84,14 @@ class FlywayMigrationTest {
         )
     }
 
+    @Test
+    fun `V26 patient authentication schema is additive on H2`() {
+        PatientAuthenticationMigrationTestSupport.verifyV26Migration(
+            dataSource = h2DataSource("patient-authentication-v26"),
+            location = "classpath:db/migration/h2",
+        )
+    }
+
     private fun h2DataSource(scope: String): SimpleDriverDataSource {
         val driver = Class.forName("org.h2.Driver").getDeclaredConstructor().newInstance() as Driver
         return SimpleDriverDataSource(
