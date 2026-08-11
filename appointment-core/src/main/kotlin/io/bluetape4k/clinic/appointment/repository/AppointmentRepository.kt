@@ -813,6 +813,78 @@ class AppointmentRepository : LongJdbcRepository<AppointmentRecord> {
         }
 
     /**
+     * Solver 결과의 source rows를 caller transaction에서 잠그고 version을 검증합니다.
+     *
+     * 조회와 후속 assignment CAS 사이에 다른 writer가 끼어들지 않도록 모든 source row를
+     * 같은 transaction에서 `FOR UPDATE`로 잠급니다. legacy projection이 아니거나 scope 밖
+     * row가 하나라도 빠지면 `false`를 반환합니다.
+     */
+    fun lockLegacySourceVersions(
+        scope: TenantClinicScope,
+        sourceVersions: Map<Long, Long>,
+    ): Boolean {
+        if (sourceVersions.isEmpty()) return true
+
+        val appointmentIds = sourceVersions.keys.map { it.requirePositiveNumber("appointmentId") }
+        sourceVersions.values.forEach { require(it >= 0L) { "source version must not be negative" } }
+
+        val rows = Appointments
+            .selectAll()
+            .where {
+                (Appointments.id inList appointmentIds) and
+                    (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId)) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.LEGACY)
+            }
+            .orderBy(Appointments.id to SortOrder.ASC)
+            .forUpdate()
+
+        val currentVersions = rows.associate { row -> row[Appointments.id].value to row[Appointments.version] }
+        return currentVersions.size == sourceVersions.size &&
+            sourceVersions.all { (appointmentId, expectedVersion) ->
+                currentVersions[appointmentId] == expectedVersion
+            }
+    }
+
+    /**
+     * Solver assignment를 source version CAS로 반영합니다.
+     *
+     * 이 메서드는 transaction을 열지 않습니다. caller가 [lockLegacySourceVersions]와
+     * 함께 같은 transaction에서 호출해야 version 확인과 모든 assignment가 원자적으로
+     * 커밋됩니다. 하나라도 예상 version과 다르면 `false`를 반환하므로 caller는 전체
+     * transaction을 rollback해야 합니다.
+     */
+    fun updateLegacyAssignment(
+        scope: TenantClinicScope,
+        appointmentId: Long,
+        expectedVersion: Long,
+        doctorId: Long,
+        appointmentDate: LocalDate,
+        startTime: LocalTime,
+        endTime: LocalTime,
+    ): Boolean {
+        val validAppointmentId = appointmentId.requirePositiveNumber("appointmentId")
+        require(expectedVersion >= 0L) { "expectedVersion must not be negative" }
+        val validDoctorId = doctorId.requirePositiveNumber("doctorId")
+        return Appointments.update(
+            where = {
+                (Appointments.id eq validAppointmentId) and
+                    (Appointments.clinicId eq scope.clinicId) and
+                    (Appointments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId)) and
+                    (Appointments.modelVersion eq AppointmentModelVersion.LEGACY) and
+                    (Appointments.version eq expectedVersion)
+            },
+        ) {
+            it[Appointments.doctorId] = validDoctorId
+            it[Appointments.appointmentDate] = appointmentDate
+            it[Appointments.startTime] = startTime
+            it[Appointments.endTime] = endTime
+            it[Appointments.version] = expectedVersion + 1L
+            it.update(Appointments.updatedAt, CurrentTimestamp)
+        } == 1
+    }
+
+    /**
      * legacy 예약 상태를 예상 version과 일치할 때만 변경하고 version을 한 번 증가시킵니다.
      *
      * 알림 idempotency가 상태 이력 개수나 시각에 의존하지 않도록 상태 변경과 같은 SQL

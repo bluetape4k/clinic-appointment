@@ -111,11 +111,12 @@ class SolverService(
     }
 
     /**
-     * 최적화 결과를 적용하기 직전에 원본 snapshot version을 다시 확인합니다.
-     * 결과 자체는 read-only이므로 이 검사는 caller의 apply transaction과 분리해 사용할 수
-     * 있으며, 하나라도 변경됐으면 false를 반환해 stale 결과 적용을 막습니다.
+     * 원본 snapshot version을 조회 시점에 advisory 방식으로 확인합니다.
+     *
+     * 이 결과만으로 assignment를 반영하면 확인 직후 다른 writer가 version을 소비할 수
+     * 있으므로 실제 반영에는 반드시 [applyOptimizedAssignments]를 사용해야 합니다.
      */
-    fun verifySourceVersions(result: SolverResult): Boolean {
+    fun isSourceVersionCurrentAdvisory(result: SolverResult): Boolean {
         val resultScope = result.scope
         return transaction {
             result.sourceVersions.all { (appointmentId, version) ->
@@ -123,6 +124,57 @@ class SolverService(
             }
         }
     }
+
+    /**
+     * 기존 호출자 호환용 alias입니다. 실제 결과 반영에는 사용하지 말고
+     * [applyOptimizedAssignments]를 사용해야 합니다.
+     */
+    @Deprecated(
+        message = "Use isSourceVersionCurrentAdvisory for an advisory check or applyOptimizedAssignments for atomic application",
+        replaceWith = ReplaceWith("isSourceVersionCurrentAdvisory(result)"),
+    )
+    fun verifySourceVersions(result: SolverResult): Boolean = isSourceVersionCurrentAdvisory(result)
+
+    /**
+     * 최적화 결과를 source version fence와 함께 원자적으로 반영합니다.
+     *
+     * `isSourceVersionCurrentAdvisory`는 호출자에게 최신성만 알려주는 advisory check입니다. 실제
+     * 반영은 이 메서드를 사용해야 하며, source rows를 잠근 같은 transaction 안에서 각
+     * assignment를 version CAS로 갱신합니다. stale 결과이거나 CAS 하나라도 실패하면
+     * transaction 전체를 rollback하고 `false`를 반환합니다.
+     */
+    fun applyOptimizedAssignments(result: SolverResult): Boolean {
+        return try {
+            transaction {
+                if (!appointmentRepository.lockLegacySourceVersions(result.scope, result.sourceVersions)) {
+                    throw StaleSolverResultException
+                }
+
+                result.appointments.forEach { appointment ->
+                    val appointmentId = checkNotNull(appointment.id) {
+                        "Solver result appointment is missing id"
+                    }
+                    val expectedVersion = result.sourceVersions[appointmentId]
+                        ?: throw StaleSolverResultException
+                    val applied = appointmentRepository.updateLegacyAssignment(
+                        scope = result.scope,
+                        appointmentId = appointmentId,
+                        expectedVersion = expectedVersion,
+                        doctorId = appointment.doctorId,
+                        appointmentDate = appointment.appointmentDate,
+                        startTime = appointment.startTime,
+                        endTime = appointment.endTime,
+                    )
+                    if (!applied) throw StaleSolverResultException
+                }
+                true
+            }
+        } catch (_: StaleSolverResultException) {
+            false
+        }
+    }
+
+    private object StaleSolverResultException : RuntimeException()
 
     private data class SolverSnapshot(
         val solution: ScheduleSolution,

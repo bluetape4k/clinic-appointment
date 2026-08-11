@@ -124,103 +124,144 @@ class ConstraintVerifierTest {
             .penalizesBy(1)
     }
 
-    @Test
-    fun `partially initialized planning entity is ignored by representative hard constraints`() {
-        val partial = appointment(doctorId = null)
-        val operatingHours = OperatingHoursRecord(
-            clinicId = 10L,
-            dayOfWeek = DayOfWeek.MONDAY,
-            openTime = LocalTime.of(9, 0),
-            closeTime = LocalTime.of(18, 0),
-        )
-        val doctor = DoctorFact(
-            id = 100L,
-            clinicId = 10L,
-            providerType = "DOCTOR",
-            maxConcurrentPatients = null,
-        )
-        val closure = ClinicClosureRecord(
-            clinicId = 10L,
-            closureDate = monday,
-            isFullDay = true,
-        )
-        val schedule = DoctorScheduleRecord(
-            doctorId = 100L,
-            dayOfWeek = DayOfWeek.MONDAY,
-            startTime = LocalTime.of(9, 0),
-            endTime = LocalTime.of(18, 0),
-        )
-        val absence = DoctorAbsenceRecord(
-            doctorId = 100L,
-            absenceDate = monday,
-            startTime = LocalTime.of(9, 0),
-            endTime = LocalTime.of(10, 0),
-        )
-        val breakTime = BreakTimeRecord(
-            clinicId = 10L,
-            dayOfWeek = DayOfWeek.MONDAY,
-            startTime = LocalTime.of(9, 0),
-            endTime = LocalTime.of(10, 0),
-        )
-        val defaultBreakTime = ClinicDefaultBreakTimeRecord(
-            clinicId = 10L,
-            name = "morning break",
-            startTime = LocalTime.of(9, 0),
-            endTime = LocalTime.of(10, 0),
-        )
-        val equipmentPartial = AppointmentPlanning(
-            id = 2L,
-            clinicId = 10L,
-            treatmentTypeId = 1L,
-            equipmentId = 200L,
-            requiresEquipment = true,
-            durationMinutes = 30,
-            doctorId = null,
-            appointmentDate = monday,
-            startTime = LocalTime.of(9, 0),
-        )
-        val equipmentUnavailability = EquipmentUnavailabilityFact(
-            equipmentId = 200L,
-            date = monday,
-            startTime = LocalTime.of(9, 0),
-            endTime = LocalTime.of(10, 0),
-        )
+    private fun partialAppointment() = appointment(doctorId = null)
 
+    private fun partialOperatingHours() = OperatingHoursRecord(
+        clinicId = 10L,
+        dayOfWeek = DayOfWeek.MONDAY,
+        openTime = LocalTime.of(9, 0),
+        closeTime = LocalTime.of(18, 0),
+    )
+
+    private fun partialDoctor() = DoctorFact(
+        id = 100L,
+        clinicId = 10L,
+        providerType = "DOCTOR",
+        maxConcurrentPatients = null,
+    )
+
+    private fun fullDayClosure() = ClinicClosureRecord(
+        clinicId = 10L,
+        closureDate = monday,
+        isFullDay = true,
+    )
+
+    private fun partialDoctorSchedule() = DoctorScheduleRecord(
+        doctorId = 100L,
+        dayOfWeek = DayOfWeek.MONDAY,
+        startTime = LocalTime.of(9, 0),
+        endTime = LocalTime.of(18, 0),
+    )
+
+    private fun partialDoctorAbsence() = DoctorAbsenceRecord(
+        doctorId = 100L,
+        absenceDate = monday,
+        startTime = LocalTime.of(9, 0),
+        endTime = LocalTime.of(10, 0),
+    )
+
+    private fun partialBreakTime() = BreakTimeRecord(
+        clinicId = 10L,
+        dayOfWeek = DayOfWeek.MONDAY,
+        startTime = LocalTime.of(9, 0),
+        endTime = LocalTime.of(10, 0),
+    )
+
+    private fun partialDefaultBreakTime() = ClinicDefaultBreakTimeRecord(
+        clinicId = 10L,
+        name = "morning break",
+        startTime = LocalTime.of(9, 0),
+        endTime = LocalTime.of(10, 0),
+    )
+
+    private fun partialEquipmentAppointment() = AppointmentPlanning(
+        id = 2L,
+        clinicId = 10L,
+        treatmentTypeId = 1L,
+        equipmentId = 200L,
+        requiresEquipment = true,
+        durationMinutes = 30,
+        doctorId = null,
+        appointmentDate = monday,
+        startTime = LocalTime.of(9, 0),
+    )
+
+    private fun equipmentUnavailability() = EquipmentUnavailabilityFact(
+        equipmentId = 200L,
+        date = monday,
+        startTime = LocalTime.of(9, 0),
+        endTime = LocalTime.of(10, 0),
+    )
+
+    @Test
+    fun `부분 초기화 예약은 영업시간 제약에서 무시된다`() {
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.withinOperatingHours(factory) }
-            .given(partial, operatingHours)
+            .given(partialAppointment(), partialOperatingHours())
             .penalizesBy(0)
+    }
+
+    @Test
+    fun `부분 초기화 예약은 휴진 충돌 제약에서 무시된다`() {
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.noClinicClosureConflict(factory) }
-            .given(partial, closure)
+            .given(partialAppointment(), fullDayClosure())
             .penalizesBy(0)
+    }
+
+    @Test
+    fun `부분 초기화 예약은 제공자 유형 제약에서 무시된다`() {
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.providerTypeMatch(factory) }
-            .given(partial, doctor)
+            .given(partialAppointment(), partialDoctor())
             .penalizesBy(0)
+    }
+
+    @Test
+    fun `부분 초기화 예약은 의사 소속 제약에서 무시된다`() {
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.doctorBelongsToClinic(factory) }
-            .given(partial, doctor)
+            .given(partialAppointment(), partialDoctor())
             .penalizesBy(0)
+    }
+
+    @Test
+    fun `부분 초기화 예약은 의사 근무시간 제약에서 무시된다`() {
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.withinDoctorSchedule(factory) }
-            .given(partial, schedule)
+            .given(partialAppointment(), partialDoctorSchedule())
             .penalizesBy(0)
+    }
+
+    @Test
+    fun `부분 초기화 예약은 의사 부재 제약에서 무시된다`() {
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.noDoctorAbsenceConflict(factory) }
-            .given(partial, absence)
+            .given(partialAppointment(), partialDoctorAbsence())
             .penalizesBy(0)
+    }
+
+    @Test
+    fun `부분 초기화 예약은 휴게시간 제약에서 무시된다`() {
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.noBreakTimeConflict(factory) }
-            .given(partial, breakTime)
+            .given(partialAppointment(), partialBreakTime())
             .penalizesBy(0)
+    }
+
+    @Test
+    fun `부분 초기화 예약은 기본 휴게시간 제약에서 무시된다`() {
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.noDefaultBreakTimeConflict(factory) }
-            .given(partial, defaultBreakTime)
+            .given(partialAppointment(), partialDefaultBreakTime())
             .penalizesBy(0)
+    }
+
+    @Test
+    fun `부분 초기화 장비 예약은 장비 unavailable 제약에서 무시된다`() {
         constraintVerifier
             .verifyThat { _, factory -> HardConstraints.equipmentUnavailabilityConflict(factory) }
-            .given(equipmentPartial, equipmentUnavailability)
+            .given(partialEquipmentAppointment(), equipmentUnavailability())
             .penalizesBy(0)
     }
 

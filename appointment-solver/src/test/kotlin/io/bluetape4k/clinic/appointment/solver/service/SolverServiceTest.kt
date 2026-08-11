@@ -47,6 +47,8 @@ import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class SolverServiceTest {
 
@@ -70,7 +72,7 @@ class SolverServiceTest {
             driver = "org.h2.Driver"
         )
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 TenantGroups,
                 Holidays,
                 Clinics,
@@ -299,7 +301,7 @@ class SolverServiceTest {
         }
 
         val result = solverService.optimize(scope(clinicId), MONDAY..FRIDAY, Duration.ofSeconds(5))
-        solverService.verifySourceVersions(result).shouldBeTrue()
+        solverService.isSourceVersionCurrentAdvisory(result).shouldBeTrue()
 
         transaction {
             AppointmentRepository().updateLegacyStatus(
@@ -310,7 +312,116 @@ class SolverServiceTest {
             ).shouldBeTrue()
         }
 
-        solverService.verifySourceVersions(result).shouldBeFalse()
+        solverService.isSourceVersionCurrentAdvisory(result).shouldBeFalse()
+    }
+
+    @Test
+    fun `원자적 assignment 적용은 source version CAS와 함께 성공한다`() {
+        val (clinicId, doctorId, _, treatmentTypeId) = insertBaseData()
+        val appointmentId = transaction {
+            Appointments.insertAndGetId {
+                it[Appointments.clinicId] = clinicId
+                it[Appointments.doctorId] = doctorId
+                it[Appointments.treatmentTypeId] = treatmentTypeId
+                it[patientName] = "Atomic Patient"
+                it[appointmentDate] = MONDAY
+                it[startTime] = LocalTime.of(9, 0)
+                it[endTime] = LocalTime.of(9, 30)
+                it[status] = AppointmentState.REQUESTED
+            }.value
+        }
+
+        val result = solverService.optimize(scope(clinicId), MONDAY..FRIDAY, Duration.ofSeconds(5))
+
+        solverService.applyOptimizedAssignments(result).shouldBeTrue()
+
+        transaction {
+            val applied = checkNotNull(
+                AppointmentRepository().findByIdAndScope(appointmentId, scope(clinicId)),
+            )
+            applied.version.shouldBeEqualTo(1L)
+            applied.doctorId.shouldBeEqualTo(result.appointments.single().doctorId)
+            applied.appointmentDate.shouldBeEqualTo(result.appointments.single().appointmentDate)
+            applied.startTime.shouldBeEqualTo(result.appointments.single().startTime)
+            applied.endTime.shouldBeEqualTo(result.appointments.single().endTime)
+        }
+    }
+
+    @Test
+    fun `advisory 확인 뒤 동시 writer가 version을 소비하면 원자적 적용은 stale을 거부한다`() {
+        val (clinicId, doctorId, _, treatmentTypeId) = insertBaseData()
+        val appointmentId = transaction {
+            Appointments.insertAndGetId {
+                it[Appointments.clinicId] = clinicId
+                it[Appointments.doctorId] = doctorId
+                it[Appointments.treatmentTypeId] = treatmentTypeId
+                it[patientName] = "Concurrent Patient"
+                it[appointmentDate] = MONDAY
+                it[startTime] = LocalTime.of(9, 0)
+                it[endTime] = LocalTime.of(9, 30)
+                it[status] = AppointmentState.REQUESTED
+            }.value
+        }
+
+        val result = solverService.optimize(scope(clinicId), MONDAY..FRIDAY, Duration.ofSeconds(5))
+        solverService.isSourceVersionCurrentAdvisory(result).shouldBeTrue()
+
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            executor.submit<Boolean> {
+                transaction {
+                    AppointmentRepository().updateLegacyStatus(
+                        scope = scope(clinicId),
+                        appointmentId = appointmentId,
+                        expectedVersion = 0L,
+                        newStatus = AppointmentState.CONFIRMED,
+                    )
+                }
+            }.get(5, TimeUnit.SECONDS).shouldBeTrue()
+
+            solverService.applyOptimizedAssignments(result).shouldBeFalse()
+        } finally {
+            executor.shutdownNow()
+            executor.awaitTermination(5, TimeUnit.SECONDS)
+        }
+
+        transaction {
+            val current = checkNotNull(
+                AppointmentRepository().findByIdAndScope(appointmentId, scope(clinicId)),
+            )
+            current.status.shouldBeEqualTo(AppointmentState.CONFIRMED)
+            current.version.shouldBeEqualTo(1L)
+        }
+    }
+
+    @Test
+    fun `assignment CAS 하나가 실패하면 선행 assignment도 함께 rollback된다`() {
+        val (clinicId, doctorId, _, treatmentTypeId) = insertBaseData()
+        val appointmentId = transaction {
+            Appointments.insertAndGetId {
+                it[Appointments.clinicId] = clinicId
+                it[Appointments.doctorId] = doctorId
+                it[Appointments.treatmentTypeId] = treatmentTypeId
+                it[patientName] = "Rollback Patient"
+                it[appointmentDate] = MONDAY
+                it[startTime] = LocalTime.of(9, 0)
+                it[endTime] = LocalTime.of(9, 30)
+                it[status] = AppointmentState.REQUESTED
+            }.value
+        }
+
+        val result = solverService.optimize(scope(clinicId), MONDAY..FRIDAY, Duration.ofSeconds(5))
+        val duplicatedResult = result.copy(appointments = result.appointments + result.appointments)
+
+        solverService.applyOptimizedAssignments(duplicatedResult).shouldBeFalse()
+
+        transaction {
+            val current = checkNotNull(
+                AppointmentRepository().findByIdAndScope(appointmentId, scope(clinicId)),
+            )
+            current.version.shouldBeEqualTo(0L)
+            current.status.shouldBeEqualTo(AppointmentState.REQUESTED)
+        }
     }
 
     @Test
