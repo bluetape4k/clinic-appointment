@@ -23,7 +23,7 @@ export class PatientLoginPageComponent {
     { key: 'EMAIL', label: '이메일' },
     { key: 'LOGIN_ID', label: '로그인 ID' },
   ];
-  readonly tenantCode = signal(this.tenant.tenantCode() ?? 'tenant-default');
+  readonly tenantCode = signal(this.tenant.tenantCode() ?? '');
   readonly identifierKey = signal<PatientLoginIdentifierKey>('PHONE');
   readonly identifierValue = signal('');
   readonly password = signal('');
