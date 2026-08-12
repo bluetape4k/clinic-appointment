@@ -60,6 +60,25 @@ internal fun ActorContext.requireAdminActor(): ActorContext {
     return this
 }
 
+/** 취소만 허용되는 patient/operator role matrix를 HTTP 경계에서 재검증한다. */
+internal fun ActorContext.requireCancellationActor(reasonDetail: String?): ActorContext {
+    when (actorType) {
+        ActorType.PATIENT -> {
+            requirePatientActor()
+            if (reasonDetail != null) {
+                throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
+            }
+        }
+
+        ActorType.ADMIN,
+        ActorType.STAFF,
+        -> Unit
+
+        else -> throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
+    }
+    return this
+}
+
 /**
  * rollback 중 신규 Plan ingress만 닫고 기존 commitment 예약의 조회·변경 경로는 유지한다.
  *

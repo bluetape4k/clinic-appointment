@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.service
 
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import io.bluetape4k.clinic.appointment.api.commitment.AcceptAppointmentProposalCommand
 import io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentCommandError
 import io.bluetape4k.clinic.appointment.api.commitment.AppointmentCommitmentCommandException
@@ -40,6 +41,7 @@ import io.bluetape4k.clinic.appointment.api.dto.commitment.ProposalDecisionReque
 import io.bluetape4k.clinic.appointment.api.dto.commitment.toProposalResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.toResponse
 import io.bluetape4k.clinic.appointment.api.security.ActorContext
+import io.bluetape4k.clinic.appointment.api.security.ActorType
 import io.bluetape4k.clinic.appointment.api.tenant.TenantCodeRules
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentItemDraft
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecisionType
@@ -536,9 +538,10 @@ internal class DefaultAppointmentCommitmentApplicationService(
         idempotencyKey: String,
         request: CancelAppointmentRequest,
     ): AppointmentCommitmentResponse {
-        val access = accessResolver.requireAppointmentAccess(actor, appointmentId)
+        requireCancellationActor(actor, request.reasonDetail)
+        val access = accessResolver.requireAppointmentCancellationAccess(actor, appointmentId)
         val current = readCommitmentWithCurrentProposal(appointmentId)
-        return runCommand(actor, access.tenantGroupId, access.clinicId) {
+        return runCancellationCommand(actor, access.tenantGroupId, access.clinicId) {
             commandService.cancelAppointment(
                 CancelAppointmentCommand(
                     context =
@@ -551,15 +554,40 @@ internal class DefaultAppointmentCommitmentApplicationService(
                             appointmentId,
                             current.proposal.id,
                             expectedVersion,
-                            request.reasonCode,
+                            CancellationReasonRegistry.canonicalHashHex(
+                                request.reasonCode,
+                                request.reasonDetail,
+                            ),
                         ),
                     appointmentId = appointmentId,
                     proposalId = current.proposal.id,
                     expectedVersion = expectedVersion,
                     expectedProposalHash = current.proposal.proposalHash,
                     reasonCode = request.reasonCode,
+                    reasonDetail = request.reasonDetail,
                 ),
             ).let { commitmentResponse(access.tenantGroupId, access.clinicId, it.commitment, it.proposal) }
+        }
+    }
+
+    private fun requireCancellationActor(
+        actor: ActorContext,
+        reasonDetail: String?,
+    ) {
+        when (actor.actorType) {
+            ActorType.ADMIN,
+            ActorType.STAFF,
+            -> Unit
+
+            ActorType.PATIENT -> {
+                if (reasonDetail != null) {
+                    throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
+                }
+            }
+
+            ActorType.DOCTOR,
+            ActorType.SYSTEM,
+            -> throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
         }
     }
 
@@ -1139,6 +1167,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
             clinicId = clinicId,
             actorScopeHash = hash(actor.actorScopeText()),
             actorAuditRef = actor.actorAuditRef(),
+            actorRole = actor.actorType.name,
             idempotencyKeyHash = idempotencyKeyHasher.hash(idempotencyKey),
             commandHash = hash(listOf(operation, actor.actorScopeText(), *parts).joinToString("|")),
             correlationId = actor.correlationId,
@@ -1188,17 +1217,21 @@ internal class DefaultAppointmentCommitmentApplicationService(
         actor: ActorContext,
         tenantGroupId: Long,
         clinicId: Long,
+        latencyRecorder: (String, String, CommitmentMetricResult, Duration) -> Unit =
+            { tenant, clinic, result, latency ->
+                metrics.recordProposalLatency(tenant, clinic, result, latency)
+            },
         block: () -> T,
     ): T {
         val startedAt = Instant.now(clock)
         try {
             return block().also {
                 recordMetricSafely {
-                    metrics.recordProposalLatency(
-                        tenant = tenantTag(actor, tenantGroupId),
-                        clinic = clinicTag(clinicId),
-                        result = CommitmentMetricResult.SUCCESS,
-                        latency = Duration.between(startedAt, Instant.now(clock)),
+                    latencyRecorder(
+                        tenantTag(actor, tenantGroupId),
+                        clinicTag(clinicId),
+                        CommitmentMetricResult.SUCCESS,
+                        Duration.between(startedAt, Instant.now(clock)),
                     )
                 }
                 log.info { "Appointment commitment application command completed" }
@@ -1218,16 +1251,32 @@ internal class DefaultAppointmentCommitmentApplicationService(
                     CommitmentMetricResult.REJECTED
                 }
             recordMetricSafely {
-                metrics.recordProposalLatency(
-                    tenant = tenantTag(actor, tenantGroupId),
-                    clinic = clinicTag(clinicId),
-                    result = result,
-                    latency = Duration.between(startedAt, Instant.now(clock)),
+                latencyRecorder(
+                    tenantTag(actor, tenantGroupId),
+                    clinicTag(clinicId),
+                    result,
+                    Duration.between(startedAt, Instant.now(clock)),
                 )
             }
             throw exception.toApiException()
         }
     }
+
+    private fun <T> runCancellationCommand(
+        actor: ActorContext,
+        tenantGroupId: Long,
+        clinicId: Long,
+        block: () -> T,
+    ): T =
+        runCommand(
+            actor = actor,
+            tenantGroupId = tenantGroupId,
+            clinicId = clinicId,
+            latencyRecorder = { tenant, clinic, result, latency ->
+                metrics.recordCancellationLatency(tenant, clinic, result, latency)
+            },
+            block = block,
+        )
 
     /**
      * 관측 실패가 이미 결정된 예약 command 결과를 덮어쓰지 않도록 격리합니다.

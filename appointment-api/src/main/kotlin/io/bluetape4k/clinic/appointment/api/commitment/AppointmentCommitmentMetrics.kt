@@ -20,6 +20,16 @@ interface AppointmentCommitmentCommandMetrics {
         latency: Duration,
     )
 
+    /** 취소 command 전용 latency를 기록한다. 기존 metric adapter는 no-op으로 호환된다. */
+    fun recordCancellationLatency(
+        tenant: String,
+        clinic: String,
+        result: CommitmentMetricResult,
+        latency: Duration,
+    ) {
+        // 기존 외부 metric adapter가 취소 전용 timer를 아직 제공하지 않아도 command 결과는 보존한다.
+    }
+
     fun recordAllocationConflict(
         tenant: String,
         clinic: String,
@@ -45,6 +55,14 @@ class AppointmentCommitmentMetrics(
         result: CommitmentMetricResult,
         latency: Duration,
     ) = timer("appointment.commitment.proposal.latency", tags(tenant, clinic, "result", result.name), latency)
+
+    /** 취소 hot path 지연을 proposal metric과 분리해 기록합니다. */
+    override fun recordCancellationLatency(
+        tenant: String,
+        clinic: String,
+        result: CommitmentMetricResult,
+        latency: Duration,
+    ) = timer("appointment.commitment.cancellation.latency", tags(tenant, clinic, "result", result.name), latency)
 
     /** proposal 만료 1건을 PII가 없는 [reason] counter로 기록합니다. */
     fun recordProposalExpiry(

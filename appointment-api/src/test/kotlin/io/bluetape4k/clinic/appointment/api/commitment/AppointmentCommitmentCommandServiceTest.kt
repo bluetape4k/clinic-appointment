@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldHaveSize
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.api.notification.AppointmentNotificationWriter
 import io.bluetape4k.clinic.appointment.api.notification.CommitmentAppointmentNotification
@@ -19,6 +20,7 @@ import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationStatus
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentAuditEvents
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentCancellationDetails
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommandIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentItems
 import io.bluetape4k.clinic.appointment.model.tables.Appointments
@@ -909,6 +911,7 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
                 expectedVersion = held.commitment.version,
                 expectedProposalHash = held.proposal.proposalHash,
                 reasonCode = "REFUND",
+                reasonDetail = "결제 환불 처리로 예약을 취소합니다.",
             )
 
         val cancelled = service.cancelAppointment(command)
@@ -929,7 +932,16 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
                 .select(SchedulingOutboxEvents.payloadJson)
                 .where { SchedulingOutboxEvents.eventType eq "APPOINTMENT_CANCELLED" }
                 .single()[SchedulingOutboxEvents.payloadJson] shouldBeEqualTo
-                """{"appointmentId":${held.commitment.appointmentId},"commitmentId":${held.commitment.id},"proposalId":${held.proposal.id},"commitmentVersion":${held.commitment.version + 1},"reasonCode":"REFUND"}"""
+                        """{"appointmentId":${held.commitment.appointmentId},"commitmentId":${held.commitment.id},"proposalId":${held.proposal.id},"commitmentVersion":${held.commitment.version + 1},"reasonCode":"REFUND","reasonDetailHash":"${CancellationReasonRegistry.canonicalHashHex("REFUND", "결제 환불 처리로 예약을 취소합니다.")}"}"""
+            AppointmentCancellationDetails
+                .selectAll()
+                .single()
+                .let { detail ->
+                    detail[AppointmentCancellationDetails.reasonCode] shouldBeEqualTo "REFUND"
+                    detail[AppointmentCancellationDetails.reasonDetail] shouldBeEqualTo
+                        "결제 환불 처리로 예약을 취소합니다."
+                    detail[AppointmentCancellationDetails.commitmentId] shouldBeEqualTo held.commitment.id
+                }
         }
     }
 

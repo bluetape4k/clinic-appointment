@@ -66,6 +66,26 @@ internal class AppointmentCommitmentAccessResolverTest : VisitCommitmentCommandT
     }
 
     @Test
+    fun `staff can access an appointment only through the cancellation boundary`() {
+        val appointment = confirmDirect(commandService(), "staff-cancel-access")
+        val staff = actor(
+            actorType = ActorType.STAFF,
+            roles = setOf(ActorRole.STAFF),
+        )
+        val resolver = accessResolver()
+
+        val access = resolver.requireAppointmentCancellationAccess(
+            staff,
+            appointment.commitment.appointmentId,
+        )
+
+        access.appointmentId shouldBeEqualTo appointment.commitment.appointmentId
+        assertFailsWith<AppointmentCommitmentApiException> {
+            resolver.requireAppointmentAccess(staff, appointment.commitment.appointmentId)
+        }.error shouldBeEqualTo AppointmentCommitmentApiError.SCOPE_FORBIDDEN
+    }
+
+    @Test
     fun `consent authority must use the exact authenticated tenant namespace`() {
         val resolver = accessResolver()
 

@@ -72,6 +72,7 @@ import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.event.policy.SchedulingPolicyEventRepository
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingContext
 import io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriter
@@ -281,6 +282,7 @@ class ServiceConfig {
         notificationOutboxRepository: NotificationOutboxRepository,
         notificationOutboxHasherProvider: ObjectProvider<NotificationOutboxHasher>,
         clinicRepository: ClinicRepository,
+        notificationProperties: NotificationProperties,
     ): AppointmentNotificationWriter {
         val hasher = notificationOutboxHasherProvider.getIfAvailable()
             ?: return UnavailableAppointmentNotificationWriter
@@ -290,6 +292,12 @@ class ServiceConfig {
             clinicRepository = clinicRepository,
             clock = Clock.systemUTC(),
             sameDayReminderLeadTime = Duration.ofHours(2),
+            cancellationSchemaVersion =
+                if (notificationProperties.v2Producer) {
+                    NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION
+                } else {
+                    NotificationOutboxEnvelope.LEGACY_SCHEMA_VERSION
+                },
         )
     }
 

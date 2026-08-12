@@ -1,8 +1,13 @@
 package io.bluetape4k.clinic.appointment.event.notification
 
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonCode
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import java.io.Serializable
 import java.time.LocalDate
 import java.time.LocalTime
+
+/** API 호환을 위해 event package에서 core reason code를 재노출한다. */
+typealias CancellationReasonCode = io.bluetape4k.clinic.appointment.commitment.CancellationReasonCode
 
 /**
  * 알림 template parameter의 닫힌 type discriminator다.
@@ -13,26 +18,6 @@ enum class NotificationParameterType {
     APPOINTMENT_REMINDER,
     APPOINTMENT_CANCELLED,
     APPOINTMENT_RESCHEDULED,
-}
-
-/**
- * 취소 알림에 포함할 수 있는 등록된 취소 사유 code다.
- *
- * 병원별 등록 code를 그대로 보존하되 대문자 업무 code 형식만 허용한다. 자유 입력
- * 사유는 durable notification payload에 저장하지 않는다.
- */
-@JvmInline
-value class CancellationReasonCode(val value: String) : Serializable {
-    init {
-        require(REASON_CODE.matches(value)) {
-            "value must be a registered uppercase cancellation reason code"
-        }
-    }
-
-    companion object {
-        private val REASON_CODE = Regex("[A-Z][A-Z0-9_]{0,63}")
-        private const val serialVersionUID = 1L
-    }
 }
 
 /**
@@ -114,18 +99,19 @@ data class AppointmentReminderParameters(
 /**
  * 예약 취소 알림 template parameter다.
  *
- * 취소 사유는 등록된 [CancellationReasonCode]만 허용하고, 자유 입력 문구는 포함하지
- * 않는다.
+ * 취소 사유는 등록된 [CancellationReasonCode]와 bounded 안내 문구만 허용한다.
  */
 data class AppointmentCancelledParameters(
     val clinicDisplayName: String,
     val appointmentDate: LocalDate,
     val startTime: LocalTime,
     val cancellationReasonCode: CancellationReasonCode?,
+    val cancellationReasonDetail: String? = null,
 ) : NotificationTemplateParameters {
 
     init {
         validateDurableOpaqueString(clinicDisplayName, "clinicDisplayName", MAX_CLINIC_DISPLAY_NAME_LENGTH)
+        CancellationReasonRegistry.requireDetail(cancellationReasonDetail)
     }
 
     override val parameterType: NotificationParameterType = NotificationParameterType.APPOINTMENT_CANCELLED

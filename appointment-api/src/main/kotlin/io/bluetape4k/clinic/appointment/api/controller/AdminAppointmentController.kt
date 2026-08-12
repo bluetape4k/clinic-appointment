@@ -217,13 +217,13 @@ class AdminAppointmentController(
 
     @Operation(
         summary = "Cancel a proposed, held, or confirmed appointment",
-        description = "Releases active allocations and records only a registered cancellation reason code.",
+        description = "Patients may cancel with a registered reason code. ADMIN/STAFF may also provide a bounded patient-facing detail.",
     )
     @ApiResponses(
         ApiResponse(responseCode = "200", description = "Appointment cancelled"),
         ApiResponse(responseCode = "400", description = "Invalid cancellation reason"),
         ApiResponse(responseCode = "401", description = "Missing or invalid Gateway identity"),
-        ApiResponse(responseCode = "403", description = "Administrator or clinic scope rejected"),
+        ApiResponse(responseCode = "403", description = "Patient ownership or ADMIN/STAFF clinic scope rejected"),
         ApiResponse(responseCode = "404", description = "Commitment not found"),
         ApiResponse(responseCode = "409", description = "Appointment cannot be cancelled from its current state"),
         ApiResponse(responseCode = "412", description = "ETag does not match current version"),
@@ -245,7 +245,7 @@ class AdminAppointmentController(
         @Valid @RequestBody request: CancelAppointmentRequest,
     ): ResponseEntity<AppointmentCommitmentResponse> {
         val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
-            .requireAdminActor()
+            .requireCancellationActor(request.reasonDetail)
         return service.cancelAppointment(
             actor,
             id,

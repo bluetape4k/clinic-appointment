@@ -18,6 +18,7 @@ class AppointmentCommitmentMetricsTest {
         val metrics = AppointmentCommitmentMetrics(registry)
 
         metrics.recordProposalLatency("tenant-a", "clinic-7", CommitmentMetricResult.SUCCESS, Duration.ofMillis(12))
+        metrics.recordCancellationLatency("tenant-a", "clinic-7", CommitmentMetricResult.SUCCESS, Duration.ofMillis(18))
         metrics.recordProposalExpiry("tenant-a", "clinic-7", CommitmentExpiryReason.TTL)
         metrics.recordAllocationConflict("tenant-a", "clinic-7", CommitmentConflictReason.OVERLAP)
         metrics.recordOutboxLag("tenant-a", "clinic-7", Duration.ofMinutes(6))
@@ -37,5 +38,6 @@ class AppointmentCommitmentMetricsTest {
         registry.find("appointment.commitment.proposal.expired").counter().shouldNotBeNull().count() shouldBeEqualTo 1.0
         registry.find("appointment.commitment.allocation.conflict").counter().shouldNotBeNull().count() shouldBeEqualTo 1.0
         registry.find("appointment.commitment.migration.rejected").counter().shouldNotBeNull().count() shouldBeEqualTo 1.0
+        registry.find("appointment.commitment.cancellation.latency").timer().shouldNotBeNull().count() shouldBeEqualTo 1L
     }
 }

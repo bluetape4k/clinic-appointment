@@ -28,7 +28,6 @@ class NotificationOutboxCodec {
         enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
         enable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
-        enable(DeserializationFeature.FAIL_ON_NULL_CREATOR_PROPERTIES)
     }
 
     fun encode(envelope: NotificationOutboxEnvelope): String =
@@ -45,12 +44,20 @@ class NotificationOutboxCodec {
 
     private fun decodeStrict(json: String): NotificationOutboxEnvelope {
         val encoded = mapper.readValue<NotificationOutboxEnvelopeJson>(json)
-        if (encoded.schemaVersion != NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION) {
+        if (encoded.schemaVersion !in NotificationOutboxEnvelope.SUPPORTED_SCHEMA_VERSIONS) {
             throw invalidPayload()
         }
 
         val parameterType = encoded.parameterType.toParameterType()
-        return encoded.toEnvelope(parameterType)
+        return encoded.toEnvelope(parameterType).also { envelope ->
+            if (
+                envelope.schemaVersion == NotificationOutboxEnvelope.LEGACY_SCHEMA_VERSION &&
+                envelope.parameters is AppointmentCancelledParameters &&
+                envelope.parameters.cancellationReasonDetail != null
+            ) {
+                throw invalidPayload()
+            }
+        }
     }
 
     private fun NotificationOutboxEnvelope.toJson(): NotificationOutboxEnvelopeJson =
@@ -89,6 +96,7 @@ class NotificationOutboxCodec {
                     appointmentDate = typed.appointmentDate.toString(),
                     startTime = typed.startTime.toString(),
                     cancellationReasonCode = typed.cancellationReasonCode?.value,
+                    cancellationReasonDetail = typed.cancellationReasonDetail,
                 )
                 is AppointmentRescheduledParameters -> NotificationParametersJson.AppointmentRescheduled(
                     clinicDisplayName = typed.clinicDisplayName,
@@ -241,6 +249,7 @@ private interface NotificationParametersJson : Serializable {
         val appointmentDate: String,
         val startTime: String,
         val cancellationReasonCode: String?,
+        val cancellationReasonDetail: String? = null,
     ) : NotificationParametersJson {
 
         fun toParameters(): AppointmentCancelledParameters =
@@ -249,6 +258,7 @@ private interface NotificationParametersJson : Serializable {
                 appointmentDate = LocalDate.parse(appointmentDate),
                 startTime = LocalTime.parse(startTime),
                 cancellationReasonCode = cancellationReasonCode?.let(::CancellationReasonCode),
+                cancellationReasonDetail = cancellationReasonDetail,
             )
 
         companion object {
