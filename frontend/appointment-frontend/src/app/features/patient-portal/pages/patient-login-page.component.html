@@ -1,0 +1,51 @@
+<main class="auth-page" aria-labelledby="login-title">
+  <section class="auth-card">
+    <div class="auth-brand">PATIENT PORTAL</div>
+    <p class="auth-eyebrow">환자 인증</p>
+    <h1 id="login-title">예약을 이어서 확인하세요</h1>
+    <p class="auth-intro">전화번호, 이메일, 로그인 ID 중 하나로 안전하게 로그인합니다.</p>
+
+    <form #loginForm="ngForm" (ngSubmit)="submit()" novalidate>
+      <label>
+        <span>Tenant</span>
+        <input name="tenantCode" [ngModel]="tenantCode()" (ngModelChange)="tenantCode.set($event)" autocomplete="organization" required />
+      </label>
+
+      <div class="identifier-row">
+        <label>
+          <span>식별자 종류</span>
+          <select name="identifierKey" [ngModel]="identifierKey()" (ngModelChange)="identifierKey.set($event)" aria-label="식별자 종류">
+            @for (option of identifierKeys; track option.key) {
+              <option [value]="option.key">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+        <label class="identifier-value">
+          <span>식별자</span>
+          <input
+            name="identifierValue"
+            [ngModel]="identifierValue()"
+            (ngModelChange)="identifierValue.set($event)"
+            [autocomplete]="identifierKey() === 'EMAIL' ? 'email' : identifierKey() === 'PHONE' ? 'tel' : 'username'"
+            required
+          />
+        </label>
+      </div>
+
+      <label>
+        <span>비밀번호</span>
+        <input name="password" type="password" [ngModel]="password()" (ngModelChange)="password.set($event)" autocomplete="current-password" required />
+      </label>
+
+      @if (errorMessage(); as message) {
+        <p class="auth-error" role="alert">{{ message }}</p>
+      }
+
+      <button type="submit" [disabled]="auth.loading() || loginForm.invalid">
+        {{ auth.loading() ? '확인 중…' : '로그인' }}
+      </button>
+    </form>
+
+    <p class="auth-footer">처음 방문하셨나요? <a routerLink="/portal/register">환자 계정 만들기</a></p>
+  </section>
+</main>

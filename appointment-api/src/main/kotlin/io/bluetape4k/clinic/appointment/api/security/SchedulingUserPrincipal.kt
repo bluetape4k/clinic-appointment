@@ -41,6 +41,8 @@ import java.time.Instant
  * @property issuer 감사 목적으로 복사한 검증된 JWT issuer.
  * @property tokenId 검증된 non-blank JWT `jti`. idempotency key가 아니라 길이 제한 audit evidence이다.
  * @property authenticatedAt JWT `auth_time` claim에서 온 UTC instant.
+ * @property expiresAt 검증된 JWT `exp` claim에서 온 UTC instant. 오래된 compatibility
+ * constructor는 [Instant.EPOCH] sentinel을 사용하므로 신규 session 응답에서 재사용하지 않는다.
  */
 data class SchedulingUserPrincipal(
     val userId: String,
@@ -58,6 +60,7 @@ data class SchedulingUserPrincipal(
     val issuer: String = "",
     val tokenId: String = "",
     val authenticatedAt: Instant = Instant.EPOCH,
+    val expiresAt: Instant = Instant.EPOCH,
 ) : UserDetails, Serializable {
     companion object {
         private const val serialVersionUID = 4L

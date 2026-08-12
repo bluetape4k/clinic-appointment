@@ -25,6 +25,8 @@ import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyDefinitionReco
 import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyPreviewJobRecord
 import io.bluetape4k.clinic.appointment.model.dto.SchedulingPolicyScopeHeadRecord
 import io.bluetape4k.clinic.appointment.model.dto.TenantGroupRecord
+import io.bluetape4k.clinic.appointment.model.dto.PatientAccountRecord
+import io.bluetape4k.clinic.appointment.model.dto.PatientLoginIdentityRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentEquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentDependencyRecord
@@ -62,6 +64,8 @@ import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyDefinitions
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyPreviewJobs
 import io.bluetape4k.clinic.appointment.model.tables.SchedulingPolicyScopeHeads
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import io.bluetape4k.clinic.appointment.model.tables.PatientAccounts
+import io.bluetape4k.clinic.appointment.model.tables.PatientLoginIdentities
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentDependencies
@@ -80,6 +84,26 @@ fun ResultRow.toTenantGroupRecord() = TenantGroupRecord(
     displayName = this[TenantGroups.displayName],
     active = this[TenantGroups.active],
     createdAt = this[TenantGroups.createdAt],
+)
+
+fun ResultRow.toPatientAccountRecord() = PatientAccountRecord(
+    id = this[PatientAccounts.id].value,
+    tenantGroupId = this[PatientAccounts.tenantGroupId].value,
+    patientSubject = this[PatientAccounts.patientSubject],
+    displayName = this[PatientAccounts.displayName],
+    passwordHash = this[PatientAccounts.passwordHash],
+    active = this[PatientAccounts.active],
+    createdAt = this[PatientAccounts.createdAt],
+    updatedAt = this[PatientAccounts.updatedAt],
+)
+
+fun ResultRow.toPatientLoginIdentityRecord() = PatientLoginIdentityRecord(
+    id = this[PatientLoginIdentities.id].value,
+    patientAccountId = this[PatientLoginIdentities.patientAccountId].value,
+    tenantGroupId = this[PatientLoginIdentities.tenantGroupId].value,
+    key = this[PatientLoginIdentities.key],
+    normalizedValue = this[PatientLoginIdentities.normalizedValue],
+    createdAt = this[PatientLoginIdentities.createdAt],
 )
 
 fun ResultRow.toClinicRecord() = ClinicRecord(

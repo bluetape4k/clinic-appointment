@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import org.junit.jupiter.api.Test
+import java.time.Duration
 
 /** Redis 운영 URL 검증이 local fallback과 production TLS 경계를 분리하는지 확인합니다. */
 class CacheConfigSecurityTest {
@@ -56,6 +57,17 @@ class CacheConfigSecurityTest {
             }
         } finally {
             client.shutdown()
+        }
+    }
+
+    @Test
+    fun `Redis command timeout은 양수만 허용한다`() {
+        assertFailsWith<IllegalArgumentException> {
+            CacheConfig().redisClientWithTimeout(
+                url = "redis://localhost:6379",
+                requireTls = false,
+                commandTimeout = Duration.ZERO,
+            )
         }
     }
 }

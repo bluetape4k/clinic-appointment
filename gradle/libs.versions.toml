@@ -190,6 +190,7 @@ testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgr
 testcontainers-mysql = { module = "org.testcontainers:testcontainers-mysql" }
 testcontainers-mariadb = { module = "org.testcontainers:testcontainers-mariadb" }
 testcontainers-cockroachdb = { module = "org.testcontainers:testcontainers-cockroachdb" }
+testcontainers-toxiproxy = { module = "org.testcontainers:testcontainers-toxiproxy" }
 
 # ── Gatling (project-local version) ───────────────────────────────────────
 gatling-charts-highcharts = { module = "io.gatling.highcharts:gatling-charts-highcharts", version.ref = "gatling" }

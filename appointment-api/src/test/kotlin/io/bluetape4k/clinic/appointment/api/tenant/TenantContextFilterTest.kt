@@ -186,6 +186,32 @@ class TenantContextFilterTest {
     }
 
     @Test
+    fun `public patient auth route resolves active tenant before controller`() {
+        val response = MockHttpServletResponse()
+        val chain = CapturingFilterChain {
+            TenantContext.requireCurrent().tenantCode shouldBeEqualTo "tenant-a"
+        }
+
+        filter.doFilter(tenantRequest("/api/tenant-a/auth/csrf"), response, chain)
+
+        chain.called.shouldBeTrue()
+        response.status shouldBeEqualTo HttpStatus.OK.value()
+        TenantContext.current().shouldBeNull()
+    }
+
+    @Test
+    fun `public patient auth route rejects inactive tenant before controller`() {
+        val response = MockHttpServletResponse()
+        val chain = CapturingFilterChain()
+
+        filter.doFilter(tenantRequest("/api/missing/auth/csrf"), response, chain)
+
+        chain.called shouldBeEqualTo false
+        response.status shouldBeEqualTo HttpStatus.NOT_FOUND.value()
+        TenantContext.current().shouldBeNull()
+    }
+
+    @Test
     fun `request entry clears stale context before a tenantless dispatch`() {
         TenantContext.set(
             TenantInfo(

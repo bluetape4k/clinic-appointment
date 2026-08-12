@@ -1,6 +1,14 @@
 <div class="portal-frame">
   <nav class="portal-nav" aria-label="환자 포털">
-    <strong class="portal-brand">임상 포털</strong>
+    <div class="portal-nav-heading">
+      <div>
+        <strong class="portal-brand">임상 포털</strong>
+        @if (auth.session(); as session) {
+          <span class="portal-user">{{ session.displayName }} · {{ session.tenantCode }}</span>
+        }
+      </div>
+      <button type="button" class="logout-button" (click)="logout()">로그아웃</button>
+    </div>
     @for (item of navItems; track item.route) {
       <a
         [routerLink]="item.route"
