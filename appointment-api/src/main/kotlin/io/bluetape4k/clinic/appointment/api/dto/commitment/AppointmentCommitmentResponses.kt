@@ -178,8 +178,10 @@ internal data class AppointmentCommitmentDisplay(
     val sessionNumber: Int? = null,
     val totalSessions: Int? = null,
     val clinicDisplayName: String? = null,
-) {
+) : Serializable {
     internal companion object {
+        private const val serialVersionUID = 1L
+
         val EMPTY = AppointmentCommitmentDisplay()
     }
 }

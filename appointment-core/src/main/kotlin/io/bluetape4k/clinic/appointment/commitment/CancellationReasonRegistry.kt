@@ -22,11 +22,13 @@ object CancellationReasonRegistry {
         "CLINIC_REQUEST",
     )
 
+    /** 등록된 취소 사유 code인지 검증하고 원래 값을 반환합니다. */
     fun requireCode(value: String): String {
         require(value in codes) { "reasonCode must be a registered cancellation reason code" }
         return value
     }
 
+    /** 취소 상세 사유의 공백·길이·제어문자 계약을 검증합니다. */
     fun requireDetail(value: String?): String? {
         if (value == null) return null
         require(value.isNotBlank()) { "reasonDetail must not be blank" }
@@ -39,7 +41,7 @@ object CancellationReasonRegistry {
         return value
     }
 
-    /** `cancel-v1\0` + length-prefixed UTF-8 fields의 SHA-256 hex digest다. */
+    /** `cancel-v1\0` + length-prefixed UTF-8 fields의 SHA-256 hex digest를 반환합니다. */
     fun canonicalHashHex(reasonCode: String, reasonDetail: String?): String =
         MessageDigest.getInstance("SHA-256")
             .digest(canonicalBytes(reasonCode, reasonDetail))

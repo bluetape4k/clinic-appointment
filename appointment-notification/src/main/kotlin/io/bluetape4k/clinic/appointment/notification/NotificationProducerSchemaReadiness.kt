@@ -13,6 +13,7 @@ class NotificationProducerSchemaReadiness(
     private val schemaReadiness: NotificationSchemaReadiness?,
     private val templateCatalog: NotificationTemplateCatalog = BuiltInWaitlistNotificationTemplateCatalog,
 ) {
+    /** 현재 producer 설정과 schema/template 준비 상태를 평가합니다. */
     fun check(): NotificationReadiness {
         if (!properties.v2Producer) return NotificationReadiness.up()
 
@@ -41,6 +42,7 @@ class NotificationProducerSchemaReadiness(
         return NotificationReadiness.up()
     }
 
+    /** v2 producer를 안전하게 활성화할 수 있는지 반환합니다. */
     fun allowsV2(): Boolean = properties.v2Producer && check().available
 }
 

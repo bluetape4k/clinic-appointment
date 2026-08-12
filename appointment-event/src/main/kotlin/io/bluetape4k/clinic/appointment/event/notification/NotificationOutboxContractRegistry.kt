@@ -8,6 +8,12 @@ package io.bluetape4k.clinic.appointment.event.notification
  */
 object NotificationOutboxContractRegistry {
 
+    /**
+     * envelope 내부 discriminator와 typed parameter의 event 계약을 검증합니다.
+     *
+     * @param envelope 검증할 notification envelope입니다.
+     * @throws NotificationContractException event, slot, template, parameter 조합이 유효하지 않을 때.
+     */
     fun validate(envelope: NotificationOutboxEnvelope) {
         val expectedParameterType = when (envelope.eventType) {
             NotificationEventType.CREATED -> NotificationParameterType.APPOINTMENT_CREATED
@@ -51,6 +57,18 @@ object NotificationOutboxContractRegistry {
         }
     }
 
+    /**
+     * outbox row metadata가 envelope의 canonical 계약과 일치하는지 검증합니다.
+     *
+     * @param envelope codec에서 복원한 envelope입니다.
+     * @param channel 저장된 notification channel입니다.
+     * @param eventType 저장된 event type입니다.
+     * @param notificationSlot 저장된 notification slot입니다.
+     * @param templateKey 저장된 template key입니다.
+     * @param templateVersion 저장된 template version입니다.
+     * @param parameterType 저장된 parameter type입니다.
+     * @throws NotificationContractException envelope와 row metadata가 불일치할 때.
+     */
     fun validateStoredMetadata(
         envelope: NotificationOutboxEnvelope,
         channel: NotificationChannelType,
