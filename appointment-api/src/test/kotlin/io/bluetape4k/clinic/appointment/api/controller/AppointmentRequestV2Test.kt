@@ -7,6 +7,7 @@ import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiException
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ConsentEvidenceRequest
+import io.bluetape4k.clinic.appointment.api.dto.commitment.CancelAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CreateAppointmentRequestV2
 import io.bluetape4k.clinic.appointment.api.dto.commitment.DeclineProposalRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ProposalDecisionRequest
@@ -57,6 +58,35 @@ class AppointmentRequestV2Test {
 
         assertFailsWith<IllegalArgumentException> {
             DeclineProposalRequest("환자 전화번호 010-1234-5678")
+        }
+    }
+
+    @Test
+    fun `operator cancellation detail is bounded and rejects control characters`() {
+        CancelAppointmentRequest(
+            reasonCode = "CUSTOMER_REQUEST",
+            reasonDetail = "진료 일정이 변경되어 예약을 취소합니다.",
+        ).reasonDetail shouldBeEqualTo "진료 일정이 변경되어 예약을 취소합니다."
+
+        listOf(
+            " ",
+            "a".repeat(501),
+            "환자\n요청",
+            "환자\u0000요청",
+        ).forEach { invalidDetail ->
+            assertFailsWith<IllegalArgumentException> {
+                CancelAppointmentRequest(
+                    reasonCode = "CUSTOMER_REQUEST",
+                    reasonDetail = invalidDetail,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `cancellation reason must come from the closed registry`() {
+        assertFailsWith<IllegalArgumentException> {
+            CancelAppointmentRequest(reasonCode = "UNREGISTERED_REASON")
         }
     }
 

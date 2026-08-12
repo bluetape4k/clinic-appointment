@@ -108,9 +108,10 @@ bytes로 직렬화하며, nullable detail은 `0xffffffff` length로 표현한다
 code point를 그대로 UTF-8로 인코딩하고 Unicode normalization이나 delimiter join을
 사용하지 않는다.
 
-reason code의 단일 source of truth는
-`appointment-api/.../commitment/CancellationReasonRegistry.kt`이며 현재 등록
-목록은 `CUSTOMER_REQUEST`, `REFUND`, `EQUIPMENT_FAILURE`, `CLINIC_REQUEST`이다.
+reason code와 canonical codec의 단일 source of truth는
+`appointment-core/.../commitment/CancellationReasonRegistry.kt`이다. API와
+event가 함께 의존하는 core contract로 모듈 순환을 만들지 않으며, 현재 등록 목록은
+`CUSTOMER_REQUEST`, `REFUND`, `EQUIPMENT_FAILURE`, `CLINIC_REQUEST`이다.
 DTO·command·event codec·OpenAPI enum·frontend catalog는 이 registry를 사용하고
 미등록 대문자 code도 거부한다.
 
