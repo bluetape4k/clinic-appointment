@@ -42,6 +42,17 @@ structured key를 선택하고 CSRF/login/session/notification/SSE 경계를 통
 보장하지 못했다. Playwright helper가 실제 login route를 거치도록 바꾸자 tenant
 session 복원과 시각 fixture 전 인증 상태가 같은 계약을 사용하게 됐다.
 
+### 6. Redis near-cache는 fixture 종료 순서와 command timeout을 함께 고정한다
+
+Spring `@SpringBootTest`가 Redis singleton보다 오래 살아 있으면 Testcontainers가
+먼저 내려간 뒤 Lettuce `CLIENT TRACKING OFF` 정리가 reconnect loop를 만들 수 있다.
+공통 기반 클래스를 쓰지 않는 통합 테스트도 `@DirtiesContext(AFTER_CLASS)`와
+`SAME_THREAD`를 적용해 context를 먼저 닫고, custom `RedisClient`는
+`RedisURI.timeout`을 명시해야 한다. `bluetape4k-testcontainers`의
+`ToxiproxyServer`와 `RedisServer`를 같은 network에 붙여 downstream latency를 주입하면
+정상 응답 경로만 확인하는 cache test가 아닌 종료 경로를 재현할 수 있다. 이 회귀는
+전체 API suite가 실제로 JVM을 종료하는지까지 확인해야 완료로 판정한다.
+
 ## 재발 방지 규칙
 
 - 신규 인증 방식은 `{key,value}` 또는 명시적 sealed 계약을 먼저 정하고, DB unique
@@ -54,8 +65,8 @@ session 복원과 시각 fixture 전 인증 상태가 같은 계약을 사용하
 - protected profile의 외부 adapter는 fail-closed로 만들고, local/test fallback은
   상태가 없고 bounded인지 코드와 profile matrix test로 확인한다.
 - 모듈 전체 테스트가 fixture 종료에서 멈추면 테스트 본문이 통과했다는 이유로 green으로
-  보고하지 않는다. 종료 원인과 재현 환경을 P2 gap으로 기록하고, 정상 종료하는 targeted
-  evidence를 별도로 남긴다.
+  보고하지 않는다. Redis 기반 Spring context는 class 뒤에 닫고, command timeout과
+  Toxiproxy 장애 회귀를 함께 검증한 뒤 전체 JVM exit code를 확인한다.
 
 ## 검증 요약
 
@@ -63,7 +74,8 @@ session 복원과 시각 fixture 전 인증 상태가 같은 계약을 사용하
 - API auth/security/context targeted: 53 tests 통과
 - API wiring/ApplicationContextRunner: 14 tests 통과
 - frontend: 37 files, 225 tests 통과; Angular build 통과; Playwright E2E 3개 통과
-- full API: Redis teardown 뒤 Lettuce reconnect loop로 process exit 미완료
+- full API: 762 tests 통과, 4분 50초에 `BUILD SUCCESSFUL` 및 process exit 0
+- Redis lifecycle: Toxiproxy latency 회귀 1개 및 timeout/security targeted 6개 통과
 - production limiter/cookie/DB canary: 환경 부재로 `PENDING`
 
 ## 공식 참고

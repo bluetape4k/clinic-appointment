@@ -13,6 +13,7 @@ import io.bluetape4k.io.serializer.ForyBinarySerializer
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.redis.lettuce.codec.LettuceBinaryCodecs
 import io.lettuce.core.RedisClient
+import io.lettuce.core.RedisURI
 import io.lettuce.core.codec.RedisCodec
 import org.apache.fory.Fory
 import org.apache.fory.ThreadSafeFory
@@ -74,15 +75,47 @@ class CacheConfig {
         private const val MASTER_CACHE_LOCAL_SIZE = 500L
         private val MASTER_CACHE_LOCAL_TTL: Duration = Duration.ofMinutes(10)
         private val MASTER_CACHE_REDIS_TTL: Duration = Duration.ofHours(1)
+        private val DEFAULT_REDIS_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(3)
     }
 
     @Bean(destroyMethod = "shutdown")
     fun redisClient(
         @Value("\${spring.data.redis.url:redis://localhost:6379}") url: String,
         @Value("\${scheduling.cache.redis.require-tls:false}") requireTls: Boolean,
-    ): RedisClient = RedisClient.create(
-        RedisCacheSecurityPolicy().validate(url, requireTls).toString()
-    )
+        @Value("\${scheduling.cache.redis.command-timeout:3s}") commandTimeout: Duration,
+    ): RedisClient = createRedisClient(url, requireTls, commandTimeout)
+
+    /**
+     * 테스트에서 Spring 바인딩 없이 TLS URL 정책을 검증하기 위한 기본 timeout wiring이다.
+     */
+    internal fun redisClient(url: String, requireTls: Boolean): RedisClient =
+        createRedisClient(url, requireTls, DEFAULT_REDIS_COMMAND_TIMEOUT)
+
+    /**
+     * Redis 명령 timeout을 명시적으로 고정한 client를 생성한다.
+     *
+     * Near-cache의 RESP3 `CLIENT TRACKING OFF` 정리는 Redis가 응답하지 않는
+     * 종료 경로에서도 bounded wait를 가져야 Spring context와 Testcontainers가
+     * 정해진 순서로 종료될 수 있다.
+     */
+    internal fun redisClientWithTimeout(
+        url: String,
+        requireTls: Boolean,
+        commandTimeout: Duration,
+    ): RedisClient = createRedisClient(url, requireTls, commandTimeout)
+
+    private fun createRedisClient(
+        url: String,
+        requireTls: Boolean,
+        commandTimeout: Duration,
+    ): RedisClient {
+        require(!commandTimeout.isNegative && !commandTimeout.isZero) {
+            "Redis command timeout must be positive"
+        }
+        val redisUri = RedisURI.create(RedisCacheSecurityPolicy().validate(url, requireTls).toString())
+        redisUri.timeout = commandTimeout
+        return RedisClient.create(redisUri)
+    }
 
     @Bean(destroyMethod = "close")
     fun clinicDoctorsCache(redisClient: RedisClient): NearCacheOperations<List<DoctorRecord>> =

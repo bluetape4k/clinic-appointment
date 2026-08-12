@@ -20,6 +20,9 @@ import org.mockito.Mockito.mockingDetails
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
+import org.junit.jupiter.api.parallel.Execution
+import org.junit.jupiter.api.parallel.ExecutionMode
+import org.springframework.test.annotation.DirtiesContext
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpHeaders
@@ -49,6 +52,8 @@ import tools.jackson.databind.json.JsonMapper
 )
 @ActiveProfiles("test", "integration-test")
 @ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@Execution(ExecutionMode.SAME_THREAD)
 class AppointmentCommitmentSecurityIntegrationTest {
 
     companion object {
