@@ -27,6 +27,7 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/controller/AppointmentCommitmentHttpSupport.kt`: PATIENT/operator cancel actor helper
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/DatabaseConfig.kt`: dev/test SchemaInit에 cancellation detail table 등록
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentCommands.kt`: 내부 bounded detail command
+- `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/CancellationReasonRegistry.kt`: DTO·command·event·OpenAPI가 공유하는 폐쇄 reason code registry와 canonical hash codec
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentCommandService.kt`: cancellation snapshot, audit/outbox/notification 원자 기록
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentMetrics.kt`: cancel 전용 timer/result/replay/lock contention metric
 - `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/model/tables/AppointmentCancellationDetails.kt`: Exposed cancellation detail table
@@ -35,11 +36,13 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 - `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxContracts.kt`: schema version compatibility and bounded text contract
 - `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxCodec.kt`: v1/v2 dual-read and v2 encode
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/notification/AppointmentNotificationWriter.kt`: cancellation detail 전달과 template version
+- `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ServiceConfig.kt`: v2-producer flag를 writer schema 선택과 activation gate에 연결
 - `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationTemplateRenderer.kt`: cancellation detail text/HTML render와 escape
 - `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationTemplateCatalog.kt`: cancellation template v2 채널별 readiness
 - `appointment-notification/src/test`: worker/renderer/template readiness와 reminder lease 경합 통합 테스트
 - `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationSchemaReadiness.kt`: codec/template/channel contract readiness
 - `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationProperties.kt`: default-off v2 producer flag와 허용 schema policy
+- `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfiguration.kt`: property binding, worker gate, readiness/invalid-config wiring
 - `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxMetrics.kt`: schema/decode/template readiness bounded metrics
 - `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxAlertPolicy.kt`: activation/rollback alert threshold와 지속 시간
 - `appointment-api/src/gatling/kotlin/io/bluetape4k/clinic/appointment/api/PatientAppointmentCancelPostgresSimulation.kt`: PostgreSQL cancel load model와 assertions
@@ -109,11 +112,11 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentCommandServiceTest.kt`
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/service/DefaultAppointmentCommitmentApplicationServiceTest.kt`
 
-- [ ] patient/admin cancel command가 detail을 전달하고 command hash에 `reasonCode|reasonDetail` canonical part가 포함되는 실패 테스트를 추가한다.
+- [ ] patient/admin cancel command가 detail을 전달하고 command hash에 registry가 정의한 canonical part가 포함되는 실패 테스트를 추가한다.
 - [ ] `CancelAppointmentCommand.reasonDetail: String?`에 동일한 bounded validation을 적용한다. patient branch는 null을 강제한다.
 - [ ] controller를 우회한 application/command 직접 호출에서도 `ADMIN`/`STAFF`만 detail을 허용하고 `PATIENT` detail은 거부하는 부정 테스트를 추가한다.
-- [ ] detail은 versioned length-prefixed UTF-8 canonical encoding으로 hash하며 Unicode 정규화, null, delimiter 문자를 포함한 replay mismatch 테스트를 추가한다.
-- [ ] reason code는 대문자 정규식만으로 허용하지 않고 폐쇄 enum/registry를 통해 검증하며 미등록 code 테스트를 추가한다.
+- [ ] detail은 `cancel-v1\\0` prefix 뒤에 `reasonCode`와 nullable `reasonDetail`을 각각 unsigned 32-bit big-endian UTF-8 byte length + bytes로 직렬화하는 단일 length-prefixed canonical codec으로 hash한다. null은 `0xffffffff` length로 표현하고 Unicode는 입력 code point를 그대로 UTF-8로 인코딩하며 normalization/delimiter join을 사용하지 않는다. 이 형식의 Unicode·null·delimiter replay mismatch 테스트를 추가한다.
+- [ ] `CancellationReasonRegistry`를 단일 source of truth로 만들고 현재 허용 code(`CUSTOMER_REQUEST`, `REFUND`, `EQUIPMENT_FAILURE`, `CLINIC_REQUEST`)를 명시한다. DTO·command·event codec·OpenAPI enum·frontend catalog가 registry를 사용하며 미등록 code 테스트를 추가한다.
 - [ ] cancellation transaction에서 `AppointmentCancellationDetails.insert`를 상태 전환 직후, audit/scheduling outbox/notification 전에 실행한다. commitment 하나당 duplicate row가 생기면 command를 실패시킨다.
 - [ ] `AppointmentAuditEvents.payloadHash`와 scheduling outbox JSON에는 raw detail을 로그로 출력하지 않고 command hash/detail snapshot 규칙을 적용한다.
 - [ ] success, duplicate idempotent replay, stale ETag, invalid transition, transaction rollback에서 detail/audit/outbox row 수를 검증한다.
@@ -153,6 +156,8 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 - [ ] consumer-first rollout을 고정한다: decoder `{1,2}` + writer `1` 배포 후 모든 worker replica readiness/codec matrix 확인, 그 다음 feature flag로 writer `2`를 활성화한다. rollback은 writer `1` 전환 뒤 `schema_version=2`의 `PENDING`/`PROCESSING`/`RETRY_WAIT`가 lease+retry 최대 구간 동안 0임을 확인해야 dual-reader 제거를 허용한다.
 - [ ] 실제 feature flag/property, readiness endpoint/health indicator, 모든 replica 확인 명령과 timeout 산식을 문서화한다. `schema_version=2` backlog 0 SQL, decode failure/template readiness metric·alert를 operator runbook과 테스트 fixture에 고정한다. compile-time `CURRENT_SCHEMA_VERSION`만 바꾸는 staged rollout은 허용하지 않는다.
 - [ ] activation과 rollback checklist를 분리한다. 현재 `@ConfigurationProperties(prefix = "clinic.notification")`에 `v2-producer`를 추가해 default-off `clinic.notification.v2-producer`로 통일하고 binding/invalid-config fail-fast test를 둔다. 모든 worker 동일 build/codec readiness와 active channel별 template readiness 후에만 flag를 켠다. rollback은 flag off, v2 `PENDING`/`PROCESSING`/`RETRY_WAIT`와 `EXHAUSTED` 0 또는 승인된 reconciliation, dual-reader 보존 기간을 요구한다.
+- [ ] `NotificationAutoConfiguration`의 `@EnableConfigurationProperties(NotificationProperties::class)` binding, default-off `clinic.notification.v2-producer`, invalid-config fail-fast, worker gate와 readiness health indicator를 실제 bean graph에 연결하고 context test로 검증한다. 모든 worker 동일 build/codec readiness와 active channel별 template readiness 후에만 flag를 켠다.
+- [ ] `ServiceConfig.appointmentNotificationWriter`가 동일 flag와 readiness gate를 받아 cancellation만 schema v2로 선택하고, flag off/ready 실패에서는 기존 schema v1을 유지하는지 context/bean contract test로 검증한다. `NotificationAutoConfiguration`의 worker/readiness/metrics/alert bean wiring과 함께 실제 activation 경계를 증명한다.
 - [ ] outbox에 schema version column이 없으므로 vendor별 JSON extraction 또는 indexed projection의 실행 가능한 query, 예상 출력, timeout, redrive/suppression 절차를 runbook과 test fixture에 고정한다.
 - [ ] codec failure, schema-version backlog, template readiness를 bounded metric/alert로 분리하고 activation/rollback threshold, 평가·해제 지속 시간, dashboard query와 담당자 행동을 고정한다.
 

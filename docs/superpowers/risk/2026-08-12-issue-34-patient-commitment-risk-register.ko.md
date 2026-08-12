@@ -24,6 +24,10 @@
 | detail이 민감정보 저장소로 확산 | DB/outbox/DLQ/backup/provider log에 PHI/PII 또는 raw text가 남음 | 고정 안내문 mapping 또는 패턴 차단, ACL/보존·삭제 정책, 모든 sink redaction과 negative test | detail producer 중지 후 code-only mode; privacy/security lane 재실행 |
 | 성능 gate가 합성 또는 단일 실행에 머묾 | H2/atOnceUsers/합성 queue 비용만 통과하거나 baseline artifact가 없음 | PostgreSQL Testcontainers cancel simulation과 실제 codec backlog benchmark를 동일 환경 3회 실행하고 report comparator/CI exit code를 강제 | benchmark artifact/comparator가 없으면 PR 준비 `PENDING`; 절대·상대 latency/error/retry/lock threshold 초과 시 merge 중단 |
 | 의도된 conflict를 오류로 집계 | load mix의 expected `412`/retry exhaustion 때문에 error threshold가 필연적으로 초과 | scenario success와 unexpected 5xx/timeout·비의도 exhaustion의 분모와 report field를 분리 | benchmark report schema/비교기에서 expected outcome을 제외하지 않으면 실행 중단 |
+| canonical hash 규약이 구현마다 달라 replay 충돌/우회 발생 | delimiter join, Unicode normalization, null 처리의 구현 차이 | `CancellationReasonRegistry`의 `cancel-v1` length-prefixed UTF-8 codec만 허용하고 API/application/command replay 테스트로 고정 | codec test가 실패하면 idempotency rollout 중단 |
+| 미등록 cancellation reason code가 durable event로 유입 | regex만 통과한 신규 code가 DTO·event·frontend에서 서로 다르게 해석됨 | 폐쇄 registry를 DTO·command·event codec·OpenAPI·frontend catalog의 단일 source로 사용 | registry contract test가 없으면 producer 활성화 PENDING |
+| notification property가 실제 worker gate와 분리됨 | flag가 설정돼도 auto-configuration이 binding/health/worker에 연결되지 않거나 invalid config가 기동 후 발견됨 | `NotificationAutoConfiguration` context test로 `clinic.notification.v2-producer` binding, default-off, fail-fast, readiness gate를 검증 | wiring evidence 없이는 v2 producer 활성화 금지 |
+| API writer와 notification worker가 서로 다른 rollout flag를 사용함 | `ServiceConfig.appointmentNotificationWriter`가 readiness와 무관하게 v2 envelope를 생성하거나 worker가 v1-only로 기동함 | ServiceConfig writer, NotificationAutoConfiguration worker/readiness/metrics/alert가 같은 properties/gate를 주입받는 context contract test | flag/readiness bean wiring 증거가 없으면 producer 전환 PENDING |
 
 ## 중단 기준
 

@@ -100,9 +100,19 @@ key만 사용한다. 생성의 `412/409`는 같은 key의 최초 proposal 결과
 ### Actor와 command
 
 `AppointmentCommitmentApplicationService.cancelAppointment`는 resolver가
-검증한 actor를 command에 전달한다. command context hash에는 `reasonCode`와
-관리자 detail의 canonical 값이 함께 포함되어 같은 idempotency key로 다른
-문구를 재사용할 수 없게 한다.
+검증한 actor를 command에 전달한다. command context hash에는 registry가 정의한
+`cancel-v1` canonical codec으로 `reasonCode`와 관리자 detail을 함께 포함해
+같은 idempotency key로 다른 문구를 재사용할 수 없게 한다. codec은
+`cancel-v1\\0` prefix 뒤 각 필드를 unsigned 32-bit big-endian UTF-8 byte length와
+bytes로 직렬화하며, nullable detail은 `0xffffffff` length로 표현한다. 입력
+code point를 그대로 UTF-8로 인코딩하고 Unicode normalization이나 delimiter join을
+사용하지 않는다.
+
+reason code의 단일 source of truth는
+`appointment-api/.../commitment/CancellationReasonRegistry.kt`이며 현재 등록
+목록은 `CUSTOMER_REQUEST`, `REFUND`, `EQUIPMENT_FAILURE`, `CLINIC_REQUEST`이다.
+DTO·command·event codec·OpenAPI enum·frontend catalog는 이 registry를 사용하고
+미등록 대문자 code도 거부한다.
 
 controller는 role별 입력 규칙만 담당하고, tenant·clinic·patient 소유권과
 상태 전이는 기존 access resolver와 command service가 담당한다. request body는
@@ -150,6 +160,15 @@ email, rendered message는 계속 durable envelope에 넣지 않는다.
   feature flag를 통해 producer를 v2로 전환한다. 모든 active worker replica가
   동일 build와 codec `{1,2}` readiness를 보고하지 않으면 producer를 활성화하지
   않는다.
+- `NotificationAutoConfiguration`은 `@EnableConfigurationProperties`로
+  `NotificationProperties`를 실제 worker/health bean에 연결한다. 이 binding은
+  `clinic.notification.v2-producer`를 default-off로 두고 invalid config를
+  fail-fast하며, codec/template/channel readiness가 모두 준비되지 않으면 v2
+  producer worker를 생성하거나 활성화하지 않는다.
+- API의 `ServiceConfig.appointmentNotificationWriter`도 같은 properties/readiness
+  gate를 주입받아 cancellation만 v2를 선택한다. flag가 꺼져 있거나 readiness가
+  준비되지 않으면 writer는 v1로 유지하며, auto-configuration의 worker·health·
+  metrics·alert bean과 writer의 선택이 context test에서 같은 경계를 사용해야 한다.
 - v2의 취소 template version은 `2`로 올리고, 다른 template은 version `1`을
   유지한다.
 - notification renderer/catalog가 cancellation template version `2`와 code/detail
