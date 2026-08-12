@@ -27,7 +27,7 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/controller/AppointmentCommitmentHttpSupport.kt`: PATIENT/operator cancel actor helper
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/DatabaseConfig.kt`: dev/test SchemaInit에 cancellation detail table 등록
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentCommands.kt`: 내부 bounded detail command
-- `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/CancellationReasonRegistry.kt`: DTO·command·event·OpenAPI가 공유하는 폐쇄 reason code registry와 canonical hash codec
+- `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/commitment/CancellationReasonRegistry.kt`: API·event·notification이 함께 의존하는 폐쇄 reason code registry와 canonical hash codec
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentCommandService.kt`: cancellation snapshot, audit/outbox/notification 원자 기록
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentMetrics.kt`: cancel 전용 timer/result/replay/lock contention metric
 - `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/model/tables/AppointmentCancellationDetails.kt`: Exposed cancellation detail table
@@ -116,7 +116,7 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 - [ ] `CancelAppointmentCommand.reasonDetail: String?`에 동일한 bounded validation을 적용한다. patient branch는 null을 강제한다.
 - [ ] controller를 우회한 application/command 직접 호출에서도 `ADMIN`/`STAFF`만 detail을 허용하고 `PATIENT` detail은 거부하는 부정 테스트를 추가한다.
 - [ ] detail은 `cancel-v1\\0` prefix 뒤에 `reasonCode`와 nullable `reasonDetail`을 각각 unsigned 32-bit big-endian UTF-8 byte length + bytes로 직렬화하는 단일 length-prefixed canonical codec으로 hash한다. null은 `0xffffffff` length로 표현하고 Unicode는 입력 code point를 그대로 UTF-8로 인코딩하며 normalization/delimiter join을 사용하지 않는다. 이 형식의 Unicode·null·delimiter replay mismatch 테스트를 추가한다.
-- [ ] `CancellationReasonRegistry`를 단일 source of truth로 만들고 현재 허용 code(`CUSTOMER_REQUEST`, `REFUND`, `EQUIPMENT_FAILURE`, `CLINIC_REQUEST`)를 명시한다. DTO·command·event codec·OpenAPI enum·frontend catalog가 registry를 사용하며 미등록 code 테스트를 추가한다.
+- [ ] `appointment-core`의 `CancellationReasonRegistry`를 단일 source of truth로 만들고 현재 허용 code(`CUSTOMER_REQUEST`, `REFUND`, `EQUIPMENT_FAILURE`, `CLINIC_REQUEST`)를 명시한다. API DTO/command, event codec, notification writer, OpenAPI enum, frontend catalog는 이 core contract에서 파생·검증하며 미등록 code 테스트를 추가한다. 모듈 의존 순환을 만들기 위해 API registry를 event가 참조하는 방식은 허용하지 않는다.
 - [ ] cancellation transaction에서 `AppointmentCancellationDetails.insert`를 상태 전환 직후, audit/scheduling outbox/notification 전에 실행한다. commitment 하나당 duplicate row가 생기면 command를 실패시킨다.
 - [ ] `AppointmentAuditEvents.payloadHash`와 scheduling outbox JSON에는 raw detail을 로그로 출력하지 않고 command hash/detail snapshot 규칙을 적용한다.
 - [ ] success, duplicate idempotent replay, stale ETag, invalid transition, transaction rollback에서 detail/audit/outbox row 수를 검증한다.
@@ -132,12 +132,16 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 ### Task 4: notification schema v2와 writer 전달
 
 **Files:**
+- Modify: `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/commitment/CancellationReasonRegistry.kt`
 - Modify: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationTemplateParameters.kt`
 - Modify: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxContracts.kt`
 - Modify: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxCodec.kt`
 - Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/notification/AppointmentNotificationWriter.kt`
+- Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ServiceConfig.kt`
 - Test: `appointment-event/src/test/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxCodecTest.kt`
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/notification/AppointmentNotificationWriterTest.kt`
+- Test: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfigurationTest.kt`
+- Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/AppointmentMessagingAutoConfigurationWiringTest.kt`
 
 - [ ] v1 code-only JSON decode와 v2 code+detail encode/decode, unknown field rejection, control-character rejection, null detail rendering equivalence 테스트를 먼저 작성한다.
 - [ ] `eventType + slot + templateKey + templateVersion + parameterType` 폐쇄형 조합을 검증하고 v1/v2 교차 조합 위조 payload를 거부한다.
@@ -149,7 +153,7 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 검증 명령:
 
 ```bash
-./gradlew :appointment-event:test :appointment-api:test --tests '*NotificationOutboxCodecTest*' --tests '*AppointmentNotificationWriterTest*'
+./gradlew :appointment-core:test :appointment-event:test :appointment-notification:test :appointment-api:test --tests '*NotificationOutboxCodecTest*' --tests '*AppointmentNotificationWriterTest*' --tests '*NotificationAutoConfigurationTest*' --tests '*AppointmentMessagingAutoConfigurationWiringTest*'
 ```
 
 - [ ] 실제 `appointment-notification` renderer/catalog에서 모든 활성 channel의 cancellation template v2 존재, detail text/HTML escape, null-detail v1 동등성을 검증한다. template readiness가 확인되지 않으면 v2 producer를 활성화하지 않는다.
