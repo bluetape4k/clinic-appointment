@@ -1,8 +1,9 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { effect, Injectable, inject, signal } from '@angular/core';
 
 import {
   AppointmentCommitmentResponse,
   AppointmentProposalResponse,
+  CancelAppointmentRequest,
   CommitmentStatus,
   CreateAppointmentRequest,
   DeclineProposalRequest,
@@ -11,8 +12,11 @@ import {
 } from '../../core/api/portal-api.models';
 import { PortalApiClient } from '../../core/api/portal-api-client';
 import { PortalApiErrorState, PortalApiException } from '../../core/api/portal-api-error';
+import { PatientAuthService } from '../../core/services/patient-auth.service';
 
-export type AppointmentCommitmentView = 'idle' | 'loading' | 'submitting' | 'proposal' | 'held' | 'confirmed' | 'expired' | 'error';
+const APPOINTMENT_REFERENCE_PREFIX = 'appointment_portal_last_id:';
+
+export type AppointmentCommitmentView = 'idle' | 'loading' | 'submitting' | 'proposal' | 'held' | 'confirmed' | 'cancelled' | 'expired' | 'error';
 
 export interface AppointmentCommitmentState {
   view: AppointmentCommitmentView;
@@ -43,74 +47,145 @@ const initialState: AppointmentCommitmentState = {
 @Injectable({ providedIn: 'root' })
 export class AppointmentCommitmentFacade {
   private readonly client = inject(PortalApiClient);
+  private readonly auth = inject(PatientAuthService);
   private readonly _state = signal<AppointmentCommitmentState>(initialState);
+  private readonly conflictRefreshes = new Map<number, Promise<void>>();
+  private lastSessionReference: unknown;
+  private hasObservedSession = false;
 
   readonly state = this._state.asReadonly();
 
-  async requestAppointment(body: CreateAppointmentRequest, idempotencyKey: string): Promise<void> {
-    if (this._state().busy) return;
+  constructor() {
+    effect(() => {
+      const session = this.auth.session();
+      if (this.hasObservedSession && this.lastSessionReference !== session) {
+        this.resetForSessionChange();
+      }
+      this.lastSessionReference = session;
+      this.hasObservedSession = true;
+    });
+  }
+
+  /** 인증 주체가 바뀌거나 로그아웃할 때 이전 환자 예약을 즉시 폐기합니다. */
+  resetForSessionChange(): void {
+    this.sessionGeneration += 1;
+    this.conflictRefreshes.clear();
+    this._state.set(initialState);
+    try {
+      const storage = globalThis.sessionStorage;
+      if (!storage) return;
+      for (let index = storage.length - 1; index >= 0; index -= 1) {
+        const key = storage.key(index);
+        if (key?.startsWith(APPOINTMENT_REFERENCE_PREFIX)) storage.removeItem(key);
+      }
+    } catch {
+      // storage cleanup 실패와 무관하게 메모리의 server-owned 상태는 폐기합니다.
+    }
+  }
+
+  async requestAppointment(body: CreateAppointmentRequest, idempotencyKey: string): Promise<boolean> {
+    if (this._state().busy) return false;
     this.requireKey(idempotencyKey);
+    const generation = this.sessionGeneration;
     this._state.update(state => ({ ...state, view: 'submitting', busy: true, notice: null, error: null }));
     try {
       const response = await this.client.requestAppointment(body, idempotencyKey);
+      if (!this.isCurrentGeneration(generation)) return false;
       this.applyProposal(response);
+      return true;
     } catch (error) {
-      this.applyError(error);
+      if (this.isCurrentGeneration(generation)) this.applyError(error);
       throw error;
     } finally {
-      this._state.update(state => ({ ...state, busy: false }));
+      if (this.isCurrentGeneration(generation)) this._state.update(state => ({ ...state, busy: false }));
     }
   }
 
   async loadCommitment(appointmentId: number): Promise<void> {
     if (this._state().busy) return;
+    const generation = this.sessionGeneration;
     this._state.update(state => ({ ...state, view: 'loading', busy: true, error: null }));
     try {
       const response = await this.client.getCommitment(appointmentId);
+      if (!this.isCurrentGeneration(generation)) return;
       this.applyCommitment(response.body, response.etag, '최신 예약 상태를 불러왔습니다.');
     } catch (error) {
-      this.applyError(error);
+      if (this.isCurrentGeneration(generation)) this.applyError(error);
       throw error;
     } finally {
-      this._state.update(state => ({ ...state, busy: false }));
+      if (this.isCurrentGeneration(generation)) this._state.update(state => ({ ...state, busy: false }));
     }
   }
 
-  async acceptProposal(body: ProposalDecisionRequest, idempotencyKey: string): Promise<void> {
+  async acceptProposal(body: ProposalDecisionRequest, idempotencyKey: string): Promise<boolean> {
     const current = this.requireDecisionContext(idempotencyKey);
-    if (this._state().busy) return;
+    if (this._state().busy) return false;
+    const generation = this.sessionGeneration;
     this._state.update(state => ({ ...state, view: 'submitting', busy: true, notice: null, error: null }));
     try {
       const response = await this.client.acceptProposal(current.appointmentId, current.proposalId, body, idempotencyKey, current.etag);
+      if (!this.isCurrentGeneration(generation)) return false;
       this.applyCommitment(response.body, response.etag, '예약 제안을 확정했습니다.');
+      return true;
     } catch (error) {
-      if (this.isEtagConflict(error)) {
-        await this.refreshAfterConflict(current.appointmentId);
-      } else {
-        this.applyError(error);
+      if (this.isCurrentGeneration(generation)) {
+        if (this.isEtagConflict(error)) {
+          await this.refreshAfterConflict(current.appointmentId, generation);
+        } else {
+          this.applyError(error);
+        }
       }
       throw error;
     } finally {
-      this._state.update(state => ({ ...state, busy: false }));
+      if (this.isCurrentGeneration(generation)) this._state.update(state => ({ ...state, busy: false }));
     }
   }
 
-  async declineProposal(body: DeclineProposalRequest, idempotencyKey: string): Promise<void> {
+  async declineProposal(body: DeclineProposalRequest, idempotencyKey: string): Promise<boolean> {
     const current = this.requireDecisionContext(idempotencyKey);
-    if (this._state().busy) return;
+    if (this._state().busy) return false;
+    const generation = this.sessionGeneration;
     this._state.update(state => ({ ...state, view: 'submitting', busy: true, notice: null, error: null }));
     try {
       const response = await this.client.declineProposal(current.appointmentId, current.proposalId, body, idempotencyKey, current.etag);
+      if (!this.isCurrentGeneration(generation)) return false;
       this.applyCommitment(response.body, response.etag, '예약 제안을 거절했습니다.');
+      return true;
     } catch (error) {
-      if (this.isEtagConflict(error)) {
-        await this.refreshAfterConflict(current.appointmentId);
-      } else {
-        this.applyError(error);
+      if (this.isCurrentGeneration(generation)) {
+        if (this.isEtagConflict(error)) {
+          await this.refreshAfterConflict(current.appointmentId, generation);
+        } else {
+          this.applyError(error);
+        }
       }
       throw error;
     } finally {
-      this._state.update(state => ({ ...state, busy: false }));
+      if (this.isCurrentGeneration(generation)) this._state.update(state => ({ ...state, busy: false }));
+    }
+  }
+
+  async cancelAppointment(body: CancelAppointmentRequest, idempotencyKey: string): Promise<boolean> {
+    const current = this.requireMutationContext(idempotencyKey);
+    if (this._state().busy) return false;
+    const generation = this.sessionGeneration;
+    this._state.update(state => ({ ...state, view: 'submitting', busy: true, notice: null, error: null }));
+    try {
+      const response = await this.client.cancelAppointment(current.appointmentId, body, idempotencyKey, current.etag);
+      if (!this.isCurrentGeneration(generation)) return false;
+      this.applyCommitment(response.body, response.etag, '예약을 취소했습니다.');
+      return true;
+    } catch (error) {
+      if (this.isCurrentGeneration(generation)) {
+        if (this.isEtagConflict(error)) {
+          await this.refreshAfterConflict(current.appointmentId, generation);
+        } else {
+          this.applyError(error);
+        }
+      }
+      throw error;
+    } finally {
+      if (this.isCurrentGeneration(generation)) this._state.update(state => ({ ...state, busy: false }));
     }
   }
 
@@ -156,9 +231,33 @@ export class AppointmentCommitmentFacade {
     }));
   }
 
-  private async refreshAfterConflict(appointmentId: number): Promise<void> {
-    const response = await this.client.getCommitment(appointmentId);
-    this.applyCommitment(response.body, response.etag, '최신 예약 상태를 불러왔습니다.');
+  private async refreshAfterConflict(appointmentId: number, generation: number): Promise<void> {
+    const existing = this.conflictRefreshes.get(appointmentId);
+    if (existing) return existing;
+
+    const refresh = this.client.getCommitment(appointmentId)
+      .then(response => {
+        if (!this.isCurrentGeneration(generation)) return;
+        const current = this._state();
+        if (current.appointmentId !== appointmentId) return;
+        if (current.commitment && response.body.version < current.commitment.version) return;
+        this.applyCommitment(response.body, response.etag, '최신 예약 상태를 불러왔습니다.');
+      })
+      .catch(error => {
+        if (this.isCurrentGeneration(generation)) this.applyError(error);
+        throw error;
+      })
+      .finally(() => {
+        if (this.conflictRefreshes.get(appointmentId) === refresh) this.conflictRefreshes.delete(appointmentId);
+      });
+    this.conflictRefreshes.set(appointmentId, refresh);
+    return refresh;
+  }
+
+  private sessionGeneration = 0;
+
+  private isCurrentGeneration(generation: number): boolean {
+    return generation === this.sessionGeneration;
   }
 
   private applyError(error: unknown): void {
@@ -179,6 +278,15 @@ export class AppointmentCommitmentFacade {
     return { appointmentId: state.appointmentId, proposalId: state.proposalId, etag: state.etag };
   }
 
+  private requireMutationContext(idempotencyKey: string): { appointmentId: number; etag: string } {
+    this.requireKey(idempotencyKey);
+    const state = this._state();
+    if (!state.appointmentId || !state.etag) {
+      throw new Error('최신 예약 상태와 ETag가 필요합니다.');
+    }
+    return { appointmentId: state.appointmentId, etag: state.etag };
+  }
+
   private requireKey(key: string): void {
     if (!key.trim()) throw new Error('Idempotency-Key가 필요합니다.');
   }
@@ -190,6 +298,7 @@ export class AppointmentCommitmentFacade {
   private viewForStatus(status: CommitmentStatus): AppointmentCommitmentView {
     if (status === 'HELD') return 'held';
     if (status === 'CONFIRMED') return 'confirmed';
+    if (status === 'CANCELLED') return 'cancelled';
     if (status === 'EXPIRED') return 'expired';
     return 'proposal';
   }

@@ -402,6 +402,7 @@ class SecurityConfig {
         AuthorizationManagers.allOf(
             AuthorityAuthorizationManager.hasAnyRole(
                 SchedulingRole.ADMIN,
+                SchedulingRole.STAFF,
                 SchedulingRole.PATIENT,
             ),
             tenantAuthorizationManager,

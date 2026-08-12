@@ -114,6 +114,18 @@ describe('PortalApiClient', () => {
     await expect(promise).resolves.toMatchObject({ body: { status: 'CONFIRMED' } });
   });
 
+  it('취소에 code-only body와 최신 ETag를 함께 넣는다', async () => {
+    const promise = client.cancelAppointment(42, { reasonCode: 'CUSTOMER_REQUEST' }, 'cancel_01J1M6Y6XRK8N0W2M3P4Q5R6S7', '"4"');
+    const request = httpMock.expectOne('/api/clinic-a/appointments/42/cancel');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.headers.get('Idempotency-Key')).toBe('cancel_01J1M6Y6XRK8N0W2M3P4Q5R6S7');
+    expect(request.request.headers.get('If-Match')).toBe('"4"');
+    expect(request.request.body).toEqual({ reasonCode: 'CUSTOMER_REQUEST' });
+    request.flush({ appointmentId: 42, commitmentId: 9, status: 'CANCELLED', version: 5, currentProposal: {}, confirmedProposalId: 11, effectivePolicySnapshotId: 1 }, { headers: new HttpHeaders({ ETag: '"5"' }) });
+
+    await expect(promise).resolves.toMatchObject({ etag: '"5"', body: { status: 'CANCELLED' } });
+  });
+
   it('슬롯 조회도 같은 tenant scope와 typed query를 사용한다', async () => {
     const promise = client.getSlots(3, 4, 5, '2026-08-20', 30);
     const request = httpMock.expectOne((candidate) =>

@@ -77,6 +77,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRep
 import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingContext
 import io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriter
 import io.bluetape4k.clinic.appointment.notification.NotificationProperties
+import io.bluetape4k.clinic.appointment.notification.NotificationProducerSchemaReadiness
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
@@ -283,9 +284,11 @@ class ServiceConfig {
         notificationOutboxHasherProvider: ObjectProvider<NotificationOutboxHasher>,
         clinicRepository: ClinicRepository,
         notificationProperties: NotificationProperties,
+        producerReadinessProvider: ObjectProvider<NotificationProducerSchemaReadiness>,
     ): AppointmentNotificationWriter {
         val hasher = notificationOutboxHasherProvider.getIfAvailable()
             ?: return UnavailableAppointmentNotificationWriter
+        val v2Ready = notificationProperties.v2Producer && producerReadinessProvider.ifAvailable?.allowsV2() == true
         return DefaultAppointmentNotificationWriter(
             repository = notificationOutboxRepository,
             hasher = hasher,
@@ -293,7 +296,7 @@ class ServiceConfig {
             clock = Clock.systemUTC(),
             sameDayReminderLeadTime = Duration.ofHours(2),
             cancellationSchemaVersion =
-                if (notificationProperties.v2Producer) {
+                if (v2Ready) {
                     NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION
                 } else {
                     NotificationOutboxEnvelope.LEGACY_SCHEMA_VERSION

@@ -11,6 +11,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationContractException
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRowKind
@@ -250,6 +251,72 @@ internal class AppointmentNotificationWriterTest {
     }
 
     @Test
+    fun `v2 producer는 취소 detail과 template version 2를 함께 기록한다`() {
+        val v2Writer = DefaultAppointmentNotificationWriter(
+            repository = repository,
+            hasher = DefaultNotificationOutboxHasher(
+                StaticNotificationOutboxKeyRing(
+                    active = NotificationHmacKey("active", ByteArray(32) { 1 }),
+                    previous = null,
+                )
+            ),
+            clinicRepository = ClinicRepository(),
+            clock = Clock.fixed(now, ZoneOffset.UTC),
+            sameDayReminderLeadTime = Duration.ofHours(2),
+            cancellationSchemaVersion = NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION,
+        )
+
+        transaction {
+            v2Writer.cancelled(
+                tenantGroupId = tenantGroupId,
+                record = appointment(status = AppointmentState.CANCELLED, version = 2L),
+                version = 2L,
+                reasonCode = CancellationReasonCode("CLINIC_REQUEST"),
+                reasonDetail = "진료 일정이 변경되었습니다.",
+            )
+        }
+
+        transaction {
+            val row = NotificationOutboxEvents.selectAll().single()
+            val envelope = NotificationOutboxCodec().decode(requireNotNull(row[NotificationOutboxEvents.parametersJson]))
+            envelope.schemaVersion shouldBeEqualTo NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION
+            envelope.templateVersion.value shouldBeEqualTo 2
+            (envelope.parameters as AppointmentCancelledParameters).cancellationReasonDetail shouldBeEqualTo
+                "진료 일정이 변경되었습니다."
+        }
+    }
+
+    @Test
+    fun `v1 producer는 detail을 조용히 버리지 않고 재시도 가능한 계약 오류로 닫는다`() {
+        assertFailsWith<NotificationContractException> {
+            transaction {
+                writer.cancelled(
+                    tenantGroupId = tenantGroupId,
+                    record = appointment(status = AppointmentState.CANCELLED, version = 2L),
+                    version = 2L,
+                    reasonCode = CancellationReasonCode("CLINIC_REQUEST"),
+                    reasonDetail = "진료 일정이 변경되었습니다.",
+                )
+            }
+        }
+
+        transaction { NotificationOutboxEvents.selectAll().count() shouldBeEqualTo 0L }
+    }
+
+    @Test
+    fun `legacy writer의 detail overload도 안내 문구를 조용히 폐기하지 않는다`() {
+        assertFailsWith<NotificationContractException> {
+            legacyWriter.cancelled(
+                tenantGroupId = tenantGroupId,
+                record = appointment(status = AppointmentState.CANCELLED, version = 2L),
+                version = 2L,
+                reasonCode = CancellationReasonCode("CLINIC_REQUEST"),
+                reasonDetail = "진료 일정이 변경되었습니다.",
+            )
+        }
+    }
+
+    @Test
     fun `v2 고객 요청은 proposal 일정과 회원 ID로 생성 알림만 기록한다`() {
         transaction {
             writer.commitmentRequested(commitmentNotification())
@@ -354,6 +421,51 @@ internal class AppointmentNotificationWriterTest {
         startsAt = startsAt,
         endsAt = startsAt.plus(Duration.ofMinutes(30)),
     )
+
+    private val legacyWriter = object : AppointmentNotificationWriter {
+        override fun appointmentCreated(
+            tenantGroupId: Long,
+            record: AppointmentRecord,
+            version: Long,
+            resolution: MemberResolution,
+        ) = Unit
+
+        override fun statusChanged(
+            tenantGroupId: Long,
+            record: AppointmentRecord,
+            version: Long,
+            from: AppointmentState,
+            to: AppointmentState,
+        ) = Unit
+
+        override fun cancelled(
+            tenantGroupId: Long,
+            record: AppointmentRecord,
+            version: Long,
+            reasonCode: CancellationReasonCode?,
+        ) = Unit
+
+        override fun rescheduled(
+            tenantGroupId: Long,
+            original: AppointmentRecord,
+            replacement: AppointmentRecord,
+            version: Long,
+        ) = Unit
+
+        override fun commitmentRequested(notification: CommitmentAppointmentNotification) = Unit
+
+        override fun commitmentConfirmed(notification: CommitmentAppointmentNotification) = Unit
+
+        override fun commitmentCancelled(
+            notification: CommitmentAppointmentNotification,
+            reasonCode: CancellationReasonCode?,
+        ) = Unit
+
+        override fun commitmentRescheduled(
+            previous: CommitmentAppointmentNotification,
+            replacement: CommitmentAppointmentNotification,
+        ) = Unit
+    }
 
     companion object {
         @JvmStatic

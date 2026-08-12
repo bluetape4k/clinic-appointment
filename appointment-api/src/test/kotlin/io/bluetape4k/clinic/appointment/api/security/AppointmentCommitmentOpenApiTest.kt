@@ -103,6 +103,13 @@ class AppointmentCommitmentOpenApiTest {
             headers[HttpHeaders.IF_MATCH]?.path("required")?.asBoolean() shouldBeEqualTo true
         }
 
+        val cancel = root.at("/paths/${pointer("/api/{tenantCode}/appointments/{id}/cancel")}/post")
+        cancel.at("/requestBody/content/application~1json/schema/\$ref").stringValue()
+            .endsWith("/CancelAppointmentRequest").shouldBeTrue()
+        val cancelSchema = root.at("/components/schemas/CancelAppointmentRequest")
+        cancelSchema.path("required").toList().map { it.stringValue() }.toSet() shouldBeEqualTo setOf("reasonCode")
+        cancelSchema.path("properties").path("reasonDetail").path("maxLength").asInt() shouldBeEqualTo 500
+
         val createSchema = root.at("/components/schemas/CreateAppointmentRequestV2")
         createSchema.path("required").toList().map { it.stringValue() }.toSet() shouldBeEqualTo
             setOf("appointmentPlanId", "preferredStartAt", "preferredEndAt", "evidence")

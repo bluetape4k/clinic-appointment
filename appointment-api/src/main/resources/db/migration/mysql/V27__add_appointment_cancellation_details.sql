@@ -23,7 +23,10 @@ CREATE TABLE scheduling_appointment_cancellation_details (
         REFERENCES scheduling_appointment_commitments(id) ON DELETE CASCADE,
     CONSTRAINT fk_cancellation_detail_proposal FOREIGN KEY (proposal_id)
         REFERENCES scheduling_appointment_proposals(id) ON DELETE CASCADE,
-    CONSTRAINT uq_cancellation_detail_commitment UNIQUE (commitment_id)
+    CONSTRAINT uq_cancellation_detail_commitment UNIQUE (commitment_id),
+    CONSTRAINT ck_cancellation_detail_reason_detail_length CHECK (
+        reason_detail IS NULL OR CHAR_LENGTH(reason_detail) BETWEEN 1 AND 500
+    )
 );
 
 CREATE INDEX idx_cancellation_detail_scope_time

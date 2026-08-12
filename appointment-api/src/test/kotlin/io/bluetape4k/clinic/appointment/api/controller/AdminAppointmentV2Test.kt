@@ -148,7 +148,7 @@ class AdminAppointmentV2Test {
                 request = CancelAppointmentRequest("CUSTOMER_REQUEST", "환자 입력 문구"),
             )
         }
-        exception.error shouldBeEqualTo AppointmentCommitmentApiError.SCOPE_FORBIDDEN
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.PAYLOAD_INVALID
     }
 
     @Test

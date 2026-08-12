@@ -1,5 +1,6 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RouterLink } from '@angular/router';
 
 import { PortalApiClient } from '../../../core/api/portal-api-client';
 import { PortalEventStreamAdapter, PortalNotification } from '../../../core/api/portal-event-stream.adapter';
@@ -9,6 +10,7 @@ import { formatAppointmentSession, resolveAppointmentTitle } from '../appointmen
 @Component({
   selector: 'app-patient-notifications-page',
   standalone: true,
+  imports: [RouterLink],
   template: `
     <section class="portal-page" aria-labelledby="notifications-title">
       <p class="portal-eyebrow">NOTIFICATIONS</p>
@@ -41,7 +43,7 @@ import { formatAppointmentSession, resolveAppointmentTitle } from '../appointmen
                   <time [attr.datetime]="notification.createdAt">{{ notification.createdAt }}</time>
                   <div class="notification-actions">
                     <button type="button" (click)="markRead(notification.eventId)">{{ notification.read ? '읽음' : '읽음으로 표시' }}</button>
-                    <a href="/portal/appointments">예약 상세 보기<span aria-hidden="true"> ↗</span></a>
+                    <a [routerLink]="['/portal/appointments']" [queryParams]="{ appointmentId: notification.appointmentId }">예약 상세 보기<span aria-hidden="true"> ↗</span></a>
                   </div>
                 </div>
               </article>

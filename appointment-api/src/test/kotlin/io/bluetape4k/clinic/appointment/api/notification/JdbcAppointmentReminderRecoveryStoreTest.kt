@@ -6,6 +6,7 @@ import io.bluetape4k.clinic.appointment.event.notification.AppointmentReminderPa
 import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
@@ -222,6 +223,9 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
             val row = NotificationOutboxEvents.selectAll().single()
             row[NotificationOutboxEvents.status] shouldBeEqualTo NotificationOutboxStatus.PENDING
             row[NotificationOutboxEvents.notificationSlot] shouldBeEqualTo NotificationSlot.REMINDER_24H
+            NotificationOutboxCodec()
+                .decode(checkNotNull(row[NotificationOutboxEvents.parametersJson]))
+                .schemaVersion shouldBeEqualTo NotificationOutboxEnvelope.LEGACY_SCHEMA_VERSION
             row[NotificationOutboxEvents.memberId] shouldBeEqualTo "member-1"
             row[NotificationOutboxEvents.parametersJson]!!.contains("010-") shouldBeEqualTo false
         }

@@ -92,6 +92,14 @@ class FlywayMigrationTest {
         )
     }
 
+    @Test
+    fun `V27 cancellation detail schema is additive on H2`() {
+        AppointmentCancellationMigrationTestSupport.verifyV27Migration(
+            dataSource = h2DataSource("appointment-cancellation-v27"),
+            location = "classpath:db/migration/h2",
+        )
+    }
+
     private fun h2DataSource(scope: String): SimpleDriverDataSource {
         val driver = Class.forName("org.h2.Driver").getDeclaredConstructor().newInstance() as Driver
         return SimpleDriverDataSource(

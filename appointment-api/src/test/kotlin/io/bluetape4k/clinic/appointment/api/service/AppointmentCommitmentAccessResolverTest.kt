@@ -66,7 +66,7 @@ internal class AppointmentCommitmentAccessResolverTest : VisitCommitmentCommandT
     }
 
     @Test
-    fun `staff can access an appointment only through the cancellation boundary`() {
+    fun `staff can access an appointment through scoped read and cancellation boundaries`() {
         val appointment = confirmDirect(commandService(), "staff-cancel-access")
         val staff = actor(
             actorType = ActorType.STAFF,
@@ -80,9 +80,8 @@ internal class AppointmentCommitmentAccessResolverTest : VisitCommitmentCommandT
         )
 
         access.appointmentId shouldBeEqualTo appointment.commitment.appointmentId
-        assertFailsWith<AppointmentCommitmentApiException> {
-            resolver.requireAppointmentAccess(staff, appointment.commitment.appointmentId)
-        }.error shouldBeEqualTo AppointmentCommitmentApiError.SCOPE_FORBIDDEN
+        resolver.requireAppointmentAccess(staff, appointment.commitment.appointmentId)
+            .appointmentId shouldBeEqualTo appointment.commitment.appointmentId
     }
 
     @Test

@@ -168,6 +168,19 @@ internal class NotificationOutboxEndToEndTest {
         }
     }
 
+    @Test
+    fun `claimed row metadata가 envelope와 다르면 provider를 호출하지 않고 재시도한다`() {
+        runBlocking {
+            val provider = CapturingChannel(NotificationProviderResult.accepted())
+            val claimed = claimed().copy(templateKey = NotificationTemplateKey("appointment-forged"))
+
+            worker(E2EWorkStore(), provider).process(claimed) shouldBeEqualTo
+                NotificationOutboxWorkerResult.RETRY_SCHEDULED
+
+            provider.requests.size shouldBeEqualTo 0
+        }
+    }
+
     private fun worker(
         store: E2EWorkStore,
         provider: CapturingChannel,

@@ -133,6 +133,18 @@ internal class DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitm
     }
 
     @Test
+    fun `query exposes immutable plan and clinic display metadata`() {
+        val created = confirmDirect(commandService(CLOCK), "display-metadata")
+        val response = applicationService(AppointmentCommitmentProperties(mode = AppointmentCommitmentMode.OFF))
+            .query(adminActor(), created.commitment.appointmentId)
+
+        response.currentProposal.productName shouldBeEqualTo "미백 패키지"
+        response.currentProposal.sessionNumber shouldBeEqualTo 1
+        response.currentProposal.totalSessions shouldBeEqualTo 2
+        response.currentProposal.clinicDisplayName shouldBeEqualTo "Task 6 Clinic"
+    }
+
+    @Test
     fun `records proposal latency and allocation conflict metrics on command paths`() {
         val registry = SimpleMeterRegistry()
         val service = applicationService(

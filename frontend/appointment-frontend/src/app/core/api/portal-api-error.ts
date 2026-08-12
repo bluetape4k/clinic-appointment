@@ -2,6 +2,7 @@ import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 
 export type PortalApiErrorKind =
   | 'tenant-missing'
+  | 'transport'
   | 'unauthorized'
   | 'forbidden'
   | 'conflict'
@@ -35,7 +36,8 @@ export function mapPortalApiError(error: HttpErrorResponse): PortalApiErrorState
   const retryAfterSeconds = parseRetryAfter(error.headers);
 
   let kind: PortalApiErrorKind;
-  if (status === 401) kind = 'unauthorized';
+  if (status === 0) kind = 'transport';
+  else if (status === 401) kind = 'unauthorized';
   else if (status === 403) kind = 'forbidden';
   else if (status === 409 || status === 412) kind = 'conflict';
   else if (status === 410) kind = 'expired';

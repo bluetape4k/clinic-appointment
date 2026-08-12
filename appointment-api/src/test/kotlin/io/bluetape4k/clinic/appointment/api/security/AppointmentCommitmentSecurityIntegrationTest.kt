@@ -231,11 +231,21 @@ class AppointmentCommitmentSecurityIntegrationTest {
             request("/api/tenant-default/appointments/7/approve", token(SchedulingRole.STAFF)),
             request("/api/tenant-default/appointments/7/confirm", token(SchedulingRole.STAFF)),
             request("/api/tenant-default/appointments/7/proposals/31/expire", token(SchedulingRole.STAFF)),
-            request("/api/tenant-default/appointments/7/cancel", token(SchedulingRole.STAFF)),
+            request(
+                "/api/tenant-default/appointments/7/cancel",
+                TestJwtProvider.createToken(
+                    userId = "scheduling-service",
+                    clinicId = 7L,
+                    roles = listOf(SchedulingRole.SYSTEM),
+                    actorType = ActorType.SYSTEM,
+                    allowedTenants = listOf(TENANT_DEFAULT),
+                    allowedClinicIds = setOf(7L),
+                    assurance = AuthenticationAssurance.SERVICE,
+                ),
+            ),
             request("/api/tenant-default/appointments/7/change-proposals", token(SchedulingRole.STAFF)),
             request("/api/tenant-default/appointments/7/proposals/31/accept", token(SchedulingRole.ADMIN)),
             request("/api/tenant-default/appointments/7/proposals/31/decline", token(SchedulingRole.ADMIN)),
-            getRequest("/api/tenant-default/appointments/7/commitment", token(SchedulingRole.STAFF)),
         )
 
         deniedRequests.forEach { response ->
@@ -300,6 +310,7 @@ class AppointmentCommitmentSecurityIntegrationTest {
             extraHeaders = mutationHeaders("decline"),
         )
         getRequest("/api/tenant-default/appointments/7/commitment", token(SchedulingRole.PATIENT))
+        getRequest("/api/tenant-default/appointments/7/commitment", token(SchedulingRole.STAFF))
 
         val invokedMethods = mockingDetails(appointmentCommitmentApplicationService)
             .invocations

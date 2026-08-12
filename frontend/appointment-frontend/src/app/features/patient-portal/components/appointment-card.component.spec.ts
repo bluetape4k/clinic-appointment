@@ -56,4 +56,28 @@ describe('AppointmentCardComponent', () => {
 
     expect(fixture.componentInstance.dateTimeLabel).toBe('2026년 8월 20일 10:30');
   });
+
+  it('진행 상태 stepper는 현재 상태를 aria-current로 표시하고 취소 이벤트를 노출한다', async () => {
+    await TestBed.configureTestingModule({ imports: [AppointmentCardComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(AppointmentCardComponent);
+    const cancel = vi.fn();
+    fixture.componentInstance.cancelRequested.subscribe(cancel);
+    fixture.componentInstance.appointment = baseAppointment;
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-step="CONFIRMED"]')?.getAttribute('aria-current')).toBe('step');
+    expect(fixture.nativeElement.querySelectorAll('[data-step]').length).toBe(5);
+    fixture.nativeElement.querySelector('[data-cancel]')?.click();
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('취소 완료 상태에는 mutation 버튼을 남기지 않는다', async () => {
+    await TestBed.configureTestingModule({ imports: [AppointmentCardComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(AppointmentCardComponent);
+    fixture.componentInstance.appointment = { ...baseAppointment, status: 'CANCELLED' };
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-cancel]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-terminal]')?.textContent?.trim()).toBe('취소가 완료된 예약입니다.');
+  });
 });

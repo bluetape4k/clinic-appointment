@@ -14,7 +14,8 @@ export const patientAuthGuard: CanActivateFn = async () => {
     return router.createUrlTree(['/portal/login']);
   }
 
-  return (await auth.ensureSession())
-    ? true
-    : router.createUrlTree(['/portal/login']);
+  if (!(await auth.ensureSession()) || !auth.isPatient()) {
+    return router.createUrlTree(['/portal/login']);
+  }
+  return true;
 };

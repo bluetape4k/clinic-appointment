@@ -8,6 +8,7 @@ import {
   AppointmentCommitmentResponse,
   AppointmentProposalResponse,
   AvailableSlot,
+  CancelAppointmentRequest,
   CreateAppointmentRequest,
   DeclineProposalRequest,
   PortalResponse,
@@ -59,6 +60,19 @@ export class PortalApiClient {
   ): Promise<PortalResponse<AppointmentCommitmentResponse>> {
     return this.post(
       `/appointments/${this.requirePositiveId(appointmentId)}/proposals/${this.requirePositiveId(proposalId)}/decline`,
+      body,
+      { 'Idempotency-Key': idempotencyKey, 'If-Match': etag },
+    );
+  }
+
+  async cancelAppointment(
+    appointmentId: number,
+    body: CancelAppointmentRequest,
+    idempotencyKey: string,
+    etag: string,
+  ): Promise<PortalResponse<AppointmentCommitmentResponse>> {
+    return this.post(
+      `/appointments/${this.requirePositiveId(appointmentId)}/cancel`,
       body,
       { 'Idempotency-Key': idempotencyKey, 'If-Match': etag },
     );

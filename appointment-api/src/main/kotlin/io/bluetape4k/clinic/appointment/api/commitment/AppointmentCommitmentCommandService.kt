@@ -1740,6 +1740,12 @@ internal class AppointmentCommitmentCommandService(
             reasonCode: CancellationReasonCode?,
         ) = Unit
 
+        override fun commitmentCancelled(
+            notification: CommitmentAppointmentNotification,
+            reasonCode: CancellationReasonCode?,
+            reasonDetail: String?,
+        ) = Unit
+
         override fun commitmentRescheduled(
             previous: CommitmentAppointmentNotification,
             replacement: CommitmentAppointmentNotification,

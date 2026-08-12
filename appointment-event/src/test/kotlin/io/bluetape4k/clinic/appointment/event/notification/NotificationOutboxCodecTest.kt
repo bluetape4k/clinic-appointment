@@ -114,6 +114,45 @@ class NotificationOutboxCodecTest {
     }
 
     @Test
+    fun `codec rejects a known parameter with an incompatible event tuple`() {
+        val json = codec.encode(envelope()).replace(
+            "\"eventType\":\"CONFIRMED\"",
+            "\"eventType\":\"CANCELLED\"",
+        )
+
+        val failure = assertFailsWith<NotificationContractException> {
+            codec.decode(json)
+        }
+
+        failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+    }
+
+    @Test
+    fun `codec rejects a reminder template key assigned to the other reminder slot`() {
+        val valid = envelope(
+            eventType = NotificationEventType.REMINDER,
+            notificationSlot = NotificationSlot.REMINDER_24H,
+            templateKey = "appointment-reminder-24h",
+            parameterType = NotificationParameterType.APPOINTMENT_REMINDER,
+            parameters = AppointmentReminderParameters(
+                clinicDisplayName = "Blue Clinic",
+                appointmentDate = LocalDate.parse("2026-08-01"),
+                startTime = LocalTime.parse("10:30"),
+            ),
+        )
+        val json = codec.encode(valid).replace(
+            "\"templateKey\":\"appointment-reminder-24h\"",
+            "\"templateKey\":\"appointment-reminder-same-day\"",
+        )
+
+        val failure = assertFailsWith<NotificationContractException> {
+            codec.decode(json)
+        }
+
+        failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+    }
+
+    @Test
     fun `codec output never carries recipient profile data or rendered messages`() {
         val json = codec.encode(envelope())
 
@@ -197,6 +236,7 @@ class NotificationOutboxCodecTest {
             ),
         ).replace(",\"cancellationReasonDetail\":null", "")
             .replace("\"schemaVersion\":2", "\"schemaVersion\":1")
+            .replace("\"templateVersion\":2", "\"templateVersion\":1")
 
         val legacyDecoded = codec.decode(legacy)
         (legacyDecoded.parameters as AppointmentCancelledParameters).cancellationReasonDetail shouldBeEqualTo null
@@ -369,7 +409,9 @@ class NotificationOutboxCodecTest {
             eventType = eventType,
             notificationSlot = notificationSlot,
             templateKey = NotificationTemplateKey(templateKey),
-            templateVersion = NotificationTemplateVersion(3),
+            templateVersion = NotificationTemplateVersion(
+                if (eventType == NotificationEventType.CANCELLED) 2 else 1,
+            ),
             parameterType = parameterType,
             parameters = parameters,
             occurredAt = Instant.parse("2026-07-31T01:00:00Z"),
