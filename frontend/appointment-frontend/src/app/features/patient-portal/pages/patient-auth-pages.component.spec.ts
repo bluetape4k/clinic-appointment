@@ -58,6 +58,18 @@ describe('환자 인증 페이지', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/portal/appointments');
   });
 
+  it('저장된 tenant scope가 없으면 login form에 기본 tenant를 주입하지 않는다', () => {
+    const fixture = TestBed.createComponent(PatientLoginPageComponent);
+
+    expect(fixture.componentInstance.tenantCode()).toBe('');
+  });
+
+  it('저장된 tenant scope가 없으면 register form에도 기본 tenant를 주입하지 않는다', () => {
+    const fixture = TestBed.createComponent(PatientRegisterPageComponent);
+
+    expect(fixture.componentInstance.tenantCode()).toBe('');
+  });
+
   it('register는 최대 세 가지 식별자를 중복 없이 추가하고 전달한다', async () => {
     const fixture = TestBed.createComponent(PatientRegisterPageComponent);
     const page = fixture.componentInstance;

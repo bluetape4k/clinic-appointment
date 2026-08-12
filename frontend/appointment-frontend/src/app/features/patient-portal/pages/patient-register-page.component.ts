@@ -28,7 +28,7 @@ export class PatientRegisterPageComponent {
     { key: 'EMAIL', label: '이메일' },
     { key: 'LOGIN_ID', label: '로그인 ID' },
   ];
-  readonly tenantCode = signal(this.tenant.tenantCode() ?? 'tenant-default');
+  readonly tenantCode = signal(this.tenant.tenantCode() ?? '');
   readonly displayName = signal('');
   readonly password = signal('');
   readonly identifiers = signal<IdentifierRow[]>([{ key: 'PHONE', value: '' }]);
