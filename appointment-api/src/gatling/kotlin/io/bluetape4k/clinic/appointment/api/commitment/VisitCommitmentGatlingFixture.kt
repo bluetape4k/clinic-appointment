@@ -13,6 +13,7 @@ import io.bluetape4k.clinic.appointment.model.plan.AppointmentPlanStatus
 import io.bluetape4k.clinic.appointment.model.plan.PlanTreatmentStatus
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentAuditEvents
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentCancellationDetails
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommandIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentItems
@@ -35,6 +36,7 @@ import io.bluetape4k.clinic.appointment.model.tables.WaitlistCapacityHolds
 import io.bluetape4k.clinic.appointment.model.tables.WaitlistEntries
 import io.bluetape4k.clinic.appointment.model.tables.WaitlistOfferEvents
 import io.bluetape4k.clinic.appointment.model.tables.WaitlistOffers
+import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommandIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentItemRepository
@@ -153,14 +155,28 @@ internal class VisitCommitmentGatlingFixture {
                         "MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver",
             )
-        val clinic =
-            transaction(database) {
-                SchemaUtils.createMissingTablesAndColumns(*TABLES)
-                createSchedulingOutboxEventsTable()
-                seedClinic()
-            }
+        val clinic = initialize(database)
         return block(VisitCommitmentCommandInvoker(database), clinic)
     }
+
+    /**
+     * PostgreSQL Gatling fixture가 production outbox table을 그대로 생성할 수 있게 한다.
+     * H2 probe는 기존 최소 DDL을 유지하고, PostgreSQL은 [SchedulingOutboxEvents]의 전체
+     * column/index 계약을 사용한다.
+     */
+    internal fun initialize(
+        database: Database,
+        useProductionOutboxSchema: Boolean = false,
+    ): GatlingClinicFixture =
+        transaction(database) {
+            SchemaUtils.createMissingTablesAndColumns(*TABLES)
+            if (useProductionOutboxSchema) {
+                SchemaUtils.createMissingTablesAndColumns(SchedulingOutboxEvents)
+            } else {
+                createSchedulingOutboxEventsTable()
+            }
+            seedClinic()
+        }
 
     private fun createSchedulingOutboxEventsTable() {
         TransactionManager.current().connection.prepareStatement(
@@ -334,6 +350,7 @@ internal class VisitCommitmentGatlingFixture {
                 ResourceAllocations,
                 AppointmentCommandIdempotencies,
                 AppointmentAuditEvents,
+                AppointmentCancellationDetails,
                 WaitlistEntries,
                 WaitlistOffers,
                 WaitlistCapacityHolds,
@@ -350,7 +367,7 @@ internal data class VisitCommitmentProbeResult(
 )
 
 /** Gatling fixture가 seed한 clinic과 Plan revision FK입니다. */
-private data class GatlingClinicFixture(
+internal data class GatlingClinicFixture(
     val clinicId: Long,
     val doctorId: Long,
     val treatmentTypeId: Long,
@@ -365,7 +382,7 @@ private data class GatlingClinicFixture(
  * JVM 생성자로 구성합니다. 성공 뒤 allocation count는 같은 H2 database의 production
  * [ResourceAllocationRepository]로 다시 읽어 multi-lock 증거를 고정합니다.
  */
-private class VisitCommitmentCommandInvoker(
+internal class VisitCommitmentCommandInvoker(
     private val database: Database,
 ) {
     private val serviceClass =
@@ -382,6 +399,8 @@ private class VisitCommitmentCommandInvoker(
         Class.forName("io.bluetape4k.clinic.appointment.api.commitment.ProposalConsentEvidence")
     private val directCommandClass =
         Class.forName("io.bluetape4k.clinic.appointment.api.commitment.DirectAppointmentConfirmationCommand")
+    private val cancelCommandClass =
+        Class.forName("io.bluetape4k.clinic.appointment.api.commitment.CancelAppointmentCommand")
     private val notificationWriter =
         Class.forName(
             "io.bluetape4k.clinic.appointment.api.commitment." +
@@ -479,6 +498,68 @@ private class VisitCommitmentCommandInvoker(
                 ),
         )
 
+    /**
+     * production cancel command를 reflection 경계에서 호출한다.
+     *
+     * [source]의 immutable appointment/proposal snapshot을 사용하므로 benchmark가 stale
+     * `expectedVersion`이나 hash를 임의로 다시 계산하지 않는다.
+     */
+    fun cancel(
+        clinic: GatlingClinicFixture,
+        source: CommandOutcome,
+        key: String,
+        actorRole: String,
+        reasonDetail: String? = null,
+    ): CommandOutcome {
+        require(source.success) { "cancel source commitment must be successful" }
+        return try {
+            val result =
+                serviceClass
+                    .getMethod("cancelAppointment", cancelCommandClass)
+                    .invoke(
+                        service,
+                        cancelCommandClass
+                            .constructors
+                            .single { it.parameterCount == 7 }
+                            .newInstance(
+                                commandContext(clinic, key, actorRole),
+                                source.appointmentId,
+                                source.proposalId,
+                                source.version,
+                                source.proposalHash,
+                                "CUSTOMER_REQUEST",
+                                reasonDetail,
+                            ),
+                    )
+            val commitment = result.javaClass.getMethod("getCommitment").invoke(result)
+            val proposalRecord = result.javaClass.getMethod("getProposal").invoke(result)
+            val appointmentId = commitment.javaClass.getMethod("getAppointmentId").invoke(commitment) as Long
+            val commitmentId = commitment.javaClass.getMethod("getId").invoke(commitment) as Long
+            val proposalId = proposalRecord.javaClass.getMethod("getId").invoke(proposalRecord) as Long
+            val version = commitment.javaClass.getMethod("getVersion").invoke(commitment) as Long
+            val proposalHash = proposalRecord.javaClass.getMethod("getProposalHash").invoke(proposalRecord) as String
+            val replay = result.javaClass.getMethod("getIdempotentReplay").invoke(result) as Boolean
+            CommandOutcome.success(
+                appointmentId = appointmentId,
+                commitmentId = commitmentId,
+                proposalId = proposalId,
+                version = version,
+                proposalHash = proposalHash,
+                replay = replay,
+                allocationCount = 0,
+            )
+        } catch (failure: InvocationTargetException) {
+            val target = failure.targetException
+            val code =
+                if (target.javaClass.simpleName == "AppointmentCommitmentCommandException") {
+                    target.javaClass.getMethod("getCode").invoke(target).toString()
+                } else {
+                    throw target
+                }
+            CommandOutcome.rejected(code)
+        }
+    }
+
     private fun confirm(
         clinic: GatlingClinicFixture,
         key: String,
@@ -506,14 +587,25 @@ private class VisitCommitmentCommandInvoker(
                     )
             val commitment = result.javaClass.getMethod("getCommitment").invoke(result)
             val proposalRecord = result.javaClass.getMethod("getProposal").invoke(result)
+            val appointmentId = commitment.javaClass.getMethod("getAppointmentId").invoke(commitment) as Long
             val commitmentId = commitment.javaClass.getMethod("getId").invoke(commitment) as Long
             val proposalId = proposalRecord.javaClass.getMethod("getId").invoke(proposalRecord) as Long
+            val version = commitment.javaClass.getMethod("getVersion").invoke(commitment) as Long
+            val proposalHash = proposalRecord.javaClass.getMethod("getProposalHash").invoke(proposalRecord) as String
             val replay = result.javaClass.getMethod("getIdempotentReplay").invoke(result) as Boolean
             val allocationCount =
                 transaction(database) {
                     ResourceAllocationRepository().findByProposal(proposalId).size
                 }
-            CommandOutcome.success(commitmentId, proposalId, replay, allocationCount)
+            CommandOutcome.success(
+                appointmentId = appointmentId,
+                commitmentId = commitmentId,
+                proposalId = proposalId,
+                version = version,
+                proposalHash = proposalHash,
+                replay = replay,
+                allocationCount = allocationCount,
+            )
         } catch (failure: InvocationTargetException) {
             val target = failure.targetException
             val code =
@@ -610,6 +702,7 @@ private class VisitCommitmentCommandInvoker(
     private fun commandContext(
         clinic: GatlingClinicFixture,
         key: String,
+        actorRole: String = "UNKNOWN",
     ): Any =
         contextConstructor
             .newInstance(
@@ -617,7 +710,7 @@ private class VisitCommitmentCommandInvoker(
                 clinic.clinicId,
                 "a".repeat(64),
                 "actor:masked",
-                "UNKNOWN",
+                actorRole,
                 sha256(key),
                 "c".repeat(64),
                 "gatling-$key",
@@ -698,25 +791,34 @@ private class VisitCommitmentCommandInvoker(
 }
 
 /** reflection 호출 결과를 Gatling probe가 검증하기 쉬운 값으로 축약합니다. */
-private data class CommandOutcome(
+internal data class CommandOutcome(
+    val appointmentId: Long,
     val success: Boolean,
     val commitmentId: Long,
     val proposalId: Long,
+    val version: Long,
+    val proposalHash: String,
     val replay: Boolean,
     val allocationCount: Int,
     val errorCode: String?,
 ) {
     companion object {
         fun success(
+            appointmentId: Long,
             commitmentId: Long,
             proposalId: Long,
+            version: Long,
+            proposalHash: String,
             replay: Boolean,
             allocationCount: Int,
         ): CommandOutcome =
             CommandOutcome(
+                appointmentId = appointmentId,
                 success = true,
                 commitmentId = commitmentId,
                 proposalId = proposalId,
+                version = version,
+                proposalHash = proposalHash,
                 replay = replay,
                 allocationCount = allocationCount,
                 errorCode = null,
@@ -724,9 +826,12 @@ private data class CommandOutcome(
 
         fun rejected(errorCode: String): CommandOutcome =
             CommandOutcome(
+                appointmentId = -1L,
                 success = false,
                 commitmentId = -1L,
                 proposalId = -1L,
+                version = -1L,
+                proposalHash = "",
                 replay = false,
                 allocationCount = 0,
                 errorCode = errorCode,

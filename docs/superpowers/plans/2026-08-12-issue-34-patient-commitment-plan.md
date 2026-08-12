@@ -259,9 +259,9 @@ npm run test:e2e -- --project=chromium
 - [x] cancel 완료 response와 화면에 audit/history/reasonDetail 금지 필드가 섞이지 않는 negative contract를 고정하고 별도 detail route를 추가하지 않는다.
 - [x] cancel end-to-end timer를 proposal latency와 분리하고 `result`/`replay` tag, lock-wait/retry 신호를 검증하는 metric contract test를 추가한다.
 - [ ] PostgreSQL warm-up 30초·측정 5분·고정 dataset 100개·동시성(동일 10/상이 20)을 사용해 cancel p95/p99와 error/lock-wait를 기준선과 비교한다. p95 10% 또는 p99 15% 회귀 시 PR 준비를 중단한다.
-- [ ] notification v1/v2 mixed backlog의 discriminator 단일 분기, throughput/p95/p99/decode failure/drain-time을 기존 scale harness에서 검증하고 예외 fallback을 금지한다.
-- [ ] 성능 lane은 기존 합성 Gatling 비용 모델을 근거로 사용하지 않는다. `appointment-api/src/gatling`에 PostgreSQL Testcontainers/singleton fixture, cancel success/replay/412/경합 시나리오, warm-up 30초·측정 5분·dataset 100·동시성 10/20 load model, baseline/after JSON artifact와 lock-wait query를 추가하고 `./gradlew :appointment-api:gatlingRun`으로 실행한다.
-- [ ] `appointment-event` 또는 `appointment-notification` scale harness는 실제 v1/v2 codec JSON decode와 DB backlog drain을 반복 실행하도록 고치고, 혼합 비율·500자 detail·throughput/p95/p99/decode failure/drain-time 및 기준선 대비 회귀 상한을 artifact로 남긴다. 합성 비용 모델 단독 결과는 인정하지 않는다.
+- [x] notification v1/v2 mixed backlog는 합성 비용 모델과 분리된 `NotificationCodecBacklogBenchmarkTest`에서 실제 `NotificationOutboxEvents` row를 읽고 discriminator에 따라 strict decode한 뒤 terminal 상태로 drain한다. 예외 fallback은 허용하지 않는다.
+- [ ] 성능 lane은 기존 합성 Gatling 비용 모델을 근거로 사용하지 않는다. `appointment-api/src/gatling`에 PostgreSQL Testcontainers/singleton fixture, cancel success/replay/412/경합 시나리오, warm-up 30초·측정 5분·dataset 100·동시성 10/20 load model, baseline/after JSON artifact와 lock-wait query를 추가하고 `./gradlew :appointment-api:gatlingRun`으로 실행한다. fixture/simulation 구현과 wiring smoke는 완료했지만 full gate 실행·기준선 비교는 남아 있다.
+- [x] `appointment-event`의 실제 codec backlog harness는 legacy-heavy/current-heavy 혼합 비율, 500자 detail, warm-up/측정 window, throughput/p95/p99/decode failure/drain-time artifact를 지원한다. 다만 동일 환경 3회 baseline/candidate 실행과 회귀 gate 판정은 별도 검증으로 남긴다.
 - [ ] PostgreSQL simulation은 patient/admin success 50%, idempotent replay 20%, expected `412` conflict 20%, expected retry exhaustion 10% arrival mix를 고정하고 동일 appointment 10·상이 appointment 20 동시성을 생성한다. expected conflict/exhaustion은 scenario success로 판정하고, unexpected HTTP 5xx/timeout과 비의도 exhaustion만 error/retry threshold 분모에 포함한다. pre-change baseline과 candidate는 동일 machine/container image/dataset/seed로 각각 3회 측정하며 median과 분산을 report에 저장한다.
 - [ ] benchmark assertion은 p95 상대 10%·p99 상대 15% 초과 또는 절대 p95 500ms·p99 1s 초과, error rate 1% 초과, retry exhaustion 0.1% 초과, lock-wait p95 50ms 초과에서 non-zero exit한다. report에는 CPU/JDK/PostgreSQL/container image/seed를 포함한다.
 - [ ] codec backlog benchmark는 legacy-heavy 80/20과 current-heavy 20/80 payload mix, 각 10,000건, 500자 detail, warm-up 30초·측정 5분을 고정하고 throughput/p95/p99/decode failure/drain-time 및 동일 절대/상대 회귀 상한을 assertion한다. synthetic fairness harness와 실제 codec benchmark를 분리한다.
@@ -270,7 +270,7 @@ npm run test:e2e -- --project=chromium
 - [ ] detail이 DB/outbox에 저장되는 경계를 보존기간·ACL·DLQ/backup/provider log redaction 정책과 함께 문서화하고, PHI/PII 패턴 차단 또는 고정 안내문 mapping을 선택해 테스트한다.
 - [x] `git diff --check`, Kotlin 7-tier review, frontend lint/build/test, backend module tests를 실행한다.
 - [ ] 최종 검증에 `./gradlew :appointment-api:gatlingRun`과 notification mixed-schema benchmark 명령을 포함하고, 두 성능 artifact가 없으면 PR 준비 상태를 `PENDING`으로 유지한다.
-- [ ] 최종 검증 명령은 `./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=... -Dissue34.candidate=...`와 `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*'` 및 `scripts/compare-issue34-benchmark.sh baseline.json candidate.json`으로 고정한다. CI job `issue34-performance-gate`가 report artifact를 업로드하고 comparator 실패를 merge blocker로 반환한다.
+- [ ] 최종 검증 명령은 `./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=... -Dissue34.candidate=...`, `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=... -Dissue34.codec.mix=... -Dissue34.codec.run=...`, `scripts/compare-issue34-benchmark.sh baseline.json candidate.json`, `node scripts/compare-issue34-codec-benchmark.mjs baseline-codec-dir candidate-codec-dir`으로 고정한다. CI job `issue34-performance-gate`가 report artifact를 업로드하고 comparator 실패를 merge blocker로 반환한다.
 - [ ] 결과와 미검증 항목을 한국어 implementation review에 기록하고, P0/P1이 없을 때만 PR 준비 상태로 표시한다.
 
 최종 검증 명령:
@@ -279,8 +279,9 @@ npm run test:e2e -- --project=chromium
 git diff --check
 ./gradlew :appointment-event:test :appointment-api:test :appointment-notification:test
 ./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=appointment-api/src/gatling/resources/benchmarks/issue-34/baseline.json -Dissue34.candidate=appointment-api/src/gatling/resources/benchmarks/issue-34/candidate.json
-./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*'
+./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=baseline -Dissue34.codec.mix=legacy-heavy -Dissue34.codec.run=1
 scripts/compare-issue34-benchmark.sh appointment-api/src/gatling/resources/benchmarks/issue-34/baseline.json appointment-api/src/gatling/resources/benchmarks/issue-34/candidate.json
+node scripts/compare-issue34-codec-benchmark.mjs codec-baseline-dir codec-candidate-dir
 cd frontend/appointment-frontend && npm test -- --watch=false && npm run build
 ```
 

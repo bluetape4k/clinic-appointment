@@ -113,6 +113,28 @@ subprojects {
 
             useJUnitPlatform()
 
+            // Issue #34 codec gate is an explicit test lane. Forward only its
+            // bounded properties to the forked JUnit JVM so a normal module
+            // test remains a short smoke while the gate command can request
+            // the fixed 10,000-row/30-second/5-minute window.
+            if (project.path == ":appointment-event") {
+                listOf(
+                    "issue34.codec.benchmark",
+                    "issue34.codec.mode",
+                    "issue34.codec.mix",
+                    "issue34.codec.run",
+                    "issue34.codec.rows",
+                    "issue34.codec.warmupSeconds",
+                    "issue34.codec.measureSeconds",
+                    "issue34.codec.artifact",
+                    "issue34.sourceCommit",
+                ).forEach { propertyName ->
+                    System.getProperty(propertyName)?.let { propertyValue ->
+                        systemProperty(propertyName, propertyValue)
+                    }
+                }
+            }
+
             // Colima의 macOS 호스트 소켓 경로는 Docker 데몬 컨테이너에서
             // bind-mount할 수 없으므로, Ryuk가 사용하는 공식 컨테이너 내부
             // 소켓 경로를 기본값으로 지정한다. 사용자가 명시한 override는 보존한다.

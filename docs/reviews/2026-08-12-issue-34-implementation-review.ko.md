@@ -2,10 +2,11 @@
 
 ## 결론
 
-현재 구현은 로컬 모듈 검증과 포털 단위·브라우저 계약까지 통과했지만,
-PostgreSQL 취소 성능 gate, 실제 mixed-schema backlog benchmark, 보호된
-backend Playwright harness가 아직 없다. 따라서 이 문서의 최종 상태는
-`PENDING`이며 PR/merge 준비 상태로 승격하지 않는다.
+현재 구현은 로컬 모듈 검증과 포털 단위·브라우저 계약까지 통과했고,
+PostgreSQL 취소 성능 lane과 실제 mixed-schema backlog benchmark의 실행
+harness도 추가했다. 그러나 고정 window의 baseline/candidate 3회 artifact,
+보호된 backend Playwright harness, 운영 rollout 증거는 아직 없다. 따라서 이
+문서의 최종 상태는 `PENDING`이며 PR/merge 준비 상태로 승격하지 않는다.
 
 - 검토 대상: `feat/issue-34-patient-commitment`
 - 기준: `develop` (`fe772eb4`)부터 현재 브랜치의 모든 committed implementation changes이며, 검토 시점 worktree는 clean 상태
@@ -22,9 +23,9 @@ backend Playwright harness가 아직 없다. 따라서 이 문서의 최종 상�
 | 2. 보안·개인정보 | 취소 route의 ADMIN/STAFF/PATIENT matcher와 ownership 재검증, patient detail 차단, DB 원문·outbox hash 분리를 적용했다. | `AppointmentCommitmentHttpSupport.kt`, `AppointmentCommitmentAccessResolver.kt`, security integration tests | 로컬 PASS; 실제 IDOR fixture는 미실행 |
 | 3. API·도메인 | 폐쇄 reason code, bounded detail, ETag/idempotency, 상태 terminal 전이를 API·command·frontend에 반영했다. | DTO/command tests, OpenAPI contract, facade/page tests | 로컬 PASS |
 | 4. 데이터·트랜잭션 | V27 additive migration과 cancellation detail snapshot을 상태 전환·audit/outbox 전에 같은 transaction으로 기록한다. | H2/PostgreSQL/MySQL migration tests, command/atomicity tests | 로컬 PASS; 기본 Colima Ryuk 소켓 환경은 2건 실패했으나 Ryuk 비활성 재실행에서 698건 통과 |
-| 5. 이벤트·알림 | canonical `cancel-v1\\0` codec, v1/v2 dual-read, cancellation template v2, null/detail escape, producer readiness gate를 구현했다. | event/notification/API tests | 로컬 PASS; 실제 backlog drain 성능 미검증 |
+| 5. 이벤트·알림 | canonical `cancel-v1\\0` codec, v1/v2 dual-read, cancellation template v2, null/detail escape, producer readiness gate와 실제 outbox-row backlog drain harness를 구현했다. | event/notification/API tests, `NotificationCodecBacklogBenchmarkTest` | 로컬 PASS; 고정 10,000건·30초/5분 3회 성능 비교 미검증 |
 | 6. 포털·접근성 | Angular 22 client/facade와 `CANCELLED` terminal stepper, code-only confirmation, 412 single-flight를 구현했다. 로그인 주체 전환 시 facade/sessionStorage를 폐기하고 세대가 지난 비동기 응답을 차단하며, busy/stale mutation은 성공으로 오인하지 않는다. | 38개 파일·252개 Vitest tests, build, 4 Playwright tests | 로컬 PASS; protected backend harness와 320px/AT matrix 미검증 |
-| 7. 테스트·운영·성능 | 모듈별 검증과 diff hygiene는 통과했으나 계획된 30초 warm-up/5분 PostgreSQL gate와 codec benchmark artifact/CI가 없다. | 아래 증거 목록 | PENDING |
+| 7. 테스트·운영·성능 | 모듈별 검증과 diff hygiene, PostgreSQL cancel/codec smoke wiring은 통과했으나 계획된 30초 warm-up/5분 고정 window의 baseline/candidate artifact·CI와 보호된 backend gate가 없다. | 아래 증거 목록 | PENDING |
 
 ## 독립 검토 결과
 
@@ -66,8 +67,10 @@ decline/cancel/412 refresh의 성공·오류·`finally`가 세대를 비교한�
 |---|---|
 | `./gradlew :appointment-core:test --tests '*CancellationReasonRegistryTest*' --no-daemon` | BUILD SUCCESSFUL (targeted registry lane) |
 | `./gradlew :appointment-core:test --no-daemon --rerun-tasks` (Ryuk disabled) | 698 passing, BUILD SUCCESSFUL; 기본 환경은 Colima Ryuk socket mount 오류로 2건 실패 |
-| `./gradlew :appointment-event:test --no-daemon` | 194 passing, BUILD SUCCESSFUL |
+| `./gradlew :appointment-event:test --no-daemon --rerun-tasks` | 197 passing, BUILD SUCCESSFUL |
 | `./gradlew :appointment-event:test --tests '*NotificationOutboxCodecTest*' --no-daemon` | 14 passing, BUILD SUCCESSFUL |
+| `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' --no-daemon` | 실제 H2 outbox smoke PASS, artifact 생성 |
+| `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' --rerun-tasks -Dissue34.codec.benchmark=true -Dissue34.codec.rows=1000 -Dissue34.codec.measureSeconds=0 -Dissue34.codec.warmupSeconds=0 -Dissue34.codec.mix=current-heavy` | current-heavy wiring smoke PASS, decode failures 0 |
 | `./gradlew :appointment-notification:test --no-daemon --rerun-tasks` | 155 passing, BUILD SUCCESSFUL |
 | `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test` (Issue #34 관련 filter) | 102 passing, BUILD SUCCESSFUL |
 | `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test --no-daemon --rerun-tasks` | 771 passing, 3 pending, BUILD SUCCESSFUL (5분 39초) |
@@ -77,14 +80,16 @@ decline/cancel/412 refresh의 성공·오류·`finally`가 세대를 비교한�
 | frontend `npm run build` | 성공 |
 | frontend `npm run test:e2e` | 4 passing |
 | `git diff --check` | 오류 없음 |
+| `node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs` | 7 passing, BUILD SUCCESSFUL |
 
 ## 미검증·차단 항목
 
-1. `appointment-api:gatlingRun`의 PostgreSQL fixture/simulation, 고정 dataset,
-   30초 warm-up·5분 측정·baseline/candidate 3회와 p95/p99/lock-wait artifact가
-   아직 구현·실행되지 않았다.
+1. `appointment-api:gatlingRun`의 PostgreSQL fixture/simulation과 고정 dataset,
+   30초 warm-up·5분 측정 경로는 구현됐지만 baseline/candidate 3회와
+   p95/p99/lock-wait artifact를 아직 실행·비교하지 않았다.
 2. 실제 notification v1/v2 JSON decode와 DB backlog drain을 수행하는
-   `NotificationCodecBacklogBenchmarkTest` 및 comparator/CI artifact가 없다.
+   `NotificationCodecBacklogBenchmarkTest`와 mixed-ratio comparator는 구현됐고
+   smoke가 통과했지만, 10,000건·30초/5분 3회 artifact와 CI gate는 아직 없다.
 3. 보호된 backend와 Playwright를 한 번에 실행해 ETag/412, 권한, outbox,
    trace/screenshot/request-count를 보존하는 harness가 없다.
 4. production rollout readiness, schema backlog 0, provider delivery unknown 상태는
@@ -101,4 +106,4 @@ decline/cancel/412 refresh의 성공·오류·`finally`가 세대를 비교한�
 
 성능 artifact가 없는 상태에서 merge blocker를 우회하지 않는다. 다음 실행은
 계획 Task 7의 PostgreSQL 취소 simulation과 실제 codec backlog benchmark를
-동일 환경에서 먼저 추가하는 것이다.
+동일 환경에서 3회 실행해 comparator evidence를 남기는 것이다.

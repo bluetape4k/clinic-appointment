@@ -11,6 +11,8 @@ const repositoryRoot = path.resolve(import.meta.dirname, "../..");
 const collector = path.join(repositoryRoot, "scripts/collect-appointment-messaging-benchmark.mjs");
 const consumerCollector = path.join(repositoryRoot, "scripts/collect-appointment-messaging-consumer-benchmark.mjs");
 const consumerValidator = path.join(repositoryRoot, "scripts/validate-appointment-messaging-consumer-benchmark.mjs");
+const issue34Comparator = path.join(repositoryRoot, "scripts/compare-issue34-benchmark.sh");
+const issue34CodecComparator = path.join(repositoryRoot, "scripts/compare-issue34-codec-benchmark.mjs");
 
 test("collector selects the requested configuration from mixed raw reports", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "appointment-messaging-benchmark-"));
@@ -81,6 +83,207 @@ test("consumer collector preserves throughput and contention measurements", asyn
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("issue 34 comparator accepts three-run artifacts within the regression budget", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    await writeFile(baseline, JSON.stringify(issue34Report(100, 200, 20, 0.1, 0.01, 0, "baseline")));
+    await writeFile(candidate, JSON.stringify(issue34Report(105, 210, 21, 0.001, 0.0001)));
+
+    const result = await execFileAsync(issue34Comparator, [baseline, candidate], {
+      cwd: repositoryRoot,
+    });
+
+    assert.match(result.stdout, /PASS/);
+    assert.match(result.stdout, /p95/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("issue 34 comparator rejects a p99 regression beyond the hard gate", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    await writeFile(baseline, JSON.stringify(issue34Report(100, 200, 20, 0.1, 0.01, 0, "baseline")));
+    await writeFile(candidate, JSON.stringify(issue34Report(100, 250, 20, 0.1, 0.01, 0, "candidate")));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /p99/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("issue 34 comparator rejects scenario mismatches even when latency is within budget", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    await writeFile(baseline, JSON.stringify(issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline")));
+    await writeFile(candidate, JSON.stringify(issue34Report(100, 200, 20, 0.001, 0.0001, 0.01, "candidate")));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /scenario mismatch/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("issue 34 codec comparator accepts two mixed-schema scenarios with three runs", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-codec-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline");
+    const candidate = path.join(root, "candidate");
+    await mkdir(baseline, { recursive: true });
+    await mkdir(candidate, { recursive: true });
+    for (const mode of ["baseline", "candidate"]) {
+      const directory = mode === "baseline" ? baseline : candidate;
+      for (const mix of ["legacy-heavy", "current-heavy"]) {
+        for (const run of [1, 2, 3]) {
+          await writeFile(
+            path.join(directory, `${mode}-${mix}-run${run}.json`),
+            JSON.stringify(codecReport(mode, mix, run)),
+          );
+        }
+      }
+    }
+
+    const result = await execFileAsync(process.execPath, [issue34CodecComparator, baseline, candidate], {
+      cwd: repositoryRoot,
+    });
+
+    assert.match(result.stdout, /PASS legacy-heavy/);
+    assert.match(result.stdout, /PASS current-heavy/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("issue 34 codec comparator rejects a decode failure", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-codec-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline");
+    const candidate = path.join(root, "candidate");
+    await mkdir(baseline, { recursive: true });
+    await mkdir(candidate, { recursive: true });
+    for (const mode of ["baseline", "candidate"]) {
+      const directory = mode === "baseline" ? baseline : candidate;
+      for (const mix of ["legacy-heavy", "current-heavy"]) {
+        for (const run of [1, 2, 3]) {
+          const report = codecReport(mode, mix, run);
+          if (mode === "candidate" && mix === "current-heavy" && run === 2) {
+            report.metrics.decodeFailures = 1;
+          }
+          await writeFile(
+            path.join(directory, `${mode}-${mix}-run${run}.json`),
+            JSON.stringify(report),
+          );
+        }
+      }
+    }
+
+    await assert.rejects(
+      execFileAsync(process.execPath, [issue34CodecComparator, baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /decode failures/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+function issue34Report(
+  p95,
+  p99,
+  lockWaitP95,
+  unexpectedErrorRate,
+  unintendedRetryExhaustionRate,
+  scenarioMismatchRate = 0,
+  mode = "candidate",
+) {
+  return {
+    schemaVersion: 1,
+    benchmark: "issue-34-patient-appointment-cancel",
+    mode,
+    environment: issue34Environment(),
+    runs: [1, 2, 3].map((run) => ({
+      run,
+      cancelP95Millis: p95,
+      cancelP99Millis: p99,
+      unexpectedErrorRate,
+      unintendedRetryExhaustionRate,
+      lockWaitP95Millis: lockWaitP95,
+      expectedConflictRate: 0.2,
+      expectedRetryExhaustionRate: 0.1,
+      scenarioMismatchRate,
+    })),
+  };
+}
+
+function issue34Environment() {
+  return {
+    datasetAppointments: 100,
+    warmupSeconds: 30,
+    measureSeconds: 300,
+    sameAppointmentConcurrency: 10,
+    differentAppointmentConcurrency: 20,
+    seed: 34,
+    postgresqlImage: "postgres:18-alpine",
+    jdk: "OpenJDK Runtime Environment",
+    vm: "OpenJDK 64-Bit Server VM",
+  };
+}
+
+function codecReport(mode, mix, run, metrics = {}) {
+  return {
+    schemaVersion: 1,
+    benchmark: "issue-34-notification-codec-backlog",
+    mode,
+    mix,
+    run,
+    environment: {
+      database: "h2",
+      datasetRows: 10000,
+      warmupSeconds: 30,
+      measureSeconds: 300,
+      detailLength: 500,
+      batchSize: 500,
+      legacyRatio: mix === "legacy-heavy" ? 0.8 : 0.2,
+      jdk: "OpenJDK Runtime Environment",
+      vm: "OpenJDK 64-Bit Server VM",
+    },
+    metrics: {
+      throughputRowsPerSecond: 1000,
+      decodeP95Millis: 10,
+      decodeP99Millis: 20,
+      decodeFailures: 0,
+      drainTimeMillis: 100,
+      decodedRows: 10000,
+      latencySamples: 10000,
+      passes: 1,
+      ...metrics,
+    },
+  };
+}
 
 function rawConsumer(operation, rows, mode, scoreUnit, score) {
   return {
