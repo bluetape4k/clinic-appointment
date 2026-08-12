@@ -17,6 +17,7 @@ import io.bluetape4k.clinic.appointment.model.plan.AppointmentPlanStatus
 import io.bluetape4k.clinic.appointment.model.plan.PlanTreatmentStatus
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentAuditEvents
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentCancellationDetails
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommandIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentItems
@@ -607,6 +608,7 @@ internal abstract class VisitCommitmentCommandTestSupport {
                 WaitlistOfferEvents,
                 AppointmentCommandIdempotencies,
                 AppointmentAuditEvents,
+                AppointmentCancellationDetails,
                 SchedulingOutboxEvents,
             )
     }

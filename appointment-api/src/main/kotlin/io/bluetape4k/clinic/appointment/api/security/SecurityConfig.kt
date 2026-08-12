@@ -286,12 +286,13 @@ class SecurityConfig {
                     .access(closureRescheduleAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/appointments/*/commitment")
                     .access(commitmentReadTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/appointments/*/cancel")
+                    .access(commitmentCancellationTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(
                         HttpMethod.POST,
                         "/api/{tenantCode}/appointments/*/approve",
                         "/api/{tenantCode}/appointments/*/confirm",
                         "/api/{tenantCode}/appointments/*/proposals/*/expire",
-                        "/api/{tenantCode}/appointments/*/cancel",
                         "/api/{tenantCode}/appointments/*/change-proposals",
                     )
                     .access(commitmentAdminTenantAccess(tenantAuthorizationManager))
@@ -411,6 +412,18 @@ class SecurityConfig {
     ): AuthorizationManager<RequestAuthorizationContext> =
         AuthorizationManagers.allOf(
             AuthorityAuthorizationManager.hasRole(SchedulingRole.ADMIN),
+            tenantAuthorizationManager,
+        )
+
+    private fun commitmentCancellationTenantAccess(
+        tenantAuthorizationManager: TenantAuthorizationManager,
+    ): AuthorizationManager<RequestAuthorizationContext> =
+        AuthorizationManagers.allOf(
+            AuthorityAuthorizationManager.hasAnyRole(
+                SchedulingRole.ADMIN,
+                SchedulingRole.STAFF,
+                SchedulingRole.PATIENT,
+            ),
             tenantAuthorizationManager,
         )
 

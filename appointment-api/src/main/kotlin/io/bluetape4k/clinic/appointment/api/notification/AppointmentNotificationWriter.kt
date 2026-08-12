@@ -95,6 +95,17 @@ interface AppointmentNotificationWriter {
         reasonCode: CancellationReasonCode?,
     )
 
+    /** bounded 운영 취소 설명을 전달하는 확장 경계입니다. 기존 writer는 code-only로 호환됩니다. */
+    fun cancelled(
+        tenantGroupId: Long,
+        record: AppointmentRecord,
+        version: Long,
+        reasonCode: CancellationReasonCode?,
+        reasonDetail: String?,
+    ) {
+        cancelled(tenantGroupId, record, version, reasonCode)
+    }
+
     fun rescheduled(
         tenantGroupId: Long,
         original: AppointmentRecord,
@@ -110,6 +121,15 @@ interface AppointmentNotificationWriter {
         notification: CommitmentAppointmentNotification,
         reasonCode: CancellationReasonCode?,
     )
+
+    /** commitment 취소 알림에 bounded 환자 안내 문구를 전달합니다. */
+    fun commitmentCancelled(
+        notification: CommitmentAppointmentNotification,
+        reasonCode: CancellationReasonCode?,
+        reasonDetail: String?,
+    ) {
+        commitmentCancelled(notification, reasonCode)
+    }
 
     fun commitmentRescheduled(
         previous: CommitmentAppointmentNotification,
@@ -129,7 +149,14 @@ class DefaultAppointmentNotificationWriter(
     private val clinicRepository: ClinicRepository,
     private val clock: Clock,
     private val sameDayReminderLeadTime: Duration,
+    private val cancellationSchemaVersion: Int = NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION,
 ) : AppointmentNotificationWriter {
+
+    init {
+        require(cancellationSchemaVersion in NotificationOutboxEnvelope.SUPPORTED_SCHEMA_VERSIONS) {
+            "cancellationSchemaVersion must be supported"
+        }
+    }
 
     init {
         require(!sameDayReminderLeadTime.isNegative && !sameDayReminderLeadTime.isZero) {
@@ -220,7 +247,18 @@ class DefaultAppointmentNotificationWriter(
         record: AppointmentRecord,
         version: Long,
         reasonCode: CancellationReasonCode?,
+    ) = cancelled(tenantGroupId, record, version, reasonCode, null)
+
+    override fun cancelled(
+        tenantGroupId: Long,
+        record: AppointmentRecord,
+        version: Long,
+        reasonCode: CancellationReasonCode?,
+        reasonDetail: String?,
     ) {
+        require(reasonDetail == null || cancellationSchemaVersion == NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION) {
+            "cancellation detail requires schema v2 producer readiness"
+        }
         repository.suppressOutstandingReminders(
             tenantGroupId = TenantGroupId(tenantGroupId),
             clinicId = ClinicId(record.clinicId),
@@ -252,6 +290,7 @@ class DefaultAppointmentNotificationWriter(
                 appointmentDate = record.appointmentDate,
                 startTime = record.startTime,
                 cancellationReasonCode = reasonCode,
+                cancellationReasonDetail = reasonDetail,
             ),
             availableAt = now(),
         )
@@ -355,7 +394,16 @@ class DefaultAppointmentNotificationWriter(
     override fun commitmentCancelled(
         notification: CommitmentAppointmentNotification,
         reasonCode: CancellationReasonCode?,
+    ) = commitmentCancelled(notification, reasonCode, null)
+
+    override fun commitmentCancelled(
+        notification: CommitmentAppointmentNotification,
+        reasonCode: CancellationReasonCode?,
+        reasonDetail: String?,
     ) {
+        require(reasonDetail == null || cancellationSchemaVersion == NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION) {
+            "cancellation detail requires schema v2 producer readiness"
+        }
         repository.suppressOutstandingReminders(
             tenantGroupId = TenantGroupId(notification.tenantGroupId),
             clinicId = ClinicId(notification.clinicId),
@@ -375,6 +423,7 @@ class DefaultAppointmentNotificationWriter(
                 appointmentDate = schedule.appointmentDate,
                 startTime = schedule.startTime,
                 cancellationReasonCode = reasonCode,
+                cancellationReasonDetail = reasonDetail,
             ),
             availableAt = now(),
         )
@@ -524,7 +573,7 @@ class DefaultAppointmentNotificationWriter(
         repository.enqueue(
             SendableNotificationDraft(
                 envelope = NotificationOutboxEnvelope(
-                    schemaVersion = NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION,
+                    schemaVersion = notificationSchemaVersion(parameters),
                     eventId = NotificationEventId(digest.value),
                     idempotencyKey = NotificationIdempotencyKey(digest.value),
                     tenantGroupId = TenantGroupId(notification.tenantGroupId),
@@ -535,7 +584,7 @@ class DefaultAppointmentNotificationWriter(
                     eventType = eventType,
                     notificationSlot = slot,
                     templateKey = templateKey,
-                    templateVersion = NotificationTemplateVersion(1),
+                    templateVersion = notificationTemplateVersion(parameters),
                     parameterType = parameters.parameterType,
                     parameters = parameters,
                     occurredAt = occurredAt,
@@ -622,7 +671,7 @@ class DefaultAppointmentNotificationWriter(
         repository.enqueue(
             SendableNotificationDraft(
                 envelope = NotificationOutboxEnvelope(
-                    schemaVersion = NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION,
+                    schemaVersion = notificationSchemaVersion(parameters),
                     eventId = NotificationEventId(digest.value),
                     idempotencyKey = NotificationIdempotencyKey(digest.value),
                     tenantGroupId = TenantGroupId(tenantGroupId),
@@ -633,7 +682,7 @@ class DefaultAppointmentNotificationWriter(
                     eventType = eventType,
                     notificationSlot = slot,
                     templateKey = templateKey,
-                    templateVersion = NotificationTemplateVersion(1),
+                    templateVersion = notificationTemplateVersion(parameters),
                     parameterType = parameters.parameterType,
                     parameters = parameters,
                     occurredAt = occurredAt,
@@ -661,6 +710,18 @@ class DefaultAppointmentNotificationWriter(
             eventType = eventType,
             channel = NotificationChannelType.DUMMY,
             notificationSlot = slot,
+        )
+
+    private fun notificationSchemaVersion(parameters: NotificationTemplateParameters): Int =
+        if (parameters is AppointmentCancelledParameters) {
+            cancellationSchemaVersion
+        } else {
+            NotificationOutboxEnvelope.LEGACY_SCHEMA_VERSION
+        }
+
+    private fun notificationTemplateVersion(parameters: NotificationTemplateParameters): NotificationTemplateVersion =
+        NotificationTemplateVersion(
+            if (parameters is AppointmentCancelledParameters && cancellationSchemaVersion == 2) 2 else 1,
         )
 
     private fun auditFingerprint(

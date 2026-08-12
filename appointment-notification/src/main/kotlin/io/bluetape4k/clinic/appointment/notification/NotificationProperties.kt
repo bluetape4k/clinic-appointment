@@ -33,6 +33,8 @@ import java.time.Duration
 @ConfigurationProperties(prefix = "clinic.notification")
 data class NotificationProperties(
     val enabled: Boolean = true,
+    /** 취소 알림 schema v2 producer 전환 flag. consumer readiness 전까지 기본값은 false다. */
+    val v2Producer: Boolean = false,
     val events: EventProperties = EventProperties(),
     val reminder: ReminderProperties = ReminderProperties(),
     val worker: WorkerProperties = WorkerProperties(),

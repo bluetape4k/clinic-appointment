@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.commitment
 
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import io.bluetape4k.clinic.appointment.api.notification.AppointmentNotificationWriter
 import io.bluetape4k.clinic.appointment.api.notification.CommitmentAppointmentNotification
 import io.bluetape4k.clinic.appointment.api.notification.MemberResolution
@@ -25,6 +26,7 @@ import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.policy.AdminBookingMode
 import io.bluetape4k.clinic.appointment.model.reliability.BookingReliabilityDecisionStamp
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentAuditEvents
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentCancellationDetails
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommandIdempotencyConflictException
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommandIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentRepository
@@ -583,7 +585,8 @@ internal class AppointmentCommitmentCommandService(
      *
      * 확정 예약에 변경 proposal이 대기 중이어도 확정 포인터를 취소 대상으로 사용합니다.
      * [CancelAppointmentCommand.reasonCode]는 등록 code만 허용하며 outbox에 자유 텍스트나
-     * 고객 민감정보를 포함하지 않습니다.
+     * 고객 민감정보를 포함하지 않습니다. bounded 운영 안내 문구는 notification writer에
+     * 전달하되 actor·환자 식별자는 전달하지 않습니다.
      */
     fun cancelAppointment(command: CancelAppointmentCommand): AppointmentCommitmentCommandResult =
         executeCommand(command.context, OPERATION_CANCEL_APPOINTMENT) {
@@ -652,6 +655,22 @@ internal class AppointmentCommitmentCommandService(
                 "cancelled appointment projection target must exist"
             }
             val cancelled = requireCommitment(command.context, command.appointmentId)
+            AppointmentCancellationDetails.insert {
+                it[tenantGroupId] = command.context.tenantGroupId
+                it[clinicId] = command.context.clinicId
+                it[appointmentId] = cancelled.appointmentId
+                it[commitmentId] = cancelled.id
+                it[proposalId] = proposal.id
+                it[reasonCode] = command.reasonCode
+                it[reasonDetail] = command.reasonDetail
+                it[actorRole] = command.context.actorRole
+                it[actorScopeHash] = command.context.actorScopeHash
+                it[detailHash] = CancellationReasonRegistry.canonicalHashHex(
+                    command.reasonCode,
+                    command.reasonDetail,
+                )
+                it[occurredAt] = now
+            }
             writeDecision(
                 context = command.context,
                 eventType = EVENT_APPOINTMENT_CANCELLED,
@@ -659,6 +678,10 @@ internal class AppointmentCommitmentCommandService(
                 proposal = proposal,
                 occurredAt = now,
                 reasonCode = command.reasonCode,
+                reasonDetailHash = CancellationReasonRegistry.canonicalHashHex(
+                    command.reasonCode,
+                    command.reasonDetail,
+                ),
             )
             notificationWriter.commitmentCancelled(
                 notification =
@@ -669,6 +692,7 @@ internal class AppointmentCommitmentCommandService(
                         memberId = requireCommitmentMemberId(command.context, cancelled.appointmentId),
                     ),
                 reasonCode = CancellationReasonCode(command.reasonCode),
+                reasonDetail = command.reasonDetail,
             )
             persistCommandResult(command.context, cancelled, proposal)
             AppointmentCommitmentCommandResult(cancelled, proposal, idempotentReplay = false)
@@ -1437,6 +1461,7 @@ internal class AppointmentCommitmentCommandService(
         proposal: AppointmentProposalRecord,
         occurredAt: Instant,
         reasonCode: String? = null,
+        reasonDetailHash: String? = null,
     ) {
         AppointmentAuditEvents.insert {
             it[tenantGroupId] = context.tenantGroupId
@@ -1472,6 +1497,7 @@ internal class AppointmentCommitmentCommandService(
                     append(",\"proposalId\":${proposal.id}")
                     append(",\"commitmentVersion\":${commitment.version}")
                     reasonCode?.let { append(",\"reasonCode\":\"$it\"") }
+                    reasonDetailHash?.let { append(",\"reasonDetailHash\":\"$it\"") }
                     append('}')
                 }
             it[status] = SchedulingOutboxStatus.PENDING

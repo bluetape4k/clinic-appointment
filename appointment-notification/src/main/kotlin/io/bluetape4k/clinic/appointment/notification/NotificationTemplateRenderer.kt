@@ -125,12 +125,13 @@ class NotificationTemplateRenderer(
             is AppointmentCreatedParameters -> baseFields()
             is AppointmentConfirmedParameters -> baseFields()
             is AppointmentReminderParameters -> baseFields()
-            is AppointmentCancelledParameters -> mapOf(
-                "clinicDisplayName" to clinicDisplayName,
-                "appointmentDate" to appointmentDate.format(DATE_FORMAT),
-                "startTime" to startTime.format(TIME_FORMAT),
-                "cancellationReasonCode" to (cancellationReasonCode?.value ?: "UNSPECIFIED"),
-            )
+            is AppointmentCancelledParameters -> buildMap {
+                put("clinicDisplayName", clinicDisplayName)
+                put("appointmentDate", appointmentDate.format(DATE_FORMAT))
+                put("startTime", startTime.format(TIME_FORMAT))
+                put("cancellationReasonCode", cancellationReasonCode?.value ?: "UNSPECIFIED")
+                cancellationReasonDetail?.let { put("cancellationReasonDetail", it) }
+            }
             is AppointmentRescheduledParameters -> mapOf(
                 "clinicDisplayName" to clinicDisplayName,
                 "previousAppointmentDate" to previousAppointmentDate.format(DATE_FORMAT),

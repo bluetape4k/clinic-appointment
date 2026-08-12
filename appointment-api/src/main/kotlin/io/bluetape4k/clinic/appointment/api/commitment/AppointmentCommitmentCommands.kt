@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.commitment
 
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentItemDraft
 import io.bluetape4k.clinic.appointment.model.commitment.AppointmentProposalDraft
 import io.bluetape4k.clinic.appointment.model.commitment.ConsentDecisionType
@@ -44,6 +45,7 @@ internal class CommitmentCommandContext(
     clinicId: Long,
     actorScopeHash: String,
     actorAuditRef: String,
+    actorRole: String = "UNKNOWN",
     idempotencyKeyHash: String,
     commandHash: String,
     correlationId: String,
@@ -52,6 +54,7 @@ internal class CommitmentCommandContext(
     val clinicId = clinicId.requirePositiveNumber("clinicId")
     val actorScopeHash = actorScopeHash.requireNotBlank("actorScopeHash")
     val actorAuditRef = actorAuditRef.requireNotBlank("actorAuditRef")
+    val actorRole = actorRole.requireNotBlank("actorRole")
     val idempotencyKeyHash = idempotencyKeyHash.requireNotBlank("idempotencyKeyHash")
     val commandHash = commandHash.requireNotBlank("commandHash")
     val correlationId = correlationId.requireNotBlank("correlationId")
@@ -61,6 +64,9 @@ internal class CommitmentCommandContext(
             "actorScopeHash must be a lowercase SHA-256 value"
         }
         require(this.actorAuditRef.length <= 128) { "actorAuditRef must not exceed 128 characters" }
+        require(this.actorRole.matches(ACTOR_ROLE)) {
+            "actorRole must be a stable actor type"
+        }
         require(this.idempotencyKeyHash.matches(SHA256)) {
             "idempotencyKeyHash must be a lowercase SHA-256 value"
         }
@@ -74,6 +80,7 @@ internal class CommitmentCommandContext(
 
     companion object {
         private val SHA256 = Regex("[0-9a-f]{64}")
+        private val ACTOR_ROLE = Regex("[A-Z_]{1,16}")
         private val CORRELATION_ID = Regex("[A-Za-z0-9._:/-]{1,128}")
         private const val serialVersionUID = 1L
     }
@@ -507,6 +514,7 @@ internal class ExpireAppointmentProposalCommand(
  * @property expectedVersion `If-Match`에서 파생한 현재 commitment version입니다.
  * @property expectedProposalHash caller가 조회한 현재 proposal의 canonical hash입니다.
  * @property reasonCode 자유 텍스트를 대신하는 등록된 대문자 업무 사유 code입니다.
+ * @property reasonDetail 관리자·staff가 환자에게 전달할 제한된 취소 설명입니다.
  */
 internal class CancelAppointmentCommand(
     val context: CommitmentCommandContext,
@@ -515,6 +523,7 @@ internal class CancelAppointmentCommand(
     expectedVersion: Long,
     expectedProposalHash: String,
     reasonCode: String,
+    val reasonDetail: String? = null,
 ) : Serializable {
     val appointmentId = appointmentId.requirePositiveNumber("appointmentId")
     val proposalId = proposalId.requirePositiveNumber("proposalId")
@@ -526,14 +535,12 @@ internal class CancelAppointmentCommand(
         require(this.expectedProposalHash.matches(SHA256)) {
             "expectedProposalHash must be a lowercase SHA-256 value"
         }
-        require(REASON_CODE.matches(this.reasonCode)) {
-            "reasonCode must be a registered uppercase business code"
-        }
+        CancellationReasonRegistry.requireCode(this.reasonCode)
+        CancellationReasonRegistry.requireDetail(this.reasonDetail)
     }
 
     companion object {
         private val SHA256 = Regex("[0-9a-f]{64}")
-        private val REASON_CODE = Regex("[A-Z][A-Z0-9_]{0,63}")
         private const val serialVersionUID = 1L
     }
 }

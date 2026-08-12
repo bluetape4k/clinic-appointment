@@ -87,6 +87,34 @@ internal class AppointmentCommitmentAccessResolver(
     }
 
     /**
+     * 취소 명령 전용 자원 접근을 검증한다.
+     *
+     * 일반 commitment 변경은 관리자와 환자만 수행하지만 취소는 운영 staff도
+     * tenant·clinic 범위 안에서 수행할 수 있다. 따라서 기존 read/write resolver의
+     * 정책을 넓히지 않고 취소 전용 ownership 경계를 별도로 둔다.
+     */
+    fun requireAppointmentCancellationAccess(
+        actor: ActorContext,
+        appointmentId: Long,
+    ): ResolvedAppointmentAccess {
+        val scope = resolveScope(actor)
+        return transaction(database) {
+            val appointmentFingerprint = appointmentRepository.findPatientReferenceFingerprint(
+                appointmentId,
+                scope.tenantGroupId,
+                scope.clinicId,
+            ) ?: forbidden()
+            requireCancellationOwnership(actor, scope.tenantGroupId, appointmentFingerprint)
+            ResolvedAppointmentAccess(
+                tenantGroupId = scope.tenantGroupId,
+                clinicId = scope.clinicId,
+                appointmentId = appointmentId,
+                patientReferenceFingerprint = appointmentFingerprint,
+            )
+        }
+    }
+
+    /**
      * 동의 authority가 actor의 정확한 tenant namespace에서 발행됐는지 검증한다.
      *
      * prefix 유사 tenant를 허용하지 않도록 `tenantCode:` 전체를 case-sensitive하게
@@ -136,6 +164,33 @@ internal class AppointmentCommitmentAccessResolver(
 
             ActorType.ADMIN -> Unit
             ActorType.STAFF,
+            ActorType.DOCTOR,
+            ActorType.SYSTEM,
+            -> forbidden()
+        }
+    }
+
+    private fun requireCancellationOwnership(
+        actor: ActorContext,
+        tenantGroupId: Long,
+        expectedFingerprint: String,
+    ) {
+        when (actor.actorType) {
+            ActorType.ADMIN,
+            ActorType.STAFF,
+            -> Unit
+
+            ActorType.PATIENT -> {
+                val patientSubjectId = actor.patientSubjectId
+                    ?.takeIf(String::isNotBlank)
+                    ?: forbidden()
+                val actualFingerprint =
+                    patientSubjectFingerprintResolver.fingerprint(tenantGroupId, patientSubjectId)
+                if (!constantTimeEquals(expectedFingerprint, actualFingerprint)) {
+                    forbidden()
+                }
+            }
+
             ActorType.DOCTOR,
             ActorType.SYSTEM,
             -> forbidden()

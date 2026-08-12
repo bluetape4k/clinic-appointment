@@ -339,12 +339,16 @@ data class NotificationOutboxEnvelope(
 ) : Serializable {
 
     init {
-        require(schemaVersion == CURRENT_SCHEMA_VERSION) { "schemaVersion must be $CURRENT_SCHEMA_VERSION" }
+        require(schemaVersion in SUPPORTED_SCHEMA_VERSIONS) {
+            "schemaVersion must be one of $SUPPORTED_SCHEMA_VERSIONS"
+        }
         require(parameterType == parameters.parameterType) { "parameterType must match parameters" }
     }
 
     companion object {
-        const val CURRENT_SCHEMA_VERSION = 1
+        const val LEGACY_SCHEMA_VERSION = 1
+        const val CURRENT_SCHEMA_VERSION = 2
+        val SUPPORTED_SCHEMA_VERSIONS: Set<Int> = setOf(LEGACY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
         private const val serialVersionUID = 1L
     }
 }

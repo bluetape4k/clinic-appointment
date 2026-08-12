@@ -90,7 +90,7 @@ class NotificationOutboxCodecTest {
 
     @Test
     fun `codec rejects unknown schema version with template parameter invalid contract failure`() {
-        val json = codec.encode(envelope()).replace("\"schemaVersion\":1", "\"schemaVersion\":2")
+        val json = codec.encode(envelope()).replace("\"schemaVersion\":2", "\"schemaVersion\":99")
 
         val failure = assertFailsWith<NotificationContractException> {
             codec.decode(json)
@@ -172,11 +172,49 @@ class NotificationOutboxCodecTest {
             "appointmentDate",
             "startTime",
             "cancellationReasonCode",
+            "cancellationReasonDetail",
         )
         parameters.getValue("cancellationReasonCode") shouldBeEqualTo "CUSTOMER_REQUEST"
         json.contains("cancellationReasonText").shouldBeFalse()
         json.contains("reasonText").shouldBeFalse()
         json.contains("freeText").shouldBeFalse()
+    }
+
+    @Test
+    fun `codec reads legacy cancellation payload without detail and round trips schema v2 detail`() {
+        val legacy = codec.encode(
+            envelope(
+                eventType = NotificationEventType.CANCELLED,
+                notificationSlot = NotificationSlot.CANCELLED,
+                templateKey = "appointment.cancelled.sms",
+                parameterType = NotificationParameterType.APPOINTMENT_CANCELLED,
+                parameters = AppointmentCancelledParameters(
+                    clinicDisplayName = "Blue Clinic",
+                    appointmentDate = LocalDate.parse("2026-08-01"),
+                    startTime = LocalTime.parse("10:30"),
+                    cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
+                ),
+            ),
+        ).replace(",\"cancellationReasonDetail\":null", "")
+            .replace("\"schemaVersion\":2", "\"schemaVersion\":1")
+
+        val legacyDecoded = codec.decode(legacy)
+        (legacyDecoded.parameters as AppointmentCancelledParameters).cancellationReasonDetail shouldBeEqualTo null
+
+        val current = envelope(
+            eventType = NotificationEventType.CANCELLED,
+            notificationSlot = NotificationSlot.CANCELLED,
+            templateKey = "appointment.cancelled.sms",
+            parameterType = NotificationParameterType.APPOINTMENT_CANCELLED,
+            parameters = AppointmentCancelledParameters(
+                clinicDisplayName = "Blue Clinic",
+                appointmentDate = LocalDate.parse("2026-08-01"),
+                startTime = LocalTime.parse("10:30"),
+                cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
+                cancellationReasonDetail = "진료 일정 변경",
+            ),
+        )
+        codec.decode(codec.encode(current)) shouldBeEqualTo current
     }
 
     @Test

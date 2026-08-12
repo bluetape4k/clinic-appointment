@@ -92,12 +92,63 @@ class AdminAppointmentV2Test {
             id = 11L,
             idempotencyKey = "cancel_01J1M6Y6XRK8N0W2M3P4Q5R6S7",
             ifMatch = "\"1\"",
-            request = CancelAppointmentRequest("EQUIPMENT_FAILURE"),
+            request = CancelAppointmentRequest(
+                reasonCode = "EQUIPMENT_FAILURE",
+                reasonDetail = "장비 점검으로 진료 일정을 취소합니다.",
+            ),
         )
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
         response.headers.getFirst(HttpHeaders.ETAG) shouldBeEqualTo "\"2\""
         service.lastExpectedVersion shouldBeEqualTo 1L
+    }
+
+    @Test
+    fun `staff cancellation accepts bounded operator detail`() {
+        val service = FakeAppointmentCommitmentApplicationService()
+        val controller = AdminAppointmentController(service, ActorContextResolver())
+
+        val response = controller.cancelAppointment(
+            tenantCode = "tenant-a",
+            authentication = authentication(staffPrincipal()),
+            servletRequest = MockHttpServletRequest(),
+            id = 11L,
+            idempotencyKey = "cancel_01J1M6Y6XRK8N0W2M3P4Q5R6S8",
+            ifMatch = "\"1\"",
+            request = CancelAppointmentRequest("CLINIC_REQUEST", "병원 운영 사정으로 예약을 취소합니다."),
+        )
+
+        response.statusCode shouldBeEqualTo HttpStatus.OK
+        service.lastActor.shouldNotBeNull().actorType shouldBeEqualTo ActorType.STAFF
+    }
+
+    @Test
+    fun `patient cancellation accepts code but rejects operator detail`() {
+        val service = FakeAppointmentCommitmentApplicationService()
+        val controller = AdminAppointmentController(service, ActorContextResolver())
+
+        controller.cancelAppointment(
+            tenantCode = "tenant-a",
+            authentication = authentication(patientPrincipal()),
+            servletRequest = MockHttpServletRequest(),
+            id = 11L,
+            idempotencyKey = "cancel_01J1M6Y6XRK8N0W2M3P4Q5R9",
+            ifMatch = "\"1\"",
+            request = CancelAppointmentRequest("CUSTOMER_REQUEST"),
+        ).statusCode shouldBeEqualTo HttpStatus.OK
+
+        val exception = assertFailsWith<AppointmentCommitmentApiException> {
+            controller.cancelAppointment(
+                tenantCode = "tenant-a",
+                authentication = authentication(patientPrincipal()),
+                servletRequest = MockHttpServletRequest(),
+                id = 11L,
+                idempotencyKey = "cancel_01J1M6Y6XRK8N0W2M3P4Q6",
+                ifMatch = "\"1\"",
+                request = CancelAppointmentRequest("CUSTOMER_REQUEST", "환자 입력 문구"),
+            )
+        }
+        exception.error shouldBeEqualTo AppointmentCommitmentApiError.SCOPE_FORBIDDEN
     }
 
     @Test
@@ -269,6 +320,21 @@ class AdminAppointmentV2Test {
         issuer = "appointment-auth-service",
         tokenId = "token-admin-7",
         authenticatedAt = Instant.parse("2026-07-29T00:00:00Z"),
+    )
+
+    private fun staffPrincipal() = adminPrincipal().copy(
+        userId = "staff-actor-7",
+        roles = setOf(SchedulingRole.STAFF),
+        actorType = ActorType.STAFF,
+        tokenId = "token-staff-7",
+    )
+
+    private fun patientPrincipal() = adminPrincipal().copy(
+        userId = "patient-actor-7",
+        roles = setOf(SchedulingRole.PATIENT),
+        actorType = ActorType.PATIENT,
+        patientSubjectId = "patient-subject-7",
+        tokenId = "token-patient-7",
     )
 
     private fun systemPrincipal() = SchedulingUserPrincipal(
