@@ -29,5 +29,5 @@ regexes = [
     '''jwt\.secret=test-secret.*''',
     '''MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY''',
     '''0123456789abcdef0123456789abcdef''',
-    '''(?:request|accept|approval|cancel|direct)_01J1M6Y6XRK8N0W2M3P4Q5R6S7''',
+    '''(?:request|accept|approval|cancel|direct)_01J1M6Y6XRK8N0W2M3P4Q(?:5R6S[78]|5R9|6)''',
 ]
