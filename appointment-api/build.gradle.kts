@@ -85,6 +85,10 @@ dependencies {
     gatling(project(":appointment-event"))
     gatling(libs.gatling.charts.highcharts)
     gatling(libs.gatling.http.java)
+    gatling(libs.bluetape4k.testcontainers)
+    gatling(libs.testcontainers)
+    gatling(libs.testcontainers.postgresql)
+    gatling(libs.postgresql.driver)
     gatlingRuntimeOnly(libs.h2.v2)
 }
 
