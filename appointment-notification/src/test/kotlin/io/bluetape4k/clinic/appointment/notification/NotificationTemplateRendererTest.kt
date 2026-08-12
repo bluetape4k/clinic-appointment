@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentConfirmedParameters
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentCancelledParameters
 import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
@@ -12,7 +14,6 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateK
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.Locale
@@ -34,7 +35,7 @@ internal class NotificationTemplateRendererTest {
     fun `알 수 없는 version은 TEMPLATE_NOT_FOUND로 실패한다`() {
         val renderer = NotificationTemplateRenderer(StaticCatalog(emptyList()))
 
-        val failure = assertThrows<NotificationTemplateException> {
+        val failure = assertFailsWith<NotificationTemplateException> {
             renderer.render(key, version, NotificationChannelType.SMS, confirmedParameters(), profile)
         }
 
@@ -57,7 +58,7 @@ internal class NotificationTemplateRendererTest {
             )
         )
 
-        val unknown = assertThrows<NotificationTemplateException> {
+        val unknown = assertFailsWith<NotificationTemplateException> {
             renderer.render(key, version, NotificationChannelType.SMS, confirmedParameters(), profile)
         }
 
@@ -78,7 +79,7 @@ internal class NotificationTemplateRendererTest {
             },
         )
 
-        val failure = assertThrows<NotificationTemplateException> {
+        val failure = assertFailsWith<NotificationTemplateException> {
             renderer.render(key, version, NotificationChannelType.SMS, confirmedParameters(), profile)
         }
 
@@ -87,15 +88,15 @@ internal class NotificationTemplateRendererTest {
 
     @Test
     fun `typed durable parameter 값의 control delimiter length 위반을 거절한다`() {
-        val control = assertThrows<IllegalArgumentException> {
+        val control = assertFailsWith<IllegalArgumentException> {
             confirmedParameters(clinicDisplayName = "clinic\nname")
         }
-        val tooLong = assertThrows<IllegalArgumentException> {
+        val tooLong = assertFailsWith<IllegalArgumentException> {
             confirmedParameters(clinicDisplayName = "a".repeat(121))
         }
 
-        control.message!!.contains("control") shouldBeEqualTo true
-        tooLong.message!!.contains("120") shouldBeEqualTo true
+        control.message.shouldNotBeNull().contains("control") shouldBeEqualTo true
+        tooLong.message.shouldNotBeNull().contains("120") shouldBeEqualTo true
     }
 
     @Test
@@ -109,7 +110,7 @@ internal class NotificationTemplateRendererTest {
             confirmedParameters(),
             profile,
         )
-        val badScheme = assertThrows<NotificationTemplateException> {
+        val badScheme = assertFailsWith<NotificationTemplateException> {
             NotificationTemplateRenderer(
                 StaticCatalog(
                     listOf(NotificationTemplate(
@@ -129,7 +130,7 @@ internal class NotificationTemplateRendererTest {
                 profile = profile,
             )
         }
-        val script = assertThrows<IllegalArgumentException> {
+        val script = assertFailsWith<IllegalArgumentException> {
             NotificationTemplate(
                 key = key,
                 version = version,
@@ -140,9 +141,9 @@ internal class NotificationTemplateRendererTest {
             )
         }
 
-        rendered.htmlBody!!.contains("&lt;script&gt;") shouldBeEqualTo true
+        rendered.htmlBody.shouldNotBeNull().contains("&lt;script&gt;") shouldBeEqualTo true
         badScheme.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
-        script.message!!.contains("script") shouldBeEqualTo true
+        script.message.shouldNotBeNull().contains("script") shouldBeEqualTo true
     }
 
     @Test
@@ -228,7 +229,7 @@ internal class NotificationTemplateRendererTest {
             profile,
         )
 
-        withDetail.htmlBody!!.contains("&lt;b&gt;일정 변경&lt;/b&gt;") shouldBeEqualTo true
+        withDetail.htmlBody.shouldNotBeNull().contains("&lt;b&gt;일정 변경&lt;/b&gt;") shouldBeEqualTo true
         withDetail.textBody.contains(detail) shouldBeEqualTo true
         withoutDetail.textBody.contains("null") shouldBeEqualTo false
         withoutDetail.textBody.contains("CUSTOMER_REQUEST") shouldBeEqualTo true

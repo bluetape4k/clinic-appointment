@@ -1,6 +1,5 @@
 package io.bluetape4k.clinic.appointment.event.notification
 
-import io.bluetape4k.clinic.appointment.commitment.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import java.io.Serializable
 import java.time.LocalDate

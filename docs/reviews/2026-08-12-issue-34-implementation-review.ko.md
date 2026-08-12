@@ -8,7 +8,7 @@ backend Playwright harness가 아직 없다. 따라서 이 문서의 최종 상�
 `PENDING`이며 PR/merge 준비 상태로 승격하지 않는다.
 
 - 검토 대상: `feat/issue-34-patient-commitment`
-- 기준: `develop` (`fe772eb4`)부터 구현 커밋 `043ca8e` 및 이후 미커밋 변경
+- 기준: `develop` (`fe772eb4`)부터 현재 브랜치의 모든 committed implementation changes이며, 검토 시점 worktree는 clean 상태
 - 범위: 환자 code-only 취소, ADMIN/STAFF bounded detail, canonical hash와
   cancellation snapshot, notification v1/v2 readiness, Angular portal cancel
   flow, migration/security/observability
