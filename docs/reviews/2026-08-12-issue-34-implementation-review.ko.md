@@ -2,88 +2,108 @@
 
 ## 결론
 
-코드 기준 exact head `bd07645f19d53008e1404a2cfd20cde17975e04c`는
-이전 독립 검토에서 확인된 benchmark 증거 계약의 차단 항목을 모두 닫았다.
-취소 부하의 warm-up과 측정 구간을 분리하고, monotonic clock으로 실제 측정 시간을
-검증하며, sampler 종료를 기다린 뒤 artifact를 확정한다. 환경 fingerprint는
-`pauseMillis`를 포함한 canonical JSON의 SHA-256으로 만들고 comparator와 chart
-generator가 독립적으로 다시 계산한다. 여러 run의 누적은 Jackson tree로 JSON을
-파싱해 mode, source commit, 환경, fingerprint, run 번호를 검증한 뒤 구조적으로
-추가한다.
+현재 구현은 로컬 모듈 검증과 포털 단위·브라우저 계약까지 통과했고,
+PostgreSQL 취소 성능 lane과 실제 mixed-schema backlog benchmark의 실행
+harness도 추가했다. 그러나 고정 window의 baseline/candidate 3회 artifact,
+보호된 backend Playwright harness, 운영 rollout 증거는 아직 없다. 따라서 이
+문서의 최종 상태는 `PENDING`이며 PR/merge 준비 상태로 승격하지 않는다.
 
-코드·계약 검토 상태는 `CLEAR`다. 다만 정식 baseline/candidate 각 3회 실행,
-그 결과로 만든 실측 chart/PNG, 보호된 backend E2E, production rollout 증거는 아직
-없다. 유효한 변경 전 baseline 없이 같은 코드를 baseline과 candidate로 실행하면
-성능 회귀 증거가 아니므로 이를 생성하지 않았다. 따라서 Issue #34의 전체 DoD와
-PR merge 상태는 `PENDING`이다.
-
-- 검토 브랜치: `feat/issue-34-patient-commitment`
-- 코드 검토 head: `bd07645f19d53008e1404a2cfd20cde17975e04c`
-- 기준 브랜치: `develop`
-- 범위: 환자 code-only 취소, ADMIN/STAFF 등록 상세, snapshot·알림 v1/v2,
-  Angular portal 취소 흐름, migration·보안·운영·benchmark 증거 계약
+- 검토 대상: `feat/issue-34-patient-commitment`
+- 기준: `develop` (`fe772eb4`)부터 현재 브랜치의 모든 committed implementation changes이며, 검토 시점 worktree는 clean 상태
+- 범위: 환자 code-only 취소, ADMIN/STAFF bounded detail, canonical hash와
+  cancellation snapshot, notification v1/v2 readiness, Angular portal cancel
+  flow, migration/security/observability
 - 제외: Issue #305 환자 취소 이력 조회·감사 UI
 
 ## 7-tier 판정
 
-| Tier | 검토 내용 | 판정 |
-|---|---|---|
-| 1. 구조·의존성 | reason registry는 `appointment-core`에 있고 API/event/notification이 같은 계약을 사용한다. Gatling JSON 처리는 기존 version catalog의 Jackson 3을 명시적으로 사용한다. | PASS |
-| 2. 보안·개인정보 | PATIENT detail 차단, ADMIN/STAFF 등록값 allow-list, tenant·clinic·patient ownership 재검증, durable payload redaction, 로그인 주체 전환 시 client state 폐기를 확인했다. | PASS; production ACL·backup·provider log는 PENDING |
-| 3. API·도메인 | 폐쇄 reason code, ETag/idempotency, terminal transition, code-only 환자 확인 계약이 DTO·command·OpenAPI·frontend에 일치한다. | PASS |
-| 4. 데이터·트랜잭션 | V27 세 dialect migration과 Flyway 비활성 schema가 cancellation snapshot을 포함하고, 상태 전환·audit·outbox가 같은 transaction 경계에 있다. | PASS |
-| 5. 이벤트·알림 | v1/v2 dual-read, cancellation template v1/v2, row/envelope/template identity, default-off producer readiness와 legacy recovery 경계를 확인했다. | PASS; 정식 mixed-schema benchmark는 PENDING |
-| 6. 포털·접근성 | 취소 confirmation, 412 single-flight, 세션 generation, stale 응답 차단, busy/stale mutation 결과, 새로고침 복구 계약을 확인했다. | PASS; protected-backend E2E와 AT matrix는 PENDING |
-| 7. 테스트·운영·성능 | 고정 환경·monotonic 측정 구간·lock sampler·환경 fingerprint·구조적 multi-run artifact 계약과 fail-closed comparator/chart를 확인했다. | 코드 PASS; 정식 실측과 운영 증거는 PENDING |
+| Tier | 검토 내용 | 현재 근거 | 판정 |
+|---|---|---|---|
+| 1. 구조·의존성 | reason registry를 `appointment-core`에 두고 API/event/notification이 공통 계약을 사용한다. ServiceConfig와 NotificationAutoConfiguration의 v2 flag/readiness 경계를 연결했다. | `CancellationReasonRegistry.kt`, `ServiceConfig.kt`, `NotificationAutoConfiguration.kt` | 로컬 PASS |
+| 2. 보안·개인정보 | 취소 route의 ADMIN/STAFF/PATIENT matcher와 ownership 재검증, patient detail 차단, DB 원문·outbox hash 분리를 적용했다. | `AppointmentCommitmentHttpSupport.kt`, `AppointmentCommitmentAccessResolver.kt`, security integration tests | 로컬 PASS; 실제 IDOR fixture는 미실행 |
+| 3. API·도메인 | 폐쇄 reason code, bounded detail, ETag/idempotency, 상태 terminal 전이를 API·command·frontend에 반영했다. | DTO/command tests, OpenAPI contract, facade/page tests | 로컬 PASS |
+| 4. 데이터·트랜잭션 | V27 additive migration과 cancellation detail snapshot을 상태 전환·audit/outbox 전에 같은 transaction으로 기록한다. | H2/PostgreSQL/MySQL migration tests, command/atomicity tests | 로컬 PASS; 기본 Colima Ryuk 소켓 환경은 2건 실패했으나 Ryuk 비활성 재실행에서 698건 통과 |
+| 5. 이벤트·알림 | canonical `cancel-v1\\0` codec, v1/v2 dual-read, cancellation template v2, null/detail escape, producer readiness gate와 실제 outbox-row backlog drain harness를 구현했다. | event/notification/API tests, `NotificationCodecBacklogBenchmarkTest` | 로컬 PASS; 고정 10,000건·30초/5분 3회 성능 비교 미검증 |
+| 6. 포털·접근성 | Angular 22 client/facade와 `CANCELLED` terminal stepper, code-only confirmation, 412 single-flight를 구현했다. 로그인 주체 전환 시 facade/sessionStorage를 폐기하고 세대가 지난 비동기 응답을 차단하며, busy/stale mutation은 성공으로 오인하지 않는다. | 38개 파일·252개 Vitest tests, build, 4 Playwright tests | 로컬 PASS; protected backend harness와 320px/AT matrix 미검증 |
+| 7. 테스트·운영·성능 | 모듈별 검증과 diff hygiene, PostgreSQL cancel/codec smoke wiring은 통과했으나 계획된 30초 warm-up/5분 고정 window의 baseline/candidate artifact·CI와 보호된 backend gate가 없다. | 아래 증거 목록 | PENDING |
 
-## 독립 검토에서 닫힌 항목
+## 독립 검토 결과
 
-| 이전 지적 | 현재 구현 |
+### Code reviewer
+
+독립 `implementation_code_review` lane에서 처음 보고된 P1은 다음 구현으로
+닫았다. (1) v1 producer의 cancellation detail은 조용히 버리지 않고
+`NotificationContractException`으로 fail-closed하며 outbox row를 남기지 않는다.
+(2) codec envelope, claimed DB metadata, renderer catalog identity를 공통
+registry로 검증하고 reminder canonical key와 slot의 교차 조합을 거부한다.
+(3) 페이지 intent key는 secure random+입력 fingerprint이며 성공·terminal·412에서는
+폐기하고 명시적 transport/503에서만 재사용한다. status 0 tenant-missing과
+transport를 분리하고 408/429/500/502/504는 회전시킨다. facade busy/stale 결과는
+`false`로 명시해 페이지가 성공으로 처리하지 않으며 non-412 취소 오류는 호출자에게
+재전파한다. (4) commitment 복구는 404만 신규 폼을 허용하고 그 밖의 인증·권한·
+네트워크 오류는 retry 상태를 표시한다. (5) legacy notification writer의 detail
+overload는 detail을 조용히 폐기하지 않고 계약 예외로 닫는다. 이 항목들의
+targeted regression은 event codec 14개, notification 155개, API 25개,
+frontend 252개가 통과했다. 최신 architect 재검토는 코드 기준 P0=0/P1=0/P2=0,
+`CLEAR`로 판정했다. code reviewer의 최종 재검토 회신 전까지 merge gate는 열지 않는다.
+
+### Architect
+
+독립 `implementation_arch_review` 결과는 최신 수정 기준 `CLEAR`이다
+(P0=0, P1=0, P2=0).
+로그아웃·로그인 reset이 memory state, conflict map, appointment reference
+storage를 삭제하고 session generation을 증가시키며, request/load/accept/
+decline/cancel/412 refresh의 성공·오류·`finally`가 세대를 비교한다. deferred
+응답 회귀 테스트도 추가되어 이전 환자 응답이 새 세션에 기록되는 P1은 닫혔다.
+
+`clinicDisplayName`은 proposal snapshot이 아니라 tenant·clinic ownership을
+재검증한 현재 canonical `Clinics.name`으로 표시하는 정책이며, 설계 문서와 구현이
+일치한다. 외부 rollout·성능·보호 backend 증거가 없어 PR/merge 상태는 계속
+`PENDING`이다.
+
+## 새로 확인한 검증 증거
+
+| 명령 | 결과 |
 |---|---|
-| warm-up 표본이 측정 결과에 섞일 수 있음 | 측정 phase 진입 시 관측치를 초기화하고, 측정 구간만 latency/error/lock-wait에 포함한다. |
-| 측정 시간이 wall clock과 traffic 시작 지연에 의존 | phase barrier와 `System.nanoTime()` span을 사용하고 최소 측정 시간을 comparator/chart가 강제한다. |
-| sampler 종료 이후 trailing query 가능 | sampling을 중지한 뒤 bounded `Future.get`으로 종료를 확인하고 종료 시각을 기록한다. JDBC query timeout과 nested cleanup도 적용한다. |
-| smoke 환경도 baseline/candidate가 같으면 통과 | dataset 100, warm-up 30초, 측정 300초, concurrency 10/20, pause 1000ms 등 절대 환경 계약을 comparator와 chart가 함께 강제한다. |
-| run별 source/environment provenance가 불완전 | source commit과 전체 canonical environment를 run마다 확인하고 SHA-256 fingerprint를 독립 재계산한다. |
-| 정규식과 마지막 `]` 위치로 run JSON을 삽입 | Jackson `ObjectNode`/`ArrayNode`로 report와 run을 파싱·검증하고 배열에 구조적으로 추가한다. |
-
-## 최신 검증 증거
-
-| 검증 | 결과 |
-|---|---|
-| `node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs tests/benchmarks/issue34-benchmark-chart.test.mjs` | 29/29 PASS |
-| `./gradlew :appointment-api:compileGatlingKotlin --no-daemon` | BUILD SUCCESSFUL |
-| PostgreSQL cancel Gatling 단일 smoke | KO 0, lock-wait sampling failure 0, fingerprint 독립 재계산 일치 |
-| PostgreSQL cancel Gatling run 1·2 append smoke | 두 run 구조적 누적, KO 0, source/environment/fingerprint 일치 |
-| `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --no-daemon` | `c31818d`에서 BUILD SUCCESSFUL |
-| `git diff --check` | PASS |
-
-위 PostgreSQL 실행은 짧은 wiring·artifact smoke다. 30초 warm-up과 5분 측정의
-정식 성능 결과 또는 deployment SLO 증거로 사용하지 않는다.
+| `./gradlew :appointment-core:test --tests '*CancellationReasonRegistryTest*' --no-daemon` | BUILD SUCCESSFUL (targeted registry lane) |
+| `./gradlew :appointment-core:test --no-daemon --rerun-tasks` (Ryuk disabled) | 698 passing, BUILD SUCCESSFUL; 기본 환경은 Colima Ryuk socket mount 오류로 2건 실패 |
+| `./gradlew :appointment-event:test --no-daemon --rerun-tasks` | 197 passing, BUILD SUCCESSFUL |
+| `./gradlew :appointment-event:test --tests '*NotificationOutboxCodecTest*' --no-daemon` | 14 passing, BUILD SUCCESSFUL |
+| `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' --no-daemon` | 실제 H2 outbox smoke PASS, artifact 생성 |
+| `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' --rerun-tasks -Dissue34.codec.benchmark=true -Dissue34.codec.rows=1000 -Dissue34.codec.measureSeconds=0 -Dissue34.codec.warmupSeconds=0 -Dissue34.codec.mix=current-heavy` | current-heavy wiring smoke PASS, decode failures 0 |
+| `./gradlew :appointment-notification:test --no-daemon --rerun-tasks` | 155 passing, BUILD SUCCESSFUL |
+| `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test` (Issue #34 관련 filter) | 102 passing, BUILD SUCCESSFUL |
+| `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test --no-daemon --rerun-tasks` | 771 passing, 3 pending, BUILD SUCCESSFUL (5분 39초) |
+| `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test --tests '*FlywayMigrationTest*' --tests '*FlywayPostgreSQLMigrationTest*' --tests '*FlywayMySQLMigrationTest*' --no-daemon` | 21 passing, 1 pending, BUILD SUCCESSFUL |
+| `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test --tests '*JdbcAppointmentReminderRecoveryStoreTest*' --no-daemon` | 10 passing, BUILD SUCCESSFUL; recovery schema v1 확인 |
+| frontend `npx ng test --watch=false` | 38 files, 252 passing |
+| frontend `npm run build` | 성공 |
+| frontend `npm run test:e2e` | 4 passing |
+| `git diff --check` | 오류 없음 |
+| `node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs` | 7 passing, BUILD SUCCESSFUL |
 
 ## 미검증·차단 항목
 
-1. 실제 변경 전 baseline과 현재 candidate를 동일 머신·JDK·PostgreSQL image·dataset·
-   pause·concurrency에서 각각 3회 실행하고 comparator를 통과해야 한다.
-2. 유효한 여섯 run artifact로 latency, error, lock-wait chart와 분석 문서의 실측
-   표·PNG를 생성해야 한다.
-3. notification mixed-schema backlog도 두 mix 각각 3회 실행해 decode failure 0과
-   처리량·latency 회귀 한계를 검증해야 한다.
-4. 보호된 backend E2E로 ETag/412, tenant·patient 권한, outbox, request count,
-   trace/screenshot을 보존해야 한다.
-5. production에서 ACL·backup·provider log, schema backlog 0, canary/SLO/rollback을
-   확인해야 한다.
+1. `appointment-api:gatlingRun`의 PostgreSQL fixture/simulation과 고정 dataset,
+   30초 warm-up·5분 측정 경로는 구현됐지만 baseline/candidate 3회와
+   p95/p99/lock-wait artifact를 아직 실행·비교하지 않았다.
+2. 실제 notification v1/v2 JSON decode와 DB backlog drain을 수행하는
+   `NotificationCodecBacklogBenchmarkTest`와 mixed-ratio comparator는 구현됐고
+   smoke가 통과했지만, 10,000건·30초/5분 3회 artifact와 CI gate는 아직 없다.
+3. 보호된 backend와 Playwright를 한 번에 실행해 ETag/412, 권한, outbox,
+   trace/screenshot/request-count를 보존하는 harness가 없다.
+4. production rollout readiness, schema backlog 0, provider delivery unknown 상태는
+   운영 환경에서 확인하지 않았다.
 
 ## 상태
 
-- P0: 0
-- P1: 0
-- P2: 0
-- P3: 0 (구조적 JSON append 보강 후)
-- 코드 아키텍처: `CLEAR`
-- 코드 검토: `CLEAR`
-- Issue #34 전체 DoD: `PENDING`
-- PR/merge: 정식 성능·보호 backend·운영 gate가 충족될 때까지 `PENDING`
+- P0: 0 (현재 확인 범위)
+- P1: 0 (architect 재검토 기준; code reviewer 최종 보고서 수신 전 보류)
+- P2: 0 (architect 재검토 기준)
+- Architectural Status: `CLEAR`
+- 최종: `PENDING`
+- PR/merge: 성능·보호된 외부 gate가 충족될 때까지 대기
 
-실측 chart는 아직 추가하지 않았다. 현재 코드로 baseline과 candidate를 모두 만드는
-방식은 변경 전후 비교를 위조하므로 허용하지 않는다.
+성능 artifact가 없는 상태에서 merge blocker를 우회하지 않는다. 다음 실행은
+계획 Task 7의 PostgreSQL 취소 simulation과 실제 codec backlog benchmark를
+동일 환경에서 3회 실행해 comparator evidence를 남기는 것이다.

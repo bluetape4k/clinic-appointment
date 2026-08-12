@@ -4,7 +4,7 @@
 
 **목표:** 환자 포털에서 tenant-scoped 예약 약속을 요청·조회·동의·취소하고, 관리자·직원 취소 설명을 감사 기록과 환자 알림에 안전하게 전달한다.
 
-**구조:** commitment cancel route는 하나로 유지하고 controller/security/application에서 PATIENT와 ADMIN/STAFF를 분기한다. 취소 detail field는 호환성상 유지하되 서버 소유 고정 안내문 exact allow-list로 제한하고, 같은 DB transaction에 snapshot으로 저장한다. notification event는 schema v2 producer와 v1/v2 decoder를 제공한다. Angular 포털은 기존 facade/client에 cancel command와 상태 stepper를 추가한다.
+**구조:** commitment cancel route는 하나로 유지하고 controller/security/application에서 PATIENT와 ADMIN/STAFF를 분기한다. 취소 detail은 같은 DB transaction에 별도 bounded snapshot으로 저장하고, notification event는 schema v2 producer와 v1/v2 decoder를 제공한다. Angular 포털은 기존 facade/client에 cancel command와 상태 stepper를 추가한다.
 
 **기술 스택:** Kotlin 2.3, Spring Boot 4, Exposed v1, Flyway(H2/PostgreSQL/MySQL), JUnit 5/Kluent/MockK, Angular 22, TypeScript 6, Vitest, Playwright.
 
@@ -26,7 +26,7 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/service/AppointmentCommitmentAccessResolver.kt`: cancel 전용 STAFF scope와 patient ownership 재검증
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/controller/AppointmentCommitmentHttpSupport.kt`: PATIENT/operator cancel actor helper
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/DatabaseConfig.kt`: dev/test SchemaInit에 cancellation detail table 등록
-- `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentCommands.kt`: 내부 registered detail command
+- `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentCommands.kt`: 내부 bounded detail command
 - `appointment-core/src/main/kotlin/io/bluetape4k/clinic/appointment/commitment/CancellationReasonRegistry.kt`: API·event·notification이 함께 의존하는 폐쇄 reason code registry와 canonical hash codec
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentCommandService.kt`: cancellation snapshot, audit/outbox/notification 원자 기록
 - `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentMetrics.kt`: cancel 전용 timer/result/replay/lock contention metric
@@ -70,7 +70,7 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 
 - [x] `CancelAppointmentRequest(reasonCode, reasonDetail?)`의 실패 테스트를 먼저 추가한다. blank/code pattern, 501자, ISO control, patient가 detail을 보낸 경우를 각각 검증한다.
 - [x] `./gradlew :appointment-api:test --tests '*AdminAppointmentV2Test*' --tests '*AppointmentCommitmentSecurityIntegrationTest*'`를 실행해 새 테스트가 실패하는지 확인한다.
-- [x] DTO의 `reasonDetail`을 서버 소유 고정 안내문 exact allow-list로 제한하고, cancel controller가 `PATIENT`는 detail 없는 request만, `ADMIN`/`STAFF`는 code+등록 detail을 허용하도록 actor branch를 구현한다.
+- [x] DTO에 `reasonDetail` bounded validation을 추가하고, cancel controller가 `PATIENT`는 detail 없는 request만, `ADMIN`/`STAFF`는 code+detail을 허용하도록 actor branch를 구현한다.
 - [x] cancel 경로 전용 matcher를 `ADMIN`/`STAFF`/`PATIENT`로 바꾸고 나머지 admin mutation은 `ADMIN` 전용으로 유지한다. controller와 access resolver도 같은 operator matrix를 재검증한다.
 - [x] OpenAPI description과 오류 matrix를 갱신하고 targeted tests가 통과하는지 확인한다.
 
@@ -113,9 +113,9 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/service/DefaultAppointmentCommitmentApplicationServiceTest.kt`
 
 - [x] patient/admin cancel command가 detail을 전달하고 command hash에 registry가 정의한 canonical part가 포함되는 실패 테스트를 추가한다.
-- [x] `CancelAppointmentCommand.reasonDetail: String?`에 동일한 exact allow-list validation을 적용한다. patient branch는 null을 강제한다.
+- [x] `CancelAppointmentCommand.reasonDetail: String?`에 동일한 bounded validation을 적용한다. patient branch는 null을 강제한다.
 - [x] controller를 우회한 application/command 직접 호출에서도 `ADMIN`/`STAFF`만 detail을 허용하고 `PATIENT` detail은 거부하는 부정 테스트를 추가한다.
-- [x] detail은 `cancel-v1\\0` prefix 뒤에 `reasonCode`와 nullable `reasonDetail`을 각각 unsigned 32-bit big-endian UTF-8 byte length + bytes로 직렬화하는 단일 length-prefixed canonical codec으로 hash한다. null은 `0xffffffff` length로 표현하고 Unicode는 입력 code point를 그대로 UTF-8로 인코딩하며 normalization/delimiter join을 사용하지 않는다. null과 서로 다른 등록 Unicode 안내문의 replay mismatch 테스트를 추가한다.
+- [x] detail은 `cancel-v1\\0` prefix 뒤에 `reasonCode`와 nullable `reasonDetail`을 각각 unsigned 32-bit big-endian UTF-8 byte length + bytes로 직렬화하는 단일 length-prefixed canonical codec으로 hash한다. null은 `0xffffffff` length로 표현하고 Unicode는 입력 code point를 그대로 UTF-8로 인코딩하며 normalization/delimiter join을 사용하지 않는다. 이 형식의 Unicode·null·delimiter replay mismatch 테스트를 추가한다.
 - [x] `appointment-core`의 `CancellationReasonRegistry`를 단일 source of truth로 만들고 현재 허용 code(`CUSTOMER_REQUEST`, `REFUND`, `EQUIPMENT_FAILURE`, `CLINIC_REQUEST`)를 명시한다. API DTO/command, event codec, notification writer, OpenAPI enum, frontend catalog는 이 core contract에서 파생·검증하며 미등록 code 테스트를 추가한다. 모듈 의존 순환을 만들기 위해 API registry를 event가 참조하는 방식은 허용하지 않는다.
 - [x] cancellation transaction에서 `AppointmentCancellationDetails.insert`를 상태 전환 직후, audit/scheduling outbox/notification 전에 실행한다. commitment 하나당 duplicate row가 생기면 command를 실패시킨다.
 - [x] `AppointmentAuditEvents.payloadHash`와 scheduling outbox JSON에는 raw detail을 로그로 출력하지 않고 command hash/detail snapshot 규칙을 적용한다.
@@ -156,11 +156,11 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 - [x] v1 code-only JSON decode와 v2 code+detail encode/decode, unknown field rejection, control-character rejection, null detail rendering equivalence 테스트를 먼저 작성한다.
 - [x] `eventType + slot + templateKey + templateVersion + parameterType` 폐쇄형 조합을 검증하고 v1/v2 교차 조합 위조 payload를 거부한다.
 - [x] codec envelope, claimed outbox row metadata, renderer catalog 반환값을 같은 registry identity로 검증해 tuple 위조·row/payload 불일치를 provider 호출 전에 재시도 가능한 계약 오류로 닫는다.
-- [x] `AppointmentCancelledParameters.cancellationReasonDetail`을 registered optional field로 추가한다. existing v1 payload는 missing field를 null로 읽고 durable `toString()`은 중첩 parameter를 redaction한다.
+- [x] `AppointmentCancelledParameters.cancellationReasonDetail`을 bounded optional field로 추가한다. existing v1 payload는 missing field를 null로 읽는다.
 - [x] envelope init은 supported versions `{1, 2}`를 허용하고 writer current version은 `2`로 올린다. decoder는 v1/v2만 허용한다.
 - [x] cancellation template만 version `2`, 나머지는 version `1`로 enqueue하도록 writer를 수정한다. legacy cancellation writer와 commitment writer 양쪽을 검증한다.
 - [x] v1 producer가 cancellation detail을 조용히 버리지 않도록 fail-closed `NotificationContractException`을 던지고 transaction/outbox row를 남기지 않는 회귀 테스트를 고정한다.
-- [x] notification contract KDoc와 OpenAPI를 patient-facing 고정 안내문 선택 정책으로 정확히 바꾼다.
+- [x] notification contract KDoc와 기존 “free text 금지” 문구를 새 patient-facing bounded detail 정책으로 정확히 바꾼다.
 
 검증 명령:
 
@@ -261,19 +261,16 @@ npm run test:e2e -- --project=chromium
 - [ ] PostgreSQL warm-up 30초·측정 5분·고정 dataset 100개·동시성(동일 10/상이 20)을 사용해 cancel p95/p99와 error/lock-wait를 기준선과 비교한다. p95 10% 또는 p99 15% 회귀 시 PR 준비를 중단한다.
 - [x] notification v1/v2 mixed backlog는 합성 비용 모델과 분리된 `NotificationCodecBacklogBenchmarkTest`에서 실제 `NotificationOutboxEvents` row를 읽고 discriminator에 따라 strict decode한 뒤 terminal 상태로 drain한다. 예외 fallback은 허용하지 않는다.
 - [ ] 성능 lane은 기존 합성 Gatling 비용 모델을 근거로 사용하지 않는다. `appointment-api/src/gatling`에 PostgreSQL Testcontainers/singleton fixture, cancel success/replay/412/경합 시나리오, warm-up 30초·측정 5분·dataset 100·동시성 10/20 load model, baseline/after JSON artifact와 lock-wait query를 추가하고 `./gradlew :appointment-api:gatlingRun`으로 실행한다. fixture/simulation 구현과 wiring smoke는 완료했지만 full gate 실행·기준선 비교는 남아 있다.
-- [x] `appointment-event`의 실제 codec backlog harness는 legacy-heavy/current-heavy 혼합 비율, 등록 안내문 detail, warm-up/측정 window, throughput/p95/p99/decode failure/drain-time artifact를 지원한다. 다만 동일 환경 3회 baseline/candidate 실행과 회귀 gate 판정은 별도 검증으로 남긴다.
+- [x] `appointment-event`의 실제 codec backlog harness는 legacy-heavy/current-heavy 혼합 비율, 500자 detail, warm-up/측정 window, throughput/p95/p99/decode failure/drain-time artifact를 지원한다. 다만 동일 환경 3회 baseline/candidate 실행과 회귀 gate 판정은 별도 검증으로 남긴다.
 - [ ] PostgreSQL simulation은 patient/admin success 50%, idempotent replay 20%, expected `412` conflict 20%, expected retry exhaustion 10% arrival mix를 고정하고 동일 appointment 10·상이 appointment 20 동시성을 생성한다. expected conflict/exhaustion은 scenario success로 판정하고, unexpected HTTP 5xx/timeout과 비의도 exhaustion만 error/retry threshold 분모에 포함한다. pre-change baseline과 candidate는 동일 machine/container image/dataset/seed로 각각 3회 측정하며 median과 분산을 report에 저장한다.
 - [ ] benchmark assertion은 p95 상대 10%·p99 상대 15% 초과 또는 절대 p95 500ms·p99 1s 초과, error rate 1% 초과, retry exhaustion 0.1% 초과, lock-wait p95 50ms 초과에서 non-zero exit한다. report에는 CPU/JDK/PostgreSQL/container image/seed를 포함한다.
-- [ ] codec backlog benchmark는 legacy-heavy 80/20과 current-heavy 20/80 payload mix, 각 10,000건, 15자 등록 안내문 detail, warm-up 30초·측정 5분을 고정하고 throughput/p95/p99/decode failure/drain-time 및 동일 절대/상대 회귀 상한을 assertion한다. synthetic fairness harness와 실제 codec benchmark를 분리한다.
-- [ ] `issue34.mode`는 report의 provenance metadata일 뿐 실행 경로를 바꾸지 않는다. baseline/candidate는 동일 코드의 mode만 바꿔 생성하지 말고, 승인된 pre-change 구현 또는 보존된 baseline artifact와 현재 candidate를 동일 환경에서 비교한다.
+- [ ] codec backlog benchmark는 legacy-heavy 80/20과 current-heavy 20/80 payload mix, 각 10,000건, 500자 detail, warm-up 30초·측정 5분을 고정하고 throughput/p95/p99/decode failure/drain-time 및 동일 절대/상대 회귀 상한을 assertion한다. synthetic fairness harness와 실제 codec benchmark를 분리한다.
 - [x] `./gradlew :appointment-notification:test`를 포함해 renderer/worker readiness와 rollback compatibility를 검증한다.
 - [ ] tenant·clinic·patient가 서로 다른 실제 fixture로 IDOR 취소를 실행해 403/비존재형 오류와 state/audit/outbox/idempotency 무변경을 검증한다.
-- [x] 공통 registry에서 서버 소유 고정 안내문만 exact match로 허용하고 이름+질환·주소·연락처·임의 문구·공백 변형을 API·event decode에서 거부하며 오류 원문을 노출하지 않는 negative test를 고정한다.
-- [x] detail snapshot의 appointment lifecycle FK 삭제, 별도 read API 금지, notification terminal retention과 provider request redaction 경계를 설계 문서에 고정한다.
-- [ ] production DB ACL, backup 만료, provider 로그 redaction 설정은 v2 producer 활성화 전 운영 증거로 확인한다.
+- [ ] detail이 DB/outbox에 저장되는 경계를 보존기간·ACL·DLQ/backup/provider log redaction 정책과 함께 문서화하고, PHI/PII 패턴 차단 또는 고정 안내문 mapping을 선택해 테스트한다.
 - [x] `git diff --check`, Kotlin 7-tier review, frontend lint/build/test, backend module tests를 실행한다.
 - [ ] 최종 검증에 `./gradlew :appointment-api:gatlingRun`과 notification mixed-schema benchmark 명령을 포함하고, 두 성능 artifact가 없으면 PR 준비 상태를 `PENDING`으로 유지한다.
-- [ ] 최종 검증 명령은 `./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=... -Dissue34.candidate=... -Dissue34.sourceCommit=<measured-commit>`, `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=... -Dissue34.codec.mix=... -Dissue34.codec.run=... -Dissue34.sourceCommit=<measured-commit>`, `scripts/compare-issue34-benchmark.sh baseline.json candidate.json`, `node scripts/compare-issue34-codec-benchmark.mjs baseline-codec-dir candidate-codec-dir`으로 고정한다. report에 source commit을 기록하고 comparator는 baseline/candidate가 동일하거나 `unknown`인 provenance를 거부한다. CI job `issue34-performance-gate`가 report artifact를 업로드하고 comparator 실패를 merge blocker로 반환한다.
+- [ ] 최종 검증 명령은 `./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=... -Dissue34.candidate=...`, `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=... -Dissue34.codec.mix=... -Dissue34.codec.run=...`, `scripts/compare-issue34-benchmark.sh baseline.json candidate.json`, `node scripts/compare-issue34-codec-benchmark.mjs baseline-codec-dir candidate-codec-dir`으로 고정한다. CI job `issue34-performance-gate`가 report artifact를 업로드하고 comparator 실패를 merge blocker로 반환한다.
 - [ ] 결과와 미검증 항목을 한국어 implementation review에 기록하고, P0/P1이 없을 때만 PR 준비 상태로 표시한다.
 
 최종 검증 명령:
@@ -281,8 +278,8 @@ npm run test:e2e -- --project=chromium
 ```bash
 git diff --check
 ./gradlew :appointment-event:test :appointment-api:test :appointment-notification:test
-./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=appointment-api/src/gatling/resources/benchmarks/issue-34/baseline.json -Dissue34.candidate=appointment-api/src/gatling/resources/benchmarks/issue-34/candidate.json -Dissue34.sourceCommit=<measured-commit>
-./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=baseline -Dissue34.codec.mix=legacy-heavy -Dissue34.codec.run=1 -Dissue34.sourceCommit=<measured-commit>
+./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=appointment-api/src/gatling/resources/benchmarks/issue-34/baseline.json -Dissue34.candidate=appointment-api/src/gatling/resources/benchmarks/issue-34/candidate.json
+./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=baseline -Dissue34.codec.mix=legacy-heavy -Dissue34.codec.run=1
 scripts/compare-issue34-benchmark.sh appointment-api/src/gatling/resources/benchmarks/issue-34/baseline.json appointment-api/src/gatling/resources/benchmarks/issue-34/candidate.json
 node scripts/compare-issue34-codec-benchmark.mjs codec-baseline-dir codec-candidate-dir
 cd frontend/appointment-frontend && npm test -- --watch=false && npm run build

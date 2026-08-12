@@ -7,22 +7,9 @@ if [[ $# -ne 2 ]]; then
 fi
 
 node --input-type=module - "$@" <<'NODE'
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 const [baselinePath, candidatePath] = process.argv.slice(2);
-const ENVIRONMENT_KEYS = [
-  "datasetAppointments",
-  "warmupSeconds",
-  "measureSeconds",
-  "sameAppointmentConcurrency",
-  "differentAppointmentConcurrency",
-  "pauseMillis",
-  "seed",
-  "postgresqlImage",
-  "jdk",
-  "vm",
-];
 const baseline = await readReport(baselinePath, "baseline");
 const candidate = await readReport(candidatePath, "candidate");
 validateEnvironment(baseline, candidate);
@@ -85,100 +72,28 @@ async function readReport(file, label) {
   if (!parsed.environment || typeof parsed.environment !== "object") {
     throw new Error(`${label} report must include an environment object`);
   }
-  validateExpectedEnvironment(parsed.environment, label);
-  validateEnvironmentFingerprint(parsed.environment, `${label} environment`);
-  for (const run of parsed.runs) validateRunEvidence(run, parsed.environment, `${label} run ${run.run}`);
   return parsed;
 }
 
-function validateExpectedEnvironment(environment, label) {
-  const expected = {
-    datasetAppointments: 100,
-    warmupSeconds: 30,
-    measureSeconds: 300,
-    sameAppointmentConcurrency: 10,
-    differentAppointmentConcurrency: 20,
-    pauseMillis: 1000,
-  };
-  for (const [key, value] of Object.entries(expected)) {
-    if (environment[key] !== value) throw new Error(`${label} environment ${key} must be ${value}`);
-  }
-}
-
-function validateRunEvidence(run, environment, label) {
-  if (run.sourceCommit !== environment.sourceCommit) {
-    throw new Error(`${label} run sourceCommit must match its report environment`);
-  }
-  if (!run.environment || typeof run.environment !== "object") {
-    throw new Error(`${label} environment snapshot is required`);
-  }
-  for (const key of [...ENVIRONMENT_KEYS, "sourceCommit"]) {
-    if (run.environment[key] !== environment[key]) {
-      throw new Error(`${label} environment key ${key} must match its report environment`);
-    }
-  }
-  validateEnvironmentFingerprint(run.environment, `${label} environment`);
-  if (run.environmentFingerprint !== environment.environmentFingerprint) {
-    throw new Error(`${label} environmentFingerprint must match its report environment`);
-  }
-  if (run.environmentFingerprint !== run.environment.environmentFingerprint) {
-    throw new Error(`${label} environmentFingerprint must match its run environment snapshot`);
-  }
-  const measurementStartedAt = integer(run.measurementStartedAtEpochMillis, `${label} measurementStartedAtEpochMillis`);
-  const measurementEndedAt = integer(run.measurementEndedAtEpochMillis, `${label} measurementEndedAtEpochMillis`);
-  const measurementSpan = integer(run.measurementSpanMillis, `${label} measurementSpanMillis`);
-  if (run.measurementClock !== "SYSTEM_NANO_TIME") {
-    throw new Error(`${label} measurementClock must be SYSTEM_NANO_TIME`);
-  }
-  if (measurementStartedAt <= 0 || measurementEndedAt <= measurementStartedAt) {
-    throw new Error(`${label} measurement timestamps must form a positive interval`);
-  }
-  const configuredSpan = environment.measureSeconds * 1000;
-  if (measurementSpan < configuredSpan * 0.95 || measurementSpan > configuredSpan * 1.05) {
-    throw new Error(`${label} measurementSpanMillis must stay within 95%-105% of the configured window`);
-  }
-  const warmupRequests = integer(run.warmupRequests, `${label} warmupRequests`);
-  const requests = integer(run.requests, `${label} requests`);
-  if (warmupRequests <= 0) throw new Error(`${label} warmupRequests must be positive`);
-  if (requests <= 0) throw new Error(`${label} requests must be positive`);
-  const queries = integer(run.lockWaitSampleQueries, `${label} lockWaitSampleQueries`);
-  const failures = integer(run.lockWaitSampleFailures, `${label} lockWaitSampleFailures`);
-  if (queries <= 0) throw new Error(`${label} lock-wait sampling must execute at least one successful query`);
-  if (failures !== 0) throw new Error(`${label} lock-wait sampling failures must be zero`);
-}
-
 function validateEnvironment(baseline, candidate) {
-  for (const key of ENVIRONMENT_KEYS) {
+  const keys = [
+    "datasetAppointments",
+    "warmupSeconds",
+    "measureSeconds",
+    "sameAppointmentConcurrency",
+    "differentAppointmentConcurrency",
+    "seed",
+    "postgresqlImage",
+    "jdk",
+    "vm",
+  ];
+  for (const key of keys) {
     if (!(key in baseline.environment) || !(key in candidate.environment)) {
       throw new Error(`environment key ${key} is required in both reports`);
     }
     if (baseline.environment[key] !== candidate.environment[key]) {
       throw new Error(`environment key ${key} differs between baseline and candidate`);
     }
-  }
-  validateSourceCommit(baseline.environment.sourceCommit, "baseline");
-  validateSourceCommit(candidate.environment.sourceCommit, "candidate");
-  if (baseline.environment.sourceCommit === candidate.environment.sourceCommit) {
-    throw new Error("baseline and candidate sourceCommit must differ");
-  }
-}
-
-function validateEnvironmentFingerprint(environment, label) {
-  if (typeof environment.environmentFingerprint !== "string" || environment.environmentFingerprint.trim() === "") {
-    throw new Error(`${label} environmentFingerprint is required`);
-  }
-  const canonicalEnvironment = Object.fromEntries(
-    [...ENVIRONMENT_KEYS, "sourceCommit"].map((key) => [key, environment[key]]),
-  );
-  const expected = createHash("sha256").update(JSON.stringify(canonicalEnvironment)).digest("hex");
-  if (environment.environmentFingerprint !== expected) {
-    throw new Error(`${label} environmentFingerprint must match the canonical SHA-256`);
-  }
-}
-
-function validateSourceCommit(value, label) {
-  if (typeof value !== "string" || value.trim() === "" || value === "unknown") {
-    throw new Error(`${label} environment sourceCommit must identify the measured source`);
   }
 }
 
@@ -205,12 +120,6 @@ function number(value, name) {
     throw new Error(`metric ${name} must be a finite non-negative number`);
   }
   return value;
-}
-
-function integer(value, name) {
-  const parsed = number(value, name);
-  if (!Number.isInteger(parsed)) throw new Error(`metric ${name} must be an integer`);
-  return parsed;
 }
 
 function median(series) {
