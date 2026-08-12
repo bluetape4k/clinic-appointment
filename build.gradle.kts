@@ -58,12 +58,12 @@ subprojects {
 
     java {
         toolchain {
-            languageVersion.set(JavaLanguageVersion.of(25))
+            languageVersion.set(JavaLanguageVersion.of(21))
         }
     }
 
     kotlin {
-        jvmToolchain(25)
+        jvmToolchain(21)
         compilerOptions {
             languageVersion.set(KotlinVersion.KOTLIN_2_3)
             apiVersion.set(KotlinVersion.KOTLIN_2_3)
@@ -127,24 +127,11 @@ subprojects {
                     "issue34.codec.warmupSeconds",
                     "issue34.codec.measureSeconds",
                     "issue34.codec.artifact",
-                    "issue34.sourceCommit",
                 ).forEach { propertyName ->
                     System.getProperty(propertyName)?.let { propertyValue ->
                         systemProperty(propertyName, propertyValue)
                     }
                 }
-            }
-
-            // Colima의 macOS 호스트 소켓 경로는 Docker 데몬 컨테이너에서
-            // bind-mount할 수 없으므로, Ryuk가 사용하는 공식 컨테이너 내부
-            // 소켓 경로를 기본값으로 지정한다. 사용자가 명시한 override는 보존한다.
-            val colimaDockerSocket = file("${System.getProperty("user.home")}/.colima/default/docker.sock")
-            if (colimaDockerSocket.exists()) {
-                environment(
-                    "TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE",
-                    providers.environmentVariable("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE").orNull
-                        ?: "/var/run/docker.sock"
-                )
             }
 
             jvmArgs(

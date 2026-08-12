@@ -1,6 +1,5 @@
 package io.bluetape4k.clinic.appointment.event.notification
 
-import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
@@ -70,12 +69,11 @@ class NotificationCodecBacklogBenchmarkTest {
                 datasetRows = configuration.rows,
                 warmupSeconds = configuration.warmupSeconds,
                 measureSeconds = configuration.measureSeconds,
-                detailLength = CancellationReasonRegistry.CLINIC_SCHEDULE_CHANGED_DETAIL.length,
+                detailLength = DETAIL_LENGTH,
                 batchSize = BATCH_SIZE,
                 legacyRatio = configuration.legacyRatio,
                 jdk = System.getProperty("java.runtime.version", "unknown"),
                 vm = System.getProperty("java.vm.name", "unknown"),
-                sourceCommit = sourceCommit(),
             ),
             metrics = CodecBenchmarkMetrics(
                 throughputRowsPerSecond = measurements.decodedRows /
@@ -259,8 +257,8 @@ class NotificationCodecBacklogBenchmarkTest {
         Files.writeString(path, "$json\n")
     }
 
-    private fun detailFor(@Suppress("UNUSED_PARAMETER") index: Int): String =
-        CancellationReasonRegistry.CLINIC_SCHEDULE_CHANGED_DETAIL
+    private fun detailFor(index: Int): String =
+        "issue34-detail-$index-".repeat(100).take(DETAIL_LENGTH)
 
     private data class PendingRow(
         val id: Long,
@@ -320,7 +318,6 @@ class NotificationCodecBacklogBenchmarkTest {
         val legacyRatio: Double,
         val jdk: String,
         val vm: String,
-        val sourceCommit: String,
     )
 
     private data class CodecBenchmarkMetrics(
@@ -395,14 +392,10 @@ class NotificationCodecBacklogBenchmarkTest {
         private const val BENCHMARK_NAME = "issue-34-notification-codec-backlog"
         private const val LEGACY_HEAVY = "legacy-heavy"
         private const val CURRENT_HEAVY = "current-heavy"
+        private const val DETAIL_LENGTH = 500
         private const val BATCH_SIZE = 500
         private const val MAX_LATENCY_SAMPLES = 500_000
         private const val NANOS_PER_SECOND = 1_000_000_000L
         private const val NANOS_PER_MILLISECOND = 1_000_000L
-
-        private fun sourceCommit(): String =
-            System.getProperty("issue34.sourceCommit")
-                ?: System.getenv("GITHUB_SHA")
-                ?: "unknown"
     }
 }
