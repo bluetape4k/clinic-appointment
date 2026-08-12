@@ -31,6 +31,10 @@ import io.bluetape4k.clinic.appointment.model.tables.ResourceAllocations
 import io.bluetape4k.clinic.appointment.model.tables.ResourceCapacityBuckets
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistCapacityHolds
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistEntries
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistOfferEvents
+import io.bluetape4k.clinic.appointment.model.tables.WaitlistOffers
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommandIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentItemRepository
@@ -330,6 +334,10 @@ internal class VisitCommitmentGatlingFixture {
                 ResourceAllocations,
                 AppointmentCommandIdempotencies,
                 AppointmentAuditEvents,
+                WaitlistEntries,
+                WaitlistOffers,
+                WaitlistCapacityHolds,
+                WaitlistOfferEvents,
             )
     }
 }
@@ -374,10 +382,21 @@ private class VisitCommitmentCommandInvoker(
         Class.forName("io.bluetape4k.clinic.appointment.api.commitment.ProposalConsentEvidence")
     private val directCommandClass =
         Class.forName("io.bluetape4k.clinic.appointment.api.commitment.DirectAppointmentConfirmationCommand")
+    private val notificationWriter =
+        Class.forName(
+            "io.bluetape4k.clinic.appointment.api.commitment." +
+                "AppointmentCommitmentCommandService\$NoopAppointmentNotificationWriter",
+        ).getDeclaredField("INSTANCE").apply { isAccessible = true }.get(null)
+    private val bookingEligibilityGate =
+        Class.forName("io.bluetape4k.clinic.appointment.api.commitment.BookingEligibilityGate")
+            .getDeclaredField("Companion").get(null).let { companion ->
+                companion.javaClass.getMethod("disabled").invoke(companion)
+            }
+    private val contextConstructor = contextClass.constructors.single { it.parameterCount == 8 }
     private val service =
         serviceClass
             .constructors
-            .single { it.parameterCount == 11 }
+            .single { it.parameterCount == 13 }
             .newInstance(
                 database,
                 CLOCK,
@@ -390,6 +409,8 @@ private class VisitCommitmentCommandInvoker(
                 AppointmentItemRepository(),
                 ResourceAllocationRepository(),
                 AppointmentCommandIdempotencyRepository(),
+                notificationWriter,
+                bookingEligibilityGate,
             )
 
     fun confirmDirect(
@@ -590,14 +611,13 @@ private class VisitCommitmentCommandInvoker(
         clinic: GatlingClinicFixture,
         key: String,
     ): Any =
-        contextClass
-            .constructors
-            .single()
+        contextConstructor
             .newInstance(
                 TENANT_ID,
                 clinic.clinicId,
                 "a".repeat(64),
                 "actor:masked",
+                "UNKNOWN",
                 sha256(key),
                 "c".repeat(64),
                 "gatling-$key",
