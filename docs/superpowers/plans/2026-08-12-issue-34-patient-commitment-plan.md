@@ -138,8 +138,11 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 - Modify: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxCodec.kt`
 - Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/notification/AppointmentNotificationWriter.kt`
 - Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ServiceConfig.kt`
+- Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationProperties.kt`
+- Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfiguration.kt`
 - Test: `appointment-event/src/test/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxCodecTest.kt`
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/notification/AppointmentNotificationWriterTest.kt`
+- Test: `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/commitment/CancellationReasonRegistryTest.kt`
 - Test: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfigurationTest.kt`
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/AppointmentMessagingAutoConfigurationWiringTest.kt`
 
@@ -153,7 +156,7 @@ standalone component convention을 다시 읽고 각 task의 RED→GREEN 순서�
 검증 명령:
 
 ```bash
-./gradlew :appointment-core:test :appointment-event:test :appointment-notification:test :appointment-api:test --tests '*NotificationOutboxCodecTest*' --tests '*AppointmentNotificationWriterTest*' --tests '*NotificationAutoConfigurationTest*' --tests '*AppointmentMessagingAutoConfigurationWiringTest*'
+./gradlew :appointment-core:test :appointment-event:test :appointment-notification:test :appointment-api:test --tests '*CancellationReasonRegistryTest*' --tests '*NotificationOutboxCodecTest*' --tests '*AppointmentNotificationWriterTest*' --tests '*NotificationAutoConfigurationTest*' --tests '*AppointmentMessagingAutoConfigurationWiringTest*'
 ```
 
 - [ ] 실제 `appointment-notification` renderer/catalog에서 모든 활성 channel의 cancellation template v2 존재, detail text/HTML escape, null-detail v1 동등성을 검증한다. template readiness가 확인되지 않으면 v2 producer를 활성화하지 않는다.
