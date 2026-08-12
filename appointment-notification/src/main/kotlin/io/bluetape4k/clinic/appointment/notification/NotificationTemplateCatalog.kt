@@ -8,6 +8,8 @@ import java.io.Serializable
 
 val WAITLIST_SLOT_OFFER_TEMPLATE_KEY = NotificationTemplateKey("waitlist.slot.offer")
 val WAITLIST_SLOT_OFFER_TEMPLATE_VERSION = NotificationTemplateVersion(1)
+val APPOINTMENT_CANCELLED_TEMPLATE_KEY = NotificationTemplateKey("appointment-cancelled")
+val APPOINTMENT_CANCELLED_TEMPLATE_VERSION = NotificationTemplateVersion(2)
 
 /** code-owned 고정 template을 key, version, channel로 찾는 runtime catalog입니다. */
 fun interface NotificationTemplateCatalog {
@@ -19,15 +21,35 @@ fun interface NotificationTemplateCatalog {
 
     fun findWaitlistOffer(channel: NotificationChannelType): NotificationTemplate? =
         find(WAITLIST_SLOT_OFFER_TEMPLATE_KEY, WAITLIST_SLOT_OFFER_TEMPLATE_VERSION, channel)
+
+    fun findAppointmentCancellation(channel: NotificationChannelType): NotificationTemplate? =
+        find(APPOINTMENT_CANCELLED_TEMPLATE_KEY, APPOINTMENT_CANCELLED_TEMPLATE_VERSION, channel)
 }
 
-/** 기본 설정에서 사용할 수 있는 PII-free code-owned waitlist offer template입니다. */
+/** 기본 설정에서 사용할 수 있는 PII-free waitlist/cancellation template입니다. */
 object BuiltInWaitlistNotificationTemplateCatalog : NotificationTemplateCatalog {
     override fun find(
         key: NotificationTemplateKey,
         version: NotificationTemplateVersion,
         channel: NotificationChannelType,
     ): NotificationTemplate? {
+        if (key == APPOINTMENT_CANCELLED_TEMPLATE_KEY && version == APPOINTMENT_CANCELLED_TEMPLATE_VERSION) {
+            return NotificationTemplate(
+                key = key,
+                version = version,
+                channel = channel,
+                fields = setOf(
+                    "clinicDisplayName",
+                    "appointmentDate",
+                    "startTime",
+                    "cancellationReasonCode",
+                    "cancellationReasonDetail",
+                ),
+                titleTemplate = "예약 취소 안내",
+                textTemplate = "{{clinicDisplayName}} 예약이 취소되었습니다. 사유: {{cancellationReasonCode}} {{cancellationReasonDetail}}",
+                htmlTemplate = "<p>{{clinicDisplayName}} 예약이 취소되었습니다.</p><p>사유: {{cancellationReasonCode}} {{cancellationReasonDetail}}</p>",
+            )
+        }
         if (key != WAITLIST_SLOT_OFFER_TEMPLATE_KEY || version != WAITLIST_SLOT_OFFER_TEMPLATE_VERSION) return null
         return NotificationTemplate(
             key = key,

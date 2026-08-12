@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
+import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
+import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiException
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentCommitmentResponse
 import io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse
 import io.bluetape4k.clinic.appointment.api.security.ActorContextResolver
@@ -95,8 +97,10 @@ class AppointmentCommitmentQueryController(
         val actor = actorContextResolver.resolveAppointmentActor(authentication, tenantCode, servletRequest)
         when (actor.actorType) {
             ActorType.PATIENT -> actor.requirePatientActor()
-            ActorType.ADMIN -> actor.requireAdminActor()
-            else -> actor.requireAdminActor()
+            ActorType.ADMIN,
+            ActorType.STAFF,
+            -> actor.requireCommitmentReadActor()
+            else -> throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
         }
         return service.query(actor, id).okResponse()
     }

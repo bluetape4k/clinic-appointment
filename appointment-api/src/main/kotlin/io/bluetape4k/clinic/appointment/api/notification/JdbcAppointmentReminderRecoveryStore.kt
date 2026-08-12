@@ -89,6 +89,9 @@ class JdbcAppointmentReminderRecoveryStore(
         require(limit > 0) { "limit must be positive" }
         if (!dayBeforeEnabled && !sameDayEnabled) return emptyList()
         return withContext(ioDispatcher) {
+            // recovery reminder는 cancellation 외 이벤트이므로 consumer-first rollout과
+            // 무관하게 기존 schema v1 계약으로만 materialize합니다.
+            val schemaVersion = NotificationOutboxEnvelope.LEGACY_SCHEMA_VERSION
             cursorMutex.withLock {
                 val result = buildList {
                     while (size < limit && pendingCandidates.isNotEmpty()) {
@@ -126,6 +129,7 @@ class JdbcAppointmentReminderRecoveryStore(
                         row.toCandidates(
                             now = now,
                             commitmentSchedule = v2Schedules[rowId],
+                            schemaVersion = schemaVersion,
                             runId = checkpoint.runId,
                             completesRun = completesRun && rowId == lastRowId,
                         )
@@ -292,6 +296,7 @@ class JdbcAppointmentReminderRecoveryStore(
     private fun ResultRow.toCandidates(
         now: Instant,
         commitmentSchedule: CommitmentSchedule?,
+        schemaVersion: Int,
         runId: String,
         completesRun: Boolean,
     ): List<ReminderRecoveryCandidate> {
@@ -333,6 +338,7 @@ class JdbcAppointmentReminderRecoveryStore(
                 memberId = this[Appointments.patientExternalId],
                 clinicDisplayName = this[Clinics.name],
                 schedule = schedule,
+                schemaVersion = schemaVersion,
                 slot = slot,
                 dueAt = dueAt,
                 now = now,
@@ -353,6 +359,7 @@ class JdbcAppointmentReminderRecoveryStore(
         memberId: String?,
         clinicDisplayName: String,
         schedule: ReminderSchedule,
+        schemaVersion: Int,
         slot: NotificationSlot,
         dueAt: Instant,
         now: Instant,
@@ -395,7 +402,7 @@ class JdbcAppointmentReminderRecoveryStore(
             )
             SendableNotificationDraft(
                 envelope = NotificationOutboxEnvelope(
-                    schemaVersion = NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION,
+                    schemaVersion = schemaVersion,
                     eventId = NotificationEventId(digest.value),
                     idempotencyKey = NotificationIdempotencyKey(digest.value),
                     tenantGroupId = tenant,

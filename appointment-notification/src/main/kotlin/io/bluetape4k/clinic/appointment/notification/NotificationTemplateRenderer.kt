@@ -34,6 +34,12 @@ class NotificationTemplateRenderer(
     ): RenderedNotificationTemplate {
         val template = catalog.find(key, version, channel)
             ?: throw NotificationTemplateException(NotificationFailureCode.TEMPLATE_NOT_FOUND, "notification template not found")
+        if (template.key != key || template.version != version || template.channel != channel) {
+            throw NotificationTemplateException(
+                NotificationFailureCode.TEMPLATE_PARAMETER_INVALID,
+                "notification template identity mismatch",
+            )
+        }
         val values = validateParameters(template, parameters, profile)
         return RenderedNotificationTemplate(
             title = template.titleTemplate?.let { renderText(it, values, channel) },
@@ -49,7 +55,8 @@ class NotificationTemplateRenderer(
     ): Map<String, String> {
         val parameterValues = parameters.toTemplateFields()
         val allowed = parameterValues.keys + PROFILE_FIELDS + TEMPLATE_FIELDS
-        val unknown = template.fields - allowed
+        val optional = if (parameters is AppointmentCancelledParameters) OPTIONAL_PARAMETER_FIELDS else emptySet()
+        val unknown = template.fields - allowed - optional
         if (unknown.isNotEmpty()) {
             throw NotificationTemplateException(NotificationFailureCode.TEMPLATE_PARAMETER_INVALID, "unknown template parameter")
         }
@@ -97,8 +104,10 @@ class NotificationTemplateRenderer(
         var rendered = template
         TOKEN_REGEX.findAll(template).forEach { match ->
             val name = match.groupValues[1]
-            val value = values[name]
-                ?: throw NotificationTemplateException(NotificationFailureCode.TEMPLATE_PARAMETER_INVALID, "missing template parameter")
+            val value = values[name] ?: if (name == "cancellationReasonDetail") "" else null
+            if (value == null) {
+                throw NotificationTemplateException(NotificationFailureCode.TEMPLATE_PARAMETER_INVALID, "missing template parameter")
+            }
             rendered = rendered.replace(match.value, value)
         }
         if (rendered.contains("{{") || rendered.contains("}}")) {
@@ -166,6 +175,7 @@ class NotificationTemplateRenderer(
         val TOKEN_REGEX = Regex("\\{\\{([A-Za-z0-9_.-]+)}}")
         val PROFILE_FIELDS = setOf("profile.displayName", "profile.locale")
         val TEMPLATE_FIELDS = setOf("template.deepLink")
+        val OPTIONAL_PARAMETER_FIELDS = setOf("cancellationReasonDetail")
         val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
         val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_TIME
     }

@@ -139,4 +139,19 @@ class FlywayPostgreSQLMigrationTest {
             location = "classpath:db/migration/postgresql",
         )
     }
+
+    @Test
+    fun `V27 cancellation detail schema is additive on PostgreSQL`() {
+        val postgres = Containers.Postgres
+        val driver = Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentCancellationMigrationTestSupport.verifyV27Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                postgres.jdbcUrl,
+                postgres.username ?: "test",
+                postgres.password ?: "",
+            ),
+            location = "classpath:db/migration/postgresql",
+        )
+    }
 }

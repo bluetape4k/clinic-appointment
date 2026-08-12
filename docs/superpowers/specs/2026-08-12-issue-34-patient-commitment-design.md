@@ -210,8 +210,20 @@ API에는 `REQUESTED` 상태가 없으므로 요청 전송 중인 local view만 
 view로 되돌아가지 않는다. 현재 상태는 색상뿐 아니라 텍스트와
 `aria-current="step"`로 표현한다.
 상품명이 있으면 제목, 대표 진료명은 fallback 제목, 회차가 있으면
-`회차 / 전체 회차`, 없으면 회차 메타를 숨긴다. 방문 일시와 clinic 표시명은
-proposal snapshot에서 렌더링한다.
+`회차 / 전체 회차`, 없으면 회차 메타를 숨긴다. 방문 일시와 상품·회차 정보는
+proposal의 불변 plan/revision snapshot에서 렌더링한다. clinic 표시명은 매 응답에서
+tenant·clinic ownership을 재검증한 뒤 현재 canonical clinic 이름을 표시한다. 과거
+예약 당시의 clinic 명칭 보존이 필요해지면 별도 clinic-display snapshot 계약을
+추가하며, 이번 범위에서는 이름 변경이 과거 예약 표시에도 반영되는 것을 명시적
+제품 정책으로 취급한다.
+
+환자 로그인·로그아웃과 route guard 재진입은 인증 주체 경계로 취급한다.
+root singleton facade의 현재 commitment와 tenant별 최소 재진입 참조는 로그인
+주체가 바뀌거나 로그아웃하면 즉시 폐기하고, 새 세션은 query/sessionStorage의
+appointment ID를 backend GET으로 다시 소유권 검증한 뒤에만 복원한다. 폐기 시점
+이전에 시작한 request/load/mutation/412 재조회 응답은 session generation이
+달라졌으면 facade 상태에 적용하지 않는다. 이 흐름은 환자 A의 늦은 응답이나
+이전 환자의 저장 참조가 환자 B 화면에 노출되지 않는 것을 보장한다.
 
 ### 액션과 오류
 

@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.event
 
-import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -12,7 +12,9 @@ import org.springframework.stereotype.Component
 class AppointmentEventLogger(
     private val metrics: AppointmentEventAuditMetrics? = null,
 ) {
-    companion object : KLogging()
+    companion object : KLogging() {
+        private val STATUS_REASON_CODES = setOf("DOCTOR_APPROVED")
+    }
 
     @EventListener
     fun onCreated(event: AppointmentDomainEvent.Created) {
@@ -28,7 +30,7 @@ class AppointmentEventLogger(
     @EventListener
     fun onStatusChanged(event: AppointmentDomainEvent.StatusChanged) {
         val reasonPart = event.reason
-            ?.toRegisteredReasonCode()
+            ?.toAuditReasonCode()
             ?.let { ""","reasonCode":${jsonString(it)}""" }
             ?: ""
         saveEventLog(
@@ -43,7 +45,7 @@ class AppointmentEventLogger(
     @EventListener
     fun onCancelled(event: AppointmentDomainEvent.Cancelled) {
         val reasonPart = event.reason
-            .toRegisteredReasonCode()
+            .toCancellationReasonCode()
             ?.let { ""","reasonCode":${jsonString(it)}""" }
             ?: ""
         saveEventLog(
@@ -111,6 +113,11 @@ class AppointmentEventLogger(
         append('"')
     }
 
-    private fun String.toRegisteredReasonCode(): String? =
-        runCatching { CancellationReasonCode(this).value }.getOrNull()
+    private fun String.toAuditReasonCode(): String? =
+        takeIf { it in STATUS_REASON_CODES }
+            ?: toCancellationReasonCode()
+
+    private fun String.toCancellationReasonCode(): String? =
+        runCatching { CancellationReasonRegistry.requireCode(this) }.getOrNull()
+
 }

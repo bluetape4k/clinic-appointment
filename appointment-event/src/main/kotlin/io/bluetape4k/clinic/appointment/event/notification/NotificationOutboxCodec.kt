@@ -30,8 +30,10 @@ class NotificationOutboxCodec {
         enable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
     }
 
-    fun encode(envelope: NotificationOutboxEnvelope): String =
-        mapper.writeValueAsString(envelope.toJson())
+    fun encode(envelope: NotificationOutboxEnvelope): String {
+        NotificationOutboxContractRegistry.validate(envelope)
+        return mapper.writeValueAsString(envelope.toJson())
+    }
 
     fun decode(json: String): NotificationOutboxEnvelope =
         try {
@@ -49,15 +51,7 @@ class NotificationOutboxCodec {
         }
 
         val parameterType = encoded.parameterType.toParameterType()
-        return encoded.toEnvelope(parameterType).also { envelope ->
-            if (
-                envelope.schemaVersion == NotificationOutboxEnvelope.LEGACY_SCHEMA_VERSION &&
-                envelope.parameters is AppointmentCancelledParameters &&
-                envelope.parameters.cancellationReasonDetail != null
-            ) {
-                throw invalidPayload()
-            }
-        }
+        return encoded.toEnvelope(parameterType).also(NotificationOutboxContractRegistry::validate)
     }
 
     private fun NotificationOutboxEnvelope.toJson(): NotificationOutboxEnvelopeJson =

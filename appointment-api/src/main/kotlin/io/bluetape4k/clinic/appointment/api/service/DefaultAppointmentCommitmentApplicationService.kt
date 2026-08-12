@@ -27,6 +27,7 @@ import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiExcep
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentProperties
 import io.bluetape4k.clinic.appointment.api.config.toApiException
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentCommitmentResponse
+import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentCommitmentDisplay
 import io.bluetape4k.clinic.appointment.api.dto.commitment.AppointmentProposalResponse
 import io.bluetape4k.clinic.appointment.api.dto.commitment.ApproveProposalRequest
 import io.bluetape4k.clinic.appointment.api.dto.commitment.CancelAppointmentRequest
@@ -52,7 +53,9 @@ import io.bluetape4k.clinic.appointment.model.dto.PersistedAppointmentPlanRevisi
 import io.bluetape4k.clinic.appointment.model.dto.ResourceAllocationRequest
 import io.bluetape4k.clinic.appointment.model.plan.BookingPreferenceSnapshot
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentItems
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentPlans
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentProposals
+import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRevisionRepository
@@ -61,6 +64,7 @@ import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.error
 import io.bluetape4k.logging.info
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.select
@@ -581,7 +585,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
 
             ActorType.PATIENT -> {
                 if (reasonDetail != null) {
-                    throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
+                    throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.PAYLOAD_INVALID)
                 }
             }
 
@@ -600,6 +604,7 @@ internal class DefaultAppointmentCommitmentApplicationService(
         commitment.toProposalResponse(
             proposal,
             policySnapshotResolver.resolvePersisted(tenantGroupId, clinicId, proposal.policySnapshotId),
+            appointmentDisplay(tenantGroupId, clinicId, commitment.appointmentId, proposal.id),
         )
 
     private fun commitmentResponse(
@@ -611,7 +616,67 @@ internal class DefaultAppointmentCommitmentApplicationService(
         commitment.toResponse(
             proposal,
             policySnapshotResolver.resolvePersisted(tenantGroupId, clinicId, proposal.policySnapshotId),
+            appointmentDisplay(tenantGroupId, clinicId, commitment.appointmentId, proposal.id),
         )
+
+    /**
+     * 상품·회차 metadata는 기존 immutable Plan/Plan revision snapshot에서 조립하고,
+     * clinic 이름은 tenant·clinic ownership을 확인한 현재 canonical row에서 읽습니다.
+     * raw patient scope나 구매 원문은 읽지 않으며, 항목이 여러 회차를 함께 묶은 경우에는
+     * 잘못된 회차를 표시하지 않도록 단일 sequence일 때만 sessionNumber를 채웁니다.
+     */
+    private fun appointmentDisplay(
+        tenantGroupId: Long,
+        clinicId: Long,
+        appointmentId: Long,
+        proposalId: Long,
+    ): AppointmentCommitmentDisplay = transaction(database) {
+        val clinicDisplayName = Clinics
+            .select(Clinics.name)
+            .where {
+                (Clinics.id eq clinicId) and
+                    (Clinics.tenantGroupId eq tenantGroupId)
+            }
+            .singleOrNull()
+            ?.get(Clinics.name)
+
+        val itemRows = AppointmentItems
+            .selectAll()
+            .where {
+                (AppointmentItems.appointmentId eq appointmentId) and
+                    (AppointmentItems.proposalId eq proposalId)
+            }
+            .toList()
+        val revisionId = itemRows
+            .map { it[AppointmentItems.planRevisionId].value }
+            .distinct()
+            .singleOrNull()
+        val revision = revisionId?.let(planRevisionRepository::findById)
+        val productName = revision?.let {
+            AppointmentPlans
+                .select(AppointmentPlans.productName)
+                .where {
+                    (AppointmentPlans.id eq it.revision.planId) and
+                        (AppointmentPlans.tenantGroupId eq tenantGroupId) and
+                        (AppointmentPlans.clinicId eq clinicId)
+                }
+                .singleOrNull()
+                ?.get(AppointmentPlans.productName)
+        }
+        val sequenceByTreatment = revision
+            ?.treatments
+            ?.associate { it.treatmentKey to it.sequence }
+            .orEmpty()
+        val sequences = itemRows
+            .mapNotNull { sequenceByTreatment[it[AppointmentItems.treatmentKey]] }
+            .distinct()
+        AppointmentCommitmentDisplay(
+                productName = productName,
+            sessionNumber = sequences.singleOrNull()?.takeIf { it > 0 },
+            totalSessions = revision?.treatments?.maxOfOrNull { it.sequence }?.takeIf { it > 0 },
+            clinicDisplayName = clinicDisplayName,
+        )
+    }
 
     private fun requireNewCommitmentWrite(clinicId: Long) {
         if (!properties.isWriteEnabled(clinicId)) {

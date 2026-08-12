@@ -162,8 +162,10 @@ internal class AppointmentCommitmentAccessResolver(
                 }
             }
 
-            ActorType.ADMIN -> Unit
+            ActorType.ADMIN,
             ActorType.STAFF,
+            -> Unit
+
             ActorType.DOCTOR,
             ActorType.SYSTEM,
             -> forbidden()

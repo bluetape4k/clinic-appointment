@@ -103,6 +103,62 @@ internal class NotificationAutoConfigurationTest {
     }
 
     @Test
+    fun `v2 producer는 schema와 cancellation template readiness가 없으면 v1로 fail closed 한다`() {
+        val database = database("auto_v2_gate", version = "21")
+        context(database, withKey = true)
+            .withPropertyValues("clinic.notification.v2-producer=true")
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBean(NotificationProducerSchemaReadiness::class.java)
+                    .allowsV2() shouldBeEqualTo true
+                applicationContext.getBean(NotificationOutboxReadinessSource::class.java)
+                    .snapshot()
+                    .schema
+                    .available shouldBeEqualTo true
+            }
+    }
+
+    @Test
+    fun `v2 producer readiness는 cancellation template의 key version channel과 detail field를 함께 검증한다`() {
+        val database = database("auto_v2_malformed_template", version = "21")
+        context(database, withKey = true)
+            .withPropertyValues("clinic.notification.v2-producer=true")
+            .withBean(
+                "malformedNotificationTemplateCatalog",
+                NotificationTemplateCatalog::class.java,
+                {
+                    NotificationTemplateCatalog { key, version, channel ->
+                        if (key != APPOINTMENT_CANCELLED_TEMPLATE_KEY) return@NotificationTemplateCatalog null
+                        NotificationTemplate(
+                            key = key,
+                            version = version,
+                            channel = channel,
+                            fields = setOf("clinicDisplayName"),
+                            textTemplate = "{{clinicDisplayName}}",
+                        )
+                    }
+                },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBean(NotificationProducerSchemaReadiness::class.java)
+                    .allowsV2() shouldBeEqualTo false
+            }
+    }
+
+    @Test
+    fun `v2 producer 설정이 boolean이 아니면 binding 단계에서 시작을 거절한다`() {
+        ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
+            .withPropertyValues("clinic.notification.v2-producer=not-a-boolean")
+            .run { applicationContext ->
+                check(applicationContext.startupFailure != null) {
+                    "invalid v2 producer property must fail startup"
+                }
+            }
+    }
+
+    @Test
     fun `ACTIVE에서 실제 delivery worker가 제공된 경우에만 dispatcher를 구성한다`() {
         val database = database("auto_dispatcher", version = "21")
         context(database, withKey = true)

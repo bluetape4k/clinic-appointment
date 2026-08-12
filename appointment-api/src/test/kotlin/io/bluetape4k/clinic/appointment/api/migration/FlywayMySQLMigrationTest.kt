@@ -168,4 +168,19 @@ class FlywayMySQLMigrationTest {
             location = "classpath:db/migration/mysql",
         )
     }
+
+    @Test
+    fun `V27 cancellation detail schema is additive on MySQL 8`() {
+        val mysql = Containers.MySql8
+        val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentCancellationMigrationTestSupport.verifyV27Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                mysql.jdbcUrl,
+                mysql.username ?: "test",
+                mysql.password ?: "",
+            ),
+            location = "classpath:db/migration/mysql",
+        )
+    }
 }

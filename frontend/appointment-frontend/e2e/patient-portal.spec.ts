@@ -100,6 +100,83 @@ test.describe('환자 포털 브라우저 계약', () => {
     await expect(page.getByText('2026년 8월 20일 10:30')).toBeVisible();
     await expect(page.getByText('3회차 / 10회')).toBeVisible();
     await expect(page.getByText('확정', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /예약 상세 보기/ })).toBeVisible();
+    await expect(page.locator('[data-step="CONFIRMED"]')).toHaveAttribute('aria-current', 'step');
+  });
+
+  test('예약 요청 뒤 취소 사유를 확인하고 취소 상태 stepper로 전환한다', async ({ page }) => {
+    await signIn(page);
+
+    await page.route('**/api/tenant-default/appointment-requests', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { ETag: '"1"' },
+        body: JSON.stringify({
+          appointmentId: 42,
+          commitmentId: 84,
+          proposalId: 126,
+          status: 'PROPOSED',
+          version: 1,
+          expiresAt: '2026-08-20T01:00:00Z',
+          policySnapshot: {
+            snapshotId: 7,
+            snapshotHash: 'snapshot-hash',
+            tenantGeneration: 1,
+            clinicGeneration: 1,
+            sourceVersions: {},
+          },
+        }),
+      });
+    });
+
+    await page.route('**/api/tenant-default/appointments/42/cancel', async route => {
+      expect(JSON.parse(route.request().postData() || '{}')).toEqual({ reasonCode: 'REFUND' });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { ETag: '"2"' },
+        body: JSON.stringify({
+          appointmentId: 42,
+          commitmentId: 84,
+          status: 'CANCELLED',
+          version: 2,
+          currentProposal: {
+            proposalId: 126,
+            revision: 1,
+            startsAt: '2026-08-20T01:30:00Z',
+            endsAt: '2026-08-20T02:30:00Z',
+            expiresAt: '2026-08-20T01:00:00Z',
+            expired: false,
+            representativeTreatmentName: '피부 재생 관리',
+            policySnapshot: {
+              snapshotId: 7,
+              snapshotHash: 'snapshot-hash',
+              tenantGeneration: 1,
+              clinicGeneration: 1,
+              sourceVersions: {},
+            },
+          },
+          confirmedProposalId: null,
+          effectivePolicySnapshotId: 7,
+        }),
+      });
+    });
+
+    await page.getByLabel('예약 계획 ID').fill('101');
+    await page.getByLabel('희망 시작').fill('2026-08-20T10:30');
+    await page.getByLabel('희망 종료').fill('2026-08-20T11:30');
+    await page.getByLabel('동의 권위').fill('consent:clinic-a');
+    await page.getByLabel('동의 증빙 ID').fill('ev_01J1M6Y6XRK8N0W2M3P4Q5R6S7');
+    await page.getByRole('button', { name: '예약 요청 보내기' }).click();
+
+    await expect(page.locator('[data-step="PROPOSED"]')).toHaveAttribute('aria-current', 'step');
+    await page.getByRole('button', { name: '예약 취소', exact: true }).click();
+    await expect(page.locator('[data-cancel-confirmation]')).toBeVisible();
+    await page.locator('select[name="cancellationReasonCode"]').selectOption('REFUND');
+    await page.getByRole('button', { name: '취소 확정' }).click();
+
+    await expect(page.locator('[data-step="CANCELLED"]')).toHaveAttribute('aria-current', 'step');
+    await expect(page.locator('[data-terminal]')).toHaveText('취소가 완료된 예약입니다.');
+    await expect(page.getByRole('button', { name: '예약 취소', exact: true })).toHaveCount(0);
   });
 });

@@ -95,7 +95,7 @@ interface AppointmentNotificationWriter {
         reasonCode: CancellationReasonCode?,
     )
 
-    /** bounded 운영 취소 설명을 전달하는 확장 경계입니다. 기존 writer는 code-only로 호환됩니다. */
+    /** bounded 운영 취소 설명을 전달하는 확장 경계입니다. legacy writer는 detail을 폐기하지 않고 거부합니다. */
     fun cancelled(
         tenantGroupId: Long,
         record: AppointmentRecord,
@@ -103,6 +103,7 @@ interface AppointmentNotificationWriter {
         reasonCode: CancellationReasonCode?,
         reasonDetail: String?,
     ) {
+        requireDetailSupportedByLegacyWriter(reasonDetail)
         cancelled(tenantGroupId, record, version, reasonCode)
     }
 
@@ -128,6 +129,7 @@ interface AppointmentNotificationWriter {
         reasonCode: CancellationReasonCode?,
         reasonDetail: String?,
     ) {
+        requireDetailSupportedByLegacyWriter(reasonDetail)
         commitmentCancelled(notification, reasonCode)
     }
 
@@ -135,6 +137,15 @@ interface AppointmentNotificationWriter {
         previous: CommitmentAppointmentNotification,
         replacement: CommitmentAppointmentNotification,
     )
+}
+
+private fun requireDetailSupportedByLegacyWriter(reasonDetail: String?) {
+    if (reasonDetail != null) {
+        throw NotificationContractException(
+            failureCode = NotificationFailureCode.TEMPLATE_PARAMETER_INVALID,
+            message = "Cancellation detail requires a detail-aware notification writer",
+        )
+    }
 }
 
 /**
@@ -149,7 +160,8 @@ class DefaultAppointmentNotificationWriter(
     private val clinicRepository: ClinicRepository,
     private val clock: Clock,
     private val sameDayReminderLeadTime: Duration,
-    private val cancellationSchemaVersion: Int = NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION,
+    /** 직접 구성한 writer도 consumer-first rollout의 legacy code-only 기본값을 따른다. */
+    private val cancellationSchemaVersion: Int = NotificationOutboxEnvelope.LEGACY_SCHEMA_VERSION,
 ) : AppointmentNotificationWriter {
 
     init {
@@ -256,9 +268,7 @@ class DefaultAppointmentNotificationWriter(
         reasonCode: CancellationReasonCode?,
         reasonDetail: String?,
     ) {
-        require(reasonDetail == null || cancellationSchemaVersion == NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION) {
-            "cancellation detail requires schema v2 producer readiness"
-        }
+        requireCancellationDetailSupported(reasonDetail)
         repository.suppressOutstandingReminders(
             tenantGroupId = TenantGroupId(tenantGroupId),
             clinicId = ClinicId(record.clinicId),
@@ -290,7 +300,7 @@ class DefaultAppointmentNotificationWriter(
                 appointmentDate = record.appointmentDate,
                 startTime = record.startTime,
                 cancellationReasonCode = reasonCode,
-                cancellationReasonDetail = reasonDetail,
+                cancellationReasonDetail = reasonDetail.takeIf { cancellationSchemaVersion == NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION },
             ),
             availableAt = now(),
         )
@@ -401,9 +411,7 @@ class DefaultAppointmentNotificationWriter(
         reasonCode: CancellationReasonCode?,
         reasonDetail: String?,
     ) {
-        require(reasonDetail == null || cancellationSchemaVersion == NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION) {
-            "cancellation detail requires schema v2 producer readiness"
-        }
+        requireCancellationDetailSupported(reasonDetail)
         repository.suppressOutstandingReminders(
             tenantGroupId = TenantGroupId(notification.tenantGroupId),
             clinicId = ClinicId(notification.clinicId),
@@ -423,7 +431,7 @@ class DefaultAppointmentNotificationWriter(
                 appointmentDate = schedule.appointmentDate,
                 startTime = schedule.startTime,
                 cancellationReasonCode = reasonCode,
-                cancellationReasonDetail = reasonDetail,
+                cancellationReasonDetail = reasonDetail.takeIf { cancellationSchemaVersion == NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION },
             ),
             availableAt = now(),
         )
@@ -772,6 +780,15 @@ class DefaultAppointmentNotificationWriter(
             failureCode = NotificationFailureCode.MEMBER_DIRECTORY_UNAVAILABLE,
             message = "Verified appointment member is unavailable",
         )
+
+    private fun requireCancellationDetailSupported(reasonDetail: String?) {
+        if (reasonDetail != null && cancellationSchemaVersion != NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION) {
+            throw NotificationContractException(
+                failureCode = NotificationFailureCode.TEMPLATE_PARAMETER_INVALID,
+                message = "Cancellation detail requires notification schema v2",
+            )
+        }
+    }
 
     private data class NotificationClinic(
         val displayName: String,

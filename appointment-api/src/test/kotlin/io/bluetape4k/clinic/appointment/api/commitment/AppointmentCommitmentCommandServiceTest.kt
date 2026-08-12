@@ -940,7 +940,7 @@ internal class AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandT
                     detail[AppointmentCancellationDetails.reasonCode] shouldBeEqualTo "REFUND"
                     detail[AppointmentCancellationDetails.reasonDetail] shouldBeEqualTo
                         "결제 환불 처리로 예약을 취소합니다."
-                    detail[AppointmentCancellationDetails.commitmentId] shouldBeEqualTo held.commitment.id
+                    detail[AppointmentCancellationDetails.commitmentId].value shouldBeEqualTo held.commitment.id
                 }
         }
     }

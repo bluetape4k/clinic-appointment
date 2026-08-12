@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationC
 import io.bluetape4k.clinic.appointment.event.notification.NotificationContractException
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxContractRegistry
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttemptOutcome
 import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
@@ -108,6 +109,19 @@ class NotificationOutboxWorker(
             return handleRetryableFailure(claimed, NotificationFailureCode.TEMPLATE_PARAMETER_INVALID)
         } catch (e: RuntimeException) {
             return handleRetryableFailure(claimed, NotificationFailureCode.TEMPLATE_PARAMETER_INVALID)
+        }
+        try {
+            NotificationOutboxContractRegistry.validateStoredMetadata(
+                envelope = envelope,
+                channel = claimed.channel,
+                eventType = claimed.eventType,
+                notificationSlot = claimed.notificationSlot,
+                templateKey = claimed.templateKey,
+                templateVersion = claimed.templateVersion,
+                parameterType = claimed.parameterType,
+            )
+        } catch (e: NotificationContractException) {
+            return handleRetryableFailure(claimed, e.failureCode)
         }
         val profileResult = profileResolver.resolve(
             MemberNotificationProfileRequest(

@@ -2,6 +2,8 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentConfirmedParameters
+import io.bluetape4k.clinic.appointment.event.notification.AppointmentCancelledParameters
+import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentRescheduledParameters
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
@@ -60,6 +62,27 @@ internal class NotificationTemplateRendererTest {
         }
 
         unknown.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+    }
+
+    @Test
+    fun `catalog가 요청한 template identity와 다른 row를 반환하면 fail closed 한다`() {
+        val renderer = NotificationTemplateRenderer(
+            NotificationTemplateCatalog { _, _, channel ->
+                NotificationTemplate(
+                    key = NotificationTemplateKey("appointment.other"),
+                    version = version,
+                    channel = channel,
+                    fields = setOf("clinicDisplayName"),
+                    textTemplate = "{{clinicDisplayName}}",
+                )
+            },
+        )
+
+        val failure = assertThrows<NotificationTemplateException> {
+            renderer.render(key, version, NotificationChannelType.SMS, confirmedParameters(), profile)
+        }
+
+        failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
     }
 
     @Test
@@ -173,6 +196,42 @@ internal class NotificationTemplateRendererTest {
         sms.textBody.contains("<script>") shouldBeEqualTo true
         push.textBody.contains("<script>") shouldBeEqualTo true
         rescheduled.textBody shouldBeEqualTo "2026-08-01 2026-08-02"
+    }
+
+    @Test
+    fun `취소 template v2는 detail을 text와 HTML에서 escape하고 null이면 code-only로 렌더링한다`() {
+        val renderer = NotificationTemplateRenderer(BuiltInWaitlistNotificationTemplateCatalog)
+        val detail = "<b>일정 변경</b>"
+        val withDetail = renderer.render(
+            APPOINTMENT_CANCELLED_TEMPLATE_KEY,
+            APPOINTMENT_CANCELLED_TEMPLATE_VERSION,
+            NotificationChannelType.EMAIL,
+            AppointmentCancelledParameters(
+                clinicDisplayName = "서울클리닉",
+                appointmentDate = LocalDate.parse("2026-08-01"),
+                startTime = LocalTime.parse("09:00:00"),
+                cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
+                cancellationReasonDetail = detail,
+            ),
+            profile,
+        )
+        val withoutDetail = renderer.render(
+            APPOINTMENT_CANCELLED_TEMPLATE_KEY,
+            APPOINTMENT_CANCELLED_TEMPLATE_VERSION,
+            NotificationChannelType.EMAIL,
+            AppointmentCancelledParameters(
+                clinicDisplayName = "서울클리닉",
+                appointmentDate = LocalDate.parse("2026-08-01"),
+                startTime = LocalTime.parse("09:00:00"),
+                cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
+            ),
+            profile,
+        )
+
+        withDetail.htmlBody!!.contains("&lt;b&gt;일정 변경&lt;/b&gt;") shouldBeEqualTo true
+        withDetail.textBody.contains(detail) shouldBeEqualTo true
+        withoutDetail.textBody.contains("null") shouldBeEqualTo false
+        withoutDetail.textBody.contains("CUSTOMER_REQUEST") shouldBeEqualTo true
     }
 
     private fun renderer(channel: NotificationChannelType): NotificationTemplateRenderer =

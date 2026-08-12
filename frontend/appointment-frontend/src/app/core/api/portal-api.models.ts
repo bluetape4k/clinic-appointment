@@ -1,5 +1,14 @@
 export type CommitmentStatus = 'PROPOSED' | 'HELD' | 'CONFIRMED' | 'EXPIRED' | 'CANCELLED';
 
+export const CANCELLATION_REASON_CODES = [
+  'CUSTOMER_REQUEST',
+  'REFUND',
+  'EQUIPMENT_FAILURE',
+  'CLINIC_REQUEST',
+] as const;
+
+export type CancellationReasonCode = typeof CANCELLATION_REASON_CODES[number];
+
 export interface ConsentEvidence {
   evidenceAuthority: string;
   evidenceId: string;
@@ -33,6 +42,10 @@ export interface AppointmentProposalResponse {
   version: number;
   expiresAt: string;
   policySnapshot: AppointmentPolicySnapshot;
+  productName?: string | null;
+  sessionNumber?: number | null;
+  totalSessions?: number | null;
+  clinicDisplayName?: string | null;
 }
 
 export interface AppointmentProposalSummary {
@@ -44,6 +57,10 @@ export interface AppointmentProposalSummary {
   expired: boolean;
   representativeTreatmentName: string;
   policySnapshot: AppointmentPolicySnapshot;
+  productName?: string | null;
+  sessionNumber?: number | null;
+  totalSessions?: number | null;
+  clinicDisplayName?: string | null;
 }
 
 export interface AppointmentCommitmentResponse {
@@ -62,6 +79,11 @@ export interface ProposalDecisionRequest {
 
 export interface DeclineProposalRequest {
   reasonCode: string;
+}
+
+/** 환자 포털 취소 요청은 서버의 등록 code만 전송하며 운영자 detail은 노출하지 않는다. */
+export interface CancelAppointmentRequest {
+  reasonCode: CancellationReasonCode;
 }
 
 export interface AvailableSlot {

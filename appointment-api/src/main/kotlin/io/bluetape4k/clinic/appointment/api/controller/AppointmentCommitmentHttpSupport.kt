@@ -60,13 +60,21 @@ internal fun ActorContext.requireAdminActor(): ActorContext {
     return this
 }
 
+/** 운영자 commitment 조회는 ADMIN과 STAFF 모두 선택 clinic 범위에서 허용합니다. */
+internal fun ActorContext.requireCommitmentReadActor(): ActorContext {
+    if (actorType != ActorType.ADMIN && actorType != ActorType.STAFF) {
+        throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
+    }
+    return this
+}
+
 /** 취소만 허용되는 patient/operator role matrix를 HTTP 경계에서 재검증한다. */
 internal fun ActorContext.requireCancellationActor(reasonDetail: String?): ActorContext {
     when (actorType) {
         ActorType.PATIENT -> {
             requirePatientActor()
             if (reasonDetail != null) {
-                throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
+                throw AppointmentCommitmentApiException(AppointmentCommitmentApiError.PAYLOAD_INVALID)
             }
         }
 

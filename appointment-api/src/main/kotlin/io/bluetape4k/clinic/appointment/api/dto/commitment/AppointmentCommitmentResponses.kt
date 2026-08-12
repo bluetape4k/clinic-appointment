@@ -26,6 +26,14 @@ data class AppointmentProposalResponse(
     val version: Long,
     val expiresAt: Instant,
     val policySnapshot: AppointmentPolicySnapshotSummary,
+    /** 구매 Plan snapshot에서 읽은 환자 표시용 상품명입니다. 없으면 `null`입니다. */
+    val productName: String? = null,
+    /** 이번 방문이 단일 회차로 식별될 때의 1부터 시작하는 회차입니다. */
+    val sessionNumber: Int? = null,
+    /** Plan revision에서 계산한 전체 회차 수입니다. */
+    val totalSessions: Int? = null,
+    /** tenant·clinic scope에서 읽은 병원 표시명입니다. */
+    val clinicDisplayName: String? = null,
 ) : Serializable {
     private companion object {
         const val serialVersionUID = 1L
@@ -70,6 +78,10 @@ data class AppointmentProposalSummary(
     val expired: Boolean,
     val representativeTreatmentName: String,
     val policySnapshot: AppointmentPolicySnapshotSummary,
+    val productName: String? = null,
+    val sessionNumber: Int? = null,
+    val totalSessions: Int? = null,
+    val clinicDisplayName: String? = null,
 ) : Serializable {
     private companion object {
         const val serialVersionUID = 1L
@@ -110,6 +122,7 @@ data class AppointmentPolicySourceVersionSummary(
 internal fun AppointmentCommitmentRecord.toProposalResponse(
     proposal: AppointmentProposalRecord,
     policySnapshot: PersistedPolicySnapshotReference,
+    display: AppointmentCommitmentDisplay = AppointmentCommitmentDisplay.EMPTY,
 ): AppointmentProposalResponse =
     AppointmentProposalResponse(
         appointmentId = appointmentId,
@@ -119,24 +132,30 @@ internal fun AppointmentCommitmentRecord.toProposalResponse(
         version = version,
         expiresAt = proposal.expiresAt,
         policySnapshot = policySnapshot.toSummary(),
+        productName = display.productName,
+        sessionNumber = display.sessionNumber,
+        totalSessions = display.totalSessions,
+        clinicDisplayName = display.clinicDisplayName,
     )
 
 internal fun AppointmentCommitmentRecord.toResponse(
     proposal: AppointmentProposalRecord,
     policySnapshot: PersistedPolicySnapshotReference,
+    display: AppointmentCommitmentDisplay = AppointmentCommitmentDisplay.EMPTY,
 ): AppointmentCommitmentResponse =
     AppointmentCommitmentResponse(
         appointmentId = appointmentId,
         commitmentId = id,
         status = status,
         version = version,
-        currentProposal = proposal.toSummary(policySnapshot),
+        currentProposal = proposal.toSummary(policySnapshot, display),
         confirmedProposalId = confirmedProposalId,
         effectivePolicySnapshotId = effectivePolicySnapshotId,
     )
 
 private fun AppointmentProposalRecord.toSummary(
     policySnapshot: PersistedPolicySnapshotReference,
+    display: AppointmentCommitmentDisplay,
 ): AppointmentProposalSummary =
     AppointmentProposalSummary(
         proposalId = id,
@@ -147,7 +166,23 @@ private fun AppointmentProposalRecord.toSummary(
         expired = expiredAt != null,
         representativeTreatmentName = representativeTreatmentName,
         policySnapshot = policySnapshot.toSummary(),
+        productName = display.productName,
+        sessionNumber = display.sessionNumber,
+        totalSessions = display.totalSessions,
+        clinicDisplayName = display.clinicDisplayName,
     )
+
+/** commitment/proposal 응답에 공통으로 붙는 scope-검증된 표시 metadata입니다. */
+internal data class AppointmentCommitmentDisplay(
+    val productName: String? = null,
+    val sessionNumber: Int? = null,
+    val totalSessions: Int? = null,
+    val clinicDisplayName: String? = null,
+) {
+    internal companion object {
+        val EMPTY = AppointmentCommitmentDisplay()
+    }
+}
 
 private fun PersistedPolicySnapshotReference.toSummary(): AppointmentPolicySnapshotSummary =
     AppointmentPolicySnapshotSummary(

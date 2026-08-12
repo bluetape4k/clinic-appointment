@@ -103,7 +103,7 @@ class EventLogTest {
         val event = AppointmentDomainEvent.Cancelled(
                 appointmentId = 4L,
                 scope = scope(40L),
-                reason = "PATIENT_REQUEST"
+                reason = "CUSTOMER_REQUEST"
             )
 
         logger.onCancelled(event)
@@ -115,7 +115,7 @@ class EventLogTest {
             row[AppointmentEventLogs.eventType] shouldBeEqualTo "Cancelled"
             row[AppointmentEventLogs.entityId] shouldBeEqualTo 4L
             row[AppointmentEventLogs.clinicId] shouldBeEqualTo 40L
-            row[AppointmentEventLogs.payloadJson].contains("\"reasonCode\":\"PATIENT_REQUEST\"").shouldBeTrue()
+            row[AppointmentEventLogs.payloadJson].contains("\"reasonCode\":\"CUSTOMER_REQUEST\"").shouldBeTrue()
         }
     }
 

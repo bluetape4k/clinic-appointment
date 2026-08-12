@@ -5,6 +5,7 @@ import { Router, RouterLink } from '@angular/router';
 import { PatientLoginIdentifierKey } from '../../../core/api/patient-auth.models';
 import { TenantContextService } from '../../../core/api/tenant-context.service';
 import { PatientAuthService } from '../../../core/services/patient-auth.service';
+import { AppointmentCommitmentFacade } from '../appointment-commitment.facade';
 
 @Component({
   selector: 'app-patient-login-page',
@@ -17,6 +18,7 @@ export class PatientLoginPageComponent {
   readonly auth = inject(PatientAuthService);
   private readonly tenant = inject(TenantContextService);
   private readonly router = inject(Router);
+  private readonly commitment = inject(AppointmentCommitmentFacade);
 
   readonly identifierKeys: Array<{ key: PatientLoginIdentifierKey; label: string }> = [
     { key: 'PHONE', label: '전화번호' },
@@ -37,6 +39,7 @@ export class PatientLoginPageComponent {
         throw new Error('required');
       }
       this.tenant.setTenant(tenantCode);
+      this.commitment.resetForSessionChange();
       await this.auth.login(tenantCode, {
         identifier: { key: this.identifierKey(), value: this.identifierValue() },
         password: this.password(),

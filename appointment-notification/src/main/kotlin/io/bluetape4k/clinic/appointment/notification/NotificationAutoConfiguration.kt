@@ -79,6 +79,19 @@ class NotificationAutoConfiguration {
         NotificationSchemaReadiness(database, cryptoProperties, metricsProvider.ifAvailable)
 
     @Bean
+    @ConditionalOnMissingBean
+    fun notificationProducerSchemaReadiness(
+        properties: NotificationProperties,
+        schemaReadinessProvider: ObjectProvider<NotificationSchemaReadiness>,
+        templateCatalogProvider: ObjectProvider<NotificationTemplateCatalog>,
+    ): NotificationProducerSchemaReadiness =
+        NotificationProducerSchemaReadiness(
+            properties = properties,
+            schemaReadiness = schemaReadinessProvider.ifAvailable,
+            templateCatalog = templateCatalogProvider.ifAvailable ?: BuiltInWaitlistNotificationTemplateCatalog,
+        )
+
+    @Bean
     @ConditionalOnBean(Database::class)
     @ConditionalOnMissingBean(NotificationOutboxWorkStore::class)
     fun notificationOutboxWorkStore(
@@ -122,13 +135,16 @@ class NotificationAutoConfiguration {
     @ConditionalOnMissingBean(NotificationOutboxReadinessSource::class)
     fun notificationOutboxReadinessSource(
         readiness: NotificationSchemaReadiness,
+        producerReadiness: NotificationProducerSchemaReadiness,
     ): NotificationOutboxReadinessSource =
         NotificationOutboxReadinessSource {
-            if (readiness.check().available) {
+            val schemaReady = readiness.check().available
+            val producerReady = producerReadiness.check().available
+            if (schemaReady && producerReady) {
                 NotificationOutboxReadinessSnapshot.up()
             } else {
                 NotificationOutboxReadinessSnapshot(
-                    schema = NotificationComponentState.down("SCHEMA_NOT_READY"),
+                    schema = NotificationComponentState.down(if (schemaReady) "PRODUCER_NOT_READY" else "SCHEMA_NOT_READY"),
                     claim = NotificationComponentState.down("CLAIM_NOT_READY"),
                     keyRing = NotificationComponentState.down("KEY_RING_NOT_READY"),
                 )

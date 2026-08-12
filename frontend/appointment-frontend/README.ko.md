@@ -15,6 +15,11 @@ npm start   # http://localhost:4200
 
 API 서버(`http://localhost:8080`)가 먼저 실행되어 있어야 합니다.
 
+환자 포털의 취소는 등록된 사유 code를 한국어 label로 선택하는 code-only
+흐름입니다. 요청에는 최신 ETag와 `Idempotency-Key`가 포함되고, 성공하면
+상태 stepper가 `CANCELLED` terminal 단계로 이동합니다. 관리자·직원용 상세
+사유는 환자 포털 모델이나 완료 응답에 포함하지 않습니다.
+
 ## 사용자 흐름
 
 ![환자 예약 시나리오 시퀀스](../../docs/requirements/assets/user-scenarios-01-patient-booking-ko.png)

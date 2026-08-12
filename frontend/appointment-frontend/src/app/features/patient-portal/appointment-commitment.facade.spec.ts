@@ -1,9 +1,11 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { AppointmentCommitmentFacade } from './appointment-commitment.facade';
 import { PortalApiClient } from '../../core/api/portal-api-client';
 import { PortalApiException } from '../../core/api/portal-api-error';
+import { PatientAuthService } from '../../core/services/patient-auth.service';
 import { AppointmentCommitmentResponse, AppointmentProposalResponse, PortalResponse } from '../../core/api/portal-api.models';
 
 const proposalResponse: AppointmentProposalResponse = {
@@ -42,7 +44,9 @@ describe('AppointmentCommitmentFacade', () => {
     getCommitment: ReturnType<typeof vi.fn>;
     acceptProposal: ReturnType<typeof vi.fn>;
     declineProposal: ReturnType<typeof vi.fn>;
+    cancelAppointment: ReturnType<typeof vi.fn>;
   };
+  let auth: { session: ReturnType<typeof signal> };
 
   beforeEach(() => {
     client = {
@@ -50,8 +54,15 @@ describe('AppointmentCommitmentFacade', () => {
       getCommitment: vi.fn(),
       acceptProposal: vi.fn(),
       declineProposal: vi.fn(),
+      cancelAppointment: vi.fn(),
     };
-    TestBed.configureTestingModule({ providers: [{ provide: PortalApiClient, useValue: client }] });
+    auth = { session: signal(null) };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: PortalApiClient, useValue: client },
+        { provide: PatientAuthService, useValue: auth },
+      ],
+    });
     facade = TestBed.inject(AppointmentCommitmentFacade);
   });
 
@@ -94,6 +105,16 @@ describe('AppointmentCommitmentFacade', () => {
     expect(facade.state()).toMatchObject({ view: 'confirmed', etag: '"4"', notice: '최신 예약 상태를 불러왔습니다.' });
   });
 
+  it('ETag 충돌 후 최신 상태 조회 실패는 submitting 상태에 남지 않는다', async () => {
+    client.acceptProposal.mockRejectedValue(new PortalApiException({ kind: 'conflict', status: 412, code: 'ETAG_MISMATCH', message: '최신 상태를 확인하세요', retryAfterSeconds: null, correlationId: null }));
+    client.getCommitment.mockRejectedValue(new PortalApiException({ kind: 'retryable', status: 503, code: 'HTTP_503', message: '잠시 후 다시 시도하세요.', retryAfterSeconds: null, correlationId: null }));
+    facade.seedCommitment(42, 11, '"3"');
+
+    await expect(facade.acceptProposal({ evidence: { evidenceAuthority: 'consent:clinic-a', evidenceId: '01J1M6Y6XRK8N0W2M3P4Q5R6S7' } }, 'accept-key')).rejects.toThrow();
+
+    expect(facade.state()).toMatchObject({ view: 'error', busy: false, notice: '잠시 후 다시 시도하세요.' });
+  });
+
   it('proposal 만료는 expired view와 사용자 안내로 매핑한다', async () => {
     client.declineProposal.mockRejectedValue(new PortalApiException({ kind: 'expired', status: 410, code: 'PROPOSAL_EXPIRED', message: '제안이 만료되었습니다.', retryAfterSeconds: null, correlationId: null }));
     facade.seedCommitment(42, 11, '"3"');
@@ -101,5 +122,57 @@ describe('AppointmentCommitmentFacade', () => {
     await expect(facade.declineProposal({ reasonCode: 'CUSTOMER_REQUEST' }, 'decline-key')).rejects.toThrow();
 
     expect(facade.state()).toMatchObject({ view: 'expired', notice: '제안이 만료되었습니다.' });
+  });
+
+  it('취소 성공은 terminal cancelled view와 새 ETag를 저장한다', async () => {
+    client.cancelAppointment.mockResolvedValue({ body: { ...commitmentResponse, status: 'CANCELLED', version: 5 }, etag: '"5"', retryAfterSeconds: null });
+    facade.seedCommitment(42, 11, '"4"');
+
+    await facade.cancelAppointment({ reasonCode: 'CUSTOMER_REQUEST' }, 'cancel-key');
+
+    expect(client.cancelAppointment).toHaveBeenCalledWith(42, { reasonCode: 'CUSTOMER_REQUEST' }, 'cancel-key', '"4"');
+    expect(facade.state()).toMatchObject({ view: 'cancelled', status: 'CANCELLED', etag: '"5"', notice: '예약을 취소했습니다.' });
+  });
+
+  it('인증 주체 변경 reset은 이전 commitment와 예약 참조를 폐기한다', () => {
+    facade.seedCommitment(42, 11, '"4"');
+    sessionStorage.setItem('appointment_portal_last_id:unknown', '42');
+
+    facade.resetForSessionChange();
+
+    expect(facade.state()).toMatchObject({ view: 'idle', appointmentId: null, commitment: null, etag: null });
+    expect(sessionStorage.getItem('appointment_portal_last_id:unknown')).toBeNull();
+  });
+
+  it('session reset 뒤 늦게 도착한 기존 환자 응답은 facade 상태를 다시 채우지 않는다', async () => {
+    let resolve!: (value: PortalResponse<AppointmentCommitmentResponse>) => void;
+    client.getCommitment.mockReturnValue(new Promise<PortalResponse<AppointmentCommitmentResponse>>(done => { resolve = done; }));
+
+    const pending = facade.loadCommitment(42);
+    facade.resetForSessionChange();
+    resolve({ body: commitmentResponse, etag: '"4"', retryAfterSeconds: null });
+    await pending;
+
+    expect(facade.state()).toMatchObject({ view: 'idle', appointmentId: null, commitment: null, busy: false });
+  });
+
+  it('취소 중 빠른 중복 클릭은 한 번만 전송하고 412에서는 최신 상태만 읽는다', async () => {
+    let resolve!: (value: PortalResponse<AppointmentCommitmentResponse>) => void;
+    client.cancelAppointment.mockReturnValue(new Promise<PortalResponse<AppointmentCommitmentResponse>>(done => { resolve = done; }));
+    facade.seedCommitment(42, 11, '"4"');
+
+    const first = facade.cancelAppointment({ reasonCode: 'CUSTOMER_REQUEST' }, 'cancel-key');
+    const second = facade.cancelAppointment({ reasonCode: 'CUSTOMER_REQUEST' }, 'cancel-key');
+    expect(client.cancelAppointment).toHaveBeenCalledTimes(1);
+    resolve({ body: { ...commitmentResponse, status: 'CANCELLED', version: 5 }, etag: '"5"', retryAfterSeconds: null });
+    await Promise.all([first, second]);
+    expect(facade.state()).toMatchObject({ view: 'cancelled', status: 'CANCELLED' });
+
+    client.cancelAppointment.mockRejectedValue(new PortalApiException({ kind: 'conflict', status: 412, code: 'ETAG_MISMATCH', message: '최신 상태를 확인하세요', retryAfterSeconds: null, correlationId: null }));
+    client.getCommitment.mockResolvedValue({ body: { ...commitmentResponse, status: 'CANCELLED', version: 6 }, etag: '"6"', retryAfterSeconds: null });
+    facade.seedCommitment(42, 11, '"5"');
+    await expect(facade.cancelAppointment({ reasonCode: 'CUSTOMER_REQUEST' }, 'cancel-key')).rejects.toThrow();
+    expect(client.getCommitment).toHaveBeenCalledWith(42);
+    expect(facade.state()).toMatchObject({ view: 'cancelled', status: 'CANCELLED', etag: '"6"' });
   });
 });
