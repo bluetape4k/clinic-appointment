@@ -98,7 +98,7 @@ data class AppointmentReminderParameters(
 /**
  * 예약 취소 알림 template parameter다.
  *
- * 취소 사유는 등록된 [CancellationReasonCode]와 bounded 안내 문구만 허용한다.
+ * 취소 사유는 등록된 [CancellationReasonCode]와 서버 소유 고정 안내 문구만 허용한다.
  */
 data class AppointmentCancelledParameters(
     val clinicDisplayName: String,
@@ -114,6 +114,8 @@ data class AppointmentCancelledParameters(
     }
 
     override val parameterType: NotificationParameterType = NotificationParameterType.APPOINTMENT_CANCELLED
+
+    override fun toString(): String = "AppointmentCancelledParameters(<redacted>)"
 
     companion object {
         private const val serialVersionUID = 1L

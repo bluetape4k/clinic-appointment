@@ -91,6 +91,8 @@ class AppointmentRequestV2Test {
             "환자번호 A-1234",
             "진단명: 고혈압",
             "카드번호 4111 1111 1111 1111",
+            "홍길동 환자의 고혈압으로 예약을 취소합니다.",
+            "등록되지 않은 임의 안내 문구",
         ).forEach { sensitiveDetail ->
             assertFailsWith<IllegalArgumentException> {
                 CancelAppointmentRequest(

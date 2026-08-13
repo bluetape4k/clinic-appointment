@@ -326,7 +326,7 @@ function codecReport(mode, mix, run, metrics = {}) {
       datasetRows: 10000,
       warmupSeconds: 30,
       measureSeconds: 300,
-      detailLength: 500,
+      detailLength: 15,
       batchSize: 500,
       legacyRatio: mix === "legacy-heavy" ? 0.8 : 0.2,
       jdk: "OpenJDK Runtime Environment",

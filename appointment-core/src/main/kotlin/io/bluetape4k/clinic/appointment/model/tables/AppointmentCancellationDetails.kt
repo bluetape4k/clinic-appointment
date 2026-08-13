@@ -7,8 +7,9 @@ import org.jetbrains.exposed.v1.javatime.timestamp
 /**
  * terminal 취소의 환자 안내 문구 snapshot과 비민감 감사 metadata를 저장한다.
  *
- * 원문 actor ID·token·환자 식별자는 저장하지 않으며 bounded detail은 취소 command와
- * 같은 transaction에서만 기록한다. commitment 하나에는 terminal 취소 하나만 존재한다.
+ * 원문 actor ID·token·환자 식별자는 저장하지 않으며 서버 소유 고정 detail은 취소
+ * command와 같은 transaction에서만 기록한다. commitment 하나에는 terminal 취소
+ * 하나만 존재한다.
  */
 object AppointmentCancellationDetails : LongIdTable("scheduling_appointment_cancellation_details") {
     val tenantGroupId = reference("tenant_group_id", TenantGroups, onDelete = ReferenceOption.RESTRICT)

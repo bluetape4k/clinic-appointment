@@ -16,7 +16,7 @@
 이번 변경은 다음을 함께 제공한다.
 
 - patient actor가 `PROPOSED`, `HELD`, `CONFIRMED` 약속을 취소할 수 있는 API
-- admin/staff actor가 취소 code와 bounded 환자 안내 문구를 입력하는 API
+- admin/staff actor가 취소 code와 서버 소유 환자 안내 문구를 선택하는 API
 - 취소 상태 변경, 감사 metadata, scheduling outbox, notification outbox의
   동일 transaction 기록
 - 취소 안내 문구를 환자 알림의 typed parameter로 전달하는 notification schema
@@ -65,11 +65,10 @@ body:
 ```
 
 - `reasonCode`는 기존 uppercase business code allow-list와 동일하게 검증한다.
-- `reasonDetail`은 선택적 UTF-8 text이며 최대 500자, blank·ISO control character를
-  거부한다. 공통 registry는 email, 전화·계좌·카드형 숫자열과 환자번호·진단명·처방 등
-  민감 field marker를 거부한다. HTML·template delimiter는 renderer에서
-  escape하며, 패턴으로 식별할 수 없는 의료정보·결제정보·환자 식별자도 입력하지 않는
-  운영 규칙을 유지한다.
+- `reasonDetail`은 선택적 UTF-8 text field를 호환성상 유지하되 공통 registry가 소유한
+  고정 안내문과 exact match만 허용한다. trim·부분 일치·정규식 fallback은 사용하지 않고
+  미등록 값은 `400`으로 거부한다. 따라서 환자명·의료정보·결제정보를 포함한 임의 text는
+  durable aggregate와 notification outbox 경계에 들어갈 수 없다.
 - `ADMIN` 또는 `STAFF`만 `reasonDetail`을 보낼 수 있다. `PATIENT`가 해당 필드를 보내면
   `400`으로 거부하고, patient command에는 detail을 전달하지 않는다.
 - `ADMIN`, `STAFF`, `PATIENT` 모두 tenant path, clinic scope, commitment ownership 검사를
@@ -138,7 +137,7 @@ actor, tenant, clinic, patient subject를 선택하지 못한다.
 경합을 PostgreSQL 통합 테스트로 검증한다.
 
 새 cancellation detail table은 tenant·clinic·appointment·commitment·proposal,
-reason code, nullable bounded detail, actor role, actor scope hash, detail hash,
+reason code, nullable registered detail, actor role, actor scope hash, detail hash,
 occurredAt을 보유한다. raw actor ID, token, patient subject, phone/email은
 저장하지 않는다. commitment 하나의 terminal cancellation에 하나의 row만
 허용한다. detail hash는 audit payload hash와 notification 재현 검증에 사용한다.
@@ -158,8 +157,8 @@ rendered body의 `toString()`은 원문을 redaction하고 로그·metric·excep
 ### Notification contract v2
 
 `AppointmentCancelledParameters`에 nullable
-`cancellationReasonDetail`을 추가한다. 이 값은 같은 500자/control-character
-검증을 통과한 환자 안내 문구만 담으며 member profile, recipient name, phone,
+`cancellationReasonDetail`을 추가한다. 이 값은 같은 서버 소유 고정 안내문
+registry를 통과하며 member profile, recipient name, phone,
 email, rendered message는 계속 durable envelope에 넣지 않는다.
 
 - 새 producer는 `NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION = 2`를
@@ -288,7 +287,7 @@ legacy appointment cancellation, payment/refund, #305 history endpoint는 이
   `result`/`replay` 저카디널리티 tag를 사용한다. access resolver 이전/이후 경계를
   문서화하고 lock contention·retry exhaustion을 별도 계측한다.
 - v1/v2 notification backlog는 schema discriminator를 한 번 읽어 분기하고,
-  legacy-heavy 80/20과 current-heavy 20/80, 각 10,000건, 500자 detail fixture의
+  legacy-heavy 80/20과 current-heavy 20/80, 각 10,000건, 15자 등록 안내문 detail fixture의
   실제 codec decode throughput, p95/p99, decode failure, drain-time을 측정한다.
   synthetic fairness harness와 실제 codec benchmark를 분리하고 동일 절대/상대
   회귀 상한을 적용하며 예외 기반 fallback은 사용하지 않는다.

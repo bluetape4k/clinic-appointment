@@ -8,8 +8,10 @@ harness도 추가했다. 이전 exact head의 PR 일반 CI 22개 검사는 모�
 독립 최종 검토에서 Flyway 비활성 스키마의 취소 snapshot 테이블 누락과 cancellation
 template v1 backlog 미지원이 확인됐다. 두 항목은 회귀 테스트와 함께 로컬에서 수정했고
 repair head 재검토에서 code review는 `APPROVE`였지만 architect가 operator detail의
-PHI/PII 확산 방어가 계획과 risk register에만 남은 P1을 확인했다. 공통 registry에
-민감 식별자 패턴 차단을 추가하고 API/event decode가 같은 계약을 사용하도록 수정했으며,
+PHI/PII 확산 방어가 계획과 risk register에만 남은 P1을 확인했다. 최초 정규식 차단은
+이름+질환 조합을 막지 못해 재검토에서 다시 `BLOCK`됐다. 공통 registry를 서버 소유
+고정 안내문 exact allow-list로 축소하고 API/event decode가 같은 계약을 사용하며
+durable object의 `toString()`이 중첩 parameter를 redaction하도록 수정했으며,
 새 exact head 검증을 기다린다. 고정 window의
 baseline/candidate 3회 artifact, 보호된 backend Playwright harness, 운영 rollout
 증거는 아직 없다. 따라서 이 문서의 최종 상태는 `PENDING`이며 PR/merge 준비
@@ -17,7 +19,7 @@ baseline/candidate 3회 artifact, 보호된 backend Playwright harness, 운영 r
 
 - 검토 대상: `feat/issue-34-patient-commitment`
 - 기준: `develop` (`fe772eb4`)부터 현재 브랜치의 모든 committed implementation changes와 독립 검토 P1 repair diff
-- 범위: 환자 code-only 취소, ADMIN/STAFF bounded detail, canonical hash와
+- 범위: 환자 code-only 취소, ADMIN/STAFF registered detail, canonical hash와
   cancellation snapshot, notification v1/v2 readiness, Angular portal cancel
   flow, migration/security/observability
 - 제외: Issue #305 환자 취소 이력 조회·감사 UI
@@ -27,8 +29,8 @@ baseline/candidate 3회 artifact, 보호된 backend Playwright harness, 운영 r
 | Tier | 검토 내용 | 현재 근거 | 판정 |
 |---|---|---|---|
 | 1. 구조·의존성 | reason registry를 `appointment-core`에 두고 API/event/notification이 공통 계약을 사용한다. ServiceConfig와 NotificationAutoConfiguration의 v2 flag/readiness 경계를 연결했다. | `CancellationReasonRegistry.kt`, `ServiceConfig.kt`, `NotificationAutoConfiguration.kt` | 로컬 PASS |
-| 2. 보안·개인정보 | 취소 route의 ADMIN/STAFF/PATIENT matcher와 ownership 재검증, patient detail 차단, DB 원문·outbox hash 분리, 공통 registry의 email·전화/계좌/카드형 숫자열·민감 field marker 차단을 적용했다. 오류에는 원문을 포함하지 않고 API/event decode가 같은 계약을 사용한다. | `CancellationReasonRegistry.kt`, `AppointmentCommitmentHttpSupport.kt`, `AppointmentCommitmentAccessResolver.kt`, API/event/security tests | 로컬 PASS; 실제 IDOR fixture와 production ACL·backup·provider log 정책은 미검증 |
-| 3. API·도메인 | 폐쇄 reason code, bounded detail, ETag/idempotency, 상태 terminal 전이를 API·command·frontend에 반영했다. | DTO/command tests, OpenAPI contract, facade/page tests | 로컬 PASS |
+| 2. 보안·개인정보 | 취소 route의 ADMIN/STAFF/PATIENT matcher와 ownership 재검증, patient detail 차단, DB 원문·outbox hash 분리, 공통 registry의 서버 소유 고정 안내문 exact allow-list를 적용했다. 미등록 값·공백 변형을 거부하고 오류와 durable object `toString()`에는 원문/중첩 parameter를 포함하지 않는다. | `CancellationReasonRegistry.kt`, `AppointmentCommitmentHttpSupport.kt`, `AppointmentCommitmentAccessResolver.kt`, API/event/security tests | 로컬 PASS; 실제 IDOR fixture와 production ACL·backup·provider log 정책은 미검증 |
+| 3. API·도메인 | 폐쇄 reason code, registered detail, ETag/idempotency, 상태 terminal 전이를 API·command·frontend에 반영했다. | DTO/command tests, OpenAPI contract, facade/page tests | 로컬 PASS |
 | 4. 데이터·트랜잭션 | V27 additive migration과 cancellation detail snapshot을 상태 전환·audit/outbox 전에 같은 transaction으로 기록한다. Flyway 비활성 dev/test 초기화기도 같은 snapshot 테이블을 생성한다. | H2/PostgreSQL/MySQL migration tests, command/atomicity tests, `SchemaInitConfigTest` | 로컬 PASS; 기본 Colima Ryuk 소켓 환경은 2건 실패했으나 Ryuk 비활성 재실행에서 698건 통과 |
 | 5. 이벤트·알림 | canonical `cancel-v1\\0` codec, v1/v2 dual-read, cancellation template v1/v2, null/detail escape, 두 template의 producer readiness gate와 실제 outbox-row backlog drain harness를 구현했다. | event/notification/API tests, `NotificationCodecBacklogBenchmarkTest` | 로컬 PASS; 고정 10,000건·30초/5분 3회 성능 비교 미검증 |
 | 6. 포털·접근성 | Angular 22 client/facade와 `CANCELLED` terminal stepper, code-only confirmation, 412 single-flight를 구현했다. 로그인 주체 전환 시 facade/sessionStorage를 폐기하고 세대가 지난 비동기 응답을 차단하며, busy/stale mutation은 성공으로 오인하지 않는다. | 38개 파일·252개 Vitest tests, build, 4 Playwright tests | 로컬 PASS; protected backend harness와 320px/AT matrix 미검증 |
@@ -76,11 +78,12 @@ v2만 제공해 기존 v1 backlog가 `TEMPLATE_NOT_FOUND`로 소진될 수 있�
 v1과 v2 identity·필수 field를 함께 검증하도록 수정했다. v2-only catalog 거부와 실제
 v1 렌더링 회귀를 RED→GREEN으로 확인했다. repair head `058006f5` 재검토는 두 항목이
 닫혔음을 확인했지만 operator detail에 PHI/PII가 저장·전파될 수 있는 계획상 미완료
-P1을 새로 확인했다. API 계약은 유지하면서 `appointment-core` registry가 email,
-전화·계좌·카드형 숫자열, 환자번호·진단·처방 marker를 거부하도록 하고 API request와
-event codec의 negative test를 RED→GREEN으로 고정했다. ISO 날짜·시간 일정 문구는
-오탐하지 않는 회귀도 함께 고정했다. 이 privacy repair를 포함한 새 exact head의 독립
-재검토 전까지 merge gate는 열지 않는다.
+P1을 새로 확인했다. 첫 repair의 blacklist는 direct identifier는 막았지만
+`홍길동 환자의 고혈압` 같은 비정형 PHI를 허용해 `863c10c8` architecture 재검토에서
+다시 `BLOCK`됐다. API field 이름·type은 유지하되 `appointment-core` registry가 소유한
+고정 안내문과 exact match만 허용하고 API request·command·event codec가 이를 공유하며,
+notification parameter/envelope의 `toString()`을 redaction하는 두 번째 repair를
+RED→GREEN으로 진행한다. 새 exact head 독립 재검토 전까지 merge gate는 열지 않는다.
 
 ## 새로 확인한 검증 증거
 
@@ -93,6 +96,7 @@ event codec의 negative test를 RED→GREEN으로 고정했다. ISO 날짜·시�
 | `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' --no-daemon` | 실제 H2 outbox smoke PASS, artifact 생성 |
 | `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' --rerun-tasks -Dissue34.codec.benchmark=true -Dissue34.codec.rows=1000 -Dissue34.codec.measureSeconds=0 -Dissue34.codec.warmupSeconds=0 -Dissue34.codec.mix=current-heavy` | current-heavy wiring smoke PASS, decode failures 0 |
 | `./gradlew :appointment-notification:test --no-daemon` | 157 passing, BUILD SUCCESSFUL; cancellation v1/v2 catalog/readiness 포함 |
+| `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-core:test :appointment-event:test :appointment-notification:test --rerun-tasks --no-daemon` | core 700, event 199, notification 157 passing; exact allow-list와 durable object redaction 포함 |
 | `./gradlew :appointment-api:test --tests '*SchemaInitConfigTest*' --tests '*AppointmentCommitmentCommandServiceTest*' --tests '*AppointmentNotificationWriterTest*' --tests '*AppointmentMessagingAutoConfigurationWiringTest*' --no-daemon` | 46 passing, BUILD SUCCESSFUL; Flyway 비활성 snapshot table 포함 |
 | `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-core:test --tests '*CancellationReasonRegistryTest*' :appointment-event:test --tests '*NotificationOutboxCodecTest*' :appointment-notification:test --tests '*NotificationTemplateRendererTest*' --tests '*NotificationAutoConfigurationTest*' :appointment-api:test --tests '*AppointmentRequestV2Test*' --tests '*SchemaInitConfigTest*' --tests '*AppointmentCommitmentCommandServiceTest*' --tests '*AppointmentNotificationWriterTest*' --rerun-tasks --no-daemon` | 52 passing, BUILD SUCCESSFUL; 민감 식별자 차단·원문 비노출·정상 일정 오탐 방지 포함 |
 | `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test` (Issue #34 관련 filter) | 102 passing, BUILD SUCCESSFUL |
@@ -103,7 +107,7 @@ event codec의 negative test를 RED→GREEN으로 고정했다. ISO 날짜·시�
 | frontend `npm run build` | 성공 |
 | frontend `npm run test:e2e` | 4 passing |
 | `git diff --check` | 오류 없음 |
-| `node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs` | 9 passing, BUILD SUCCESSFUL; baseline/candidate 동일 `sourceCommit` 거부 |
+| `node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs tests/benchmarks/issue34-benchmark-chart.test.mjs` | 13 passing; baseline/candidate 동일 `sourceCommit` 거부와 15자 등록 detail chart 계약 확인 |
 | `gh pr checks 306 --repo bluetape4k/clinic-appointment` | 22 checks passing, 0 pending/failing; CI/Frontend/Visual Companion jobs completed successfully |
 
 ## 미검증·차단 항목

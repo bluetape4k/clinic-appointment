@@ -514,7 +514,7 @@ internal class ExpireAppointmentProposalCommand(
  * @property expectedVersion `If-Match`에서 파생한 현재 commitment version입니다.
  * @property expectedProposalHash caller가 조회한 현재 proposal의 canonical hash입니다.
  * @property reasonCode 자유 텍스트를 대신하는 등록된 대문자 업무 사유 code입니다.
- * @property reasonDetail 관리자·staff가 환자에게 전달할 제한된 취소 설명입니다.
+ * @property reasonDetail 관리자·staff가 선택한 서버 소유 고정 취소 안내문입니다.
  */
 internal class CancelAppointmentCommand(
     val context: CommitmentCommandContext,
