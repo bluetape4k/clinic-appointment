@@ -43,7 +43,7 @@ PR merge 상태는 `PENDING`이다.
 | warm-up 표본이 측정 결과에 섞일 수 있음 | 측정 phase 진입 시 관측치를 초기화하고, 측정 구간만 latency/error/lock-wait에 포함한다. |
 | 측정 시간이 wall clock과 traffic 시작 지연에 의존 | phase barrier와 `System.nanoTime()` span을 사용하고 최소 측정 시간을 comparator/chart가 강제한다. |
 | sampler 종료 이후 trailing query 가능 | sampling을 중지한 뒤 bounded `Future.get`으로 종료를 확인하고 종료 시각을 기록한다. JDBC query timeout과 nested cleanup도 적용한다. |
-| smoke 환경도 baseline/candidate가 같으면 통과 | dataset 100, warm-up 30초, 측정 300초, concurrency 10/20, pause 182ms 등 절대 환경 계약을 comparator와 chart가 함께 강제한다. |
+| smoke 환경도 baseline/candidate가 같으면 통과 | dataset 100, warm-up 30초, 측정 300초, concurrency 10/20, pause 1000ms 등 절대 환경 계약을 comparator와 chart가 함께 강제한다. |
 | run별 source/environment provenance가 불완전 | source commit과 전체 canonical environment를 run마다 확인하고 SHA-256 fingerprint를 독립 재계산한다. |
 | 정규식과 마지막 `]` 위치로 run JSON을 삽입 | Jackson `ObjectNode`/`ArrayNode`로 report와 run을 파싱·검증하고 배열에 구조적으로 추가한다. |
 
