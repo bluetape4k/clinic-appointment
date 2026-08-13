@@ -4,6 +4,8 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeInstanceOf
+import io.bluetape4k.assertions.shouldNotContain
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import org.junit.jupiter.api.Test
 import tools.jackson.module.kotlin.jacksonObjectMapper
@@ -251,7 +253,7 @@ class NotificationOutboxCodecTest {
                 appointmentDate = LocalDate.parse("2026-08-01"),
                 startTime = LocalTime.parse("10:30"),
                 cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
-                cancellationReasonDetail = "진료 일정 변경",
+                cancellationReasonDetail = CancellationReasonRegistry.CLINIC_SCHEDULE_CHANGED_DETAIL,
             ),
         )
         codec.decode(codec.encode(current)) shouldBeEqualTo current
@@ -270,19 +272,43 @@ class NotificationOutboxCodecTest {
                     appointmentDate = LocalDate.parse("2026-08-01"),
                     startTime = LocalTime.parse("10:30"),
                     cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
-                    cancellationReasonDetail = "진료 일정 변경",
+                    cancellationReasonDetail = CancellationReasonRegistry.CLINIC_SCHEDULE_CHANGED_DETAIL,
                 ),
             ),
         )
+        val safeDetail = CancellationReasonRegistry.CLINIC_SCHEDULE_CHANGED_DETAIL
         val sensitive = "010-1234-5678"
 
         val failure = assertFailsWith<NotificationContractException> {
-            codec.decode(safe.replace("진료 일정 변경", sensitive))
+            codec.decode(safe.replace(safeDetail, sensitive))
         }
 
         failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
         failure.message?.contains(sensitive).shouldBeFalse()
         failure.cause shouldBeEqualTo null
+    }
+
+    @Test
+    fun `durable cancellation objects redact detail and nested parameters from toString`() {
+        val detail = CancellationReasonRegistry.SCHEDULE_CHANGED_DETAIL
+        val cancellation = AppointmentCancelledParameters(
+            clinicDisplayName = "Blue Clinic",
+            appointmentDate = LocalDate.parse("2026-08-01"),
+            startTime = LocalTime.parse("10:30"),
+            cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
+            cancellationReasonDetail = detail,
+        )
+        val envelope = envelope(
+            eventType = NotificationEventType.CANCELLED,
+            notificationSlot = NotificationSlot.CANCELLED,
+            templateKey = "appointment.cancelled.sms",
+            parameterType = NotificationParameterType.APPOINTMENT_CANCELLED,
+            parameters = cancellation,
+        )
+
+        cancellation.toString().shouldNotContain(detail)
+        envelope.toString().shouldNotContain(detail)
+        envelope.toString().shouldNotContain("Blue Clinic")
     }
 
     @Test

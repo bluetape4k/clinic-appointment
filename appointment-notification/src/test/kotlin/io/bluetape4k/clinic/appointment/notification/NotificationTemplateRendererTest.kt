@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.notification
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentConfirmedParameters
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentCancelledParameters
 import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
@@ -200,9 +201,9 @@ internal class NotificationTemplateRendererTest {
     }
 
     @Test
-    fun `취소 template v2는 detail을 text와 HTML에서 escape하고 null이면 code-only로 렌더링한다`() {
+    fun `취소 template v2는 등록 detail을 렌더링하고 null이면 code-only로 렌더링한다`() {
         val renderer = NotificationTemplateRenderer(BuiltInWaitlistNotificationTemplateCatalog)
-        val detail = "<b>일정 변경</b>"
+        val detail = CancellationReasonRegistry.CLINIC_SCHEDULE_CHANGED_DETAIL
         val withDetail = renderer.render(
             APPOINTMENT_CANCELLED_TEMPLATE_KEY,
             APPOINTMENT_CANCELLED_TEMPLATE_VERSION,
@@ -229,7 +230,7 @@ internal class NotificationTemplateRendererTest {
             profile,
         )
 
-        withDetail.htmlBody.shouldNotBeNull().contains("&lt;b&gt;일정 변경&lt;/b&gt;") shouldBeEqualTo true
+        withDetail.htmlBody.shouldNotBeNull().contains(detail) shouldBeEqualTo true
         withDetail.textBody.contains(detail) shouldBeEqualTo true
         withoutDetail.textBody.contains("null") shouldBeEqualTo false
         withoutDetail.textBody.contains("CUSTOMER_REQUEST") shouldBeEqualTo true

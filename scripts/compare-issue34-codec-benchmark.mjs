@@ -90,7 +90,7 @@ function assertEnvironment(baselineRuns, candidateRuns, mix) {
   assert.equal(baselineEnvironment.datasetRows, 10_000, `${mix}: datasetRows must be 10000`);
   assert.equal(baselineEnvironment.warmupSeconds, 30, `${mix}: warmupSeconds must be 30`);
   assert.equal(baselineEnvironment.measureSeconds, 300, `${mix}: measureSeconds must be 300`);
-  assert.equal(baselineEnvironment.detailLength, 500, `${mix}: detailLength must be 500`);
+  assert.equal(baselineEnvironment.detailLength, 15, `${mix}: detailLength must be 15`);
 }
 
 function assertSourceCommits(baselineEnvironment, candidateEnvironment, mix) {

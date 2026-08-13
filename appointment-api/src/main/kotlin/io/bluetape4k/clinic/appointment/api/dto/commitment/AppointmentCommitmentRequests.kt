@@ -162,12 +162,12 @@ data class DeclineProposalRequest(
  * 병원 운영자가 가예약 또는 확정 예약을 취소할 때 기록할 업무 사유이다.
  *
  * 환불, 고객 요청, 병원 사정 같은 원인은 예약서비스가 해석하지 않고 등록 code로
- * 보존한다. 관리자·staff만 bounded 안내 문구를 추가할 수 있으며, 환자 식별자·의료·
- * 결제 상세 형태는 공통 registry에서 거부한다.
+ * 보존한다. 관리자·staff만 서버 소유 고정 안내 문구를 선택할 수 있으며 임의 text는
+ * 공통 registry에서 거부한다.
  *
  * @property reasonCode 최대 64자의 등록된 대문자 업무 code. 예: `REFUND`,
  * `CUSTOMER_REQUEST`, `EQUIPMENT_FAILURE`.
- * @property reasonDetail 관리자·staff가 환자에게 전달할 선택적 500자 저위험 안내 문구.
+ * @property reasonDetail 관리자·staff가 환자에게 전달할 선택적 서버 소유 안내 문구.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 data class CancelAppointmentRequest(
@@ -176,6 +176,15 @@ data class CancelAppointmentRequest(
     @field:Pattern(regexp = "[A-Z][A-Z0-9_]{0,63}")
     val reasonCode: String,
     @field:Size(max = CancellationReasonRegistry.MAX_DETAIL_LENGTH)
+    @field:Schema(
+        description = "서버가 소유하는 선택적 취소 안내 문구. 미등록 값은 400으로 거부합니다.",
+        allowableValues = [
+            CancellationReasonRegistry.SCHEDULE_CHANGED_DETAIL,
+            CancellationReasonRegistry.REFUND_PROCESSING_DETAIL,
+            CancellationReasonRegistry.CLINIC_SCHEDULE_CHANGED_DETAIL,
+            CancellationReasonRegistry.EQUIPMENT_MAINTENANCE_DETAIL,
+        ],
+    )
     val reasonDetail: String? = null,
 ) : StrictAppointmentCommitmentBody() {
     init {

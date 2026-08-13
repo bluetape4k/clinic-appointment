@@ -345,6 +345,11 @@ data class NotificationOutboxEnvelope(
         require(parameterType == parameters.parameterType) { "parameterType must match parameters" }
     }
 
+    override fun toString(): String =
+        "NotificationOutboxEnvelope(schemaVersion=$schemaVersion, channel=$channel, eventType=$eventType, " +
+            "notificationSlot=$notificationSlot, templateKey=$templateKey, templateVersion=$templateVersion, " +
+            "parameterType=$parameterType, identity=<redacted>, parameters=<redacted>)"
+
     companion object {
         const val LEGACY_SCHEMA_VERSION = 1
         const val CURRENT_SCHEMA_VERSION = 2

@@ -6,6 +6,7 @@ import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentApplicationService
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
@@ -109,6 +110,8 @@ class AppointmentCommitmentOpenApiTest {
         val cancelSchema = root.at("/components/schemas/CancelAppointmentRequest")
         cancelSchema.path("required").toList().map { it.stringValue() }.toSet() shouldBeEqualTo setOf("reasonCode")
         cancelSchema.path("properties").path("reasonDetail").path("maxLength").asInt() shouldBeEqualTo 500
+        cancelSchema.path("properties").path("reasonDetail").path("enum")
+            .toList().map { it.stringValue() }.toSet() shouldBeEqualTo CancellationReasonRegistry.allowedDetails
 
         val createSchema = root.at("/components/schemas/CreateAppointmentRequestV2")
         createSchema.path("required").toList().map { it.stringValue() }.toSet() shouldBeEqualTo

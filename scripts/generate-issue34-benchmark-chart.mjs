@@ -208,7 +208,7 @@ function validateCodecMetrics(report) {
   if (report.environment.datasetRows !== 10_000) throw new Error(`${context}: datasetRows must be 10000`);
   if (report.environment.warmupSeconds !== 30) throw new Error(`${context}: warmupSeconds must be 30`);
   if (report.environment.measureSeconds !== 300) throw new Error(`${context}: measureSeconds must be 300`);
-  if (report.environment.detailLength !== 500) throw new Error(`${context}: detailLength must be 500`);
+  if (report.environment.detailLength !== 15) throw new Error(`${context}: detailLength must be 15`);
   const metrics = report.metrics;
   if (!metrics || typeof metrics !== "object") throw new Error(`${context}: metrics are required`);
   nonNegative(metrics.throughputRowsPerSecond, `${context}: throughputRowsPerSecond`);
@@ -433,7 +433,7 @@ function renderCodecLatency(codec) {
   }
   return renderComparisonChart({
     title: "Issue #34 알림 codec latency",
-    subtitle: "legacy-heavy/current-heavy · 10,000 rows · detail 500자 · warm-up 30초 · 측정 300초",
+    subtitle: "legacy-heavy/current-heavy · 10,000 rows · 등록 detail 15자 · warm-up 30초 · 측정 300초",
     note: "benchmark 근거이며 배포 SLO가 아니다. decode p95/p99와 drain time은 ms 단위이며 낮을수록 좋다.",
     unit: "밀리초 (ms)",
     metrics: metrics.map(([label]) => [label, label]),
@@ -448,7 +448,7 @@ function renderCodecThroughput(codec) {
   const candidate = Object.fromEntries(MIXES.map((mix) => [mix, codec.byMix[mix].candidateMedian.throughputRowsPerSecond]));
   return renderComparisonChart({
     title: "Issue #34 알림 codec throughput",
-    subtitle: "legacy-heavy/current-heavy · 10,000 rows · detail 500자 · warm-up 30초 · 측정 300초",
+    subtitle: "legacy-heavy/current-heavy · 10,000 rows · 등록 detail 15자 · warm-up 30초 · 측정 300초",
     note: "benchmark 근거이며 배포 SLO가 아니다. 처리량은 초당 decoded row 수이며 높을수록 좋다.",
     unit: "처리량 (rows/s)",
     metrics: MIXES.map((mix) => [mix, mix]),

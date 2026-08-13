@@ -24,16 +24,19 @@ class CancellationReasonRegistryTest {
     }
 
     @Test
-    fun `canonical hash distinguishes null unicode and delimiter detail without normalization`() {
+    fun `canonical hash distinguishes null and registered unicode detail`() {
         val codeOnly = CancellationReasonRegistry.canonicalHashHex("CUSTOMER_REQUEST", null)
-        val nonEmpty = CancellationReasonRegistry.canonicalHashHex("CUSTOMER_REQUEST", "a")
-        val delimiter = CancellationReasonRegistry.canonicalHashHex("CUSTOMER_REQUEST", "a|b")
-        val unicode = CancellationReasonRegistry.canonicalHashHex("CUSTOMER_REQUEST", "가나다")
-        val decomposed = CancellationReasonRegistry.canonicalHashHex("CUSTOMER_REQUEST", "가나다")
+        val scheduleChanged = CancellationReasonRegistry.canonicalHashHex(
+            "CUSTOMER_REQUEST",
+            CancellationReasonRegistry.SCHEDULE_CHANGED_DETAIL,
+        )
+        val refundProcessing = CancellationReasonRegistry.canonicalHashHex(
+            "CUSTOMER_REQUEST",
+            CancellationReasonRegistry.REFUND_PROCESSING_DETAIL,
+        )
 
-        codeOnly shouldNotBeEqualTo nonEmpty
-        delimiter shouldNotBeEqualTo codeOnly
-        unicode shouldNotBeEqualTo decomposed
+        codeOnly shouldNotBeEqualTo scheduleChanged
+        scheduleChanged shouldNotBeEqualTo refundProcessing
         codeOnly.length shouldBeEqualTo 64
     }
 
@@ -46,6 +49,10 @@ class CancellationReasonRegistryTest {
             "환자번호 A-1234",
             "진단명: 고혈압",
             "카드번호 4111 1111 1111 1111",
+            "홍길동 환자의 고혈압으로 예약을 취소합니다.",
+            "서울시 강남구 주소로 안내해 주세요.",
+            "진료 일정이 변경되었습니다. ",
+            "등록되지 않은 임의 안내 문구",
         )
 
         sensitiveDetails.forEach { detail ->
@@ -58,12 +65,9 @@ class CancellationReasonRegistryTest {
     }
 
     @Test
-    fun `cancellation detail accepts low risk schedule guidance`() {
-        CancellationReasonRegistry.requireDetail("진료 일정이 변경되어 예약을 취소합니다.") shouldBeEqualTo
-            "진료 일정이 변경되어 예약을 취소합니다."
-        CancellationReasonRegistry.requireDetail("결제 환불 처리로 예약을 취소합니다.") shouldBeEqualTo
-            "결제 환불 처리로 예약을 취소합니다."
-        CancellationReasonRegistry.requireDetail("2026-08-13 10:30 일정으로 변경합니다.") shouldBeEqualTo
-            "2026-08-13 10:30 일정으로 변경합니다."
+    fun `cancellation detail accepts only server owned guidance`() {
+        CancellationReasonRegistry.allowedDetails.forEach { detail ->
+            CancellationReasonRegistry.requireDetail(detail) shouldBeEqualTo detail
+        }
     }
 }
