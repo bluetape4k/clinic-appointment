@@ -4,9 +4,10 @@
 
 현재 구현은 로컬 모듈 검증과 포털 단위·브라우저 계약까지 통과했고,
 PostgreSQL 취소 성능 lane과 실제 mixed-schema backlog benchmark의 실행
-harness도 추가했다. 그러나 고정 window의 baseline/candidate 3회 artifact,
-보호된 backend Playwright harness, 운영 rollout 증거는 아직 없다. 따라서 이
-문서의 최종 상태는 `PENDING`이며 PR/merge 준비 상태로 승격하지 않는다.
+harness도 추가했다. PR 일반 CI 22개 검사는 모두 통과했지만, 고정 window의
+baseline/candidate 3회 artifact, 보호된 backend Playwright harness, 운영 rollout
+증거는 아직 없다. 따라서 이 문서의 최종 상태는 `PENDING`이며 PR/merge 준비
+상태로 승격하지 않는다.
 
 - 검토 대상: `feat/issue-34-patient-commitment`
 - 기준: `develop` (`fe772eb4`)부터 현재 브랜치의 모든 committed implementation changes이며, 검토 시점 worktree는 clean 상태
@@ -25,7 +26,7 @@ harness도 추가했다. 그러나 고정 window의 baseline/candidate 3회 arti
 | 4. 데이터·트랜잭션 | V27 additive migration과 cancellation detail snapshot을 상태 전환·audit/outbox 전에 같은 transaction으로 기록한다. | H2/PostgreSQL/MySQL migration tests, command/atomicity tests | 로컬 PASS; 기본 Colima Ryuk 소켓 환경은 2건 실패했으나 Ryuk 비활성 재실행에서 698건 통과 |
 | 5. 이벤트·알림 | canonical `cancel-v1\\0` codec, v1/v2 dual-read, cancellation template v2, null/detail escape, producer readiness gate와 실제 outbox-row backlog drain harness를 구현했다. | event/notification/API tests, `NotificationCodecBacklogBenchmarkTest` | 로컬 PASS; 고정 10,000건·30초/5분 3회 성능 비교 미검증 |
 | 6. 포털·접근성 | Angular 22 client/facade와 `CANCELLED` terminal stepper, code-only confirmation, 412 single-flight를 구현했다. 로그인 주체 전환 시 facade/sessionStorage를 폐기하고 세대가 지난 비동기 응답을 차단하며, busy/stale mutation은 성공으로 오인하지 않는다. | 38개 파일·252개 Vitest tests, build, 4 Playwright tests | 로컬 PASS; protected backend harness와 320px/AT matrix 미검증 |
-| 7. 테스트·운영·성능 | 모듈별 검증과 diff hygiene, PostgreSQL cancel/codec smoke wiring은 통과했으나 계획된 30초 warm-up/5분 고정 window의 baseline/candidate artifact·CI와 보호된 backend gate가 없다. | 아래 증거 목록 | PENDING |
+| 7. 테스트·운영·성능 | 모듈별 검증과 diff hygiene, PostgreSQL cancel/codec smoke wiring, PR 일반 CI는 통과했으나 계획된 30초 warm-up/5분 고정 window의 baseline/candidate artifact와 보호된 backend gate가 없다. | 아래 증거 목록 | PENDING |
 
 ## 독립 검토 결과
 
@@ -81,6 +82,7 @@ decline/cancel/412 refresh의 성공·오류·`finally`가 세대를 비교한�
 | frontend `npm run test:e2e` | 4 passing |
 | `git diff --check` | 오류 없음 |
 | `node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs` | 7 passing, BUILD SUCCESSFUL |
+| `gh pr checks 306 --repo bluetape4k/clinic-appointment` | 22 checks passing, 0 pending/failing; CI/Frontend/Visual Companion jobs completed successfully |
 
 ## 미검증·차단 항목
 
@@ -102,8 +104,12 @@ decline/cancel/412 refresh의 성공·오류·`finally`가 세대를 비교한�
 - P2: 0 (architect 재검토 기준)
 - Architectural Status: `CLEAR`
 - 최종: `PENDING`
-- PR/merge: 성능·보호된 외부 gate가 충족될 때까지 대기
+- PR CI: 22/22 checks PASS; 독립 review thread와 성능·보호된 외부 gate는 미완료
+- PR/merge: 성능·보호된 외부 gate와 독립 review가 충족될 때까지 대기
 
-성능 artifact가 없는 상태에서 merge blocker를 우회하지 않는다. 다음 실행은
-계획 Task 7의 PostgreSQL 취소 simulation과 실제 codec backlog benchmark를
-동일 환경에서 3회 실행해 comparator evidence를 남기는 것이다.
+성능 artifact가 없는 상태에서 merge blocker를 우회하지 않는다. `issue34.mode`는
+현재 report metadata만 바꾸므로 동일 코드 경로를 baseline/candidate로 반복 실행한
+결과는 pre-change 근거가 아니다. 다음 실행은 실제 pre-change 구현 또는 승인된
+baseline artifact를 확보한 뒤 계획 Task 7의 PostgreSQL 취소 simulation과 실제
+codec backlog benchmark를 동일 환경에서 3회 실행해 comparator evidence를 남기는
+것이다.
