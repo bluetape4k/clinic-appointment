@@ -196,6 +196,14 @@ test("Issue #34 chart generator rejects codec reports without a fixed environmen
   }
 });
 
+test("root Gradle test task forwards sourceCommit to codec benchmark JVM", async () => {
+  const buildScript = await readFile(path.join(repositoryRoot, "build.gradle.kts"), "utf8");
+  assert.match(
+    buildScript,
+    /listOf\([\s\S]*"issue34\.codec\.artifact"[\s\S]*"issue34\.sourceCommit"[\s\S]*\)\.forEach/,
+  );
+});
+
 function cancelReport(mode, p95 = 100, p99 = 200, lockWaitP95 = 20) {
   return {
     schemaVersion: 1,
