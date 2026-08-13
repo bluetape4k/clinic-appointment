@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(import.meta.dirname, "../..");
 const generator = path.join(repositoryRoot, "scripts/generate-issue34-benchmark-chart.mjs");
 
-test("Issue #34 chart generator writes SVG panels and a measured Korean analysis", async () => {
+test("Issue #34 chart generator uses monotonic spans for SVG panels and measured Korean analysis", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "issue-34-chart-"));
   try {
     const baselineCancel = path.join(root, "cancel-baseline.json");
@@ -20,8 +21,13 @@ test("Issue #34 chart generator writes SVG panels and a measured Korean analysis
     const output = path.join(root, "charts");
     await mkdir(baselineCodec, { recursive: true });
     await mkdir(candidateCodec, { recursive: true });
-    await writeFile(baselineCancel, JSON.stringify(cancelReport("baseline")));
-    await writeFile(candidateCancel, JSON.stringify(cancelReport("candidate", 105, 210, 21)));
+    const baselineReport = cancelReport("baseline");
+    const candidateReport = cancelReport("candidate", 105, 210, 21);
+    for (const run of [...baselineReport.runs, ...candidateReport.runs]) {
+      run.measurementEndedAtEpochMillis = 401_000;
+    }
+    await writeFile(baselineCancel, JSON.stringify(baselineReport));
+    await writeFile(candidateCancel, JSON.stringify(candidateReport));
 
     for (const mode of ["baseline", "candidate"]) {
       const directory = mode === "baseline" ? baselineCodec : candidateCodec;
@@ -82,6 +88,8 @@ test("Issue #34 chart generator writes SVG panels and a measured Korean analysis
     assert.match(analysis, /lock-wait 표본 신뢰도/);
     assert.match(analysis, /run1=30, run2=30, run3=30/);
     assert.match(analysis, /run1=300000ms, run2=300000ms, run3=300000ms/);
+    assert.match(analysis, /pauseMillis.*1000ms/);
+    assert.match(analysis, /SYSTEM_NANO_TIME/);
     assert.match(analysis, /조회 실패를 `0 ms`로 해석하지 않는다/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -99,7 +107,7 @@ test("Issue #34 chart generator rejects a same-commit comparison before writing 
     await mkdir(candidateCodec, { recursive: true });
     await writeFile(baselineCancel, JSON.stringify(cancelReport("baseline")));
     const sameCommit = cancelReport("candidate");
-    sameCommit.environment.sourceCommit = "pre-change-commit";
+    setCancelSourceCommit(sameCommit, "pre-change-commit");
     await writeFile(candidateCancel, JSON.stringify(sameCommit));
 
     for (const mode of ["baseline", "candidate"]) {
@@ -244,6 +252,32 @@ test("Issue #34 chart generator rejects a mixed cancel run environment", async (
   }
 });
 
+test("Issue #34 chart generator rejects a stale canonical environment fingerprint", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-chart-fingerprint-"));
+  try {
+    const candidate = cancelReport("candidate");
+    candidate.environment.environmentFingerprint = "stale-environment-fingerprint";
+    for (const run of candidate.runs) {
+      run.environmentFingerprint = "stale-environment-fingerprint";
+      run.environment.environmentFingerprint = "stale-environment-fingerprint";
+    }
+    await assertGeneratorRejectsCancelReport(root, candidate, /canonical SHA-256/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Issue #34 chart generator rejects a mixed cancel request pause", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-chart-run-pause-"));
+  try {
+    const candidate = cancelReport("candidate");
+    candidate.runs[1].environment.pauseMillis = 0;
+    await assertGeneratorRejectsCancelReport(root, candidate, /environment key pauseMillis/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Issue #34 chart generator rejects a short cancel measurement span", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "issue-34-chart-measurement-span-"));
   try {
@@ -328,13 +362,14 @@ function cancelReport(mode, p95 = 100, p99 = 200, lockWaitP95 = 20) {
     measureSeconds: 300,
     sameAppointmentConcurrency: 10,
     differentAppointmentConcurrency: 20,
+    pauseMillis: 1_000,
     seed: 34,
     postgresqlImage: "postgres:18-alpine",
     jdk: "OpenJDK Runtime Environment",
     vm: "OpenJDK 64-Bit Server VM",
     sourceCommit: mode === "baseline" ? "pre-change-commit" : "candidate-commit",
-    environmentFingerprint: `${mode}-environment-fingerprint`,
   };
+  environment.environmentFingerprint = cancelEnvironmentFingerprint(environment);
   return {
     schemaVersion: 1,
     benchmark: "issue-34-patient-appointment-cancel",
@@ -348,6 +383,7 @@ function cancelReport(mode, p95 = 100, p99 = 200, lockWaitP95 = 20) {
       measurementStartedAtEpochMillis: 1_000,
       measurementEndedAtEpochMillis: 301_000,
       measurementSpanMillis: 300_000,
+      measurementClock: "SYSTEM_NANO_TIME",
       cancelP95Millis: p95,
       cancelP99Millis: p99,
       unexpectedErrorRate: 0.001,
@@ -362,6 +398,21 @@ function cancelReport(mode, p95 = 100, p99 = 200, lockWaitP95 = 20) {
       scenarioMismatchRate: 0,
     })),
   };
+}
+
+function cancelEnvironmentFingerprint(environment) {
+  return createHash("sha256").update(JSON.stringify(environment)).digest("hex");
+}
+
+function setCancelSourceCommit(report, sourceCommit) {
+  report.environment.sourceCommit = sourceCommit;
+  delete report.environment.environmentFingerprint;
+  report.environment.environmentFingerprint = cancelEnvironmentFingerprint(report.environment);
+  for (const run of report.runs) {
+    run.sourceCommit = sourceCommit;
+    run.environment = { ...report.environment };
+    run.environmentFingerprint = report.environment.environmentFingerprint;
+  }
 }
 
 function codecReport(mode, mix, run) {

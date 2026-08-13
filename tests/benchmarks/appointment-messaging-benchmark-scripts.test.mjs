@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -92,13 +93,18 @@ test("consumer collector preserves throughput and contention measurements", asyn
   }
 });
 
-test("issue 34 comparator accepts three-run artifacts within the regression budget", async () => {
+test("issue 34 comparator accepts monotonic spans independent of audit timestamps", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
   try {
     const baseline = path.join(root, "baseline.json");
     const candidate = path.join(root, "candidate.json");
-    await writeFile(baseline, JSON.stringify(issue34Report(100, 200, 20, 0.1, 0.01, 0, "baseline")));
-    await writeFile(candidate, JSON.stringify(issue34Report(105, 210, 21, 0.001, 0.0001)));
+    const baselineReport = issue34Report(100, 200, 20, 0.1, 0.01, 0, "baseline");
+    const candidateReport = issue34Report(105, 210, 21, 0.001, 0.0001);
+    for (const run of [...baselineReport.runs, ...candidateReport.runs]) {
+      run.measurementEndedAtEpochMillis = 401_000;
+    }
+    await writeFile(baseline, JSON.stringify(baselineReport));
+    await writeFile(candidate, JSON.stringify(candidateReport));
 
     const result = await execFileAsync(issue34Comparator, [baseline, candidate], {
       cwd: repositoryRoot,
@@ -160,7 +166,7 @@ test("issue 34 comparator rejects baseline and candidate from the same source co
     const candidate = path.join(root, "candidate.json");
     const baselineReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline");
     const candidateReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "candidate");
-    candidateReport.environment.sourceCommit = baselineReport.environment.sourceCommit;
+    setIssue34SourceCommit(candidateReport, baselineReport.environment.sourceCommit);
     await writeFile(baseline, JSON.stringify(baselineReport));
     await writeFile(candidate, JSON.stringify(candidateReport));
 
@@ -287,6 +293,17 @@ test("issue 34 cancel load synchronizes phase boundaries before measurement and 
   assert.match(fixture, /CyclicBarrier/);
   assert.match(fixture, /measurementStartedAtEpochMillis/);
   assert.match(fixture, /measurementEndedAtEpochMillis/);
+  assert.match(fixture, /measurementStartedAtNanos/);
+  assert.match(fixture, /measurementEndedAtNanos/);
+  assert.match(fixture, /TimeUnit\.NANOSECONDS\.toMillis/);
+  assert.match(fixture, /stopLockWaitSampling\(\)[\s\S]*measurementEndedAtEpochMillis\.compareAndSet/);
+  assert.match(fixture, /get\(SAMPLER_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit\.SECONDS\)/);
+  assert.match(fixture, /queryTimeout = LOCK_WAIT_QUERY_TIMEOUT_SECONDS/);
+  assert.match(fixture, /issue34\.pauseMillis/);
+  assert.match(
+    fixture,
+    /override fun close\(\) \{\s*try \{\s*stopLockWaitSampling\(\)\s*} finally \{\s*samplerExecutor\.shutdownNow\(\)\s*try \{\s*awaitTermination\(replacementExecutor\)\s*} finally \{\s*awaitTermination\(contentionExecutor\)/,
+  );
   assert.doesNotMatch(fixture, /measurementStartsAtNanos/);
 });
 
@@ -315,6 +332,58 @@ test("issue 34 comparator rejects a run from a different environment fingerprint
       (error) => {
         assert.notEqual(error.code, 0);
         assert.match(`${error.stdout}\n${error.stderr}`, /environmentFingerprint/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("issue 34 comparator rejects a stale canonical environment fingerprint", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    const baselineReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline");
+    const candidateReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "candidate");
+    candidateReport.environment.environmentFingerprint = "stale-environment-fingerprint";
+    for (const run of candidateReport.runs) {
+      run.environmentFingerprint = "stale-environment-fingerprint";
+      run.environment.environmentFingerprint = "stale-environment-fingerprint";
+    }
+    await writeFile(baseline, JSON.stringify(baselineReport));
+    await writeFile(candidate, JSON.stringify(candidateReport));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /canonical SHA-256/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("issue 34 comparator rejects a run with a different request pause", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    const baselineReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline");
+    const candidateReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "candidate");
+    candidateReport.runs[1].environment.pauseMillis = 0;
+    await writeFile(baseline, JSON.stringify(baselineReport));
+    await writeFile(candidate, JSON.stringify(candidateReport));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /pauseMillis/);
         return true;
       },
     );
@@ -473,6 +542,7 @@ function issue34Report(
       measurementStartedAtEpochMillis: 1_000,
       measurementEndedAtEpochMillis: 301_000,
       measurementSpanMillis: 300_000,
+      measurementClock: "SYSTEM_NANO_TIME",
       cancelP95Millis: p95,
       cancelP99Millis: p99,
       unexpectedErrorRate,
@@ -490,19 +560,36 @@ function issue34Report(
 }
 
 function issue34Environment(mode) {
-  return {
+  const environment = {
     datasetAppointments: 100,
     warmupSeconds: 30,
     measureSeconds: 300,
     sameAppointmentConcurrency: 10,
     differentAppointmentConcurrency: 20,
+    pauseMillis: 1_000,
     seed: 34,
     postgresqlImage: "postgres:18-alpine",
     jdk: "OpenJDK Runtime Environment",
     vm: "OpenJDK 64-Bit Server VM",
     sourceCommit: mode === "baseline" ? "pre-change-commit" : "candidate-commit",
-    environmentFingerprint: `${mode}-environment-fingerprint`,
   };
+  environment.environmentFingerprint = issue34EnvironmentFingerprint(environment);
+  return environment;
+}
+
+function issue34EnvironmentFingerprint(environment) {
+  return createHash("sha256").update(JSON.stringify(environment)).digest("hex");
+}
+
+function setIssue34SourceCommit(report, sourceCommit) {
+  report.environment.sourceCommit = sourceCommit;
+  delete report.environment.environmentFingerprint;
+  report.environment.environmentFingerprint = issue34EnvironmentFingerprint(report.environment);
+  for (const run of report.runs) {
+    run.sourceCommit = sourceCommit;
+    run.environment = { ...report.environment };
+    run.environmentFingerprint = report.environment.environmentFingerprint;
+  }
 }
 
 function codecReport(mode, mix, run, metrics = {}) {

@@ -7,6 +7,7 @@ if [[ $# -ne 2 ]]; then
 fi
 
 node --input-type=module - "$@" <<'NODE'
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 const [baselinePath, candidatePath] = process.argv.slice(2);
@@ -16,6 +17,7 @@ const ENVIRONMENT_KEYS = [
   "measureSeconds",
   "sameAppointmentConcurrency",
   "differentAppointmentConcurrency",
+  "pauseMillis",
   "seed",
   "postgresqlImage",
   "jdk",
@@ -96,6 +98,7 @@ function validateExpectedEnvironment(environment, label) {
     measureSeconds: 300,
     sameAppointmentConcurrency: 10,
     differentAppointmentConcurrency: 20,
+    pauseMillis: 1000,
   };
   for (const [key, value] of Object.entries(expected)) {
     if (environment[key] !== value) throw new Error(`${label} environment ${key} must be ${value}`);
@@ -124,11 +127,11 @@ function validateRunEvidence(run, environment, label) {
   const measurementStartedAt = integer(run.measurementStartedAtEpochMillis, `${label} measurementStartedAtEpochMillis`);
   const measurementEndedAt = integer(run.measurementEndedAtEpochMillis, `${label} measurementEndedAtEpochMillis`);
   const measurementSpan = integer(run.measurementSpanMillis, `${label} measurementSpanMillis`);
+  if (run.measurementClock !== "SYSTEM_NANO_TIME") {
+    throw new Error(`${label} measurementClock must be SYSTEM_NANO_TIME`);
+  }
   if (measurementStartedAt <= 0 || measurementEndedAt <= measurementStartedAt) {
     throw new Error(`${label} measurement timestamps must form a positive interval`);
-  }
-  if (measurementSpan !== measurementEndedAt - measurementStartedAt) {
-    throw new Error(`${label} measurementSpanMillis must equal end - start`);
   }
   const configuredSpan = environment.measureSeconds * 1000;
   if (measurementSpan < configuredSpan * 0.95 || measurementSpan > configuredSpan * 1.05) {
@@ -163,6 +166,13 @@ function validateEnvironment(baseline, candidate) {
 function validateEnvironmentFingerprint(environment, label) {
   if (typeof environment.environmentFingerprint !== "string" || environment.environmentFingerprint.trim() === "") {
     throw new Error(`${label} environmentFingerprint is required`);
+  }
+  const canonicalEnvironment = Object.fromEntries(
+    [...ENVIRONMENT_KEYS, "sourceCommit"].map((key) => [key, environment[key]]),
+  );
+  const expected = createHash("sha256").update(JSON.stringify(canonicalEnvironment)).digest("hex");
+  if (environment.environmentFingerprint !== expected) {
+    throw new Error(`${label} environmentFingerprint must match the canonical SHA-256`);
   }
 }
 
