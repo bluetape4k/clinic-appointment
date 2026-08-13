@@ -16,6 +16,7 @@ import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
 import io.bluetape4k.clinic.appointment.api.security.SchedulingRole
 import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
 import io.bluetape4k.clinic.appointment.api.service.AppointmentCommitmentApplicationService
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -104,7 +105,7 @@ class AdminAppointmentV2Test {
     }
 
     @Test
-    fun `staff cancellation accepts bounded operator detail`() {
+    fun `staff cancellation accepts registered operator detail`() {
         val service = FakeAppointmentCommitmentApplicationService()
         val controller = AdminAppointmentController(service, ActorContextResolver())
 
@@ -115,7 +116,10 @@ class AdminAppointmentV2Test {
             id = 11L,
             idempotencyKey = "cancel_01J1M6Y6XRK8N0W2M3P4Q5R6S8",
             ifMatch = "\"1\"",
-            request = CancelAppointmentRequest("CLINIC_REQUEST", "병원 운영 사정으로 예약을 취소합니다."),
+            request = CancelAppointmentRequest(
+                reasonCode = "CLINIC_REQUEST",
+                reasonDetail = CancellationReasonRegistry.CLINIC_SCHEDULE_CHANGED_DETAIL,
+            ),
         )
 
         response.statusCode shouldBeEqualTo HttpStatus.OK
@@ -145,7 +149,10 @@ class AdminAppointmentV2Test {
                 id = 11L,
                 idempotencyKey = "cancel_01J1M6Y6XRK8N0W2M3P4Q6",
                 ifMatch = "\"1\"",
-                request = CancelAppointmentRequest("CUSTOMER_REQUEST", "환자 입력 문구"),
+                request = CancelAppointmentRequest(
+                    reasonCode = "CUSTOMER_REQUEST",
+                    reasonDetail = CancellationReasonRegistry.SCHEDULE_CHANGED_DETAIL,
+                ),
             )
         }
         exception.error shouldBeEqualTo AppointmentCommitmentApiError.PAYLOAD_INVALID
