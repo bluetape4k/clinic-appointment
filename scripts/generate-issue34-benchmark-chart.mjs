@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -13,6 +14,7 @@ const CANCEL_ENVIRONMENT_KEYS = [
   "measureSeconds",
   "sameAppointmentConcurrency",
   "differentAppointmentConcurrency",
+  "pauseMillis",
   "seed",
   "postgresqlImage",
   "jdk",
@@ -185,6 +187,7 @@ function validateCancelReport(report, expectedMode) {
   if (report.environment.differentAppointmentConcurrency !== 20) {
     throw new Error("cancel differentAppointmentConcurrency must be 20");
   }
+  if (report.environment.pauseMillis !== 1_000) throw new Error("cancel pauseMillis must be 1000");
   for (const run of report.runs) {
     if (run.sourceCommit !== report.environment.sourceCommit) {
       throw new Error(`cancel ${expectedMode} run ${run.run}: run sourceCommit must match its report environment`);
@@ -248,14 +251,23 @@ function validateEnvironmentFingerprint(environment, label) {
   if (typeof environment.environmentFingerprint !== "string" || environment.environmentFingerprint.trim() === "") {
     throw new Error(`${label}: environmentFingerprint is required`);
   }
+  const canonicalEnvironment = Object.fromEntries(
+    [...CANCEL_ENVIRONMENT_KEYS, "sourceCommit"].map((key) => [key, environment[key]]),
+  );
+  const expected = createHash("sha256").update(JSON.stringify(canonicalEnvironment)).digest("hex");
+  if (environment.environmentFingerprint !== expected) {
+    throw new Error(`${label}: environmentFingerprint must match the canonical SHA-256`);
+  }
 }
 
 function validateMeasurementWindow(run, environment, label) {
   const startedAt = nonNegativeInteger(run.measurementStartedAtEpochMillis, `${label} measurementStartedAtEpochMillis`);
   const endedAt = nonNegativeInteger(run.measurementEndedAtEpochMillis, `${label} measurementEndedAtEpochMillis`);
   const span = nonNegativeInteger(run.measurementSpanMillis, `${label} measurementSpanMillis`);
+  if (run.measurementClock !== "SYSTEM_NANO_TIME") {
+    throw new Error(`${label}: measurementClock must be SYSTEM_NANO_TIME`);
+  }
   if (startedAt <= 0 || endedAt <= startedAt) throw new Error(`${label}: measurement timestamps must form a positive interval`);
-  if (span !== endedAt - startedAt) throw new Error(`${label}: measurementSpanMillis must equal end - start`);
   const configuredSpan = environment.measureSeconds * 1000;
   if (span < configuredSpan * 0.95 || span > configuredSpan * 1.05) {
     throw new Error(`${label}: measurementSpanMillis must stay within 95%-105% of the configured window`);
@@ -403,6 +415,9 @@ function buildSummary(cancel, codec, inputs) {
   const cancelSummary = {
     baseline: cancel.baselineMedian,
     candidate: cancel.candidateMedian,
+    environment: Object.fromEntries(
+      CANCEL_ENVIRONMENT_KEYS.map((key) => [key, cancel.candidate.environment[key]]),
+    ),
     lockWaitSampling: {
       baseline: cancel.baseline.runs.map(lockWaitSamplingEvidence),
       candidate: cancel.candidate.runs.map(lockWaitSamplingEvidence),
@@ -633,6 +648,7 @@ function renderAnalysis(summary) {
 - 배포 SLO 증거: \`${summary.deploymentSloEvidence ? "true" : "false"}\`
 - 취소 sourceCommit: baseline \`${summary.sourceCommits.cancel.baseline}\` → candidate \`${summary.sourceCommits.cancel.candidate}\`
 - codec sourceCommit: legacy-heavy \`${summary.sourceCommits.codec["legacy-heavy"].baseline}\` → \`${summary.sourceCommits.codec["legacy-heavy"].candidate}\`, current-heavy도 같은 provenance를 사용한다.
+- 취소 측정 환경: \`${cancel.environment.postgresqlImage}\`, concurrency \`${cancel.environment.sameAppointmentConcurrency}/${cancel.environment.differentAppointmentConcurrency}\`, \`pauseMillis=${cancel.environment.pauseMillis}ms\`, 측정 clock \`SYSTEM_NANO_TIME\`.
 - 모든 결과는 각 mode의 3회 측정 median이다.
 
 ## PostgreSQL 환자 예약 취소
@@ -675,7 +691,7 @@ ${checkLines}
 
 - \`expectedConflictRate\`와 \`expectedRetryExhaustionRate\`는 고정 arrival mix의 의도한 결과다. 오류율과 retry exhaustion gate의 분모에서 제외한다.
 - 모든 취소 run은 30개 virtual user가 전역 start barrier를 통과한 뒤 측정 요청과 lock-wait sampling을 시작하고, 전역 end barrier에서 함께 닫아야 한다.
-- 매 run은 report 환경의 전체 snapshot과 SHA-256 \`environmentFingerprint\`를 보존하고, 측정 span은 설정한 window의 95%-105% 범위여야 한다.
+- 매 run은 report 환경의 전체 snapshot과 SHA-256 \`environmentFingerprint\`를 보존하고, \`pauseMillis\`를 포함해 같아야 한다. 측정 span은 \`SYSTEM_NANO_TIME\` 기준으로 설정한 window의 95%-105% 범위여야 한다.
 - 모든 취소 run은 lock-wait query를 한 번 이상 성공해야 하고 실패 수가 0이어야 한다. warm-up query나 조회 실패를 \`0 ms\`로 해석하지 않는다.
 - \`sourceCommit\`이 없거나 \`unknown\`이거나 baseline/candidate가 같으면 생성기는 결과를 만들지 않는다.
 - 입력 artifact가 없거나 3회·환경·dataset 계약을 만족하지 않으면 이 문서 대신 실행이 실패해야 한다. 현재 저장소의 실측 결과가 없을 때는 이 문서의 템플릿 상태를 유지한다.

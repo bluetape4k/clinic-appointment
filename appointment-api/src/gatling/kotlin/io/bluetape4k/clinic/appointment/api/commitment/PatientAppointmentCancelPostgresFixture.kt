@@ -79,12 +79,17 @@ internal class PatientAppointmentCancelPostgresFixture(
     private val warmupRequests = AtomicInteger(0)
     private val measurementStartedAtEpochMillis = AtomicLong(0)
     private val measurementEndedAtEpochMillis = AtomicLong(0)
+    private val measurementStartedAtNanos = AtomicLong(0)
+    private val measurementEndedAtNanos = AtomicLong(0)
     private val replacementSequence = AtomicLong(0)
     private val differentSlotCursor = AtomicInteger(1)
     private val sampling = AtomicBoolean(false)
     private val samplerExecutor = Executors.newSingleThreadExecutor()
     private val measurementStartBarrier =
         CyclicBarrier(TOTAL_CONCURRENCY) {
+            check(measurementStartedAtNanos.compareAndSet(0, System.nanoTime())) {
+                "measurement monotonic start boundary must be crossed exactly once"
+            }
             check(measurementStartedAtEpochMillis.compareAndSet(0, System.currentTimeMillis())) {
                 "measurement start boundary must be crossed exactly once"
             }
@@ -93,10 +98,13 @@ internal class PatientAppointmentCancelPostgresFixture(
     private val measurementEndBarrier =
         CyclicBarrier(TOTAL_CONCURRENCY) {
             check(measurementStartedAtEpochMillis.get() > 0) { "measurement must start before it ends" }
+            stopLockWaitSampling()
+            check(measurementEndedAtNanos.compareAndSet(0, System.nanoTime())) {
+                "measurement monotonic end boundary must be crossed exactly once"
+            }
             check(measurementEndedAtEpochMillis.compareAndSet(0, System.currentTimeMillis())) {
                 "measurement end boundary must be crossed exactly once"
             }
-            stopLockWaitSampling()
         }
     private var samplerFuture: Future<*>? = null
     private lateinit var replayTarget: CancelSlot
@@ -129,8 +137,19 @@ internal class PatientAppointmentCancelPostgresFixture(
 
     private fun stopLockWaitSampling() {
         if (!sampling.compareAndSet(true, false)) return
-        samplerFuture?.get()
-        samplerFuture = null
+        val future = samplerFuture
+        try {
+            future?.get(SAMPLER_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        } catch (failure: InterruptedException) {
+            future?.cancel(true)
+            Thread.currentThread().interrupt()
+            throw failure
+        } catch (failure: Exception) {
+            future?.cancel(true)
+            throw failure
+        } finally {
+            samplerFuture = null
+        }
     }
 
     /**
@@ -220,8 +239,17 @@ internal class PatientAppointmentCancelPostgresFixture(
         check(lockWaitSampleFailures.get() == 0) { "lock-wait sampling failures must be zero" }
         val measurementStartedAt = measurementStartedAtEpochMillis.get()
         val measurementEndedAt = measurementEndedAtEpochMillis.get()
+        val measurementStartedAtMonotonic = measurementStartedAtNanos.get()
+        val measurementEndedAtMonotonic = measurementEndedAtNanos.get()
         check(measurementStartedAt > 0L) { "measurement start boundary was not recorded" }
         check(measurementEndedAt > measurementStartedAt) { "measurement end boundary must follow its start" }
+        check(measurementStartedAtMonotonic > 0L) { "measurement monotonic start boundary was not recorded" }
+        check(measurementEndedAtMonotonic > measurementStartedAtMonotonic) {
+            "measurement monotonic end boundary must follow its start"
+        }
+        val measurementSpanMillis =
+            TimeUnit.NANOSECONDS.toMillis(measurementEndedAtMonotonic - measurementStartedAtMonotonic)
+        check(measurementSpanMillis > 0L) { "measurement monotonic span must be positive" }
         val environmentJson = environmentJson()
         val environmentFingerprint = environmentFingerprint(environmentJson)
         val reportEnvironmentJson =
@@ -235,7 +263,8 @@ internal class PatientAppointmentCancelPostgresFixture(
               "environment": $reportEnvironmentJson,
               "measurementStartedAtEpochMillis": $measurementStartedAt,
               "measurementEndedAtEpochMillis": $measurementEndedAt,
-              "measurementSpanMillis": ${measurementEndedAt - measurementStartedAt},
+              "measurementClock": "SYSTEM_NANO_TIME",
+              "measurementSpanMillis": $measurementSpanMillis,
               "cancelP95Millis": ${percentileMillis(cancelDurationsNanos, 0.95)},
               "cancelP99Millis": ${percentileMillis(cancelDurationsNanos, 0.99)},
               "unexpectedErrorRate": ${unexpectedErrorRate()},
@@ -467,6 +496,7 @@ internal class PatientAppointmentCancelPostgresFixture(
                         """.trimIndent(),
                     )
                 statement.use { query ->
+                    query.queryTimeout = LOCK_WAIT_QUERY_TIMEOUT_SECONDS
                     query.executeQuery().use { rows ->
                         while (rows.next()) lockWaitMillis += rows.getDouble(1)
                     }
@@ -515,10 +545,16 @@ internal class PatientAppointmentCancelPostgresFixture(
     }
 
     override fun close() {
-        stopLockWaitSampling()
-        samplerExecutor.shutdownNow()
-        awaitTermination(replacementExecutor)
-        awaitTermination(contentionExecutor)
+        try {
+            stopLockWaitSampling()
+        } finally {
+            samplerExecutor.shutdownNow()
+            try {
+                awaitTermination(replacementExecutor)
+            } finally {
+                awaitTermination(contentionExecutor)
+            }
+        }
     }
 
     private fun awaitTermination(executor: java.util.concurrent.ExecutorService) {
@@ -547,6 +583,9 @@ internal class PatientAppointmentCancelPostgresFixture(
         const val MEASURE_SECONDS = 300L
         const val TOTAL_CONCURRENCY = 30
         const val PHASE_BARRIER_TIMEOUT_SECONDS = 60L
+        const val SAMPLER_SHUTDOWN_TIMEOUT_SECONDS = 10L
+        const val LOCK_WAIT_QUERY_TIMEOUT_SECONDS = 5
+        const val PAUSE_MILLIS = 1_000L
         const val HTTP_OK = 200
         const val HTTP_PRECONDITION_FAILED = 412
         const val HTTP_INTERNAL_ERROR = 500
@@ -564,6 +603,9 @@ internal class PatientAppointmentCancelPostgresFixture(
         fun systemSeconds(name: String, defaultValue: Long): Long =
             System.getProperty(name)?.toLongOrNull()?.coerceAtLeast(1L) ?: defaultValue
 
+        fun systemMillis(name: String, defaultValue: Long): Long =
+            System.getProperty(name)?.toLongOrNull()?.coerceAtLeast(0L) ?: defaultValue
+
         fun reportMode(): String =
             System.getProperty("issue34.mode", "candidate").also {
                 require(it == "baseline" || it == "candidate") { "issue34.mode must be baseline or candidate" }
@@ -575,7 +617,7 @@ internal class PatientAppointmentCancelPostgresFixture(
                 ?: "unknown"
 
         fun environmentJson(): String =
-            """{"datasetAppointments":$DATASET_SIZE,"warmupSeconds":${systemSeconds("issue34.warmupSeconds", WARMUP_SECONDS)},"measureSeconds":${systemSeconds("issue34.measureSeconds", MEASURE_SECONDS)},"sameAppointmentConcurrency":10,"differentAppointmentConcurrency":20,"seed":$SEED,"postgresqlImage":"${PostgreSQLServer.IMAGE}:${PostgreSQLServer.TAG}","jdk":"${escapeJson(System.getProperty("java.runtime.version"))}","vm":"${escapeJson(System.getProperty("java.vm.name"))}","sourceCommit":"${escapeJson(sourceCommit())}"}"""
+            """{"datasetAppointments":$DATASET_SIZE,"warmupSeconds":${systemSeconds("issue34.warmupSeconds", WARMUP_SECONDS)},"measureSeconds":${systemSeconds("issue34.measureSeconds", MEASURE_SECONDS)},"sameAppointmentConcurrency":10,"differentAppointmentConcurrency":20,"pauseMillis":${systemMillis("issue34.pauseMillis", PAUSE_MILLIS)},"seed":$SEED,"postgresqlImage":"${PostgreSQLServer.IMAGE}:${PostgreSQLServer.TAG}","jdk":"${escapeJson(System.getProperty("java.runtime.version"))}","vm":"${escapeJson(System.getProperty("java.vm.name"))}","sourceCommit":"${escapeJson(sourceCommit())}"}"""
 
         fun environmentFingerprint(environmentJson: String): String =
             MessageDigest.getInstance("SHA-256")
