@@ -79,6 +79,9 @@ test("Issue #34 chart generator writes SVG panels and a measured Korean analysis
     assert.match(analysis, /판정.*PASS/);
     assert.match(analysis, /sourceCommit/);
     assert.match(analysis, /benchmark 근거이며 배포 SLO가 아니다/);
+    assert.match(analysis, /lock-wait 표본 신뢰도/);
+    assert.match(analysis, /run1=30, run2=30, run3=30/);
+    assert.match(analysis, /조회 실패를 `0 ms`로 해석하지 않는다/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -131,6 +134,61 @@ test("Issue #34 chart generator rejects a same-commit comparison before writing 
       (error) => {
         assert.notEqual(error.code, 0);
         assert.match(`${error.stdout}\n${error.stderr}`, /sourceCommit/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Issue #34 chart generator rejects failed lock-wait sampling", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-chart-lock-wait-"));
+  try {
+    const baselineCancel = path.join(root, "cancel-baseline.json");
+    const candidateCancel = path.join(root, "cancel-candidate.json");
+    const baselineCodec = path.join(root, "codec-baseline");
+    const candidateCodec = path.join(root, "codec-candidate");
+    await mkdir(baselineCodec, { recursive: true });
+    await mkdir(candidateCodec, { recursive: true });
+    await writeFile(baselineCancel, JSON.stringify(cancelReport("baseline")));
+    const failedSampling = cancelReport("candidate");
+    failedSampling.runs[0].lockWaitSampleFailures = 1;
+    await writeFile(candidateCancel, JSON.stringify(failedSampling));
+
+    for (const mode of ["baseline", "candidate"]) {
+      const directory = mode === "baseline" ? baselineCodec : candidateCodec;
+      for (const mix of ["legacy-heavy", "current-heavy"]) {
+        for (const run of [1, 2, 3]) {
+          await writeFile(
+            path.join(directory, `${mode}-${mix}-run${run}.json`),
+            JSON.stringify(codecReport(mode, mix, run)),
+          );
+        }
+      }
+    }
+
+    await assert.rejects(
+      execFileAsync(
+        process.execPath,
+        [
+          generator,
+          "--cancel-baseline",
+          baselineCancel,
+          "--cancel-candidate",
+          candidateCancel,
+          "--codec-baseline-dir",
+          baselineCodec,
+          "--codec-candidate-dir",
+          candidateCodec,
+          "--output-dir",
+          path.join(root, "charts"),
+        ],
+        { cwd: repositoryRoot },
+      ),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /lock-wait sampling failures/);
         return true;
       },
     );
@@ -228,6 +286,8 @@ function cancelReport(mode, p95 = 100, p99 = 200, lockWaitP95 = 20) {
       unexpectedErrorRate: 0.001,
       unintendedRetryExhaustionRate: 0.0001,
       lockWaitP95Millis: lockWaitP95,
+      lockWaitSampleQueries: 30,
+      lockWaitSampleFailures: 0,
       expectedConflictRate: 0.2,
       expectedRetryExhaustionRate: 0.1,
       scenarioMismatchRate: 0,
