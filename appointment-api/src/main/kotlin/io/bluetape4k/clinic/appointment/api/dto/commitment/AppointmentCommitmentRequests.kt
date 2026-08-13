@@ -163,11 +163,11 @@ data class DeclineProposalRequest(
  *
  * 환불, 고객 요청, 병원 사정 같은 원인은 예약서비스가 해석하지 않고 등록 code로
  * 보존한다. 관리자·staff만 bounded 안내 문구를 추가할 수 있으며, 환자 식별자·의료·
- * 결제 상세를 입력하지 않는 운영 규칙을 따른다.
+ * 결제 상세 형태는 공통 registry에서 거부한다.
  *
  * @property reasonCode 최대 64자의 등록된 대문자 업무 code. 예: `REFUND`,
  * `CUSTOMER_REQUEST`, `EQUIPMENT_FAILURE`.
- * @property reasonDetail 관리자·staff가 환자에게 전달할 선택적 500자 안내 문구.
+ * @property reasonDetail 관리자·staff가 환자에게 전달할 선택적 500자 저위험 안내 문구.
  */
 @JsonIgnoreProperties(ignoreUnknown = false)
 data class CancelAppointmentRequest(

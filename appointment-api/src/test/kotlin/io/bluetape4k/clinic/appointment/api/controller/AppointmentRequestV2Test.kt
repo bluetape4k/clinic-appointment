@@ -84,6 +84,24 @@ class AppointmentRequestV2Test {
     }
 
     @Test
+    fun `operator cancellation detail rejects patient medical and payment identifiers`() {
+        listOf(
+            "연락처는 010-1234-5678입니다.",
+            "안내 email은 patient@example.com입니다.",
+            "환자번호 A-1234",
+            "진단명: 고혈압",
+            "카드번호 4111 1111 1111 1111",
+        ).forEach { sensitiveDetail ->
+            assertFailsWith<IllegalArgumentException> {
+                CancelAppointmentRequest(
+                    reasonCode = "CUSTOMER_REQUEST",
+                    reasonDetail = sensitiveDetail,
+                )
+            }
+        }
+    }
+
+    @Test
     fun `cancellation reason must come from the closed registry`() {
         assertFailsWith<IllegalArgumentException> {
             CancelAppointmentRequest(reasonCode = "UNREGISTERED_REASON")

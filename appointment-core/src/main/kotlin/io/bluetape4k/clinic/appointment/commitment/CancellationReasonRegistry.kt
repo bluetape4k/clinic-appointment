@@ -28,7 +28,7 @@ object CancellationReasonRegistry {
         return value
     }
 
-    /** 취소 상세 사유의 공백·길이·제어문자 계약을 검증합니다. */
+    /** 취소 상세 사유의 공백·길이·제어문자·민감 식별자 계약을 검증합니다. */
     fun requireDetail(value: String?): String? {
         if (value == null) return null
         require(value.isNotBlank()) { "reasonDetail must not be blank" }
@@ -38,7 +38,19 @@ object CancellationReasonRegistry {
         require(value.none(Char::isISOControl)) {
             "reasonDetail must not contain control characters"
         }
+        require(!looksLikeSensitiveDetail(value)) {
+            "reasonDetail must not contain patient, medical, or payment identifiers"
+        }
         return value
+    }
+
+    private fun looksLikeSensitiveDetail(value: String): Boolean {
+        val normalized = value.lowercase()
+        if (SENSITIVE_DETAIL_MARKERS.any(normalized::contains)) return true
+        if (EMAIL_LIKE_PATTERN.containsMatchIn(value)) return true
+        val withoutDateTime = ISO_DATE_OR_TIME_PATTERN.replace(value, " ")
+        return PHONE_OR_ACCOUNT_CANDIDATE.findAll(withoutDateTime)
+            .any { candidate -> candidate.value.count(Char::isDigit) >= MIN_SENSITIVE_DIGIT_COUNT }
     }
 
     /** `cancel-v1\0` + length-prefixed UTF-8 fields의 SHA-256 hex digest를 반환합니다. */
@@ -67,6 +79,31 @@ object CancellationReasonRegistry {
             detail?.let(::put)
         }.array()
     }
+
+    private val EMAIL_LIKE_PATTERN = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")
+    private val ISO_DATE_OR_TIME_PATTERN = Regex("\\b(?:\\d{4}-\\d{2}-\\d{2}|\\d{1,2}:\\d{2})\\b")
+    private val PHONE_OR_ACCOUNT_CANDIDATE =
+        Regex("(?<![A-Za-z0-9])(?:\\+?\\d[\\d(). -]{7,}\\d)(?![A-Za-z0-9])")
+    private val SENSITIVE_DETAIL_MARKERS = setOf(
+        "주민등록번호",
+        "환자번호",
+        "차트번호",
+        "진단명",
+        "질환명",
+        "병명",
+        "처방",
+        "보험번호",
+        "카드번호",
+        "계좌번호",
+        "patient id",
+        "medical record",
+        "diagnosis",
+        "prescription",
+        "insurance id",
+        "card number",
+        "account number",
+    )
+    private const val MIN_SENSITIVE_DIGIT_COUNT = 9
 }
 
 /** 등록된 예약 취소 reason code다. */

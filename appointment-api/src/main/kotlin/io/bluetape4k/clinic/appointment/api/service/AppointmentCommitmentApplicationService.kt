@@ -146,8 +146,9 @@ interface AppointmentCommitmentApplicationService {
     /**
      * 현재 가예약 또는 확정 예약을 취소하고 보유한 자원 allocation을 해제한다.
      *
-     * 결제·환불 자체는 다른 서비스의 책임이며 [request]에는 예약 취소 사유 code만
-     * 전달한다. 구현체는 현재 확정 proposal 또는 최초 미확정 proposal에 명령을 결합한다.
+     * 결제·환불 자체는 다른 서비스의 책임이며 [request]에는 등록된 취소 사유 code와
+     * 민감 식별자 검사를 통과한 선택적 환자 안내 문구만 전달한다. 구현체는 현재 확정
+     * proposal 또는 최초 미확정 proposal에 명령을 결합한다.
      */
     fun cancelAppointment(
         actor: ActorContext,
