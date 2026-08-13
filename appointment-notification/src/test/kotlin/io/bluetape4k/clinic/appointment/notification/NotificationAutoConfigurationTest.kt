@@ -147,6 +147,31 @@ internal class NotificationAutoConfigurationTest {
     }
 
     @Test
+    fun `v2 producer readiness는 기존 cancellation v1 backlog를 렌더링하지 못하면 거부한다`() {
+        val database = database("auto_v2_missing_legacy_template", version = "21")
+        context(database, withKey = true)
+            .withPropertyValues("clinic.notification.v2-producer=true")
+            .withBean(
+                "v2OnlyNotificationTemplateCatalog",
+                NotificationTemplateCatalog::class.java,
+                {
+                    NotificationTemplateCatalog { key, version, channel ->
+                        if (version != APPOINTMENT_CANCELLED_TEMPLATE_VERSION) {
+                            null
+                        } else {
+                            BuiltInWaitlistNotificationTemplateCatalog.find(key, version, channel)
+                        }
+                    }
+                },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBean(NotificationProducerSchemaReadiness::class.java)
+                    .allowsV2() shouldBeEqualTo false
+            }
+    }
+
+    @Test
     fun `v2 producer 설정이 boolean이 아니면 binding 단계에서 시작을 거절한다`() {
         ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
