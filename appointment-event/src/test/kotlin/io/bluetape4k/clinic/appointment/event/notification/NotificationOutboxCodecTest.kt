@@ -258,6 +258,34 @@ class NotificationOutboxCodecTest {
     }
 
     @Test
+    fun `codec rejects cancellation detail containing patient identifiers without payload leakage`() {
+        val safe = codec.encode(
+            envelope(
+                eventType = NotificationEventType.CANCELLED,
+                notificationSlot = NotificationSlot.CANCELLED,
+                templateKey = "appointment.cancelled.sms",
+                parameterType = NotificationParameterType.APPOINTMENT_CANCELLED,
+                parameters = AppointmentCancelledParameters(
+                    clinicDisplayName = "Blue Clinic",
+                    appointmentDate = LocalDate.parse("2026-08-01"),
+                    startTime = LocalTime.parse("10:30"),
+                    cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
+                    cancellationReasonDetail = "진료 일정 변경",
+                ),
+            ),
+        )
+        val sensitive = "010-1234-5678"
+
+        val failure = assertFailsWith<NotificationContractException> {
+            codec.decode(safe.replace("진료 일정 변경", sensitive))
+        }
+
+        failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+        failure.message?.contains(sensitive).shouldBeFalse()
+        failure.cause shouldBeEqualTo null
+    }
+
+    @Test
     fun `codec rejects closed boundary violations as template parameter invalid without raw payload leakage`() {
         val valid = codec.encode(envelope())
         val cases = listOf(

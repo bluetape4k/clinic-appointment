@@ -7,6 +7,9 @@ PostgreSQL 취소 성능 lane과 실제 mixed-schema backlog benchmark의 실행
 harness도 추가했다. 이전 exact head의 PR 일반 CI 22개 검사는 모두 통과했지만,
 독립 최종 검토에서 Flyway 비활성 스키마의 취소 snapshot 테이블 누락과 cancellation
 template v1 backlog 미지원이 확인됐다. 두 항목은 회귀 테스트와 함께 로컬에서 수정했고
+repair head 재검토에서 code review는 `APPROVE`였지만 architect가 operator detail의
+PHI/PII 확산 방어가 계획과 risk register에만 남은 P1을 확인했다. 공통 registry에
+민감 식별자 패턴 차단을 추가하고 API/event decode가 같은 계약을 사용하도록 수정했으며,
 새 exact head 검증을 기다린다. 고정 window의
 baseline/candidate 3회 artifact, 보호된 backend Playwright harness, 운영 rollout
 증거는 아직 없다. 따라서 이 문서의 최종 상태는 `PENDING`이며 PR/merge 준비
@@ -24,7 +27,7 @@ baseline/candidate 3회 artifact, 보호된 backend Playwright harness, 운영 r
 | Tier | 검토 내용 | 현재 근거 | 판정 |
 |---|---|---|---|
 | 1. 구조·의존성 | reason registry를 `appointment-core`에 두고 API/event/notification이 공통 계약을 사용한다. ServiceConfig와 NotificationAutoConfiguration의 v2 flag/readiness 경계를 연결했다. | `CancellationReasonRegistry.kt`, `ServiceConfig.kt`, `NotificationAutoConfiguration.kt` | 로컬 PASS |
-| 2. 보안·개인정보 | 취소 route의 ADMIN/STAFF/PATIENT matcher와 ownership 재검증, patient detail 차단, DB 원문·outbox hash 분리를 적용했다. | `AppointmentCommitmentHttpSupport.kt`, `AppointmentCommitmentAccessResolver.kt`, security integration tests | 로컬 PASS; 실제 IDOR fixture는 미실행 |
+| 2. 보안·개인정보 | 취소 route의 ADMIN/STAFF/PATIENT matcher와 ownership 재검증, patient detail 차단, DB 원문·outbox hash 분리, 공통 registry의 email·전화/계좌/카드형 숫자열·민감 field marker 차단을 적용했다. 오류에는 원문을 포함하지 않고 API/event decode가 같은 계약을 사용한다. | `CancellationReasonRegistry.kt`, `AppointmentCommitmentHttpSupport.kt`, `AppointmentCommitmentAccessResolver.kt`, API/event/security tests | 로컬 PASS; 실제 IDOR fixture와 production ACL·backup·provider log 정책은 미검증 |
 | 3. API·도메인 | 폐쇄 reason code, bounded detail, ETag/idempotency, 상태 terminal 전이를 API·command·frontend에 반영했다. | DTO/command tests, OpenAPI contract, facade/page tests | 로컬 PASS |
 | 4. 데이터·트랜잭션 | V27 additive migration과 cancellation detail snapshot을 상태 전환·audit/outbox 전에 같은 transaction으로 기록한다. Flyway 비활성 dev/test 초기화기도 같은 snapshot 테이블을 생성한다. | H2/PostgreSQL/MySQL migration tests, command/atomicity tests, `SchemaInitConfigTest` | 로컬 PASS; 기본 Colima Ryuk 소켓 환경은 2건 실패했으나 Ryuk 비활성 재실행에서 698건 통과 |
 | 5. 이벤트·알림 | canonical `cancel-v1\\0` codec, v1/v2 dual-read, cancellation template v1/v2, null/detail escape, 두 template의 producer readiness gate와 실제 outbox-row backlog drain harness를 구현했다. | event/notification/API tests, `NotificationCodecBacklogBenchmarkTest` | 로컬 PASS; 고정 10,000건·30초/5분 3회 성능 비교 미검증 |
@@ -51,8 +54,9 @@ targeted regression은 event codec 14개, notification 155개, API 25개,
 frontend 252개가 통과했다. 이후 exact head 최종 검토에서 Flyway 비활성
 `SchemaInitConfig`가 `AppointmentCancellationDetails`를 만들지 않는 P1을 새로 찾았다.
 실제 초기화기를 실행한 H2 회귀 테스트를 먼저 RED로 확인한 뒤 테이블을 FK 의존 순서에
-추가했고, 관련 API targeted 46개 테스트가 통과했다. 새 head의 독립 재검토 전까지
-merge gate는 열지 않는다.
+추가했고, 관련 API targeted 46개 테스트가 통과했다. repair head `058006f5` 독립
+재검토는 P0/P1/P2/P3 모두 0으로 `APPROVE`했으며 새 privacy repair head의 재검토
+전까지 merge gate는 열지 않는다.
 
 ### Architect
 
@@ -70,7 +74,13 @@ decline/cancel/412 refresh의 성공·오류·`finally`가 세대를 비교한�
 v2만 제공해 기존 v1 backlog가 `TEMPLATE_NOT_FOUND`로 소진될 수 있는 P1을 찾았다.
 기본 catalog에 code-only v1 template을 추가하고, readiness가 모든 활성 channel에서
 v1과 v2 identity·필수 field를 함께 검증하도록 수정했다. v2-only catalog 거부와 실제
-v1 렌더링 회귀를 RED→GREEN으로 확인했으며 새 head의 독립 재검토를 기다린다.
+v1 렌더링 회귀를 RED→GREEN으로 확인했다. repair head `058006f5` 재검토는 두 항목이
+닫혔음을 확인했지만 operator detail에 PHI/PII가 저장·전파될 수 있는 계획상 미완료
+P1을 새로 확인했다. API 계약은 유지하면서 `appointment-core` registry가 email,
+전화·계좌·카드형 숫자열, 환자번호·진단·처방 marker를 거부하도록 하고 API request와
+event codec의 negative test를 RED→GREEN으로 고정했다. ISO 날짜·시간 일정 문구는
+오탐하지 않는 회귀도 함께 고정했다. 이 privacy repair를 포함한 새 exact head의 독립
+재검토 전까지 merge gate는 열지 않는다.
 
 ## 새로 확인한 검증 증거
 
@@ -84,6 +94,7 @@ v1 렌더링 회귀를 RED→GREEN으로 확인했으며 새 head의 독립 재�
 | `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' --rerun-tasks -Dissue34.codec.benchmark=true -Dissue34.codec.rows=1000 -Dissue34.codec.measureSeconds=0 -Dissue34.codec.warmupSeconds=0 -Dissue34.codec.mix=current-heavy` | current-heavy wiring smoke PASS, decode failures 0 |
 | `./gradlew :appointment-notification:test --no-daemon` | 157 passing, BUILD SUCCESSFUL; cancellation v1/v2 catalog/readiness 포함 |
 | `./gradlew :appointment-api:test --tests '*SchemaInitConfigTest*' --tests '*AppointmentCommitmentCommandServiceTest*' --tests '*AppointmentNotificationWriterTest*' --tests '*AppointmentMessagingAutoConfigurationWiringTest*' --no-daemon` | 46 passing, BUILD SUCCESSFUL; Flyway 비활성 snapshot table 포함 |
+| `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-core:test --tests '*CancellationReasonRegistryTest*' :appointment-event:test --tests '*NotificationOutboxCodecTest*' :appointment-notification:test --tests '*NotificationTemplateRendererTest*' --tests '*NotificationAutoConfigurationTest*' :appointment-api:test --tests '*AppointmentRequestV2Test*' --tests '*SchemaInitConfigTest*' --tests '*AppointmentCommitmentCommandServiceTest*' --tests '*AppointmentNotificationWriterTest*' --rerun-tasks --no-daemon` | 52 passing, BUILD SUCCESSFUL; 민감 식별자 차단·원문 비노출·정상 일정 오탐 방지 포함 |
 | `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test` (Issue #34 관련 filter) | 102 passing, BUILD SUCCESSFUL |
 | `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test --no-daemon --rerun-tasks` | 771 passing, 3 pending, BUILD SUCCESSFUL (5분 39초) |
 | `TESTCONTAINERS_RYUK_DISABLED=true ./gradlew :appointment-api:test --tests '*FlywayMigrationTest*' --tests '*FlywayPostgreSQLMigrationTest*' --tests '*FlywayMySQLMigrationTest*' --no-daemon` | 21 passing, 1 pending, BUILD SUCCESSFUL |
@@ -115,9 +126,9 @@ v1 렌더링 회귀를 RED→GREEN으로 확인했으며 새 head의 독립 재�
 - P0: 0 (현재 확인 범위)
 - P1: 로컬 known issue 0; 새 exact head 독립 재검토 전 보류
 - P2: 0 (현재 확인 범위)
-- Architectural Status: `PENDING` (이전 exact head `BLOCK`, 로컬 repair 재검토 전)
+- Architectural Status: `PENDING` (`058006f5` 재검토 `BLOCK`, privacy repair exact-head 재검토 전)
 - 최종: `PENDING`
-- PR CI: `88cdb5fa` 기준 22/22 checks PASS; 로컬 repair의 새 exact head CI·독립 review와 성능·보호된 외부 gate는 미완료
+- PR CI: `88cdb5fa` 기준 22/22 checks PASS; `058006f5`는 마지막 확인 시 17 PASS/3 running이며 privacy repair의 새 exact head CI·독립 review와 성능·보호된 외부 gate는 미완료
 - PR/merge: 성능·보호된 외부 gate와 독립 review가 충족될 때까지 대기
 
 성능 artifact가 없는 상태에서 merge blocker를 우회하지 않는다. `issue34.mode`는

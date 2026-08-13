@@ -268,7 +268,9 @@ npm run test:e2e -- --project=chromium
 - [ ] `issue34.mode`는 report의 provenance metadata일 뿐 실행 경로를 바꾸지 않는다. baseline/candidate는 동일 코드의 mode만 바꿔 생성하지 말고, 승인된 pre-change 구현 또는 보존된 baseline artifact와 현재 candidate를 동일 환경에서 비교한다.
 - [x] `./gradlew :appointment-notification:test`를 포함해 renderer/worker readiness와 rollback compatibility를 검증한다.
 - [ ] tenant·clinic·patient가 서로 다른 실제 fixture로 IDOR 취소를 실행해 403/비존재형 오류와 state/audit/outbox/idempotency 무변경을 검증한다.
-- [ ] detail이 DB/outbox에 저장되는 경계를 보존기간·ACL·DLQ/backup/provider log redaction 정책과 함께 문서화하고, PHI/PII 패턴 차단 또는 고정 안내문 mapping을 선택해 테스트한다.
+- [x] 공통 registry에서 email, 전화·계좌·카드형 숫자열과 환자번호·진단명·처방 등 명시적 PHI/PII 형태를 거부하고 API·event decode가 같은 계약을 쓰는 negative test를 고정한다.
+- [x] detail snapshot의 appointment lifecycle FK 삭제, 별도 read API 금지, notification terminal retention과 provider request redaction 경계를 설계 문서에 고정한다.
+- [ ] production DB ACL, backup 만료, provider 로그 redaction 설정은 v2 producer 활성화 전 운영 증거로 확인한다.
 - [x] `git diff --check`, Kotlin 7-tier review, frontend lint/build/test, backend module tests를 실행한다.
 - [ ] 최종 검증에 `./gradlew :appointment-api:gatlingRun`과 notification mixed-schema benchmark 명령을 포함하고, 두 성능 artifact가 없으면 PR 준비 상태를 `PENDING`으로 유지한다.
 - [ ] 최종 검증 명령은 `./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=... -Dissue34.candidate=... -Dissue34.sourceCommit=<measured-commit>`, `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=... -Dissue34.codec.mix=... -Dissue34.codec.run=... -Dissue34.sourceCommit=<measured-commit>`, `scripts/compare-issue34-benchmark.sh baseline.json candidate.json`, `node scripts/compare-issue34-codec-benchmark.mjs baseline-codec-dir candidate-codec-dir`으로 고정한다. report에 source commit을 기록하고 comparator는 baseline/candidate가 동일하거나 `unknown`인 provenance를 거부한다. CI job `issue34-performance-gate`가 report artifact를 업로드하고 comparator 실패를 merge blocker로 반환한다.

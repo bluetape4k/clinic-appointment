@@ -66,8 +66,10 @@ body:
 
 - `reasonCode`는 기존 uppercase business code allow-list와 동일하게 검증한다.
 - `reasonDetail`은 선택적 UTF-8 text이며 최대 500자, blank·ISO control character를
-  거부한다. HTML·template delimiter는 renderer에서 escape하며, 의료정보·결제정보·
-  환자 식별자를 입력하지 않는 운영 규칙을 문서화한다.
+  거부한다. 공통 registry는 email, 전화·계좌·카드형 숫자열과 환자번호·진단명·처방 등
+  민감 field marker를 거부한다. HTML·template delimiter는 renderer에서
+  escape하며, 패턴으로 식별할 수 없는 의료정보·결제정보·환자 식별자도 입력하지 않는
+  운영 규칙을 유지한다.
 - `ADMIN` 또는 `STAFF`만 `reasonDetail`을 보낼 수 있다. `PATIENT`가 해당 필드를 보내면
   `400`으로 거부하고, patient command에는 detail을 전달하지 않는다.
 - `ADMIN`, `STAFF`, `PATIENT` 모두 tenant path, clinic scope, commitment ownership 검사를
@@ -144,6 +146,14 @@ occurredAt을 보유한다. raw actor ID, token, patient subject, phone/email은
 기존 `AppointmentAuditEvents.payloadHash`는 원문을 저장하지 않는 원칙을
 유지하며 command hash에 detail을 포함한다. 애플리케이션 로그에는 detail을
 출력하지 않는다.
+
+detail snapshot은 예약 aggregate의 일부로 취급한다. 별도 조회 API는 #305 전까지
+제공하지 않고 애플리케이션 DB principal만 접근하며, appointment 삭제 시 FK cascade로
+함께 삭제한다. notification outbox에 복제된 detail은 terminal 상태별 retention
+기본값(`SENT`/`SUPPRESSED` 7일, `EXHAUSTED` 30일)을 적용한다. provider request와
+rendered body의 `toString()`은 원문을 redaction하고 로그·metric·exception에 복사하지
+않는다. 실제 production DB ACL, backup 만료, provider 로그 정책은 v2 producer 활성화
+전 운영 확인 항목이며 코드 merge 증거로 대체하지 않는다.
 
 ### Notification contract v2
 

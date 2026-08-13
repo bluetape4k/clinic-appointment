@@ -30,7 +30,7 @@ fun interface NotificationTemplateCatalog {
         find(APPOINTMENT_CANCELLED_TEMPLATE_KEY, APPOINTMENT_CANCELLED_LEGACY_TEMPLATE_VERSION, channel)
 }
 
-/** 기본 설정에서 사용할 수 있는 PII-free waitlist/cancellation template입니다. */
+/** 기본 설정에서 사용할 수 있는 민감 식별자 차단형 waitlist/cancellation template입니다. */
 object BuiltInWaitlistNotificationTemplateCatalog : NotificationTemplateCatalog {
     override fun find(
         key: NotificationTemplateKey,
