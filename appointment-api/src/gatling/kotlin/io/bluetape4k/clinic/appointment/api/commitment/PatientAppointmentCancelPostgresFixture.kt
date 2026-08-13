@@ -4,6 +4,9 @@ import io.bluetape4k.testcontainers.database.PostgreSQLServer
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import tools.jackson.databind.node.ArrayNode
+import tools.jackson.databind.node.ObjectNode
+import tools.jackson.databind.json.JsonMapper
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -625,36 +628,33 @@ internal class PatientAppointmentCancelPostgresFixture(
                 .joinToString(separator = "") { byte -> "%02x".format(byte) }
 
         fun appendRun(existing: String, runJson: String, runNumber: Int): String {
-            val marker = Regex("\"runs\"\\s*:\\s*\\[").find(existing)
-            requireNotNull(marker) { "issue-34 report is missing runs array" }
-            require(existing.contains("\"mode\": \"${reportMode()}\"")) {
+            val report = REPORT_MAPPER.readTree(existing) as? ObjectNode
+            requireNotNull(report) { "issue-34 report root must be an object" }
+            require(report.path("mode").stringValue() == reportMode()) {
                 "issue-34 report mode does not match the current run"
             }
-            val existingSourceCommit =
-                Regex("\"sourceCommit\"\\s*:\\s*\"([^\"]+)\"")
-                    .find(existing)
-                    ?.groupValues
-                    ?.get(1)
+            val environment = report.path("environment") as? ObjectNode
+            requireNotNull(environment) { "issue-34 report is missing environment object" }
+            val existingSourceCommit = environment.path("sourceCommit").stringValue()
             require(existingSourceCommit == sourceCommit()) {
                 "issue-34 report sourceCommit does not match the current run"
             }
-            val existingEnvironmentFingerprint =
-                Regex("\"environmentFingerprint\"\\s*:\\s*\"([^\"]+)\"")
-                    .find(existing)
-                    ?.groupValues
-                    ?.get(1)
+            val existingEnvironmentFingerprint = environment.path("environmentFingerprint").stringValue()
             require(existingEnvironmentFingerprint == environmentFingerprint(environmentJson())) {
                 "issue-34 report environmentFingerprint does not match the current run"
             }
-            val end = existing.lastIndexOf(']')
-            val start = marker.range.last + 1
-            require(end > start) { "issue-34 report has malformed runs array" }
-            require(!Regex("\\\"run\\\"\\s*:\\s*$runNumber\\s*[,}]").containsMatchIn(existing)) {
+            val runs = report.path("runs") as? ArrayNode
+            requireNotNull(runs) { "issue-34 report is missing runs array" }
+            require(runs.none { it.path("run").asInt(-1) == runNumber }) {
                 "issue-34 report already contains run=$runNumber"
             }
-            val current = existing.substring(start, end).trim()
-            val separator = if (current.isEmpty()) "" else ","
-            return existing.substring(0, end) + separator + runJson + existing.substring(end)
+            val runNode = REPORT_MAPPER.readTree(runJson) as? ObjectNode
+            requireNotNull(runNode) { "issue-34 run must be an object" }
+            require(runNode.path("run").asInt(-1) == runNumber) {
+                "issue-34 run payload does not match run=$runNumber"
+            }
+            runs.add(runNode)
+            return REPORT_MAPPER.writeValueAsString(report)
         }
 
         fun escapeJson(value: String): String =
@@ -666,5 +666,7 @@ internal class PatientAppointmentCancelPostgresFixture(
                 postfix = "}",
                 separator = ",",
             ) { (key, count) -> "\"${escapeJson(key)}\":$count" }
+
+        private val REPORT_MAPPER: JsonMapper = JsonMapper.builder().build()
     }
 }

@@ -307,11 +307,14 @@ test("issue 34 cancel load synchronizes phase boundaries before measurement and 
   assert.doesNotMatch(fixture, /measurementStartsAtNanos/);
 });
 
-test("issue 34 report append accepts formatted JSON and Gatling cleanup is fail-safe", async () => {
+test("issue 34 report append is structural and Gatling cleanup is fail-safe", async () => {
   const simulation = await readFile(issue34Simulation, "utf8");
   const fixture = await readFile(issue34Fixture, "utf8");
 
-  assert.equal(fixture.includes('Regex("\\\"runs\\\"\\\\s*:\\\\s*\\\\[")'), true);
+  assert.match(fixture, /import tools\.jackson\.databind\.json\.JsonMapper/);
+  assert.match(fixture, /REPORT_MAPPER\.readTree\(existing\)/);
+  assert.match(fixture, /runs\.add\(runNode\)/);
+  assert.doesNotMatch(fixture, /lastIndexOf\('\]'\)/);
   assert.match(simulation, /override fun after\(\) \{\s*try \{/);
   assert.match(simulation, /finally \{[\s\S]*fixture\.close\(\)[\s\S]*server\.stop\(0\)[\s\S]*executor\.shutdownNow\(\)/);
 });

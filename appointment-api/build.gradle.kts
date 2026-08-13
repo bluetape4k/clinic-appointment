@@ -86,6 +86,7 @@ dependencies {
     gatling(libs.gatling.charts.highcharts)
     gatling(libs.gatling.http.java)
     gatling(libs.bluetape4k.testcontainers)
+    gatling(libs.jackson3.databind)
     gatling(libs.testcontainers)
     gatling(libs.testcontainers.postgresql)
     gatling(libs.postgresql.driver)
