@@ -193,6 +193,81 @@ test("issue 34 comparator rejects a lock-wait sampling failure", async () => {
   }
 });
 
+test("issue 34 comparator rejects smoke-window artifacts", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    const baselineReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline");
+    const candidateReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "candidate");
+    baselineReport.environment.warmupSeconds = 1;
+    baselineReport.environment.measureSeconds = 2;
+    candidateReport.environment.warmupSeconds = 1;
+    candidateReport.environment.measureSeconds = 2;
+    await writeFile(baseline, JSON.stringify(baselineReport));
+    await writeFile(candidate, JSON.stringify(candidateReport));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /warmupSeconds|measureSeconds/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("issue 34 comparator rejects mixed run source commits", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    const baselineReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline");
+    const candidateReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "candidate");
+    candidateReport.runs[1].sourceCommit = "different-candidate-commit";
+    await writeFile(baseline, JSON.stringify(baselineReport));
+    await writeFile(candidate, JSON.stringify(candidateReport));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /run sourceCommit/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("issue 34 comparator requires auditable warm-up and measurement request counts", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    const baselineReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline");
+    const candidateReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "candidate");
+    candidateReport.runs[0].warmupRequests = 0;
+    await writeFile(baseline, JSON.stringify(baselineReport));
+    await writeFile(candidate, JSON.stringify(candidateReport));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /warmupRequests/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("issue 34 codec comparator accepts two mixed-schema scenarios with three runs", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "issue-34-codec-benchmark-"));
   try {
@@ -311,6 +386,7 @@ function issue34Report(
     environment: issue34Environment(mode),
     runs: [1, 2, 3].map((run) => ({
       run,
+      sourceCommit: issue34Environment(mode).sourceCommit,
       cancelP95Millis: p95,
       cancelP99Millis: p99,
       unexpectedErrorRate,
@@ -318,6 +394,8 @@ function issue34Report(
       lockWaitP95Millis: lockWaitP95,
       lockWaitSampleQueries: 30,
       lockWaitSampleFailures: 0,
+      warmupRequests: 30,
+      requests: 100,
       expectedConflictRate: 0.2,
       expectedRetryExhaustionRate: 0.1,
       scenarioMismatchRate,

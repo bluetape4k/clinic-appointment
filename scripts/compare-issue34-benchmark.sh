@@ -72,11 +72,30 @@ async function readReport(file, label) {
   if (!parsed.environment || typeof parsed.environment !== "object") {
     throw new Error(`${label} report must include an environment object`);
   }
-  for (const run of parsed.runs) validateLockWaitSampling(run, `${label} run ${run.run}`);
+  validateExpectedEnvironment(parsed.environment, label);
+  for (const run of parsed.runs) validateRunEvidence(run, parsed.environment.sourceCommit, `${label} run ${run.run}`);
   return parsed;
 }
 
-function validateLockWaitSampling(run, label) {
+function validateExpectedEnvironment(environment, label) {
+  const expected = {
+    datasetAppointments: 100,
+    warmupSeconds: 30,
+    measureSeconds: 300,
+    sameAppointmentConcurrency: 10,
+    differentAppointmentConcurrency: 20,
+  };
+  for (const [key, value] of Object.entries(expected)) {
+    if (environment[key] !== value) throw new Error(`${label} environment ${key} must be ${value}`);
+  }
+}
+
+function validateRunEvidence(run, sourceCommit, label) {
+  if (run.sourceCommit !== sourceCommit) throw new Error(`${label} run sourceCommit must match its report environment`);
+  const warmupRequests = integer(run.warmupRequests, `${label} warmupRequests`);
+  const requests = integer(run.requests, `${label} requests`);
+  if (warmupRequests <= 0) throw new Error(`${label} warmupRequests must be positive`);
+  if (requests <= 0) throw new Error(`${label} requests must be positive`);
   const queries = integer(run.lockWaitSampleQueries, `${label} lockWaitSampleQueries`);
   const failures = integer(run.lockWaitSampleFailures, `${label} lockWaitSampleFailures`);
   if (queries <= 0) throw new Error(`${label} lock-wait sampling must execute at least one successful query`);

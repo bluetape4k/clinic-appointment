@@ -41,8 +41,9 @@ internal data class CancellationObservation(
  *
  * active slot은 항상 100개를 유지하려고 비동기 replacement를 사용한다. replacement는 측정
  * 요청의 latency에 포함하지 않으며, command 경로 자체는 [VisitCommitmentCommandInvoker]를
- * 통해 동일한 Exposed transaction과 idempotency/lock 코드를 실행한다. 초기 fixture만 별도
- * seed 단계에서 생성하고, 측정 중에는 synthetic response를 만들지 않는다.
+ * 통해 동일한 Exposed transaction과 idempotency/lock 코드를 실행한다. monotonic deadline
+ * 이전 요청은 warm-up count에만 포함하고, 이후 요청과 lock-wait query만 측정 artifact에
+ * 기록한다. 초기 fixture만 별도 seed 단계에서 생성하고 측정 중 synthetic response는 만들지 않는다.
  */
 internal class PatientAppointmentCancelPostgresFixture(
     private val datasetSize: Int = DATASET_SIZE,
@@ -66,6 +67,8 @@ internal class PatientAppointmentCancelPostgresFixture(
     private val lockWaitMillis = ConcurrentLinkedQueue<Double>()
     private val lockWaitSampleQueries = AtomicInteger(0)
     private val lockWaitSampleFailures = AtomicInteger(0)
+    private val warmupRequests = AtomicInteger(0)
+    private val measurementStartsAtNanos = AtomicLong(Long.MAX_VALUE)
     private val replacementSequence = AtomicLong(0)
     private val differentSlotCursor = AtomicInteger(1)
     private val sampling = AtomicBoolean(false)
@@ -78,12 +81,14 @@ internal class PatientAppointmentCancelPostgresFixture(
         seedDataset()
     }
 
-    fun startLockWaitSampling() {
+    fun startMeasurementWindow(warmupSeconds: Long) {
+        require(warmupSeconds > 0) { "warmupSeconds must be positive" }
         if (!sampling.compareAndSet(false, true)) return
+        measurementStartsAtNanos.set(System.nanoTime() + TimeUnit.SECONDS.toNanos(warmupSeconds))
         samplerFuture =
             samplerExecutor.submit {
                 while (sampling.get()) {
-                    sampleLockWaits()
+                    if (measurementStarted()) sampleLockWaits()
                     Thread.sleep(20L)
                 }
             }
@@ -132,7 +137,6 @@ internal class PatientAppointmentCancelPostgresFixture(
                 )
             }
         val elapsed = System.nanoTime() - started
-        cancelDurationsNanos += elapsed
         val result =
             CancellationObservation(
                 operation = operation,
@@ -141,7 +145,12 @@ internal class PatientAppointmentCancelPostgresFixture(
                 elapsedNanos = elapsed,
                 scenarioMatched = observation.scenarioMatched,
             )
-        observations += result
+        if (started >= measurementStartsAtNanos.get()) {
+            cancelDurationsNanos += elapsed
+            observations += result
+        } else {
+            warmupRequests.incrementAndGet()
+        }
         return result
     }
 
@@ -149,12 +158,15 @@ internal class PatientAppointmentCancelPostgresFixture(
     fun writeReport(path: Path, runNumber: Int) {
         require(runNumber in 1..3) { "issue-34 benchmark run must be between 1 and 3" }
         stopLockWaitSampling()
+        check(warmupRequests.get() > 0) { "warm-up must execute at least one request" }
+        check(observations.isNotEmpty()) { "measurement must execute at least one request" }
         check(lockWaitSampleQueries.get() > 0) { "lock-wait sampling must execute at least one successful query" }
         check(lockWaitSampleFailures.get() == 0) { "lock-wait sampling failures must be zero" }
         val runJson =
             """
             {
               "run": $runNumber,
+              "sourceCommit": "${escapeJson(sourceCommit())}",
               "cancelP95Millis": ${percentileMillis(cancelDurationsNanos, 0.95)},
               "cancelP99Millis": ${percentileMillis(cancelDurationsNanos, 0.99)},
               "unexpectedErrorRate": ${unexpectedErrorRate()},
@@ -164,6 +176,7 @@ internal class PatientAppointmentCancelPostgresFixture(
               "lockWaitSampleFailures": ${lockWaitSampleFailures.get()},
               "expectedConflictRate": ${expectedConflictRate()},
               "expectedRetryExhaustionRate": ${expectedRetryExhaustionRate()},
+              "warmupRequests": ${warmupRequests.get()},
               "requests": ${observations.size},
               "scenarioMismatches": ${observations.count { !it.scenarioMatched }},
               "scenarioMismatchRate": ${scenarioMismatchRate()},
@@ -408,6 +421,8 @@ internal class PatientAppointmentCancelPostgresFixture(
         }
     }
 
+    private fun measurementStarted(): Boolean = System.nanoTime() >= measurementStartsAtNanos.get()
+
     private fun unexpectedErrorRate(): Double =
         observations.count {
             it.statusCode >= HTTP_INTERNAL_ERROR &&
@@ -507,6 +522,14 @@ internal class PatientAppointmentCancelPostgresFixture(
             require(start >= 0) { "issue-34 report is missing runs array" }
             require(existing.contains("\"mode\": \"${reportMode()}\"")) {
                 "issue-34 report mode does not match the current run"
+            }
+            val existingSourceCommit =
+                Regex("\"sourceCommit\"\\s*:\\s*\"([^\"]+)\"")
+                    .find(existing)
+                    ?.groupValues
+                    ?.get(1)
+            require(existingSourceCommit == sourceCommit()) {
+                "issue-34 report sourceCommit does not match the current run"
             }
             val end = existing.lastIndexOf(']')
             require(end > start) { "issue-34 report has malformed runs array" }
