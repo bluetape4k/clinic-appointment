@@ -1,0 +1,34 @@
+{
+  "kind": "chart",
+  "source": {
+    "question": "고정 환경의 Issue #34 baseline과 candidate가 취소 latency·시나리오 안전성·mixed-schema codec backlog gate를 통과하는가?",
+    "revision": "report.environment.sourceCommit (baseline/candidate)",
+    "paths": [
+      "scripts/generate-issue34-benchmark-chart.mjs",
+      "scripts/compare-issue34-benchmark.sh",
+      "scripts/compare-issue34-codec-benchmark.mjs",
+      "docs/benchmarks/issue-34-patient-commitment-benchmark-analysis.ko.md"
+    ]
+  },
+  "nodes": [
+    {"id": "cancel-reports", "label": "PostgreSQL 취소 3회 report", "source": "scripts/compare-issue34-benchmark.sh"},
+    {"id": "codec-reports", "label": "mixed-schema codec 3회 report", "source": "scripts/compare-issue34-codec-benchmark.mjs"},
+    {"id": "gate-rules", "label": "상대·절대 latency와 오류 gate", "source": "docs/benchmarks/issue-34-patient-commitment-benchmark-analysis.ko.md"},
+    {"id": "cancel-latency", "label": "취소 latency chart", "source": "scripts/generate-issue34-benchmark-chart.mjs"},
+    {"id": "cancel-safety", "label": "취소 scenario safety chart", "source": "scripts/generate-issue34-benchmark-chart.mjs"},
+    {"id": "codec-latency", "label": "codec latency chart", "source": "scripts/generate-issue34-benchmark-chart.mjs"},
+    {"id": "codec-throughput", "label": "codec throughput chart", "source": "scripts/generate-issue34-benchmark-chart.mjs"},
+    {"id": "analysis", "label": "한국어 median·gate 분석", "source": "docs/benchmarks/issue-34-patient-commitment-benchmark-analysis.ko.md"}
+  ],
+  "edges": [
+    {"id": "cancel-latency-input", "from": "cancel-reports", "to": "cancel-latency", "kind": "data", "source": "scripts/generate-issue34-benchmark-chart.mjs"},
+    {"id": "cancel-safety-input", "from": "cancel-reports", "to": "cancel-safety", "kind": "data", "source": "scripts/generate-issue34-benchmark-chart.mjs"},
+    {"id": "codec-latency-input", "from": "codec-reports", "to": "codec-latency", "kind": "data", "source": "scripts/generate-issue34-benchmark-chart.mjs"},
+    {"id": "codec-throughput-input", "from": "codec-reports", "to": "codec-throughput", "kind": "data", "source": "scripts/generate-issue34-benchmark-chart.mjs"},
+    {"id": "cancel-gate-analysis", "from": "cancel-reports", "to": "analysis", "kind": "analysis", "source": "scripts/generate-issue34-benchmark-chart.mjs"},
+    {"id": "codec-gate-analysis", "from": "codec-reports", "to": "analysis", "kind": "analysis", "source": "scripts/generate-issue34-benchmark-chart.mjs"},
+    {"id": "rules-analysis", "from": "gate-rules", "to": "analysis", "kind": "constraint", "source": "docs/benchmarks/issue-34-patient-commitment-benchmark-analysis.ko.md"}
+  ],
+  "behavior": {"branches": 0, "loops": 0},
+  "repairs": []
+}

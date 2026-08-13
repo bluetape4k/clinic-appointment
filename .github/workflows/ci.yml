@@ -123,10 +123,14 @@ jobs:
               - 'docs/operations/appointment-consumer-replay-runbook.md'
               - 'docs/benchmarks/appointment-messaging-postgresql-baseline.json'
               - 'docs/benchmarks/appointment-messaging-consumer-postgresql-baseline.json'
+              - 'docs/benchmarks/issue-34-patient-commitment-benchmark-analysis.ko.md'
+              - 'docs/benchmarks/issue-34-patient-commitment-benchmark-chart.semantic.json'
               - 'docs/images/readme-charts/appointment-messaging-postgresql-benchmark-01-*'
               - 'docs/images/readme-charts/appointment-messaging-consumer-postgresql-benchmark-01-*'
               - 'scripts/*appointment-messaging-benchmark*'
+              - 'scripts/generate-issue34-benchmark-chart.mjs'
               - 'tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs'
+              - 'tests/benchmarks/issue34-benchmark-chart.test.mjs'
               - 'README.md'
               - 'README.ko.md'
             frontend:
@@ -486,7 +490,9 @@ jobs:
 
       - name: Collect and validate benchmark report
         run: |
-          node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs
+          node --test \
+            tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs \
+            tests/benchmarks/issue34-benchmark-chart.test.mjs
           node scripts/collect-appointment-messaging-benchmark.mjs \
             --input-dir benchmark/appointment-messaging-benchmark/build/reports/benchmarks \
             --output build/reports/appointment-messaging-postgresql/benchmark.json \
