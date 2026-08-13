@@ -55,7 +55,7 @@ PR merge 상태는 `PENDING`이다.
 | `./gradlew :appointment-api:compileGatlingKotlin --no-daemon` | BUILD SUCCESSFUL |
 | PostgreSQL cancel Gatling 단일 smoke | KO 0, lock-wait sampling failure 0, fingerprint 독립 재계산 일치 |
 | PostgreSQL cancel Gatling run 1·2 append smoke | 두 run 구조적 누적, KO 0, source/environment/fingerprint 일치 |
-| `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel` | 이전 benchmark repair head에서 BUILD SUCCESSFUL; 최종 exact-head 재검증 대상 |
+| `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --no-daemon` | `c31818d`에서 BUILD SUCCESSFUL |
 | `git diff --check` | PASS |
 
 위 PostgreSQL 실행은 짧은 wiring·artifact smoke다. 30초 warm-up과 5분 측정의
