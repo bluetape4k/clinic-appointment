@@ -13,6 +13,14 @@ const consumerCollector = path.join(repositoryRoot, "scripts/collect-appointment
 const consumerValidator = path.join(repositoryRoot, "scripts/validate-appointment-messaging-consumer-benchmark.mjs");
 const issue34Comparator = path.join(repositoryRoot, "scripts/compare-issue34-benchmark.sh");
 const issue34CodecComparator = path.join(repositoryRoot, "scripts/compare-issue34-codec-benchmark.mjs");
+const issue34Simulation = path.join(
+  repositoryRoot,
+  "appointment-api/src/gatling/kotlin/io/bluetape4k/clinic/appointment/api/PatientAppointmentCancelPostgresSimulation.kt",
+);
+const issue34Fixture = path.join(
+  repositoryRoot,
+  "appointment-api/src/gatling/kotlin/io/bluetape4k/clinic/appointment/api/commitment/PatientAppointmentCancelPostgresFixture.kt",
+);
 
 test("collector selects the requested configuration from mixed raw reports", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "appointment-messaging-benchmark-"));
@@ -268,6 +276,78 @@ test("issue 34 comparator requires auditable warm-up and measurement request cou
   }
 });
 
+test("issue 34 cancel load synchronizes phase boundaries before measurement and lock sampling", async () => {
+  const simulation = await readFile(issue34Simulation, "utf8");
+  const fixture = await readFile(issue34Fixture, "utf8");
+
+  assert.match(simulation, /BenchmarkPhase\.WARMUP/);
+  assert.match(simulation, /BenchmarkPhase\.MEASUREMENT/);
+  assert.match(simulation, /awaitMeasurementStart/);
+  assert.match(simulation, /awaitMeasurementEnd/);
+  assert.match(fixture, /CyclicBarrier/);
+  assert.match(fixture, /measurementStartedAtEpochMillis/);
+  assert.match(fixture, /measurementEndedAtEpochMillis/);
+  assert.doesNotMatch(fixture, /measurementStartsAtNanos/);
+});
+
+test("issue 34 report append accepts formatted JSON and Gatling cleanup is fail-safe", async () => {
+  const simulation = await readFile(issue34Simulation, "utf8");
+  const fixture = await readFile(issue34Fixture, "utf8");
+
+  assert.equal(fixture.includes('Regex("\\\"runs\\\"\\\\s*:\\\\s*\\\\[")'), true);
+  assert.match(simulation, /override fun after\(\) \{\s*try \{/);
+  assert.match(simulation, /finally \{[\s\S]*fixture\.close\(\)[\s\S]*server\.stop\(0\)[\s\S]*executor\.shutdownNow\(\)/);
+});
+
+test("issue 34 comparator rejects a run from a different environment fingerprint", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    const baselineReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline");
+    const candidateReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "candidate");
+    candidateReport.runs[1].environmentFingerprint = "mixed-environment-fingerprint";
+    await writeFile(baseline, JSON.stringify(baselineReport));
+    await writeFile(candidate, JSON.stringify(candidateReport));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /environmentFingerprint/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("issue 34 comparator rejects a measurement span shorter than the configured window", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    const baselineReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline");
+    const candidateReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "candidate");
+    candidateReport.runs[0].measurementEndedAtEpochMillis = 2_000;
+    candidateReport.runs[0].measurementSpanMillis = 1_000;
+    await writeFile(baseline, JSON.stringify(baselineReport));
+    await writeFile(candidate, JSON.stringify(candidateReport));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /measurementSpanMillis/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("issue 34 codec comparator accepts two mixed-schema scenarios with three runs", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "issue-34-codec-benchmark-"));
   try {
@@ -379,14 +459,20 @@ function issue34Report(
   scenarioMismatchRate = 0,
   mode = "candidate",
 ) {
+  const environment = issue34Environment(mode);
   return {
     schemaVersion: 1,
     benchmark: "issue-34-patient-appointment-cancel",
     mode,
-    environment: issue34Environment(mode),
+    environment,
     runs: [1, 2, 3].map((run) => ({
       run,
-      sourceCommit: issue34Environment(mode).sourceCommit,
+      sourceCommit: environment.sourceCommit,
+      environmentFingerprint: environment.environmentFingerprint,
+      environment: { ...environment },
+      measurementStartedAtEpochMillis: 1_000,
+      measurementEndedAtEpochMillis: 301_000,
+      measurementSpanMillis: 300_000,
       cancelP95Millis: p95,
       cancelP99Millis: p99,
       unexpectedErrorRate,
@@ -415,6 +501,7 @@ function issue34Environment(mode) {
     jdk: "OpenJDK Runtime Environment",
     vm: "OpenJDK 64-Bit Server VM",
     sourceCommit: mode === "baseline" ? "pre-change-commit" : "candidate-commit",
+    environmentFingerprint: `${mode}-environment-fingerprint`,
   };
 }
 

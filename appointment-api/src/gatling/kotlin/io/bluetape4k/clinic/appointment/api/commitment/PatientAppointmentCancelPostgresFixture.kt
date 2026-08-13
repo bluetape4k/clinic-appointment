@@ -6,6 +6,8 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
+import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
@@ -27,6 +29,12 @@ internal enum class CancellationLoadOperation(
     RETRY_EXHAUSTION("retry-exhaustion"),
 }
 
+/** Gatling 요청이 속한 benchmark phase입니다. */
+internal enum class BenchmarkPhase {
+    WARMUP,
+    MEASUREMENT,
+}
+
 /** loopback HTTP handler와 report writer 사이에 전달하는 한 번의 관측값입니다. */
 internal data class CancellationObservation(
     val operation: CancellationLoadOperation,
@@ -41,9 +49,10 @@ internal data class CancellationObservation(
  *
  * active slot은 항상 100개를 유지하려고 비동기 replacement를 사용한다. replacement는 측정
  * 요청의 latency에 포함하지 않으며, command 경로 자체는 [VisitCommitmentCommandInvoker]를
- * 통해 동일한 Exposed transaction과 idempotency/lock 코드를 실행한다. monotonic deadline
- * 이전 요청은 warm-up count에만 포함하고, 이후 요청과 lock-wait query만 측정 artifact에
- * 기록한다. 초기 fixture만 별도 seed 단계에서 생성하고 측정 중 synthetic response는 만들지 않는다.
+ * 통해 동일한 Exposed transaction과 idempotency/lock 코드를 실행한다. 모든 virtual user가
+ * warm-up을 끝낸 뒤 barrier를 통과해야 측정과 lock-wait sampling을 시작하며, 모든 측정 요청이
+ * 끝난 뒤 두 번째 barrier에서 측정 구간을 닫는다. 초기 fixture만 별도 seed 단계에서 생성하고
+ * 측정 중 synthetic response는 만들지 않는다.
  */
 internal class PatientAppointmentCancelPostgresFixture(
     private val datasetSize: Int = DATASET_SIZE,
@@ -68,11 +77,27 @@ internal class PatientAppointmentCancelPostgresFixture(
     private val lockWaitSampleQueries = AtomicInteger(0)
     private val lockWaitSampleFailures = AtomicInteger(0)
     private val warmupRequests = AtomicInteger(0)
-    private val measurementStartsAtNanos = AtomicLong(Long.MAX_VALUE)
+    private val measurementStartedAtEpochMillis = AtomicLong(0)
+    private val measurementEndedAtEpochMillis = AtomicLong(0)
     private val replacementSequence = AtomicLong(0)
     private val differentSlotCursor = AtomicInteger(1)
     private val sampling = AtomicBoolean(false)
     private val samplerExecutor = Executors.newSingleThreadExecutor()
+    private val measurementStartBarrier =
+        CyclicBarrier(TOTAL_CONCURRENCY) {
+            check(measurementStartedAtEpochMillis.compareAndSet(0, System.currentTimeMillis())) {
+                "measurement start boundary must be crossed exactly once"
+            }
+            startLockWaitSampling()
+        }
+    private val measurementEndBarrier =
+        CyclicBarrier(TOTAL_CONCURRENCY) {
+            check(measurementStartedAtEpochMillis.get() > 0) { "measurement must start before it ends" }
+            check(measurementEndedAtEpochMillis.compareAndSet(0, System.currentTimeMillis())) {
+                "measurement end boundary must be crossed exactly once"
+            }
+            stopLockWaitSampling()
+        }
     private var samplerFuture: Future<*>? = null
     private lateinit var replayTarget: CancelSlot
 
@@ -81,20 +106,28 @@ internal class PatientAppointmentCancelPostgresFixture(
         seedDataset()
     }
 
-    fun startMeasurementWindow(warmupSeconds: Long) {
-        require(warmupSeconds > 0) { "warmupSeconds must be positive" }
+    /** 모든 virtual user가 warm-up을 끝낼 때까지 기다린 뒤 측정 경계를 연다. */
+    fun awaitMeasurementStart() {
+        measurementStartBarrier.await(PHASE_BARRIER_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    }
+
+    /** 모든 virtual user의 측정 요청이 끝날 때까지 기다린 뒤 측정 경계를 닫는다. */
+    fun awaitMeasurementEnd() {
+        measurementEndBarrier.await(PHASE_BARRIER_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    }
+
+    private fun startLockWaitSampling() {
         if (!sampling.compareAndSet(false, true)) return
-        measurementStartsAtNanos.set(System.nanoTime() + TimeUnit.SECONDS.toNanos(warmupSeconds))
         samplerFuture =
             samplerExecutor.submit {
                 while (sampling.get()) {
-                    if (measurementStarted()) sampleLockWaits()
+                    sampleLockWaits()
                     Thread.sleep(20L)
                 }
             }
     }
 
-    fun stopLockWaitSampling() {
+    private fun stopLockWaitSampling() {
         if (!sampling.compareAndSet(true, false)) return
         samplerFuture?.get()
         samplerFuture = null
@@ -108,7 +141,9 @@ internal class PatientAppointmentCancelPostgresFixture(
     fun execute(
         operation: CancellationLoadOperation,
         sameAppointment: Boolean,
+        phase: BenchmarkPhase,
     ): CancellationObservation {
+        verifyPhaseOpen(phase)
         val started = System.nanoTime()
         val observation =
             runCatching {
@@ -145,13 +180,34 @@ internal class PatientAppointmentCancelPostgresFixture(
                 elapsedNanos = elapsed,
                 scenarioMatched = observation.scenarioMatched,
             )
-        if (started >= measurementStartsAtNanos.get()) {
-            cancelDurationsNanos += elapsed
-            observations += result
-        } else {
-            warmupRequests.incrementAndGet()
+        verifyPhaseOpen(phase)
+        when (phase) {
+            BenchmarkPhase.WARMUP -> {
+                warmupRequests.incrementAndGet()
+            }
+            BenchmarkPhase.MEASUREMENT -> {
+                cancelDurationsNanos += elapsed
+                observations += result
+            }
         }
         return result
+    }
+
+    private fun verifyPhaseOpen(phase: BenchmarkPhase) {
+        when (phase) {
+            BenchmarkPhase.WARMUP ->
+                check(measurementStartedAtEpochMillis.get() == 0L) {
+                    "warm-up request crossed the measurement start barrier"
+                }
+            BenchmarkPhase.MEASUREMENT -> {
+                check(measurementStartedAtEpochMillis.get() > 0L) {
+                    "measurement request started before the measurement barrier"
+                }
+                check(measurementEndedAtEpochMillis.get() == 0L) {
+                    "measurement request crossed the measurement end barrier"
+                }
+            }
+        }
     }
 
     /** current process의 세 번 중 한 번을 artifact로 저장한다. */
@@ -162,11 +218,24 @@ internal class PatientAppointmentCancelPostgresFixture(
         check(observations.isNotEmpty()) { "measurement must execute at least one request" }
         check(lockWaitSampleQueries.get() > 0) { "lock-wait sampling must execute at least one successful query" }
         check(lockWaitSampleFailures.get() == 0) { "lock-wait sampling failures must be zero" }
+        val measurementStartedAt = measurementStartedAtEpochMillis.get()
+        val measurementEndedAt = measurementEndedAtEpochMillis.get()
+        check(measurementStartedAt > 0L) { "measurement start boundary was not recorded" }
+        check(measurementEndedAt > measurementStartedAt) { "measurement end boundary must follow its start" }
+        val environmentJson = environmentJson()
+        val environmentFingerprint = environmentFingerprint(environmentJson)
+        val reportEnvironmentJson =
+            "${environmentJson.dropLast(1)},\"environmentFingerprint\":\"$environmentFingerprint\"}"
         val runJson =
             """
             {
               "run": $runNumber,
               "sourceCommit": "${escapeJson(sourceCommit())}",
+              "environmentFingerprint": "$environmentFingerprint",
+              "environment": $reportEnvironmentJson,
+              "measurementStartedAtEpochMillis": $measurementStartedAt,
+              "measurementEndedAtEpochMillis": $measurementEndedAt,
+              "measurementSpanMillis": ${measurementEndedAt - measurementStartedAt},
               "cancelP95Millis": ${percentileMillis(cancelDurationsNanos, 0.95)},
               "cancelP99Millis": ${percentileMillis(cancelDurationsNanos, 0.99)},
               "unexpectedErrorRate": ${unexpectedErrorRate()},
@@ -193,18 +262,7 @@ internal class PatientAppointmentCancelPostgresFixture(
                   "schemaVersion": 1,
                   "benchmark": "issue-34-patient-appointment-cancel",
                   "mode": "${reportMode()}",
-                  "environment": {
-                    "datasetAppointments": $DATASET_SIZE,
-                    "warmupSeconds": ${systemSeconds("issue34.warmupSeconds", WARMUP_SECONDS)},
-                    "measureSeconds": ${systemSeconds("issue34.measureSeconds", MEASURE_SECONDS)},
-                    "sameAppointmentConcurrency": 10,
-                    "differentAppointmentConcurrency": 20,
-                    "seed": $SEED,
-                    "postgresqlImage": "${PostgreSQLServer.IMAGE}:${PostgreSQLServer.TAG}",
-                    "jdk": "${escapeJson(System.getProperty("java.runtime.version"))}",
-                    "vm": "${escapeJson(System.getProperty("java.vm.name"))}",
-                    "sourceCommit": "${escapeJson(sourceCommit())}"
-                  },
+                  "environment": $reportEnvironmentJson,
                   "runs": [$runJson]
                 }
                 """.trimIndent()
@@ -421,8 +479,6 @@ internal class PatientAppointmentCancelPostgresFixture(
         }
     }
 
-    private fun measurementStarted(): Boolean = System.nanoTime() >= measurementStartsAtNanos.get()
-
     private fun unexpectedErrorRate(): Double =
         observations.count {
             it.statusCode >= HTTP_INTERNAL_ERROR &&
@@ -489,6 +545,8 @@ internal class PatientAppointmentCancelPostgresFixture(
         const val SEED = 34
         const val WARMUP_SECONDS = 30L
         const val MEASURE_SECONDS = 300L
+        const val TOTAL_CONCURRENCY = 30
+        const val PHASE_BARRIER_TIMEOUT_SECONDS = 60L
         const val HTTP_OK = 200
         const val HTTP_PRECONDITION_FAILED = 412
         const val HTTP_INTERNAL_ERROR = 500
@@ -516,10 +574,17 @@ internal class PatientAppointmentCancelPostgresFixture(
                 ?: System.getenv("GITHUB_SHA")
                 ?: "unknown"
 
+        fun environmentJson(): String =
+            """{"datasetAppointments":$DATASET_SIZE,"warmupSeconds":${systemSeconds("issue34.warmupSeconds", WARMUP_SECONDS)},"measureSeconds":${systemSeconds("issue34.measureSeconds", MEASURE_SECONDS)},"sameAppointmentConcurrency":10,"differentAppointmentConcurrency":20,"seed":$SEED,"postgresqlImage":"${PostgreSQLServer.IMAGE}:${PostgreSQLServer.TAG}","jdk":"${escapeJson(System.getProperty("java.runtime.version"))}","vm":"${escapeJson(System.getProperty("java.vm.name"))}","sourceCommit":"${escapeJson(sourceCommit())}"}"""
+
+        fun environmentFingerprint(environmentJson: String): String =
+            MessageDigest.getInstance("SHA-256")
+                .digest(environmentJson.toByteArray(Charsets.UTF_8))
+                .joinToString(separator = "") { byte -> "%02x".format(byte) }
+
         fun appendRun(existing: String, runJson: String, runNumber: Int): String {
-            val marker = "\"runs\":["
-            val start = existing.indexOf(marker)
-            require(start >= 0) { "issue-34 report is missing runs array" }
+            val marker = Regex("\"runs\"\\s*:\\s*\\[").find(existing)
+            requireNotNull(marker) { "issue-34 report is missing runs array" }
             require(existing.contains("\"mode\": \"${reportMode()}\"")) {
                 "issue-34 report mode does not match the current run"
             }
@@ -531,12 +596,21 @@ internal class PatientAppointmentCancelPostgresFixture(
             require(existingSourceCommit == sourceCommit()) {
                 "issue-34 report sourceCommit does not match the current run"
             }
+            val existingEnvironmentFingerprint =
+                Regex("\"environmentFingerprint\"\\s*:\\s*\"([^\"]+)\"")
+                    .find(existing)
+                    ?.groupValues
+                    ?.get(1)
+            require(existingEnvironmentFingerprint == environmentFingerprint(environmentJson())) {
+                "issue-34 report environmentFingerprint does not match the current run"
+            }
             val end = existing.lastIndexOf(']')
+            val start = marker.range.last + 1
             require(end > start) { "issue-34 report has malformed runs array" }
             require(!Regex("\\\"run\\\"\\s*:\\s*$runNumber\\s*[,}]").containsMatchIn(existing)) {
                 "issue-34 report already contains run=$runNumber"
             }
-            val current = existing.substring(start + marker.length, end).trim()
+            val current = existing.substring(start, end).trim()
             val separator = if (current.isEmpty()) "" else ","
             return existing.substring(0, end) + separator + runJson + existing.substring(end)
         }

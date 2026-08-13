@@ -10,6 +10,17 @@ node --input-type=module - "$@" <<'NODE'
 import { readFile } from "node:fs/promises";
 
 const [baselinePath, candidatePath] = process.argv.slice(2);
+const ENVIRONMENT_KEYS = [
+  "datasetAppointments",
+  "warmupSeconds",
+  "measureSeconds",
+  "sameAppointmentConcurrency",
+  "differentAppointmentConcurrency",
+  "seed",
+  "postgresqlImage",
+  "jdk",
+  "vm",
+];
 const baseline = await readReport(baselinePath, "baseline");
 const candidate = await readReport(candidatePath, "candidate");
 validateEnvironment(baseline, candidate);
@@ -73,7 +84,8 @@ async function readReport(file, label) {
     throw new Error(`${label} report must include an environment object`);
   }
   validateExpectedEnvironment(parsed.environment, label);
-  for (const run of parsed.runs) validateRunEvidence(run, parsed.environment.sourceCommit, `${label} run ${run.run}`);
+  validateEnvironmentFingerprint(parsed.environment, `${label} environment`);
+  for (const run of parsed.runs) validateRunEvidence(run, parsed.environment, `${label} run ${run.run}`);
   return parsed;
 }
 
@@ -90,8 +102,38 @@ function validateExpectedEnvironment(environment, label) {
   }
 }
 
-function validateRunEvidence(run, sourceCommit, label) {
-  if (run.sourceCommit !== sourceCommit) throw new Error(`${label} run sourceCommit must match its report environment`);
+function validateRunEvidence(run, environment, label) {
+  if (run.sourceCommit !== environment.sourceCommit) {
+    throw new Error(`${label} run sourceCommit must match its report environment`);
+  }
+  if (!run.environment || typeof run.environment !== "object") {
+    throw new Error(`${label} environment snapshot is required`);
+  }
+  for (const key of [...ENVIRONMENT_KEYS, "sourceCommit"]) {
+    if (run.environment[key] !== environment[key]) {
+      throw new Error(`${label} environment key ${key} must match its report environment`);
+    }
+  }
+  validateEnvironmentFingerprint(run.environment, `${label} environment`);
+  if (run.environmentFingerprint !== environment.environmentFingerprint) {
+    throw new Error(`${label} environmentFingerprint must match its report environment`);
+  }
+  if (run.environmentFingerprint !== run.environment.environmentFingerprint) {
+    throw new Error(`${label} environmentFingerprint must match its run environment snapshot`);
+  }
+  const measurementStartedAt = integer(run.measurementStartedAtEpochMillis, `${label} measurementStartedAtEpochMillis`);
+  const measurementEndedAt = integer(run.measurementEndedAtEpochMillis, `${label} measurementEndedAtEpochMillis`);
+  const measurementSpan = integer(run.measurementSpanMillis, `${label} measurementSpanMillis`);
+  if (measurementStartedAt <= 0 || measurementEndedAt <= measurementStartedAt) {
+    throw new Error(`${label} measurement timestamps must form a positive interval`);
+  }
+  if (measurementSpan !== measurementEndedAt - measurementStartedAt) {
+    throw new Error(`${label} measurementSpanMillis must equal end - start`);
+  }
+  const configuredSpan = environment.measureSeconds * 1000;
+  if (measurementSpan < configuredSpan * 0.95 || measurementSpan > configuredSpan * 1.05) {
+    throw new Error(`${label} measurementSpanMillis must stay within 95%-105% of the configured window`);
+  }
   const warmupRequests = integer(run.warmupRequests, `${label} warmupRequests`);
   const requests = integer(run.requests, `${label} requests`);
   if (warmupRequests <= 0) throw new Error(`${label} warmupRequests must be positive`);
@@ -103,18 +145,7 @@ function validateRunEvidence(run, sourceCommit, label) {
 }
 
 function validateEnvironment(baseline, candidate) {
-  const keys = [
-    "datasetAppointments",
-    "warmupSeconds",
-    "measureSeconds",
-    "sameAppointmentConcurrency",
-    "differentAppointmentConcurrency",
-    "seed",
-    "postgresqlImage",
-    "jdk",
-    "vm",
-  ];
-  for (const key of keys) {
+  for (const key of ENVIRONMENT_KEYS) {
     if (!(key in baseline.environment) || !(key in candidate.environment)) {
       throw new Error(`environment key ${key} is required in both reports`);
     }
@@ -126,6 +157,12 @@ function validateEnvironment(baseline, candidate) {
   validateSourceCommit(candidate.environment.sourceCommit, "candidate");
   if (baseline.environment.sourceCommit === candidate.environment.sourceCommit) {
     throw new Error("baseline and candidate sourceCommit must differ");
+  }
+}
+
+function validateEnvironmentFingerprint(environment, label) {
+  if (typeof environment.environmentFingerprint !== "string" || environment.environmentFingerprint.trim() === "") {
+    throw new Error(`${label} environmentFingerprint is required`);
   }
 }
 

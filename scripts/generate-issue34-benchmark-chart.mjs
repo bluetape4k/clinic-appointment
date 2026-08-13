@@ -175,6 +175,7 @@ function validateCancelReport(report, expectedMode) {
   for (const key of CANCEL_ENVIRONMENT_KEYS) {
     if (!(key in report.environment)) throw new Error(`cancel ${expectedMode} environment key ${key} is required`);
   }
+  validateEnvironmentFingerprint(report.environment, `cancel ${expectedMode} environment`);
   if (report.environment.datasetAppointments !== 100) throw new Error("cancel datasetAppointments must be 100");
   if (report.environment.warmupSeconds !== 30) throw new Error("cancel warmupSeconds must be 30");
   if (report.environment.measureSeconds !== 300) throw new Error("cancel measureSeconds must be 300");
@@ -188,6 +189,22 @@ function validateCancelReport(report, expectedMode) {
     if (run.sourceCommit !== report.environment.sourceCommit) {
       throw new Error(`cancel ${expectedMode} run ${run.run}: run sourceCommit must match its report environment`);
     }
+    if (!run.environment || typeof run.environment !== "object") {
+      throw new Error(`cancel ${expectedMode} run ${run.run}: environment snapshot is required`);
+    }
+    for (const key of [...CANCEL_ENVIRONMENT_KEYS, "sourceCommit"]) {
+      if (run.environment[key] !== report.environment[key]) {
+        throw new Error(`cancel ${expectedMode} run ${run.run}: environment key ${key} must match its report environment`);
+      }
+    }
+    validateEnvironmentFingerprint(run.environment, `cancel ${expectedMode} run ${run.run} environment`);
+    if (run.environmentFingerprint !== report.environment.environmentFingerprint) {
+      throw new Error(`cancel ${expectedMode} run ${run.run}: environmentFingerprint must match its report environment`);
+    }
+    if (run.environmentFingerprint !== run.environment.environmentFingerprint) {
+      throw new Error(`cancel ${expectedMode} run ${run.run}: environmentFingerprint must match its run environment snapshot`);
+    }
+    validateMeasurementWindow(run, report.environment, `cancel ${expectedMode} run ${run.run}`);
     const warmupRequests = nonNegativeInteger(
       run.warmupRequests,
       `cancel ${expectedMode} run ${run.run} warmupRequests`,
@@ -224,6 +241,24 @@ function validateCancelReport(report, expectedMode) {
     if (failures !== 0) {
       throw new Error(`cancel ${expectedMode} run ${run.run}: lock-wait sampling failures must be zero`);
     }
+  }
+}
+
+function validateEnvironmentFingerprint(environment, label) {
+  if (typeof environment.environmentFingerprint !== "string" || environment.environmentFingerprint.trim() === "") {
+    throw new Error(`${label}: environmentFingerprint is required`);
+  }
+}
+
+function validateMeasurementWindow(run, environment, label) {
+  const startedAt = nonNegativeInteger(run.measurementStartedAtEpochMillis, `${label} measurementStartedAtEpochMillis`);
+  const endedAt = nonNegativeInteger(run.measurementEndedAtEpochMillis, `${label} measurementEndedAtEpochMillis`);
+  const span = nonNegativeInteger(run.measurementSpanMillis, `${label} measurementSpanMillis`);
+  if (startedAt <= 0 || endedAt <= startedAt) throw new Error(`${label}: measurement timestamps must form a positive interval`);
+  if (span !== endedAt - startedAt) throw new Error(`${label}: measurementSpanMillis must equal end - start`);
+  const configuredSpan = environment.measureSeconds * 1000;
+  if (span < configuredSpan * 0.95 || span > configuredSpan * 1.05) {
+    throw new Error(`${label}: measurementSpanMillis must stay within 95%-105% of the configured window`);
   }
 }
 
@@ -614,10 +649,10 @@ function renderAnalysis(summary) {
 
 ### lock-wait 표본 신뢰도
 
-| mode | run별 warm-up 요청 | run별 측정 요청 | run별 성공 query 수 | run별 실패 수 | 판정 |
-|---|---|---|---|---|---|
-| baseline | ${baselineSampling.warmupRequests} | ${baselineSampling.requests} | ${baselineSampling.queries} | ${baselineSampling.failures} | ${baselineSampling.verdict} |
-| candidate | ${candidateSampling.warmupRequests} | ${candidateSampling.requests} | ${candidateSampling.queries} | ${candidateSampling.failures} | ${candidateSampling.verdict} |
+| mode | run별 측정 span | run별 warm-up 요청 | run별 측정 요청 | run별 성공 query 수 | run별 실패 수 | 판정 |
+|---|---|---|---|---|---|---|
+| baseline | ${baselineSampling.measurementSpans} | ${baselineSampling.warmupRequests} | ${baselineSampling.requests} | ${baselineSampling.queries} | ${baselineSampling.failures} | ${baselineSampling.verdict} |
+| candidate | ${candidateSampling.measurementSpans} | ${candidateSampling.warmupRequests} | ${candidateSampling.requests} | ${candidateSampling.queries} | ${candidateSampling.failures} | ${candidateSampling.verdict} |
 
 취소 gate는 p95 상대 10%, p99 상대 15%, 절대 p95 500ms, p99 1초,
 예상 밖 오류율 1%, 비의도 retry exhaustion 0.1%, lock-wait p95 50ms,
@@ -639,8 +674,9 @@ ${checkLines}
 ## 해석 규칙
 
 - \`expectedConflictRate\`와 \`expectedRetryExhaustionRate\`는 고정 arrival mix의 의도한 결과다. 오류율과 retry exhaustion gate의 분모에서 제외한다.
-- 모든 취소 run은 warm-up과 측정 요청을 각각 한 번 이상 실행하고, measurement deadline 이후 요청만 latency·rate에 포함해야 한다.
-- 모든 취소 run은 lock-wait query를 한 번 이상 성공해야 하고 실패 수가 0이어야 한다. 조회 실패를 \`0 ms\`로 해석하지 않는다.
+- 모든 취소 run은 30개 virtual user가 전역 start barrier를 통과한 뒤 측정 요청과 lock-wait sampling을 시작하고, 전역 end barrier에서 함께 닫아야 한다.
+- 매 run은 report 환경의 전체 snapshot과 SHA-256 \`environmentFingerprint\`를 보존하고, 측정 span은 설정한 window의 95%-105% 범위여야 한다.
+- 모든 취소 run은 lock-wait query를 한 번 이상 성공해야 하고 실패 수가 0이어야 한다. warm-up query나 조회 실패를 \`0 ms\`로 해석하지 않는다.
 - \`sourceCommit\`이 없거나 \`unknown\`이거나 baseline/candidate가 같으면 생성기는 결과를 만들지 않는다.
 - 입력 artifact가 없거나 3회·환경·dataset 계약을 만족하지 않으면 이 문서 대신 실행이 실패해야 한다. 현재 저장소의 실측 결과가 없을 때는 이 문서의 템플릿 상태를 유지한다.
 - 결과는 로컬 PostgreSQL/H2 harness의 비교 근거이며 보호된 backend E2E, 운영 rollout readiness, production SLO를 증명하지 않는다.
@@ -664,6 +700,7 @@ node scripts/compare-issue34-codec-benchmark.mjs <codec-baseline-dir> <codec-can
 function lockWaitSamplingEvidence(run) {
   return {
     run: run.run,
+    measurementSpanMillis: run.measurementSpanMillis,
     queries: run.lockWaitSampleQueries,
     failures: run.lockWaitSampleFailures,
     warmupRequests: run.warmupRequests,
@@ -673,6 +710,7 @@ function lockWaitSamplingEvidence(run) {
 
 function renderLockWaitSampling(runs) {
   return {
+    measurementSpans: runs.map((run) => `run${run.run}=${run.measurementSpanMillis}ms`).join(", "),
     queries: runs.map((run) => `run${run.run}=${run.queries}`).join(", "),
     failures: runs.map((run) => `run${run.run}=${run.failures}`).join(", "),
     warmupRequests: runs.map((run) => `run${run.run}=${run.warmupRequests}`).join(", "),
