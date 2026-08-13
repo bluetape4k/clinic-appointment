@@ -145,6 +145,30 @@ test("issue 34 comparator rejects scenario mismatches even when latency is withi
   }
 });
 
+test("issue 34 comparator rejects baseline and candidate from the same source commit", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    const baselineReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline");
+    const candidateReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "candidate");
+    candidateReport.environment.sourceCommit = baselineReport.environment.sourceCommit;
+    await writeFile(baseline, JSON.stringify(baselineReport));
+    await writeFile(candidate, JSON.stringify(candidateReport));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /sourceCommit/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("issue 34 codec comparator accepts two mixed-schema scenarios with three runs", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "issue-34-codec-benchmark-"));
   try {
@@ -170,6 +194,42 @@ test("issue 34 codec comparator accepts two mixed-schema scenarios with three ru
 
     assert.match(result.stdout, /PASS legacy-heavy/);
     assert.match(result.stdout, /PASS current-heavy/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("issue 34 codec comparator rejects baseline and candidate from the same source commit", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-codec-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline");
+    const candidate = path.join(root, "candidate");
+    await mkdir(baseline, { recursive: true });
+    await mkdir(candidate, { recursive: true });
+    for (const mode of ["baseline", "candidate"]) {
+      const directory = mode === "baseline" ? baseline : candidate;
+      for (const mix of ["legacy-heavy", "current-heavy"]) {
+        for (const run of [1, 2, 3]) {
+          const report = codecReport(mode, mix, run);
+          if (mode === "candidate") {
+            report.environment.sourceCommit = "pre-change-commit";
+          }
+          await writeFile(
+            path.join(directory, `${mode}-${mix}-run${run}.json`),
+            JSON.stringify(report),
+          );
+        }
+      }
+    }
+
+    await assert.rejects(
+      execFileAsync(process.execPath, [issue34CodecComparator, baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /sourceCommit/);
+        return true;
+      },
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -224,7 +284,7 @@ function issue34Report(
     schemaVersion: 1,
     benchmark: "issue-34-patient-appointment-cancel",
     mode,
-    environment: issue34Environment(),
+    environment: issue34Environment(mode),
     runs: [1, 2, 3].map((run) => ({
       run,
       cancelP95Millis: p95,
@@ -239,7 +299,7 @@ function issue34Report(
   };
 }
 
-function issue34Environment() {
+function issue34Environment(mode) {
   return {
     datasetAppointments: 100,
     warmupSeconds: 30,
@@ -250,6 +310,7 @@ function issue34Environment() {
     postgresqlImage: "postgres:18-alpine",
     jdk: "OpenJDK Runtime Environment",
     vm: "OpenJDK 64-Bit Server VM",
+    sourceCommit: mode === "baseline" ? "pre-change-commit" : "candidate-commit",
   };
 }
 
@@ -270,6 +331,7 @@ function codecReport(mode, mix, run, metrics = {}) {
       legacyRatio: mix === "legacy-heavy" ? 0.8 : 0.2,
       jdk: "OpenJDK Runtime Environment",
       vm: "OpenJDK 64-Bit Server VM",
+      sourceCommit: mode === "baseline" ? "pre-change-commit" : "candidate-commit",
     },
     metrics: {
       throughputRowsPerSecond: 1000,

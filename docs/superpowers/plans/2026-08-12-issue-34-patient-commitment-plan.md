@@ -271,7 +271,7 @@ npm run test:e2e -- --project=chromium
 - [ ] detail이 DB/outbox에 저장되는 경계를 보존기간·ACL·DLQ/backup/provider log redaction 정책과 함께 문서화하고, PHI/PII 패턴 차단 또는 고정 안내문 mapping을 선택해 테스트한다.
 - [x] `git diff --check`, Kotlin 7-tier review, frontend lint/build/test, backend module tests를 실행한다.
 - [ ] 최종 검증에 `./gradlew :appointment-api:gatlingRun`과 notification mixed-schema benchmark 명령을 포함하고, 두 성능 artifact가 없으면 PR 준비 상태를 `PENDING`으로 유지한다.
-- [ ] 최종 검증 명령은 `./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=... -Dissue34.candidate=...`, `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=... -Dissue34.codec.mix=... -Dissue34.codec.run=...`, `scripts/compare-issue34-benchmark.sh baseline.json candidate.json`, `node scripts/compare-issue34-codec-benchmark.mjs baseline-codec-dir candidate-codec-dir`으로 고정한다. CI job `issue34-performance-gate`가 report artifact를 업로드하고 comparator 실패를 merge blocker로 반환한다.
+- [ ] 최종 검증 명령은 `./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=... -Dissue34.candidate=... -Dissue34.sourceCommit=<measured-commit>`, `./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=... -Dissue34.codec.mix=... -Dissue34.codec.run=... -Dissue34.sourceCommit=<measured-commit>`, `scripts/compare-issue34-benchmark.sh baseline.json candidate.json`, `node scripts/compare-issue34-codec-benchmark.mjs baseline-codec-dir candidate-codec-dir`으로 고정한다. report에 source commit을 기록하고 comparator는 baseline/candidate가 동일하거나 `unknown`인 provenance를 거부한다. CI job `issue34-performance-gate`가 report artifact를 업로드하고 comparator 실패를 merge blocker로 반환한다.
 - [ ] 결과와 미검증 항목을 한국어 implementation review에 기록하고, P0/P1이 없을 때만 PR 준비 상태로 표시한다.
 
 최종 검증 명령:
@@ -279,8 +279,8 @@ npm run test:e2e -- --project=chromium
 ```bash
 git diff --check
 ./gradlew :appointment-event:test :appointment-api:test :appointment-notification:test
-./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=appointment-api/src/gatling/resources/benchmarks/issue-34/baseline.json -Dissue34.candidate=appointment-api/src/gatling/resources/benchmarks/issue-34/candidate.json
-./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=baseline -Dissue34.codec.mix=legacy-heavy -Dissue34.codec.run=1
+./gradlew :appointment-api:gatlingRun --simulation io.bluetape4k.clinic.appointment.api.PatientAppointmentCancelPostgresSimulation -Dissue34.baseline=appointment-api/src/gatling/resources/benchmarks/issue-34/baseline.json -Dissue34.candidate=appointment-api/src/gatling/resources/benchmarks/issue-34/candidate.json -Dissue34.sourceCommit=<measured-commit>
+./gradlew :appointment-event:test --tests '*NotificationCodecBacklogBenchmarkTest*' -Dissue34.codec.benchmark=true -Dissue34.codec.mode=baseline -Dissue34.codec.mix=legacy-heavy -Dissue34.codec.run=1 -Dissue34.sourceCommit=<measured-commit>
 scripts/compare-issue34-benchmark.sh appointment-api/src/gatling/resources/benchmarks/issue-34/baseline.json appointment-api/src/gatling/resources/benchmarks/issue-34/candidate.json
 node scripts/compare-issue34-codec-benchmark.mjs codec-baseline-dir codec-candidate-dir
 cd frontend/appointment-frontend && npm test -- --watch=false && npm run build

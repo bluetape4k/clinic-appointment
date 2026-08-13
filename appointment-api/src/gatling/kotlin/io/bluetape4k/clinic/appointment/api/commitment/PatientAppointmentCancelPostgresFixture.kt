@@ -183,7 +183,8 @@ internal class PatientAppointmentCancelPostgresFixture(
                     "seed": $SEED,
                     "postgresqlImage": "${PostgreSQLServer.IMAGE}:${PostgreSQLServer.TAG}",
                     "jdk": "${escapeJson(System.getProperty("java.runtime.version"))}",
-                    "vm": "${escapeJson(System.getProperty("java.vm.name"))}"
+                    "vm": "${escapeJson(System.getProperty("java.vm.name"))}",
+                    "sourceCommit": "${escapeJson(sourceCommit())}"
                   },
                   "runs": [$runJson]
                 }
@@ -484,6 +485,11 @@ internal class PatientAppointmentCancelPostgresFixture(
             System.getProperty("issue34.mode", "candidate").also {
                 require(it == "baseline" || it == "candidate") { "issue34.mode must be baseline or candidate" }
             }
+
+        fun sourceCommit(): String =
+            System.getProperty("issue34.sourceCommit")
+                ?: System.getenv("GITHUB_SHA")
+                ?: "unknown"
 
         fun appendRun(existing: String, runJson: String, runNumber: Int): String {
             val marker = "\"runs\":["
