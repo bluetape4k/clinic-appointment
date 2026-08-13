@@ -9,6 +9,7 @@ import io.bluetape4k.clinic.appointment.event.integration.UntrustedSchedulingEve
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentAuditEvents
+import io.bluetape4k.clinic.appointment.model.tables.AppointmentCancellationDetails
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommandIdempotencies
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentCommitments
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentIdempotencies
@@ -132,6 +133,7 @@ class SchemaInitConfig {
                     AppointmentCommitments,
                     AppointmentProposals,
                     ConsentDecisions,
+                    AppointmentCancellationDetails,
                     AppointmentItems,
                     TreatmentSpaces,
                     ResourceCapacityBuckets,

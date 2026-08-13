@@ -235,6 +235,25 @@ internal class NotificationTemplateRendererTest {
         withoutDetail.textBody.contains("CUSTOMER_REQUEST") shouldBeEqualTo true
     }
 
+    @Test
+    fun `기본 catalog는 backlog의 취소 template v1을 code-only로 렌더링한다`() {
+        val rendered = NotificationTemplateRenderer(BuiltInWaitlistNotificationTemplateCatalog).render(
+            APPOINTMENT_CANCELLED_TEMPLATE_KEY,
+            NotificationTemplateVersion(1),
+            NotificationChannelType.SMS,
+            AppointmentCancelledParameters(
+                clinicDisplayName = "서울클리닉",
+                appointmentDate = LocalDate.parse("2026-08-01"),
+                startTime = LocalTime.parse("09:00:00"),
+                cancellationReasonCode = CancellationReasonCode("CUSTOMER_REQUEST"),
+            ),
+            profile,
+        )
+
+        rendered.textBody.contains("CUSTOMER_REQUEST") shouldBeEqualTo true
+        rendered.textBody.contains("null") shouldBeEqualTo false
+    }
+
     private fun renderer(channel: NotificationChannelType): NotificationTemplateRenderer =
         NotificationTemplateRenderer(
             StaticCatalog(
