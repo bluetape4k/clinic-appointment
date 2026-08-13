@@ -95,6 +95,17 @@ function validateEnvironment(baseline, candidate) {
       throw new Error(`environment key ${key} differs between baseline and candidate`);
     }
   }
+  validateSourceCommit(baseline.environment.sourceCommit, "baseline");
+  validateSourceCommit(candidate.environment.sourceCommit, "candidate");
+  if (baseline.environment.sourceCommit === candidate.environment.sourceCommit) {
+    throw new Error("baseline and candidate sourceCommit must differ");
+  }
+}
+
+function validateSourceCommit(value, label) {
+  if (typeof value !== "string" || value.trim() === "" || value === "unknown") {
+    throw new Error(`${label} environment sourceCommit must identify the measured source`);
+  }
 }
 
 function summarize(report) {

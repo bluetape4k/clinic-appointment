@@ -74,6 +74,7 @@ class NotificationCodecBacklogBenchmarkTest {
                 legacyRatio = configuration.legacyRatio,
                 jdk = System.getProperty("java.runtime.version", "unknown"),
                 vm = System.getProperty("java.vm.name", "unknown"),
+                sourceCommit = sourceCommit(),
             ),
             metrics = CodecBenchmarkMetrics(
                 throughputRowsPerSecond = measurements.decodedRows /
@@ -318,6 +319,7 @@ class NotificationCodecBacklogBenchmarkTest {
         val legacyRatio: Double,
         val jdk: String,
         val vm: String,
+        val sourceCommit: String,
     )
 
     private data class CodecBenchmarkMetrics(
@@ -397,5 +399,10 @@ class NotificationCodecBacklogBenchmarkTest {
         private const val MAX_LATENCY_SAMPLES = 500_000
         private const val NANOS_PER_SECOND = 1_000_000_000L
         private const val NANOS_PER_MILLISECOND = 1_000_000L
+
+        private fun sourceCommit(): String =
+            System.getProperty("issue34.sourceCommit")
+                ?: System.getenv("GITHUB_SHA")
+                ?: "unknown"
     }
 }

@@ -81,7 +81,7 @@ decline/cancel/412 refresh의 성공·오류·`finally`가 세대를 비교한�
 | frontend `npm run build` | 성공 |
 | frontend `npm run test:e2e` | 4 passing |
 | `git diff --check` | 오류 없음 |
-| `node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs` | 7 passing, BUILD SUCCESSFUL |
+| `node --test tests/benchmarks/appointment-messaging-benchmark-scripts.test.mjs` | 9 passing, BUILD SUCCESSFUL; baseline/candidate 동일 `sourceCommit` 거부 |
 | `gh pr checks 306 --repo bluetape4k/clinic-appointment` | 22 checks passing, 0 pending/failing; CI/Frontend/Visual Companion jobs completed successfully |
 
 ## 미검증·차단 항목
@@ -92,6 +92,8 @@ decline/cancel/412 refresh의 성공·오류·`finally`가 세대를 비교한�
 2. 실제 notification v1/v2 JSON decode와 DB backlog drain을 수행하는
    `NotificationCodecBacklogBenchmarkTest`와 mixed-ratio comparator는 구현됐고
    smoke가 통과했지만, 10,000건·30초/5분 3회 artifact와 CI gate는 아직 없다.
+   comparator는 `sourceCommit`이 없거나 `unknown`이거나 baseline/candidate가
+   같으면 실패하도록 고정했다.
 3. 보호된 backend와 Playwright를 한 번에 실행해 ETag/412, 권한, outbox,
    trace/screenshot/request-count를 보존하는 harness가 없다.
 4. production rollout readiness, schema backlog 0, provider delivery unknown 상태는

@@ -83,11 +83,30 @@ function byMix(reports, mix) {
 function assertEnvironment(baselineRuns, candidateRuns, mix) {
   const baselineEnvironment = baselineRuns[0].environment;
   const candidateEnvironment = candidateRuns[0].environment;
-  assert.deepEqual(candidateEnvironment, baselineEnvironment, `${mix}: benchmark environments differ`);
+  assertSourceCommits(baselineEnvironment, candidateEnvironment, mix);
+  const { sourceCommit: _baselineSourceCommit, ...baselineComparable } = baselineEnvironment;
+  const { sourceCommit: _candidateSourceCommit, ...candidateComparable } = candidateEnvironment;
+  assert.deepEqual(candidateComparable, baselineComparable, `${mix}: benchmark environments differ`);
   assert.equal(baselineEnvironment.datasetRows, 10_000, `${mix}: datasetRows must be 10000`);
   assert.equal(baselineEnvironment.warmupSeconds, 30, `${mix}: warmupSeconds must be 30`);
   assert.equal(baselineEnvironment.measureSeconds, 300, `${mix}: measureSeconds must be 300`);
   assert.equal(baselineEnvironment.detailLength, 500, `${mix}: detailLength must be 500`);
+}
+
+function assertSourceCommits(baselineEnvironment, candidateEnvironment, mix) {
+  for (const [label, value] of [
+    ["baseline", baselineEnvironment.sourceCommit],
+    ["candidate", candidateEnvironment.sourceCommit],
+  ]) {
+    assert.equal(typeof value, "string", `${mix}: ${label} sourceCommit is required`);
+    assert.notEqual(value.trim(), "", `${mix}: ${label} sourceCommit cannot be empty`);
+    assert.notEqual(value, "unknown", `${mix}: ${label} sourceCommit cannot be unknown`);
+  }
+  assert.notEqual(
+    baselineEnvironment.sourceCommit,
+    candidateEnvironment.sourceCommit,
+    `${mix}: baseline and candidate sourceCommit must differ`,
+  );
 }
 
 function assertValidMetrics(reports, mode, mix) {
