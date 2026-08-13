@@ -84,7 +84,7 @@ open class PatientAppointmentCancelPostgresSimulation : Simulation() {
 
     override fun before() {
         server.start()
-        fixture.startLockWaitSampling()
+        fixture.startMeasurementWindow(warmupSeconds)
     }
 
     override fun after() {

@@ -185,6 +185,16 @@ function validateCancelReport(report, expectedMode) {
     throw new Error("cancel differentAppointmentConcurrency must be 20");
   }
   for (const run of report.runs) {
+    if (run.sourceCommit !== report.environment.sourceCommit) {
+      throw new Error(`cancel ${expectedMode} run ${run.run}: run sourceCommit must match its report environment`);
+    }
+    const warmupRequests = nonNegativeInteger(
+      run.warmupRequests,
+      `cancel ${expectedMode} run ${run.run} warmupRequests`,
+    );
+    const requests = nonNegativeInteger(run.requests, `cancel ${expectedMode} run ${run.run} requests`);
+    if (warmupRequests <= 0) throw new Error(`cancel ${expectedMode} run ${run.run}: warmupRequests must be positive`);
+    if (requests <= 0) throw new Error(`cancel ${expectedMode} run ${run.run}: requests must be positive`);
     for (const field of [
       "cancelP95Millis",
       "cancelP99Millis",
@@ -604,10 +614,10 @@ function renderAnalysis(summary) {
 
 ### lock-wait 표본 신뢰도
 
-| mode | run별 성공 query 수 | run별 실패 수 | 판정 |
-|---|---|---|---|
-| baseline | ${baselineSampling.queries} | ${baselineSampling.failures} | ${baselineSampling.verdict} |
-| candidate | ${candidateSampling.queries} | ${candidateSampling.failures} | ${candidateSampling.verdict} |
+| mode | run별 warm-up 요청 | run별 측정 요청 | run별 성공 query 수 | run별 실패 수 | 판정 |
+|---|---|---|---|---|---|
+| baseline | ${baselineSampling.warmupRequests} | ${baselineSampling.requests} | ${baselineSampling.queries} | ${baselineSampling.failures} | ${baselineSampling.verdict} |
+| candidate | ${candidateSampling.warmupRequests} | ${candidateSampling.requests} | ${candidateSampling.queries} | ${candidateSampling.failures} | ${candidateSampling.verdict} |
 
 취소 gate는 p95 상대 10%, p99 상대 15%, 절대 p95 500ms, p99 1초,
 예상 밖 오류율 1%, 비의도 retry exhaustion 0.1%, lock-wait p95 50ms,
@@ -629,6 +639,7 @@ ${checkLines}
 ## 해석 규칙
 
 - \`expectedConflictRate\`와 \`expectedRetryExhaustionRate\`는 고정 arrival mix의 의도한 결과다. 오류율과 retry exhaustion gate의 분모에서 제외한다.
+- 모든 취소 run은 warm-up과 측정 요청을 각각 한 번 이상 실행하고, measurement deadline 이후 요청만 latency·rate에 포함해야 한다.
 - 모든 취소 run은 lock-wait query를 한 번 이상 성공해야 하고 실패 수가 0이어야 한다. 조회 실패를 \`0 ms\`로 해석하지 않는다.
 - \`sourceCommit\`이 없거나 \`unknown\`이거나 baseline/candidate가 같으면 생성기는 결과를 만들지 않는다.
 - 입력 artifact가 없거나 3회·환경·dataset 계약을 만족하지 않으면 이 문서 대신 실행이 실패해야 한다. 현재 저장소의 실측 결과가 없을 때는 이 문서의 템플릿 상태를 유지한다.
@@ -655,6 +666,8 @@ function lockWaitSamplingEvidence(run) {
     run: run.run,
     queries: run.lockWaitSampleQueries,
     failures: run.lockWaitSampleFailures,
+    warmupRequests: run.warmupRequests,
+    requests: run.requests,
   };
 }
 
@@ -662,7 +675,11 @@ function renderLockWaitSampling(runs) {
   return {
     queries: runs.map((run) => `run${run.run}=${run.queries}`).join(", "),
     failures: runs.map((run) => `run${run.run}=${run.failures}`).join(", "),
-    verdict: runs.every((run) => run.queries > 0 && run.failures === 0) ? "PASS" : "FAIL",
+    warmupRequests: runs.map((run) => `run${run.run}=${run.warmupRequests}`).join(", "),
+    requests: runs.map((run) => `run${run.run}=${run.requests}`).join(", "),
+    verdict: runs.every((run) => run.queries > 0 && run.failures === 0 && run.warmupRequests > 0 && run.requests > 0)
+      ? "PASS"
+      : "FAIL",
   };
 }
 

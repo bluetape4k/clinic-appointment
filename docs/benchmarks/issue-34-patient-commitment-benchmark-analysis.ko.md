@@ -36,7 +36,9 @@ node scripts/generate-issue34-benchmark-chart.mjs \
 | 입력 | 고정 계약 |
 |---|---|
 | 취소 baseline/candidate | `issue-34-patient-appointment-cancel`, 각 3회(`run` 1·2·3), dataset 100, warm-up 30초, 측정 300초, concurrency 10/20 |
-| 취소 provenance | `sourceCommit` 필수, `unknown` 금지, baseline/candidate 서로 다른 commit, 매 run `lockWaitSampleQueries > 0`, `lockWaitSampleFailures = 0` |
+| 취소 provenance | report와 매 run의 `sourceCommit` 필수·일치, `unknown` 금지, baseline/candidate 서로 다른 commit |
+| 취소 측정 경계 | 매 run `warmupRequests > 0`, `requests > 0`; monotonic measurement deadline 이후 요청만 latency·rate 집계 |
+| 취소 lock-wait | 매 run `lockWaitSampleQueries > 0`, `lockWaitSampleFailures = 0`; measurement window에서만 query |
 | codec baseline/candidate | `issue-34-notification-codec-backlog`, `legacy-heavy`·`current-heavy` 각각 3회 |
 | codec dataset | 각 report 10,000 rows, 등록 detail 15자, batch 500, warm-up 30초, 측정 300초 |
 | codec metrics | decoded rows, latency sample, throughput, p95/p99, drain time을 모두 기록하고 p99 ≥ p95 |

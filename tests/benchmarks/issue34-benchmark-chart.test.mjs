@@ -197,6 +197,41 @@ test("Issue #34 chart generator rejects failed lock-wait sampling", async () => 
   }
 });
 
+test("Issue #34 chart generator rejects mixed cancel run source commits", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-chart-provenance-"));
+  try {
+    const baselineCancel = path.join(root, "cancel-baseline.json");
+    const candidateCancel = path.join(root, "cancel-candidate.json");
+    const baselineCodec = path.join(root, "codec-baseline");
+    const candidateCodec = path.join(root, "codec-candidate");
+    await mkdir(baselineCodec, { recursive: true });
+    await mkdir(candidateCodec, { recursive: true });
+    await writeFile(baselineCancel, JSON.stringify(cancelReport("baseline")));
+    const candidate = cancelReport("candidate");
+    candidate.runs[1].sourceCommit = "different-candidate-commit";
+    await writeFile(candidateCancel, JSON.stringify(candidate));
+    for (const mode of ["baseline", "candidate"]) {
+      const directory = mode === "baseline" ? baselineCodec : candidateCodec;
+      for (const mix of ["legacy-heavy", "current-heavy"]) {
+        for (const run of [1, 2, 3]) {
+          await writeFile(path.join(directory, `${mode}-${mix}-run${run}.json`), JSON.stringify(codecReport(mode, mix, run)));
+        }
+      }
+    }
+
+    await assert.rejects(
+      execFileAsync(process.execPath, [generator, "--cancel-baseline", baselineCancel, "--cancel-candidate", candidateCancel, "--codec-baseline-dir", baselineCodec, "--codec-candidate-dir", candidateCodec, "--output-dir", path.join(root, "charts")], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /run sourceCommit/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Issue #34 chart generator rejects codec reports without a fixed environment field", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "issue-34-chart-environment-"));
   try {
@@ -281,6 +316,7 @@ function cancelReport(mode, p95 = 100, p99 = 200, lockWaitP95 = 20) {
     },
     runs: [1, 2, 3].map((run) => ({
       run,
+      sourceCommit: mode === "baseline" ? "pre-change-commit" : "candidate-commit",
       cancelP95Millis: p95,
       cancelP99Millis: p99,
       unexpectedErrorRate: 0.001,
@@ -288,6 +324,8 @@ function cancelReport(mode, p95 = 100, p99 = 200, lockWaitP95 = 20) {
       lockWaitP95Millis: lockWaitP95,
       lockWaitSampleQueries: 30,
       lockWaitSampleFailures: 0,
+      warmupRequests: 30,
+      requests: 100,
       expectedConflictRate: 0.2,
       expectedRetryExhaustionRate: 0.1,
       scenarioMismatchRate: 0,
