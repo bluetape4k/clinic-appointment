@@ -265,6 +265,7 @@ npm run test:e2e -- --project=chromium
 - [ ] PostgreSQL simulation은 patient/admin success 50%, idempotent replay 20%, expected `412` conflict 20%, expected retry exhaustion 10% arrival mix를 고정하고 동일 appointment 10·상이 appointment 20 동시성을 생성한다. expected conflict/exhaustion은 scenario success로 판정하고, unexpected HTTP 5xx/timeout과 비의도 exhaustion만 error/retry threshold 분모에 포함한다. pre-change baseline과 candidate는 동일 machine/container image/dataset/seed로 각각 3회 측정하며 median과 분산을 report에 저장한다.
 - [ ] benchmark assertion은 p95 상대 10%·p99 상대 15% 초과 또는 절대 p95 500ms·p99 1s 초과, error rate 1% 초과, retry exhaustion 0.1% 초과, lock-wait p95 50ms 초과에서 non-zero exit한다. report에는 CPU/JDK/PostgreSQL/container image/seed를 포함한다.
 - [ ] codec backlog benchmark는 legacy-heavy 80/20과 current-heavy 20/80 payload mix, 각 10,000건, 500자 detail, warm-up 30초·측정 5분을 고정하고 throughput/p95/p99/decode failure/drain-time 및 동일 절대/상대 회귀 상한을 assertion한다. synthetic fairness harness와 실제 codec benchmark를 분리한다.
+- [ ] `issue34.mode`는 report의 provenance metadata일 뿐 실행 경로를 바꾸지 않는다. baseline/candidate는 동일 코드의 mode만 바꿔 생성하지 말고, 승인된 pre-change 구현 또는 보존된 baseline artifact와 현재 candidate를 동일 환경에서 비교한다.
 - [x] `./gradlew :appointment-notification:test`를 포함해 renderer/worker readiness와 rollback compatibility를 검증한다.
 - [ ] tenant·clinic·patient가 서로 다른 실제 fixture로 IDOR 취소를 실행해 403/비존재형 오류와 state/audit/outbox/idempotency 무변경을 검증한다.
 - [ ] detail이 DB/outbox에 저장되는 경계를 보존기간·ACL·DLQ/backup/provider log redaction 정책과 함께 문서화하고, PHI/PII 패턴 차단 또는 고정 안내문 mapping을 선택해 테스트한다.
