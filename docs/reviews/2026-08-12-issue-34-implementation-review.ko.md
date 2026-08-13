@@ -106,7 +106,7 @@ decline/cancel/412 refresh의 성공·오류·`finally`가 세대를 비교한�
 - P2: 0 (architect 재검토 기준)
 - Architectural Status: `CLEAR`
 - 최종: `PENDING`
-- PR CI: 22/22 checks PASS; 독립 review thread와 성능·보호된 외부 gate는 미완료
+- PR CI: `2700ab3a` 기준 22/22 checks PASS; 독립 review thread와 성능·보호된 외부 gate는 미완료
 - PR/merge: 성능·보호된 외부 gate와 독립 review가 충족될 때까지 대기
 
 성능 artifact가 없는 상태에서 merge blocker를 우회하지 않는다. `issue34.mode`는
