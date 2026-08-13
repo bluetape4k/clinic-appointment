@@ -127,6 +127,7 @@ subprojects {
                     "issue34.codec.warmupSeconds",
                     "issue34.codec.measureSeconds",
                     "issue34.codec.artifact",
+                    "issue34.sourceCommit",
                 ).forEach { propertyName ->
                     System.getProperty(propertyName)?.let { propertyValue ->
                         systemProperty(propertyName, propertyValue)
