@@ -64,6 +64,8 @@ internal class PatientAppointmentCancelPostgresFixture(
     private val observations = ConcurrentLinkedQueue<CancellationObservation>()
     private val cancelDurationsNanos = ConcurrentLinkedQueue<Long>()
     private val lockWaitMillis = ConcurrentLinkedQueue<Double>()
+    private val lockWaitSampleQueries = AtomicInteger(0)
+    private val lockWaitSampleFailures = AtomicInteger(0)
     private val replacementSequence = AtomicLong(0)
     private val differentSlotCursor = AtomicInteger(1)
     private val sampling = AtomicBoolean(false)
@@ -147,6 +149,8 @@ internal class PatientAppointmentCancelPostgresFixture(
     fun writeReport(path: Path, runNumber: Int) {
         require(runNumber in 1..3) { "issue-34 benchmark run must be between 1 and 3" }
         stopLockWaitSampling()
+        check(lockWaitSampleQueries.get() > 0) { "lock-wait sampling must execute at least one successful query" }
+        check(lockWaitSampleFailures.get() == 0) { "lock-wait sampling failures must be zero" }
         val runJson =
             """
             {
@@ -156,6 +160,8 @@ internal class PatientAppointmentCancelPostgresFixture(
               "unexpectedErrorRate": ${unexpectedErrorRate()},
               "unintendedRetryExhaustionRate": ${unintendedRetryExhaustionRate()},
               "lockWaitP95Millis": ${percentile(lockWaitMillis, 0.95)},
+              "lockWaitSampleQueries": ${lockWaitSampleQueries.get()},
+              "lockWaitSampleFailures": ${lockWaitSampleFailures.get()},
               "expectedConflictRate": ${expectedConflictRate()},
               "expectedRetryExhaustionRate": ${expectedRetryExhaustionRate()},
               "requests": ${observations.size},
@@ -377,7 +383,7 @@ internal class PatientAppointmentCancelPostgresFixture(
     }
 
     private fun sampleLockWaits() {
-        runCatching {
+        try {
             transaction(database) {
                 val jdbcConnection =
                     TransactionManager.current().connection.connection as java.sql.Connection
@@ -395,6 +401,10 @@ internal class PatientAppointmentCancelPostgresFixture(
                     }
                 }
             }
+            lockWaitSampleQueries.incrementAndGet()
+        } catch (failure: Exception) {
+            lockWaitSampleFailures.incrementAndGet()
+            throw failure
         }
     }
 

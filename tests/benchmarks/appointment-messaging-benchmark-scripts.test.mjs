@@ -169,6 +169,30 @@ test("issue 34 comparator rejects baseline and candidate from the same source co
   }
 });
 
+test("issue 34 comparator rejects a lock-wait sampling failure", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-benchmark-"));
+  try {
+    const baseline = path.join(root, "baseline.json");
+    const candidate = path.join(root, "candidate.json");
+    const baselineReport = issue34Report(100, 200, 20, 0.001, 0.0001, 0, "baseline");
+    const candidateReport = issue34Report(100, 200, 0, 0.001, 0.0001, 0, "candidate");
+    candidateReport.runs[1].lockWaitSampleFailures = 1;
+    await writeFile(baseline, JSON.stringify(baselineReport));
+    await writeFile(candidate, JSON.stringify(candidateReport));
+
+    await assert.rejects(
+      execFileAsync(issue34Comparator, [baseline, candidate], { cwd: repositoryRoot }),
+      (error) => {
+        assert.notEqual(error.code, 0);
+        assert.match(`${error.stdout}\n${error.stderr}`, /lock-wait sampling failures/);
+        return true;
+      },
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("issue 34 codec comparator accepts two mixed-schema scenarios with three runs", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "issue-34-codec-benchmark-"));
   try {
@@ -292,6 +316,8 @@ function issue34Report(
       unexpectedErrorRate,
       unintendedRetryExhaustionRate,
       lockWaitP95Millis: lockWaitP95,
+      lockWaitSampleQueries: 30,
+      lockWaitSampleFailures: 0,
       expectedConflictRate: 0.2,
       expectedRetryExhaustionRate: 0.1,
       scenarioMismatchRate,

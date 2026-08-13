@@ -200,6 +200,20 @@ function validateCancelReport(report, expectedMode) {
     if (run.cancelP99Millis < run.cancelP95Millis) {
       throw new Error(`cancel ${expectedMode} run ${run.run}: p99 must be >= p95`);
     }
+    const queries = nonNegativeInteger(
+      run.lockWaitSampleQueries,
+      `cancel ${expectedMode} run ${run.run} lockWaitSampleQueries`,
+    );
+    const failures = nonNegativeInteger(
+      run.lockWaitSampleFailures,
+      `cancel ${expectedMode} run ${run.run} lockWaitSampleFailures`,
+    );
+    if (queries <= 0) {
+      throw new Error(`cancel ${expectedMode} run ${run.run}: lock-wait sampling requires a successful query`);
+    }
+    if (failures !== 0) {
+      throw new Error(`cancel ${expectedMode} run ${run.run}: lock-wait sampling failures must be zero`);
+    }
   }
 }
 
@@ -344,6 +358,10 @@ function buildSummary(cancel, codec, inputs) {
   const cancelSummary = {
     baseline: cancel.baselineMedian,
     candidate: cancel.candidateMedian,
+    lockWaitSampling: {
+      baseline: cancel.baseline.runs.map(lockWaitSamplingEvidence),
+      candidate: cancel.candidate.runs.map(lockWaitSamplingEvidence),
+    },
     checks: cancelChecksFromMedians(cancel.baselineMedian, cancel.candidateMedian),
     verdict: cancelChecksFromMedians(cancel.baselineMedian, cancel.candidateMedian).every((check) => check.passed)
       ? "PASS"
@@ -548,6 +566,8 @@ function renderComparisonChart({ title, subtitle, note, unit, metrics, baseline,
 
 function renderAnalysis(summary) {
   const cancel = summary.cancel;
+  const baselineSampling = renderLockWaitSampling(cancel.lockWaitSampling.baseline);
+  const candidateSampling = renderLockWaitSampling(cancel.lockWaitSampling.candidate);
   const codecRows = MIXES.map((mix) => {
     const value = summary.codec[mix];
     return `| ${mix} | ${formatNumber(value.baseline.decodeP95Millis)} / ${formatNumber(value.candidate.decodeP95Millis)} | ${formatNumber(value.baseline.decodeP99Millis)} / ${formatNumber(value.candidate.decodeP99Millis)} | ${formatNumber(value.baseline.throughputRowsPerSecond)} / ${formatNumber(value.candidate.throughputRowsPerSecond)} | ${formatNumber(value.baseline.drainTimeMillis)} / ${formatNumber(value.candidate.drainTimeMillis)} | ${value.verdict} |`;
@@ -582,6 +602,13 @@ function renderAnalysis(summary) {
 | 예상 밖 오류율 | ${formatPercent(cancel.baseline.unexpectedErrorRate)} | ${formatPercent(cancel.candidate.unexpectedErrorRate)} | ${formatDelta(cancel.baseline.unexpectedErrorRate, cancel.candidate.unexpectedErrorRate)} |
 | 비의도 retry exhaustion 비율 | ${formatPercent(cancel.baseline.unintendedRetryExhaustionRate)} | ${formatPercent(cancel.candidate.unintendedRetryExhaustionRate)} | ${formatDelta(cancel.baseline.unintendedRetryExhaustionRate, cancel.candidate.unintendedRetryExhaustionRate)} |
 
+### lock-wait 표본 신뢰도
+
+| mode | run별 성공 query 수 | run별 실패 수 | 판정 |
+|---|---|---|---|
+| baseline | ${baselineSampling.queries} | ${baselineSampling.failures} | ${baselineSampling.verdict} |
+| candidate | ${candidateSampling.queries} | ${candidateSampling.failures} | ${candidateSampling.verdict} |
+
 취소 gate는 p95 상대 10%, p99 상대 15%, 절대 p95 500ms, p99 1초,
 예상 밖 오류율 1%, 비의도 retry exhaustion 0.1%, lock-wait p95 50ms,
 scenario mismatch 0을 기준으로 판정한다.
@@ -602,6 +629,7 @@ ${checkLines}
 ## 해석 규칙
 
 - \`expectedConflictRate\`와 \`expectedRetryExhaustionRate\`는 고정 arrival mix의 의도한 결과다. 오류율과 retry exhaustion gate의 분모에서 제외한다.
+- 모든 취소 run은 lock-wait query를 한 번 이상 성공해야 하고 실패 수가 0이어야 한다. 조회 실패를 \`0 ms\`로 해석하지 않는다.
 - \`sourceCommit\`이 없거나 \`unknown\`이거나 baseline/candidate가 같으면 생성기는 결과를 만들지 않는다.
 - 입력 artifact가 없거나 3회·환경·dataset 계약을 만족하지 않으면 이 문서 대신 실행이 실패해야 한다. 현재 저장소의 실측 결과가 없을 때는 이 문서의 템플릿 상태를 유지한다.
 - 결과는 로컬 PostgreSQL/H2 harness의 비교 근거이며 보호된 backend E2E, 운영 rollout readiness, production SLO를 증명하지 않는다.
@@ -622,6 +650,22 @@ node scripts/compare-issue34-codec-benchmark.mjs <codec-baseline-dir> <codec-can
 `;
 }
 
+function lockWaitSamplingEvidence(run) {
+  return {
+    run: run.run,
+    queries: run.lockWaitSampleQueries,
+    failures: run.lockWaitSampleFailures,
+  };
+}
+
+function renderLockWaitSampling(runs) {
+  return {
+    queries: runs.map((run) => `run${run.run}=${run.queries}`).join(", "),
+    failures: runs.map((run) => `run${run.run}=${run.failures}`).join(", "),
+    verdict: runs.every((run) => run.queries > 0 && run.failures === 0) ? "PASS" : "FAIL",
+  };
+}
+
 function environmentSubtitle(environment) {
   return `${environment.postgresqlImage} · ${environment.datasetAppointments.toLocaleString("ko-KR")}건 · warm-up ${environment.warmupSeconds}초 · 측정 ${environment.measureSeconds}초 · seed ${environment.seed}`;
 }
@@ -638,6 +682,12 @@ function nonNegative(value, name) {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     throw new Error(`${name} must be a finite non-negative number`);
   }
+}
+
+function nonNegativeInteger(value, name) {
+  nonNegative(value, name);
+  if (!Number.isInteger(value)) throw new Error(`${name} must be an integer`);
+  return value;
 }
 
 async function readJson(file, label) {

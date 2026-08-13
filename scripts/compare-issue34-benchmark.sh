@@ -72,7 +72,15 @@ async function readReport(file, label) {
   if (!parsed.environment || typeof parsed.environment !== "object") {
     throw new Error(`${label} report must include an environment object`);
   }
+  for (const run of parsed.runs) validateLockWaitSampling(run, `${label} run ${run.run}`);
   return parsed;
+}
+
+function validateLockWaitSampling(run, label) {
+  const queries = integer(run.lockWaitSampleQueries, `${label} lockWaitSampleQueries`);
+  const failures = integer(run.lockWaitSampleFailures, `${label} lockWaitSampleFailures`);
+  if (queries <= 0) throw new Error(`${label} lock-wait sampling must execute at least one successful query`);
+  if (failures !== 0) throw new Error(`${label} lock-wait sampling failures must be zero`);
 }
 
 function validateEnvironment(baseline, candidate) {
@@ -131,6 +139,12 @@ function number(value, name) {
     throw new Error(`metric ${name} must be a finite non-negative number`);
   }
   return value;
+}
+
+function integer(value, name) {
+  const parsed = number(value, name);
+  if (!Number.isInteger(parsed)) throw new Error(`metric ${name} must be an integer`);
+  return parsed;
 }
 
 function median(series) {
