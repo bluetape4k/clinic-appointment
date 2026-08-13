@@ -81,6 +81,7 @@ test("Issue #34 chart generator writes SVG panels and a measured Korean analysis
     assert.match(analysis, /benchmark 근거이며 배포 SLO가 아니다/);
     assert.match(analysis, /lock-wait 표본 신뢰도/);
     assert.match(analysis, /run1=30, run2=30, run3=30/);
+    assert.match(analysis, /run1=300000ms, run2=300000ms, run3=300000ms/);
     assert.match(analysis, /조회 실패를 `0 ms`로 해석하지 않는다/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -232,6 +233,29 @@ test("Issue #34 chart generator rejects mixed cancel run source commits", async 
   }
 });
 
+test("Issue #34 chart generator rejects a mixed cancel run environment", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-chart-run-environment-"));
+  try {
+    const candidate = cancelReport("candidate");
+    candidate.runs[1].environment.jdk = "different-jdk";
+    await assertGeneratorRejectsCancelReport(root, candidate, /environment key jdk/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Issue #34 chart generator rejects a short cancel measurement span", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "issue-34-chart-measurement-span-"));
+  try {
+    const candidate = cancelReport("candidate");
+    candidate.runs[0].measurementEndedAtEpochMillis = 2_000;
+    candidate.runs[0].measurementSpanMillis = 1_000;
+    await assertGeneratorRejectsCancelReport(root, candidate, /measurementSpanMillis/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Issue #34 chart generator rejects codec reports without a fixed environment field", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "issue-34-chart-environment-"));
   try {
@@ -298,25 +322,32 @@ test("root Gradle test task forwards sourceCommit to codec benchmark JVM", async
 });
 
 function cancelReport(mode, p95 = 100, p99 = 200, lockWaitP95 = 20) {
+  const environment = {
+    datasetAppointments: 100,
+    warmupSeconds: 30,
+    measureSeconds: 300,
+    sameAppointmentConcurrency: 10,
+    differentAppointmentConcurrency: 20,
+    seed: 34,
+    postgresqlImage: "postgres:18-alpine",
+    jdk: "OpenJDK Runtime Environment",
+    vm: "OpenJDK 64-Bit Server VM",
+    sourceCommit: mode === "baseline" ? "pre-change-commit" : "candidate-commit",
+    environmentFingerprint: `${mode}-environment-fingerprint`,
+  };
   return {
     schemaVersion: 1,
     benchmark: "issue-34-patient-appointment-cancel",
     mode,
-    environment: {
-      datasetAppointments: 100,
-      warmupSeconds: 30,
-      measureSeconds: 300,
-      sameAppointmentConcurrency: 10,
-      differentAppointmentConcurrency: 20,
-      seed: 34,
-      postgresqlImage: "postgres:18-alpine",
-      jdk: "OpenJDK Runtime Environment",
-      vm: "OpenJDK 64-Bit Server VM",
-      sourceCommit: mode === "baseline" ? "pre-change-commit" : "candidate-commit",
-    },
+    environment,
     runs: [1, 2, 3].map((run) => ({
       run,
-      sourceCommit: mode === "baseline" ? "pre-change-commit" : "candidate-commit",
+      sourceCommit: environment.sourceCommit,
+      environmentFingerprint: environment.environmentFingerprint,
+      environment: { ...environment },
+      measurementStartedAtEpochMillis: 1_000,
+      measurementEndedAtEpochMillis: 301_000,
+      measurementSpanMillis: 300_000,
       cancelP95Millis: p95,
       cancelP99Millis: p99,
       unexpectedErrorRate: 0.001,
@@ -363,4 +394,32 @@ function codecReport(mode, mix, run) {
       passes: 1,
     },
   };
+}
+
+async function assertGeneratorRejectsCancelReport(root, candidateReport, messagePattern) {
+  const baselineCancel = path.join(root, "cancel-baseline.json");
+  const candidateCancel = path.join(root, "cancel-candidate.json");
+  const baselineCodec = path.join(root, "codec-baseline");
+  const candidateCodec = path.join(root, "codec-candidate");
+  await mkdir(baselineCodec, { recursive: true });
+  await mkdir(candidateCodec, { recursive: true });
+  await writeFile(baselineCancel, JSON.stringify(cancelReport("baseline")));
+  await writeFile(candidateCancel, JSON.stringify(candidateReport));
+  for (const mode of ["baseline", "candidate"]) {
+    const directory = mode === "baseline" ? baselineCodec : candidateCodec;
+    for (const mix of ["legacy-heavy", "current-heavy"]) {
+      for (const run of [1, 2, 3]) {
+        await writeFile(path.join(directory, `${mode}-${mix}-run${run}.json`), JSON.stringify(codecReport(mode, mix, run)));
+      }
+    }
+  }
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [generator, "--cancel-baseline", baselineCancel, "--cancel-candidate", candidateCancel, "--codec-baseline-dir", baselineCodec, "--codec-candidate-dir", candidateCodec, "--output-dir", path.join(root, "charts")], { cwd: repositoryRoot }),
+    (error) => {
+      assert.notEqual(error.code, 0);
+      assert.match(`${error.stdout}\n${error.stderr}`, messagePattern);
+      return true;
+    },
+  );
 }

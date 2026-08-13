@@ -36,9 +36,9 @@ node scripts/generate-issue34-benchmark-chart.mjs \
 | 입력 | 고정 계약 |
 |---|---|
 | 취소 baseline/candidate | `issue-34-patient-appointment-cancel`, 각 3회(`run` 1·2·3), dataset 100, warm-up 30초, 측정 300초, concurrency 10/20 |
-| 취소 provenance | report와 매 run의 `sourceCommit` 필수·일치, `unknown` 금지, baseline/candidate 서로 다른 commit |
-| 취소 측정 경계 | 매 run `warmupRequests > 0`, `requests > 0`; monotonic measurement deadline 이후 요청만 latency·rate 집계 |
-| 취소 lock-wait | 매 run `lockWaitSampleQueries > 0`, `lockWaitSampleFailures = 0`; measurement window에서만 query |
+| 취소 provenance | report와 매 run의 전체 환경 snapshot·SHA-256 `environmentFingerprint`·`sourceCommit` 필수·일치, `unknown` 금지, baseline/candidate 서로 다른 commit |
+| 취소 측정 경계 | 30개 virtual user의 전역 start/end barrier, 매 run `warmupRequests > 0`, `requests > 0`, 측정 span은 설정 window의 95%-105% |
+| 취소 lock-wait | start barrier에서 sampler를 열고 end barrier에서 닫음, 매 run `lockWaitSampleQueries > 0`, `lockWaitSampleFailures = 0` |
 | codec baseline/candidate | `issue-34-notification-codec-backlog`, `legacy-heavy`·`current-heavy` 각각 3회 |
 | codec dataset | 각 report 10,000 rows, 등록 detail 15자, batch 500, warm-up 30초, 측정 300초 |
 | codec metrics | decoded rows, latency sample, throughput, p95/p99, drain time을 모두 기록하고 p99 ≥ p95 |
@@ -46,6 +46,18 @@ node scripts/generate-issue34-benchmark-chart.mjs \
 입력이 누락되거나 환경·provenance가 어긋나면 생성기는 출력하지 않고
 실패한다. 같은 코드 경로에서 `issue34.mode`만 바꿔 만든 두 결과는
 pre-change baseline으로 인정하지 않는다.
+
+## 증거 계약 교훈
+
+Gatling scenario 시간과 fixture 내부 deadline을 따로 시작하면 fixture 초기화나
+virtual user 시작 지연만큼 warm-up 표본이 측정 구간에 섞일 수 있다. 따라서 각
+virtual user가 warm-up을 마친 뒤 전역 barrier에서 측정을 함께 시작하고, 모두가
+측정을 마친 뒤 두 번째 barrier에서 lock-wait sampler와 측정 구간을 함께 닫는다.
+
+또한 report 최상위 환경만 비교하면 같은 commit에서 실행한 smoke·다른 JDK·다른
+PostgreSQL image의 run이 하나의 artifact에 섞여도 숨겨질 수 있다. 매 run에 전체
+환경 snapshot과 fingerprint, 실제 측정 시작·종료·span을 기록하고, append·comparator·
+chart generator 세 경계에서 동일성을 각각 검증한다.
 
 ## 생성되는 결과
 
