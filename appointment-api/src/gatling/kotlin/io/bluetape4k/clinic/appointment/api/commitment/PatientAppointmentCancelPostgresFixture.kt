@@ -17,6 +17,7 @@ import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicIntegerArray
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReferenceArray
 import kotlin.math.ceil
@@ -72,6 +73,7 @@ internal class PatientAppointmentCancelPostgresFixture(
     private val clinic = schema.initialize(database, useProductionOutboxSchema = true)
     private val invoker = VisitCommitmentCommandInvoker(database)
     private val slots = AtomicReferenceArray<CancelSlot>(datasetSize)
+    private val successClaims = AtomicIntegerArray(datasetSize)
     private val replacementExecutor = Executors.newVirtualThreadPerTaskExecutor()
     private val contentionExecutor = Executors.newVirtualThreadPerTaskExecutor()
     private val observations = ConcurrentLinkedQueue<CancellationObservation>()
@@ -86,6 +88,7 @@ internal class PatientAppointmentCancelPostgresFixture(
     private val measurementEndedAtNanos = AtomicLong(0)
     private val replacementSequence = AtomicLong(0)
     private val differentSlotCursor = AtomicInteger(1)
+    private val contentionSlotCursor = AtomicInteger(0)
     private val sampling = AtomicBoolean(false)
     private val samplerExecutor = Executors.newSingleThreadExecutor()
     private val measurementStartBarrier =
@@ -158,7 +161,7 @@ internal class PatientAppointmentCancelPostgresFixture(
     /**
      * one HTTP request에 해당하는 실제 command 실행입니다.
      * 같은 appointment lane은 slot 1을 고정해 row/resource 경합을 만들고, 다른 appointment
-     * lane은 나머지 99개를 round-robin으로 선택한다.
+     * lane은 hot slot 1과 conflict 전용 slot 99를 제외한 slot 2..98을 round-robin으로 선택한다.
      */
     fun execute(
         operation: CancellationLoadOperation,
@@ -332,31 +335,52 @@ internal class PatientAppointmentCancelPostgresFixture(
         allowTerminalConflict: Boolean,
     ): CommandExecution {
         index ?: return CommandExecution(HTTP_SERVICE_UNAVAILABLE, "SLOT_NOT_READY", false)
-        val slot =
-            if (allowTerminalConflict) {
-                slots[index]
-            } else {
-                awaitActiveSlot(index)
-            } ?: return CommandExecution(HTTP_SERVICE_UNAVAILABLE, "SLOT_NOT_READY", false)
-        if (!slot.active) {
-            if (!allowTerminalConflict) {
-                return CommandExecution(HTTP_SERVICE_UNAVAILABLE, "SLOT_NOT_READY", false)
+        if (allowTerminalConflict) {
+            val slot = slots[index] ?: return CommandExecution(HTTP_SERVICE_UNAVAILABLE, "SLOT_NOT_READY", false)
+            if (!slot.active) {
+                val terminalConflict =
+                    invoker.cancel(
+                        clinic,
+                        slot.source,
+                        "issue34-terminal-conflict-${slot.index}-${System.nanoTime()}",
+                        actorRole,
+                    )
+                return mapOutcome(terminalConflict, "success-or-conflict")
             }
-            val terminalConflict =
-                invoker.cancel(
-                    clinic,
-                    slot.source,
-                    "issue34-terminal-conflict-${slot.index}-${System.nanoTime()}",
-                    actorRole,
-                )
-            return mapOutcome(terminalConflict, "success-or-conflict")
+            val outcome = invoker.cancel(clinic, slot.source, slot.cancelKey, actorRole)
+            if (outcome.success && !outcome.replay) {
+                val replaced = slots.compareAndSet(index, slot, slot.copy(active = false, lastCancellation = outcome))
+                if (replaced) replacementExecutor.submit { replenish(index) }
+            }
+            return mapOutcome(outcome, "success-or-conflict")
         }
-        val outcome = invoker.cancel(clinic, slot.source, slot.cancelKey, actorRole)
-        if (outcome.success && !outcome.replay) {
-            val replaced = slots.compareAndSet(index, slot, slot.copy(active = false, lastCancellation = outcome))
-            if (replaced) replacementExecutor.submit { replenish(index) }
+        var candidateIndex: Int? = index
+        repeat(MAX_SLOT_WAIT_ATTEMPTS) {
+            val selectedIndex = candidateIndex ?: nextDifferentSlot()
+            if (selectedIndex == null || !successClaims.compareAndSet(selectedIndex, 0, 1)) {
+                candidateIndex = null
+                Thread.sleep(SLOT_WAIT_MILLIS)
+                return@repeat
+            }
+            val slot = awaitActiveSlot(selectedIndex)
+            if (slot == null) {
+                successClaims.set(selectedIndex, 0)
+                candidateIndex = null
+                return@repeat
+            }
+            val outcome =
+                try {
+                    invoker.cancel(clinic, slot.source, slot.cancelKey, actorRole)
+                } finally {
+                    successClaims.set(selectedIndex, 0)
+                }
+            if (outcome.success && !outcome.replay) {
+                val replaced = slots.compareAndSet(selectedIndex, slot, slot.copy(active = false, lastCancellation = outcome))
+                if (replaced) replacementExecutor.submit { replenish(selectedIndex) }
+            }
+            return mapOutcome(outcome, "success")
         }
-        return mapOutcome(outcome, "success")
+        return CommandExecution(HTTP_SERVICE_UNAVAILABLE, "SLOT_NOT_READY", false)
     }
 
     private fun replayCancelledSlot(): CommandExecution {
@@ -373,7 +397,7 @@ internal class PatientAppointmentCancelPostgresFixture(
             if (sameAppointment) {
                 slots[1]
             } else {
-                nextDifferentSlot()?.let(::awaitActiveSlot)
+                slots[nextContentionSlot()]
             }
                 ?: return CommandExecution(HTTP_SERVICE_UNAVAILABLE, "SLOT_NOT_READY", false)
         val stale = slot.source.copy(version = slot.source.version + 1)
@@ -386,9 +410,8 @@ internal class PatientAppointmentCancelPostgresFixture(
             if (sameAppointment) {
                 slots[1]
             } else {
-                nextDifferentSlot()?.let(::awaitActiveSlot)
-            }
-                ?: return CommandExecution(HTTP_SERVICE_UNAVAILABLE, "SLOT_NOT_READY", false)
+                slots[nextContentionSlot()]
+            } ?: return CommandExecution(HTTP_SERVICE_UNAVAILABLE, "SLOT_NOT_READY", false)
         val jobs =
             List(2) { attempt ->
                 contentionExecutor.submit<CommandOutcome> {
@@ -448,12 +471,18 @@ internal class PatientAppointmentCancelPostgresFixture(
      * 의도된 contention 결과로 오인하지 않도록 하는 bounded scan이다.
      */
     private fun nextDifferentSlot(): Int? {
-        val first = 1 + (differentSlotCursor.getAndIncrement() - 1) % (datasetSize - 1)
-        repeat(datasetSize - 1) { offset ->
-            val index = 1 + (first - 1 + offset) % (datasetSize - 1)
-            if (slots[index]?.active == true) return index
+        val differentSlotCount = SUCCESS_SLOT_END_INDEX - FIRST_DIFFERENT_SLOT_INDEX + 1
+        val first = FIRST_DIFFERENT_SLOT_INDEX + (differentSlotCursor.getAndIncrement() - 1) % differentSlotCount
+        repeat(differentSlotCount) { offset ->
+            val index = FIRST_DIFFERENT_SLOT_INDEX + (first - FIRST_DIFFERENT_SLOT_INDEX + offset) % differentSlotCount
+            if (slots[index]?.active == true && successClaims[index] == 0) return index
         }
         return null
+    }
+
+    private fun nextContentionSlot(): Int {
+        val contentionSlotCount = CONTENTION_SLOT_END_INDEX - CONTENTION_SLOT_START_INDEX + 1
+        return CONTENTION_SLOT_START_INDEX + contentionSlotCursor.getAndIncrement() % contentionSlotCount
     }
 
     private fun mapOutcome(
@@ -595,6 +624,10 @@ internal class PatientAppointmentCancelPostgresFixture(
         const val HTTP_SERVICE_UNAVAILABLE = 503
         const val MAX_SLOT_WAIT_ATTEMPTS = 200
         const val SLOT_WAIT_MILLIS = 5L
+        const val FIRST_DIFFERENT_SLOT_INDEX = 2
+        const val SUCCESS_SLOT_END_INDEX = 98
+        const val CONTENTION_SLOT_START_INDEX = 99
+        const val CONTENTION_SLOT_END_INDEX = 99
         val CONFLICT_CODES =
             setOf(
                 "VERSION_CONFLICT",
