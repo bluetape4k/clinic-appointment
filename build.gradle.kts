@@ -113,6 +113,18 @@ subprojects {
 
             useJUnitPlatform()
 
+            // Colima의 macOS 호스트 소켓 경로는 Docker 데몬 컨테이너에서
+            // bind-mount할 수 없으므로, Ryuk가 사용하는 공식 컨테이너 내부
+            // 소켓 경로를 기본값으로 지정한다. 사용자가 명시한 override는 보존한다.
+            val colimaDockerSocket = file("${System.getProperty("user.home")}/.colima/default/docker.sock")
+            if (colimaDockerSocket.exists()) {
+                environment(
+                    "TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE",
+                    providers.environmentVariable("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE").orNull
+                        ?: "/var/run/docker.sock"
+                )
+            }
+
             jvmArgs(
                 "-Xshare:off",
                 "-Xms2G",
