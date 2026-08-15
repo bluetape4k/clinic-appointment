@@ -20,21 +20,24 @@ import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.model.tables.PlanRevisionTreatments
 import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
-import io.bluetape4k.clinic.appointment.test.AbstractExposedTest
-import io.bluetape4k.clinic.appointment.test.TestDB
-import io.bluetape4k.clinic.appointment.test.withDb
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 import java.time.Instant
 
-class AppointmentCancellationHistoryRepositoryTest : AbstractExposedTest() {
+class AppointmentCancellationHistoryRepositoryTest {
 
     @Test
     fun `patient scope와 boundary가 다른 취소 detail은 page에서 제외한다`() {
-        withDb(TestDB.H2) {
+        val database = Database.connect(
+            "jdbc:h2:mem:appointment-cancellation-history-${System.nanoTime()};MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        transaction(database) {
             SchemaUtils.createMissingTablesAndColumns(
                 TenantGroups,
                 Clinics,
