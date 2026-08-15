@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.integration
 
 import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.configuration.FluentConfiguration
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.Timestamp
@@ -20,9 +21,7 @@ internal object NotificationOutboxPerformanceTestSupport {
         dataSource: DataSource,
         location: String,
     ) {
-        Flyway.configure()
-            .dataSource(dataSource)
-            .locations(location)
+        flyway(dataSource, location)
             .cleanDisabled(false)
             .load()
             .apply {
@@ -30,6 +29,16 @@ internal object NotificationOutboxPerformanceTestSupport {
                 migrate()
             }
     }
+
+    private fun flyway(dataSource: DataSource, location: String): FluentConfiguration =
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .apply {
+                if (location.endsWith("/postgresql")) {
+                    configuration(mapOf("flyway.postgresql.transactional.lock" to "false"))
+                }
+            }
 
     fun seedBacklog(connection: Connection) {
         connection.autoCommit = false

@@ -1,0 +1,92 @@
+{
+  "kind": "chart",
+  "source": {
+    "question": "Issue #34의 18회 fixed-window 측정에서 취소 안전성·지연과 notification codec 처리량·지연 gate가 통과했는가?",
+    "revision": "8f09a78945ee8e3335a72b0d95695649564d2cbb",
+    "paths": [
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/cancel-baseline.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/cancel-candidate.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/legacy-heavy-1.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/legacy-heavy-2.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/legacy-heavy-3.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/current-heavy-1.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/current-heavy-2.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/current-heavy-3.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/legacy-heavy-1.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/legacy-heavy-2.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/legacy-heavy-3.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/current-heavy-1.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/current-heavy-2.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/current-heavy-3.json",
+      "scripts/generate-issue34-benchmark-chart.mjs"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "benchmark",
+      "label": "18회 fixed-window benchmark",
+      "source": "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports"
+    },
+    {
+      "id": "cancel-latency",
+      "label": "환자 예약 취소 지연",
+      "source": "scripts/generate-issue34-benchmark-chart.mjs"
+    },
+    {
+      "id": "cancel-safety",
+      "label": "환자 예약 취소 안전성",
+      "source": "scripts/generate-issue34-benchmark-chart.mjs"
+    },
+    {
+      "id": "codec-latency",
+      "label": "notification codec 지연",
+      "source": "scripts/generate-issue34-benchmark-chart.mjs"
+    },
+    {
+      "id": "codec-throughput",
+      "label": "notification codec 처리량",
+      "source": "scripts/generate-issue34-benchmark-chart.mjs"
+    }
+  ],
+  "edges": [
+    {
+      "id": "benchmark-cancel-latency",
+      "from": "benchmark",
+      "to": "cancel-latency",
+      "kind": "comparison",
+      "source": "scripts/generate-issue34-benchmark-chart.mjs"
+    },
+    {
+      "id": "benchmark-cancel-safety",
+      "from": "benchmark",
+      "to": "cancel-safety",
+      "kind": "comparison",
+      "source": "scripts/generate-issue34-benchmark-chart.mjs"
+    },
+    {
+      "id": "benchmark-codec-latency",
+      "from": "benchmark",
+      "to": "codec-latency",
+      "kind": "comparison",
+      "source": "scripts/generate-issue34-benchmark-chart.mjs"
+    },
+    {
+      "id": "benchmark-codec-throughput",
+      "from": "benchmark",
+      "to": "codec-throughput",
+      "kind": "comparison",
+      "source": "scripts/generate-issue34-benchmark-chart.mjs"
+    }
+  ],
+  "behavior": {
+    "branches": 0,
+    "loops": 0
+  },
+  "repairs": [
+    {
+      "target": "codec-latency-drain-labels",
+      "reason": "큰 drain time 숫자 라벨이 인접한 baseline/candidate 라벨과 겹쳐 각각 바깥쪽으로 정렬했다.",
+      "touches": 4
+    }
+  ]
+}

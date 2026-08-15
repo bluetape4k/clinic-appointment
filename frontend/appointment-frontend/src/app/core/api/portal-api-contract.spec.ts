@@ -58,4 +58,16 @@ describe('환자 포털 API 계약', () => {
       expect(error.retryAfterSeconds).toBe(7);
     }
   });
+
+  it('401 원문 error는 반사하지 않고 고정된 인증 문구로 정규화한다', () => {
+    const error = mapPortalApiError(new HttpErrorResponse({
+      status: 401,
+      statusText: 'Unauthorized',
+      error: { errorCode: 'AUTH_INTERNAL', error: 'internal token details', correlationId: 'contract-401' },
+    }));
+
+    expect(error.message).toBe('로그인 세션이 만료되었습니다. 다시 로그인해 주세요.');
+    expect(error.message).not.toContain('internal token details');
+    expect(error.correlationId).toBe('contract-401');
+  });
 });

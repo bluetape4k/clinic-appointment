@@ -42,6 +42,17 @@ import io.bluetape4k.clinic.appointment.api.service.FailClosedAppointmentCommitm
 import io.bluetape4k.clinic.appointment.api.service.FailClosedPatientSubjectFingerprintResolver
 import io.bluetape4k.clinic.appointment.api.service.HmacAppointmentCommitmentIdempotencyKeyHasher
 import io.bluetape4k.clinic.appointment.api.service.PatientSubjectFingerprintResolver
+import io.bluetape4k.clinic.appointment.api.service.PatientCancellationHistoryService
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryCursorCodec
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryEtagCodec
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryReferenceCodec
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryTokenRegistry
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryTenantIdentityGenerationProvider
+import io.bluetape4k.clinic.appointment.api.service.DatabasePatientHistoryReadiness
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryReadiness
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryMetadataMetrics
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryWriterVersionProvider
+import io.bluetape4k.clinic.appointment.api.migration.PatientCancellationHistoryBackfillRunner
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiService
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApplicationPort
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityMetrics
@@ -82,6 +93,7 @@ import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.repository.AppointmentIdempotencyRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentPlanRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
+import io.bluetape4k.clinic.appointment.repository.AppointmentCancellationHistoryRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStateHistoryRepository
 import io.bluetape4k.clinic.appointment.repository.AppointmentStatsRepository
 import io.bluetape4k.clinic.appointment.repository.BookingReliabilityRepository
@@ -151,6 +163,7 @@ import java.time.Duration
     ProfileReevaluationProperties::class,
     NotificationMemberIdProperties::class,
     NotificationProperties::class,
+    PatientHistoryProperties::class,
     BookingReliabilityProperties::class,
     WaitlistDeliveryProperties::class,
     PatientAuthenticationProperties::class,
@@ -178,6 +191,92 @@ class ServiceConfig {
 
     @Bean
     fun appointmentRepository(): AppointmentRepository = AppointmentRepository()
+
+    @Bean
+    fun appointmentCancellationHistoryRepository(): AppointmentCancellationHistoryRepository =
+        AppointmentCancellationHistoryRepository()
+
+    /** 활성화 시 외부 shared registry가 없으면 startup을 fail-closed 합니다. */
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.patient-history", name = ["api-enabled"], havingValue = "true")
+    @ConditionalOnMissingBean(PatientHistoryTokenRegistry::class)
+    internal fun missingPatientHistoryTokenRegistry(): PatientHistoryTokenRegistry =
+        error("appointment.patient-history requires a shared PatientHistoryTokenRegistry bean")
+
+    /** 활성화 시 tenant identity generation의 외부 권위 소유자가 없으면 startup을 중단합니다. */
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.patient-history", name = ["api-enabled"], havingValue = "true")
+    @ConditionalOnMissingBean(PatientHistoryTenantIdentityGenerationProvider::class)
+    internal fun missingPatientHistoryTenantIdentityGenerationProvider(): PatientHistoryTenantIdentityGenerationProvider =
+        error("appointment.patient-history requires a shared PatientHistoryTenantIdentityGenerationProvider bean")
+
+    /** 활성화 시 모든 writer replica의 contract version을 관찰하는 외부 provider가 필요합니다. */
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.patient-history", name = ["api-enabled"], havingValue = "true")
+    @ConditionalOnMissingBean(PatientHistoryWriterVersionProvider::class)
+    internal fun missingPatientHistoryWriterVersionProvider(): PatientHistoryWriterVersionProvider =
+        error("appointment.patient-history requires a shared PatientHistoryWriterVersionProvider bean")
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.patient-history", name = ["api-enabled"], havingValue = "true")
+    internal fun patientHistoryCursorCodec(
+        properties: PatientHistoryProperties,
+        registry: PatientHistoryTokenRegistry,
+    ): PatientHistoryCursorCodec = PatientHistoryCursorCodec(properties.cursorKeys(), registry)
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.patient-history", name = ["api-enabled"], havingValue = "true")
+    internal fun patientHistoryReferenceCodec(properties: PatientHistoryProperties): PatientHistoryReferenceCodec =
+        PatientHistoryReferenceCodec(properties.referenceKeys())
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.patient-history", name = ["api-enabled"], havingValue = "true")
+    internal fun patientHistoryEtagCodec(): PatientHistoryEtagCodec = PatientHistoryEtagCodec()
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.patient-history", name = ["api-enabled"], havingValue = "true")
+    internal fun patientHistoryReadiness(
+        database: Database,
+        registry: PatientHistoryTokenRegistry,
+        writerVersionProvider: PatientHistoryWriterVersionProvider,
+    ): PatientHistoryReadiness = DatabasePatientHistoryReadiness(database, registry, writerVersionProvider)
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.patient-history", name = ["backfill-enabled"], havingValue = "true")
+    internal fun patientCancellationHistoryBackfillRunner(
+        database: Database,
+        properties: PatientHistoryProperties,
+    ): PatientCancellationHistoryBackfillRunner = PatientCancellationHistoryBackfillRunner(
+        database = database,
+        batchSize = properties.backfillBatchSize,
+    )
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.patient-history", name = ["api-enabled"], havingValue = "true")
+    @ConditionalOnMissingBean(PatientCancellationHistoryService::class)
+    internal fun patientCancellationHistoryService(
+        database: Database,
+        tenantGroupRepository: TenantGroupRepository,
+        appointmentCancellationHistoryRepository: AppointmentCancellationHistoryRepository,
+        patientSubjectFingerprintResolver: PatientSubjectFingerprintResolver,
+        patientHistoryCursorCodec: PatientHistoryCursorCodec,
+        patientHistoryReferenceCodec: PatientHistoryReferenceCodec,
+        patientHistoryEtagCodec: PatientHistoryEtagCodec,
+        patientHistoryReadiness: PatientHistoryReadiness,
+        meterRegistry: MeterRegistry,
+    ): PatientCancellationHistoryService = PatientCancellationHistoryService(
+        database = database,
+        tenantGroupRepository = tenantGroupRepository,
+        historyRepository = appointmentCancellationHistoryRepository,
+        patientSubjectFingerprintResolver = patientSubjectFingerprintResolver,
+        cursorCodec = patientHistoryCursorCodec,
+        referenceCodec = patientHistoryReferenceCodec,
+        etagCodec = patientHistoryEtagCodec,
+        readiness = patientHistoryReadiness,
+        metadataMetrics = PatientHistoryMetadataMetrics { count ->
+            meterRegistry.counter("patient_history_metadata_ambiguous_total").increment(count.toDouble())
+        },
+    )
 
     @Bean
     fun appointmentIdempotencyRepository(): AppointmentIdempotencyRepository = AppointmentIdempotencyRepository()

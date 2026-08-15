@@ -1,0 +1,44 @@
+{
+  "capturedAt": "2026-08-15",
+  "acceptedRunCount": 18,
+  "sourceRefs": {
+    "baseline": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+    "candidate": "8f09a78945ee8e3335a72b0d95695649564d2cbb"
+  },
+  "environment": {
+    "jdk": "25.0.4+7-LTS-jvmci-25.2-b20",
+    "vm": "Java HotSpot(TM) 64-Bit Server VM",
+    "postgresqlImage": "postgres:18-alpine",
+    "cancelWindow": "warm-up 30초 + 측정 300초",
+    "codecWindow": "warm-up 30초 + 측정 300초"
+  },
+  "rawArtifactNormalization": [
+    {
+      "rawPath": "raw/cancel/baseline-jdk25.json",
+      "rawSourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c9",
+      "actualSourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+      "normalizedPath": "reports/cancel-baseline.json",
+      "change": "sourceCommit과 그 값에 종속된 environmentFingerprint만 실제 baseline HEAD로 정규화했으며 metric·run timing·sampling 값은 변경하지 않았다."
+    },
+    {
+      "rawPath": "raw/codec/baseline-jdk25/*.json",
+      "rawSourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c9",
+      "actualSourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+      "normalizedPath": "reports/codec-baseline/*.json",
+      "change": "sourceCommit만 실제 baseline HEAD로 정규화했으며 metric·timing 값은 변경하지 않았다."
+    },
+    {
+      "rawPath": "raw/codec/candidate-rerun/*.json",
+      "rawSourceCommit": "8f09a78945ee8e3335a72b0d95695649564d2cbb9",
+      "actualSourceCommit": "8f09a78945ee8e3335a72b0d95695649564d2cbb",
+      "normalizedPath": "reports/codec-candidate/*.json",
+      "change": "sourceCommit만 실제 candidate HEAD로 정규화했으며 metric·timing 값은 변경하지 않았다."
+    }
+  ],
+  "replay": {
+    "cancelComparator": "comparator/cancel-normalized.log",
+    "codecComparator": "comparator/codec-normalized.log",
+    "chartSummary": "charts/issue-34-benchmark-summary.json",
+    "chartVerdict": "PASS"
+  }
+}

@@ -37,6 +37,7 @@ class VisitCommitmentPerformanceIntegrationTest {
         Flyway.configure()
             .dataSource(dataSource)
             .locations("classpath:db/migration/postgresql")
+            .configuration(mapOf("flyway.postgresql.transactional.lock" to "false"))
             .cleanDisabled(false)
             .load()
             .apply {

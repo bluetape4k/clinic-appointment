@@ -12,6 +12,8 @@ import io.bluetape4k.clinic.appointment.api.notification.NotificationMemberApiEx
 import io.bluetape4k.clinic.appointment.event.notification.NotificationContractException
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.service.IdempotencyKeyConflictException
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryApiException
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryApiError
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiError
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiException
 import io.bluetape4k.clinic.appointment.api.dto.WaitlistApiErrorResponse
@@ -163,6 +165,24 @@ class GlobalExceptionHandler(
         request: HttpServletRequest,
     ): ResponseEntity<SchedulingApiErrorResponse> =
         appointmentCommitmentResponse(ex.error, request)
+
+    @ExceptionHandler(PatientHistoryApiException::class)
+    fun handlePatientHistory(
+        ex: PatientHistoryApiException,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val correlationId = request.correlationId()
+        val builder = ResponseEntity.status(ex.error.httpStatus)
+        if (ex.error.retryable) builder.header(HttpHeaders.RETRY_AFTER, "1")
+        return builder.body(
+            SchedulingApiErrorResponse(
+                error = ex.error.safeMessage,
+                errorCode = "PATIENT_HISTORY_${ex.error.name}",
+                correlationId = correlationId,
+                retryable = ex.error.retryable,
+            ),
+        )
+    }
 
     @ExceptionHandler(BookingReliabilityApiException::class)
     fun handleBookingReliability(
@@ -323,6 +343,9 @@ class GlobalExceptionHandler(
         ex: MethodArgumentNotValidException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isPatientCancellationHistoryRequest()) {
+            return patientHistoryResponse(PatientHistoryApiError.PAYLOAD_INVALID, request)
+        }
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
         }
@@ -351,6 +374,9 @@ class GlobalExceptionHandler(
         ex: MethodArgumentTypeMismatchException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isPatientCancellationHistoryRequest()) {
+            return patientHistoryResponse(PatientHistoryApiError.PAYLOAD_INVALID, request)
+        }
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
         }
@@ -379,6 +405,9 @@ class GlobalExceptionHandler(
         ex: HttpMessageNotReadableException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isPatientCancellationHistoryRequest()) {
+            return patientHistoryResponse(PatientHistoryApiError.PAYLOAD_INVALID, request)
+        }
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
         }
@@ -425,6 +454,9 @@ class GlobalExceptionHandler(
         ex: IllegalArgumentException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isPatientCancellationHistoryRequest()) {
+            return patientHistoryResponse(PatientHistoryApiError.PAYLOAD_INVALID, request)
+        }
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.PAYLOAD_INVALID, request)
         }
@@ -452,6 +484,9 @@ class GlobalExceptionHandler(
         ex: NoSuchElementException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isPatientCancellationHistoryRequest()) {
+            return patientHistoryResponse(PatientHistoryApiError.SNAPSHOT_CONFLICT, request)
+        }
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.COMMITMENT_NOT_FOUND, request)
         }
@@ -482,6 +517,9 @@ class GlobalExceptionHandler(
         ex: NoResourceFoundException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isPatientCancellationHistoryRequest()) {
+            return patientHistoryResponse(PatientHistoryApiError.UNAVAILABLE, request)
+        }
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentResponse(AppointmentCommitmentApiError.COMMITMENT_NOT_FOUND, request)
         }
@@ -501,6 +539,9 @@ class GlobalExceptionHandler(
         ex: IllegalStateException,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isPatientCancellationHistoryRequest()) {
+            return patientHistoryResponse(PatientHistoryApiError.UNAVAILABLE, request)
+        }
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentInternalError(ex, request)
         }
@@ -531,7 +572,9 @@ class GlobalExceptionHandler(
 
     @ExceptionHandler(AccessDeniedException::class)
     fun handleAccessDenied(request: HttpServletRequest): ResponseEntity<*> =
-        if (request.isAppointmentCommitmentRequest()) {
+        if (request.isPatientCancellationHistoryRequest()) {
+            patientHistoryResponse(PatientHistoryApiError.SCOPE_FORBIDDEN, request)
+        } else if (request.isAppointmentCommitmentRequest()) {
             appointmentCommitmentResponse(AppointmentCommitmentApiError.SCOPE_FORBIDDEN, request)
         } else if (request.isBookingReliabilityRequest()) {
             bookingReliabilityResponse(BookingReliabilityApiError.BOOKING_RELIABILITY_FORBIDDEN, request)
@@ -550,6 +593,9 @@ class GlobalExceptionHandler(
         ex: Exception,
         request: HttpServletRequest,
     ): ResponseEntity<*> {
+        if (request.isPatientCancellationHistoryRequest()) {
+            return patientHistoryResponse(PatientHistoryApiError.UNAVAILABLE, request)
+        }
         if (request.isAppointmentCommitmentRequest()) {
             return appointmentCommitmentInternalError(ex, request)
         }
@@ -677,6 +723,9 @@ class GlobalExceptionHandler(
     private fun HttpServletRequest.isAppointmentCommitmentRequest(): Boolean =
         isAppointmentCommitmentRequestPath(requestURI)
 
+    private fun HttpServletRequest.isPatientCancellationHistoryRequest(): Boolean =
+        isPatientCancellationHistoryRequestPath(requestURI)
+
     private fun HttpServletRequest.isBookingReliabilityRequest(): Boolean =
         isBookingReliabilityRequestPath(requestURI)
 
@@ -750,6 +799,22 @@ class GlobalExceptionHandler(
                 retryable = retryable,
                 action = action,
             )
+        )
+    }
+
+    private fun patientHistoryResponse(
+        error: PatientHistoryApiError,
+        request: HttpServletRequest,
+    ): ResponseEntity<SchedulingApiErrorResponse> {
+        val builder = ResponseEntity.status(error.httpStatus)
+        if (error.retryable) builder.header(HttpHeaders.RETRY_AFTER, "1")
+        return builder.body(
+            SchedulingApiErrorResponse(
+                error = error.safeMessage,
+                errorCode = "PATIENT_HISTORY_${error.name}",
+                correlationId = request.correlationId(),
+                retryable = error.retryable,
+            ),
         )
     }
 

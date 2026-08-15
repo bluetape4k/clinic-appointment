@@ -17,4 +17,9 @@ class SecurityProfileAssertionTest {
         NoOpSecurityConfig::class.java.getAnnotation(Profile::class.java).value
             .toList() shouldBeEqualTo listOf("(dev | test) & !integration-test")
     }
+
+    @Test
+    fun `no-op security provides actor resolver for route controllers`() {
+        NoOpSecurityConfig().actorContextResolver()::class shouldBeEqualTo ActorContextResolver::class
+    }
 }

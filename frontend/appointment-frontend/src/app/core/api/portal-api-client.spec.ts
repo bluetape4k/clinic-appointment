@@ -7,6 +7,7 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { PortalApiClient } from './portal-api-client';
 import { PortalApiException } from './portal-api-error';
 import { TenantContextService } from './tenant-context.service';
+import { PatientAuthService } from '../services/patient-auth.service';
 
 const evidence = {
   evidenceAuthority: 'consent:clinic-a',
@@ -17,6 +18,7 @@ describe('PortalApiClient', () => {
   let client: PortalApiClient;
   let httpMock: HttpTestingController;
   let tenant: TenantContextService;
+  let auth: PatientAuthService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -25,6 +27,7 @@ describe('PortalApiClient', () => {
     client = TestBed.inject(PortalApiClient);
     httpMock = TestBed.inject(HttpTestingController);
     tenant = TestBed.inject(TenantContextService);
+    auth = TestBed.inject(PatientAuthService);
     tenant.setTenant('clinic-a');
   });
 
@@ -177,5 +180,142 @@ describe('PortalApiClient', () => {
     await expect(promise).rejects.toSatisfy((error: PortalApiException) =>
       error.state.kind === 'retryable' && error.state.retryAfterSeconds === 10,
     );
+  });
+
+  it('취소 이력 최초 조회는 cursor 없이 요청하고 tenant generation을 private cache에 결속한다', async () => {
+    const promise = client.getCancellationHistory({ cursor: null, limit: 20 });
+    const request = httpMock.expectOne(candidate =>
+      candidate.url === '/api/clinic-a/patient/appointments/cancellation-history' &&
+      candidate.params.get('limit') === '20' &&
+      !candidate.params.has('cursor') &&
+      !candidate.headers.has('If-None-Match'),
+    );
+    request.flush({ limit: 20, entries: [], nextCursor: null }, {
+      status: 200,
+      statusText: 'OK',
+      headers: new HttpHeaders({ ETag: '"sha256:' + 'a'.repeat(64) + '"', 'X-Tenant-Identity-Generation': 'v1.generation-a' }),
+    });
+
+    await expect(promise).resolves.toMatchObject({ kind: 'body', tenantIdentityGeneration: 'v1.generation-a' });
+  });
+
+  it('같은 page의 304는 동일 generation private body만 재사용한다', async () => {
+    const etag = '"sha256:' + 'b'.repeat(64) + '"';
+    const first = client.getCancellationHistory({ cursor: null, limit: 20 });
+    const firstRequest = httpMock.expectOne('/api/clinic-a/patient/appointments/cancellation-history?limit=20');
+    firstRequest.flush({ limit: 20, entries: [], nextCursor: null }, {
+      status: 200,
+      statusText: 'OK',
+      headers: new HttpHeaders({ ETag: etag, 'X-Tenant-Identity-Generation': 'v1.generation-b' }),
+    });
+    await first;
+
+    const second = client.getCancellationHistory({ cursor: null, limit: 20 });
+    const secondRequest = httpMock.expectOne('/api/clinic-a/patient/appointments/cancellation-history?limit=20');
+    expect(secondRequest.request.headers.get('If-None-Match')).toBe(etag);
+    expect(secondRequest.request.headers.get('X-Tenant-Identity-Generation')).toBe('v1.generation-b');
+    secondRequest.flush(null, {
+      status: 304,
+      statusText: 'Not Modified',
+      headers: new HttpHeaders({ ETag: etag, 'X-Tenant-Identity-Generation': 'v1.generation-b' }),
+    });
+
+    await expect(second).resolves.toMatchObject({ kind: 'not-modified', body: { entries: [] } });
+  });
+
+  it('tenant generation 변경은 기존 body를 반환하지 않고 첫 페이지를 한 번만 무조건 재조회한다', async () => {
+    const first = client.getCancellationHistory({ cursor: null, limit: 20 });
+    const firstRequest = httpMock.expectOne('/api/clinic-a/patient/appointments/cancellation-history?limit=20');
+    firstRequest.flush({ limit: 20, entries: [{ appointmentRef: 'old' }], nextCursor: null }, {
+      status: 200,
+      statusText: 'OK',
+      headers: new HttpHeaders({ ETag: '"sha256:' + '1'.repeat(64) + '"', 'X-Tenant-Identity-Generation': 'v1.generation-a' }),
+    });
+    await first;
+
+    const second = client.getCancellationHistory({ cursor: null, limit: 20 });
+    const generationChanged = httpMock.expectOne('/api/clinic-a/patient/appointments/cancellation-history?limit=20');
+    expect(generationChanged.request.headers.get('X-Tenant-Identity-Generation')).toBe('v1.generation-a');
+    generationChanged.flush({ limit: 20, entries: [{ appointmentRef: 'new' }], nextCursor: null }, {
+      status: 200,
+      statusText: 'OK',
+      headers: new HttpHeaders({ ETag: '"sha256:' + '2'.repeat(64) + '"', 'X-Tenant-Identity-Generation': 'v1.generation-b' }),
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const bootstrap = httpMock.expectOne('/api/clinic-a/patient/appointments/cancellation-history?limit=20');
+    expect(bootstrap.request.headers.has('If-None-Match')).toBe(false);
+    expect(bootstrap.request.headers.has('X-Tenant-Identity-Generation')).toBe(false);
+    bootstrap.flush({ limit: 20, entries: [{ appointmentRef: 'fresh' }], nextCursor: null }, {
+      status: 200,
+      statusText: 'OK',
+      headers: new HttpHeaders({ ETag: '"sha256:' + '3'.repeat(64) + '"', 'X-Tenant-Identity-Generation': 'v1.generation-b' }),
+    });
+
+    await expect(second).resolves.toMatchObject({ body: { entries: [{ appointmentRef: 'fresh' }] } });
+  });
+
+  it('tenant 전환은 기존 history cache를 비우고 generation bootstrap을 다시 수행한다', async () => {
+    const first = client.getCancellationHistory({ cursor: null, limit: 20 });
+    const firstRequest = httpMock.expectOne('/api/clinic-a/patient/appointments/cancellation-history?limit=20');
+    firstRequest.flush({ limit: 20, entries: [], nextCursor: null }, {
+      status: 200,
+      statusText: 'OK',
+      headers: new HttpHeaders({ ETag: '"sha256:' + 'c'.repeat(64) + '"', 'X-Tenant-Identity-Generation': 'v1.generation-c' }),
+    });
+    await first;
+
+    tenant.setTenant('clinic-b');
+    const second = client.getCancellationHistory({ cursor: null, limit: 20 });
+    const secondRequest = httpMock.expectOne('/api/clinic-b/patient/appointments/cancellation-history?limit=20');
+    expect(secondRequest.request.headers.has('If-None-Match')).toBe(false);
+    expect(secondRequest.request.headers.has('X-Tenant-Identity-Generation')).toBe(false);
+    secondRequest.flush({ limit: 20, entries: [], nextCursor: null }, {
+      status: 200,
+      statusText: 'OK',
+      headers: new HttpHeaders({ ETag: '"sha256:' + 'd'.repeat(64) + '"', 'X-Tenant-Identity-Generation': 'v1.generation-d' }),
+    });
+
+    await expect(second).resolves.toMatchObject({ tenantIdentityGeneration: 'v1.generation-d' });
+  });
+
+  it('session reset 뒤 지연된 history 응답은 private cache를 다시 채우지 않는다', async () => {
+    const promise = client.getCancellationHistory({ cursor: null, limit: 20 });
+    const request = httpMock.expectOne('/api/clinic-a/patient/appointments/cancellation-history?limit=20');
+
+    auth.beginSessionChange();
+    client.clearCancellationHistoryCache();
+    request.flush({ limit: 20, entries: [{ appointmentRef: 'old' }], nextCursor: null }, {
+      status: 200,
+      statusText: 'OK',
+      headers: new HttpHeaders({ ETag: '"sha256:' + 'e'.repeat(64) + '"', 'X-Tenant-Identity-Generation': 'v1.generation-e' }),
+    });
+
+    await expect(promise).rejects.toThrow('현재 session');
+  });
+
+  it('tenant 전환 뒤 지연된 이전 tenant history 응답은 새 tenant cache에 저장하지 않는다', async () => {
+    const promise = client.getCancellationHistory({ cursor: null, limit: 20 });
+    const request = httpMock.expectOne('/api/clinic-a/patient/appointments/cancellation-history?limit=20');
+
+    tenant.setTenant('clinic-b');
+    client.clearCancellationHistoryCache();
+    request.flush({ limit: 20, entries: [{ appointmentRef: 'old-tenant' }], nextCursor: null }, {
+      status: 200,
+      statusText: 'OK',
+      headers: new HttpHeaders({ ETag: '"sha256:' + 'f'.repeat(64) + '"', 'X-Tenant-Identity-Generation': 'v1.generation-f' }),
+    });
+
+    await expect(promise).rejects.toThrow('현재 session');
+    const next = client.getCancellationHistory({ cursor: null, limit: 20 });
+    const nextRequest = httpMock.expectOne('/api/clinic-b/patient/appointments/cancellation-history?limit=20');
+    expect(nextRequest.request.headers.has('If-None-Match')).toBe(false);
+    expect(nextRequest.request.headers.has('X-Tenant-Identity-Generation')).toBe(false);
+    nextRequest.flush({ limit: 20, entries: [], nextCursor: null }, {
+      status: 200,
+      statusText: 'OK',
+      headers: new HttpHeaders({ ETag: '"sha256:' + '0'.repeat(64) + '"', 'X-Tenant-Identity-Generation': 'v1.generation-b' }),
+    });
+    await expect(next).resolves.toMatchObject({ body: { entries: [] } });
   });
 });

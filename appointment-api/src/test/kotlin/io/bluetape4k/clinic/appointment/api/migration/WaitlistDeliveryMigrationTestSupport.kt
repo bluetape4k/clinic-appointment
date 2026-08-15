@@ -93,6 +93,7 @@ internal object WaitlistDeliveryMigrationTestSupport {
         val flyway = Flyway.configure()
             .dataSource(dataSource)
             .locations(location)
+            .target("19")
             .cleanDisabled(false)
             .load()
         flyway.clean()

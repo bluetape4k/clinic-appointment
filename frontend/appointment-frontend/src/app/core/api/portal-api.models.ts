@@ -104,4 +104,42 @@ export interface PortalResponse<T> {
   body: T;
   etag: string | null;
   retryAfterSeconds: number | null;
+  /** 서버 tenant resolver가 발급한 opaque session-memory generation입니다. */
+  tenantIdentityGeneration?: string | null;
 }
+
+/** 환자 취소 이력 조회에 공개하는 유일한 query입니다. */
+export interface PatientHistoryQuery {
+  cursor: string | null;
+  limit: number;
+}
+
+/** 환자에게 표시할 취소 이력 한 건입니다. 서버가 이미 환자용 label을 제공합니다. */
+export interface PatientCancellationHistoryEntry {
+  appointmentRef: string;
+  productName: string | null;
+  sessionNumber: number | null;
+  totalSessions: number | null;
+  visitStartAt: string | null;
+  visitEndAt: string | null;
+  fromStatus: string | null;
+  fromStatusLabel: string | null;
+  toStatus: string;
+  toStatusLabel: string;
+  reasonCode: string;
+  reasonLabel: string;
+  reasonDetail: string | null;
+  actorRole: string;
+  actorLabel: string;
+  occurredAt: string;
+}
+
+export interface PatientCancellationHistoryPage {
+  limit: number;
+  entries: PatientCancellationHistoryEntry[];
+  nextCursor: string | null;
+}
+
+export type CancellationHistoryPageResult =
+  | { kind: 'body'; body: PatientCancellationHistoryPage; etag: string; tenantIdentityGeneration: string }
+  | { kind: 'not-modified'; body: PatientCancellationHistoryPage; etag: string; tenantIdentityGeneration: string };

@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.model.tables
 
+import io.bluetape4k.clinic.appointment.model.commitment.AppointmentCommitmentStatus
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.javatime.timestamp
@@ -19,6 +20,8 @@ object AppointmentCancellationDetails : LongIdTable("scheduling_appointment_canc
     val proposalId = reference("proposal_id", AppointmentProposals, onDelete = ReferenceOption.CASCADE)
     val reasonCode = varchar("reason_code", 64)
     val reasonDetail = varchar("reason_detail", 500).nullable()
+    val fromCommitmentStatus = enumerationByName<AppointmentCommitmentStatus>("from_commitment_status", 32).nullable()
+    val patientScopeFingerprint = varchar("patient_scope_fingerprint", 128).nullable()
     val actorRole = varchar("actor_role", 16)
     val actorScopeHash = varchar("actor_scope_hash", 128)
     val detailHash = varchar("detail_hash", 64)
@@ -32,6 +35,14 @@ object AppointmentCancellationDetails : LongIdTable("scheduling_appointment_canc
             tenantGroupId,
             clinicId,
             occurredAt,
+        )
+        index(
+            "idx_cancellation_detail_patient_scope_time",
+            false,
+            tenantGroupId,
+            patientScopeFingerprint,
+            occurredAt,
+            id,
         )
     }
 }

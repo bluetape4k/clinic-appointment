@@ -1,0 +1,379 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "issue-34-patient-commitment",
+  "verdict": "PASS",
+  "deploymentSloEvidence": false,
+  "cancel": {
+    "baseline": {
+      "cancelP95Millis": 57.624125,
+      "cancelP99Millis": 92.304583,
+      "unexpectedErrorRate": 0,
+      "unintendedRetryExhaustionRate": 0,
+      "lockWaitP95Millis": 29.843,
+      "expectedConflictRate": 0.3723682713098896,
+      "expectedRetryExhaustionRate": 0,
+      "scenarioMismatchRate": 0.011039034937976555
+    },
+    "candidate": {
+      "cancelP95Millis": 55.580875,
+      "cancelP99Millis": 96.029333,
+      "unexpectedErrorRate": 0,
+      "unintendedRetryExhaustionRate": 0,
+      "lockWaitP95Millis": 24.67,
+      "expectedConflictRate": 0.3752283105022831,
+      "expectedRetryExhaustionRate": 0,
+      "scenarioMismatchRate": 0
+    },
+    "environment": {
+      "datasetAppointments": 100,
+      "warmupSeconds": 30,
+      "measureSeconds": 300,
+      "sameAppointmentConcurrency": 10,
+      "differentAppointmentConcurrency": 20,
+      "pauseMillis": 1000,
+      "seed": 34,
+      "postgresqlImage": "postgres:18-alpine",
+      "jdk": "25.0.4+7-LTS-jvmci-25.2-b20",
+      "vm": "Java HotSpot(TM) 64-Bit Server VM"
+    },
+    "lockWaitSampling": {
+      "baseline": [
+        {
+          "run": 1,
+          "measurementSpanMillis": 301012,
+          "queries": 9243,
+          "failures": 0,
+          "warmupRequests": 870,
+          "requests": 8747
+        },
+        {
+          "run": 2,
+          "measurementSpanMillis": 300999,
+          "queries": 8246,
+          "failures": 0,
+          "warmupRequests": 870,
+          "requests": 8396
+        },
+        {
+          "run": 3,
+          "measurementSpanMillis": 301016,
+          "queries": 9661,
+          "failures": 0,
+          "warmupRequests": 870,
+          "requests": 8787
+        }
+      ],
+      "candidate": [
+        {
+          "run": 1,
+          "measurementSpanMillis": 301028,
+          "queries": 9291,
+          "failures": 0,
+          "warmupRequests": 870,
+          "requests": 8760
+        },
+        {
+          "run": 2,
+          "measurementSpanMillis": 300823,
+          "queries": 9465,
+          "failures": 0,
+          "warmupRequests": 844,
+          "requests": 8760
+        },
+        {
+          "run": 3,
+          "measurementSpanMillis": 300886,
+          "queries": 9553,
+          "failures": 0,
+          "warmupRequests": 870,
+          "requests": 8760
+        }
+      ]
+    },
+    "checks": [
+      {
+        "name": "취소 p95 상대 회귀",
+        "passed": true,
+        "actual": 55.580875,
+        "limit": 63.3865375,
+        "baseline": 57.624125,
+        "budget": 0.1
+      },
+      {
+        "name": "취소 p99 상대 회귀",
+        "passed": true,
+        "actual": 96.029333,
+        "limit": 106.15027044999998,
+        "baseline": 92.304583,
+        "budget": 0.15
+      },
+      {
+        "name": "취소 p95 절대 상한",
+        "passed": true,
+        "actual": 55.580875,
+        "limit": 500
+      },
+      {
+        "name": "취소 p99 절대 상한",
+        "passed": true,
+        "actual": 96.029333,
+        "limit": 1000
+      },
+      {
+        "name": "예상 밖 오류율",
+        "passed": true,
+        "actual": 0,
+        "limit": 0.01
+      },
+      {
+        "name": "비의도 retry exhaustion 비율",
+        "passed": true,
+        "actual": 0,
+        "limit": 0.001
+      },
+      {
+        "name": "lock-wait p95",
+        "passed": true,
+        "actual": 24.67,
+        "limit": 50
+      },
+      {
+        "name": "scenario mismatch 비율",
+        "passed": true,
+        "actual": 0,
+        "limit": 0
+      }
+    ],
+    "verdict": "PASS",
+    "sourceFiles": [
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/cancel-baseline.json",
+      "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/cancel-candidate.json"
+    ]
+  },
+  "codec": {
+    "legacy-heavy": {
+      "baseline": {
+        "throughputRowsPerSecond": 29220.89686161888,
+        "decodeP95Millis": 0.0045,
+        "decodeP99Millis": 0.005459,
+        "decodeFailures": 0,
+        "drainTimeMillis": 164950.447032,
+        "decodedRows": 4820000,
+        "latencySamples": 500000,
+        "passes": 482
+      },
+      "candidate": {
+        "throughputRowsPerSecond": 30361.519926878693,
+        "decodeP95Millis": 0.004209,
+        "decodeP99Millis": 0.005,
+        "decodeFailures": 0,
+        "drainTimeMillis": 165999.594623,
+        "decodedRows": 5000000,
+        "latencySamples": 500000,
+        "passes": 500
+      },
+      "checks": [
+        {
+          "name": "decode p95 절대 상한",
+          "passed": true,
+          "actual": 0.004209,
+          "limit": 500
+        },
+        {
+          "name": "decode p99 절대 상한",
+          "passed": true,
+          "actual": 0.005,
+          "limit": 1000
+        },
+        {
+          "name": "decode p95 상대 회귀",
+          "passed": true,
+          "actual": 0.004209,
+          "limit": 0.00495,
+          "baseline": 0.0045,
+          "budget": 0.1
+        },
+        {
+          "name": "decode p99 상대 회귀",
+          "passed": true,
+          "actual": 0.005,
+          "limit": 0.00627785,
+          "baseline": 0.005459,
+          "budget": 0.15
+        },
+        {
+          "name": "throughput 상대 회귀",
+          "passed": true,
+          "actual": 30361.519926878693,
+          "limit": 26298.807175456994,
+          "baseline": 29220.89686161888,
+          "budget": 0.1
+        },
+        {
+          "name": "drain-time 상대 회귀",
+          "passed": true,
+          "actual": 165999.594623,
+          "limit": 181445.49173520002,
+          "baseline": 164950.447032,
+          "budget": 0.1
+        },
+        {
+          "name": "decode failures",
+          "passed": true,
+          "actual": 0,
+          "limit": 0
+        }
+      ],
+      "verdict": "PASS",
+      "sourceFiles": [
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/legacy-heavy-1.json",
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/legacy-heavy-2.json",
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/legacy-heavy-3.json",
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/legacy-heavy-1.json",
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/legacy-heavy-2.json",
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/legacy-heavy-3.json"
+      ]
+    },
+    "current-heavy": {
+      "baseline": {
+        "throughputRowsPerSecond": 30871.893015671256,
+        "decodeP95Millis": 0.004208,
+        "decodeP99Millis": 0.004959,
+        "decodeFailures": 0,
+        "drainTimeMillis": 163255.294952,
+        "decodedRows": 5040000,
+        "latencySamples": 500000,
+        "passes": 504
+      },
+      "candidate": {
+        "throughputRowsPerSecond": 31031.516221863523,
+        "decodeP95Millis": 0.00425,
+        "decodeP99Millis": 0.005042,
+        "decodeFailures": 0,
+        "drainTimeMillis": 163060.031093,
+        "decodedRows": 5060000,
+        "latencySamples": 500000,
+        "passes": 506
+      },
+      "checks": [
+        {
+          "name": "decode p95 절대 상한",
+          "passed": true,
+          "actual": 0.00425,
+          "limit": 500
+        },
+        {
+          "name": "decode p99 절대 상한",
+          "passed": true,
+          "actual": 0.005042,
+          "limit": 1000
+        },
+        {
+          "name": "decode p95 상대 회귀",
+          "passed": true,
+          "actual": 0.00425,
+          "limit": 0.004628800000000001,
+          "baseline": 0.004208,
+          "budget": 0.1
+        },
+        {
+          "name": "decode p99 상대 회귀",
+          "passed": true,
+          "actual": 0.005042,
+          "limit": 0.00570285,
+          "baseline": 0.004959,
+          "budget": 0.15
+        },
+        {
+          "name": "throughput 상대 회귀",
+          "passed": true,
+          "actual": 31031.516221863523,
+          "limit": 27784.70371410413,
+          "baseline": 30871.893015671256,
+          "budget": 0.1
+        },
+        {
+          "name": "drain-time 상대 회귀",
+          "passed": true,
+          "actual": 163060.031093,
+          "limit": 179580.82444720002,
+          "baseline": 163255.294952,
+          "budget": 0.1
+        },
+        {
+          "name": "decode failures",
+          "passed": true,
+          "actual": 0,
+          "limit": 0
+        }
+      ],
+      "verdict": "PASS",
+      "sourceFiles": [
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/current-heavy-1.json",
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/current-heavy-2.json",
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-baseline/current-heavy-3.json",
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/current-heavy-1.json",
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/current-heavy-2.json",
+        "docs/benchmarks/issue-34-fixed-window/2026-08-15/reports/codec-candidate/current-heavy-3.json"
+      ]
+    }
+  },
+  "sourceCommits": {
+    "cancel": {
+      "baseline": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+      "candidate": "8f09a78945ee8e3335a72b0d95695649564d2cbb"
+    },
+    "codec": {
+      "legacy-heavy": {
+        "baseline": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+        "candidate": "8f09a78945ee8e3335a72b0d95695649564d2cbb"
+      },
+      "current-heavy": {
+        "baseline": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+        "candidate": "8f09a78945ee8e3335a72b0d95695649564d2cbb"
+      }
+    }
+  },
+  "environments": {
+    "cancel": {
+      "datasetAppointments": 100,
+      "warmupSeconds": 30,
+      "measureSeconds": 300,
+      "sameAppointmentConcurrency": 10,
+      "differentAppointmentConcurrency": 20,
+      "pauseMillis": 1000,
+      "seed": 34,
+      "postgresqlImage": "postgres:18-alpine",
+      "jdk": "25.0.4+7-LTS-jvmci-25.2-b20",
+      "vm": "Java HotSpot(TM) 64-Bit Server VM",
+      "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+      "environmentFingerprint": "6fe6863c2877ea7f9b8a550aa3947ac8c16a3d16d070eed57e8300721a38d036"
+    },
+    "codec": {
+      "legacy-heavy": {
+        "database": "h2",
+        "datasetRows": 10000,
+        "warmupSeconds": 30,
+        "measureSeconds": 300,
+        "detailLength": 15,
+        "batchSize": 500,
+        "legacyRatio": 0.8,
+        "jdk": "25.0.4+7-LTS-jvmci-25.2-b20",
+        "vm": "Java HotSpot(TM) 64-Bit Server VM",
+        "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c"
+      },
+      "current-heavy": {
+        "database": "h2",
+        "datasetRows": 10000,
+        "warmupSeconds": 30,
+        "measureSeconds": 300,
+        "detailLength": 15,
+        "batchSize": 500,
+        "legacyRatio": 0.2,
+        "jdk": "25.0.4+7-LTS-jvmci-25.2-b20",
+        "vm": "Java HotSpot(TM) 64-Bit Server VM",
+        "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c"
+      }
+    }
+  }
+}

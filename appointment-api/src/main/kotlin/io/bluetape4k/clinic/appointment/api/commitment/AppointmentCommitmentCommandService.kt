@@ -628,6 +628,15 @@ internal class AppointmentCommitmentCommandService(
                     }
                 }
             }
+            // 취소 CAS 직전의 상태와 appointment scope를 같은 transaction에서 snapshot합니다.
+            // legacy appointment는 fingerprint가 없을 수 있으므로 V28 nullable 계약을 유지합니다.
+            val snapshotFromCommitmentStatus = commitment.status
+            val snapshotPatientScopeFingerprint =
+                appointmentRepository.findPatientReferenceFingerprint(
+                    appointmentId = commitment.appointmentId,
+                    tenantGroupId = command.context.tenantGroupId,
+                    clinicId = command.context.clinicId,
+                )
             if (
                 !commitmentRepository.cancelByVersion(
                     commitmentId = commitment.id,
@@ -661,6 +670,8 @@ internal class AppointmentCommitmentCommandService(
                 it[appointmentId] = cancelled.appointmentId
                 it[commitmentId] = cancelled.id
                 it[proposalId] = proposal.id
+                it[AppointmentCancellationDetails.fromCommitmentStatus] = snapshotFromCommitmentStatus
+                it[AppointmentCancellationDetails.patientScopeFingerprint] = snapshotPatientScopeFingerprint
                 it[reasonCode] = command.reasonCode
                 it[reasonDetail] = command.reasonDetail
                 it[actorRole] = command.context.actorRole

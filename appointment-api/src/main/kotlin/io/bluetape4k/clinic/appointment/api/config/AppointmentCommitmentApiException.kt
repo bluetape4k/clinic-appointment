@@ -146,6 +146,9 @@ private val APPOINTMENT_COMMITMENT_ITEM_PATH = Regex(
 private val APPOINTMENT_COMMITMENT_PROPOSAL_DECISION_PATH = Regex(
     "^/api/([^/]+)/appointments/[^/]+/proposals/[^/]+/(?:accept|decline|expire)$"
 )
+private val PATIENT_CANCELLATION_HISTORY_PATH = Regex(
+    "^/api/([^/]+)/patient/appointments/cancellation-history$"
+)
 
 /**
  * commitment 오류 envelope가 소유하는 공개 경로만 식별한다.
@@ -155,6 +158,11 @@ private val APPOINTMENT_COMMITMENT_PROPOSAL_DECISION_PATH = Regex(
  * 실제로 소유하는 생성·조회·mutation 경로만 닫힌 집합으로 유지한다. tenant code는
  * canonical rule을 통과해야 하며, 예약된 `v1`/`v2` root는 legacy 경로로 분류하지 않는다.
  */
+internal fun isPatientCancellationHistoryRequestPath(path: String): Boolean =
+    PATIENT_CANCELLATION_HISTORY_PATH.matchEntire(path)
+        ?.groupValues?.getOrNull(1)
+        ?.let(TenantCodeRules::isCanonical) == true
+
 internal fun isAppointmentCommitmentRequestPath(path: String): Boolean =
     listOf(
         APPOINTMENT_COMMITMENT_CREATE_PATH,

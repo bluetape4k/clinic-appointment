@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="720" viewBox="0 0 1480 720" role="img" aria-label="Issue #34 알림 codec throughput">
+  <title>Issue #34 알림 codec throughput</title>
+  <desc>legacy-heavy/current-heavy · 10,000 rows · 등록 detail 15자 · warm-up 30초 · 측정 300초. benchmark 근거이며 배포 SLO가 아니다. 처리량은 초당 decoded row 수이며 높을수록 좋다.</desc>
+  <style>
+    .background { fill: #101827; }
+    .title { font: 700 38px "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #f6f7fb; }
+    .subtitle, .note, .axis-title, .axis-value, .group-label, .legend-label { font-family: "goorm Sans Code", "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #c9d3e5; }
+    .subtitle { font-size: 19px; }
+    .note { font-size: 17px; fill: #ffcf8a; }
+    .axis-title { font-size: 18px; }
+    .axis-value { font-size: 15px; }
+    .group-label { font-size: 16px; fill: #f6f7fb; font-weight: 700; }
+    .legend-label { font-size: 17px; }
+    .value { font: 700 15px "goorm Sans Code", "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #f6f7fb; }
+    .verdict { font: 700 21px "goorm Sans Code", "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; }
+    .grid { stroke: #40506a; stroke-width: 1; stroke-dasharray: 6 8; }
+    .bar, .bar-0, .bar-1 { stroke: #f6f7fb; stroke-width: 2; }
+    .bar-0 { fill: #73d2de; }
+    .bar-1 { fill: #f2b880; }
+  </style>
+  <rect width="1480" height="720" class="background"/>
+  <text x="64" y="70" class="title">Issue #34 알림 codec throughput</text>
+  <text x="64" y="110" class="subtitle">legacy-heavy/current-heavy · 10,000 rows · 등록 detail 15자 · warm-up 30초 · 측정 300초</text>
+  <text x="64" y="143" class="note">benchmark 근거이며 배포 SLO가 아니다. 처리량은 초당 decoded row 수이며 높을수록 좋다.</text>
+  <text x="1410" y="72" class="verdict" text-anchor="end" fill="#9be28f">판정: PASS</text>
+  <rect x="620" y="145" width="20" height="20" rx="4" class="bar-0"/><text x="650" y="162" class="legend-label">baseline</text><rect x="780" y="145" width="20" height="20" rx="4" class="bar-1"/><text x="810" y="162" class="legend-label">candidate</text>
+  <text x="1390" y="190" class="axis-title" text-anchor="end">처리량 (rows/s)</text>
+  <line x1="190.0" y1="210" x2="190.0" y2="600" class="grid"/><text x="190.0" y="625" class="axis-value" text-anchor="middle">0.000</text><line x1="490.0" y1="210" x2="490.0" y2="600" class="grid"/><text x="490.0" y="625" class="axis-value" text-anchor="middle">9697.3</text><line x1="790.0" y1="210" x2="790.0" y2="600" class="grid"/><text x="790.0" y="625" class="axis-value" text-anchor="middle">19394.7</text><line x1="1090.0" y1="210" x2="1090.0" y2="600" class="grid"/><text x="1090.0" y="625" class="axis-value" text-anchor="middle">29092.0</text><line x1="1390.0" y1="210" x2="1390.0" y2="600" class="grid"/><text x="1390.0" y="625" class="axis-value" text-anchor="middle">38789.4</text>
+  <rect x="190" y="249.8" width="904.0" height="48.8" rx="8" class="bar bar-0"/><text x="1104.0" y="288.5" class="value">29220.9</text><rect x="190" y="316.5" width="939.3" height="48.8" rx="8" class="bar bar-1"/><text x="1139.3" y="355.3" class="value">30361.5</text><text x="170" y="313.5" class="group-label" text-anchor="end">legacy-heavy</text><rect x="190" y="444.8" width="955.1" height="48.8" rx="8" class="bar bar-0"/><text x="1155.1" y="483.5" class="value">30871.9</text><rect x="190" y="511.5" width="960.0" height="48.8" rx="8" class="bar bar-1"/><text x="1160.0" y="550.3" class="value">31031.5</text><text x="170" y="508.5" class="group-label" text-anchor="end">current-heavy</text>
+</svg>

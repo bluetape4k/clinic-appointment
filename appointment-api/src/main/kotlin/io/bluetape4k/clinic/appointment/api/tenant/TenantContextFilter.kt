@@ -3,6 +3,8 @@ package io.bluetape4k.clinic.appointment.api.tenant
 import io.bluetape4k.clinic.appointment.api.config.PlanFoundationError
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import io.bluetape4k.clinic.appointment.api.config.isSchedulingPolicyRequestPath
+import io.bluetape4k.clinic.appointment.api.config.isPatientCancellationHistoryRequestPath
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryApiError
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.api.security.JwtTokenParser
 import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
@@ -70,6 +72,8 @@ class TenantContextFilter(
                         response,
                         SchedulingPolicyErrorCode.POLICY_INTERNAL_ERROR,
                     )
+                } else if (request.isPatientHistoryRequest()) {
+                    SecurityErrorResponseWriter.write(response, PatientHistoryApiError.UNAVAILABLE)
                 } else {
                     SecurityErrorResponseWriter.write(response, PlanFoundationError.INTERNAL_ERROR)
                 }
@@ -82,6 +86,8 @@ class TenantContextFilter(
                         response,
                         SchedulingPolicyErrorCode.POLICY_RESOURCE_NOT_FOUND,
                     )
+                } else if (request.isPatientHistoryRequest()) {
+                    SecurityErrorResponseWriter.write(response, PatientHistoryApiError.TENANT_NOT_FOUND)
                 } else {
                     SecurityErrorResponseWriter.write(response, PlanFoundationError.RESOURCE_NOT_FOUND)
                 }
@@ -94,6 +100,8 @@ class TenantContextFilter(
                         response,
                         SchedulingPolicyErrorCode.POLICY_ACTOR_FORBIDDEN,
                     )
+                } else if (request.isPatientHistoryRequest()) {
+                    SecurityErrorResponseWriter.write(response, PatientHistoryApiError.SCOPE_FORBIDDEN)
                 } else {
                     SecurityErrorResponseWriter.write(response, PlanFoundationError.FORBIDDEN)
                 }
@@ -128,6 +136,9 @@ class TenantContextFilter(
     /** tenant filter가 controller 전에도 policy 전용 안정 오류 계약을 선택하게 한다. */
     private fun HttpServletRequest.isSchedulingPolicyRequest(): Boolean =
         isSchedulingPolicyRequestPath(requestURI)
+
+    private fun HttpServletRequest.isPatientHistoryRequest(): Boolean =
+        isPatientCancellationHistoryRequestPath(requestURI)
 
     private fun HttpServletRequest.correlationIdForLog(): String =
         (getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) as? String)

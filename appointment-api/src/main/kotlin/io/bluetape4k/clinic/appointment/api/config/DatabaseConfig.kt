@@ -59,6 +59,7 @@ import io.bluetape4k.clinic.appointment.model.tables.TreatmentSpaces
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentEquipments
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentTypes
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentDependencies
+import io.bluetape4k.clinic.appointment.api.migration.PatientHistoryBackfillCheckpoint
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.boot.ApplicationRunner
@@ -157,6 +158,7 @@ class SchemaInitConfig {
                     ProfileReevaluationOutcomes,
                     NotificationOutboxEvents,
                     NotificationDeliveryAttempts,
+                    PatientHistoryBackfillCheckpoint,
                 )
             }
         }

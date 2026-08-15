@@ -154,4 +154,19 @@ class FlywayPostgreSQLMigrationTest {
             location = "classpath:db/migration/postgresql",
         )
     }
+
+    @Test
+    fun `V28 expand V29 index and V30 checkpoint are additive on PostgreSQL`() {
+        val postgres = Containers.Postgres
+        val driver = Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentCancellationMigrationTestSupport.verifyV28Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                postgres.jdbcUrl,
+                postgres.username ?: "test",
+                postgres.password ?: "",
+            ),
+            location = "classpath:db/migration/postgresql",
+        )
+    }
 }

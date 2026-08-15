@@ -1,6 +1,5 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
-import io.bluetape4k.clinic.appointment.api.security.ActorContextResolver
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.assertions.shouldBeEqualTo
@@ -15,9 +14,6 @@ import org.junit.jupiter.api.parallel.ExecutionMode
 import org.springframework.test.annotation.DirtiesContext
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.boot.test.context.TestConfiguration
-import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
@@ -43,7 +39,6 @@ import java.nio.file.Path
     ],
 )
 @ActiveProfiles("test")
-@Import(SchedulingPolicyOpenApiTest.OpenApiTestConfiguration::class)
 @ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Execution(ExecutionMode.SAME_THREAD)
@@ -222,10 +217,4 @@ class SchedulingPolicyOpenApiTest {
         const val IDEMPOTENCY_KEY = "Idempotency-Key"
     }
 
-    @TestConfiguration(proxyBeanMethods = false)
-    class OpenApiTestConfiguration {
-        /** no-op security profile에는 없는 controller constructor dependency만 제공한다. */
-        @Bean
-        fun actorContextResolver(): ActorContextResolver = ActorContextResolver()
-    }
 }

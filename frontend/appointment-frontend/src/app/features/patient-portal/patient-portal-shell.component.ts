@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { PatientAuthService } from '../../core/services/patient-auth.service';
 import { TenantContextService } from '../../core/api/tenant-context.service';
 import { AppointmentCommitmentFacade } from './appointment-commitment.facade';
+import { PortalApiClient } from '../../core/api/portal-api-client';
 
 export interface PatientPortalNavItem {
   label: string;
@@ -21,6 +22,7 @@ export class PatientPortalShellComponent {
   private readonly tenant = inject(TenantContextService);
   private readonly router = inject(Router);
   private readonly commitment = inject(AppointmentCommitmentFacade);
+  private readonly portalApi = inject(PortalApiClient);
   readonly navItems: PatientPortalNavItem[] = [
     { label: '예약 현황', route: '/portal/appointments' },
     { label: '알림', route: '/portal/notifications' },
@@ -29,10 +31,11 @@ export class PatientPortalShellComponent {
 
   async logout(): Promise<void> {
     const tenantCode = this.tenant.tenantCode();
+    this.commitment.resetForSessionChange();
+    this.portalApi.clearCancellationHistoryCache();
     try {
       if (tenantCode) await this.auth.logout(tenantCode);
     } finally {
-      this.commitment.resetForSessionChange();
       await this.router.navigate(['/portal/login'], { replaceUrl: true });
     }
   }

@@ -100,6 +100,14 @@ class FlywayMigrationTest {
         )
     }
 
+    @Test
+    fun `V28 expand V29 index and V30 checkpoint are additive on H2`() {
+        AppointmentCancellationMigrationTestSupport.verifyV28Migration(
+            dataSource = h2DataSource("appointment-cancellation-v28"),
+            location = "classpath:db/migration/h2",
+        )
+    }
+
     private fun h2DataSource(scope: String): SimpleDriverDataSource {
         val driver = Class.forName("org.h2.Driver").getDeclaredConstructor().newInstance() as Driver
         return SimpleDriverDataSource(
