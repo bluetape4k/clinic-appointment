@@ -436,6 +436,21 @@ internal class NotificationAutoConfigurationTest {
     }
 
     @Test
+    fun `host가 LeaderGroupElector를 제공하면 notification auto configuration은 자체 elector를 만들지 않는다`() {
+        val database = database("auto_reminder_host_leader", version = "21")
+        val connection = mockk<StatefulRedisConnection<String, String>>(relaxed = true)
+        val hostElector = mockk<LeaderGroupElector>(relaxed = true)
+        context(database, withKey = true)
+            .withBean("statefulRedisConnection", StatefulRedisConnection::class.java, { connection })
+            .withBean("hostLeaderGroupElector", LeaderGroupElector::class.java, { hostElector })
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(LeaderGroupElector::class.java).size shouldBeEqualTo 1
+                applicationContext.getBean(LeaderGroupElector::class.java) shouldBeEqualTo hostElector
+            }
+    }
+
+    @Test
     fun `worker가 비활성화되면 reminder recovery background path를 구성하지 않는다`() {
         val database = database("auto_reminder_recovery_disabled", version = "21")
         context(database, withKey = true)

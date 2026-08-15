@@ -573,6 +573,7 @@ class NotificationAutoConfiguration {
         name = ["io.bluetape4k.leader.micrometer.InstrumentedLeaderGroupElector"],
     )
     @ConditionalOnBean(StatefulRedisConnection::class)
+    @ConditionalOnMissingBean(LeaderGroupElector::class)
     fun notificationLeaderElection(
         connection: StatefulRedisConnection<String, String>,
         meterRegistryProvider: ObjectProvider<MeterRegistry>,
