@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="720" viewBox="0 0 1480 720" role="img" aria-label="Issue #34 환자 예약 취소 시나리오 안전성">
+  <title>Issue #34 환자 예약 취소 시나리오 안전성</title>
+  <desc>postgres:18-alpine · 100건 · warm-up 30초 · 측정 300초 · seed 34. 예상 412와 예상 retry exhaustion은 시나리오 성공이다. 나머지 실패율은 낮을수록 좋다.</desc>
+  <style>
+    .background { fill: #101827; }
+    .title { font: 700 38px "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #f6f7fb; }
+    .subtitle, .note, .axis-title, .axis-value, .group-label, .legend-label { font-family: "goorm Sans Code", "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #c9d3e5; }
+    .subtitle { font-size: 19px; }
+    .note { font-size: 17px; fill: #ffcf8a; }
+    .axis-title { font-size: 18px; }
+    .axis-value { font-size: 15px; }
+    .group-label { font-size: 16px; fill: #f6f7fb; font-weight: 700; }
+    .legend-label { font-size: 17px; }
+    .value { font: 700 15px "goorm Sans Code", "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; fill: #f6f7fb; }
+    .verdict { font: 700 21px "goorm Sans Code", "goorm Sans", "Apple SD Gothic Neo", "Noto Sans KR", "Arial Unicode MS", sans-serif; }
+    .grid { stroke: #40506a; stroke-width: 1; stroke-dasharray: 6 8; }
+    .bar, .bar-0, .bar-1 { stroke: #f6f7fb; stroke-width: 2; }
+    .bar-0 { fill: #73d2de; }
+    .bar-1 { fill: #f2b880; }
+  </style>
+  <rect width="1480" height="720" class="background"/>
+  <text x="64" y="70" class="title">Issue #34 환자 예약 취소 시나리오 안전성</text>
+  <text x="64" y="110" class="subtitle">postgres:18-alpine · 100건 · warm-up 30초 · 측정 300초 · seed 34</text>
+  <text x="64" y="143" class="note">예상 412와 예상 retry exhaustion은 시나리오 성공이다. 나머지 실패율은 낮을수록 좋다.</text>
+  <text x="1410" y="72" class="verdict" text-anchor="end" fill="#9be28f">판정: PASS</text>
+  <rect x="620" y="145" width="20" height="20" rx="4" class="bar-0"/><text x="650" y="162" class="legend-label">baseline</text><rect x="780" y="145" width="20" height="20" rx="4" class="bar-1"/><text x="810" y="162" class="legend-label">candidate</text>
+  <text x="1390" y="190" class="axis-title" text-anchor="end">비율 (%)</text>
+  <line x1="190" y1="600.0" x2="1390" y2="600.0" class="grid"/><text x="172" y="606.0" class="axis-value" text-anchor="end">0.000%</text><line x1="190" y1="502.5" x2="1390" y2="502.5" class="grid"/><text x="172" y="508.5" class="axis-value" text-anchor="end">11.726%</text><line x1="190" y1="405.0" x2="1390" y2="405.0" class="grid"/><text x="172" y="411.0" class="axis-value" text-anchor="end">23.452%</text><line x1="190" y1="307.5" x2="1390" y2="307.5" class="grid"/><text x="172" y="313.5" class="axis-value" text-anchor="end">35.178%</text><line x1="190" y1="210.0" x2="1390" y2="210.0" class="grid"/><text x="172" y="216.0" class="axis-value" text-anchor="end">46.904%</text>
+  <rect x="241.0" y="290.4" width="60.0" height="309.6" rx="8" class="bar bar-0"/><text x="271.0" y="276.4" class="value" text-anchor="middle">37.237%</text><rect x="319.0" y="288.0" width="60.0" height="312.0" rx="8" class="bar bar-1"/><text x="349.0" y="274.0" class="value" text-anchor="middle">37.523%</text><text x="310.0" y="645" class="group-label" text-anchor="middle">예상 412</text><rect x="481.0" y="600.0" width="60.0" height="0.0" rx="8" class="bar bar-0"/><text x="511.0" y="586.0" class="value" text-anchor="middle">0.000%</text><rect x="559.0" y="600.0" width="60.0" height="0.0" rx="8" class="bar bar-1"/><text x="589.0" y="586.0" class="value" text-anchor="middle">0.000%</text><text x="550.0" y="645" class="group-label" text-anchor="middle">예상 retry exhaustion</text><rect x="721.0" y="600.0" width="60.0" height="0.0" rx="8" class="bar bar-0"/><text x="751.0" y="586.0" class="value" text-anchor="middle">0.000%</text><rect x="799.0" y="600.0" width="60.0" height="0.0" rx="8" class="bar bar-1"/><text x="829.0" y="586.0" class="value" text-anchor="middle">0.000%</text><text x="790.0" y="645" class="group-label" text-anchor="middle">예상 밖 오류</text><rect x="961.0" y="600.0" width="60.0" height="0.0" rx="8" class="bar bar-0"/><text x="991.0" y="586.0" class="value" text-anchor="middle">0.000%</text><rect x="1039.0" y="600.0" width="60.0" height="0.0" rx="8" class="bar bar-1"/><text x="1069.0" y="586.0" class="value" text-anchor="middle">0.000%</text><text x="1030.0" y="645" class="group-label" text-anchor="middle">비의도 exhaustion</text><rect x="1201.0" y="590.8" width="60.0" height="9.2" rx="8" class="bar bar-0"/><text x="1231.0" y="576.8" class="value" text-anchor="middle">1.104%</text><rect x="1279.0" y="600.0" width="60.0" height="0.0" rx="8" class="bar bar-1"/><text x="1309.0" y="586.0" class="value" text-anchor="middle">0.000%</text><text x="1270.0" y="645" class="group-label" text-anchor="middle">scenario mismatch</text>
+</svg>

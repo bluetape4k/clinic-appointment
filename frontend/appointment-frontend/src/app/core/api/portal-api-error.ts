@@ -31,7 +31,9 @@ export function mapPortalApiError(error: HttpErrorResponse): PortalApiErrorState
   const payload = typeof error.error === 'object' && error.error !== null ? error.error as Record<string, unknown> : {};
   const status = error.status;
   const code = typeof payload['errorCode'] === 'string' ? payload['errorCode'] : `HTTP_${status}`;
-  const message = typeof payload['error'] === 'string' ? payload['error'] : '예약 요청을 처리하지 못했습니다.';
+  const message = status === 401
+    ? '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.'
+    : typeof payload['error'] === 'string' ? payload['error'] : '예약 요청을 처리하지 못했습니다.';
   const correlationId = typeof payload['correlationId'] === 'string' ? payload['correlationId'] : null;
   const retryAfterSeconds = parseRetryAfter(error.headers);
 

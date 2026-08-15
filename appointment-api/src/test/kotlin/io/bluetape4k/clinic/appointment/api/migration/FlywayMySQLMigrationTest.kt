@@ -183,4 +183,19 @@ class FlywayMySQLMigrationTest {
             location = "classpath:db/migration/mysql",
         )
     }
+
+    @Test
+    fun `V28 expand V29 index and V30 checkpoint are additive on MySQL 8`() {
+        val mysql = Containers.MySql8
+        val driver = Class.forName("com.mysql.cj.jdbc.Driver").getDeclaredConstructor().newInstance() as Driver
+        AppointmentCancellationMigrationTestSupport.verifyV28Migration(
+            dataSource = SimpleDriverDataSource(
+                driver,
+                mysql.jdbcUrl,
+                mysql.username ?: "test",
+                mysql.password ?: "",
+            ),
+            location = "classpath:db/migration/mysql",
+        )
+    }
 }

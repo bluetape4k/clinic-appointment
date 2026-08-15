@@ -65,6 +65,11 @@ class ProfileReevaluationQueryPlanTest {
         Flyway.configure()
             .dataSource(dataSource)
             .locations(migrationLocation)
+            .apply {
+                if (dialect == Dialect.POSTGRESQL) {
+                    configuration(mapOf("flyway.postgresql.transactional.lock" to "false"))
+                }
+            }
             .cleanDisabled(false)
             .load()
             .apply {

@@ -3,10 +3,12 @@ package io.bluetape4k.clinic.appointment.api.security
 import io.bluetape4k.clinic.appointment.api.config.PlanFoundationError
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
 import io.bluetape4k.clinic.appointment.api.config.isAppointmentCommitmentRequestPath
+import io.bluetape4k.clinic.appointment.api.config.isPatientCancellationHistoryRequestPath
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import io.bluetape4k.clinic.appointment.api.config.isSchedulingPolicyRequestPath
 import io.bluetape4k.clinic.appointment.api.config.isBookingReliabilityRequestPath
 import io.bluetape4k.clinic.appointment.api.config.isWaitlistRequestPath
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryApiError
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiError
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContextFilter
 import io.bluetape4k.clinic.appointment.api.tenant.TenantPathValidationFilter
@@ -17,6 +19,7 @@ import io.bluetape4k.logging.info
 import jakarta.servlet.DispatcherType
 import jakarta.servlet.Filter
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -198,11 +201,10 @@ class SecurityConfig {
                     } else {
                         HttpStatus.UNAUTHORIZED
                     }
-                    if (status == HttpStatus.FORBIDDEN && request.isAppointmentCommitmentRequest()) {
-                        SecurityErrorResponseWriter.write(
-                            response,
-                            AppointmentCommitmentApiError.SCOPE_FORBIDDEN,
-                        )
+                    if (status == HttpStatus.FORBIDDEN && request.isPatientCancellationHistoryRequest()) {
+                        SecurityErrorResponseWriter.write(response, PatientHistoryApiError.SCOPE_FORBIDDEN)
+                    } else if (status == HttpStatus.FORBIDDEN && request.isAppointmentCommitmentRequest()) {
+                        SecurityErrorResponseWriter.write(response, AppointmentCommitmentApiError.SCOPE_FORBIDDEN)
                     } else if (status == HttpStatus.FORBIDDEN && request.isSchedulingPolicyRequest()) {
                         SecurityErrorResponseWriter.write(
                             response,
@@ -264,6 +266,8 @@ class SecurityConfig {
                     .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/auth/session")
                     .access(patientTenantAccess(tenantAuthorizationManager))
                     .requestMatchers(HttpMethod.POST, "/api/{tenantCode}/auth/logout")
+                    .access(patientTenantAccess(tenantAuthorizationManager))
+                    .requestMatchers(HttpMethod.GET, "/api/{tenantCode}/patient/appointments/cancellation-history")
                     .access(patientTenantAccess(tenantAuthorizationManager))
                     // Commitment route는 일반 tenant 읽기/쓰기 규칙보다 먼저 평가해야 한다.
                     // 경로의 tenant만 selector로 사용하며, tenant manager가 인증된 grant 집합과
@@ -684,6 +688,9 @@ private fun jakarta.servlet.http.HttpServletRequest.isWaitlistRequest(): Boolean
 private fun jakarta.servlet.http.HttpServletRequest.isAppointmentCommitmentRequest(): Boolean =
     isAppointmentCommitmentRequestPath(requestURI)
 
+private fun jakarta.servlet.http.HttpServletRequest.isPatientCancellationHistoryRequest(): Boolean =
+    isPatientCancellationHistoryRequestPath(requestURI)
+
 /**
  * local dev/test에서 모든 요청을 허용하는 security configuration이다.
  */
@@ -693,6 +700,11 @@ private fun jakarta.servlet.http.HttpServletRequest.isAppointmentCommitmentReque
 class NoOpSecurityConfig {
 
     companion object : KLogging()
+
+    /** local/test route controller도 protected profile과 같은 actor resolver를 사용한다. */
+    @Bean
+    @ConditionalOnMissingBean(ActorContextResolver::class)
+    fun actorContextResolver(): ActorContextResolver = ActorContextResolver()
 
     @Bean
     fun correlationIdFilter(): CorrelationIdFilter = CorrelationIdFilter()

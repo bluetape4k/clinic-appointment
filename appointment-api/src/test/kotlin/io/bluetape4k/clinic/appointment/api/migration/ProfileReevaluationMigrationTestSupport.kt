@@ -25,6 +25,7 @@ internal object ProfileReevaluationMigrationTestSupport {
         val flyway = Flyway.configure()
             .dataSource(dataSource)
             .locations(location)
+            .target("13")
             .cleanDisabled(false)
             .load()
         flyway.clean()

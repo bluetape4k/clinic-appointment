@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
 import io.bluetape4k.clinic.appointment.api.reliability.BookingReliabilityApiError
 import io.bluetape4k.clinic.appointment.api.waitlist.WaitlistApiError
+import io.bluetape4k.clinic.appointment.api.service.PatientHistoryApiError
 import jakarta.servlet.http.HttpServletResponse
 import java.util.UUID
 
@@ -116,6 +117,22 @@ object SecurityErrorResponseWriter {
         response.characterEncoding = Charsets.UTF_8.name()
         response.writer.write(
             """{"success":false,"data":null,"error":"${escapeJson(error.safeMessage)}","reasonCode":"${error.name}","errorCode":"${error.name}","correlationId":"${escapeJson(correlationId)}","retryable":${error.retryable},"action":"${escapeJson(error.action)}"}"""
+        )
+    }
+
+    /** 환자 취소 이력 route의 인증·인가 실패를 sanitized history registry로 씁니다. */
+    fun write(response: HttpServletResponse, error: PatientHistoryApiError) {
+        val correlationId = response.getHeader(CorrelationIdFilter.HEADER_NAME)
+            ?.takeIf { it.isNotBlank() }
+            ?: UUID.randomUUID().toString().also {
+                response.setHeader(CorrelationIdFilter.HEADER_NAME, it)
+            }
+        response.status = error.httpStatus.value()
+        response.contentType = "application/json"
+        response.characterEncoding = Charsets.UTF_8.name()
+        if (error.retryable) response.setHeader("Retry-After", "1")
+        response.writer.write(
+            """{"success":false,"data":null,"error":"${escapeJson(error.safeMessage)}","errorCode":"PATIENT_HISTORY_${error.name}","correlationId":"${escapeJson(correlationId)}","retryable":${error.retryable}}"""
         )
     }
 

@@ -44,6 +44,29 @@ internal fun ActorContextResolver.resolveAppointmentActor(
     return resolve(authentication, tenantCode, clinicId, correlationId)
 }
 
+/** clinic selector가 없는 환자 취소 이력 route의 tenant-only actor를 해석합니다. */
+internal fun ActorContextResolver.resolvePatientHistoryActor(
+    authentication: Authentication?,
+    tenantCode: String,
+    request: HttpServletRequest,
+): ActorContext {
+    if (!TenantCodeRules.isCanonical(tenantCode)) {
+        throw io.bluetape4k.clinic.appointment.api.service.PatientHistoryApiException(
+            io.bluetape4k.clinic.appointment.api.service.PatientHistoryApiError.PAYLOAD_INVALID,
+        )
+    }
+    val correlationId = request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE) as? String
+        ?: UUID.randomUUID().toString()
+    return resolve(authentication, tenantCode, clinicId = null, correlationId = correlationId)
+        .also {
+            if (it.actorType != ActorType.PATIENT || it.patientSubjectId.isNullOrBlank()) {
+                throw io.bluetape4k.clinic.appointment.api.service.PatientHistoryApiException(
+                    io.bluetape4k.clinic.appointment.api.service.PatientHistoryApiError.SCOPE_FORBIDDEN,
+                )
+            }
+        }
+}
+
 /** 고객 전용 command가 비어 있지 않은 Gateway patient subject를 가졌는지 검증한다. */
 internal fun ActorContext.requirePatientActor(): ActorContext {
     if (actorType != ActorType.PATIENT || patientSubjectId.isNullOrBlank()) {

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "issue-34-notification-codec-backlog",
+  "mode": "baseline",
+  "mix": "legacy-heavy",
+  "run": 3,
+  "environment": {
+    "database": "h2",
+    "datasetRows": 10000,
+    "warmupSeconds": 30,
+    "measureSeconds": 300,
+    "detailLength": 15,
+    "batchSize": 500,
+    "legacyRatio": 0.8,
+    "jdk": "25.0.4+7-LTS-jvmci-25.2-b20",
+    "vm": "Java HotSpot(TM) 64-Bit Server VM",
+    "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c"
+  },
+  "metrics": {
+    "throughputRowsPerSecond": 30115.993576418947,
+    "decodeP95Millis": 0.004459,
+    "decodeP99Millis": 0.005417,
+    "decodeFailures": 0,
+    "drainTimeMillis": 163368.34405,
+    "decodedRows": 4920000,
+    "latencySamples": 500000,
+    "passes": 492
+  }
+}

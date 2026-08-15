@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "issue-34-patient-appointment-cancel",
+  "mode": "baseline",
+  "environment": {
+    "datasetAppointments": 100,
+    "warmupSeconds": 30,
+    "measureSeconds": 300,
+    "sameAppointmentConcurrency": 10,
+    "differentAppointmentConcurrency": 20,
+    "pauseMillis": 1000,
+    "seed": 34,
+    "postgresqlImage": "postgres:18-alpine",
+    "jdk": "25.0.4+7-LTS-jvmci-25.2-b20",
+    "vm": "Java HotSpot(TM) 64-Bit Server VM",
+    "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+    "environmentFingerprint": "6fe6863c2877ea7f9b8a550aa3947ac8c16a3d16d070eed57e8300721a38d036"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+      "environmentFingerprint": "6fe6863c2877ea7f9b8a550aa3947ac8c16a3d16d070eed57e8300721a38d036",
+      "environment": {
+        "datasetAppointments": 100,
+        "warmupSeconds": 30,
+        "measureSeconds": 300,
+        "sameAppointmentConcurrency": 10,
+        "differentAppointmentConcurrency": 20,
+        "pauseMillis": 1000,
+        "seed": 34,
+        "postgresqlImage": "postgres:18-alpine",
+        "jdk": "25.0.4+7-LTS-jvmci-25.2-b20",
+        "vm": "Java HotSpot(TM) 64-Bit Server VM",
+        "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+        "environmentFingerprint": "6fe6863c2877ea7f9b8a550aa3947ac8c16a3d16d070eed57e8300721a38d036"
+      },
+      "measurementStartedAtEpochMillis": 1786784868596,
+      "measurementEndedAtEpochMillis": 1786785169604,
+      "measurementClock": "SYSTEM_NANO_TIME",
+      "measurementSpanMillis": 301012,
+      "cancelP95Millis": 57.212542,
+      "cancelP99Millis": 80.208459,
+      "unexpectedErrorRate": 0,
+      "unintendedRetryExhaustionRate": 0,
+      "lockWaitP95Millis": 28.893,
+      "lockWaitSampleQueries": 9243,
+      "lockWaitSampleFailures": 0,
+      "expectedConflictRate": 0.3791014061964102,
+      "expectedRetryExhaustionRate": 0,
+      "warmupRequests": 870,
+      "requests": 8747,
+      "scenarioMismatches": 140,
+      "scenarioMismatchRate": 0.016005487595747114,
+      "scenarioMismatchByOperation": {
+        "SUCCESS_PATIENT": 74,
+        "SUCCESS_ADMIN": 66
+      },
+      "errorCodeCounts": {
+        "VERSION_CONFLICT": 2839,
+        "INVALID_TRANSITION": 477
+      }
+    },
+    {
+      "run": 2,
+      "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+      "environmentFingerprint": "6fe6863c2877ea7f9b8a550aa3947ac8c16a3d16d070eed57e8300721a38d036",
+      "environment": {
+        "datasetAppointments": 100,
+        "warmupSeconds": 30,
+        "measureSeconds": 300,
+        "sameAppointmentConcurrency": 10,
+        "differentAppointmentConcurrency": 20,
+        "pauseMillis": 1000,
+        "seed": 34,
+        "postgresqlImage": "postgres:18-alpine",
+        "jdk": "25.0.4+7-LTS-jvmci-25.2-b20",
+        "vm": "Java HotSpot(TM) 64-Bit Server VM",
+        "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+        "environmentFingerprint": "6fe6863c2877ea7f9b8a550aa3947ac8c16a3d16d070eed57e8300721a38d036"
+      },
+      "measurementStartedAtEpochMillis": 1786785272176,
+      "measurementEndedAtEpochMillis": 1786785573170,
+      "measurementClock": "SYSTEM_NANO_TIME",
+      "measurementSpanMillis": 300999,
+      "cancelP95Millis": 372.574541,
+      "cancelP99Millis": 752.42425,
+      "unexpectedErrorRate": 0,
+      "unintendedRetryExhaustionRate": 0,
+      "lockWaitP95Millis": 217.532,
+      "lockWaitSampleQueries": 8246,
+      "lockWaitSampleFailures": 0,
+      "expectedConflictRate": 0.3512386850881372,
+      "expectedRetryExhaustionRate": 0,
+      "warmupRequests": 870,
+      "requests": 8396,
+      "scenarioMismatches": 71,
+      "scenarioMismatchRate": 0.008456407813244401,
+      "scenarioMismatchByOperation": {
+        "SUCCESS_ADMIN": 38,
+        "SUCCESS_PATIENT": 33
+      },
+      "errorCodeCounts": {
+        "VERSION_CONFLICT": 2658,
+        "INVALID_TRANSITION": 291
+      }
+    },
+    {
+      "run": 3,
+      "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+      "environmentFingerprint": "6fe6863c2877ea7f9b8a550aa3947ac8c16a3d16d070eed57e8300721a38d036",
+      "environment": {
+        "datasetAppointments": 100,
+        "warmupSeconds": 30,
+        "measureSeconds": 300,
+        "sameAppointmentConcurrency": 10,
+        "differentAppointmentConcurrency": 20,
+        "pauseMillis": 1000,
+        "seed": 34,
+        "postgresqlImage": "postgres:18-alpine",
+        "jdk": "25.0.4+7-LTS-jvmci-25.2-b20",
+        "vm": "Java HotSpot(TM) 64-Bit Server VM",
+        "sourceCommit": "bd07645f19d53008e1404a2cfd20cde17975e04c",
+        "environmentFingerprint": "6fe6863c2877ea7f9b8a550aa3947ac8c16a3d16d070eed57e8300721a38d036"
+      },
+      "measurementStartedAtEpochMillis": 1786785627464,
+      "measurementEndedAtEpochMillis": 1786785928475,
+      "measurementClock": "SYSTEM_NANO_TIME",
+      "measurementSpanMillis": 301016,
+      "cancelP95Millis": 57.624125,
+      "cancelP99Millis": 92.304583,
+      "unexpectedErrorRate": 0,
+      "unintendedRetryExhaustionRate": 0,
+      "lockWaitP95Millis": 29.843,
+      "lockWaitSampleQueries": 9661,
+      "lockWaitSampleFailures": 0,
+      "expectedConflictRate": 0.3723682713098896,
+      "expectedRetryExhaustionRate": 0,
+      "warmupRequests": 870,
+      "requests": 8787,
+      "scenarioMismatches": 97,
+      "scenarioMismatchRate": 0.011039034937976555,
+      "scenarioMismatchByOperation": {
+        "SUCCESS_ADMIN": 43,
+        "SUCCESS_PATIENT": 54
+      },
+      "errorCodeCounts": {
+        "VERSION_CONFLICT": 2844,
+        "INVALID_TRANSITION": 428
+      }
+    }
+  ]
+}

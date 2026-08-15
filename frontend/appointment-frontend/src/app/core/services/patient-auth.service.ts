@@ -20,10 +20,21 @@ export class PatientAuthService {
   private readonly tenant = inject(TenantContextService);
 
   private readonly _session = signal<PatientSessionSummary | null>(null);
+  private _sessionVersion = 0;
   readonly session = this._session.asReadonly();
   readonly isAuthenticated = computed(() => this._session() !== null);
   readonly isPatient = computed(() => this._session()?.role === 'PATIENT');
   readonly loading = signal(false);
+
+  /** cookie/session 주체가 바뀌는 순간 동기적으로 증가하는 client epoch입니다. */
+  currentSessionVersion(): number {
+    return this._sessionVersion;
+  }
+
+  beginSessionChange(): void {
+    this._sessionVersion += 1;
+    this._session.set(null);
+  }
 
   async bootstrapCsrf(tenantCode: string): Promise<void> {
     await firstValueFrom(
@@ -54,6 +65,9 @@ export class PatientAuthService {
   }
 
   async login(tenantCode: string, request: PatientLoginRequest): Promise<PatientSessionSummary> {
+    this.beginSessionChange();
+    const requestedSessionVersion = this._sessionVersion;
+    const requestedTenantCode = tenantCode;
     this.loading.set(true);
     try {
       await this.bootstrapCsrf(tenantCode);
@@ -65,14 +79,26 @@ export class PatientAuthService {
         ),
       );
       const session = this.requireData(response, '로그인 응답이 비어 있습니다.');
+      if (
+        requestedSessionVersion !== this._sessionVersion ||
+        this.tenant.tenantCode() !== requestedTenantCode
+      ) {
+        throw new Error('로그인 응답이 현재 session에 속하지 않습니다.');
+      }
       this._session.set(session);
       return session;
     } finally {
-      this.loading.set(false);
+      if (requestedSessionVersion === this._sessionVersion) this.loading.set(false);
     }
   }
 
   async sessionFor(tenantCode: string): Promise<PatientSessionSummary> {
+    // A session restore is a new identity observation. Invalidate any older
+    // restore/login result before issuing the request so two concurrent cookie
+    // observations cannot apply in completion order.
+    this.beginSessionChange();
+    const requestedSessionVersion = this._sessionVersion;
+    const requestedTenantCode = tenantCode;
     const response = await firstValueFrom(
       this.http.get<ApiResponse<PatientSessionSummary>>(
         this.url(tenantCode, 'session'),
@@ -80,11 +106,19 @@ export class PatientAuthService {
       ),
     );
     const session = this.requireData(response, '환자 session 응답이 비어 있습니다.');
+    if (
+      requestedSessionVersion !== this._sessionVersion ||
+      this.tenant.tenantCode() !== requestedTenantCode
+    ) {
+      throw new Error('환자 session 응답이 현재 session에 속하지 않습니다.');
+    }
     this._session.set(session);
     return session;
   }
 
   async logout(tenantCode: string): Promise<void> {
+    this.beginSessionChange();
+    const requestedSessionVersion = this._sessionVersion;
     this.loading.set(true);
     try {
       await this.bootstrapCsrf(tenantCode);
@@ -92,8 +126,10 @@ export class PatientAuthService {
         this.http.post<void>(this.url(tenantCode, 'logout'), null, { withCredentials: true }),
       );
     } finally {
-      this._session.set(null);
-      this.loading.set(false);
+      if (requestedSessionVersion === this._sessionVersion) {
+        this._session.set(null);
+        this.loading.set(false);
+      }
     }
   }
 
@@ -121,7 +157,7 @@ export class PatientAuthService {
   }
 
   clearSession(): void {
-    this._session.set(null);
+    this.beginSessionChange();
   }
 
   private url(tenantCode: string, action: string): string {

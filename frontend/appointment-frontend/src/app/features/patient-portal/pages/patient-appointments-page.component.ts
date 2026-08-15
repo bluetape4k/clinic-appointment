@@ -6,6 +6,7 @@ import { CancellationReasonCode } from '../../../core/api/portal-api.models';
 import { PortalApiException } from '../../../core/api/portal-api-error';
 import { TenantContextService } from '../../../core/api/tenant-context.service';
 import { AppointmentCardComponent, AppointmentCardModel } from '../components/appointment-card.component';
+import { PatientCancellationHistoryComponent } from '../components/patient-cancellation-history.component';
 import { AppointmentCommitmentFacade } from '../appointment-commitment.facade';
 
 interface AppointmentDraft {
@@ -22,7 +23,7 @@ interface AppointmentDraft {
 @Component({
   selector: 'app-patient-appointments-page',
   standalone: true,
-  imports: [FormsModule, AppointmentCardComponent],
+  imports: [FormsModule, AppointmentCardComponent, PatientCancellationHistoryComponent],
   template: `
     <section class="portal-page" aria-labelledby="appointments-title">
       <p class="portal-eyebrow">APPOINTMENTS</p>
@@ -93,6 +94,8 @@ interface AppointmentDraft {
       @if (facade.state().notice; as notice) {
         <p class="portal-notice" role="status" aria-live="polite">{{ notice }}</p>
       }
+
+      <app-patient-cancellation-history />
     </section>
   `,
   styles: [`
