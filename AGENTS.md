@@ -79,3 +79,30 @@ Prefer module-scoped validation.
   and `Table.deleteAll()` in `@BeforeEach`.
 - Flyway SQL `scheduling_*` table names are schema names; do not rename them.
 - Do not use `@Testcontainers`; use bluetape4k singleton launchers.
+
+## Example-service operational evidence policy
+
+`clinic-appointment` is an example service, not a live production deployment
+target. A repository-level operational gate is satisfied by production-like,
+container-backed simulation; live production credentials, telemetry, canaries,
+rollback drills, and deployment evidence are out of scope unless an issue or
+approved plan explicitly names them.
+
+- For changes that exercise database, cache, broker, leader-election,
+  migration, readiness, transaction, concurrency, or other infrastructure
+  contracts, use production-shaped configuration, schema, and migrations with
+  existing `bluetape4k-testcontainers` singleton launchers (for example,
+  `PostgreSQLServer.Launcher` and `RedisServer.Launcher`) and sequential
+  execution.
+- Do not add `@Testcontainers`, raw `GenericContainer` ownership, or per-test
+  ad-hoc lifecycle when a singleton launcher exists.
+- Record the image/version, schema or migration state, relevant configuration,
+  lifecycle/cleanup ownership, command, and assertion/test counts in the
+  evidence.
+- H2, mocks, and embedded fakes remain appropriate for pure logic or fast unit
+  tests, but they do not close an infrastructure production-like gate and must
+  not silently replace a real-service requirement.
+- Label this evidence `production-like` or `container-backed`; it is
+  simulation evidence, not proof that live production is healthy.
+- A specific issue or approved plan may require live-production evidence as a
+  separate gate; do not impose that gate on ordinary example-service work.
