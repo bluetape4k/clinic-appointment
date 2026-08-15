@@ -6,11 +6,18 @@ import io.bluetape4k.clinic.appointment.api.controller.execute
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
+import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpHeaders
@@ -39,6 +46,42 @@ class PatientCancellationHistoryHttpSecurityIntegrationTest {
 
     @LocalServerPort
     private var port: Int = 0
+
+    @BeforeEach
+    fun ensureDefaultTenant() {
+        transaction {
+            val defaultTenant = TenantGroups
+                .selectAll()
+                .where { TenantGroups.tenantCode eq TenantGroups.DEFAULT_TENANT_CODE }
+                .firstOrNull()
+            if (defaultTenant != null) {
+                TenantGroups.update({ TenantGroups.id eq defaultTenant[TenantGroups.id] }) {
+                    it[active] = true
+                }
+                return@transaction
+            }
+
+            val defaultId = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+            val existingDefaultId = TenantGroups
+                .selectAll()
+                .where { TenantGroups.id eq defaultId }
+                .firstOrNull()
+            if (existingDefaultId != null) {
+                TenantGroups.update({ TenantGroups.id eq defaultId }) {
+                    it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
+                    it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
+                    it[active] = true
+                }
+            } else {
+                TenantGroups.insert {
+                    it[id] = defaultId
+                    it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
+                    it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
+                    it[active] = true
+                }
+            }
+        }
+    }
 
     @Test
     fun `환자 취소 이력 route는 익명과 workforce를 거절하고 환자 요청만 controller 경계까지 전달한다`() {
