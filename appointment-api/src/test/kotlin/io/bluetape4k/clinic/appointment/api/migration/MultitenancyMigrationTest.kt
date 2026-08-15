@@ -106,6 +106,11 @@ class MultitenancyMigrationTest {
         val flyway = Flyway.configure()
             .dataSource(target.url, target.user, target.password)
             .locations("classpath:db/migration/${target.vendor}")
+            .apply {
+                if (target.vendor == "postgresql") {
+                    configuration(mapOf("flyway.postgresql.transactional.lock" to "false"))
+                }
+            }
             .cleanDisabled(false)
             .load()
 

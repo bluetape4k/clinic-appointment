@@ -73,6 +73,7 @@ class SchedulingPolicySecurityIntegrationTest {
                 registry.add("spring.datasource.password") { postgres.password ?: "" }
                 registry.add("spring.datasource.driver-class-name") { "org.postgresql.Driver" }
                 registry.add("spring.flyway.enabled") { "true" }
+                registry.add("spring.flyway.postgresql.transactional-lock") { "false" }
             }
         }
     }
