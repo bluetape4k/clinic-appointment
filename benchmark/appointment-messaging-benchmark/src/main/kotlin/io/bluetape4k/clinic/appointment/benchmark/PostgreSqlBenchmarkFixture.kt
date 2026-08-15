@@ -61,6 +61,7 @@ class PostgreSqlBenchmarkFixture {
             .locations("classpath:db/migration/postgresql")
             .schemas(schema)
             .defaultSchema(schema)
+            .configuration(mapOf("flyway.postgresql.transactional.lock" to "false"))
             .cleanDisabled(false)
             .load()
             .also { flyway ->
