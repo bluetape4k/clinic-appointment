@@ -1,8 +1,8 @@
 # 이슈 #334 solver planning fact version fence 워크플로 체크리스트
 
-상태: `PRE-PR VERIFICATION COMPLETE / DELIVERY PENDING` — Task 1~4 구현과
-module-wide H2/PostgreSQL 검증, 독립 review, lesson 기록을 완료했고 PR/CI와
-최신 머지 승인만 남아 있다.
+상태: `PR #347 OPEN / CI PENDING` — Task 1~4 구현과 module-wide
+H2/PostgreSQL 검증, 독립 review, lesson, PR metadata parity를 완료했고
+exact-head CI와 최신 머지 승인만 남아 있다.
 
 ## 분류와 범위
 
@@ -38,7 +38,7 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 - [x] CL-04 — 각 단계에서 command, path, result를 즉시 기록한다.
 - [x] CL-05 — 설계/계획/테스트/CI pending 항목은 unchecked로 fail-closed 유지한다.
 - [x] CL-06 — receipt 또는 테스트 증거가 stale하면 해당 단계와 downstream proof를 재실행한다.
-- [ ] CL-07 — PR/merge/branch 삭제 같은 외부 side effect 직전에 authority와 exact head를 재검증한다.
+- [x] CL-07 — PR/merge/branch 삭제 같은 외부 side effect 직전에 authority와 exact head를 재검증한다.
 - [ ] CL-08 — 완료 시 `Required checks: X/Y; N/A: N; Blocked: N`을 계산한다.
 - [x] CL-09 — PR 전 재사용 가능한 lesson을 기록하고 검토한다.
 - [x] CL-10 — final review, fresh verification, scoped commit을 pre-PR에 수렴한다.
@@ -77,9 +77,9 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 
 ## 외부 side effect 조건부 게이트
 
-- [ ] CG-11 — PR 대상 repository/base/head authority를 재확인한다.
+- [x] CG-11 — PR 대상 repository/base/head authority를 재확인한다.
 - [ ] CG-12 — exact head를 push하고 remote SHA를 확인한다.
-- [ ] CG-13 — 한국어 PR body와 `## DoD Status` metadata parity를 확인한다.
+- [x] CG-13 — 한국어 PR body와 `## DoD Status` metadata parity를 확인한다.
 - [ ] CG-14 — exact-head CI, review, thread, artifact를 fresh read 한다.
 - [ ] CG-15 — merge-ready report를 작성한다.
 - [ ] CG-16 — merge 전 새 사용자 승인을 받는다.
@@ -102,8 +102,8 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 
 ## 현재 stop condition
 
-TDD RED/GREEN 구현과 module-wide 검증, 독립 review/lesson이 완료되어 pre-PR
-검증을 통과했다. 코드 기준 정적 검사와 `git diff --check`도 통과했다. 구현·PR·merge는
-각 downstream gate와 fresh CI/approval 이후에만 진행하며, 현재는 exact head push와
-PR/CI 확인을 기다린다. 현재 계획 경로는
+TDD RED/GREEN 구현과 module-wide 검증, 독립 review/lesson, PR metadata parity가
+완료됐다. 코드 기준 정적 검사와 `git diff --check`도 통과했다. PR #347은 exact-head
+CI를 진행 중이며, CI/review/thread를 fresh read한 뒤 최신 사용자 승인 없이는 merge하지
+않는다. 현재 계획 경로는
 `docs/superpowers/plans/2026-08-16-issue-334-solver-fact-version-fence-plan.md`다.
