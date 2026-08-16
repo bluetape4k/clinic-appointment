@@ -1,6 +1,6 @@
 # 이슈 #334 solver planning fact version fence 워크플로 체크리스트
 
-상태: `IMPLEMENTATION IN PROGRESS` — 설계·구현계획 승인을 완료했고 Task 1 canonical hash RED/GREEN을 진행 중이다.
+상태: `IMPLEMENTATION IN PROGRESS` — Task 1 canonical hash와 Task 2 SolverResult snapshot metadata RED/GREEN을 완료했고 Task 2 commit 직전이다.
 
 ## 분류와 범위
 

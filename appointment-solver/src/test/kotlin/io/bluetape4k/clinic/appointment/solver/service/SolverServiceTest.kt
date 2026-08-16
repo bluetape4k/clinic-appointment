@@ -227,6 +227,9 @@ class SolverServiceTest {
 
         result.isFeasible.shouldBeTrue()
         result.appointments shouldHaveSize 2
+        result.dateRange?.start shouldBeEqualTo MONDAY
+        result.dateRange?.endInclusive shouldBeEqualTo FRIDAY
+        result.planningFactVersion.matches(Regex("[0-9a-f]{64}")).shouldBeTrue()
     }
 
     @Test
@@ -313,6 +316,16 @@ class SolverServiceTest {
         }
 
         solverService.isSourceVersionCurrentAdvisory(result).shouldBeFalse()
+    }
+
+    @Test
+    fun `legacy result metadata가 advisory와 apply에서 안전하게 거부된다`() {
+        val (clinicId, _, _, _) = insertBaseData()
+        val result = solverService.optimize(scope(clinicId), MONDAY..FRIDAY, Duration.ofSeconds(5))
+        val legacyResult = result.copy(dateRange = null, planningFactVersion = "")
+
+        solverService.isSourceVersionCurrentAdvisory(legacyResult).shouldBeFalse()
+        solverService.applyOptimizedAssignments(legacyResult).shouldBeFalse()
     }
 
     @Test
