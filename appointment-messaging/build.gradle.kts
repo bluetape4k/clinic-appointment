@@ -28,5 +28,7 @@ dependencies {
     testImplementation(libs.h2.v2)
     testImplementation(libs.spring.kafka4.test)
     testImplementation(libs.bluetape4k.testcontainers)
+    testImplementation(libs.postgresql.driver)
+    testImplementation(libs.testcontainers.postgresql)
     testImplementation("org.testcontainers:testcontainers-kafka")
 }
