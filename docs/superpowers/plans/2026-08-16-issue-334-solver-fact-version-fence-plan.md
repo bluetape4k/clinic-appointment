@@ -160,7 +160,7 @@ internal object PlanningFactVersionHasher {
 
   Run the exact command from Step 3. Expected: hasher tests PASS. 이어서 `./gradlew :appointment-solver:compileKotlin`으로 production compile을 확인한다.
 
-- [ ] **Step 6: Task 1을 Lore commit한다.**
+- [x] **Step 6: Task 1을 Lore commit한다.**
 
   ```bash
   git add docs/superpowers/risk/2026-08-16-issue-334-solver-fact-version-fence-risk.md appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/PlanningFactVersionHasher.kt appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/PlanningFactVersionHasherTest.kt
@@ -180,7 +180,7 @@ Not-tested: SolverService apply 경로와 PostgreSQL race는 다음 task에서 �
 - Modify: `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverService.kt`
 - Modify: `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServiceTest.kt`
 
-- [ ] **Step 1: result metadata RED를 작성한다.**
+- [x] **Step 1: result metadata RED를 작성한다.**
 
   기존 feasible test의 result assertion 뒤에 다음을 추가한다.
 
@@ -192,7 +192,7 @@ result.planningFactVersion.matches(Regex("[0-9a-f]{64}")).shouldBeTrue()
 
   별도 test `legacy result metadata가 advisory와 apply에서 안전하게 거부된다`에서 `result.copy(dateRange = null, planningFactVersion = "")`를 `isSourceVersionCurrentAdvisory`와 `applyOptimizedAssignments`에 전달하고 둘 다 `false`인지 고정한다.
 
-- [ ] **Step 2: metadata RED를 확인한다.**
+- [x] **Step 2: metadata RED를 확인한다.**
 
   ```bash
   ./gradlew :appointment-solver:test --tests 'io.bluetape4k.clinic.appointment.solver.service.SolverServiceTest.*'
@@ -200,7 +200,7 @@ result.planningFactVersion.matches(Regex("[0-9a-f]{64}")).shouldBeTrue()
 
   Expected: 새 result property가 없어 compile failure가 발생한다.
 
-- [ ] **Step 3: SolverResult contract를 추가한다.**
+- [x] **Step 3: SolverResult contract를 추가한다.**
 
   `scope` 다음에 아래 두 field를 둔다.
 
@@ -211,7 +211,7 @@ val planningFactVersion: String = "",
 
   `sourceVersions`는 유지한다. nullable/blank 기본값은 기존 in-memory fixture와 이전 serialized result를 안전하게 읽되, apply/advisory가 fence 없는 result를 성공시키지 않도록 하기 위한 것이다. `Serializable` `serialVersionUID`는 새 결과 contract에 맞춰 `2L`로 올리고 KDoc에 legacy result reject 의미를 기록한다.
 
-- [ ] **Step 4: snapshot loader를 current-transaction 함수로 분리한다.**
+- [x] **Step 4: snapshot loader를 current-transaction 함수로 분리한다.**
 
   `SolverService`에 다음 구조를 적용한다.
 
@@ -231,7 +231,7 @@ private fun loadSnapshotInCurrentTransaction(
 
   `SolverSnapshot`에 `planningFactVersion: String`을 추가하고, `optimize`의 `SolverResult` 생성 시 snapshot의 hash와 원래 dateRange를 전달한다. solve가 사용하는 appointments는 digest에서 제외하지만 기존 `originalAppointments` map과 source version 생성은 변경하지 않는다.
 
-- [ ] **Step 5: metadata GREEN과 기존 solver 회귀를 실행한다.**
+- [x] **Step 5: metadata GREEN과 기존 solver 회귀를 실행한다.**
 
   ```bash
   ./gradlew :appointment-solver:test --tests 'io.bluetape4k.clinic.appointment.solver.service.SolverServiceTest.*'

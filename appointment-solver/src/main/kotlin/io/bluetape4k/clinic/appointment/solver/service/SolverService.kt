@@ -88,6 +88,8 @@ class SolverService(
             pinnedCount = pinnedCount,
             scope = scope,
             sourceVersions = originalMap.mapNotNull { (id, record) -> record.version.let { id to it } }.toMap(),
+            dateRange = dateRange,
+            planningFactVersion = snapshot.planningFactVersion,
         )
     }
 
@@ -117,6 +119,8 @@ class SolverService(
      * 있으므로 실제 반영에는 반드시 [applyOptimizedAssignments]를 사용해야 합니다.
      */
     fun isSourceVersionCurrentAdvisory(result: SolverResult): Boolean {
+        if (result.dateRange == null || result.planningFactVersion.isBlank()) return false
+
         val resultScope = result.scope
         return transaction {
             result.sourceVersions.all { (appointmentId, version) ->
@@ -144,6 +148,8 @@ class SolverService(
      * transaction 전체를 rollback하고 `false`를 반환합니다.
      */
     fun applyOptimizedAssignments(result: SolverResult): Boolean {
+        if (result.dateRange == null || result.planningFactVersion.isBlank()) return false
+
         return try {
             transaction {
                 if (!appointmentRepository.lockLegacySourceVersions(result.scope, result.sourceVersions)) {
@@ -179,57 +185,67 @@ class SolverService(
     private data class SolverSnapshot(
         val solution: ScheduleSolution,
         val originalAppointments: Map<Long, AppointmentRecord>,
+        val planningFactVersion: String,
     )
 
     private fun loadSnapshot(scope: TenantClinicScope, dateRange: ClosedRange<LocalDate>): SolverSnapshot =
         transaction {
-            val clinic = clinicRepository.findByIdAndTenant(scope.clinicId, scope.tenantGroupId)
-                ?: throw IllegalArgumentException("Clinic not found: ${scope.clinicId}")
-
-            val doctors = doctorRepository.findByScope(scope)
-            val appointments = appointmentRepository.findByClinicAndDateRange(scope, dateRange)
-            val treatments = treatmentTypeRepository.findByScope(scope)
-            val equipments = equipmentRepository.findByScope(scope)
-            val operatingHours = clinicRepository.findAllOperatingHours(scope)
-            val doctorSchedules = doctors.flatMap { doctor ->
-                val doctorId = checkNotNull(doctor.id) {
-                    "Doctor record is missing id: clinicId=${doctor.clinicId}"
-                }
-                doctorRepository.findAllSchedules(scope, doctorId)
-            }
-            val doctorAbsences = doctors.flatMap { doctor ->
-                val doctorId = checkNotNull(doctor.id) {
-                    "Doctor record is missing id: clinicId=${doctor.clinicId}"
-                }
-                doctorRepository.findAbsencesByDateRange(scope, doctorId, dateRange)
-            }
-            val breakTimes = clinicRepository.findAllBreakTimes(scope)
-            val defaultBreakTimes = clinicRepository.findDefaultBreakTimes(scope)
-            val closures = clinicRepository.findClosuresByDateRange(scope, dateRange)
-            val holidays = holidayRepository.findByDateRange(scope, dateRange)
-            val treatmentEquipments = treatmentTypeRepository.findAllTreatmentEquipments(scope)
-
-            val solution = SolutionConverter.buildSolution(
-                clinic = clinic,
-                doctors = doctors,
-                appointments = appointments,
-                treatments = treatments,
-                equipments = equipments,
-                operatingHours = operatingHours,
-                doctorSchedules = doctorSchedules,
-                doctorAbsences = doctorAbsences,
-                breakTimes = breakTimes,
-                defaultBreakTimes = defaultBreakTimes,
-                closures = closures,
-                holidays = holidays,
-                treatmentEquipments = treatmentEquipments,
-                dateRange = dateRange,
-            )
-            SolverSnapshot(
-                solution = solution,
-                originalAppointments = appointments.associateBy { record ->
-                    checkNotNull(record.id) { "Appointment record is missing id: clinicId=${record.clinicId}" }
-                },
-            )
+            loadSnapshotInCurrentTransaction(scope, dateRange)
         }
+
+    private fun loadSnapshotInCurrentTransaction(
+        scope: TenantClinicScope,
+        dateRange: ClosedRange<LocalDate>,
+    ): SolverSnapshot {
+        val clinic = clinicRepository.findByIdAndTenant(scope.clinicId, scope.tenantGroupId)
+            ?: throw IllegalArgumentException("Clinic not found: ${scope.clinicId}")
+
+        val doctors = doctorRepository.findByScope(scope)
+        val appointments = appointmentRepository.findByClinicAndDateRange(scope, dateRange)
+        val treatments = treatmentTypeRepository.findByScope(scope)
+        val equipments = equipmentRepository.findByScope(scope)
+        val operatingHours = clinicRepository.findAllOperatingHours(scope)
+        val doctorSchedules = doctors.flatMap { doctor ->
+            val doctorId = checkNotNull(doctor.id) {
+                "Doctor record is missing id: clinicId=${doctor.clinicId}"
+            }
+            doctorRepository.findAllSchedules(scope, doctorId)
+        }
+        val doctorAbsences = doctors.flatMap { doctor ->
+            val doctorId = checkNotNull(doctor.id) {
+                "Doctor record is missing id: clinicId=${doctor.clinicId}"
+            }
+            doctorRepository.findAbsencesByDateRange(scope, doctorId, dateRange)
+        }
+        val breakTimes = clinicRepository.findAllBreakTimes(scope)
+        val defaultBreakTimes = clinicRepository.findDefaultBreakTimes(scope)
+        val closures = clinicRepository.findClosuresByDateRange(scope, dateRange)
+        val holidays = holidayRepository.findByDateRange(scope, dateRange)
+        val treatmentEquipments = treatmentTypeRepository.findAllTreatmentEquipments(scope)
+
+        val solution = SolutionConverter.buildSolution(
+            clinic = clinic,
+            doctors = doctors,
+            appointments = appointments,
+            treatments = treatments,
+            equipments = equipments,
+            operatingHours = operatingHours,
+            doctorSchedules = doctorSchedules,
+            doctorAbsences = doctorAbsences,
+            breakTimes = breakTimes,
+            defaultBreakTimes = defaultBreakTimes,
+            closures = closures,
+            holidays = holidays,
+            treatmentEquipments = treatmentEquipments,
+            dateRange = dateRange,
+        )
+        return SolverSnapshot(
+            solution = solution,
+            originalAppointments = appointments.associateBy { record ->
+                checkNotNull(record.id) { "Appointment record is missing id: clinicId=${record.clinicId}" }
+            },
+            planningFactVersion = PlanningFactVersionHasher.hash(scope, dateRange, solution),
+        )
+    }
+
 }
