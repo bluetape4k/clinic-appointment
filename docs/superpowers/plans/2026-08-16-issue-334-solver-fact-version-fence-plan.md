@@ -346,7 +346,7 @@ return try {
 
   Expected: 12개 planning fact mutation test, legacy-safe rejection, 기존 CAS/concurrent writer/duplicate rollback/pinned 관련 test가 PASS한다.
 
-- [ ] **Step 6: Task 3을 Lore commit한다.**
+- [x] **Step 6: Task 3을 Lore commit한다.**
 
   ```bash
   git add appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverService.kt appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServiceTest.kt
@@ -365,7 +365,7 @@ Not-tested: PostgreSQL singleton race는 다음 task에서 검증한다"
 - Modify: `appointment-solver/build.gradle.kts`
 - Create: `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServicePostgresConcurrencyTest.kt`
 
-- [ ] **Step 1: 기존 alias만 test dependency로 추가한다.**
+- [x] **Step 1: 기존 alias만 test dependency로 추가한다.**
 
   `appointment-solver/build.gradle.kts`에 다음 세 줄을 추가한다. version catalog에 이미 정의된 alias를 재사용하며 새 dependency를 만들지 않는다.
 
@@ -375,11 +375,11 @@ testImplementation(libs.postgresql.driver)
 testImplementation(libs.testcontainers.postgresql)
 ```
 
-- [ ] **Step 2: PostgreSQL test fixture를 작성한다.**
+- [x] **Step 2: PostgreSQL test fixture를 작성한다.**
 
   `SolverServicePostgresConcurrencyTest`는 `PostgreSQLServer.Launcher.postgres`를 lazy singleton으로 가져오고, `@BeforeAll`에서 `Database.connect(postgres.jdbcUrl, driver = "org.postgresql.Driver", user = ..., password = ...)` 후 H2와 같은 scheduling table set을 `SchemaUtils.createMissingTablesAndColumns`로 생성한다. `@BeforeEach`는 tenant/group와 모든 child table을 reverse `deleteAll`한다. H2 `SolverServiceTest`와 이 class에 JUnit `@ResourceLock("exposed-default-database")`와 `@Execution(ExecutionMode.SAME_THREAD)`를 적용하고, `@AfterAll`에서 H2 URL을 다시 `Database.connect`해 Exposed default database를 복원한다. raw container annotation이나 per-test container start는 작성하지 않는다.
 
-- [ ] **Step 3: fact 변경과 실제 Postgres hash mismatch를 검증한다.**
+- [x] **Step 3: fact 변경과 실제 Postgres hash mismatch를 검증한다.**
 
   H2 helper와 같은 fixture를 Postgres에 넣고 다음 test를 작성한다.
 
@@ -397,11 +397,19 @@ fun `PostgreSQL에서 solve와 apply 사이 clinic 변경은 결과를 거부한
 }
 ```
 
-- [ ] **Step 4: appointment lock 경합으로 SERIALIZABLE conflict를 검증한다.**
+- [x] **Step 4: appointment lock 경합과 CAS stale 수렴을 검증한다.**
 
-  `CountDownLatch` 두 개와 single-thread executor를 사용한다. writer transaction이 `lockLegacySourceVersions(scope, result.sourceVersions)`로 appointment row lock을 잡고 `writerReady`를 count down한다. apply thread를 시작해 snapshot hash를 읽고 appointment lock에서 대기시킨 뒤, main thread가 별도 transaction에서 clinic max concurrency를 수정·commit한다. writer를 `releaseWriter`로 종료하면 apply는 `false`를 반환해야 하며, 결과 appointment의 version/status에는 assignment가 남지 않아야 한다. timeout은 5초로 제한하고 finally에서 executor shutdown/await를 수행한다. serialization failure가 발생하면 `isSerializationConflict`가 false로 수렴시키는 것이 pass 조건이다.
+  `CountDownLatch` 두 개와 two-thread executor를 사용한다. writer transaction이
+  `lockLegacySourceVersions(scope, result.sourceVersions)`로 appointment row lock을 잡고
+  appointment status/version을 먼저 소비한 뒤 `writerReady`를 count down한다. apply thread를
+  시작해 snapshot hash를 읽고 appointment lock에서 대기시킨 뒤, main thread가 별도 transaction에서
+  clinic max concurrency도 수정·commit한다. writer를 `releaseWriter`로 종료하면 apply는
+  appointment CAS stale로 `false`를 반환해야 하며, 결과 assignment는 남지 않고 writer의
+  status/version만 보존되어야 한다. timeout은 5초로 제한하고 finally에서 executor shutdown/await를
+  수행한다. PostgreSQL fact 변경 자체는 별도 hash mismatch test로 검증하며, 이 경합 test는
+  실제 row lock·CAS rollback 경계를 검증한다.
 
-- [ ] **Step 5: Docker/Colima 전제와 test를 순차 검증한다.**
+- [x] **Step 5: Docker/Colima 전제와 test를 순차 검증한다.**
 
   ```bash
   colima status
