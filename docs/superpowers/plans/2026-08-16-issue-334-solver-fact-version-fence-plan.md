@@ -239,7 +239,7 @@ private fun loadSnapshotInCurrentTransaction(
 
   Expected: metadata test와 기존 feasible/reschedule/empty/no-score test가 PASS한다.
 
-- [ ] **Step 6: Task 2를 Lore commit한다.**
+- [x] **Step 6: Task 2를 Lore commit한다.**
 
   ```bash
   git add appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverResult.kt appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverService.kt appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServiceTest.kt
@@ -258,7 +258,7 @@ Not-tested: SERIALIZABLE apply와 PostgreSQL concurrency는 다음 task에서 �
 - Modify: `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverService.kt`
 - Modify: `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServiceTest.kt`
 
-- [ ] **Step 1: H2 fact mutation RED 회귀를 추가한다.**
+- [x] **Step 1: H2 fact mutation RED 회귀를 추가한다.**
 
   `SolverServiceTest`에 공통 helper를 추가한다.
 
@@ -295,7 +295,7 @@ private fun assertApplyRejectsAfterPlanningFactChange(
 
   시간 값은 `LocalTime.of(12, 0)`/`LocalTime.of(13, 0)`로 작성하고, fixture의 운영시간과 겹쳐도 appointment 결과의 assignment 자체보다 fence 거부를 검증한다. H2 cleanup 순서는 기존 reverse `deleteAll`을 유지하고 신규 equipment/association row를 먼저 지운다.
 
-- [ ] **Step 2: RED를 확인한다.**
+- [x] **Step 2: RED를 확인한다.**
 
   ```bash
   ./gradlew :appointment-solver:test --tests 'io.bluetape4k.clinic.appointment.solver.service.SolverServiceTest.*'
@@ -303,11 +303,11 @@ private fun assertApplyRejectsAfterPlanningFactChange(
 
   Expected: helper가 호출하는 `planningFactVersion` 비교가 없어서 변경 후 advisory/apply가 `true`가 되거나, 아직 구현 전이면 새 test compile/behavior failure가 난다.
 
-- [ ] **Step 3: advisory에 planning fact 비교를 추가한다.**
+- [x] **Step 3: advisory에 planning fact 비교를 추가한다.**
 
   `isSourceVersionCurrentAdvisory`는 결과의 nullable dateRange/blank hash를 먼저 안전하게 거부하고, 하나의 transaction에서 `loadSnapshotInCurrentTransaction`을 호출해 현재 hash와 result hash를 비교한다. 이어서 기존 `sourceVersions.all`을 확인한다. 현재 snapshot read가 실패하면 예외를 삼키지 않고 기존 transaction exception contract로 전파한다.
 
-- [ ] **Step 4: apply를 SERIALIZABLE fence로 교체한다.**
+- [x] **Step 4: apply를 SERIALIZABLE fence로 교체한다.**
 
   `applyOptimizedAssignments`는 다음 구조를 사용한다.
 
@@ -338,7 +338,7 @@ return try {
 
   `isSerializationConflict`는 cause chain과 `SQLException.nextException`을 순회해 SQLSTATE `40001` 또는 `40P01`만 인식한다. `StaleSolverResultException`은 기존 rollback을 위해 transaction 안에서 throw하고, unexpected SQL/encoding failure는 재throw한다. 기존 duplicate assignment rollback, concurrent appointment writer, pinned behavior test는 수정하지 않고 그대로 통과시킨다.
 
-- [ ] **Step 5: H2 GREEN과 rollback 보존을 실행한다.**
+- [x] **Step 5: H2 GREEN과 rollback 보존을 실행한다.**
 
   ```bash
   ./gradlew :appointment-solver:test --tests 'io.bluetape4k.clinic.appointment.solver.service.SolverServiceTest.*'

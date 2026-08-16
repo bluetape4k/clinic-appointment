@@ -13,8 +13,11 @@ import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.solver.converter.SolutionConverter
 import io.bluetape4k.clinic.appointment.solver.domain.ScheduleSolution
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.sql.Connection
+import java.sql.SQLException
 import java.time.Duration
 import java.time.LocalDate
+import java.util.ArrayDeque
 
 /**
  * Solver 실행 진입점.
@@ -123,6 +126,9 @@ class SolverService(
 
         val resultScope = result.scope
         return transaction {
+            val snapshot = loadSnapshotInCurrentTransaction(resultScope, checkNotNull(result.dateRange))
+            if (snapshot.planningFactVersion != result.planningFactVersion) return@transaction false
+
             result.sourceVersions.all { (appointmentId, version) ->
                 appointmentRepository.findByIdAndScope(appointmentId, resultScope)?.version == version
             }
@@ -148,10 +154,16 @@ class SolverService(
      * transaction 전체를 rollback하고 `false`를 반환합니다.
      */
     fun applyOptimizedAssignments(result: SolverResult): Boolean {
-        if (result.dateRange == null || result.planningFactVersion.isBlank()) return false
-
         return try {
-            transaction {
+            transaction(transactionIsolation = Connection.TRANSACTION_SERIALIZABLE) {
+                val resultDateRange = result.dateRange ?: throw StaleSolverResultException
+                if (result.planningFactVersion.isBlank()) throw StaleSolverResultException
+
+                val current = loadSnapshotInCurrentTransaction(result.scope, resultDateRange)
+                if (current.planningFactVersion != result.planningFactVersion) {
+                    throw StaleSolverResultException
+                }
+
                 if (!appointmentRepository.lockLegacySourceVersions(result.scope, result.sourceVersions)) {
                     throw StaleSolverResultException
                 }
@@ -177,6 +189,8 @@ class SolverService(
             }
         } catch (_: StaleSolverResultException) {
             false
+        } catch (failure: Exception) {
+            if (failure.isSerializationConflict()) false else throw failure
         }
     }
 
@@ -246,6 +260,25 @@ class SolverService(
             },
             planningFactVersion = PlanningFactVersionHasher.hash(scope, dateRange, solution),
         )
+    }
+
+    private fun Throwable.isSerializationConflict(): Boolean = sqlExceptions().any { exception ->
+        exception.sqlState == "40001" || exception.sqlState == "40P01"
+    }
+
+    private fun Throwable.sqlExceptions(): Sequence<SQLException> = sequence {
+        val seen = mutableSetOf<Throwable>()
+        val pending = ArrayDeque<Throwable>()
+        pending.add(this@sqlExceptions)
+        while (pending.isNotEmpty()) {
+            val current = pending.removeFirst()
+            if (!seen.add(current)) continue
+            if (current is SQLException) {
+                yield(current)
+                current.nextException?.let(pending::addLast)
+            }
+            current.cause?.let(pending::addLast)
+        }
     }
 
 }
