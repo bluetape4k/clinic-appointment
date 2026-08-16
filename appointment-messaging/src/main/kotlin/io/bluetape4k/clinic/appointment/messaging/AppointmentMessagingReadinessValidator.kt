@@ -89,14 +89,16 @@ class AppointmentMessagingReadinessValidator(
         schema: String?,
         table: String,
     ): Set<String> = sequenceOf(catalog, null).distinct()
-        .mapNotNull { candidateCatalog ->
-            runCatching {
-                metadata.getColumns(candidateCatalog, schema, table.uppercase(), null).use { result ->
-                    buildSet {
-                        while (result.next()) add(result.getString("COLUMN_NAME").lowercase())
+        .flatMap { candidateCatalog ->
+            identifierCandidates(table).mapNotNull { tablePattern ->
+                runCatching {
+                    metadata.getColumns(candidateCatalog, schema, tablePattern, null).use { result ->
+                        buildSet {
+                            while (result.next()) add(result.getString("COLUMN_NAME").lowercase())
+                        }
                     }
-                }
-            }.getOrNull()
+                }.getOrNull()
+            }
         }
         .firstOrNull { it.isNotEmpty() }
         ?: emptySet()
@@ -108,21 +110,24 @@ class AppointmentMessagingReadinessValidator(
         table: String,
     ): Set<String> = sequenceOf(catalog, null).distinct()
         .flatMap { candidateCatalog ->
-            sequenceOf(table, table.uppercase(), table.lowercase()).asSequence()
-            .mapNotNull { tablePattern ->
-                runCatching {
-                    metadata.getIndexInfo(candidateCatalog, schema, tablePattern.uppercase(), false, false).use { result ->
-                        buildSet {
-                            while (result.next()) {
-                                result.getString("INDEX_NAME")?.let { add(it.lowercase()) }
+            identifierCandidates(table)
+                .mapNotNull { tablePattern ->
+                    runCatching {
+                        metadata.getIndexInfo(candidateCatalog, schema, tablePattern, false, false).use { result ->
+                            buildSet {
+                                while (result.next()) {
+                                    result.getString("INDEX_NAME")?.let { add(it.lowercase()) }
+                                }
                             }
                         }
-                    }
-                }.getOrNull()
-            }
+                    }.getOrNull()
+                }
         }
         .firstOrNull { it.isNotEmpty() }
         ?: emptySet()
+
+    private fun identifierCandidates(identifier: String): Sequence<String> =
+        sequenceOf(identifier, identifier.uppercase(), identifier.lowercase()).distinct()
 
     companion object {
         private const val OUTBOX_TABLE = "scheduling_outbox_events"
