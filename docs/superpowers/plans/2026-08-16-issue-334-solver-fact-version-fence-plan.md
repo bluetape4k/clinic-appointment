@@ -420,7 +420,7 @@ fun `PostgreSQL에서 solve와 apply 사이 clinic 변경은 결과를 거부한
 
   관리된 `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`를 상속한다. Colima가 healthy인데 bind-mount 오류가 나면 VM을 재시작하거나 skip하지 않고 원인을 진단한다. Expected: PostgreSQL 두 test PASS; 실패 시 오류와 환경을 risk/lesson에 기록하고 verification을 완료로 표시하지 않는다.
 
-- [ ] **Step 6: Task 4를 Lore commit한다.**
+- [x] **Step 6: Task 4를 Lore commit한다.**
 
   ```bash
   git add appointment-solver/build.gradle.kts appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServicePostgresConcurrencyTest.kt
@@ -433,6 +433,9 @@ Tested: PostgreSQL hash mismatch and appointment lock race tests
 Not-tested: 전체 repository suite와 remote CI는 delivery 단계에서 검증한다"
   ```
 
+  Result: Task 4 핵심 변경은 `54f420f0`으로 커밋했고, race test 안정화와
+  advisory null-safety 후속 수정은 `e29271f4`, `2c821ed0`으로 각각 수렴했다.
+
 ## Task 5: module verification, review, lesson, checklist 수렴
 
 **Files:**
@@ -440,7 +443,7 @@ Not-tested: 전체 repository suite와 remote CI는 delivery 단계에서 검증
 - Create: `docs/lessons/2026-08-16-issue-334-solver-fact-version-fence.md`
 - Modify: `docs/superpowers/checklists/2026-08-16-issue-334-workflow.md`
 
-- [ ] **Step 1: 변경된 Kotlin 경계와 static safety를 검사한다.**
+- [x] **Step 1: 변경된 Kotlin 경계와 static safety를 검사한다.**
 
   ```bash
   ./gradlew :appointment-solver:compileKotlin :appointment-solver:compileTestKotlin
@@ -449,37 +452,43 @@ Not-tested: 전체 repository suite와 remote CI는 delivery 단계에서 검증
   git diff --check
   ```
 
-  Expected: compile 성공, 금지 annotation/container/미완료 표식 없음, diff whitespace 오류 없음. `!!` 신규 production 사용은 추가하지 않는다.
+  Result: compile/build 경로 성공, 금지 annotation/container와 코드 표식 없음,
+  `git diff --check` 통과. `!!` 신규 production 사용은 추가하지 않았다.
 
-- [ ] **Step 2: solver module 전체를 순차 실행한다.**
+- [x] **Step 2: solver module 전체를 순차 실행한다.**
 
   ```bash
-  ./gradlew :appointment-solver:test --no-build-cache
-  ./gradlew :appointment-solver:build --no-build-cache
+  ./gradlew :appointment-solver:test --no-build-cache --no-daemon
+  ./gradlew :appointment-solver:build --no-build-cache --no-daemon
   ```
 
-  Expected: baseline 79개를 포함한 전체 solver test와 build가 PASS한다. failure가 있으면 해당 task로 돌아가 원인을 고친 뒤 두 명령을 다시 실행한다.
+  Result: 10 suites / 98 tests, skipped 0, failures 0, errors 0과
+  `BUILD SUCCESSFUL`을 확인했다. 첫 daemon 종료 후 `--no-daemon` 재실행 결과를
+  최종 증거로 사용했다.
 
-- [ ] **Step 3: 독립 final review 문서를 작성한다.**
+- [x] **Step 3: 독립 final review 문서를 작성한다.**
 
   review 문서는 문제 재현, digest field ledger, transaction boundary, serialization conflict, rollback/CAS/pinned, Testcontainers policy, API/serialization compatibility를 별도 관점으로 읽고 P0/P1/P2/P3 개수를 기록한다. P0/P1이 0이 아니면 pre-PR을 중지한다. review에는 exact commit SHA, targeted test 명령과 결과, known gap을 포함한다.
 
-- [ ] **Step 4: Korean lesson을 작성한다.**
+- [x] **Step 4: Korean lesson을 작성한다.**
 
   lesson에는 context, appointment-only fence의 한계, canonical hash 선택 이유, implementation surprise, H2와 PostgreSQL evidence 차이, 재사용할 `ScheduleSolution` field ledger 규칙, future writer가 지켜야 할 directive를 포함한다. 운영 증거가 아니라 Testcontainers 기반 DB consistency simulation임을 명시한다.
 
-- [ ] **Step 5: checklist와 receipt를 fresh evidence로 갱신한다.**
+- [x] **Step 5: checklist와 receipt를 fresh evidence로 갱신한다.**
 
-  `KT-01..KT-07`, `A-05..A-08`, `CL-08..CL-10`, `SPW-05`를 실제 command/path/result로 갱신한다. receipt에는 implementation/verification component check와 evidence를 순서대로 기록하고, unchecked ID를 임의로 체크하지 않는다.
+  `KT-01..KT-07`, `A-05..A-08`, `CL-09..CL-10`, `SPW-05`를 실제
+  command/path/result로 갱신했고, `CL-08`은 CI/merge-ready 시점까지 보류한다.
+  receipt에는 implementation/verification component check와 evidence를 순서대로
+  기록하고, unchecked ID를 임의로 체크하지 않는다.
 
-- [ ] **Step 6: Task 5를 Lore commit한다.**
+- [x] **Step 6: Task 5를 Lore commit한다.**
 
   ```bash
   git add docs/review/2026-08-16-issue-334-solver-fact-version-fence-step-6r-code-review.md docs/lessons/2026-08-16-issue-334-solver-fact-version-fence.md docs/superpowers/checklists/2026-08-16-issue-334-workflow.md
-  git commit -m "solver fact fence 검증과 lesson을 남긴다" -m "Constraint: module test와 production-like DB 증거를 서로 대체하지 않고 분리해 보고해야 한다
+  git commit -m "stale solver 결과 적용 방지의 검증 근거를 남긴다" -m "Constraint: module test와 production-like DB 증거를 서로 대체하지 않고 분리해 보고해야 한다
 Rejected: H2 green만으로 production consistency를 완료로 판정하는 방식 | isolation과 container runtime 위험을 가린다
 Confidence: high
-Scope-risk: moderate
+Scope-risk: narrow
 Directive: planning fact 목록이 바뀌면 hasher ledger·회귀·lesson을 함께 갱신한다
 Tested: solver compile/test/build, diff-check, static scan, final review
 Not-tested: remote CI와 merge는 fresh PR authority 뒤에 수행한다"
@@ -487,7 +496,7 @@ Not-tested: remote CI와 merge는 fresh PR authority 뒤에 수행한다"
 
 ## Task 6: PR/CI/merge-ready handoff
 
-- [ ] **Step 1: exact head와 PR authority를 재확인한다.**
+- [x] **Step 1: exact head와 PR authority를 재확인한다.**
 
   ```bash
   git status --short --branch
@@ -497,6 +506,10 @@ Not-tested: remote CI와 merge는 fresh PR authority 뒤에 수행한다"
   ```
 
   target repository는 `bluetape4k/clinic-appointment`, base는 `develop`, head는 현재 semantic branch다. root dirty file과 다른 worktree를 PR diff에 포함하지 않는다.
+
+  Result: repository default branch는 `develop`, matching PR은 없고 현재 exact head는
+  `51688f86460e1863cb72fa9ad91d74fad32a359a`다. feature worktree만 이 branch를
+  가리키며 root의 별도 worktree 변경은 PR 범위에 포함하지 않는다.
 
 - [ ] **Step 2: 한국어 PR을 생성하고 metadata parity를 확인한다.**
 
@@ -524,10 +537,10 @@ Not-tested: remote CI와 merge는 fresh PR authority 뒤에 수행한다"
 
 ## 계획 자체 검토
 
-- [ ] Spec coverage: 문제/선택지/계약은 Task 1–3, H2와 PostgreSQL acceptance는 Task 3–4, performance/stability와 Korean artifacts는 Task 1/5, PR/CI/merge는 Task 6에 연결했다.
-- [ ] Placeholder scan: 계획 저장 후 unresolved-marker scan이 결과를 내지 않아야 한다.
-- [ ] Type consistency: `PlanningFactVersionHasher.hash(scope, dateRange, solution)`, `SolverSnapshot.planningFactVersion`, `SolverResult.dateRange/planningFactVersion`, `loadSnapshotInCurrentTransaction` 이름을 모든 task에서 동일하게 사용한다.
-- [ ] Artifact read-back: `git diff --check`와 계획 전체 read-back을 실행한다.
+- [x] Spec coverage: 문제/선택지/계약은 Task 1–3, H2와 PostgreSQL acceptance는 Task 3–4, performance/stability와 Korean artifacts는 Task 1/5, PR/CI/merge는 Task 6에 연결했다.
+- [x] Placeholder scan: 계획 저장 후 unresolved-marker scan이 결과를 내지 않았다.
+- [x] Type consistency: `PlanningFactVersionHasher.hash(scope, dateRange, solution)`, `SolverSnapshot.planningFactVersion`, `SolverResult.dateRange/planningFactVersion`, `loadSnapshotInCurrentTransaction` 이름을 모든 task에서 동일하게 사용한다.
+- [x] Artifact read-back: `git diff --check`와 계획 전체 read-back을 실행했다.
 
 ## 완료 조건
 
