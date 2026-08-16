@@ -122,11 +122,12 @@ class SolverService(
      * 있으므로 실제 반영에는 반드시 [applyOptimizedAssignments]를 사용해야 합니다.
      */
     fun isSourceVersionCurrentAdvisory(result: SolverResult): Boolean {
-        if (result.dateRange == null || result.planningFactVersion.isBlank()) return false
+        val resultDateRange = result.dateRange ?: return false
+        if (result.planningFactVersion.isBlank()) return false
 
         val resultScope = result.scope
         return transaction {
-            val snapshot = loadSnapshotInCurrentTransaction(resultScope, checkNotNull(result.dateRange))
+            val snapshot = loadSnapshotInCurrentTransaction(resultScope, resultDateRange)
             if (snapshot.planningFactVersion != result.planningFactVersion) return@transaction false
 
             result.sourceVersions.all { (appointmentId, version) ->
