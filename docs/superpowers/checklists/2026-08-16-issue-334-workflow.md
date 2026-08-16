@@ -1,6 +1,6 @@
 # 이슈 #334 solver planning fact version fence 워크플로 체크리스트
 
-상태: `DESIGN REVIEW PENDING` — 승인된 설계를 문서화했으며 구현계획 승인 전이다.
+상태: `PLAN REVIEW PENDING` — 설계 승인과 구현계획 자체 검토를 완료했으며 계획 사용자 승인 전이다.
 
 ## 분류와 범위
 
@@ -32,7 +32,7 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 
 - [x] CL-01 — 이 checklist를 첫 설계 문서 mutation 전에 인스턴스화했다.
 - [x] CL-02 — 적용/조건부/N/A 범위와 제외 surface를 기록했다.
-- [x] CL-03 — 설계 문서 후 사용자 review, 그 다음 implementation plan 순서를 고정했다.
+- [x] CL-03 — 설계 문서 사용자 review/승인 후 implementation plan 순서를 지켰다.
 - [x] CL-04 — 각 단계에서 command, path, result를 즉시 기록한다.
 - [x] CL-05 — 설계/계획/테스트/CI pending 항목은 unchecked로 fail-closed 유지한다.
 - [x] CL-06 — receipt 또는 테스트 증거가 stale하면 해당 단계와 downstream proof를 재실행한다.
@@ -43,8 +43,8 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 
 ## Type-A 산출물 게이트
 
-- [ ] A-01/A-02 — 요구사항·research source ledger와 설계 문서 자체 review.
-- [ ] A-03 — 설계 문서 사용자 승인.
+- [x] A-01/A-02 — 요구사항·research source ledger와 설계 문서 자체 review를 완료했다.
+- [x] A-03 — 설계 문서 사용자 승인을 받았다.
 - [ ] A-04 — 구현계획 작성·검토·사용자 승인.
 - [ ] A-05 — 동시성/직렬화/성능·안정성 risk prediction.
 - [ ] A-06 — RED/GREEN 테스트 우선 구현.
@@ -95,6 +95,7 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 
 ## 현재 stop condition
 
-설계 문서가 사용자 review를 통과하기 전에는 `appointment-solver` production code,
-테스트 코드, Gradle 의존성, plan 문서를 수정하지 않는다. 구현·PR·merge는 해당
-게이트와 fresh CI/approval 이후에만 진행한다.
+구현계획이 사용자 review를 통과하기 전에는 `appointment-solver` production code,
+테스트 코드, Gradle 의존성을 수정하지 않는다. 구현·PR·merge는 해당 게이트와
+fresh CI/approval 이후에만 진행한다. 현재 계획 경로는
+`docs/superpowers/plans/2026-08-16-issue-334-solver-fact-version-fence-plan.md`다.
