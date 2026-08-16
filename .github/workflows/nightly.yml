@@ -44,6 +44,15 @@ jobs:
       - name: Detekt static analysis
         run: ./gradlew detekt --parallel
 
+      - name: Upload API consumer fixture evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-consumer-fixture-report
+          path: build/reports/consumer-fixtures/issue-336/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload detekt report
         if: always()
         uses: actions/upload-artifact@v7
