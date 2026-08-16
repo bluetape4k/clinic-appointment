@@ -59,7 +59,7 @@
 - Create: `appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/PlanningFactVersionHasherTest.kt`
 - Create: `appointment-solver/src/main/kotlin/io/bluetape4k/clinic/appointment/solver/service/PlanningFactVersionHasher.kt`
 
-- [ ] **Step 1: 동시성·성능·안정성 위험을 문서화한다.**
+- [x] **Step 1: 동시성·성능·안정성 위험을 문서화한다.**
 
   risk 문서에 다음 네 가지를 고정한다.
 
@@ -70,7 +70,7 @@
 
   각 위험에 trigger, 관찰 가능한 증거, 완화책, 중단 조건을 표로 기록한다.
 
-- [ ] **Step 2: deterministic hash RED 테스트를 먼저 작성한다.**
+- [x] **Step 2: deterministic hash RED 테스트를 먼저 작성한다.**
 
   `PlanningFactVersionHasherTest`에 다음 테스트를 추가한다.
 
@@ -113,7 +113,7 @@ fun `각 problem fact field 변경은 digest를 변경한다`() {
 
   `solution`, `doctor`, `SCOPE`, `RANGE` fixture는 `ScheduleSolution`의 실제 생성자와 `ClinicFact`/`DoctorFact`를 사용해 test file 안에 정의한다. fixture는 appointment와 score를 제외하고 clinic, doctor, treatment, equipment, operating hours, schedules, absences, breaks, default breaks, closures, holidays, treatment-equipment mapping을 각각 최소 한 건 포함한다.
 
-- [ ] **Step 3: RED를 확인한다.**
+- [x] **Step 3: RED를 확인한다.**
 
   Run:
 
@@ -123,7 +123,7 @@ fun `각 problem fact field 변경은 digest를 변경한다`() {
 
   Expected: `PlanningFactVersionHasher`가 아직 없어 compile failure가 발생한다. 이 failure가 새 테스트/심볼 부재인지 확인하고 기존 테스트 failure로 대체하지 않는다.
 
-- [ ] **Step 4: length-framed canonical encoder를 구현한다.**
+- [x] **Step 4: length-framed canonical encoder를 구현한다.**
 
   `PlanningFactVersionHasher.kt`는 다음 계약을 그대로 구현한다.
 
@@ -156,7 +156,7 @@ internal object PlanningFactVersionHasher {
 
   `ScheduleSolution.equipmentUnavailabilities`가 현재 loader에서 비어 있어도 encoder contract에는 포함한다. 향후 loader가 해당 fact를 채울 때 같은 fence가 자동으로 적용된다. appointments와 mutable `score`는 기존 appointment source version/CAS와 solver 결과이므로 planning-fact digest에서 제외한다.
 
-- [ ] **Step 5: encoder targeted GREEN을 실행한다.**
+- [x] **Step 5: encoder targeted GREEN을 실행한다.**
 
   Run the exact command from Step 3. Expected: hasher tests PASS. 이어서 `./gradlew :appointment-solver:compileKotlin`으로 production compile을 확인한다.
 
