@@ -131,7 +131,7 @@ Kafka, Exposed, leader, Resilience4j 타입을 노출하는 concrete class를 �
 
 각 configuration에는 대응하는 project dependency 하나만 추가한다. 예를 들어 core fixture는 `project(":appointment-core")`만 선언한다. Kafka, Spring Kafka, Exposed JDBC, leader, Resilience4j 또는 다른 애플리케이션 모듈을 우회 의존성으로 추가하지 않는다.
 
-전용 report task `generateModuleConsumerFixtureVariantReport`는 세 configuration의 resolution result를 해석하고, module별 selected variant, attributes, resolved artifact 좌표를 `build/reports/consumer-fixtures/issue-336/variants.json`에 기록한다. resolution 예외도 task 내부에서 module별 `status=failed`, 오류 class와 정제한 요약으로 기록하고 report task 자체는 파일 생성을 완료한다. 전용 검증 task `assertModuleConsumerFixtureApiVariants`는 이 JSON을 입력으로 받아 대상 project component의 variant가 `apiElements`이고 `Usage`가 `Usage.JAVA_API`인지 검사하며, 실패 status나 속성 불일치가 있으면 report 생성 뒤 실패한다. 이 assertion은 report task에 의존하고, 세 compile task는 assertion에 의존한다. `compileModuleConsumerFixtures`는 세 compile task를 묶으며 루트 `check`는 이 통합 task에 의존한다. `--dry-run` 출력으로 `report -> assertion -> module compile -> integration -> check` 순서를 검증한다. 단순 dependency report 출력은 assertion을 대신하지 않는다.
+전용 report task `generateModuleConsumerFixtureVariantReport`는 세 configuration의 resolution result를 해석하고, module별 selected variant, attributes, resolved artifact 좌표와 `sourceRef`·`gitSha`·resolution fingerprint를 `build/reports/consumer-fixtures/issue-336/variants.json`에 기록한다. task input에 fingerprint를 선언해 dependency scope·variant·build script가 바뀌면 `--rerun-tasks` 없이도 stale report가 재사용되지 않게 한다. resolution 예외도 task 내부에서 module별 `status=failed`, 오류 class, 제한된 cause chain과 정제한 요약으로 기록하고 report·bounded diagnostics 파일 생성을 완료한다. 별도 `generateModuleConsumerFixtureClasspathReport`는 동일 configuration의 artifact count·size·fingerprint를 `classpath.json`에 기록한다. 전용 검증 task `assertModuleConsumerFixtureApiVariants`는 이 JSON을 입력으로 받아 대상 project component의 variant가 `apiElements`이고 `Usage`가 `Usage.JAVA_API`인지 검사하며, 실패 status나 속성 불일치가 있으면 report 생성 뒤 실패한다. `assertModuleConsumerFixtureTaskGraph`는 producer `jar -> report -> assertion -> compile -> check` edge를 기계적으로 검사한다. 이 assertion들은 report task에 의존하고, 세 compile task는 assertion에 의존한다. `compileModuleConsumerFixtures`는 세 compile task를 묶으며 루트 `check`는 이 통합 task에 의존한다. `--dry-run` 출력은 기계 assertion의 보조 증거로 사용한다. 단순 dependency report 출력은 assertion을 대신하지 않는다.
 
 ### 6.2 fixture source와 compile task
 
@@ -155,7 +155,7 @@ src/consumerFixture/notification/kotlin/
 - `libraries` 입력은 대응하는 consumer fixture configuration 하나다.
 - output은 `build/consumer-fixtures/<module>/classes`로 분리한다.
 - Kotlin compiler의 `jvmTarget`은 `JVM_21`, Java toolchain은 21로 고정한다.
-- 대상 project artifact를 생산하는 task dependency는 configuration에서 추론하게 하고, host JDK에 의존하지 않는다.
+- 대상 project artifact를 생산하는 task dependency는 각 fixture compile task에 대응하는 project `jar` task를 명시적으로 연결하고, configuration resolution만으로 추론하지 않는다. host JDK에 의존하지 않는다.
 - root `clean`은 `build/consumer-fixtures`를 기존 root build directory와 함께 제거한다.
 
 task와 경로의 대응은 다음과 같이 고정한다.
@@ -186,7 +186,7 @@ fixture는 단순히 대표 DTO를 생성하지 않고 외부 dependency별 공�
 | notification | `NotificationAppointmentEventConsumer`, `NotificationAppointmentEventKafkaListener` | messaging 공개 타입, `ConsumerRecord`, `Acknowledgment`가 포함된 생성자·listener method |
 | notification | JDBC store와 `NotificationSchemaReadiness` | `Database`를 받는 공개 생성자·method |
 | notification | `NotificationOutboxMetrics` | `MeterRegistry`를 받는 공개 생성자 |
-| notification | `NotificationReminderSchedulingRunner` | `LeaderGroupElector`를 받는 공개 생성자 |
+| notification | `NotificationOutboxSchedulingRunner`, `NotificationObservationSchedulingRunner`, `NotificationRetentionSchedulingRunner`, `NotificationReminderSchedulingRunner` | 각 공개 생성자와 `LeaderGroupElector`를 받는 reminder 생성자 |
 | notification | `ResilientNotificationChannel` | 공개 Resilience4j factory·생성자 type-use |
 | notification | `NotificationAutoConfiguration`의 JDBC bean methods | 모든 public bean method의 callable reference와 `Database` type-use |
 | notification | `NotificationAutoConfiguration.notificationLeaderElection` | `@ConditionalOnClass(RedisClient::class)` annotation, `RedisClient`, `StatefulRedisConnection`, 반환 `LeaderGroupElector` type-use |
@@ -217,7 +217,7 @@ fixture는 이 표의 대표 항목만 검사하지 않는다. 외부 package를
 | notification | Kafka listener 공개 매개변수 | `libs.spring.kafka4` 또는 그 API가 전달하는 Kafka client | `api` |
 | notification | Exposed JDBC 공개 생성자 | `libs.jetbrains.exposed.jdbc`, 필요한 경우 `libs.exposed.jdbc` | `api` |
 | notification | `MeterRegistry` 공개 생성자 | `libs.micrometer.core` | `api` |
-| notification | leader-aware runner와 public auto-configuration | `libs.bluetape4k.leader`, `libs.bluetape4k.leader.micrometer`, `libs.bluetape4k.lettuce`, `libs.lettuce.core` 중 RED가 요구한 좌표 | runtime 필수 type-use는 `api`, 공개 선언 해석에만 필요한 optional type-use는 `compileOnlyApi` |
+| notification | leader-aware runner와 public auto-configuration | `libs.bluetape4k.leader`, `libs.bluetape4k.leader.micrometer`, `libs.bluetape4k.lettuce`, `libs.lettuce.core` 중 RED가 요구한 좌표 | runtime 필수 type-use는 명시적 `api` allowlist로 고정하고, `compileOnlyApi`는 optional declaration-only 좌표에 한정한다. `ApplicationContextRunner`의 classpath 존재/부재 검증 없이는 runtime 좌표를 낮추지 않는다. |
 | notification | Resilience4j 공개 생성자 | 필요한 Resilience4j API artifact | `api` |
 | notification | public auto-configuration과 configuration properties의 Spring 타입 | Spring Boot autoconfigure와 Spring Context 직접 좌표 | `compileOnlyApi` |
 
