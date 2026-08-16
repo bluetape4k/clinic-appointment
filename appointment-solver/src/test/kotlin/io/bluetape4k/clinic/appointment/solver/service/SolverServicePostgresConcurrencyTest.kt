@@ -285,7 +285,6 @@ class SolverServicePostgresConcurrencyTest {
             val applyFuture = executor.submit<Boolean> {
                 solverService.applyOptimizedAssignments(result)
             }
-            Thread.sleep(250L)
             applyFuture.isDone.shouldBeFalse()
 
             transaction {
