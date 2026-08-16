@@ -47,6 +47,9 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.parallel.Execution
+import org.junit.jupiter.api.parallel.ExecutionMode
+import org.junit.jupiter.api.parallel.ResourceLock
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
@@ -54,6 +57,8 @@ import java.time.LocalTime
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
+@ResourceLock("exposed-default-database")
+@Execution(ExecutionMode.SAME_THREAD)
 class SolverServiceTest {
 
     private fun scope(clinicId: Long) = TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId)

@@ -1,6 +1,6 @@
 # 이슈 #334 solver planning fact version fence 워크플로 체크리스트
 
-상태: `IMPLEMENTATION IN PROGRESS` — Task 1 canonical hash, Task 2 metadata, Task 3 H2 planning-fact fence RED/GREEN을 완료했고 PostgreSQL 검증이 남아 있다.
+상태: `IMPLEMENTATION IN PROGRESS` — Task 1~4 RED/GREEN과 H2/PostgreSQL 검증을 완료했고 module-wide verification·independent review·lesson이 남아 있다.
 
 ## 분류와 범위
 

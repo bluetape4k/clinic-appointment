@@ -168,6 +168,11 @@ class SolverService(
                     throw StaleSolverResultException
                 }
 
+                val lockedSnapshot = loadSnapshotInCurrentTransaction(result.scope, resultDateRange)
+                if (lockedSnapshot.planningFactVersion != result.planningFactVersion) {
+                    throw StaleSolverResultException
+                }
+
                 result.appointments.forEach { appointment ->
                     val appointmentId = checkNotNull(appointment.id) {
                         "Solver result appointment is missing id"
