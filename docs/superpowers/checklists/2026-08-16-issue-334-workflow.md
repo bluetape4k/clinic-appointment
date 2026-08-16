@@ -1,6 +1,6 @@
 # 이슈 #334 solver planning fact version fence 워크플로 체크리스트
 
-상태: `PLAN REVIEW PENDING` — 설계 승인과 구현계획 자체 검토를 완료했으며 계획 사용자 승인 전이다.
+상태: `IMPLEMENTATION IN PROGRESS` — 설계·구현계획 승인을 완료했고 Task 1 canonical hash RED/GREEN을 진행 중이다.
 
 ## 분류와 범위
 
@@ -45,8 +45,8 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 
 - [x] A-01/A-02 — 요구사항·research source ledger와 설계 문서 자체 review를 완료했다.
 - [x] A-03 — 설계 문서 사용자 승인을 받았다.
-- [ ] A-04 — 구현계획 작성·검토·사용자 승인.
-- [ ] A-05 — 동시성/직렬화/성능·안정성 risk prediction.
+- [x] A-04 — 구현계획 작성·검토·사용자 승인을 받았다.
+- [x] A-05 — 동시성/직렬화/성능·안정성 risk prediction을 작성했다.
 - [ ] A-06 — RED/GREEN 테스트 우선 구현.
 - [ ] A-07 — targeted 및 module verification.
 - [ ] A-08 — 독립 final code review와 lesson.
@@ -95,7 +95,7 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 
 ## 현재 stop condition
 
-구현계획이 사용자 review를 통과하기 전에는 `appointment-solver` production code,
-테스트 코드, Gradle 의존성을 수정하지 않는다. 구현·PR·merge는 해당 게이트와
-fresh CI/approval 이후에만 진행한다. 현재 계획 경로는
+구현계획 승인을 받아 TDD 구현을 진행 중이다. RED 확인 없이 production code를
+수정하지 않으며, 구현·PR·merge는 각 downstream gate와 fresh CI/approval 이후에만
+진행한다. 현재 계획 경로는
 `docs/superpowers/plans/2026-08-16-issue-334-solver-fact-version-fence-plan.md`다.
