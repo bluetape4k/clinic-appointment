@@ -34,12 +34,16 @@ import io.bluetape4k.assertions.shouldHaveSize
 import io.mockk.every
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -196,6 +200,41 @@ class SolverServiceTest {
         }
     }
 
+    private fun insertAppointment(base: BaseData): Long = transaction {
+        Appointments.insertAndGetId {
+            it[Appointments.clinicId] = base.clinicId
+            it[Appointments.doctorId] = base.doctorId1
+            it[Appointments.treatmentTypeId] = base.treatmentTypeId
+            it[patientName] = "Planning Fact Patient"
+            it[appointmentDate] = MONDAY
+            it[startTime] = LocalTime.of(9, 0)
+            it[endTime] = LocalTime.of(9, 30)
+            it[status] = AppointmentState.REQUESTED
+        }.value
+    }
+
+    private fun assertAppointmentVersionAndStatusUnchanged(base: BaseData, appointmentId: Long) {
+        transaction {
+            val current = checkNotNull(
+                AppointmentRepository().findByIdAndScope(appointmentId, scope(base.clinicId)),
+            )
+            current.version.shouldBeEqualTo(0L)
+            current.status.shouldBeEqualTo(AppointmentState.REQUESTED)
+        }
+    }
+
+    private fun assertApplyRejectsAfterPlanningFactChange(change: (BaseData) -> Unit) {
+        val base = insertBaseData()
+        val appointmentId = insertAppointment(base)
+        val result = solverService.optimize(scope(base.clinicId), MONDAY..FRIDAY, Duration.ofSeconds(2))
+
+        change(base)
+
+        solverService.isSourceVersionCurrentAdvisory(result).shouldBeFalse()
+        solverService.applyOptimizedAssignments(result).shouldBeFalse()
+        assertAppointmentVersionAndStatusUnchanged(base, appointmentId)
+    }
+
     @Test
     fun `1 - Solver가 feasible 해를 반환한다`() {
         val (clinicId, doctorId1, _, treatmentTypeId) = insertBaseData()
@@ -326,6 +365,156 @@ class SolverServiceTest {
 
         solverService.isSourceVersionCurrentAdvisory(legacyResult).shouldBeFalse()
         solverService.applyOptimizedAssignments(legacyResult).shouldBeFalse()
+    }
+
+    @Test
+    fun `clinic 변경은 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                Clinics.update({ Clinics.id eq base.clinicId }) {
+                    it[Clinics.maxConcurrentPatients] = 2
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `doctor 변경은 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                Doctors.update({ Doctors.id eq base.doctorId1 }) {
+                    it[Doctors.providerType] = ProviderType.CONSULTANT
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `treatment 변경은 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                TreatmentTypes.update({ TreatmentTypes.id eq base.treatmentTypeId }) {
+                    it[TreatmentTypes.defaultDurationMinutes] = 60
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `equipment 추가는 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                Equipments.insert {
+                    it[Equipments.clinicId] = base.clinicId
+                    it[Equipments.name] = "MRI"
+                    it[Equipments.usageDurationMinutes] = 30
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `operating hour 삭제는 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                OperatingHoursTable.deleteWhere { OperatingHoursTable.clinicId eq base.clinicId }
+            }
+        }
+    }
+
+    @Test
+    fun `doctor schedule 변경은 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                DoctorSchedules.update({ DoctorSchedules.doctorId eq base.doctorId1 }) {
+                    it[DoctorSchedules.startTime] = LocalTime.of(10, 0)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `doctor absence 추가는 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                DoctorAbsences.insert {
+                    it[DoctorAbsences.doctorId] = base.doctorId1
+                    it[DoctorAbsences.absenceDate] = MONDAY
+                    it[DoctorAbsences.reason] = "회의"
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `break 변경은 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                BreakTimes.insert {
+                    it[BreakTimes.clinicId] = base.clinicId
+                    it[BreakTimes.dayOfWeek] = DayOfWeek.MONDAY
+                    it[BreakTimes.startTime] = LocalTime.of(12, 0)
+                    it[BreakTimes.endTime] = LocalTime.of(13, 0)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `default break 변경은 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                ClinicDefaultBreakTimes.insert {
+                    it[ClinicDefaultBreakTimes.clinicId] = base.clinicId
+                    it[ClinicDefaultBreakTimes.name] = "점심"
+                    it[ClinicDefaultBreakTimes.startTime] = LocalTime.of(12, 0)
+                    it[ClinicDefaultBreakTimes.endTime] = LocalTime.of(13, 0)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `closure 추가는 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                ClinicClosures.insert {
+                    it[ClinicClosures.clinicId] = base.clinicId
+                    it[ClinicClosures.closureDate] = MONDAY
+                    it[ClinicClosures.reason] = "점검"
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `holiday 추가는 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { _ ->
+            transaction {
+                Holidays.insert {
+                    it[Holidays.tenantGroupId] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
+                    it[Holidays.holidayDate] = MONDAY
+                    it[Holidays.name] = "임시 휴일"
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `treatment equipment 연결 추가는 stale result를 거부한다`() {
+        assertApplyRejectsAfterPlanningFactChange { base ->
+            transaction {
+                val equipmentId = Equipments.insertAndGetId {
+                    it[Equipments.clinicId] = base.clinicId
+                    it[Equipments.name] = "MRI"
+                    it[Equipments.usageDurationMinutes] = 30
+                }.value
+                TreatmentEquipments.insert {
+                    it[TreatmentEquipments.treatmentTypeId] = base.treatmentTypeId
+                    it[TreatmentEquipments.equipmentId] = equipmentId
+                }
+            }
+        }
     }
 
     @Test
