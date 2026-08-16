@@ -1,6 +1,8 @@
 # 이슈 #334 solver planning fact version fence 워크플로 체크리스트
 
-상태: `IMPLEMENTATION IN PROGRESS` — Task 1~4 RED/GREEN과 H2/PostgreSQL 검증을 완료했고 module-wide verification·independent review·lesson이 남아 있다.
+상태: `PRE-PR VERIFICATION COMPLETE / DELIVERY PENDING` — Task 1~4 구현과
+module-wide H2/PostgreSQL 검증, 독립 review, lesson 기록을 완료했고 PR/CI와
+최신 머지 승인만 남아 있다.
 
 ## 분류와 범위
 
@@ -38,8 +40,8 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 - [x] CL-06 — receipt 또는 테스트 증거가 stale하면 해당 단계와 downstream proof를 재실행한다.
 - [ ] CL-07 — PR/merge/branch 삭제 같은 외부 side effect 직전에 authority와 exact head를 재검증한다.
 - [ ] CL-08 — 완료 시 `Required checks: X/Y; N/A: N; Blocked: N`을 계산한다.
-- [ ] CL-09 — PR 전 재사용 가능한 lesson을 기록하고 검토한다.
-- [ ] CL-10 — final review, fresh verification, scoped commit을 pre-PR에 수렴한다.
+- [x] CL-09 — PR 전 재사용 가능한 lesson을 기록하고 검토한다.
+- [x] CL-10 — final review, fresh verification, scoped commit을 pre-PR에 수렴한다.
 
 ## Type-A 산출물 게이트
 
@@ -47,21 +49,23 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 - [x] A-03 — 설계 문서 사용자 승인을 받았다.
 - [x] A-04 — 구현계획 작성·검토·사용자 승인을 받았다.
 - [x] A-05 — 동시성/직렬화/성능·안정성 risk prediction을 작성했다.
-- [ ] A-06 — RED/GREEN 테스트 우선 구현.
-- [ ] A-07 — targeted 및 module verification.
-- [ ] A-08 — 독립 final code review와 lesson.
+- [x] A-06 — RED/GREEN 테스트 우선 구현.
+- [x] A-07 — targeted 및 module verification.
+- [x] A-08 — 독립 final code review와 lesson.
 - [ ] A-09 — PR/CI/merge-ready 보고.
 
 ## Kotlin/Testcontainers 계약
 
-- [ ] KT-01 — 변경된 공개/내부 Kotlin 계약과 KDoc을 한국어로 점검한다.
-- [ ] KT-02 — Exposed 읽기·검증·적용이 명시적 transaction 경계를 유지한다.
-- [ ] KT-03 — 기존 appointment CAS, rollback, pinned 의미론을 보존한다.
-- [ ] KT-04 — H2에서 planning fact 추가/수정/삭제 회귀를 검증한다.
-- [ ] KT-05 — PostgreSQL은 `PostgreSQLServer.Launcher.postgres` singleton만 사용한다.
-- [ ] KT-06 — `@Testcontainers`/`GenericContainer`를 사용하지 않고, Docker/Colima
+- [x] KT-01 — 변경된 공개/내부 Kotlin 계약과 KDoc을 한국어로 점검한다.
+- [x] KT-02 — Exposed 읽기·검증·적용이 명시적 transaction 경계를 유지한다.
+- [x] KT-03 — 기존 appointment CAS, rollback, pinned 의미론을 보존한다.
+- [x] KT-04 — H2에서 planning fact 추가/수정/삭제 회귀를 검증한다.
+- [x] KT-05 — PostgreSQL은 `PostgreSQLServer.Launcher.postgres` singleton만 사용한다.
+- [x] KT-06 — `@Testcontainers`/`GenericContainer`를 사용하지 않고, Docker/Colima
       bind-mount 오류를 skip으로 처리하지 않는다.
-- [ ] KT-07 — real DB/concurrency 테스트는 순차 실행하고 serialization conflict를 판정한다.
+- [x] KT-07 — real DB/concurrency 테스트는 순차 실행하고 serialization conflict를 판정한다.
+      PostgreSQL 동시성 시나리오는 appointment lock/CAS stale 수렴을 검증했고,
+      planning-fact 변경은 별도 snapshot hash mismatch로 검증했다.
 
 ## Writer/SPW 게이트
 
@@ -91,11 +95,15 @@ worktree `fix/issue-334-solver-fact-version-fence`, base `90e50da`.
 | snapshot이 mutable planning fact를 읽는다 | `SolverService.loadSnapshot`, `ScheduleSolution` |
 | 기존 appointment CAS/rollback/pinned을 보존해야 한다 | `SolverServiceTest.kt` stale/CAS/rollback/pinned 회귀 테스트 |
 | PostgreSQL singleton launcher를 사용한다 | `bluetape4k-testcontainers`의 `PostgreSQLServer.Launcher.postgres`, sibling test pattern |
-| baseline이 깨끗하다 | `./gradlew :appointment-solver:test --no-build-cache` — 79 passing |
+| baseline이 깨끗하다 | `./gradlew :appointment-solver:test --no-build-cache --no-daemon` — 10 suites / 98 tests, skipped 0, failures 0, errors 0 |
+| planning fact hash가 안정적이다 | `PlanningFactVersionHasherTest` 4개와 `SolverServiceTest` 12개 fact mutation 회귀 |
+| PostgreSQL 동시성 경계가 재현된다 | `SolverServicePostgresConcurrencyTest` 2개, `PostgreSQLServer.Launcher.postgres`, Colima Docker |
+| 독립 review와 재사용 lesson이 남아 있다 | `docs/review/2026-08-16-issue-334-solver-fact-version-fence-step-6r-code-review.md`, `docs/lessons/2026-08-16-issue-334-solver-fact-version-fence.md` |
 
 ## 현재 stop condition
 
-구현계획 승인을 받아 TDD 구현을 진행 중이다. RED 확인 없이 production code를
-수정하지 않으며, 구현·PR·merge는 각 downstream gate와 fresh CI/approval 이후에만
-진행한다. 현재 계획 경로는
+TDD RED/GREEN 구현과 module-wide 검증, 독립 review/lesson이 완료되어 pre-PR
+검증을 통과했다. 코드 기준 정적 검사와 `git diff --check`도 통과했다. 구현·PR·merge는
+각 downstream gate와 fresh CI/approval 이후에만 진행하며, 현재는 exact head push와
+PR/CI 확인을 기다린다. 현재 계획 경로는
 `docs/superpowers/plans/2026-08-16-issue-334-solver-fact-version-fence-plan.md`다.
