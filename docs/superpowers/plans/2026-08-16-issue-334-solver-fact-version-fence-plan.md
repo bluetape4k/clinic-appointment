@@ -511,9 +511,13 @@ Not-tested: remote CI와 merge는 fresh PR authority 뒤에 수행한다"
   `51688f86460e1863cb72fa9ad91d74fad32a359a`다. feature worktree만 이 branch를
   가리키며 root의 별도 worktree 변경은 PR 범위에 포함하지 않는다.
 
-- [ ] **Step 2: 한국어 PR을 생성하고 metadata parity를 확인한다.**
+- [x] **Step 2: 한국어 PR을 생성하고 metadata parity를 확인한다.**
 
   PR body는 issue #334 URL, 문제/선택한 canonical hash, 변경 파일, H2/PostgreSQL test evidence, `## DoD Status` 표와 known gap을 포함한다. `gh pr create --repo bluetape4k/clinic-appointment --base develop --head fix/issue-334-solver-fact-version-fence` 후 live body/title/assignee/labels/milestone와 head SHA를 다시 읽는다. CI 전에는 merge를 요청하지 않는다.
+
+  Result: PR `#347`을 생성하고 `Closes #334`, 한국어 `## DoD Status`, known gap,
+  assignee `debop`, labels `bug`/`maintenance`, milestone `1.4.0`, base `develop`,
+  head branch와 SHA를 live read-back했다. CI 전 merge 요청은 하지 않았다.
 
 - [ ] **Step 3: exact-head CI와 review thread를 수렴한다.**
 
