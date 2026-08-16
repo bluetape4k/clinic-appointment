@@ -23,8 +23,8 @@ dependencies {
     api(libs.bluetape4k.states)
     api(libs.kotlinx.coroutines.core)
 
+    api(libs.exposed.jdbc)
     implementation(libs.jetbrains.exposed.jdbc)
-    implementation(libs.exposed.jdbc)
     implementation(libs.jackson3.module.kotlin)
 
     testImplementation(libs.bluetape4k.junit5)

@@ -16,6 +16,7 @@ import io.bluetape4k.leader.LeaderGroupElector
 import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
 import io.bluetape4k.leader.micrometer.InstrumentedLeaderGroupElector
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
 import io.mockk.mockk
 import java.util.concurrent.CountDownLatch
@@ -26,6 +27,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
+import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import kotlin.system.measureTimeMillis
 
@@ -447,6 +449,17 @@ internal class NotificationAutoConfigurationTest {
                 applicationContext.startupFailure shouldBeEqualTo null
                 applicationContext.getBeansOfType(LeaderGroupElector::class.java).size shouldBeEqualTo 1
                 applicationContext.getBean(LeaderGroupElector::class.java) shouldBeEqualTo hostElector
+            }
+    }
+
+    @Test
+    fun `Redis와 Lettuce classpath가 없으면 leader auto configuration을 건너뛴다`() {
+        ApplicationContextRunner()
+            .withClassLoader(FilteredClassLoader(RedisClient::class.java, StatefulRedisConnection::class.java))
+            .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(LeaderGroupElector::class.java).isEmpty() shouldBeEqualTo true
             }
     }
 
