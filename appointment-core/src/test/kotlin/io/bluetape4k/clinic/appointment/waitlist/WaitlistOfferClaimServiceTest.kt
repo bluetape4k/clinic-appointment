@@ -255,7 +255,7 @@ class WaitlistOfferClaimServiceTest {
 
     private fun withWaitlistTables(block: org.jetbrains.exposed.v1.jdbc.JdbcTransaction.() -> Unit) {
         withTables(
-            TestDB.H2,
+            TestDB.POSTGRESQL,
             Clinics,
             Doctors,
             TreatmentTypes,

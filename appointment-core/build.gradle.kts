@@ -39,11 +39,7 @@ dependencies {
     testImplementation(libs.jetbrains.exposed.migration.jdbc)
     testImplementation(libs.h2.v2)
     testImplementation(libs.postgresql.driver)
-    testImplementation(libs.mysql.connector.j)
     testImplementation(libs.testcontainers.postgresql)
-    testImplementation(libs.testcontainers.mysql)
-    testImplementation(libs.testcontainers.mariadb)
-    testImplementation(libs.testcontainers.cockroachdb)
     testImplementation(libs.kotlinx.coroutines.test)
 }
 

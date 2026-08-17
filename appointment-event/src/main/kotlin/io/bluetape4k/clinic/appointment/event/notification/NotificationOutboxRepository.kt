@@ -15,9 +15,6 @@ import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
-import org.jetbrains.exposed.v1.core.vendors.MariaDBDialect
-import org.jetbrains.exposed.v1.core.vendors.MysqlDialect
-import org.jetbrains.exposed.v1.core.vendors.currentDialect
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -573,11 +570,7 @@ class NotificationOutboxRepository(
     }
 
     private fun idempotencyUpsertKeys(): Array<Column<*>> =
-        if (currentDialect is MysqlDialect || currentDialect is MariaDBDialect) {
-            emptyArray()
-        } else {
-            arrayOf(NotificationOutboxEvents.idempotencyKeyVersion, NotificationOutboxEvents.idempotencyKey)
-        }
+        arrayOf(NotificationOutboxEvents.idempotencyKeyVersion, NotificationOutboxEvents.idempotencyKey)
 
     private fun insertAttempt(
         row: ResultRow,

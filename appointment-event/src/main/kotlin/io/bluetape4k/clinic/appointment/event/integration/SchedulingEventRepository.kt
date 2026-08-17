@@ -670,12 +670,7 @@ class SchedulingEventRepository {
      * 유지해야 한다. 이 메서드는 observational이며 legacy row를 repair하지 않는다.
      */
     fun readOutboxDualWriteConvergence(): OutboxDualWriteConvergence {
-        val dialect = TransactionManager.current().db.dialect.name
-        val planIdAsText = if (dialect.contains("mysql", ignoreCase = true)) {
-            "CAST(plan_id AS CHAR)"
-        } else {
-            "CAST(plan_id AS VARCHAR)"
-        }
+        val planIdAsText = "CAST(plan_id AS VARCHAR)"
         var result: OutboxDualWriteConvergence? = null
         TransactionManager.current().exec(
             """

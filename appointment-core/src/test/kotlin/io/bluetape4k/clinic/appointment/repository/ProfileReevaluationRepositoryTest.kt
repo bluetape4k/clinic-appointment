@@ -31,12 +31,17 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * 프로필 변경 inbox의 latest-revision 병합과 owner-fenced 작업 수명주기를 방언별로 검증합니다.
+ * 프로필 변경 inbox의 latest-revision 병합과 owner-fenced 작업 수명주기를 PostgreSQL에서 검증합니다.
  */
 class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
 
+    companion object {
+        @JvmStatic
+        fun enablePostgreSQL() = TestDB.ALL_POSTGRES
+    }
+
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `같은 환자의 더 최신 revision만 실행 대상으로 남긴다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository()
@@ -54,7 +59,7 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `살아 있는 lease는 탈취할 수 없고 만료된 lease만 회수한다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository(
@@ -91,7 +96,7 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `head가 전진하면 이전 revision worker의 checkpoint와 완료를 거부한다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository()
@@ -116,7 +121,7 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `PROPOSED 전용 작업은 목표 시간을 늦추지 않고 우선순위를 한 번 고정한다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository(hasHeldAppointments = { false })
@@ -141,7 +146,7 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `새 작업은 목표 마감 시각을 기다리지 않고 즉시 선점한다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository()
@@ -163,7 +168,7 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `짧아진 목표는 기존 due를 앞당기고 길어진 목표는 다시 늦추지 않는다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository()
@@ -194,7 +199,7 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `공정 선점은 큰 병원 하나보다 서로 다른 병원을 먼저 선택한다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository(hasHeldAppointments = { true })
@@ -226,7 +231,7 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `동일 due 병원이 전역 한도보다 많아도 clinic cursor가 다음 병원으로 순환한다`(
         testDB: TestDB,
     ) {
@@ -342,7 +347,7 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `terminal retry는 남은 attempt와 관계없이 즉시 최종 실패로 전이한다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository(maxAttempts = 5)
@@ -365,7 +370,7 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `운영상 대기는 현재 claim을 재시도 예산에서 제외한다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository(maxAttempts = 1)
@@ -403,7 +408,7 @@ class ProfileReevaluationRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `redrive는 FAILED 원본을 유지하고 같은 세대의 새 작업을 한 번만 만든다`(testDB: TestDB) {
         withProfileReevaluationTables(testDB) {
             val repository = ProfileReevaluationRepository(maxAttempts = 1)

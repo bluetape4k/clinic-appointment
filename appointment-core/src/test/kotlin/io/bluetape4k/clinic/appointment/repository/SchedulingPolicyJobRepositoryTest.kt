@@ -28,18 +28,23 @@ import org.junit.jupiter.params.provider.MethodSource
 import java.time.Instant
 
 /**
- * preview job과 activation command의 durable claim·lease·checkpoint 계약을 방언별로 검증한다.
+ * preview job과 activation command의 durable claim·lease·checkpoint 계약을 PostgreSQL에서 검증한다.
  *
- * H2, PostgreSQL, MySQL에서 한 worker만 claim을 획득하고, 만료된 lease만 회수하며, terminal
+ * 한 worker만 claim을 획득하고, 만료된 lease만 회수하며, terminal
  * 상태는 다시 실행되지 않는지 확인한다. preview evidence token과 command 결과는 원본
  * revision·generation에 고정되어 stale 또는 부분 결과가 활성화 근거가 될 수 없어야 한다.
  */
 class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
 
+    companion object {
+        @JvmStatic
+        fun enablePostgreSQL() = TestDB.ALL_POSTGRES
+    }
+
     private val repository = SchedulingPolicyJobRepository("unit-test-signing-secret".toByteArray())
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `activation stores only a bounded hash and fingerprint for keyed idempotency`(testDB: TestDB) {
         withJobTables(testDB) {
             val rawKey = "activate-20260727-001"
@@ -79,7 +84,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `new jobs cannot be forged in terminal or leased state`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -120,7 +125,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `expired activation lease is reclaimable and stale owner cannot complete`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -169,7 +174,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `activation retry releases only the current lease and preserves sanitized failure evidence`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -207,7 +212,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `preview cancellation clears lease and can no longer produce activation evidence`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -227,7 +232,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `scoped idempotency lookup and manual replay preserve immutable missed evidence`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -296,7 +301,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `preview checkpoint is owner fenced and can resume from persisted cursor`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -349,7 +354,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `completed preview alone exposes immutable result hash and activation evidence`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -416,7 +421,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `non completed preview terminal states discard partial evidence and lease ownership`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -454,7 +459,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `due job selection is time ordered and strictly bounded`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -488,7 +493,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `expired preview remains due so the worker can terminalize it`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -507,7 +512,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `preview queue capacity is isolated by tenant baseline and clinic override scope`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")
@@ -538,7 +543,7 @@ class SchedulingPolicyJobRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `preview job primary key lookup is fenced by tenant and policy scope`(testDB: TestDB) {
         withJobTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")

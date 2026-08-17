@@ -115,12 +115,7 @@ class WaitlistDeliveryRepositoryTest {
     }
 
     @Test
-    fun `claim strategy exposes h2 version update and locked dialect lock timeout contracts`() {
-        val h2 = VacancyClaimStrategies.forDialectName("H2")
-        h2.mode shouldBeEqualTo VacancyClaimMode.VERSION_UPDATE
-        h2.lockTimeoutPlan shouldBeEqualTo null
-        h2.claimSelectionSql("scheduling_waitlist_vacancy_jobs") shouldContain "UPDATE scheduling_waitlist_vacancy_jobs"
-
+    fun `claim strategy exposes only the PostgreSQL lock timeout contract`() {
         val postgres = VacancyClaimStrategies.forDialectName("PostgreSQL")
         postgres.mode shouldBeEqualTo VacancyClaimMode.LOCKED_SELECTION
         postgres.claimSelectionSql("scheduling_waitlist_vacancy_jobs") shouldContain "FOR UPDATE"
@@ -129,20 +124,8 @@ class WaitlistDeliveryRepositoryTest {
             beforeClaimSql shouldBeEqualTo listOf("SET LOCAL lock_timeout = '2s'")
             afterClaimSql shouldBeEqualTo emptyList<String>()
         }
-
-        val mysql = VacancyClaimStrategies.forDialectName("MySQL")
-        mysql.mode shouldBeEqualTo VacancyClaimMode.LOCKED_SELECTION
-        mysql.claimSelectionSql("scheduling_waitlist_vacancy_jobs") shouldContain "FOR UPDATE"
-        requireNotNull(mysql.lockTimeoutPlan).run {
-            timeout shouldBeEqualTo Duration.ofSeconds(2)
-            beforeClaimSql shouldBeEqualTo listOf(
-                "SET @waitlist_previous_innodb_lock_wait_timeout := @@innodb_lock_wait_timeout",
-                "SET innodb_lock_wait_timeout = 2",
-            )
-            afterClaimSql shouldBeEqualTo listOf(
-                "SET innodb_lock_wait_timeout = @waitlist_previous_innodb_lock_wait_timeout",
-            )
-        }
+        assertFailsWith<IllegalArgumentException> { VacancyClaimStrategies.forDialectName("H2") }
+        assertFailsWith<IllegalArgumentException> { VacancyClaimStrategies.forDialectName("MySQL") }
     }
 
     @Test
@@ -295,56 +278,33 @@ class WaitlistDeliveryRepositoryTest {
     }
 
     @Test
-    fun `mysql lock wait timeout retries only when two second lock timeout is configured`() {
-        var mysqlCalls = 0
-        val mysqlDelays = mutableListOf<Duration>()
-        val mysqlRepository = WaitlistDeliveryRepository(
-            claimStrategy = VacancyClaimStrategies.forDialectName("MySQL"),
+    fun `vendor-specific lock wait timeout is not retried`() {
+        var calls = 0
+        val delays = mutableListOf<Duration>()
+        val repository = WaitlistDeliveryRepository(
             retryPolicy = ContentionRetryPolicy(
                 maxAttempts = 3,
                 jitterDelay = { Duration.ofMillis(5) },
-                sleeper = { delay -> mysqlDelays += delay },
+                sleeper = { delay -> delays += delay },
             ),
         )
-
-        mysqlRepository.withContentionRetry {
-            mysqlCalls += 1
-            if (mysqlCalls == 1) {
-                throw SQLException("lock wait timeout", "HY000", 1205)
-            }
-            "ok"
-        } shouldBeEqualTo "ok"
-
-        mysqlCalls shouldBeEqualTo 2
-        mysqlDelays shouldBeEqualTo listOf(Duration.ofMillis(5))
-
-        var h2Calls = 0
-        val h2Delays = mutableListOf<Duration>()
-        val h2Repository = WaitlistDeliveryRepository(
-            claimStrategy = VacancyClaimStrategies.forDialectName("H2"),
-            retryPolicy = ContentionRetryPolicy(
-                maxAttempts = 3,
-                jitterDelay = { Duration.ofMillis(5) },
-                sleeper = { delay -> h2Delays += delay },
-            ),
-        )
-        val h2LockWait = SQLException("lock wait timeout", "HY000", 1205)
+        val lockWait = SQLException("lock wait timeout", "HY000", 1205)
 
         val failure = assertFailsWith<SQLException> {
-            h2Repository.withContentionRetry {
-                h2Calls += 1
-                throw h2LockWait
+            repository.withContentionRetry {
+                calls += 1
+                throw lockWait
             }
         }
 
-        (failure === h2LockWait) shouldBeEqualTo true
-        h2Calls shouldBeEqualTo 1
-        h2Delays shouldBeEqualTo emptyList<Duration>()
+        (failure === lockWait) shouldBeEqualTo true
+        calls shouldBeEqualTo 1
+        delays shouldBeEqualTo emptyList<Duration>()
     }
 
     private fun withDeliveryTables(block: org.jetbrains.exposed.v1.jdbc.JdbcTransaction.() -> Unit) {
         withTables(
-            TestDB.H2,
+            TestDB.POSTGRESQL,
             Clinics,
             WaitlistVacancyJobs,
         ) {

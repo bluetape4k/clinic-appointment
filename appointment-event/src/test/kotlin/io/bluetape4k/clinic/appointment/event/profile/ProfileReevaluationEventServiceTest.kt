@@ -21,6 +21,7 @@ import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationJobs
 import io.bluetape4k.clinic.appointment.model.tables.ProfileReevaluationOutcomes
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.repository.ProfileReevaluationRepository
+import io.bluetape4k.testcontainers.database.PostgreSQLServer
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -28,6 +29,7 @@ import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -45,18 +47,17 @@ class ProfileReevaluationEventServiceTest {
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val fingerprint = "a".repeat(64)
     private val assessmentHash = "b".repeat(64)
-    private val databaseUrl =
-        "jdbc:h2:mem:profile_reevaluation_event_${System.nanoTime()};" +
-            "DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE"
+    private val postgres = PostgreSQLServer.Launcher.postgres
     private val database = Database.connect(
-        databaseUrl,
-        driver = "org.h2.Driver",
-        user = "sa",
-        password = "",
+        postgres.jdbcUrl,
+        driver = "org.postgresql.Driver",
+        user = postgres.username ?: PostgreSQLServer.USERNAME,
+        password = postgres.password ?: PostgreSQLServer.PASSWORD,
     )
 
     @BeforeEach
     fun setup() {
+        TransactionManager.defaultDatabase = database
         transaction(database) {
             SchemaUtils.createMissingTablesAndColumns(
                 TenantGroups,

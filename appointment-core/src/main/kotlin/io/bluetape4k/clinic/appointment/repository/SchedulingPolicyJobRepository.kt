@@ -365,7 +365,7 @@ class SchedulingPolicyJobRepository(
      * Gateway 인증정보, 병원 접근 검증을 거쳐 만든 [scope]와 row의
      * `tenant_group_id`, `scope`, `clinic_scope_key`, `id`가 모두 일치할 때만 반환합니다.
      * tenant baseline은 `clinic_scope_key = 0`, clinic override는 양수 clinic ID를 사용하므로
-     * PostgreSQL, MySQL, H2에서 null 비교 차이 없이 같은 fence를 적용합니다.
+     * non-null scope key를 사용해 PostgreSQL에서 null 비교 없이 같은 fence를 적용합니다.
      *
      * 반환값 `null`은 해당 row가 없거나 호출자가 제공한 scope boundary와 일치하지 않는다는
      * 뜻입니다. API 계층은 이를 동일하게 404로 처리해야 하며, 다른 tenant/scope에 존재하는지

@@ -12,8 +12,8 @@ import org.jetbrains.exposed.v1.javatime.timestamp
  * immutable policy version과 revision에 bind된 draft payload를 저장하는 table입니다.
  *
  * `clinic_scope_key`는 의도적으로 non-null입니다. `0`은 tenant scope를 나타내고
- * 양수 clinic ID는 clinic scope를 나타냅니다. 이 방식으로 H2, PostgreSQL, MySQL에서
- * 동일한 unique constraint 동작을 얻습니다.
+ * 양수 clinic ID는 clinic scope를 나타냅니다. 이 방식으로 PostgreSQL production contract와
+ * H2 unit fixture에서 동일한 unique constraint 동작을 얻습니다.
  */
 object SchedulingPolicyDefinitions : LongIdTable("scheduling_policy_definitions") {
     /** 양수 tenant owner입니다. 모든 조회 authorization은 이 값으로 scope가 제한되어야 합니다. */
