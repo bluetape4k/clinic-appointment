@@ -213,4 +213,3 @@ gh pr view <number> --json headRefName,baseRefName,statusCheckRollup,mergeStateS
 - **호출자:** README는 Slice B에서 갱신한다. Slice A PR body에는 API 문서가 아직 PostgreSQL default를 설명하지 않는다는 사실을 명시한다.
 
 판정: `P0=0`, `P1=0`. 구현 중 source evidence가 계획과 달라지면 해당 task를 중단하고 plan을 먼저 갱신한다.
-
