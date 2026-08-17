@@ -67,9 +67,9 @@
   - **Action:** PR 생성·merge 직전에 authority와 target을 다시 읽는다.
   - **Evidence:** 최신 repo/base/head/authority와 live read-back.
   - **Failure:** hold가 stale이면 side effect를 실행하지 않는다.
-- [ ] **CL-08 — 완료 count 산출**
+- [x] **CL-08 — 완료 count 산출**
   - **Action:** required checks count와 unchecked IDs를 계산한다.
-  - **Evidence:** `Required checks: X/Y; N/A: N; Blocked: N`.
+  - **Evidence:** local workflow completion-check 기준 required checks `7/7`, Scope N/A `3`, Blocked `0`; PR/CI/merge gates는 별도 pending이다.
   - **Failure:** count가 맞지 않으면 완료를 주장하지 않는다.
 
 ## Type-A Steps

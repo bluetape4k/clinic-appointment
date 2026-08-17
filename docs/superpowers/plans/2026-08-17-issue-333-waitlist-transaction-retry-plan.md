@@ -249,11 +249,11 @@
   `docs/superpowers/reviews/2026-08-17-issue-333-waitlist-transaction-retry-plan-review.ko.md`
   and the final implementation review. P0/P1 must be zero.
 
-- [ ] **Step 3: Commit converged branch.**
+- [x] **Step 3: Commit converged branch.**
 
   Use Korean Lore commit messages. Keep only approved source, tests, Korean spec/plan/lesson, and
   checklist changes; preserve unrelated `.superpowers/` and `.workflow-inputs/`. Production and
-  documentation changes are ready for the final scoped commit after workflow receipts are recorded.
+  documentation changes were committed with Korean Lore trailers; unrelated files remain preserved.
 
 - [ ] **Step 4: Publish and verify PR.**
 
