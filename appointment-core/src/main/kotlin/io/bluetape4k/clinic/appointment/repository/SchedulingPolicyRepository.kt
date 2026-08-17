@@ -25,11 +25,8 @@ import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import java.security.MessageDigest
 import java.time.Instant
@@ -673,25 +670,7 @@ class SchedulingPolicyRepository {
             it[generation] = 0L
             it[clinicGenerationEpoch] = 0L
         }
-        if (isH2Dialect()) {
-            val exists = SchedulingPolicyScopeHeads.selectAll()
-                .where { scopeHeadPredicate(scope) }
-                .limit(1)
-                .any()
-            if (!exists) {
-                try {
-                    SchedulingPolicyScopeHeads.insert(insertBody)
-                } catch (error: ExposedSQLException) {
-                    val competingInsertWon = SchedulingPolicyScopeHeads.selectAll()
-                        .where { scopeHeadPredicate(scope) }
-                        .limit(1)
-                        .any()
-                    if (!competingInsertWon) throw error
-                }
-            }
-        } else {
-            SchedulingPolicyScopeHeads.insertIgnore(insertBody)
-        }
+        SchedulingPolicyScopeHeads.insertIgnore(insertBody)
     }
 
     private fun clinicGenerationDigest(
@@ -736,20 +715,8 @@ class SchedulingPolicyRepository {
                 it[EffectiveSchedulingPolicySnapshots.payloadJson] = payloadJson
                 it[EffectiveSchedulingPolicySnapshots.snapshotHash] = snapshotHash
             }
-        if (isH2Dialect()) {
-            try {
-                EffectiveSchedulingPolicySnapshots.insert(insertBody)
-            } catch (error: ExposedSQLException) {
-                val competingInsertWon = findSnapshot(tenantGroupId, clinicId, snapshotHash) != null
-                if (!competingInsertWon) throw error
-            }
-        } else {
-            EffectiveSchedulingPolicySnapshots.insertIgnore(insertBody)
-        }
+        EffectiveSchedulingPolicySnapshots.insertIgnore(insertBody)
     }
-
-    private fun isH2Dialect(): Boolean =
-        TransactionManager.current().db.dialect.name.equals("h2", ignoreCase = true)
 
     private fun ByteArray.toHex(): String =
         joinToString(separator = "") { byte -> "%02x".format(byte) }

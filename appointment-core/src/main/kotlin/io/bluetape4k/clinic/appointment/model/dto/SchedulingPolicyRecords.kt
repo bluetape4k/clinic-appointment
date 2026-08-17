@@ -22,7 +22,7 @@ data class PolicyScopeRef(
     val scope: PolicyScope,
     val clinicId: Long? = null,
 ) : Serializable {
-    /** H2, PostgreSQL, MySQL에서 동일한 unique constraint를 만들기 위한 non-null key입니다. */
+    /** PostgreSQL unique constraint와 H2 단위 fixture가 같은 scope를 식별하도록 하는 non-null key입니다. */
     val clinicScopeKey: Long
         get() = when (scope) {
             PolicyScope.TENANT_DEFAULT -> 0L
@@ -66,8 +66,8 @@ data class PolicyScopeRef(
  * @property effectiveUntil 선택 종료 UTC exclusive boundary입니다. open ended이면 `null`입니다.
  * @property revision approval이 bind되는 양수 draft revision입니다.
  * @property payloadHash canonical payload의 lowercase 64-character SHA-256입니다.
- * @property payloadJson schema-versioned canonical JSON입니다. H2, PostgreSQL, MySQL에서
- * UTF-8 byte 기준 256 KiB로 제한됩니다. actor credential이나 idempotency key를 포함하면 안 됩니다.
+ * @property payloadJson schema-versioned canonical JSON입니다. PostgreSQL에서 UTF-8 byte 기준
+ * 256 KiB로 제한됩니다. actor credential이나 idempotency key를 포함하면 안 됩니다.
  * @property createdByActorId stable trusted Gateway subject입니다. display name, access
  * token, request-body identity가 아니어야 합니다.
  * @property createdByActorRole 생성 시점 감사에 기록된 role입니다.

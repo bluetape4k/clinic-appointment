@@ -28,7 +28,6 @@ import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
-import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -551,8 +550,7 @@ class ProfileReevaluationRepository(
     /**
      * 최신 revision fencing 뒤 같은 작업·예약의 완료 결과를 잠금 조회합니다.
      *
-     * MySQL `REPEATABLE READ`에서도 잠금 대기 전에 만든 consistent-read snapshot으로
-     * 돌아가지 않고 앞선 worker가 커밋한 결과를 확인합니다.
+     * locking read로 앞선 worker가 커밋한 결과를 확인합니다.
      */
     fun findOutcomeForUpdate(
         jobId: Long,
@@ -934,18 +932,7 @@ class ProfileReevaluationRepository(
             it[assessmentHash] = "0".repeat(64)
             it[occurredAt] = BOOTSTRAP_OCCURRED_AT
         }
-        if (TransactionManager.current().db.dialect.name.equals("h2", ignoreCase = true)) {
-            val exists = findHeadRow(scope, forUpdate = false) != null
-            if (!exists) {
-                try {
-                    ProfileReevaluationHeads.insert(insertBody)
-                } catch (error: ExposedSQLException) {
-                    if (findHeadRow(scope, forUpdate = false) == null) throw error
-                }
-            }
-        } else {
-            ProfileReevaluationHeads.insertIgnore(insertBody)
-        }
+        ProfileReevaluationHeads.insertIgnore(insertBody)
     }
 
     private fun findHeadRow(scope: ProfileReevaluationScope, forUpdate: Boolean): ResultRow? {
@@ -1118,7 +1105,7 @@ class ProfileReevaluationRepository(
         const val MAX_FAILED_JOB_PAGE_SIZE = 1_000
         val FAILURE_CODE_REGEX = Regex("^[A-Z][A-Z0-9_]{0,95}$")
 
-        // MySQL TIMESTAMP의 최소 유효 UTC 값입니다. Instant.EPOCH은 zero date로 저장될 수 있습니다.
+        // PostgreSQL timestamp 범위에서 안정적으로 저장할 수 있는 bootstrap 시각입니다.
         private val BOOTSTRAP_OCCURRED_AT: Instant = Instant.ofEpochSecond(1L)
     }
 }

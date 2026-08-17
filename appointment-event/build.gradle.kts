@@ -26,9 +26,10 @@ dependencies {
     implementation(libs.jackson3.module.kotlin)
 
     testImplementation(libs.bluetape4k.junit5)
+    testImplementation(libs.bluetape4k.testcontainers)
     testImplementation(libs.exposed.r2dbc.tests)
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation(libs.h2.v2)
-    testImplementation(libs.r2dbc.h2)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.postgresql.driver)
 }

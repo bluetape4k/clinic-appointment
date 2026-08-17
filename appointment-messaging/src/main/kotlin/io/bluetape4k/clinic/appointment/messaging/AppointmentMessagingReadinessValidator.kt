@@ -68,8 +68,8 @@ class AppointmentMessagingReadinessValidator(
     private fun schemaContractExists(): Boolean = runCatching {
         dataSource?.connection?.use { connection ->
             val metadata = connection.metaData
-            // PostgreSQL/H2는 schema를 노출하고 MySQL은 선택한 catalog를 노출합니다.
-            // getSchema()가 비어 있다는 이유로 유효한 MySQL V23 database를 거부하지 않습니다.
+            // JDBC driver에 따라 schema 또는 catalog 중 하나만 노출될 수 있습니다.
+            // 두 값이 모두 비어 있을 때만 schema contract를 충족하지 않은 것으로 판단합니다.
             val schema = connection.schema.takeIf { it.isNotBlank() }
             val catalog = connection.catalog.takeIf { it.isNotBlank() }
             if (schema == null && catalog == null) return@use false

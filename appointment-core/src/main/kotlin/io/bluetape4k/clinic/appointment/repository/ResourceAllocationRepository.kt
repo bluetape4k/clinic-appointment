@@ -440,40 +440,13 @@ class ResourceAllocationRepository {
      * [ResourceAllocationRequest.maximumCapacity]와 활성 allocation으로 검증합니다.
      */
     private fun lockResourceMutex(key: ResourceMutexKey) {
-        val dialectName = TransactionManager.current().db.dialect.name.lowercase()
-        if (dialectName == "h2") {
-            val mutexExists =
-                ResourceCapacityBuckets
-                    .selectAll()
-                    .where { resourceMutexCondition(key) }
-                    .any()
-            if (!mutexExists) {
-                try {
-                    ResourceCapacityBuckets.insert {
-                        it[tenantGroupId] = key.tenantGroupId
-                        it[clinicId] = key.clinicId
-                        it[resourceType] = key.resourceType
-                        it[resourceId] = key.resourceId
-                        it[bucketStartAt] = RESOURCE_MUTEX_INSTANT
-                        it[ResourceCapacityBuckets.maximumCapacity] = RESOURCE_MUTEX_CAPACITY
-                    }
-                } catch (failure: ExposedSQLException) {
-                    // 두 H2 transaction이 누락된 mutex row를 동시에 관찰할 수 있다. unique key가
-                    // 조정 지점이므로, 예상된 이 경쟁만 무시한다.
-                    if (!failure.isUniqueConstraintViolation()) {
-                        throw failure
-                    }
-                }
-            }
-        } else {
-            ResourceCapacityBuckets.insertIgnore {
-                it[tenantGroupId] = key.tenantGroupId
-                it[clinicId] = key.clinicId
-                it[resourceType] = key.resourceType
-                it[resourceId] = key.resourceId
-                it[bucketStartAt] = RESOURCE_MUTEX_INSTANT
-                it[ResourceCapacityBuckets.maximumCapacity] = RESOURCE_MUTEX_CAPACITY
-            }
+        ResourceCapacityBuckets.insertIgnore {
+            it[tenantGroupId] = key.tenantGroupId
+            it[clinicId] = key.clinicId
+            it[resourceType] = key.resourceType
+            it[resourceId] = key.resourceId
+            it[bucketStartAt] = RESOURCE_MUTEX_INSTANT
+            it[ResourceCapacityBuckets.maximumCapacity] = RESOURCE_MUTEX_CAPACITY
         }
         val query =
             ResourceCapacityBuckets
@@ -481,18 +454,14 @@ class ResourceAllocationRepository {
             .where {
                 resourceMutexCondition(key)
             }
-        val lockOption =
-            when (dialectName) {
-                "postgresql" ->
-                    ForUpdateOption.PostgreSQL.ForUpdate(ForUpdateOption.PostgreSQL.MODE.NO_WAIT)
-                "mysql" ->
-                    ForUpdateOption.MySQL.ForUpdate(ForUpdateOption.MySQL.MODE.NO_WAIT)
-                else -> ForUpdateOption.ForUpdate
-            }
         try {
-            query.forUpdate(lockOption).single()
+            query
+                .forUpdate(
+                    ForUpdateOption.PostgreSQL.ForUpdate(ForUpdateOption.PostgreSQL.MODE.NO_WAIT),
+                )
+                .single()
         } catch (failure: ExposedSQLException) {
-            if (failure.sqlState == POSTGRES_LOCK_UNAVAILABLE || failure.errorCode == MYSQL_LOCK_NOWAIT) {
+            if (failure.sqlState == POSTGRES_LOCK_UNAVAILABLE) {
                 throw ResourceAllocationConflictException("resource confirmation is already in progress")
             }
             throw failure
@@ -505,9 +474,6 @@ class ResourceAllocationRepository {
             (ResourceCapacityBuckets.resourceType eq key.resourceType) and
             (ResourceCapacityBuckets.resourceId eq key.resourceId) and
             (ResourceCapacityBuckets.bucketStartAt eq RESOURCE_MUTEX_INSTANT)
-
-    private fun ExposedSQLException.isUniqueConstraintViolation(): Boolean =
-        sqlState == H2_UNIQUE_VIOLATION || errorCode == H2_UNIQUE_VIOLATION_CODE
 
     private fun validateInternalConflicts(requests: List<ResourceAllocationRequest>) {
         requests.forEachIndexed { index, first ->
@@ -686,11 +652,8 @@ class ResourceAllocationRepository {
                 query.andWhere { ResourceAllocations.proposalId neq oldProposalId }
             }
             /*
-             * MySQL의 기본 REPEATABLE READ에서는 command 앞부분의 scope 조회가 만든
-             * snapshot이 mutex 대기 뒤에도 유지될 수 있다. locking read는 현재
-             * committed row를 읽으므로 직전 winner의 allocation을 놓치지 않는다.
-             * mutex를 canonical 순서로 먼저 잡았기 때문에 이 row lock도 같은 자원
-             * 순서를 유지한다.
+             * mutex를 canonical 순서로 먼저 잡았기 때문에 이 locking read도 같은 자원
+             * 순서를 유지하며, 직전 winner가 커밋한 allocation을 읽는다.
              */
             val existing = query.forUpdate().toList()
             val existingWaitlistHolds =
@@ -900,9 +863,6 @@ class ResourceAllocationRepository {
         val RESOURCE_MUTEX_INSTANT: Instant = Instant.parse("2000-01-01T00:00:00Z")
         const val RESOURCE_MUTEX_CAPACITY = 1
         const val POSTGRES_LOCK_UNAVAILABLE = "55P03"
-        const val MYSQL_LOCK_NOWAIT = 3_572
-        const val H2_UNIQUE_VIOLATION = "23505"
-        const val H2_UNIQUE_VIOLATION_CODE = 2_3505
     }
 }
 

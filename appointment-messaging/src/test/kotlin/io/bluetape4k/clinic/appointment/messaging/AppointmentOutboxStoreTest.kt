@@ -12,30 +12,58 @@ import io.bluetape4k.clinic.appointment.model.tables.ProductCatalogProjections
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
+import io.bluetape4k.testcontainers.database.PostgreSQLServer
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInstance
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AppointmentOutboxStoreTest {
     private val now = Instant.parse("2026-08-05T08:30:00Z")
 
+    @BeforeAll
+    fun connectPostgreSQL() {
+        previousDefaultDatabase = TransactionManager.defaultDatabase
+        TransactionManager.defaultDatabase = POSTGRESQL_DATABASE
+        transaction {
+            SchemaUtils.create(
+                TenantGroups,
+                Clinics,
+                ProductCatalogProjections,
+                AppointmentPlans,
+                SchedulingOutboxEvents,
+            )
+        }
+    }
+
+    @AfterAll
+    fun restoreH2DefaultDatabase() {
+        TransactionManager.defaultDatabase = previousDefaultDatabase
+    }
+
     @BeforeEach
     fun setup() {
-        Database.connect(
-            "jdbc:h2:mem:appointment_outbox_store_${System.nanoTime()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
-            driver = "org.h2.Driver",
-        )
+        TransactionManager.defaultDatabase = POSTGRESQL_DATABASE
         transaction {
-            SchemaUtils.create(TenantGroups, Clinics, ProductCatalogProjections, AppointmentPlans, SchedulingOutboxEvents)
+            SchedulingOutboxEvents.deleteAll()
+            AppointmentPlans.deleteAll()
+            ProductCatalogProjections.deleteAll()
+            Clinics.deleteAll()
+            TenantGroups.deleteAll()
             TenantGroups.insert {
                 it[id] = EntityID(1L, TenantGroups)
                 it[tenantCode] = "tenant-one"
@@ -48,6 +76,17 @@ class AppointmentOutboxStoreTest {
                 it[name] = "Clinic One"
             }
         }
+    }
+
+    private companion object {
+        private var previousDefaultDatabase: Database? = null
+        private val POSTGRESQL = PostgreSQLServer.Launcher.postgres
+        private val POSTGRESQL_DATABASE = Database.connect(
+            POSTGRESQL.jdbcUrl,
+            driver = "org.postgresql.Driver",
+            user = POSTGRESQL.username ?: PostgreSQLServer.USERNAME,
+            password = POSTGRESQL.password ?: PostgreSQLServer.PASSWORD,
+        )
     }
 
     @Test

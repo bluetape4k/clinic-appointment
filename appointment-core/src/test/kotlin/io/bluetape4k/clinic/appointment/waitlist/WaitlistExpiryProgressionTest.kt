@@ -129,7 +129,7 @@ class WaitlistExpiryProgressionTest {
 
     private fun withExpiryTables(block: org.jetbrains.exposed.v1.jdbc.JdbcTransaction.() -> Unit) {
         withTables(
-            TestDB.H2_COMMITMENT,
+            TestDB.POSTGRESQL,
             Clinics,
             Doctors,
             TreatmentTypes,

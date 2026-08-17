@@ -33,7 +33,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import java.time.Instant
 
 /**
- * 버전 정책 영속성의 잠금 순서·반개구간·불변 snapshot 계약을 데이터베이스 방언별로 검증한다.
+ * 버전 정책 영속성의 잠금 순서·반개구간·불변 snapshot 계약을 PostgreSQL에서 검증한다.
  *
  * 호출자 소유 트랜잭션 안에서 tenant 스코프를 clinic보다 먼저 잠그고, revision CAS와 generation
  * 증가를 분리하며, `effectiveFrom <= at < effectiveUntil`인 `ACTIVE` 정의만 선택하는지
@@ -42,10 +42,15 @@ import java.time.Instant
  */
 class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
 
+    companion object {
+        @JvmStatic
+        fun enablePostgreSQL() = TestDB.ALL_POSTGRES
+    }
+
     private val repository = SchedulingPolicyRepository()
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `definition identity uses a non-null tenant sentinel and approvals are revision scoped`(testDB: TestDB) {
         withPolicyTables(testDB) {
             val tenantDefinition = repository.createDefinition(definition())
@@ -74,7 +79,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `definition version is unique inside its exact scope and kind`(testDB: TestDB) {
         withPolicyTables(testDB) {
             repository.createDefinition(definition())
@@ -86,7 +91,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `scope head generation advances only from the expected revision`(testDB: TestDB) {
         withPolicyTables(testDB) {
             val tenantScope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
@@ -125,7 +130,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `tenant clinic digest is derived from one exact scope head lookup`(testDB: TestDB) {
         withTables(
             testDB,
@@ -155,7 +160,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `authoritative head reads do not bootstrap and active selection uses half open boundaries`(testDB: TestDB) {
         withPolicyTables(testDB) {
             val tenantScope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
@@ -201,7 +206,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `bulk active lookup binds each policy kind to its exact evaluation instant`(testDB: TestDB) {
         withPolicyTables(testDB) {
             val scope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
@@ -256,7 +261,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `draft version allocation and revision-only scope mutation are serialized`(testDB: TestDB) {
         withPolicyTables(testDB) {
             val scope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
@@ -283,7 +288,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `draft revision and lifecycle transitions use compare and set contracts`(testDB: TestDB) {
         withPolicyTables(testDB) {
             val draft = repository.createDefinition(definition())
@@ -347,7 +352,7 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
     }
 
     @ParameterizedTest
-    @MethodSource(ENABLE_DIALECTS_METHOD)
+    @MethodSource("enablePostgreSQL")
     fun `published interval lookup and immutable snapshot identity are reproducible`(testDB: TestDB) {
         withPolicyTables(testDB) {
             val now = Instant.parse("2026-07-27T00:00:00Z")

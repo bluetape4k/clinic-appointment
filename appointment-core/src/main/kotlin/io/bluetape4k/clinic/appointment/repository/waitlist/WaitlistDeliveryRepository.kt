@@ -481,12 +481,11 @@ class WaitlistDeliveryRepository(
 
     fun <T> withContentionRetry(block: () -> T): T {
         var attempt = 1
-        val strategy = resolvedClaimStrategy()
         while (true) {
             try {
                 return block()
             } catch (failure: ExposedSQLException) {
-                if (!failure.isRetryableContention(strategy)) {
+                if (!failure.isRetryableContention()) {
                     throw failure
                 }
                 if (attempt >= retryPolicy.maxAttempts) {
@@ -495,7 +494,7 @@ class WaitlistDeliveryRepository(
                 sleepBeforeRetry(attempt)
                 attempt += 1
             } catch (failure: SQLException) {
-                if (!failure.isRetryableContention(strategy)) {
+                if (!failure.isRetryableContention()) {
                     throw failure
                 }
                 if (attempt >= retryPolicy.maxAttempts) {
@@ -525,7 +524,6 @@ class WaitlistDeliveryRepository(
     ): VacancyClaim? {
         val current =
             when (strategy.mode) {
-                VacancyClaimMode.VERSION_UPDATE -> findVacancy(jobId)
                 VacancyClaimMode.LOCKED_SELECTION -> findClaimCandidate(jobId, now, forUpdate = true)
             } ?: return null
         val eligible = current.status == VacancyJobState.READY ||
@@ -639,16 +637,11 @@ class WaitlistDeliveryRepository(
     private fun resolvedClaimStrategy(): VacancyClaimStrategy =
         claimStrategy ?: VacancyClaimStrategies.current()
 
-    private fun SQLException.isRetryableContention(strategy: VacancyClaimStrategy): Boolean =
-        sqlState in RETRYABLE_SQL_STATES || isMysqlLockWaitTimeout(strategy)
+    private fun SQLException.isRetryableContention(): Boolean =
+        sqlState in RETRYABLE_SQL_STATES
 
-    private fun ExposedSQLException.isRetryableContention(strategy: VacancyClaimStrategy): Boolean =
-        sqlState in RETRYABLE_SQL_STATES || isMysqlLockWaitTimeout(strategy)
-
-    private fun SQLException.isMysqlLockWaitTimeout(strategy: VacancyClaimStrategy): Boolean =
-        errorCode == MYSQL_LOCK_WAIT_TIMEOUT_ERROR_CODE &&
-            strategy.dialect == VacancyClaimDialect.MYSQL &&
-            strategy.lockTimeoutPlan?.timeout == MYSQL_LOCK_WAIT_TIMEOUT
+    private fun ExposedSQLException.isRetryableContention(): Boolean =
+        sqlState in RETRYABLE_SQL_STATES
 
     private companion object {
         private const val MAX_OWNER_LENGTH = 160
@@ -665,8 +658,6 @@ class WaitlistDeliveryRepository(
         private val STABLE_ERROR_CODE_REGEX = Regex("[A-Z0-9_]{1,96}")
         private val COMMAND_RESULT_TYPE_REGEX = Regex("[A-Z0-9_]{1,64}")
         private val RETRYABLE_SQL_STATES = setOf("40001", "40P01")
-        private const val MYSQL_LOCK_WAIT_TIMEOUT_ERROR_CODE = 1205
-        private val MYSQL_LOCK_WAIT_TIMEOUT = Duration.ofSeconds(2)
     }
 }
 
@@ -704,17 +695,14 @@ object WaitlistCommandDuplicateClassifier {
         }
 
     private fun SQLException.isKnownUniqueViolation(): Boolean =
-        sqlState == POSTGRES_OR_H2_UNIQUE_SQL_STATE ||
-            (sqlState == MYSQL_INTEGRITY_SQL_STATE && errorCode == MYSQL_DUPLICATE_ENTRY_ERROR_CODE)
+        sqlState == POSTGRES_UNIQUE_SQL_STATE
 
     private fun SQLException.referencesCommandIdempotencyAuthority(): Boolean {
         val lowerMessage = message?.lowercase() ?: return false
         return COMMAND_IDEMPOTENCY_AUTHORITY_HINTS.any { hint -> hint in lowerMessage }
     }
 
-    private const val POSTGRES_OR_H2_UNIQUE_SQL_STATE = "23505"
-    private const val MYSQL_INTEGRITY_SQL_STATE = "23000"
-    private const val MYSQL_DUPLICATE_ENTRY_ERROR_CODE = 1062
+    private const val POSTGRES_UNIQUE_SQL_STATE = "23505"
     private val COMMAND_IDEMPOTENCY_AUTHORITY_HINTS = listOf(
         "uq_waitlist_command_idempotency",
         "uq_waitlist_command",
@@ -722,24 +710,21 @@ object WaitlistCommandDuplicateClassifier {
     )
 }
 
-/** vacancy claim의 DB별 획득 방식을 식별합니다. */
+/** PostgreSQL vacancy claim의 획득 방식을 식별합니다. */
 enum class VacancyClaimMode {
-    VERSION_UPDATE,
     LOCKED_SELECTION,
 }
 
-/** vacancy claim adapter가 지원하는 DB dialect입니다. */
+/** vacancy claim adapter가 지원하는 PostgreSQL dialect입니다. */
 enum class VacancyClaimDialect {
-    H2,
     POSTGRESQL,
-    MYSQL,
 }
 
 /**
  * DB session에 적용할 bounded lock wait 설정입니다.
  *
- * PostgreSQL은 `SET LOCAL`로 transaction scope에 묶고, MySQL은 기존 session 값을 저장한 뒤
- * claim 이후 복원해서 lock wait 설정이 호출자 transaction 바깥으로 새지 않도록 합니다.
+ * PostgreSQL은 `SET LOCAL`로 transaction scope에 묶어 lock wait 설정이 호출자 transaction
+ * 바깥으로 새지 않도록 합니다.
  */
 data class LockTimeoutPlan(
     val timeout: Duration,
@@ -752,10 +737,9 @@ data class LockTimeoutPlan(
 }
 
 /**
- * vacancy claim의 dialect별 public contract입니다.
+ * PostgreSQL vacancy claim의 public contract입니다.
  *
- * H2는 conditional version update를 사용하고 PostgreSQL/MySQL은 row lock 기반 selection을
- * 먼저 수행합니다. 저장소 public API는 동일하게 유지됩니다.
+ * PostgreSQL은 row lock 기반 selection을 먼저 수행합니다. 저장소 public API는 동일하게 유지됩니다.
  */
 interface VacancyClaimStrategy : Serializable {
     val dialect: VacancyClaimDialect
@@ -767,29 +751,13 @@ interface VacancyClaimStrategy : Serializable {
 
 /** Exposed dialect 이름에서 waitlist vacancy claim adapter를 선택합니다. */
 object VacancyClaimStrategies {
-    fun current(): VacancyClaimStrategy =
-        forDialectName(TransactionManager.currentOrNull()?.db?.dialect?.name ?: H2_DIALECT_NAME)
+    fun current(): VacancyClaimStrategy = PostgreSqlLockedVacancyClaimStrategy
 
     fun forDialectName(dialectName: String): VacancyClaimStrategy =
         when (dialectName.trim().lowercase()) {
             "postgresql", "postgres", "pgsql" -> PostgreSqlLockedVacancyClaimStrategy
-            "mysql", "mariadb" -> MySqlLockedVacancyClaimStrategy
-            else -> H2VersionUpdateVacancyClaimStrategy
+            else -> throw IllegalArgumentException("Only PostgreSQL is supported for vacancy claims")
         }
-
-    private const val H2_DIALECT_NAME = "h2"
-}
-
-private object H2VersionUpdateVacancyClaimStrategy : VacancyClaimStrategy {
-    override val dialect: VacancyClaimDialect = VacancyClaimDialect.H2
-    override val mode: VacancyClaimMode = VacancyClaimMode.VERSION_UPDATE
-    override val lockTimeoutPlan: LockTimeoutPlan? = null
-
-    override fun claimSelectionSql(tableName: String): String =
-        "UPDATE $tableName SET status = ?, lease_owner = ?, lease_version = lease_version + 1, version = version + 1 " +
-            "WHERE id = ? AND version = ? AND lease_version = ?"
-
-    private fun readResolve(): Any = H2VersionUpdateVacancyClaimStrategy
 }
 
 private object PostgreSqlLockedVacancyClaimStrategy : VacancyClaimStrategy {
@@ -806,25 +774,6 @@ private object PostgreSqlLockedVacancyClaimStrategy : VacancyClaimStrategy {
         "SELECT * FROM $tableName WHERE id = ? AND status IN ('READY', 'PROCESSING') FOR UPDATE"
 
     private fun readResolve(): Any = PostgreSqlLockedVacancyClaimStrategy
-}
-
-private object MySqlLockedVacancyClaimStrategy : VacancyClaimStrategy {
-    override val dialect: VacancyClaimDialect = VacancyClaimDialect.MYSQL
-    override val mode: VacancyClaimMode = VacancyClaimMode.LOCKED_SELECTION
-    override val lockTimeoutPlan: LockTimeoutPlan =
-        LockTimeoutPlan(
-            timeout = Duration.ofSeconds(2),
-            beforeClaimSql = listOf(
-                "SET @waitlist_previous_innodb_lock_wait_timeout := @@innodb_lock_wait_timeout",
-                "SET innodb_lock_wait_timeout = 2",
-            ),
-            afterClaimSql = listOf("SET innodb_lock_wait_timeout = @waitlist_previous_innodb_lock_wait_timeout"),
-        )
-
-    override fun claimSelectionSql(tableName: String): String =
-        "SELECT * FROM $tableName WHERE id = ? AND status IN ('READY', 'PROCESSING') FOR UPDATE"
-
-    private fun readResolve(): Any = MySqlLockedVacancyClaimStrategy
 }
 
 /** DB contention retry의 attempt 수, jitter 계산, sleep side effect를 주입합니다. */

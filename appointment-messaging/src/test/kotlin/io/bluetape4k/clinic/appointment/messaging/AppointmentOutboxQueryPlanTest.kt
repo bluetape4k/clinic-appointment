@@ -2,39 +2,46 @@ package io.bluetape4k.clinic.appointment.messaging
 
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxStatus
+import org.jetbrains.exposed.v1.core.statements.StatementType
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.sql.Connection
-import java.sql.DriverManager
-import java.sql.Timestamp
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Duration
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** V22 ready-index 선택과 fenced lease predicate에 대한 H2 증거. */
+/** PostgreSQL Testcontainers에서 V22 ready-index와 fenced lease predicate를 검증하는 증거. */
 class AppointmentOutboxQueryPlanTest {
-    private lateinit var jdbcUrl: String
+    private var previousDefaultDatabase: Database? = null
 
     @BeforeEach
     fun setup() {
-        jdbcUrl = AppointmentOutboxPerformanceTestSupport.connectAndCreateSchema("query_plan")
-        connection().use { connection ->
-            val summary = AppointmentOutboxPerformanceTestSupport.seedBacklog(connection)
-            assertEquals(AppointmentOutboxPerformanceTestSupport.SEED, summary.seed)
-            assertEquals(AppointmentOutboxPerformanceTestSupport.ROW_COUNT, summary.totalRows)
-            assertTrue(summary.appointmentRows > 0)
-            assertTrue(summary.legacyRows > 0)
-            assertTrue(summary.pendingAppointmentRows > 0)
-            ensureDeterministicCandidates(connection)
-            connection.createStatement().use { statement -> statement.execute("ANALYZE") }
+        previousDefaultDatabase = TransactionManager.defaultDatabase
+        AppointmentOutboxPerformanceTestSupport.connectAndCreateSchema("query_plan")
+        val summary = AppointmentOutboxPerformanceTestSupport.seedBacklog()
+        assertEquals(AppointmentOutboxPerformanceTestSupport.SEED, summary.seed)
+        assertEquals(AppointmentOutboxPerformanceTestSupport.ROW_COUNT, summary.totalRows)
+        assertTrue(summary.appointmentRows > 0)
+        assertTrue(summary.legacyRows > 0)
+        assertTrue(summary.pendingAppointmentRows > 0)
+        transaction {
+            ensureDeterministicCandidates()
+            TransactionManager.current().exec("ANALYZE scheduling_outbox_events")
         }
+    }
+
+    @AfterEach
+    fun restoreDefaultDatabase() {
+        TransactionManager.defaultDatabase = previousDefaultDatabase
     }
 
     @Test
     fun `ready claim uses the V22 appointment index and bounded page`() {
-        connection().use { connection ->
-            val indexColumns = indexColumns(connection, READY_INDEX)
+        transaction {
+            val indexColumns = indexColumns(READY_INDEX)
             assertEquals(
                 listOf(
                     "STATUS",
@@ -48,43 +55,43 @@ class AppointmentOutboxQueryPlanTest {
                 indexColumns,
             )
 
-            val plan = explain(connection, READY_CLAIM_SQL)
+            val plan = explain(READY_CLAIM_SQL)
             assertTrue(
-                plan.contains(READY_INDEX, ignoreCase = true) ||
-                    plan.contains(LEASE_RECOVERY_INDEX, ignoreCase = true),
+                plan.contains("Index Scan using $READY_INDEX", ignoreCase = true) ||
+                    plan.contains("Bitmap Index Scan on $READY_INDEX", ignoreCase = true) ||
+                    plan.contains("Index Scan using $LEASE_RECOVERY_INDEX", ignoreCase = true) ||
+                    plan.contains("Bitmap Index Scan on $LEASE_RECOVERY_INDEX", ignoreCase = true),
                 plan,
             )
-            assertFalse(plan.contains("tableScan", ignoreCase = true), plan)
 
-            connection.prepareStatement(READY_CLAIM_SQL).use { statement ->
-                statement.executeQuery().use { rows ->
-                    var count = 0
-                    while (rows.next()) count++
-                    assertTrue(count <= AppointmentOutboxPerformanceTestSupport.PAGE_SIZE)
-                }
-            }
-
-            val claim = JdbcAppointmentOutboxStore(maxClinicBatch = 4)
-                .claim("query-plan-relay", 1, Duration.ofSeconds(30))
-                .single()
-            assertEquals(1, claim.attemptNumber)
-            assertEquals(AppointmentTopic(DefaultAppointmentOutboxWriter.DEFAULT_TOPIC), claim.topic)
-            assertTrue(claim.partitionKey.value.startsWith("tenant-1:CLINIC:clinic-31:APPOINTMENT:apt-"))
+            val count = TransactionManager.current().exec(READY_CLAIM_SQL) { rows ->
+                var result = 0
+                while (rows.next()) result++
+                result
+            } ?: 0
+            assertTrue(count <= AppointmentOutboxPerformanceTestSupport.PAGE_SIZE)
         }
+
+        val claim = JdbcAppointmentOutboxStore(maxClinicBatch = 4)
+            .claim("query-plan-relay", 1, Duration.ofSeconds(30))
+            .single()
+        assertEquals(1, claim.attemptNumber)
+        assertEquals(AppointmentTopic(DefaultAppointmentOutboxWriter.DEFAULT_TOPIC), claim.topic)
+        assertTrue(claim.partitionKey.value.startsWith("tenant-1:CLINIC:clinic-31:APPOINTMENT:apt-"))
     }
 
     @Test
     fun `claim terminalizes invalid event and null metadata before a valid successor`() {
-        val invalidIds = connection().use { connection -> installInvalidReadyRows(connection) }
+        val invalidIds = transaction { installInvalidReadyRows() }
         val store = JdbcAppointmentOutboxStore(maxClinicBatch = 4)
 
         assertTrue(store.claim("invalid-metadata-relay", 1, Duration.ofSeconds(30)).isEmpty())
-        connection().use { connection ->
+        transaction {
             invalidIds.forEach { id ->
-                assertEquals(SchedulingOutboxStatus.FAILED.name, readString(connection, id, "status"))
+                assertEquals(SchedulingOutboxStatus.FAILED.name, readString(id, "status"))
                 assertEquals(
                     AppointmentOutboxRelay.FAILURE_INVALID_METADATA,
-                    readString(connection, id, "last_failure_code"),
+                    readString(id, "last_failure_code"),
                 )
             }
         }
@@ -95,202 +102,248 @@ class AppointmentOutboxQueryPlanTest {
 
     @Test
     fun `conditional lease update repeats due expiry and candidate attempt predicates`() {
-        connection().use { connection ->
-            val readyId = selectId(connection, """
+        transaction {
+            val readyId = selectId("""
                 SELECT id FROM scheduling_outbox_events
                 WHERE status = 'PENDING' AND aggregate_type = 'APPOINTMENT'
                   AND (next_attempt_at IS NULL OR next_attempt_at <= TIMESTAMP '2026-08-05 08:30:00')
                   AND (lease_until IS NULL OR lease_until <= TIMESTAMP '2026-08-05 08:30:00')
                 ORDER BY created_at, id LIMIT 1
             """.trimIndent())
-            val futureId = selectId(connection, """
+            val futureId = selectId("""
                 SELECT id FROM scheduling_outbox_events
                 WHERE status = 'PENDING' AND aggregate_type = 'APPOINTMENT'
                   AND next_attempt_at > TIMESTAMP '2026-08-05 08:30:00'
                 ORDER BY id LIMIT 1
             """.trimIndent())
 
-            val updated = connection.prepareStatement(CONDITIONAL_LEASE_UPDATE_SQL).use { statement ->
-                statement.setString(1, "query-plan-relay")
-                statement.setString(2, "query-plan-token")
-                statement.setTimestamp(3, Timestamp.valueOf("2026-08-05 08:31:00"))
-                statement.setLong(4, readyId)
-                statement.setLong(5, futureId)
-                statement.executeUpdate()
-            }
+            val updated = conditionalLeaseUpdate(
+                owner = "query-plan-relay",
+                token = "query-plan-token",
+                leaseUntil = "2026-08-05 08:31:00",
+                firstId = readyId,
+                secondId = futureId,
+            )
             assertEquals(1, updated)
-            assertEquals("query-plan-relay", readString(connection, readyId, "lease_owner"))
-            assertEquals("query-plan-token", readString(connection, readyId, "lease_token"))
-            assertEquals(1, readInt(connection, readyId, "attempt_count"))
-            assertEquals(null, readString(connection, futureId, "lease_owner"))
-            assertEquals(0, readInt(connection, futureId, "attempt_count"))
+            assertEquals("query-plan-relay", readString(readyId, "lease_owner"))
+            assertEquals("query-plan-token", readString(readyId, "lease_token"))
+            assertEquals(1, readInt(readyId, "attempt_count"))
+            assertEquals(null, readString(futureId, "lease_owner"))
+            assertEquals(0, readInt(futureId, "attempt_count"))
 
-// 오래된 candidate version은 fenced lease를 덮어쓸 수 없다.
-            val staleUpdate = connection.prepareStatement(CONDITIONAL_LEASE_UPDATE_SQL).use { statement ->
-                statement.setString(1, "stale-relay")
-                statement.setString(2, "stale-token")
-                statement.setTimestamp(3, Timestamp.valueOf("2026-08-05 08:31:00"))
-                statement.setLong(4, readyId)
-                statement.setLong(5, readyId)
-                statement.executeUpdate()
-            }
+            // 오래된 candidate version은 fenced lease를 덮어쓸 수 없다.
+            val staleUpdate = conditionalLeaseUpdate(
+                owner = "stale-relay",
+                token = "stale-token",
+                leaseUntil = "2026-08-05 08:31:00",
+                firstId = readyId,
+                secondId = readyId,
+            )
             assertEquals(0, staleUpdate)
         }
     }
 
     @Test
     fun `fixed seed benchmark exercises production claim with percentile and contention evidence`() {
-        connection().use { connection ->
-            val benchmark = AppointmentOutboxPerformanceTestSupport.benchmarkClaim(
-                connection = connection,
-                store = JdbcAppointmentOutboxStore(maxClinicBatch = 4),
-            )
-            assertEquals(AppointmentOutboxPerformanceTestSupport.SEED, benchmark.seed)
-            assertEquals(AppointmentOutboxPerformanceTestSupport.ROW_COUNT, benchmark.totalRows)
-            assertEquals(3, benchmark.warmupRounds)
-            assertEquals(15, benchmark.measurementRounds)
-            assertTrue(benchmark.samplesNanos.all { it > 0L })
-            assertTrue(benchmark.p50Nanos > 0L)
-            assertTrue(benchmark.p95Nanos >= benchmark.p50Nanos)
-            assertTrue(benchmark.p99Nanos >= benchmark.p95Nanos)
-            assertTrue(benchmark.maxClaimed <= AppointmentOutboxPerformanceTestSupport.PAGE_SIZE / 4)
-            assertEquals(benchmark.contentionClaims, benchmark.contentionDistinctIds)
-            assertTrue(benchmark.contentionSamplesNanos.all { it > 0L })
-            AppointmentOutboxPerformanceTestSupport.writeBenchmarkReport(benchmark)
-        }
+        val benchmark = AppointmentOutboxPerformanceTestSupport.benchmarkClaim(
+            store = JdbcAppointmentOutboxStore(maxClinicBatch = 4),
+        )
+        assertEquals(AppointmentOutboxPerformanceTestSupport.SEED, benchmark.seed)
+        assertEquals(AppointmentOutboxPerformanceTestSupport.ROW_COUNT, benchmark.totalRows)
+        assertEquals(3, benchmark.warmupRounds)
+        assertEquals(15, benchmark.measurementRounds)
+        assertTrue(benchmark.samplesNanos.all { it > 0L })
+        assertTrue(benchmark.p50Nanos > 0L)
+        assertTrue(benchmark.p95Nanos >= benchmark.p50Nanos)
+        assertTrue(benchmark.p99Nanos >= benchmark.p95Nanos)
+        assertTrue(benchmark.maxClaimed <= AppointmentOutboxPerformanceTestSupport.PAGE_SIZE / 4)
+        assertEquals(benchmark.contentionClaims, benchmark.contentionDistinctIds)
+        assertTrue(benchmark.contentionSamplesNanos.all { it > 0L })
+        AppointmentOutboxPerformanceTestSupport.writeBenchmarkReport(benchmark)
     }
 
-    private fun connection(): Connection = DriverManager.getConnection(jdbcUrl)
-
-    private fun installInvalidReadyRows(connection: Connection): List<Long> {
-        val ids = connection.prepareStatement(
+    private fun installInvalidReadyRows(): List<Long> {
+        val ids = TransactionManager.current().exec(
             """
             SELECT id FROM scheduling_outbox_events
             WHERE aggregate_type = 'APPOINTMENT'
             ORDER BY id LIMIT 3 OFFSET 2
             """.trimIndent(),
-        ).use { statement ->
-            statement.executeQuery().use { rows ->
-                buildList {
-                    while (rows.next()) add(rows.getLong(1))
-                }
+        ) { rows ->
+            buildList {
+                while (rows.next()) add(rows.getLong(1))
             }
-        }
+        } ?: emptyList()
         assertEquals(3, ids.size)
-        connection.prepareStatement(
-            """
+        val invalidRows = listOf(
+            Triple(ids[0], "AppointmentUnknown", DefaultAppointmentOutboxWriter.DEFAULT_TOPIC),
+            Triple(ids[1], AppointmentEventType.CREATED.wireName, null),
+            Triple(ids[2], AppointmentEventType.CREATED.wireName, DefaultAppointmentOutboxWriter.DEFAULT_TOPIC),
+        )
+        invalidRows.forEachIndexed { index, (id, eventType, topic) ->
+            val partitionKey: String? = when (index) {
+                1 -> "tenant-1:CLINIC:clinic-31:APPOINTMENT:apt-100004"
+                2 -> null
+                else -> "tenant-1:CLINIC:clinic-31:APPOINTMENT:apt-100002"
+            }
+            TransactionManager.current().exec(
+                """
             UPDATE scheduling_outbox_events
             SET status = 'PENDING', attempt_count = 0,
                 next_attempt_at = TIMESTAMP '2026-08-05 08:29:00', lease_until = NULL,
-                event_type = ?, topic = ?, partition_key = ?
-            WHERE id = ?
+                event_type = ${sqlString(eventType)}, topic = ${sqlString(topic)},
+                partition_key = ${sqlString(partitionKey)}
+            WHERE id = $id
             """.trimIndent(),
-        ).use { statement ->
-            statement.setString(1, "AppointmentUnknown")
-            statement.setString(2, DefaultAppointmentOutboxWriter.DEFAULT_TOPIC)
-            statement.setString(3, "tenant-1:CLINIC:clinic-31:APPOINTMENT:apt-100002")
-            statement.setLong(4, ids[0])
-            assertEquals(1, statement.executeUpdate())
-
-            statement.setString(1, AppointmentEventType.CREATED.wireName)
-            statement.setObject(2, null)
-            statement.setString(3, "tenant-1:CLINIC:clinic-31:APPOINTMENT:apt-100004")
-            statement.setLong(4, ids[1])
-            assertEquals(1, statement.executeUpdate())
-
-            statement.setString(1, AppointmentEventType.CREATED.wireName)
-            statement.setString(2, DefaultAppointmentOutboxWriter.DEFAULT_TOPIC)
-            statement.setObject(3, null)
-            statement.setLong(4, ids[2])
-            assertEquals(1, statement.executeUpdate())
+            )
         }
+        val invalidReadyRows = TransactionManager.current().exec(
+            """
+            SELECT COUNT(*)
+            FROM scheduling_outbox_events
+            WHERE id IN (${ids.joinToString()})
+              AND status = 'PENDING'
+              AND aggregate_type = 'APPOINTMENT'
+              AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
+              AND (lease_until IS NULL OR lease_until <= CURRENT_TIMESTAMP)
+              AND (
+                  event_type NOT IN (
+                      'AppointmentCreated',
+                      'AppointmentStatusChanged',
+                      'AppointmentCancelled',
+                      'AppointmentRescheduled'
+                  )
+                  OR topic IS NULL
+                  OR partition_key IS NULL
+              )
+            """.trimIndent(),
+        ) { rows ->
+            check(rows.next()) { "invalid fixture query returned no row" }
+            rows.getInt(1)
+        } ?: 0
+        assertEquals(ids.size, invalidReadyRows, "invalid fixture must satisfy the production invalid-row predicate")
         return ids
     }
 
-    private fun ensureDeterministicCandidates(connection: Connection) {
-        val ids = connection.prepareStatement(
+    private fun ensureDeterministicCandidates() {
+        val ids = TransactionManager.current().exec(
             "SELECT id FROM scheduling_outbox_events WHERE aggregate_type = 'APPOINTMENT' ORDER BY id LIMIT 2",
-        ).use { statement ->
-            statement.executeQuery().use { rows ->
-                buildList {
-                    while (rows.next()) add(rows.getLong(1))
-                }
+        ) { rows ->
+            buildList {
+                while (rows.next()) add(rows.getLong(1))
             }
-        }
+        } ?: emptyList()
         assertTrue(ids.size == 2, "fixture must contain two appointment rows")
-        connection.prepareStatement(
+        TransactionManager.current().exec(
             """
             UPDATE scheduling_outbox_events
             SET status = 'PENDING', attempt_count = 0,
-                next_attempt_at = ?, lease_until = ?
-            WHERE id = ?
+                next_attempt_at = TIMESTAMP '2026-08-05 08:29:00',
+                lease_until = TIMESTAMP '2026-08-05 08:29:00'
+            WHERE id = ${ids[0]}
             """.trimIndent(),
-        ).use { statement ->
-            statement.setTimestamp(1, Timestamp.valueOf("2026-08-05 08:29:00"))
-            statement.setTimestamp(2, Timestamp.valueOf("2026-08-05 08:29:00"))
-            statement.setLong(3, ids[0])
-            assertEquals(1, statement.executeUpdate())
-            statement.setTimestamp(1, Timestamp.valueOf("2026-08-05 08:31:00"))
-            statement.setTimestamp(2, null)
-            statement.setLong(3, ids[1])
-            assertEquals(1, statement.executeUpdate())
-        }
+        )
+        TransactionManager.current().exec(
+            """
+            UPDATE scheduling_outbox_events
+            SET status = 'PENDING', attempt_count = 0,
+                next_attempt_at = TIMESTAMP '2026-08-05 08:31:00', lease_until = NULL
+            WHERE id = ${ids[1]}
+            """.trimIndent(),
+        )
     }
 
-    private fun explain(connection: Connection, sql: String): String =
-        connection.prepareStatement("EXPLAIN $sql").use { statement ->
-            statement.executeQuery().use { rows ->
-                buildString {
-                    while (rows.next()) appendLine(rows.getString(1))
+    private fun explain(sql: String): String =
+        TransactionManager.current().exec(
+            stmt = "EXPLAIN $sql",
+            explicitStatementType = StatementType.SELECT,
+        ) { rows ->
+            buildString {
+                while (rows.next()) appendLine(rows.getString(1))
+            }
+        } ?: error("EXPLAIN returned no plan")
+
+    private fun indexColumns(indexName: String): List<String> =
+        TransactionManager.current().exec(
+            """
+            SELECT attribute.attname
+            FROM pg_class table_ref
+            JOIN pg_index index_ref ON index_ref.indrelid = table_ref.oid
+            JOIN pg_class index_table ON index_table.oid = index_ref.indexrelid
+            JOIN LATERAL unnest(index_ref.indkey) WITH ORDINALITY keys(attnum, position) ON TRUE
+            JOIN pg_attribute attribute
+              ON attribute.attrelid = table_ref.oid AND attribute.attnum = keys.attnum
+            WHERE table_ref.relname = '${SchedulingOutboxEvents.tableName}'
+              AND index_table.relname = '${indexName.lowercase()}'
+            ORDER BY keys.position
+            """.trimIndent(),
+        ) { rows ->
+            buildList {
+                while (rows.next()) {
+                    add(rows.getString("attname").uppercase())
                 }
             }
+        } ?: emptyList()
+
+    private fun selectId(sql: String): Long =
+        TransactionManager.current().exec(sql) { rows ->
+            assertTrue(rows.next(), "fixture did not contain a matching appointment row")
+            rows.getLong(1)
+        } ?: error("query returned no result set")
+
+    private fun readString(id: Long, column: String): String? =
+        TransactionManager.current().exec(
+            "SELECT $column FROM scheduling_outbox_events WHERE id = $id",
+        ) { rows ->
+            assertTrue(rows.next())
+            rows.getString(1)
         }
 
-    private fun indexColumns(connection: Connection, indexName: String): List<String> {
-        val columns = mutableListOf<Pair<Short, String>>()
-        connection.metaData.getIndexInfo(
-            null,
-            "PUBLIC",
-            SchedulingOutboxEvents.tableName.uppercase(),
-            false,
-            false,
-        ).use { rows ->
-            while (rows.next()) {
-                if (rows.getString("INDEX_NAME").equals(indexName, ignoreCase = true)) {
-                    rows.getString("COLUMN_NAME")?.let { column ->
-                        columns += rows.getShort("ORDINAL_POSITION") to column.uppercase()
-                    }
-                }
-            }
-        }
-        return columns.sortedBy { it.first }.map { it.second }
+    private fun readInt(id: Long, column: String): Int =
+        TransactionManager.current().exec(
+            "SELECT $column FROM scheduling_outbox_events WHERE id = $id",
+        ) { rows ->
+            assertTrue(rows.next())
+            rows.getInt(1)
+        } ?: error("query returned no result set")
+
+    private fun conditionalLeaseUpdate(
+        owner: String,
+        token: String,
+        leaseUntil: String,
+        firstId: Long,
+        secondId: Long,
+    ): Int {
+        TransactionManager.current().exec(
+            """
+            UPDATE scheduling_outbox_events
+            SET lease_owner = ${sqlString(owner)},
+                lease_token = ${sqlString(token)},
+                lease_until = TIMESTAMP '$leaseUntil',
+                attempt_count = attempt_count + 1
+            WHERE id IN ($firstId, $secondId)
+              AND status = 'PENDING'
+              AND attempt_count = 0
+              AND (next_attempt_at IS NULL OR next_attempt_at <= TIMESTAMP '2026-08-05 08:30:00')
+              AND (lease_until IS NULL OR lease_until <= TIMESTAMP '2026-08-05 08:30:00')
+            """.trimIndent(),
+        )
+        return TransactionManager.current().exec(
+            """
+            SELECT COUNT(*)
+            FROM scheduling_outbox_events
+            WHERE id IN ($firstId, $secondId)
+              AND lease_owner = ${sqlString(owner)}
+              AND lease_token = ${sqlString(token)}
+            """.trimIndent(),
+        ) { rows ->
+            check(rows.next()) { "lease update count query returned no row" }
+            rows.getInt(1)
+        } ?: 0
     }
 
-    private fun selectId(connection: Connection, sql: String): Long =
-        connection.prepareStatement(sql).use { statement ->
-            statement.executeQuery().use { rows ->
-                assertTrue(rows.next(), "fixture did not contain a matching appointment row")
-                rows.getLong(1)
-            }
-        }
-
-    private fun readString(connection: Connection, id: Long, column: String): String? =
-        connection.prepareStatement("SELECT $column FROM scheduling_outbox_events WHERE id = ?").use { statement ->
-            statement.setLong(1, id)
-            statement.executeQuery().use { rows ->
-                assertTrue(rows.next())
-                rows.getString(1)
-            }
-        }
-
-    private fun readInt(connection: Connection, id: Long, column: String): Int =
-        connection.prepareStatement("SELECT $column FROM scheduling_outbox_events WHERE id = ?").use { statement ->
-            statement.setLong(1, id)
-            statement.executeQuery().use { rows ->
-                assertTrue(rows.next())
-                rows.getInt(1)
-            }
-        }
+    private fun sqlString(value: String?): String =
+        value?.let { "'${it.replace("'", "''")}'" } ?: "NULL"
 
     private companion object {
         const val READY_INDEX = "IDX_OUTBOX_APPOINTMENT_READY"
@@ -327,18 +380,6 @@ class AppointmentOutboxQueryPlanTest {
               )
             ORDER BY candidate.created_at, candidate.id
             LIMIT 128
-        """
-        const val CONDITIONAL_LEASE_UPDATE_SQL = """
-            UPDATE scheduling_outbox_events
-            SET lease_owner = ?,
-                lease_token = ?,
-                lease_until = ?,
-                attempt_count = attempt_count + 1
-            WHERE id IN (?, ?)
-              AND status = 'PENDING'
-              AND attempt_count = 0
-              AND (next_attempt_at IS NULL OR next_attempt_at <= TIMESTAMP '2026-08-05 08:30:00')
-              AND (lease_until IS NULL OR lease_until <= TIMESTAMP '2026-08-05 08:30:00')
         """
     }
 }

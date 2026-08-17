@@ -38,10 +38,16 @@ class WaitlistCommandReservationTest {
     }
 
     @Test
-    fun `mysql style command duplicate classification supports replay and mismatch authority`() {
-        val mysqlDuplicate = SQLException("Duplicate entry 'abc' for key 'uq_waitlist_command_key'", "23000", 1062)
-        val wrappedDuplicate = SQLException("outer").also { it.initCause(mysqlDuplicate) }
-        val genericIntegrity = SQLException("Duplicate entry 'abc' for key 'other_unique_key'", "23000", 1062)
+    fun `PostgreSQL command duplicate classification supports replay and mismatch authority`() {
+        val postgresDuplicate = SQLException(
+            "duplicate key value violates unique constraint \"uq_waitlist_command_idempotency\"",
+            "23505",
+        )
+        val wrappedDuplicate = SQLException("outer").also { it.initCause(postgresDuplicate) }
+        val genericIntegrity = SQLException(
+            "duplicate key value violates unique constraint \"other_unique_key\"",
+            "23505",
+        )
 
         WaitlistCommandDuplicateClassifier.isCommandReservationDuplicate(wrappedDuplicate).shouldBeEqualTo(true)
         WaitlistCommandDuplicateClassifier.isCommandReservationDuplicate(genericIntegrity).shouldBeEqualTo(false)
@@ -207,7 +213,7 @@ class WaitlistCommandReservationTest {
 
     private fun withCommandTables(block: org.jetbrains.exposed.v1.jdbc.JdbcTransaction.() -> Unit) {
         withTables(
-            TestDB.H2,
+            TestDB.POSTGRESQL,
             Clinics,
             WaitlistCommandRecords,
         ) {

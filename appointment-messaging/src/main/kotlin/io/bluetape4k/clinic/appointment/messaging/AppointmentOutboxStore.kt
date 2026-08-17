@@ -19,11 +19,7 @@ import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.core.notExists
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.stringLiteral
-import org.jetbrains.exposed.v1.core.vendors.MariaDBDialect
-import org.jetbrains.exposed.v1.core.vendors.MysqlDialect
-import org.jetbrains.exposed.v1.core.vendors.PostgreSQLDialect
 import org.jetbrains.exposed.v1.core.vendors.ForUpdateOption
-import org.jetbrains.exposed.v1.core.vendors.currentDialect
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -170,7 +166,10 @@ class JdbcAppointmentOutboxStore(
                         )
                 }
                 .orderBy(SchedulingOutboxEvents.createdAt to SortOrder.ASC, SchedulingOutboxEvents.id to SortOrder.ASC)
-                .limit(minOf(MAX_CANDIDATE_PAGE_SIZE, limit * maxClinicBatch * CLINIC_PAGE_MULTIPLIER))
+                // PostgreSQL의 row lock은 LIMIT에 포함된 모든 행에 잡힙니다. 요청량보다 큰
+                // 페이지를 잠그면 한 relay가 후속 행까지 독점해 다른 relay의 claim을
+                // 굶기므로, 한 transaction이 잠그는 후보 수를 실제 요청량으로 제한합니다.
+                .limit(minOf(MAX_CANDIDATE_PAGE_SIZE, limit))
                 .forUpdate(readyClaimLockOption())
                 .toList()
 
@@ -240,7 +239,7 @@ class JdbcAppointmentOutboxStore(
 
             // claim은 하나의 제한된 conditional UPDATE입니다. CASE expression으로 random fencing
             // token과 행별 attempt 증가를 유지하며 N번의 row-level update로 되돌아가지 않습니다.
-            // H2도 같은 bounded IN CAS를 사용하지만 dialect가 지원하지 않으므로 SKIP LOCKED만 생략합니다.
+            // claim update는 bounded IN CAS로 유지하며, 후보 조회에서 PostgreSQL SKIP LOCKED를 사용합니다.
             val candidateIds = candidatesToClaim.map { it.id }
             val candidateAttemptPredicate = candidatesToClaim
                 .map { candidate ->
@@ -411,13 +410,9 @@ class JdbcAppointmentOutboxStore(
             ((SchedulingOutboxEvents.nextAttemptAt.isNull()) or
                 (SchedulingOutboxEvents.nextAttemptAt lessEq now))
 
-    /** PostgreSQL/MySQL에서는 다른 relay가 잠근 행을 기다리지 않고 다음 후보로 진행한다. */
-    private fun readyClaimLockOption(): ForUpdateOption = when (currentDialect) {
-        is PostgreSQLDialect -> ForUpdateOption.PostgreSQL.ForUpdate(ForUpdateOption.PostgreSQL.MODE.SKIP_LOCKED)
-        is MysqlDialect -> ForUpdateOption.MySQL.ForUpdate(ForUpdateOption.MySQL.MODE.SKIP_LOCKED)
-        is MariaDBDialect -> ForUpdateOption.ForUpdate
-        else -> ForUpdateOption.ForUpdate
-    }
+    /** 다른 relay가 잠근 행을 기다리지 않고 다음 후보로 진행하는 PostgreSQL lock입니다. */
+    private fun readyClaimLockOption(): ForUpdateOption =
+        ForUpdateOption.PostgreSQL.ForUpdate(ForUpdateOption.PostgreSQL.MODE.SKIP_LOCKED)
 
     private fun markInvalidRows(rows: List<InvalidRow>, now: Instant) {
         if (rows.isEmpty()) return
@@ -468,7 +463,6 @@ class JdbcAppointmentOutboxStore(
         )
         private const val MAX_CLAIM_SIZE = 32
         private const val MAX_CANDIDATE_PAGE_SIZE = 128
-        private const val CLINIC_PAGE_MULTIPLIER = 4
         private const val METRICS_PARTITION_SAMPLE_SIZE = 1_000
         private val FAILURE_CODE_PATTERN = Regex("^[A-Z][A-Z0-9_]{0,63}$")
     }
