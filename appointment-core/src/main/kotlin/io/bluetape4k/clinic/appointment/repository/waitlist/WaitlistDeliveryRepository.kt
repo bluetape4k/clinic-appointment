@@ -158,6 +158,14 @@ class WaitlistDeliveryRepository(
             ?.toVacancyJobRecord()
     }
 
+    /**
+     * 현재 Exposed transaction에서 vacancy lease를 한 번만 시도합니다.
+     *
+     * contention 재시도는 이 메서드가 소유한 transaction 안에서 수행하지 않습니다.
+     * 호출자는 [withContentionRetry]를 transaction 경계 밖에서 호출하고, callback마다
+     * claim부터 후속 delivery/terminal write까지를 fresh top-level transaction으로 감싸야
+     * aborted transaction 재사용을 피할 수 있습니다.
+     */
     fun claim(
         jobId: Long,
         owner: String,
@@ -171,27 +179,25 @@ class WaitlistDeliveryRepository(
         }
         require(leaseUntil > now) { "leaseUntil must be later than now" }
 
-        return withContentionRetry {
-            val strategy = resolvedClaimStrategy()
-            val lockTimeoutPlan = strategy.lockTimeoutPlan
-            var appliedLockTimeoutStatements = 0
-            try {
-                lockTimeoutPlan?.beforeClaimSql?.forEach { sql ->
+        val strategy = resolvedClaimStrategy()
+        val lockTimeoutPlan = strategy.lockTimeoutPlan
+        var appliedLockTimeoutStatements = 0
+        try {
+            lockTimeoutPlan?.beforeClaimSql?.forEach { sql ->
+                TransactionManager.current().exec(sql)
+                appliedLockTimeoutStatements += 1
+            }
+            return claimWithStrategy(
+                strategy = strategy,
+                jobId = validJobId,
+                owner = validOwner,
+                now = now,
+                leaseUntil = leaseUntil,
+            )
+        } finally {
+            if (appliedLockTimeoutStatements > 0) {
+                lockTimeoutPlan?.afterClaimSql?.forEach { sql ->
                     TransactionManager.current().exec(sql)
-                    appliedLockTimeoutStatements += 1
-                }
-                claimWithStrategy(
-                    strategy = strategy,
-                    jobId = validJobId,
-                    owner = validOwner,
-                    now = now,
-                    leaseUntil = leaseUntil,
-                )
-            } finally {
-                if (appliedLockTimeoutStatements > 0) {
-                    lockTimeoutPlan?.afterClaimSql?.forEach { sql ->
-                        TransactionManager.current().exec(sql)
-                    }
                 }
             }
         }
@@ -479,13 +485,18 @@ class WaitlistDeliveryRepository(
                 (WaitlistCommandRecords.expiresAt lessEq now)
         }
 
+    /**
+     * transaction 경계 밖에서 호출하는 contention coordinator입니다.
+     * callback은 매 attempt마다 fresh top-level transaction을 열어야 합니다.
+     */
     fun <T> withContentionRetry(block: () -> T): T {
         var attempt = 1
+        val strategy = resolvedClaimStrategy()
         while (true) {
             try {
                 return block()
             } catch (failure: ExposedSQLException) {
-                if (!failure.isRetryableContention()) {
+                if (!failure.isRetryableContention(strategy)) {
                     throw failure
                 }
                 if (attempt >= retryPolicy.maxAttempts) {
@@ -494,7 +505,7 @@ class WaitlistDeliveryRepository(
                 sleepBeforeRetry(attempt)
                 attempt += 1
             } catch (failure: SQLException) {
-                if (!failure.isRetryableContention()) {
+                if (!failure.isRetryableContention(strategy)) {
                     throw failure
                 }
                 if (attempt >= retryPolicy.maxAttempts) {
@@ -637,11 +648,21 @@ class WaitlistDeliveryRepository(
     private fun resolvedClaimStrategy(): VacancyClaimStrategy =
         claimStrategy ?: VacancyClaimStrategies.current()
 
-    private fun SQLException.isRetryableContention(): Boolean =
-        sqlState in RETRYABLE_SQL_STATES
+    private fun SQLException.isRetryableContention(strategy: VacancyClaimStrategy): Boolean =
+        sqlState in RETRYABLE_SQL_STATES ||
+            isPostgreSqlLockTimeout(strategy)
 
-    private fun ExposedSQLException.isRetryableContention(): Boolean =
-        sqlState in RETRYABLE_SQL_STATES
+    private fun ExposedSQLException.isRetryableContention(strategy: VacancyClaimStrategy): Boolean =
+        sqlState in RETRYABLE_SQL_STATES ||
+            isPostgreSqlLockTimeout(strategy)
+
+    private fun SQLException.isPostgreSqlLockTimeout(strategy: VacancyClaimStrategy): Boolean =
+        sqlState == POSTGRESQL_LOCK_NOT_AVAILABLE_SQL_STATE &&
+            strategy.dialect == VacancyClaimDialect.POSTGRESQL
+
+    private fun ExposedSQLException.isPostgreSqlLockTimeout(strategy: VacancyClaimStrategy): Boolean =
+        sqlState == POSTGRESQL_LOCK_NOT_AVAILABLE_SQL_STATE &&
+            strategy.dialect == VacancyClaimDialect.POSTGRESQL
 
     private companion object {
         private const val MAX_OWNER_LENGTH = 160
@@ -658,6 +679,7 @@ class WaitlistDeliveryRepository(
         private val STABLE_ERROR_CODE_REGEX = Regex("[A-Z0-9_]{1,96}")
         private val COMMAND_RESULT_TYPE_REGEX = Regex("[A-Z0-9_]{1,64}")
         private val RETRYABLE_SQL_STATES = setOf("40001", "40P01")
+        private const val POSTGRESQL_LOCK_NOT_AVAILABLE_SQL_STATE = "55P03"
     }
 }
 
