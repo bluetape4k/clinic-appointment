@@ -39,9 +39,9 @@
 
 ## Common Gates
 
-- [ ] **CL-01 — mutation 전 checklist 생성**
+- [x] **CL-01 — mutation 전 checklist 생성**
   - **Action:** router/common/leaf rows를 mutation 전에 인스턴스화한다.
-  - **Evidence:** 이 파일의 executable IDs와 applicability.
+  - **Evidence:** 설계·계획·리뷰 artifact와 code mutation 전에 이 checklist가 `122785677ac9a1e554b066539618b83ae647ffef`에 생성·추적되었고 executable IDs와 applicability를 포함한다.
   - **Failure:** checklist를 먼저 만들지 않았다면 STOP하고 복구한다.
 - [ ] **CL-02 — 모든 row 분류**
   - **Action:** required, conditional, N/A를 각 row에 결정한다.
@@ -88,7 +88,7 @@
   - **Failure:** material change는 spec 재승인을 받는다.
 - [ ] **A-04 — 구현 plan 승인·검토**
   - **Action:** spec-to-file/test/command traceability가 있는 plan을 작성·검토한다.
-  - **Evidence:** plan path, SPW-01..05, six-lens plan review P0=0/P1=0, user approval.
+  - **Evidence:** plan path와 `docs/superpowers/reviews/2026-08-17-issue-333-waitlist-transaction-retry-plan-review.ko.md`의 six-lens P0=0/P1=0 검토는 완료했으며, 현재 thread의 별도 계획 승인만 대기 중이다.
   - **Failure:** ordering·proof·rollback gap을 수리한다.
 - [ ] **A-05 — concurrency/DB risk 예측**
   - **Action:** lock timeout, aborted transaction, retry lifecycle, container stability 위험을 기록한다.

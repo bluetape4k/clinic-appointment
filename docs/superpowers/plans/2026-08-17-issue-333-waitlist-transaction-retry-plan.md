@@ -20,6 +20,7 @@
 | PostgreSQL regression | `appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/waitlist/WaitlistDeliveryPostgreSqlContentionTest.kt` | 실제 lock timeout abort/fresh retry와 serializable `40001` fresh retry |
 | design | `docs/superpowers/specs/2026-08-17-issue-333-waitlist-transaction-retry-design.md` | 선택 경계와 수용 기준 |
 | plan | `docs/superpowers/plans/2026-08-17-issue-333-waitlist-transaction-retry-plan.md` | 실행 순서와 검증 명령 |
+| plan review | `docs/superpowers/reviews/2026-08-17-issue-333-waitlist-transaction-retry-plan-review.ko.md` | six-lens 및 통합 계획 검토 |
 | lesson | `docs/lessons/2026-08-17-issue-333-waitlist-transaction-retry.md` | 재사용 가능한 transaction/retry 교훈 |
 
 ## Spec-to-plan traceability
@@ -50,11 +51,13 @@
 
   ```bash
   ./gradlew :appointment-core:test \
-    --tests "io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryRepositoryTest.postgreSQL lock timeout retries only for the PostgreSQL strategy" \
+    --tests "io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryRepositoryTest" \
     --no-build-cache
   ```
 
-  Expected: FAIL because current `isRetryableContention` recognizes only `40001`, `40P01`, and MySQL error code `1205`.
+  Expected: FAIL in the new `55P03` regression because current `isRetryableContention` recognizes only
+  `40001`, `40P01`, and MySQL error code `1205`. The class filter avoids relying on Kotlin backtick
+  method names containing spaces.
 
 - [ ] **Step 3: Commit the RED test.**
 
@@ -93,7 +96,7 @@
 
   ```bash
   ./gradlew :appointment-core:test \
-    --tests "io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryPostgreSqlContentionTest.PostgreSQL lock timeout aborts one attempt then retries in a fresh transaction" \
+    --tests "io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryPostgreSqlContentionTest" \
     -PuseDB=POSTGRESQL --no-build-cache --no-daemon
   ```
 
@@ -125,7 +128,7 @@
 
   ```bash
   ./gradlew :appointment-core:test \
-    --tests "io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryPostgreSqlContentionTest.PostgreSQL serializable contention retries in a fresh transaction" \
+    --tests "io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryPostgreSqlContentionTest" \
     -PuseDB=POSTGRESQL --no-build-cache --no-daemon
   ```
 
@@ -242,7 +245,9 @@
 
   Review performance, stability, security, operator/Ops, developer/API, and user/caller concerns
   against this plan and final diff. No native subagent lanes are spawned under the current session
-  policy; each lens is recorded independently in the integrated review table. P0/P1 must be zero.
+  policy; each lens is recorded independently in
+  `docs/superpowers/reviews/2026-08-17-issue-333-waitlist-transaction-retry-plan-review.ko.md`
+  and the final implementation review. P0/P1 must be zero.
 
 - [ ] **Step 3: Commit converged branch.**
 
