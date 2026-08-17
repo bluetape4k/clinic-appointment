@@ -26,9 +26,13 @@ import java.time.Instant
 /**
  * durable vacancy claim 하나를 offer/hold/notification/job terminal 결과로 수렴시킵니다.
  *
- * 이 서비스는 transaction을 열지 않습니다. 호출자는 claim부터 notification enqueue와
+ * 이 서비스는 transaction을 열지 않습니다. 일반 호출자는 claim부터 notification enqueue와
  * terminal fence까지를 하나의 Exposed transaction으로 감싸야 하며, enqueue 실패를 바깥으로
- * 전파해 offer/hold와 processing job이 함께 rollback되도록 해야 합니다.
+ * 전파해 offer/hold와 processing job이 함께 rollback되도록 해야 합니다. contention 재시도가
+ * 필요한 호출자는 [WaitlistDeliveryRepository.withContentionRetry]를 transaction 경계 밖에서
+ * 호출하고, callback마다 fresh top-level transaction 안에서 claim과 이 [process] 호출 전체를
+ * 다시 실행해야 합니다. 그래야 PostgreSQL `55P03` 또는 serializable `40001`로 abort된
+ * transaction을 다음 attempt가 재사용하지 않습니다.
  */
 class WaitlistDeliveryService(
     private val deliveryRepository: WaitlistDeliveryRepository,
