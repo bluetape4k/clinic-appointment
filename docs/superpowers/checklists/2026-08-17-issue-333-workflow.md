@@ -1,0 +1,275 @@
+# Issue #333 Type-A Workflow Checklist
+
+상태 기준: `[ ]` 미증명, `[x]` 최신 증거로 PASS, `N/A`는 범위 근거를 함께 기록합니다.
+
+## Router
+
+- [x] **WF-00 — AGENTS.md 계층 읽기**
+  - **Action:** 사용자·workspace·repository 기준 정보를 순서대로 읽는다.
+  - **Evidence:** `/Users/debop/.codex/AGENTS.md`, `/Users/debop/work/bluetape4k/.github/docs/workspace/AGENTS.md`, `/Users/debop/work/bluetape4k/clinic-appointment/AGENTS.md`를 읽고 repo-local Korean/Testcontainers 정책을 적용했다.
+  - **Failure:** 누락된 기준 정보가 있으면 분류와 변경을 중지한다.
+- [x] **WF-01 — 작업 유형 분류**
+  - **Action:** Issue #333과 현재 repository evidence를 기준으로 작업 유형을 확정한다.
+  - **Evidence:** Type-A; repository/service transaction contract와 PostgreSQL contention 회귀 테스트가 함께 바뀌는 다층 변경이다.
+  - **Failure:** 유형이 모호하면 실행 lane을 시작하지 않는다.
+- [x] **WF-02 — 첫 실행 계획 작성**
+  - **Action:** 파일·명령·Expected DoD가 있는 ordered plan을 사용자에게 제시한다.
+  - **Evidence:** 사용자에게 `develop` base와 `fix/issue-333-waitlist-transaction-retry` head를 포함한 계획을 제시했다.
+  - **Failure:** 계획 승인 전에는 mutation하지 않는다.
+- [x] **WF-03 — 첫 계획 승인**
+  - **Action:** 사용자의 명시 승인을 기록한다.
+  - **Evidence:** 현재 thread의 `승인` 응답.
+  - **Failure:** 승인 전 durable artifact와 code mutation을 중지한다.
+- [x] **WF-04 — 실행 계약 로드**
+  - **Action:** Type-A leaf, common gates, Kotlin/Testcontainers/TDD/writer 계약을 읽는다.
+  - **Evidence:** `bluetape-full-feature`, `common-gates.md`, `bluetape-kotlin-patterns`, `testing.md`, `checklist.md`, `bluetape-writer`, `brainstorming`, `writing-plans`, `test-driven-development`를 읽었다.
+  - **Failure:** 필요한 계약이 없거나 unreadable이면 변경을 중지한다.
+- [x] **WF-04A — machine-readable run 초기화**
+  - **Action:** `bluetape-flow.py`로 현재 session에 바인딩된 run을 초기화한다.
+  - **Evidence:** run id, manifest hash, state root, component와 owner receipt.
+  - **Failure:** helper가 없으면 문서 checklist 경로로 남기고 runtime surface gap을 보고한다.
+- [ ] **WF-05 — 의존 순서 게이트 실행**
+  - **Action:** checklist physical order대로 증거를 수집하고 각 dependent gate를 순차 실행한다.
+  - **Evidence:** 각 row의 최신 command/file/URL/result.
+  - **Failure:** 실패·PENDING row의 dependent gate를 실행하지 않는다.
+- [ ] **WF-06 — 누락·약한 gate 복구**
+  - **Action:** 누락된 증거를 재구성하고 affected proof를 재실행한다.
+  - **Evidence:** repair row와 fresh rerun result.
+  - **Failure:** 안전한 복구가 없으면 BLOCKED로 남긴다.
+
+## Common Gates
+
+- [ ] **CL-01 — mutation 전 checklist 생성**
+  - **Action:** router/common/leaf rows를 mutation 전에 인스턴스화한다.
+  - **Evidence:** 이 파일의 executable IDs와 applicability.
+  - **Failure:** checklist를 먼저 만들지 않았다면 STOP하고 복구한다.
+- [ ] **CL-02 — 모든 row 분류**
+  - **Action:** required, conditional, N/A를 각 row에 결정한다.
+  - **Evidence:** `N/A`에는 이슈 범위와 source path 근거를 기록한다.
+  - **Failure:** 미분류 row는 required unchecked로 취급한다.
+- [ ] **CL-03 — 의존 순서 준수**
+  - **Action:** 선행 증거가 PASS한 뒤에만 dependent row를 실행한다.
+  - **Evidence:** receipt/event 순서와 checklist evidence.
+  - **Failure:** 순서가 어긋나면 affected downstream proof를 재실행한다.
+- [ ] **CL-04 — 증거 즉시 기록**
+  - **Action:** gate를 확인하는 즉시 command/file/URL/result를 기록한다.
+  - **Evidence:** row별 fresh evidence.
+  - **Failure:** 뒤늦게 재구성하지 않고 unchecked로 둔다.
+- [ ] **CL-05 — fail closed**
+  - **Action:** PENDING/FAIL row의 dependent branch를 중지한다.
+  - **Evidence:** pending reason 또는 failure와 중지 상태.
+  - **Failure:** dependent 작업을 실행했다면 affected proof를 재검증한다.
+- [ ] **CL-06 — skip/reorder 복구**
+  - **Action:** 누락 row를 복구하고 이후 증거를 새로 수집한다.
+  - **Evidence:** repair result와 refreshed downstream result.
+  - **Failure:** 최종 상태를 BLOCKED로 유지한다.
+- [ ] **CL-07 — irreversible hold refresh**
+  - **Action:** PR 생성·merge 직전에 authority와 target을 다시 읽는다.
+  - **Evidence:** 최신 repo/base/head/authority와 live read-back.
+  - **Failure:** hold가 stale이면 side effect를 실행하지 않는다.
+- [ ] **CL-08 — 완료 count 산출**
+  - **Action:** required checks count와 unchecked IDs를 계산한다.
+  - **Evidence:** `Required checks: X/Y; N/A: N; Blocked: N`.
+  - **Failure:** count가 맞지 않으면 완료를 주장하지 않는다.
+
+## Type-A Steps
+
+- [ ] **A-01 — 요구사항과 branch 격리 확인**
+  - **Action:** 승인된 Issue #333, base, head, 변경 범위와 기존 dirty state를 확인한다.
+  - **Evidence:** branch `fix/issue-333-waitlist-transaction-retry`, base `develop`, unrelated `.superpowers/`·`.workflow-inputs/` 보존.
+  - **Failure:** integration branch에서 일반 구현을 진행하지 않는다.
+- [ ] **A-02 — 현재 evidence 기반 설계 조사**
+  - **Action:** repository/service/test/helper/history와 Exposed transaction semantics를 조사한다.
+  - **Evidence:** `WaitlistDeliveryRepository.claim`, `withContentionRetry`, `WaitlistDeliveryService.process`, `TestDB.POSTGRESQL`, `Containers.Postgres`, Exposed `inTopLevelTransaction` source.
+  - **Failure:** recall만으로 설계하지 않는다.
+- [ ] **A-03 — 설계 spec 승인·검토**
+  - **Action:** 승인된 접근과 대안·failure mode·acceptance를 spec에 기록하고 review한다.
+  - **Evidence:** spec path, SPW-01..05, design review P0=0/P1=0, user review approval.
+  - **Failure:** material change는 spec 재승인을 받는다.
+- [ ] **A-04 — 구현 plan 승인·검토**
+  - **Action:** spec-to-file/test/command traceability가 있는 plan을 작성·검토한다.
+  - **Evidence:** plan path, SPW-01..05, six-lens plan review P0=0/P1=0, user approval.
+  - **Failure:** ordering·proof·rollback gap을 수리한다.
+- [ ] **A-05 — concurrency/DB risk 예측**
+  - **Action:** lock timeout, aborted transaction, retry lifecycle, container stability 위험을 기록한다.
+  - **Evidence:** risk table에 signal·mitigation·rerun/rollback point.
+  - **Failure:** generic skip을 사용하지 않는다.
+- [ ] **A-06 — TDD 구현**
+  - **Action:** RED→GREEN→REFACTOR 순서로 PostgreSQL lock timeout/serialization 회귀와 최소 production fix를 구현한다.
+  - **Evidence:** 수정 전 RED output, 수정 후 GREEN output, scoped diff.
+  - **Failure:** failing behavior로 되돌아가며 stale proof를 사용하지 않는다.
+- [ ] **A-07 — spec/plan/hazard 검증**
+  - **Action:** targeted·PostgreSQL·module validation과 acceptance traceability를 완료한다.
+  - **Evidence:** fresh Gradle outputs, verifier PASS, Testcontainers sequential evidence.
+  - **Failure:** gap을 구현 또는 artifact로 되돌린다.
+- [ ] **A-08 — pre-PR review 수렴**
+  - **Action:** six-lens code review와 integration review를 수행하고 P0/P1을 제거한다.
+  - **Evidence:** review table, SPW-01..05, `git diff --check`, P0=0/P1=0.
+  - **Failure:** PR 생성을 중지하고 blocker를 수리한다.
+- [ ] **A-09 — lesson gate**
+  - **Action:** 재사용 가능한 transaction/retry 교훈을 Korean lesson으로 기록하거나 evidence-backed N/A를 남긴다.
+  - **Evidence:** tracked lesson commit 또는 네 가지 absence category를 포함한 N/A.
+  - **Failure:** untracked lesson은 통과하지 못한다.
+- [ ] **A-10 — PR delivery**
+  - **Action:** authorized head를 push하고 live PR/metadata/body/CI를 검증한다.
+  - **Evidence:** CG-11..14, PR URL/head SHA/labels/milestone/CI.
+  - **Failure:** stale/missing PR evidence는 PENDING/FAIL로 둔다.
+- [ ] **A-11 — merge-ready report**
+  - **Action:** 최신 head와 CI/review/lesson evidence를 사용자에게 보고한다.
+  - **Evidence:** CG-15 count와 unchecked CG-16..18.
+  - **Failure:** merge approval을 요청하기 전 누락을 수리한다.
+- [ ] **A-12 — fresh merge approval 후 closeout**
+  - **Action:** 정확한 PR/head에 대한 새 merge 승인을 받은 뒤 rebase merge, sync, cleanup을 수행한다.
+  - **Evidence:** CG-16..18 merge SHA, local/upstream parity, preserved/removed state.
+  - **Failure:** approval 전 merge하지 않는다.
+
+## Kotlin / Testcontainers
+
+- [ ] **KT-01 — triggered guidance**
+  - **Action:** Kotlin, Exposed, testing, Testcontainers, concurrency references를 적용한다.
+  - **Evidence:** touched files와 reference mapping.
+  - **Failure:** unclassified trigger는 구현을 막는다.
+- [ ] **KT-02 — impact/reuse 확인**
+  - **Action:** callers, tests, helper, public KDoc와 기존 retry idiom을 확인한다.
+  - **Evidence:** symbol impact와 raw fallback rationale.
+  - **Failure:** memory 기반 구현을 중지한다.
+- [ ] **KT-03 — Kotlin/Exposed 계약**
+  - **Action:** validation, exception, transaction receiver, lock lifecycle, logging, public KDoc를 점검한다.
+  - **Evidence:** file/line findings와 P0/P1/P2/P3 disposition.
+  - **Failure:** P0/P1은 progression을 막는다.
+- [ ] **KT-04 — Kotlin validation**
+  - **Action:** diagnostics, compile, targeted tests, Testcontainers, diff check를 실행한다.
+  - **Evidence:** fresh commands/results.
+  - **Failure:** stale/partial evidence로 PASS하지 않는다.
+- [ ] **KT-05 — final checklist**
+  - **Action:** `references/checklist.md`와 triggered test checklist를 모두 완료한다.
+  - **Evidence:** counts, N/A 근거, P0=0/P1=0.
+  - **Failure:** unchecked row와 repair action을 보고한다.
+- [ ] **KT-TEST-01 — project test idiom**
+  - **Action:** JUnit 5와 bluetape4k assertions를 사용한다.
+  - **Evidence:** touched test assertion review.
+  - **Failure:** generic assertion을 교체한다.
+- [ ] **KT-TEST-02 — concurrency proof**
+  - **Action:** bounded executor/latch와 실제 DB transaction lifecycle로 contention을 증명한다.
+  - **Evidence:** helper fit rationale와 race/cleanup proof.
+  - **Failure:** fake concurrency proof를 차단한다.
+- [ ] **KT-TEST-03 — singleton fixture**
+  - **Action:** `PostgreSQLServer.Launcher.postgres`와 `TestDB.POSTGRESQL`을 사용하고 container test를 순차 실행한다.
+  - **Evidence:** fixture path, command order, fresh result.
+  - **Failure:** raw duplicate container를 추가하지 않는다.
+- [ ] **KT-TEST-04 — HTTP lifecycle**
+  - **Action:** HTTP/HC5 surface trigger 여부를 판정한다.
+  - **Evidence:** 이번 변경은 HTTP/HC5를 건드리지 않아 `N/A`로 기록한다.
+  - **Failure:** 해당 surface를 추가하면 lifecycle matrix를 다시 연다.
+- [ ] **KT-TEST-05 — targeted→module validation**
+  - **Action:** smallest test, affected compile/test, full module test 순서로 실행한다.
+  - **Evidence:** expected/actual result와 no-build-cache output.
+  - **Failure:** stale cache output을 인정하지 않는다.
+
+## Superpowers Writer
+
+- [ ] **SPW-01 — audience/purpose/evidence 고정**
+  - **Action:** Korean spec/plan/review/lesson의 source ledger와 unsupported claim을 기록한다.
+  - **Evidence:** artifact path, audience, exact identifiers, unknowns.
+  - **Failure:** source 없는 claim을 제거·한정한다.
+- [ ] **SPW-02 — artifact contract**
+  - **Action:** spec·plan·review·lesson에 요구된 구조를 채운다.
+  - **Evidence:** 각 artifact section과 acceptance/DoD mapping.
+  - **Failure:** incomplete artifact를 승인·구현에 사용하지 않는다.
+- [ ] **SPW-03 — Korean technical register**
+  - **Action:** naturalness checklist로 번역투·용어 drift·과장 표현을 제거한다.
+  - **Evidence:** KO-01..06 review.
+  - **Failure:** 의미 변경 prose를 되돌린다.
+- [ ] **SPW-04 — technical traceability**
+  - **Action:** artifact의 identifier·command·number·decision을 current source와 대조한다.
+  - **Evidence:** source-to-claim/spec-to-plan mapping.
+  - **Failure:** drift가 있으면 dependent artifact를 다시 연다.
+- [ ] **SPW-05 — read-back**
+  - **Action:** rendered Markdown과 최종 transcript를 읽고 writer DoD를 기록한다.
+  - **Evidence:** final path, checklist count, remaining gaps.
+  - **Failure:** writer gate를 unchecked로 유지한다.
+
+## Common Gates CG-01..CG-18
+
+- [ ] **CG-01 — authority reread**
+  - **Action:** mutation 전 current guidance/status/diff/approved plan을 다시 읽는다.
+  - **Evidence:** paths, status, exact authority.
+  - **Failure:** editing을 중지한다.
+- [ ] **CG-02 — historical/current evidence**
+  - **Action:** GNO fallback와 live GitHub/direct repository evidence를 기록한다.
+  - **Evidence:** query attempts, unavailable index, Issue #333 live metadata와 source anchors.
+  - **Failure:** history gap을 해결하기 전 설계하지 않는다.
+- [ ] **CG-03 — user work/boundary 보호**
+  - **Action:** feature branch에서만 변경하고 unrelated dirty files를 보존한다.
+  - **Evidence:** branch/base/status와 scoped paths.
+  - **Failure:** develop에 일반 구현을 하지 않는다.
+- [ ] **CG-04 — policy/audience**
+  - **Action:** Korean-only repository artifact와 Testcontainers/Exposed 정책을 준수한다.
+  - **Evidence:** AGENTS paths와 touched surfaces.
+  - **Failure:** 언어·정책 drift를 수리한다.
+- [ ] **CG-05 — ecosystem reuse**
+  - **Action:** existing retry, transaction, singleton launcher, assertion helper를 먼저 재사용한다.
+  - **Evidence:** reused anchors와 fallback rationale.
+  - **Failure:** 새 abstraction/dependency를 중지한다.
+- [ ] **CG-06 — public/docs contract**
+  - **Action:** 변경된 KDoc와 필요한 issue/PR/lesson artifact를 동기화한다.
+  - **Evidence:** source-to-doc mapping 또는 scoped N/A.
+  - **Failure:** undocumented behavior를 delivery하지 않는다.
+- [ ] **CG-07 — RED/GREEN targeted proof**
+  - **Action:** failing regression을 먼저 확인한 뒤 최소 수정과 targeted test를 검증한다.
+  - **Evidence:** RED/GREEN output.
+  - **Failure:** implementation을 되돌려 failing behavior부터 수리한다.
+- [ ] **CG-08 — heavyweight serialization**
+  - **Action:** PostgreSQL/Testcontainers와 full module checks를 순차 실행한다.
+  - **Evidence:** command order와 fresh result.
+  - **Failure:** 병렬/모호한 container evidence를 폐기하고 재실행한다.
+- [ ] **CG-09 — lesson gate**
+  - **Action:** reusable transaction/retry lesson 여부를 판정한다.
+  - **Evidence:** lesson path/index 또는 four-category N/A.
+  - **Failure:** lesson evidence 전 pre-PR을 닫지 않는다.
+- [ ] **CG-10 — final pre-PR proof**
+  - **Action:** leaf/common proof와 final scoped diff를 수렴한다.
+  - **Evidence:** P0=0/P1=0, diff check, local HEAD.
+  - **Failure:** PR 생성을 차단한다.
+- [ ] **CG-11 — PR authority**
+  - **Action:** 승인 계획의 repo/base/head와 prerequisites를 재확인한다.
+  - **Evidence:** exact authority와 CG-01..10 PASS.
+  - **Failure:** PR 생성을 중지한다.
+- [ ] **CG-12 — exact head push**
+  - **Action:** authorized head를 force 없이 push하고 SHA를 read-back한다.
+  - **Evidence:** local/remote SHA equality.
+  - **Failure:** stale/rejected push를 수리한다.
+- [ ] **CG-12A — pre-PR guidance refresh**
+  - **Action:** PR 생성 직전에 AGENTS/leaf/common/template/issue metadata를 다시 읽는다.
+  - **Evidence:** current content hash/read timestamps와 no-drift result.
+  - **Failure:** drift를 수리하기 전 PR을 생성하지 않는다.
+- [ ] **CG-13 — PR create/verify**
+  - **Action:** Korean body를 작성하고 assignee/labels/milestone/body ending을 live verify한다.
+  - **Evidence:** PR URL/number/head SHA/final `## DoD Status`.
+  - **Failure:** live PR metadata를 수리한다.
+- [ ] **CG-14 — CI/human review**
+  - **Action:** exact head CI와 최신 reviews/threads를 확인한다.
+  - **Evidence:** required checks successful, no unresolved blocker, P0=0/P1=0.
+  - **Failure:** repair 후 affected proof를 재실행한다.
+- [ ] **CG-15 — merge-ready report**
+  - **Action:** current head와 count를 사용자에게 보고한다.
+  - **Evidence:** `Required checks: X/Y; N/A: N; Blocked: 0`, exact PR/head, unchecked CG-16..18.
+  - **Failure:** merge approval 전에 누락을 수리한다.
+- [ ] **CG-16 — fresh merge approval**
+  - **Action:** CG-15 이후 exact PR/head에 대한 새 승인을 받는다.
+  - **Evidence:** user approval timestamp/message와 refreshed target.
+  - **Failure:** approval 전 merge하지 않는다.
+- [ ] **CG-17 — rebase merge verify**
+  - **Action:** approved strategy로 merge하고 live merged state/SHA를 확인한다.
+  - **Evidence:** command, URL, strategy, merge SHA.
+  - **Failure:** merge failure를 진단하고 중지한다.
+- [ ] **CG-18 — local sync/cleanup**
+  - **Action:** develop을 upstream과 동기화하고 proven merged branch만 정리한다.
+  - **Evidence:** local/upstream SHAs와 preserved/removed state.
+  - **Failure:** 모호한 branch/worktree는 보존하고 PENDING으로 보고한다.
+
+## Scope N/A
+
+- **Production deployment/canary evidence:** N/A. 이 예제 issue의 acceptance 범위는 `PostgreSQLServer.Launcher.postgres` 기반 실제 PostgreSQL 시뮬레이션이며 production 운영 증거를 요구하지 않는다.
+- **HTTP/HC5 lifecycle matrix:** N/A. 변경 대상은 `appointment-core` waitlist repository/service와 DB tests이며 HTTP/HC5 adapter를 추가·수정하지 않는다.
+- **Module registration/dependency train:** N/A. 기존 `appointment-core` 모듈·catalog·dependencies를 유지하고 새 모듈/의존성을 추가하지 않는다.
