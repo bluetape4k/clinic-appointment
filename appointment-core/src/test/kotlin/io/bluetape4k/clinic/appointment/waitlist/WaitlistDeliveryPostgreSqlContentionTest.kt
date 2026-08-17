@@ -19,7 +19,9 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.inTopLevelTransaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.Test
+import java.sql.Connection
 import java.sql.SQLException
 import java.time.Duration
 import java.time.Instant
@@ -144,17 +146,152 @@ class WaitlistDeliveryPostgreSqlContentionTest {
         }
     }
 
+    @Test
+    fun `PostgreSQL serializable contention retries in a fresh transaction`() {
+        withTables(TestDB.POSTGRESQL, Clinics, WaitlistVacancyJobs) {
+            val database = TestDB.POSTGRESQL.db ?: error("PostgreSQL database is not connected")
+            val firstRead = CountDownLatch(1)
+            val conflictCommitted = CountDownLatch(1)
+            val callbackAttempts = AtomicInteger()
+            val transactionIdentities = CopyOnWriteArrayList<Int>()
+            val firstAttemptFailure = AtomicReference<Throwable?>()
+            val repository = WaitlistDeliveryRepository(
+                claimStrategy = VacancyClaimStrategies.forDialectName("PostgreSQL"),
+                retryPolicy = ContentionRetryPolicy(
+                    maxAttempts = 3,
+                    jitterDelay = { Duration.ZERO },
+                    sleeper = {},
+                ),
+            )
+            Clinics.insert {
+                it[id] = EntityID(CLINIC_ID, Clinics)
+                it[tenantGroupId] = EntityID(TENANT_GROUP_ID, TenantGroups)
+                it[name] = "PostgreSQL serializable clinic"
+                it[slotDurationMinutes] = 30
+                it[maxConcurrentPatients] = 1
+            }
+            val firstJob = insertFixture(
+                repository = repository,
+                vacancyKey = "postgres-serializable-a",
+                sourceAppointmentId = 101L,
+            )
+            val secondJob = insertFixture(
+                repository = repository,
+                vacancyKey = "postgres-serializable-b",
+                sourceAppointmentId = 102L,
+            )
+            commit()
+
+            val executor = Executors.newFixedThreadPool(2)
+            val conflictFuture = executor.submit<Throwable?> {
+                try {
+                    firstRead.await(10, TimeUnit.SECONDS).shouldBeTrue()
+                    inTopLevelTransaction(
+                        db = database,
+                        transactionIsolation = Connection.TRANSACTION_SERIALIZABLE,
+                    ) {
+                        maxAttempts = 1
+                        WaitlistVacancyJobs.selectAll().toList().size shouldBeEqualTo 2
+                        WaitlistVacancyJobs.update({ WaitlistVacancyJobs.id eq firstJob.id }) {
+                            it[WaitlistVacancyJobs.attempt] = 1
+                        }
+                    }
+                    conflictCommitted.countDown()
+                    null
+                } catch (failure: Throwable) {
+                    conflictCommitted.countDown()
+                    failure
+                }
+            }
+            val retryFuture = executor.submit<Throwable?> {
+                try {
+                    repository.withContentionRetry {
+                        val attempt = callbackAttempts.incrementAndGet()
+                        try {
+                            inTopLevelTransaction(
+                                db = database,
+                                transactionIsolation = Connection.TRANSACTION_SERIALIZABLE,
+                            ) {
+                                maxAttempts = 1
+                                transactionIdentities += System.identityHashCode(TransactionManager.current())
+                                WaitlistVacancyJobs.selectAll().toList().size shouldBeEqualTo 2
+                                if (attempt == 1) {
+                                    firstRead.countDown()
+                                    conflictCommitted.await(10, TimeUnit.SECONDS).shouldBeTrue()
+                                }
+                                requireNotNull(
+                                    repository.claim(
+                                        jobId = firstJob.id,
+                                        owner = OWNER,
+                                        now = NOW,
+                                        leaseUntil = NOW.plusSeconds(30),
+                                    ),
+                                )
+                                WaitlistVacancyJobs.update({ WaitlistVacancyJobs.id eq secondJob.id }) {
+                                    it[WaitlistVacancyJobs.attempt] = 1
+                                }
+                            }
+                        } catch (failure: Throwable) {
+                            firstAttemptFailure.compareAndSet(null, failure)
+                            throw failure
+                        }
+                    }
+                    null
+                } catch (failure: Throwable) {
+                    failure
+                }
+            }
+
+            try {
+                val retryFailure = retryFuture.get(15, TimeUnit.SECONDS)
+                if (retryFailure != null) {
+                    throw retryFailure
+                }
+                retryFailure shouldBeEqualTo null
+                conflictFuture.get(10, TimeUnit.SECONDS) shouldBeEqualTo null
+
+                firstAttemptFailure.get()?.sqlState() shouldBeEqualTo "40001"
+                callbackAttempts.get() shouldBeEqualTo 2
+                transactionIdentities.size shouldBeEqualTo 2
+                transactionIdentities.toSet().size shouldBeEqualTo 2
+
+                val claimed = requireNotNull(repository.findVacancy(firstJob.id))
+                claimed.status shouldBeEqualTo VacancyJobState.PROCESSING
+                claimed.leaseOwner shouldBeEqualTo OWNER
+                claimed.version shouldBeEqualTo 1L
+                inTopLevelTransaction(db = database) {
+                    WaitlistVacancyJobs
+                        .selectAll()
+                        .where { WaitlistVacancyJobs.id eq firstJob.id }
+                        .single()[WaitlistVacancyJobs.attempt] shouldBeEqualTo 1
+                    WaitlistVacancyJobs
+                        .selectAll()
+                        .where { WaitlistVacancyJobs.id eq secondJob.id }
+                        .single()[WaitlistVacancyJobs.attempt] shouldBeEqualTo 1
+                }
+            } finally {
+                conflictCommitted.countDown()
+                retryFuture.cancel(true)
+                conflictFuture.cancel(true)
+                executor.shutdownNow()
+                executor.awaitTermination(10, TimeUnit.SECONDS).shouldBeTrue()
+            }
+        }
+    }
+
     private fun org.jetbrains.exposed.v1.jdbc.JdbcTransaction.insertFixture(
         repository: WaitlistDeliveryRepository,
+        vacancyKey: String = "postgres-lock-timeout",
+        sourceAppointmentId: Long = 100L,
     ) = repository.insertVacancy(
         NewVacancyJob(
             tenantGroupId = TENANT_GROUP_ID,
             clinicId = CLINIC_ID,
-            vacancyKey = "postgres-lock-timeout",
+            vacancyKey = vacancyKey,
             vacancyGeneration = 1L,
-            activeVacancyKey = "postgres-lock-timeout",
-            sourceAppointmentId = 100L,
-            sourceTransitionId = "postgres-lock-timeout-transition",
+            activeVacancyKey = vacancyKey,
+            sourceAppointmentId = sourceAppointmentId,
+            sourceTransitionId = "$vacancyKey-transition",
             resourceType = ResourceType.PRACTITIONER,
             resourceId = "doctor-$DOCTOR_ID",
             capacityUnits = 1,
