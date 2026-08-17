@@ -291,7 +291,7 @@ jobs:
           path: '**/build/reports/kover/'
           retention-days: 7
 
-  # ── 6. API 모듈 테스트 (appointment-api, H2 / PostgreSQL / MySQL 병렬) ──────────
+  # ── 6. API 모듈 테스트 (appointment-api, PostgreSQL 단일) ─────────────────────
   test-api:
     name: Test / API (${{ matrix.db }})
     runs-on: ubuntu-latest
@@ -301,12 +301,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - db: H2
-            profiles: "test"
           - db: PostgreSQL
             profiles: "test,test-postgresql"
-          - db: MySQL
-            profiles: "test,test-mysql"
     steps:
       - uses: actions/checkout@v7
 
@@ -627,7 +623,7 @@ jobs:
           path: frontend/appointment-frontend/dist/
           retention-days: 3
 
-  # ── 10. Flyway 마이그레이션 검증 (H2 / PostgreSQL / MySQL) ─────────────────────
+  # ── 10. Flyway 마이그레이션 검증 (PostgreSQL 단일) ─────────────────────────────
   flyway-migration:
     name: Flyway Migration / ${{ matrix.db }}
     runs-on: ubuntu-latest
@@ -637,12 +633,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - db: H2
-            test-class: "io.bluetape4k.clinic.appointment.api.migration.FlywayMigrationTest"
           - db: PostgreSQL
             test-class: "io.bluetape4k.clinic.appointment.api.migration.FlywayPostgreSQLMigrationTest"
-          - db: MySQL
-            test-class: "io.bluetape4k.clinic.appointment.api.migration.FlywayMySQLMigrationTest"
     steps:
       - uses: actions/checkout@v7
 

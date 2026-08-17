@@ -149,6 +149,10 @@ parameter를 제거합니다.
 
 현재는 수동으로 PostgreSQL + Redis를 실행한 뒤 API를 기동합니다.
 
+공식 지원 데이터베이스는 PostgreSQL 하나입니다. API 실행, Flyway 마이그레이션,
+일반 CI와 nightly CI의 통합 검증은 PostgreSQL 기준으로 수행하며, H2와 MySQL은
+지원 데이터베이스 행렬에 포함하지 않습니다.
+
 ```bash
 # API 서버 기동 (PostgreSQL + Redis 필요)
 ./gradlew :appointment-api:bootRun

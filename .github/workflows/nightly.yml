@@ -166,7 +166,7 @@ jobs:
           path: '**/build/reports/kover/'
           retention-days: 7
 
-  # ── 4. API 테스트 (H2 / PostgreSQL / MySQL) ───────────────────────────────────
+  # ── 4. API 테스트 (PostgreSQL 단일) ───────────────────────────────────────────
   test-api:
     name: Test / API (${{ matrix.db }})
     runs-on: ubuntu-latest
@@ -175,12 +175,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - db: H2
-            profiles: "test"
           - db: PostgreSQL
             profiles: "test,test-postgresql"
-          - db: MySQL
-            profiles: "test,test-mysql"
     steps:
       - uses: actions/checkout@v7
 
