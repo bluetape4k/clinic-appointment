@@ -3,9 +3,9 @@
 ## 리뷰 범위와 기준
 
 승인된 Issue #333 설계·계획과 현재 feature branch diff를 대조했다. 대상은
-`WaitlistDeliveryRepository.claim`의 retry 경계, dialect별 SQLSTATE 분류,
-`WaitlistDeliveryService` 호출자 계약 KDoc, H2 단위 회귀, 실제 PostgreSQL
-contention 회귀다. 이 예제의 acceptance는 `PostgreSQLServer.Launcher.postgres`
+`WaitlistDeliveryRepository.claim`의 retry 경계, PostgreSQL strategy SQLSTATE 분류,
+`WaitlistDeliveryService` 호출자 계약 KDoc, PostgreSQL 단일 strategy 계약, 실제
+PostgreSQL contention 회귀다. 이 예제의 acceptance는 `PostgreSQLServer.Launcher.postgres`
 시뮬레이션이며 production 운영 증거는 범위 밖 N/A다.
 
 ## 요구사항 추적
@@ -17,7 +17,7 @@ contention 회귀다. 이 예제의 acceptance는 `PostgreSQLServer.Launcher.pos
 | PostgreSQL lock timeout | PostgreSQL strategy 전용 SQLSTATE `55P03` 판정 | 실제 blocker lock timeout test GREEN | PASS |
 | serializable retry | 기존 `40001` 분류 유지와 fresh callback | 실제 PostgreSQL `SERIALIZABLE` test GREEN | PASS |
 | delivery 원자성 | `WaitlistDeliveryService` KDoc와 기존 process 경계 유지 | outbox failure rollback test GREEN | PASS |
-| 호환성 | public signature·H2/MySQL 정책 유지 | repository 13개 계약 test와 full module test GREEN | PASS |
+| 호환성 | public signature·PostgreSQL 단일 strategy 정책 유지 | repository 13개 계약 test와 full module test GREEN | PASS |
 
 ## 여섯 관점 결과
 
@@ -34,7 +34,7 @@ contention 회귀다. 이 예제의 acceptance는 `PostgreSQLServer.Launcher.pos
 
 - `./gradlew :appointment-core:test --tests "...WaitlistDeliveryRepositoryTest" --tests "...WaitlistDeliveryPostgreSqlContentionTest" -PuseDB=POSTGRESQL --no-build-cache --no-daemon --console=plain` — **15/15 통과**
 - `./gradlew :appointment-core:test --tests "...WaitlistDeliveryServiceTest" --no-build-cache --no-daemon --console=plain` — **4/4 통과**
-- `./gradlew :appointment-core:test --no-build-cache --no-daemon --console=plain` — **705 tests 통과**
+- `./gradlew :appointment-core:test --no-build-cache --no-daemon --console=plain` — **552 tests 통과**
 - `git diff --check` — 통과
 
 ## 판정

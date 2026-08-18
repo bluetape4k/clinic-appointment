@@ -43,7 +43,7 @@
 
 - [x] **Step 1: Add the failing test.**
 
-  Add a test that constructs a repository with `VacancyClaimStrategies.forDialectName("PostgreSQL")`, throws `SQLException("lock timeout", "55P03")` on the first callback, and succeeds on the second callback. Assert two calls and one configured delay. Add a paired H2 assertion that the same SQLSTATE is not retried. Use `assertFailsWith`, `shouldBeEqualTo`, and the existing `ContentionRetryPolicy` fixture.
+  Add a test that constructs a repository with `VacancyClaimStrategies.forDialectName("PostgreSQL")`, throws `SQLException("lock timeout", "55P03")` on the first callback, and succeeds on the second callback. Assert two calls and one configured delay. Keep the explicit unsupported-dialect assertions aligned with the PostgreSQL-only strategy contract. Use `assertFailsWith`, `shouldBeEqualTo`, and the existing `ContentionRetryPolicy` fixture.
 
 - [x] **Step 2: Run the unit test and confirm RED.**
 
@@ -56,7 +56,7 @@
   ```
 
   Expected: FAIL in the new `55P03` regression because current `isRetryableContention` recognizes only
-  `40001`, `40P01`, and MySQL error code `1205`. The class filter avoids relying on Kotlin backtick
+  `40001` and `40P01`. The class filter avoids relying on Kotlin backtick
   method names containing spaces.
 
 - [x] **Step 3: Commit the RED test.**
@@ -150,7 +150,7 @@
 - [x] **Step 2: Extend PostgreSQL retry classification.**
 
   Add a strategy-gated `55P03` predicate for `VacancyClaimDialect.POSTGRESQL`. Preserve global
-  `40001`/`40P01`, MySQL `1205` plus its two-second timeout guard, non-retryable exception identity,
+  `40001`/`40P01`, non-retryable exception identity,
   `WaitlistContention` wrapping, and interrupt restoration.
 
 - [x] **Step 3: Clarify caller-owned retry KDoc.**
@@ -176,8 +176,7 @@
 - [x] **Step 1: Run existing rollback and retry contract tests.**
 
   Verify outbox failure still rolls back offer, hold, history, and vacancy completion; non-
-  retryable SQLSTATE, exhaustion, interruption, MySQL, and H2 tests preserve their existing
-  assertions.
+  retryable SQLSTATE, exhaustion, and interruption tests preserve their existing assertions.
 
 - [x] **Step 2: Inspect public compatibility.**
 
@@ -194,7 +193,7 @@
 
 ## Task 6: Proportional verification
 
-- [x] **Step 1: Run targeted H2/unit validation.**
+- [x] **Step 1: Run targeted repository/service validation.**
 
   ```bash
   ./gradlew :appointment-core:test \
@@ -289,5 +288,5 @@ Rejected: new transaction-owning public service API and raw Testcontainers | unn
 Confidence: high
 Scope-risk: moderate
 Directive: preserve caller-owned transaction semantics while making retry lifetime explicit in KDoc and PostgreSQL tests.
-Tested: unit and PostgreSQL RED, targeted GREEN (15 repository/contention tests and 4 service tests), and full `appointment-core` 705-test module validation are complete.
+Tested: unit and PostgreSQL RED, targeted GREEN (15 repository/contention tests and 4 service tests), and full `appointment-core` 552-test module validation are complete.
 Not-tested: remote PR CI, human review, merge, and local develop synchronization remain pending delivery gates.

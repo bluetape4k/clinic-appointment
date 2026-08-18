@@ -33,14 +33,14 @@ serializable 충돌 뒤 현재 transaction을 abort하므로, 다음 attempt가 
    `WaitlistDeliveryService.process`, notification enqueue, terminal fence까지를
    함께 실행한다. 그러면 delivery 원자성과 retry 경계가 동시에 유지된다.
 4. SQLSTATE `55P03`은 PostgreSQL strategy에서만 retryable로 분류한다. 기존
-   `40001`, `40P01`, MySQL error code `1205` 계약과 H2 비재시도 계약은 유지한다.
+   `40001`, `40P01` SQLSTATE와 non-retryable exception identity 계약은 유지한다.
 
 ## 검증 결과와 경계
 
 - repository와 실제 PostgreSQL contention targeted run: **15/15 통과**
 - `WaitlistDeliveryServiceTest`: **4/4 통과**; outbox 실패 rollback 계약 유지
 - `./gradlew :appointment-core:test --no-build-cache --no-daemon --console=plain`:
-  **705 tests 통과**
+  **552 tests 통과**
 - Colima running, Docker context `default`, Docker socket override와
   `PostgreSQLServer.Launcher.postgres` singleton을 확인한 뒤 PostgreSQL 테스트를
   순차 실행했다.

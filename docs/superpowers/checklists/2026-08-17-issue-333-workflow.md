@@ -30,7 +30,7 @@
   - **Failure:** helper가 없으면 문서 checklist 경로로 남기고 runtime surface gap을 보고한다.
 - [x] **WF-05 — 의존 순서 게이트 실행**
   - **Action:** checklist physical order대로 증거를 수집하고 각 dependent gate를 순차 실행한다.
-  - **Evidence:** RED unit → RED PostgreSQL contention → production fix → targeted GREEN → service rollback → 705-test module validation 순서로 실행했고 `.bluetape` check receipts를 갱신했다.
+  - **Evidence:** RED unit → RED PostgreSQL contention → production fix → targeted GREEN → service rollback → 552-test module validation 순서로 실행했고 `.bluetape` check receipts를 갱신했다.
   - **Failure:** 실패·PENDING row의 dependent gate를 실행하지 않는다.
 - [x] **WF-06 — 누락·약한 gate 복구**
   - **Action:** 누락된 증거를 재구성하고 affected proof를 재실행한다.
@@ -61,7 +61,7 @@
   - **Failure:** dependent 작업을 실행했다면 affected proof를 재검증한다.
 - [x] **CL-06 — skip/reorder 복구**
   - **Action:** 누락 row를 복구하고 이후 증거를 새로 수집한다.
-  - **Evidence:** FK fixture와 Kotlin column shadowing repair 후 PostgreSQL 2개 및 전체 705개 테스트를 재실행했다.
+  - **Evidence:** FK fixture와 Kotlin column shadowing repair 후 PostgreSQL 2개 및 전체 552개 테스트를 재실행했다.
   - **Failure:** 최종 상태를 BLOCKED로 유지한다.
 - [ ] **CL-07 — irreversible hold refresh**
   - **Action:** PR 생성·merge 직전에 authority와 target을 다시 읽는다.
@@ -100,7 +100,7 @@
   - **Failure:** failing behavior로 되돌아가며 stale proof를 사용하지 않는다.
 - [x] **A-07 — spec/plan/hazard 검증**
   - **Action:** targeted·PostgreSQL·module validation과 acceptance traceability를 완료한다.
-  - **Evidence:** service 4개, targeted 15개, `appointment-core` 705개 fresh Gradle 테스트와 sequential Testcontainers evidence를 확보했다.
+  - **Evidence:** service 4개, targeted 15개, `appointment-core` 552개 fresh Gradle 테스트와 sequential Testcontainers evidence를 확보했다.
   - **Failure:** gap을 구현 또는 artifact로 되돌린다.
 - [x] **A-08 — pre-PR review 수렴**
   - **Action:** six-lens code review와 integration review를 수행하고 P0/P1을 제거한다.
@@ -143,7 +143,7 @@
   - **Failure:** stale/partial evidence로 PASS하지 않는다.
 - [x] **KT-05 — final checklist**
   - **Action:** `references/checklist.md`와 triggered test checklist를 모두 완료한다.
-  - **Evidence:** required rows와 Scope N/A를 분류하고 705 tests, P0=0/P1=0을 기록했다.
+  - **Evidence:** required rows와 Scope N/A를 분류하고 552 tests, P0=0/P1=0을 기록했다.
   - **Failure:** unchecked row와 repair action을 보고한다.
 - [x] **KT-TEST-01 — project test idiom**
   - **Action:** JUnit 5와 bluetape4k assertions를 사용한다.
@@ -163,7 +163,7 @@
   - **Failure:** 해당 surface를 추가하면 lifecycle matrix를 다시 연다.
 - [x] **KT-TEST-05 — targeted→module validation**
   - **Action:** smallest test, affected compile/test, full module test 순서로 실행한다.
-  - **Evidence:** RED → targeted 15개 → service 4개 → full module 705개를 no-build-cache로 순차 실행했다.
+  - **Evidence:** RED → targeted 15개 → service 4개 → full module 552개를 no-build-cache로 순차 실행했다.
   - **Failure:** stale cache output을 인정하지 않는다.
 
 ## Superpowers Writer
@@ -221,7 +221,7 @@
   - **Failure:** implementation을 되돌려 failing behavior부터 수리한다.
 - [x] **CG-08 — heavyweight serialization**
   - **Action:** PostgreSQL/Testcontainers와 full module checks를 순차 실행한다.
-  - **Evidence:** PostgreSQL Testcontainers targeted를 먼저 순차 실행한 뒤 full module 705개를 실행했다.
+  - **Evidence:** PostgreSQL Testcontainers targeted를 먼저 순차 실행한 뒤 full module 552개를 실행했다.
   - **Failure:** 병렬/모호한 container evidence를 폐기하고 재실행한다.
 - [x] **CG-09 — lesson gate**
   - **Action:** reusable transaction/retry lesson 여부를 판정한다.
@@ -229,7 +229,7 @@
   - **Failure:** lesson evidence 전 pre-PR을 닫지 않는다.
 - [x] **CG-10 — final pre-PR proof**
   - **Action:** leaf/common proof와 final scoped diff를 수렴한다.
-  - **Evidence:** code review P0=0/P1=0, `git diff --check`, targeted 15/service 4/module 705 fresh PASS; PR delivery만 pending이다.
+  - **Evidence:** code review P0=0/P1=0, `git diff --check`, targeted 15/service 4/module 552 fresh PASS; PR delivery만 pending이다.
   - **Failure:** PR 생성을 차단한다.
 - [ ] **CG-11 — PR authority**
   - **Action:** 승인 계획의 repo/base/head와 prerequisites를 재확인한다.
