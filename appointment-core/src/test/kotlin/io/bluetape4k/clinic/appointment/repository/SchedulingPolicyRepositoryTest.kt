@@ -45,6 +45,9 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
     companion object {
         @JvmStatic
         fun enablePostgreSQL() = TestDB.ALL_POSTGRES
+
+        @JvmStatic
+        fun enableH2() = TestDB.ALL_H2
     }
 
     private val repository = SchedulingPolicyRepository()
@@ -126,6 +129,26 @@ class SchedulingPolicyRepositoryTest : AbstractExposedTest() {
                 repository.compareAndIncrementGeneration(clinicScope, expectedRevision = 0L)
             }
             repository.lockScopeHead(tenantScope).clinicGenerationEpoch shouldBeEqualTo 1L
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("enableH2")
+    fun `scope head bootstrap is idempotent on every H2 fixture`(testDB: TestDB) {
+        withPolicyTables(testDB) {
+            val scope = PolicyScopeRef(tenantGroupId = 1L, scope = PolicyScope.TENANT_DEFAULT)
+
+            val initial = repository.lockScopeHead(scope)
+            val advanced = repository.compareAndIncrementGeneration(scope, expectedRevision = 0L)
+            val replay = repository.lockScopeHead(scope)
+
+            initial.revision shouldBeEqualTo 0L
+            initial.generation shouldBeEqualTo 0L
+            advanced.revision shouldBeEqualTo 1L
+            advanced.generation shouldBeEqualTo 1L
+            replay.revision shouldBeEqualTo 1L
+            replay.generation shouldBeEqualTo 1L
+            replay.clinicGenerationEpoch shouldBeEqualTo 0L
         }
     }
 
