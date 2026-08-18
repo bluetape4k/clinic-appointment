@@ -67,7 +67,9 @@ import java.time.ZoneOffset
  *
  * 각 테스트는 독립 H2 database를 사용하고 [BeforeEach]에서 production table 객체로
  * 스키마를 구성합니다. PostgreSQL 동시성 테스트는 같은 초기화 계약을 override하여
- * bluetape4k singleton container에 적용합니다.
+ * bluetape4k singleton container에 적용합니다. 기존 Flyway outbox table 확인은
+ * current Exposed transaction의 parameterized `exec`로 수행해 connection ownership을
+ * 유지합니다.
  */
 internal abstract class VisitCommitmentCommandTestSupport {
     protected lateinit var database: Database

@@ -153,6 +153,23 @@ parameter를 제거합니다.
 일반 CI와 nightly CI의 통합 검증은 PostgreSQL 기준으로 수행하며, H2와 MySQL은
 지원 데이터베이스 행렬에 포함하지 않습니다.
 
+### JDBC 구현 우선순위와 테스트 경계
+
+애플리케이션 트랜잭션 안에서 SQL이 필요하면 Exposed DSL 또는
+`TransactionManager.current().exec(...)`를 먼저 사용하고, 값은 Exposed parameter
+binding으로 전달합니다. Flyway `DataSource`, Spring readiness metadata, Gatling
+진단 fixture, PostgreSQL benchmark의 schema·pool lifecycle처럼 애플리케이션
+트랜잭션 밖에서 소유권이 분명한 경계만 raw JDBC allowlist에 남깁니다.
+
+전체 파일·심볼·소유자·대체하지 않은 이유와 검증 명령은
+[`scripts/raw-jdbc-allowlist.json`](scripts/raw-jdbc-allowlist.json)에 고정하고,
+정적 read-back은 [`validate-appointment-raw-jdbc-inventory.mjs`](scripts/validate-appointment-raw-jdbc-inventory.mjs)로
+실행합니다. PostgreSQL은 production-schema를 Testcontainers로 재현하는 기준이며,
+H2는 unit/wiring 보조 fixture입니다. 이 예제의 범위에는 production 배포 SLO 증명이
+포함되지 않습니다. 자세한 분류와 fresh evidence는
+[`Issue #350 lesson`](docs/lessons/2026-08-17-issue-350-raw-jdbc-priority.md)을
+참고하세요.
+
 ```bash
 # API 서버 기동 (PostgreSQL + Redis 필요)
 ./gradlew :appointment-api:bootRun

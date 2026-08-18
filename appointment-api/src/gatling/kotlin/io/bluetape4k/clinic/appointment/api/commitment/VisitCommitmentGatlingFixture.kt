@@ -163,7 +163,8 @@ internal class VisitCommitmentGatlingFixture {
     /**
      * PostgreSQL Gatling fixture가 production outbox table을 그대로 생성할 수 있게 한다.
      * H2 probe는 기존 최소 DDL을 유지하고, PostgreSQL은 [SchedulingOutboxEvents]의 전체
-     * column/index 계약을 사용한다.
+     * column/index 계약을 사용한다. H2 전용 DDL은 현재 Exposed transaction의
+     * `exec(..., StatementType.CREATE)`로 실행해 별도 connection을 만들지 않는다.
      */
     internal fun initialize(
         database: Database,

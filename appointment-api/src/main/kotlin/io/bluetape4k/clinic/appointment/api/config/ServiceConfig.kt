@@ -1082,7 +1082,14 @@ class ServiceConfig {
     fun bookingReliabilityOperationalState(): BookingReliabilityOperationalState =
         BookingReliabilityOperationalState()
 
-    /** V17 테이블·인덱스와 Flyway 최신 version을 확인하는 fail-closed readiness probe입니다. */
+    /**
+     * Spring이 소유한 [DataSource]에서 V17 테이블·인덱스와 Flyway 최신 version을
+     * 확인하는 fail-closed readiness probe입니다.
+     *
+     * 이 metadata 조회는 startup readiness 경계이며, 애플리케이션 transaction이나
+     * repository ownership으로 옮기지 않습니다. connection lifecycle은 Spring
+     * DataSource가 소유하고 probe는 사용 후 connection을 닫습니다.
+     */
     @Bean
     @ConditionalOnBean(DataSource::class)
     fun bookingReliabilitySchemaReadiness(dataSource: DataSource): DefaultBookingReliabilitySchemaReadiness =

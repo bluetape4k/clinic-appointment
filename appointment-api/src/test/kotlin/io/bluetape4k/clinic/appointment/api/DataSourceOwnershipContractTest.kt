@@ -5,7 +5,13 @@ import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
 
-/** Spring runtime의 DataSource/Exposed 연결 경계를 repository source에서 고정합니다. */
+/**
+ * Spring runtime의 DataSource/Exposed 연결 경계를 repository source에서 고정합니다.
+ *
+ * 아래 pattern constant와 fixture root는 실행 가능한 JDBC 호출이 아니라 ownership
+ * 규칙을 검사하기 위한 source guard입니다. raw JDBC inventory도 이 문자열을 resource
+ * marker로 세지 않으며, 실제 경계 호출은 allowlist에서 별도로 read-back합니다.
+ */
 class DataSourceOwnershipContractTest {
 
     @Test
