@@ -43,7 +43,9 @@ import io.bluetape4k.clinic.appointment.model.tables.WaitlistOffers
 import io.bluetape4k.clinic.appointment.repository.AppointmentCommitmentRepository
 import io.bluetape4k.clinic.appointment.repository.ResourceAllocationRepository
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.VarCharColumnType
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.statements.StatementType
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -94,11 +96,16 @@ internal abstract class VisitCommitmentCommandTestSupport {
 
     private fun tableReadable(tableName: String): Boolean =
         listOf(tableName, tableName.uppercase()).distinct().any { candidate ->
-            val jdbcConnection =
-                TransactionManager.current().connection.connection as java.sql.Connection
-            jdbcConnection.metaData
-                .getTables(null, null, candidate, arrayOf("TABLE"))
-                .use { rows -> rows.next() }
+            TransactionManager.current().exec(
+                stmt =
+                    """
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_name = ?
+                    """.trimIndent(),
+                args = listOf(VarCharColumnType() to candidate),
+                explicitStatementType = StatementType.SELECT,
+            ) { rows -> rows.next() } == true
         }
 
     /**
