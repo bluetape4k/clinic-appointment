@@ -39,6 +39,7 @@ class AppointmentConsumerRuntime(
     private val codec: AppointmentEventEnvelopeCodec,
     private val inboxStore: AppointmentConsumerInboxStore,
     private val allowedTopics: Set<AppointmentTopic>,
+    private val scopeAuthority: AppointmentConsumerScopeAuthority,
     private val schemaRegistry: AppointmentSchemaRegistry = StaticAppointmentSchemaRegistry(),
     private val metrics: AppointmentConsumerMetrics = NoopAppointmentConsumerMetrics,
 ) {
@@ -93,6 +94,23 @@ class AppointmentConsumerRuntime(
             (envelope.tenantGroupId != expectedScope.tenantGroupId || envelope.clinicId != expectedScope.clinicId)
         ) {
             return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.SCOPE_MISMATCH)
+        }
+        if (expectedScope == null) {
+            val scopeAuthorized = try {
+                scopeAuthority.isAuthorized(envelope.tenantGroupId, envelope.clinicId)
+            } catch (failure: AppointmentConsumerRetryableException) {
+                metrics.retry(AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
+                throw failure
+            } catch (failure: Exception) {
+                metrics.retry(AppointmentConsumerFailureCode.HANDLER_RETRYABLE)
+                throw AppointmentConsumerRetryableException(
+                    "appointment consumer scope authority is unavailable",
+                    failure,
+                )
+            }
+            if (!scopeAuthorized) {
+                return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.SCOPE_MISMATCH)
+            }
         }
         val provenance = AppointmentConsumerProvenance(
             topic = topic,

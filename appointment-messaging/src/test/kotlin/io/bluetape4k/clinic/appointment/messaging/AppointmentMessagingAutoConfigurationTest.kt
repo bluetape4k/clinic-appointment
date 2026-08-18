@@ -5,6 +5,7 @@ import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeNull
 import org.h2.jdbcx.JdbcDataSource
+import org.jetbrains.exposed.v1.jdbc.Database
 import org.springframework.beans.factory.config.BeanPostProcessor
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.health.contributor.Status
@@ -127,5 +128,41 @@ internal class AppointmentMessagingAutoConfigurationTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun `database-backed consumer registers an independent scope authority`() {
+        val database = Database.connect(
+            "jdbc:h2:mem:appointment_auto_config_scope_${System.nanoTime()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+            driver = "org.h2.Driver",
+        )
+
+        contextRunner
+            .withPropertyValues("appointment.messaging.consumer.enabled=true")
+            .withBean(Database::class.java, Supplier { database })
+            .run { context ->
+                context.startupFailure shouldBeEqualTo null
+                context.getBean(AppointmentConsumerScopeAuthority::class.java)::class shouldBeEqualTo
+                    DatabaseAppointmentConsumerScopeAuthority::class
+                context.getBean(AppointmentConsumerRuntime::class.java).let { runtime ->
+                    runtime::class shouldBeEqualTo AppointmentConsumerRuntime::class
+                }
+            }
+    }
+
+    @Test
+    fun `disabled consumer does not register runtime even when database is available`() {
+        val database = Database.connect(
+            "jdbc:h2:mem:appointment_auto_config_scope_disabled_${System.nanoTime()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+            driver = "org.h2.Driver",
+        )
+
+        contextRunner
+            .withBean(Database::class.java, Supplier { database })
+            .run { context ->
+                context.startupFailure shouldBeEqualTo null
+                context.getBeansOfType(AppointmentConsumerRuntime::class.java).isEmpty().shouldBeTrue()
+                context.getBeansOfType(AppointmentConsumerScopeAuthority::class.java).isEmpty().shouldBeTrue()
+            }
     }
 }

@@ -55,22 +55,11 @@ class AppointmentKafkaConsumerConfiguration {
             factory.containerProperties.ackMode = ContainerProperties.AckMode.MANUAL_IMMEDIATE
             factory.containerProperties.setShutdownTimeout(properties.consumer.shutdownTimeout.toMillis())
             factory.containerProperties.setMissingTopicsFatal(true)
-            val recoverer = ConsumerRecordRecoverer { record, exception ->
-                val failureCode = if (exception is AppointmentConsumerInvalidEnvelopeException) {
-                    AppointmentConsumerFailureCode.INVALID_ENVELOPE
-                } else {
-                    AppointmentConsumerFailureCode.HANDLER_FAILED
-                }
-                inboxStore?.quarantineRejected(
-                    AppointmentConsumerIdentity(
-                        properties.consumer.logicalConsumerId,
-                        properties.consumer.logicalStreamId,
-                    ),
-                    record,
-                    failureCode,
-                )
-                metrics?.quarantined(failureCode)
-            }
+            val recoverer = appointmentConsumerRecoverer(
+                properties = properties,
+                inboxStore = inboxStore,
+                metrics = metrics,
+            )
             factory.setCommonErrorHandler(
                 DefaultErrorHandler(
                     recoverer,
@@ -85,4 +74,38 @@ class AppointmentKafkaConsumerConfiguration {
             )
         }
     }
+}
+
+/** Spring Kafka가 감싼 listener 예외에서도 원래 consumer 실패 계약을 복원합니다. */
+internal fun appointmentConsumerRecoverer(
+    properties: AppointmentMessagingProperties,
+    inboxStore: AppointmentConsumerInboxStore?,
+    metrics: AppointmentConsumerMetrics?,
+): ConsumerRecordRecoverer = ConsumerRecordRecoverer { record, exception ->
+    val failureCode = appointmentConsumerRecoveryFailureCode(exception)
+    inboxStore?.quarantineRejected(
+        AppointmentConsumerIdentity(
+            properties.consumer.logicalConsumerId,
+            properties.consumer.logicalStreamId,
+        ),
+        record,
+        failureCode,
+    )
+    metrics?.quarantined(failureCode)
+}
+
+/** listener wrapper의 cause chain을 따라 terminal recovery 분류를 결정합니다. */
+internal fun appointmentConsumerRecoveryFailureCode(exception: Throwable): AppointmentConsumerFailureCode {
+    var current: Throwable? = exception
+    val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Throwable, Boolean>())
+    while (current != null && seen.add(current)) {
+        when (current) {
+            is AppointmentConsumerInvalidEnvelopeException ->
+                return AppointmentConsumerFailureCode.INVALID_ENVELOPE
+            is AppointmentConsumerRetryableException ->
+                return AppointmentConsumerFailureCode.HANDLER_RETRYABLE
+        }
+        current = current.cause
+    }
+    return AppointmentConsumerFailureCode.HANDLER_FAILED
 }

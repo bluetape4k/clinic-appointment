@@ -23,6 +23,9 @@ import java.util.Properties
 
 class KafkaAppointmentReplaySourceTest {
     private val topic = AppointmentTopic("clinic.appointment.events")
+    private val scopeAuthority = AppointmentConsumerScopeAuthority { tenantGroupId, clinicId ->
+        tenantGroupId == 7L && clinicId == 31L
+    }
     private lateinit var database: Database
 
     @BeforeEach
@@ -53,6 +56,7 @@ class KafkaAppointmentReplaySourceTest {
                 codec = AppointmentEventEnvelopeCodec(),
                 inboxStore = JdbcAppointmentConsumerInboxStore(database),
                 allowedTopics = setOf(topic),
+                scopeAuthority = scopeAuthority,
             ),
             handler = AppointmentConsumerHandler { _, _ -> error("handler must not be reached") },
             expectedIdentity = expectedIdentity,
@@ -103,6 +107,7 @@ class KafkaAppointmentReplaySourceTest {
                 codec = AppointmentEventEnvelopeCodec(),
                 inboxStore = JdbcAppointmentConsumerInboxStore(database),
                 allowedTopics = setOf(topic),
+                scopeAuthority = scopeAuthority,
             ),
             handler = AppointmentConsumerHandler { _, _ -> error("handler must not be reached") },
             expectedIdentity = expectedIdentity,
@@ -133,6 +138,7 @@ class KafkaAppointmentReplaySourceTest {
             codec = AppointmentEventEnvelopeCodec(),
             inboxStore = JdbcAppointmentConsumerInboxStore(database),
             allowedTopics = setOf(topic),
+            scopeAuthority = scopeAuthority,
         )
         runtime.consume(record, expectedIdentity) { _, _ -> }
 
