@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.clinic.appointment.messaging.AppointmentAggregateId
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerContext
+import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerHandlerResult
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerIdentity
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerProvenance
 import io.bluetape4k.clinic.appointment.messaging.AppointmentEventEnvelope
@@ -52,7 +53,9 @@ class AppointmentStatsProjectionConsumerTest {
     @Test
     fun `projection is tenant scoped and deduplicates by aggregate event`() {
         consumer.handle(envelope("event-2", version = 2, tenant = 11), context(tenant = 11))
+            .shouldBeEqualTo(AppointmentConsumerHandlerResult.APPLIED)
         consumer.handle(envelope("event-2", version = 2, tenant = 11), context(tenant = 11))
+            .shouldBeEqualTo(AppointmentConsumerHandlerResult.ALREADY_APPLIED)
         consumer.handle(envelope("event-1", version = 1, tenant = 11), context(tenant = 11))
         consumer.handle(envelope("event-3", version = 3, tenant = 11), context(tenant = 11))
         consumer.handle(envelope("event-other", version = 1, tenant = 12), context(tenant = 12))

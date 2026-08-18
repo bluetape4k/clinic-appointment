@@ -4,6 +4,8 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.messaging.AppointmentCancelledPayload
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerContext
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerHandler
+import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerHandlerResult
+import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRetryableException
 import io.bluetape4k.clinic.appointment.messaging.AppointmentCreatedPayload
 import io.bluetape4k.clinic.appointment.messaging.AppointmentEventEnvelope
 import io.bluetape4k.clinic.appointment.messaging.AppointmentRescheduledPayload
@@ -19,11 +21,34 @@ class NotificationAppointmentEventConsumer(
     private val suspendBridgeTimeout: Duration = Duration.ofSeconds(30),
 ) : AppointmentConsumerHandler {
 
-    override fun handle(envelope: AppointmentEventEnvelope, context: AppointmentConsumerContext) {
-        val route = routeFor(envelope) ?: return
+    override fun handle(
+        envelope: AppointmentEventEnvelope,
+        context: AppointmentConsumerContext,
+    ): AppointmentConsumerHandlerResult {
+        val route = routeFor(envelope) ?: return AppointmentConsumerHandlerResult.ALREADY_APPLIED
         val scope = TenantClinicScope(envelope.tenantGroupId, envelope.clinicId)
-        runSynchronously(suspendBridgeTimeout) {
+        return when (val result = runSynchronously(suspendBridgeTimeout) {
             delivery.deliver(scope, route.appointmentId, route.eventType)
+        }) {
+            NotificationDirectDeliveryResult.RouteRejected,
+            NotificationDirectDeliveryResult.NotFound,
+            -> AppointmentConsumerHandlerResult.ALREADY_APPLIED
+
+            is NotificationDirectDeliveryResult.Processed -> when (result.workerResult) {
+                NotificationOutboxWorkerResult.COMPLETED,
+                NotificationOutboxWorkerResult.SUPPRESSED,
+                -> AppointmentConsumerHandlerResult.APPLIED
+
+                NotificationOutboxWorkerResult.EXHAUSTED,
+                -> throw IllegalStateException("notification outbox delivery was exhausted")
+
+                NotificationOutboxWorkerResult.RETRY_SCHEDULED,
+                NotificationOutboxWorkerResult.LEASE_LOST,
+                NotificationOutboxWorkerResult.NOT_READY,
+                -> throw AppointmentConsumerRetryableException(
+                    "notification outbox delivery did not reach a terminal state: ${result.workerResult}",
+                )
+            }
         }
     }
 

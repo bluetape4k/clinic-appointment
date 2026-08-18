@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.stats
 import io.bluetape4k.clinic.appointment.messaging.AppointmentCancelledPayload
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerContext
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerHandler
+import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerHandlerResult
 import io.bluetape4k.clinic.appointment.messaging.AppointmentCreatedPayload
 import io.bluetape4k.clinic.appointment.messaging.AppointmentEventEnvelope
 import io.bluetape4k.clinic.appointment.messaging.AppointmentRescheduledPayload
@@ -17,11 +18,14 @@ class AppointmentStatsProjectionConsumer(
     private val database: Database,
     private val repository: AppointmentStatsProjectionRepository,
 ) : AppointmentConsumerHandler {
-    override fun handle(envelope: AppointmentEventEnvelope, context: AppointmentConsumerContext) {
+    override fun handle(
+        envelope: AppointmentEventEnvelope,
+        context: AppointmentConsumerContext,
+    ): AppointmentConsumerHandlerResult {
         check(context.provenance.tenantGroupId == envelope.tenantGroupId) { "consumer tenant scope mismatch" }
         check(context.provenance.clinicId == envelope.clinicId) { "consumer clinic scope mismatch" }
         val event = projectionEvent(envelope)
-        transaction(database) {
+        val applied = transaction(database) {
             repository.upsert(
                 tenantGroupId = envelope.tenantGroupId,
                 clinicId = envelope.clinicId,
@@ -31,6 +35,11 @@ class AppointmentStatsProjectionConsumer(
                 eventVersion = event.version,
                 eventId = envelope.eventId.value,
             )
+        }
+        return if (applied) {
+            AppointmentConsumerHandlerResult.APPLIED
+        } else {
+            AppointmentConsumerHandlerResult.ALREADY_APPLIED
         }
     }
 
