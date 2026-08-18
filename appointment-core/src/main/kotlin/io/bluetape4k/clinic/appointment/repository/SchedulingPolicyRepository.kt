@@ -24,9 +24,9 @@ import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
-import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
+import org.jetbrains.exposed.v1.jdbc.upsert
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import java.security.MessageDigest
 import java.time.Instant
@@ -260,7 +260,7 @@ class SchedulingPolicyRepository {
     /**
      * 스코프 직렬화 행을 초기화하고 잠근다.
      *
-     * `insertIgnore`로 최초 접근 경쟁을 안전하게 처리한다. 이어서 획득한 `FOR UPDATE`
+     * 공통 no-op `upsert`로 최초 접근 경쟁을 안전하게 처리한다. 이어서 획득한 `FOR UPDATE`
      * 잠금은 중첩 구간, 세대, 스냅샷, 명령 결과, outbox 쓰기가 모두 끝날 때까지 호출자
      * 트랜잭션이 유지해야 한다.
      */
@@ -670,7 +670,15 @@ class SchedulingPolicyRepository {
             it[generation] = 0L
             it[clinicGenerationEpoch] = 0L
         }
-        SchedulingPolicyScopeHeads.insertIgnore(insertBody)
+        SchedulingPolicyScopeHeads.upsert(
+            SchedulingPolicyScopeHeads.tenantGroupId,
+            SchedulingPolicyScopeHeads.scope,
+            SchedulingPolicyScopeHeads.clinicScopeKey,
+            onUpdate = {
+                it[SchedulingPolicyScopeHeads.tenantGroupId] = scope.tenantGroupId
+            },
+            body = insertBody,
+        )
     }
 
     private fun clinicGenerationDigest(
@@ -715,7 +723,15 @@ class SchedulingPolicyRepository {
                 it[EffectiveSchedulingPolicySnapshots.payloadJson] = payloadJson
                 it[EffectiveSchedulingPolicySnapshots.snapshotHash] = snapshotHash
             }
-        EffectiveSchedulingPolicySnapshots.insertIgnore(insertBody)
+        EffectiveSchedulingPolicySnapshots.upsert(
+            EffectiveSchedulingPolicySnapshots.tenantGroupId,
+            EffectiveSchedulingPolicySnapshots.clinicId,
+            EffectiveSchedulingPolicySnapshots.snapshotHash,
+            onUpdate = {
+                it[EffectiveSchedulingPolicySnapshots.tenantGroupId] = tenantGroupId
+            },
+            body = insertBody,
+        )
     }
 
     private fun ByteArray.toHex(): String =
