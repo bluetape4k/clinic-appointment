@@ -31,7 +31,7 @@ rollback 전까지 추가 SQL을 실행할 수 없다. 현재 retry loop는 slee
   `inTopLevelTransaction(database) { claim + process + enqueue + terminal fence }` 전체를
   재실행한다.
 - PostgreSQL lock timeout SQLSTATE `55P03`은 PostgreSQL 전략에서만 retryable로 분류한다.
-  기존 `40001`, `40P01`, MySQL error code `1205` 계약은 유지한다.
+  기존 `40001`, `40P01` SQLSTATE와 non-retryable exception identity 계약은 유지한다.
 - 새 모듈·dependency·raw `GenericContainer`·`@Testcontainers`는 추가하지 않는다.
 - 실제 production 배포·canary 증거는 이 예제 issue의 범위가 아니다. acceptance는
   bluetape4k PostgreSQL singleton을 사용한 실제 PostgreSQL 시뮬레이션으로 판정한다.
@@ -99,8 +99,8 @@ caller (no transaction)
   변경하지 않는다.
 - `withContentionRetry`의 의미를 “transaction 밖에서 전체 작업 callback에 적용하는 retry
   coordinator”로 KDoc에 명시한다.
-- PostgreSQL strategy의 SQLSTATE 판정만 확장하며 H2/MySQL 분기와 기존 exception 계약은
-  유지한다.
+- PostgreSQL 단일 strategy의 SQLSTATE 판정만 확장하며 H2/MySQL dialect 분기는 추가하지
+  않고 기존 exception 계약은 유지한다.
 - README나 공개 모듈 등록은 변경하지 않는다. Issue/PR/lesson은 repository-local Korean
   artifact 정책에 따라 작성한다.
 

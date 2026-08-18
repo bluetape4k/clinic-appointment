@@ -30,7 +30,8 @@
   retry classifier(line 642), `WaitlistDeliveryService.process`의 caller-owned transaction
   KDoc, `TestDB.POSTGRESQL`·`Containers.Postgres`·`WithTables` fixture를 계획이 직접 소유한다.
 - `@Testcontainers`·`GenericContainer`를 사용하지 않고 singleton launcher를 재사용한다. 실제
-  PostgreSQL test와 H2/unit test는 순차 실행하며, production 운영 증거는 요구하지 않는다.
+  PostgreSQL contention test와 repository/service 계약 test는 순차 실행하며, production 운영
+  증거는 요구하지 않는다.
 - 변경 전 RED → 최소 production 수정 → GREEN → full `:appointment-core:test` 순서와
   rollback point가 계획에 있다. 실패 시 fixture를 먼저 고치고 production code를 수정하지
   않는 fail-closed 순서도 유지한다.

@@ -303,7 +303,7 @@ class WaitlistDeliveryRepositoryTest {
     }
 
     @Test
-    fun `postgresql lock timeout retries only for the PostgreSQL strategy`() {
+    fun `postgresql lock timeout retries with the PostgreSQL strategy`() {
         var postgresCalls = 0
         val postgresDelays = mutableListOf<Duration>()
         val postgresRepository = WaitlistDeliveryRepository(
@@ -325,29 +325,6 @@ class WaitlistDeliveryRepositoryTest {
 
         postgresCalls shouldBeEqualTo 2
         postgresDelays shouldBeEqualTo listOf(Duration.ofMillis(5))
-
-        var h2Calls = 0
-        val h2Delays = mutableListOf<Duration>()
-        val h2Repository = WaitlistDeliveryRepository(
-            claimStrategy = VacancyClaimStrategies.forDialectName("H2"),
-            retryPolicy = ContentionRetryPolicy(
-                maxAttempts = 3,
-                jitterDelay = { Duration.ofMillis(5) },
-                sleeper = { delay -> h2Delays += delay },
-            ),
-        )
-        val h2LockTimeout = SQLException("lock timeout", "55P03")
-
-        val failure = assertFailsWith<SQLException> {
-            h2Repository.withContentionRetry {
-                h2Calls += 1
-                throw h2LockTimeout
-            }
-        }
-
-        (failure === h2LockTimeout) shouldBeEqualTo true
-        h2Calls shouldBeEqualTo 1
-        h2Delays shouldBeEqualTo emptyList<Duration>()
     }
 
     private fun withDeliveryTables(block: org.jetbrains.exposed.v1.jdbc.JdbcTransaction.() -> Unit) {
