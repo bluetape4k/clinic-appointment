@@ -127,13 +127,23 @@ class AppointmentMessagingAutoConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "appointment.messaging.consumer", name = ["enabled"], havingValue = "true")
-    @ConditionalOnBean(AppointmentConsumerInboxStore::class)
+    @ConditionalOnBean(Database::class)
+    @ConditionalOnMissingBean
+    @DependsOnDatabaseInitialization
+    fun appointmentConsumerScopeAuthority(
+        database: Database,
+    ): AppointmentConsumerScopeAuthority = DatabaseAppointmentConsumerScopeAuthority(database)
+
+    @Bean
+    @ConditionalOnProperty(prefix = "appointment.messaging.consumer", name = ["enabled"], havingValue = "true")
+    @ConditionalOnBean(AppointmentConsumerInboxStore::class, AppointmentConsumerScopeAuthority::class)
     @ConditionalOnMissingBean
     fun appointmentConsumerRuntime(
         properties: AppointmentMessagingProperties,
         codec: AppointmentEventEnvelopeCodec,
         schemaRegistry: AppointmentSchemaRegistry,
         inboxStore: AppointmentConsumerInboxStore,
+        scopeAuthority: AppointmentConsumerScopeAuthority,
         metrics: AppointmentConsumerMetrics,
     ): AppointmentConsumerRuntime {
         schemaRegistry.validate(AppointmentEventEnvelope.CURRENT_SCHEMA_VERSION)
@@ -141,6 +151,7 @@ class AppointmentMessagingAutoConfiguration {
             codec = codec,
             inboxStore = inboxStore,
             allowedTopics = properties.allowedTopics,
+            scopeAuthority = scopeAuthority,
             schemaRegistry = schemaRegistry,
             metrics = metrics,
         )

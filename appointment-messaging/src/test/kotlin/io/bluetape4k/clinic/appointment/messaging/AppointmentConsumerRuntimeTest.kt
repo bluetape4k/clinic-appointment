@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.messaging
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeInstanceOf
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -9,7 +10,6 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import org.springframework.kafka.support.Acknowledgment
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
@@ -18,6 +18,9 @@ class AppointmentConsumerRuntimeTest {
     private lateinit var database: Database
     private lateinit var runtime: AppointmentConsumerRuntime
     private val codec = AppointmentEventEnvelopeCodec()
+    private val scopeAuthority = AppointmentConsumerScopeAuthority { tenantGroupId, clinicId ->
+        tenantGroupId == 7L && clinicId == 31L
+    }
 
     @BeforeEach
     fun setUp() {
@@ -36,6 +39,7 @@ class AppointmentConsumerRuntimeTest {
             codec = codec,
             inboxStore = JdbcAppointmentConsumerInboxStore(database, maxAttempts = 2),
             allowedTopics = setOf(AppointmentTopic("clinic.appointment.events")),
+            scopeAuthority = scopeAuthority,
         )
     }
 
@@ -65,6 +69,90 @@ class AppointmentConsumerRuntimeTest {
         transaction(database) {
             AppointmentConsumerInboxTable.selectAll().single()[AppointmentConsumerInboxTable.status]
                 .shouldBeEqualTo(AppointmentConsumerStatus.QUARANTINED)
+        }
+    }
+
+    @Test
+    fun `live record for an unknown clinic is quarantined before invoking handler`() {
+        val calls = AtomicInteger()
+        val acknowledgment = RecordingAcknowledgment()
+        val record = record(
+            key = AppointmentPartitionKeyFactory.create(7, 999, 42).value,
+            value = codec.encode(envelope(clinicId = 999)),
+        )
+
+        runtime.consume(record, acknowledgment, identity()) { _, _ -> calls.incrementAndGet() }
+            .shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
+
+        calls.get() shouldBeEqualTo 0
+        acknowledgment.count shouldBeEqualTo 1
+        transaction(database) {
+            AppointmentConsumerRejectedRecordTable.selectAll().single()[AppointmentConsumerRejectedRecordTable.failureCode]
+                .shouldBeEqualTo(AppointmentConsumerFailureCode.SCOPE_MISMATCH.name)
+        }
+    }
+
+    @Test
+    fun `live record for a clinic owned by another tenant is quarantined before invoking handler`() {
+        val calls = AtomicInteger()
+        val acknowledgment = RecordingAcknowledgment()
+        val record = record(
+            key = AppointmentPartitionKeyFactory.create(8, 31, 42).value,
+            value = codec.encode(envelope(tenantGroupId = 8)),
+        )
+
+        runtime.consume(record, acknowledgment, identity()) { _, _ -> calls.incrementAndGet() }
+            .shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
+
+        calls.get() shouldBeEqualTo 0
+        acknowledgment.count shouldBeEqualTo 1
+        transaction(database) {
+            AppointmentConsumerRejectedRecordTable.selectAll().single()[AppointmentConsumerRejectedRecordTable.failureCode]
+                .shouldBeEqualTo(AppointmentConsumerFailureCode.SCOPE_MISMATCH.name)
+        }
+    }
+
+    @Test
+    fun `live record with a forged tenant and clinic scope is quarantined before invoking handler`() {
+        val calls = AtomicInteger()
+        val acknowledgment = RecordingAcknowledgment()
+        val record = record(
+            key = AppointmentPartitionKeyFactory.create(999, 998, 42).value,
+            value = codec.encode(envelope(tenantGroupId = 999, clinicId = 998)),
+        )
+
+        runtime.consume(record, acknowledgment, identity()) { _, _ -> calls.incrementAndGet() }
+            .shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
+
+        calls.get() shouldBeEqualTo 0
+        acknowledgment.count shouldBeEqualTo 1
+        transaction(database) {
+            AppointmentConsumerRejectedRecordTable.selectAll().single()[AppointmentConsumerRejectedRecordTable.failureCode]
+                .shouldBeEqualTo(AppointmentConsumerFailureCode.SCOPE_MISMATCH.name)
+        }
+    }
+
+    @Test
+    fun `live scope authority failure is retried without quarantine or acknowledgement`() {
+        val authorityFailure = IllegalStateException("scope authority unavailable")
+        val unavailableRuntime = AppointmentConsumerRuntime(
+            codec = codec,
+            inboxStore = JdbcAppointmentConsumerInboxStore(database),
+            allowedTopics = setOf(AppointmentTopic("clinic.appointment.events")),
+            scopeAuthority = AppointmentConsumerScopeAuthority { _, _ -> throw authorityFailure },
+        )
+        val acknowledgment = RecordingAcknowledgment()
+
+        val failure = assertFailsWith<AppointmentConsumerRetryableException> {
+            unavailableRuntime.consume(record(), acknowledgment, identity()) { _, _ ->
+                error("handler must not be reached")
+            }
+        }
+        failure.cause.shouldBeEqualTo(authorityFailure)
+
+        acknowledgment.count shouldBeEqualTo 0
+        transaction(database) {
+            AppointmentConsumerRejectedRecordTable.selectAll().count() shouldBeEqualTo 0L
         }
     }
 
@@ -105,6 +193,7 @@ class AppointmentConsumerRuntimeTest {
             codec = codec,
             inboxStore = JdbcAppointmentConsumerInboxStore(database),
             allowedTopics = setOf(AppointmentTopic("clinic.appointment.events")),
+            scopeAuthority = scopeAuthority,
             schemaRegistry = object : AppointmentSchemaRegistry {
                 override val subject: String = "appointment-events-value"
                 override fun validate(schemaVersion: Int) {
@@ -120,7 +209,7 @@ class AppointmentConsumerRuntimeTest {
         )
         val acknowledgment = RecordingAcknowledgment()
 
-        assertThrows<AppointmentConsumerRetryableException> {
+        assertFailsWith<AppointmentConsumerRetryableException> {
             unavailableRuntime.consume(record(), acknowledgment, identity()) { _, _ -> }
         }
 
@@ -158,7 +247,7 @@ class AppointmentConsumerRuntimeTest {
             throw AppointmentConsumerRetryableException("provider unavailable")
         }
 
-        assertThrows<AppointmentConsumerRetryableException> {
+        assertFailsWith<AppointmentConsumerRetryableException> {
             runtime.consume(record, identity(), failingHandler)
         }
         runtime.consume(record, identity(), failingHandler)
@@ -196,19 +285,23 @@ class AppointmentConsumerRuntimeTest {
         value,
     )
 
-    private fun envelope() = AppointmentEventEnvelope(
-        eventId = AppointmentEventId("event-runtime-42"),
+    private fun envelope(
+        tenantGroupId: Long = 7,
+        clinicId: Long = 31,
+        appointmentId: Long = 42,
+    ) = AppointmentEventEnvelope(
+        eventId = AppointmentEventId("event-runtime-$clinicId"),
         eventType = AppointmentEventType.CREATED,
         schemaVersion = AppointmentEventEnvelope.CURRENT_SCHEMA_VERSION,
         occurredAt = Instant.parse("2026-08-06T00:00:00Z"),
-        tenantGroupId = 7,
-        clinicId = 31,
+        tenantGroupId = tenantGroupId,
+        clinicId = clinicId,
         aggregateType = AppointmentEventEnvelope.AGGREGATE_TYPE,
-        aggregateId = AppointmentAggregateId(42),
+        aggregateId = AppointmentAggregateId(appointmentId),
         correlationId = io.bluetape4k.clinic.appointment.service.AppointmentCorrelationId("correlation-runtime-42"),
         causationId = io.bluetape4k.clinic.appointment.service.AppointmentCausationId("causation-runtime-42"),
         payload = AppointmentCreatedPayload(
-            appointmentId = AppointmentAggregateId(42),
+            appointmentId = AppointmentAggregateId(appointmentId),
             version = 1,
             status = io.bluetape4k.clinic.appointment.statemachine.AppointmentState.CONFIRMED,
         ),

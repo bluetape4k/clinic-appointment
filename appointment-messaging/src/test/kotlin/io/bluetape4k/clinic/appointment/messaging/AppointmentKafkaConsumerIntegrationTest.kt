@@ -33,6 +33,10 @@ import java.util.concurrent.atomic.AtomicInteger
 )
 class AppointmentKafkaConsumerIntegrationTest {
 
+    private val scopeAuthority = AppointmentConsumerScopeAuthority { tenantGroupId, clinicId ->
+        tenantGroupId == 7L && clinicId == 31L
+    }
+
     @Test
     fun `Kafka event is processed once and duplicate redelivery is acknowledged`() {
         val kafka = AppointmentMessagingKafkaServerLauncher.kafka
@@ -70,6 +74,7 @@ class AppointmentKafkaConsumerIntegrationTest {
                 codec = AppointmentEventEnvelopeCodec(),
                 inboxStore = JdbcAppointmentConsumerInboxStore(database, maxAttempts = 2),
                 allowedTopics = setOf(topic),
+                scopeAuthority = scopeAuthority,
             )
             val calls = AtomicInteger()
             val acknowledgments = RecordingAcknowledgment()
@@ -129,6 +134,7 @@ class AppointmentKafkaConsumerIntegrationTest {
             codec = AppointmentEventEnvelopeCodec(),
             inboxStore = JdbcAppointmentConsumerInboxStore(database, maxAttempts = 3),
             allowedTopics = setOf(topic),
+            scopeAuthority = scopeAuthority,
         )
         val firstFactory = listenerFactory(kafka, groupId)
         val secondFactory = listenerFactory(kafka, groupId)
