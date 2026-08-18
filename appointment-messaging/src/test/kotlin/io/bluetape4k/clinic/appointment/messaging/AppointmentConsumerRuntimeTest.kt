@@ -48,7 +48,10 @@ class AppointmentConsumerRuntimeTest {
         val calls = AtomicInteger()
         val record = record()
         val acknowledgment = RecordingAcknowledgment()
-        val handler = AppointmentConsumerHandler { _, _ -> calls.incrementAndGet() }
+        val handler = AppointmentConsumerHandler { _, _ ->
+            calls.incrementAndGet()
+            AppointmentConsumerHandlerResult.APPLIED
+        }
 
         runtime.consume(record, acknowledgment, identity(), handler) shouldBeEqualTo AppointmentConsumerOutcome.PROCESSED
         runtime.consume(record, acknowledgment, identity(), handler) shouldBeEqualTo AppointmentConsumerOutcome.DUPLICATE
@@ -62,7 +65,10 @@ class AppointmentConsumerRuntimeTest {
         val calls = AtomicInteger()
         val record = record(key = "tenant-99:CLINIC:clinic-9:APPOINTMENT:apt-9")
 
-        val outcome = runtime.consume(record, identity()) { _, _ -> calls.incrementAndGet() }
+        val outcome = runtime.consume(record, identity()) { _, _ ->
+            calls.incrementAndGet()
+            AppointmentConsumerHandlerResult.APPLIED
+        }
 
         outcome shouldBeEqualTo AppointmentConsumerOutcome.QUARANTINED
         calls.get() shouldBeEqualTo 0
@@ -81,7 +87,10 @@ class AppointmentConsumerRuntimeTest {
             value = codec.encode(envelope(clinicId = 999)),
         )
 
-        runtime.consume(record, acknowledgment, identity()) { _, _ -> calls.incrementAndGet() }
+        runtime.consume(record, acknowledgment, identity()) { _, _ ->
+            calls.incrementAndGet()
+            AppointmentConsumerHandlerResult.APPLIED
+        }
             .shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
 
         calls.get() shouldBeEqualTo 0
@@ -101,7 +110,10 @@ class AppointmentConsumerRuntimeTest {
             value = codec.encode(envelope(tenantGroupId = 8)),
         )
 
-        runtime.consume(record, acknowledgment, identity()) { _, _ -> calls.incrementAndGet() }
+        runtime.consume(record, acknowledgment, identity()) { _, _ ->
+            calls.incrementAndGet()
+            AppointmentConsumerHandlerResult.APPLIED
+        }
             .shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
 
         calls.get() shouldBeEqualTo 0
@@ -121,7 +133,10 @@ class AppointmentConsumerRuntimeTest {
             value = codec.encode(envelope(tenantGroupId = 999, clinicId = 998)),
         )
 
-        runtime.consume(record, acknowledgment, identity()) { _, _ -> calls.incrementAndGet() }
+        runtime.consume(record, acknowledgment, identity()) { _, _ ->
+            calls.incrementAndGet()
+            AppointmentConsumerHandlerResult.APPLIED
+        }
             .shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
 
         calls.get() shouldBeEqualTo 0
@@ -163,13 +178,36 @@ class AppointmentConsumerRuntimeTest {
         val firstFailure = runCatching {
             runtime.consume(record, identity()) { _, _ ->
                 if (calls.getAndIncrement() == 0) throw AppointmentConsumerRetryableException("provider unavailable")
+                AppointmentConsumerHandlerResult.APPLIED
             }
         }.exceptionOrNull()
 
         firstFailure.shouldBeInstanceOf<AppointmentConsumerRetryableException>()
-        runtime.consume(record, identity()) { _, _ -> calls.incrementAndGet() }
+        runtime.consume(record, identity()) { _, _ ->
+            calls.incrementAndGet()
+            AppointmentConsumerHandlerResult.APPLIED
+        }
             .shouldBeEqualTo(AppointmentConsumerOutcome.PROCESSED)
         calls.get() shouldBeEqualTo 2
+    }
+
+    @Test
+    fun `terminal handler failure keeps the bounded quarantine contract`() {
+        val terminalRuntime = AppointmentConsumerRuntime(
+            codec = codec,
+            inboxStore = JdbcAppointmentConsumerInboxStore(database, maxAttempts = 1),
+            allowedTopics = setOf(AppointmentTopic("clinic.appointment.events")),
+            scopeAuthority = scopeAuthority,
+        )
+
+        terminalRuntime.consume(record(), identity()) { _, _ ->
+            throw IllegalStateException("terminal handler failure")
+        }.shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
+
+        transaction(database) {
+            AppointmentConsumerInboxTable.selectAll().single()[AppointmentConsumerInboxTable.status]
+                .shouldBeEqualTo(AppointmentConsumerStatus.QUARANTINED)
+        }
     }
 
     @Test
@@ -177,7 +215,7 @@ class AppointmentConsumerRuntimeTest {
         val invalid = record(value = "{\"eventId\":\"secret-patient-payload\"}")
         val acknowledgment = RecordingAcknowledgment()
 
-        runtime.consume(invalid, acknowledgment, identity()) { _, _ -> }
+        runtime.consume(invalid, acknowledgment, identity()) { _, _ -> AppointmentConsumerHandlerResult.ALREADY_APPLIED }
             .shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
 
         acknowledgment.count shouldBeEqualTo 1
@@ -210,7 +248,9 @@ class AppointmentConsumerRuntimeTest {
         val acknowledgment = RecordingAcknowledgment()
 
         assertFailsWith<AppointmentConsumerRetryableException> {
-            unavailableRuntime.consume(record(), acknowledgment, identity()) { _, _ -> }
+            unavailableRuntime.consume(record(), acknowledgment, identity()) { _, _ ->
+                AppointmentConsumerHandlerResult.ALREADY_APPLIED
+            }
         }
 
         acknowledgment.count shouldBeEqualTo 0
@@ -227,7 +267,10 @@ class AppointmentConsumerRuntimeTest {
             record = record(),
             acknowledgment = null,
             identity = identity(),
-            handler = { _, _ -> calls++ },
+            handler = { _, _ ->
+                calls++
+                AppointmentConsumerHandlerResult.APPLIED
+            },
             expectedScope = AppointmentReplayScope(tenantGroupId = 99, clinicId = 31),
         ).shouldBeEqualTo(AppointmentConsumerOutcome.QUARANTINED)
 
@@ -257,7 +300,10 @@ class AppointmentConsumerRuntimeTest {
             record = record,
             acknowledgment = null,
             identity = identity(),
-            handler = { _, _ -> calls.incrementAndGet() },
+            handler = { _, _ ->
+                calls.incrementAndGet()
+                AppointmentConsumerHandlerResult.APPLIED
+            },
             expectedScope = AppointmentReplayScope(tenantGroupId = 7, clinicId = 31),
         )
 

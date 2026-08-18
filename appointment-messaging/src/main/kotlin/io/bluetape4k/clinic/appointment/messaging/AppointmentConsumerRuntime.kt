@@ -11,8 +11,27 @@ data class AppointmentConsumerContext(
     val provenance: AppointmentConsumerProvenance,
 )
 
+/**
+ * handler가 event ID에 대해 side effect를 적용한 결과입니다.
+ *
+ * handler는 [AppointmentEventEnvelope.eventId]를 자체 durable idempotency key로 사용해야
+ * 하며, process crash 뒤 같은 event가 재전달되면 [ALREADY_APPLIED]를 반환해야 합니다.
+ * 두 결과 모두 inbox를 terminal processed로 전환할 수 있지만, retryable 예외는 반드시
+ * 던져야 inbox가 처리 완료로 오인되지 않습니다.
+ */
+enum class AppointmentConsumerHandlerResult {
+    APPLIED,
+    ALREADY_APPLIED,
+}
+
+/**
+ * inbox terminal update 전에 side effect의 durable idempotency 결과를 반환하는 공개 handler 계약입니다.
+ */
 fun interface AppointmentConsumerHandler {
-    fun handle(envelope: AppointmentEventEnvelope, context: AppointmentConsumerContext)
+    fun handle(
+        envelope: AppointmentEventEnvelope,
+        context: AppointmentConsumerContext,
+    ): AppointmentConsumerHandlerResult
 }
 
 enum class AppointmentConsumerOutcome {
@@ -167,7 +186,11 @@ class AppointmentConsumerRuntime(
 
         val context = AppointmentConsumerContext(identity, provenance)
         try {
-            handler.handle(envelope, context)
+            when (handler.handle(envelope, context)) {
+                AppointmentConsumerHandlerResult.APPLIED,
+                AppointmentConsumerHandlerResult.ALREADY_APPLIED,
+                -> Unit
+            }
             return if (inboxStore.markProcessed(identity, envelope.eventId, acquisition.leaseUntil)) {
                 acknowledgment?.acknowledge()
                 metrics.processed()

@@ -82,7 +82,10 @@ class AppointmentKafkaConsumerIntegrationTest {
                 consumerId = AppointmentLogicalConsumerId("notification"),
                 streamId = AppointmentLogicalStreamId("appointment-events"),
             )
-            val handler = AppointmentConsumerHandler { _, _ -> calls.incrementAndGet() }
+            val handler = AppointmentConsumerHandler { _, _ ->
+                calls.incrementAndGet()
+                AppointmentConsumerHandlerResult.APPLIED
+            }
 
             runtime.consume(record, acknowledgments, identity, handler) shouldBeEqualTo AppointmentConsumerOutcome.PROCESSED
             runtime.consume(record, acknowledgments, identity, handler) shouldBeEqualTo AppointmentConsumerOutcome.DUPLICATE
@@ -147,6 +150,7 @@ class AppointmentKafkaConsumerIntegrationTest {
                             firstCrashed.countDown()
                             throw AppointmentConsumerRetryableException("simulated consumer crash")
                         }
+                        AppointmentConsumerHandlerResult.APPLIED
                     }
                 },
             )
@@ -158,7 +162,10 @@ class AppointmentKafkaConsumerIntegrationTest {
                     AppointmentKafkaConsumerListener(
                         runtime = runtime,
                         identity = identity,
-                        handler = { _, _ -> recovered.countDown() },
+                        handler = { _, _ ->
+                            recovered.countDown()
+                            AppointmentConsumerHandlerResult.APPLIED
+                        },
                     ).onMessage(record, acknowledgment)
                     recoveredRuntimeReturned.countDown()
                 },

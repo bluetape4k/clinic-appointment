@@ -140,7 +140,7 @@ class KafkaAppointmentReplaySourceTest {
             allowedTopics = setOf(topic),
             scopeAuthority = scopeAuthority,
         )
-        runtime.consume(record, expectedIdentity) { _, _ -> }
+        runtime.consume(record, expectedIdentity) { _, _ -> AppointmentConsumerHandlerResult.ALREADY_APPLIED }
 
         val consumer = MockConsumer<String, String>(OffsetResetStrategy.NONE)
         val partition = TopicPartition(topic.value, 0)
