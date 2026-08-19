@@ -48,4 +48,3 @@
   verification, documentation, delivery evidence가 모두 존재함
 
 최종 판정: **CLEAR**.
-
