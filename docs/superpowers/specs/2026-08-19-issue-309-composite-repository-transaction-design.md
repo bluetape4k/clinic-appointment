@@ -85,16 +85,37 @@ Issue 본문의 이전 수치가 현재 소스와 다를 때는 현재 소스를
 | `SPLIT-TRANSACTION` | `WaitlistApplicationService.confirmOffer`, `PatientAuthenticationService.login`, replay/reconciliation, notification outbox worker | reservation/business/finalization 또는 read/password/issue를 짧은 단계로 분리하고 각 commit을 검증 | 단계를 합쳐 replay/재시도 계약 변경 |
 | `BOOTSTRAP-BOUNDARY` | `ExposedDatabaseFactory`, lifecycle, configuration bean, schema/readiness/backfill runner | Spring `DataSource`에서 `Database` handle 생성·해제, startup/readiness 전용 접근 | 일반 request service가 bootstrap handle을 선택해 transaction 생성 |
 
-`TreatmentSpaceRepository`와 `AppointmentItemRepository`는 단일 테이블처럼 보이는
-메서드라도 tenant ownership 또는 proposal/plan revision 검증을 함께 수행하므로
-이번 수직 전환에서는 `COMPOSITE-DSL`로 남긴다. 향후 별도 issue에서 공통 repository
-계약을 도입하려면 동일한 불변식과 API 호환성 테스트를 먼저 추가한다.
+`AppointmentItemRepository`는 단일 테이블처럼 보이는 메서드라도 proposal/plan
+revision 검증과 batch insert를 함께 수행하므로 `COMPOSITE-DSL`로 남긴다.
+`TreatmentSpaceRepository`는 `LONG-JDBC` 공통 계약을 제공하되 tenant·clinic ownership
+검증을 수행하는 명시적 `save`와 capability 메서드를 계속 사용한다. generic 메서드는
+caller-owned transaction 안의 내부 공통 계약으로만 취급하고, 외부 호출은 scope 전용
+메서드를 사용해야 한다.
+
+### 현재 Database inventory 기준
+
+이번 수직 전환에서는 `Database` 직접 사용을 일괄 제거하지 않았다. 영향 모듈의
+main source를 다시 검색한 결과 `transaction(database)` 55건이 21개 파일에 있고,
+`private val database: Database` 필드는 23개 파일에 있다. 이는 다음 경계가 섞여
+있기 때문이다.
+
+| 분류 | 대표 사용처 | 이번 범위의 판단 | 후속 후보 |
+| --- | --- | --- | --- |
+| `BOOTSTRAP-BOUNDARY` | `ExposedDatabaseLifecycle`, `NotificationSchemaReadiness`, `PatientCancellationHistoryBackfillRunner` | startup/readiness/backfill lifecycle에서 handle을 소유하므로 유지 | lifecycle 전용 adapter 검토 |
+| `SPLIT-TRANSACTION` | `PatientAuthenticationService`, `WaitlistApplicationService`, `AppointmentReplayService` | password·외부 IO·reservation/replay 단계의 짧은 commit을 보존 | 단계별 transaction contract 보강 |
+| `WORKER/CLAIM` | `AppointmentConsumerInboxStore`, `WaitlistOfferNotificationStore`, `NotificationOutboxWorkStore` | lease·lock·재시도 SQL과 같은 transaction에 있어 유지 | claim helper 재사용성 검토 |
+| `PROJECTION/RECOVERY` | `AppointmentStatsProjectionConsumer`, `JdbcAppointmentReminderRecoveryStore` | projection/recovery 저장 경계의 명시적 database를 유지 | 공통 runner boundary 설계 |
+
+이 inventory는 변경하지 않은 사용처를 후속 후보로 분류하기 위한 현재 소스 기준표다.
+이번 issue에서는 이 경계를 Spring transaction 하나로 합치거나 Database 선택 책임을
+repository로 이동하지 않는다.
 
 ## 4. transaction 계약
 
 ### 4.1 Spring 경계
 
-- application service의 public write method가 transaction 소유자다.
+- non-suspend application service의 public read/create entry point가 Spring proxy
+  transaction 소유자다.
 - 기본 propagation은 `REQUIRED`로 두어 상위 transaction이 있으면 참여하고 없으면
   Spring transaction manager가 시작한다.
 - 검증 가능한 business 예외와 unchecked 예외는 write를 rollback한다. 외부 호출
@@ -102,6 +123,10 @@ Issue 본문의 이전 수치가 현재 소스와 다를 때는 현재 소스를
   transaction 밖에서 수행한다.
 - 순수 조회 entry point는 `readOnly = true`를 사용하며, read-only 메서드가 write를
   호출하는 구조를 허용하지 않는다.
+- `suspend` status/cancel은 `Dispatchers.IO` 안의 명시적 Exposed transaction이
+  소유자다. imperative Spring interceptor가 coroutine 완료를 기다리지 않는 경로와
+  중첩하지 않으며, 별도 suspend proxy fixture를 추가하기 전에는 `@Transactional`을
+  선언하지 않는다.
 - `REQUIRES_NEW`는 idempotency finalization·audit처럼 의도적으로 상위 실패와
   분리해야 하는 단계에서만 사용하고, 그 이유와 재시도 결과를 KDoc/테스트에
   남긴다. 임의의 nested transaction 대체 수단으로 사용하지 않는다.

@@ -32,6 +32,9 @@ import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.SQLException
@@ -44,9 +47,11 @@ import java.time.LocalDate
  *
  * 예약 row와 notification/messaging outbox intent는 같은 Exposed transaction 안에서 기록되는
  * durable authority입니다. 현재 [ApplicationEventPublisher] signal은 빠른 보조 신호이며, signal
- * 전달 실패가 outbox 기록의 권위나 worker polling 경계를 대신하지 않습니다. Issue #307의 bounded
- * `@Transactional` publisher 검증은 별도 fixture에서 수행하고 이 서비스의 transaction 위치와
- * legacy signal 동작은 유지합니다.
+ * 전달 실패가 outbox 기록의 권위나 worker polling 경계를 대신하지 않습니다. public read/write
+ * non-suspend read/create entry point의 Spring `@Transactional` 선언은 proxy 경계를 고정하고,
+ * 내부 Exposed DSL은 caller-owned transaction에 참여합니다. coroutine status/cancel은
+ * `Dispatchers.IO` 안에서 명시적 Exposed transaction을 소유하므로 imperative Spring
+ * interceptor와 겹치는 `@Transactional`을 선언하지 않습니다.
  *
  * @param appointmentRepository 예약 Repository
  * @param stateMachine 예약 상태 전이 검증기
@@ -73,6 +78,7 @@ class AppointmentService(
     }
 
     /** 검증된 tenant-clinic 범위의 예약만 기간으로 조회합니다. */
+    @Transactional(readOnly = true)
     fun getByDateRange(scope: TenantClinicScope, startDate: LocalDate, endDate: LocalDate): List<AppointmentRecord> {
         log.debug { "getByDateRange: dateRange=$startDate..$endDate" }
         return transaction { appointmentRepository.findByClinicAndDateRange(scope, startDate..endDate) }
@@ -95,6 +101,7 @@ class AppointmentService(
         transaction { appointmentRepository.findScopeByIdAndTenant(id, tenantGroupId) }
             ?: throw NoSuchElementException("Appointment not found: $id")
 
+    @Transactional
     fun create(
         tenantGroupId: Long,
         request: CreateAppointmentRequest,
@@ -109,6 +116,7 @@ class AppointmentService(
     )
 
     /** 서버에서 검증한 command context와 함께 예약 생성 intent를 기록합니다. */
+    @Transactional
     fun create(
         tenantGroupId: Long,
         request: CreateAppointmentRequest,
@@ -277,7 +285,7 @@ class AppointmentService(
             commandContext = AppointmentCommandContext.root(LEGACY_STATUS_CORRELATION_ID),
         )
 
-    /** 상태 변경과 notification/appointment outbox intent를 하나의 transaction으로 기록합니다. */
+    /** 상태 변경과 notification/appointment outbox intent를 하나의 명시적 Exposed transaction으로 기록합니다. */
     suspend fun updateStatus(
         scope: TenantClinicScope,
         id: Long,
@@ -418,7 +426,7 @@ class AppointmentService(
             commandContext = AppointmentCommandContext.root(LEGACY_CANCEL_CORRELATION_ID),
         )
 
-    /** 취소와 notification/appointment outbox intent를 하나의 transaction으로 기록합니다. */
+    /** 취소와 notification/appointment outbox intent를 하나의 명시적 Exposed transaction으로 기록합니다. */
     suspend fun cancel(
         scope: TenantClinicScope,
         id: Long,
@@ -522,6 +530,22 @@ class AppointmentService(
     }
 
     private fun publishLegacyEventSafely(event: AppointmentDomainEvent) {
+        if (TransactionSynchronizationManager.isSynchronizationActive() &&
+            TransactionSynchronizationManager.isActualTransactionActive()
+        ) {
+            TransactionSynchronizationManager.registerSynchronization(
+                object : TransactionSynchronization {
+                    override fun afterCommit() {
+                        publishLegacyEventNow(event)
+                    }
+                }
+            )
+            return
+        }
+        publishLegacyEventNow(event)
+    }
+
+    private fun publishLegacyEventNow(event: AppointmentDomainEvent) {
         runCatching { eventPublisher.publishEvent(event) }
             .onFailure { ex ->
                 log.warn(ex) { "Legacy appointment event listener failed after durable mutation" }

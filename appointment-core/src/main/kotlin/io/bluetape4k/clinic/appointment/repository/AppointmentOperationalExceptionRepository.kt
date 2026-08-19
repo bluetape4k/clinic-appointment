@@ -17,8 +17,9 @@ import java.time.Instant
 class AppointmentOperationalExceptionRepository {
 
     /** 예외 사실을 append하고 생성된 양수 ID를 반환합니다. */
-    fun append(exception: AppointmentOperationalException): Long =
-        AppointmentOperationalExceptions.insertAndGetId {
+    fun append(exception: AppointmentOperationalException): Long {
+        requireCurrentExposedTransaction("AppointmentOperationalExceptionRepository")
+        return AppointmentOperationalExceptions.insertAndGetId {
             it[appointmentPlanId] = exception.appointmentPlanId
             it[appointmentId] = exception.appointmentId
             it[type] = exception.type
@@ -27,9 +28,11 @@ class AppointmentOperationalExceptionRepository {
             it[openedAt] = exception.openedAt
             it[resolvedAt] = exception.resolvedAt
         }.value
+    }
 
     /** 열린 예외를 운영자가 인지한 상태로 이동합니다. */
     fun acknowledge(exceptionId: Long): Boolean {
+        requireCurrentExposedTransaction("AppointmentOperationalExceptionRepository")
         exceptionId.requirePositiveNumber("exceptionId")
         return AppointmentOperationalExceptions.update(
             where = {
@@ -43,6 +46,7 @@ class AppointmentOperationalExceptionRepository {
 
     /** 열린 또는 인지된 예외를 해결하고 결과 시각을 기록합니다. */
     fun resolve(exceptionId: Long, resolvedAt: Instant): Boolean {
+        requireCurrentExposedTransaction("AppointmentOperationalExceptionRepository")
         exceptionId.requirePositiveNumber("exceptionId")
         return AppointmentOperationalExceptions.update(
             where = {
