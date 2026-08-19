@@ -42,6 +42,12 @@ import java.time.LocalDate
 /**
  * 예약 API 유스케이스 서비스.
  *
+ * 예약 row와 notification/messaging outbox intent는 같은 Exposed transaction 안에서 기록되는
+ * durable authority입니다. 현재 [ApplicationEventPublisher] signal은 빠른 보조 신호이며, signal
+ * 전달 실패가 outbox 기록의 권위나 worker polling 경계를 대신하지 않습니다. Issue #307의 bounded
+ * `@Transactional` publisher 검증은 별도 fixture에서 수행하고 이 서비스의 transaction 위치와
+ * legacy signal 동작은 유지합니다.
+ *
  * @param appointmentRepository 예약 Repository
  * @param stateMachine 예약 상태 전이 검증기
  * @param eventPublisher 예약 도메인 이벤트 발행기
