@@ -39,13 +39,14 @@ assert_selected_version() {
     local forbidden_version
     local forbidden_pattern
     local forbidden_header_regex
+    local configuration="${DEPENDENCY_INSIGHT_CONFIGURATION:-runtimeClasspath}"
 
     echo "[CHECK] $coordinate -> $target_version"
     if ! (
         cd -- "$REPOSITORY_ROOT"
         ./gradlew "$module:dependencyInsight" \
             --dependency "$coordinate" \
-            --configuration runtimeClasspath \
+            --configuration "$configuration" \
             --no-daemon \
             --console=plain
     ) >"$output_file" 2>&1; then
@@ -69,6 +70,12 @@ assert_selected_version() {
             fail "$label still exposes forbidden selected version $coordinate:$forbidden_version"
         fi
     done
+}
+
+assert_selected_version_for_configuration() {
+    local configuration="$1"
+    shift
+    DEPENDENCY_INSIGHT_CONFIGURATION="$configuration" assert_selected_version "$@"
 }
 
 assert_catalog_exposed_version() {
@@ -131,5 +138,32 @@ assert_selected_version \
     :appointment-messaging-benchmark \
     org.apache.kafka:kafka-clients \
     4.2.1
+
+assert_selected_version \
+    lettuce-core-api-runtime \
+    :appointment-api \
+    io.lettuce:lettuce-core \
+    7.6.0.RELEASE \
+    7.5.2.RELEASE
+assert_selected_version_for_configuration \
+    testRuntimeClasspath \
+    lettuce-core-api-test-runtime \
+    :appointment-api \
+    io.lettuce:lettuce-core \
+    7.6.0.RELEASE \
+    7.5.2.RELEASE
+assert_selected_version \
+    lettuce-core-notification-runtime \
+    :appointment-notification \
+    io.lettuce:lettuce-core \
+    7.6.0.RELEASE \
+    7.5.2.RELEASE
+assert_selected_version_for_configuration \
+    testRuntimeClasspath \
+    lettuce-core-notification-test-runtime \
+    :appointment-notification \
+    io.lettuce:lettuce-core \
+    7.6.0.RELEASE \
+    7.5.2.RELEASE
 
 echo "[PASS] bluetape4k-dependencies 1.4.0 dependency contract"
