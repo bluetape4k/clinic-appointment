@@ -1,19 +1,27 @@
 package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeNull
+import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.cache.nearcache.NearCacheOperations
+import io.lettuce.core.RedisCommandTimeoutException
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
-import io.bluetape4k.assertions.shouldBeFalse
-import io.bluetape4k.assertions.shouldBeEqualTo
-import io.bluetape4k.assertions.shouldBeNull
-import io.bluetape4k.assertions.shouldBeTrue
-import io.bluetape4k.assertions.shouldNotBeNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.cache.Cache
+import java.util.concurrent.CancellationException
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * [NearCacheAdapter] 단위 테스트.
@@ -66,6 +74,16 @@ class NearCacheAdapterTest {
         result.shouldBeNull()
     }
 
+    @Test
+    fun `get - 취소 예외는 삼키지 않고 호출자에게 전파한다`() {
+        val key = "cancelled-key"
+        every { delegate.get(key) } throws CancellationException("조회 취소")
+
+        assertFailsWith<CancellationException> {
+            adapter.get(key)
+        }
+    }
+
     // 4. put(key, null) → delegate.put 미호출
     @Test
     fun `put - null 값은 delegate에 저장하지 않는다`() {
@@ -105,6 +123,40 @@ class NearCacheAdapterTest {
         adapter.put(key, value)
     }
 
+    // 8. put(key, value) 제어 흐름 예외는 호출자에게 전파
+    @Test
+    fun `put - 취소 예외는 삼키지 않고 호출자에게 전파한다`() {
+        val key = "key1"
+        val value = listOf("x", "y")
+        every { delegate.put(key, value) } throws CancellationException("호출 취소")
+
+        assertFailsWith<CancellationException> {
+            adapter.put(key, value)
+        }
+    }
+
+    @Test
+    fun `put - 타임아웃 예외는 삼키지 않고 호출자에게 전파한다`() {
+        val key = "key1"
+        val value = listOf("x", "y")
+        every { delegate.put(key, value) } throws TimeoutException("Redis 타임아웃")
+
+        assertFailsWith<TimeoutException> {
+            adapter.put(key, value)
+        }
+    }
+
+    @Test
+    fun `put - Lettuce command timeout도 삼키지 않고 호출자에게 전파한다`() {
+        val key = "key1"
+        val value = listOf("x", "y")
+        every { delegate.put(key, value) } throws RedisCommandTimeoutException("Redis command timeout")
+
+        assertFailsWith<RedisCommandTimeoutException> {
+            adapter.put(key, value)
+        }
+    }
+
     // 8. evict(key) → delegate.remove(key) 1회 호출
     @Test
     fun `evict - delegate의 remove를 1회 호출한다`() {
@@ -124,6 +176,46 @@ class NearCacheAdapterTest {
         adapter.clear()
 
         verify(exactly = 1) { delegate.clearAll() }
+    }
+
+    @Test
+    fun `clear - 취소 예외는 삼키지 않고 호출자에게 전파한다`() {
+        every { delegate.clearAll() } throws CancellationException("정리 취소")
+
+        assertFailsWith<CancellationException> {
+            adapter.clear()
+        }
+    }
+
+    @Test
+    fun `clear - 진행 중 loader는 clear 이후 stale 값을 다시 저장하지 않는다`() {
+        val key = "clear-race-key"
+        val loaded = listOf("stale")
+        val loaderStarted = CountDownLatch(1)
+        val releaseLoader = CountDownLatch(1)
+        val executor = Executors.newSingleThreadExecutor()
+        every { delegate.get(key) } returns null
+        justRun { delegate.clearAll() }
+
+        try {
+            val future = executor.submit<List<String>> {
+                adapter.get(key) {
+                    loaderStarted.countDown()
+                    releaseLoader.await()
+                    loaded
+                }!!
+            }
+            loaderStarted.await(5, TimeUnit.SECONDS).shouldBeTrue()
+
+            adapter.clear()
+            releaseLoader.countDown()
+
+            future.get(5, TimeUnit.SECONDS) shouldBeEqualTo loaded
+            verify(exactly = 0) { delegate.put(key, loaded) }
+        } finally {
+            releaseLoader.countDown()
+            executor.shutdownNow()
+        }
     }
 
     // 10. putIfAbsent(key, value) → 키 없을 때(delegate.putIfAbsent 반환 null): null 반환
@@ -170,16 +262,16 @@ class NearCacheAdapterTest {
         verify(exactly = 0) { delegate.putIfAbsent(any(), any()) }
     }
 
-    // 14. putIfAbsent 예외 시 → SimpleValueWrapper(value) 반환 (저장 실패 시그널)
+    // 14. putIfAbsent 예외 시 → null 반환 (저장 실패를 기존 값으로 오인하지 않음)
     @Test
-    fun `putIfAbsent - 예외 발생 시 SimpleValueWrapper를 반환하여 저장 실패를 나타낸다`() {
+    fun `putIfAbsent - 예외 발생 시 null을 반환하여 저장 실패를 나타낸다`() {
         val key = "key1"
         val value = listOf("v")
         every { delegate.putIfAbsent(key, value) } throws RuntimeException("Redis 장애")
 
         val result = adapter.putIfAbsent(key, value)
 
-        result.shouldNotBeNull()
+        result.shouldBeNull()
     }
 
     // 15. get(key, valueLoader) → 캐시 미스 시 valueLoader 호출 후 저장
@@ -194,6 +286,102 @@ class NearCacheAdapterTest {
 
         result shouldBeEqualTo loaded
         verify(exactly = 1) { delegate.put(key, loaded) }
+    }
+
+    @Test
+    fun `get valueLoader - 같은 키의 동시 미스는 loader를 한 번만 호출한다`() {
+        val key = "same-key"
+        val loaded = listOf("loaded")
+        val lookupCount = AtomicInteger()
+        val loaderCount = AtomicInteger()
+        val loaderStarted = CountDownLatch(1)
+        val secondLookupDone = CountDownLatch(1)
+        val releaseLoader = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(2)
+
+        every { delegate.get(key) } answers {
+            if (lookupCount.incrementAndGet() == 2) secondLookupDone.countDown()
+            null
+        }
+        justRun { delegate.put(key, loaded) }
+
+        try {
+            val first = executor.submit<List<String>> {
+                adapter.get(key) {
+                    loaderCount.incrementAndGet()
+                    loaderStarted.countDown()
+                    releaseLoader.await()
+                    loaded
+                }!!
+            }
+
+            loaderStarted.await(5, TimeUnit.SECONDS).shouldBeTrue()
+            val second = executor.submit<List<String>> {
+                val forbiddenLoader = Callable<List<String>> {
+                    throw AssertionError("두 번째 loader는 호출되면 안 된다")
+                }
+                adapter.get(key, forbiddenLoader)!!
+            }
+            secondLookupDone.await(5, TimeUnit.SECONDS).shouldBeTrue()
+            loaderCount.get() shouldBeEqualTo 1
+
+            releaseLoader.countDown()
+            first.get(5, TimeUnit.SECONDS) shouldBeEqualTo loaded
+            second.get(5, TimeUnit.SECONDS) shouldBeEqualTo loaded
+            loaderCount.get() shouldBeEqualTo 1
+        } finally {
+            releaseLoader.countDown()
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `get valueLoader - loader 취소 후에는 동일 키를 다시 로드할 수 있다`() {
+        val key = "cancelled-key"
+        every { delegate.get(key) } returns null
+        val loaderCount = AtomicInteger()
+
+        assertFailsWith<CancellationException> {
+            adapter.get(key) {
+                loaderCount.incrementAndGet()
+                throw CancellationException("loader 취소")
+            }
+        }
+
+        adapter.get(key) {
+            loaderCount.incrementAndGet()
+            listOf("retry")
+        } shouldBeEqualTo listOf("retry")
+        loaderCount.get() shouldBeEqualTo 2
+    }
+
+    @Test
+    fun `get valueLoader - loader 타임아웃은 ValueRetrievalException으로 감싸지 않는다`() {
+        val key = "timeout-key"
+        every { delegate.get(key) } returns null
+
+        assertFailsWith<TimeoutException> {
+            adapter.get(key, Callable<List<String>> { throw TimeoutException("loader 타임아웃") })
+        }
+    }
+
+    @Test
+    fun `get valueLoader - loader 실패 후에는 동일 키를 다시 로드할 수 있다`() {
+        val key = "failed-key"
+        val retryValue = listOf("retry")
+        every { delegate.get(key) } returns null
+        justRun { delegate.put(key, retryValue) }
+        val loaderCount = AtomicInteger()
+
+        assertFailsWith<Cache.ValueRetrievalException> {
+            adapter.get(key, Callable<List<String>> {
+                loaderCount.incrementAndGet()
+                throw RuntimeException("loader 실패")
+            })
+        }
+
+        adapter.get(key, Callable { loaderCount.incrementAndGet(); retryValue }) shouldBeEqualTo retryValue
+        loaderCount.get() shouldBeEqualTo 2
     }
 
     // 16. get(key, valueLoader) → 캐시 히트 시 valueLoader 미호출
