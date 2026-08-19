@@ -4,7 +4,7 @@
 
 **목표:** appointment-api의 H2 Spring context에서 direct Exposed transaction과 외부 Spring bean을 통한 @Transactional command의 경계를 비교하고, 세 durable 행과 DDD publisher의 commit·rollback·listener 실패 계약을 회귀 테스트로 고정한다.
 
-**구조:** 실제 AppointmentService 전체를 바꾸지 않고, ApplicationContextRunner가 만든 H2 context 안에 작은 AggregateRoot와 세 개의 fixture table을 둔다. @Transactional은 반드시 외부 Spring proxy를 통해 호출하며, Exposed Boot 4 transaction manager와 publisher auto-configuration을 실제로 로드한다. proof가 통과하면 publisher를 bounded adapter 후보로 기록하되, 기존 post-transaction signal과 outbox authority는 유지한다.
+**구조:** 실제 AppointmentService 전체를 바꾸지 않고, ApplicationContextRunner가 만든 H2 context 안에 작은 AggregateRoot와 세 개의 fixture table을 둔다. @Transactional은 반드시 외부 Spring proxy를 통해 호출하며, 애플리케이션이 실제 사용하는 JetBrains Exposed Boot 4 `ExposedAutoConfiguration`의 `SpringTransactionManager`를 로드한다. publisher는 테스트 전용 bean으로 주입해 manager 조합을 바꾸지 않고, publisher auto-configuration의 조건·fail-closed 동작은 별도 bluetape4k manager context에서 검증한다. proof가 통과하면 publisher를 bounded adapter 후보로 기록하되, 기존 post-transaction signal과 outbox authority는 유지한다.
 
 **기술 스택:** Kotlin 2.3, Spring Boot 4, Exposed v1 JDBC, @Transactional, ApplicationContextRunner, H2, bluetape4k-exposed-spring-boot-jdbc:1.12.1 BOM 관리 의존성, JUnit 5와 bluetape assertions
 
@@ -76,16 +76,15 @@ testImplementation("io.github.bluetape4k.exposed:bluetape4k-exposed-spring-boot-
 
 **파일:** appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/AppointmentDddEventTransactionBoundaryTest.kt
 
-- [ ] ApplicationContextRunner에 다음 auto-configuration만 명시한다.
+- [ ] 실제 transaction fixture의 ApplicationContextRunner에는 애플리케이션과 동일한 JetBrains Exposed Boot 4 auto-configuration과 테스트 전용 publisher bean을 명시한다. publisher auto-configuration은 별도 조건 검증 runner에서만 bluetape4k manager와 함께 로드해 공식 manager와 중복 생성하지 않는다.
 
 ~~~kotlin
 AutoConfigurations.of(
     ExposedAutoConfiguration::class.java,
-    ExposedAggregateEventPublisherAutoConfiguration::class.java,
 )
 ~~~
 
-- [ ] @TestConfiguration(proxyBeanMethods = false)에 EmbeddedDatabaseBuilder().generateUniqueName(true).setType(EmbeddedDatabaseType.H2).build() DataSource를 destroyMethod = "shutdown"으로 등록하고, Database.connect(dataSource) handle을 bean으로 등록한다. fixture command bean은 open class여야 한다.
+- [ ] 테스트 class의 `@BeforeAll`에서 `EmbeddedDatabaseBuilder().generateUniqueName(true).setType(EmbeddedDatabaseType.H2).build()` DataSource와 Exposed fixture handle을 만들고, `@BeforeEach`의 `transaction(fixtureDatabase) { SchemaUtils.createMissingTablesAndColumns(...); Table.deleteAll() }`로 초기화한다. ApplicationContextRunner에는 같은 DataSource를 넣고, Spring manager가 소유한 현재 Exposed handle은 context 시작 직후 캡처해 context 종료 후 해제한다. fixture command bean은 open class여야 한다.
 - [ ] command bean의 public 메서드를 다음 형태로 선언한다.
 
 ~~~kotlin
@@ -103,7 +102,7 @@ open fun commit(appointmentId: Long) {
 
 - [ ] direct baseline은 별도 transaction(database) {} 호출로 두고, TransactionSynchronizationManager.isSynchronizationActive()와 isActualTransactionActive()가 false임을 확인한다. publisher에 event가 등록된 aggregate를 baseline에서 넘기면 fail-closed 예외가 발생하고 세 행이 생기지 않아야 한다.
 - [ ] proxy command에서는 두 synchronization flag가 true이고, TransactionManager.currentOrNull()?.connection의 underlying JDBC connection identity와 DataSourceUtils.getConnection(dataSource) identity가 동일함을 확인한다.
-- [ ] publisher auto-configuration을 명시하지 않은 baseline context에는 publisher bean이 없고, 명시적으로 추가한 context에는 단일 publisher bean이 생기는지 확인한다. auto-configuration의 class condition과 Exposed transaction manager 이후 ordering도 assertion한다.
+- [ ] 실제 fixture에는 테스트 전용 publisher bean을 주입하고, publisher auto-configuration을 명시하지 않은 공식 Exposed baseline에는 publisher bean이 없음을 확인한다. 별도 bluetape4k manager runner에서 auto-configuration을 명시하면 단일 publisher bean이 생기는지, class condition과 ordering이 고정되는지 assertion한다.
 
 RED 실행:
 
@@ -123,14 +122,14 @@ RED 실행:
 - [ ] 예외를 전파하는 rollback command를 추가한다. 세 행을 기록하고 publisher를 호출한 뒤 IllegalStateException("pilot rollback")을 던진다. 호출 후 세 행이 모두 0이고 synchronous listener가 rollback 전에 호출될 수 있음을 별도로 기록하며, aggregate buffer가 1개 유지됨을 assertion한다.
 - [ ] rollback aggregate는 다음 성공 command에서만 명시적으로 새 aggregate instance로 재시도한다. 이전 aggregate의 buffer를 자동으로 재사용하지 않으며, 성공 후 새 instance buffer가 비어 있음을 확인한다.
 - [ ] rollback event 기준 데이터의 attempt/version과 성공 재시도의 opaque ID를 대조해 같은 event가 두 번 발행되지 않음을 확인한다. retry는 새 aggregate instance와 증가한 attempt를 사용하고 성공 후 이전 buffer를 참조하지 않는다.
-- [ ] 모든 Exposed 쓰기는 transaction {} 안에서 수행하고, 조회 assertion도 같은 Database handle을 사용한다.
+- [ ] 모든 Exposed 쓰기는 transaction {} 안에서 수행하고, 조회 assertion도 같은 fixture Database handle을 사용한다. command 내부의 무인자 `transaction {}`는 활성 Spring transaction의 Exposed database를 해석한다.
 
 ### Task 4: GREEN — listener 실패 의미와 auto-configuration fail-closed
 
 **파일:** 동일 테스트 파일
 
 - [ ] synchronous ApplicationEventPublisher listener가 예외를 던지는 context를 만들고, command 예외 전파·세 행 rollback·publisher buffer 보존을 확인한다. listener는 외부 I/O를 하지 않고 메모리 observation만 수행한다.
-- [ ] @TransactionalEventListener bean은 commit에서만 opaque ID를 받고 rollback에서는 호출 횟수 0이어야 한다. AFTER_COMMIT listener가 예외를 던져도 이미 커밋한 세 행을 되돌리거나 command 재시도하지 않음을 확인한다.
+- [ ] @TransactionalEventListener bean은 commit에서만 opaque ID를 받고 rollback에서는 호출 횟수 0이어야 한다. AFTER_COMMIT listener가 예외를 던져도 Spring event multicaster가 command를 정상 반환하고 이미 커밋한 세 행을 되돌리거나 command 재시도하지 않음을 결과 assertion으로 고정한다.
 - [ ] 단일 springTransactionManager context에서 publisher bean이 1개 선택되는지 확인한다.
 - [ ] 두 개의 비-primary PlatformTransactionManager를 등록한 context에서는 publisher auto-configuration이 publisher를 만들지 않고 context가 fail-closed로 유지되는지 확인한다. primary 하나를 둔 조합은 명시적 선택이 가능한 별도 assertion으로 남긴다.
 - [ ] commit·rollback·synchronous listener failure·AFTER_COMMIT failure 후 각각 TransactionSynchronizationManager.isSynchronizationActive()가 false이고, TransactionManager.currentOrNull()가 null이며, DataSourceUtils.isConnectionTransactional(...) resource가 남지 않고, publisher registration이 다음 command를 방해하지 않는지 확인한다.

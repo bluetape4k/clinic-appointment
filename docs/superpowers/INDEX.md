@@ -11,9 +11,9 @@
 | 7 | 2026-08-08 | Issue #208 Type A review gate 백필 및 현재 remediation 정합화 | ⚠️ 차단: historical gate 미증명 / current remediation PASS | [status](../review/2026-08-07-issue-208-retrospective-gate-status.md) / [current seven-tier](../review/2026-08-08-issue-208-current-remediation-seven-tier.md) / [lesson](../lessons/2026-08-07-issue-208-type-a-review-gate-backfill.md) / [reviews](../review/2026-08-07-issue-208-pr-200-step-2r-spec-review.md) |
 | 8 | 2026-08-08 | Issue #204 notification outbox readiness와 외부 rollout 경계 | ⚠️ 외부 rollout HOLD / local readiness PASS | [readiness](../review/2026-08-08-issue-204-notification-outbox-readiness.md) / [lesson](../lessons/2026-08-08-issue-204-readiness-boundary.md) / [runbook](../runbooks/notification-outbox-operations.md) |
 | 9 | 2026-08-12 | Issue #34 환자 예약 취소·알림 schema v2·포털 상태 전이 | ⚠️ 로컬 구현·모듈 검증 PASS / 성능·보호된 외부 gate PENDING | [spec](specs/2026-08-12-issue-34-patient-commitment-design.md) / [plan](plans/2026-08-12-issue-34-patient-commitment-plan.md) / [risk](risk/2026-08-12-issue-34-patient-commitment-risk-register.ko.md) / [review](../reviews/2026-08-12-issue-34-implementation-review.ko.md) |
-| 10 | 2026-08-19 | Issue #307 DDD 이벤트와 `@Transactional` 경계 | 📝 설계·계획 리뷰 PASS / 구현 진행 | [spec](specs/2026-08-19-issue-307-ddd-event-transaction-boundary-design.md) / [plan](plans/2026-08-19-issue-307-ddd-event-transaction-boundary-plan.md) / [spec review](../review/2026-08-19-issue-307-spec-review.md) / [plan review](../review/2026-08-19-issue-307-plan-review.md) |
+| 10 | 2026-08-19 | Issue #307 DDD 이벤트와 `@Transactional` 경계 | ✅ bounded pilot·모듈 검증 PASS / 실제 서비스 wiring 유지 | [spec](specs/2026-08-19-issue-307-ddd-event-transaction-boundary-design.md) / [plan](plans/2026-08-19-issue-307-ddd-event-transaction-boundary-plan.md) / [spec review](../review/2026-08-19-issue-307-spec-review.md) / [plan review](../review/2026-08-19-issue-307-plan-review.md) / [implementation review](../review/2026-08-19-issue-307-implementation-review.md) |
 
-✅ 완료: 4  📝 계획 완료: 1  ⚠️ 차단/HOLD: 3  🚧 진행 중: 1
+✅ 완료: 5  📝 계획 완료: 1  ⚠️ 차단/HOLD: 3  🚧 진행 중: 1
 
 ## 공개 시각 동반 문서
 
