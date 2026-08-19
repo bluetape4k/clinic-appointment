@@ -48,6 +48,7 @@ class AppointmentItemRepository {
         scope: AppointmentItemAppendScope,
         items: List<AppointmentItemDraft>,
     ): List<AppointmentItemRecord> {
+        requireCurrentExposedTransaction("AppointmentItemRepository")
         require(items.isNotEmpty()) { "appointment items must not be empty" }
         val treatmentKeys = items.map(AppointmentItemDraft::treatmentKey)
         require(treatmentKeys.size == treatmentKeys.toSet().size) {
@@ -103,6 +104,7 @@ class AppointmentItemRepository {
         proposalId: Long,
         requests: List<ResourceAllocationRequest>,
     ) {
+        requireCurrentExposedTransaction("AppointmentItemRepository")
         val treatmentKeys =
             AppointmentItems
                 .select(AppointmentItems.treatmentKey)

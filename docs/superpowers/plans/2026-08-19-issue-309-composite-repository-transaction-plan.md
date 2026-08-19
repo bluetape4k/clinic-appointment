@@ -111,11 +111,16 @@ H2 parameterized dialect가 모두 실행되는지 확인한다. 실패하면 �
 
 **Actions:**
 
-1. RED 단계에서 `AppointmentService`의 create/status/cancel write entry point에 Spring `@Transactional`이 없고 read query entry point에 `readOnly`가 없음을 metadata assertion으로 고정한다.
-2. GREEN 단계에서 proxy 호출 대상인 public `create` write와 `getByDateRange` read에 `@Transactional`/`@Transactional(readOnly = true)`를 선언한다. status/cancel의 public scope entry point에도 `@Transactional`을 선언한다.
-3. 기존 `transaction {}` 호출은 같은 Spring/Exposed connection 참여를 확인한 뒤에만 유지한다. 이 변경에서 외부 event signal, outbox, coroutine `withContext`, idempotency retry 순서는 바꾸지 않는다.
+1. RED 단계에서 `AppointmentService`의 create write와 read query entry point에 Spring
+   `@Transactional`/`readOnly`가 없고, coroutine status/cancel에 명시적 Exposed
+   transaction 경계가 고정되지 않았음을 metadata assertion으로 고정한다.
+2. GREEN 단계에서 proxy 호출 대상인 public `create` write와 `getByDateRange` read에
+   `@Transactional`/`@Transactional(readOnly = true)`를 선언한다. status/cancel은
+   `Dispatchers.IO` 내부 명시적 Exposed transaction을 유지하고 imperative Spring
+   annotation을 추가하지 않는다.
+3. 기존 `transaction {}` 호출은 같은 Spring/Exposed connection 참여를 확인한 뒤에만 유지한다. Spring transaction이 활성화된 create의 legacy event signal은 after-commit synchronization으로 전달하고, outbox·coroutine `withContext`·idempotency retry 순서는 바꾸지 않는다.
 4. `AnnotationTransactionAttributeSource` 또는 `AnnotatedElementUtils`로 propagation `REQUIRED`, rollback 기본값, read-only를 검증한다.
-5. H2 Spring proxy fixture에서 성공 write는 commit되고 writer 예외는 appointment·idempotency·outbox를 함께 rollback하는지 확인한다. 기존 `AppointmentNotificationAtomicityTest`의 direct fixture는 보존한다.
+5. H2 Spring proxy fixture에서 성공 create는 commit되고 legacy signal은 after-commit에 전달되며 writer 예외는 appointment·idempotency·outbox를 함께 rollback하는지 확인한다. 기존 `AppointmentNotificationAtomicityTest`의 direct fixture는 보존한다.
 
 **Verification:**
 
@@ -123,7 +128,7 @@ H2 parameterized dialect가 모두 실행되는지 확인한다. 실패하면 �
 ./gradlew :appointment-api:test --tests '*AppointmentServiceTransactionContractTest' --tests '*AppointmentNotificationAtomicityTest' --tests '*AppointmentDddEventTransactionBoundaryTest' --no-daemon
 ```
 
-**Rollback:** suspend proxy가 기존 API 호출을 깨거나 connection identity가 달라지면 annotation을 write entry point 중 non-suspend `create`부터 축소하고, 실패한 메서드와 근거를 설계 lesson에 기록한다.
+**Rollback:** suspend proxy가 기존 API 호출을 깨거나 connection identity가 달라지면 annotation을 non-suspend `create`와 read 경계로 축소하고, explicit Exposed transaction을 유지한 메서드와 근거를 설계 lesson에 기록한다.
 
 ## Task 5 — composite/split 계약 문서화와 후속 inventory
 
@@ -190,4 +195,3 @@ rg -n "@Testcontainers|transaction\(database\)" appointment-*/src/main/kotlin ap
 4. merge 확인 후 root `develop`을 `git fetch` + `git merge --ff-only origin/develop`으로 동기화하고, Issue #309 worktree와 local/remote branch만 proven merged 상태에서 정리한다. 다른 worktree와 root의 `.superpowers/`, `.workflow-inputs/`는 보존한다.
 
 **Stop condition:** 구현·검증·문서·PR/CI metadata가 모두 fresh evidence를 가지며, merge approval 전에는 delivery를 멈춘다. CI 실패, review P1, branch drift, fixture 실패가 있으면 해당 원인을 수정·재검증하기 전 merge하지 않는다.
-

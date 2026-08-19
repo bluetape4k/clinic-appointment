@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.repository
 
+import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
+import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentIdempotencyRecord
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentIdempotencies
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -11,7 +13,15 @@ import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import java.time.Instant
 
-class AppointmentIdempotencyRepository {
+/** 예약 생성 idempotency의 record CRUD와 scope 특수 조회를 제공하는 caller-owned repository. */
+class AppointmentIdempotencyRepository : LongJdbcRepository<AppointmentIdempotencyRecord> {
+
+    override val table = AppointmentIdempotencies
+
+    override fun extractId(entity: AppointmentIdempotencyRecord): Long =
+        entity.id.requireNotNull("id")
+
+    override fun ResultRow.toEntity(): AppointmentIdempotencyRecord = toAppointmentIdempotencyRecord()
 
     fun save(record: AppointmentIdempotencyRecord): AppointmentIdempotencyRecord {
         val id = AppointmentIdempotencies.insertAndGetId {

@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.repository
 
+import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
 import io.bluetape4k.logging.KLogging
+import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistory
 import io.bluetape4k.clinic.appointment.model.tables.AppointmentStateHistoryRecord
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -14,8 +16,15 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
  *
  * 예약의 모든 상태 전이를 기록하고 조회합니다.
  */
-class AppointmentStateHistoryRepository {
+class AppointmentStateHistoryRepository : LongJdbcRepository<AppointmentStateHistoryRecord> {
     companion object : KLogging()
+
+    override val table = AppointmentStateHistory
+
+    override fun extractId(entity: AppointmentStateHistoryRecord): Long =
+        entity.id.requireNotNull("id")
+
+    override fun ResultRow.toEntity(): AppointmentStateHistoryRecord = toRecord()
 
     /**
      * 상태 변경 이력을 저장합니다.

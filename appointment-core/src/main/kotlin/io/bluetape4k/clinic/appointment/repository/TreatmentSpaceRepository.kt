@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.repository
 
+import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
+import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentSpaceRecord
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TreatmentSpaces
@@ -7,13 +9,21 @@ import io.bluetape4k.support.requireNotBlank
 import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /**
  * caller transaction 안에서 병원별 실제 진료 공간과 capability를 저장·조회합니다.
  */
-class TreatmentSpaceRepository {
+class TreatmentSpaceRepository : LongJdbcRepository<TreatmentSpaceRecord> {
+
+    override val table = TreatmentSpaces
+
+    override fun extractId(entity: TreatmentSpaceRecord): Long =
+        entity.id.requireNotNull("id")
+
+    override fun ResultRow.toEntity(): TreatmentSpaceRecord = mapSpace(this)
 
     /**
      * 공간의 tenant·clinic 소유권을 검증하고 저장합니다.
