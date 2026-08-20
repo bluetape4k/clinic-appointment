@@ -27,6 +27,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   JAVA_VERSION: '25'
   JAVA_DISTRIBUTION: 'temurin'
@@ -41,6 +44,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install gitleaks
         env:
@@ -59,6 +63,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: gradle/actions/wrapper-validation@v6.3.0
 
   # ── 2. 변경 모듈 감지 ──────────────────────────────────────────────────────
@@ -75,6 +81,8 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -140,9 +148,12 @@ jobs:
   build:
     name: Build & Detekt
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [validate-wrapper, changes]
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v5.7.0
         with:

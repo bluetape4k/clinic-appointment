@@ -64,7 +64,7 @@ GRADLE_USER_HOME="$clean_gradle_user_home" ./gradlew \
 PR에는 다음 증거를 함께 남긴다.
 
 ```bash
-find . -type f -name gradle.lockfile \
+find . -type f \( -name gradle.lockfile -o -name settings-gradle.lockfile \) \
   -not -path './.gradle/*' -print | sort
 xmllint --noout gradle/verification-metadata.xml
 git diff --check
@@ -77,12 +77,29 @@ bash scripts/verify-dependency-locking.sh
 - lockfile에 의도하지 않은 version, repository, 빈 configuration이 추가되지 않았다.
 - verification metadata에 local path, machine-specific path, 승인하지 않은 artifact가 없다.
 - `verify-metadata=true`, `verify-signatures=false`의 범위가 의도와 일치한다.
+- root, `settings-gradle.lockfile`, `buildSrc`, benchmark, frontend Gradle project를 포함한
+  예상 lockfile inventory가 모두 존재한다.
 - `dependencyInsight`가 API·notification의 runtime/test configuration에서
   `lettuce-core:7.6.0.RELEASE`를 선택한다.
-- CI workflow에 write flag, `continue-on-error`, lenient fallback이 없다.
+- CI workflow에 write flag, `continue-on-error`, lenient fallback이 없고,
+  `permissions: contents: read`, `persist-credentials: false`, build timeout이 적용된다.
 
 PGP signature 검증은 별도 key provenance와 운영 keyring을 합의하기 전까지 추가하지
 않는다. SHA-256을 PGP 검증의 대체 설명으로 사용하지 않는다.
+
+## 잔여 위험과 재검토 조건
+
+- **artifact provenance (P2):** 현재 metadata는 SHA-256 무결성만 검증하고 PGP 서명을
+  검증하지 않는다. 담당자는 `debop`이며, trusted key 소유·교체·폐기 절차를 합의하기
+  전까지의 임시 수용이다. `1.4.0` release train 종료 전에 PGP 도입 여부를 재검토한다.
+- **settings plugin resolution (P3):** `foojay-resolver-convention`은
+  `pluginManagement`에 선언만 되어 실제 적용되지 않으므로 현재 metadata에 artifact가
+  없다. 실제 plugin을 적용할 때 settings resolution의 lock·verification 증거를 같은 PR에
+  추가한다.
+- **clean-cache 시간 기준선 (P2):** Issue #361에서는 별도 성능 임계치를 승인하지 않았다.
+  현재 clean `GRADLE_USER_HOME`에서 governance는 2분 4초, helper는 4초였으며, CI build
+  job은 20분 timeout으로 제한한다. 모듈 증가나 CI cache miss로 이 범위를 넘으면
+  inventory·검증 분리를 재검토한다.
 
 ## 롤백
 
