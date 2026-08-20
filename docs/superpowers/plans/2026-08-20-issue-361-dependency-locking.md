@@ -94,7 +94,7 @@ verification or writes generated files.
 
 **Files:**
 - Modify: `build.gradle.kts:1-28` (Gradle API import)
-- Modify: `build.gradle.kts:690-710` (all-project policy)
+- Modify: `build.gradle.kts:690-710` (all-project policy and per-project task registration)
 - Modify: `build.gradle.kts` after the `subprojects` configuration block and before the Kover aggregation block
 - Modify: `buildSrc/build.gradle.kts:1-20`
 
@@ -133,34 +133,40 @@ dependencyLocking {
 기존 `mavenCentral()`, `central-snapshots`, changing-module cache 정책과 dependency
 resolution rule은 삭제하거나 변경하지 않는다.
 
-- [ ] **Step 3: Register the all-configuration verification task**
+- [ ] **Step 3: Register per-project configuration verification tasks**
 
-root build의 subproject configuration이 끝난 뒤 다음 task를 등록한다.
+Gradle 9의 unsafe cross-project configuration resolution을 피하기 위해 각 project가 자기
+configuration만 resolve하는 task를 등록하고, root task는 subproject task를 `dependsOn`으로
+연결한다. root build에는 다음 helper와 task 연결을 추가한다.
 
 ```kotlin
-val verifyDependencyGovernance = tasks.register("verifyDependencyGovernance") {
+fun Project.registerDependencyGovernanceTask() = tasks.register("verifyDependencyGovernance") {
     group = "verification"
-    description = "Resolves every resolvable project configuration under strict locking and verification."
+    description = "Resolves every resolvable configuration of this project under strict locking and verification."
     notCompatibleWithConfigurationCache("Configuration inventory is intentionally resolved at task execution time.")
 
     doLast {
-        val configurationsToResolve = allprojects
-            .flatMap { project ->
-                project.configurations
-                    .filter(Configuration::isCanBeResolved)
-                    .map { configuration -> project.path to configuration }
-            }
-            .sortedWith(compareBy({ it.first }, { it.second.name }))
+        val configurationsToResolve = configurations
+            .filter { it.isCanBeResolved }
+            .sortedBy { it.name }
 
         require(configurationsToResolve.isNotEmpty()) {
-            "No resolvable Gradle configurations were discovered."
+            "No resolvable Gradle configurations were discovered for ${project.path}."
         }
 
-        configurationsToResolve.forEach { (projectPath, configuration) ->
-            logger.lifecycle("Resolving $projectPath:${configuration.name}")
+        configurationsToResolve.forEach { configuration ->
+            logger.lifecycle("Resolving ${project.path}:${configuration.name}")
             configuration.resolve()
         }
     }
+}
+
+allprojects {
+    registerDependencyGovernanceTask()
+}
+
+tasks.named("verifyDependencyGovernance") {
+    dependsOn(subprojects.map { it.tasks.named("verifyDependencyGovernance") })
 }
 ```
 
@@ -168,7 +174,9 @@ The task must include `runtimeClasspath`, `testRuntimeClasspath`, API `gatling`,
 configurations, and the three root fixture configurations because all are resolvable. It must
 not create a new configuration, mutate dependency versions, or catch and hide Gradle locking
 or verification exceptions. `notCompatibleWithConfigurationCache` is intentional; the helper
-passes `--no-configuration-cache` so the inventory is fresh on every run.
+passes `--no-configuration-cache --no-parallel` so the inventory is fresh and configuration
+resolution is serialized on every run. The root task does not directly resolve a subproject
+configuration.
 
 - [ ] **Step 4: Run the task and verify the next expected RED failure**
 
@@ -214,6 +222,7 @@ Run from the repository root:
 ./gradlew \
   --no-daemon \
   --no-configuration-cache \
+  --no-parallel \
   --console=plain \
   --refresh-dependencies \
   --write-locks \
@@ -237,11 +246,12 @@ git diff --check
 git status --short
 ```
 
-Expected: only Gradle project lockfiles, `buildSrc/gradle.lockfile` when applicable, and the
-single root verification XML are new; frontend npm state is unchanged; XML parsing and whitespace
-checks pass. Review the generated diff for machine-specific paths, SNAPSHOT coordinates, or
-unexpected repositories and remove the affected generated entry only after reproducing the
-cause with the relevant configuration.
+Expected: only Gradle project lockfiles (including `settings-gradle.lockfile` and frontend
+Gradle projects), `buildSrc/gradle.lockfile` when applicable, and the single root verification
+XML are new; frontend npm state is unchanged; XML parsing and whitespace checks pass. Review the
+generated diff for machine-specific paths, SNAPSHOT coordinates, or unexpected repositories and
+remove the affected generated entry only after reproducing the cause with the relevant
+configuration.
 
 - [ ] **Step 4: Run the helper for the first GREEN result**
 
@@ -524,4 +534,3 @@ automatically.
   helper, generation commands, and CI. Lock mode is `LockMode.STRICT`, verification property is
   `org.gradle.dependency.verification=strict`, and all four lettuce checks use the same target
   version `7.6.0.RELEASE`.
-

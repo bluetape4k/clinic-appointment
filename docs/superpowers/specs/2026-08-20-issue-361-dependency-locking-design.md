@@ -94,27 +94,30 @@ dependencyLocking {
 정책을 둔다. main build와 `buildSrc`의 lockfile은 각 build가 소유하는 위치에 생성한다.
 verification metadata는 Gradle의 전역 범위에 맞춰 root의 단일 파일을 사용한다.
 
-lockfile은 다음 위치에 생성되며 실제 생성 결과를 기준으로 누락된 JVM project를
-추가한다.
+lockfile은 Gradle project별 위치와 settings buildscript 위치에 생성되며 실제 생성
+결과를 기준으로 누락된 project를 추가한다.
 
 - root `gradle.lockfile` (root configuration이 외부 dependency를 resolve할 때)
-- 각 JVM subproject의 `<project>/gradle.lockfile`
+- 각 Gradle subproject의 `<project>/gradle.lockfile` (frontend Gradle project 포함)
 - `buildSrc/gradle.lockfile`
+- `settings-gradle.lockfile` (version catalog settings buildscript가 resolve할 때)
 
-`frontend/appointment-frontend`의 npm lockfile은 이 Issue의 Gradle lock 범위가 아니며
-수정하지 않는다.
+`frontend/appointment-frontend`의 npm lockfile과 `package-lock.json`은 이 Issue의 Gradle
+lock 범위가 아니며 수정하지 않는다.
 
 ### 2. 전체 configuration 검증 task
 
-root에 `verifyDependencyGovernance` task를 추가한다. task는 다음 순서로 동작한다.
+root와 각 subproject에 `verifyDependencyGovernance` task를 등록하고, root task가
+subproject task를 `dependsOn`으로 연결한다. Gradle 9의 unsafe cross-project configuration
+resolution을 피하기 위해 각 task는 자기 project의 configuration만 resolve한다. root task는
+root configuration과 세 custom fixture configuration을 resolve하고, subproject task는
+해당 project의 configuration을 resolve한다.
 
-1. root와 모든 subproject에서 `canBeResolved == true`인 configuration을 수집한다.
-2. configuration 이름과 project path를 안정적인 순서로 정렬한다.
-3. 각 configuration의 `incoming.resolutionResult` 또는 동등한 lazy resolution API를
-   실제로 호출해 graph를 resolve한다.
-4. lock mode가 strict가 아니거나 expected lockfile이 없는 project가 있으면 명확한
-   project/configuration 목록과 함께 실패한다.
-5. resolution 중 missing lock entry 또는 missing verification metadata가 발생하면
+각 project task는 다음 순서로 동작한다.
+
+1. 자기 project에서 `canBeResolved == true`인 configuration을 이름순으로 수집한다.
+2. 각 configuration을 실제로 resolve해 dependency graph와 artifact를 확인한다.
+3. resolution 중 missing lock entry 또는 missing verification metadata가 발생하면
    Gradle의 원래 실패를 보존하고 `--write-locks`/verification write flag를 제안하되
    task 자체는 파일을 변경하지 않는다.
 
@@ -139,7 +142,7 @@ keyring을 별도 합의하지 않았으므로 이번 범위에 추가하지 않
 생성·갱신은 다음 명령을 사용한다.
 
 ```bash
-./gradlew --no-daemon --console=plain --write-verification-metadata sha256 +
+./gradlew --no-daemon --console=plain --write-verification-metadata sha256 \
   verifyDependencyGovernance
 ```
 

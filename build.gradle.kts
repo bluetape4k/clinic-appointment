@@ -5,6 +5,7 @@ import groovy.json.JsonSlurper
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.artifacts.Configuration
+import org.gradle.api.artifacts.dsl.LockMode
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.artifacts.result.ResolvedDependencyResult
 import org.gradle.api.artifacts.result.ResolvedComponentResult
@@ -105,6 +106,27 @@ fun registerApiConsumerFixtureCompile(
         description = "Compiles the $sourceDirectory API consumer fixture against apiElements."
         group = "verification"
         dependsOn(kotlinCompile)
+    }
+}
+
+fun Project.registerDependencyGovernanceTask() = tasks.register("verifyDependencyGovernance") {
+    group = "verification"
+    description = "Resolves every resolvable configuration of this project under strict locking and verification."
+    notCompatibleWithConfigurationCache("Configuration inventory is intentionally resolved at task execution time.")
+
+    doLast {
+        val configurationsToResolve = configurations
+            .filter { it.isCanBeResolved }
+            .sortedBy { it.name }
+
+        require(configurationsToResolve.isNotEmpty()) {
+            "No resolvable Gradle configurations were discovered for ${project.path}."
+        }
+
+        configurationsToResolve.forEach { configuration ->
+            logger.lifecycle("Resolving ${project.path}:${configuration.name}")
+            configuration.resolve()
+        }
     }
 }
 
@@ -701,6 +723,11 @@ allprojects {
     configurations.all {
         resolutionStrategy.cacheChangingModulesFor(0, TimeUnit.SECONDS)
     }
+    dependencyLocking {
+        lockAllConfigurations()
+        lockMode = LockMode.STRICT
+    }
+    registerDependencyGovernanceTask()
 }
 
 dependencyManagement {
@@ -907,6 +934,10 @@ subprojects {
         testImplementation(rootLibs.datafaker)
         testImplementation(rootLibs.random.beans)
     }
+}
+
+tasks.named("verifyDependencyGovernance") {
+    dependsOn(subprojects.map { it.tasks.named("verifyDependencyGovernance") })
 }
 
 // ─── Kover 집계 설정 ────────────────────────────────────────────────────
