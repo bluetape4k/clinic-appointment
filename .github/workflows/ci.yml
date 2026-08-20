@@ -159,6 +159,11 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
+      - name: Verify Gradle dependency locking and verification
+        run: bash scripts/verify-dependency-locking.sh
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
       - name: Build (compile only, frontend 제외)
         run: ./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies
         env:
