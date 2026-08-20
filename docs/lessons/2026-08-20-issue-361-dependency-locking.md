@@ -23,8 +23,10 @@ Redis 7.2/8.8 이미지 매트릭스와 추가 dependency upgrade는 이번 범�
   SHA-256 artifact entry 1,655개이며 local path, `SNAPSHOT`, `mavenLocal`,
   `central-snapshots` 흔적이 없다.
 - `scripts/verify-dependency-locking.sh`는 write flag 없이 strict governance와
-  API/notification runtime·test `dependencyInsight`를 실행한다. expected lockfile
-  inventory를 확인하고 Gradle 실패 시 원문 로그를 그대로 출력한다.
+  API/notification runtime·test `dependencyInsight`를 실행하고, root notification
+  compile-only fixture의 문서화된 `lettuce-core:7.5.2.RELEASE` 예외도 확인한다.
+  expected lockfile inventory는 실제 find 결과와 비교하며 Gradle 실패 시 원문 로그를
+  그대로 출력한다.
 - CI build job은 기존 version contract 다음에 locking contract를 실행하며,
   `permissions: contents: read`, 모든 checkout의 `persist-credentials: false`,
   20분 job timeout을 사용한다.
@@ -49,18 +51,19 @@ Redis 7.2/8.8 이미지 매트릭스와 추가 dependency upgrade는 이번 범�
 
 ## 검증 증거
 
-검증 대상 HEAD는 `79e438d5`(fixture producer 보정) 이후 hardening 변경을 포함한
-현재 feature branch이며, 각 명령은 해당 worktree에서 새로 실행했다.
+검증 대상은 현재 feature branch의 locking hardening·CI 보완·검증 helper·운영 문서
+변경을 모두 포함한 최신 상태이며, 각 명령은 해당 worktree에서 새로 실행했다.
 
 | 영역 | 명령 | 결과 |
 |---|---|---|
 | 기존 dependency 계약 | `bash scripts/verify-dependency-1.4.0.sh` | PASS |
-| strict locking 계약 | `bash scripts/verify-dependency-locking.sh` | PASS, 4개 dependencyInsight |
-| clean cache governance | `GRADLE_USER_HOME=$(mktemp -d) ./gradlew ... verifyDependencyGovernance` | PASS, 2분 4초 |
-| clean cache helper | 같은 임시 `GRADLE_USER_HOME`의 helper | PASS, 4초 |
+| strict locking 계약 | `bash scripts/verify-dependency-locking.sh` | PASS, 5개 dependencyInsight |
+| clean cache governance | `GRADLE_USER_HOME=$(mktemp -d) ./gradlew ... verifyDependencyGovernance` | PASS, 2분 37초 |
+| clean cache helper | 같은 임시 `GRADLE_USER_HOME`의 helper | PASS, 29초 |
+| standalone clean cache helper | 별도 `GRADLE_USER_HOME=$(mktemp -d)`의 helper | PASS, 2분 11초 |
 | 모듈 테스트 | core 560, notification 162, solver 98, API 824(3 skip), messaging 125, benchmark 4 | 모두 BUILD SUCCESSFUL |
-| CI compile-only | `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies` | PASS, 1분 35초 |
-| 정적 분석 | `./gradlew detekt --parallel` | PASS |
+| CI compile-only | `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies --no-daemon` | PASS, 1분 41초 |
+| 정적 분석 | `./gradlew detekt --parallel --no-daemon` | PASS, 1초 |
 | consumer fixture regression | `./gradlew assertModuleConsumerFixtureApiVariants --no-configuration-cache --no-parallel` | PASS |
 | 구조/문서 | `xmllint`, `actionlint`, `bash -n`, `git diff --check`, Korean terminology audit | 모두 PASS |
 
@@ -72,8 +75,18 @@ Redis 7.2/8.8 이미지 매트릭스와 추가 dependency upgrade는 이번 범�
 - `settings.gradle.kts`의 Foojay plugin은 `pluginManagement` 선언만 있고 실제 적용되지
   않아 settings lockfile에는 `empty=incomingCatalogForLibs0`만 있다. 실제 적용 시
   settings plugin resolution lock·verification 증거를 같은 PR에 추가한다.
-- clean-cache governance는 2분 4초였다. Issue #361에 성능 임계치가 승인되지 않았으므로
-  20분 CI timeout과 현재 측정값을 기준으로 모듈 증가·cache miss 시 재평가한다.
+- clean-cache governance는 2분 37초, 같은 cache를 이어 쓴 helper는 29초였고, 별도
+  clean cache에서 helper만 실행한 측정은 2분 11초였다. Issue #361에 성능 임계치가
+  승인되지 않았으므로 20분 CI timeout과 현재 측정값을 기준으로 모듈 증가·cache miss
+  시 재평가한다.
+- root notification API consumer fixture는 compile-only root-BOM 경계에서
+  `lettuce-core:7.5.2.RELEASE`를 선택한다. 실제 notification runtime/test의
+  `7.6.0.RELEASE` 계약과 분리된 예외이며 helper가 양쪽 선택을 고정 검증한다. fixture가
+  외부 소비자 계약을 더 정확히 대표해야 할 때 버전 정렬을 재검토한다.
+- `buildSrc`는 strict lockfile과 root build lifecycle의 plugin/compile resolution으로
+  보호되지만, root custom governance task가 buildSrc의 모든 resolvable configuration을
+  직접 열거하지는 않는다. 새 buildSrc configuration을 추가하기 전 전용 검증 task와
+  동일 metadata 경계를 설계한다.
 - Redis 7.2/8.8 image matrix는 Redis 8 단일 launcher 계약과 분리된 후속 이슈로 남긴다.
 
 ## 미래 guard

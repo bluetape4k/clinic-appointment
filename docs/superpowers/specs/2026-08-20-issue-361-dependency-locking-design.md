@@ -2,11 +2,13 @@
 
 ## 결정 상태
 
-`SPEC REVIEW PENDING`
+`SPEC REVIEW APPROVED`
+
+`IMPLEMENTATION STATUS: LOCAL VERIFICATION COMPLETE; PR/CI PENDING`
 
 이 문서는 [Issue #361](https://github.com/bluetape4k/clinic-appointment/issues/361)의
-구현 경계를 고정한다. 사용자가 승인한 A안인 Gradle 네이티브 전역 정책을 적용하며,
-spec 검토가 끝나기 전에는 구현 파일을 수정하지 않는다.
+구현 경계를 고정한다. 사용자가 승인한 A안인 Gradle 네이티브 전역 정책을 적용했으며,
+구현은 spec 승인 후 이 경계 안에서 진행했다.
 
 ## 문제와 목표
 
@@ -161,13 +163,18 @@ keyring을 별도 합의하지 않았으므로 이번 범위에 추가하지 않
 - API와 notification 각각에 대해 `lettuce-core`의
   `runtimeClasspath`와 `testRuntimeClasspath` `dependencyInsight`를 실행하고
   `7.6.0.RELEASE` 선택과 `7.5.2.RELEASE` 비선택을 확인한다.
+- root notification API consumer fixture는 root dependency-management BOM이 적용되는
+  compile-only configuration이므로 `7.5.2.RELEASE`를 선택한다. 이는 Issue #310에서
+  고정한 실제 notification runtime/test의 `7.6.0.RELEASE` 계약과 별도인 의도된
+  fixture 경계이며, helper가 해당 선택과 fixture compile/variant 검증을 함께 고정한다.
 - 기존 `scripts/verify-dependency-1.4.0.sh`를 대체하지 않는다. CI의 동일 build job에서
   기존 version contract, 새 lock/verification contract, 일반 build 순서를 유지한다.
 
 `.github/workflows/ci.yml`의 `build` job에는 새 script를 dependency contract 다음에
 추가한다. 다른 module job의 dependency 설치나 Docker/Testcontainers lifecycle은
-변경하지 않는다. `gradle/**`, `build.gradle.kts`, `buildSrc/**`, 검증 script 변경은
-현재 path filter로 build job을 활성화해야 한다.
+변경하지 않는다. `gradle/**`, `build.gradle.kts`, `buildSrc/**`, lockfile, verification
+metadata, 검증 script 변경은 path filter로 build job과 영향을 받는 module test를
+활성화해야 한다.
 
 ### 5. 운영 문서
 
@@ -254,16 +261,16 @@ matrix는 각각 이번 범위의 명시적 제외로 남긴다.
 
 ## 완료 조건
 
-- [ ] root와 `buildSrc`에 strict dependency locking이 적용된다.
-- [ ] 실제 resolve 가능한 project configuration을 모두 검증하는 task가 동작한다.
-- [ ] project별 `gradle.lockfile`과 root `gradle/verification-metadata.xml`이 생성되고
+- [x] root와 `buildSrc`에 strict dependency locking이 적용된다.
+- [x] 실제 resolve 가능한 root/subproject configuration을 모두 검증하는 task가 동작한다.
+- [x] project별 `gradle.lockfile`과 root `gradle/verification-metadata.xml`이 생성되고
   clean-cache strict 검증을 통과한다.
-- [ ] `org.gradle.dependency.verification=strict`가 local·CI에서 적용된다.
-- [ ] 기존 `bluetape4k-dependencies:1.4.0`와 `lettuce-core:7.6.0.RELEASE`
+- [x] `org.gradle.dependency.verification=strict`가 local·CI에서 적용된다.
+- [x] 기존 `bluetape4k-dependencies:1.4.0`와 `lettuce-core:7.6.0.RELEASE`
   `dependencyInsight` 계약이 유지된다.
-- [ ] cache, notification, solver, API, messaging benchmark 검증 경로가 실행된다.
-- [ ] 갱신·리뷰·승인·롤백 문서와 CI read-only 검사가 추가된다.
-- [ ] Redis 7.2/8.8 matrix, unrelated dependency upgrade, API 기능 변경이 없다.
+- [x] cache, notification, solver, API, messaging benchmark 검증 경로가 실행된다.
+- [x] 갱신·리뷰·승인·롤백 문서와 CI read-only 검사가 추가된다.
+- [x] Redis 7.2/8.8 matrix, unrelated dependency upgrade, API 기능 변경이 없다.
 
 ## 문서 검수 기록
 

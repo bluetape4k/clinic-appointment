@@ -8,9 +8,12 @@
 
 **Tech Stack:** Gradle 9.7.0, Kotlin DSL, `gradle.lockfile`, `gradle/verification-metadata.xml`, Bash, GitHub Actions, 기존 Kotlin/JUnit 5 모듈 테스트.
 
+> **실행 상태 (2026-08-20):** Task 1–7 구현과 로컬 검증은 완료했다. 현재 Task 8의
+> workflow receipt, PR 생성, live CI 확인이 남아 있으며 merge는 별도 승인 대상이다.
+
 ---
 
-## Task 1: 의존성 거버넌스 검증 helper를 먼저 작성한다 (RED)
+## Task 1: 의존성 거버넌스 검증 helper를 먼저 작성한다 (완료)
 
 **Files:**
 - Create: `scripts/verify-dependency-locking.sh`
@@ -90,7 +93,7 @@ Expected: `FAIL` because `gradle/verification-metadata.xml` and
 `verifyDependencyGovernance` do not exist yet. Do not add a fallback that disables
 verification or writes generated files.
 
-## Task 2: 전역 locking 정책과 configuration resolve task를 추가한다
+## Task 2: 전역 locking 정책과 configuration resolve task를 추가한다 (완료)
 
 **Files:**
 - Modify: `build.gradle.kts:1-28` (Gradle API import)
@@ -190,7 +193,7 @@ Expected: configuration discovery starts, then strict locking or verification fa
 the generated files and strict property are not complete. The failure must name the missing
 lock entry or verification metadata rather than a Kotlin compilation error.
 
-## Task 3: strict verification property와 generated 산출물을 만든다
+## Task 3: strict verification property와 generated 산출물을 만든다 (완료)
 
 **Files:**
 - Modify: `gradle.properties:11`
@@ -274,7 +277,7 @@ git add build.gradle.kts buildSrc/build.gradle.kts gradle.properties \
 git commit -m "빌드 의존성 고정과 무결성 검증을 강제한다" -m "Issue #361의 strict locking과 SHA-256 verification metadata를 실제 Gradle configuration에 적용한다.\n\nConstraint: CI는 generated artifact를 쓰지 않고 기존 1.4.0 dependencyInsight 계약을 유지해야 한다.\nRejected: lenient verification과 CI 전용 검사는 전역 재현성을 보장하지 못하므로 제외했다.\nConfidence: high\nScope-risk: moderate\nDirective: dependency 변경은 문서화된 write 명령과 lock/metadata diff 리뷰를 거친다.\nTested: verifyDependencyGovernance 및 verify-dependency-locking.sh 통과\nNot-tested: CI runner와 전체 모듈 통합 테스트는 다음 검증 단계에서 실행한다."
 ```
 
-## Task 4: CI에서 read-only dependency contract를 필수화한다
+## Task 4: CI에서 read-only dependency contract를 필수화한다 (완료)
 
 **Files:**
 - Modify: `.github/workflows/ci.yml` immediately after `Verify bluetape4k-dependencies 1.4.0 contract`
@@ -317,7 +320,7 @@ git add .github/workflows/ci.yml
 git commit -m "CI에서 의존성 고정 계약을 검증한다" -m "빌드 전에 strict locking, verification metadata, lettuce dependencyInsight를 read-only로 검사한다.\n\nConstraint: CI job graph와 기존 dependency contract 순서를 유지해야 한다.\nRejected: generated artifact를 CI에서 갱신하는 방식은 재현성과 reviewability를 훼손하므로 제외했다.\nConfidence: high\nScope-risk: narrow\nDirective: dependency 갱신은 개발자 로컬 write 절차로만 수행한다.\nTested: actionlint 또는 대체 workflow 검사, git diff --check\nNot-tested: GitHub runner의 실제 job은 PR CI에서 확인한다."
 ```
 
-## Task 5: 갱신·승인·롤백 운영 문서를 추가한다
+## Task 5: 갱신·승인·롤백 운영 문서를 추가한다 (완료)
 
 **Files:**
 - Create: `docs/maintenance/dependency-locking.md`
@@ -367,6 +370,7 @@ CI와 일반 build에서는 생성 플래그를 사용하지 않는다. 누락�
 - [ ] `runtimeClasspath`와 `testRuntimeClasspath`
 - [ ] API `gatling`, messaging benchmark
 - [ ] root consumer fixture configuration
+- [ ] notification fixture의 문서화된 `lettuce-core:7.5.2.RELEASE` 예외 검증
 - [ ] `bluetape4k-dependencies:1.4.0`와 `lettuce-core:7.6.0.RELEASE` dependencyInsight
 ```
 
@@ -391,7 +395,7 @@ git add docs/maintenance/dependency-locking.md
 git commit -m "의존성 고정 갱신 절차를 문서화한다" -m "lockfile과 verification metadata를 안전하게 갱신·리뷰·롤백하는 저장소 운영 계약을 남긴다.\n\nConstraint: CI는 strict read-only이고 generated artifact 승인은 PR에서 이뤄져야 한다.\nRejected: verification 예외를 운영 절차로 허용하는 방식은 제외했다.\nConfidence: high\nScope-risk: narrow\nDirective: dependency 변경자는 lock/metadata diff와 dependencyInsight 증거를 함께 제출한다.\nTested: git diff --check; audit-korean-terms.mjs\nNot-tested: 문서 링크의 외부 렌더링은 PR preview에서 확인한다."
 ```
 
-## Task 6: 모듈별 기능·benchmark와 clean-cache 검증을 수행한다
+## Task 6: 모듈별 기능·benchmark와 clean-cache 검증을 수행한다 (완료)
 
 **Files:**
 - No source changes expected; only test reports and local temporary Gradle cache are produced.
@@ -449,7 +453,7 @@ git diff --check
 Expected: compile-only build, Detekt, and whitespace checks pass. Existing warnings are recorded
 without changing unrelated deprecation or Exposed cleanup scope.
 
-## Task 7: six-perspective review와 lesson을 남긴다
+## Task 7: six-perspective review와 lesson을 남긴다 (완료)
 
 **Files:**
 - Create: `docs/lessons/2026-08-20-issue-361-dependency-locking.md`
@@ -491,7 +495,7 @@ node /Users/debop/.codex/skills/bluetape-writer/scripts/audit-korean-terms.mjs \
 
 Expected: zero findings and no stale version or scope claims.
 
-## Task 8: pre-PR evidence and handoff
+## Task 8: pre-PR evidence and handoff (진행 중)
 
 **Files:**
 - Review only: all implementation files, generated artifacts, lesson, and Issue #361 metadata.
@@ -532,5 +536,6 @@ automatically.
   future file; commands and file paths are explicit.
 - **Type/API consistency:** The task is named `verifyDependencyGovernance` in the root build,
   helper, generation commands, and CI. Lock mode is `LockMode.STRICT`, verification property is
-  `org.gradle.dependency.verification=strict`, and all four lettuce checks use the same target
-  version `7.6.0.RELEASE`.
+  `org.gradle.dependency.verification=strict`, four module lettuce checks use
+  `7.6.0.RELEASE`, and the compile-only notification fixture exception is fixed at
+  `7.5.2.RELEASE` with a separate documented assertion.

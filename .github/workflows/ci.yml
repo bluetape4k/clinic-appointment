@@ -94,6 +94,11 @@ jobs:
               - 'gradle/**'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
+              - 'gradle.lockfile'
+              - '**/gradle.lockfile'
+              - 'settings-gradle.lockfile'
+              - 'gradle.properties'
+              - 'gradle/verification-metadata.xml'
             solver:
               - 'appointment-solver/**'
               - 'appointment-core/**'
@@ -101,6 +106,11 @@ jobs:
               - 'gradle/**'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
+              - 'gradle.lockfile'
+              - '**/gradle.lockfile'
+              - 'settings-gradle.lockfile'
+              - 'gradle.properties'
+              - 'gradle/verification-metadata.xml'
             api:
               - 'appointment-api/**'
               - 'appointment-messaging/**'
@@ -110,6 +120,11 @@ jobs:
               - 'gradle/**'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
+              - 'gradle.lockfile'
+              - '**/gradle.lockfile'
+              - 'settings-gradle.lockfile'
+              - 'gradle.properties'
+              - 'gradle/verification-metadata.xml'
             notification:
               - 'appointment-notification/**'
               - 'appointment-core/**'
@@ -117,6 +132,11 @@ jobs:
               - 'gradle/**'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
+              - 'gradle.lockfile'
+              - '**/gradle.lockfile'
+              - 'settings-gradle.lockfile'
+              - 'gradle.properties'
+              - 'gradle/verification-metadata.xml'
             messaging:
               - 'appointment-messaging/**'
               - 'benchmark/appointment-messaging-benchmark/**'
@@ -126,6 +146,11 @@ jobs:
               - 'gradle/**'
               - 'build.gradle.kts'
               - 'settings.gradle.kts'
+              - 'gradle.lockfile'
+              - '**/gradle.lockfile'
+              - 'settings-gradle.lockfile'
+              - 'gradle.properties'
+              - 'gradle/verification-metadata.xml'
               - 'docs/alerts/appointment-messaging-rules.yml'
               - 'docs/runbooks/appointment-messaging-operations.md'
               - 'docs/operations/appointment-consumer-replay-runbook.md'
@@ -143,6 +168,11 @@ jobs:
               - 'README.ko.md'
             frontend:
               - 'frontend/**'
+              - 'gradle.lockfile'
+              - '**/gradle.lockfile'
+              - 'settings-gradle.lockfile'
+              - 'gradle.properties'
+              - 'gradle/verification-metadata.xml'
 
   # ── 3. 빌드 + Detekt 정적 분석 ─────────────────────────────────────────────
   build:
@@ -208,6 +238,8 @@ jobs:
     if: needs.changes.outputs.core-event == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v5.7.0
         with:
@@ -264,6 +296,8 @@ jobs:
     if: needs.changes.outputs.solver == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v5.7.0
         with:
@@ -321,6 +355,8 @@ jobs:
             profiles: "test,test-postgresql"
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v5.7.0
         with:
@@ -375,6 +411,8 @@ jobs:
     if: needs.changes.outputs.notification == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v5.7.0
         with:
@@ -430,6 +468,8 @@ jobs:
     if: needs.changes.outputs.messaging == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v5.7.0
         with:
@@ -488,6 +528,8 @@ jobs:
     if: needs.changes.outputs.messaging == 'true'
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v5.7.0
         with:
@@ -571,6 +613,8 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Download coverage artifacts
         uses: actions/download-artifact@v8
@@ -610,6 +654,8 @@ jobs:
         working-directory: frontend/appointment-frontend
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -653,6 +699,8 @@ jobs:
             test-class: "io.bluetape4k.clinic.appointment.api.migration.FlywayPostgreSQLMigrationTest"
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v5.7.0
         with:

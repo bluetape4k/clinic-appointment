@@ -29,6 +29,12 @@ configuration을 자기 project 경계 안에서 resolve한다. 다음 경로를
 - root의 consumer fixture configuration
 - `buildSrc`와 plugin resolution
 
+root의 `appointmentNotificationConsumerFixtureClasspath`는 실제 애플리케이션
+runtime이 아니라 API compile-only fixture다. root에 적용된 BOM이 이 configuration의
+`lettuce-core`를 `7.5.2.RELEASE`로 선택하므로, helper는 이 선택을 문서화된 예외로
+명시적으로 확인한다. notification 모듈 자체의 `runtimeClasspath`와
+`testRuntimeClasspath`는 별도로 `7.6.0.RELEASE`를 요구하고 확인한다.
+
 읽기 검증 명령에는 `--write-locks`나 `--write-verification-metadata`를 넣지 않는다.
 누락된 lock entry나 checksum은 실패 원인으로 남겨야 한다.
 
@@ -81,8 +87,11 @@ bash scripts/verify-dependency-locking.sh
   예상 lockfile inventory가 모두 존재한다.
 - `dependencyInsight`가 API·notification의 runtime/test configuration에서
   `lettuce-core:7.6.0.RELEASE`를 선택한다.
-- CI workflow에 write flag, `continue-on-error`, lenient fallback이 없고,
-  `permissions: contents: read`, `persist-credentials: false`, build timeout이 적용된다.
+- notification API consumer fixture는 compile-only root-BOM 경계에서
+  `lettuce-core:7.5.2.RELEASE`를 선택하며, helper가 이 예외를 고정 확인한다.
+- dependency-locking 검증 step 자체에 write flag, `continue-on-error`, lenient fallback이
+  없고, workflow에는 `permissions: contents: read`, `persist-credentials: false`, build
+  timeout이 적용된다. 기존 coverage/Kover 단계의 `continue-on-error`는 별도 운영 경로다.
 
 PGP signature 검증은 별도 key provenance와 운영 keyring을 합의하기 전까지 추가하지
 않는다. SHA-256을 PGP 검증의 대체 설명으로 사용하지 않는다.
@@ -97,9 +106,21 @@ PGP signature 검증은 별도 key provenance와 운영 keyring을 합의하기 
   없다. 실제 plugin을 적용할 때 settings resolution의 lock·verification 증거를 같은 PR에
   추가한다.
 - **clean-cache 시간 기준선 (P2):** Issue #361에서는 별도 성능 임계치를 승인하지 않았다.
-  현재 clean `GRADLE_USER_HOME`에서 governance는 2분 4초, helper는 4초였으며, CI build
-  job은 20분 timeout으로 제한한다. 모듈 증가나 CI cache miss로 이 범위를 넘으면
+  현재 clean `GRADLE_USER_HOME`에서 governance는 2분 37초였고, 같은 cache를 이어 쓴
+  helper는 29초였다. helper만 새 clean cache에서 실행한 별도 측정은 2분 11초였다. CI
+  build job은 20분 timeout으로 제한하며, 모듈 증가나 CI cache miss로 이 범위를 넘으면
   inventory·검증 분리를 재검토한다.
+- **notification fixture의 Lettuce 예외 (P2):** root API consumer fixture는
+  compile-only configuration이고 root BOM의 `7.5.2.RELEASE` 선택을 따른다. 실제
+  notification runtime/test는 `7.6.0.RELEASE`로 고정되어 있으며 helper가 두 경계를
+  모두 검증한다. fixture가 새로운 Lettuce API를 직접 소비하거나 외부 소비자 계약을
+  대표해야 할 때 `7.6.0.RELEASE`로 정렬할지 재검토한다. 담당자는 `debop`이다.
+- **buildSrc configuration inventory (P2):** `buildSrc`는 strict lockfile과 root
+  build lifecycle에서의 plugin/compile resolution을 갖지만, root aggregator가
+  `buildSrc`의 모든 `canBeResolved` configuration을 별도 custom task로 순회하지는
+  않는다. buildSrc에 새 resolvable configuration을 추가하기 전에는 동일한
+  verification metadata 경계를 보장하는 전용 검증 task를 설계한다. 담당자는
+  `debop`이며 `1.4.0` release train 종료 전에 재검토한다.
 
 ## 롤백
 
@@ -107,7 +128,8 @@ PGP signature 검증은 별도 key provenance와 운영 keyring을 합의하기 
 이전 commit으로 함께 되돌린다. 이후 읽기 검증을 다시 실행한다.
 
 ```bash
-git revert <dependency-change-commit>
+dependency_change_commit="<dependency-change-commit>" # 실제 commit SHA로 교체
+git revert "$dependency_change_commit"
 ./gradlew verifyDependencyGovernance \
   --no-daemon --no-configuration-cache --no-parallel --console=plain
 bash scripts/verify-dependency-locking.sh
@@ -125,6 +147,7 @@ verification을 `lenient`로 바꾸거나 broad trusted-artifact 예외를 추�
 - [ ] API `gatling` configuration
 - [ ] messaging benchmark configuration
 - [ ] root consumer fixture configuration
+- [ ] notification fixture의 문서화된 `lettuce-core:7.5.2.RELEASE` 예외 검증
 - [ ] `bluetape4k-dependencies:1.4.0` dependencyInsight
 - [ ] `lettuce-core:7.6.0.RELEASE` runtime/test dependencyInsight
 - [ ] frontend npm lockfile은 변경하지 않음
