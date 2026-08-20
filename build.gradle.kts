@@ -404,11 +404,15 @@ private fun componentCoordinate(component: ResolvedComponentResult): String = wh
     else -> id.displayName
 }
 
-private fun resolvedApiRootCoordinates(target: ApiConsumerFixtureTarget): Set<String> {
-    val producer = target.configuration.incoming.resolutionResult.root.dependencies
+private fun producerDependency(target: ApiConsumerFixtureTarget): ResolvedDependencyResult? =
+    target.configuration.incoming.resolutionResult.root.dependencies
         .filterIsInstance<ResolvedDependencyResult>()
-        .singleOrNull()
-        ?.selected
+        .singleOrNull { dependency ->
+            (dependency.selected.id as? ProjectComponentIdentifier)?.projectPath == target.modulePath
+        }
+
+private fun resolvedApiRootCoordinates(target: ApiConsumerFixtureTarget): Set<String> {
+    val producer = producerDependency(target)?.selected
         ?: return emptySet()
     return producer.dependencies
         .filterIsInstance<ResolvedDependencyResult>()
@@ -437,9 +441,7 @@ private fun configurationFingerprint(target: ApiConsumerFixtureTarget): String {
 }
 
 private fun resolvedVariant(target: ApiConsumerFixtureTarget): Pair<ResolvedDependencyResult?, ResolvedVariantResult?> {
-    val dependency = target.configuration.incoming.resolutionResult.root.dependencies
-        .filterIsInstance<ResolvedDependencyResult>()
-        .singleOrNull()
+    val dependency = producerDependency(target)
     return dependency to dependency?.resolvedVariant
 }
 
