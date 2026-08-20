@@ -84,7 +84,9 @@ node /Users/debop/.codex/skills/bluetape-writer/scripts/audit-korean-terms.mjs \
 → findings 없음
 ```
 
-PR과 CI 링크는 브랜치 게시 후 이 문서에 추가한다.
+PR: [#363 Redis 8 launcher 호환성 계약 검증](https://github.com/bluetape4k/clinic-appointment/pull/363)
+
+CI: [PR #363 checks](https://github.com/bluetape4k/clinic-appointment/pull/363/checks)
 
 ## 다음 작업 경계
 
