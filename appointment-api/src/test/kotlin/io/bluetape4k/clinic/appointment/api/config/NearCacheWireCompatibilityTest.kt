@@ -3,13 +3,16 @@ package io.bluetape4k.clinic.appointment.api.config
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeInstanceOf
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.cache.nearcache.NearCacheOperations
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
+import io.bluetape4k.io.compressor.LZ4Compressor
 import io.bluetape4k.io.serializer.BinarySerializationException
+import io.bluetape4k.io.serializer.CompressableBinarySerializer
 import io.lettuce.core.RedisClient
 import org.junit.jupiter.api.Test
 
@@ -82,6 +85,37 @@ class NearCacheWireCompatibilityTest {
         config.deserializeUnknownClass().shouldBeFalse()
         config.maxDepth() shouldBeEqualTo 32
         config.maxGraphMemoryBytes() shouldBeEqualTo 8L * 1024 * 1024
+    }
+
+    @Test
+    fun `secure Fory 등록 id와 LZ4 codec namespace 계약을 고정한다`() {
+        val registrations = CacheConfig.secureThreadSafeFory.execute { fory ->
+            listOf(
+                CacheConfig.DOCTOR_REGISTRATION_ID to DoctorRecord::class.java,
+                CacheConfig.EQUIPMENT_REGISTRATION_ID to EquipmentRecord::class.java,
+                CacheConfig.TREATMENT_TYPE_REGISTRATION_ID to TreatmentTypeRecord::class.java,
+            ).map { (registrationId, typeInfo) ->
+                val resolved = fory.typeResolver.getTypeInfo(typeInfo)
+                fory.typeResolver.isRegisteredById(typeInfo).shouldBeTrue()
+                registrationId to (resolved.userTypeId to resolved.type)
+            }
+        }
+        registrations shouldBeEqualTo listOf(
+            CacheConfig.DOCTOR_REGISTRATION_ID to
+                (CacheConfig.DOCTOR_REGISTRATION_ID to DoctorRecord::class.java),
+            CacheConfig.EQUIPMENT_REGISTRATION_ID to
+                (CacheConfig.EQUIPMENT_REGISTRATION_ID to EquipmentRecord::class.java),
+            CacheConfig.TREATMENT_TYPE_REGISTRATION_ID to
+                (CacheConfig.TREATMENT_TYPE_REGISTRATION_ID to TreatmentTypeRecord::class.java),
+        )
+
+        val serializer = CacheConfig.secureCacheSerializer.shouldBeInstanceOf<CompressableBinarySerializer>()
+        serializer.compressor.shouldBeInstanceOf<LZ4Compressor>()
+        listOf(
+            CacheConfig.DOCTORS_REMOTE_CACHE_NAME,
+            CacheConfig.EQUIPMENTS_REMOTE_CACHE_NAME,
+            CacheConfig.TREATMENT_TYPES_REMOTE_CACHE_NAME,
+        ).forEach { it.endsWith("-v3").shouldBeTrue() }
     }
 
     private fun <T : Any> verifyRoundTrip(
