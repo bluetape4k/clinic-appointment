@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `RedisServer.Launcher.redis`가 제공하는 `redis:8.8.1`에서 API cache/NearCache와 notification Lettuce leader lifecycle의 실제 호환성 계약을 검증한다.
+**Goal:** `RedisServer.Launcher.redis`가 제공하는 `redis:8`에서 API cache/NearCache와 notification Lettuce leader lifecycle의 실제 호환성 계약을 검증한다.
 
 **Architecture:** 기존 API `Containers.Redis` singleton은 그대로 재사용하고 notification 테스트에도 동일한 `RedisServer.Launcher.redis`와 Lettuce helper를 사용한다. API에는 이미지·singleton 계약 테스트를 추가하고, notification에는 `SCRIPT FLUSH` 후 실제 `LettuceLeaderGroupElector`를 실행하는 통합 테스트를 추가한다. CI workflow는 변경하지 않고 기존 모듈 테스트 job이 새 테스트를 실행하게 한다.
 
-**Tech Stack:** Kotlin 2.3, JUnit 5, Lettuce 7.6.0.RELEASE, `bluetape4k-testcontainers`, Redis 8.8.1, Gradle, Testcontainers singleton launcher.
+**Tech Stack:** Kotlin 2.3, JUnit 5, Lettuce 7.6.0.RELEASE, `bluetape4k-testcontainers:1.12.1`, Redis 8, Gradle, Testcontainers singleton launcher.
 
 ---
 
@@ -42,7 +42,7 @@ class RedisServerContractTest {
     fun `API 테스트는 Redis 8 launcher singleton을 사용한다`() {
         (Containers.Redis === RedisServer.Launcher.redis).shouldBeTrue()
         Containers.Redis.dockerImageName shouldBeEqualTo "${RedisServer.IMAGE}:${RedisServer.TAG}"
-        RedisServer.TAG.startsWith("8.").shouldBeTrue()
+        RedisServer.TAG shouldBeEqualTo "8"
     }
 }
 ```
@@ -115,7 +115,7 @@ class RedisLeaderGroupCompatibilityTest {
 
         try {
             redis.dockerImageName shouldBeEqualTo "${RedisServer.IMAGE}:${RedisServer.TAG}"
-            RedisServer.TAG.startsWith("8.").shouldBeTrue()
+            RedisServer.TAG shouldBeEqualTo "8"
             commands.del(slotKey, "$slotKey:meta")
             commands.scriptFlush()
 
@@ -170,11 +170,11 @@ Expected: Redis singleton이 기동되고 `BUILD SUCCESSFUL`이 출력된다. Do
 
 ## 배경
 
-`RedisServer.Launcher.redis`는 현재 `RedisServer.TAG = "8.8.1"`을 사용한다. 7.2/8.8 matrix를 구현하면 현재 launcher 계약을 우회하게 된다.
+`RedisServer.Launcher.redis`는 현재 `bluetape4k-testcontainers:1.12.1`의 `RedisServer.TAG = "8"`을 사용한다. 7.2/8.8 matrix를 구현하면 현재 launcher 계약을 우회하게 된다.
 
 ## 결정
 
-서비스 지원 기준은 `redis:8.8.1`로 고정하고 API와 notification 테스트 모두 `RedisServer.Launcher.redis` singleton을 사용한다. 전역 Gradle dependency locking은 Issue #361에 남긴다.
+서비스 지원 기준은 `redis:8`로 고정하고 API와 notification 테스트 모두 `RedisServer.Launcher.redis` singleton을 사용한다. 전역 Gradle dependency locking은 Issue #361에 남긴다.
 
 ## 결과
 
@@ -273,9 +273,9 @@ git add appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/tes
   appointment-notification/build.gradle.kts \
   appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/RedisLeaderGroupCompatibilityTest.kt \
   docs/lessons/2026-08-20-issue-360-redis-8-contract.md
-git commit -m "검증: Redis 8.8.1 launcher 호환성 계약을 고정한다" \
+git commit -m "검증: Redis 8 launcher 호환성 계약을 고정한다" \
   -m "API cache/NearCache와 notification Lettuce leader lifecycle을 기존 Redis launcher singleton에서 실제 Redis로 검증한다." \
-  -m "Constraint: RedisServer.Launcher.redis는 RedisServer.TAG=8.8.1을 사용한다." \
+  -m "Constraint: RedisServer.Launcher.redis는 RedisServer.TAG=8을 사용한다." \
   -m "Rejected: Redis 7.2/8.8 matrix와 전역 dependency locking은 별도 Issue로 남긴다." \
   -m "Confidence: high" \
   -m "Scope-risk: narrow" \
@@ -293,7 +293,7 @@ PR 본문에는 다음을 포함한다.
 ```markdown
 ## 요약
 
-- `RedisServer.Launcher.redis` 기반 Redis 8.8.1 계약 테스트 추가
+- `RedisServer.Launcher.redis` 기반 Redis 8 계약 테스트 추가
 - API cache/NearCache 경로와 notification Lettuce leader Lua fallback/lifecycle 검증
 - #361 전역 Gradle dependency locking은 범위에서 제외
 
@@ -306,7 +306,7 @@ PR 본문에는 다음을 포함한다.
 
 ## DoD Status
 
-- [x] Redis 8.8.1 launcher singleton 계약 고정
+- [x] Redis 8 launcher singleton 계약 고정
 - [x] API cache/NearCache 검증
 - [x] notification Lua fallback, release, connection close 검증
 - [x] 한국어 lesson 기록
@@ -319,10 +319,10 @@ PR 생성 후 `gh pr view <number> --json title,body,headRefName,baseRefName,ass
 
 ## 계획 자체 검토
 
-- **Spec coverage:** Redis 8.8.1 고정, launcher singleton, API cache/NearCache, notification Lua fallback, release/close, 문서, CI 경로, #361 제외를 각각 Task 1–5에 매핑했다.
+- **Spec coverage:** Redis 8 고정, launcher singleton, API cache/NearCache, notification Lua fallback, release/close, 문서, CI 경로, #361 제외를 각각 Task 1–5에 매핑했다.
 - **Placeholder scan:** 구현·검증 단계에는 실제 파일, 코드, 명령, 기대 결과를 적었고, lesson의 검증 결과는 실행 후 실제 출력으로 채운다.
 - **Type consistency:** `RedisServerContractTest`, `RedisLeaderGroupCompatibilityTest`, `RedisServer.TAG`, `RedisServer.Launcher.redis` 이름을 모든 단계에서 동일하게 사용한다.
-- **Plan review:** 성능은 production hot path 변경이 없어 N/A, 안정성은 lifecycle/cleanup 단계로 고정, 보안은 production 입력 경계 변경이 없어 N/A, 운영은 Redis 8.8.1 rollback/지원 경계, 개발자/API는 기존 helper 재사용, 사용자/호출자는 Issue·lesson 범위를 검증한다. P0=0, P1=0.
+- **Plan review:** 성능은 production hot path 변경이 없어 N/A, 안정성은 lifecycle/cleanup 단계로 고정, 보안은 production 입력 경계 변경이 없어 N/A, 운영은 Redis 8 rollback/지원 경계, 개발자/API는 기존 helper 재사용, 사용자/호출자는 Issue·lesson 범위를 검증한다. P0=0, P1=0.
 
 ## 문서 검수 기록
 
