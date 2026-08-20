@@ -3,14 +3,17 @@ package io.bluetape4k.clinic.appointment.api.tenant
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeNull
+import io.bluetape4k.junit5.concurrency.MultithreadingTester
+import io.bluetape4k.junit5.concurrency.StructuredTaskScopeTester
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import kotlinx.coroutines.test.runTest
+import java.util.concurrent.ConcurrentLinkedQueue
 
 class TenantContextTest {
 
@@ -103,5 +106,61 @@ class TenantContextTest {
 
         job.cancelAndJoin()
         TenantContext.current().shouldBeNull()
+    }
+
+    @Test
+    fun `virtual thread tasks bind an explicit tenant and release it before completion`() {
+        val other = tenant.copy(id = 2L, tenantCode = "tenant-b")
+        val observed = ConcurrentLinkedQueue<TenantInfo>()
+
+        StructuredTaskScopeTester()
+            .workers(2)
+            .rounds(16)
+            .add {
+                TenantContext.withTenant(tenant) {
+                    observed.add(TenantContext.requireCurrent())
+                }
+                TenantContext.current().shouldBeNull()
+            }
+            .add {
+                TenantContext.withTenant(other) {
+                    observed.add(TenantContext.requireCurrent())
+                }
+                TenantContext.current().shouldBeNull()
+            }
+            .run()
+
+        observed.size shouldBeEqualTo 32
+        observed.count { it == tenant } shouldBeEqualTo 16
+        observed.count { it == other } shouldBeEqualTo 16
+    }
+
+    @Test
+    fun `reused request threads do not expose a previous tenant`() {
+        val other = tenant.copy(id = 2L, tenantCode = "tenant-b")
+        val observed = ConcurrentLinkedQueue<TenantInfo>()
+
+        MultithreadingTester()
+            .workers(2)
+            .rounds(32)
+            .addAll(
+                {
+                    TenantContext.withTenant(tenant) {
+                        observed.add(TenantContext.requireCurrent())
+                    }
+                    TenantContext.current().shouldBeNull()
+                },
+                {
+                    TenantContext.withTenant(other) {
+                        observed.add(TenantContext.requireCurrent())
+                    }
+                    TenantContext.current().shouldBeNull()
+                },
+            )
+            .run()
+
+        observed.size shouldBeEqualTo 64
+        observed.count { it == tenant } shouldBeEqualTo 32
+        observed.count { it == other } shouldBeEqualTo 32
     }
 }
