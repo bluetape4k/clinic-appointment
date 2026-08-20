@@ -102,4 +102,3 @@ Redis 7.2/8.8 matrix, 전역 lockfile, 또는 Redis 8 전용
 | SPW-03 용어·명령 일관성 | PASS |
 | SPW-04 결정·제외 범위 기록 | PASS |
 | SPW-05 실제 검증 결과 기록 | PASS |
-
