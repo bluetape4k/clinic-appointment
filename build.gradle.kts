@@ -1,5 +1,5 @@
-import io.gitlab.arturbosch.detekt.Detekt
-import io.gitlab.arturbosch.detekt.report.ReportMergeTask
+import dev.detekt.gradle.Detekt
+import dev.detekt.gradle.report.ReportMergeTask
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
@@ -38,7 +38,7 @@ plugins {
     alias(libs.plugins.kotlin.jpa) apply false
     alias(libs.plugins.kotlin.serialization) apply false
 
-    alias(libs.plugins.detekt)
+    alias(libs.plugins.detekt.dev)
 
     alias(libs.plugins.dependency.management)
     alias(libs.plugins.spring.boot) apply false
@@ -863,9 +863,10 @@ subprojects {
             output.set(file)
         }
         withType<Detekt>().configureEach detekt@{
+            reports.checkstyle.required.set(true)
             finalizedBy(reportMerge)
             reportMerge.configure {
-                input.from(this@detekt.xmlReportFile)
+                input.from(this@detekt.reports.checkstyle.outputLocation)
             }
         }
 
