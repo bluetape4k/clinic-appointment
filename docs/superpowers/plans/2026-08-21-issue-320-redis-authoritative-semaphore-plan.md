@@ -77,7 +77,8 @@
 
 - [ ] **Step 5: expirable renew/release lifecycle을 구현한다.**
   - `leaseTime = worker.leaseDuration`, `acquireWaitTime = min(pollInterval, leaseTime / 4)`,
-    `renewInterval = max(leaseTime / 3, 100ms)`를 사용하고, lease/provider timeout
+    `renewInterval = leaseTime / 3`을 사용한다. Redis coordinator는 `leaseTime >= 300ms`
+    를 require하여 `0 < renewInterval < leaseTime`을 보장하고, lease/provider timeout
     검증 관계를 유지한다.
   - ownership loss/backend/integrity failure에서는 renew job이 action을 중단하고
     `NOT_READY` 경계로 회수한다.
@@ -89,7 +90,8 @@
 - [ ] **Step 6: 최소 단위 테스트를 GREEN으로 만든다.**
   - Run: Task 1의 targeted Gradle command.
   - Expected: fake semaphore contract, local semantics, failure mapping, partial acquire
-    rollback, owner/request 분리, renew ownership loss와 cleanup tests PASS.
+    rollback, owner/request 분리, renew result 전체 매핑, renew ownership loss와 cleanup
+    tests PASS.
 
 ## Task 3: dispatcher 및 Spring wiring 통합
 
@@ -139,14 +141,19 @@
     key에서 barrier로 동시에 action을 실행할 때 총 active 수가 각 상한 이하인지
     확인한다.
   - 정상 release와 짧은 expirable lease 만료 후 capacity 회복을 확인한다.
-  - 한 coordinator의 connection을 성공적인 allocation 뒤 닫아 renew가 `NOT_READY`와
-    provider 미호출로 fail-closed 되는지 확인하고, 다른 coordinator의 capacity가
-    계속 회복되는지 확인한다.
+  - acquire 전에 한 coordinator의 connection을 닫아 `NOT_READY`와 provider 미호출을
+    확인한다. 별도 barrier 테스트에서는 action 시작 후 connection을 닫아 in-flight
+    action 취소와 permit 회수를 확인한다. 다른 coordinator의 capacity가 계속
+    회복되는지도 확인한다.
 
 - [ ] **Step 3: 통합 테스트를 실행한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationOutboxConcurrencyRedisIntegrationTest"`
   - Expected: Docker/Colima의 Redis 8이 시작되고 PASS. bind-mount 오류나 skip은 성공으로
     처리하지 않고 원인을 진단한다.
+
+- [ ] **Step 4: Spring lifecycle ownership을 검증한다.**
+  - ApplicationContext destroy 시 coordinator/client close 횟수가 정확히 한 번이고,
+    injected shared `StatefulRedisConnection`은 coordinator가 닫지 않는지 확인한다.
 
 ## Task 5: 문서·정적 검증·리뷰
 

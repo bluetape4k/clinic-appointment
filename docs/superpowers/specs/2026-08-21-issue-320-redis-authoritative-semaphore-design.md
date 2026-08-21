@@ -88,12 +88,14 @@ Redis 조정이 실패한 경우에는 로컬 permit으로 몰래 전환하지 �
    `worker.leaseDuration`으로 고정하고, `acquireWaitTime`은
    `min(worker.pollInterval, leaseTime / 4)`로 제한한다. worker 설정의 기존 검증
    (`leaseDuration > providerAttemptsPerLease * longestProviderTimeout`)이 provider
-   호출 상한보다 lease가 길다는 전제를 유지한다.
+  호출 상한보다 lease가 길다는 전제를 유지한다. Redis coordinator는 추가로
+  `leaseTime >= 300ms`를 요구하며, `renewInterval = leaseTime / 3`이 항상
+  `0 < renewInterval < leaseTime`이 되도록 한다.
 2. 병원별 expirable permit을 같은 방식으로 acquire한다. clinic acquire가 실패하거나
    취소되면 이미 획득한 global handle을 반드시 `NonCancellable`로 먼저 반납한다.
 3. 두 permit을 모두 소유한 동안에만 `worker.process`를 호출한다.
-4. `renewInterval = max(leaseTime / 3, 100ms)` 간격으로 Redis server-time 기준으로
-   renew한다. renew 결과의 새 handle을 원자적으로 교체한다.
+4. `renewInterval = leaseTime / 3` 간격으로 Redis server-time 기준으로 renew한다.
+   renew 결과의 새 handle을 원자적으로 교체한다.
 5. worker 종료·예외·취소 후 `NonCancellable` cleanup에서 clinic permit, global
    permit 순으로 release한다.
 6. release가 ambiguous이면 원래 request로 reconcile하고, owned handle이 확인될 때만
@@ -104,11 +106,13 @@ worker를 호출하지 않고 `NOT_READY`를 반환한다. `Ambiguous`는 reconc
 소유권을 확인할 때만 worker를 호출한다. Redis 연결이 살아 있는 동안 로컬 semaphore로
 대체하지 않는다.
 
-renew가 ownership을 잃거나 integrity/backend 결과를 신뢰할 수 없게 되면 renew job이
-현재 action coroutine을 취소하고 permit을 재사용하지 않는다. dispatcher는 이
-전용 `NotificationPermitLostException`을 `NOT_READY`로 매핑하며, 원래 caller의
-`CancellationException`은 그대로 재전파한다. cleanup 실패는 warning log와 bounded
-metric으로 남긴다.
+renew 결과가 `Renewed`가 아니면 결과 유형을 다음처럼 매핑한다: `Expired`/`Released`는
+`EXPIRED`, `OwnershipLost`/`StaleGeneration`은 `OWNERSHIP_LOST`, `Closed`는 `CLOSED`,
+backend failure는 `BACKEND_FAILURE`, integrity failure는 `INTEGRITY_FAILURE`,
+ambiguous는 `AMBIGUOUS`. renew job은 이 failure를 `NotificationPermitLostException`으로
+action에 전달해 현재 coroutine을 중단하고 permit을 재사용하지 않는다. dispatcher는
+이 전용 예외를 `NOT_READY`로 매핑하며, 원래 caller의 `CancellationException`은 그대로
+재전파한다. cleanup 실패는 warning log와 bounded metric으로 남긴다.
 
 ## 실패·복구 정책
 
@@ -124,8 +128,13 @@ metric으로 남긴다.
 
 Failure metric은 `mode`(`local`, `redis`)와 다음 고정 reason만 사용한다:
 `UNAVAILABLE`, `TIMED_OUT`, `BACKEND_FAILURE`, `INTEGRITY_FAILURE`, `AMBIGUOUS`,
-`OWNERSHIP_LOST`, `RELEASE_FAILURE`. tenant, clinic, member, appointment, request
-identity는 tag로 사용하지 않는다.
+`OWNERSHIP_LOST`, `EXPIRED`, `CLOSED`, `RELEASE_FAILURE`. tenant, clinic, member,
+appointment, request identity는 tag로 사용하지 않는다.
+
+Coordinator의 내부 outcome은 `Acquired(value)`와 `Backpressured(reason)` 두 가지다.
+dispatcher는 후자를 `NotificationOutboxWorkerResult.NOT_READY`로 변환한다.
+`NotificationPermitLostException`은 coordinator 내부 action 중단 신호이며, 외부
+호출자 cancellation과 혼동하지 않는다.
 
 ## 테스트 설계
 
@@ -157,9 +166,11 @@ identity는 tag로 사용하지 않는다.
 - 정상 release 후 available permits가 회복되는지 확인한다.
 - 짧은 expirable lease에서 release를 생략한 allocation이 만료 후 회복되는지
   확인한다.
-- coordinator별 Lettuce connection을 분리하고, 한 coordinator의 connection을
-  성공적인 allocation 뒤 닫아 renew가 `NOT_READY`와 provider 미호출로 fail-closed
-  되는지 확인한다. 다른 coordinator의 Redis capacity는 계속 회복 가능해야 한다.
+- coordinator별 Lettuce connection을 분리한다. acquire 전에 한 connection을 닫아
+  admission failure가 `NOT_READY`와 provider 미호출로 fail-closed 되는지 확인하고,
+  별도 테스트에서는 action barrier 뒤 connection을 닫아 in-flight action이
+  `NotificationPermitLostException` 경계로 취소되는지 확인한다. 다른 coordinator의
+  Redis capacity는 계속 회복 가능해야 한다.
 
 ### 수용 기준
 
@@ -175,6 +186,8 @@ identity는 tag로 사용하지 않는다.
 - suspend cleanup은 `withContext(NonCancellable)` 안에서 수행한다.
 - Redis semaphore client는 dispatcher `close`에서 닫으며, shared Lettuce connection은
   coordinator가 소유하지 않는다.
+- Spring context destroy에서 coordinator/client가 정확히 한 번 close되고 shared
+  `StatefulRedisConnection`은 열린 상태로 남는 것을 lifecycle test로 검증한다.
 - 설정과 Redis 응답에 대한 검증은 `require`/`check`로 명시하고, permit identity는
   라이브러리의 redacted value object를 사용한다.
 - 전역 lockfile 및 Redis image matrix는 이 설계에서 생성하거나 수정하지 않는다.
