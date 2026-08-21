@@ -4,7 +4,7 @@
 
 **Goal:** `NotificationOutboxDispatcher`의 전역·병원별 provider admission을 Redis-authoritative expirable semaphore로 공유하고 Redis 장애에서는 fail-closed backpressure를 적용한다.
 
-**Architecture:** dispatcher는 `NotificationOutboxConcurrencyCoordinator` 하나의 port만 호출한다. Redis connection이 없으면 기존 local semaphore implementation을 사용하고, connection이 있으면 global/clinic별 `LettuceSuspendPermitExpirableSemaphore`를 lazy-create하여 capacity 초기화, bounded acquire, renew, reconcile, release를 수행한다. Redis 조정 실패는 `NOT_READY`로 반환하여 DB lease recovery가 재시도하게 한다.
+**Architecture:** dispatcher는 `NotificationOutboxConcurrencyCoordinator` 하나의 port만 호출한다. 기본 `REDIS` 모드에서는 전용 Redis connection이 없으면 시작을 거부하고, 명시적인 `LOCAL` 모드에서만 기존 local semaphore implementation을 사용한다. Redis 모드에서는 global/clinic별 `LettuceSuspendPermitExpirableSemaphore`를 lazy-create하여 capacity 초기화, bounded acquire, renew, reconcile, release를 수행한다. Redis 조정 실패는 `NOT_READY`로 반환하여 DB lease recovery가 재시도하게 한다.
 
 **Tech Stack:** Kotlin 2.3, kotlinx-coroutines, Spring Boot 4 auto-configuration, Lettuce 7.6, `bluetape4k-lettuce 1.12.1`, JUnit 5, MockK, Testcontainers Redis 8 launcher, Micrometer.
 
@@ -15,6 +15,7 @@
 - Create: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxConcurrencyCoordinator.kt` — local/distributed permit port, expirable lease lifecycle, typed failure mapping.
 - Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxDispatcher.kt` — 기존 local permit 직접 사용을 coordinator 호출로 교체하고 `close` lifecycle을 노출한다.
 - Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfiguration.kt` — optional `StatefulRedisConnection`을 dispatcher coordinator에 전달하고 Spring destroy lifecycle을 연결한다.
+- Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationProperties.kt` — Redis/로컬 모드와 lease safety margin을 검증한다.
 - Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxMetrics.kt` — bounded concurrency admission/backpressure counter를 추가한다.
 - Modify: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxDispatcherTest.kt` — local coordinator 회귀와 Redis failure/backpressure 결과를 고정한다.
 - Create: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxConcurrencyCoordinatorTest.kt` — fake semaphore 기반 acquire/reconcile/renew/release 단위 테스트.
@@ -38,6 +39,8 @@
     worker 호출 횟수가 0이고 dispatcher 결과가 `NOT_READY`인지 고정한다.
   - Redis 없는 default constructor는 기존 worker 결과와 global/clinic local 상한을
     유지하는지 고정한다.
+  - `claim → Redis failure/NOT_READY → lease expiry → recoverExpired 재처리`를 한
+    통합 시나리오로 고정해 claimed row가 영구 유실되지 않음을 검증한다.
 
 - [ ] **Step 3: ambiguous acquire/reconcile와 cleanup 테스트를 작성한다.**
   - 첫 acquire가 ambiguous여도 동일 owner/request로 reconcile하여 owned handle을
@@ -86,14 +89,14 @@
 - [ ] **Step 5: acquire ambiguous를 reconcile한다.**
   - `Acquired`는 handle을 반환한다.
   - `Ambiguous`는 동일 request로 reconcile하고 `Owned`인 경우에만 작업을 계속한다.
-  - `Unavailable`, `TimedOut`, backend/integrity/closed/unknown 결과는 backpressure로
+  - `Unavailable`, `CapacityExceeded`, `TimedOut`, backend/integrity/closed/unknown 결과는 backpressure로
     변환한다.
 
 - [ ] **Step 6: expirable renew/release lifecycle을 구현한다.**
   - `leaseTime = worker.leaseDuration`, `acquireWaitTime = min(pollInterval, leaseTime / 4)`,
-    `renewInterval = leaseTime / 3`을 사용한다. Redis coordinator는 `leaseTime >= 300ms`
-    를 require하여 `0 < renewInterval < leaseTime`을 보장하고, lease/provider timeout
-    검증 관계를 유지한다.
+    `renewInterval = leaseTime / 3`을 사용한다. Redis coordinator는
+    `leaseTime >= max(1s, inProcessProviderBound + 3 * pollInterval)`를 require하여 Redis
+    왕복과 scheduler 지연 여유를 확보하고, `0 < renewInterval < leaseTime`을 보장한다.
   - ownership loss/backend/integrity failure에서는 renew job이 action을 중단하고
     `NOT_READY` 경계로 회수한다.
   - clinic acquire 실패·취소 시 global handle을 rollback한다. `finally`에서 renew job을
@@ -122,18 +125,18 @@
   - dispatcher를 `AutoCloseable`로 만들고 coordinator close를 위임한다.
 
 - [ ] **Step 2: optional Redis connection을 주입한다.**
-  - Redis connection provider를 별도 조건부 phase로 분리해 Redis/Lettuce classpath
-    부재에서도 local dispatcher를 구성한다.
-  - `ObjectProvider<StatefulRedisConnection<String, String>>`로 connection 부재를
-    정상 처리한다.
-  - connection이 있으면 distributed coordinator를 생성하고, 없으면 local coordinator를
-    생성한다.
-  - shared Lettuce connection 자체는 dispatcher가 닫지 않는다.
+  - Redis connection provider를 별도 조건부 phase로 분리한다. `LOCAL`에서는 Redis/Lettuce
+    classpath·connection이 없어도 dispatcher를 구성하고, `REDIS`에서는 전용 connection 부재를
+    startup failure로 처리한다.
+  - `NotificationConcurrencyRedisConnection`이라는 명시적 전용 port로 connection을 주입한다.
+    cache/leader용 임의 `StatefulRedisConnection` 빈을 자동 재사용하지 않는다.
+  - shared Lettuce connection 자체는 dispatcher가 닫지 않고, provider가 소유한 dedicated
+    connection만 Spring destroy에서 닫는다.
 
 - [ ] **Step 3: auto-configuration 회귀 테스트를 통과시킨다.**
   - Redis/Lettuce classpath 부재에서도 local dispatcher가 구성되는지 확인한다.
-  - classpath는 있지만 connection 없는 context가 local coordinator를 선택하는지 확인한다.
-  - connection 있는 context가 Redis coordinator를 선택하는지 확인한다.
+  - `REDIS` connection 없는 context가 startup failure인지, 전용 connection 있는 context가
+    Redis coordinator를 선택하는지 확인한다.
 
 - [ ] **Step 4: targeted regression을 실행한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationOutboxDispatcherTest" --tests "io.bluetape4k.clinic.appointment.notification.NotificationAutoConfigurationTest"`
@@ -168,9 +171,11 @@
   - coordinator별 connection을 닫은 뒤 새 connection으로 재생성해 expired allocation과
     capacity 회복을 확인한다.
   - 같은 semaphore name에 다른 capacity를 요청하면 fail-closed 되는지 확인한다.
-  - 한 coordinator와 두 coordinator의 bounded workload에서 observed peak,
-    admission latency, backpressure count를 표로 기록한다. 이는 production benchmark가
-    아닌 재현 가능한 local comparison snapshot이다.
+  - 한 coordinator와 두 coordinator의 bounded workload를 warm-up 1회, 측정 5회,
+    coordinator당 100개 작업, 작업 시간 10ms로 실행한다. observed peak는 두 모드 모두
+    `globalConcurrency` 이하이어야 하며, Redis 경로 admission latency p95가 local 대비
+    5배를 초과하면 결과를 회귀로 기록한다. 이는 production benchmark가 아닌 재현 가능한
+    local comparison 결과다.
 
 - [ ] **Step 4: 통합 테스트를 실행한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationOutboxConcurrencyRedisIntegrationTest"`

@@ -12,6 +12,7 @@ internal class NotificationPropertiesTest {
     fun `worker 기본값은 durable retry와 catch-up 경계를 보수적으로 제한한다`() {
         val worker = NotificationProperties().worker
 
+        worker.concurrencyMode shouldBeEqualTo NotificationConcurrencyMode.REDIS
         worker.maxAttempts shouldBeEqualTo 6
         worker.maxElapsed shouldBeEqualTo Duration.ofHours(24)
         worker.providerAttemptsPerLease shouldBeEqualTo 1
@@ -20,6 +21,25 @@ internal class NotificationPropertiesTest {
         worker.reminderRecoveryMaxCandidatesPerRun shouldBeEqualTo 1_000
         worker.pollInterval shouldBeEqualTo Duration.ofSeconds(1)
         worker.validate()
+    }
+
+    @Test
+    fun `Redis 동시성 모드는 provider bound와 renew 여유가 부족하면 시작을 거절한다`() {
+        NotificationProperties.WorkerProperties(
+            leaseDuration = Duration.ofSeconds(14),
+            providerTimeout = Duration.ofSeconds(10),
+            pollInterval = Duration.ofSeconds(1),
+            channels = mapOf("dummy" to NotificationProperties.ChannelWorkerProperties(providerTimeout = Duration.ofSeconds(10))),
+        ).validate()
+
+        assertFailsWith<IllegalStateException> {
+            NotificationProperties.WorkerProperties(
+                leaseDuration = Duration.ofSeconds(12),
+                providerTimeout = Duration.ofSeconds(10),
+                pollInterval = Duration.ofSeconds(1),
+                channels = mapOf("dummy" to NotificationProperties.ChannelWorkerProperties(providerTimeout = Duration.ofSeconds(10))),
+            ).validate()
+        }
     }
 
     @Test

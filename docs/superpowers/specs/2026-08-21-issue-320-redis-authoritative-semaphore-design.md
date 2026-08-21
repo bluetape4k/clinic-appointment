@@ -24,8 +24,8 @@ exactly-once 보장 수단으로 사용하지 않는다.
   명시한다.
 - 정상 종료 시 permit client를 닫고, process exit 또는 Redis 장애에서는 만료와
   backpressure로 안전하게 회복한다.
-- Redis가 구성되지 않은 기존 테스트·단일 프로세스 사용자는 기존 로컬 semaphore
-  동작을 유지한다.
+- `concurrency-mode=LOCAL`을 명시한 테스트·단일 프로세스 사용자는 기존 로컬 semaphore
+  동작을 유지한다. 기본값은 `REDIS`이며, Redis 연결이 없으면 시작을 거부한다.
 - Redis 8 `RedisServer.Launcher.redis`를 사용하는 단일 통합 검증과 다중 coordinator
   동시성 검증을 추가한다.
 
@@ -50,17 +50,18 @@ exactly-once 보장 수단으로 사용하지 않는다.
 중 release 불능 permit을 별도 reconciliation 없이 회수할 수 없어, outbox worker의
 장애 경계에 추가적인 stale allocation 복구가 필요하다.
 
-### C. 만료형 Redis semaphore + 명시적 로컬 fallback (채택)
+### C. 만료형 Redis semaphore + 명시적 로컬 모드 (채택)
 
 `LettuceSuspendPermitExpirableSemaphore`의 Redis server-time lease를 사용한다. 정상
 경로에서는 release하고, 처리 시간이 길어지면 lease를 갱신하며, process exit에는
 만료가 permit을 회수한다. acquire/release가 ambiguous이면 같은 owner/request
 identity로 한 번 reconcile한 뒤 fail-closed backpressure를 적용한다.
 
-Redis 연결이 없는 구형 단일 프로세스 환경만 로컬 semaphore로 동작한다. 연결은 있으나
-Redis 조정이 실패한 경우에는 로컬 permit으로 몰래 전환하지 않고 해당 notification을
-`NOT_READY`로 남겨 다음 DB lease recovery가 다시 시도하게 한다. 이 정책이 다중
-인스턴스에서 상한을 초과하지 않는 유일한 안전한 fallback이다.
+운영 기본값은 `REDIS`다. Redis 연결이 없는 상태에서 `REDIS`를 선택하면 auto-configuration이
+시작을 거부하므로 인스턴스별 설정 오류로 전역 상한을 우회할 수 없다. 단일 프로세스 테스트나
+명시적으로 분리된 개발 실행에서만 `concurrency-mode=LOCAL`을 사용한다. 연결은 있으나
+Redis 조정이 실패한 경우에는 로컬 permit으로 전환하지 않고 해당 notification을 `NOT_READY`로
+남겨 다음 DB lease recovery가 다시 시도하게 한다.
 
 ## 구성 요소와 흐름
 
@@ -68,8 +69,9 @@ Redis 조정이 실패한 경우에는 로컬 permit으로 몰래 전환하지 �
 
 새 coordinator는 dispatcher가 사용할 단일 admission port다.
 
-- Redis가 없으면 전역 `Semaphore`와 참조 카운트 기반 clinic registry를 생성한다.
-- Redis가 있으면 전역 semaphore와 clinic별 semaphore를 lazy-create한다.
+- `concurrency-mode=LOCAL`이면 전역 `Semaphore`와 참조 카운트 기반 clinic registry를 생성한다.
+- `concurrency-mode=REDIS`이면 전용 `NotificationConcurrencyRedisConnection`이 없을 때
+  시작을 거부하고, 전역 semaphore와 clinic별 semaphore를 lazy-create한다.
 - 각 semaphore는 같은 namespace 아래에서 capacity metadata를 확인한 뒤
   `trySetPermits`로 capacity를 한 번만 초기화한다. 이미 다른 인스턴스가 초기화한
   경우에도 metadata가 요청 capacity와 일치할 때만 `AlreadyInitialized`를 정상으로
@@ -93,15 +95,16 @@ Redis 조정이 실패한 경우에는 로컬 permit으로 몰래 전환하지 �
 
 ### 한 notification의 admission 순서
 
-1. 전역 expirable permit을 bounded wait로 acquire한다. `leaseTime`은
+1. clinic expirable permit을 bounded wait로 acquire한다. clinic permit을 먼저 확인해
+   hot clinic 대기자가 global permit을 오래 점유하지 않게 한다. `leaseTime`은
    `worker.leaseDuration`으로 고정하고, `acquireWaitTime`은
    `min(worker.pollInterval, leaseTime / 4)`로 제한한다. worker 설정의 기존 검증
    (`leaseDuration > providerAttemptsPerLease * longestProviderTimeout`)이 provider
-  호출 상한보다 lease가 길다는 전제를 유지한다. Redis coordinator는 추가로
-  `leaseTime >= 300ms`를 요구하며, `renewInterval = leaseTime / 3`이 항상
-  `0 < renewInterval < leaseTime`이 되도록 한다.
-2. 병원별 expirable permit을 같은 방식으로 acquire한다. clinic acquire가 실패하거나
-   취소되면 이미 획득한 global handle을 반드시 `NonCancellable`로 먼저 반납한다.
+   호출 상한보다 lease가 길다는 전제를 유지한다. Redis coordinator는 추가로
+   `leaseTime >= max(1s, inProcessProviderBound + 3 * pollInterval)`을 요구하며,
+   `renewInterval = leaseTime / 3`이 항상 `0 < renewInterval < leaseTime`이 되도록 한다.
+2. global expirable permit을 같은 방식으로 acquire한다. global acquire가 실패하거나
+   취소되면 이미 획득한 clinic handle을 반드시 `NonCancellable`로 먼저 반납한다.
 3. 두 permit을 모두 소유한 동안에만 `worker.process`를 호출한다.
 4. `renewInterval = leaseTime / 3` 간격으로 Redis server-time 기준으로 renew한다.
    renew 결과의 새 handle을 원자적으로 교체한다.
@@ -110,7 +113,8 @@ Redis 조정이 실패한 경우에는 로컬 permit으로 몰래 전환하지 �
 6. release가 ambiguous이면 원래 request로 reconcile하고, owned handle이 확인될 때만
    한 번 더 release한다. 결과가 불명확해도 lease 만료가 최종 회수 경계다.
 
-Acquire가 `Unavailable` 또는 `CapacityExceeded`이면 `UNAVAILABLE`, `TimedOut`이면
+Acquire가 `Unavailable`이면 `UNAVAILABLE`, `CapacityExceeded`이면 `CAPACITY_EXCEEDED`,
+`TimedOut`이면
 `TIMED_OUT`, `Closed`이면 `CLOSED`, backend/integrity failure는 각 유형의 고정
 reason으로 매핑하고 worker를 호출하지 않는다. 이 모든 `Backpressured` 결과는
 dispatcher에서 `NOT_READY`로 변환된다. `Ambiguous`는 reconcile 결과가 소유권을
@@ -139,7 +143,7 @@ action에 전달해 현재 coroutine을 중단하고 permit을 재사용하지 �
 | DB lease lost/provider retry | 기존 worker 결과와 DB fencing 유지 | DB/provider idempotency |
 
 Failure metric은 `mode`(`local`, `redis`)와 다음 고정 reason만 사용한다:
-`UNAVAILABLE`, `TIMED_OUT`, `BACKEND_FAILURE`, `INTEGRITY_FAILURE`, `AMBIGUOUS`,
+`UNAVAILABLE`, `CAPACITY_EXCEEDED`, `TIMED_OUT`, `BACKEND_FAILURE`, `INTEGRITY_FAILURE`, `AMBIGUOUS`,
 `OWNERSHIP_LOST`, `EXPIRED`, `RELEASED`, `CLOSED`, `RELEASE_FAILURE`. tenant, clinic,
 member, appointment, request identity는 tag로 사용하지 않는다. `RELEASED`와
 `EXPIRED`를 분리해 정상 cleanup과 stale allocation 회수를 운영상 구별한다.
@@ -164,7 +168,7 @@ dispatcher는 후자를 `NotificationOutboxWorkerResult.NOT_READY`로 변환한�
   호출하는지 검증한다.
 - renew ownership loss와 cancellation에서 release가 호출되고
   `CancellationException`이 재전파되는지 검증한다.
-- global을 먼저 획득한 뒤 clinic acquire가 실패·취소되는 경우 global permit이
+- clinic을 먼저 획득한 뒤 global acquire가 실패·취소되는 경우 clinic permit이
   누수 없이 반납되는지 검증한다.
 - clinic registry가 idle key를 제거하고 active reference 동안 같은 semaphore를
   공유하는지 검증한다.
@@ -191,7 +195,7 @@ dispatcher는 후자를 `NotificationOutboxWorkerResult.NOT_READY`로 변환한�
   capacity가 회복되는지 확인한다.
 - 동일 workload를 한 coordinator와 두 coordinator로 각각 실행해 observed peak,
   admission latency, backpressure count를 비교한다. 이는 production benchmark가
-  아닌 Redis round-trip과 local path 차이를 보여주는 bounded snapshot이다.
+  아닌 Redis round-trip과 local path 차이를 보여주는 제한된 비교 결과다.
 
 ### 수용 기준
 
@@ -212,9 +216,10 @@ dispatcher는 후자를 `NotificationOutboxWorkerResult.NOT_READY`로 변환한�
   제거하지 않는다. close와 retain/release race는 단위 테스트로 고정한다.
 - Spring context destroy에서 coordinator/client가 정확히 한 번 close되고 shared
   `StatefulRedisConnection`은 열린 상태로 남는 것을 lifecycle test로 검증한다.
-- Redis connection provider는 별도 조건부 auto-configuration phase로 둔다. Redis/Lettuce
-  classpath 부재에서도 local dispatcher가 유지되며, classpath 부재·connection 부재·
-  connection 존재를 각각 context-runner로 검증한다.
+- Redis connection provider는 별도 조건부 auto-configuration phase로 둔다. `LOCAL`에서는
+  Redis/Lettuce classpath·connection이 없어도 dispatcher가 유지되며, `REDIS`에서는
+  전용 connection 부재를 startup failure로 처리한다. 두 모드와 connection ownership을
+  각각 context-runner로 검증한다.
 - 설정과 Redis 응답에 대한 검증은 `require`/`check`로 명시하고, permit identity는
   라이브러리의 redacted value object를 사용한다.
 - 전역 lockfile 및 Redis image matrix는 이 설계에서 생성하거나 수정하지 않는다.
