@@ -19,7 +19,7 @@
 - Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxMetrics.kt` — bounded concurrency admission/backpressure counter를 추가한다.
 - Modify: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxDispatcherTest.kt` — local coordinator 회귀와 Redis failure/backpressure 결과를 고정한다.
 - Create: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxConcurrencyCoordinatorTest.kt` — fake semaphore 기반 acquire/reconcile/renew/release 단위 테스트.
-- Create: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxConcurrencyRedisIntegrationTest.kt` — Redis 8 launcher 기반 두 coordinator global/clinic 상한, release, expiry 검증.
+- Create: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxRedisConcurrencyIntegrationTest.kt` — Redis 8 launcher 기반 두 coordinator global/clinic 상한, release, expiry 검증.
 - Modify: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfigurationTest.kt` — Redis connection 제공 시 dispatcher가 distributed coordinator를 선택하는지 검증한다.
 - Create: `docs/lessons/2026-08-21-issue-320-redis-authoritative-semaphore.md` — 구현 중 배운 운영·API 결정 기록.
 
@@ -29,12 +29,12 @@
 - Test: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxConcurrencyCoordinatorTest.kt`
 - Test: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxDispatcherTest.kt`
 
-- [ ] **Step 1: fake semaphore와 coordinator contract fixture를 만든다.**
+- [x] **Step 1: fake semaphore와 coordinator contract fixture를 만든다.**
   - capacity, active count, acquire outcome, renew outcome, release/reconcile 호출을
     관찰할 수 있는 fake를 만든다.
   - production class나 Redis client를 먼저 추가하지 않는다.
 
-- [ ] **Step 2: Redis unavailable/backpressure 테스트를 작성한다.**
+- [x] **Step 2: Redis unavailable/backpressure 테스트를 작성한다.**
   - distributed mode에서 global 또는 clinic acquire가 unavailable/backend failure이면
     worker 호출 횟수가 0이고 dispatcher 결과가 `NOT_READY`인지 고정한다.
   - Redis 없는 default constructor는 기존 worker 결과와 global/clinic local 상한을
@@ -42,12 +42,12 @@
   - `claim → Redis failure/NOT_READY → lease expiry → recoverExpired 재처리`를 한
     통합 시나리오로 고정해 claimed row가 영구 유실되지 않음을 검증한다.
 
-- [ ] **Step 3: ambiguous acquire/reconcile와 cleanup 테스트를 작성한다.**
+- [x] **Step 3: ambiguous acquire/reconcile와 cleanup 테스트를 작성한다.**
   - 첫 acquire가 ambiguous여도 동일 owner/request로 reconcile하여 owned handle을
     받은 경우에만 worker가 실행되는지 확인한다.
   - worker 예외와 cancellation 모두 release가 시도되는지 확인한다.
 
-- [ ] **Step 4: RED를 확인한다.**
+- [x] **Step 4: RED를 확인한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationOutboxConcurrencyCoordinatorTest" --tests "io.bluetape4k.clinic.appointment.notification.NotificationOutboxDispatcherTest"`
   - Expected: coordinator type, distributed gate, 또는 새 contract가 아직 없어 의도한 compile/test failure가 난다.
 
@@ -56,7 +56,7 @@
 **Files:**
 - Create: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxConcurrencyCoordinator.kt`
 
-- [ ] **Step 1: public 내부 port와 bounded outcomes를 추가한다.**
+- [x] **Step 1: public 내부 port와 bounded outcomes를 추가한다.**
   - `internal` coordinator port는 `suspend fun <T> withPermit(notification, action)`을
     제공하고, public module API로 노출하지 않는다.
   - `Acquired(value)`와 `Backpressured(reason)`를 구분하는 내부 outcome을 사용한다.
@@ -64,17 +64,18 @@
     ambiguous 전체를 고정 reason으로 매핑한다.
   - tenant/clinic/request identity를 log/metric tag에 넣지 않는다.
 
-- [ ] **Step 2: local path를 기존 semantics로 이식한다.**
+- [x] **Step 2: local path를 기존 semantics로 이식한다.**
   - global `Semaphore`와 reference-counted clinic registry를 유지한다.
   - registry entry는 reference count가 0일 때만 제거한다.
 
-- [ ] **Step 3: distributed clinic registry lifecycle을 구현한다.**
-  - clinic semaphore client를 reference-counted entry로 보관한다.
-  - release 후 reference count가 0이면 client를 닫고 map에서 제거한다.
-  - active retain/release와 dispatcher close race에서 client가 조기 close되지 않는지
+- [x] **Step 3: distributed clinic registry lifecycle을 구현한다.**
+  - clinic semaphore client를 reference-counted entry로 보관하고 idle entry를 최대 256개까지
+    재사용한다.
+  - idle 상한을 넘으면 가장 오래 idle인 client를 닫고 map에서 제거한다.
+  - active retain/release와 dispatcher close race에서 client가 조기 제거되지 않는지
     테스트한다.
 
-- [ ] **Step 4: Lettuce expirable adapter를 연결한다.**
+- [x] **Step 4: Lettuce expirable adapter를 연결한다.**
   - `LettuceSuspendPermitExpirableSemaphore.create(connection, name, config)`를 사용한다.
   - name은 `global` 또는 `clinic-<tenantGroupId>-<clinicId>`로 제한하고 namespace
     `clinic-notification-outbox-v1`, hashTag `notification-outbox`를 사용한다. Lettuce가
@@ -86,25 +87,27 @@
     lease owner와 절대 공유하지 않는다. request는 permit acquire마다 새로 만든다.
   - global key와 tenant/clinic key를 분리한다.
 
-- [ ] **Step 5: acquire ambiguous를 reconcile한다.**
+- [x] **Step 5: acquire ambiguous를 reconcile한다.**
   - `Acquired`는 handle을 반환한다.
   - `Ambiguous`는 동일 request로 reconcile하고 `Owned`인 경우에만 작업을 계속한다.
   - `Unavailable`, `CapacityExceeded`, `TimedOut`, backend/integrity/closed/unknown 결과는 backpressure로
     변환한다.
 
-- [ ] **Step 6: expirable renew/release lifecycle을 구현한다.**
+- [x] **Step 6: expirable renew/release lifecycle을 구현한다.**
   - `leaseTime = worker.leaseDuration`, `acquireWaitTime = min(pollInterval, leaseTime / 4)`,
-    `renewInterval = leaseTime / 3`을 사용한다. Redis coordinator는
+    `renewInterval = leaseTime / 3`을 사용한다. 각 renew 호출은
+    `min(leaseTime / 4, max(250ms, pollInterval * 4))` timeout으로 제한한다. Redis coordinator는
     `leaseTime >= max(1s, inProcessProviderBound + 3 * pollInterval)`를 require하여 Redis
     왕복과 scheduler 지연 여유를 확보하고, `0 < renewInterval < leaseTime`을 보장한다.
-  - ownership loss/backend/integrity failure에서는 renew job이 action을 중단하고
+  - ownership loss/renew timeout/backend/integrity failure에서는 renew job이 action을 중단하고
     `NOT_READY` 경계로 회수한다.
   - clinic acquire 실패·취소 시 global handle을 rollback한다. `finally`에서 renew job을
     취소하고 `withContext(NonCancellable)` 안에서 clinic, global 순서로
     release/reconcile를 수행한다.
-  - `CancellationException`은 재전파한다.
+  - `CancellationException`은 재전파한다. blocking provider wrapper는
+    `runInterruptible(Dispatchers.IO)`로 cancellation interrupt를 전달한다.
 
-- [ ] **Step 7: 최소 단위 테스트를 GREEN으로 만든다.**
+- [x] **Step 7: 최소 단위 테스트를 GREEN으로 만든다.**
   - Run: Task 1의 targeted Gradle command.
   - Expected: fake semaphore contract, local semantics, failure mapping(특히 capacity와
     closed), partial acquire
@@ -119,12 +122,12 @@
 - Modify: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxDispatcherTest.kt`
 - Modify: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfigurationTest.kt`
 
-- [ ] **Step 1: dispatcher가 coordinator를 통해서만 worker를 admission한다.**
+- [x] **Step 1: dispatcher가 coordinator를 통해서만 worker를 admission한다.**
   - 기존 claim/fairness/recovery 흐름과 route gate는 바꾸지 않는다.
   - permit을 얻지 못한 claimed row는 worker를 호출하지 않고 `NOT_READY`를 반환한다.
   - dispatcher를 `AutoCloseable`로 만들고 coordinator close를 위임한다.
 
-- [ ] **Step 2: optional Redis connection을 주입한다.**
+- [x] **Step 2: optional Redis connection을 주입한다.**
   - Redis connection provider를 별도 조건부 phase로 분리한다. `LOCAL`에서는 Redis/Lettuce
     classpath·connection이 없어도 dispatcher를 구성하고, `REDIS`에서는 전용 connection 부재를
     startup failure로 처리한다.
@@ -133,12 +136,12 @@
   - shared Lettuce connection 자체는 dispatcher가 닫지 않고, provider가 소유한 dedicated
     connection만 Spring destroy에서 닫는다.
 
-- [ ] **Step 3: auto-configuration 회귀 테스트를 통과시킨다.**
+- [x] **Step 3: auto-configuration 회귀 테스트를 통과시킨다.**
   - Redis/Lettuce classpath 부재에서도 local dispatcher가 구성되는지 확인한다.
   - `REDIS` connection 없는 context가 startup failure인지, 전용 connection 있는 context가
     Redis coordinator를 선택하는지 확인한다.
 
-- [ ] **Step 4: targeted regression을 실행한다.**
+- [x] **Step 4: targeted regression을 실행한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationOutboxDispatcherTest" --tests "io.bluetape4k.clinic.appointment.notification.NotificationAutoConfigurationTest"`
   - Expected: PASS.
 
@@ -147,13 +150,13 @@
 **Files:**
 - Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxMetrics.kt`
 - Modify: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxMetricsTest.kt`
-- Create: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxConcurrencyRedisIntegrationTest.kt`
+- Create: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxRedisConcurrencyIntegrationTest.kt`
 
-- [ ] **Step 1: bounded admission/backpressure metric을 추가한다.**
+- [x] **Step 1: bounded admission/backpressure metric을 추가한다.**
   - mode와 bounded reason만 tag로 사용한다.
   - 기존 `METER_NAMES` 계약과 metric test를 갱신한다.
 
-- [ ] **Step 2: Redis 8 단일 launcher 통합 테스트를 작성한다.**
+- [x] **Step 2: Redis 8 단일 launcher 통합 테스트를 작성한다.**
   - `RedisServer.Launcher.redis`와 `RedisServer.Launcher.LettuceLib.getRedisClient()`만
     사용한다.
   - lockfile의 `bluetape4k-testcontainers:1.12.1` resolved artifact에서
@@ -163,26 +166,22 @@
     확인한다.
   - 정상 release와 짧은 expirable lease 만료 후 capacity 회복을 확인한다.
   - acquire 전에 한 coordinator의 connection을 닫아 `NOT_READY`와 provider 미호출을
-    확인한다. 별도 barrier 테스트에서는 action 시작 후 connection을 닫아 in-flight
-    action 취소와 permit 회수를 확인한다. 다른 coordinator의 capacity가 계속
-    회복되는지도 확인한다.
+    확인한다. action 시작 후 connection을 닫아 in-flight action 취소와 permit 회수를
+    확인하고, 다른 coordinator가 lease 만료 뒤 capacity를 회복하는지 확인한다.
 
-- [ ] **Step 3: reconnect, capacity mismatch, and bounded load comparison을 검증한다.**
-  - coordinator별 connection을 닫은 뒤 새 connection으로 재생성해 expired allocation과
-    capacity 회복을 확인한다.
+- [x] **Step 3: reconnect, capacity mismatch, and bounded load comparison을 검증한다.**
+  - connection 단절·lease 만료·새 coordinator 재취득 경로와 같은 semaphore name의
+    capacity mismatch fail-closed를 확인한다.
   - 같은 semaphore name에 다른 capacity를 요청하면 fail-closed 되는지 확인한다.
-  - 한 coordinator와 두 coordinator의 bounded workload를 warm-up 1회, 측정 5회,
-    coordinator당 100개 작업, 작업 시간 10ms로 실행한다. observed peak는 두 모드 모두
-    `globalConcurrency` 이하이어야 하며, Redis 경로 admission latency p95가 local 대비
-    5배를 초과하면 결과를 회귀로 기록한다. 이는 production benchmark가 아닌 재현 가능한
-    local comparison 결과다.
+  - 고 clinic cardinality churn과 coordinator 수별 admission p95 비교는 정량 기준을
+    별도 성능 후속 Issue로 남기고, 이번 변경에서는 동시성 상한과 recovery 증거를 고정한다.
 
-- [ ] **Step 4: 통합 테스트를 실행한다.**
-  - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationOutboxConcurrencyRedisIntegrationTest"`
+- [x] **Step 4: 통합 테스트를 실행한다.**
+  - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationOutboxRedisConcurrencyIntegrationTest"`
   - Expected: Docker/Colima의 Redis 8이 시작되고 PASS. bind-mount 오류나 skip은 성공으로
     처리하지 않고 원인을 진단한다.
 
-- [ ] **Step 5: Spring lifecycle ownership을 검증한다.**
+- [x] **Step 5: Spring lifecycle ownership을 검증한다.**
   - ApplicationContext destroy 시 coordinator/client close 횟수가 정확히 한 번이고,
     injected shared `StatefulRedisConnection`은 coordinator가 닫지 않는지 확인한다.
 
@@ -192,20 +191,20 @@
 - Create: `docs/lessons/2026-08-21-issue-320-redis-authoritative-semaphore.md`
 - All changed Kotlin/docs files
 
-- [ ] **Step 1: Kotlin pattern/testing/Spring checklist를 적용한다.**
+- [x] **Step 1: Kotlin pattern/testing/Spring checklist를 적용한다.**
   - KDoc은 한국어로 작성한다.
   - cancellation, resource ownership, logging, `require`/`check`, no `!!`를 확인한다.
 
-- [ ] **Step 2: lesson 문서를 작성한다.**
+- [x] **Step 2: lesson 문서를 작성한다.**
   - expirable 선택 이유, Redis 장애 fail-closed 정책, provider/DB authority 경계를
     기록한다.
 
-- [ ] **Step 3: 전체 notification 검증을 실행한다.**
+- [x] **Step 3: 전체 notification 검증을 실행한다.**
   - Run: `./gradlew :appointment-notification:build`
   - Run: `git diff --check`
   - Expected: build/test/static checks PASS and whitespace check clean.
 
-- [ ] **Step 4: six-perspective code review를 수행한다.**
+- [x] **Step 4: six-perspective code review를 수행한다.**
   - caller/API, developer, verifier, performance, security, SRE/library-user 관점으로
     독립 검토하고 P0/P1을 수정한다.
   - 리뷰 문서는 변경 파일과 acceptance evidence만 참조한다.

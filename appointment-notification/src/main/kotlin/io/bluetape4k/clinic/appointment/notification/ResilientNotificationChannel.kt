@@ -143,6 +143,10 @@ class ResilientNotificationChannel(
             } catch (e: TimeoutException) {
                 future.cancel(true)
                 throw e
+            } catch (e: InterruptedException) {
+                future.cancel(true)
+                Thread.currentThread().interrupt()
+                throw CancellationException("provider call interrupted", e)
             } catch (e: ExecutionException) {
                 throw e.cause ?: e
             }

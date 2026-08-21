@@ -114,6 +114,29 @@ identity를 공유하지 않습니다.
 - 코루틴 취소는 provider를 한 번만 호출한 뒤 그대로 전파하며 provider 실패로
   변환하지 않습니다.
 
+## 다중 인스턴스 동시성
+
+내구성 outbox worker의 `concurrency-mode` 기본값은 `REDIS`입니다. Auto-Configuration은
+`RedisClient`와 분리된 notification 전용 Lettuce connection을 만들고, Redis semaphore의
+global·tenant/clinic permit으로 여러 인스턴스의 admission을 정렬합니다. 전용 connection을
+구성할 수 없으면 애플리케이션 시작을 거부하며, Redis 장애·capacity 불일치·lease 만료는
+provider 호출 없이 `NOT_READY` backpressure로 처리합니다.
+
+Redis semaphore는 동시성 상한을 조정할 뿐입니다. 실제 발송의 최종 권위는 기존 데이터베이스
+claim/lease/fencing과 provider idempotency key에 남아 있으므로, admission 실패 뒤 lease가
+만료되면 기존 `recoverExpired` 경로가 같은 outbox 행을 다시 처리합니다. `lease-duration`은
+provider 시도 bound와 Redis 갱신 여유(`3 * poll-interval`, 최소 1초)를 포함해야 합니다.
+각 renew 호출은 lease의 1/4 이내 timeout으로 제한되며, timeout·ownership loss는 현재
+작업을 `NOT_READY`로 중단합니다. blocking provider 호출은 `runInterruptible` 경계에서
+취소 시 interrupt를 전달하지만, interrupt를 무시하는 외부 SDK의 종료는 provider 자체
+timeout과 DB fencing·provider idempotency가 최종 경계를 제공합니다.
+
+단일 프로세스 테스트·개발에서만 `clinic.notification.worker.concurrency-mode=LOCAL`을
+명시적으로 선택할 수 있습니다. 운영 다중 인스턴스는 `REDIS`를 유지하고, 모든 인스턴스가
+동일한 dedicated Redis endpoint/database/ACL 계약을 사용해야 합니다. 고정 namespace와
+capacity contract key는 환경 경계를 대신하지 않습니다. Redis 7.2/8.8 이미지 매트릭스와
+전역 lockfile은 별도 후속 Issue 범위입니다.
+
 ## 설정 예시
 
 ```yaml
@@ -133,6 +156,7 @@ clinic:
       canary-clinic-ids: []
     worker:
       enabled: true
+      concurrency-mode: REDIS
       max-attempts: 6
       max-elapsed: 24h
       provider-attempts-per-lease: 1

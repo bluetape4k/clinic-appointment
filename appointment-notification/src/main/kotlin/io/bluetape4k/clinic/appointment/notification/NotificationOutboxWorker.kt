@@ -10,6 +10,8 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxSta
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttemptOutcome
 import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import java.time.Duration
 
 /**
@@ -170,7 +172,9 @@ class NotificationOutboxWorker(
             return handleRetryableFailure(claimed, NotificationFailureCode.TEMPLATE_PARAMETER_INVALID)
         }
         val providerResult = try {
-            providerChannel.send(request)
+            runInterruptible(Dispatchers.IO) {
+                providerChannel.send(request)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: NotificationProviderException) {

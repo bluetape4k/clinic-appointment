@@ -5,6 +5,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryA
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentConfirmedParameters
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
+import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.NotificationAuditFingerprint
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventId
@@ -36,6 +37,71 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 
 internal class NotificationOutboxWorkerLeaseTest {
+
+    @Test
+    fun `Redis admission 실패 뒤 실제 DB lease 만료 복구가 같은 행을 다시 처리한다`() {
+        runBlocking {
+            val database = Database.connect(
+                "jdbc:h2:mem:notification_redis_failure_${System.nanoTime()};MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver",
+            )
+            transaction(database) {
+                SchemaUtils.createMissingTablesAndColumns(NotificationOutboxEvents, NotificationDeliveryAttempts)
+            }
+            val repository = NotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(5))
+            val enqueued = transaction(database) { repository.enqueue(notificationDraft("redis-failure")) }
+            val store = JdbcNotificationOutboxWorkStore(database, repository)
+            var providerCalls = 0
+            val coordinator = object : NotificationOutboxConcurrencyCoordinator {
+                override val mode: NotificationConcurrencyMode = NotificationConcurrencyMode.REDIS
+                private var calls = 0
+
+                override suspend fun <T> withPermit(
+                    notification: ClaimedNotification,
+                    action: suspend () -> T,
+                ): NotificationOutboxAdmission<T> {
+                    calls++
+                    return if (calls == 1) {
+                        NotificationOutboxAdmission.Backpressured(NotificationPermitFailureReason.BACKEND_FAILURE)
+                    } else {
+                        providerCalls++
+                        NotificationOutboxAdmission.Acquired(action())
+                    }
+                }
+
+                override fun close() = Unit
+            }
+            val dispatcher = NotificationOutboxDispatcher.withCoordinator(
+                store = store,
+                worker = NotificationOutboxJobWorker {
+                    NotificationOutboxWorkerResult.COMPLETED
+                },
+                leaseOwner = "owner-a",
+                globalConcurrency = 1,
+                perClinicConcurrency = 1,
+                concurrencyCoordinator = coordinator,
+            )
+
+            dispatcher.dispatchOnce() shouldBeEqualTo listOf(NotificationOutboxWorkerResult.NOT_READY)
+            transaction(database) {
+                exec(
+                    "UPDATE clinic_notification_outbox " +
+                        "SET lease_until = DATEADD('SECOND', -1, CURRENT_TIMESTAMP) " +
+                        "WHERE id = ${enqueued.id}",
+                )
+            }
+            dispatcher.dispatchOnce() shouldBeEqualTo listOf(NotificationOutboxWorkerResult.COMPLETED)
+            providerCalls shouldBeEqualTo 1
+            transaction(database) {
+                NotificationOutboxEvents.selectAll().single()[NotificationOutboxEvents.status] shouldBeEqualTo
+                    NotificationOutboxStatus.PROCESSING
+                NotificationDeliveryAttempts
+                    .selectAll()
+                    .map { it[NotificationDeliveryAttempts.outcome] } shouldBeEqualTo
+                    listOf(NotificationDeliveryAttemptOutcome.LEASE_LOST, null)
+            }
+        }
+    }
 
     @Test
     fun `만료 lease 복구는 DB 시간 기준으로 이전 attempt를 닫고 새 attempt를 claim한다`() {
