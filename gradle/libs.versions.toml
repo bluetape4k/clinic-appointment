@@ -19,7 +19,7 @@ bluetape4k-dependencies = "1.4.0"
 kotlin = "2.4.0"
 spring-boot4 = "4.1.0"
 dokka = "2.2.0"
-detekt = "1.23.8"
+detekt-dev = "2.0.0-alpha.6"
 dependency-management = "1.1.7"
 kover = "0.9.8"
 test-logger = "4.0.0"
@@ -48,7 +48,7 @@ kotlin-noarg = { id = "org.jetbrains.kotlin.plugin.noarg", version.ref = "kotlin
 kotlin-jpa = { id = "org.jetbrains.kotlin.plugin.jpa", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
-detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+detekt-dev = { id = "dev.detekt", version.ref = "detekt-dev" }
 dependency-management = { id = "io.spring.dependency-management", version.ref = "dependency-management" }
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot4" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
