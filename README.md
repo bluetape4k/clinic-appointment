@@ -153,6 +153,21 @@ parameter를 제거합니다.
 일반 CI와 nightly CI의 통합 검증은 PostgreSQL 기준으로 수행하며, H2와 MySQL은
 지원 데이터베이스 행렬에 포함하지 않습니다.
 
+### Redis 통합 테스트 이미지 계약
+
+API cache/NearCache와 notification leader·outbox 통합 테스트는 `redis:8.8`을
+유일한 지원 이미지로 사용합니다. 각 모듈의 `Redis88Launcher`가
+bluetape4k `RedisServer(image = "redis", tag = "8.8")`를 singleton으로 기동하며,
+production Redis 설정이나 의존성 버전을 변경하지 않습니다.
+
+- `test-api`와 `test-notification` CI job이 모듈 테스트를 실행하므로 이미지 태그가
+  누락되거나 의도하지 않게 바뀌면 `RedisServerContractTest`와 통합 검증이 실패합니다.
+- 이 계약은 테스트 호환성만 고정하며 Redis 버전 행렬이나 Redis 8 전용 명령 지원을
+  의미하지 않습니다.
+- 이미지 롤백이 필요하면 production 설정을 먼저 바꾸지 말고 두 모듈의
+  `Redis88Launcher`, 계약 테스트, 이 문서와 lesson을 함께 이전 계약으로 되돌린 뒤
+  해당 모듈 테스트를 다시 실행합니다.
+
 ### JDBC 구현 우선순위와 테스트 경계
 
 애플리케이션 트랜잭션 안에서 SQL이 필요하면 Exposed DSL 또는

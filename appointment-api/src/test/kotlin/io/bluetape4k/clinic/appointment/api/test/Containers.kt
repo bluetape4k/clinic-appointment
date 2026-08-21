@@ -12,7 +12,7 @@ import org.flywaydb.core.Flyway
  */
 object Containers : KLogging() {
 
-    val Redis: RedisServer by lazy { RedisServer.Launcher.redis }
+    val Redis: RedisServer by lazy { Redis88Launcher.redis }
 
     val Postgres: PostgreSQLServer by lazy { PostgreSQLServer.Launcher.postgres }
 

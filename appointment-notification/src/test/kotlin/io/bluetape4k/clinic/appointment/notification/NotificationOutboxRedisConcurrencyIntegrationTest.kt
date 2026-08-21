@@ -17,7 +17,6 @@ import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.redis.lettuce.synchronizer.SemaphoreOwnerId
 import io.bluetape4k.redis.lettuce.synchronizer.SemaphoreRequestId
-import io.bluetape4k.testcontainers.storage.RedisServer
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
@@ -36,9 +35,9 @@ import org.junit.jupiter.api.Test
 internal class NotificationOutboxRedisConcurrencyIntegrationTest {
 
     @Test
-    fun `Redis 8에서 두 dispatcher coordinator가 global과 clinic 상한을 공유한다`() = runBlocking {
-        val redis = RedisServer.Launcher.redis
-        val client = RedisServer.Launcher.LettuceLib.getRedisClient()
+    fun `Redis 8점 8에서 두 dispatcher coordinator가 global과 clinic 상한을 공유한다`() = runBlocking {
+        val redis = Redis88Launcher.redis
+        val client = Redis88Launcher.client()
         val connectionA = client.connect()
         val connectionB = client.connect()
         val namespace = "clinic-notification-test-${UUID.randomUUID()}"
@@ -76,8 +75,8 @@ internal class NotificationOutboxRedisConcurrencyIntegrationTest {
         val releaseBoth = CompletableDeferred<Unit>()
 
         try {
-            redis.dockerImageName shouldBeEqualTo "${RedisServer.IMAGE}:${RedisServer.TAG}"
-            RedisServer.TAG shouldBeEqualTo "8"
+            redis.dockerImageName shouldBeEqualTo Redis88Launcher.IMAGE_NAME
+            Redis88Launcher.TAG shouldBeEqualTo "8.8"
 
             val globalResults = coroutineScope {
                 val first = async {
@@ -142,8 +141,8 @@ internal class NotificationOutboxRedisConcurrencyIntegrationTest {
 
     @Test
     fun `capacity contract가 Redis에 고정되어 다른 capacity 설정을 차단한다`() = runBlocking {
-        RedisServer.Launcher.redis
-        val client = RedisServer.Launcher.LettuceLib.getRedisClient()
+        Redis88Launcher.redis
+        val client = Redis88Launcher.client()
         val connection = client.connect()
         val namespace = "clinic-notification-capacity-${UUID.randomUUID()}"
         val hashTag = "notification-capacity-${UUID.randomUUID()}"
@@ -169,8 +168,8 @@ internal class NotificationOutboxRedisConcurrencyIntegrationTest {
 
     @Test
     fun `expirable permit은 lease가 만료되면 다른 owner가 다시 취득할 수 있다`() = runBlocking {
-        RedisServer.Launcher.redis
-        val client = RedisServer.Launcher.LettuceLib.getRedisClient()
+        Redis88Launcher.redis
+        val client = Redis88Launcher.client()
         val connectionA = client.connect()
         val connectionB = client.connect()
         val namespace = "clinic-notification-expiry-${UUID.randomUUID()}"
@@ -218,8 +217,8 @@ internal class NotificationOutboxRedisConcurrencyIntegrationTest {
 
     @Test
     fun `닫힌 Redis connection은 coordinator admission을 backpressure로 전환한다`() = runBlocking {
-        RedisServer.Launcher.redis
-        val client = RedisServer.Launcher.LettuceLib.getRedisClient()
+        Redis88Launcher.redis
+        val client = Redis88Launcher.client()
         val connection = client.connect()
         val properties = workerProperties()
         val factory = LettuceNotificationPermitSemaphoreFactory(
@@ -248,8 +247,8 @@ internal class NotificationOutboxRedisConcurrencyIntegrationTest {
 
     @Test
     fun `in-flight action은 Redis connection 단절 후 중단되고 다른 coordinator가 lease 만료 뒤 회복한다`() = runBlocking {
-        RedisServer.Launcher.redis
-        val client = RedisServer.Launcher.LettuceLib.getRedisClient()
+        Redis88Launcher.redis
+        val client = Redis88Launcher.client()
         val connectionA = client.connect()
         val connectionB = client.connect()
         val namespace = "clinic-notification-inflight-${UUID.randomUUID()}"
