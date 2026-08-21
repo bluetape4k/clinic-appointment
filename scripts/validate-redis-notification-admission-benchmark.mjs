@@ -71,6 +71,8 @@ for (const [index, scenario] of scenarios.entries()) {
   if (scenario.successfulOperations + scenario.backpressuredOperations !== scenario.operations) {
     fail(`${path} operation 합계가 맞지 않습니다`);
   }
+  if (!Number.isFinite(scenario.warmupMillis) || scenario.warmupMillis < 0) fail(`${path}.warmupMillis가 음수이거나 누락되었습니다`);
+  positive(scenario.workloadElapsedMillis, `${path}.workloadElapsedMillis`);
   positive(scenario.throughputOpsPerSecond, `${path}.throughputOpsPerSecond`);
   for (const metric of ["admissionLatencyMs", "queueingLatencyMs", "acquireLatencyMs", "reconcileLatencyMs", "renewLatencyMs"]) {
     percentiles(scenario[metric], `${path}.${metric}`);
@@ -82,7 +84,9 @@ for (const [index, scenario] of scenarios.entries()) {
 
 const summary = required(report.summary, "summary");
 positive(summary.elapsedMillis, "summary.elapsedMillis");
+positive(summary.workloadElapsedMillis, "summary.workloadElapsedMillis");
 positive(summary.throughputOpsPerSecond, "summary.throughputOpsPerSecond");
+positive(summary.steadyStateThroughputOpsPerSecond, "summary.steadyStateThroughputOpsPerSecond");
 for (const metric of ["admissionLatencyMs", "queueingLatencyMs", "acquireLatencyMs", "reconcileLatencyMs", "renewLatencyMs"]) {
   percentiles(summary[metric], `summary.${metric}`);
 }
@@ -102,6 +106,7 @@ console.log(JSON.stringify({
   configuration: report.configuration,
   scenarioCount: scenarios.length,
   admissionP99Ms: p99,
+  steadyStateThroughputOpsPerSecond: summary.steadyStateThroughputOpsPerSecond,
   worstScenario: worstScenario.name,
   targetP99Ms,
   targetStatus,

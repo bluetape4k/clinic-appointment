@@ -166,14 +166,17 @@ object RedisNotificationAdmissionBenchmark {
         val failures = ConcurrentHashMap<NotificationPermitFailureReason, AtomicInteger>()
         val uniqueClinics = ConcurrentHashMap.newKeySet<Long>()
         val slots = Semaphore(concurrency)
-        val scenarioStarted = System.nanoTime()
+        var warmupMillis = 0.0
 
         return try {
             if (cacheMode == CacheMode.WARM) {
+                val warmupStarted = System.nanoTime()
                 for (clinicId in 1L..cardinality.toLong()) {
                     coordinatorA.withPermit(notification(clinicId, scenarioIndex)) { Unit }
                 }
+                warmupMillis = elapsedMillis(warmupStarted)
             }
+            val workloadStarted = System.nanoTime()
             supervisorScope {
                 (0 until operations).map { operationIndex ->
                     async(Dispatchers.IO) {
@@ -197,6 +200,7 @@ object RedisNotificationAdmissionBenchmark {
                     }
                 }.awaitAll()
             }
+            val workloadElapsedMillis = elapsedMillis(workloadStarted)
             val primitive = withContext(Dispatchers.IO) {
                 measurePrimitiveLatencies(
                     connection = connectionA,
@@ -215,7 +219,9 @@ object RedisNotificationAdmissionBenchmark {
                 operations = operations,
                 successfulOperations = operations - failures.values.sumOf { it.get() },
                 backpressuredOperations = failures.values.sumOf { it.get() },
-                throughputOpsPerSecond = (operations * 1_000.0) / elapsedMillis(scenarioStarted).coerceAtLeast(0.001),
+                warmupMillis = warmupMillis,
+                workloadElapsedMillis = workloadElapsedMillis,
+                throughputOpsPerSecond = (operations * 1_000.0) / workloadElapsedMillis.coerceAtLeast(0.001),
                 admissionLatencyMs = Percentiles.from(admissionSamples),
                 queueingLatencyMs = Percentiles.from(queueingSamples),
                 acquireLatencyMs = primitive.acquire,
@@ -331,6 +337,8 @@ object RedisNotificationAdmissionBenchmark {
         val acquire = scenarios.map { it.acquireLatencyMs }
         val reconcile = scenarios.map { it.reconcileLatencyMs }
         val renew = scenarios.map { it.renewLatencyMs }
+        val workloadElapsedMillis = scenarios.sumOf { it.workloadElapsedMillis }
+        val successfulOperations = scenarios.sumOf { it.successfulOperations }
         val sourceCommit = (System.getenv("GIT_COMMIT") ?: "unprovided").jsonEscape()
         val javaVersion = System.getProperty("java.version").jsonEscape()
         val osName = System.getProperty("os.name").jsonEscape()
@@ -361,7 +369,9 @@ object RedisNotificationAdmissionBenchmark {
             appendLine("  \"summary\": {")
             appendLine("    \"elapsedMillis\": ${elapsedMillis.rounded()},")
             appendLine("""    "summaryAggregation": "maxScenarioPercentile",""")
+            appendLine("    \"workloadElapsedMillis\": ${workloadElapsedMillis.rounded()},")
             appendLine("    \"throughputOpsPerSecond\": ${scenarios.sumOf { it.successfulOperations } * 1_000.0 / elapsedMillis.coerceAtLeast(0.001)} ,")
+            appendLine("    \"steadyStateThroughputOpsPerSecond\": ${successfulOperations * 1_000.0 / workloadElapsedMillis.coerceAtLeast(0.001)},")
             appendLine("    \"admissionLatencyMs\": ${admission.aggregateJson()},")
             appendLine("    \"queueingLatencyMs\": ${queueing.aggregateJson()},")
             appendLine("    \"acquireLatencyMs\": ${acquire.aggregateJson()},")
@@ -469,6 +479,8 @@ object RedisNotificationAdmissionBenchmark {
         val operations: Int,
         val successfulOperations: Int,
         val backpressuredOperations: Int,
+        val warmupMillis: Double,
+        val workloadElapsedMillis: Double,
         val throughputOpsPerSecond: Double,
         val admissionLatencyMs: Percentiles,
         val queueingLatencyMs: Percentiles,
@@ -488,6 +500,8 @@ object RedisNotificationAdmissionBenchmark {
             appendLine("""$indent  "operations": $operations,""")
             appendLine("""$indent  "successfulOperations": $successfulOperations,""")
             appendLine("""$indent  "backpressuredOperations": $backpressuredOperations,""")
+            appendLine("""$indent  "warmupMillis": ${warmupMillis.rounded()},""")
+            appendLine("""$indent  "workloadElapsedMillis": ${workloadElapsedMillis.rounded()},""")
             appendLine("""$indent  "throughputOpsPerSecond": ${throughputOpsPerSecond.rounded()},""")
             appendLine("""$indent  "admissionLatencyMs": ${admissionLatencyMs.toJson()},""")
             appendLine("""$indent  "queueingLatencyMs": ${queueingLatencyMs.toJson()},""")
