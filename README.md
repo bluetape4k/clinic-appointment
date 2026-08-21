@@ -262,6 +262,11 @@ cardinality `1,000`의 준비 시간은 약 `1.59–1.70s`, Redis key count는 c
 [Issue #369 benchmark analysis](docs/benchmarks/issue-369-redis-admission-benchmark/analysis.ko.md)를
 참고하세요.
 
+![Issue #369 Redis admission benchmark chart](docs/benchmarks/issue-369-redis-admission-benchmark/charts/issue-369-redis-admission-chart-ko.png)
+
+차트는 커밋된 `main.json`에서 SVG → PNG로 재생성하며, p99 기준과 warm
+cardinality/churn에 따른 준비 시간·Redis key count를 함께 보여 줍니다.
+
 ### PostgreSQL 예약 consumer benchmark
 
 같은 `kotlinx-benchmark` 모듈에서 PostgreSQL production V23 consumer schema도 실행합니다.

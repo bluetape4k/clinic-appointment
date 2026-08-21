@@ -79,6 +79,24 @@ successful operation/sec이다. `key`는 시나리오 종료 직후 Redis key �
 | cold | 1,000 | 100% | 0.000 | 106.775 | 5.324 | 106.631 | 106.679 | 749.242 | 8 | 80 | 410 |
 | warm | 1,000 | 100% | 1,634.146 | 106.081 | 5.067 | 105.893 | 105.994 | 754.143 | 8 | 80 | 5,410 |
 
+## 차트
+
+![Issue #369 Redis admission benchmark 차트](charts/issue-369-redis-admission-chart-ko.png)
+
+차트의 원자료는 이 문서의 표와 동일한 `main.json`이다. 상단은 admission
+latency p50/p95/p99와 local p99 target `250ms`를 비교하고, 하단은 warm
+시나리오의 cardinality별 준비 시간과 시나리오 종료 직후 Redis key count를
+churn별로 비교한다. 차트는 다음 명령으로 SVG를 재생성한 뒤 CairoSVG로 PNG를
+렌더링한다.
+
+```bash
+node scripts/generate-issue369-redis-admission-chart.mjs \
+  --input docs/benchmarks/issue-369-redis-admission-benchmark/main.json \
+  --output docs/benchmarks/issue-369-redis-admission-benchmark/charts/issue-369-redis-admission-chart-ko.svg
+cairosvg docs/benchmarks/issue-369-redis-admission-benchmark/charts/issue-369-redis-admission-chart-ko.svg \
+  -o docs/benchmarks/issue-369-redis-admission-benchmark/charts/issue-369-redis-admission-chart-ko.png -s 2
+```
+
 summary의 보수적 worst-scenario aggregate는 다음과 같다.
 
 | 지표 | p50 | p95 | p99 |
