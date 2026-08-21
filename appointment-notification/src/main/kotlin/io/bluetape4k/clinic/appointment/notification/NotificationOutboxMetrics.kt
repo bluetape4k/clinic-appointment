@@ -39,6 +39,7 @@ class NotificationOutboxMetrics(
     private val reminderRecoveryCounters = ConcurrentHashMap<String, Counter>()
     private val eventLogWriteFailures = ConcurrentHashMap<String, Counter>()
     private val directEventScopeRejections = ConcurrentHashMap<String, Counter>()
+    private val concurrencyAdmissionCounters = ConcurrentHashMap<ConcurrencyAdmissionMeterKey, Counter>()
     private val eventLogNullTenantRows = AtomicLong()
 
     init {
@@ -80,6 +81,19 @@ class NotificationOutboxMetrics(
         directEventScopeRejections.computeIfAbsent(bounded) {
             Counter.builder(DIRECT_EVENT_SCOPE_REJECTIONS)
                 .tag("reason_code", bounded)
+                .register(registry)
+        }.increment()
+    }
+
+    /** Redis/local admission backpressure를 고정 mode·reason tag로 기록합니다. */
+    internal fun recordConcurrencyAdmission(
+        mode: NotificationConcurrencyMode,
+        reason: NotificationPermitFailureReason,
+    ) {
+        val key = ConcurrencyAdmissionMeterKey(mode, reason)
+        concurrencyAdmissionCounters.computeIfAbsent(key) {
+            Counter.builder(CONCURRENCY_ADMISSIONS)
+                .tags("mode", mode.name.lowercase(), "reason", reason.name)
                 .register(registry)
         }.increment()
     }
@@ -231,6 +245,7 @@ class NotificationOutboxMetrics(
         const val REMINDER_RECOVERY = "clinic.notification.reminder.recovery"
         const val EVENT_LOG_WRITE_FAILURES = "clinic.notification.event.log.write.failures"
         const val DIRECT_EVENT_SCOPE_REJECTIONS = "clinic.notification.direct.event.scope.rejections"
+        const val CONCURRENCY_ADMISSIONS = "clinic.notification.outbox.concurrency.admissions"
         const val EVENT_LOG_NULL_TENANT_ROWS = "clinic.notification.event.log.null.tenant.rows"
         const val EVENT_LOG_WRITE_FAILED = "EVENT_LOG_WRITE_FAILED"
         const val DIRECT_EVENT_SCOPE_REJECTED = "DIRECT_EVENT_SCOPE_REJECTED"
@@ -248,6 +263,7 @@ class NotificationOutboxMetrics(
             REMINDER_RECOVERY,
             EVENT_LOG_WRITE_FAILURES,
             DIRECT_EVENT_SCOPE_REJECTIONS,
+            CONCURRENCY_ADMISSIONS,
             EVENT_LOG_NULL_TENANT_ROWS,
         )
     }
@@ -268,6 +284,11 @@ private data class FailureMeterKey(
 private data class ChannelEventMeterKey(
     val channel: NotificationChannelType,
     val eventType: NotificationEventType,
+)
+
+private data class ConcurrencyAdmissionMeterKey(
+    val mode: NotificationConcurrencyMode,
+    val reason: NotificationPermitFailureReason,
 )
 
 /**

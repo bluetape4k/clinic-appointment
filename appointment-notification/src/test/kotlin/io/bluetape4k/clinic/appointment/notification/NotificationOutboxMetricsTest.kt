@@ -53,12 +53,32 @@ internal class NotificationOutboxMetricsTest {
         )
         metrics.recordEventLogWriteFailure(NotificationOutboxMetrics.EVENT_LOG_WRITE_FAILED)
         metrics.recordDirectEventScopeRejected(NotificationOutboxMetrics.DIRECT_EVENT_SCOPE_REJECTED)
+        metrics.recordConcurrencyAdmission(
+            mode = NotificationConcurrencyMode.REDIS,
+            reason = NotificationPermitFailureReason.BACKEND_FAILURE,
+        )
+        metrics.recordConcurrencyAdmission(
+            mode = NotificationConcurrencyMode.REDIS,
+            reason = NotificationPermitFailureReason.RELEASED,
+        )
+        metrics.recordConcurrencyAdmission(
+            mode = NotificationConcurrencyMode.REDIS,
+            reason = NotificationPermitFailureReason.EXPIRED,
+        )
 
         registry.get(NotificationOutboxMetrics.EVENT_LOG_WRITE_FAILURES)
             .tag("reason_code", NotificationOutboxMetrics.EVENT_LOG_WRITE_FAILED)
             .counter().count() shouldBeEqualTo 1.0
         registry.get(NotificationOutboxMetrics.DIRECT_EVENT_SCOPE_REJECTIONS)
             .tag("reason_code", NotificationOutboxMetrics.DIRECT_EVENT_SCOPE_REJECTED)
+            .counter().count() shouldBeEqualTo 1.0
+        registry.get(NotificationOutboxMetrics.CONCURRENCY_ADMISSIONS)
+            .tag("mode", "redis")
+            .tag("reason", NotificationPermitFailureReason.RELEASED.name)
+            .counter().count() shouldBeEqualTo 1.0
+        registry.get(NotificationOutboxMetrics.CONCURRENCY_ADMISSIONS)
+            .tag("mode", "redis")
+            .tag("reason", NotificationPermitFailureReason.EXPIRED.name)
             .counter().count() shouldBeEqualTo 1.0
 
         registry.meters.map { it.id.name }.toSet() shouldBeEqualTo NotificationOutboxMetrics.METER_NAMES

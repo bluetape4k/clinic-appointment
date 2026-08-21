@@ -49,6 +49,19 @@ import org.springframework.context.annotation.Bean
 class NotificationAutoConfiguration {
     companion object : KLogging()
 
+    /**
+     * cache/leader connection과 분리된 notification semaphore 전용 연결입니다.
+     * RedisClient가 있으면 모드와 관계없이 준비하지만 `LOCAL` 모드에서는 사용하지 않습니다.
+     */
+    @Bean(destroyMethod = "close")
+    @ConditionalOnClass(RedisClient::class)
+    @ConditionalOnBean(RedisClient::class)
+    @ConditionalOnMissingBean(NotificationConcurrencyRedisConnection::class)
+    fun notificationConcurrencyRedisConnection(
+        redisClient: RedisClient,
+    ): OwnedNotificationConcurrencyRedisConnection =
+        OwnedNotificationConcurrencyRedisConnection(redisClient.connect())
+
     @Bean
     @ConditionalOnMissingBean
     fun notificationOutboxCodec(): NotificationOutboxCodec = NotificationOutboxCodec()
@@ -325,6 +338,7 @@ class NotificationAutoConfiguration {
         providerIdempotencyKeyFactoryProvider: ObjectProvider<NotificationProviderIdempotencyKeyFactory>,
         routeGate: NotificationDeliveryRouteGate,
         metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
+        redisConnectionProvider: ObjectProvider<NotificationConcurrencyRedisConnection>,
     ): NotificationOutboxDispatcher? {
         if (!routeGate.hasWorkerRoute) return null
         val runtimeConfigured =
@@ -333,7 +347,34 @@ class NotificationAutoConfiguration {
                 providerIdempotencyKeyFactoryProvider.ifAvailable != null
         if (deliveryActionProvider.ifAvailable == null && !runtimeConfigured) return null
         val workerProperties = properties.worker.validate()
-        return NotificationOutboxDispatcher(
+        val metrics = metricsProvider.ifAvailable
+        val coordinator: NotificationOutboxConcurrencyCoordinator = when (workerProperties.concurrencyMode) {
+            NotificationConcurrencyMode.LOCAL -> LocalNotificationOutboxConcurrencyCoordinator(
+                globalConcurrency = workerProperties.globalConcurrency,
+                perClinicConcurrency = workerProperties.perClinicConcurrency,
+            )
+            NotificationConcurrencyMode.REDIS -> {
+                val redisConnection = checkNotNull(redisConnectionProvider.ifAvailable) {
+                    "clinic.notification.worker.concurrency-mode=REDIS requires a dedicated notification Redis connection"
+                }
+                val factory = LettuceNotificationPermitSemaphoreFactory(
+                    connection = redisConnection.connection(),
+                    leaseTime = workerProperties.leaseDuration,
+                    pollInterval = workerProperties.pollInterval,
+                )
+                RedisNotificationOutboxConcurrencyCoordinator(
+                    properties = workerProperties,
+                    global = factory.create("global", workerProperties.globalConcurrency),
+                    clinicFactory = factory,
+                    onFailure = { reason ->
+                        if (reason == NotificationPermitFailureReason.RELEASE_FAILURE) {
+                            metrics?.recordConcurrencyAdmission(NotificationConcurrencyMode.REDIS, reason)
+                        }
+                    },
+                )
+            }
+        }
+        return NotificationOutboxDispatcher.withCoordinator(
             store = workStore,
             worker = worker,
             leaseOwner = "notification-outbox-worker",
@@ -341,7 +382,8 @@ class NotificationAutoConfiguration {
             perClinicConcurrency = workerProperties.perClinicConcurrency,
             readiness = readiness,
             routeGate = routeGate,
-            metrics = metricsProvider.ifAvailable,
+            metrics = metrics,
+            concurrencyCoordinator = coordinator,
         )
     }
 

@@ -20,23 +20,28 @@ import java.time.Duration
 import java.time.Instant
 import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 
 internal class NotificationOutboxConcurrencyCoordinatorTest {
 
     @Test
-    fun `clinic admission failure rolls back the global permit without invoking the action`() = runBlocking {
+    fun `global admission failure rolls back the clinic permit without invoking the action`() = runBlocking {
         val global = FakeNotificationPermitSemaphore(
-            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("global")))),
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Unavailable)),
         )
         val clinic = FakeNotificationPermitSemaphore(
-            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Unavailable)),
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("clinic")))),
         )
         val coordinator = RedisNotificationOutboxConcurrencyCoordinator(
             properties = workerProperties(),
             global = global,
-            clinicFactory = { clinic },
+            clinicFactory = { _, _ -> clinic },
         )
         val actionCalls = AtomicInteger()
 
@@ -47,7 +52,9 @@ internal class NotificationOutboxConcurrencyCoordinatorTest {
 
         result shouldBeEqualTo NotificationOutboxAdmission.Backpressured(NotificationPermitFailureReason.UNAVAILABLE)
         actionCalls.get() shouldBeEqualTo 0
-        global.releaseCalls shouldBeEqualTo 1
+        global.releaseCalls shouldBeEqualTo 0
+        clinic.releaseCalls shouldBeEqualTo 1
+        Unit
     }
 
     @Test
@@ -62,7 +69,7 @@ internal class NotificationOutboxConcurrencyCoordinatorTest {
         val coordinator = RedisNotificationOutboxConcurrencyCoordinator(
             properties = workerProperties(),
             global = global,
-            clinicFactory = { clinic },
+            clinicFactory = { _, _ -> clinic },
         )
 
         val result = coordinator.withPermit(notification()) { "sent" }
@@ -72,6 +79,7 @@ internal class NotificationOutboxConcurrencyCoordinatorTest {
         global.releaseCalls shouldBeEqualTo 1
         clinic.releaseCalls shouldBeEqualTo 1
         clinic.reconciledRequests.single() shouldBeEqualTo clinic.acquiredRequests.single()
+        Unit
     }
 
     @Test
@@ -85,7 +93,7 @@ internal class NotificationOutboxConcurrencyCoordinatorTest {
         val coordinator = RedisNotificationOutboxConcurrencyCoordinator(
             properties = workerProperties(),
             global = global,
-            clinicFactory = { clinic },
+            clinicFactory = { _, _ -> clinic },
         )
 
         val thrown = runCatching {
@@ -94,9 +102,176 @@ internal class NotificationOutboxConcurrencyCoordinatorTest {
             }
         }.exceptionOrNull()
 
-        thrown!!::class shouldBeEqualTo java.util.concurrent.CancellationException::class
+        check(thrown != null) { "cancellation must be propagated" }
+        thrown::class shouldBeEqualTo java.util.concurrent.CancellationException::class
         clinic.releaseCalls shouldBeEqualTo 1
         global.releaseCalls shouldBeEqualTo 1
+        Unit
+    }
+
+    @Test
+    fun `renew ownership loss stops provider action and releases both permits`() = runBlocking {
+        val global = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("global")))),
+        )
+        val clinic = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("clinic")))),
+            renewResults = ArrayDeque(listOf(NotificationPermitRenew.OwnershipLost)),
+        )
+        val coordinator = RedisNotificationOutboxConcurrencyCoordinator(
+            properties = workerProperties(),
+            global = global,
+            clinicFactory = { _, _ -> clinic },
+        )
+
+        val result = coordinator.withPermit(notification()) {
+            delay(2_000)
+            "must-not-complete"
+        }
+
+        result shouldBeEqualTo NotificationOutboxAdmission.Backpressured(
+            NotificationPermitFailureReason.OWNERSHIP_LOST,
+        )
+        clinic.releaseCalls shouldBeEqualTo 1
+        global.releaseCalls shouldBeEqualTo 1
+        Unit
+    }
+
+    @Test
+    fun `ambiguous release는 동일 request reconcile 뒤 한 번만 재시도한다`() = runBlocking {
+        val global = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("global")))),
+        )
+        val clinic = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("clinic")))),
+            reconcileResults = ArrayDeque(listOf(NotificationPermitReconcile.Owned(handle("clinic-reconciled")))),
+            releaseResults = ArrayDeque(
+                listOf(NotificationPermitMutation.Ambiguous, NotificationPermitMutation.Released),
+            ),
+        )
+        val coordinator = RedisNotificationOutboxConcurrencyCoordinator(
+            properties = workerProperties(),
+            global = global,
+            clinicFactory = { _, _ -> clinic },
+        )
+
+        coordinator.withPermit(notification()) { "sent" } shouldBeEqualTo NotificationOutboxAdmission.Acquired("sent")
+        clinic.releaseCalls shouldBeEqualTo 2
+        clinic.reconciledRequests.size shouldBeEqualTo 1
+        clinic.releasedHandles.last().value shouldBeEqualTo "clinic-reconciled"
+        Unit
+    }
+
+    @Test
+    fun `renew된 최신 generation handle을 cleanup에서 release한다`() = runBlocking {
+        val global = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("global")))),
+            renewResults = ArrayDeque(listOf(NotificationPermitRenew.Renewed(handle("global-renewed")))),
+        )
+        val clinic = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("clinic")))),
+            renewResults = ArrayDeque(listOf(NotificationPermitRenew.Renewed(handle("clinic-renewed")))),
+        )
+        val coordinator = RedisNotificationOutboxConcurrencyCoordinator(
+            properties = workerProperties(),
+            global = global,
+            clinicFactory = { _, _ -> clinic },
+        )
+
+        coordinator.withPermit(notification()) {
+            delay(900)
+            "sent"
+        } shouldBeEqualTo NotificationOutboxAdmission.Acquired("sent")
+
+        clinic.releasedHandles.last().value shouldBeEqualTo "clinic-renewed"
+        global.releasedHandles.last().value shouldBeEqualTo "global-renewed"
+        Unit
+    }
+
+    @Test
+    fun `idle clinic semaphore는 bounded cache 안에서 재사용된다`() = runBlocking {
+        val global = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(
+                listOf(
+                    NotificationPermitAcquire.Acquired(handle("global-1")),
+                    NotificationPermitAcquire.Acquired(handle("global-2")),
+                ),
+            ),
+        )
+        val clinic = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(
+                listOf(
+                    NotificationPermitAcquire.Acquired(handle("clinic-1")),
+                    NotificationPermitAcquire.Acquired(handle("clinic-2")),
+                ),
+            ),
+        )
+        val factoryCalls = AtomicInteger()
+        val coordinator = RedisNotificationOutboxConcurrencyCoordinator(
+            properties = workerProperties(),
+            global = global,
+            clinicFactory = { _, _ ->
+                factoryCalls.incrementAndGet()
+                clinic
+            },
+        )
+
+        coordinator.withPermit(notification()) { "first" }
+        coordinator.withPermit(notification()) { "second" }
+
+        factoryCalls.get() shouldBeEqualTo 1
+        Unit
+    }
+
+    @Test
+    fun `renew backend hang은 bounded timeout 뒤 backpressure가 된다`() = runBlocking {
+        val global = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("global")))),
+            renewDelay = Duration.ofSeconds(2),
+        )
+        val clinic = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("clinic")))),
+            renewDelay = Duration.ofSeconds(2),
+        )
+        val coordinator = RedisNotificationOutboxConcurrencyCoordinator(
+            properties = workerProperties(),
+            global = global,
+            clinicFactory = { _, _ -> clinic },
+        )
+
+        coordinator.withPermit(notification()) { delay(5_000) } shouldBeEqualTo
+            NotificationOutboxAdmission.Backpressured(NotificationPermitFailureReason.BACKEND_FAILURE)
+        Unit
+    }
+
+    @Test
+    fun `coordinator close는 active clinic entry를 release 전에 제거하지 않는다`() = runBlocking {
+        val global = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("global")))),
+        )
+        val clinic = FakeNotificationPermitSemaphore(
+            acquireResults = ArrayDeque(listOf(NotificationPermitAcquire.Acquired(handle("clinic")))),
+        )
+        val coordinator = RedisNotificationOutboxConcurrencyCoordinator(
+            properties = workerProperties(),
+            global = global,
+            clinicFactory = { _, _ -> clinic },
+        )
+        val started = CompletableDeferred<Unit>()
+        val job = launch {
+            coordinator.withPermit(notification()) {
+                started.complete(Unit)
+                awaitCancellation()
+            }
+        }
+
+        started.await()
+        coordinator.close()
+        job.cancelAndJoin()
+
+        clinic.releaseCalls shouldBeEqualTo 1
+        global.releaseCalls shouldBeEqualTo 1
+        Unit
     }
 
     private fun workerProperties() = NotificationProperties.WorkerProperties(
@@ -141,9 +316,13 @@ internal class NotificationOutboxConcurrencyCoordinatorTest {
     private class FakeNotificationPermitSemaphore(
         private val acquireResults: ArrayDeque<NotificationPermitAcquire>,
         private val reconcileResults: ArrayDeque<NotificationPermitReconcile> = ArrayDeque(),
+        private val renewResults: ArrayDeque<NotificationPermitRenew> = ArrayDeque(),
+        private val releaseResults: ArrayDeque<NotificationPermitMutation> = ArrayDeque(),
+        private val renewDelay: Duration = Duration.ZERO,
     ) : NotificationPermitSemaphore {
         val acquiredRequests = mutableListOf<SemaphoreRequestId>()
         val reconciledRequests = mutableListOf<SemaphoreRequestId>()
+        val releasedHandles = mutableListOf<NotificationPermitHandle>()
         var releaseCalls: Int = 0
 
         override suspend fun initialize(capacity: Int): NotificationPermitInitialization =
@@ -166,12 +345,15 @@ internal class NotificationOutboxConcurrencyCoordinatorTest {
             return reconcileResults.removeFirst()
         }
 
-        override suspend fun renew(handle: NotificationPermitHandle, extension: Duration): NotificationPermitRenew =
-            NotificationPermitRenew.Renewed(handle)
+        override suspend fun renew(handle: NotificationPermitHandle, extension: Duration): NotificationPermitRenew {
+            if (!renewDelay.isZero) delay(renewDelay.toMillis())
+            return if (renewResults.isEmpty()) NotificationPermitRenew.Renewed(handle) else renewResults.removeFirst()
+        }
 
         override suspend fun release(handle: NotificationPermitHandle): NotificationPermitMutation {
             releaseCalls++
-            return NotificationPermitMutation.Released
+            releasedHandles += handle
+            return if (releaseResults.isEmpty()) NotificationPermitMutation.Released else releaseResults.removeFirst()
         }
 
         override fun close() = Unit

@@ -18,6 +18,7 @@ import java.time.Duration
  *       max-attempts: 6
  *       lease-duration: 60s
  *       suspend-bridge-timeout: 30s
+ *       concurrency-mode: REDIS
  *       global-concurrency: 4
  *       per-clinic-concurrency: 1
  * ```
@@ -92,6 +93,7 @@ data class NotificationProperties(
      */
     data class WorkerProperties(
         val enabled: Boolean = true,
+        val concurrencyMode: NotificationConcurrencyMode = NotificationConcurrencyMode.REDIS,
         val maxAttempts: Int = 6,
         val maxElapsed: Duration = Duration.ofHours(24),
         val providerAttemptsPerLease: Int = 1,
@@ -178,6 +180,15 @@ data class NotificationProperties(
             val inProcessProviderBound = longestProviderTimeout.multipliedBy(providerAttemptsPerLease.toLong())
             check(leaseDuration > inProcessProviderBound) {
                 "leaseDuration must exceed the in-process provider retry bound"
+            }
+            if (concurrencyMode == NotificationConcurrencyMode.REDIS) {
+                val redisLeaseSafetyBound = maxOf(
+                    Duration.ofSeconds(1),
+                    inProcessProviderBound.plus(pollInterval.multipliedBy(3)),
+                )
+                check(leaseDuration >= redisLeaseSafetyBound) {
+                    "leaseDuration must include the Redis renew safety margin"
+                }
             }
             val providerLimit = channels.values.minOf(ChannelWorkerProperties::effectiveConcurrency)
             check(
@@ -312,4 +323,15 @@ data class NotificationProperties(
             private const val serialVersionUID = 1L
         }
     }
+}
+
+/**
+ * outbox provider admission을 조정하는 권위 경로입니다.
+ *
+ * `REDIS`는 다중 인스턴스 운영 기본값이며 전용 Redis connection이 없으면 시작을 거부합니다.
+ * `LOCAL`은 단일 프로세스 테스트·개발 실행에서만 명시적으로 선택해야 합니다.
+ */
+enum class NotificationConcurrencyMode {
+    REDIS,
+    LOCAL,
 }

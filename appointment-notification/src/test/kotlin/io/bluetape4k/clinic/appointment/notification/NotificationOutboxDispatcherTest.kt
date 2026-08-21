@@ -161,6 +161,35 @@ internal class NotificationOutboxDispatcherTest {
     }
 
     @Test
+    fun `Redis admission 실패 뒤 DB lease 복구가 같은 행을 다시 처리한다`() = runBlocking {
+        val store = FairFakeWorkStore(
+            candidates = listOf(candidate(id = 1L, clinicId = 1L)),
+            recoverClaimedOnNextRecovery = true,
+        )
+        val processedIds = mutableListOf<Long>()
+        val coordinator = FailOnceConcurrencyCoordinator()
+        val dispatcher = NotificationOutboxDispatcher.withCoordinator(
+            store = store,
+            worker = NotificationOutboxJobWorker {
+                processedIds += it.id
+                NotificationOutboxWorkerResult.COMPLETED
+            },
+            leaseOwner = "dispatcher-test",
+            globalConcurrency = 1,
+            perClinicConcurrency = 1,
+            concurrencyCoordinator = coordinator,
+        )
+
+        dispatcher.dispatchOnce() shouldBeEqualTo listOf(NotificationOutboxWorkerResult.NOT_READY)
+        processedIds shouldBeEqualTo emptyList()
+        dispatcher.dispatchOnce() shouldBeEqualTo listOf(NotificationOutboxWorkerResult.COMPLETED)
+        processedIds shouldBeEqualTo listOf(1L)
+        coordinator.calls shouldBeEqualTo 2
+        store.operations shouldBeEqualTo listOf("recover:1", "find:1", "find:1", "recover:1")
+        Unit
+    }
+
+    @Test
     fun `CANARY dispatcher는 allowlist 병원의 신규 후보만 claim한다`() {
         runBlocking {
             val store = FairFakeWorkStore(
@@ -268,6 +297,7 @@ internal class NotificationOutboxDispatcherTest {
     private inner class FairFakeWorkStore(
         candidates: List<NotificationCandidate>,
         expired: List<ClaimedNotification> = emptyList(),
+        private val recoverClaimedOnNextRecovery: Boolean = false,
     ) : NotificationOutboxWorkStore {
         private val byId = candidates.associateBy(NotificationCandidate::id)
         private val remaining = candidates.toMutableList()
@@ -315,7 +345,11 @@ internal class NotificationOutboxDispatcherTest {
 
         override suspend fun claim(id: Long, owner: String): ClaimedNotification? {
             claimedIds += id
-            return byId[id]?.let { claimed(it.id, it.clinicId.value) }
+            return byId[id]?.let {
+                val claimed = claimed(it.id, it.clinicId.value)
+                if (recoverClaimedOnNextRecovery) expired += claimed
+                claimed
+            }
         }
 
         override suspend fun recoverExpired(limit: Int, owner: String): List<ClaimedNotification> {
@@ -370,4 +404,23 @@ internal class NotificationOutboxDispatcherTest {
             eventId = NotificationEventId("event-$id"),
             parametersJson = "{}",
         )
+
+    private class FailOnceConcurrencyCoordinator : NotificationOutboxConcurrencyCoordinator {
+        override val mode: NotificationConcurrencyMode = NotificationConcurrencyMode.REDIS
+        var calls: Int = 0
+
+        override suspend fun <T> withPermit(
+            notification: ClaimedNotification,
+            action: suspend () -> T,
+        ): NotificationOutboxAdmission<T> {
+            calls++
+            return if (calls == 1) {
+                NotificationOutboxAdmission.Backpressured(NotificationPermitFailureReason.BACKEND_FAILURE)
+            } else {
+                NotificationOutboxAdmission.Acquired(action())
+            }
+        }
+
+        override fun close() = Unit
+    }
 }

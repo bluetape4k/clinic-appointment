@@ -18,7 +18,9 @@ import io.bluetape4k.leader.micrometer.InstrumentedLeaderGroupElector
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -200,6 +202,79 @@ internal class NotificationAutoConfigurationTest {
                 applicationContext.getBeansOfType(NotificationOutboxDispatcher::class.java).size shouldBeEqualTo 1
                 applicationContext.getBeansOfType(NotificationOutboxSchedulingRunner::class.java).size shouldBeEqualTo 1
             }
+    }
+
+    @Test
+    fun `REDIS 모드는 전용 connection이 없으면 dispatcher 시작을 거절한다`() {
+        val database = database("auto_dispatcher_redis_required", version = "21")
+        context(database, withKey = true)
+            .withPropertyValues(
+                "clinic.notification.rollout.mode=ACTIVE",
+                "clinic.notification.worker.concurrency-mode=REDIS",
+            )
+            .withBean(
+                "deliveryAction",
+                NotificationDeliveryAction::class.java,
+                { NotificationDeliveryAction { NotificationDeliveryResult.sent() } },
+            )
+            .run { applicationContext ->
+                check(applicationContext.startupFailure != null) {
+                    "REDIS mode must fail startup without a dedicated connection"
+                }
+            }
+    }
+
+    @Test
+    fun `REDIS 모드는 명시된 전용 connection으로 dispatcher를 구성한다`() {
+        val database = database("auto_dispatcher_redis_connection", version = "21")
+        val connection = mockk<StatefulRedisConnection<String, String>>(relaxed = true)
+        context(database, withKey = true)
+            .withPropertyValues(
+                "clinic.notification.rollout.mode=ACTIVE",
+                "clinic.notification.worker.concurrency-mode=REDIS",
+            )
+            .withBean(
+                "notificationConcurrencyRedisConnection",
+                NotificationConcurrencyRedisConnection::class.java,
+                { NotificationConcurrencyRedisConnection { connection } },
+            )
+            .withBean(
+                "deliveryAction",
+                NotificationDeliveryAction::class.java,
+                { NotificationDeliveryAction { NotificationDeliveryResult.sent() } },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(NotificationOutboxDispatcher::class.java).size shouldBeEqualTo 1
+            }
+    }
+
+    @Test
+    fun `auto-created dedicated Redis connection은 context destroy에서 한 번 닫힌다`() {
+        val database = database("auto_dispatcher_owned_redis_connection", version = "21")
+        val redisClient = mockk<RedisClient>(relaxed = true)
+        val connection = mockk<StatefulRedisConnection<String, String>>(relaxed = true)
+        every { redisClient.connect() } returns connection
+
+        context(database, withKey = true)
+            .withPropertyValues(
+                "clinic.notification.rollout.mode=ACTIVE",
+                "clinic.notification.worker.concurrency-mode=REDIS",
+            )
+            .withBean("redisClient", RedisClient::class.java, { redisClient })
+            .withBean(
+                "deliveryAction",
+                NotificationDeliveryAction::class.java,
+                { NotificationDeliveryAction { NotificationDeliveryResult.sent() } },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(OwnedNotificationConcurrencyRedisConnection::class.java)
+                    .size shouldBeEqualTo 1
+            }
+
+        verify(exactly = 1) { redisClient.connect() }
+        verify(exactly = 1) { connection.close() }
     }
 
     @Test
@@ -547,6 +622,7 @@ internal class NotificationAutoConfigurationTest {
     ): ApplicationContextRunner {
         var runner = ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
+            .withPropertyValues("clinic.notification.worker.concurrency-mode=LOCAL")
             .withBean("database", Database::class.java, { database })
             .withBean("appointmentRepository", AppointmentRepository::class.java, { AppointmentRepository() })
         if (withKey) {

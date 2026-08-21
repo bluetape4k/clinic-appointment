@@ -27,13 +27,19 @@ import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationComm
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.Locale
 
 internal class NotificationOutboxEndToEndTest {
@@ -144,6 +150,46 @@ internal class NotificationOutboxEndToEndTest {
     }
 
     @Test
+    fun `blocking resilient provider는 worker cancellation에서 interrupt된다`() = runBlocking {
+        val providerEntered = CountDownLatch(1)
+        val providerInterrupted = CountDownLatch(1)
+        val delegate = object : NotificationChannel {
+            override val channelType: NotificationChannelType = NotificationChannelType.SMS
+
+            override fun send(request: NotificationProviderRequest): NotificationProviderResult {
+                providerEntered.countDown()
+                try {
+                    while (true) Thread.sleep(1_000)
+                } catch (interrupted: InterruptedException) {
+                    providerInterrupted.countDown()
+                    throw CancellationException("provider interrupted", interrupted)
+                }
+            }
+        }
+        val resilient = ResilientNotificationChannel.create(
+            delegate = delegate,
+            providerTimeout = Duration.ofSeconds(30),
+        )
+
+        try {
+            val job = launch {
+                worker(E2EWorkStore(), resilient).process(claimed())
+            }
+            check(withContext(Dispatchers.IO) { providerEntered.await(2, TimeUnit.SECONDS) }) {
+                "provider did not start"
+            }
+
+            job.cancelAndJoin()
+
+            check(withContext(Dispatchers.IO) { providerInterrupted.await(2, TimeUnit.SECONDS) }) {
+                "provider was not interrupted"
+            }
+        } finally {
+            resilient.close()
+        }
+    }
+
+    @Test
     fun `malformed payload는 worker 밖으로 새지 않고 닫힌 TEMPLATE_PARAMETER_INVALID retry가 된다`() {
         runBlocking {
             val store = E2EWorkStore()
@@ -183,7 +229,7 @@ internal class NotificationOutboxEndToEndTest {
 
     private fun worker(
         store: E2EWorkStore,
-        provider: CapturingChannel,
+        provider: NotificationChannel,
         profile: MemberNotificationProfile = profile(),
     ): NotificationOutboxWorker =
         NotificationOutboxWorker(

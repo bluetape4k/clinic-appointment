@@ -7,15 +7,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * notification outbox 후보를 clinic cursor 기준으로 공정하게 claim하고 제한된 동시성으로 처리합니다.
  */
-class NotificationOutboxDispatcher(
+class NotificationOutboxDispatcher private constructor(
     private val store: NotificationOutboxWorkStore,
     private val worker: NotificationOutboxJobWorker,
     private val leaseOwner: String,
@@ -24,9 +21,56 @@ class NotificationOutboxDispatcher(
     private val readiness: NotificationSchemaReadiness? = null,
     private val routeGate: NotificationDeliveryRouteGate = NotificationDeliveryRouteGate.active(),
     private val metrics: NotificationOutboxMetrics? = null,
-) {
-    private val globalPermits: Semaphore
-    private val clinicPermits: NotificationClinicPermitRegistry
+    private val concurrencyCoordinator: NotificationOutboxConcurrencyCoordinator,
+) : AutoCloseable {
+    constructor(
+        store: NotificationOutboxWorkStore,
+        worker: NotificationOutboxJobWorker,
+        leaseOwner: String,
+        globalConcurrency: Int,
+        perClinicConcurrency: Int,
+        readiness: NotificationSchemaReadiness? = null,
+        routeGate: NotificationDeliveryRouteGate = NotificationDeliveryRouteGate.active(),
+        metrics: NotificationOutboxMetrics? = null,
+    ) : this(
+        store = store,
+        worker = worker,
+        leaseOwner = leaseOwner,
+        globalConcurrency = globalConcurrency,
+        perClinicConcurrency = perClinicConcurrency,
+        readiness = readiness,
+        routeGate = routeGate,
+        metrics = metrics,
+        concurrencyCoordinator = LocalNotificationOutboxConcurrencyCoordinator(
+            globalConcurrency = globalConcurrency,
+            perClinicConcurrency = perClinicConcurrency,
+        ),
+    )
+
+    companion object {
+        internal fun withCoordinator(
+            store: NotificationOutboxWorkStore,
+            worker: NotificationOutboxJobWorker,
+            leaseOwner: String,
+            globalConcurrency: Int,
+            perClinicConcurrency: Int,
+            readiness: NotificationSchemaReadiness? = null,
+            routeGate: NotificationDeliveryRouteGate = NotificationDeliveryRouteGate.active(),
+            metrics: NotificationOutboxMetrics? = null,
+            concurrencyCoordinator: NotificationOutboxConcurrencyCoordinator,
+        ): NotificationOutboxDispatcher = NotificationOutboxDispatcher(
+            store = store,
+            worker = worker,
+            leaseOwner = leaseOwner,
+            globalConcurrency = globalConcurrency,
+            perClinicConcurrency = perClinicConcurrency,
+            readiness = readiness,
+            routeGate = routeGate,
+            metrics = metrics,
+            concurrencyCoordinator = concurrencyCoordinator,
+        )
+    }
+
     private val claimMutex = Mutex()
     private var cursor: NotificationFairCursor? = null
     private var recoveryTurn: Boolean = true
@@ -37,8 +81,6 @@ class NotificationOutboxDispatcher(
         require(perClinicConcurrency in 1..globalConcurrency) {
             "perClinicConcurrency must be between 1 and globalConcurrency"
         }
-        globalPermits = Semaphore(globalConcurrency)
-        clinicPermits = NotificationClinicPermitRegistry(perClinicConcurrency)
     }
 
     suspend fun dispatchOnce(): List<NotificationOutboxWorkerResult> {
@@ -47,9 +89,16 @@ class NotificationOutboxDispatcher(
         return coroutineScope {
             claimed.map { notification ->
                 async {
-                    globalPermits.withPermit {
-                        clinicPermits.withPermit(notification) {
-                            worker.process(notification)
+                    when (val admission = concurrencyCoordinator.withPermit(notification) {
+                        worker.process(notification)
+                    }) {
+                        is NotificationOutboxAdmission.Acquired -> admission.value
+                        is NotificationOutboxAdmission.Backpressured -> {
+                            metrics?.recordConcurrencyAdmission(
+                                mode = concurrencyCoordinator.mode,
+                                reason = admission.reason,
+                            )
+                            NotificationOutboxWorkerResult.NOT_READY
                         }
                     }
                 }
@@ -110,62 +159,8 @@ class NotificationOutboxDispatcher(
             }
             .mapNotNull { candidate -> store.claim(candidate.id, leaseOwner) }
     }
-}
 
-internal class NotificationClinicPermitRegistry(
-    private val permits: Int,
-) {
-    private val entries = ConcurrentHashMap<NotificationClinicPermitKey, NotificationClinicPermitEntry>()
-
-    suspend fun <T> withPermit(
-        notification: ClaimedNotification,
-        action: suspend () -> T,
-    ): T = withPermit(notification.tenantGroupId.value, notification.clinicId.value, action)
-
-    suspend fun <T> withPermit(
-        tenantGroupId: Long,
-        clinicId: Long,
-        action: suspend () -> T,
-    ): T {
-        val key = NotificationClinicPermitKey(tenantGroupId, clinicId)
-        val entry = retain(key)
-        return try {
-            entry.semaphore.withPermit { action() }
-        } finally {
-            release(key, entry)
-        }
-    }
-
-    private fun retain(key: NotificationClinicPermitKey): NotificationClinicPermitEntry {
-        var retained: NotificationClinicPermitEntry? = null
-        entries.compute(key) { _, current ->
-            val entry = current ?: NotificationClinicPermitEntry(Semaphore(permits))
-            entry.referenceCount++
-            retained = entry
-            entry
-        }
-        return checkNotNull(retained)
-    }
-
-    private fun release(
-        key: NotificationClinicPermitKey,
-        retained: NotificationClinicPermitEntry,
-    ) {
-        entries.compute(key) { _, current ->
-            check(current === retained) { "clinic permit entry changed while referenced" }
-            check(retained.referenceCount > 0) { "clinic permit reference count must be positive" }
-            retained.referenceCount--
-            if (retained.referenceCount == 0) null else retained
-        }
+    override fun close() {
+        concurrencyCoordinator.close()
     }
 }
-
-private data class NotificationClinicPermitKey(
-    val tenantGroupId: Long,
-    val clinicId: Long,
-)
-
-private class NotificationClinicPermitEntry(
-    val semaphore: Semaphore,
-    var referenceCount: Int = 0,
-)
