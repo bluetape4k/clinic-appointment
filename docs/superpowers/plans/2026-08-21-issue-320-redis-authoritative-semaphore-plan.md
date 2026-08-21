@@ -65,7 +65,8 @@
 - [ ] **Step 3: Lettuce expirable adapter를 연결한다.**
   - `LettuceSuspendPermitExpirableSemaphore.create(connection, name, config)`를 사용한다.
   - `trySetPermits`의 `Initialized`와 `AlreadyInitialized`만 성공으로 취급한다.
-  - owner는 coordinator lifetime 동안 유지하고 request는 permit acquire마다 새로 만든다.
+  - owner는 `SemaphoreOwnerId.random()`으로 coordinator lifetime 동안 유지하고 DB
+    lease owner와 절대 공유하지 않는다. request는 permit acquire마다 새로 만든다.
   - global key와 tenant/clinic key를 분리한다.
 
 - [ ] **Step 4: acquire ambiguous를 reconcile한다.**
@@ -75,15 +76,20 @@
     변환한다.
 
 - [ ] **Step 5: expirable renew/release lifecycle을 구현한다.**
-  - lease 중간 간격으로 renew하고 ownership loss/backend/integrity failure에서는
-    작업을 중단한다.
-  - `finally`에서 renew job을 취소하고 `withContext(NonCancellable)` 안에서 clinic,
-    global 순서로 release/reconcile를 수행한다.
+  - `leaseTime = worker.leaseDuration`, `acquireWaitTime = min(pollInterval, leaseTime / 4)`,
+    `renewInterval = max(leaseTime / 3, 100ms)`를 사용하고, lease/provider timeout
+    검증 관계를 유지한다.
+  - ownership loss/backend/integrity failure에서는 renew job이 action을 중단하고
+    `NOT_READY` 경계로 회수한다.
+  - clinic acquire 실패·취소 시 global handle을 rollback한다. `finally`에서 renew job을
+    취소하고 `withContext(NonCancellable)` 안에서 clinic, global 순서로
+    release/reconcile를 수행한다.
   - `CancellationException`은 재전파한다.
 
 - [ ] **Step 6: 최소 단위 테스트를 GREEN으로 만든다.**
   - Run: Task 1의 targeted Gradle command.
-  - Expected: fake semaphore contract, local semantics, failure mapping, cleanup tests PASS.
+  - Expected: fake semaphore contract, local semantics, failure mapping, partial acquire
+    rollback, owner/request 분리, renew ownership loss와 cleanup tests PASS.
 
 ## Task 3: dispatcher 및 Spring wiring 통합
 
@@ -127,10 +133,15 @@
 - [ ] **Step 2: Redis 8 단일 launcher 통합 테스트를 작성한다.**
   - `RedisServer.Launcher.redis`와 `RedisServer.Launcher.LettuceLib.getRedisClient()`만
     사용한다.
-  - `RedisServer.TAG == "8"`을 검증한다.
-  - 두 coordinator가 같은 global/clinic key에서 동시에 action을 실행할 때 총 active
-    수가 각 상한 이하인지 확인한다.
+  - lockfile의 `bluetape4k-testcontainers:1.12.1` resolved artifact에서
+    `RedisServer.TAG == "8"`과 container image를 검증한다.
+  - coordinator별 Lettuce connection을 분리하고 두 coordinator가 같은 global/clinic
+    key에서 barrier로 동시에 action을 실행할 때 총 active 수가 각 상한 이하인지
+    확인한다.
   - 정상 release와 짧은 expirable lease 만료 후 capacity 회복을 확인한다.
+  - 한 coordinator의 connection을 성공적인 allocation 뒤 닫아 renew가 `NOT_READY`와
+    provider 미호출로 fail-closed 되는지 확인하고, 다른 coordinator의 capacity가
+    계속 회복되는지 확인한다.
 
 - [ ] **Step 3: 통합 테스트를 실행한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationOutboxConcurrencyRedisIntegrationTest"`
