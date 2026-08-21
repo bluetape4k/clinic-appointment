@@ -101,13 +101,16 @@ Redis 조정이 실패한 경우에는 로컬 permit으로 몰래 전환하지 �
 6. release가 ambiguous이면 원래 request로 reconcile하고, owned handle이 확인될 때만
    한 번 더 release한다. 결과가 불명확해도 lease 만료가 최종 회수 경계다.
 
-Acquire가 `Unavailable`, `TimedOut`, backend failure, integrity failure를 반환하면
-worker를 호출하지 않고 `NOT_READY`를 반환한다. `Ambiguous`는 reconcile 결과가
-소유권을 확인할 때만 worker를 호출한다. Redis 연결이 살아 있는 동안 로컬 semaphore로
-대체하지 않는다.
+Acquire가 `Unavailable` 또는 `CapacityExceeded`이면 `UNAVAILABLE`, `TimedOut`이면
+`TIMED_OUT`, `Closed`이면 `CLOSED`, backend/integrity failure는 각 유형의 고정
+reason으로 매핑하고 worker를 호출하지 않는다. 이 모든 `Backpressured` 결과는
+dispatcher에서 `NOT_READY`로 변환된다. `Ambiguous`는 reconcile 결과가 소유권을
+확인할 때만 worker를 호출하고, reconcile 실패는 `AMBIGUOUS` backpressure로 처리한다.
+Redis 연결이 살아 있는 동안 로컬 semaphore로 대체하지 않는다.
 
-renew 결과가 `Renewed`가 아니면 결과 유형을 다음처럼 매핑한다: `Expired`/`Released`는
-`EXPIRED`, `OwnershipLost`/`StaleGeneration`은 `OWNERSHIP_LOST`, `Closed`는 `CLOSED`,
+renew 결과가 `Renewed`가 아니면 결과 유형을 다음처럼 매핑한다: `Expired`는
+`EXPIRED`, 의도된 `Released`는 `RELEASED`, `OwnershipLost`/`StaleGeneration`은
+`OWNERSHIP_LOST`, `Closed`는 `CLOSED`,
 backend failure는 `BACKEND_FAILURE`, integrity failure는 `INTEGRITY_FAILURE`,
 ambiguous는 `AMBIGUOUS`. renew job은 이 failure를 `NotificationPermitLostException`으로
 action에 전달해 현재 coroutine을 중단하고 permit을 재사용하지 않는다. dispatcher는
@@ -128,9 +131,11 @@ action에 전달해 현재 coroutine을 중단하고 permit을 재사용하지 �
 
 Failure metric은 `mode`(`local`, `redis`)와 다음 고정 reason만 사용한다:
 `UNAVAILABLE`, `TIMED_OUT`, `BACKEND_FAILURE`, `INTEGRITY_FAILURE`, `AMBIGUOUS`,
-`OWNERSHIP_LOST`, `EXPIRED`, `CLOSED`, `RELEASE_FAILURE`. tenant, clinic, member,
-appointment, request identity는 tag로 사용하지 않는다.
+`OWNERSHIP_LOST`, `EXPIRED`, `RELEASED`, `CLOSED`, `RELEASE_FAILURE`. tenant, clinic,
+member, appointment, request identity는 tag로 사용하지 않는다. `RELEASED`와
+`EXPIRED`를 분리해 정상 cleanup과 stale allocation 회수를 운영상 구별한다.
 
+`NotificationOutboxConcurrencyCoordinator`와 그 port는 모듈 내부 전용(`internal`)이다.
 Coordinator의 내부 outcome은 `Acquired(value)`와 `Backpressured(reason)` 두 가지다.
 dispatcher는 후자를 `NotificationOutboxWorkerResult.NOT_READY`로 변환한다.
 `NotificationPermitLostException`은 coordinator 내부 action 중단 신호이며, 외부

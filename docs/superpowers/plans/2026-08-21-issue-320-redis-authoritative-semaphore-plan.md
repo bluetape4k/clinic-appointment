@@ -54,8 +54,11 @@
 - Create: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxConcurrencyCoordinator.kt`
 
 - [ ] **Step 1: public 내부 port와 bounded outcomes를 추가한다.**
-  - coordinator는 `suspend fun <T> withPermit(notification, action)`을 제공한다.
-  - acquired value와 fail-closed backpressure를 구분하는 내부 outcome을 사용한다.
+  - `internal` coordinator port는 `suspend fun <T> withPermit(notification, action)`을
+    제공하고, public module API로 노출하지 않는다.
+  - `Acquired(value)`와 `Backpressured(reason)`를 구분하는 내부 outcome을 사용한다.
+  - acquire의 `Unavailable`/`CapacityExceeded`/`TimedOut`/`Closed`/backend/integrity/
+    ambiguous 전체를 고정 reason으로 매핑한다.
   - tenant/clinic/request identity를 log/metric tag에 넣지 않는다.
 
 - [ ] **Step 2: local path를 기존 semantics로 이식한다.**
@@ -89,7 +92,8 @@
 
 - [ ] **Step 6: 최소 단위 테스트를 GREEN으로 만든다.**
   - Run: Task 1의 targeted Gradle command.
-  - Expected: fake semaphore contract, local semantics, failure mapping, partial acquire
+  - Expected: fake semaphore contract, local semantics, failure mapping(특히 capacity와
+    closed), partial acquire
     rollback, owner/request 분리, renew result 전체 매핑, renew ownership loss와 cleanup
     tests PASS.
 
