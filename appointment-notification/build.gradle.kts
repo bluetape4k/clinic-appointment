@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.JavaExec
+
 plugins {
     alias(libs.plugins.exposed)
     kotlin("plugin.spring")
@@ -48,3 +50,60 @@ dependencies {
 
     runtimeOnly(libs.h2.v2)
 }
+
+private fun registerRedisAdmissionBenchmark(
+    name: String,
+    configuration: String,
+    defaultOperations: String,
+    defaultCardinalities: String,
+    defaultChurnRates: String,
+) = tasks.register<JavaExec>(name) {
+    group = "benchmark"
+    description = "Redis 8.8 notification outbox admission benchmark ($configuration)"
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("io.bluetape4k.clinic.appointment.notification.RedisNotificationAdmissionBenchmark")
+
+    val output = providers.gradleProperty("redisAdmissionBenchmarkOutput").orElse(
+        layout.buildDirectory.file("reports/redis-admission/$configuration/redis-notification-admission.json")
+            .map { it.asFile.absolutePath },
+    )
+    systemProperty("redis.admission.benchmark.output", output.get())
+    systemProperty("redis.admission.benchmark.configuration", configuration)
+    systemProperty(
+        "redis.admission.benchmark.operations",
+        providers.gradleProperty("redisAdmissionBenchmarkOperations").orElse(defaultOperations).get(),
+    )
+    systemProperty(
+        "redis.admission.benchmark.cardinalities",
+        providers.gradleProperty("redisAdmissionBenchmarkCardinalities").orElse(defaultCardinalities).get(),
+    )
+    systemProperty(
+        "redis.admission.benchmark.churnRates",
+        providers.gradleProperty("redisAdmissionBenchmarkChurnRates").orElse(defaultChurnRates).get(),
+    )
+    systemProperty(
+        "redis.admission.benchmark.concurrency",
+        providers.gradleProperty("redisAdmissionBenchmarkConcurrency").orElse("16").get(),
+    )
+    systemProperty(
+        "redis.admission.benchmark.actionMillis",
+        providers.gradleProperty("redisAdmissionBenchmarkActionMillis").orElse("2").get(),
+    )
+}
+
+registerRedisAdmissionBenchmark(
+    name = "redisAdmissionBenchmarkSmoke",
+    configuration = "smoke",
+    defaultOperations = "24",
+    defaultCardinalities = "10,100",
+    defaultChurnRates = "0.0,1.0",
+)
+
+registerRedisAdmissionBenchmark(
+    name = "redisAdmissionBenchmark",
+    configuration = "main",
+    defaultOperations = "80",
+    defaultCardinalities = "10,100,1000",
+    defaultChurnRates = "0.0,0.5,1.0",
+)

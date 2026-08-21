@@ -127,6 +127,9 @@ jobs:
               - 'gradle/verification-metadata.xml'
             notification:
               - 'appointment-notification/**'
+              - 'docs/benchmarks/issue-369-redis-admission-benchmark/**'
+              - 'scripts/generate-issue369-redis-admission-chart.mjs'
+              - 'tests/benchmarks/issue369-redis-admission-chart.test.mjs'
               - 'appointment-core/**'
               - 'buildSrc/**'
               - 'gradle/**'
@@ -419,6 +422,10 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.3'
+
       - uses: gradle/actions/setup-gradle@v6.3.0
         with:
           gradle-version: wrapper
@@ -435,6 +442,9 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
           TESTCONTAINERS_RYUK_DISABLED: "true"
+
+      - name: Validate Redis admission benchmark chart
+        run: node --test tests/benchmarks/issue369-redis-admission-chart.test.mjs
 
       - name: Generate Kover report
         if: always()

@@ -234,6 +234,39 @@ row `20,000`건을 사용하며 Docker가 필요합니다.
 smoke task는 pull request 확인용이고, full task는 nightly CI에서 직렬 실행되며 JSON과
 생성 chart artifact를 업로드합니다.
 
+### Redis notification outbox admission benchmark
+
+`:appointment-notification`의 test source harness가 Redis `8.8`에서 clinic cardinality
+와 clinic ID churn을 cold/warm 시나리오로 측정합니다. production coordinator와 semaphore
+의미론은 변경하지 않으며, internal 타입을 직접 써야 하므로 별도 public benchmark 모듈이
+아닌 module-scoped JavaExec task로 격리했습니다.
+
+```bash
+# smoke: PR 전 확인용 (cardinality 10/100, churn 0%/100%, cold)
+./gradlew :appointment-notification:redisAdmissionBenchmarkSmoke --no-build-cache
+
+# full: cardinality 10/100/1000 × churn 0%/50%/100% × cold/warm
+./gradlew :appointment-notification:redisAdmissionBenchmark --no-build-cache
+
+# JSON 계약과 p99 기준 검증
+node scripts/validate-redis-notification-admission-benchmark.mjs \
+  --input appointment-notification/build/reports/redis-admission/main/redis-notification-admission.json \
+  --target-p99-ms 250
+```
+
+full baseline의 보수적 worst-scenario aggregate는 admission p50 `7.104ms`, p95
+`137.150ms`, p99 `138.923ms`이며, lease recovery는 `reacquired`였습니다. warm
+cardinality `1,000`의 준비 시간은 약 `1.59–1.70s`, Redis key count는 churn에 따라
+`5,010–5,410`까지 관측됐습니다. 이 수치는 로컬 characterization evidence이고
+배포 SLO 증명이 아닙니다. 전체 raw JSON과 해석은
+[Issue #369 benchmark analysis](docs/benchmarks/issue-369-redis-admission-benchmark/analysis.ko.md)를
+참고하세요.
+
+![Issue #369 Redis admission benchmark chart](docs/benchmarks/issue-369-redis-admission-benchmark/charts/issue-369-redis-admission-chart-ko.png)
+
+차트는 커밋된 `main.json`에서 SVG → PNG로 재생성하며, p99 기준과 warm
+cardinality/churn에 따른 준비 시간·Redis key count를 함께 보여 줍니다.
+
 ### PostgreSQL 예약 consumer benchmark
 
 같은 `kotlinx-benchmark` 모듈에서 PostgreSQL production V23 consumer schema도 실행합니다.

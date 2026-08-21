@@ -1,0 +1,62 @@
+{
+  "kind": "chart",
+  "source": {
+    "question": "Issue #369의 Redis admission p99 기준과 warm cardinality·churn에 따른 준비 비용 및 key 증가를 한눈에 확인할 수 있는가?",
+    "revision": "ff28359624591bf4e0c7a8d072a3c5e490b7ddbb",
+    "paths": [
+      "docs/benchmarks/issue-369-redis-admission-benchmark/main.json",
+      "docs/benchmarks/issue-369-redis-admission-benchmark/analysis.ko.md",
+      "scripts/generate-issue369-redis-admission-chart.mjs"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "benchmark",
+      "label": "Redis 8.8 admission benchmark",
+      "source": "docs/benchmarks/issue-369-redis-admission-benchmark/main.json"
+    },
+    {
+      "id": "latency-summary",
+      "label": "Admission latency percentile and p99 target",
+      "source": "scripts/generate-issue369-redis-admission-chart.mjs"
+    },
+    {
+      "id": "warmup-scaling",
+      "label": "Warm cache preparation time by cardinality and churn",
+      "source": "scripts/generate-issue369-redis-admission-chart.mjs"
+    },
+    {
+      "id": "key-retention",
+      "label": "Warm scenario Redis key count after completion",
+      "source": "scripts/generate-issue369-redis-admission-chart.mjs"
+    }
+  ],
+  "edges": [
+    {
+      "id": "benchmark-latency-summary",
+      "from": "benchmark",
+      "to": "latency-summary",
+      "kind": "comparison",
+      "source": "scripts/generate-issue369-redis-admission-chart.mjs"
+    },
+    {
+      "id": "benchmark-warmup-scaling",
+      "from": "benchmark",
+      "to": "warmup-scaling",
+      "kind": "comparison",
+      "source": "scripts/generate-issue369-redis-admission-chart.mjs"
+    },
+    {
+      "id": "benchmark-key-retention",
+      "from": "benchmark",
+      "to": "key-retention",
+      "kind": "comparison",
+      "source": "scripts/generate-issue369-redis-admission-chart.mjs"
+    }
+  ],
+  "behavior": {
+    "branches": 0,
+    "loops": 0
+  },
+  "repairs": []
+}
