@@ -65,20 +65,31 @@
   - global `Semaphore`와 reference-counted clinic registry를 유지한다.
   - registry entry는 reference count가 0일 때만 제거한다.
 
-- [ ] **Step 3: Lettuce expirable adapter를 연결한다.**
+- [ ] **Step 3: distributed clinic registry lifecycle을 구현한다.**
+  - clinic semaphore client를 reference-counted entry로 보관한다.
+  - release 후 reference count가 0이면 client를 닫고 map에서 제거한다.
+  - active retain/release와 dispatcher close race에서 client가 조기 close되지 않는지
+    테스트한다.
+
+- [ ] **Step 4: Lettuce expirable adapter를 연결한다.**
   - `LettuceSuspendPermitExpirableSemaphore.create(connection, name, config)`를 사용한다.
-  - `trySetPermits`의 `Initialized`와 `AlreadyInitialized`만 성공으로 취급한다.
+  - name은 `global` 또는 `clinic-<tenantGroupId>-<clinicId>`로 제한하고 namespace
+    `clinic-notification-outbox-v1`, hashTag `notification-outbox`를 사용한다. Lettuce가
+    생성하는 full key prefix가 같은 slot에 놓이는지 통합 테스트에서 read-back한다.
+  - semaphore별 capacity metadata를 `SETNX`/`GET`으로 검증하고 mismatch/backend
+    오류는 fail-closed 한다. `AlreadyInitialized`는 metadata가 요청 capacity와
+    일치할 때만 성공으로 취급한다.
   - owner는 `SemaphoreOwnerId.random()`으로 coordinator lifetime 동안 유지하고 DB
     lease owner와 절대 공유하지 않는다. request는 permit acquire마다 새로 만든다.
   - global key와 tenant/clinic key를 분리한다.
 
-- [ ] **Step 4: acquire ambiguous를 reconcile한다.**
+- [ ] **Step 5: acquire ambiguous를 reconcile한다.**
   - `Acquired`는 handle을 반환한다.
   - `Ambiguous`는 동일 request로 reconcile하고 `Owned`인 경우에만 작업을 계속한다.
   - `Unavailable`, `TimedOut`, backend/integrity/closed/unknown 결과는 backpressure로
     변환한다.
 
-- [ ] **Step 5: expirable renew/release lifecycle을 구현한다.**
+- [ ] **Step 6: expirable renew/release lifecycle을 구현한다.**
   - `leaseTime = worker.leaseDuration`, `acquireWaitTime = min(pollInterval, leaseTime / 4)`,
     `renewInterval = leaseTime / 3`을 사용한다. Redis coordinator는 `leaseTime >= 300ms`
     를 require하여 `0 < renewInterval < leaseTime`을 보장하고, lease/provider timeout
@@ -90,7 +101,7 @@
     release/reconcile를 수행한다.
   - `CancellationException`은 재전파한다.
 
-- [ ] **Step 6: 최소 단위 테스트를 GREEN으로 만든다.**
+- [ ] **Step 7: 최소 단위 테스트를 GREEN으로 만든다.**
   - Run: Task 1의 targeted Gradle command.
   - Expected: fake semaphore contract, local semantics, failure mapping(특히 capacity와
     closed), partial acquire
@@ -111,6 +122,8 @@
   - dispatcher를 `AutoCloseable`로 만들고 coordinator close를 위임한다.
 
 - [ ] **Step 2: optional Redis connection을 주입한다.**
+  - Redis connection provider를 별도 조건부 phase로 분리해 Redis/Lettuce classpath
+    부재에서도 local dispatcher를 구성한다.
   - `ObjectProvider<StatefulRedisConnection<String, String>>`로 connection 부재를
     정상 처리한다.
   - connection이 있으면 distributed coordinator를 생성하고, 없으면 local coordinator를
@@ -118,7 +131,8 @@
   - shared Lettuce connection 자체는 dispatcher가 닫지 않는다.
 
 - [ ] **Step 3: auto-configuration 회귀 테스트를 통과시킨다.**
-  - connection 없는 context가 기존 dispatcher를 구성하는지 확인한다.
+  - Redis/Lettuce classpath 부재에서도 local dispatcher가 구성되는지 확인한다.
+  - classpath는 있지만 connection 없는 context가 local coordinator를 선택하는지 확인한다.
   - connection 있는 context가 Redis coordinator를 선택하는지 확인한다.
 
 - [ ] **Step 4: targeted regression을 실행한다.**
@@ -150,12 +164,20 @@
     action 취소와 permit 회수를 확인한다. 다른 coordinator의 capacity가 계속
     회복되는지도 확인한다.
 
-- [ ] **Step 3: 통합 테스트를 실행한다.**
+- [ ] **Step 3: reconnect, capacity mismatch, and bounded load comparison을 검증한다.**
+  - coordinator별 connection을 닫은 뒤 새 connection으로 재생성해 expired allocation과
+    capacity 회복을 확인한다.
+  - 같은 semaphore name에 다른 capacity를 요청하면 fail-closed 되는지 확인한다.
+  - 한 coordinator와 두 coordinator의 bounded workload에서 observed peak,
+    admission latency, backpressure count를 표로 기록한다. 이는 production benchmark가
+    아닌 재현 가능한 local comparison snapshot이다.
+
+- [ ] **Step 4: 통합 테스트를 실행한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationOutboxConcurrencyRedisIntegrationTest"`
   - Expected: Docker/Colima의 Redis 8이 시작되고 PASS. bind-mount 오류나 skip은 성공으로
     처리하지 않고 원인을 진단한다.
 
-- [ ] **Step 4: Spring lifecycle ownership을 검증한다.**
+- [ ] **Step 5: Spring lifecycle ownership을 검증한다.**
   - ApplicationContext destroy 시 coordinator/client close 횟수가 정확히 한 번이고,
     injected shared `StatefulRedisConnection`은 coordinator가 닫지 않는지 확인한다.
 

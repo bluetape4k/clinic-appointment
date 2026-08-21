@@ -70,12 +70,21 @@ Redis 조정이 실패한 경우에는 로컬 permit으로 몰래 전환하지 �
 
 - Redis가 없으면 전역 `Semaphore`와 참조 카운트 기반 clinic registry를 생성한다.
 - Redis가 있으면 전역 semaphore와 clinic별 semaphore를 lazy-create한다.
-- 각 semaphore는 같은 namespace 아래에서 `trySetPermits`로 capacity를 한 번만
-  초기화한다. 이미 다른 인스턴스가 초기화한 경우 `AlreadyInitialized`를 정상으로
+- 각 semaphore는 같은 namespace 아래에서 capacity metadata를 확인한 뒤
+  `trySetPermits`로 capacity를 한 번만 초기화한다. 이미 다른 인스턴스가 초기화한
+  경우에도 metadata가 요청 capacity와 일치할 때만 `AlreadyInitialized`를 정상으로
   취급한다.
-- Redis key는 `clinic:notification:outbox:global` 및
-  `clinic:notification:outbox:clinic:<tenantGroupId>:<clinicId>`로 구성한다. 숫자
-  scope 값만 key에 사용하며 metric tag에는 노출하지 않는다.
+- Lettuce synchronizer의 name 규칙에 맞춰 namespace는
+  `clinic-notification-outbox-v1`, hashTag는 `notification-outbox`로 고정한다.
+  global name은 `global`, clinic name은 `clinic-<tenantGroupId>-<clinicId>`처럼
+  영숫자·점·밑줄·하이픈만 사용한다. 라이브러리가 생성하는 full key는
+  `namespace:{hashTag}:semaphore:<name>:...`이며, 숫자 scope 값만 key에 사용하고
+  metric tag에는 노출하지 않는다.
+- 각 semaphore name의 capacity metadata를 같은 hashTag의
+  `...:capacity-contract:<name>` key에 `SETNX`로 기록한다. 이미 값이 있으면
+  요청 capacity와 반드시 일치해야 하며, 불일치·metadata/backend 오류는 fail-closed
+  한다. namespace/hashTag/name과 capacity 계약은 rolling deployment 동안 변경하지
+  않는다.
 - owner는 dispatcher 인스턴스 생성 시 `SemaphoreOwnerId.random()`으로 한 번 생성한다.
   이 값은 현재 DB lease owner 문자열(`notification-outbox-worker`)과 분리된 Redis 전용
   identity이며, 두 dispatcher 인스턴스는 서로 다른 owner를 사용해야 한다. request는
@@ -171,11 +180,18 @@ dispatcher는 후자를 `NotificationOutboxWorkerResult.NOT_READY`로 변환한�
 - 정상 release 후 available permits가 회복되는지 확인한다.
 - 짧은 expirable lease에서 release를 생략한 allocation이 만료 후 회복되는지
   확인한다.
+- namespace/hashTag/name으로 생성된 full key와 capacity metadata가 같은 Redis slot을
+  사용하고, capacity mismatch가 fail-closed 되는지 확인한다.
 - coordinator별 Lettuce connection을 분리한다. acquire 전에 한 connection을 닫아
   admission failure가 `NOT_READY`와 provider 미호출로 fail-closed 되는지 확인하고,
   별도 테스트에서는 action barrier 뒤 connection을 닫아 in-flight action이
   `NotificationPermitLostException` 경계로 취소되는지 확인한다. 다른 coordinator의
   Redis capacity는 계속 회복 가능해야 한다.
+- connection을 닫은 뒤 새 Lettuce connection으로 재연결해 기존 allocation이 만료되고
+  capacity가 회복되는지 확인한다.
+- 동일 workload를 한 coordinator와 두 coordinator로 각각 실행해 observed peak,
+  admission latency, backpressure count를 비교한다. 이는 production benchmark가
+  아닌 Redis round-trip과 local path 차이를 보여주는 bounded snapshot이다.
 
 ### 수용 기준
 
@@ -191,8 +207,14 @@ dispatcher는 후자를 `NotificationOutboxWorkerResult.NOT_READY`로 변환한�
 - suspend cleanup은 `withContext(NonCancellable)` 안에서 수행한다.
 - Redis semaphore client는 dispatcher `close`에서 닫으며, shared Lettuce connection은
   coordinator가 소유하지 않는다.
+- distributed clinic registry는 local registry와 동일하게 reference count를 추적한다.
+  idle entry는 client를 닫고 map에서 제거하며, active reference가 있는 동안에는
+  제거하지 않는다. close와 retain/release race는 단위 테스트로 고정한다.
 - Spring context destroy에서 coordinator/client가 정확히 한 번 close되고 shared
   `StatefulRedisConnection`은 열린 상태로 남는 것을 lifecycle test로 검증한다.
+- Redis connection provider는 별도 조건부 auto-configuration phase로 둔다. Redis/Lettuce
+  classpath 부재에서도 local dispatcher가 유지되며, classpath 부재·connection 부재·
+  connection 존재를 각각 context-runner로 검증한다.
 - 설정과 Redis 응답에 대한 검증은 `require`/`check`로 명시하고, permit identity는
   라이브러리의 redacted value object를 사용한다.
 - 전역 lockfile 및 Redis image matrix는 이 설계에서 생성하거나 수정하지 않는다.
