@@ -210,11 +210,11 @@
 - `docs/reviews/2026-08-22-issue-316-leader-scheduled-code-review.md`
 - PR body 임시 파일 `docs/reviews/2026-08-22-issue-316-leader-scheduled-pr-body.md`
 
-- [ ] **Step 1: implementation diff에 대해 six-perspective code review를 수행한다.**
+- [x] **Step 1: implementation diff에 대해 six-perspective code review를 수행한다.**
   - performance, stability, security, operator/ops, developer/API, user/caller 관점에서 현재 diff와 fresh test output만 검토한다.
   - P0/P1은 merge 전 수정하고, P2/P3는 수정하거나 후속 Issue 번호와 근거를 기록한다.
   - performance/stability scan에서 `runSynchronously` cancellation, AOP lease cleanup, shutdown, metric cardinality, optional bean startup을 다시 읽는다.
-- [ ] **Step 2: lesson과 review evidence를 commit한다.**
+- [x] **Step 2: lesson과 review evidence를 commit한다.**
   - lesson에는 실제 실행한 명령·결과, Docker/Redis 환경 여부, 미실행 검증 사유를 포함한다.
   - code review 문서에는 검토한 commit SHA, test/build 결과, acceptance traceability, P0/P1 count를 포함한다.
 - [ ] **Step 3: PR을 만들기 전 live Issue/branch 상태를 read-back한다.**
