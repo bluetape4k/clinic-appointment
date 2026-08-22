@@ -14,6 +14,8 @@
 
 - Modify: `gradle/libs.versions.toml`
   - `io.github.bluetape4k.leader:bluetape4k-leader-spring-boot` BOM-managed alias를 추가한다.
+- No change: `settings.gradle.kts`, CI/Nightly workflow, test resources, coverage aggregation
+  - 새 Gradle module을 만들지 않으므로 module registration·publish variant·coverage target을 추가하지 않는다. 기존 `appointment-notification` test/build graph를 그대로 검증한다.
 - Modify: `appointment-notification/build.gradle.kts`
   - `api(libs.bluetape4k.leader.spring.boot)`를 추가한다.
   - 기존 `bluetape4k-leader`와 `bluetape4k-leader-micrometer`는 Redis compatibility 테스트와 upstream AOP recorder auto-configuration 사용처가 있으므로 검증 후 유지한다.
@@ -186,6 +188,9 @@
   - Expected: 각 명령이 `BUILD SUCCESSFUL`을 출력하고 실패·의도하지 않은 skip이 없다.
 - [ ] **Step 3: Kotlin/Spring checklist와 diff 검사를 적용한다.**
   - `transaction {}` 경계, cancellation 재전파, optional bean 조건, resource ownership, low-cardinality metric, `!!` 금지와 한국어 KDoc을 확인한다.
+  - 이번 변경에는 새 blocking call, polling loop, retry, allocation-heavy collection을 추가하지 않았는지 확인하고, 기존 `runSynchronously` timeout 경계와 AOP task lifecycle을 유지한다.
+  - 새 사용자 입력·secret·권한 경계를 추가하지 않았음을 확인하고, 고정 reminder lock 이름과 upstream lock-tag sanitization을 security evidence로 기록한다.
+  - `README*`와 공개 설정 문서는 변경하지 않는다. public API, property key, 운영 명령이 바뀌지 않고 내부 scheduler wiring만 바뀌므로 한국어 KDoc과 lesson, PR body가 필요한 독자 문서 범위를 충족한다.
   - Run: `git diff --check`
   - Expected: whitespace 오류가 없다.
 - [ ] **Step 4: lesson 문서를 작성한다.**
@@ -193,6 +198,37 @@
 - [ ] **Step 5: 계획·문서 자연스러움 검사를 실행한다.**
   - Run: `node /Users/debop/.codex/skills/bluetape-writer/scripts/audit-korean-terms.mjs --series clinic-appointment docs/superpowers/plans/2026-08-22-issue-316-leader-scheduled-plan.md docs/lessons/2026-08-22-issue-316-leader-scheduled.md`
   - Expected: `PASS` 및 findings=0.
+
+## Task 7: code review와 PR handoff
+
+**Files/artifacts:**
+- 변경된 모든 source/test/docs 파일
+- `docs/reviews/2026-08-22-issue-316-leader-scheduled-code-review.md`
+- PR body 임시 파일 `docs/reviews/2026-08-22-issue-316-leader-scheduled-pr-body.md`
+
+- [ ] **Step 1: implementation diff에 대해 six-perspective code review를 수행한다.**
+  - performance, stability, security, operator/ops, developer/API, user/caller 관점에서 현재 diff와 fresh test output만 검토한다.
+  - P0/P1은 merge 전 수정하고, P2/P3는 수정하거나 후속 Issue 번호와 근거를 기록한다.
+  - performance/stability scan에서 `runSynchronously` cancellation, AOP lease cleanup, shutdown, metric cardinality, optional bean startup을 다시 읽는다.
+- [ ] **Step 2: lesson과 review evidence를 commit한다.**
+  - lesson에는 실제 실행한 명령·결과, Docker/Redis 환경 여부, 미실행 검증 사유를 포함한다.
+  - code review 문서에는 검토한 commit SHA, test/build 결과, acceptance traceability, P0/P1 count를 포함한다.
+- [ ] **Step 3: PR을 만들기 전 live Issue/branch 상태를 read-back한다.**
+  - Run: `git status --short --branch`
+  - Run: `git log --oneline --decorate -8`
+  - Run: `gh issue view 316 --repo bluetape4k/clinic-appointment --json number,title,state,assignees,labels,milestone,url`
+  - Expected: 현재 head가 `feat/issue-316-leader-scheduled`, base가 `develop`, Issue #316이 OPEN·`debop`·`1.4.0`·`enhancement`/`test` 상태임을 확인한다.
+- [ ] **Step 4: 한국어 PR을 생성하고 CI를 확인한다.**
+  - target repository: `bluetape4k/clinic-appointment`
+  - base: `develop`
+  - head: `feat/issue-316-leader-scheduled`
+  - PR title/body는 한국어로 작성하고 body에 `Closes #316`, 변경 범위, DoD Status 표, 실행 명령과 결과, known gap을 포함한다.
+  - Run: `gh pr create --repo bluetape4k/clinic-appointment --base develop --head feat/issue-316-leader-scheduled --title "리마인더 복구 스케줄러를 @LeaderScheduled로 전환한다" --body-file docs/reviews/2026-08-22-issue-316-leader-scheduled-pr-body.md`
+  - Run: `gh pr checks <PR_NUMBER> --repo bluetape4k/clinic-appointment --watch`
+  - Expected: PR body read-back과 required CI checks가 모두 PASS한다.
+- [ ] **Step 5: merge는 별도 승인 게이트로 남긴다.**
+  - fresh `gh pr view <PR_NUMBER> --json headRefName,baseRefName,statusCheckRollup,reviews,reviewDecision,mergeStateStatus,body,url`로 exact head/CI/review/mergeability를 다시 읽는다.
+  - 사용자의 새 명시 승인 전에는 merge, auto-merge, tag, branch deletion을 실행하지 않는다.
 
 ## 수용 기준 추적표
 
