@@ -135,6 +135,23 @@ internal class NotificationPropertiesTest {
     }
 
     @Test
+    fun `leader health는 기본 비활성이고 window와 lease risk를 검증한다`() {
+        val leaderHealth = NotificationProperties().leaderHealth
+
+        leaderHealth.enabled shouldBeEqualTo false
+        leaderHealth.failureWindow shouldBeEqualTo Duration.ofMinutes(5)
+        leaderHealth.leaseRiskWindow shouldBeEqualTo Duration.ofSeconds(30)
+        leaderHealth.validate()
+
+        assertFailsWith<IllegalStateException> {
+            leaderHealth.copy(failureWindow = Duration.ZERO).validate()
+        }
+        assertFailsWith<IllegalStateException> {
+            leaderHealth.copy(leaseRiskWindow = Duration.ofSeconds(-1)).validate()
+        }
+    }
+
+    @Test
     fun `worker 전체 동시성은 member resolver와 channel provider 상한의 최솟값을 넘지 않는다`() {
         val failure = assertFailsWith<IllegalStateException> {
             NotificationProperties.WorkerProperties(

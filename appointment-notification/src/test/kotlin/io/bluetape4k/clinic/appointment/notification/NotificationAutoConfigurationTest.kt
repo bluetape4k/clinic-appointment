@@ -616,6 +616,27 @@ internal class NotificationAutoConfigurationTest {
             }
     }
 
+    @Test
+    fun `leader health는 기본 비활성이고 명시적으로 켠 경우에만 monitor를 구성한다`() {
+        val disabledDatabase = database("auto_leader_health_disabled", version = "21")
+        context(disabledDatabase, withKey = true)
+            .withBean("leaderElector", LeaderGroupElector::class.java, { mockk(relaxed = true) })
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(NotificationLeaderHealthMonitor::class.java).size shouldBeEqualTo 0
+            }
+
+        val enabledDatabase = database("auto_leader_health_enabled", version = "21")
+        context(enabledDatabase, withKey = true)
+            .withPropertyValues("clinic.notification.leader-health.enabled=true")
+            .withBean("leaderElector", LeaderGroupElector::class.java, { mockk(relaxed = true) })
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(NotificationLeaderHealthMonitor::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(NotificationLeaderHealthSource::class.java).size shouldBeEqualTo 1
+            }
+    }
+
     private fun context(
         database: Database,
         withKey: Boolean,

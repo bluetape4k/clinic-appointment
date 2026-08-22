@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.config
 
+import io.bluetape4k.clinic.appointment.notification.NotificationLeaderHealthSource
+import io.bluetape4k.clinic.appointment.notification.NotificationLeaderHealthStatus
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxHealthIndicator
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxHealthStatus
 import org.springframework.boot.health.contributor.Health
@@ -24,6 +26,34 @@ class NotificationHealthConfiguration {
             builder
                 .withDetail("readiness", readiness.details)
                 .withDetail("liveness", liveness.details)
+                .build()
+        }
+
+    @Bean("notificationLeaderHealth")
+    @ConditionalOnBean(NotificationLeaderHealthSource::class)
+    fun notificationLeaderActuatorHealth(
+        source: NotificationLeaderHealthSource,
+    ): HealthIndicator =
+        HealthIndicator {
+            val snapshot = source.snapshot()
+            val builder = when (snapshot.status) {
+                NotificationLeaderHealthStatus.UP -> Health.up()
+                NotificationLeaderHealthStatus.DEGRADED -> Health.status("DEGRADED")
+                NotificationLeaderHealthStatus.DOWN -> Health.down()
+            }
+            builder
+                .withDetail("backendAvailable", snapshot.backendAvailable)
+                .withDetail("leaderPresent", snapshot.leaderPresent)
+                .withDetail("leaseAtRisk", snapshot.leaseAtRisk)
+                .withDetail("lastAcquiredAt", snapshot.lastAcquiredAt?.toString() ?: "NEVER")
+                .withDetail(
+                    "lastAcquisitionFailureAt",
+                    snapshot.lastAcquisitionFailureAt?.toString() ?: "NEVER",
+                )
+                .withDetail("recentAcquisitionFailures", snapshot.recentAcquisitionFailures)
+                .withDetail("failureWindowSeconds", snapshot.failureWindowSeconds)
+                .withDetail("leaseRiskWindowSeconds", snapshot.leaseRiskWindowSeconds)
+                .withDetail("leaseUntil", snapshot.leaseUntil?.toString() ?: "NONE")
                 .build()
         }
 }

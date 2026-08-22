@@ -37,8 +37,15 @@
 - 대시보드에서 pending 수, oldest active age, attempt·retry·suppression·exhaustion,
   lease recovery를 볼 수 있다.
 - `worker.poll-interval` 주기로 dispatcher가 실행되고, `observation.poll-interval`
-  주기로 최대 `observation.limit`개의 ready backlog snapshot을 갱신한다. Actuator `health`의
+  주기로 최대 `observation.limit`개의 ready backlog 관측 데이터를 갱신한다. Actuator `health`의
   `notificationOutboxHealth` 구성 요소가 readiness와 degraded 정보를 반환한다.
+- leader health는 기본적으로 비활성화되어 있으며, Redis leader elector를 사용하는 환경에서
+  `clinic.notification.leader-health.enabled=true`로 활성화하면
+  `notificationLeaderHealth` 구성 요소가 추가된다.
+- leader health는 운영 관측 신호이며 scheduler 실행, outbox claim, DB fence의 권위를
+  대체하지 않는다. backend 상태 조회 실패는 `DOWN`, leader 부재·lease 임박·최근 획득
+  실패는 `DEGRADED`로 표시한다. health 세부 정보에는 tenant·request·node·payload
+  식별자를 포함하지 않는다.
 - 공용 metric과 alert label에 tenant·clinic·member·appointment·outbox 식별자가
   포함되지 않는다.
 
@@ -48,9 +55,39 @@
 테이블·index 생성 시간, lock wait, 실행 계획, backlog 처리량을 다시 측정하고
 배포 기록에 첨부해야 합니다.
 
-## 3. 단계별 전환
+## 3. leader readiness 관측
 
-### 3.1 `SHADOW`
+leader 상태를 readiness 그룹에서 함께 관측해야 하는 환경은 다음처럼 명시적으로
+활성화합니다.
+
+```yaml
+clinic:
+  notification:
+    leader-health:
+      enabled: true
+      failure-window: 5m
+      lease-risk-window: 30s
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,notificationOutboxHealth,notificationLeaderHealth
+```
+
+`notificationLeaderHealth`는 정상 lease를 확인하면 `UP`, leader가 없거나 lease가
+임박했거나 최근 leader 획득 실패가 있으면 `DEGRADED`, leader backend 상태를 읽을 수
+없으면 `DOWN`을 반환합니다. 성공한 획득은 현재 실패 window를 비우지만 마지막 실패
+시각은 보존하므로 운영자가 회복 이력을 확인할 수 있습니다. 두 window는 양수여야
+하며 실패 기록은 제한된 개수만 메모리에 보존합니다.
+
+이 health 결과는 읽기 전용 운영 신호입니다. scheduler 실행 여부와 outbox claim,
+DB fence의 최종 권위는 기존 경로에 남아 있으며 leader health 상태가 그 동작을
+차단하지 않습니다.
+
+## 4. 단계별 전환
+
+### 4.1 `SHADOW`
 
 ```yaml
 clinic:
@@ -73,7 +110,7 @@ clinic:
 - 종료 시 회원 ID·예약 ID·parameter가 제거된다.
 - oldest active age가 5분 미만이고 suppression reason을 설명할 수 있다.
 
-### 3.2 `CANARY`
+### 4.2 `CANARY`
 
 첫 병원 한 곳만 허용 목록에 넣습니다.
 
@@ -103,7 +140,7 @@ clinic:
 알림 플랫폼 담당자와 해당 병원 운영 담당자가 증거를 함께 확인하고 다음 병원
 묶음을 승인합니다. 승인·측정·확대 시각을 후속 이슈에 기록합니다.
 
-### 3.3 `ACTIVE`
+### 4.3 `ACTIVE`
 
 모든 병원이 같은 카나리 기준을 통과한 뒤에만 `ACTIVE`로 바꿉니다.
 
@@ -120,7 +157,7 @@ worker만 provider를 호출합니다. 안정 구간을 확인한 뒤 별도 변
 listener를 제거합니다. 기존 `scheduling_notification_history` 물리 테이블도 보존
 정책과 참조 여부를 확인한 후 별도의 additive migration으로 제거합니다.
 
-### 3.4 중단과 롤백
+### 4.4 중단과 롤백
 
 - 카나리 이상이 worker 경로에 한정되면 `SHADOW`로 되돌립니다.
 - 중복 가능성, provider 결과 불명, 키 장애가 있으면 `PAUSED`로 전환합니다.
@@ -134,7 +171,7 @@ listener를 제거합니다. 기존 `scheduling_notification_history` 물리 테
   이전 application으로 되돌립니다. 구버전 node drain 뒤 event-log null row를 다시
   backfill해 0임을 증명하고, `NOT NULL` hardening은 별도 release 승인으로만 진행합니다.
 
-### 3.5 V21 preflight와 partial DDL recovery
+### 4.5 V21 preflight와 partial DDL recovery
 
 배포 전 각 dialect에서 다음 read-only 결과를 저장합니다.
 
@@ -154,7 +191,7 @@ index/constraint metadata를 대조하고, MySQL은 각 `ALTER`/`CREATE INDEX` �
 재실행할 수 있는지 판단합니다. 임의 default tenant를 채우거나 schema-down으로
 되돌리지 않습니다.
 
-## 4. 관측 지표와 경보
+## 5. 관측 지표와 경보
 
 주요 metric은 다음과 같습니다.
 
@@ -169,7 +206,7 @@ index/constraint metadata를 대조하고, MySQL은 각 `ALTER`/`CREATE INDEX` �
 
 `pending`과 `oldest age`는 미래 발송 예정 행을 제외하고 현재 DB 시각에 발송 가능한
 backlog만 셉니다. gauge는 metric scrape에서 테이블을 다시 읽지 않고, worker poll과
-분리된 scheduler가 기본 10초마다 최대 10,001건만 읽어 갱신한 snapshot을 반환합니다.
+분리된 scheduler가 기본 10초마다 최대 10,001건만 읽어 갱신한 관측 결과를 반환합니다.
 Actuator liveness detail의 `backlogCapped=true`이면 실제 backlog가 관측 상한 이상이라는
 뜻이며 10,000건 경보를 해제하면 안 됩니다.
 
@@ -188,7 +225,7 @@ filter로 조회하고 metric label로 승격하지 않습니다.
 | pending backlog | 10,000건 초과이며 10분 증가: warning | 15분 감소 | 병원별 공정성, DB·회원·provider 용량 확인 |
 | key revoke/lookup failure | 즉시 critical | 자동 해제 없음 | Security·Notification 공동 대응, enqueue/readiness 503 |
 
-## 5. 수동 재알림
+## 6. 수동 재알림
 
 엔드포인트:
 
@@ -214,7 +251,7 @@ POST /api/{tenantCode}/clinics/{clinicId}/notifications/re-notify
 generation, 실행·승인 참조, scope, 단계, 시각, 결과 수만 남기고 예약 ID 원문은
 남기지 않습니다.
 
-## 6. 회원 ID 전환과 리마인더 누락
+## 7. 회원 ID 전환과 리마인더 누락
 
 legacy 예약의 회원 ID 누락은 기본 `ENFORCE`입니다. 이행이 필요한 병원만 담당자와
 만료 시각이 있는 `OBSERVE` 예외를 사용합니다. 만료된 예외는 자동으로 전역
@@ -243,7 +280,7 @@ legacy 예약의 회원 ID 누락은 기본 `ENFORCE`입니다. 이행이 필요
 `worker.catch-up-window`를 넘었는지 먼저 확인합니다. metric과 로그에는 tenant, clinic,
 appointment, member 식별자를 넣지 않습니다.
 
-## 7. HMAC 키 교체와 긴급 폐기
+## 8. HMAC 키 교체와 긴급 폐기
 
 `clinic.notification.crypto`에는 key material이 아니라 외부 secret reference만
 설정합니다. 지원 scheme은 `vault:`, `aws-secretsmanager:`,
@@ -272,9 +309,9 @@ Security 담당자가 90일 주기로 교체합니다. 이전 키는 최대 재�
 on-call이 중복 가능성을 확인한 뒤 새 active key를 배포합니다. 이 경보는 자동으로
 해제하지 않습니다.
 
-## 8. DB 마이그레이션
+## 9. DB 마이그레이션
 
-1. 배포 전 각 DB에서 V14를 별도 staging snapshot에 적용해 DDL lock 시간과
+1. 배포 전 각 DB에서 V14를 별도 staging 복제본에 적용해 DDL lock 시간과
    application timeout을 측정합니다.
 2. PostgreSQL은 운영 제약에 맞는 concurrent index 절차가 필요한지 확인합니다.
    MySQL은 online DDL 지원과 metadata lock을 확인합니다.
@@ -290,7 +327,7 @@ on-call이 중복 가능성을 확인한 뒤 새 active key를 배포합니다. 
 로컬 검증 수치는 운영 승인 자료가 아닙니다. staging 측정값, 적용 시각, 영향 받은
 행 수, lock wait, rollback 판단을 후속 rollout 이슈에 첨부해야 합니다.
 
-## 9. 종료 확인
+## 10. 종료 확인
 
 - rollout 모드와 clinic allowlist가 의도한 값이다.
 - 동일 논리 알림의 중복과 `DELIVERY_RESULT_UNKNOWN`이 없다.
