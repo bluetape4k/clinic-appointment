@@ -2,7 +2,7 @@
   "kind": "chart",
   "source": {
     "question": "Issue #372 Redis clinic permit key lifecycle를 어떤 범위에서 관측할 수 있는가?",
-    "revision": "e3941686888b5bec98baabc61613835cb9412e44",
+    "revision": "5fc19efd3d39b2c56890671edd7f0dc3d837209e",
     "paths": [
       "docs/benchmarks/issue-372-redis-key-lifecycle-benchmark/main.json",
       "docs/benchmarks/issue-372-redis-key-lifecycle-benchmark/analysis.ko.md",

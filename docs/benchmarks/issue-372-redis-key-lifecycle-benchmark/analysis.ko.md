@@ -69,9 +69,9 @@ cardinality `10/100/1,000`, churn `0/50/100%`의 18개 조합을 측정한다. s
 
 | warm churn | warmup (ms) | workload 종료 key | long-run 2회차 key | coordinator 종료 key | retention 2,500ms key | persistent |
 |---:|---:|---:|---:|---:|---:|---:|
-| 0% | 1,682.867 | 5,005 | 5,005 | 5,005 | 5,005 | 5,005 |
-| 50% | 1,563.963 | 5,205 | 5,205 | 5,205 | 5,205 | 5,205 |
-| 100% | 1,641.401 | 5,405 | 5,405 | 5,405 | 5,405 | 5,405 |
+| 0% | 1,613.107 | 5,005 | 5,005 | 5,005 | 5,005 | 5,005 |
+| 50% | 1,665.786 | 5,205 | 5,205 | 5,205 | 5,205 | 5,205 |
+| 100% | 1,644.072 | 5,405 | 5,405 | 5,405 | 5,405 | 5,405 |
 
 세 수준 모두 네 lifecycle stage의 key 수가 같고, 모든 관측 key의 `PTTL`은 `-1`이었다.
 관측된 key 종류는 `available`, `capacity`, `capacity-contract`, `generation`,
@@ -80,9 +80,9 @@ cardinality `10/100/1,000`, churn `0/50/100%`의 18개 조합을 측정한다. s
 활성 allocation key를 남기지 않았다는 뜻이지, 운영 traffic에서 expirable key가
 항상 즉시 제거된다는 뜻은 아니다.
 
-전체 report는 admission sample 4,320개, 성공 3,819개, backpressure 501개를
+전체 report는 admission sample 4,320개, 성공 3,821개, backpressure 499개를
 기록했다. lifecycle observation coverage는 `1.000`이고, lease recovery는
-`reacquired`였다. smoke도 coverage `1.000`, admission p99 `137.301ms`,
+`reacquired`였다. smoke도 coverage `1.000`, admission p99 `138.514ms`,
 `reacquired`를 기록했다.
 
 ![Issue #372 Redis key lifecycle benchmark 차트](charts/issue-372-redis-key-lifecycle-chart-ko.png)
@@ -102,10 +102,10 @@ coverage `1.000`이다.
 | 검증 항목 | 결과 | 판정 |
 |---|---:|---|
 | lifecycle coverage | 1.000 / target 1.000 | PASS |
-| main admission p99 | 134.997ms / local target 250ms | PASS |
-| smoke admission p99 | 137.301ms / local target 250ms | PASS |
+| main admission p99 | 137.907ms / local target 250ms | PASS |
+| smoke admission p99 | 138.514ms / local target 250ms | PASS |
 | fresh main baseline p99 범위 | 137.045–139.704ms | 후보 p99가 범위의 최댓값보다 낮음 |
-| warm N=1,000 준비 시간 최댓값 | 1,682.867ms | 기존 반복 최댓값 1,691.780ms 이내 |
+| warm N=1,000 준비 시간 최댓값 | 1,665.786ms | 기존 반복 최댓값 1,691.780ms 이내 |
 | lease recovery | reacquired | PASS |
 | deployment SLO 증거 | false | 이 작업의 범위 밖 |
 

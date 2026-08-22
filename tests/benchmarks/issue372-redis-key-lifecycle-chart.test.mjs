@@ -21,8 +21,8 @@ test("Issue #372 chart is generated from the committed lifecycle report", async 
     const chart = await readFile(output, "utf8");
     assert.match(stdout, /within-target/);
     assert.match(chart, /lifecycle coverage/);
-    assert.match(chart, /134\.997 ms/);
-    assert.match(chart, /1,682\.867/);
+    assert.match(chart, /137\.907 ms/);
+    assert.match(chart, /1,613\.107/);
     assert.match(chart, /5,405/);
     assert.match(chart, /persistent=-1/);
     assert.match(chart, /data-source="warm-cardinality-1000-churn-1_0\.lifecycle\.afterRetentionWindow"/);
