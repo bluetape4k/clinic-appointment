@@ -50,4 +50,3 @@
 - Step 3-R: **PASS**
 
 계획은 구현 가능한 순서와 구체적인 검증 명령을 갖추었고, 승인 전 구현 금지·proxy 경계·DB fencing authority·optional dependency·upstream metrics namespace를 보존한다. 다음 게이트는 이 계획 문서에 대한 사용자의 명시 승인이다. 승인 전에는 `appointment-notification` Kotlin/Gradle source를 수정하지 않는다.
-
