@@ -12,9 +12,12 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateV
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
-import io.bluetape4k.leader.LeaderGroupElector
-import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
-import io.bluetape4k.leader.micrometer.InstrumentedLeaderGroupElector
+import io.bluetape4k.leader.LeaderElector
+import io.bluetape4k.leader.lettuce.LettuceLeaderElector
+import io.bluetape4k.leader.micrometer.MicrometerLeaderAopMetricsRecorder
+import io.bluetape4k.leader.spring.aop.autoconfigure.LeaderAopAutoConfiguration
+import io.bluetape4k.leader.spring.aop.autoconfigure.LeaderAopFactoryAutoConfiguration
+import io.bluetape4k.leader.spring.metrics.LeaderMicrometerAutoConfiguration
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
@@ -461,6 +464,7 @@ internal class NotificationAutoConfigurationTest {
                 applicationContext.startupFailure shouldBeEqualTo null
                 applicationContext.getBeansOfType(NotificationReminderRecoveryScanner::class.java).size shouldBeEqualTo 1
                 applicationContext.getBeansOfType(AppointmentReminderScheduler::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(NotificationReminderSchedulingBootstrap::class.java).size shouldBeEqualTo 1
                 applicationContext.containsBean("notificationReminderSchedulingRunner") shouldBeEqualTo true
                 runBlocking {
                     applicationContext.getBean(AppointmentReminderScheduler::class.java).triggerOnce()
@@ -469,7 +473,7 @@ internal class NotificationAutoConfigurationTest {
     }
 
     @Test
-    fun `Redis connection과 meter registry가 있으면 reminder leader는 instrumented elector로 구성된다`() {
+    fun `Redis connection과 meter registry가 있으면 single elector와 upstream AOP recorder를 구성한다`() {
         val database = database("auto_reminder_leader", version = "21")
         val connection = mockk<StatefulRedisConnection<String, String>>(relaxed = true)
         context(database, withKey = true)
@@ -495,35 +499,38 @@ internal class NotificationAutoConfigurationTest {
             )
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
-                applicationContext.getBeansOfType(LeaderGroupElector::class.java).size shouldBeEqualTo 1
-                applicationContext.getBean(LeaderGroupElector::class.java)::class shouldBeEqualTo InstrumentedLeaderGroupElector::class
+                applicationContext.getBeansOfType(LeaderElector::class.java).size shouldBeEqualTo 1
+                applicationContext.getBean(LeaderElector::class.java)::class shouldBeEqualTo LettuceLeaderElector::class
+                applicationContext.getBeansOfType(MicrometerLeaderAopMetricsRecorder::class.java).size shouldBeEqualTo 1
             }
     }
 
     @Test
-    fun `Redis connection만 있고 meter registry가 없으면 raw leader elector를 유지한다`() {
+    fun `Redis connection만 있고 meter registry가 없으면 single elector만 구성한다`() {
         val database = database("auto_reminder_leader_without_meter", version = "21")
         val connection = mockk<StatefulRedisConnection<String, String>>(relaxed = true)
         context(database, withKey = true)
             .withBean("statefulRedisConnection", StatefulRedisConnection::class.java, { connection })
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
-                applicationContext.getBean(LeaderGroupElector::class.java)::class shouldBeEqualTo LettuceLeaderGroupElector::class
+                applicationContext.getBeansOfType(LeaderElector::class.java).size shouldBeEqualTo 1
+                applicationContext.getBean(LeaderElector::class.java)::class shouldBeEqualTo LettuceLeaderElector::class
+                applicationContext.getBeansOfType(MicrometerLeaderAopMetricsRecorder::class.java).size shouldBeEqualTo 0
             }
     }
 
     @Test
-    fun `host가 LeaderGroupElector를 제공하면 notification auto configuration은 자체 elector를 만들지 않는다`() {
+    fun `host가 LeaderElector를 제공하면 notification auto configuration은 자체 elector를 만들지 않는다`() {
         val database = database("auto_reminder_host_leader", version = "21")
         val connection = mockk<StatefulRedisConnection<String, String>>(relaxed = true)
-        val hostElector = mockk<LeaderGroupElector>(relaxed = true)
+        val hostElector = mockk<LeaderElector>(relaxed = true)
         context(database, withKey = true)
             .withBean("statefulRedisConnection", StatefulRedisConnection::class.java, { connection })
-            .withBean("hostLeaderGroupElector", LeaderGroupElector::class.java, { hostElector })
+            .withBean("hostLeaderElector", LeaderElector::class.java, { hostElector })
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
-                applicationContext.getBeansOfType(LeaderGroupElector::class.java).size shouldBeEqualTo 1
-                applicationContext.getBean(LeaderGroupElector::class.java) shouldBeEqualTo hostElector
+                applicationContext.getBeansOfType(LeaderElector::class.java).size shouldBeEqualTo 1
+                applicationContext.getBean(LeaderElector::class.java) shouldBeEqualTo hostElector
             }
     }
 
@@ -534,7 +541,7 @@ internal class NotificationAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
-                applicationContext.getBeansOfType(LeaderGroupElector::class.java).isEmpty() shouldBeEqualTo true
+                applicationContext.getBeansOfType(LeaderElector::class.java).isEmpty() shouldBeEqualTo true
             }
     }
 
@@ -620,20 +627,22 @@ internal class NotificationAutoConfigurationTest {
     fun `leader health는 기본 비활성이고 명시적으로 켠 경우에만 monitor를 구성한다`() {
         val disabledDatabase = database("auto_leader_health_disabled", version = "21")
         context(disabledDatabase, withKey = true)
-            .withBean("leaderElector", LeaderGroupElector::class.java, { mockk(relaxed = true) })
+            .withBean("leaderElector", LeaderElector::class.java, { mockk(relaxed = true) })
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
                 applicationContext.getBeansOfType(NotificationLeaderHealthMonitor::class.java).size shouldBeEqualTo 0
+                applicationContext.getBeansOfType(NotificationLeaderAopMetricsRecorder::class.java).size shouldBeEqualTo 0
             }
 
         val enabledDatabase = database("auto_leader_health_enabled", version = "21")
         context(enabledDatabase, withKey = true)
             .withPropertyValues("clinic.notification.leader-health.enabled=true")
-            .withBean("leaderElector", LeaderGroupElector::class.java, { mockk(relaxed = true) })
+            .withBean("leaderElector", LeaderElector::class.java, { mockk(relaxed = true) })
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
                 applicationContext.getBeansOfType(NotificationLeaderHealthMonitor::class.java).size shouldBeEqualTo 1
                 applicationContext.getBeansOfType(NotificationLeaderHealthSource::class.java).size shouldBeEqualTo 1
+                applicationContext.getBeansOfType(NotificationLeaderAopMetricsRecorder::class.java).size shouldBeEqualTo 1
             }
     }
 
@@ -642,7 +651,14 @@ internal class NotificationAutoConfigurationTest {
         withKey: Boolean,
     ): ApplicationContextRunner {
         var runner = ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
+            .withConfiguration(
+                AutoConfigurations.of(
+                    LeaderAopFactoryAutoConfiguration::class.java,
+                    LeaderMicrometerAutoConfiguration::class.java,
+                    LeaderAopAutoConfiguration::class.java,
+                    NotificationAutoConfiguration::class.java,
+                ),
+            )
             .withPropertyValues("clinic.notification.worker.concurrency-mode=LOCAL")
             .withBean("database", Database::class.java, { database })
             .withBean("appointmentRepository", AppointmentRepository::class.java, { AppointmentRepository() })

@@ -129,7 +129,7 @@
 - `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfiguration.kt`
 - `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfigurationTest.kt`
 
-- [ ] **Step 1: context RED를 새 bean 계약으로 전환한다.**
+- [x] **Step 1: context RED를 새 bean 계약으로 전환한다.**
   - Redis `StatefulRedisConnection`과 upstream `lettuceLeaderElectionFactory`가 있는 context에서 `LeaderElector` state bean이 하나 생성되는지 확인한다.
   - `MeterRegistry`가 없어도 state elector는 생성되고 optional upstream AOP Micrometer recorder만 비활성화되는지 확인한다.
   - host-provided `LeaderElector`가 있으면 자체 state elector를 만들지 않고 동일 instance를 유지하는지 확인한다.
@@ -138,14 +138,14 @@
   - runner가 있으면 `NotificationReminderSchedulingBootstrap`이 생성되는지 확인한다.
   - 기존 `LeaderGroupElector`, `LettuceLeaderGroupElector`, `InstrumentedLeaderGroupElector`, `shedlock.leader.*` bean/metric assertion을 제거한다.
   - upstream `LeaderAopFactoryAutoConfiguration`/`LeaderAopAutoConfiguration`이 먼저 factory/aspect를 등록한 뒤 notification configuration이 state elector와 recorder를 평가하는지 context configuration order를 확인하고, 필요한 경우 `@AutoConfigureAfter`로 순서를 고정한다.
-- [ ] **Step 2: notification auto-configuration을 구현한다.**
+- [x] **Step 2: notification auto-configuration을 구현한다.**
   - runner bean에서 group elector/health monitor provider를 제거한다.
   - `@ConditionalOnClass`/`@ConditionalOnBean`/`@ConditionalOnMissingBean`으로 `LeaderElectorFactory` 기반 state elector를 조건부 등록한다. factory bean 이름은 upstream `lettuceLeaderElectionFactory`를 `@Qualifier`로 명시한다.
   - health monitor condition을 `@ConditionalOnBean(LeaderElector::class)`로 바꾼다.
   - bootstrap과 `NotificationLeaderAopMetricsRecorder`를 각각 runner/health monitor 존재 조건으로 등록한다.
   - factory-created health elector는 injected Redis connection의 owner가 아니므로 notification bean이 connection을 닫지 않음을 명시하고, context close 시 shared connection lifecycle은 기존 owner bean에 남긴다.
   - 기존 Redis connection을 사용하는 notification concurrency wiring을 건드리지 않고 leader-specific group decorator만 제거한다.
-- [ ] **Step 3: context GREEN을 확인한다.**
+- [x] **Step 3: context GREEN을 확인한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationAutoConfigurationTest" --no-build-cache --console=plain`
   - Expected: Redis/factory, host override, no Redis, health/recorder/bootstrap 조건 테스트가 모두 PASS한다.
 
