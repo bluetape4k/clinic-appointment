@@ -82,7 +82,7 @@ class NotificationRetentionSchedulingRunner(
 }
 
 /** 애플리케이션 준비 직후와 설정된 간격마다 누락된 reminder materialization을 보정합니다. */
-class NotificationReminderSchedulingRunner(
+open class NotificationReminderSchedulingRunner(
     private val scheduler: AppointmentReminderScheduler,
     private val metrics: NotificationOutboxMetrics? = null,
     private val suspendBridgeTimeout: Duration = Duration.ofSeconds(30),
@@ -94,7 +94,7 @@ class NotificationReminderSchedulingRunner(
         fixedDelayString = "\${clinic.notification.worker.reminder-recovery-interval:PT1H}",
         failureMode = LeaderAspectFailureMode.SKIP,
     )
-    fun poll() {
+    open fun poll() {
         try {
             val result = runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() } ?: return
             metrics?.recordReminderRecovery(result)
