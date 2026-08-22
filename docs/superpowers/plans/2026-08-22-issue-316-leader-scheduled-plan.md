@@ -155,12 +155,12 @@
 - `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderMicrometerTest.kt`
 - `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderScheduledIntegrationTest.kt`
 
-- [ ] **Step 1: Micrometer 테스트를 upstream 계약으로 교체한다.**
+- [x] **Step 1: Micrometer 테스트를 upstream 계약으로 교체한다.**
   - `SimpleMeterRegistry`와 upstream `MicrometerLeaderAopMetricsRecorder`/AOP auto-configuration을 사용해 `leader.aop.attempts`, `leader.aop.acquired`, `leader.aop.lock.not.acquired`, `leader.aop.task.failed`, `leader.aop.active` 중 실제 callback이 발생한 항목을 확인한다.
   - lock tag가 upstream sanitization(`redacted-lock`)을 따르고 reminder lock 원문이나 tenant/cardinality를 노출하지 않는지 확인한다.
   - `shedlock.leader.*` 이름이 생성되지 않는다는 negative assertion을 둔다.
   - 본문이 일반 예외를 내부에서 흡수하는 경우 `task.failed`를 잘못 기대하지 않고 notification outbox metric/logging 테스트로 분리한다.
-- [ ] **Step 2: 실제 Spring proxy RED를 작성한다.**
+- [x] **Step 2: 실제 Spring proxy RED를 작성한다.**
   - test configuration에서 fake `LeaderElectorFactory`와 `LeaderAopAutoConfiguration`을 연결하고 `NotificationReminderSchedulingRunner`를 Spring bean으로 만든다.
   - `AopTestUtils` 또는 실제 bean identity로 `getBean(NotificationReminderSchedulingRunner::class.java)`가 target과 다른 proxy임을 확인한다.
   - `@EnableScheduling` context의 `ScheduledTaskHolder`에서 reminder task가 하나 등록되고 annotation의 fixed-delay placeholder가 해석되는지 확인한다. reflection metadata만으로 scheduler 등록을 대체하지 않는다.
@@ -172,7 +172,7 @@
   - Redis 8 singleton launcher에서 짧은 lease를 실제로 만료시킨 뒤 `LeaderState.empty(lockName)`와 다음 tick 재시도를 read-back하고, stale DB claim은 existing fencing 회귀 테스트로 차단됨을 확인한다. Docker를 실행하지 못하면 이 acceptance 항목을 PASS로 대체하지 않고 PENDING으로 남긴다.
   - Spring context close 뒤 bootstrap/scheduler가 새 작업을 시작하지 않고 AOP lease callback이 정리되는지 확인한다.
   - Docker/Redis가 필요한 경우 `@Testcontainers`를 사용하지 않고 repository singleton launcher를 사용한다. 환경에서 Docker를 실행할 수 없으면 실패/skip을 성공으로 처리하지 않고 명령·원인을 기록한다.
-- [ ] **Step 4: 통합 GREEN을 확인한다.**
+- [x] **Step 4: 통합 GREEN을 확인한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationLeaderMicrometerTest" --tests "io.bluetape4k.clinic.appointment.notification.NotificationLeaderScheduledIntegrationTest" --no-build-cache --console=plain`
   - Expected: upstream metric namespace, proxy invocation, contention/backend/cancellation/shutdown 계약이 PASS한다.
 
