@@ -2,10 +2,10 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
-import io.bluetape4k.leader.LeaderGroupElector
-import io.bluetape4k.leader.lettuce.LettuceLeaderGroupElector
-import io.bluetape4k.leader.lettuce.leaderGroupElection
-import io.bluetape4k.leader.micrometer.InstrumentedLeaderGroupElector
+import io.bluetape4k.leader.LeaderElector
+import io.bluetape4k.leader.LeaderElectorFactory
+import io.bluetape4k.leader.LeaderElectionOptions
+import io.bluetape4k.leader.spring.aop.autoconfigure.LeaderAopFactoryAutoConfiguration
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRuntime
@@ -15,6 +15,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -30,11 +31,11 @@ import org.springframework.context.annotation.Bean
  * `clinic.notification.enabled=true` (기본값)일 때 활성화됩니다.
  * [NotificationChannel] 빈이 없으면 [DummyNotificationChannel]을 등록합니다.
  * 데이터베이스가 있으면 내구성 outbox worker·dispatcher·retention runner를 구성하고,
- * Redis가 있으면 리마인더 복구 한 tick 전체를 감싸는 리더 선출 빈을 등록합니다.
+ * Redis가 있으면 리마인더 복구 상태 조회용 single leader elector를 등록합니다.
  * 스케줄러는 호스트 애플리케이션이 [org.springframework.scheduling.annotation.EnableScheduling]을
  * 명시적으로 선택한 경우에만 동작합니다.
  */
-@AutoConfiguration
+@AutoConfiguration(after = [LeaderAopFactoryAutoConfiguration::class])
 @ConditionalOnProperty(
     prefix = "clinic.notification",
     name = ["enabled"],
@@ -602,35 +603,22 @@ class NotificationAutoConfiguration {
         )
     }
 
-    /**
-     * Redis가 있을 때 리더 선출 빈 등록.
-     * 리마인더 복구 한 tick 전체를 단일 리더 action 안에서 실행할 때 사용합니다.
-     * outbox 발송 정합성은 데이터베이스 lease와 fencing이 보장합니다.
-     */
+    /** upstream Lettuce factory가 있을 때 health 조회용 single elector를 등록합니다. */
     @Bean
-    @ConditionalOnClass(
-        value = [RedisClient::class],
-        name = ["io.bluetape4k.leader.micrometer.InstrumentedLeaderGroupElector"],
-    )
-    @ConditionalOnBean(StatefulRedisConnection::class)
-    @ConditionalOnMissingBean(LeaderGroupElector::class)
-    fun notificationLeaderElection(
-        connection: StatefulRedisConnection<String, String>,
-        meterRegistryProvider: ObjectProvider<MeterRegistry>,
-    ): LeaderGroupElector {
-        val delegate: LettuceLeaderGroupElector = connection.leaderGroupElection()
-        val registry = meterRegistryProvider.ifAvailable
-        if (registry == null) {
-            log.info { "HA 리더 선출 활성화: LettuceLeaderGroupElector" }
-            return delegate
-        }
-        log.info { "HA 리더 선출 활성화: InstrumentedLeaderGroupElector" }
-        return InstrumentedLeaderGroupElector(
-            delegate = delegate,
-            registry = registry,
-            lockName = REMINDER_RECOVERY_LOCK_NAME,
-        )
-    }
+    @ConditionalOnClass(name = ["io.bluetape4k.leader.LeaderElectorFactory"])
+    @ConditionalOnBean(name = ["lettuceLeaderElectionFactory"])
+    @ConditionalOnMissingBean(LeaderElector::class)
+    fun notificationLeaderStateElector(
+        @Qualifier("lettuceLeaderElectionFactory") factory: LeaderElectorFactory,
+    ): LeaderElector = factory.create(LeaderElectionOptions())
+
+    /** runner와 AOP proxy를 분리해 application-ready 첫 실행이 proxy를 통과하도록 합니다. */
+    @Bean
+    @ConditionalOnBean(NotificationReminderSchedulingRunner::class)
+    @ConditionalOnMissingBean(NotificationReminderSchedulingBootstrap::class)
+    fun notificationReminderSchedulingBootstrap(
+        runner: NotificationReminderSchedulingRunner,
+    ): NotificationReminderSchedulingBootstrap = NotificationReminderSchedulingBootstrap(runner)
 
     /**
      * 기본 동작을 바꾸지 않고 reminder leader 상태를 선택적으로 관측합니다.
@@ -642,10 +630,10 @@ class NotificationAutoConfiguration {
         name = ["enabled"],
         havingValue = "true",
     )
-    @ConditionalOnBean(LeaderGroupElector::class)
+    @ConditionalOnBean(LeaderElector::class)
     @ConditionalOnMissingBean(NotificationLeaderHealthMonitor::class)
     fun notificationLeaderHealthMonitor(
-        leaderElector: LeaderGroupElector,
+        leaderElector: LeaderElector,
         properties: NotificationProperties,
     ): NotificationLeaderHealthMonitor {
         val healthProperties = properties.leaderHealth.validate()
@@ -655,6 +643,14 @@ class NotificationAutoConfiguration {
             leaseRiskWindow = healthProperties.leaseRiskWindow,
         )
     }
+
+    /** upstream AOP callback을 notification bounded health 상태에 연결합니다. */
+    @Bean
+    @ConditionalOnBean(NotificationLeaderHealthMonitor::class)
+    @ConditionalOnMissingBean(NotificationLeaderAopMetricsRecorder::class)
+    fun notificationLeaderAopMetricsRecorder(
+        monitor: NotificationLeaderHealthMonitor,
+    ): NotificationLeaderAopMetricsRecorder = NotificationLeaderAopMetricsRecorder(monitor)
 
 }
 

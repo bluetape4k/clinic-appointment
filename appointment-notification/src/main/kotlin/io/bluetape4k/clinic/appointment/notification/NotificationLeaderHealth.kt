@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.notification
 
-import io.bluetape4k.leader.LeaderGroupElector
+import io.bluetape4k.leader.LeaderElector
 import io.bluetape4k.leader.LeaderLease
 import kotlinx.coroutines.CancellationException
 import java.io.Serializable
@@ -51,10 +51,10 @@ data class NotificationLeaderHealthSnapshot(
  * reminder lock의 획득 결과와 Redis lease 상태를 개인정보 없는 상태 요약으로 합칩니다.
  *
  * 이 monitor는 scheduler 실행을 허용하거나 차단하지 않습니다. runner가 실제로 관측한
- * 획득 성공·backend 실패만 기록하고, health 조회 시 현재 group lease를 읽습니다.
+ * 획득 성공·backend 실패만 기록하고, health 조회 시 현재 single lease를 읽습니다.
  */
 class NotificationLeaderHealthMonitor(
-    private val elector: LeaderGroupElector,
+    private val elector: LeaderElector,
     private val lockName: String = REMINDER_RECOVERY_LOCK_NAME,
     private val clock: Clock = Clock.systemUTC(),
     private val failureWindow: Duration = Duration.ofMinutes(5),
@@ -105,14 +105,8 @@ class NotificationLeaderHealthMonitor(
             )
         }
 
-        val leaseUntil = leaderState.leaders.fold<LeaderLease, Instant?>(null) { earliest, lease ->
-            lease.leaseUntil?.let { candidate ->
-                earliest?.let {
-                    if (candidate.isBefore(it)) candidate else it
-                } ?: candidate
-            } ?: earliest
-        }
-        val leaderPresent = leaderState.leaders.isNotEmpty()
+        val leaseUntil = leaderState.leader?.leaseUntil
+        val leaderPresent = leaderState.leader != null
         val leaseAtRisk = leaseUntil?.let {
             !it.isAfter(now.plus(leaseRiskWindow))
         } == true

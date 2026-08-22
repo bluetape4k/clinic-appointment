@@ -106,20 +106,20 @@
 - `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderHealthMonitorTest.kt`
 - `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderAopMetricsRecorderTest.kt`
 
-- [ ] **Step 1: single-elector health RED를 작성한다.**
+- [x] **Step 1: single-elector health RED를 작성한다.**
   - mock `LeaderElector.state(lockName)`가 `LeaderState.occupied(lockName, LeaderLease(...))`, empty/non-leader, expired lease를 반환하는 fixture를 만든다.
   - 기존 success/failure window와 lease-risk window에 대해 UP/DEGRADED/DOWN, `leaderPresent`, `leaseAtRisk`가 동일하게 유지되는지 확인한다.
-- [ ] **Step 2: recorder RED를 작성한다.**
+- [x] **Step 2: recorder RED를 작성한다.**
   - reminder lock에서 `onLockAcquired`가 monitor의 `recordAcquired()`를 한 번 호출하는지 확인한다.
   - 같은 lock의 `SkipReason.BACKEND_ERROR`만 `recordAcquisitionFailure()`를 호출하는지 확인한다.
   - `SkipReason.CONTENTION`, 다른 lock 이름, 다른 callback은 notification health 상태를 변경하지 않는지 확인한다.
-- [ ] **Step 3: health monitor를 `LeaderElector` 기반으로 구현한다.**
+- [x] **Step 3: health monitor를 `LeaderElector` 기반으로 구현한다.**
   - `LeaderState.leader` 단일 lease를 읽고 기존 bounded 상태 계산을 유지한다.
   - scheduler 허용/차단 결정을 health monitor에 넣지 않는다.
-- [ ] **Step 4: recorder adapter를 구현한다.**
+- [x] **Step 4: recorder adapter를 구현한다.**
   - `LeaderAopMetricsRecorder`를 구현하고 reminder lock 이름을 constructor default로 고정한다.
   - upstream `LeaderElectionOptions`, `Duration`, `SkipReason` callback signature를 그대로 사용한다.
-- [ ] **Step 5: GREEN을 확인한다.**
+- [x] **Step 5: GREEN을 확인한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationLeaderHealthMonitorTest" --tests "io.bluetape4k.clinic.appointment.notification.NotificationLeaderAopMetricsRecorderTest" --no-build-cache --console=plain`
   - Expected: 단일 lease 상태와 callback filtering 테스트가 모두 PASS한다.
 
