@@ -1,8 +1,8 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
-import io.bluetape4k.leader.LeaderGroupElector
-import io.bluetape4k.leader.LeaderGroupState
+import io.bluetape4k.leader.LeaderElector
+import io.bluetape4k.leader.LeaderState
 import io.bluetape4k.leader.LeaderLease
 import io.mockk.every
 import io.mockk.mockk
@@ -18,7 +18,7 @@ internal class NotificationLeaderHealthMonitorTest {
     fun `정상 leader lease는 low cardinality UP snapshot을 반환한다`() {
         val now = Instant.parse("2026-08-22T00:00:00Z")
         val clock = MutableTestClock(now)
-        val elector = mockk<LeaderGroupElector>()
+        val elector = mockk<LeaderElector>()
         every { elector.state(REMINDER_RECOVERY_LOCK_NAME) } returns leaderState(now.plusSeconds(300))
         val monitor = NotificationLeaderHealthMonitor(elector, clock = clock)
 
@@ -42,7 +42,7 @@ internal class NotificationLeaderHealthMonitorTest {
     fun `최근 획득 실패는 bounded window 동안 DEGRADED이고 시간이 지나면 자동 복구된다`() {
         val now = Instant.parse("2026-08-22T00:00:00Z")
         val clock = MutableTestClock(now)
-        val elector = mockk<LeaderGroupElector>()
+        val elector = mockk<LeaderElector>()
         every { elector.state(REMINDER_RECOVERY_LOCK_NAME) } returns leaderState(now.plusSeconds(3_600))
         val monitor = NotificationLeaderHealthMonitor(elector, clock = clock)
 
@@ -59,7 +59,7 @@ internal class NotificationLeaderHealthMonitorTest {
     @Test
     fun `lease 만료 임박은 backend가 살아 있어도 DEGRADED로 표시된다`() {
         val now = Instant.parse("2026-08-22T00:00:00Z")
-        val elector = mockk<LeaderGroupElector>()
+        val elector = mockk<LeaderElector>()
         every { elector.state(REMINDER_RECOVERY_LOCK_NAME) } returns leaderState(now.plusSeconds(10))
         val monitor = NotificationLeaderHealthMonitor(
             elector = elector,
@@ -76,7 +76,7 @@ internal class NotificationLeaderHealthMonitorTest {
     @Test
     fun `leader backend 예외는 DOWN이며 실행 경계를 대신 결정하지 않는다`() {
         val now = Instant.parse("2026-08-22T00:00:00Z")
-        val elector = mockk<LeaderGroupElector>()
+        val elector = mockk<LeaderElector>()
         every { elector.state(REMINDER_RECOVERY_LOCK_NAME) } throws IllegalStateException("redis unavailable")
         val monitor = NotificationLeaderHealthMonitor(
             elector = elector,
@@ -91,19 +91,14 @@ internal class NotificationLeaderHealthMonitorTest {
         snapshot.leaseAtRisk shouldBeEqualTo false
     }
 
-    private fun leaderState(leaseUntil: Instant): LeaderGroupState =
-        LeaderGroupState(
+    private fun leaderState(leaseUntil: Instant): LeaderState =
+        LeaderState.occupied(
             lockName = REMINDER_RECOVERY_LOCK_NAME,
-            maxLeaders = 1,
-            activeCount = 1,
-            leaders = listOf(
-                LeaderLease(
-                    auditLeaderId = "redacted",
-                    electedAt = leaseUntil.minusSeconds(60),
-                    leaseUntil = leaseUntil,
-                    slot = 0,
-                    nodeId = "redacted",
-                ),
+            leader = LeaderLease(
+                auditLeaderId = "redacted",
+                electedAt = leaseUntil.minusSeconds(60),
+                leaseUntil = leaseUntil,
+                nodeId = "redacted",
             ),
         )
 
