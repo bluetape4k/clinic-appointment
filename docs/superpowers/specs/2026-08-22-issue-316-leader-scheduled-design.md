@@ -86,6 +86,11 @@ annotation의 AOP 경계가 `poll()`을 감싸므로 self-invocation으로 leade
   사용한다. notification에서 `InstrumentedLeaderGroupElector`를 더 이상
   실행 경계에 연결하지 않으며, 기존 `shedlock.leader.*` decorator metric을
   같은 action에 중복 기록하지 않는다.
+- `poll()` 본문이 일반 scheduler 예외를 기존 tick 경계에서 흡수하면 AOP는
+  해당 예외를 `task.failed`로 볼 수 없다. 이 경우 `leader.aop.*`는 leader
+  획득·backend 실패·AOP 경계의 실패를 관측하고, scheduler 본문 실패는
+  notification 로그와 `NotificationOutboxMetrics` 계약으로 검증한다. 본문
+  예외를 다시 던지는 방식으로 scheduler 수명 주기를 바꾸지 않는다.
 - health 조회용 `LeaderElector`는 Redis가 제공하는
   `lettuceLeaderElectionFactory`에서 생성하고, Redis/factory가 없으면
   기존처럼 health monitor를 만들지 않는다. host가 제공한 compatible
@@ -156,6 +161,10 @@ annotation의 AOP 경계가 `poll()`을 감싸므로 self-invocation으로 leade
       실행되고, DB claim/fencing은 최종 중복 방어로 남는다.
 - [ ] backend 오류·본문 오류·취소·shutdown에서 의도한 예외/cleanup 계약을
       회귀 테스트로 증명한다.
+- [ ] Spring proxy 호출과 직접 호출을 구분하는 테스트를 두어 application-ready
+      bootstrap이 AOP 경계를 우회하지 않음을 증명한다. Docker/Redis가 필요한
+      lease 검증을 실행할 수 없으면 해당 명령과 환경 원인을 기록하고, 같은
+      lock-name의 factory/state 계약을 검증하는 대체 증거를 남긴다.
 - [ ] notification health monitor가 single `LeaderState`를 읽고 bounded
       성공·backend 실패 기록을 유지한다.
 - [ ] 기존 `shedlock.leader.*` 중복 실행 metric 없이 upstream `leader.aop.*`
