@@ -21,6 +21,9 @@ DB claim/fencing은 최종 정합성 권위로 유지하고, application-ready �
   Redis 8.8 lease 만료 재취득 회귀 테스트와 Korean lesson/review를 추가한다.
 - `@LeaderScheduled` public API type-use가 누락되지 않도록 root consumer fixture
   API scope allowlist와 `LeaderScheduled` compile fixture inventory를 갱신한다.
+- API runtime에서 upstream `LeaderElectionAutoConfiguration`이 없는 Exposed backend
+  클래스를 eager import하지 않도록 애플리케이션 exclusion을 추가하고, notification의
+  Redis elector/AOP 경로는 유지한다.
 
 ## DoD Status
 
@@ -32,6 +35,7 @@ DB claim/fencing은 최종 정합성 권위로 유지하고, application-ready �
 | Redis lease 만료 후 다음 elector 재취득 | PASS | `RedisLeaderScheduledLeaseIntegrationTest`, Redis 8.8 |
 | health/metrics/optional bean 조건 | PASS | health/recorder/micrometer/auto-config tests |
 | DB claim/fencing 및 public scheduler contract 유지 | PASS | 해당 source diff에 schema/claim 변경 없음 |
+| API runtime 선택적 backend auto-configuration 호환성 | PASS | API PostgreSQL 전체 832 tests, 1 skipped |
 | module test/build/lock/diff/document audit | PASS | 아래 검증 결과 |
 
 ## 검증 결과
@@ -44,6 +48,7 @@ DB claim/fencing은 최종 정합성 권위로 유지하고, application-ready �
 - `./gradlew assertModuleConsumerFixtureApiVariants --no-configuration-cache --no-parallel --console=plain`: `BUILD SUCCESSFUL`
 - `./gradlew compileModuleConsumerFixtures --no-configuration-cache --no-parallel --console=plain`: `BUILD SUCCESSFUL`
 - `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies`: `BUILD SUCCESSFUL` (기존 configuration-cache warning만 보고됨)
+- `./gradlew :appointment-api:test --no-daemon -Dspring.profiles.active="test,test-postgresql" --no-build-cache --no-configuration-cache --console=plain`: `SUCCESS: Executed 832 tests in 3m 7s (1 skipped)`, `BUILD SUCCESSFUL`
 - `scripts/verify-dependency-locking.sh`: PASS
 - `git diff --check`: PASS
 - Korean terminology audit: PASS, findings=0
@@ -55,8 +60,13 @@ Redis Lettuce single elector 0.5.0은 `supportsAuditLeaderState=false`라
 포장하지 않고 두 elector의 lease 재취득을 통합 증거로 사용한다. audit-state와
 ownership-loss telemetry는 Issue #319에서 upstream capability를 재검토한다.
 
+`bluetape4k-leader-spring-boot`의 범용 `LeaderElectionAutoConfiguration`은 선택적
+Exposed backend 설정을 eager import하므로, API 애플리케이션은 해당 auto-configuration을
+제외한다. AOP factory와 notification 소유 Redis elector는 계속 활성화되며, 이 보정은
+모듈의 모든 선택적 backend를 runtime에 추가하지 않기 위한 경계다.
+
 ## 복귀
 
-문제 발생 시 DB schema나 scheduler public API를 건드리지 않고 이 PR의 dependency,
-runner, auto-configuration 변경을 commit 단위로 revert한다. Issue #317의 leader 정책
-외부화는 이 PR에 포함하지 않는다.
+문제 발생 시 DB schema나 scheduler public API를 건드리지 않고 이 PR의
+`AppointmentApiApplication` exclusion, dependency, runner, auto-configuration 변경을
+commit 단위로 revert한다. Issue #317의 leader 정책 외부화는 이 PR에 포함하지 않는다.

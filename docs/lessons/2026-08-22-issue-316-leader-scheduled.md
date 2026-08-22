@@ -31,6 +31,13 @@
   elector를 Redis 8.8에 연결하고, 첫 action을 1초 lease보다 오래 붙잡은 동안 두 번째
   elector가 lease 만료 후 재취득하는 통합 테스트를 authoritative lease evidence로
   사용했다. 실제 audit-state/ownership-loss 관측은 후속 Issue #319 범위다.
+- `bluetape4k-leader-spring-boot 0.5.0`은 선택적 Exposed backend를 compile-only로
+  두면서 범용 `LeaderElectionAutoConfiguration`에서 해당 설정 클래스를 eager import한다.
+  notification API가 이 artifact를 공개하게 되면 Exposed DB bean을 가진
+  `appointment-api`의 context가 없는 backend class를 먼저 해석하므로, API 애플리케이션
+  경계에서 범용 election auto-configuration만 제외했다. AOP factory와 notification이
+  직접 구성하는 Redis elector 경로는 그대로 유지하며, 모든 backend 의존성을 무조건
+  추가하는 방식은 선택하지 않았다.
 
 ## 검증 증거
 
@@ -47,14 +54,16 @@
 | `NotificationLeaderScheduledIntegrationTest` | 5 tests passed; proxy, contention, backend error, cancellation, context-close cancellation |
 | `RedisLeaderScheduledLeaseIntegrationTest` | 1 test passed; Redis 8.8 lease expiry and next-elector reacquisition |
 | API consumer fixture scope/assertion + compile | PASS; `bluetape4k-leader-spring-boot` 공개 API 좌표와 `LeaderScheduled` type-use를 fixture 계약에 반영 |
+| `appointment-api` 전체 PostgreSQL 테스트 | PASS; `SUCCESS: Executed 832 tests in 3m 7s (1 skipped)`, `BUILD SUCCESSFUL` |
 | CI 동일 root build | `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies` 성공; 기존 configuration-cache warning은 남음 |
 | dependency lock/verification checks | PASS; lockfiles and `gradle/verification-metadata.xml` remain aligned |
 
 ## 운영·복귀
 
 문제 발생 시 DB schema나 reminder scheduler API를 되돌리지 않고,
-`@LeaderScheduled` dependency·runner·auto-configuration 변경을 마지막 GREEN
-checkpoint 이전 commit 단위로 revert한다. #317의 wait/lease 설정 외부화와 #319의
+`AppointmentApiApplication`의 upstream auto-configuration exclusion과
+`@LeaderScheduled` dependency·runner·notification auto-configuration 변경을 마지막
+GREEN checkpoint 이전 commit 단위로 revert한다. #317의 wait/lease 설정 외부화와 #319의
 lease extension·ownership-loss telemetry는 이 작업에서 선행 구현하지 않는다.
 
 ## 남은 경계
