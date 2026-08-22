@@ -161,12 +161,13 @@
 - [ ] **Step 2: 실제 Spring proxy RED를 작성한다.**
   - test configuration에서 fake `LeaderElectorFactory`와 `LeaderAopAutoConfiguration`을 연결하고 `NotificationReminderSchedulingRunner`를 Spring bean으로 만든다.
   - `AopTestUtils` 또는 실제 bean identity로 `getBean(NotificationReminderSchedulingRunner::class.java)`가 target과 다른 proxy임을 확인한다.
+  - `@EnableScheduling` context의 `ScheduledTaskHolder`에서 reminder task가 하나 등록되고 annotation의 fixed-delay placeholder가 해석되는지 확인한다. reflection metadata만으로 scheduler 등록을 대체하지 않는다.
   - fake elector가 정상 획득을 반환하면 bootstrap 호출이 `triggerOnce()`를 정확히 한 번 실행하는지 확인한다.
   - contention이면 `triggerOnce()`가 호출되지 않고, backend exception이면 `failureMode=SKIP`이 예외를 외부로 내보내지 않는지 확인한다.
   - 직접 target 호출과 proxied bean 호출의 결과를 구분해 application-ready 경계가 AOP를 우회하지 않음을 고정한다.
 - [ ] **Step 3: cancellation, lease loss, shutdown 계약을 검증한다.**
   - fake elector가 `CancellationException`을 던지면 cancellation이 재전파되고 scheduled executor가 일반 exception으로 오인하지 않는지 확인한다.
-  - lease 만료/ownership loss 후 새 tick이 다시 시도되고 stale DB claim은 existing fencing에 의해 차단된다는 테스트 또는 명시적인 upstream state/factory 대체 증거를 남긴다.
+  - Redis 8 singleton launcher에서 짧은 lease를 실제로 만료시킨 뒤 `LeaderState.empty(lockName)`와 다음 tick 재시도를 read-back하고, stale DB claim은 existing fencing 회귀 테스트로 차단됨을 확인한다. Docker를 실행하지 못하면 이 acceptance 항목을 PASS로 대체하지 않고 PENDING으로 남긴다.
   - Spring context close 뒤 bootstrap/scheduler가 새 작업을 시작하지 않고 AOP lease callback이 정리되는지 확인한다.
   - Docker/Redis가 필요한 경우 `@Testcontainers`를 사용하지 않고 repository singleton launcher를 사용한다. 환경에서 Docker를 실행할 수 없으면 실패/skip을 성공으로 처리하지 않고 명령·원인을 기록한다.
 - [ ] **Step 4: 통합 GREEN을 확인한다.**
