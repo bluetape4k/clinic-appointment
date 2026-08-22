@@ -29,6 +29,7 @@ dependencies {
 
     // Reminder recovery trigger leader election (delivery correctness uses DB lease/fencing)
     api(libs.bluetape4k.leader)
+    api(libs.bluetape4k.leader.spring.boot)
     implementation(libs.bluetape4k.leader.micrometer)
     implementation(libs.bluetape4k.lettuce)
     api(libs.lettuce.core)
