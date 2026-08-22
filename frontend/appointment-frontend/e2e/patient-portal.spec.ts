@@ -43,6 +43,14 @@ async function signIn(page: Page): Promise<void> {
   await page.route('**/api/tenant-default/notifications/stream', route =>
     route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' }),
   );
+  await page.route('**/api/tenant-default/patient/appointments/cancellation-history**', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { ETag: '"sha256:' + 'e'.repeat(64) + '"', 'X-Tenant-Identity-Generation': 'v1.e2e-generation' },
+      body: JSON.stringify({ limit: 20, entries: [], nextCursor: null }),
+    }),
+  );
 
   await page.goto('/portal/login');
   await page.getByLabel('Tenant').fill('tenant-default');
@@ -60,6 +68,7 @@ test.describe('환자 포털 브라우저 계약', () => {
     await expect(page.getByText('임상 포털', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: '예약 현황' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '새 예약 요청' })).toBeVisible();
+    await expect(page.getByText('표시할 취소 이력이 없습니다.')).toBeVisible();
     await expect(page.getByLabel('예약 계획 ID')).toHaveAttribute('type', 'number');
     await expect(page.getByLabel('희망 시작')).toHaveAttribute('type', 'datetime-local');
     await expect(page.getByRole('link', { name: '예약 현황' })).toHaveAttribute('aria-current', 'page');
@@ -89,6 +98,88 @@ test.describe('환자 포털 브라우저 계약', () => {
       await appointmentsLink.focus();
       await expect(appointmentsLink).toBeFocused();
     }
+  });
+
+  test('tenant-scoped 슬롯을 조회하고 상품·회차·장소 선택 요약을 예약 draft에 연결한다', async ({ page }) => {
+    await signIn(page);
+    await page.route('**/api/tenant-default/clinics/3', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: { id: 3, name: '서울 메인 클리닉', timezone: 'Asia/Seoul' } }),
+      }),
+    );
+    await page.route('**/api/tenant-default/clinics/3/slots**', async route => {
+      const url = new URL(route.request().url());
+      expect(url.searchParams.get('doctorId')).toBe('4');
+      expect(url.searchParams.get('treatmentTypeId')).toBe('5');
+      expect(url.searchParams.get('date')).toBe('2026-08-20');
+      expect(url.searchParams.get('requestedDurationMinutes')).toBe('30');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: [{ date: '2026-08-20', startTime: '10:00:00', endTime: '10:30:00', doctorId: 4, equipmentIds: [], remainingCapacity: 1 }],
+        }),
+      });
+    });
+    await page.route('**/api/tenant-default/appointment-requests', async route => {
+      expect(JSON.parse(route.request().postData() || '{}')).toMatchObject({
+        appointmentPlanId: 77,
+        preferredStartAt: '2026-08-20T01:00:00.000Z',
+        preferredEndAt: '2026-08-20T01:30:00.000Z',
+        evidence: {
+          evidenceAuthority: 'consent:clinic-a',
+          evidenceId: '01J1M6Y6XRK8N0W2M3P4Q5R6S7',
+        },
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { ETag: '"1"' },
+        body: JSON.stringify({
+          appointmentId: 42,
+          commitmentId: 84,
+          proposalId: 126,
+          status: 'PROPOSED',
+          version: 1,
+          expiresAt: '2026-08-20T02:00:00Z',
+          policySnapshot: {
+            snapshotId: 7,
+            snapshotHash: 'snapshot-hash',
+            tenantGeneration: 1,
+            clinicGeneration: 1,
+            sourceVersions: {},
+          },
+          productName: '피부 재생 관리',
+          sessionNumber: 3,
+          totalSessions: 10,
+          clinicDisplayName: '서울 메인 클리닉',
+        }),
+      });
+    });
+    await page.goto('/portal/appointments?clinicId=3&doctorId=4&treatmentTypeId=5&date=2026-08-20&clinicName=%EC%84%9C%EC%9A%B8%20%EB%A9%94%EC%9D%B8%20%ED%81%B4%EB%A6%AC%EB%8B%89');
+    await page.getByLabel('진료 시간(분, 선택)').fill('30');
+    await page.getByRole('button', { name: '가용 시간 조회' }).click();
+
+    const slot = page.getByRole('option', { name: /10:00–10:30/ });
+    await expect(slot).toBeVisible();
+    await page.getByLabel('예약 계획 ID').fill('77');
+    await page.getByLabel('상품명 (선택)').fill('피부 재생 관리');
+    await page.getByLabel('회차 (선택)', { exact: true }).fill('3');
+    await page.getByLabel('전체 회차 (선택)', { exact: true }).fill('10');
+    await slot.click();
+
+    await expect(page.locator('[data-slot-summary]')).toContainText('피부 재생 관리');
+    await expect(page.locator('[data-slot-summary]')).toContainText('3회차 / 10회');
+    await expect(page.locator('[data-slot-summary]')).toContainText('서울 메인 클리닉');
+    await expect(page.getByLabel('희망 시작')).toHaveValue('2026-08-20T10:00');
+    await expect(page.getByLabel('희망 종료')).toHaveValue('2026-08-20T10:30');
+    await page.getByLabel('동의 권위').fill('consent:clinic-a');
+    await page.getByLabel('동의 증빙 ID').fill('01J1M6Y6XRK8N0W2M3P4Q5R6S7');
+    await page.getByRole('button', { name: '예약 요청 보내기' }).click();
+    await expect(page.locator('[data-step="PROPOSED"]')).toHaveAttribute('aria-current', 'step');
   });
 
   test('승인된 C 참조 상태용 확정 예약 visual fixture를 렌더링한다', async ({ page }) => {

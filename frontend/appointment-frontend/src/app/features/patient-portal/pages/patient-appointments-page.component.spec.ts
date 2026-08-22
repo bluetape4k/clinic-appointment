@@ -4,6 +4,8 @@ import { TestBed } from '@angular/core/testing';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { PortalApiException } from '../../../core/api/portal-api-error';
+import { PortalApiClient } from '../../../core/api/portal-api-client';
+import { SlotSelection } from '../components/patient-slot-calendar.component';
 import { AppointmentCommitmentFacade, AppointmentCommitmentState } from '../appointment-commitment.facade';
 import { PatientAppointmentsPageComponent } from './patient-appointments-page.component';
 
@@ -71,6 +73,10 @@ describe('환자 예약 현황 페이지', () => {
       imports: [PatientAppointmentsPageComponent],
       providers: [
         { provide: AppointmentCommitmentFacade, useValue: facade },
+        { provide: PortalApiClient, useValue: {
+          getSlots: vi.fn().mockResolvedValue({ body: [], etag: null, retryAfterSeconds: null }),
+          clearCancellationHistoryCache: vi.fn(),
+        } },
         { provide: ActivatedRoute, useValue: { snapshot: routeSnapshot } },
       ],
     }).compileComponents();
@@ -296,5 +302,180 @@ describe('환자 예약 현황 페이지', () => {
 
     expect(page.restoreBlocked()).toBe(false);
     expect(fixture.nativeElement.querySelector('.request-form')).not.toBeNull();
+  });
+
+  it('새 예약 흐름에 tenant-scoped 슬롯 선택 캘린더를 표시한다', () => {
+    state.set({
+      view: 'idle', appointmentId: null, proposalId: null, status: null, commitment: null, proposal: null,
+      etag: null, busy: false, notice: null, error: null,
+    });
+
+    const fixture = TestBed.createComponent(PatientAppointmentsPageComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-slot-calendar]')).not.toBeNull();
+  });
+
+  it('슬롯 선택 시간을 appointment request payload의 시작·종료 값으로 그대로 반영한다', async () => {
+    state.set({
+      view: 'idle', appointmentId: null, proposalId: null, status: null, commitment: null, proposal: null,
+      etag: null, busy: false, notice: null, error: null,
+    });
+    const fixture = TestBed.createComponent(PatientAppointmentsPageComponent);
+    const page = fixture.componentInstance;
+    page.draft.appointmentPlanId = 77;
+    page.draft.evidenceAuthority = 'consent:clinic-a';
+    page.draft.evidenceId = '01J1M6Y6XRK8N0W2M3P4Q5R6S7';
+    const selection: SlotSelection = {
+      slot: { date: '2026-08-20', startTime: '10:00:00', endTime: '10:30:00', doctorId: 4, equipmentIds: [], remainingCapacity: 1 },
+      clinicId: 3,
+      doctorId: 4,
+      treatmentTypeId: 5,
+      requestedDurationMinutes: 30,
+      appointmentPlanId: 77,
+      clinicTimezone: 'Asia/Seoul',
+      productName: '피부 재생 관리',
+      sessionNumber: 3,
+      totalSessions: 10,
+      clinicName: '서울 메인 클리닉',
+      preferredStartAt: '2026-08-20T10:00:00',
+      preferredEndAt: '2026-08-20T10:30:00',
+    };
+
+    page.applySlotSelection(selection);
+    await page.requestAppointment();
+
+    expect(facade.requestAppointment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appointmentPlanId: 77,
+        preferredStartAt: '2026-08-20T01:00:00.000Z',
+        preferredEndAt: '2026-08-20T01:30:00.000Z',
+      }),
+      expect.stringMatching(/^portal-request-/),
+    );
+  });
+
+  it('clinic timezone이 브라우저 timezone과 달라도 local 슬롯을 UTC로 정확히 변환한다', async () => {
+    state.set({
+      view: 'idle', appointmentId: null, proposalId: null, status: null, commitment: null, proposal: null,
+      etag: null, busy: false, notice: null, error: null,
+    });
+    routeSnapshot.queryParamMap = convertToParamMap({});
+    const fixture = TestBed.createComponent(PatientAppointmentsPageComponent);
+    const page = fixture.componentInstance;
+    page.draft.appointmentPlanId = 77;
+    page.draft.evidenceAuthority = 'consent:clinic-a';
+    page.draft.evidenceId = '01J1M6Y6XRK8N0W2M3P4Q5R6S7';
+    page.applySlotSelection({
+      slot: { date: '2026-08-20', startTime: '10:00:00', endTime: '10:30:00', doctorId: 4, equipmentIds: [], remainingCapacity: 1 },
+      clinicId: 3, doctorId: 4, treatmentTypeId: 5, requestedDurationMinutes: 30,
+      appointmentPlanId: 77, clinicTimezone: 'America/New_York', productName: null, sessionNumber: null, totalSessions: null,
+      clinicName: '뉴욕 클리닉', preferredStartAt: '2026-08-20T10:00:00', preferredEndAt: '2026-08-20T10:30:00',
+    });
+    await page.requestAppointment();
+
+    expect(facade.requestAppointment).toHaveBeenCalledWith(
+      expect.objectContaining({ preferredStartAt: '2026-08-20T14:00:00.000Z', preferredEndAt: '2026-08-20T14:30:00.000Z' }),
+      expect.stringMatching(/^portal-request-/),
+    );
+    fixture.destroy();
+  });
+
+  it('슬롯이 무효화되면 stale draft 시간을 지우고 새 슬롯 선택 전 요청을 막는다', async () => {
+    state.set({
+      view: 'idle', appointmentId: null, proposalId: null, status: null, commitment: null, proposal: null,
+      etag: null, busy: false, notice: null, error: null,
+    });
+    const fixture = TestBed.createComponent(PatientAppointmentsPageComponent);
+    const page = fixture.componentInstance;
+    page.draft.appointmentPlanId = 77;
+    page.draft.evidenceAuthority = 'consent:clinic-a';
+    page.draft.evidenceId = '01J1M6Y6XRK8N0W2M3P4Q5R6S7';
+    page.applySlotSelection({
+      slot: { date: '2026-08-20', startTime: '10:00:00', endTime: '10:30:00', doctorId: 4, equipmentIds: [], remainingCapacity: 1 },
+      clinicId: 3, doctorId: 4, treatmentTypeId: 5, requestedDurationMinutes: 30,
+      appointmentPlanId: 77, clinicTimezone: 'Asia/Seoul', productName: null, sessionNumber: null, totalSessions: null,
+      clinicName: '서울 메인 클리닉', preferredStartAt: '2026-08-20T10:00:00', preferredEndAt: '2026-08-20T10:30:00',
+    });
+
+    page.clearSlotSelection();
+    await page.requestAppointment();
+
+    expect(page.draft.preferredStartAt).toBe('');
+    expect(page.draft.preferredEndAt).toBe('');
+    expect(facade.requestAppointment).not.toHaveBeenCalled();
+    expect(page.slotSelectionError()).toContain('최신 가용 시간');
+    fixture.destroy();
+  });
+
+  it('선택 후 예약 계획 ID가 바뀌면 기존 슬롯을 즉시 무효화한다', () => {
+    state.set({
+      view: 'idle', appointmentId: null, proposalId: null, status: null, commitment: null, proposal: null,
+      etag: null, busy: false, notice: null, error: null,
+    });
+    const fixture = TestBed.createComponent(PatientAppointmentsPageComponent);
+    const page = fixture.componentInstance;
+    page.draft.appointmentPlanId = 77;
+    page.applySlotSelection({
+      slot: { date: '2026-08-20', startTime: '10:00:00', endTime: '10:30:00', doctorId: 4, equipmentIds: [], remainingCapacity: 1 },
+      clinicId: 3, doctorId: 4, treatmentTypeId: 5, requestedDurationMinutes: 30,
+      appointmentPlanId: 77, clinicTimezone: 'Asia/Seoul', productName: null, sessionNumber: null, totalSessions: null,
+      clinicName: '서울 메인 클리닉', preferredStartAt: '2026-08-20T10:00:00', preferredEndAt: '2026-08-20T10:30:00',
+    });
+
+    page.onAppointmentPlanIdChange(88);
+
+    expect(page.selectedSlotSelection()).toBeNull();
+    expect(page.draft.preferredStartAt).toBe('');
+    expect(page.draft.preferredEndAt).toBe('');
+    fixture.destroy();
+  });
+
+  it('scope-locked 페이지는 다른 병원 범위의 슬롯을 예약 요청에 연결하지 않는다', async () => {
+    state.set({
+      view: 'idle', appointmentId: null, proposalId: null, status: null, commitment: null, proposal: null,
+      etag: null, busy: false, notice: null, error: null,
+    });
+    routeSnapshot.queryParamMap = convertToParamMap({ clinicId: '3', doctorId: '4', treatmentTypeId: '5', date: '2026-08-20' });
+    const fixture = TestBed.createComponent(PatientAppointmentsPageComponent);
+    const page = fixture.componentInstance;
+    page.draft.appointmentPlanId = 77;
+    page.applySlotSelection({
+      slot: { date: '2026-08-20', startTime: '10:00:00', endTime: '10:30:00', doctorId: 99, equipmentIds: [], remainingCapacity: 1 },
+      clinicId: 9, doctorId: 99, treatmentTypeId: 5, requestedDurationMinutes: 30,
+      appointmentPlanId: 77, clinicTimezone: 'Asia/Seoul', productName: null, sessionNumber: null, totalSessions: null,
+      clinicName: '다른 병원', preferredStartAt: '2026-08-20T10:00:00', preferredEndAt: '2026-08-20T10:30:00',
+    });
+
+    await page.requestAppointment();
+
+    expect(page.selectedSlotSelection()).toBeNull();
+    expect(facade.requestAppointment).not.toHaveBeenCalled();
+    expect(page.slotSelectionError()).toContain('최신 가용 시간');
+    fixture.destroy();
+  });
+
+  it('DST gap의 local 시간은 UTC payload로 추정하지 않고 예약 요청을 막는다', async () => {
+    state.set({
+      view: 'idle', appointmentId: null, proposalId: null, status: null, commitment: null, proposal: null,
+      etag: null, busy: false, notice: null, error: null,
+    });
+    const fixture = TestBed.createComponent(PatientAppointmentsPageComponent);
+    const page = fixture.componentInstance;
+    page.draft.appointmentPlanId = 77;
+    page.draft.evidenceAuthority = 'consent:clinic-a';
+    page.draft.evidenceId = '01J1M6Y6XRK8N0W2M3P4Q5R6S7';
+    page.applySlotSelection({
+      slot: { date: '2026-03-08', startTime: '02:30:00', endTime: '03:00:00', doctorId: 4, equipmentIds: [], remainingCapacity: 1 },
+      clinicId: 3, doctorId: 4, treatmentTypeId: 5, requestedDurationMinutes: 30,
+      appointmentPlanId: 77, clinicTimezone: 'America/New_York', productName: null, sessionNumber: null, totalSessions: null,
+      clinicName: '뉴욕 클리닉', preferredStartAt: '2026-03-08T02:30:00', preferredEndAt: '2026-03-08T03:00:00',
+    });
+
+    await page.requestAppointment();
+
+    expect(facade.requestAppointment).not.toHaveBeenCalled();
+    expect(page.slotSelectionError()).toContain('유효하지 않습니다');
+    fixture.destroy();
   });
 });

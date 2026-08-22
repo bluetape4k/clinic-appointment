@@ -95,6 +95,13 @@ export interface AvailableSlot {
   remainingCapacity: number;
 }
 
+/** 환자 포털 슬롯 해석에 필요한 tenant-clinic 권위 메타데이터입니다. */
+export interface PortalClinicMetadata {
+  id: number;
+  name: string;
+  timezone: string;
+}
+
 export interface ApiEnvelope<T> {
   success?: boolean;
   data: T | null;

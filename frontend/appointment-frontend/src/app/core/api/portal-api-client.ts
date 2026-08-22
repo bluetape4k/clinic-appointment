@@ -15,6 +15,7 @@ import {
   PortalResponse,
   PatientCancellationHistoryPage,
   PatientHistoryQuery,
+  PortalClinicMetadata,
   ProposalDecisionRequest,
 } from './portal-api.models';
 import { mapPortalApiError, PortalApiException } from './portal-api-error';
@@ -99,6 +100,13 @@ export class PortalApiClient {
       : params.set('requestedDurationMinutes', requestedDurationMinutes);
     const response = await this.send<ApiEnvelope<AvailableSlot[]>>('GET', `/clinics/${this.requirePositiveId(clinicId)}/slots`, undefined, {}, requestParams);
     return { ...response, body: response.body?.data ?? [] };
+  }
+
+  async getClinic(clinicId: number): Promise<PortalResponse<PortalClinicMetadata>> {
+    const response = await this.send<ApiEnvelope<PortalClinicMetadata>>('GET', `/clinics/${this.requirePositiveId(clinicId)}`);
+    const clinic = response.body?.data;
+    if (!clinic) throw new Error('병원 권위 메타데이터가 비어 있습니다.');
+    return { ...response, body: clinic };
   }
 
   async getNotifications(): Promise<PortalResponse<PortalNotification[]>> {
