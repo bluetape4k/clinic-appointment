@@ -2,6 +2,8 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.leader.LeaderElector
 import io.bluetape4k.leader.LeaderElectorFactory
 import io.bluetape4k.leader.LeaderRunResult
@@ -23,9 +25,14 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.TaskScheduler
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.scheduling.config.FixedDelayTask
+import org.springframework.scheduling.config.ScheduledTask
 import org.springframework.scheduling.config.ScheduledTaskHolder
 import org.springframework.test.util.AopTestUtils
 import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal class NotificationLeaderScheduledIntegrationTest {
 
@@ -112,6 +119,36 @@ internal class NotificationLeaderScheduledIntegrationTest {
         }
     }
 
+    @Test
+    fun `Spring context close는 reminder scheduled task를 취소한다`() {
+        val scheduler = mockk<AppointmentReminderScheduler>()
+        val elector = electedElector()
+        val cancelled = AtomicBoolean(false)
+        val scheduledFuture = mockk<ScheduledFuture<Any?>>(relaxed = true)
+        every { scheduledFuture.isCancelled } answers { cancelled.get() }
+        every { scheduledFuture.getDelay(any()) } returns TimeUnit.HOURS.toMillis(1)
+        every { scheduledFuture.cancel(any()) } answers {
+            cancelled.set(true)
+            true
+        }
+        val taskScheduler = mockk<TaskScheduler>(relaxed = true)
+        every { taskScheduler.scheduleWithFixedDelay(any(), any<Duration>()) } returns scheduledFuture
+        every { taskScheduler.scheduleWithFixedDelay(any(), any<Instant>(), any<Duration>()) } returns scheduledFuture
+        var scheduledTask: ScheduledTask? = null
+
+        context(scheduler, elector, taskScheduler).run { applicationContext ->
+            applicationContext.startupFailure shouldBeEqualTo null
+            scheduledTask = applicationContext
+                .getBean(ScheduledTaskHolder::class.java)
+                .scheduledTasks
+                .single()
+            checkNotNull(scheduledTask).nextExecution().shouldNotBeNull()
+        }
+
+        cancelled.get().shouldBeTrue()
+        checkNotNull(scheduledTask).nextExecution() shouldBeEqualTo null
+    }
+
     private fun electedElector(): LeaderElector {
         val elector = mockk<LeaderElector>(relaxed = true)
         val action = slot<() -> Any?>()
@@ -126,6 +163,7 @@ internal class NotificationLeaderScheduledIntegrationTest {
     private fun context(
         scheduler: AppointmentReminderScheduler,
         elector: LeaderElector,
+        taskScheduler: TaskScheduler = mockk(relaxed = true),
     ): ApplicationContextRunner {
         val factory = mockk<LeaderElectorFactory>()
         every { factory.create(any()) } returns elector
@@ -145,7 +183,7 @@ internal class NotificationLeaderScheduledIntegrationTest {
             )
             .withBean("localLeaderElectionFactory", LeaderElectorFactory::class.java, { factory })
             .withBean("appointmentReminderScheduler", AppointmentReminderScheduler::class.java, { scheduler })
-            .withBean("taskScheduler", TaskScheduler::class.java, { mockk(relaxed = true) })
+            .withBean("taskScheduler", TaskScheduler::class.java, { taskScheduler })
     }
 
     @Configuration(proxyBeanMethods = false)
