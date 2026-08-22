@@ -181,6 +181,8 @@
 
 **Files:**
 - `docs/lessons/2026-08-22-issue-316-leader-scheduled.md`
+- `build.gradle.kts`
+- `src/consumerFixture/notification/kotlin/io/bluetape4k/clinic/appointment/consumer/NotificationApiConsumerFixture.kt`
 - 변경된 모든 Kotlin/Gradle/docs 파일
 
 - [x] **Step 1: module targeted test를 실행한다.**
@@ -202,6 +204,12 @@
 - [x] **Step 5: 계획·문서 자연스러움 검사를 실행한다.**
   - Run: `node /Users/debop/.codex/skills/bluetape-writer/scripts/audit-korean-terms.mjs --series clinic-appointment docs/superpowers/plans/2026-08-22-issue-316-leader-scheduled-plan.md docs/lessons/2026-08-22-issue-316-leader-scheduled.md`
   - Expected: `PASS` 및 findings=0.
+- [x] **Step 6: 공개 API 소비자 fixture 계약을 갱신하고 CI 동일 build를 재실행한다.**
+  - `@LeaderScheduled`가 public runner API의 직접 type-use이므로 root API scope allowlist와 notification consumer fixture inventory에 `bluetape4k-leader-spring-boot`를 반영한다.
+  - Run: `./gradlew assertModuleConsumerFixtureApiVariants --no-configuration-cache --no-parallel --console=plain`
+  - Run: `./gradlew compileModuleConsumerFixtures --no-configuration-cache --no-parallel --console=plain`
+  - Run: `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies`
+  - Expected: API scope assertion, 세 consumer fixture compile, CI 동일 compile/build가 모두 `BUILD SUCCESSFUL`이다. configuration-cache warning은 기존 fixture 검증 task의 known warning으로 남기되 build failure가 아니어야 한다.
 
 ## Task 7: code review와 PR handoff
 
@@ -217,7 +225,7 @@
 - [x] **Step 2: lesson과 review evidence를 commit한다.**
   - lesson에는 실제 실행한 명령·결과, Docker/Redis 환경 여부, 미실행 검증 사유를 포함한다.
   - code review 문서에는 검토한 commit SHA, test/build 결과, acceptance traceability, P0/P1 count를 포함한다.
-- [ ] **Step 3: PR을 만들기 전 live Issue/branch 상태를 read-back한다.**
+- [x] **Step 3: PR을 만들기 전 live Issue/branch 상태를 read-back한다.**
   - Run: `git status --short --branch`
   - Run: `git log --oneline --decorate -8`
   - Run: `gh issue view 316 --repo bluetape4k/clinic-appointment --json number,title,state,assignees,labels,milestone,url`

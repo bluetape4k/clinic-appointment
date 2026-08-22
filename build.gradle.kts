@@ -233,6 +233,7 @@ private val apiConsumerFixtureExpectedScopes = mapOf(
     ),
     "notification" to ApiConsumerFixtureScope(
         api = setOf(
+            "io.github.bluetape4k.leader:bluetape4k-leader-spring-boot",
             "io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce",
             "io.github.resilience4j:resilience4j-bulkhead",
             "io.github.resilience4j:resilience4j-circuitbreaker",
@@ -281,7 +282,7 @@ private val apiConsumerFixtureInventory = mapOf(
         "NotificationReminderSchedulingRunner", "NotificationRetentionRunner", "AppointmentReminderScheduler",
         "ResilientNotificationChannel", "NotificationAutoConfiguration", "NotificationRuntimeHealthSignals",
         "NotificationDirectDeliveryPort", "ConsumerRecord", "Acknowledgment", "Database", "MeterRegistry",
-        "LeaderGroupElector", "RedisClient", "StatefulRedisConnection", "CircuitBreaker", "Retry", "Bulkhead",
+        "LeaderGroupElector", "LeaderScheduled", "RedisClient", "StatefulRedisConnection", "CircuitBreaker", "Retry", "Bulkhead",
         "ConditionalOnClass",
     ),
 )
