@@ -46,6 +46,8 @@
 | `NotificationLeaderMicrometerTest` | 3 tests passed |
 | `NotificationLeaderScheduledIntegrationTest` | 5 tests passed; proxy, contention, backend error, cancellation, context-close cancellation |
 | `RedisLeaderScheduledLeaseIntegrationTest` | 1 test passed; Redis 8.8 lease expiry and next-elector reacquisition |
+| API consumer fixture scope/assertion + compile | PASS; `bluetape4k-leader-spring-boot` 공개 API 좌표와 `LeaderScheduled` type-use를 fixture 계약에 반영 |
+| CI 동일 root build | `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies` 성공; 기존 configuration-cache warning은 남음 |
 | dependency lock/verification checks | PASS; lockfiles and `gradle/verification-metadata.xml` remain aligned |
 
 ## 운영·복귀

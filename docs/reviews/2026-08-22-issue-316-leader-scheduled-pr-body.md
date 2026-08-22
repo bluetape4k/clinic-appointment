@@ -19,6 +19,8 @@ DB claim/fencing은 최종 정합성 권위로 유지하고, application-ready �
   `shedlock.leader.*` 중복 metric을 제거한다.
 - Spring proxy/스케줄 등록/contended skip/backend error/cancellation/context close,
   Redis 8.8 lease 만료 재취득 회귀 테스트와 Korean lesson/review를 추가한다.
+- `@LeaderScheduled` public API type-use가 누락되지 않도록 root consumer fixture
+  API scope allowlist와 `LeaderScheduled` compile fixture inventory를 갱신한다.
 
 ## DoD Status
 
@@ -39,6 +41,9 @@ DB claim/fencing은 최종 정합성 권위로 유지하고, application-ready �
 - Redis 8.8 lease integration: 1 test passed
 - `./gradlew :appointment-notification:test --no-build-cache --no-configuration-cache --console=plain`: 198 tests passed, `BUILD SUCCESSFUL`
 - `./gradlew :appointment-notification:build --no-build-cache --no-configuration-cache --console=plain`: `BUILD SUCCESSFUL`, Kover verify passed
+- `./gradlew assertModuleConsumerFixtureApiVariants --no-configuration-cache --no-parallel --console=plain`: `BUILD SUCCESSFUL`
+- `./gradlew compileModuleConsumerFixtures --no-configuration-cache --no-parallel --console=plain`: `BUILD SUCCESSFUL`
+- `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies`: `BUILD SUCCESSFUL` (기존 configuration-cache warning만 보고됨)
 - `scripts/verify-dependency-locking.sh`: PASS
 - `git diff --check`: PASS
 - Korean terminology audit: PASS, findings=0

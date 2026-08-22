@@ -23,6 +23,7 @@ import io.bluetape4k.clinic.appointment.notification.NotificationOutboxObservati
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxWorkStore
 import io.bluetape4k.clinic.appointment.notification.AppointmentReminderScheduler
 import io.bluetape4k.leader.LeaderGroupElector
+import io.bluetape4k.leader.spring.scheduling.LeaderScheduled
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
 import io.github.resilience4j.bulkhead.Bulkhead
@@ -64,12 +65,13 @@ private fun metricsType(
 ): NotificationOutboxMetrics =
     io.bluetape4k.clinic.appointment.notification.NotificationOutboxMetrics(registry, observationStore)
 
-// appointment-notification/.../NotificationSchedulingRunners.kt: all four public scheduling runner classes.
+// appointment-notification/.../NotificationSchedulingRunners.kt: public scheduling runners and annotation type-use.
 private val runnerTypes: List<KClass<*>> = listOf(
     NotificationOutboxSchedulingRunner::class,
     NotificationObservationSchedulingRunner::class,
     NotificationRetentionSchedulingRunner::class,
     NotificationReminderSchedulingRunner::class,
+    LeaderScheduled::class,
 )
 
 // appointment-notification/.../ResilientNotificationChannel.kt: Resilience4j public factory type-use.
