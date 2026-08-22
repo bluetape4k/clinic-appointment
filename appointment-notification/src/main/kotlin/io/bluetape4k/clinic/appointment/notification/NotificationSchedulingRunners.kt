@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.notification
 
-import io.bluetape4k.leader.LeaderGroupElector
+import io.bluetape4k.leader.annotation.LeaderAspectFailureMode
+import io.bluetape4k.leader.spring.scheduling.LeaderScheduled
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
 import io.bluetape4k.logging.warn
@@ -84,39 +85,18 @@ class NotificationRetentionSchedulingRunner(
 class NotificationReminderSchedulingRunner(
     private val scheduler: AppointmentReminderScheduler,
     private val metrics: NotificationOutboxMetrics? = null,
-    private val leaderElector: LeaderGroupElector? = null,
     private val suspendBridgeTimeout: Duration = Duration.ofSeconds(30),
-    private val leaderHealthMonitor: NotificationLeaderHealthMonitor? = null,
 ) {
     companion object : KLogging()
 
-    @EventListener(ApplicationReadyEvent::class)
-    fun onApplicationReady() {
-        poll()
-    }
-
-    @Scheduled(fixedDelayString = "\${clinic.notification.worker.reminder-recovery-interval:PT1H}")
+    @LeaderScheduled(
+        name = REMINDER_RECOVERY_LOCK_NAME,
+        fixedDelayString = "\${clinic.notification.worker.reminder-recovery-interval:PT1H}",
+        failureMode = LeaderAspectFailureMode.SKIP,
+    )
     fun poll() {
         try {
-            val result = if (leaderElector == null) {
-                runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() }
-            } else {
-                var actionStarted = false
-                try {
-                    leaderElector.runIfLeader(REMINDER_RECOVERY_LOCK_NAME) {
-                        actionStarted = true
-                        leaderHealthMonitor?.recordAcquired()
-                        runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() }
-                    }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    if (!actionStarted) {
-                        leaderHealthMonitor?.recordAcquisitionFailure()
-                    }
-                    throw e
-                }
-            } ?: return
+            val result = runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() } ?: return
             metrics?.recordReminderRecovery(result)
             if (result.scanned > 0) {
                 log.info {
@@ -129,6 +109,16 @@ class NotificationReminderSchedulingRunner(
         } catch (e: Exception) {
             log.warn { "리마인더 보정에 실패했습니다: failure=${e.javaClass.simpleName}" }
         }
+    }
+}
+
+/** 애플리케이션 준비 이벤트에서 AOP proxy를 거쳐 reminder recovery를 즉시 실행합니다. */
+class NotificationReminderSchedulingBootstrap(
+    private val runner: NotificationReminderSchedulingRunner,
+) {
+    @EventListener(ApplicationReadyEvent::class)
+    fun onApplicationReady() {
+        runner.poll()
     }
 }
 
