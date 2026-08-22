@@ -154,6 +154,7 @@
 **Files:**
 - `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderMicrometerTest.kt`
 - `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderScheduledIntegrationTest.kt`
+- `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/RedisLeaderScheduledLeaseIntegrationTest.kt`
 
 - [x] **Step 1: Micrometer 테스트를 upstream 계약으로 교체한다.**
   - `SimpleMeterRegistry`와 upstream `MicrometerLeaderAopMetricsRecorder`/AOP auto-configuration을 사용해 `leader.aop.attempts`, `leader.aop.acquired`, `leader.aop.lock.not.acquired`, `leader.aop.task.failed`, `leader.aop.active` 중 실제 callback이 발생한 항목을 확인한다.
@@ -167,10 +168,10 @@
   - fake elector가 정상 획득을 반환하면 bootstrap 호출이 `triggerOnce()`를 정확히 한 번 실행하는지 확인한다.
   - contention이면 `triggerOnce()`가 호출되지 않고, backend exception이면 `failureMode=SKIP`이 예외를 외부로 내보내지 않는지 확인한다.
   - 직접 target 호출과 proxied bean 호출의 결과를 구분해 application-ready 경계가 AOP를 우회하지 않음을 고정한다.
-- [ ] **Step 3: cancellation, lease loss, shutdown 계약을 검증한다.**
+- [x] **Step 3: cancellation, lease loss, shutdown 계약을 검증한다.**
   - fake elector가 `CancellationException`을 던지면 cancellation이 재전파되고 scheduled executor가 일반 exception으로 오인하지 않는지 확인한다.
-  - Redis 8 singleton launcher에서 짧은 lease를 실제로 만료시킨 뒤 `LeaderState.empty(lockName)`와 다음 tick 재시도를 read-back하고, stale DB claim은 existing fencing 회귀 테스트로 차단됨을 확인한다. Docker를 실행하지 못하면 이 acceptance 항목을 PASS로 대체하지 않고 PENDING으로 남긴다.
-  - Spring context close 뒤 bootstrap/scheduler가 새 작업을 시작하지 않고 AOP lease callback이 정리되는지 확인한다.
+  - Redis 8 singleton launcher에서 짧은 lease 동안 첫 action을 붙잡은 채 두 번째 single elector가 lease 만료 후 재취득하는지 확인한다. `bluetape4k-leader 0.5.0`의 Redis single elector는 `supportsAuditLeaderState=false`라 `state()`가 기본 `LeaderState.empty(lockName)`을 반환하므로, 해당 read-back을 실제 Redis lease 증거로 오인하지 않고 두 elector 재취득을 authoritative evidence로 사용한다. stale DB claim은 existing fencing 회귀 테스트로 차단된다.
+  - Spring context close 뒤 `ScheduledTask`의 `ScheduledFuture`가 취소되어 새 작업을 시작하지 않고 AOP scheduling lifecycle이 정리되는지 확인한다.
   - Docker/Redis가 필요한 경우 `@Testcontainers`를 사용하지 않고 repository singleton launcher를 사용한다. 환경에서 Docker를 실행할 수 없으면 실패/skip을 성공으로 처리하지 않고 명령·원인을 기록한다.
 - [x] **Step 4: 통합 GREEN을 확인한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationLeaderMicrometerTest" --tests "io.bluetape4k.clinic.appointment.notification.NotificationLeaderScheduledIntegrationTest" --no-build-cache --console=plain`
@@ -182,23 +183,23 @@
 - `docs/lessons/2026-08-22-issue-316-leader-scheduled.md`
 - 변경된 모든 Kotlin/Gradle/docs 파일
 
-- [ ] **Step 1: module targeted test를 실행한다.**
+- [x] **Step 1: module targeted test를 실행한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationSchedulingRunnersTest" --tests "io.bluetape4k.clinic.appointment.notification.NotificationLeaderHealthMonitorTest" --tests "io.bluetape4k.clinic.appointment.notification.NotificationLeaderAopMetricsRecorderTest" --tests "io.bluetape4k.clinic.appointment.notification.NotificationAutoConfigurationTest" --no-build-cache --console=plain`
   - Expected: 지정된 회귀 테스트가 모두 PASS한다.
-- [ ] **Step 2: 전체 notification test와 build를 순서대로 실행한다.**
+- [x] **Step 2: 전체 notification test와 build를 순서대로 실행한다.**
   - Run: `./gradlew :appointment-notification:test --no-build-cache --console=plain`
   - Run: `./gradlew :appointment-notification:build --no-build-cache --console=plain`
   - Expected: 각 명령이 `BUILD SUCCESSFUL`을 출력하고 실패·의도하지 않은 skip이 없다.
-- [ ] **Step 3: Kotlin/Spring checklist와 diff 검사를 적용한다.**
+- [x] **Step 3: Kotlin/Spring checklist와 diff 검사를 적용한다.**
   - `transaction {}` 경계, cancellation 재전파, optional bean 조건, resource ownership, low-cardinality metric, `!!` 금지와 한국어 KDoc을 확인한다.
   - 이번 변경에는 새 blocking call, polling loop, retry, allocation-heavy collection을 추가하지 않았는지 확인하고, 기존 `runSynchronously` timeout 경계와 AOP task lifecycle을 유지한다.
   - 새 사용자 입력·secret·권한 경계를 추가하지 않았음을 확인하고, 고정 reminder lock 이름과 upstream lock-tag sanitization을 security evidence로 기록한다.
   - `README*`와 공개 설정 문서는 변경하지 않는다. public API, property key, 운영 명령이 바뀌지 않고 내부 scheduler wiring만 바뀌므로 한국어 KDoc과 lesson, PR body가 필요한 독자 문서 범위를 충족한다.
   - Run: `git diff --check`
   - Expected: whitespace 오류가 없다.
-- [ ] **Step 4: lesson 문서를 작성한다.**
+- [x] **Step 4: lesson 문서를 작성한다.**
   - `@LeaderScheduled`를 선택한 이유, `LeaderElector`와 기존 group elector의 타입 경계, upstream `leader.aop.*`와 notification metric의 책임 분리, proxy/bootstrap 필수성, DB fencing 보존, rollback 명령과 실행된 검증 결과를 기록한다.
-- [ ] **Step 5: 계획·문서 자연스러움 검사를 실행한다.**
+- [x] **Step 5: 계획·문서 자연스러움 검사를 실행한다.**
   - Run: `node /Users/debop/.codex/skills/bluetape-writer/scripts/audit-korean-terms.mjs --series clinic-appointment docs/superpowers/plans/2026-08-22-issue-316-leader-scheduled-plan.md docs/lessons/2026-08-22-issue-316-leader-scheduled.md`
   - Expected: `PASS` 및 findings=0.
 
