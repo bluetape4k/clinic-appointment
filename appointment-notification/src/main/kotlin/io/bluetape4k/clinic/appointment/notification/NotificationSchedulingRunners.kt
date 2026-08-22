@@ -86,6 +86,7 @@ class NotificationReminderSchedulingRunner(
     private val metrics: NotificationOutboxMetrics? = null,
     private val leaderElector: LeaderGroupElector? = null,
     private val suspendBridgeTimeout: Duration = Duration.ofSeconds(30),
+    private val leaderHealthMonitor: NotificationLeaderHealthMonitor? = null,
 ) {
     companion object : KLogging()
 
@@ -100,8 +101,20 @@ class NotificationReminderSchedulingRunner(
             val result = if (leaderElector == null) {
                 runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() }
             } else {
-                leaderElector.runIfLeader(REMINDER_RECOVERY_LOCK_NAME) {
-                    runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() }
+                var actionStarted = false
+                try {
+                    leaderElector.runIfLeader(REMINDER_RECOVERY_LOCK_NAME) {
+                        actionStarted = true
+                        leaderHealthMonitor?.recordAcquired()
+                        runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (!actionStarted) {
+                        leaderHealthMonitor?.recordAcquisitionFailure()
+                    }
+                    throw e
                 }
             } ?: return
             metrics?.recordReminderRecovery(result)

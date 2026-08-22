@@ -109,6 +109,7 @@ internal class NotificationSchedulingRunnersTest {
     fun `reminder poll은 leader action 안에서 scheduler를 실행한다`() {
         val scheduler = mockk<AppointmentReminderScheduler>()
         val elector = mockk<LeaderGroupElector>(relaxed = true)
+        val leaderHealthMonitor = mockk<NotificationLeaderHealthMonitor>(relaxed = true)
         val metrics = mockk<NotificationOutboxMetrics>(relaxed = true)
         val result = ReminderRecoveryScanResult(
             notYetDue = 0,
@@ -125,7 +126,12 @@ internal class NotificationSchedulingRunnersTest {
             )
         } answers { secondArg<() -> ReminderRecoveryScanResult?>().invoke() }
 
-        NotificationReminderSchedulingRunner(scheduler, metrics, elector).poll()
+        NotificationReminderSchedulingRunner(
+            scheduler = scheduler,
+            metrics = metrics,
+            leaderElector = elector,
+            leaderHealthMonitor = leaderHealthMonitor,
+        ).poll()
 
         coVerify(exactly = 1) { scheduler.triggerOnce() }
         verify(exactly = 1) {
@@ -135,6 +141,7 @@ internal class NotificationSchedulingRunnersTest {
             )
         }
         verify(exactly = 1) { metrics.recordReminderRecovery(result) }
+        verify(exactly = 1) { leaderHealthMonitor.recordAcquired() }
     }
 
     @Test
@@ -159,6 +166,7 @@ internal class NotificationSchedulingRunnersTest {
     fun `Redis leader failure는 scheduler action을 호출하지 않고 tick 경계에서 흡수한다`() {
         val scheduler = mockk<AppointmentReminderScheduler>()
         val elector = mockk<LeaderGroupElector>(relaxed = true)
+        val leaderHealthMonitor = mockk<NotificationLeaderHealthMonitor>(relaxed = true)
         every {
             elector.runIfLeader(
                 REMINDER_RECOVERY_LOCK_NAME,
@@ -166,9 +174,14 @@ internal class NotificationSchedulingRunnersTest {
             )
         } throws IllegalStateException("redis unavailable")
 
-        NotificationReminderSchedulingRunner(scheduler, leaderElector = elector).poll()
+        NotificationReminderSchedulingRunner(
+            scheduler = scheduler,
+            leaderElector = elector,
+            leaderHealthMonitor = leaderHealthMonitor,
+        ).poll()
 
         coVerify(exactly = 0) { scheduler.triggerOnce() }
+        verify(exactly = 1) { leaderHealthMonitor.recordAcquisitionFailure() }
     }
 
     @Test

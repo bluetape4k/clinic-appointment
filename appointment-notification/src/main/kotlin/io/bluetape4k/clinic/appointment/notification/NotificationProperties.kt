@@ -27,6 +27,7 @@ import java.time.Duration
  * @property events outbox 생성 시 적용하는 예약 이벤트별 알림 설정
  * @property reminder 리마인더 outbox 생성 설정
  * @property worker 내구성 outbox worker 설정
+ * @property leaderHealth reminder leader readiness 관측 설정
  * @property observation backlog 관측 설정
  * @property retention 종료 outbox 보존·삭제 설정
  * @property rollout 병원별 provider route 전환 설정
@@ -39,6 +40,7 @@ data class NotificationProperties(
     val events: EventProperties = EventProperties(),
     val reminder: ReminderProperties = ReminderProperties(),
     val worker: WorkerProperties = WorkerProperties(),
+    val leaderHealth: LeaderHealthProperties = LeaderHealthProperties(),
     val observation: ObservationProperties = ObservationProperties(),
     val retention: RetentionProperties = RetentionProperties(),
     val rollout: RolloutProperties = RolloutProperties(),
@@ -208,7 +210,24 @@ data class NotificationProperties(
         }
     }
 
-    /** ready backlog snapshot의 조회 주기와 상한입니다. */
+    /** reminder leader health contributor의 opt-in과 bounded 시간 창입니다. */
+    data class LeaderHealthProperties(
+        val enabled: Boolean = false,
+        val failureWindow: Duration = Duration.ofMinutes(5),
+        val leaseRiskWindow: Duration = Duration.ofSeconds(30),
+    ) : Serializable {
+        fun validate(): LeaderHealthProperties {
+            check(failureWindow.isPositive) { "leader health failureWindow must be positive" }
+            check(leaseRiskWindow.isPositive) { "leader health leaseRiskWindow must be positive" }
+            return this
+        }
+
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
+
+    /** ready backlog 관측 결과의 조회 주기와 상한입니다. */
     data class ObservationProperties(
         val pollInterval: Duration = Duration.ofSeconds(10),
         val limit: Int = 10_001,

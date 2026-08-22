@@ -534,6 +534,7 @@ class NotificationAutoConfiguration {
         scheduler: AppointmentReminderScheduler,
         metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
         leaderElectorProvider: ObjectProvider<LeaderGroupElector>,
+        leaderHealthMonitorProvider: ObjectProvider<NotificationLeaderHealthMonitor>,
         properties: NotificationProperties,
     ): NotificationReminderSchedulingRunner =
         NotificationReminderSchedulingRunner(
@@ -541,6 +542,7 @@ class NotificationAutoConfiguration {
             metrics = metricsProvider.ifAvailable,
             leaderElector = leaderElectorProvider.ifAvailable,
             suspendBridgeTimeout = properties.worker.validate().suspendBridgeTimeout,
+            leaderHealthMonitor = leaderHealthMonitorProvider.ifAvailable,
         )
 
     @Bean
@@ -631,6 +633,30 @@ class NotificationAutoConfiguration {
             delegate = delegate,
             registry = registry,
             lockName = REMINDER_RECOVERY_LOCK_NAME,
+        )
+    }
+
+    /**
+     * 기본 동작을 바꾸지 않고 reminder leader 상태를 선택적으로 관측합니다.
+     * health 결과는 scheduler 실행이나 DB claim/fence의 허용 여부를 결정하지 않습니다.
+     */
+    @Bean
+    @ConditionalOnProperty(
+        prefix = "clinic.notification.leader-health",
+        name = ["enabled"],
+        havingValue = "true",
+    )
+    @ConditionalOnBean(LeaderGroupElector::class)
+    @ConditionalOnMissingBean(NotificationLeaderHealthMonitor::class)
+    fun notificationLeaderHealthMonitor(
+        leaderElector: LeaderGroupElector,
+        properties: NotificationProperties,
+    ): NotificationLeaderHealthMonitor {
+        val healthProperties = properties.leaderHealth.validate()
+        return NotificationLeaderHealthMonitor(
+            elector = leaderElector,
+            failureWindow = healthProperties.failureWindow,
+            leaseRiskWindow = healthProperties.leaseRiskWindow,
         )
     }
 
