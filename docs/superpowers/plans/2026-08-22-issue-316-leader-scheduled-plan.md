@@ -235,14 +235,14 @@
   - Run: `git log --oneline --decorate -8`
   - Run: `gh issue view 316 --repo bluetape4k/clinic-appointment --json number,title,state,assignees,labels,milestone,url`
   - Expected: 현재 head가 `feat/issue-316-leader-scheduled`, base가 `develop`, Issue #316이 OPEN·`debop`·`1.4.0`·`enhancement`/`test` 상태임을 확인한다.
-- [ ] **Step 4: 한국어 PR을 생성하고 CI를 확인한다.**
+- [x] **Step 4: 한국어 PR을 생성하고 CI를 확인한다.**
   - target repository: `bluetape4k/clinic-appointment`
   - base: `develop`
   - head: `feat/issue-316-leader-scheduled`
   - PR title/body는 한국어로 작성하고 body에 `Closes #316`, 변경 범위, DoD Status 표, 실행 명령과 결과, known gap을 포함한다.
   - Run: `gh pr create --repo bluetape4k/clinic-appointment --base develop --head feat/issue-316-leader-scheduled --title "리마인더 복구 스케줄러를 @LeaderScheduled로 전환한다" --body-file docs/reviews/2026-08-22-issue-316-leader-scheduled-pr-body.md`
   - Run: `gh pr checks --repo bluetape4k/clinic-appointment --watch`
-  - Expected: PR body read-back과 required CI checks가 모두 PASS한다.
+  - Expected: PR #376 body read-back과 required CI checks 15개가 모두 PASS한다.
 - [ ] **Step 5: merge는 별도 승인 게이트로 남긴다.**
   - fresh `gh pr view --repo bluetape4k/clinic-appointment --json headRefName,baseRefName,statusCheckRollup,reviews,reviewDecision,mergeStateStatus,body,url`로 exact head/CI/review/mergeability를 다시 읽는다.
   - 사용자의 새 명시 승인 전에는 merge, auto-merge, tag, branch deletion을 실행하지 않는다.
@@ -273,11 +273,11 @@
 
 ## 계획 승인 및 구현 게이트
 
-- [ ] SPW-01: 계획이 설계 문서의 목표·제외 범위·수용 기준을 모두 추적한다.
-- [ ] SPW-02: 모든 구현 단계가 정확한 파일, 테스트, 실행 명령, 기대 결과를 가진다.
-- [ ] SPW-03: proxy/AOP, optional classpath, health state, metric namespace, DB fencing의 위험을 별도 검증한다.
-- [ ] SPW-04: 실패 시 복귀·재실행 절차가 명시되어 있고 placeholder가 없다.
-- [ ] SPW-05: 사용자 승인 전에는 Kotlin/Gradle source implementation을 시작하지 않는다.
+- [x] SPW-01: 계획이 설계 문서의 목표·제외 범위·수용 기준을 모두 추적한다.
+- [x] SPW-02: 모든 구현 단계가 정확한 파일, 테스트, 실행 명령, 기대 결과를 가진다.
+- [x] SPW-03: proxy/AOP, optional classpath, health state, metric namespace, DB fencing의 위험을 별도 검증한다.
+- [x] SPW-04: 실패 시 복귀·재실행 절차가 명시되어 있고 placeholder가 없다.
+- [x] SPW-05: 사용자 승인 전에는 Kotlin/Gradle source implementation을 시작하지 않는다.
 
 계획 문서 자체 검토와 6-perspective 계획 리뷰에서 P0/P1이 0임을 확인하고 사용자 승인을 받은 뒤 Task 1부터 순서대로 실행한다. 구현 완료 후에는 별도 six-perspective code review, lesson, PR/CI 검증을 거친 뒤 merge에는 새 명시 승인을 요구한다.
 
