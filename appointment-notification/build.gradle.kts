@@ -107,3 +107,71 @@ registerRedisAdmissionBenchmark(
     defaultCardinalities = "10,100,1000",
     defaultChurnRates = "0.0,0.5,1.0",
 )
+
+private fun registerRedisKeyLifecycleBenchmark(
+    name: String,
+    configuration: String,
+    defaultOperations: String,
+    defaultCardinalities: String,
+    defaultChurnRates: String,
+    defaultLongRunRounds: String,
+) = tasks.register<JavaExec>(name) {
+    group = "benchmark"
+    description = "Redis 8.8 notification key lifecycle benchmark ($configuration)"
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("io.bluetape4k.clinic.appointment.notification.RedisNotificationKeyLifecycleBenchmark")
+
+    val output = providers.gradleProperty("redisKeyLifecycleBenchmarkOutput").orElse(
+        layout.buildDirectory.file("reports/redis-key-lifecycle/$configuration/redis-notification-key-lifecycle.json")
+            .map { it.asFile.absolutePath },
+    )
+    systemProperty("redis.lifecycle.benchmark.output", output.get())
+    systemProperty("redis.lifecycle.benchmark.configuration", configuration)
+    systemProperty(
+        "redis.lifecycle.benchmark.operations",
+        providers.gradleProperty("redisKeyLifecycleBenchmarkOperations").orElse(defaultOperations).get(),
+    )
+    systemProperty(
+        "redis.lifecycle.benchmark.cardinalities",
+        providers.gradleProperty("redisKeyLifecycleBenchmarkCardinalities").orElse(defaultCardinalities).get(),
+    )
+    systemProperty(
+        "redis.lifecycle.benchmark.churnRates",
+        providers.gradleProperty("redisKeyLifecycleBenchmarkChurnRates").orElse(defaultChurnRates).get(),
+    )
+    systemProperty(
+        "redis.lifecycle.benchmark.longRunRounds",
+        providers.gradleProperty("redisKeyLifecycleBenchmarkLongRunRounds").orElse(defaultLongRunRounds).get(),
+    )
+    systemProperty(
+        "redis.lifecycle.benchmark.retentionWaitMillis",
+        providers.gradleProperty("redisKeyLifecycleBenchmarkRetentionWaitMillis").orElse("2500").get(),
+    )
+    systemProperty(
+        "redis.lifecycle.benchmark.concurrency",
+        providers.gradleProperty("redisKeyLifecycleBenchmarkConcurrency").orElse("16").get(),
+    )
+    systemProperty(
+        "redis.lifecycle.benchmark.actionMillis",
+        providers.gradleProperty("redisKeyLifecycleBenchmarkActionMillis").orElse("2").get(),
+    )
+}
+
+registerRedisKeyLifecycleBenchmark(
+    name = "redisKeyLifecycleBenchmarkSmoke",
+    configuration = "smoke",
+    defaultOperations = "24",
+    defaultCardinalities = "10,100",
+    defaultChurnRates = "0.0,1.0",
+    defaultLongRunRounds = "1",
+)
+
+registerRedisKeyLifecycleBenchmark(
+    name = "redisKeyLifecycleBenchmark",
+    configuration = "main",
+    defaultOperations = "80",
+    defaultCardinalities = "10,100,1000",
+    defaultChurnRates = "0.0,0.5,1.0",
+    defaultLongRunRounds = "2",
+)

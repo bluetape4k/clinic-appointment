@@ -1,0 +1,57 @@
+{
+  "kind": "chart",
+  "source": {
+    "question": "Issue #372 Redis clinic permit key lifecycle를 어떤 범위에서 관측할 수 있는가?",
+    "revision": "5fc19efd3d39b2c56890671edd7f0dc3d837209e",
+    "paths": [
+      "docs/benchmarks/issue-372-redis-key-lifecycle-benchmark/main.json",
+      "docs/benchmarks/issue-372-redis-key-lifecycle-benchmark/analysis.ko.md",
+      "scripts/generate-issue372-redis-key-lifecycle-chart.mjs"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "benchmark",
+      "label": "Redis 8.8 lifecycle benchmark",
+      "kind": "measurement",
+      "source": "main.json"
+    },
+    {
+      "id": "coverage",
+      "label": "4단계 lifecycle coverage 100%",
+      "kind": "contract",
+      "source": "summary.lifecycleObservationCoverage"
+    },
+    {
+      "id": "warmup",
+      "label": "warm cardinality/churn warmup",
+      "kind": "metric",
+      "source": "warm scenarios"
+    },
+    {
+      "id": "lifecycle",
+      "label": "workload → long-run → close → retention key count",
+      "kind": "metric",
+      "source": "scenario.lifecycle"
+    },
+    {
+      "id": "decision",
+      "label": "운영 정책 변경 없이 관측 근거로 보류",
+      "kind": "decision",
+      "source": "analysis.ko.md"
+    }
+  ],
+  "edges": [
+    { "from": "benchmark", "to": "coverage", "label": "parser validates" },
+    { "from": "benchmark", "to": "warmup", "label": "groups warm scenarios" },
+    { "from": "benchmark", "to": "lifecycle", "label": "snapshots four stages" },
+    { "from": "coverage", "to": "decision", "label": "evidence complete" },
+    { "from": "warmup", "to": "decision", "label": "local characterization" },
+    { "from": "lifecycle", "to": "decision", "label": "persistent key observation" }
+  ],
+  "behavior": {
+    "branches": 0,
+    "loops": 0
+  },
+  "repairs": []
+}

@@ -1,0 +1,933 @@
+{
+  "schemaVersion": 1,
+  "benchmarkFamily": "io.bluetape4k.clinic.appointment.notification.RedisNotificationKeyLifecycleBenchmark",
+  "redisImage": "redis:8.8",
+  "configuration": "main",
+  "sourceCommit": "5fc19efd3d39b2c56890671edd7f0dc3d837209e",
+  "environment": {"java": "21.0.12.1", "os": "Mac OS X", "arch": "aarch64"},
+  "workload": {
+    "operationsPerRound": 80,
+    "longRunRounds": 2,
+    "concurrency": 16,
+    "actionMillis": 2,
+    "retentionWaitMillis": 2500,
+    "globalConcurrency": 8,
+    "perClinicConcurrency": 2,
+    "clinicCardinalities": [10, 100, 1000],
+    "churnRates": [0.0, 0.5, 1.0],
+    "cacheModes": ["cold", "warm"]
+  },
+  "summary": {
+    "elapsedMillis": 79185.705,
+    "admissionLatencyMs": {"sampleCount":4320,"p50":5.973,"p95":106.539,"p99":137.907},
+    "successfulOperations": 3821,
+    "backpressuredOperations": 499,
+    "lifecycleObservationCoverage": 1.000,
+    "requiredLifecycleStages": ["workload-end", "long-run", "after-coordinator-close", "after-retention-window"],
+    "persistentKeyCountAfterRetentionMax": 5405
+  },
+  "scenarios": [
+    {
+      "name": "cold-cardinality-10-churn-0_0",
+      "clinicCardinality": 10,
+      "churnRate": 0.0,
+      "cacheMode": "cold",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 193,
+      "backpressuredOperations": 47,
+      "warmupMillis": 0.000,
+      "workloadElapsedMillis": 591.215,
+      "admissionLatencyMs": {"sampleCount":240,"p50":5.973,"p95":106.539,"p99":137.907},
+      "failureReasons": {"TIMED_OUT":47},
+      "uniqueClinicIds": 10,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 55,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":55},
+          "keyKinds": {"available":11, "capacity":11, "capacity-contract":11, "generation":11, "requests":11}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 55,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":55},
+            "keyKinds": {"available":11, "capacity":11, "capacity-contract":11, "generation":11, "requests":11}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 55,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":55},
+            "keyKinds": {"available":11, "capacity":11, "capacity-contract":11, "generation":11, "requests":11}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 55,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":55},
+          "keyKinds": {"available":11, "capacity":11, "capacity-contract":11, "generation":11, "requests":11}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 55,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":55},
+          "keyKinds": {"available":11, "capacity":11, "capacity-contract":11, "generation":11, "requests":11}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "warm-cardinality-10-churn-0_0",
+      "clinicCardinality": 10,
+      "churnRate": 0.0,
+      "cacheMode": "warm",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 185,
+      "backpressuredOperations": 55,
+      "warmupMillis": 48.019,
+      "workloadElapsedMillis": 567.992,
+      "admissionLatencyMs": {"sampleCount":240,"p50":5.208,"p95":105.431,"p99":108.040},
+      "failureReasons": {"TIMED_OUT":55},
+      "uniqueClinicIds": 10,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 55,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":55},
+          "keyKinds": {"available":11, "capacity":11, "capacity-contract":11, "generation":11, "requests":11}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 55,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":55},
+            "keyKinds": {"available":11, "capacity":11, "capacity-contract":11, "generation":11, "requests":11}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 55,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":55},
+            "keyKinds": {"available":11, "capacity":11, "capacity-contract":11, "generation":11, "requests":11}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 55,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":55},
+          "keyKinds": {"available":11, "capacity":11, "capacity-contract":11, "generation":11, "requests":11}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 55,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":55},
+          "keyKinds": {"available":11, "capacity":11, "capacity-contract":11, "generation":11, "requests":11}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "cold-cardinality-10-churn-0_5",
+      "clinicCardinality": 10,
+      "churnRate": 0.5,
+      "cacheMode": "cold",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 208,
+      "backpressuredOperations": 32,
+      "warmupMillis": 0.000,
+      "workloadElapsedMillis": 378.505,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.652,"p95":104.888,"p99":113.938},
+      "failureReasons": {"TIMED_OUT":32},
+      "uniqueClinicIds": 50,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 255,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":255},
+          "keyKinds": {"available":51, "capacity":51, "capacity-contract":51, "generation":51, "requests":51}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 255,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":255},
+            "keyKinds": {"available":51, "capacity":51, "capacity-contract":51, "generation":51, "requests":51}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 255,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":255},
+            "keyKinds": {"available":51, "capacity":51, "capacity-contract":51, "generation":51, "requests":51}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 255,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":255},
+          "keyKinds": {"available":51, "capacity":51, "capacity-contract":51, "generation":51, "requests":51}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 255,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":255},
+          "keyKinds": {"available":51, "capacity":51, "capacity-contract":51, "generation":51, "requests":51}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "warm-cardinality-10-churn-0_5",
+      "clinicCardinality": 10,
+      "churnRate": 0.5,
+      "cacheMode": "warm",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 211,
+      "backpressuredOperations": 29,
+      "warmupMillis": 23.357,
+      "workloadElapsedMillis": 372.449,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.443,"p95":104.654,"p99":107.289},
+      "failureReasons": {"TIMED_OUT":29},
+      "uniqueClinicIds": 50,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 255,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":255},
+          "keyKinds": {"available":51, "capacity":51, "capacity-contract":51, "generation":51, "requests":51}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 255,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":255},
+            "keyKinds": {"available":51, "capacity":51, "capacity-contract":51, "generation":51, "requests":51}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 255,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":255},
+            "keyKinds": {"available":51, "capacity":51, "capacity-contract":51, "generation":51, "requests":51}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 255,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":255},
+          "keyKinds": {"available":51, "capacity":51, "capacity-contract":51, "generation":51, "requests":51}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 255,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":255},
+          "keyKinds": {"available":51, "capacity":51, "capacity-contract":51, "generation":51, "requests":51}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "cold-cardinality-10-churn-1_0",
+      "clinicCardinality": 10,
+      "churnRate": 1.0,
+      "cacheMode": "cold",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 0.000,
+      "workloadElapsedMillis": 316.198,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.686,"p95":104.558,"p99":106.419},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "warm-cardinality-10-churn-1_0",
+      "clinicCardinality": 10,
+      "churnRate": 1.0,
+      "cacheMode": "warm",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 19.862,
+      "workloadElapsedMillis": 315.532,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.775,"p95":104.351,"p99":106.206},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 455,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":455},
+          "keyKinds": {"available":91, "capacity":91, "capacity-contract":91, "generation":91, "requests":91}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 455,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":455},
+            "keyKinds": {"available":91, "capacity":91, "capacity-contract":91, "generation":91, "requests":91}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 455,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":455},
+            "keyKinds": {"available":91, "capacity":91, "capacity-contract":91, "generation":91, "requests":91}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 455,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":455},
+          "keyKinds": {"available":91, "capacity":91, "capacity-contract":91, "generation":91, "requests":91}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 455,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":455},
+          "keyKinds": {"available":91, "capacity":91, "capacity-contract":91, "generation":91, "requests":91}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "cold-cardinality-100-churn-0_0",
+      "clinicCardinality": 100,
+      "churnRate": 0.0,
+      "cacheMode": "cold",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 0.000,
+      "workloadElapsedMillis": 316.328,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.593,"p95":104.262,"p99":107.371},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "warm-cardinality-100-churn-0_0",
+      "clinicCardinality": 100,
+      "churnRate": 0.0,
+      "cacheMode": "warm",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 179.298,
+      "workloadElapsedMillis": 314.985,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.352,"p95":104.426,"p99":105.691},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 505,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":505},
+          "keyKinds": {"available":101, "capacity":101, "capacity-contract":101, "generation":101, "requests":101}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 505,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":505},
+            "keyKinds": {"available":101, "capacity":101, "capacity-contract":101, "generation":101, "requests":101}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 505,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":505},
+            "keyKinds": {"available":101, "capacity":101, "capacity-contract":101, "generation":101, "requests":101}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 505,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":505},
+          "keyKinds": {"available":101, "capacity":101, "capacity-contract":101, "generation":101, "requests":101}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 505,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":505},
+          "keyKinds": {"available":101, "capacity":101, "capacity-contract":101, "generation":101, "requests":101}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "cold-cardinality-100-churn-0_5",
+      "clinicCardinality": 100,
+      "churnRate": 0.5,
+      "cacheMode": "cold",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 0.000,
+      "workloadElapsedMillis": 315.181,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.584,"p95":104.778,"p99":105.219},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "warm-cardinality-100-churn-0_5",
+      "clinicCardinality": 100,
+      "churnRate": 0.5,
+      "cacheMode": "warm",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 185.691,
+      "workloadElapsedMillis": 315.896,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.419,"p95":104.574,"p99":106.491},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 705,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":705},
+          "keyKinds": {"available":141, "capacity":141, "capacity-contract":141, "generation":141, "requests":141}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 705,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":705},
+            "keyKinds": {"available":141, "capacity":141, "capacity-contract":141, "generation":141, "requests":141}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 705,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":705},
+            "keyKinds": {"available":141, "capacity":141, "capacity-contract":141, "generation":141, "requests":141}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 705,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":705},
+          "keyKinds": {"available":141, "capacity":141, "capacity-contract":141, "generation":141, "requests":141}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 705,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":705},
+          "keyKinds": {"available":141, "capacity":141, "capacity-contract":141, "generation":141, "requests":141}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "cold-cardinality-100-churn-1_0",
+      "clinicCardinality": 100,
+      "churnRate": 1.0,
+      "cacheMode": "cold",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 0.000,
+      "workloadElapsedMillis": 316.236,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.523,"p95":104.315,"p99":106.958},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "warm-cardinality-100-churn-1_0",
+      "clinicCardinality": 100,
+      "churnRate": 1.0,
+      "cacheMode": "warm",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 179.674,
+      "workloadElapsedMillis": 316.367,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.522,"p95":105.506,"p99":106.193},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 905,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":905},
+          "keyKinds": {"available":181, "capacity":181, "capacity-contract":181, "generation":181, "requests":181}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 905,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":905},
+            "keyKinds": {"available":181, "capacity":181, "capacity-contract":181, "generation":181, "requests":181}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 905,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":905},
+            "keyKinds": {"available":181, "capacity":181, "capacity-contract":181, "generation":181, "requests":181}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 905,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":905},
+          "keyKinds": {"available":181, "capacity":181, "capacity-contract":181, "generation":181, "requests":181}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 905,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":905},
+          "keyKinds": {"available":181, "capacity":181, "capacity-contract":181, "generation":181, "requests":181}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "cold-cardinality-1000-churn-0_0",
+      "clinicCardinality": 1000,
+      "churnRate": 0.0,
+      "cacheMode": "cold",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 0.000,
+      "workloadElapsedMillis": 315.884,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.544,"p95":104.342,"p99":106.934},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "warm-cardinality-1000-churn-0_0",
+      "clinicCardinality": 1000,
+      "churnRate": 0.0,
+      "cacheMode": "warm",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 1613.107,
+      "workloadElapsedMillis": 314.013,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.369,"p95":103.915,"p99":105.824},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 5005,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":5005},
+          "keyKinds": {"available":1001, "capacity":1001, "capacity-contract":1001, "generation":1001, "requests":1001}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 5005,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":5005},
+            "keyKinds": {"available":1001, "capacity":1001, "capacity-contract":1001, "generation":1001, "requests":1001}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 5005,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":5005},
+            "keyKinds": {"available":1001, "capacity":1001, "capacity-contract":1001, "generation":1001, "requests":1001}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 5005,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":5005},
+          "keyKinds": {"available":1001, "capacity":1001, "capacity-contract":1001, "generation":1001, "requests":1001}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 5005,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":5005},
+          "keyKinds": {"available":1001, "capacity":1001, "capacity-contract":1001, "generation":1001, "requests":1001}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "cold-cardinality-1000-churn-0_5",
+      "clinicCardinality": 1000,
+      "churnRate": 0.5,
+      "cacheMode": "cold",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 0.000,
+      "workloadElapsedMillis": 313.147,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.387,"p95":104.053,"p99":104.772},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "warm-cardinality-1000-churn-0_5",
+      "clinicCardinality": 1000,
+      "churnRate": 0.5,
+      "cacheMode": "warm",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 1665.786,
+      "workloadElapsedMillis": 313.883,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.365,"p95":104.269,"p99":105.285},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 5205,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":5205},
+          "keyKinds": {"available":1041, "capacity":1041, "capacity-contract":1041, "generation":1041, "requests":1041}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 5205,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":5205},
+            "keyKinds": {"available":1041, "capacity":1041, "capacity-contract":1041, "generation":1041, "requests":1041}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 5205,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":5205},
+            "keyKinds": {"available":1041, "capacity":1041, "capacity-contract":1041, "generation":1041, "requests":1041}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 5205,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":5205},
+          "keyKinds": {"available":1041, "capacity":1041, "capacity-contract":1041, "generation":1041, "requests":1041}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 5205,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":5205},
+          "keyKinds": {"available":1041, "capacity":1041, "capacity-contract":1041, "generation":1041, "requests":1041}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "cold-cardinality-1000-churn-1_0",
+      "clinicCardinality": 1000,
+      "churnRate": 1.0,
+      "cacheMode": "cold",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 0.000,
+      "workloadElapsedMillis": 312.189,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.280,"p95":104.045,"p99":104.540},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+            "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":405},
+          "keyKinds": {"available":81, "capacity":81, "capacity-contract":81, "generation":81, "requests":81}
+        },
+        "retentionWaitMillis": 2500
+      }
+    },
+    {
+      "name": "warm-cardinality-1000-churn-1_0",
+      "clinicCardinality": 1000,
+      "churnRate": 1.0,
+      "cacheMode": "warm",
+      "operationsPerRound": 80,
+      "longRunRounds": 2,
+      "successfulOperations": 216,
+      "backpressuredOperations": 24,
+      "warmupMillis": 1644.072,
+      "workloadElapsedMillis": 313.910,
+      "admissionLatencyMs": {"sampleCount":240,"p50":4.208,"p95":104.015,"p99":105.923},
+      "failureReasons": {"TIMED_OUT":24},
+      "uniqueClinicIds": 80,
+      "lifecycle":       {
+        "workloadEnd":         {
+          "stage": "workload-end",
+          "keyCount": 5405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":5405},
+          "keyKinds": {"available":1081, "capacity":1081, "capacity-contract":1081, "generation":1081, "requests":1081}
+        },
+        "longRun": [
+          {
+            "stage": "long-run-round-1",
+            "keyCount": 5405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":5405},
+            "keyKinds": {"available":1081, "capacity":1081, "capacity-contract":1081, "generation":1081, "requests":1081}
+          },
+          {
+            "stage": "long-run-round-2",
+            "keyCount": 5405,
+            "ttlBuckets": {"expiring":0, "missing":0, "persistent":5405},
+            "keyKinds": {"available":1081, "capacity":1081, "capacity-contract":1081, "generation":1081, "requests":1081}
+          }
+        ],
+        "afterCoordinatorClose":         {
+          "stage": "after-coordinator-close",
+          "keyCount": 5405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":5405},
+          "keyKinds": {"available":1081, "capacity":1081, "capacity-contract":1081, "generation":1081, "requests":1081}
+        },
+        "afterRetentionWindow":         {
+          "stage": "after-retention-window",
+          "keyCount": 5405,
+          "ttlBuckets": {"expiring":0, "missing":0, "persistent":5405},
+          "keyKinds": {"available":1081, "capacity":1081, "capacity-contract":1081, "generation":1081, "requests":1081}
+        },
+        "retentionWaitMillis": 2500
+      }
+    }
+  ],
+  "leaseRecovery": {"status":"reacquired","leaseMillis":1000,"reacquireLatencyMs":2.482},
+  "deploymentSloEvidence": false
+}
