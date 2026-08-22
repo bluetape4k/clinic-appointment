@@ -36,6 +36,8 @@
   - runner 생성자에는 scheduler, optional outbox metrics, validated suspend bridge timeout만 전달한다.
   - bootstrap과 AOP recorder bean을 조건부 등록한다.
   - Redis/Lettuce/factory가 없는 classpath에서 notification 자체가 시작되는 조건을 유지한다.
+- Modify: `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/AppointmentApiApplication.kt`
+  - notification이 직접 구성하는 Redis elector와 AOP factory는 유지하면서, API runtime에 없는 선택적 Exposed backend를 eager import하는 upstream `LeaderElectionAutoConfiguration`을 애플리케이션 경계에서 제외한다.
 - Modify: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationSchedulingRunnersTest.kt`
   - old group elector 테스트를 제거하고 annotation metadata, runner body, bootstrap delegation, exception/cancellation 계약을 고정한다.
 - Modify: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderHealthMonitorTest.kt`
@@ -183,6 +185,7 @@
 - `docs/lessons/2026-08-22-issue-316-leader-scheduled.md`
 - `build.gradle.kts`
 - `src/consumerFixture/notification/kotlin/io/bluetape4k/clinic/appointment/consumer/NotificationApiConsumerFixture.kt`
+- `appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/AppointmentApiApplication.kt`
 - 변경된 모든 Kotlin/Gradle/docs 파일
 
 - [x] **Step 1: module targeted test를 실행한다.**
@@ -206,10 +209,12 @@
   - Expected: `PASS` 및 findings=0.
 - [x] **Step 6: 공개 API 소비자 fixture 계약을 갱신하고 CI 동일 build를 재실행한다.**
   - `@LeaderScheduled`가 public runner API의 직접 type-use이므로 root API scope allowlist와 notification consumer fixture inventory에 `bluetape4k-leader-spring-boot`를 반영한다.
+  - API runtime에서 upstream `LeaderElectionAutoConfiguration`이 선택적 Exposed backend를 eager import하지 않도록 애플리케이션 exclusion을 추가하고, notification 소유 Redis elector/AOP factory 경로는 유지한다.
   - Run: `./gradlew assertModuleConsumerFixtureApiVariants --no-configuration-cache --no-parallel --console=plain`
   - Run: `./gradlew compileModuleConsumerFixtures --no-configuration-cache --no-parallel --console=plain`
   - Run: `./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies`
-  - Expected: API scope assertion, 세 consumer fixture compile, CI 동일 compile/build가 모두 `BUILD SUCCESSFUL`이다. configuration-cache warning은 기존 fixture 검증 task의 known warning으로 남기되 build failure가 아니어야 한다.
+  - Run: `./gradlew :appointment-api:test --no-daemon -Dspring.profiles.active="test,test-postgresql" --no-build-cache --no-configuration-cache --console=plain`
+  - Expected: API scope assertion, 세 consumer fixture compile, CI 동일 compile/build, 전체 API PostgreSQL 테스트가 모두 성공한다. configuration-cache warning은 기존 fixture 검증 task의 known warning으로 남기되 build failure가 아니어야 한다.
 
 ## Task 7: code review와 PR handoff
 
@@ -253,6 +258,7 @@
 | lease 상태와 bounded health 기록 유지 | Task 3, Task 4 | `LeaderState` health 테스트, conditional context 테스트 |
 | `leader.aop.*` 사용 및 `shedlock.leader.*` 중복 제거 | Task 3, Task 5 | recorder callback 및 metric namespace positive/negative assertion |
 | optional dependency/classpath와 host elector 조건 | Task 4 | `ApplicationContextRunner` matrix |
+| API runtime의 선택적 backend auto-configuration 호환성 | Task 6 | API PostgreSQL 전체 테스트와 application exclusion |
 | module test/build 및 diff clean | Task 6 | Gradle output와 `git diff --check` |
 | 한국어 계획·lesson·delivery artifact | Task 6 및 delivery gate | naturalness audit, review/PR read-back |
 

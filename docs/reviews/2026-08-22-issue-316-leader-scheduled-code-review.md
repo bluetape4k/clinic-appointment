@@ -47,6 +47,10 @@
 - `NotificationReminderSchedulingRunner` 생성자는 scheduler, optional metrics, timeout만 받도록 단순화했고, 직접 `runIfLeader`를 호출하는 내부 API를 제거했다.
 - `NotificationReminderSchedulingBootstrap`을 별도 bean으로 두어 self-invocation과 AOP 우회 위험을 명시적인 wiring으로 차단했다.
 - old deprecated `ReminderRecoveryTriggerGuard` 직접 호출 surface와 scheduler public API는 유지했다. repository 내 runner 생성 호출부와 auto-configuration 조건을 모두 회귀 확인했다.
+- API가 notification의 공개 `bluetape4k-leader-spring-boot`를 소비할 때 upstream 범용
+  election auto-configuration이 없는 Exposed backend를 eager import하는 경로를 확인했다.
+  `AppointmentApiApplication`은 해당 범용 설정만 제외하고 notification Redis elector와
+  AOP factory 경로를 유지한다.
 
 판정: P0=0, P1=0.
 
@@ -67,6 +71,7 @@
 | `RedisLeaderScheduledLeaseIntegrationTest` | 1 test passed on Redis 8.8 singleton |
 | `./gradlew :appointment-notification:test --no-build-cache --no-configuration-cache --console=plain` | 198 tests passed, `BUILD SUCCESSFUL` |
 | `./gradlew :appointment-notification:build --no-build-cache --no-configuration-cache --console=plain` | `BUILD SUCCESSFUL`; Kover verify passed |
+| `./gradlew :appointment-api:test --no-daemon -Dspring.profiles.active="test,test-postgresql" --no-build-cache --no-configuration-cache --console=plain` | 832 tests passed, 1 skipped, `BUILD SUCCESSFUL` |
 | `git diff --check` | PASS |
 | Korean terminology audit for plan/lesson | PASS, findings=0 |
 
@@ -77,3 +82,12 @@
 - P2: **1** (Redis single-elector audit-state 미지원; Issue #319 범위로 추적)
 - P3: **0**
 - 구현·검증·문서화는 merge 전 상태로 적합하다. PR CI와 원격 metadata read-back을 다음 delivery gate에서 확인하며, 사용자 새 승인 전에는 merge·auto-merge·tag·branch deletion을 수행하지 않는다.
+
+## CI 보정 재검토
+
+초기 PR CI는 `appointment-api` context 초기화 중
+`NoClassDefFoundError: io/bluetape4k/leader/exposed/jdbc/ExposedJdbcLeaderElector`로
+실패했다. 이는 runner 동작이나 DB claim/fencing 회귀가 아니라 공개된 upstream
+선택적 backend auto-configuration 경계 문제였다. API 애플리케이션 exclusion을 추가한
+뒤 CI와 동일한 PostgreSQL 프로필에서 832 tests(1 skipped)가 성공했으며, P0/P1 판정은
+변경되지 않는다.
