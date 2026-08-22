@@ -225,10 +225,10 @@
   - head: `feat/issue-316-leader-scheduled`
   - PR title/body는 한국어로 작성하고 body에 `Closes #316`, 변경 범위, DoD Status 표, 실행 명령과 결과, known gap을 포함한다.
   - Run: `gh pr create --repo bluetape4k/clinic-appointment --base develop --head feat/issue-316-leader-scheduled --title "리마인더 복구 스케줄러를 @LeaderScheduled로 전환한다" --body-file docs/reviews/2026-08-22-issue-316-leader-scheduled-pr-body.md`
-  - Run: `gh pr checks <PR_NUMBER> --repo bluetape4k/clinic-appointment --watch`
+  - Run: `gh pr checks --repo bluetape4k/clinic-appointment --watch`
   - Expected: PR body read-back과 required CI checks가 모두 PASS한다.
 - [ ] **Step 5: merge는 별도 승인 게이트로 남긴다.**
-  - fresh `gh pr view <PR_NUMBER> --json headRefName,baseRefName,statusCheckRollup,reviews,reviewDecision,mergeStateStatus,body,url`로 exact head/CI/review/mergeability를 다시 읽는다.
+  - fresh `gh pr view --repo bluetape4k/clinic-appointment --json headRefName,baseRefName,statusCheckRollup,reviews,reviewDecision,mergeStateStatus,body,url`로 exact head/CI/review/mergeability를 다시 읽는다.
   - 사용자의 새 명시 승인 전에는 merge, auto-merge, tag, branch deletion을 실행하지 않는다.
 
 ## 수용 기준 추적표
@@ -251,7 +251,7 @@
 - Spring proxy test가 target 직접 호출만 증명하거나 `ApplicationReadyEvent`가 proxy를 통과하지 못하면 해당 구현은 PENDING이다. same-bean self-invocation이나 수동 `runIfLeader` fallback으로 통과시키지 않는다.
 - Redis/lease 통합 테스트가 Docker bind-mount 오류 또는 환경 skip으로 끝나면 성공으로 표시하지 않는다. `colima status`, `docker context show`, `docker info`를 확인하고 실패 원인과 대체 factory/state 증거를 lesson과 최종 DoD에 남긴다.
 - 기존 DB claim/fencing 또는 deprecated direct-call 테스트가 깨지면 leader annotation만 되돌리고 DB/compatibility surface는 원복하지 않는다.
-- 구현 중 언제든 마지막 녹색 checkpoint(설계·계획 문서와 source migration 직전)로 `git revert <해당 커밋>`하여 복귀할 수 있다. `git reset --hard`는 사용하지 않는다.
+- 구현 중 언제든 마지막 녹색 checkpoint(설계·계획 문서와 source migration 직전) 이후의 구현 commit SHA를 지정한 `git revert`로 복귀할 수 있다. `git reset --hard`는 사용하지 않는다.
 - 각 task의 RED/ GREEN 명령은 task 경계에서 재실행 가능하며, 다음 task는 선행 GREEN 증거가 있을 때만 시작한다.
 
 ## 계획 승인 및 구현 게이트
