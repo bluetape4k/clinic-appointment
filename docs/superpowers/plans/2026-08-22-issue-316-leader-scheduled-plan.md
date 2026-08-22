@@ -66,14 +66,14 @@
 - `appointment-notification/build.gradle.kts`
 - `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationSchedulingRunnersTest.kt`
 
-- [ ] **Step 1: catalog alias와 module API dependency를 추가한다.**
+- [x] **Step 1: catalog alias와 module API dependency를 추가한다.**
   - `bluetape4k-leader-spring-boot = { module = "io.github.bluetape4k.leader:bluetape4k-leader-spring-boot" }`를 기존 leader alias 옆에 추가한다.
   - `appointment-notification`에 `api(libs.bluetape4k.leader.spring.boot)`를 추가하고 version을 직접 지정하지 않는다.
-- [ ] **Step 2: 새 계약을 먼저 컴파일하는 failing test를 작성한다.**
+- [x] **Step 2: 새 계약을 먼저 컴파일하는 failing test를 작성한다.**
   - `NotificationSchedulingRunnersTest`에 `poll` 메서드의 `LeaderScheduled` merged annotation을 읽어 lock 이름, fixed-delay placeholder, `LeaderAspectFailureMode.SKIP`을 확인하는 테스트를 추가한다.
   - bootstrap fixture에서 `NotificationReminderSchedulingBootstrap.onApplicationReady()`가 mock runner의 `poll()`을 정확히 한 번 호출하는 테스트를 추가한다.
   - 현재 production class가 아직 annotation/bootstrap을 제공하지 않으므로 RED compile failure를 확인한다.
-- [ ] **Step 3: RED를 기록한다.**
+- [x] **Step 3: RED를 기록한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationSchedulingRunnersTest" --no-build-cache --console=plain`
   - Expected: 새 annotation 또는 bootstrap symbol이 없어 실패한다. dependency resolution 실패가 발생하면 alias/module 좌표를 확인하고 이 task의 구현을 중단한 채 해당 실패를 기록한다.
 
@@ -83,18 +83,18 @@
 - `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationSchedulingRunners.kt`
 - `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationSchedulingRunnersTest.kt`
 
-- [ ] **Step 1: runner 단위 테스트를 새 body 계약으로 정리한다.**
+- [x] **Step 1: runner 단위 테스트를 새 body 계약으로 정리한다.**
   - old `LeaderGroupElector.runIfLeader`, `recordAcquired`, `recordAcquisitionFailure` 검증을 제거한다.
   - elector 없이 직접 `poll()`을 호출했을 때 `triggerOnce()` 결과 metric/logging이 유지되는지, 일반 예외가 tick에서 흡수되는지, `CancellationException`이 재전파되는지 남긴다.
   - contention/backend 결과는 proxy integration test에서 검증하도록 경계를 분리한다.
-- [ ] **Step 2: 최소 runner 구현을 추가한다.**
+- [x] **Step 2: 최소 runner 구현을 추가한다.**
   - `@Scheduled`와 group elector constructor parameter를 제거하고 `@LeaderScheduled`를 정확한 placeholder와 `SKIP` mode로 선언한다.
   - `runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() }` 및 기존 metrics/logging을 보존한다.
   - `CancellationException`은 다시 던지고 다른 `Exception`은 기존 warn 로그 후 반환한다.
-- [ ] **Step 3: bootstrap bean을 추가한다.**
+- [x] **Step 3: bootstrap bean을 추가한다.**
   - `NotificationReminderSchedulingBootstrap`은 runner를 constructor injection하고 `@EventListener(ApplicationReadyEvent::class)`에서 `runner.poll()`만 호출한다.
   - runner와 같은 bean 안에서 직접 호출하지 않는다.
-- [ ] **Step 4: GREEN을 확인한다.**
+- [x] **Step 4: GREEN을 확인한다.**
   - Run: `./gradlew :appointment-notification:test --tests "io.bluetape4k.clinic.appointment.notification.NotificationSchedulingRunnersTest" --no-build-cache --console=plain`
   - Expected: runner body, annotation metadata, bootstrap delegation, exception/cancellation 테스트가 모두 PASS한다.
 

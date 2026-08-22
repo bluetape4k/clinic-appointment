@@ -533,16 +533,12 @@ class NotificationAutoConfiguration {
     fun notificationReminderSchedulingRunner(
         scheduler: AppointmentReminderScheduler,
         metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
-        leaderElectorProvider: ObjectProvider<LeaderGroupElector>,
-        leaderHealthMonitorProvider: ObjectProvider<NotificationLeaderHealthMonitor>,
         properties: NotificationProperties,
     ): NotificationReminderSchedulingRunner =
         NotificationReminderSchedulingRunner(
             scheduler = scheduler,
             metrics = metricsProvider.ifAvailable,
-            leaderElector = leaderElectorProvider.ifAvailable,
             suspendBridgeTimeout = properties.worker.validate().suspendBridgeTimeout,
-            leaderHealthMonitor = leaderHealthMonitorProvider.ifAvailable,
         )
 
     @Bean
