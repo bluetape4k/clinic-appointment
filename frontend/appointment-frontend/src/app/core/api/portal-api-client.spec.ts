@@ -144,6 +144,15 @@ describe('PortalApiClient', () => {
     await expect(promise).resolves.toMatchObject({ body: [{ doctorId: 4 }] });
   });
 
+  it('병원 metadata도 같은 tenant scope에서 timezone을 읽는다', async () => {
+    const promise = client.getClinic(3);
+    const request = httpMock.expectOne('/api/clinic-a/clinics/3');
+    expect(request.request.method).toBe('GET');
+    request.flush({ success: true, data: { id: 3, name: '서울 메인 클리닉', timezone: 'Asia/Seoul' } });
+
+    await expect(promise).resolves.toMatchObject({ body: { id: 3, timezone: 'Asia/Seoul' } });
+  });
+
   it('알림 snapshot도 tenant-scoped envelope에서 typed 목록으로 변환한다', async () => {
     const promise = client.getNotifications();
     const request = httpMock.expectOne('/api/clinic-a/notifications');

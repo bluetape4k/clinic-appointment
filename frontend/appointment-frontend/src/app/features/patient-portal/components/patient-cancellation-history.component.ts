@@ -234,7 +234,8 @@ export class PatientCancellationHistoryComponent implements OnInit, OnDestroy {
     this._nextCursor.set(null);
     this._errorMessage.set(null);
     const epoch = ++this.requestEpoch;
-    const tenantCode = this.observedTenant;
+    const tenantCode = this.observedTenant ?? this.tenant.tenantCode();
+    if (this.observedTenant === null) this.observedTenant = tenantCode;
     try {
       const result = await this.request(INITIAL_QUERY);
       if (!this.isCurrent(epoch, tenantCode)) return;
