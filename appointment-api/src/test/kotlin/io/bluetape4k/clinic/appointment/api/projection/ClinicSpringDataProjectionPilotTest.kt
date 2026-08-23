@@ -129,7 +129,7 @@ class ClinicSpringDataProjectionPilotTest {
             clinicSelects.size shouldBeEqualTo 1
             clinicSelects.single().contains("tenant_group_id") shouldBeEqualTo true
             Regex("order by .*id asc").containsMatchIn(clinicSelects.single()) shouldBeEqualTo true
-            statements.none { it.contains("where .*id =") && it.contains("findById") } shouldBeEqualTo true
+            statements.count { it.contains("scheduling_clinics") } shouldBeEqualTo 1
         }
 
     @Test
