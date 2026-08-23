@@ -51,4 +51,3 @@
 설계 문서와 본 통합 리뷰를 기준으로 구현 plan을 작성한다. plan에는 전용
 test package/source 파일, TDD 순서, lifecycle 실패 경로, H2/PostgreSQL 실행
 명령, runtime artifact 경계, evidence 경로와 rollback을 각각 매핑한다.
-
