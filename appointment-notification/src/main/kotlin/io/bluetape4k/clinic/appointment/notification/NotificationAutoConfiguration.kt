@@ -14,6 +14,7 @@ import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistRepository
 import io.micrometer.core.instrument.MeterRegistry
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
+import io.micrometer.observation.ObservationRegistry
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.ObjectProvider
@@ -651,6 +652,14 @@ class NotificationAutoConfiguration {
     fun notificationLeaderAopMetricsRecorder(
         monitor: NotificationLeaderHealthMonitor,
     ): NotificationLeaderAopMetricsRecorder = NotificationLeaderAopMetricsRecorder(monitor)
+
+    /** ObservationRegistry가 있을 때 지원되는 reminder leader lifecycle만 관측합니다. */
+    @Bean
+    @ConditionalOnBean(ObservationRegistry::class)
+    @ConditionalOnMissingBean(NotificationLeaderObservationBridge::class)
+    internal fun notificationLeaderObservationBridge(
+        observationRegistry: ObservationRegistry,
+    ): NotificationLeaderObservationBridge = NotificationLeaderObservationBridge(observationRegistry)
 
 }
 

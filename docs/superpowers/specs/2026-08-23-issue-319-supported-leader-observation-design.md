@@ -160,13 +160,13 @@ backend lease extension 증거가 필요하면 upstream release가 준비된 후
 
 ## 수용 기준과 DoD
 
-- [ ] 0.5.0 callback만으로 acquire·execute·skip·revoke Observation을 기록한다.
-- [ ] `extend`·`ownership-loss`를 관측한다고 주장하는 코드와 문서가 없다.
-- [ ] observation 이름과 low-cardinality 태그가 고정되고 raw 식별자가 노출되지 않는다.
-- [ ] observation 오류가 scheduler 예외·취소 전파·기존 metric을 바꾸지 않는다.
-- [ ] ObservationRegistry 부재 환경에서 기존 동작이 유지된다.
-- [ ] 단위 테스트와 기존 notification leader Micrometer 테스트가 통과한다.
-- [ ] `git diff --check`와 한국어 문서 자연스러움·용어 검토를 통과한다.
+- [x] 0.5.0 callback만으로 acquire·execute·skip·revoke Observation을 기록한다.
+- [x] `extend`·`ownership-loss`를 관측한다고 주장하는 코드와 문서가 없다.
+- [x] observation 이름과 low-cardinality 태그가 고정되고 raw 식별자가 노출되지 않는다.
+- [x] observation 오류가 scheduler 예외·취소 전파·기존 metric을 바꾸지 않는다.
+- [x] ObservationRegistry 부재 환경에서 기존 동작이 유지된다.
+- [x] 단위 테스트와 기존 notification leader Micrometer 테스트가 통과한다.
+- [x] `git diff --check`와 한국어 문서 자연스러움·용어 검토를 통과한다.
 
 ## 설계 검토 기록
 
