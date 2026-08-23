@@ -1,0 +1,34 @@
+{
+  "kind": "chart",
+  "source": {
+    "question": "H2와 PostgreSQL에서 legacy Table DSL과 candidate Spring Data projection의 total median/p95를 비교하고 운영 채택 경계를 설명한다.",
+    "revision": "2026-08-23 Issue #315 pilot evidence",
+    "paths": [
+      "docs/benchmarks/issue-315-spring-data-projection/2026-08-23/chart.data.json",
+      "docs/benchmarks/issue-315-spring-data-projection/2026-08-23/raw/h2-run.txt",
+      "docs/benchmarks/issue-315-spring-data-projection/2026-08-23/raw/postgresql-run.txt",
+      "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/projection/ClinicSpringDataProjectionPilotTest.kt"
+    ],
+    "metricDirection": "낮을수록 좋음",
+    "unit": "ns (차트 표시는 µs)",
+    "transformation": "raw median/p95 ns를 chart.data.json에서 읽어 1000으로 나누어 µs 막대 높이로 표시"
+  },
+  "nodes": [
+    {"id": "h2", "label": "H2 4/32/128건", "kind": "environment", "source": "chart.data.json#environments[0]"},
+    {"id": "postgresql", "label": "PostgreSQL 18 4/32/128건", "kind": "environment", "source": "chart.data.json#environments[1]"},
+    {"id": "legacy", "label": "legacy Table DSL", "kind": "series", "source": "chart.data.json#series[*].points[*].legacyMedianNs"},
+    {"id": "candidate", "label": "candidate Spring Data", "kind": "series", "source": "chart.data.json#series[*].points[*].candidateMedianNs"},
+    {"id": "p95", "label": "p95 진단 막대", "kind": "metric", "source": "chart.data.json#series[*].points[*].*P95Ns"},
+    {"id": "decision", "label": "test-only 유지·운영 채택 보류", "kind": "decision", "source": "summary.ko.md"}
+  ],
+  "edges": [
+    {"id": "h2-to-values", "from": "h2", "to": "legacy", "kind": "data", "source": "raw/h2-run.txt"},
+    {"id": "pg-to-values", "from": "postgresql", "to": "candidate", "kind": "data", "source": "raw/postgresql-run.txt"},
+    {"id": "values-to-p95", "from": "legacy", "to": "p95", "kind": "comparison", "source": "chart.data.json"},
+    {"id": "candidate-to-decision", "from": "candidate", "to": "decision", "kind": "decision", "source": "summary.ko.md"},
+    {"id": "p95-to-decision", "from": "p95", "to": "decision", "kind": "constraint", "source": "summary.ko.md"}
+  ],
+  "behavior": {"branches": 0, "loops": 0},
+  "repairs": [],
+  "audit": {"semanticLedger": "PASS", "visualAudit": "PASS", "assetPairAudit": "PASS", "fullSizePngInspection": "PASS", "singleSource": "chart.data.json"}
+}

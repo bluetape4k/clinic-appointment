@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "kind": "benchmark-comparison",
+  "question": "Clinics 조회 전용 Spring Data projection이 기존 Table DSL 조회와 같은 결과를 유지하면서 어떤 비용을 보이는가?",
+  "metric": {
+    "name": "transaction total elapsed",
+    "unit": "ns",
+    "direction": "lower-is-better",
+    "includes": ["transaction begin/commit", "query", "entity or row mapping"]
+  },
+  "method": {
+    "cardinalities": [4, 32, 128],
+    "warmups": 5,
+    "samples": 30,
+    "order": "alternating LEGACY_FIRST/CANDIDATE_FIRST",
+    "representativeStatementCount": "timed loop 밖에서 path별 1회 진단",
+    "poolConcurrency": "NOT_TESTED"
+  },
+  "environments": [
+    {
+      "id": "h2",
+      "label": "H2 embedded",
+      "profile": "test-h2",
+      "dialect": "h2",
+      "status": "PASS",
+      "pool": "embedded-default",
+      "jvm": "21.0.12.1",
+      "source": "raw/h2-run.txt"
+    },
+    {
+      "id": "postgresql",
+      "label": "PostgreSQL 18",
+      "profile": "test-postgresql",
+      "dialect": "postgresql",
+      "status": "PASS",
+      "pool": "Hikari maximumPoolSize=2, connectionTimeout=5000ms",
+      "jvm": "21.0.12.1",
+      "explainIndexUsage": true,
+      "source": "raw/postgresql-run.txt"
+    }
+  ],
+  "series": [
+    {
+      "environment": "h2",
+      "points": [
+        {"cardinality": 4, "legacyMedianNs": 924250, "legacyP95Ns": 1738084, "candidateMedianNs": 1266833, "candidateP95Ns": 1750583, "legacyStatements": 1, "candidateStatements": 1},
+        {"cardinality": 32, "legacyMedianNs": 871959, "legacyP95Ns": 1444917, "candidateMedianNs": 1057459, "candidateP95Ns": 1641708, "legacyStatements": 1, "candidateStatements": 1},
+        {"cardinality": 128, "legacyMedianNs": 736833, "legacyP95Ns": 1396458, "candidateMedianNs": 1068416, "candidateP95Ns": 1885375, "legacyStatements": 1, "candidateStatements": 1}
+      ]
+    },
+    {
+      "environment": "postgresql",
+      "points": [
+        {"cardinality": 4, "legacyMedianNs": 1010834, "legacyP95Ns": 1585541, "candidateMedianNs": 1388667, "candidateP95Ns": 2056000, "legacyStatements": 1, "candidateStatements": 1, "explainIndexUsage": true},
+        {"cardinality": 32, "legacyMedianNs": 1029125, "legacyP95Ns": 1888500, "candidateMedianNs": 1419083, "candidateP95Ns": 1987709, "legacyStatements": 1, "candidateStatements": 1, "explainIndexUsage": true},
+        {"cardinality": 128, "legacyMedianNs": 1232792, "legacyP95Ns": 1470375, "candidateMedianNs": 1567208, "candidateP95Ns": 2306250, "legacyStatements": 1, "candidateStatements": 1, "explainIndexUsage": true}
+      ]
+    }
+  ],
+  "provenance": {
+    "test": "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/projection/ClinicSpringDataProjectionPilotTest.kt",
+    "raw": ["raw/h2-run.txt", "raw/postgresql-run.txt"],
+    "generatedAt": "2026-08-23",
+    "secretScan": "gitleaks --no-git --config .gitleaks.toml PASS"
+  }
+}

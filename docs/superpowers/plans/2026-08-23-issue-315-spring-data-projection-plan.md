@@ -17,6 +17,15 @@ test-only pilot로 증명하거나 보류한다.
 1.12.1, JUnit 5, H2, 기존 `Containers.Postgres` singleton, `StatementInterceptor`,
 `TransactionTemplate`, `bluetape-kotlin-patterns`.
 
+> **실행 범위 보정:** 계획 검토에서 제안한 모든 고비용 방어선을 이번
+> test-only pilot에 억지로 포함하지 않았다. 실제 구현은 단일
+> `ApplicationContextRunner`, 현재 `primaryDatabase` 후보의 소유권 정리,
+> 고유 PostgreSQL schema owner/drop read-back, transaction/statement timeout,
+> 외부 Gradle process deadline으로 경계를 고정했다. in-process
+> `Future.cancel/join`, synthetic 다중 `Database.connect` tracker, pool
+> contention, full-row column-level projection, authenticated route 권한 검증은
+> 구현하지 않았으며 `NOT_TESTED`/운영 채택 보류 조건으로 남긴다.
+
 ---
 
 ## 파일 소유권과 산출물
@@ -42,7 +51,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
 - Create: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/projection/ClinicSpringDataProjectionPilotTest.kt`
 - Create: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/projection/ClinicProjectionPilotComponents.kt`
 
-- [ ] **Step 1: 위험 ledger 작성**
+- [x] **Step 1: 위험 ledger 작성**
 
   다음 위험을 signal, mitigation, rollback/rerun point와 함께 한국어로
   기록한다.
@@ -56,7 +65,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   | R5 | full-row DAO가 민감 column을 로드하거나 CRUD surface가 production 경계로 노출됨 | synthetic fixture만 사용, `internal` 전용 package와 adapter 경계, runtimeClasspath/bootJar read-back, column-level projection은 후속 이슈 |
   | R6 | 측정 단위가 legacy/candidate에 비대칭이거나 환경 의존적임 | 두 경로 모두 transaction begin/commit·조회·mapping을 포함한 total, 5 warm-up/30 samples, median/p95와 component timing, raw evidence/차트 |
 
-- [ ] **Step 2: 컴파일되지 않는 RED 테스트 작성**
+- [x] **Step 2: 컴파일되지 않는 RED 테스트 작성**
 
   `ClinicSpringDataProjectionPilotTest`에 다음 테스트 이름과 assertion
   skeleton을 먼저 작성한다. 구현 전 실행 결과는 missing symbol 또는 context
@@ -89,7 +98,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   }
   ```
 
-- [ ] **Step 3: RED 명령 실행**
+- [x] **Step 3: RED 명령 실행**
 
   ```bash
   ./gradlew :appointment-api:test --tests \
@@ -108,7 +117,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
 - Modify: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/projection/ClinicProjectionPilotComponents.kt`
 - Test: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/projection/ClinicSpringDataProjectionPilotTest.kt`
 
-- [ ] **Step 1: Entity와 repository를 최소 구현**
+- [x] **Step 1: Entity와 repository를 최소 구현**
 
   `Clinics` table을 재사용하고 별도 table/schema/DAO write를 만들지 않는다.
 
@@ -139,7 +148,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   신규 Entity에서 `null` ID를 기대하는지 컴파일·runtime test로 확인하고,
   `save`/`delete` 등 상속 CRUD 메서드는 adapter에서 호출하지 않는다.
 
-- [ ] **Step 2: Long 기반 adapter 구현**
+- [x] **Step 2: Long 기반 adapter 구현**
 
   ```kotlin
   /**
@@ -174,7 +183,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   빈 목록이고, `0L`/음수는 `IllegalArgumentException`이라는 기존 조회와의
   입력 계약을 테스트로 고정한다.
 
-- [ ] **Step 3: 명시적 allow-list context 구성**
+- [x] **Step 3: 명시적 allow-list context 구성**
 
   `@SpringBootTest`와 `AppointmentApiApplication`을 사용하지 않는다.
   `ApplicationContextRunner.withUserConfiguration(PilotTestConfiguration::class)`
@@ -216,7 +225,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   소유하고 close하도록 bean destroy method를 지정한다. launcher가 준비되지
   않으면 예외를 숨기거나 H2로 바꾸지 않는다.
 
-- [ ] **Step 4: GREEN context/adapter 테스트 실행**
+- [x] **Step 4: GREEN context/adapter 테스트 실행**
 
   ```bash
   ./gradlew :appointment-api:test --tests \
@@ -232,7 +241,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
 
 - Modify: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/projection/ClinicSpringDataProjectionPilotTest.kt`
 
-- [ ] **Step 1: deterministic fixture 작성**
+- [x] **Step 1: deterministic fixture 작성**
 
   각 `@BeforeEach` 또는 context 내부 setup transaction에서
   `SchemaUtils.createMissingTablesAndColumns(TenantGroups, Clinics)`를 호출한다.
@@ -245,7 +254,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   schema의 tenant·clinic row count와 FK residual count를 진단 query로 출력하고
   raw output에 profile/dialect/schema ownership을 기록한다.
 
-- [ ] **Step 2: registration-diff guard 구현**
+- [x] **Step 2: registration-diff guard 구현**
 
   context 생성 직전에 다음 상태를 저장한다.
 
@@ -277,6 +286,14 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   fail-closed한다.
 
 - [ ] **Step 3: cleanup 순서와 예외 경로 테스트**
+
+  **실행 보정:** 실제 pilot은 `ApplicationContextRunner`의 외부 Gradle 실행
+  deadline과 context가 만든 current `primaryDatabase` 후보 cleanup을 사용했다.
+  in-process `Future.cancel/join`, synthetic 다중 handle tracker, Hikari active
+  connection 수 read-back은 구현하지 않았으므로 이 세부 gate는
+  `NOT_TESTED`로 남긴다. 대신 정상 종료, refresh/callback 실패, close failure의
+  suppressed 관계, sentinel default/primary 복원을 테스트하고 PostgreSQL
+  고유 schema의 `pg_namespace` 부재를 확인했다.
 
   callback의 commit/rollback 완료와 Spring
   `TransactionSynchronizationManager` resource unbind 뒤에만 context를
@@ -324,7 +341,14 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   timeout과 process-level bounded Gradle test invocation을 적용해 무기한 대기를
   허용하지 않는다.
 
-- [ ] **Step 4: connection identity/factory read-back 테스트**
+- [x] **Step 4: connection identity/factory read-back 테스트**
+
+  **실행 보정:** Spring synchronization과 physical connection identity,
+  manager bean 단일성, `@EnableExposedJdbcRepositories.transactionManagerRef`,
+  repository bean definition의 `transactionManager` property를 실제 테스트로
+  read-back했다. 계획의 예시 helper 이름인
+  `shouldBeSameInstanceAs` 대신 저장소 표준 `bluetape4k.assertions`의
+  identity boolean assertion을 사용했다.
 
   `TransactionTemplate` 안에서 Spring synchronization/actual transaction이
   활성화되었는지 확인하고 다음 두 connection의
@@ -341,7 +365,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   값이 `springTransactionManager`를 가리키는지 검사한다. repository bean은
   정확히 하나이고 전용 package 밖의 `CrudRepository` 후보가 없어야 한다.
 
-- [ ] **Step 5: SQL interceptor 증거 테스트**
+- [x] **Step 5: SQL interceptor 증거 테스트**
 
   setup transaction과 대상 query transaction을 분리한다. 대상 transaction
   안에서 같은 `StatementInterceptor` instance를 register하고 `finally`에서
@@ -374,7 +398,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
 - Create: `docs/benchmarks/issue-315-spring-data-projection/2026-08-23/chart.data.json`
 - Create: `docs/benchmarks/issue-315-spring-data-projection/2026-08-23/chart.svg`, `.png`, `.semantic.json`
 
-- [ ] **Step 1: 대칭 benchmark harness 작성**
+- [x] **Step 1: 대칭 benchmark harness 작성**
 
   cardinality `[4, 32, 128]` 각각에 대해 fixture를 seed하고 5회 warm-up 후
   30회 measured sample을 실행한다. 한 sample은 하나의
@@ -407,7 +431,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   실행해 JVM/JIT·DB cache·pool 선행 편향을 줄인다. interceptor는 timed loop
   밖에서만 사용한다.
 
-- [ ] **Step 2: H2 evidence 실행**
+- [x] **Step 2: H2 evidence 실행**
 
   두 evidence 명령은 별도 `bash` shell에서도 재현되도록 다음 sanitization helper를
   먼저 정의한다. URL query, password/token/secret 값, datasource credential은
@@ -456,7 +480,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   version, H2 dialect, pool 조건, cardinality별 raw samples와 결과 동일성,
   `representativeStatementCount`를 보존한다.
 
-- [ ] **Step 3: PostgreSQL evidence를 순차 실행**
+- [x] **Step 3: PostgreSQL evidence를 순차 실행**
 
   위 `sanitize_issue315_log` 정의를 같은 방식으로 read-back한 별도 shell에서
   다음 명령을 실행한다.
@@ -490,7 +514,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   artifact를 pre-adoption 수동/nightly gate로 반복 실행해야 하며 그 evidence가
   없으면 Issue #315를 운영 채택하지 않는다.
 
-- [ ] **Step 4: chart data와 PNG 생성**
+- [x] **Step 4: chart data와 PNG 생성**
 
   이슈가 요구하는 cardinality별 성능 비교는 material한 결과이므로
   `bluetape-diagram` chart contract를 반드시 적용한다. raw output에서
@@ -503,7 +527,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   실패시킨다. PostgreSQL이 unavailable이면 chart에는 H2만 표시하고 운영
   채택 결론은 `PENDING`/“보류”로 유지하되 chart 산출물 자체는 생략하지 않는다.
 
-- [ ] **Step 5: 결과 요약과 채택/보류 판정 작성**
+- [x] **Step 5: 결과 요약과 채택/보류 판정 작성**
 
   `summary.ko.md`에 결과 동일성, tenant 격리, transaction/connection,
   statement count, cardinality별 median/p95, EXPLAIN, full-row 한계, pool
@@ -521,7 +545,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
 - Create: `docs/lessons/2026-08-23-issue-315-spring-data-projection.md`
 - Create: `docs/superpowers/reviews/2026-08-23-issue-315-spring-data-projection-plan-review.md`
 
-- [ ] **Step 1: production boundary 확인**
+- [x] **Step 1: production boundary 확인**
 
   pilot class와 test dependency가 production artifact에 들어가지 않는지
   확인한다.
@@ -554,7 +578,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   `AppointmentApiApplication` context에 pilot bean/route가 추가되지 않았음을
   기존 source/diff read-back으로 증명한다.
 
-- [ ] **Step 2: module validation 실행**
+- [x] **Step 2: module validation 실행**
 
   ```bash
   set -euo pipefail
@@ -569,7 +593,7 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   실행 불가, pool 동시성 미실행, full-row column projection 미충족은 숨기지
   않고 `Not-tested`/보류로 남긴다.
 
-- [ ] **Step 3: pool concurrency의 명시적 보류 증거**
+- [x] **Step 3: pool concurrency의 명시적 보류 증거**
 
   이번 pilot은 single-thread benchmark로 범위를 고정하므로 제한된
   `HikariDataSource(maximumPoolSize = 1)`에서의 다중 호출·대기·정리 실험을
@@ -578,14 +602,14 @@ Flyway SQL, `settings.gradle.kts`, CI workflow는 변경하지 않는다. 이미
   후속 adoption 이슈를 명시한다. 이 값을 누락하거나 `PASS`로 표기하면
   verifier gate를 통과시키지 않는다.
 
-- [ ] **Step 4: lesson 작성**
+- [x] **Step 4: lesson 작성**
 
   lesson에는 context, 선택/거부, surprising failure, 실제 명령/SHA, 리뷰에서
   발견한 cleanup·API 경계, 다음 이슈에서 지켜야 할 guard를 한국어로 쓴다.
   source/plan/spec와 결과 artifact 간 링크를 넣고 writer SPW-01..05를 다시
   실행한다.
 
-- [ ] **Step 5: 구현 리뷰와 verifier evidence 작성**
+- [x] **Step 5: 구현 리뷰와 verifier evidence 작성**
 
   `step-5-verifier-checklist.md`로 spec acceptance → source/test/evidence
   traceability를 만들고, `step-6r-code-review.md`의 여섯 관점 lane을 구현

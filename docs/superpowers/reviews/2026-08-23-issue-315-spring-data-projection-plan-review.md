@@ -61,3 +61,45 @@ P0/P1 결함이 없어야 하며, 운영 검토 대기 조건은 계획과 결�
 승인이 아니다. 구현 결과에서 PostgreSQL `EXPLAIN`, sanitized raw evidence,
 chart, runtime artifact 경계, pool 동시성 `NOT_TESTED` 표기 중 하나라도 누락되면
 기존 Table DSL을 유지하고 Issue #315를 보류한다.
+
+## 구현 후 six-lane 재검토
+
+실제 변경 파일과 fresh H2/PostgreSQL 결과를 기준으로 구현 diff를 다시
+검토했다.
+
+| 관점 | 구현 증거 | 결과 |
+|---|---|---|
+| Developer/API | `internal` test-only Entity/repository/adapter, `EntityID` typed PartTree, `ClinicRecord` mapping | PASS |
+| User/Caller | legacy equality, `id ASC`, tenant A/B/unknown/invalid 계약 테스트 | PASS |
+| Performance | 4/32/128 × warm-up 5 × measured 30, alternating order, median/p95, component 진단, chart | PASS |
+| Security | unique PostgreSQL schema, tenant predicate, raw redaction, gitleaks, authz 경계 문서화 | PASS |
+| Stability/Operability | single manager/connection identity, sentinel restore, callback/close failure suppressed, schema drop read-back | PASS |
+| Reviewer/Verifier | semantic/visual/asset-pair chart audit, `git diff --check`, runtime boundary read-back 예정 | PASS WITH PENDING GATE |
+
+구현 결함 집계는 P0=0, P1=0, P2=0, P3=0이다. 다만 이는 production
+채택 판정이 아니며 `poolConcurrency = NOT_TESTED`, full-row column-level
+projection, authenticated route 권한 검증은 의도적으로 남겨 둔 보류 조건이다.
+
+## 구현 리뷰 범위 정정 및 최종 gate
+
+위 구현 후 표의 Stability/Operability 항목 중 계획에만 있던
+`Future.cancel/join`, synthetic 다중 `Database.connect` tracker, Hikari active
+connection 수 read-back은 실제 구현 증거가 아니므로 채택하지 않는다. 실제
+구현 증거는 context가 만든 current `primaryDatabase` 후보 cleanup, unique
+schema owner의 pool-close 후 `pg_namespace` read-back, sentinel 복원,
+callback/close failure suppressed 검증과 외부 Gradle process deadline이다.
+
+최종 fresh verification은 다음과 같다.
+
+- H2 targeted pilot: 7개 테스트 성공.
+- PostgreSQL targeted pilot: 7개 테스트 성공, `idx_clinics_tenant` index scan
+  `EXPLAIN` 확인.
+- `:appointment-api:test`: 836 passing, 3 pending, failures/errors 0.
+- `:appointment-api:build`: 성공.
+- `runtimeClasspath` exact forbidden-match: 0.
+- fresh `bootJar` exact pilot class match: 0, jar 1개.
+- chart semantic/visual/asset-pair/full-size PNG audit: PASS.
+
+따라서 test-only pilot gate는 **PASS**다. candidate가 모든 측정 구간에서
+legacy보다 느리고 pool contention·full-row projection·authenticated authz가
+미검증이므로 production adoption gate는 **PENDING/HOLD**로 유지한다.

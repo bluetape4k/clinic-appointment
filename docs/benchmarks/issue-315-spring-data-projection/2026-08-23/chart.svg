@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820" role="img" aria-labelledby="title desc">
+  <title id="title">Issue #315 Clinics projection benchmark</title>
+  <desc id="desc">H2와 PostgreSQL에서 legacy Table DSL과 candidate Spring Data projection의 4, 32, 128건 total median 및 p95를 마이크로초로 비교한다.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+      .grid { stroke: #e2e8f0; stroke-width: 1; }
+      .axis { stroke: #64748b; stroke-width: 1.2; }
+      .title { fill: #0f172a; font: 700 25px "Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      .subtitle { fill: #475569; font: 400 14px "Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      .panel-title { fill: #0f172a; font: 700 18px "Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      .axis-label, .tick, .legend, .note { fill: #475569; font: 400 12px "Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      .cardinality { fill: #334155; font: 600 12px "Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      .value { fill: #1e293b; font: 600 10px "Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      .legacy { fill: #2563eb; }
+      .candidate { fill: #ea580c; }
+      .p95 { opacity: .42; }
+      .badge { fill: #dcfce7; stroke: #86efac; stroke-width: 1; }
+      .badge-text { fill: #166534; font: 700 11px "Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="820"/>
+  <text class="title" x="56" y="52">Issue #315 · Clinics 조회 projection benchmark</text>
+  <text class="subtitle" x="56" y="78">동일 결과를 확인한 뒤 transaction total median/p95를 비교 · 낮을수록 좋음 · 원본 단위 ns, 표시 단위 µs</text>
+
+  <g transform="translate(80 120)">
+    <rect class="panel" width="500" height="485" rx="12"/>
+    <text class="panel-title" x="28" y="34">H2 embedded</text>
+    <rect class="badge" x="390" y="17" width="82" height="23" rx="11"/>
+    <text class="badge-text" x="431" y="33" text-anchor="middle">PASS</text>
+    <text class="axis-label" x="28" y="63">elapsed (µs)</text>
+    <line class="grid" x1="56" y1="91" x2="470" y2="91"/><line class="grid" x1="56" y1="156" x2="470" y2="156"/>
+    <line class="grid" x1="56" y1="221" x2="470" y2="221"/><line class="grid" x1="56" y1="286" x2="470" y2="286"/>
+    <line class="grid" x1="56" y1="351" x2="470" y2="351"/><line class="axis" x1="56" y1="416" x2="470" y2="416"/>
+    <text class="tick" x="48" y="420" text-anchor="end">0</text><text class="tick" x="48" y="355" text-anchor="end">500</text>
+    <text class="tick" x="48" y="290" text-anchor="end">1,000</text><text class="tick" x="48" y="225" text-anchor="end">1,500</text>
+    <text class="tick" x="48" y="160" text-anchor="end">2,000</text><text class="tick" x="48" y="95" text-anchor="end">2,500</text>
+    <!-- H2 cardinality 4 -->
+    <rect class="legacy" x="102" y="295.9" width="22" height="120.1"/><rect class="candidate" x="128" y="251.3" width="22" height="164.7"/>
+    <rect class="legacy p95" x="154" y="190.1" width="22" height="225.9"/><rect class="candidate p95" x="180" y="188.4" width="22" height="227.6"/>
+    <text class="value" x="113" y="290" text-anchor="middle">924</text><text class="value" x="139" y="246" text-anchor="middle">1,267</text>
+    <text class="value" x="165" y="185" text-anchor="middle">1,738</text><text class="value" x="191" y="183" text-anchor="middle">1,751</text>
+    <text class="cardinality" x="152" y="438" text-anchor="middle">4건</text>
+    <!-- H2 cardinality 32 -->
+    <rect class="legacy" x="236" y="302.7" width="22" height="113.3"/><rect class="candidate" x="262" y="278.5" width="22" height="137.5"/>
+    <rect class="legacy p95" x="288" y="228.2" width="22" height="187.8"/><rect class="candidate p95" x="314" y="202.6" width="22" height="213.4"/>
+    <text class="value" x="247" y="297" text-anchor="middle">872</text><text class="value" x="273" y="273" text-anchor="middle">1,057</text>
+    <text class="value" x="299" y="223" text-anchor="middle">1,445</text><text class="value" x="325" y="198" text-anchor="middle">1,642</text>
+    <text class="cardinality" x="286" y="438" text-anchor="middle">32건</text>
+    <!-- H2 cardinality 128 -->
+    <rect class="legacy" x="370" y="320.2" width="22" height="95.8"/><rect class="candidate" x="396" y="277.1" width="22" height="138.9"/>
+    <rect class="legacy p95" x="422" y="234.5" width="22" height="181.5"/><rect class="candidate p95" x="448" y="171.9" width="22" height="244.1"/>
+    <text class="value" x="381" y="315" text-anchor="middle">737</text><text class="value" x="407" y="272" text-anchor="middle">1,068</text>
+    <text class="value" x="433" y="229" text-anchor="middle">1,396</text><text class="value" x="459" y="167" text-anchor="middle">1,885</text>
+    <text class="cardinality" x="420" y="438" text-anchor="middle">128건</text>
+    <text class="note" x="28" y="468">대표 SELECT: legacy 1회 · candidate 1회</text>
+  </g>
+
+  <g transform="translate(620 120)">
+    <rect class="panel" width="500" height="485" rx="12"/>
+    <text class="panel-title" x="28" y="34">PostgreSQL 18</text>
+    <rect class="badge" x="390" y="17" width="82" height="23" rx="11"/>
+    <text class="badge-text" x="431" y="33" text-anchor="middle">PASS</text>
+    <text class="axis-label" x="28" y="63">elapsed (µs)</text>
+    <line class="grid" x1="56" y1="91" x2="470" y2="91"/><line class="grid" x1="56" y1="156" x2="470" y2="156"/>
+    <line class="grid" x1="56" y1="221" x2="470" y2="221"/><line class="grid" x1="56" y1="286" x2="470" y2="286"/>
+    <line class="grid" x1="56" y1="351" x2="470" y2="351"/><line class="axis" x1="56" y1="416" x2="470" y2="416"/>
+    <text class="tick" x="48" y="420" text-anchor="end">0</text><text class="tick" x="48" y="355" text-anchor="end">500</text>
+    <text class="tick" x="48" y="290" text-anchor="end">1,000</text><text class="tick" x="48" y="225" text-anchor="end">1,500</text>
+    <text class="tick" x="48" y="160" text-anchor="end">2,000</text><text class="tick" x="48" y="95" text-anchor="end">2,500</text>
+    <!-- PostgreSQL cardinality 4 -->
+    <rect class="legacy" x="102" y="284.6" width="22" height="131.4"/><rect class="candidate" x="128" y="235.5" width="22" height="180.5"/>
+    <rect class="legacy p95" x="154" y="209.9" width="22" height="206.1"/><rect class="candidate p95" x="180" y="148.7" width="22" height="267.3"/>
+    <text class="value" x="113" y="279" text-anchor="middle">1,011</text><text class="value" x="139" y="230" text-anchor="middle">1,389</text>
+    <text class="value" x="165" y="205" text-anchor="middle">1,586</text><text class="value" x="191" y="143" text-anchor="middle">2,056</text>
+    <text class="cardinality" x="152" y="438" text-anchor="middle">4건</text>
+    <!-- PostgreSQL cardinality 32 -->
+    <rect class="legacy" x="236" y="282.2" width="22" height="133.8"/><rect class="candidate" x="262" y="231.5" width="22" height="184.5"/>
+    <rect class="legacy p95" x="288" y="170.5" width="22" height="245.5"/><rect class="candidate p95" x="314" y="157.6" width="22" height="258.4"/>
+    <text class="value" x="247" y="277" text-anchor="middle">1,029</text><text class="value" x="273" y="226" text-anchor="middle">1,419</text>
+    <text class="value" x="299" y="165" text-anchor="middle">1,889</text><text class="value" x="325" y="152" text-anchor="middle">1,988</text>
+    <text class="cardinality" x="286" y="438" text-anchor="middle">32건</text>
+    <!-- PostgreSQL cardinality 128 -->
+    <rect class="legacy" x="370" y="255.6" width="22" height="160.4"/><rect class="candidate" x="396" y="212.3" width="22" height="203.7"/>
+    <rect class="legacy p95" x="422" y="224.9" width="22" height="191.1"/><rect class="candidate p95" x="448" y="116.2" width="22" height="299.8"/>
+    <text class="value" x="381" y="251" text-anchor="middle">1,233</text><text class="value" x="407" y="207" text-anchor="middle">1,567</text>
+    <text class="value" x="433" y="220" text-anchor="middle">1,470</text><text class="value" x="459" y="111" text-anchor="middle">2,306</text>
+    <text class="cardinality" x="420" y="438" text-anchor="middle">128건</text>
+    <text class="note" x="28" y="468">EXPLAIN: idx_clinics_tenant 사용 · 대표 SELECT 1회</text>
+  </g>
+
+  <g transform="translate(80 642)">
+    <rect class="panel" width="1040" height="112" rx="12"/>
+    <rect class="legacy" x="28" y="24" width="16" height="16"/><text class="legend" x="52" y="37">legacy median</text>
+    <rect class="candidate" x="168" y="24" width="16" height="16"/><text class="legend" x="192" y="37">candidate median</text>
+    <rect class="legacy p95" x="350" y="24" width="16" height="16"/><text class="legend" x="374" y="37">legacy p95</text>
+    <rect class="candidate p95" x="490" y="24" width="16" height="16"/><text class="legend" x="514" y="37">candidate p95</text>
+    <text class="note" x="28" y="68">total = transaction + query + mapping · warm-up 5회 · 측정 30회 · 실행 순서 교대</text>
+    <text class="note" x="28" y="90">PostgreSQL은 고유 schema/Hikari로 실행했고, pool 동시성은 NOT_TESTED이므로 운영 채택은 보류한다.</text>
+  </g>
+</svg>
