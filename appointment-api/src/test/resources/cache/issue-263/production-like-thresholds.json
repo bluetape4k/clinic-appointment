@@ -1,0 +1,9 @@
+{
+  "postgresLockWaitMs": 5000.0,
+  "brokerLagSeconds": 5.0,
+  "brokerLagRecordsMax": 0.0,
+  "rollbackDurationMs": 5000.0,
+  "cacheHitCountMin": 3.0,
+  "cacheMissCountMin": 3.0,
+  "cacheDecodeErrorsMax": 1.0
+}

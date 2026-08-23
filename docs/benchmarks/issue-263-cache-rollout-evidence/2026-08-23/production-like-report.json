@@ -1,0 +1,66 @@
+{
+  "schemaVersion" : 1,
+  "environment" : "local",
+  "evidenceMode" : "production-like",
+  "capturedAt" : "2026-08-23T17:03:32.516101Z",
+  "deploymentSloEvidence" : false,
+  "configuration" : {
+    "flywayTransactionalLock" : false,
+    "redisScheme" : "redis",
+    "redisTls" : false,
+    "redisAcl" : false,
+    "writerNamespace" : "v3",
+    "rollbackNamespace" : "v2"
+  },
+  "execution" : {
+    "sequence" : [ "postgres-migration-and-lock-wait", "redis-v3-fixed-window", "redis-rollback-drain-restart-v2-warmup", "kafka-round-trip-and-offset-lag", "redacted-report-write" ],
+    "cleanupOwnership" : "test finally blocks exact Redis keys and temporary Kafka topic; singleton launchers own containers"
+  },
+  "redis" : {
+    "image" : "redis:8.8",
+    "tls" : false,
+    "acl" : false,
+    "namespace" : "v3",
+    "rollbackNamespace" : "v2",
+    "v3KeyAssertions" : 9,
+    "v3KeyAssertionsPassed" : 9
+  },
+  "postgres" : {
+    "image" : "postgres:18-alpine",
+    "migration" : "30",
+    "appliedMigrationCount" : 30,
+    "lockWaitMs" : 53.563041,
+    "lockProbe" : "advisory-lock",
+    "lockHoldMs" : 50.0
+  },
+  "broker" : {
+    "image" : "confluentinc/cp-kafka:7.5.2",
+    "lagMetric" : "committed-end-offset-zero-backlog",
+    "lagSeconds" : 0.0,
+    "consumerLagRecords" : 0,
+    "roundTripSeconds" : 0.44486,
+    "recordsProduced" : 1,
+    "recordsConsumed" : 1
+  },
+  "cache" : {
+    "hits" : 3,
+    "misses" : 3,
+    "decodeErrors" : 1
+  },
+  "rollback" : {
+    "result" : "PASS",
+    "durationMs" : 19.115083,
+    "trafficDrained" : true,
+    "workerRestarted" : true,
+    "v2Warmup" : true,
+    "v3Preserved" : true
+  },
+  "assertions" : {
+    "total" : 35,
+    "passed" : 35
+  },
+  "test" : {
+    "className" : "io.bluetape4k.clinic.appointment.api.config.CacheRolloutEvidenceIntegrationTest",
+    "testCount" : 1
+  }
+}

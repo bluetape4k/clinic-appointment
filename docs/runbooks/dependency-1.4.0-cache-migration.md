@@ -17,8 +17,33 @@ rollout과 observation window가 끝날 때까지 삭제하지 않는다. 운영
 JSON evidence의 형식과 live 조건을 확인한다.
 
 ```bash
-scripts/verify-cache-rollout-evidence.sh <report.json|-> [--require-live] [--thresholds <thresholds.json>]
+scripts/verify-cache-rollout-evidence.sh <report.json|-> [--require-live] [--require-production-like] [--thresholds <thresholds.json>]
 ```
+
+Issue #263의 repository-level production-like 고정 창은 다음 테스트와 validator로
+재현한다. 테스트는 `PostgreSQLServer.Launcher`, `Containers.Redis`가 위임하는
+`Redis88Launcher.redis`(Redis 8.8), `KafkaServer.Launcher` singleton을 사용하고 report에
+운영 자격 증명·raw payload를 남기지 않는다.
+
+```bash
+./gradlew :appointment-api:test \
+  --tests "io.bluetape4k.clinic.appointment.api.config.CacheRolloutEvidenceIntegrationTest" \
+  --no-daemon --no-configuration-cache --rerun-tasks
+
+scripts/verify-cache-rollout-evidence.sh \
+  appointment-api/build/reports/cache-rollout/issue-263/production-like-report.json \
+  --require-production-like \
+  --thresholds appointment-api/src/test/resources/cache/issue-263/production-like-thresholds.json
+```
+
+threshold 파일은 PostgreSQL `lockWaitMs`, broker committed/end offset 기반 zero-backlog
+`lagSeconds`(`lagMetric=committed-end-offset-zero-backlog`)와
+`consumerLagRecords`, rollback `durationMs`의 상한과 cache `hits`·`misses`의 최소값,
+`decodeErrors`의 최대값을 검증한다. `evidenceMode=production-like` report는 image,
+migration, 실행 순서, cleanup ownership, rollback lifecycle flag, assertion/test count도
+필수로 검증한다.
+local report는 `evidenceMode=production-like`와 `deploymentSloEvidence=false`를 함께
+기록하며, 실제 운영 SLO 증거로 승격하지 않는다.
 
 ## 사전 준비
 

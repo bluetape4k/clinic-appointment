@@ -298,6 +298,7 @@ rollout gate를 닫기 전에 대상 운영 환경에서 별도로 수집해야 
 | [예약 consumer replay 런북](docs/operations/appointment-consumer-replay-runbook.md) | tenant/clinic 범위 replay 권한, 제한된 Kafka source, audit claim, 보존·삭제 |
 | [의존성 1.4.0 캐시 migration 런북](docs/runbooks/dependency-1.4.0-cache-migration.md) | Redis TLS/ACL, Fory v2→v3 canary, exact-key 정리, rollback |
 | [캐시 rollout evidence validator](scripts/verify-cache-rollout-evidence.sh) | local/live evidence JSON과 PostgreSQL·broker threshold 검증 |
+| [Issue #263 production-like evidence](docs/benchmarks/issue-263-cache-rollout-evidence/2026-08-23/production-like-report.json) | Redis v3 exact-key, PostgreSQL migration/lock-wait, Kafka lag, v2 rollback 보존 결과 |
 | [프론트엔드](docs/requirements/frontend.md) | Angular 구성, 페이지 구조 |
 | [예약 플랜 시각 동반 문서](docs/superpowers/specs/2026-07-26-appointment-plan-and-capacity-design.html) | 플랜, 예약 약속, 장애 재조정, 수용량의 시뮬레이션과 결정 이력 |
 | [예약 정책 시각 동반 문서](docs/superpowers/specs/2026-07-27-scheduling-policy-foundation-design.html) | 정책 컴파일, 승인, 활성화, 복구의 시뮬레이션과 결정 이력 |

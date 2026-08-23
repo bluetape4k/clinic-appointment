@@ -77,6 +77,7 @@ dependencies {
     // Testcontainers
     testImplementation(libs.bluetape4k.testcontainers)
     testImplementation(libs.testcontainers)
+    testImplementation("org.testcontainers:testcontainers-kafka")
     testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers.mysql)
