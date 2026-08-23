@@ -449,7 +449,7 @@ git status --short --branch
 
 ## Task 6: 구현 커밋과 workflow 증거 기록
 
-- [ ] **Step 1: 변경을 Lore 형식으로 커밋한다.**
+- [x] **Step 1: 변경을 Lore 형식으로 커밋한다.**
 
 ```bash
 git add appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderObservationBridge.kt \
@@ -459,7 +459,7 @@ git add appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointmen
 git commit -m "지원되는 리더 lifecycle 관측을 notification에 연결한다" -m "0.5.0 callback으로 reminder의 acquire, execute, skip, revoke 결과만 저카디널리티 Observation에 연결하고 미래 lease-extension 경계는 추정하지 않는다.\n\nConstraint: clinic-appointment는 bluetape4k-leader 0.5.0에 고정되어 lease-extension observer가 없다.\nRejected: upstream metric 이름 재사용과 reflection 기반 extension 탐색 | 중복 의미와 버전 의존을 피한다.\nConfidence: high\nScope-risk: narrow\nDirective: upstream release capability가 준비되기 전에는 extend와 ownership-loss 관측을 추가하지 않는다.\nTested: appointment-notification test/build, git diff --check, Korean terminology audit\nNot-tested: 실제 Redis lease-extension 및 ownership-loss는 지원 API 부재로 검증하지 않음"
 ```
 
-- [ ] **Step 2: 새 Type A run에 구현·검증 evidence를 연결하고 completion check를 실행한다.**
+- [x] **Step 2: 새 Type A run에 구현·검증 evidence를 연결하고 completion check를 실행한다.**
 
 workflow state root는 `.bluetape`, run id는 `20260823T014254Z-da312f3a`, owner file은 `.bluetape/handles/issue-319-supported-owner.json`이다. 구현과 검증이 끝난 뒤 evidence JSON에는 다음 사실만 기록한다.
 
