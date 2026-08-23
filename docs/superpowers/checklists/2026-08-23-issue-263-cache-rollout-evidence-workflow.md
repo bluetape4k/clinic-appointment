@@ -63,13 +63,13 @@
   - **Action:** 누락 row를 복구하고 이후 증거를 새로 수집한다.
   - **Evidence:** dependency lock 보강과 Flyway configuration repair 뒤 `--rerun-tasks` 테스트가 `1 passing`으로 새로 통과했다.
   - **Failure:** 최종 상태를 BLOCKED로 유지한다.
-- [ ] **CL-07 — irreversible hold refresh**
+- [x] **CL-07 — irreversible hold refresh**
   - **Action:** PR 생성·merge 직전에 authority와 target을 다시 읽는다.
-  - **Evidence:** 최신 Issue/branch/head/CI/merge authority read-back.
+  - **Evidence:** merge 직전 PR #382의 base `develop`, head `chore/issue-263-cache-rollout-evidence` at `fc61f71e796fb808928daf64df2decde2f6738d1`, Issue #263 `Closes` link, assignee/labels/milestone, 전체 14개 GitHub checks PASS(workflow run `32655078937`), `mergeStateStatus=CLEAN`, `reviewDecision`/live reviews empty 상태를 fresh read-back했고 명시적 merge 승인을 받은 뒤 merge했다.
   - **Failure:** hold가 stale이면 side effect를 실행하지 않는다.
 - [x] **CL-08 — 완료 count 산출**
   - **Action:** required checks count와 unchecked IDs를 계산한다.
-  - **Evidence:** checklist `30`개 중 `27`개 checked이며 unchecked ID는 `CL-07`, `E-08`이다. `completion-check`는 workflow receipt 기준 `complete=true`, missing components/verification이 없다.
+  - **Evidence:** checklist `30`개 중 `30`개 checked이며 unchecked ID는 없다. `completion-check`는 workflow receipt 기준 `complete=true`, missing components/verification이 없다.
   - **Failure:** count가 맞지 않으면 완료를 주장하지 않는다.
 
 ## Type-E Steps
@@ -100,11 +100,11 @@
   - **Failure:** PR publication을 중지하고 repair한다.
 - [x] **E-07 — common PR gates**
   - **Action:** PR authority가 확인되면 CG-11~15를 수행한다.
-  - **Evidence:** PR #382, base `develop`, head `chore/issue-263-cache-rollout-evidence` at `d3b87e31e18067a7b535533de9e5248b3f2d25a7`, Issue #263 `Closes` link, Korean body/last `## DoD Status`, assignee `debop`, labels `maintenance/test/build`, milestone `backlog`, all 13 GitHub checks PASS, `mergeStateStatus=CLEAN`, `reviewDecision`/live reviews are empty and therefore merge approval remains held.
+  - **Evidence:** PR #382, base `develop`, head `chore/issue-263-cache-rollout-evidence` at `fc61f71e796fb808928daf64df2decde2f6738d1`, Issue #263 `Closes` link, Korean body/last `## DoD Status`, assignee `debop`, labels `maintenance/test/build`, milestone `backlog`, all 14 GitHub checks PASS(workflow run `32655078937`), `mergeStateStatus=CLEAN`, `reviewDecision`/live reviews were empty at the merge gate, and merge commit is `48c3454fcaf0e245c8cf1b988f81471ad5a2926f`.
   - **Failure:** parent gate PENDING/FAIL을 유지한다.
-- [ ] **E-08 — merge 후 closeout**
+- [x] **E-08 — merge 후 closeout**
   - **Action:** fresh merge approval 후 CG-16~18을 수행한다.
-  - **Evidence:** merge SHA, local/upstream parity, 보존·정리 목록.
+  - **Evidence:** PR #382 merge commit `48c3454fcaf0e245c8cf1b988f81471ad5a2926f`와 Issue #263 close를 확인했고, root `develop`와 `origin/develop`가 동일 SHA이며 Issue #263 worktree와 local branch를 제거했다. 기존 root 사용자 변경 `frontend/appointment-frontend/angular.json`, `.superpowers/`, `.workflow-inputs/`는 보존했다.
   - **Failure:** parent gate PENDING/FAIL을 유지한다.
 
 ## Kotlin / Testcontainers
