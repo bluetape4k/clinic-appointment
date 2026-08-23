@@ -233,7 +233,7 @@ internal class NotificationLeaderObservationBridge(
 
     override fun onTaskFailed(name: String, executionTime: Duration, throwable: Throwable) {
         val outcome = if (throwable is CancellationException) Outcome.CANCELLED else Outcome.ERROR
-        observe(name, Operation.EXECUTE, outcome, throwable)
+        observe(name, Operation.EXECUTE, outcome)
     }
 
     override fun onRevoked(lockName: String) {
@@ -244,18 +244,14 @@ internal class NotificationLeaderObservationBridge(
         name: String,
         operation: Operation,
         outcome: Outcome,
-        error: Throwable? = null,
     ) {
         if (name != lockName || registry.isNoop) return
 
         runCatching {
-            var observation = Observation.createNotStarted(OBSERVATION_NAME, registry)
+            val observation = Observation.createNotStarted(OBSERVATION_NAME, registry)
                 .lowCardinalityKeyValue(TAG_LOCK, LOCK_VALUE)
                 .lowCardinalityKeyValue(TAG_OPERATION, operation.value)
                 .lowCardinalityKeyValue(TAG_OUTCOME, outcome.value)
-            if (error != null && error !is CancellationException) {
-                observation = observation.error(error)
-            }
             observation.start().stop()
         }.onFailure { failure ->
             log.warn(failure) {
