@@ -89,8 +89,9 @@ API가 아니며 reminder lock 하나만 처리한다.
 - `outcome`은 `acquired`, `success`, `error`, `cancelled`, `skipped`, `revoked` 중 하나다.
 - `SkipReason`과 예외 class 이름은 tag로 내보내지 않는다. 필요한 원인은 기존
   upstream `leader.aop.lock.not.acquired`와 `leader.aop.task.failed` metric에 맡긴다.
-- `onTaskFailed`는 취소 여부만 `cancelled`/`error`로 구분하고, observation에
-  원래 throwable을 전달할 수는 있지만 원래 예외를 대체하거나 재전파하지 않는다.
+- `onTaskFailed`는 취소 여부만 `cancelled`/`error`로 구분한다. 원본 throwable은
+  observation context나 tag에 전달하지 않아 tracing exporter에 예외 메시지나
+  payload가 남지 않게 하며, 원래 scheduler 예외 전파는 바꾸지 않는다.
 - observation handler가 실패해도 bridge callback은 정상 반환한다.
 
 `onElected`와 `onSkipped` listener callback은 AOP callback과 같은 결과를 중복

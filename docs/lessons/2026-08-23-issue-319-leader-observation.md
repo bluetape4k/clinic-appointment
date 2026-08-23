@@ -15,8 +15,9 @@
 low-cardinality tag로 기록한다. tenant·request·예외 문자열은 tag로 만들지 않는다.
 
 `onTaskFailed`는 일반 예외와 `CancellationException`을 서로 다른 outcome으로
-기록하되 원래 scheduler 예외 전파를 대신하지 않는다. observation handler가 실패해도
-leader callback 밖으로 오류를 전파하지 않는다.
+기록하되 원본 throwable을 observation context에 전달하지 않는다. 따라서 tracing
+exporter에 예외 메시지나 payload가 남지 않으며, 원래 scheduler 예외 전파를 대신하지
+않는다. observation handler가 실패해도 leader callback 밖으로 오류를 전파하지 않는다.
 
 ## 결과
 
@@ -40,8 +41,10 @@ leader callback 밖으로 오류를 전파하지 않는다.
 ## 놓친 점과 다음 guard
 
 초기 implementation commit 전에 계획 문서의 완료 checkbox를 함께 갱신하지 않아
-계획 상태 기록을 별도 commit으로 보완했다. 이후에는 각 검증 milestone 직후 계획
-checkbox와 evidence를 같은 작업 단위에서 갱신한다.
+계획 상태 기록을 별도 commit으로 보완했다. 또한 pre-PR 보안 리뷰에서 원본
+throwable의 tracing 유출 가능성을 발견해 outcome-only 기록으로 보완했다. 이후에는
+각 검증 milestone 직후 계획 checkbox와 evidence를 같은 작업 단위에서 갱신하고,
+실패 telemetry가 원본 예외를 보존하지 않는지 회귀 테스트로 고정한다.
 
 upstream release가 lease-extension 또는 ownership-loss observer를 제공하면 먼저
 지원 API와 callback 순서를 다시 확인하고, 실제 lease backend 증거를 별도 테스트로

@@ -61,6 +61,7 @@ internal class NotificationLeaderObservationBridgeTest {
                     key.contains("exception", ignoreCase = true) ||
                     key.contains("request", ignoreCase = true)
             })
+            check(record.error == null)
         }
     }
 
@@ -123,6 +124,7 @@ internal class NotificationLeaderObservationBridgeTest {
                             outcome = low.getValue("outcome"),
                             lowCardinality = low,
                             highCardinality = high,
+                            error = context.error,
                         )
                     }
                 },
@@ -135,5 +137,6 @@ internal class NotificationLeaderObservationBridgeTest {
         val outcome: String,
         val lowCardinality: Map<String, String>,
         val highCardinality: Map<String, String>,
+        val error: Throwable?,
     )
 }
