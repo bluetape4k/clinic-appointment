@@ -53,7 +53,7 @@
   - **Failure:** 순서가 어긋나면 affected proof를 재실행한다.
 - [x] **CL-04 — 증거 즉시 기록**
   - **Action:** gate 확인 즉시 command/file/result를 기록한다.
-  - **Evidence:** `2026-08-23T16:50:39.718651Z` 실행 report와 thresholds를 `docs/benchmarks/issue-263-cache-rollout-evidence/2026-08-23/`에 보존하고 validator·test 결과를 이 checklist에 갱신했다.
+  - **Evidence:** `2026-08-23T17:03:32.516101Z` 실행 report와 thresholds를 `docs/benchmarks/issue-263-cache-rollout-evidence/2026-08-23/`에 보존하고 validator·test 결과를 이 checklist에 갱신했다.
   - **Failure:** 뒤늦게 재구성하지 않고 unchecked로 둔다.
 - [x] **CL-05 — fail closed**
   - **Action:** PENDING/FAIL row의 dependent branch를 중지한다.
@@ -69,7 +69,7 @@
   - **Failure:** hold가 stale이면 side effect를 실행하지 않는다.
 - [x] **CL-08 — 완료 count 산출**
   - **Action:** required checks count와 unchecked IDs를 계산한다.
-  - **Evidence:** checklist `30`개 중 `26`개 checked이며 unchecked ID는 `CL-07`, `E-07`, `E-08`이다. `completion-check`는 workflow receipt 기준 `complete=true`, missing components/verification이 없다.
+  - **Evidence:** checklist `30`개 중 `27`개 checked이며 unchecked ID는 `CL-07`, `E-08`이다. `completion-check`는 workflow receipt 기준 `complete=true`, missing components/verification이 없다.
   - **Failure:** count가 맞지 않으면 완료를 주장하지 않는다.
 
 ## Type-E Steps
@@ -98,9 +98,9 @@
   - **Action:** final diff, language, redaction, pruning, lesson, P0/P1 review를 수렴한다.
   - **Evidence:** exact local diff에서 production source·credential·raw payload가 없고, strict validator/forbidden scan/redaction scan/lesson read-back을 통과했다. 독립 code·architecture review 재검토는 P0=0/P1=0 CLEAR이며, lagMetric 명시·zero-backlog strict 불변식·중첩 cleanup primary 보존·`Containers.Redis`/`Redis88Launcher.redis`를 반영한 runbook·Fory pool generated serializer warm-up을 수렴했다.
   - **Failure:** PR publication을 중지하고 repair한다.
-- [ ] **E-07 — common PR gates**
+- [x] **E-07 — common PR gates**
   - **Action:** PR authority가 확인되면 CG-11~15를 수행한다.
-  - **Evidence:** exact PR/head/metadata/CI/review read-back.
+  - **Evidence:** PR #382, base `develop`, head `chore/issue-263-cache-rollout-evidence` at `d3b87e31e18067a7b535533de9e5248b3f2d25a7`, Issue #263 `Closes` link, Korean body/last `## DoD Status`, assignee `debop`, labels `maintenance/test/build`, milestone `backlog`, all 13 GitHub checks PASS, `mergeStateStatus=CLEAN`, `reviewDecision`/live reviews are empty and therefore merge approval remains held.
   - **Failure:** parent gate PENDING/FAIL을 유지한다.
 - [ ] **E-08 — merge 후 closeout**
   - **Action:** fresh merge approval 후 CG-16~18을 수행한다.
