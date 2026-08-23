@@ -29,7 +29,7 @@
 
 - Create: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderObservationBridgeTest.kt`
 
-- [ ] **Step 1: Observation handler가 수집할 테스트 fixture를 작성한다.**
+- [x] **Step 1: Observation handler가 수집할 테스트 fixture를 작성한다.**
 
 ```kotlin
 package io.bluetape4k.clinic.appointment.notification
@@ -173,7 +173,7 @@ internal class NotificationLeaderObservationBridgeTest {
 }
 ```
 
-- [ ] **Step 2: 실패하는지 확인한다.**
+- [x] **Step 2: 실패하는지 확인한다.**
 
 실행:
 
@@ -189,7 +189,7 @@ internal class NotificationLeaderObservationBridgeTest {
 
 - Create: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderObservationBridge.kt`
 
-- [ ] **Step 1: 고정 lifecycle와 callback 매핑을 구현한다.**
+- [x] **Step 1: 고정 lifecycle와 callback 매핑을 구현한다.**
 
 ```kotlin
 package io.bluetape4k.clinic.appointment.notification
@@ -290,7 +290,7 @@ internal class NotificationLeaderObservationBridge(
 }
 ```
 
-- [ ] **Step 2: bridge 단위 테스트를 통과시킨다.**
+- [x] **Step 2: bridge 단위 테스트를 통과시킨다.**
 
 실행:
 
@@ -306,22 +306,20 @@ internal class NotificationLeaderObservationBridge(
 
 - Modify: `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfiguration.kt`
 
-- [ ] **Step 1: observation imports와 조건부 bean을 추가한다.**
+- [x] **Step 1: observation imports와 조건부 bean을 추가한다.**
 
 기존 `NotificationLeaderAopMetricsRecorder` bean 뒤에 다음을 추가한다.
 
 ```kotlin
 import io.micrometer.observation.ObservationRegistry
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 ```
 
 ```kotlin
     /** ObservationRegistry가 있을 때 지원되는 reminder leader lifecycle만 관측합니다. */
     @Bean
-    @ConditionalOnClass(name = ["io.micrometer.observation.ObservationRegistry"])
     @ConditionalOnBean(ObservationRegistry::class)
     @ConditionalOnMissingBean(NotificationLeaderObservationBridge::class)
-    fun notificationLeaderObservationBridge(
+    internal fun notificationLeaderObservationBridge(
         observationRegistry: ObservationRegistry,
     ): NotificationLeaderObservationBridge =
         NotificationLeaderObservationBridge(observationRegistry)
@@ -332,7 +330,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 `LeaderElectionListenerRegistry` 자동 등록 경계가 각각 같은 bean을 사용한다.
 `onElected`·`onSkipped`는 구현하지 않아 중복 observation을 만들지 않는다.
 
-- [ ] **Step 2: 기존 auto-configuration import와 bean 순서를 확인한다.**
+- [x] **Step 2: 기존 auto-configuration import와 bean 순서를 확인한다.**
 
 실행:
 
@@ -348,7 +346,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 
 - Create: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderObservationConfigurationTest.kt`
 
-- [ ] **Step 1: registry 유무와 host replacement 테스트를 작성한다.**
+- [x] **Step 1: registry 유무와 host replacement 테스트를 작성한다.**
 
 ```kotlin
 package io.bluetape4k.clinic.appointment.notification
@@ -364,9 +362,9 @@ internal class NotificationLeaderObservationConfigurationTest {
     fun `ObservationRegistry가 있으면 notification bridge를 등록한다`() {
         ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
-            .withBean("observationRegistry", ObservationRegistry::class.java) { ObservationRegistry.create() }
+            .withBean("observationRegistry", ObservationRegistry::class.java, { ObservationRegistry.create() })
             .run { context ->
-                check(context.startupFailure == null) { context.startupFailure }
+                check(context.startupFailure == null) { "startup failure: ${context.startupFailure}" }
                 check(context.getBeansOfType(NotificationLeaderObservationBridge::class.java).size == 1)
             }
     }
@@ -376,7 +374,7 @@ internal class NotificationLeaderObservationConfigurationTest {
         ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
             .run { context ->
-                check(context.startupFailure == null) { context.startupFailure }
+                check(context.startupFailure == null) { "startup failure: ${context.startupFailure}" }
                 check(context.getBeansOfType(NotificationLeaderObservationBridge::class.java).isEmpty())
             }
     }
@@ -386,17 +384,17 @@ internal class NotificationLeaderObservationConfigurationTest {
         val hostBridge = NotificationLeaderObservationBridge(ObservationRegistry.NOOP)
         ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
-            .withBean("observationRegistry", ObservationRegistry::class.java) { ObservationRegistry.create() }
-            .withBean("hostBridge", NotificationLeaderObservationBridge::class.java) { hostBridge }
+            .withBean("observationRegistry", ObservationRegistry::class.java, { ObservationRegistry.create() })
+            .withBean("hostBridge", NotificationLeaderObservationBridge::class.java, { hostBridge })
             .run { context ->
-                check(context.startupFailure == null) { context.startupFailure }
+                check(context.startupFailure == null) { "startup failure: ${context.startupFailure}" }
                 check(context.getBean(NotificationLeaderObservationBridge::class.java) === hostBridge)
             }
     }
 }
 ```
 
-- [ ] **Step 2: 조건 테스트를 실행한다.**
+- [x] **Step 2: 조건 테스트를 실행한다.**
 
 실행:
 
@@ -413,7 +411,7 @@ internal class NotificationLeaderObservationConfigurationTest {
 - Verify: `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationLeaderMicrometerTest.kt`
 - Verify: `docs/superpowers/specs/2026-08-23-issue-319-supported-leader-observation-design.md`
 
-- [ ] **Step 1: notification 모듈 테스트를 실행한다.**
+- [x] **Step 1: notification 모듈 테스트를 실행한다.**
 
 실행:
 
@@ -423,7 +421,7 @@ internal class NotificationLeaderObservationConfigurationTest {
 
 예상 결과: `BUILD SUCCESSFUL`; 기존 `leader.aop.*` metric, `redacted-lock` tag, `shedlock.leader.*` 부재 테스트가 계속 PASS한다.
 
-- [ ] **Step 2: compile와 diff를 검증한다.**
+- [x] **Step 2: compile와 diff를 검증한다.**
 
 실행:
 
@@ -437,7 +435,7 @@ node /Users/debop/.codex/skills/bluetape-writer/scripts/audit-korean-terms.mjs \
 
 예상 결과: build, diff check, Korean terminology audit가 모두 성공한다.
 
-- [ ] **Step 3: capability boundary와 작업 상태를 확인한다.**
+- [x] **Step 3: capability boundary와 작업 상태를 확인한다.**
 
 실행:
 
