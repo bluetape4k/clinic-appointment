@@ -1,11 +1,11 @@
 package io.bluetape4k.clinic.appointment.api.config
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
 import tools.jackson.module.kotlin.jacksonObjectMapper
-import kotlin.test.assertFailsWith
 
 /**
  * Issue #204 canary report가 production SLO 주장이나 원문 payload를 포함하지 않는지 검증합니다.
