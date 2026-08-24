@@ -82,6 +82,7 @@ bluetape4k-testcontainers = { module = "io.github.bluetape4k:bluetape4k-testcont
 bluetape4k-kafka4 = { module = "io.github.bluetape4k:bluetape4k-kafka4" }
 exposed-core = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-core" }
 exposed-jdbc = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc" }
+exposed-jdbc-caffeine = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc-caffeine" }
 exposed-jdbc-lettuce = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc-lettuce" }
 exposed-r2dbc-tests = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-r2dbc-tests" }
 

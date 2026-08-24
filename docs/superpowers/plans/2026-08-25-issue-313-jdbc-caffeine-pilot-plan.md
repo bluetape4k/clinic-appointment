@@ -47,7 +47,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
 - Modify: `appointment-api/build.gradle.kts`
 - Modify: `appointment-api/gradle.lockfile` (Gradle generated)
 
-- [ ] **Step 1: catalog alias와 RED dependency 선언 추가**
+- [x] **Step 1: catalog alias와 RED dependency 선언 추가**
 
   기존 `exposed-jdbc`와 같은 섹션에 다음 alias를 추가하고 `appointment-api`의
   dependencies에 정확히 한 줄을 추가한다.
@@ -63,7 +63,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   `implementation`, `api`, `runtimeOnly`로 승격하지 않는다. production source에서
   이 alias를 import하지 않는다.
 
-- [ ] **Step 2: lockfile을 실제 Gradle resolver로 갱신**
+- [x] **Step 2: lockfile을 실제 Gradle resolver로 갱신**
 
   ```bash
   ./gradlew :appointment-api:dependencies \
@@ -76,7 +76,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   configurations에만 기록된다. 다른 dependency가 configuration scope를 넓히면
   diff를 확인하고 test-only boundary를 복구한 뒤 다시 lock한다.
 
-- [ ] **Step 3: dependency boundary를 read-back**
+- [x] **Step 3: dependency boundary를 read-back**
 
   ```bash
   ./gradlew :appointment-api:dependencies --configuration runtimeClasspath --no-daemon
