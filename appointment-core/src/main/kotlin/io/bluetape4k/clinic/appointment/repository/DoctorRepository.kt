@@ -5,6 +5,8 @@ import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.support.requireNotNull
 import io.bluetape4k.clinic.appointment.model.dto.DoctorAbsenceRecord
+import io.bluetape4k.clinic.appointment.model.dto.ClinicKeysetCursor
+import io.bluetape4k.clinic.appointment.model.dto.ClinicKeysetPage
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Repository
 import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
@@ -14,11 +16,15 @@ import io.bluetape4k.clinic.appointment.model.tables.DoctorAbsences
 import io.bluetape4k.clinic.appointment.model.tables.DoctorSchedules
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.Op
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import java.time.DayOfWeek
@@ -31,7 +37,9 @@ import java.time.LocalDate
  */
 @Repository
 class DoctorRepository : LongJdbcRepository<DoctorRecord> {
-    companion object : KLogging()
+    companion object : KLogging() {
+        private const val MAX_KEYSET_PAGE_SIZE = 100
+    }
 
     override val table = Doctors
     override fun extractId(entity: DoctorRecord): Long = entity.id.requireNotNull("id")
@@ -101,6 +109,42 @@ class DoctorRepository : LongJdbcRepository<DoctorRecord> {
                 (Doctors.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
         }
 
+    /** tenant·clinic 범위에서 `(clinic_id, id)` 순서의 다음 의사 묶음을 조회합니다. */
+    fun findKeysetPage(
+        scope: TenantClinicScope,
+        cursor: ClinicKeysetCursor?,
+        limit: Int,
+    ): ClinicKeysetPage<DoctorRecord> {
+        require(limit in 1..MAX_KEYSET_PAGE_SIZE) {
+            "limit must be between 1 and $MAX_KEYSET_PAGE_SIZE"
+        }
+        require(cursor == null || cursor.clinicId == scope.clinicId) {
+            "cursor clinicId must match scope clinicId"
+        }
+
+        val predicate =
+            ((Doctors.clinicId eq scope.clinicId) and
+                (Doctors.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))) and
+                doctorKeysetCondition(cursor)
+        val rows = Doctors
+            .selectAll()
+            .where { predicate }
+            .orderBy(Doctors.clinicId to SortOrder.ASC, Doctors.id to SortOrder.ASC)
+            .limit(limit + 1)
+            .toList()
+        val hasNext = rows.size > limit
+        val pageRows = rows.take(limit)
+
+        return ClinicKeysetPage(
+            content = pageRows.map { it.toDoctorRecord() },
+            nextCursor = if (hasNext) {
+                pageRows.lastOrNull()?.let { ClinicKeysetCursor(scope.clinicId, it[Doctors.id].value) }
+            } else {
+                null
+            },
+        )
+    }
+
     fun findAllSchedules(scope: TenantClinicScope, doctorId: Long): List<DoctorScheduleRecord> =
         DoctorSchedules
             .selectAll()
@@ -121,3 +165,9 @@ class DoctorRepository : LongJdbcRepository<DoctorRecord> {
             .andWhere { DoctorAbsences.absenceDate lessEq dateRange.endInclusive }
             .map { it.toDoctorAbsenceRecord() }
 }
+
+private fun doctorKeysetCondition(cursor: ClinicKeysetCursor?): Op<Boolean> =
+    cursor?.let {
+        (Doctors.clinicId greater it.clinicId) or
+            ((Doctors.clinicId eq it.clinicId) and (Doctors.id greater it.id))
+    } ?: Op.TRUE
