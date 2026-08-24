@@ -40,6 +40,7 @@
 | `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/DoctorControllerTest.kt` | 의사 cursor HTTP 계약 | 수정 |
 | `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/EquipmentControllerTest.kt` | 장비 cursor HTTP 계약 | 수정 |
 | `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/TreatmentTypeControllerTest.kt` | 진료 유형 cursor HTTP 계약 | 수정 |
+| `appointment-api/README.md`, `appointment-api/README.ko.md` | 추가된 cursor 경로와 offset 호환성 안내 | 수정 |
 | `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/integration/ClinicKeysetPaginationQueryPlanTest.kt` | 실제 PostgreSQL EXPLAIN 및 비교 증거 | 생성 |
 | `docs/lessons/2026-08-24-issue-312-keyset-pagination.md` | 실제 계획·비교 결과와 index 채택/보류 결정 | 생성 |
 
@@ -717,11 +718,17 @@ Expected: targeted tests and both module builds `BUILD SUCCESSFUL`. Docker-backe
 
 리뷰 결과는 P0/P1/P2 발견 수, 파일·line, 조치 또는 허용 근거로 남긴다. P0/P1은 0이어야 delivery로 이동한다. 독립 subagent review는 사용하지 않고 이 계획의 inline review로 대체한다.
 
-- [ ] **Step 4: Lore commit와 PR DoD를 준비한다.**
+- [ ] **Step 4: 공개 API 문서와 Korean KDoc을 점검한다.**
+
+두 `appointment-api` README에 세 cursor 경로, `limit` 범위, `nextCursor` 재전송 방식,
+기존 offset 경로가 유지된다는 점을 기록한다. 구현 범위를 넓히지 않고 호출자가
+offset과 cursor 중 하나를 선택할 수 있는 공개 계약만 설명한다.
+
+- [ ] **Step 5: Lore commit와 PR DoD를 준비한다.**
 
 각 commit은 Korean intent line과 `Constraint`, `Rejected`, `Confidence`, `Scope-risk`, `Directive`, `Tested`, `Not-tested` trailer를 포함한다. PR 본문은 Korean으로 작성하고 Issue #312 link, 변경 파일, targeted/PG test 결과, inline review P0/P1=0, known Docker gap, `## DoD Status`를 포함한다. 이 단계에서는 PR을 만들기 전에 live `AGENTS.md` hierarchy와 Issue #312 metadata를 다시 읽는다.
 
-- [ ] **Step 5: fresh exact-head merge approval 전에는 merge하지 않는다.**
+- [ ] **Step 6: fresh exact-head merge approval 전에는 merge하지 않는다.**
 
 PR 생성 후 head SHA, required CI, review/thread, mergeability, PR body의 `## DoD Status`를 live read-back한다. 사용자의 새 `승인`이 exact live head에 묶여 확인되기 전까지 merge, branch 삭제, worktree 삭제를 수행하지 않는다.
 
