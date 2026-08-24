@@ -33,7 +33,7 @@ offset `1,500` 조건으로 같은 목록 경계를 비교했다. 테스트가 �
 
 1. API 호출자는 기존 `page`/`size` 경로를 계속 사용할 수 있고, 대용량 순차 탐색에는
    `limit`/`nextCursor` 경로를 선택한다.
-2. 후속 인덱스 이슈에서는 각 테이블의 `(clinic_id, id)` 인덱스 후보와 기존 단일
+2. 후속 [Issue #386](https://github.com/bluetape4k/clinic-appointment/issues/386)에서는 각 테이블의 `(clinic_id, id)` 인덱스 후보와 기존 단일
    `clinic_id` 인덱스의 중복·쓰기 비용을 `EXPLAIN (ANALYZE, BUFFERS)`와 함께 다시
    비교한다.
 3. 이 문서의 단일 측정값을 성능 목표나 회귀 임계값으로 사용하지 않는다. 반복 측정
