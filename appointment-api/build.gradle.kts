@@ -43,6 +43,7 @@ dependencies {
     implementation(libs.jetbrains.exposed.spring.boot4.starter)
     // DDD aggregate event publisher는 Spring transaction 완료 경계에서만 신호를 전달한다.
     testImplementation("io.github.bluetape4k.exposed:bluetape4k-exposed-spring-boot-jdbc")
+    testImplementation(libs.exposed.jdbc.lettuce)
     implementation(libs.exposed.jdbc)
 
     // Jackson 3
