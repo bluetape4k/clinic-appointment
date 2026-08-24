@@ -310,6 +310,21 @@ class JdbcLettuceMasterCachePilotIntegrationTest @Autowired constructor(
 
     @Test
     fun `Redis 연결 실패에도 DB 결과를 반환하고 bounded timeout으로 종료한다`() {
+        val unavailableClient = CacheConfig().redisClientWithTimeout(
+            url = "redis://127.0.0.1:1",
+            requireTls = false,
+            commandTimeout = Duration.ofMillis(200),
+        )
+        val unavailableProbe = DoctorJdbcLettuceProbe(unavailableClient, pilotConfig("$DOCTOR_PILOT_PREFIX:unavailable"))
+        try {
+            val scope = TenantClinicScope(fixture.tenantA, fixture.clinicA)
+            // warm 단계는 연결 자체가 실패해도 DB 결과를 반환해야 한다.
+            unavailableProbe.findAll(where = doctorWhere(scope)).single().name shouldBeEqualTo "Dr. A"
+        } finally {
+            runCatching { unavailableProbe.close() }
+            runCatching { unavailableClient.shutdown() }
+        }
+
         val failedClient = CacheConfig().redisClientWithTimeout(
             url = Containers.Redis.url,
             requireTls = false,
@@ -344,6 +359,7 @@ class JdbcLettuceMasterCachePilotIntegrationTest @Autowired constructor(
                 EQUIPMENT_PILOT_PREFIX,
                 TREATMENT_TYPE_PILOT_PREFIX,
                 "$DOCTOR_PILOT_PREFIX:close",
+                "$DOCTOR_PILOT_PREFIX:unavailable",
                 "$DOCTOR_PILOT_PREFIX:failure",
             ).forEach { prefix ->
                 commands.keys("$prefix:*").takeIf { it.isNotEmpty() }?.let { commands.unlink(*it.toTypedArray()) }

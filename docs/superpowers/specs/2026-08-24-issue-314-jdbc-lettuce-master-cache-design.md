@@ -139,15 +139,15 @@ valueCodec = ExposedLettuceCodecs.jackson3(DoctorRecord::class.java)
 
 필수 검증은 다음과 같다.
 
-1. `:appointment-api:test --tests "*.JdbcLettuceMasterDataPilotTest"` —
+1. `:appointment-api:test --tests "*.JdbcLettuceMasterCachePilotIntegrationTest"` —
    legacy/candidate 결과, tenant 격리, 빈 결과, codec/namespace, TTL,
    invalidation, Redis 장애, close.
 2. 테스트 내부 `StatementInterceptor` — master-data SELECT 수를 경로와
    호출 단계별로 기록한다.
 3. Redis raw key/TTL 조회 — candidate prefix만 생성되고 TTL이 양수이며
    기존 v3 prefix와 섞이지 않는지 확인한다.
-4. `:appointment-api:test` — baseline 851 tests, 3 skipped 기준에서 회귀가
-   없는지 확인한다.
+4. `:appointment-api:test` — baseline 851 tests, 3 skipped에서 파일럿 8개가
+   추가된 859 tests, 3 skipped 결과에 기존 회귀가 없는지 확인한다.
 5. `:appointment-api:build`와 `git diff --check` — test-only dependency가
    runtime/bootJar에 유출되지 않고 문서·코드 diff가 깨끗한지 확인한다.
 6. 결과 문서 — candidate가 scope-list drop-in replacement가 아니면
@@ -186,14 +186,14 @@ wrapper를 미리 만들지 않는다.
 
 ## 8. 설계 DoD
 
-- [ ] test-only dependency와 probe가 실제 `bluetape4k-exposed-jdbc-lettuce`
+- [x] test-only dependency와 probe가 실제 `bluetape4k-exposed-jdbc-lettuce`
   API를 사용한다.
-- [ ] 기존 production source/API와 `clinic-*-v3` namespace가 변경되지 않는다.
-- [ ] 결과·tenant·empty-list·codec·TTL·invalidation·Redis failure·close
+- [x] 기존 production source/API와 `clinic-*-v3` namespace가 변경되지 않는다.
+- [x] 결과·tenant·empty-list·codec·TTL·invalidation·Redis failure·close
   테스트가 통과한다.
-- [ ] SQL/cache evidence가 scope-list와 per-ID 차이를 드러낸다.
-- [ ] 6관점 inline review와 spec self-review에서 P0/P1·미해결 모순이 없다.
-- [ ] 보류/채택 판정과 rollback 경계가 Korean lesson/PR DoD에 기록된다.
+- [x] SQL/cache evidence가 scope-list와 per-ID 차이를 드러낸다.
+- [x] 6관점 inline review와 spec self-review에서 P0/P1·미해결 모순이 없다.
+- [x] 보류/채택 판정과 rollback 경계가 Korean lesson/PR DoD에 기록된다.
 
 ## 근거
 

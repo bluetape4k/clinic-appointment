@@ -138,7 +138,7 @@ legacy scope-list hit은 scope SQL을 생략하지만 candidate `findAll(where)`
 8. SQL count와 runtime/bootJar dependency leakage 검사
 
 검증 명령은 우선 `:appointment-api:test --tests
-"*.JdbcLettuceMasterDataPilotTest"`로 좁히고, 이후 `:appointment-api:test`,
+"*.JdbcLettuceMasterCachePilotIntegrationTest"`로 좁히고, 이후 `:appointment-api:test`,
 `:appointment-api:build`, `git diff --check` 순서로 확장한다. 모든 결과는
 실행 출력과 Korean lesson/PR DoD에 연결한다.
 
