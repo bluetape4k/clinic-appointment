@@ -317,7 +317,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   allocation support 상태가 있고, `productionSloEvidence=false`다. 실패하면
   해당 report를 chart source로 사용하지 않는다.
 
-- [ ] **Step 5: benchmark task commit**
+- [x] **Step 5: benchmark task commit**
 
   ```bash
   git add appointment-api/build.gradle.kts \
@@ -333,6 +333,8 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   Tested: JavaExec benchmark smoke와 JSON schema assertions.
   Not-tested: PostgreSQL 다중 노드와 production traffic은 범위 밖이다."
   ```
+
+  Commit: `30bc82af`.
 
 ## Task 4: chart·summary·provenance 산출물 생성
 
@@ -396,7 +398,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   변환 도구가 없으면 SVG/semantic/XML audit는 실행하되 PNG 항목을 `PENDING`으로
   명시하며 chart 생성 성공만으로 visual QA를 통과시키지 않는다.
 
-- [ ] **Step 5: chart artifact commit**
+- [x] **Step 5: chart artifact commit**
 
   ```bash
   git add scripts/generate-issue313-jdbc-caffeine-chart.mjs \
@@ -408,9 +410,11 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   Confidence: medium
   Scope-risk: narrow
   Directive: report를 갱신하면 chart generator를 다시 실행한다.
-  Tested: JSON validator, node --check, xmllint, semantic/endpoint audit.
-  Not-tested: PNG full-size QA는 CairoSVG 설치 여부에 따른다."
+  Tested: JSON validator, node --check, xmllint, semantic/endpoint audit, PNG full-size
+  QA, opaque·asset pair audit."
   ```
+
+  Commit: `a160756c`.
 
 ## Task 5: verifier artifact와 inline review
 
@@ -421,7 +425,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
 - Create: `docs/lessons/2026-08-25-issue-313-jdbc-caffeine-pilot.md`
 - Modify: `docs/superpowers/plans/2026-08-25-issue-313-jdbc-caffeine-pilot-plan.md`
 
-- [ ] **Step 1: Step 3-R inline plan review 작성**
+- [x] **Step 1: Step 3-R inline plan review 작성**
 
   다음 필수 항목을 source path/명령으로 read-back하고 P0/P1/P2/P3로 정규화한다.
 
@@ -437,7 +441,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   P0/P1이 있으면 계획을 수정하고 해당 review row를 다시 판정한다. 사용자 요청에
   따라 독립 subagent review는 하지 않는다.
 
-- [ ] **Step 2: TDD/verification checklist read-back**
+- [x] **Step 2: TDD/verification checklist read-back**
 
   다음을 fresh command로 실행하고 결과를 plan/review artifact에 기록한다.
 
@@ -452,7 +456,12 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   실패하면 `verification-before-completion` 규칙에 따라 원인을 분리하고,
   benchmark/문서 성공으로 대체하지 않는다.
 
-- [ ] **Step 3: six-lens inline code review**
+  Fresh read-back: 기본 클래스 병렬 build의 기존 응답 불일치와 Docker 환경을
+  분리한 뒤 `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock` 및
+  `-Djunit.jupiter.execution.parallel.mode.classes.default=same_thread`로
+  `BUILD SUCCESSFUL in 3m 30s`를 확인했다.
+
+- [x] **Step 3: six-lens inline code review**
 
   최종 diff를 다음 lens로 같은 session에서 검토한다.
 
@@ -466,7 +475,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   각 lens에 P0/P1/P2/P3와 `N/A` 근거를 기록하고, P0=0/P1=0이 될 때까지 수정 후
   해당 lens를 재실행한다. 최종 artifact는 변경된 파일과 line evidence를 가리킨다.
 
-- [ ] **Step 4: lesson과 verifier DoD 작성**
+- [x] **Step 4: lesson과 verifier DoD 작성**
 
   `docs/lessons/...`에 context, decision, outcome, fresh verification, surprise,
   재발 방지 guard를 기록한다. verifier 표에는 A-VER-01~07을 다음처럼 매핑한다.
@@ -479,7 +488,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   - A-VER-06: current HEAD, module, command, result
   - A-VER-07: production DB/multi-node/PNG gaps와 `HOLD` disposition
 
-- [ ] **Step 5: final implementation commit**
+- [x] **Step 5: final implementation commit**
 
   ```bash
   git add docs/superpowers/reviews docs/lessons docs/superpowers/plans/2026-08-25-issue-313-jdbc-caffeine-pilot-plan.md
@@ -501,7 +510,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
 | P0 | none | 현재 설계의 production non-goal과 test-only dependency 경계가 모든 task에 연결됨 | 없음 |
 | P1 | none | Exposed transaction, rollback/fence, benchmark stability와 chart provenance를 명령/테스트로 고정함 | 없음 |
 | P2 | measurement | H2/JVM 측정은 production DB·multi-node 대표성이 없음 | summary/lesson/PR에서 `HOLD`와 후속 근거를 유지 |
-| P2 | visual | CairoSVG가 없는 환경에서는 PNG full-size QA를 수행할 수 없음 | SVG/XML/semantic audit는 수행하고 PNG를 `PENDING`으로 기록 |
+| P2 | visual | CairoSVG로 3200×2440 PNG를 생성하고 full-size·opaque·asset pair audit를 통과함 | 해소됨; PNG를 `PENDING`으로 남기지 않음 |
 
 ### Plan SPW-01~05 read-back
 
@@ -513,5 +522,5 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   `무효화`, `local fence`로 통일하고 코드 토큰은 보존한다.
 - **SPW-04:** 각 API와 테스트/benchmark/chart가 sibling source 및 현재 저장소
   파일로 추적된다. production SLO 주장은 하지 않는다.
-- **SPW-05:** placeholder 없이 전체 계획을 다시 읽었고 P0/P1 0건, P2 2건을
-  명시했다. 구현 전 사용자 plan approval이 남아 있다.
+- **SPW-05:** placeholder 없이 전체 계획을 다시 읽었고 P0/P1 0건, P2 1건(운영
+  대표성)을 명시했다. 구현 전 plan과 설계에 대한 사용자 승인을 확인했다.
