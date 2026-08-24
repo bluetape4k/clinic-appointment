@@ -31,7 +31,7 @@ lesson을 `origin/develop...HEAD` diff로 다시 읽었다. 확인한 최신 근
 |---|---|---|
 | P0 | 없음 | — |
 | P1 | 없음 | delivery 조건 충족 |
-| P2 | 현재 PostgreSQL 수치는 `EXPLAIN (ANALYZE, BUFFERS)` 단일 대표 실행이며 p95/처리량 benchmark가 아니다. 또한 composite `(clinic_id, id)` index는 아직 적용하지 않았다. | lesson에 측정 한계를 명시했고, 운영 cardinality·쓰기 비용을 비교하는 후속 index/benchmark 이슈로 분리한다. 이번 API 계약과 SQL shape의 blocker는 아니다. |
+| P2 | 현재 PostgreSQL 수치는 `EXPLAIN (ANALYZE, BUFFERS)` 단일 대표 실행이며 p95/처리량 benchmark가 아니다. 또한 composite `(clinic_id, id)` index는 아직 적용하지 않았다. | lesson에 측정 한계를 명시했고, [Issue #386](https://github.com/bluetape4k/clinic-appointment/issues/386)에서 운영 cardinality·쓰기 비용을 비교한다. 이번 API 계약과 SQL shape의 blocker는 아니다. |
 | P3 | README Korean audit에서 기존 `snapshot`/`스냅숏` 라인만 남아 있다. 이번 cursor 문서 추가분에는 해당 용어가 없다. | 기존 문서의 unrelated finding으로 보존하고 이번 diff에서 임의 정리하지 않는다. |
 
 ## 결론
