@@ -224,7 +224,7 @@ jobs:
   test-core:
     name: Test / Core & Event
     runs-on: ubuntu-latest
-    needs: [build, changes]
+    needs: [changes]
     if: needs.changes.outputs.core-event == 'true'
     steps:
       - uses: actions/checkout@v7
@@ -282,7 +282,7 @@ jobs:
   test-solver:
     name: Test / Solver
     runs-on: ubuntu-latest
-    needs: [build, changes]
+    needs: [changes]
     if: needs.changes.outputs.solver == 'true'
     steps:
       - uses: actions/checkout@v7
@@ -335,7 +335,7 @@ jobs:
   test-api:
     name: Test / API (${{ matrix.db }})
     runs-on: ubuntu-latest
-    needs: [build, changes]
+    needs: [changes]
     if: needs.changes.outputs.api == 'true'
     strategy:
       fail-fast: false
@@ -397,7 +397,7 @@ jobs:
   test-notification:
     name: Test / Notification
     runs-on: ubuntu-latest
-    needs: [build, changes]
+    needs: [changes]
     if: needs.changes.outputs.notification == 'true'
     steps:
       - uses: actions/checkout@v7
@@ -461,7 +461,7 @@ jobs:
     concurrency:
       group: appointment-messaging-kafka-${{ github.ref }}
       cancel-in-progress: false
-    needs: [build, changes]
+    needs: [changes]
     if: needs.changes.outputs.messaging == 'true'
     steps:
       - uses: actions/checkout@v7
@@ -598,7 +598,7 @@ jobs:
   flyway-migration:
     name: Flyway Migration / ${{ matrix.db }}
     runs-on: ubuntu-latest
-    needs: [build, changes]
+    needs: [changes]
     if: needs.changes.outputs.api == 'true'
     strategy:
       fail-fast: false
@@ -638,7 +638,7 @@ jobs:
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
-    needs: [gitleaks, build, build-frontend, flyway-migration, test-core, test-solver, test-api, test-notification, test-messaging]
+    needs: [gitleaks, changes, build, build-frontend, flyway-migration, test-core, test-solver, test-api, test-notification, test-messaging]
     if: always()
     steps:
       - name: Check all jobs
