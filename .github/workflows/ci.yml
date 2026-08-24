@@ -88,6 +88,7 @@ jobs:
         with:
           filters: |
             core-event:
+              - '.github/**'
               - 'appointment-core/**'
               - 'appointment-event/**'
               - 'buildSrc/**'
@@ -100,6 +101,7 @@ jobs:
               - 'gradle.properties'
               - 'gradle/verification-metadata.xml'
             solver:
+              - '.github/**'
               - 'appointment-solver/**'
               - 'appointment-core/**'
               - 'buildSrc/**'
@@ -112,6 +114,7 @@ jobs:
               - 'gradle.properties'
               - 'gradle/verification-metadata.xml'
             api:
+              - '.github/**'
               - 'appointment-api/**'
               - 'appointment-messaging/**'
               - 'appointment-core/**'
@@ -126,6 +129,7 @@ jobs:
               - 'gradle.properties'
               - 'gradle/verification-metadata.xml'
             notification:
+              - '.github/**'
               - 'appointment-notification/**'
               - 'docs/benchmarks/issue-369-redis-admission-benchmark/**'
               - 'scripts/generate-issue369-redis-admission-chart.mjs'
@@ -141,6 +145,7 @@ jobs:
               - 'gradle.properties'
               - 'gradle/verification-metadata.xml'
             messaging:
+              - '.github/**'
               - 'appointment-messaging/**'
               - 'appointment-event/**'
               - 'appointment-core/**'
@@ -157,6 +162,7 @@ jobs:
               - 'docs/runbooks/appointment-messaging-operations.md'
               - 'docs/operations/appointment-consumer-replay-runbook.md'
             frontend:
+              - '.github/**'
               - 'frontend/**'
               - 'gradle.lockfile'
               - '**/gradle.lockfile'
