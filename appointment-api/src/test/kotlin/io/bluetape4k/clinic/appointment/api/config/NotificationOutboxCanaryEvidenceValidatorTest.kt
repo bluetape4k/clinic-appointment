@@ -28,6 +28,9 @@ internal object NotificationOutboxCanaryEvidenceValidator {
         require(report.requiredBoolean("rollback.queuePreserved")) {
             "rollback must preserve the queue"
         }
+        require(report.requiredBoolean("rollback.workerStoppedAndRestarted")) {
+            "rollback must stop and restart the worker"
+        }
         listOf(
             "deliveryResultUnknown",
             "duplicateProviderResults",
@@ -43,6 +46,33 @@ internal object NotificationOutboxCanaryEvidenceValidator {
         }
         require(report.requiredInt("rollback.providerCallsDuringPause") == 0) {
             "paused rollback must not call the provider"
+        }
+        require(report.requiredInt("redaction.terminalRowViolations") == 0) {
+            "terminal rows must not retain raw routing fields"
+        }
+        require(report.requiredInt("idempotency.replayedRequests") >= 1) {
+            "provider idempotency replay must be exercised"
+        }
+        require(report.requiredInt("idempotency.duplicateAcceptedResults") == 0) {
+            "idempotency replay must not create a duplicate accepted result"
+        }
+        require(report.requiredText("health.component") == "notificationOutboxHealth") {
+            "health evidence must identify notificationOutboxHealth"
+        }
+        require(report.requiredText("health.status") == "UP") {
+            "notificationOutboxHealth must be UP"
+        }
+        require(report.requiredBoolean("health.redacted")) {
+            "health evidence must be redacted"
+        }
+        require(report.requiredLong("thresholds.oldestReadyAgeSeconds") == 0L) {
+            "final oldest ready age must be zero"
+        }
+        require(report.requiredLong("thresholds.readyBacklog") == 0L) {
+            "final ready backlog must be zero"
+        }
+        require(report.requiredDouble("thresholds.providerThroughputPerSecond") > 0.0) {
+            "provider throughput must be measured"
         }
         listOf("rawPayloadFields", "secretFields", "destinationFields").forEach { field ->
             require(report.requiredInt("redaction.$field") == 0) {
@@ -72,6 +102,12 @@ internal object NotificationOutboxCanaryEvidenceValidator {
 
     private fun JsonNode.requiredInt(path: String): Int = requiredNode(path).takeIf { it.isIntegralNumber }?.intValue()
         ?: error("$path must be an integer value")
+
+    private fun JsonNode.requiredLong(path: String): Long = requiredNode(path).takeIf { it.isIntegralNumber }?.longValue()
+        ?: error("$path must be an integer value")
+
+    private fun JsonNode.requiredDouble(path: String): Double = requiredNode(path).takeIf { it.isNumber }?.doubleValue()
+        ?: error("$path must be a numeric value")
 
     private fun JsonNode.requiredNode(path: String): JsonNode {
         var current = this
@@ -116,7 +152,7 @@ internal class NotificationOutboxCanaryEvidenceValidatorTest {
     fun `검증기는 production 주장과 원문 식별자 필드를 fail closed 한다`() {
         val report = objectMapper.readTree(
             javaClass.getResourceAsStream(REPORT_RESOURCE)?.use { it.readBytes().toString(Charsets.UTF_8) }
-                ?.replace("\"productionSloEvidence\": false", "\"productionSloEvidence\": true")
+                ?.replace(Regex("\\\"productionSloEvidence\\\"\\s*:\\s*false"), "\"productionSloEvidence\": true")
                 ?: error("canary report fixture is missing: $REPORT_RESOURCE")
         )
 
@@ -126,7 +162,10 @@ internal class NotificationOutboxCanaryEvidenceValidatorTest {
 
         val redactedReport = objectMapper.readTree(
             javaClass.getResourceAsStream(REPORT_RESOURCE)?.use { it.readBytes().toString(Charsets.UTF_8) }
-                ?.replace("\"redaction\": {", "\"redaction\": {\n    \"memberId\": \"member-raw\",")
+                ?.replace(
+                    Regex("\\\"redaction\\\"\\s*:\\s*\\{"),
+                    "\"redaction\": {\n    \"memberId\": \"member-raw\",",
+                )
                 ?: error("canary report fixture is missing: $REPORT_RESOURCE")
         )
 

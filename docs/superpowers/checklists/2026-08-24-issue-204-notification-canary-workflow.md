@@ -106,11 +106,11 @@
   - **Failure:** live-only success는 FAIL이다.
 - [x] **E-05 — maintenance verification**
   - **Action:** diff check, redaction/reference scan, validator, Gradle/Testcontainers 검증을 수행한다.
-- **Evidence:** exact-class combined Gradle `3 passing` (`BUILD SUCCESSFUL`), generated report validator, writer terminology audit `findings=0`, `git diff --check`를 통과했다.
+  - **Evidence:** exact-class combined Gradle `3 passing` (`BUILD SUCCESSFUL`), fixture refresh 후 validator `2 passing`, generated/durable report JSON·redaction scan, writer terminology audit `findings=0`, `git diff --check`를 통과했다.
   - **Failure:** unchecked 상태로 commit하지 않는다.
-- [ ] **E-06 — durable pre-PR proof**
+- [x] **E-06 — durable pre-PR proof**
   - **Action:** final diff, language, redaction, lesson, pruning, P0/P1 review를 수렴한다.
-  - **Evidence:** final report/checklist, P0=0/P1=0, exact local head.
+  - **Evidence:** final report/checklist, inline review P0=0/P1=0/P3=0, P2 acceptance gaps 5건을 PENDING으로 명시, exact local head.
   - **Failure:** PR 생성 전에 repair한다.
 - [ ] **E-07 — common PR gates**
   - **Action:** PR 권한과 target이 승인 계획에 포함된 경우 CG-11~15를 수행한다.
@@ -141,7 +141,7 @@
   - **Failure:** stale/partial evidence로 PASS하지 않는다.
 - [x] **KT-05 — final checklist**
   - **Action:** Kotlin final/testing/Spring checklist를 완료한다.
-  - **Evidence:** Kotlin/test rows와 N/A 근거를 갱신했고 report/review의 finding count `P0=0 / P1=0 / P2=0 / P3=0`을 확인했다.
+  - **Evidence:** Kotlin/test rows와 N/A 근거를 갱신했고 report/review의 inline finding count `P0=0 / P1=0 / P2=5 / P3=0`을 확인했다.
   - **Failure:** unchecked row와 repair action을 보고한다.
 
 ## Writer / Lesson
@@ -165,17 +165,18 @@
 |---|---|---|
 | 2026-08-24 UTC | `./gradlew :appointment-api:test --tests 'io.bluetape4k.clinic.appointment.api.config.NotificationOutboxCanaryEvidenceValidatorTest' --no-build-cache` | `2 passing`, 첫 fixture RED 후 GREEN |
 | 2026-08-24 UTC | `./gradlew :appointment-api:compileTestKotlin --no-build-cache` | `BUILD SUCCESSFUL` |
-| 2026-08-24 UTC | `./gradlew :appointment-api:test --tests 'io.bluetape4k.clinic.appointment.api.config.NotificationOutboxCanarySimulationIntegrationTest' --no-build-cache` | `1 passing`, simulation 26.8초 |
+| 2026-08-24 UTC | `./gradlew :appointment-api:test --tests 'io.bluetape4k.clinic.appointment.api.config.NotificationOutboxCanarySimulationIntegrationTest' --no-build-cache` | `1 passing`, simulation 29.6초 |
 | 2026-08-24 UTC | wildcard rerun `...NotificationOutboxCanary* --no-daemon --no-build-cache --rerun-tasks` | 테스트 자체는 `3 passing`까지 도달했지만 Gradle `EOFException`으로 task가 실패하여 최종 증거로 채택하지 않음 |
-| 2026-08-24 UTC | exact-class `...EvidenceValidatorTest` + `...SimulationIntegrationTest --no-daemon --no-build-cache --rerun-tasks --max-workers=1` | `2+1` XML tests, failures/errors `0`, `BUILD SUCCESSFUL` |
+| 2026-08-24 UTC | exact-class `...EvidenceValidatorTest` + `...SimulationIntegrationTest --no-daemon --no-build-cache --rerun-tasks --max-workers=1 --console=plain` | `2+1` XML tests, failures/errors `0`, `BUILD SUCCESSFUL` (Gradle 1분 13초, simulation 29.6초) |
+| 2026-08-24 UTC | fixture refresh 후 `./gradlew :appointment-api:test --tests 'io.bluetape4k.clinic.appointment.api.config.NotificationOutboxCanaryEvidenceValidatorTest' --no-daemon --no-build-cache --rerun-tasks --max-workers=1 --console=plain` | validator `2 passing`, `BUILD SUCCESSFUL`; durable/fixture report identical, JSON/redaction scan PASS |
 | 2026-08-24 UTC | `node .../audit-korean-terms.mjs` | 3개 문서, `findings=0` |
-| 2026-08-24 UTC | `docs/benchmarks/issue-204-notification-canary/2026-08-24/production-like-report.json` | redacted report, 모든 threshold `0`, assertions `18/18`, final `SHADOW` route assertion 포함 |
+| 2026-08-24 UTC | `docs/benchmarks/issue-204-notification-canary/2026-08-24/production-like-report.json` | redacted report, zero-failure thresholds `0`, throughput `33.74730021598272/s`, assertions `27/27`, worker stop/restart·health·final `SHADOW` route assertion 포함 |
 
 ## 현재 DoD 집계
 
 - PASS: WF-00..WF-06, CL-01..CL-06, E-01..E-05, KT-01..KT-05, SPW-01..05
 - N/A: live rollout/credential/traffic, frontend/production route, HTTP/HC5, chart/diagram, chezmoi parity
-- PENDING: CL-07, E-06, E-07, E-08 (pre-PR/PR/merge 승인과 closeout 전용)
-- Review note: 독립 `code-reviewer` lane 두 차례를 dispatch했으나 응답이 없어 P0/P1 독립 리뷰 PASS로 산정하지 않았다. 로컬 수동 검토와 fresh test/report 증거만 커밋에 반영했다.
+- PENDING: CL-07, E-07, E-08 (PR/merge 승인과 closeout 전용; P2 외부 증거는 Issue #204 rollout hold로 별도 추적)
+- Review note: 사용자 지시에 따라 독립 `code-reviewer` lane 대신 현재 diff inline review를 수행했다. P0=0/P1=0/P3=0이며, production 외부 증거 경계의 P2=5건은 PENDING으로 기록했다. 상수 evidence, replay 누락, cleanup masking, drain off-by-one, validator mutation false-positive를 수정하고 fresh test/report에 반영했다.
 - BLOCKED: 없음
-- 최종 상태: `PENDING — merge 전 fresh review와 명시 승인 필요`
+- 최종 상태: `PENDING — P2 외부 증거와 PR/merge 전 fresh review·명시 승인 필요`

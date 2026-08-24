@@ -5,7 +5,9 @@ import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentConfirmedParameters
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
+import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
+import io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand
 import io.bluetape4k.clinic.appointment.event.notification.NotificationAuditFingerprint
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttemptOutcome
@@ -13,6 +15,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryA
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
+import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCursor
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyDigest
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
@@ -23,16 +26,27 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxSta
 import io.bluetape4k.clinic.appointment.event.notification.NotificationParameterType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationProviderMessageReference
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
+import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
 import io.bluetape4k.clinic.appointment.event.notification.SendableNotificationDraft
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
+import io.bluetape4k.clinic.appointment.notification.JdbcNotificationOutboxObservationStore
 import io.bluetape4k.clinic.appointment.notification.JdbcNotificationOutboxWorkStore
 import io.bluetape4k.clinic.appointment.notification.MemberNotificationProfile
 import io.bluetape4k.clinic.appointment.notification.MemberNotificationProfileResolver
 import io.bluetape4k.clinic.appointment.notification.MemberNotificationProfileResult
+import io.bluetape4k.clinic.appointment.notification.NotificationCandidatePage
 import io.bluetape4k.clinic.appointment.notification.NotificationChannel
 import io.bluetape4k.clinic.appointment.notification.NotificationDeliveryRouteGate
+import io.bluetape4k.clinic.appointment.notification.NotificationOutboxAlertPolicy
+import io.bluetape4k.clinic.appointment.notification.NotificationOutboxAlertSample
+import io.bluetape4k.clinic.appointment.notification.NotificationOutboxAlertSeverity
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxDispatcher
+import io.bluetape4k.clinic.appointment.notification.NotificationOutboxHealthIndicator
+import io.bluetape4k.clinic.appointment.notification.NotificationOutboxLivenessSnapshot
+import io.bluetape4k.clinic.appointment.notification.NotificationOutboxReadinessSnapshot
+import io.bluetape4k.clinic.appointment.notification.NotificationOutboxWorkStore
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxWorker
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxWorkerResult
 import io.bluetape4k.clinic.appointment.notification.NotificationProperties
@@ -94,12 +108,13 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
     @Test
     fun `1000건 canary는 rollback queue 보존 retry fencing idempotency와 인프라 정리를 증명한다`() = runBlocking {
         val assertions = AssertionLedger()
+        val startedAt = Instant.now()
         val postgres = Containers.Postgres
         val dataSource = postgresDataSource(postgres)
         migrate(dataSource)
         val database = Database.connect(dataSource)
         val repository = NotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(5))
-        val store = JdbcNotificationOutboxWorkStore(database, repository)
+        val store = CountingWorkStore(JdbcNotificationOutboxWorkStore(database, repository))
         val provider = DeterministicProvider(retryOnCall = 2)
         val worker = worker(store, provider)
         val reportOutput = reportOutput()
@@ -116,14 +131,22 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
         val active = dispatcher(store, worker, NotificationRolloutMode.ACTIVE)
         val firstBatch = active.dispatchOnce()
         assertions.check(firstBatch.isNotEmpty(), "ACTIVE must claim a bounded batch")
+        assertions.check(
+            provider.replayFirstAccepted() is NotificationProviderResult.Accepted,
+            "provider replay must return the original idempotent result",
+        )
         val openBeforePause = countOpen(database)
         assertions.check(openBeforePause in 1 until LOGICAL_NOTIFICATIONS.toLong(), "partial ACTIVE must leave queue")
 
+        active.close()
+        val workerStoppedAt = Instant.now()
         val callsBeforePause = provider.calls.get()
         val paused = dispatcher(store, worker, NotificationRolloutMode.PAUSED)
         paused.dispatchOnce() shouldBeEqualTo emptyList()
-        assertions.check(provider.calls.get() == callsBeforePause, "PAUSED must not call provider")
-        assertions.check(countOpen(database) == openBeforePause, "PAUSED must preserve non-terminal queue")
+        val queuePreserved = countOpen(database) == openBeforePause
+        val providerCallsDuringPause = provider.calls.get() - callsBeforePause
+        assertions.check(providerCallsDuringPause == 0, "PAUSED must not call provider")
+        assertions.check(queuePreserved, "PAUSED must preserve non-terminal queue")
         paused.close()
 
         val finalShadow = dispatcher(store, worker, NotificationRolloutMode.SHADOW)
@@ -139,8 +162,18 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
         assertions.check(recovered.attemptNumber == 2, "expired lease must advance attempt number")
         worker.process(recovered) shouldBeEqualTo NotificationOutboxWorkerResult.COMPLETED
 
-        drain(active, database, assertions)
-        active.close()
+        val restartedActive = dispatcher(store, worker, NotificationRolloutMode.ACTIVE)
+        val workerRestartedAt = Instant.now()
+        val workerStoppedAndRestarted = workerStoppedAt <= workerRestartedAt && restartedActive !== active
+        drain(restartedActive, database, assertions)
+        restartedActive.close()
+
+        val rollback = RollbackEvidence(
+            queuePreserved = queuePreserved,
+            providerCallsDuringPause = providerCallsDuringPause,
+            workerStoppedAndRestarted = workerStoppedAndRestarted,
+        )
+        assertions.check(rollback.workerStoppedAndRestarted, "rollback must stop and restart the worker")
 
         val redis = verifyRedis(assertions)
         val kafka = verifyKafka(assertions)
@@ -148,7 +181,15 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
         assertions.check(lifecycle.openRows == 0L, "all seeded rows must be terminal")
         assertions.check(lifecycle.retryScheduled >= 1, "retry path must be exercised")
         assertions.check(lifecycle.leaseLost >= 1, "fencing path must close a lost lease")
+        assertions.check(provider.replayedRequests() == 1, "provider idempotency replay must be exercised once")
         assertions.check(provider.duplicateAcceptedResults() == 0, "provider accepted results must be idempotent")
+        assertions.check(lifecycle.terminalRedactionViolations == 0, "terminal rows must be redacted")
+        val observation = observation(database, repository)
+        assertions.check(observation.pendingReady == 0L, "final ready backlog must be zero")
+        val criticalAlerts = criticalAlertCount(lifecycle, observation)
+        assertions.check(criticalAlerts == 0, "simulation must emit no critical alerts")
+        assertions.check(store.claimFailures == 0, "all dispatcher claims must succeed")
+        val health = verifyHealth(assertions, observation)
 
         val report = report(
             postgres = postgres.dockerImageName,
@@ -157,6 +198,12 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
             kafka = kafka,
             lifecycle = lifecycle,
             provider = provider,
+            rollback = rollback,
+            observation = observation,
+            criticalAlerts = criticalAlerts,
+            claimFailures = store.claimFailures,
+            health = health,
+            startedAt = startedAt,
             assertions = assertions.snapshot(),
         )
         NotificationOutboxCanaryEvidenceValidator.validate(report)
@@ -215,7 +262,7 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
     }
 
     private fun worker(
-        store: JdbcNotificationOutboxWorkStore,
+        store: NotificationOutboxWorkStore,
         provider: DeterministicProvider,
     ): NotificationOutboxWorker = NotificationOutboxWorker(
         workStore = store,
@@ -248,7 +295,7 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
     )
 
     private fun dispatcher(
-        store: JdbcNotificationOutboxWorkStore,
+        store: NotificationOutboxWorkStore,
         worker: NotificationOutboxWorker,
         mode: NotificationRolloutMode,
     ): NotificationOutboxDispatcher = NotificationOutboxDispatcher(
@@ -266,7 +313,8 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
         assertions: AssertionLedger,
     ) {
         var rounds = 0
-        while (rounds++ < MAX_DRAIN_ROUNDS) {
+        while (rounds < MAX_DRAIN_ROUNDS) {
+            rounds++
             val results = dispatcher.dispatchOnce()
             if (results.isEmpty()) {
                 backdateRetries(database)
@@ -317,7 +365,64 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
             leaseLost = attempts.count { it[NotificationDeliveryAttempts.outcome] == NotificationDeliveryAttemptOutcome.LEASE_LOST },
             unknownResults = attempts.count { it[NotificationDeliveryAttempts.failureCode] == NotificationFailureCode.DELIVERY_RESULT_UNKNOWN.name },
             acceptedResults = provider.acceptedResults(),
+            deliveryAttempts = attempts.size,
+            terminalRedactionViolations = rows.count { row ->
+                row[NotificationOutboxEvents.status] in TERMINAL_STATUSES &&
+                    (row[NotificationOutboxEvents.appointmentId] != null ||
+                        row[NotificationOutboxEvents.memberId] != null ||
+                        row[NotificationOutboxEvents.parametersJson] != null)
+            },
         )
+    }
+
+    private suspend fun observation(
+        database: Database,
+        repository: NotificationOutboxRepository,
+    ): ObservationEvidence {
+        val snapshot = JdbcNotificationOutboxObservationStore(
+            database = database,
+            repository = repository,
+        ).loadBoundedSnapshot()
+        return ObservationEvidence(
+            pendingReady = snapshot.pendingReady,
+            oldestReadyAgeSeconds = snapshot.oldestActiveAge?.seconds ?: 0L,
+            capped = snapshot.capped,
+        )
+    }
+
+    private fun criticalAlertCount(
+        lifecycle: LifecycleEvidence,
+        observation: ObservationEvidence,
+    ): Int = NotificationOutboxAlertPolicy().evaluate(
+        NotificationOutboxAlertSample(
+            oldestActiveAge = Duration.ofSeconds(observation.oldestReadyAgeSeconds),
+            providerAttempts = lifecycle.deliveryAttempts,
+            providerFailures = lifecycle.retryScheduled,
+            unknownInFiveMinutes = lifecycle.unknownResults,
+            leaseRecoveries = lifecycle.leaseLost,
+            deliveryAttempts = lifecycle.deliveryAttempts,
+            pendingBacklog = observation.pendingReady,
+        )
+    ).count { it.severity == NotificationOutboxAlertSeverity.CRITICAL }
+
+    private fun verifyHealth(
+        assertions: AssertionLedger,
+        observation: ObservationEvidence,
+    ): HealthEvidence {
+        val indicator = NotificationOutboxHealthIndicator(
+            readinessSource = { NotificationOutboxReadinessSnapshot.up() },
+            livenessSource = {
+                NotificationOutboxLivenessSnapshot(
+                    oldestActiveAge = Duration.ofSeconds(observation.oldestReadyAgeSeconds),
+                    backlogCapped = observation.capped,
+                )
+            },
+        )
+        val health = requireNotNull(NotificationHealthConfiguration().notificationOutboxActuatorHealth(indicator).health())
+        val status = health.status.code
+        assertions.check(status == "UP", "notificationOutboxHealth must be UP")
+        assertions.check(health.details.keys == setOf("readiness", "liveness"), "health details must be bounded")
+        return HealthEvidence(component = "notificationOutboxHealth", status = status, redacted = true)
     }
 
     private fun verifyRedis(assertions: AssertionLedger): RedisEvidence {
@@ -325,14 +430,24 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
         return RedisClient.create(Containers.Redis.url).use { client ->
             client.connect().use { connection ->
                 val commands = connection.sync()
+                var leakedKeys = 0L
+                var primaryFailure: Throwable? = null
                 try {
                     commands.set(key, "simulation") shouldBeEqualTo "OK"
                     assertions.check(commands.get(key) == "simulation", "Redis canary key must round-trip")
-                    RedisEvidence(Containers.Redis.dockerImageName, keyNamespace = "issue-204:canary", leakedKeys = 0)
+                } catch (failure: Throwable) {
+                    primaryFailure = failure
+                    throw failure
                 } finally {
-                    commands.unlink(key)
-                    assertions.check(commands.exists(key) == 0L, "Redis canary key must be deleted")
+                    try {
+                        commands.unlink(key)
+                        leakedKeys = commands.exists(key)
+                    } catch (cleanupFailure: Throwable) {
+                        primaryFailure?.addSuppressed(cleanupFailure) ?: throw cleanupFailure
+                    }
                 }
+                assertions.check(leakedKeys == 0L, "Redis canary key must be deleted")
+                RedisEvidence(Containers.Redis.dockerImageName, keyNamespace = "issue-204:canary", leakedKeys = leakedKeys.toInt())
             }
         }
     }
@@ -341,10 +456,13 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
         val kafka = KafkaServer.Launcher.kafka
         val topic = "clinic.appointment.issue-204.${UUID.randomUUID()}"
         val properties = KafkaServer.Launcher.getProducerProperties(kafka)
+        var topicCreated = false
+        var primaryFailure: Throwable? = null
         try {
             AdminClient.create(properties).use { admin ->
                 admin.createTopics(listOf(NewTopic(topic, 1, 1.toShort()))).all().get(10, TimeUnit.SECONDS)
             }
+            topicCreated = true
             val metadata = KafkaServer.Launcher.createStringProducer(kafka).use { producer ->
                 producer.send(ProducerRecord(topic, "issue-204", "redacted-canary-event"))
                     .get(10, TimeUnit.SECONDS)
@@ -371,9 +489,18 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
                 assertions.check(lag == 0L, "Kafka canary consumer lag must be zero")
                 return KafkaEvidence("${KafkaServer.IMAGE}:${KafkaServer.TAG}", lag)
             }
+        } catch (failure: Throwable) {
+            primaryFailure = failure
+            throw failure
         } finally {
-            AdminClient.create(properties).use { admin ->
-                admin.deleteTopics(listOf(topic)).all().get(10, TimeUnit.SECONDS)
+            if (topicCreated) {
+                try {
+                    AdminClient.create(properties).use { admin ->
+                        admin.deleteTopics(listOf(topic)).all().get(10, TimeUnit.SECONDS)
+                    }
+                } catch (cleanupFailure: Throwable) {
+                    primaryFailure?.addSuppressed(cleanupFailure) ?: throw cleanupFailure
+                }
             }
         }
     }
@@ -385,57 +512,119 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
         kafka: KafkaEvidence,
         lifecycle: LifecycleEvidence,
         provider: DeterministicProvider,
+        rollback: RollbackEvidence,
+        observation: ObservationEvidence,
+        criticalAlerts: Int,
+        claimFailures: Int,
+        health: HealthEvidence,
+        startedAt: Instant,
         assertions: AssertionEvidence,
-    ): JsonNode = jacksonObjectMapper().createObjectNode().apply {
-        put("schemaVersion", 1)
-        put("environment", "local")
-        put("evidenceMode", "production-like-container-backed")
-        put("capturedAt", Instant.now().toString())
-        put("productionSloEvidence", false)
-        put("productionClaim", false)
-        putObject("workload").apply {
-            put("logicalNotifications", LOGICAL_NOTIFICATIONS)
-            put("fixedSeed", FIXED_SEED)
-            put("window", "bounded")
-            putArray("rolloutSequence").addAll(
-                listOf("SHADOW", "ACTIVE_SIMULATED", "PAUSED", "SHADOW").map(jacksonObjectMapper()::valueToTree)
-            )
+    ): JsonNode {
+        val objectMapper = jacksonObjectMapper()
+        val report = objectMapper.createObjectNode().apply {
+            put("schemaVersion", 1)
+            put("environment", "local")
+            put("evidenceMode", "production-like-container-backed")
+            put("capturedAt", Instant.now().toString())
+            put("productionSloEvidence", false)
+            put("productionClaim", false)
+            put("durationMillis", Duration.between(startedAt, Instant.now()).toMillis().coerceAtLeast(0L))
+            putObject("workload").apply {
+                put("logicalNotifications", LOGICAL_NOTIFICATIONS)
+                put("fixedSeed", FIXED_SEED)
+                put("window", "bounded")
+                putArray("rolloutSequence").addAll(
+                    listOf(
+                        "SHADOW",
+                        "ACTIVE_SIMULATED",
+                        "ACTIVE_WORKER_STOPPED",
+                        "PAUSED",
+                        "SHADOW",
+                        "ACTIVE_SIMULATED_RESTARTED",
+                    ).map(objectMapper::valueToTree)
+                )
+            }
+            putObject("infrastructure").apply {
+                putObject("postgres")
+                    .put("image", postgres)
+                    .put("migration", migration)
+                    .put("schema", "clinic_notification_outbox")
+                    .put("ddlLockMode", "flyway.postgresql.transactional.lock=false")
+                putObject("redis").put("image", redis.image).put("namespace", redis.keyNamespace)
+                putObject("kafka").put("image", kafka.image).put("lagRecords", kafka.lagRecords)
+            }
+            putObject("thresholds").apply {
+                put("deliveryResultUnknown", lifecycle.unknownResults)
+                put("duplicateProviderResults", provider.duplicateAcceptedResults())
+                put("criticalAlerts", criticalAlerts)
+                put("claimFailures", claimFailures)
+                put("unresolvedRows", lifecycle.openRows)
+                put("redisLeakedKeys", redis.leakedKeys)
+                put("kafkaLagRecords", kafka.lagRecords)
+                put("oldestReadyAgeSeconds", observation.oldestReadyAgeSeconds)
+                put("readyBacklog", observation.pendingReady)
+                put("providerThroughputPerSecond", provider.throughputPerSecond(startedAt))
+            }
+            putObject("rollback").apply {
+                put("queuePreserved", rollback.queuePreserved)
+                put("providerCallsDuringPause", rollback.providerCallsDuringPause)
+                put("workerStoppedAndRestarted", rollback.workerStoppedAndRestarted)
+                put("result", if (rollback.queuePreserved && rollback.providerCallsDuringPause == 0) "PASS" else "FAIL")
+            }
+            putObject("idempotency").apply {
+                put("acceptedResults", lifecycle.acceptedResults)
+                put("replayedRequests", provider.replayedRequests())
+                put("duplicateAcceptedResults", provider.duplicateAcceptedResults())
+            }
+            putObject("health").apply {
+                put("component", health.component)
+                put("status", health.status)
+                put("redacted", health.redacted)
+            }
+            putObject("lifecycle").apply {
+                put("sentRows", lifecycle.sentRows)
+                put("retryScheduled", lifecycle.retryScheduled)
+                put("leaseLost", lifecycle.leaseLost)
+                put("deliveryAttempts", lifecycle.deliveryAttempts)
+                put("providerCalls", provider.calls.get())
+                put("acceptedResults", lifecycle.acceptedResults)
+            }
+            putObject("assertions").apply {
+                put("total", assertions.total)
+                put("passed", assertions.passed)
+            }
         }
-        putObject("infrastructure").apply {
-            putObject("postgres").put("image", postgres).put("migration", migration)
-            putObject("redis").put("image", redis.image).put("namespace", redis.keyNamespace)
-            putObject("kafka").put("lagRecords", kafka.lagRecords)
+        val reportRedaction = reportRedaction(report)
+        report.putObject("redaction").apply {
+            put("rawPayloadFields", reportRedaction.rawPayloadFields)
+            put("secretFields", reportRedaction.secretFields)
+            put("destinationFields", reportRedaction.destinationFields)
+            put("terminalRowViolations", lifecycle.terminalRedactionViolations)
         }
-        putObject("thresholds").apply {
-            put("deliveryResultUnknown", lifecycle.unknownResults)
-            put("duplicateProviderResults", provider.duplicateAcceptedResults())
-            put("criticalAlerts", 0)
-            put("claimFailures", 0)
-            put("unresolvedRows", lifecycle.openRows)
-            put("redisLeakedKeys", redis.leakedKeys)
-            put("kafkaLagRecords", kafka.lagRecords)
+        return report
+    }
+
+    private fun reportRedaction(report: JsonNode): ReportRedaction {
+        var rawPayloadFields = 0
+        var secretFields = 0
+        var destinationFields = 0
+
+        fun visit(node: JsonNode) {
+            when {
+                node.isObject -> node.properties().forEach { (field, value) ->
+                    when {
+                        field.lowercase() in RAW_PAYLOAD_FIELDS -> rawPayloadFields++
+                        field.lowercase() in SECRET_FIELDS -> secretFields++
+                        field.lowercase() in DESTINATION_FIELDS -> destinationFields++
+                    }
+                    visit(value)
+                }
+                node.isArray -> node.forEach(::visit)
+            }
         }
-        putObject("rollback").apply {
-            put("queuePreserved", true)
-            put("providerCallsDuringPause", 0)
-            put("result", "PASS")
-        }
-        putObject("redaction").apply {
-            put("rawPayloadFields", 0)
-            put("secretFields", 0)
-            put("destinationFields", 0)
-        }
-        putObject("lifecycle").apply {
-            put("sentRows", lifecycle.sentRows)
-            put("retryScheduled", lifecycle.retryScheduled)
-            put("leaseLost", lifecycle.leaseLost)
-            put("providerCalls", provider.calls.get())
-            put("acceptedResults", lifecycle.acceptedResults)
-        }
-        putObject("assertions").apply {
-            put("total", assertions.total)
-            put("passed", assertions.passed)
-        }
+
+        visit(report)
+        return ReportRedaction(rawPayloadFields, secretFields, destinationFields)
     }
 
     private fun writeReport(report: JsonNode, output: Path) {
@@ -469,7 +658,11 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
     ) : NotificationChannel {
         override val channelType: NotificationChannelType = NotificationChannelType.DUMMY
         val calls = AtomicInteger()
-        private val acceptedByKey = ConcurrentHashMap<String, AtomicInteger>()
+        private val acceptedByKey = ConcurrentHashMap<String, NotificationProviderMessageReference>()
+        private val acceptedReferencesByKey = ConcurrentHashMap<String, MutableSet<String>>()
+        private val requestsByKey = ConcurrentHashMap<String, NotificationProviderRequest>()
+        private val replayCount = AtomicInteger()
+        private val referenceSequence = AtomicInteger()
         private val retryEmitted = AtomicBoolean(false)
 
         override fun send(request: NotificationProviderRequest): NotificationProviderResult {
@@ -477,13 +670,36 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
             if (call == retryOnCall && retryEmitted.compareAndSet(false, true)) {
                 return NotificationProviderResult.retry(NotificationFailureCode.PROVIDER_UNAVAILABLE)
             }
-            acceptedByKey.computeIfAbsent(request.idempotencyKey.value) { AtomicInteger() }.incrementAndGet()
-            return NotificationProviderResult.accepted(NotificationProviderMessageReference("provider-204"))
+            requestsByKey[request.idempotencyKey.value] = request
+            val reference = NotificationProviderMessageReference("provider-204-${referenceSequence.incrementAndGet()}")
+            val existing = acceptedByKey.putIfAbsent(request.idempotencyKey.value, reference)
+            val acceptedReference = existing ?: reference
+            acceptedReferencesByKey
+                .computeIfAbsent(request.idempotencyKey.value) { ConcurrentHashMap.newKeySet<String>() }
+                .add(acceptedReference.value)
+            if (existing != null) {
+                replayCount.incrementAndGet()
+                return NotificationProviderResult.accepted(acceptedReference)
+            }
+            return NotificationProviderResult.accepted(acceptedReference)
         }
 
-        fun acceptedResults(): Int = acceptedByKey.values.sumOf(AtomicInteger::get)
+        fun acceptedResults(): Int = acceptedByKey.size
 
-        fun duplicateAcceptedResults(): Int = acceptedByKey.values.sumOf { (it.get() - 1).coerceAtLeast(0) }
+        fun duplicateAcceptedResults(): Int = acceptedReferencesByKey.values.sumOf { references ->
+            (references.size - 1).coerceAtLeast(0)
+        }
+
+        fun replayedRequests(): Int = replayCount.get()
+
+        fun replayFirstAccepted(): NotificationProviderResult =
+            requestsByKey.values.firstOrNull()?.let(::send)
+                ?: error("provider must accept at least one request before replay")
+
+        fun throughputPerSecond(startedAt: Instant): Double {
+            val seconds = Duration.between(startedAt, Instant.now()).toMillis().coerceAtLeast(1L) / 1_000.0
+            return acceptedResults() / seconds
+        }
     }
 
     private data class RedisEvidence(val image: String, val keyNamespace: String, val leakedKeys: Int)
@@ -497,7 +713,76 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
         val leaseLost: Int,
         val unknownResults: Int,
         val acceptedResults: Int,
+        val deliveryAttempts: Int,
+        val terminalRedactionViolations: Int,
     )
+
+    private data class RollbackEvidence(
+        val queuePreserved: Boolean,
+        val providerCallsDuringPause: Int,
+        val workerStoppedAndRestarted: Boolean,
+    )
+
+    private data class ObservationEvidence(
+        val pendingReady: Long,
+        val oldestReadyAgeSeconds: Long,
+        val capped: Boolean,
+    )
+
+    private data class HealthEvidence(
+        val component: String,
+        val status: String,
+        val redacted: Boolean,
+    )
+
+    private data class ReportRedaction(
+        val rawPayloadFields: Int,
+        val secretFields: Int,
+        val destinationFields: Int,
+    )
+
+    private class CountingWorkStore(
+        private val delegate: NotificationOutboxWorkStore,
+    ) : NotificationOutboxWorkStore {
+        var claimFailures: Int = 0
+            private set
+
+        override suspend fun findFairCandidates(
+            limit: Int,
+            cursor: NotificationFairCursor?,
+        ): NotificationCandidatePage = delegate.findFairCandidates(limit, cursor)
+
+        override suspend fun findFairCandidatesForRoute(
+            limit: Int,
+            cursor: NotificationFairCursor?,
+            perClinicLimit: Int,
+            eligibleScopes: Set<TenantClinicScope>?,
+        ): NotificationCandidatePage = delegate.findFairCandidatesForRoute(limit, cursor, perClinicLimit, eligibleScopes)
+
+        override suspend fun claim(id: Long, owner: String): ClaimedNotification? =
+            delegate.claim(id, owner).also { if (it == null) claimFailures++ }
+
+        override suspend fun recoverExpired(limit: Int, owner: String): List<ClaimedNotification> =
+            delegate.recoverExpired(limit, owner)
+
+        override suspend fun recoverExpired(
+            limit: Int,
+            owner: String,
+            eligibleScopes: Set<TenantClinicScope>?,
+        ): List<ClaimedNotification> = delegate.recoverExpired(limit, owner, eligibleScopes)
+
+        override suspend fun complete(command: CompleteNotificationCommand): Boolean = delegate.complete(command)
+
+        override suspend fun retry(command: RetryNotificationCommand): Boolean = delegate.retry(command)
+
+        override suspend fun currentDatabaseTime(): Instant = delegate.currentDatabaseTime()
+
+        override suspend fun deleteTerminalBatch(
+            status: NotificationOutboxStatus,
+            retention: Duration,
+            limit: Int,
+        ): Int = delegate.deleteTerminalBatch(status, retention, limit)
+    }
 
     private data class AssertionEvidence(val total: Int, val passed: Int)
 
@@ -527,5 +812,13 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
             NotificationOutboxStatus.PROCESSING,
             NotificationOutboxStatus.RETRY_WAIT,
         )
+        val TERMINAL_STATUSES = setOf(
+            NotificationOutboxStatus.SENT,
+            NotificationOutboxStatus.SUPPRESSED,
+            NotificationOutboxStatus.EXHAUSTED,
+        )
+        val RAW_PAYLOAD_FIELDS = setOf("payload", "rawpayload", "parameters", "rendered")
+        val SECRET_FIELDS = setOf("secret", "credential", "token")
+        val DESTINATION_FIELDS = setOf("destination", "destinationvalue", "memberid", "appointmentid")
     }
 }
