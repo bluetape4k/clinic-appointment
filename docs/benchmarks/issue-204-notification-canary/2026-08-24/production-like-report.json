@@ -1,0 +1,77 @@
+{
+  "schemaVersion" : 1,
+  "environment" : "local",
+  "evidenceMode" : "production-like-container-backed",
+  "capturedAt" : "2026-08-24T03:43:00.499858Z",
+  "productionSloEvidence" : false,
+  "productionClaim" : false,
+  "durationMillis" : 29629,
+  "workload" : {
+    "logicalNotifications" : 1000,
+    "fixedSeed" : "issue-204-seed-v1",
+    "window" : "bounded",
+    "rolloutSequence" : [ "SHADOW", "ACTIVE_SIMULATED", "ACTIVE_WORKER_STOPPED", "PAUSED", "SHADOW", "ACTIVE_SIMULATED_RESTARTED" ]
+  },
+  "infrastructure" : {
+    "postgres" : {
+      "image" : "postgres:18-alpine",
+      "migration" : "30",
+      "schema" : "clinic_notification_outbox",
+      "ddlLockMode" : "flyway.postgresql.transactional.lock=false"
+    },
+    "redis" : {
+      "image" : "redis:8.8",
+      "namespace" : "issue-204:canary"
+    },
+    "kafka" : {
+      "image" : "confluentinc/cp-kafka:7.5.2",
+      "lagRecords" : 0
+    }
+  },
+  "thresholds" : {
+    "deliveryResultUnknown" : 0,
+    "duplicateProviderResults" : 0,
+    "criticalAlerts" : 0,
+    "claimFailures" : 0,
+    "unresolvedRows" : 0,
+    "redisLeakedKeys" : 0,
+    "kafkaLagRecords" : 0,
+    "oldestReadyAgeSeconds" : 0,
+    "readyBacklog" : 0,
+    "providerThroughputPerSecond" : 33.74730021598272
+  },
+  "rollback" : {
+    "queuePreserved" : true,
+    "providerCallsDuringPause" : 0,
+    "workerStoppedAndRestarted" : true,
+    "result" : "PASS"
+  },
+  "redaction" : {
+    "rawPayloadFields" : 0,
+    "secretFields" : 0,
+    "destinationFields" : 0,
+    "terminalRowViolations" : 0
+  },
+  "idempotency" : {
+    "acceptedResults" : 1000,
+    "replayedRequests" : 1,
+    "duplicateAcceptedResults" : 0
+  },
+  "health" : {
+    "component" : "notificationOutboxHealth",
+    "status" : "UP",
+    "redacted" : true
+  },
+  "lifecycle" : {
+    "sentRows" : 1000,
+    "retryScheduled" : 1,
+    "leaseLost" : 1,
+    "deliveryAttempts" : 1002,
+    "providerCalls" : 1002,
+    "acceptedResults" : 1000
+  },
+  "assertions" : {
+    "total" : 27,
+    "passed" : 27
+  }
+}
