@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.JavaExec
+
 plugins {
     alias(libs.plugins.exposed)
     kotlin("plugin.spring")
@@ -131,6 +133,28 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
         }
     }
+}
+
+tasks.register<JavaExec>("jdbcCaffeineEffectivePolicyPilotBenchmark") {
+    group = "benchmark"
+    description = "Issue #313 JDBC Caffeine effective policy pilot benchmark"
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("io.bluetape4k.clinic.appointment.api.config.JdbcCaffeineEffectivePolicyPilotBenchmark")
+
+    val output = providers.gradleProperty("issue313JdbcCaffeineBenchmarkOutput").orElse(
+        layout.buildDirectory.file("reports/issue-313/jdbc-caffeine-pilot.json")
+            .map { it.asFile.absolutePath },
+    )
+    systemProperty("issue313.jdbcCaffeineBenchmark.output", output.get())
+    systemProperty(
+        "issue313.jdbcCaffeineBenchmark.warmupRounds",
+        providers.gradleProperty("issue313JdbcCaffeineBenchmarkWarmupRounds").orElse("5").get(),
+    )
+    systemProperty(
+        "issue313.jdbcCaffeineBenchmark.measurementRounds",
+        providers.gradleProperty("issue313JdbcCaffeineBenchmarkMeasurementRounds").orElse("20").get(),
+    )
 }
 
 tasks.bootJar {

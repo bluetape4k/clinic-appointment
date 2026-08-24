@@ -239,7 +239,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
 - Create: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/JdbcCaffeineEffectivePolicyPilotBenchmark.kt`
 - Modify: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/JdbcCaffeineEffectivePolicyPilotFixture.kt`
 
-- [ ] **Step 1: benchmark runner와 report schema를 먼저 고정**
+- [x] **Step 1: benchmark runner와 report schema를 먼저 고정**
 
   `JdbcCaffeineEffectivePolicyPilotBenchmark.main()`은 system property로 output
   path를 받고, 기본값을 `build/reports/issue-313/jdbc-caffeine-pilot.json`으로
@@ -260,7 +260,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
 
   raw policy payload와 tenant/clinic 식별자는 report에 쓰지 않는다.
 
-- [ ] **Step 2: baseline/candidate 대칭 프로필 구현**
+- [x] **Step 2: baseline/candidate 대칭 프로필 구현**
 
   동일한 detached value와 key에 대해 다음 프로필을 각각 5 warm-up/20 measured
   sample로 실행한다. 각 sample은 `System.nanoTime()`으로 감싸고 p50/p95/p99와
@@ -277,7 +277,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   `getThreadAllocatedBytes` delta를 기록하고, 지원하지 않으면 allocation 값을
   `null`로 기록한다. allocation을 heap 전체 차이로 추정하지 않는다.
 
-- [ ] **Step 3: benchmark JavaExec task 등록**
+- [x] **Step 3: benchmark JavaExec task 등록**
 
   `appointment-api/build.gradle.kts`에 기존 `JavaExec` 관례를 따라 import와 task를
   추가한다.
@@ -301,7 +301,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   }
   ```
 
-- [ ] **Step 4: smoke report 실행과 raw evidence read-back**
+- [x] **Step 4: smoke report 실행과 raw evidence read-back**
 
   ```bash
   ./gradlew :appointment-api:jdbcCaffeineEffectivePolicyPilotBenchmark --no-daemon

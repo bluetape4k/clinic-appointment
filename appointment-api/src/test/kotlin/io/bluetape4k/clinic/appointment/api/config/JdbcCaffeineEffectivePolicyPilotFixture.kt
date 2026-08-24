@@ -114,6 +114,10 @@ internal class JdbcCaffeineEffectivePolicyPilotFixture : AutoCloseable {
 
     fun lookupBaseline(key: EffectivePolicyCacheKey): EffectiveSchedulingPolicy? = baselineCache.get(key)
 
+    fun invalidateBaseline(key: EffectivePolicyCacheKey) {
+        baselineCache.invalidateClinic(key.tenantGroupId, key.clinicId)
+    }
+
     fun publish(sample: Sample, pilotEnabled: Boolean) {
         if (!pilotEnabled) {
             baselineCache.put(sample.key, sample.value, estimatedBytes = 1L)
