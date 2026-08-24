@@ -1,0 +1,66 @@
+{
+  "issue": 386,
+  "source": "appointment-api/build/reports/performance/issue-386-keyset-index-assessment.txt",
+  "metrics": {
+    "readP95Ms": {
+      "unit": "ms",
+      "lowerIsBetter": true
+    },
+    "writeP95Ms": {
+      "unit": "ms",
+      "lowerIsBetter": true
+    }
+  },
+  "candidateIndex": {
+    "measuredPlans": 21,
+    "selectedPlans": 0,
+    "sizeBytes": 1073152
+  },
+  "tables": [
+    {
+      "name": "scheduling_doctors",
+      "baseline": {
+        "readP95Ms": 0.689,
+        "writeP95Ms": 4.022,
+        "rowsRemovedByFilter": 16767,
+        "index": "scheduling_doctors_pkey"
+      },
+      "composite": {
+        "readP95Ms": 0.660,
+        "writeP95Ms": 4.057,
+        "rowsRemovedByFilter": 16767,
+        "index": "scheduling_doctors_pkey"
+      }
+    },
+    {
+      "name": "scheduling_equipments",
+      "baseline": {
+        "readP95Ms": 0.664,
+        "writeP95Ms": 3.676,
+        "rowsRemovedByFilter": 16767,
+        "index": "scheduling_equipments_pkey"
+      },
+      "composite": {
+        "readP95Ms": 0.674,
+        "writeP95Ms": 4.021,
+        "rowsRemovedByFilter": 16767,
+        "index": "scheduling_equipments_pkey"
+      }
+    },
+    {
+      "name": "scheduling_treatment_types",
+      "baseline": {
+        "readP95Ms": 0.678,
+        "writeP95Ms": 4.216,
+        "rowsRemovedByFilter": 16767,
+        "index": "scheduling_treatment_types_pkey"
+      },
+      "composite": {
+        "readP95Ms": 0.654,
+        "writeP95Ms": 5.162,
+        "rowsRemovedByFilter": 16767,
+        "index": "scheduling_treatment_types_pkey"
+      }
+    }
+  ]
+}

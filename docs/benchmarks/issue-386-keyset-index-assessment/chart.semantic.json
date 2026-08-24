@@ -1,0 +1,22 @@
+{
+  "kind": "chart",
+  "source": {
+    "question": "후보 (clinic_id, id) 인덱스가 keyset 읽기와 쓰기 p95에 어떤 차이를 만드는가?",
+    "revision": "92b0b8a2344126cbf28f7b0a75eafc4b9e1ef659",
+    "paths": [
+      "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/integration/ClinicKeysetIndexAssessmentTest.kt",
+      "docs/benchmarks/issue-386-keyset-index-assessment/chart.data.json",
+      "docs/benchmarks/issue-386-keyset-index-assessment/summary.ko.md"
+    ]
+  },
+  "nodes": [
+    {"id": "scheduling_doctors", "label": "scheduling_doctors", "source": "chart.data.json"},
+    {"id": "scheduling_equipments", "label": "scheduling_equipments", "source": "chart.data.json"},
+    {"id": "scheduling_treatment_types", "label": "scheduling_treatment_types", "source": "chart.data.json"},
+    {"id": "baseline", "label": "현재 primary-key index", "source": "summary.ko.md"},
+    {"id": "composite", "label": "후보 (clinic_id, id)", "source": "summary.ko.md"}
+  ],
+  "edges": [],
+  "behavior": {"branches": 0, "loops": 0},
+  "repairs": []
+}
