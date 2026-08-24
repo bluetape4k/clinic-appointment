@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "environment": "local",
+  "evidenceMode": "production-like-container-backed",
+  "productionSloEvidence": false,
+  "productionClaim": false,
+  "workload": {
+    "logicalNotifications": 1000,
+    "fixedSeed": "issue-204-seed-v1",
+    "window": "bounded",
+    "rolloutSequence": ["SHADOW", "ACTIVE_SIMULATED", "PAUSED", "SHADOW"]
+  },
+  "infrastructure": {
+    "postgres": {"migration": "30"},
+    "redis": {"image": "redis:8.8"},
+    "kafka": {"lagRecords": 0}
+  },
+  "thresholds": {
+    "deliveryResultUnknown": 0,
+    "duplicateProviderResults": 0,
+    "criticalAlerts": 0,
+    "claimFailures": 0,
+    "unresolvedRows": 0,
+    "redisLeakedKeys": 0,
+    "kafkaLagRecords": 0
+  },
+  "rollback": {
+    "queuePreserved": true,
+    "providerCallsDuringPause": 0,
+    "result": "PASS"
+  },
+  "redaction": {
+    "rawPayloadFields": 0,
+    "secretFields": 0,
+    "destinationFields": 0
+  }
+}
