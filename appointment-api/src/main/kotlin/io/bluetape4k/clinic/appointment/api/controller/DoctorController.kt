@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.api.dto.ApiResponse
+import io.bluetape4k.clinic.appointment.api.dto.KeysetPageResponse
+import io.bluetape4k.clinic.appointment.api.service.ClinicKeysetCursorCodec
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.dto.DoctorAbsenceRecord
 import io.bluetape4k.clinic.appointment.model.dto.DoctorRecord
@@ -69,6 +71,40 @@ class DoctorController(
         log.debug { "GET doctors tenantCode=$tenantCode, clinicId=$clinicId, page=$pageNumber, size=$pageSize" }
         val result = transaction { doctorRepository.findPage(TenantClinicScope(tenant.id, clinicId), pageNumber, pageSize) }
         return ResponseEntity.ok(ApiResponse.ok(result))
+    }
+
+    /** 병원의 의사 목록을 `(clinic_id, id)` keyset cursor로 조회합니다. */
+    @Operation(summary = "Get doctors by clinic with keyset cursor")
+    @ApiResponses(
+        OApiResponse(responseCode = "200", description = "Success"),
+        OApiResponse(responseCode = "400", description = "Invalid parameters or cursor"),
+    )
+    @GetMapping("/clinics/{clinicId}/doctors/cursor")
+    fun getByClinicWithCursor(
+        @PathVariable tenantCode: String,
+        @PathVariable clinicId: Long,
+        @RequestParam(required = false) cursor: String?,
+        @RequestParam(defaultValue = "20") limit: Int,
+    ): ResponseEntity<ApiResponse<KeysetPageResponse<DoctorRecord>>> {
+        clinicId.requirePositiveNumber("clinicId")
+        val tenant = tenantClinicAccessChecker.verifyClinic(tenantCode, clinicId)
+        val decodedCursor = cursor?.let { token -> ClinicKeysetCursorCodec.decode(token) }
+        require(decodedCursor == null || decodedCursor.clinicId == clinicId) {
+            "cursor clinicId must match path clinicId"
+        }
+        val pageLimit = limit.coerceIn(1, PaginationDefaults.MAX_PAGE_SIZE)
+        log.debug { "GET doctors cursor tenantCode=$tenantCode, clinicId=$clinicId, limit=$pageLimit" }
+        val result = transaction {
+            doctorRepository.findKeysetPage(TenantClinicScope(tenant.id, clinicId), decodedCursor, pageLimit)
+        }
+        return ResponseEntity.ok(
+            ApiResponse.ok(
+                KeysetPageResponse(
+                    items = result.content,
+                    nextCursor = result.nextCursor?.let(ClinicKeysetCursorCodec::encode),
+                )
+            )
+        )
     }
 
     /**

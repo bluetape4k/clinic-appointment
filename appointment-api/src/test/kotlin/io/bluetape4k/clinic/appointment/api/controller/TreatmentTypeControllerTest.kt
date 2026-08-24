@@ -83,6 +83,47 @@ class TreatmentTypeControllerTest @Autowired constructor() : AbstractApiIntegrat
     }
 
     @Test
+    fun `GET - treatment types by clinic with keyset cursor`() {
+        transaction {
+            TreatmentTypes.insertAndGetId {
+                it[TreatmentTypes.clinicId] = this@TreatmentTypeControllerTest.clinicId
+                it[name] = "Follow-up"
+                it[category] = "GENERAL"
+                it[defaultDurationMinutes] = 20
+                it[requiredProviderType] = "DOCTOR"
+                it[requiresEquipment] = false
+                it[maxConcurrentPatients] = 1
+            }
+            TreatmentTypes.insertAndGetId {
+                it[TreatmentTypes.clinicId] = this@TreatmentTypeControllerTest.clinicId
+                it[name] = "Specialist Consultation"
+                it[category] = "GENERAL"
+                it[defaultDurationMinutes] = 40
+                it[requiredProviderType] = "DOCTOR"
+                it[requiresEquipment] = false
+                it[maxConcurrentPatients] = 1
+            }
+        }
+
+        val first = client.get()
+            .uri("$CLINICS_BASE_URL/{clinicId}/treatment-types/cursor?limit=1", clinicId)
+            .execute()
+
+        first.statusCode shouldBeEqualTo HttpStatus.OK
+        first.jsonPath<Boolean>("$.success").shouldBeTrue()
+        first.jsonPath<List<*>>("$.data.items").shouldHaveSize(1)
+        first.jsonPath<String>("$.data.items[0].name") shouldBeEqualTo "General Checkup"
+        val cursor = first.jsonPath<String>("$.data.nextCursor")
+
+        val second = client.get()
+            .uri("$CLINICS_BASE_URL/{clinicId}/treatment-types/cursor?limit=1&cursor={cursor}", clinicId, cursor)
+            .execute()
+
+        second.statusCode shouldBeEqualTo HttpStatus.OK
+        second.jsonPath<String>("$.data.items[0].name") shouldBeEqualTo "Follow-up"
+    }
+
+    @Test
     fun `GET - treatment type by id`() {
         val response = client.get()
             .uri("$TREATMENT_TYPES_BASE_URL/{id}", treatmentTypeId)

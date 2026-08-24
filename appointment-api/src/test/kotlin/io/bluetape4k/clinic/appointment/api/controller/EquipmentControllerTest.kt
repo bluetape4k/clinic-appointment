@@ -80,6 +80,41 @@ class EquipmentControllerTest @Autowired constructor() : AbstractApiIntegrationT
     }
 
     @Test
+    fun `GET - equipments by clinic with keyset cursor`() {
+        transaction {
+            Equipments.insertAndGetId {
+                it[Equipments.clinicId] = this@EquipmentControllerTest.clinicId
+                it[name] = "CT Scanner"
+                it[usageDurationMinutes] = 45
+                it[quantity] = 1
+            }
+            Equipments.insertAndGetId {
+                it[Equipments.clinicId] = this@EquipmentControllerTest.clinicId
+                it[name] = "Ultrasound"
+                it[usageDurationMinutes] = 30
+                it[quantity] = 2
+            }
+        }
+
+        val first = client.get()
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/cursor?limit=1", clinicId)
+            .execute()
+
+        first.statusCode shouldBeEqualTo HttpStatus.OK
+        first.jsonPath<Boolean>("$.success").shouldBeTrue()
+        first.jsonPath<List<*>>("$.data.items").shouldHaveSize(1)
+        first.jsonPath<String>("$.data.items[0].name") shouldBeEqualTo "MRI Scanner"
+        val cursor = first.jsonPath<String>("$.data.nextCursor")
+
+        val second = client.get()
+            .uri("$CLINICS_BASE_URL/{clinicId}/equipments/cursor?limit=1&cursor={cursor}", clinicId, cursor)
+            .execute()
+
+        second.statusCode shouldBeEqualTo HttpStatus.OK
+        second.jsonPath<String>("$.data.items[0].name") shouldBeEqualTo "CT Scanner"
+    }
+
+    @Test
     fun `GET - equipment by id`() {
         val response = client.get()
             .uri("$EQUIPMENTS_BASE_URL/{id}", equipmentId)

@@ -29,8 +29,11 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 | 장비 사용불가 | `DELETE /api/{tenantCode}/clinics/{clinicId}/equipments/{equipmentId}/unavailabilities/{id}` | 삭제 |
 | 클리닉 | `GET /api/{tenantCode}/clinics`, `/{id}`, `/{id}/operating-hours`, `/{id}/break-times` | 클리닉 조회 |
 | 의사 | `GET /api/{tenantCode}/clinics/{id}/doctors`, `/doctors/{id}`, `/{id}/schedules`, `/{id}/absences` | 의사 조회 |
+| 의사 | `GET /api/{tenantCode}/clinics/{clinicId}/doctors/cursor` | `limit`과 opaque `cursor`를 사용하는 keyset 목록 조회 |
 | 진료유형 | `GET /api/{tenantCode}/clinics/{id}/treatment-types`, `/treatment-types/{id}` | 진료유형 조회 |
+| 진료유형 | `GET /api/{tenantCode}/clinics/{clinicId}/treatment-types/cursor` | `limit`과 opaque `cursor`를 사용하는 keyset 목록 조회 |
 | 장비 | `GET /api/{tenantCode}/clinics/{id}/equipments`, `/equipments/{id}` | 장비 조회 |
+| 장비 | `GET /api/{tenantCode}/clinics/{clinicId}/equipments/cursor` | `limit`과 opaque `cursor`를 사용하는 keyset 목록 조회 |
 | 대시보드 통계 | `GET /api/{tenantCode}/admin/stats/{appointments,doctors,cancellations}` | 관리자 집계 조회 |
 | 플랜용 카탈로그 입력 | `PUT /api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}` | 불변 상품 BOM 버전 동기화 |
 | 예약 플랜 | `GET /api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}` | 구매 진료 플랜 한 건 조회 |
@@ -41,6 +44,12 @@ Spring Boot 4 tenant-scoped REST API 서버 — JWT 인증, Flyway 마이그레�
 | 예약 신뢰도 결정 | `GET /api/{tenantCode}/clinics/{clinicId}/members/{memberId}/booking-reliability/decision` | 직원 preview용 제한적·개인정보 안전 자격 결정 조회 |
 | 예약 신뢰도 override/clear | `POST .../booking-reliability/override`, `POST .../booking-reliability/clear` | capability와 병원 범위 검증 뒤 만료되는 직원 결정을 적용·해제 |
 | 예약 신뢰도 감사 | `GET .../booking-reliability/audit` | 프로필 필드 없이 제한된 결정·사건·override 이력 조회 |
+
+세 catalog cursor 경로는 기존 `page`/`size` 목록 경로를 대체하지 않는 추가 계약입니다.
+`limit`은 `1..100` 범위로 보정되며, 응답은 `{ "items": [...], "nextCursor": "..." }`
+형식입니다. `nextCursor`가 있으면 같은 `clinicId`와 `limit`으로 다시 전달하고,
+없으면 마지막 묶음입니다. cursor는 `v1:<clinicId>:<id>` 경계를 URL-safe Base64로
+감싼 opaque 값이므로 내용을 직접 만들거나 다른 병원 경계에 재사용할 수 없습니다.
 
 ### 임시휴진 동기 재배정
 
