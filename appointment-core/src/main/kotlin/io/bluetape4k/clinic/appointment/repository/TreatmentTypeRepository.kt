@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.repository
 
+import io.bluetape4k.clinic.appointment.model.dto.ClinicKeysetCursor
+import io.bluetape4k.clinic.appointment.model.dto.ClinicKeysetPage
 import io.bluetape4k.clinic.appointment.model.dto.EquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentEquipmentRecord
 import io.bluetape4k.clinic.appointment.model.dto.TreatmentTypeRecord
@@ -11,13 +13,17 @@ import io.bluetape4k.exposed.jdbc.repository.LongJdbcRepository
 import io.bluetape4k.exposed.core.ExposedPage
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.support.requireNotNull
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Repository
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.inSubQuery
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.select
 
@@ -28,7 +34,9 @@ import org.jetbrains.exposed.v1.jdbc.select
  */
 @Repository
 class TreatmentTypeRepository : LongJdbcRepository<TreatmentTypeRecord> {
-    companion object : KLogging()
+    companion object : KLogging() {
+        private const val MAX_KEYSET_PAGE_SIZE = 100
+    }
 
     override val table = TreatmentTypes
     override fun extractId(entity: TreatmentTypeRecord): Long = entity.id.requireNotNull("id")
@@ -123,6 +131,42 @@ class TreatmentTypeRepository : LongJdbcRepository<TreatmentTypeRecord> {
                 (TreatmentTypes.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
         }
 
+    /** tenant·clinic 범위에서 `(clinic_id, id)` 순서의 다음 진료 유형 묶음을 조회합니다. */
+    fun findKeysetPage(
+        scope: TenantClinicScope,
+        cursor: ClinicKeysetCursor?,
+        limit: Int,
+    ): ClinicKeysetPage<TreatmentTypeRecord> {
+        require(limit in 1..MAX_KEYSET_PAGE_SIZE) {
+            "limit must be between 1 and $MAX_KEYSET_PAGE_SIZE"
+        }
+        require(cursor == null || cursor.clinicId == scope.clinicId) {
+            "cursor clinicId must match scope clinicId"
+        }
+
+        val predicate =
+            ((TreatmentTypes.clinicId eq scope.clinicId) and
+                (TreatmentTypes.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))) and
+                treatmentTypeKeysetCondition(cursor)
+        val rows = TreatmentTypes
+            .selectAll()
+            .where { predicate }
+            .orderBy(TreatmentTypes.clinicId to SortOrder.ASC, TreatmentTypes.id to SortOrder.ASC)
+            .limit(limit + 1)
+            .toList()
+        val hasNext = rows.size > limit
+        val pageRows = rows.take(limit)
+
+        return ClinicKeysetPage(
+            content = pageRows.map { it.toTreatmentTypeRecord() },
+            nextCursor = if (hasNext) {
+                pageRows.lastOrNull()?.let { ClinicKeysetCursor(scope.clinicId, it[TreatmentTypes.id].value) }
+            } else {
+                null
+            },
+        )
+    }
+
     fun findAllTreatmentEquipments(scope: TenantClinicScope): List<TreatmentEquipmentRecord> {
         val treatmentIds = TreatmentTypes
             .selectAll()
@@ -159,3 +203,9 @@ private fun tenantEquipmentIds(scope: TenantClinicScope) =
             (Equipments.clinicId eq scope.clinicId) and
                 (Equipments.clinicId inSubQuery tenantClinicIds(scope.tenantGroupId))
         }
+
+private fun treatmentTypeKeysetCondition(cursor: ClinicKeysetCursor?): Op<Boolean> =
+    cursor?.let {
+        (TreatmentTypes.clinicId greater it.clinicId) or
+            ((TreatmentTypes.clinicId eq it.clinicId) and (TreatmentTypes.id greater it.id))
+    } ?: Op.TRUE
