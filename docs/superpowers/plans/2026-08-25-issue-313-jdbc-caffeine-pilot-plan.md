@@ -88,7 +88,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   lockfile의 새 artifact scope가 production/runtime이 아니다. 이 단계에서
   leakage가 발견되면 다음 task로 넘어가지 않는다.
 
-- [ ] **Step 4: dependency boundary commit**
+- [x] **Step 4: dependency boundary commit**
 
   ```bash
   git add gradle/libs.versions.toml appointment-api/build.gradle.kts appointment-api/gradle.lockfile
@@ -110,7 +110,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
 - Create: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/JdbcCaffeineEffectivePolicyPilotTest.kt`
 - Create: `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/JdbcCaffeineEffectivePolicyPilotFixture.kt`
 
-- [ ] **Step 1: fixture 없는 RED 테스트를 먼저 작성**
+- [x] **Step 1: fixture 없는 RED 테스트를 먼저 작성**
 
   다음 테스트 이름을 유지하고, 아직 helper를 정의하지 않은 상태에서 먼저
   컴파일시켜 RED를 확인한다.
@@ -137,7 +137,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   }
   ```
 
-- [ ] **Step 2: RED 명령 실행**
+- [x] **Step 2: RED 명령 실행**
 
   ```bash
   ./gradlew :appointment-api:test --tests \
@@ -149,7 +149,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   compile 실패한다. 기존 모듈 실패가 섞이면 로그에서 pilot 오류와 기존 오류를
   분리하고, 기존 기준선 테스트를 다시 실행한다.
 
-- [ ] **Step 3: detached policy fixture와 key를 고정**
+- [x] **Step 3: detached policy fixture와 key를 고정**
 
   `EffectivePolicyCacheTest`의 `SchedulingPolicyCompiler.compileCapacity` fixture를
   재사용해 `EffectiveSchedulingPolicy`와
@@ -157,7 +157,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   만든다. 새 domain DTO나 production factory를 추가하지 않는다. key와 value 모두
   `Serializable` 계약을 유지하고 payload에 Entity/transaction object를 담지 않는다.
 
-- [ ] **Step 4: H2 transaction/cache fixture를 최소 구현**
+- [x] **Step 4: H2 transaction/cache fixture를 최소 구현**
 
   다음 공개 API 조합만 사용한다.
 
@@ -189,7 +189,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   transaction 안에서만 `stageSnapshot`/`stageInvalidation`을 호출한다. raw
   `Thread.sleep`, `@Testcontainers`, 새 executor는 사용하지 않는다.
 
-- [ ] **Step 5: GREEN 계약 구현 후 targeted test 실행**
+- [x] **Step 5: GREEN 계약 구현 후 targeted test 실행**
 
   helper를 추가해 다음을 assertion한다.
 
@@ -215,7 +215,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
 
   Expected: pilot 신규 테스트와 기존 기준선이 모두 PASS한다.
 
-- [ ] **Step 6: transaction contract commit**
+- [x] **Step 6: transaction contract commit**
 
   ```bash
   git add appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/JdbcCaffeineEffectivePolicyPilotFixture.kt \
