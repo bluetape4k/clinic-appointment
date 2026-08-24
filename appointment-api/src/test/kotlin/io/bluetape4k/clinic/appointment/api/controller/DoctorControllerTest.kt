@@ -5,6 +5,8 @@ import io.bluetape4k.clinic.appointment.model.tables.DoctorAbsences
 import io.bluetape4k.clinic.appointment.model.tables.DoctorSchedules
 import io.bluetape4k.clinic.appointment.model.tables.Doctors
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
+import io.bluetape4k.clinic.appointment.api.service.ClinicKeysetCursorCodec
+import io.bluetape4k.clinic.appointment.model.dto.ClinicKeysetCursor
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.assertions.shouldBeEqualTo
@@ -103,6 +105,57 @@ class DoctorControllerTest @Autowired constructor() : AbstractApiIntegrationTest
         response.jsonPath<Int>("$.data.totalCount") shouldBeEqualTo 1
         response.jsonPath<Int>("$.data.pageNumber") shouldBeEqualTo 0
         response.jsonPath<Int>("$.data.pageSize") shouldBeEqualTo 20
+    }
+
+    @Test
+    fun `GET - doctors by clinic with keyset cursor`() {
+        transaction {
+            Doctors.insertAndGetId {
+                it[Doctors.clinicId] = this@DoctorControllerTest.clinicId
+                it[name] = "Dr. Cursor Second"
+                it[specialty] = "Cardiology"
+                it[providerType] = "DOCTOR"
+                it[maxConcurrentPatients] = 1
+            }
+            Doctors.insertAndGetId {
+                it[Doctors.clinicId] = this@DoctorControllerTest.clinicId
+                it[name] = "Dr. Cursor Third"
+                it[specialty] = "Dermatology"
+                it[providerType] = "DOCTOR"
+                it[maxConcurrentPatients] = 1
+            }
+        }
+
+        val first = client.get()
+            .uri("$CLINICS_BASE_URL/{clinicId}/doctors/cursor?limit=1", clinicId)
+            .execute()
+
+        first.statusCode shouldBeEqualTo HttpStatus.OK
+        first.jsonPath<Boolean>("$.success").shouldBeTrue()
+        first.jsonPath<List<*>>("$.data.items").shouldHaveSize(1)
+        first.jsonPath<String>("$.data.items[0].name") shouldBeEqualTo "Dr. Test"
+        val cursor = first.jsonPath<String>("$.data.nextCursor")
+
+        val second = client.get()
+            .uri("$CLINICS_BASE_URL/{clinicId}/doctors/cursor?limit=1&cursor={cursor}", clinicId, cursor)
+            .execute()
+
+        second.statusCode shouldBeEqualTo HttpStatus.OK
+        second.jsonPath<String>("$.data.items[0].name") shouldBeEqualTo "Dr. Cursor Second"
+    }
+
+    @Test
+    fun `GET - malformed or cross clinic doctor cursor returns bad request`() {
+        val malformed = client.get()
+            .uri("$CLINICS_BASE_URL/{clinicId}/doctors/cursor?cursor=not-a-cursor", clinicId)
+            .execute()
+        malformed.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
+
+        val crossClinic = ClinicKeysetCursorCodec.encode(ClinicKeysetCursor(clinicId + 1, 1L))
+        val mismatched = client.get()
+            .uri("$CLINICS_BASE_URL/{clinicId}/doctors/cursor?cursor={cursor}", clinicId, crossClinic)
+            .execute()
+        mismatched.statusCode shouldBeEqualTo HttpStatus.BAD_REQUEST
     }
 
     @Test
