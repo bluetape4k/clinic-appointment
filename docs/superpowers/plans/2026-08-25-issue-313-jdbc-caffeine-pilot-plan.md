@@ -345,7 +345,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
 - Create: `docs/benchmarks/issue-313-jdbc-caffeine-pilot/summary.ko.md`
 - Create: `docs/benchmarks/issue-313-jdbc-caffeine-pilot/provenance.json`
 
-- [ ] **Step 1: chart skill references와 기존 generator를 read-back**
+- [x] **Step 1: chart skill references와 기존 generator를 read-back**
 
   chart 변경 전에 다음을 읽고 output contract를 고정한다.
 
@@ -356,7 +356,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   sed -n '1,260p' /Users/debop/.codex/skills/bluetape-diagram/references/semantic-ledger.md
   ```
 
-- [ ] **Step 2: JSON validation과 SVG generator 작성**
+- [x] **Step 2: JSON validation과 SVG generator 작성**
 
   `scripts/generate-issue313-jdbc-caffeine-chart.mjs`는 `--input`, `--output`,
   `--semantic-output`을 필수로 받고, `schemaVersion`, benchmark family,
@@ -365,7 +365,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   “낮을수록 좋음”, allocation `N/A`, H2/local characterization, production SLO가
   아니라는 설명을 포함한다. SVG의 모든 값은 JSON에서만 읽고 손으로 입력하지 않는다.
 
-- [ ] **Step 3: report를 docs/chart data로 정규화**
+- [x] **Step 3: report를 docs/chart data로 정규화**
 
   benchmark report의 raw sample 전체는 `build/reports`에 남기고, tracked
   `chart.data.json`에는 profile별 summary와 source path/commit/environment만
@@ -377,7 +377,7 @@ GitHub Actions workflow, frontend. README/API 문서는 production 공개 표면
   - H2 및 local JVM 측정의 대표성 한계
   - 생산 도입 결론(`HOLD` 기본값)과 후속 production DB/multi-node 실험
 
-- [ ] **Step 4: chart audit와 visual evidence 실행**
+- [x] **Step 4: chart audit와 visual evidence 실행**
 
   ```bash
   node scripts/generate-issue313-jdbc-caffeine-chart.mjs \
