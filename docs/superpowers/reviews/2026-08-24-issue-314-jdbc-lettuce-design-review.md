@@ -103,8 +103,9 @@ legacy scope-list hit은 scope SQL을 생략하지만 candidate `findAll(where)`
 - Redis GET/SET/warm 실패 시 DB 결과와 error type을 함께 확인한다.
 - stale 값은 외부 DB 변경 뒤 `invalidate(id)` 전후로 비교한다. 외부 writer의
   자동 무효화가 현재 API에 없다는 사실을 운영 책임으로 명시한다.
-- `close()`에서 connection과 scheduler가 종료되는지 확인한다. cleanup
-  실패가 원래 assertion을 덮지 않도록 예외를 분리한다.
+- `close()`를 호출한 뒤 반복 close가 예외 없이 완료되는지 확인한다. 내부
+  connection 상태를 노출하지 않는 API를 반사(reflection)로 우회하지 않고,
+  cleanup 실패가 원래 assertion을 덮지 않도록 예외를 분리한다.
 - 이번 변경으로 운영 SLO, alert, dashboard, cache hit/miss metric이
   생긴다고 주장하지 않는다. 필요하면 후속 운영 이슈로 분리한다.
 
@@ -153,3 +154,13 @@ evidence가 없으면 완료로 보고하지 않는다.
 - 다음 단계는 새 추상화를 만들지 않고, 승인된 명세를 TDD 테스트와
   test-only dependency로 최소 구현한 뒤 targeted/full verification을 수행하는
   것이다.
+
+## Writer gate
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| SPW-01 | PASS | Issue #314, 실제 repository 소스, cache config, artifact 근거를 고정함 |
+| SPW-02 | PASS | 범위·계약·실패 모드·호환성·acceptance·rollback·DoD를 포함함 |
+| SPW-03 | PASS | Korean naturalness checklist와 용어 감사 결과를 반영함 |
+| SPW-04 | PASS | clinic repository와 `bluetape4k-exposed-jdbc-lettuce:1.12.1` 소스를 대조함 |
+| SPW-05 | PASS | Markdown read-back, `git diff --check`, terminology audit 통과 |

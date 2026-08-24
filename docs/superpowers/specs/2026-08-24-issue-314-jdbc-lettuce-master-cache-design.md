@@ -130,9 +130,10 @@ valueCodec = ExposedLettuceCodecs.jackson3(DoctorRecord::class.java)
 - **transaction 경계:** `findAll(where)`의 SQL이 ambient Exposed transaction을
   재사용하는지 확인한다. commit 전후 관찰은 같은 fixture에서 수행하고,
   transaction 밖에서 Query 객체를 보관하지 않는다.
-- **close:** probe의 `close()` 후 Redis connection이 새 작업을 받지 않는지
-  확인한다. 종료 중 실패가 있으면 원래 테스트 예외와 cleanup 예외를 분리해
-  기록한다.
+- **close:** probe의 `close()`가 자체 connection을 닫고 반복 호출에도
+  예외가 없는지 확인한다. 내부 connection 상태를 노출하지 않는
+  ecosystem API를 억지로 반사(reflection)하지 않으며, 종료 중 실패가 있으면
+  원래 테스트 예외와 cleanup 예외를 분리해 기록한다.
 
 ## 6. 검증과 evidence
 
@@ -203,3 +204,13 @@ wrapper를 미리 만들지 않는다.
 - `/Users/debop/work/bluetape4k/bluetape4k-exposed/exposed/jdbc-lettuce/src/main/kotlin/io/bluetape4k/exposed/lettuce/repository/AbstractJdbcLettuceRepository.kt`
 - `/Users/debop/work/bluetape4k/bluetape4k-exposed/exposed/jdbc-lettuce/src/main/kotlin/io/bluetape4k/exposed/lettuce/map/ExposedLettuceLoadedMap.kt`
 - `gh issue view 314 --repo bluetape4k/clinic-appointment`
+
+## Writer gate
+
+| 항목 | 결과 | 근거 |
+|---|---|---|
+| SPW-01 | PASS | Issue #314, 현재 repository와 실제 jdbc-lettuce 소스를 근거로 고정함 |
+| SPW-02 | PASS | 문제·범위·계약·실패·호환성·검증·rollback·DoD를 포함함 |
+| SPW-03 | PASS | Korean naturalness checklist와 용어 감사 결과를 반영함 |
+| SPW-04 | PASS | production cache 경계와 candidate API 동작을 source read-back함 |
+| SPW-05 | PASS | Markdown read-back, `git diff --check`, terminology audit 통과 |
