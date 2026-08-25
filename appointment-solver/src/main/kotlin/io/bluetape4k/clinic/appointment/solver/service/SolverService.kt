@@ -225,17 +225,22 @@ class SolverService(
         val treatments = treatmentTypeRepository.findByScope(scope)
         val equipments = equipmentRepository.findByScope(scope)
         val operatingHours = clinicRepository.findAllOperatingHours(scope)
-        val doctorSchedules = doctors.flatMap { doctor ->
-            val doctorId = checkNotNull(doctor.id) {
+        val doctorIds = doctors.map { doctor ->
+            checkNotNull(doctor.id) {
                 "Doctor record is missing id: clinicId=${doctor.clinicId}"
             }
-            doctorRepository.findAllSchedules(scope, doctorId)
         }
-        val doctorAbsences = doctors.flatMap { doctor ->
-            val doctorId = checkNotNull(doctor.id) {
-                "Doctor record is missing id: clinicId=${doctor.clinicId}"
-            }
-            doctorRepository.findAbsencesByDateRange(scope, doctorId, dateRange)
+        val doctorSchedulesByDoctorId = doctorRepository.findAllSchedulesByDoctorIds(scope, doctorIds)
+        val doctorAbsencesByDoctorId = doctorRepository.findAbsencesByDoctorIdsAndDateRange(
+            scope = scope,
+            doctorIds = doctorIds,
+            dateRange = dateRange,
+        )
+        val doctorSchedules = doctorIds.flatMap { doctorId ->
+            doctorSchedulesByDoctorId[doctorId].orEmpty()
+        }
+        val doctorAbsences = doctorIds.flatMap { doctorId ->
+            doctorAbsencesByDoctorId[doctorId].orEmpty()
         }
         val breakTimes = clinicRepository.findAllBreakTimes(scope)
         val defaultBreakTimes = clinicRepository.findDefaultBreakTimes(scope)

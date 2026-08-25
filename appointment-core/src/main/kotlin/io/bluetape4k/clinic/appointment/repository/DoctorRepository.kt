@@ -23,6 +23,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inSubQuery
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.andWhere
@@ -152,6 +153,30 @@ class DoctorRepository : LongJdbcRepository<DoctorRecord> {
             .andWhere { DoctorSchedules.doctorId inSubQuery tenantDoctorIds(scope) }
             .map { it.toDoctorScheduleRecord() }
 
+    /**
+     * 검증된 범위의 여러 의사 스케줄을 한 번에 조회합니다.
+     *
+     * 입력 의사 수와 무관하게 하나의 SELECT만 실행하며, 기존 의사별 조회와 같은
+     * 식별자 순서로 묶어 호출자가 기존 `flatMap` 결과 순서를 유지할 수 있게 합니다.
+     */
+    fun findAllSchedulesByDoctorIds(
+        scope: TenantClinicScope,
+        doctorIds: Collection<Long>,
+    ): Map<Long, List<DoctorScheduleRecord>> {
+        val ids = doctorIds.distinct()
+        if (ids.isEmpty()) return emptyMap()
+
+        return DoctorSchedules
+            .selectAll()
+            .where {
+                (DoctorSchedules.doctorId inList ids) and
+                    (DoctorSchedules.doctorId inSubQuery tenantDoctorIds(scope))
+            }
+            .orderBy(DoctorSchedules.doctorId to SortOrder.ASC, DoctorSchedules.id to SortOrder.ASC)
+            .map { it.toDoctorScheduleRecord() }
+            .groupBy(DoctorScheduleRecord::doctorId)
+    }
+
     fun findAbsencesByDateRange(
         scope: TenantClinicScope,
         doctorId: Long,
@@ -164,6 +189,33 @@ class DoctorRepository : LongJdbcRepository<DoctorRecord> {
             .andWhere { DoctorAbsences.absenceDate greaterEq dateRange.start }
             .andWhere { DoctorAbsences.absenceDate lessEq dateRange.endInclusive }
             .map { it.toDoctorAbsenceRecord() }
+
+    /**
+     * 검증된 범위의 여러 의사 부재를 날짜 구간으로 한 번에 조회합니다.
+     *
+     * 결과는 의사 ID와 row ID 순으로 정렬해 기존 의사별 조회를 순서대로 합친 결과와
+     * 같은 안정성을 보장합니다.
+     */
+    fun findAbsencesByDoctorIdsAndDateRange(
+        scope: TenantClinicScope,
+        doctorIds: Collection<Long>,
+        dateRange: ClosedRange<LocalDate>,
+    ): Map<Long, List<DoctorAbsenceRecord>> {
+        val ids = doctorIds.distinct()
+        if (ids.isEmpty()) return emptyMap()
+
+        return DoctorAbsences
+            .selectAll()
+            .where {
+                (DoctorAbsences.doctorId inList ids) and
+                    (DoctorAbsences.doctorId inSubQuery tenantDoctorIds(scope))
+            }
+            .andWhere { DoctorAbsences.absenceDate greaterEq dateRange.start }
+            .andWhere { DoctorAbsences.absenceDate lessEq dateRange.endInclusive }
+            .orderBy(DoctorAbsences.doctorId to SortOrder.ASC, DoctorAbsences.id to SortOrder.ASC)
+            .map { it.toDoctorAbsenceRecord() }
+            .groupBy(DoctorAbsenceRecord::doctorId)
+    }
 }
 
 private fun doctorKeysetCondition(cursor: ClinicKeysetCursor?): Op<Boolean> =
