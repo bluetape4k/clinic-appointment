@@ -103,7 +103,7 @@
 <path fill="#f1ecff" stroke="#8a72d6" stroke-width="2" d="M264.93,-548.62C264.93,-548.62 132,-548.62 132,-548.62 126,-548.62 120,-542.62 120,-536.62 120,-536.62 120,-489.34 120,-489.34 120,-483.34 126,-477.34 132,-477.34 132,-477.34 264.93,-477.34 264.93,-477.34 270.93,-477.34 276.93,-483.34 276.93,-489.34 276.93,-489.34 276.93,-536.62 276.93,-536.62 276.93,-542.62 270.93,-548.62 264.93,-548.62"/>
 <text xml:space="preserve" text-anchor="middle" x="198.47" y="-529.53" font-family="goorm Sans" font-size="11.00" fill="#2a1a5c">frontend</text>
 <text xml:space="preserve" text-anchor="middle" x="198.47" y="-516.03" font-family="goorm Sans" font-size="11.00" fill="#2a1a5c">appointment&#45;frontend</text>
-<text xml:space="preserve" text-anchor="middle" x="198.47" y="-502.53" font-family="goorm Sans" font-size="11.00" fill="#2a1a5c">Angular 18 SPA</text>
+<text xml:space="preserve" text-anchor="middle" x="198.47" y="-502.53" font-family="goorm Sans" font-size="11.00" fill="#2a1a5c">Angular 22 SPA</text>
 <text xml:space="preserve" text-anchor="middle" x="198.47" y="-489.03" font-family="goorm Sans" font-size="11.00" fill="#2a1a5c">예약 관리 UI</text>
 </g>
 <!-- fe&#45;&gt;api -->

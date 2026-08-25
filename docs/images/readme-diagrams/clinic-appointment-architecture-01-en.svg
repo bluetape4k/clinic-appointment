@@ -14,7 +14,7 @@
 <g id="node1" class="node">
 <title>fe</title>
 <path fill="#e8f3ff" stroke="#5b8def" stroke-width="2" d="M1021.68,-529.9C1021.68,-529.9 894,-529.9 894,-529.9 888,-529.9 882,-523.9 882,-517.9 882,-517.9 882,-499.12 882,-499.12 882,-493.12 888,-487.12 894,-487.12 894,-487.12 1021.68,-487.12 1021.68,-487.12 1027.68,-487.12 1033.68,-493.12 1033.68,-499.12 1033.68,-499.12 1033.68,-517.9 1033.68,-517.9 1033.68,-523.9 1027.68,-529.9 1021.68,-529.9"/>
-<text xml:space="preserve" text-anchor="middle" x="957.84" y="-510.81" font-family="Comic Mono" font-size="11.00" fill="#1a3a5c">Angular 18 SPA</text>
+<text xml:space="preserve" text-anchor="middle" x="957.84" y="-510.81" font-family="Comic Mono" font-size="11.00" fill="#1a3a5c">Angular 22 SPA</text>
 <text xml:space="preserve" text-anchor="middle" x="957.84" y="-498.06" font-family="Comic Mono" font-size="11.00" fill="#1a3a5c">appointment&#45;frontend</text>
 </g>
 <!-- api -->

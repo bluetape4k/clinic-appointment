@@ -25,7 +25,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 | `@Profile` 환경 분리 (local/dev/prod) | `appointment-api` | v0.2.0 | — |
 | 마스터 데이터 CRUD API (Clinic/Doctor/TreatmentType/Equipment) | `appointment-api` | v0.3.0 | [architecture.md](architecture.md) |
 | 멀티테넌시 기반 (`TenantGroup`, tenant path/JWT guard, 핵심 resource ID guard) | `appointment-core` / `appointment-api` | v0.3.0 | [architecture.md](architecture.md#adr-14-멀티테넌시-식별자와-key-authority) |
-| Angular 21 웹 UI (30개 엔드포인트 전체 연결) | `appointment-frontend` | v0.1.0 / v0.3.0 | [frontend.md](frontend.md) |
+| Angular 22 직원 UI와 tenant-aware 환자 포털 | `appointment-frontend` | 현재 | [frontend.md](frontend.md) |
 | Gatling 부하 테스트 (멀티 클리닉 포함) | `appointment-api` | v0.3.0 | — |
 | Solver 벤치마크 baseline | `appointment-solver` | v0.3.0 | — |
 
@@ -33,7 +33,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 
 | 요구사항 | 모듈 | 우선순위 | 비고 |
 |---------|------|----------|------|
-| **환자 포털 (자가 예약 웹앱)** | `appointment-patient-portal` (신규) | MEDIUM | TODO 섹션 9.1 |
+| **직원·관리자 tenant routing/auth 정합화** | `appointment-frontend` | HIGH | [Issue #295](https://github.com/bluetape4k/clinic-appointment/issues/295) residual |
 | **멀티테넌시 계약 정합화** | `appointment-core` / `appointment-api` / `appointment-solver` | HIGH | 기반은 PR #118에서 완료. #37~#39에서 schema·HTTP authority·repository 격리 보강. [감사 기록](../reviews/2026-08-04-multitenancy-audit.md) |
 | **Kafka4 transactional outbox 메시징** | `appointment-messaging` | LOW | broker 결정 #40 및 appointment stream 구현 #41 완료; consumer/idempotency 확장은 #42 — TODO 섹션 9.3 |
 | **관리자 대시보드 (통계/분석)** | `appointment-dashboard` (신규) | LOW | TODO 섹션 9.4 |
@@ -48,7 +48,7 @@ clinic-appointment 프로젝트의 전체 요구사항 목록과 구현 상태�
 | [domain-model.md](domain-model.md) | 17개 도메인 엔티티, 예약 상태머신 전이도, Exposed 테이블 목록 |
 | [solver.md](solver.md) | Timefold Solver Planning Variable, Hard/Soft 제약조건 전체 목록 |
 | [notification.md](notification.md) | 내구성 outbox 생명주기, 병원별 전환, 회원정보 경계, provider 장애 격리 |
-| [frontend.md](frontend.md) | Angular 21 페이지 구성, API 연동, 빌드 설정 |
+| [frontend.md](frontend.md) | Angular 22 페이지 구성, tenant routing 범위, API 연동, 빌드 설정 |
 | [erd.md](erd.md) | 전체 테이블 ERD (Mermaid), 관계 요약, 컬럼 타입 규칙 |
 | [data-flow.md](data-flow.md) | 예약 생성·슬롯 조회·재배정·Solver·알림 데이터 흐름 다이어그램 |
 | [user-scenarios.md](user-scenarios.md) | 예약 생성·체크인·임시휴진 재배정·리마인더 시퀀스 다이어그램 |

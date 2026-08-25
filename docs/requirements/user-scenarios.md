@@ -1,5 +1,11 @@
 # 사용자 시나리오 (User Scenarios)
 
+> S1의 `/api/...`와 JWT 표기는 현재 직원·관리자 legacy client의 기존 시나리오를
+> 보존한 것입니다. 실제 환자 포털은 `/portal/login`·`/portal/register`에서 tenant
+> code를 받고 HttpOnly cookie session으로 `/api/{tenantCode}/...`를 호출합니다.
+> 두 경로를 하나의 완료 상태로 해석하지 않으며, 직원 tenant routing/auth residual은
+> [Issue #295](https://github.com/bluetape4k/clinic-appointment/issues/295)에서 추적합니다.
+
 ## 참여자
 
 | 참여자 | 설명 |
