@@ -3,11 +3,19 @@ package io.bluetape4k.clinic.appointment.api.projection
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
+import io.bluetape4k.clinic.appointment.api.security.SchedulingRole
+import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
+import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.model.dto.ClinicRecord
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.repository.ClinicRepository
+import io.bluetape4k.clinic.appointment.repository.DoctorRepository
+import io.bluetape4k.clinic.appointment.repository.EquipmentRepository
+import io.bluetape4k.clinic.appointment.repository.TenantGroupRepository
+import io.bluetape4k.clinic.appointment.repository.TreatmentTypeRepository
 import io.bluetape4k.clinic.appointment.repository.toClinicRecord
+import io.bluetape4k.junit5.concurrency.MultithreadingTester
 import io.bluetape4k.spring.data.exposed.jdbc.repository.config.EnableExposedJdbcRepositories
 import org.jetbrains.exposed.v1.core.Transaction
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -28,8 +36,12 @@ import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.jdbc.datasource.DataSourceUtils
+import org.springframework.security.access.AccessDeniedException
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.sql.DataSource
 import kotlin.math.ceil
 import kotlin.math.roundToLong
@@ -130,6 +142,181 @@ class ClinicSpringDataProjectionPilotTest {
             clinicSelects.single().contains("tenant_group_id") shouldBeEqualTo true
             Regex("order by .*id asc").containsMatchIn(clinicSelects.single()) shouldBeEqualTo true
             statements.count { it.contains("scheduling_clinics") } shouldBeEqualTo 1
+        }
+
+    @Test
+    fun `현재 Spring Data repository 경로는 Clinics 전체 컬럼을 읽는 full-row DAO SQL을 만든다`(): Unit =
+        withPilotContext { context ->
+            val fixture = seedFixture(context)
+            val repository = context.getBean(ClinicProjectionRepository::class.java)
+            val statements = mutableListOf<String>()
+
+            transactionTemplate(context).executeWithoutResult {
+                val transaction = TransactionManager.current()
+                val interceptor = SqlStatementCapture(statements)
+                transaction.registerInterceptor(interceptor)
+                try {
+                    repository.findByTenantGroupIdOrderByIdAsc(EntityID(fixture.tenantA, TenantGroups))
+                } finally {
+                    transaction.unregisterInterceptor(interceptor)
+                }
+            }
+
+            val select = statements.single {
+                it.contains("select") && it.contains("scheduling_clinics")
+            }
+            val selectedColumns = Clinics.columns.count { column ->
+                select.contains(column.name.lowercase())
+            }
+
+            selectedColumns shouldBeEqualTo Clinics.columns.size
+            println(
+                "ISSUE315_PROJECTION_CAPABILITY profile=${context.environment.activeProfiles.contentToString()} " +
+                    "repository=bluetape4k-exposed-spring-boot-jdbc:1.12.1 " +
+                    "mode=full_row_dao selectedColumns=$selectedColumns " +
+                    "tableColumns=${Clinics.columns.size} columnLevelProjection=NOT_AVAILABLE",
+            )
+        }
+
+    @Test
+    fun `candidate 결과는 기존 tenant clinic role 권한 경계 뒤에서만 허용된다`(): Unit =
+        withPilotContext { context ->
+            val fixture = seedFixture(context)
+            val candidate = context.getBean(ClinicProjectionAdapter::class.java)
+            val accessChecker = TenantClinicAccessChecker(
+                tenantGroupRepository = TenantGroupRepository(),
+                clinicRepository = ClinicRepository(),
+                doctorRepository = DoctorRepository(),
+                treatmentTypeRepository = TreatmentTypeRepository(),
+                equipmentRepository = EquipmentRepository(),
+            )
+            val rows = transactionTemplate(context).execute {
+                candidate.findByTenant(fixture.tenantA)
+            }
+            val allowedPrincipal = SchedulingUserPrincipal(
+                userId = "issue315-staff",
+                clinicId = 102L,
+                roles = setOf(SchedulingRole.STAFF),
+                allowedTenants = setOf("issue315-tenant-a"),
+                allowedClinicIds = setOf(102L),
+            )
+
+            rows.map { it.id } shouldBeEqualTo listOf(101L, 102L)
+            transactionTemplate(context).executeWithoutResult {
+                accessChecker.verifyClinicForPrincipal(
+                    tenantCode = "issue315-tenant-a",
+                    clinicId = 102L,
+                    principal = allowedPrincipal,
+                )
+            }
+            assertFailsWith<AccessDeniedException> {
+                transactionTemplate(context).executeWithoutResult {
+                    accessChecker.verifyClinicForPrincipal(
+                        tenantCode = "issue315-tenant-a",
+                        clinicId = 101L,
+                        principal = allowedPrincipal,
+                    )
+                }
+            }
+            assertFailsWith<AccessDeniedException> {
+                transactionTemplate(context).executeWithoutResult {
+                    accessChecker.verifyClinicForPrincipal(
+                        tenantCode = "issue315-tenant-b",
+                        clinicId = 201L,
+                        principal = allowedPrincipal,
+                    )
+                }
+            }
+            assertFailsWith<AccessDeniedException> {
+                transactionTemplate(context).executeWithoutResult {
+                    accessChecker.verifyClinicForPrincipal(
+                        tenantCode = "issue315-tenant-a",
+                        clinicId = 102L,
+                        principal = allowedPrincipal.copy(
+                            roles = setOf(SchedulingRole.PATIENT),
+                        ),
+                    )
+                }
+            }
+
+            println(
+                "ISSUE315_AUTHZ_BOUNDARY tenantPredicate=preserved allowed=1 " +
+                    "deniedClinic=1 deniedTenant=1 deniedRole=1 routeIntegration=NOT_APPLICABLE",
+            )
+        }
+
+    @Test
+    fun `PostgreSQL Hikari pool contention에서도 후보 조회가 모두 완료되고 결과를 보존한다`(): Unit =
+        withPilotContext { context ->
+            val schemaOwner = context.getBean(Issue315SchemaOwner::class.java)
+            val pool = schemaOwner.pool
+            if (pool == null) {
+                println(
+                    "ISSUE315_POOL profile=${schemaOwner.profile} status=NOT_TESTED " +
+                        "reason=Hikari PostgreSQL pool is not active",
+                )
+                return@withPilotContext
+            }
+
+            val fixture = seedFixture(context)
+            val adapter = context.getBean(ClinicProjectionAdapter::class.java)
+            val dataSource = context.getBean(DataSource::class.java)
+            val transactionTemplate = transactionTemplate(context)
+            val holdersReady = CountDownLatch(POOL_SIZE)
+            val releaseHolders = CountDownLatch(1)
+            val samples = CopyOnWriteArrayList<PoolSample>()
+
+            pool.maximumPoolSize shouldBeEqualTo POOL_SIZE
+
+            fun runWorker(worker: Int) {
+                val startedAt = System.nanoTime()
+                val result = transactionTemplate.execute {
+                    val connection = DataSourceUtils.getConnection(dataSource)
+                    connection.createStatement().use { statement ->
+                        statement.execute("SELECT 1")
+                    }
+                    holdersReady.countDown()
+                    check(releaseHolders.await(POOL_RELEASE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                        "Issue #315 pool contention release timed out"
+                    }
+                    adapter.findByTenant(fixture.tenantA)
+                }
+                samples += PoolSample(
+                    worker = worker,
+                    elapsedNanos = System.nanoTime() - startedAt,
+                    result = result,
+                )
+            }
+
+            val releaser = Thread.ofPlatform().name("issue315-pool-release").start {
+                try {
+                    holdersReady.await(POOL_RELEASE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                } finally {
+                    releaseHolders.countDown()
+                }
+            }
+            try {
+                MultithreadingTester()
+                    .workers(POOL_WORKERS)
+                    .rounds(1)
+                    .addAll((0 until POOL_WORKERS).map { worker -> { runWorker(worker) } })
+                    .run()
+            } finally {
+                releaseHolders.countDown()
+                releaser.join(POOL_RELEASE_TIMEOUT_SECONDS * 1_000)
+            }
+
+            samples.size shouldBeEqualTo POOL_WORKERS
+            val expected = samples.first().result
+            samples.forEach { it.result shouldBeEqualTo expected }
+            val elapsed = samples.map { it.elapsedNanos }
+            println(
+                "ISSUE315_POOL profile=${schemaOwner.profile} status=PASS " +
+                    "poolSize=${pool.maximumPoolSize} workers=$POOL_WORKERS " +
+                    "completedWorkers=${samples.map { it.worker }.sorted()} " +
+                    "minNs=${elapsed.min()} medianNs=${elapsed.median()} p95Ns=${elapsed.p95()} " +
+                    "allResultsEqual=true",
+            )
         }
 
     @Test
@@ -504,6 +691,12 @@ class ClinicSpringDataProjectionPilotTest {
         val candidateMappingNs: Long,
     )
 
+    private data class PoolSample(
+        val worker: Int,
+        val elapsedNanos: Long,
+        val result: List<ClinicRecord>,
+    )
+
     private fun List<Long>.median(): Long {
         require(isNotEmpty())
         val sorted = sorted()
@@ -521,5 +714,8 @@ class ClinicSpringDataProjectionPilotTest {
         val BENCHMARK_CARDINALITIES = listOf(4, 32, 128)
         const val BENCHMARK_WARMUPS = 5
         const val BENCHMARK_SAMPLES = 30
+        const val POOL_SIZE = 2
+        const val POOL_WORKERS = 4
+        const val POOL_RELEASE_TIMEOUT_SECONDS = 5L
     }
 }

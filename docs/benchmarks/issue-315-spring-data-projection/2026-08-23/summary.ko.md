@@ -79,3 +79,18 @@ PostgreSQL 실행은 `Containers.Postgres` singleton과 Colima Docker context를
    match 0, `appointment-api:test` 836 passing/3 pending와 `build` 성공을
    확인했다. 이 경계를 통과한 뒤에도 위 세 조건이 해소되기 전까지는 기존
    `ClinicRepository`를 유지한다.
+
+## 후속 검증 (2026-08-25)
+
+후속 테스트는 production source/API/runtime dependency를 변경하지 않고
+기존 파일럿 fixture에 세 가지 경계를 추가했다. PostgreSQL Hikari pool
+동시성 결과와 full-row SQL 범위, 기존 `TenantClinicAccessChecker`의
+tenant·clinic·role 인가 경계를 별도 산출물로 보존했다.
+
+- [`2026-08-25 후속 검증 요약`](../2026-08-25/summary.ko.md)
+- [`2026-08-25 raw evidence`](../2026-08-25/raw/followup-run.txt)
+
+원래 benchmark의 단일 worker 측정이 pool contention을 증명하지 않는다는
+경계는 그대로 유지한다. 후속 PostgreSQL 테스트가 실제 Hikari pool 대기를
+검증했지만, candidate가 full-row DAO 경로만 제공하고 실제 authenticated
+route에는 연결되지 않았으므로 production 채택은 계속 **보류**다.

@@ -1,0 +1,24 @@
+# Issue #315 후속 검증 raw evidence
+# 실행일: 2026-08-25 (Asia/Seoul)
+# 모듈: :appointment-api
+# 테스트: io.bluetape4k.clinic.appointment.api.projection.ClinicSpringDataProjectionPilotTest
+# 명령:
+# ./gradlew --no-daemon :appointment-api:test --tests \
+#   'io.bluetape4k.clinic.appointment.api.projection.ClinicSpringDataProjectionPilotTest' --rerun-tasks
+# ./gradlew --no-daemon :appointment-api:test -Dspring.profiles.active=test-postgresql \
+#   --tests 'io.bluetape4k.clinic.appointment.api.projection.ClinicSpringDataProjectionPilotTest' --rerun-tasks
+# 출력은 Gradle JUnit XML에서 decision-relevant 라인만 추출했으며 URL·credential은 포함하지 않는다.
+
+profile=[]
+ISSUE315_PROJECTION_CAPABILITY profile=[] repository=bluetape4k-exposed-spring-boot-jdbc:1.12.1 mode=full_row_dao selectedColumns=8 tableColumns=8 columnLevelProjection=NOT_AVAILABLE
+ISSUE315_POOL profile=test-h2 status=NOT_TESTED reason=Hikari PostgreSQL pool is not active
+ISSUE315_AUTHZ_BOUNDARY tenantPredicate=preserved allowed=1 deniedClinic=1 deniedTenant=1 deniedRole=1 routeIntegration=NOT_APPLICABLE
+testCount=10 passing
+build=SUCCESSFUL
+
+profile=[test-postgresql]
+ISSUE315_PROJECTION_CAPABILITY profile=[test-postgresql] repository=bluetape4k-exposed-spring-boot-jdbc:1.12.1 mode=full_row_dao selectedColumns=8 tableColumns=8 columnLevelProjection=NOT_AVAILABLE
+ISSUE315_POOL profile=test-postgresql status=PASS poolSize=2 workers=4 completedWorkers=[0, 1, 2, 3] minNs=11791625 medianNs=12972250 p95Ns=16407542 allResultsEqual=true
+ISSUE315_AUTHZ_BOUNDARY tenantPredicate=preserved allowed=1 deniedClinic=1 deniedTenant=1 deniedRole=1 routeIntegration=NOT_APPLICABLE
+testCount=10 passing
+build=SUCCESSFUL
