@@ -25,6 +25,7 @@ MockK, bluetape4k assertions, Gradle dependency locking/verification.
 
 | 파일 | 책임 |
 |---|---|
+| `build.gradle.kts` | Java/Kotlin toolchain을 Java 25 snapshot consumer 경계와 정렬하고 기존 Gatling 21 release 예외는 유지 |
 | `gradle/libs.versions.toml` | upstream leader scheduled policy timestamp를 임시 catalog override로 고정 |
 | `gradle.lockfile`, `appointment-notification/gradle.lockfile`, `gradle/verification-metadata.xml` | 새 artifact와 transitive dependency의 생성된 lock/hash |
 | `appointment-notification/src/main/kotlin/.../NotificationSchedulingRunners.kt` | reminder 실행 주기를 plain `@Scheduled`로 유지하고 leader annotation 제거 |
@@ -42,15 +43,25 @@ MockK, bluetape4k assertions, Gradle dependency locking/verification.
 
 ### Task 1: upstream artifact를 catalog와 lock에 고정
 
-**Files:** `gradle/libs.versions.toml`, generated lock/verification files.
+**Files:** `build.gradle.kts`, `gradle/libs.versions.toml`, generated lock/verification files.
 
-- [ ] **Step 1: catalog에 timestamp version을 추가한다.**
+- [x] **Step 1: Java 25 consumer toolchain을 먼저 고정한다.**
+
+  snapshot의 `apiElements`/`runtimeElements`가 Java 25 variant만 제공하므로
+  root `java.toolchain`과 Kotlin `jvmToolchain`을 25로 맞춘다. `appointment-api`
+  의 Gatling compile task가 유지하는 `options.release=21`과 `JvmTarget.JVM_21`
+  예외는 그대로 둔다. 이 단계의 RED 증거는 Java 21 toolchain에서 snapshot을
+  resolution할 때 발생한 `only compatible with JVM runtime version 25 or newer`
+  오류다.
+
+- [x] **Step 2: catalog에 timestamp version을 추가한다.**
 
 ```toml
 [versions]
 bluetape4k-leader-scheduled-policy = "1.0.0-20260824.195548-7"
 
 [libraries]
+bluetape4k-leader-core = { module = "io.github.bluetape4k.leader:bluetape4k-leader-core", version.ref = "bluetape4k-leader-scheduled-policy" }
 bluetape4k-leader = { module = "io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce", version.ref = "bluetape4k-leader-scheduled-policy" }
 bluetape4k-leader-micrometer = { module = "io.github.bluetape4k.leader:bluetape4k-leader-micrometer", version.ref = "bluetape4k-leader-scheduled-policy" }
 bluetape4k-leader-spring-boot = { module = "io.github.bluetape4k.leader:bluetape4k-leader-spring-boot", version.ref = "bluetape4k-leader-scheduled-policy" }
@@ -59,8 +70,10 @@ bluetape4k-leader-spring-boot = { module = "io.github.bluetape4k.leader:bluetape
   `bluetape4k-dependencies` BOM 전체를 사전 릴리스로 올리지 않는다. 네 leader
   artifact의 Central metadata timestamp가 동일한지 다시 확인하고, 다른
   timestamp면 implementation 전에 계획 evidence와 catalog 값을 함께 갱신한다.
+  공식 BOM의 leader `0.5.0` constraint가 core를 되돌리지 않는지도
+  `dependencyInsight`로 확인한다.
 
-- [ ] **Step 2: dependency resolution이 새 policy classes를 선택하는지 확인한다.**
+- [x] **Step 3: dependency resolution이 새 policy classes를 선택하는지 확인한다.**
 
   Run:
 
@@ -74,7 +87,7 @@ bluetape4k-leader-spring-boot = { module = "io.github.bluetape4k.leader:bluetape
   `1.0.0-20260824.195548-7`로 해석되고 `LeaderScheduledPolicyProperties`와
   `LeaderScheduledPolicyRegistry`가 classpath에 있다.
 
-- [ ] **Step 3: lock과 verification metadata를 Gradle로 갱신한다.**
+- [x] **Step 4: lock과 verification metadata를 Gradle로 갱신한다.**
 
 ```bash
 ./gradlew :appointment-notification:dependencies --write-locks
@@ -84,7 +97,13 @@ bluetape4k-leader-spring-boot = { module = "io.github.bluetape4k.leader:bluetape
 
   Expected: generated files에 leader timestamp와 필요한 transitive hash만
   추가되고 unrelated dependency version은 변하지 않는다. `git diff --check`
-  후 lock diff를 읽어 BOM 전체 drift가 없음을 확인한다.
+  후 lock diff를 읽어 BOM 전체 drift가 없음을 확인한다. Java 25 toolchain
+  변경으로 생성되는 unrelated variant drift가 있으면 원인을 분리해 기록하고
+  필요 최소 범위만 유지한다. Gradle 9.7.1 writer가 timestamp와 normalized
+  snapshot component를 중복 키로 처리해 자동 verification write가 실패했으므로,
+  Central Snapshots에서 다시 계산한 네 artifact·module SHA-256만
+  `gradle/verification-metadata.xml`에 수동으로 추가하고 compile verification으로
+  read-back한다.
 
 ### Task 2: property policy와 안전한 bean 경계의 RED 테스트를 먼저 작성
 

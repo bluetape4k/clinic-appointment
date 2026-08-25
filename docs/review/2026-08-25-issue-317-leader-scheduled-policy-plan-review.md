@@ -8,13 +8,14 @@
   수행하고 통합했다. 별도 reviewer agent나 추가 worktree는 사용하지 않았다.
 - 현재 증거: 설계 commit `934908b7`, baseline
   `NotificationSchedulingRunnersTest` 13 passing, upstream policy PR #761,
-  Central timestamp `1.0.0-20260824.195548-7`.
+  Central timestamp `1.0.0-20260824.195548-7`, Gradle module metadata의 Java 25
+  variant.
 
 ## 관점별 결과
 
 | 관점 | 계획 검증 | 심각도 |
 |---|---|---|
-| 성능 | Task 5가 tick당 scheduler/reflective registry 생성 여부와 blocking/round-trip drift를 확인하고 기존 fixed delay를 보존한다. | P0/P1 없음 |
+| 성능 | Task 5가 tick당 scheduler/reflective registry 생성 여부와 blocking/round-trip drift를 확인하고 기존 fixed delay를 보존한다. Java 25 toolchain 정렬은 build-time compatibility만 바꾼다. | P0/P1 없음 |
 | 안정성 | Task 2~3이 policy disabled/factory 부재/selector 누락/짧은 lease를 RED/GREEN으로 고정하고, Task 5가 cancellation·backend·context close와 순차 container 실행을 검증한다. | P0/P1 없음 |
 | 보안 | Task 4가 secret 없는 설정 예시, exact selector, backend bean/SpEL startup validation, wildcard·regex 금지를 문서화한다. | P0/P1 없음 |
 | 운영 | Task 1의 immutable timestamp lock/hash, Task 4의 profile rollback, Task 6의 lesson/PR evidence가 stable release 전환과 운영 경계를 남긴다. | P0/P1 없음 |
@@ -26,7 +27,7 @@
 | 확인 항목 | 결과 |
 |---|---|
 | 설계 acceptance 1~7 각각의 구현 task | 모두 Task 1~6에 연결 |
-| dependency -> test -> production -> docs -> final review 순서 | 순서가 역전되지 않음 |
+| toolchain -> dependency -> test -> production -> docs -> final review 순서 | Java 25 variant compatibility를 Task 1 선행 조건으로 추가했고 순서가 역전되지 않음 |
 | Spring 조건/등록 순서 | upstream policy auto-configuration을 context에 직접 등록하고 factory/registry/property positive·negative를 검증 |
 | 짧은 lease 의미 | `lease-time` 명시 및 `suspendBridgeTimeout` 이상 safety bound로 고정 |
 | Exposed/DB 경계 | production Exposed 코드를 변경하지 않고 DB claim/fence 책임만 문서·테스트 계약으로 유지 |
@@ -42,6 +43,12 @@
 이는 upstream policy model을 복제하지 않고 clinic workload의 one-bean safety
 bound만 추가하는 최소 보완이다. 수정 후 여섯 관점과 통합 검토를 다시 실행했다.
 
+추가로 Task 1 실행 중 snapshot Gradle metadata가 Java 25 variant만 제공하는
+사실을 확인했다. Java 21 toolchain에서는 dependency resolution 자체가
+실패하므로, root Java/Kotlin toolchain 정렬과 Gatling 21 release 예외 보존을
+설계·계획에 반영했다. 이는 새 runtime feature가 아니라 upstream consumer
+호환성 선행 조건이다.
+
 ## 결과
 
 | Priority | Count | Disposition |
@@ -54,4 +61,3 @@ bound만 추가하는 최소 보완이다. 수정 후 여섯 관점과 통합 �
 계획 문서의 SPW-01~05, Korean terminology audit, `git diff --check`,
 placeholder/identifier consistency self-review가 PASS다. Step 4 전환 조건은
 Task 1 catalog resolution, Task 2 RED, 설계/계획 commit이며 이후 구현을 시작한다.
-
