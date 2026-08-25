@@ -22,7 +22,6 @@ dependencies {
     implementation(project(":appointment-messaging"))
     implementation(libs.spring.kafka4)
     implementation(project(":appointment-notification"))
-    api(project(":appointment-solver"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
