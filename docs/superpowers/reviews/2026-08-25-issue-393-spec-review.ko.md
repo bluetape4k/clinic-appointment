@@ -4,7 +4,8 @@
 
 - 대상 명세: `docs/superpowers/specs/2026-08-25-issue-393-outbox-ownership-design.ko.md`
 - 검토 기준 commit: `c59124cf757d3fe95220f61311cbdb5b93e37a4b`
-- 기준 develop: `28e38915cc153fc01275a2c6acad632d99340b93`
+- historical train fence: `28e38915cc153fc01275a2c6acad632d99340b93`
+- PR #410 live develop 재검증 기준: `8d4a26e2f2c96617b5697214d58183a0dee771aa`
 - 대상 이슈: [#393](https://github.com/bluetape4k/clinic-appointment/issues/393)
 - 대상 Epic: [#407](https://github.com/bluetape4k/clinic-appointment/issues/407)
 - 검토 방식: 현재 source/Gradle/fixture/migration을 대조한 6개 독립 관점과
