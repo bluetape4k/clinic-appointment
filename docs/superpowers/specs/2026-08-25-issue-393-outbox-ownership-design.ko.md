@@ -2,16 +2,19 @@
 
 > 상태: 사용자 설계 승인 완료, 구현 전 명세
 >
-> 기준 커밋: `28e38915cc153fc01275a2c6acad632d99340b93`
+> historical train fence: `28e38915cc153fc01275a2c6acad632d99340b93`
+>
+> PR #410 live develop 재검증 기준: `8d4a26e2f2c96617b5697214d58183a0dee771aa`
 >
 > 대상 이슈: [#393](https://github.com/bluetape4k/clinic-appointment/issues/393)
 >
 > Epic: [#407](https://github.com/bluetape4k/clinic-appointment/issues/407)
 
-> 구현 시작 전 live Issue 본문의 과거 기준 SHA를 현재 train 기준
-> `28e38915cc153fc01275a2c6acad632d99340b93`로 갱신하고, notification transitional
-> exception·V19 readiness 범위를 이 명세와 함께 기록한다. Issue read-back으로 제목,
-> 본문, parent 링크와 metadata를 확인한다.
+> 이 명세는 승인 당시의 historical train fence
+> `28e38915cc153fc01275a2c6acad632d99340b93`를 보존한다. 구현 PR을 재검증할 때는
+> live `develop` `8d4a26e2f2c96617b5697214d58183a0dee771aa`를 별도 기준으로 기록하고,
+> notification transitional exception·V19 readiness 범위를 이 명세와 함께 유지한다.
+> Issue read-back으로 제목, 본문, parent 링크와 metadata를 확인한다.
 
 ## 1. 목표
 

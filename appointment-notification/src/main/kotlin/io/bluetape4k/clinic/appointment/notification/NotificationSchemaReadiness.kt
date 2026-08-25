@@ -85,8 +85,8 @@ class NotificationSchemaReadiness(
     private fun requiredTables(): List<String> =
         listOf(
             NotificationOutboxEvents.tableName,
-            NotificationDeliveryAttempts.tableName,
             WaitlistNotificationOutboxEvents.tableName,
+            NotificationDeliveryAttempts.tableName,
             AppointmentEventLogs.tableName,
             Clinics.tableName,
         )
@@ -117,8 +117,8 @@ class NotificationSchemaReadiness(
     private fun missingRequiredIndexes(): List<String> {
         val migrationStatements = MigrationUtils.statementsRequiredForDatabaseMigration(
             NotificationOutboxEvents,
-            NotificationDeliveryAttempts,
             WaitlistNotificationOutboxEvents,
+            NotificationDeliveryAttempts,
         )
         return REQUIRED_INDEXES.filter { required ->
             migrationStatements.any { statement -> statement.contains(required, ignoreCase = true) }

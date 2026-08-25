@@ -12,7 +12,7 @@
 
 ## 사전 조건과 기준선
 
-- [x] worktree가 `refactor/issue-393-outbox-ownership`이고 기준 develop commit이 `28e38915cc153fc01275a2c6acad632d99340b93`인지 확인한다.
+- [x] worktree가 `refactor/issue-393-outbox-ownership`이고 historical train fence가 `28e38915cc153fc01275a2c6acad632d99340b93`, PR 재검증 대상 live `develop`가 `8d4a26e2f2c96617b5697214d58183a0dee771aa`인지 확인한다.
 - [x] root의 기존 변경(`frontend/appointment-frontend/angular.json`, `.superpowers/`, `.workflow-inputs/`)과 다른 worktree를 되돌리지 않는다.
 - [x] 승인된 설계 `docs/superpowers/specs/2026-08-25-issue-393-outbox-ownership-design.ko.md`와 7-Tier 검토 `docs/superpowers/reviews/2026-08-25-issue-393-spec-review.ko.md`의 범위 밖 dependency·module·schema 변경을 추가하지 않는다.
 - [x] 다음 source 좌표를 구현 전 inventory로 고정한다.
@@ -368,7 +368,8 @@ sed -n '370,386p' appointment-notification/src/main/kotlin/io/bluetape4k/clinic/
 - [x] source-level diff, terminology, accidental event API scope를 마지막으로 확인한다. `develop` baseline과의 range diff에서 구현 허용 변경 파일만 남아야 하며, API migration SQL V14/V19/V21/V22는 모두 무변경이어야 한다.
 
 ```bash
-base=28e38915cc153fc01275a2c6acad632d99340b93
+base=8d4a26e2f2c96617b5697214d58183a0dee771aa
+historical_train_fence=28e38915cc153fc01275a2c6acad632d99340b93
 git diff --check "$base"
 git diff "$base" --name-only | sort
 git diff --exit-code "$base" -- \

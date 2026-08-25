@@ -373,7 +373,7 @@ table과 세 필수 index의 단일 누락 사유를 H2에서 검증하고, 실�
 |---|---|---|
 | dependency/API 경계와 lockfile | `build.gradle.kts`, `gradle.lockfile`, 공개 import/fixture를 직전 commit으로 되돌리고 consumer fixture를 재실행 | 불필요 |
 | readiness 구현·회귀 fixture | `NotificationSchemaReadiness`의 waitlist 검사와 H2 단일 누락 테스트를 되돌리고 모듈 테스트를 재실행 | 불필요 |
-| README·ADR·review artifact | 문서 commit만 되돌리고 terminology audit을 재실행 | 불필요 |
+| README 6종·ADR-15·review artifact·Issue #393/#409 evidence link | 문서 commit만 되돌리고 Korean terminology audit과 Issue live readback을 재실행 | 불필요 |
 | migration SQL·runtime schema | 이번 변경에는 해당 파일과 runtime schema 변경이 없음 | 별도 migration rollback을 실행하지 않음 |
 
 **근거**: Issue #393의 설계·구현 review와 V19/V21/V22 migration contract test를 따른다.
