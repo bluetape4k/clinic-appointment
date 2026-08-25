@@ -100,6 +100,40 @@ data class AppointmentMessagingProperties(
     }
 }
 
+/** readiness 실패를 운영자가 안전하게 분류할 수 있도록 bounded하게 보존하는 진단입니다. */
+data class AppointmentReadinessDiagnostic(
+    val operation: String,
+    val target: String,
+    val code: String,
+    val errorClass: String? = null,
+    val retryable: Boolean,
+) {
+    init {
+        require(operation.length in 1..64 && operation.matches(IDENTIFIER_PATTERN)) {
+            "readiness diagnostic operation must be canonical and bounded"
+        }
+        require(target.length in 1..128 && target.all { !it.isWhitespace() && !it.isISOControl() }) {
+            "readiness diagnostic target must be bounded"
+        }
+        require(code.length in 1..64 && code.matches(IDENTIFIER_PATTERN)) {
+            "readiness diagnostic code must be canonical and bounded"
+        }
+        require(errorClass == null ||
+            (errorClass.length in 1..128 && errorClass.all { !it.isWhitespace() && !it.isISOControl() })) {
+            "readiness diagnostic error class must be bounded"
+        }
+    }
+
+    /** Actuator health detail로 노출할 수 있는 안전한 key/value 구조입니다. */
+    fun toHealthDetail(): Map<String, Any> = buildMap {
+        put("operation", operation)
+        put("target", target)
+        put("code", code)
+        errorClass?.let { put("errorClass", it) }
+        put("retryable", retryable)
+    }
+}
+
 /** writer가 구성된 상태와 broker relay 상태를 분리하는 readiness snapshot이다. */
 data class AppointmentMessagingReadiness(
     val enabled: Boolean = true,
@@ -110,6 +144,7 @@ data class AppointmentMessagingReadiness(
     val schemaValid: Boolean = true,
     val registryValid: Boolean = true,
     val serializerValid: Boolean = true,
+    val diagnostics: List<AppointmentReadinessDiagnostic> = emptyList(),
 ) {
     val ready: Boolean
         get() = enabled && configurationValid && brokerAvailable && !relayPaused && !relayHeld &&
@@ -148,6 +183,9 @@ class AppointmentMessagingReadinessProbe(
 
     @Volatile
     private var serializerValid: Boolean = true
+
+    @Volatile
+    private var diagnostics: List<AppointmentReadinessDiagnostic> = emptyList()
 
     fun markConfigurationInvalid() {
         configurationValid = false
@@ -220,6 +258,11 @@ class AppointmentMessagingReadinessProbe(
         serializerValid = true
     }
 
+    /** validator가 이전 검사 결과를 지우고 현재 bounded diagnostic만 교체합니다. */
+    internal fun replaceDiagnostics(values: Collection<AppointmentReadinessDiagnostic>) {
+        diagnostics = values.distinct().take(MAX_DIAGNOSTICS)
+    }
+
     fun snapshot(): AppointmentMessagingReadiness = AppointmentMessagingReadiness(
         enabled = enabled,
         configurationValid = configurationValid,
@@ -229,5 +272,12 @@ class AppointmentMessagingReadinessProbe(
         schemaValid = schemaValid,
         registryValid = registryValid,
         serializerValid = serializerValid,
+        diagnostics = diagnostics,
     )
+
+    private companion object {
+        const val MAX_DIAGNOSTICS = 8
+    }
 }
+
+private val IDENTIFIER_PATTERN = Regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")

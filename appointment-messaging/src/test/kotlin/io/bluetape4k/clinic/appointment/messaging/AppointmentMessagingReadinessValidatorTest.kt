@@ -1,13 +1,24 @@
 package io.bluetape4k.clinic.appointment.messaging
 
 import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.testcontainers.database.PostgreSQLServer
 import org.h2.jdbcx.JdbcDataSource
 import org.junit.jupiter.api.Test
 import org.postgresql.ds.PGSimpleDataSource
+import java.io.PrintWriter
+import java.sql.Connection
 import java.sql.DriverManager
+import java.sql.SQLInvalidAuthorizationSpecException
+import java.sql.SQLNonTransientConnectionException
+import java.sql.SQLTimeoutException
+import java.sql.SQLException
+import java.sql.SQLFeatureNotSupportedException
+import java.util.logging.Logger
+import javax.sql.DataSource
 
 class AppointmentMessagingReadinessValidatorTest {
     @Test
@@ -95,6 +106,7 @@ class AppointmentMessagingReadinessValidatorTest {
 
         probe.snapshot().schemaValid.shouldBeTrue()
         probe.snapshot().serializerValid.shouldBeTrue()
+        probe.snapshot().diagnostics shouldBeEqualTo emptyList<AppointmentReadinessDiagnostic>()
         probe.snapshot().ready.shouldBeTrue()
     }
 
@@ -114,6 +126,97 @@ class AppointmentMessagingReadinessValidatorTest {
 
         probe.snapshot().schemaValid.shouldBeFalse()
         probe.snapshot().ready.shouldBeFalse()
+
+        val diagnostic = probe.snapshot().diagnostics.firstOrNull().shouldNotBeNull()
+        diagnostic.operation shouldBeEqualTo "schema.columns"
+        diagnostic.target shouldBeEqualTo "scheduling_outbox_events.columns"
+        diagnostic.code shouldBeEqualTo "SCHEMA_COLUMNS_MISSING"
+        diagnostic.errorClass shouldBeEqualTo null
+        diagnostic.retryable.shouldBeFalse()
+    }
+
+    @Test
+    fun `permission denied preserves a bounded non-retryable schema diagnostic`() {
+        val probe = AppointmentMessagingReadinessProbe(brokerAvailable = true)
+
+        AppointmentMessagingReadinessValidator(
+            codec = AppointmentEventEnvelopeCodec(),
+            dataSource = failingDataSource(
+                SQLInvalidAuthorizationSpecException("permission denied", "42501"),
+            ),
+        ).validate(probe)
+
+        val diagnostic = probe.snapshot().diagnostics.firstOrNull().shouldNotBeNull()
+        diagnostic.operation shouldBeEqualTo "schema.connection"
+        diagnostic.target shouldBeEqualTo "database"
+        diagnostic.code shouldBeEqualTo "SCHEMA_PERMISSION_DENIED"
+        diagnostic.errorClass shouldBeEqualTo "SQLInvalidAuthorizationSpecException"
+        diagnostic.retryable.shouldBeFalse()
+        probe.snapshot().schemaValid.shouldBeFalse()
+        probe.snapshot().ready.shouldBeFalse()
+    }
+
+    @Test
+    fun `missing schema table preserves a non-retryable table diagnostic`() {
+        val dataSource = JdbcDataSource().apply {
+            setURL("jdbc:h2:mem:appointment_readiness_table_missing_${System.nanoTime()};DB_CLOSE_DELAY=-1")
+        }
+        val probe = AppointmentMessagingReadinessProbe(brokerAvailable = true)
+
+        AppointmentMessagingReadinessValidator(
+            codec = AppointmentEventEnvelopeCodec(),
+            dataSource = dataSource,
+        ).validate(probe)
+
+        val diagnostic = probe.snapshot().diagnostics.firstOrNull().shouldNotBeNull()
+        diagnostic.operation shouldBeEqualTo "schema.columns"
+        diagnostic.target shouldBeEqualTo "scheduling_outbox_events.columns"
+        diagnostic.code shouldBeEqualTo "SCHEMA_TABLE_MISSING"
+        diagnostic.retryable.shouldBeFalse()
+    }
+
+    @Test
+    fun `metadata timeout preserves a retryable schema diagnostic`() {
+        val probe = AppointmentMessagingReadinessProbe(brokerAvailable = true)
+
+        AppointmentMessagingReadinessValidator(
+            codec = AppointmentEventEnvelopeCodec(),
+            dataSource = failingDataSource(SQLTimeoutException("metadata timeout", "HYT00")),
+        ).validate(probe)
+
+        val diagnostic = probe.snapshot().diagnostics.firstOrNull().shouldNotBeNull()
+        diagnostic.operation shouldBeEqualTo "schema.connection"
+        diagnostic.code shouldBeEqualTo "SCHEMA_METADATA_TIMEOUT"
+        diagnostic.errorClass shouldBeEqualTo "SQLTimeoutException"
+        diagnostic.retryable.shouldBeTrue()
+    }
+
+    @Test
+    fun `driver failure preserves a retryable schema diagnostic without raw exception text`() {
+        val failure = SQLNonTransientConnectionException("jdbc:secret-password=do-not-expose", "08001")
+        val probe = AppointmentMessagingReadinessProbe(brokerAvailable = true)
+
+        AppointmentMessagingReadinessValidator(
+            codec = AppointmentEventEnvelopeCodec(),
+            dataSource = failingDataSource(failure),
+        ).validate(probe)
+
+        val diagnostic = probe.snapshot().diagnostics.firstOrNull().shouldNotBeNull()
+        diagnostic.code shouldBeEqualTo "SCHEMA_METADATA_DRIVER_ERROR"
+        diagnostic.errorClass shouldBeEqualTo "SQLNonTransientConnectionException"
+        diagnostic.retryable.shouldBeTrue()
+        diagnostic.toString().contains("secret-password").shouldBeFalse()
+
+        val health = AppointmentMessagingHealthIndicator(probe).health()
+        health.details["diagnostics"] shouldBeEqualTo listOf(
+            mapOf(
+                "operation" to "schema.connection",
+                "target" to "database",
+                "code" to "SCHEMA_METADATA_DRIVER_ERROR",
+                "errorClass" to "SQLNonTransientConnectionException",
+                "retryable" to true,
+            ),
+        )
     }
 
     @Test
@@ -458,5 +561,25 @@ class AppointmentMessagingReadinessValidatorTest {
                 statement.execute("DROP SCHEMA IF EXISTS \"$schema\" CASCADE")
             }
         }
+    }
+
+    private fun failingDataSource(failure: SQLException): DataSource = object : DataSource {
+        override fun getConnection(): Connection = throw failure
+
+        override fun getConnection(username: String?, password: String?): Connection = throw failure
+
+        override fun <T : Any?> unwrap(iface: Class<T>?): T = throw SQLFeatureNotSupportedException()
+
+        override fun isWrapperFor(iface: Class<*>?): Boolean = false
+
+        override fun getLogWriter(): PrintWriter? = null
+
+        override fun setLogWriter(out: PrintWriter?) = Unit
+
+        override fun setLoginTimeout(seconds: Int) = Unit
+
+        override fun getLoginTimeout(): Int = 0
+
+        override fun getParentLogger(): Logger = Logger.getGlobal()
     }
 }
