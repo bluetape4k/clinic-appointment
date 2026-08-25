@@ -5,7 +5,8 @@
 ## 검토 기준과 범위
 
 - 기준선: `develop` `28e38915cc153fc01275a2c6acad632d99340b93`
-- 현재 구현 기준: `HEAD` `5fb6e1b7`와 그 이후의 working-tree diff
+- 현재 검토 기준: branch `HEAD` `8717d740b32dd65d8d2b8cff30e42b8fefddd565`
+- 소스 구현 commit: `2e7b48ad9c79f62b0bbc79d35535b423575b54e8`; 계획 provenance commit: `8717d740b32dd65d8d2b8cff30e42b8fefddd565`
 - 설계 기준: `c59124cf757d3fe95220f61311cbdb5b93e37a4b`
 - 승인 spec 기준: `4858dd28d46b79f8e5e947a552c1c7f6a8aacb89`
 - 대상: `appointment-event`, `appointment-messaging`, `appointment-notification`의 API
@@ -37,9 +38,9 @@ Finding disposition: `P0=0`, `P1=0`, `P2=0`, `P3=0`.
 
 | 모듈 | 성능 | 안정성 | 보안/데이터 경계 | 운영 | 개발자/API | 사용자/호출자 | 통합/테스트 |
 |---|---|---|---|---|---|---|---|
-| `appointment-event` | CLEAR — 물리 table 정의만 유지: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingOutboxEvents.kt` | CLEAR — write 구현을 event로 이동하지 않음: `appointment-event/README.md:125` | CLEAR — Kafka/provider를 event가 소유하지 않음: `appointment-event/README.md:125` | CLEAR — ADR-15 ownership matrix: `docs/requirements/architecture.md:350` | CLEAR — public event contract의 기존 source/ABI 유지 | CLEAR — messaging caller migration은 README가 명시: `appointment-messaging/README.md:31` | CLEAR — event suite 포함 통합 실행에서 성공 |
-| `appointment-messaging` | CLEAR — writer에 새 loop/provider I/O 없음: `AppointmentOutboxWriter.kt:15-48` | CLEAR — `core api`/`event implementation`: `appointment-messaging/build.gradle.kts:6-8` | CLEAR — typed fixture가 core 타입·nullable reason-code를 고정: `MessagingApiConsumerFixture.kt:135-147` | CLEAR — root와 benchmark lockfile suffix만 갱신, rollback은 ADR-15에 기록 | CLEAR — public writer가 core import와 원래 parameter 순서를 유지: `AppointmentOutboxWriter.kt:16-43` | CLEAR — 직접 event 사용 caller의 `implementation` 선언과 import 이동을 안내: `appointment-messaging/README.md:31-35` | CLEAR — API scope assertion 및 compile fixture fresh run 성공 |
-| `appointment-notification` | CLEAR — pre-claim readiness 1회 + row별 확인, dispatcher concurrency test: `NotificationOutboxDispatcher.kt:86-117` | CLEAR — V19 table과 세 index를 fail-closed 목록에 추가: `NotificationSchemaReadiness.kt:85-142` | CLEAR — waitlist ownership을 event adapter에 두고 readiness만 검사: `NotificationSchemaReadiness.kt:117-125` | CLEAR — missing table/index exact reason과 migration contract를 검증 | CLEAR — 기존 worker/dispatcher API와 transitional event API 유지 | CLEAR — readiness DOWN은 운영자가 조치할 table/index 이름을 반환 | CLEAR — readiness 11/11, notification module 210개 통합 테스트 성공 |
+| `appointment-event` | CLEAR — 물리 table 정의만 유지: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingOutboxEvents.kt` | CLEAR — write 구현을 event로 이동하지 않음: `appointment-event/README.md:125` | CLEAR — Kafka/provider를 event가 소유하지 않음: `appointment-event/README.md:125` | CLEAR — ADR-15 ownership matrix: `docs/requirements/architecture.md:350` | CLEAR — public event contract의 기존 source/ABI 유지 | CLEAR — messaging caller migration은 README가 명시: `appointment-messaging/README.md:31` | CLEAR — event suite 213개 통합 실행에서 성공 |
+| `appointment-messaging` | CLEAR — writer에 새 loop/provider I/O 없음: `AppointmentOutboxWriter.kt:15-48` | CLEAR — `core api`/`event implementation`: `appointment-messaging/build.gradle.kts:6-8` | CLEAR — typed fixture가 core 타입·nullable reason-code를 고정: `MessagingApiConsumerFixture.kt:135-147` | CLEAR — root와 benchmark lockfile suffix만 갱신, rollback은 ADR-15에 기록 | CLEAR — public writer가 core import와 원래 parameter 순서를 유지: `AppointmentOutboxWriter.kt:16-43` | CLEAR — 직접 event 사용 caller의 `implementation` 선언과 import 이동을 안내: `appointment-messaging/README.md:31-35` | CLEAR — messaging suite 125개, API scope assertion 및 compile fixture fresh run 성공 |
+| `appointment-notification` | CLEAR — pre-claim readiness 1회 + row별 확인, dispatcher concurrency test: `NotificationOutboxDispatcher.kt:86-117` | CLEAR — V19 table과 세 index를 fail-closed 목록에 추가: `NotificationSchemaReadiness.kt:85-142` | CLEAR — waitlist ownership을 event adapter에 두고 readiness만 검사: `NotificationSchemaReadiness.kt:117-125` | CLEAR — missing table/index exact reason과 migration contract를 검증 | CLEAR — 기존 worker/dispatcher API와 transitional event API 유지 | CLEAR — readiness DOWN은 운영자가 조치할 table/index 이름을 반환 | CLEAR — readiness 11/11, notification suite 210개 통합 테스트 성공 |
 
 ## Fresh verification evidence
 
@@ -47,7 +48,7 @@ Finding disposition: `P0=0`, `P1=0`, `P2=0`, `P3=0`.
 
 | 검증 | 결과 |
 |---|---|
-| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-event:test :appointment-messaging:test :appointment-notification:test` | `BUILD SUCCESSFUL`, `210 passing`, 1분 16초 |
+| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-event:test :appointment-messaging:test :appointment-notification:test` | `BUILD SUCCESSFUL`, event `213 passing` + messaging `125 passing` + notification `210 passing` = 총 `548 passing`, 1분 2초 |
 | `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-notification:test --tests '*NotificationSchemaReadinessTest*'` | `BUILD SUCCESSFUL`, `11 passing` |
 | `./gradlew --no-daemon --no-configuration-cache --no-parallel :appointment-notification:test --tests '*NotificationOutboxDispatcherTest*'` | `BUILD SUCCESSFUL`, `8 passing` |
 | `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-api:test` + Flyway/PostgreSQL/MySQL/Waitlist contract 4 class | `BUILD SUCCESSFUL`, `25 passing`, `1 pending`(production MySQL endpoint 미설정) |
