@@ -100,11 +100,11 @@ class WaitlistNotificationOutboxAdapterTest {
     fun `codec는 stable canonical JSON golden을 유지한다`() {
         val envelope = WaitlistNotificationOutboxEnvelope.from(
             draft(),
-            idempotencyKey = "idempotency-1",
+            idempotencyKey = "waitlist-idempotency-test",
         )
 
         WaitlistNotificationOutboxCodec().encode(envelope) shouldBeEqualTo
-            """{"schemaVersion":1,"eventId":"waitlist-offer-v1:41","idempotencyKey":"idempotency-1","tenantGroupId":7,"clinicId":11,"offerId":41,"holdId":42,"waitlistEntryId":43,"reasonCode":"OFFER_CREATED","correlationId":"corr-170","occurredAt":"2026-08-03T10:00:00Z","availableAt":"2026-08-03T10:00:00Z"}"""
+            """{"schemaVersion":1,"eventId":"waitlist-offer-v1:41","idempotencyKey":"waitlist-idempotency-test","tenantGroupId":7,"clinicId":11,"offerId":41,"holdId":42,"waitlistEntryId":43,"reasonCode":"OFFER_CREATED","correlationId":"corr-170","occurredAt":"2026-08-03T10:00:00Z","availableAt":"2026-08-03T10:00:00Z"}"""
     }
 
     @Test
