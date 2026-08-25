@@ -55,4 +55,3 @@
 ## Kotlin 패턴 적용성
 
 이번 단계까지 Kotlin 파일 변경은 0개다. `$bluetape-kotlin-patterns` KT-01~KT-05는 적용 대상이 아니며, 구현 후 `git diff --name-only`로 Kotlin 파일 0개를 다시 확인한다. TypeScript transport와 Angular interceptor에는 해당 skill의 재사용·작은 경계·테스트 우선 원칙만 적용한다.
-
