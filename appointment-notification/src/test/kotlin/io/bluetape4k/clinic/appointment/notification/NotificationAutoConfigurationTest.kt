@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
@@ -11,6 +12,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCo
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
+import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
@@ -798,7 +800,7 @@ internal class NotificationAutoConfigurationTest {
         version: String,
     ): Database =
         Database.connect(
-            "jdbc:h2:mem:${name}_${System.nanoTime()};MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+            "jdbc:h2:mem:${name}_${System.nanoTime()}_${Base58.randomString(8)};MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
             driver = "org.h2.Driver",
         ).also { database ->
             transaction(database) {
@@ -808,6 +810,7 @@ internal class NotificationAutoConfigurationTest {
                     AppointmentEventLogs,
                     NotificationOutboxEvents,
                     NotificationDeliveryAttempts,
+                    WaitlistNotificationOutboxEvents,
                     FlywaySchemaHistory,
                 )
                 FlywaySchemaHistory.insert {

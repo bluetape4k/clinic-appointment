@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.messaging
 
-import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.service.AppointmentCausationId
 import io.bluetape4k.clinic.appointment.service.AppointmentCommandContext
 import io.bluetape4k.clinic.appointment.service.AppointmentCorrelationId

@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.messaging
 
-import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import tools.jackson.core.StreamReadConstraints
 import tools.jackson.core.StreamReadFeature

@@ -4,7 +4,8 @@ plugins {
 }
 
 dependencies {
-    api(project(":appointment-event"))
+    api(project(":appointment-core"))
+    implementation(project(":appointment-event"))
 
     implementation(libs.bluetape4k.kafka4)
     api(libs.kafka4.clients)

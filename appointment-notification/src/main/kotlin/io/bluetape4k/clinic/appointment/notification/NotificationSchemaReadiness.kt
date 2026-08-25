@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.logging.KLogging
@@ -85,6 +86,7 @@ class NotificationSchemaReadiness(
         listOf(
             NotificationOutboxEvents.tableName,
             NotificationDeliveryAttempts.tableName,
+            WaitlistNotificationOutboxEvents.tableName,
             AppointmentEventLogs.tableName,
             Clinics.tableName,
         )
@@ -116,6 +118,7 @@ class NotificationSchemaReadiness(
         val migrationStatements = MigrationUtils.statementsRequiredForDatabaseMigration(
             NotificationOutboxEvents,
             NotificationDeliveryAttempts,
+            WaitlistNotificationOutboxEvents,
         )
         return REQUIRED_INDEXES.filter { required ->
             migrationStatements.any { statement -> statement.contains(required, ignoreCase = true) }
@@ -133,6 +136,9 @@ class NotificationSchemaReadiness(
             "idx_notification_outbox_lease_recovery",
             "idx_notification_outbox_terminal_retention",
             "idx_notification_outbox_pending_oldest",
+            "uk_waitlist_notification_outbox_idempotency",
+            "idx_waitlist_notification_outbox_ready",
+            "idx_waitlist_notification_outbox_lease",
         )
     }
 }

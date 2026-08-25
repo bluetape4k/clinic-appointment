@@ -56,7 +56,7 @@ payload hash만 담습니다. 자격 판단은 core evaluator의 책임이고 �
 
 ## 외부 예약 사실
 
-예약서비스는 상품·구매·시술 이행의 소유권을 가져오지 않고 다음 사실만 수신합니다.
+예약 서비스는 상품·구매·시술 이행의 소유권을 가져오지 않고 다음 사실만 수신합니다.
 
 - `VisitPlanningEventIngress`와 `VisitPlanningEventHandler`는 불변 패키지 실행 BOM을
   검증하고 아직 진행하지 않은 미래 Plan 작업만 생성·개정합니다.
@@ -119,6 +119,16 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 
 - **내부**: `appointment-core`
 - **외부**: Spring Context
+
+## 모듈 재사용과 데이터 소유권
+
+이 모듈은 `appointment-core`의 도메인 이벤트·scope·Exposed 모델을 직접 재사용하고,
+이벤트 로그와 외부 사실 수렴을 담당합니다. `SchedulingOutboxEvents`는
+`appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingOutboxEvents.kt`에서
+정의하지만, 예약 mutation의 outbox write는 `appointment-messaging`의
+`AppointmentOutboxWriter`가 담당합니다. 따라서 event 모듈은 계약과 테이블 정의를
+재사용 가능한 형태로 제공하고 Kafka producer나 notification provider를 직접 소유하지
+않습니다.
 
 ## 테스트 실행
 

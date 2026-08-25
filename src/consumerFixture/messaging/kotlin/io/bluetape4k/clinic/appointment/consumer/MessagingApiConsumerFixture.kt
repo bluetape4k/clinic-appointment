@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.consumer
 
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerHandler
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerIdentity
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerInboxStore
@@ -30,6 +31,11 @@ import io.bluetape4k.clinic.appointment.messaging.MicrometerAppointmentOutboxMet
 import io.bluetape4k.clinic.appointment.messaging.NoopAppointmentConsumerMetrics
 import io.bluetape4k.clinic.appointment.messaging.SpringKafkaAppointmentPublisher
 import io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxMetrics
+import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingContext
+import io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriter
+import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
+import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import io.micrometer.core.instrument.MeterRegistry
 import javax.sql.DataSource
 import org.apache.kafka.clients.consumer.Consumer
@@ -117,6 +123,29 @@ private val inboxTableType: KClass<out Table> = AppointmentConsumerInboxTable::c
 private val longIdTableType: KClass<out LongIdTable> = io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerQuarantineTable::class
 private val metricsType: KClass<out AppointmentConsumerMetrics> = MicrometerAppointmentConsumerMetrics::class
 private val outboxMetricsType: KClass<out AppointmentOutboxMetrics> = MicrometerAppointmentOutboxMetrics::class
+private val outboxWriterType: KClass<out AppointmentOutboxWriter> = AppointmentOutboxWriter::class
+private val messagingContextType: KClass<out AppointmentMessagingContext> = AppointmentMessagingContext::class
+private val appointmentRecordType: KClass<out AppointmentRecord> = AppointmentRecord::class
+private val tenantClinicScopeType: KClass<out TenantClinicScope> = TenantClinicScope::class
+private val cancellationReasonCodeType: KClass<out CancellationReasonCode> = CancellationReasonCode::class
+
+// 이벤트 저장소의 테이블·상태 타입은 이 fixture에 고정하지 않는다.
+// 이 fixture는 Gradle API 범위와 누출만 검증하고, 물리적 소유권은 ADR과 source 경로로 검증한다.
+@Suppress("UNUSED_PARAMETER")
+private fun verifyOutboxWriterMethods(
+    writer: AppointmentOutboxWriter,
+    scope: TenantClinicScope,
+    appointment: AppointmentRecord,
+    replacement: AppointmentRecord,
+    context: AppointmentMessagingContext,
+    fromState: AppointmentState,
+    reasonCode: CancellationReasonCode?,
+) {
+    writer.created(scope, appointment, context)
+    writer.statusChanged(scope, appointment, fromState, context, reasonCode)
+    writer.cancelled(scope, appointment, context, reasonCode)
+    writer.rescheduled(scope, appointment, replacement, context)
+}
 
 // Keep external public bean parameter types directly in the fixture signature.
 @Suppress("UNUSED_PARAMETER")
@@ -147,6 +176,11 @@ fun verifyMessagingApiConsumerSurface(
     readinessValidatorType,
     metricsType,
     outboxMetricsType,
+    outboxWriterType,
+    messagingContextType,
+    appointmentRecordType,
+    tenantClinicScopeType,
+    cancellationReasonCodeType,
     inboxTableType,
     longIdTableType,
 )

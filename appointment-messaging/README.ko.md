@@ -15,6 +15,26 @@
   포함하며, commitment-v2 controller와 closure의 `PENDING_RESCHEDULE` 중간 전이는
   Issue #41 범위 밖입니다.
 
+## 모듈 API 경계와 재사용
+
+Gradle의 `api(project(":appointment-core"))`는 `TenantClinicScope`,
+`AppointmentRecord`, 상태·command context 같은 core 계약을 소비자에게 직접
+재사용하게 합니다. `appointment-event`는 `implementation`으로만 연결해
+`SchedulingOutboxEvents` 테이블과 `SchedulingOutboxStatus` 구현을 내부에서 재사용하고,
+Kafka envelope와 writer API를 불필요하게 event 모듈 전체로 노출하지 않습니다.
+공개 계약은 `AppointmentMessagingContracts.kt`와 `AppointmentOutboxWriter.kt`에,
+물리적 outbox 테이블 정의는
+`appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingOutboxEvents.kt`에
+있습니다. 이 경계를 지키면 core 모델과 Exposed transaction 재사용은 유지하면서
+producer 구현을 교체할 수 있습니다.
+
+기존에 event 모듈의 타입을 messaging의 전이 의존성으로 직접 사용하던 소비자는
+자신의 Gradle 선언에 `implementation(project(":appointment-event"))`를 명시해야 합니다.
+`event.notification.CancellationReasonCode`를 사용하던 코드는
+`commitment.CancellationReasonCode`로 import를 옮깁니다. messaging 공개 API만 사용하는
+소비자는 기존 `implementation(project(":appointment-messaging"))` 선언을 유지하고 event
+의존성을 추가하지 않습니다.
+
 ## 설치
 
 ```kotlin
