@@ -3,7 +3,7 @@
 검토일: 2026-08-25
 검토 branch: `feat/issue-402-kafka4-adapter`
 선행 child base: `848c3a40b210e85672b48a4ecee68feb2f3e7f0a`
-구현 source tip: `d91fbe0f0cc05d3e5cd0a53e753b4feceb1a3b75`
+구현 source tip: `d91fbe0292f5df69ba11c89993a5b206d0f4cdff`
 
 ## 검토 범위
 
@@ -71,7 +71,9 @@
 ## PR 전 결론
 
 `PASS` — 현재 child의 implementation/review gate를 통과했다. branch는 선행 #393
-head에서 한 commit만 앞서며(`0 1`), 아직 PR 생성·CI·merge는 수행하지 않았다.
+head 이후 구현·문서·호환성 보정 4개 commit을 포함하며(`git rev-list --left-right
+--count refactor/issue-393-outbox-ownership...HEAD` → `0 4`), 아직 PR 생성·CI·merge는
+수행하지 않았다.
 
 ## 문서 작성 점검
 
