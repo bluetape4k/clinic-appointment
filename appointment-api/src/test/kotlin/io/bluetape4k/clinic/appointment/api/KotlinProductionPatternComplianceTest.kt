@@ -98,12 +98,13 @@ class KotlinProductionPatternComplianceTest {
 
     @Test
     fun `all API test sources use bluetape assertion helpers`() {
+        val genericAssertionImports = Regex(
+            """(?m)^import (org\.junit\.jupiter\.api\.Assertions(?:\.\*)?|org\.junit\.jupiter\.api\.assert[A-Z]\w*|kotlin\.test\.assert[A-Z]\w*)""",
+        )
         val violations = testSources()
             .filterNot { (path, _) -> path.fileName.toString() == "KotlinProductionPatternComplianceTest.kt" }
             .filter { (_, source) ->
-                source.contains("org.junit.jupiter.api.Assertions") ||
-                    source.contains("org.junit.jupiter.api.assertThrows") ||
-                    source.contains("kotlin.test.assertFailsWith")
+                genericAssertionImports.containsMatchIn(source)
             }
             .map { (path, _) -> path.toString() }
 
