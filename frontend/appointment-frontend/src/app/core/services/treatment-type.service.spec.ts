@@ -4,6 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { TreatmentTypeService } from './treatment-type.service';
+import { TenantContextService } from '../api/tenant-context.service';
 
 describe('TreatmentTypeService', () => {
   let service: TreatmentTypeService;
@@ -13,6 +14,7 @@ describe('TreatmentTypeService', () => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
     service = TestBed.inject(TreatmentTypeService);
     httpTesting = TestBed.inject(HttpTestingController);
   });
@@ -40,7 +42,7 @@ describe('TreatmentTypeService', () => {
 
       const promise = service.loadByClinic(1);
 
-      const req = httpTesting.expectOne('/api/clinics/1/treatment-types');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/1/treatment-types');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: { content: mockTypes } });
 
@@ -51,7 +53,7 @@ describe('TreatmentTypeService', () => {
     it('빈 응답 시 빈 배열이 설정된다', async () => {
       const promise = service.loadByClinic(999);
 
-      const req = httpTesting.expectOne('/api/clinics/999/treatment-types');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/999/treatment-types');
       req.flush({ success: true, data: { content: [] } });
 
       await promise;
@@ -68,7 +70,7 @@ describe('TreatmentTypeService', () => {
 
       const promise = service.getById(1);
 
-      const req = httpTesting.expectOne('/api/treatment-types/1');
+      const req = httpTesting.expectOne('/api/tenant-a/treatment-types/1');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: mockType });
 

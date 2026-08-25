@@ -92,3 +92,11 @@
 - SPW-03: PASS — 한국어 기술 용어와 실행 동사를 일관되게 사용했다.
 - SPW-04: PASS — 모든 설계 수용 기준을 단계와 증거에 매핑했다.
 - SPW-05: PASS — 단계·표·코드 경로를 read-back했고 누락된 backend/mobile 변경을 금지했다.
+
+## 실행 결과 read-back
+
+- 단계 1~5: 완료. 공통 transport/auth scope/session state와 Portal·patient auth·management service 전환을 구현하고 관련 RED/GREEN 테스트를 통과했다.
+- 단계 6: 완료. `tenant-api-contract.spec.ts`가 9개 management source의 raw `HttpClient`, `environment.apiUrl`, unscoped `/api/`를 검사한다.
+- 단계 7: 완료. 구현 inline review와 lesson을 기록했고 P0/P1=0을 확인했다.
+- fresh 검증: `44개 파일 / 322개 unit test`, `npm run build`, `5개 Playwright E2E` 통과. Gradle frontend task는 Node archive dependency verification metadata 누락으로 실행 불가했다.
+- 범위 확인: backend, mobile/Capacitor, Kotlin source 변경 없음.

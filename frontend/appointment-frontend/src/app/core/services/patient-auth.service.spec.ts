@@ -4,12 +4,14 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { PatientAuthService } from './patient-auth.service';
+import { SessionStateService } from './session-state.service';
 import { TenantContextService } from '../api/tenant-context.service';
 
 describe('PatientAuthService', () => {
   let service: PatientAuthService;
   let httpMock: HttpTestingController;
   let tenant: TenantContextService;
+  let sessionState: SessionStateService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -18,6 +20,7 @@ describe('PatientAuthService', () => {
     service = TestBed.inject(PatientAuthService);
     httpMock = TestBed.inject(HttpTestingController);
     tenant = TestBed.inject(TenantContextService);
+    sessionState = TestBed.inject(SessionStateService);
     tenant.setTenant('tenant-a');
   });
 
@@ -206,5 +209,30 @@ describe('PatientAuthService', () => {
     });
     await expect(loginPromise).resolves.toMatchObject({ displayName: '새 환자' });
     expect(service.session()?.displayName).toBe('새 환자');
+  });
+
+  it('tenant 인자가 현재 context와 다르면 요청하지 않고 tenant 상태를 기록한다', async () => {
+    await expect(service.sessionFor('tenant-b')).rejects.toThrow('tenant scope');
+
+    expect(sessionState.status('patient')).toBe('tenant-missing');
+    httpMock.expectNone('/api/tenant-a/auth/session');
+  });
+
+  it('session 복원 401은 patient unauthorized 상태로 전파한다', async () => {
+    const promise = service.ensureSession();
+    const request = httpMock.expectOne('/api/tenant-a/auth/session');
+    request.flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    await expect(promise).resolves.toBe(false);
+    expect(sessionState.status('patient')).toBe('unauthorized');
+  });
+
+  it('session 복원 403은 patient forbidden 상태로 전파한다', async () => {
+    const promise = service.ensureSession();
+    const request = httpMock.expectOne('/api/tenant-a/auth/session');
+    request.flush(null, { status: 403, statusText: 'Forbidden' });
+
+    await expect(promise).resolves.toBe(false);
+    expect(sessionState.status('patient')).toBe('forbidden');
   });
 });

@@ -1,12 +1,10 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
 import { ApiResponse, Equipment, PagedData } from '../models';
-import { environment } from '../../../environments/environment';
+import { TenantApiClient } from '../api/tenant-api-client';
 
 @Injectable({ providedIn: 'root' })
 export class EquipmentService {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(TenantApiClient);
 
   private readonly _equipments = signal<Equipment[]>([]);
   readonly equipments = this._equipments.asReadonly();
@@ -16,12 +14,10 @@ export class EquipmentService {
   async loadByClinic(clinicId: number): Promise<Equipment[]> {
     this.loading.set(true);
     try {
-      const res = await firstValueFrom(
-        this.http.get<ApiResponse<PagedData<Equipment>>>(
-          `${environment.apiUrl}/clinics/${clinicId}/equipments`
-        )
-      );
-      const data = res.data?.content ?? [];
+      const res = await this.api.request<ApiResponse<PagedData<Equipment>>>('GET', `/clinics/${clinicId}/equipments`, {
+        authScope: 'workforce-bearer',
+      });
+      const data = res.body?.data?.content ?? [];
       this._equipments.set(data);
       return data;
     } finally {
@@ -30,9 +26,9 @@ export class EquipmentService {
   }
 
   async getById(equipmentId: number): Promise<Equipment> {
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<Equipment>>(`${environment.apiUrl}/equipments/${equipmentId}`)
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<Equipment>>('GET', `/equipments/${equipmentId}`, {
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as Equipment;
   }
 }

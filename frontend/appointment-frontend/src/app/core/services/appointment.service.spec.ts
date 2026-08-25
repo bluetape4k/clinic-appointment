@@ -5,6 +5,7 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 
 import { AppointmentService } from './appointment.service';
 import { Appointment, AppointmentStatus } from '../models';
+import { TenantContextService } from '../api/tenant-context.service';
 
 const mockAppointment = (id: number): Appointment => ({
   id,
@@ -28,6 +29,7 @@ describe('AppointmentService', () => {
     });
     service = TestBed.inject(AppointmentService);
     httpMock = TestBed.inject(HttpTestingController);
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
   });
 
   afterEach(() => {
@@ -44,7 +46,7 @@ describe('AppointmentService', () => {
       const promise = service.getByDateRange(1, '2025-06-01', '2025-06-07');
 
       const req = httpMock.expectOne(r =>
-        r.url === '/api/appointments' &&
+        r.url === '/api/tenant-a/appointments' &&
         r.params.get('clinicId') === '1' &&
         r.params.get('startDate') === '2025-06-01' &&
         r.params.get('endDate') === '2025-06-07'
@@ -59,7 +61,7 @@ describe('AppointmentService', () => {
 
     it('응답 data가 null이면 빈 배열을 반환한다', async () => {
       const promise = service.getByDateRange(1, '2025-06-01', '2025-06-07');
-      httpMock.expectOne(r => r.url === '/api/appointments').flush({ data: null });
+      httpMock.expectOne(r => r.url === '/api/tenant-a/appointments').flush({ data: null });
 
       const result = await promise;
       expect(result).toEqual([]);
@@ -74,7 +76,7 @@ describe('AppointmentService', () => {
       const promise = service.getByDateRange(1, '2025-06-01', '2025-06-07');
       expect(service.loading()).toBe(true);
 
-      httpMock.expectOne(r => r.url === '/api/appointments').flush({ data: [] });
+      httpMock.expectOne(r => r.url === '/api/tenant-a/appointments').flush({ data: [] });
       await promise;
 
       expect(service.loading()).toBe(false);
@@ -86,7 +88,7 @@ describe('AppointmentService', () => {
       const mock = mockAppointment(42);
       const promise = service.getById(42);
 
-      const req = httpMock.expectOne('/api/appointments/42');
+      const req = httpMock.expectOne('/api/tenant-a/appointments/42');
       expect(req.request.method).toBe('GET');
       req.flush({ data: mock });
 
@@ -110,7 +112,7 @@ describe('AppointmentService', () => {
 
       const promise = service.create(request);
 
-      const req = httpMock.expectOne('/api/appointments');
+      const req = httpMock.expectOne('/api/tenant-a/appointments');
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(request);
       req.flush({ data: created });
@@ -126,7 +128,7 @@ describe('AppointmentService', () => {
 
       // seed initial appointments
       const promise1 = service.getByDateRange(1, '2025-06-01', '2025-06-07');
-      httpMock.expectOne(r => r.url === '/api/appointments').flush({ data: [existing] });
+      httpMock.expectOne(r => r.url === '/api/tenant-a/appointments').flush({ data: [existing] });
       await promise1;
 
       const promise2 = service.create({
@@ -134,7 +136,7 @@ describe('AppointmentService', () => {
         patientName: '김철수', appointmentDate: '2025-06-02',
         startTime: '10:00:00', endTime: '10:30:00',
       });
-      httpMock.expectOne('/api/appointments').flush({ data: created });
+      httpMock.expectOne('/api/tenant-a/appointments').flush({ data: created });
       await promise2;
 
       expect(service.appointments()).toHaveLength(2);
@@ -149,12 +151,12 @@ describe('AppointmentService', () => {
 
       // seed
       const seedPromise = service.getByDateRange(1, '2025-06-01', '2025-06-07');
-      httpMock.expectOne(r => r.url === '/api/appointments').flush({ data: [original] });
+      httpMock.expectOne(r => r.url === '/api/tenant-a/appointments').flush({ data: [original] });
       await seedPromise;
 
       const promise = service.updateStatus(5, { status: AppointmentStatus.CONFIRMED });
 
-      const req = httpMock.expectOne('/api/appointments/5/status');
+      const req = httpMock.expectOne('/api/tenant-a/appointments/5/status');
       expect(req.request.method).toBe('PATCH');
       expect(req.request.body).toEqual({ status: AppointmentStatus.CONFIRMED });
       req.flush({ data: updated });
@@ -172,12 +174,12 @@ describe('AppointmentService', () => {
 
       // seed
       const seedPromise = service.getByDateRange(1, '2025-06-01', '2025-06-07');
-      httpMock.expectOne(r => r.url === '/api/appointments').flush({ data: [original] });
+      httpMock.expectOne(r => r.url === '/api/tenant-a/appointments').flush({ data: [original] });
       await seedPromise;
 
       const promise = service.cancel(7);
 
-      const req = httpMock.expectOne('/api/appointments/7');
+      const req = httpMock.expectOne('/api/tenant-a/appointments/7');
       expect(req.request.method).toBe('DELETE');
       req.flush({ data: cancelled });
 

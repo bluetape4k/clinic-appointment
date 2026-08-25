@@ -1,18 +1,17 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { HttpParams } from '@angular/common/http';
 import {
   ApiResponse,
   AppointmentStatsResponse,
   CancellationStatsResponse,
   DoctorStatsResponse,
 } from '../models';
-import { environment } from '../../../environments/environment';
+import { TenantApiClient } from '../api/tenant-api-client';
 
 @Injectable({ providedIn: 'root' })
 export class DashboardStatsService {
-  private readonly http = inject(HttpClient);
-  private readonly baseUrl = `${environment.apiUrl}/admin/stats`;
+  private readonly api = inject(TenantApiClient);
+  private readonly basePath = '/admin/stats';
 
   async getAppointmentStats(
     clinicId: number,
@@ -27,13 +26,11 @@ export class DashboardStatsService {
     if (statuses?.length) {
       statuses.forEach(s => { params = params.append('statuses', s); });
     }
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<AppointmentStatsResponse>>(
-        `${this.baseUrl}/appointments`,
-        { params },
-      ),
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<AppointmentStatsResponse>>('GET', `${this.basePath}/appointments`, {
+      params,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as AppointmentStatsResponse;
   }
 
   async getDoctorStats(
@@ -47,13 +44,11 @@ export class DashboardStatsService {
       .set('from', from)
       .set('to', to)
       .set('limit', limit);
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<DoctorStatsResponse>>(
-        `${this.baseUrl}/doctors`,
-        { params },
-      ),
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<DoctorStatsResponse>>('GET', `${this.basePath}/doctors`, {
+      params,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as DoctorStatsResponse;
   }
 
   async getCancellationStats(
@@ -65,12 +60,10 @@ export class DashboardStatsService {
       .set('clinicId', clinicId)
       .set('from', from)
       .set('to', to);
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<CancellationStatsResponse>>(
-        `${this.baseUrl}/cancellations`,
-        { params },
-      ),
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<CancellationStatsResponse>>('GET', `${this.basePath}/cancellations`, {
+      params,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as CancellationStatsResponse;
   }
 }

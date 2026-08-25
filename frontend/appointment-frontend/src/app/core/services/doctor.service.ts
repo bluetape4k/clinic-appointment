@@ -1,12 +1,11 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { HttpParams } from '@angular/common/http';
 import { ApiResponse, Doctor, DoctorAbsence, DoctorSchedule, PagedData } from '../models';
-import { environment } from '../../../environments/environment';
+import { TenantApiClient } from '../api/tenant-api-client';
 
 @Injectable({ providedIn: 'root' })
 export class DoctorService {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(TenantApiClient);
 
   private readonly _doctors = signal<Doctor[]>([]);
   readonly doctors = this._doctors.asReadonly();
@@ -16,12 +15,10 @@ export class DoctorService {
   async loadByClinic(clinicId: number): Promise<Doctor[]> {
     this.loading.set(true);
     try {
-      const res = await firstValueFrom(
-        this.http.get<ApiResponse<PagedData<Doctor>>>(
-          `${environment.apiUrl}/clinics/${clinicId}/doctors`
-        )
-      );
-      const data = res.data?.content ?? [];
+      const res = await this.api.request<ApiResponse<PagedData<Doctor>>>('GET', `/clinics/${clinicId}/doctors`, {
+        authScope: 'workforce-bearer',
+      });
+      const data = res.body?.data?.content ?? [];
       this._doctors.set(data);
       return data;
     } finally {
@@ -30,31 +27,27 @@ export class DoctorService {
   }
 
   async getById(doctorId: number): Promise<Doctor> {
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<Doctor>>(`${environment.apiUrl}/doctors/${doctorId}`)
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<Doctor>>('GET', `/doctors/${doctorId}`, {
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as Doctor;
   }
 
   async getSchedules(doctorId: number): Promise<DoctorSchedule[]> {
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<DoctorSchedule[]>>(
-        `${environment.apiUrl}/doctors/${doctorId}/schedules`
-      )
-    );
-    return res.data ?? [];
+    const res = await this.api.request<ApiResponse<DoctorSchedule[]>>('GET', `/doctors/${doctorId}/schedules`, {
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data ?? [];
   }
 
   async getAbsences(doctorId: number, from: string, to: string): Promise<DoctorAbsence[]> {
     const params = new HttpParams()
       .set('from', from)
       .set('to', to);
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<DoctorAbsence[]>>(
-        `${environment.apiUrl}/doctors/${doctorId}/absences`,
-        { params }
-      )
-    );
-    return res.data ?? [];
+    const res = await this.api.request<ApiResponse<DoctorAbsence[]>>('GET', `/doctors/${doctorId}/absences`, {
+      params,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data ?? [];
   }
 }

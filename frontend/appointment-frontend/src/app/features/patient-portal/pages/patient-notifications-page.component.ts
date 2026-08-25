@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 
 import { PortalApiClient } from '../../../core/api/portal-api-client';
 import { PortalEventStreamAdapter, PortalNotification } from '../../../core/api/portal-event-stream.adapter';
+import { TenantApiClient } from '../../../core/api/tenant-api-client';
 import { TenantContextService } from '../../../core/api/tenant-context.service';
 import { formatAppointmentSession, resolveAppointmentTitle } from '../appointment-summary';
 
@@ -83,6 +84,7 @@ import { formatAppointmentSession, resolveAppointmentTitle } from '../appointmen
 export class PatientNotificationsPageComponent {
   private readonly adapter = inject(PortalEventStreamAdapter);
   private readonly client = inject(PortalApiClient);
+  private readonly api = inject(TenantApiClient);
   private readonly tenant = inject(TenantContextService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -96,7 +98,7 @@ export class PatientNotificationsPageComponent {
       return;
     }
     this.adapter.connect({
-      streamUrl: `/api/${encodeURIComponent(tenantCode)}/notifications/stream`,
+      streamUrl: this.api.url('/notifications/stream'),
       poll: () => this.client.getNotifications().then(response => response.body),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: notification => this.notifications.update(current => {

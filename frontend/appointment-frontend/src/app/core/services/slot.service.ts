@@ -1,12 +1,11 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { HttpParams } from '@angular/common/http';
 import { ApiResponse, AvailableSlot } from '../models';
-import { environment } from '../../../environments/environment';
+import { TenantApiClient } from '../api/tenant-api-client';
 
 @Injectable({ providedIn: 'root' })
 export class SlotService {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(TenantApiClient);
 
   async getAvailableSlots(
     clinicId: number,
@@ -24,12 +23,10 @@ export class SlotService {
       params = params.set('requestedDurationMinutes', requestedDurationMinutes);
     }
 
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<AvailableSlot[]>>(
-        `${environment.apiUrl}/clinics/${clinicId}/slots`,
-        { params }
-      )
-    );
-    return res.data ?? [];
+    const res = await this.api.request<ApiResponse<AvailableSlot[]>>('GET', `/clinics/${clinicId}/slots`, {
+      params,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data ?? [];
   }
 }

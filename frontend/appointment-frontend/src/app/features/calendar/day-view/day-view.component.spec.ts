@@ -8,6 +8,7 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { signal } from '@angular/core';
 
 import { DayViewComponent } from './day-view.component';
+import { TenantContextService } from '../../../core/api/tenant-context.service';
 
 describe('DayViewComponent', () => {
   let httpMock: HttpTestingController;
@@ -25,6 +26,7 @@ describe('DayViewComponent', () => {
     });
 
     httpMock = TestBed.inject(HttpTestingController);
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
   });
 
   afterEach(() => {

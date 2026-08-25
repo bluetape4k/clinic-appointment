@@ -4,6 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { DoctorService } from './doctor.service';
+import { TenantContextService } from '../api/tenant-context.service';
 
 describe('DoctorService', () => {
   let service: DoctorService;
@@ -13,6 +14,7 @@ describe('DoctorService', () => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
     service = TestBed.inject(DoctorService);
     httpTesting = TestBed.inject(HttpTestingController);
   });
@@ -34,7 +36,7 @@ describe('DoctorService', () => {
 
       const promise = service.loadByClinic(1);
 
-      const req = httpTesting.expectOne('/api/clinics/1/doctors');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/1/doctors');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: { content: mockDoctors } });
 
@@ -45,7 +47,7 @@ describe('DoctorService', () => {
     it('빈 응답 시 빈 배열이 설정된다', async () => {
       const promise = service.loadByClinic(999);
 
-      const req = httpTesting.expectOne('/api/clinics/999/doctors');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/999/doctors');
       req.flush({ success: true, data: { content: [] } });
 
       await promise;
@@ -59,7 +61,7 @@ describe('DoctorService', () => {
 
       const promise = service.getById(1);
 
-      const req = httpTesting.expectOne('/api/doctors/1');
+      const req = httpTesting.expectOne('/api/tenant-a/doctors/1');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: mockDoctor });
 
@@ -76,7 +78,7 @@ describe('DoctorService', () => {
 
       const promise = service.getSchedules(1);
 
-      const req = httpTesting.expectOne('/api/doctors/1/schedules');
+      const req = httpTesting.expectOne('/api/tenant-a/doctors/1/schedules');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: mockSchedules });
 
@@ -94,7 +96,7 @@ describe('DoctorService', () => {
       const promise = service.getAbsences(1, '2026-04-01', '2026-04-30');
 
       const req = httpTesting.expectOne(
-        r => r.url === '/api/doctors/1/absences' && r.params.get('from') === '2026-04-01'
+        r => r.url === '/api/tenant-a/doctors/1/absences' && r.params.get('from') === '2026-04-01'
       );
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: mockAbsences });

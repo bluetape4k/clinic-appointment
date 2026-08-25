@@ -78,12 +78,12 @@ ETag·환자 오류 모델을 재사용할 수 있으나 환자 session cache와
 
 ## DoD
 
-- [ ] 공통 transport/auth scope/session state 구현 및 단위 테스트
-- [ ] 관리 서비스 전체 tenant path 전환 및 기존 서비스 테스트 갱신
-- [ ] PortalApiClient·PatientAuthService transport 재사용 및 cookie 계약 검증
-- [ ] raw URL 정적 계약 테스트와 role/error 상태 테스트
-- [ ] 한국어 설계·계획·리뷰·lesson 문서와 SPW-01~05 read-back
-- [ ] fresh test/build/e2e 또는 실행 불가 근거, diff check, Kotlin diff 0개 증거
+- [x] 공통 transport/auth scope/session state 구현 및 단위 테스트
+- [x] 관리 서비스 전체 tenant path 전환 및 기존 서비스 테스트 갱신
+- [x] PortalApiClient·PatientAuthService transport 재사용 및 cookie 계약 검증
+- [x] raw URL 정적 계약 테스트와 role/error 상태 테스트
+- [x] 한국어 설계·계획·리뷰·lesson 문서와 SPW-01~05 read-back
+- [x] fresh test/build/e2e, Gradle dependency verification gap 근거, diff check, Kotlin diff 0개 증거
 
 ## 문서 게이트
 
@@ -92,4 +92,3 @@ ETag·환자 오류 모델을 재사용할 수 있으나 환자 session cache와
 - SPW-03: PASS — 한국어 기술 문체와 동일 용어(`tenant`, `workforce`, `patient`, `transport`, `scope`)를 사용했다.
 - SPW-04: PASS — backend mapping과 실제 frontend 파일·baseline 결과를 대조했다.
 - SPW-05: PASS — Markdown을 다시 읽고 표·코드 토큰·미확정 workforce login endpoint를 확인했다.
-

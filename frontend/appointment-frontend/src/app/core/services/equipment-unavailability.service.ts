@@ -1,6 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { HttpParams } from '@angular/common/http';
 import {
   ApiResponse,
   CreateEquipmentUnavailabilityRequest,
@@ -10,14 +9,14 @@ import {
   UnavailabilityExceptionRequest,
   UpdateEquipmentUnavailabilityRequest,
 } from '../models';
-import { environment } from '../../../environments/environment';
+import { TenantApiClient } from '../api/tenant-api-client';
 
 @Injectable({ providedIn: 'root' })
 export class EquipmentUnavailabilityService {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(TenantApiClient);
 
   private baseUrl(clinicId: number, equipmentId: number): string {
-    return `${environment.apiUrl}/clinics/${clinicId}/equipments/${equipmentId}/unavailabilities`;
+    return `/clinics/${clinicId}/equipments/${equipmentId}/unavailabilities`;
   }
 
   /** 사용불가 스케줄 목록 조회 (E1) */
@@ -28,13 +27,11 @@ export class EquipmentUnavailabilityService {
     to: string,
   ): Promise<EquipmentUnavailabilityRecord[]> {
     const params = new HttpParams().set('from', from).set('to', to);
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<EquipmentUnavailabilityRecord[]>>(
-        this.baseUrl(clinicId, equipmentId),
-        { params },
-      )
-    );
-    return res.data ?? [];
+    const res = await this.api.request<ApiResponse<EquipmentUnavailabilityRecord[]>>('GET', this.baseUrl(clinicId, equipmentId), {
+      params,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data ?? [];
   }
 
   /** 사용불가 스케줄 등록 (E2) */
@@ -43,13 +40,11 @@ export class EquipmentUnavailabilityService {
     equipmentId: number,
     request: CreateEquipmentUnavailabilityRequest,
   ): Promise<EquipmentUnavailabilityRecord> {
-    const res = await firstValueFrom(
-      this.http.post<ApiResponse<EquipmentUnavailabilityRecord>>(
-        this.baseUrl(clinicId, equipmentId),
-        request,
-      )
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<EquipmentUnavailabilityRecord>>('POST', this.baseUrl(clinicId, equipmentId), {
+      body: request,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as EquipmentUnavailabilityRecord;
   }
 
   /** 사용불가 스케줄 수정 (E3) */
@@ -59,20 +54,18 @@ export class EquipmentUnavailabilityService {
     id: number,
     request: UpdateEquipmentUnavailabilityRequest,
   ): Promise<EquipmentUnavailabilityRecord> {
-    const res = await firstValueFrom(
-      this.http.put<ApiResponse<EquipmentUnavailabilityRecord>>(
-        `${this.baseUrl(clinicId, equipmentId)}/${id}`,
-        request,
-      )
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<EquipmentUnavailabilityRecord>>('PUT', `${this.baseUrl(clinicId, equipmentId)}/${id}`, {
+      body: request,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as EquipmentUnavailabilityRecord;
   }
 
   /** 사용불가 스케줄 삭제 (E4) */
   async delete(clinicId: number, equipmentId: number, id: number): Promise<void> {
-    await firstValueFrom(
-      this.http.delete<void>(`${this.baseUrl(clinicId, equipmentId)}/${id}`)
-    );
+    await this.api.request<void>('DELETE', `${this.baseUrl(clinicId, equipmentId)}/${id}`, {
+      authScope: 'workforce-bearer',
+    });
   }
 
   /** 예외 날짜 추가 (E5) */
@@ -82,13 +75,11 @@ export class EquipmentUnavailabilityService {
     id: number,
     request: UnavailabilityExceptionRequest,
   ): Promise<EquipmentUnavailabilityExceptionRecord> {
-    const res = await firstValueFrom(
-      this.http.post<ApiResponse<EquipmentUnavailabilityExceptionRecord>>(
-        `${this.baseUrl(clinicId, equipmentId)}/${id}/exceptions`,
-        request,
-      )
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<EquipmentUnavailabilityExceptionRecord>>('POST', `${this.baseUrl(clinicId, equipmentId)}/${id}/exceptions`, {
+      body: request,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as EquipmentUnavailabilityExceptionRecord;
   }
 
   /** 예외 날짜 삭제 (E6) */
@@ -98,11 +89,9 @@ export class EquipmentUnavailabilityService {
     id: number,
     exId: number,
   ): Promise<void> {
-    await firstValueFrom(
-      this.http.delete<void>(
-        `${this.baseUrl(clinicId, equipmentId)}/${id}/exceptions/${exId}`,
-      )
-    );
+    await this.api.request<void>('DELETE', `${this.baseUrl(clinicId, equipmentId)}/${id}/exceptions/${exId}`, {
+      authScope: 'workforce-bearer',
+    });
   }
 
   /** 충돌 예약 조회 — 등록된 스케줄 기준 (E7) */
@@ -111,12 +100,10 @@ export class EquipmentUnavailabilityService {
     equipmentId: number,
     id: number,
   ): Promise<UnavailabilityConflictResponse> {
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<UnavailabilityConflictResponse>>(
-        `${this.baseUrl(clinicId, equipmentId)}/${id}/conflicts`,
-      )
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<UnavailabilityConflictResponse>>('GET', `${this.baseUrl(clinicId, equipmentId)}/${id}/conflicts`, {
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as UnavailabilityConflictResponse;
   }
 
   /** 충돌 예약 미리보기 — 등록 전 (E8) */
@@ -125,12 +112,10 @@ export class EquipmentUnavailabilityService {
     equipmentId: number,
     request: CreateEquipmentUnavailabilityRequest,
   ): Promise<UnavailabilityConflictResponse> {
-    const res = await firstValueFrom(
-      this.http.post<ApiResponse<UnavailabilityConflictResponse>>(
-        `${this.baseUrl(clinicId, equipmentId)}/preview-conflicts`,
-        request,
-      )
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<UnavailabilityConflictResponse>>('POST', `${this.baseUrl(clinicId, equipmentId)}/preview-conflicts`, {
+      body: request,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as UnavailabilityConflictResponse;
   }
 }

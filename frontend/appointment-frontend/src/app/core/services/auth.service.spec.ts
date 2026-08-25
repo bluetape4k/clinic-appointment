@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 
 import { AuthService } from './auth.service';
+import { SessionStateService } from './session-state.service';
+import { TenantContextService } from '../api/tenant-context.service';
 
 /** Build a minimal JWT with given payload. */
 function makeJwt(payload: Record<string, unknown>): string {
@@ -57,7 +59,7 @@ describe('AuthService', () => {
     it('기존 localStorage·sessionStorage의 JWT를 초기화하고 인증하지 않는다', () => {
       const service = createService({ auth_token: makeJwt({ roles: [] }) });
 
-      expect(store).toEqual({});
+      expect(store['auth_token']).toBeUndefined();
       expect(service.getToken()).toBeNull();
       expect(service.isAuthenticated()).toBe(false);
     });
@@ -106,6 +108,85 @@ describe('AuthService', () => {
     expect(() => service.setToken(makeJwt({ roles: ['ROLE_PATIENT'] }))).not.toThrow();
     expect(service.isAuthenticated()).toBe(true);
     expect(() => service.removeToken()).not.toThrow();
+  });
+
+  describe('workforce bootstrap', () => {
+    it('허용 tenant가 하나면 비영속 token과 tenant를 함께 복원한다', () => {
+      const service = createService();
+      const tenant = TestBed.inject(TenantContextService);
+      const state = TestBed.inject(SessionStateService);
+
+      service.bootstrap(makeJwt({ roles: ['ROLE_STAFF'], allowedTenants: ['tenant-a'] }));
+
+      expect(tenant.tenantCode()).toBe('tenant-a');
+      expect(service.getToken()).toContain('.');
+      expect(state.status('workforce')).toBe('authenticated');
+      expect(store['auth_token']).toBeUndefined();
+    });
+
+    it('다중 tenant token은 명시적으로 선택한 허용 tenant만 복원한다', () => {
+      const service = createService();
+      const tenant = TestBed.inject(TenantContextService);
+
+      service.bootstrap(makeJwt({ roles: ['ROLE_ADMIN'], allowedTenants: ['tenant-a', 'tenant-b'] }), 'tenant-b');
+
+      expect(tenant.tenantCode()).toBe('tenant-b');
+      expect(service.isAuthenticated()).toBe(true);
+    });
+
+    it('허용되지 않은 tenant는 token과 tenant를 모두 폐기한다', () => {
+      const service = createService();
+      const tenant = TestBed.inject(TenantContextService);
+      const state = TestBed.inject(SessionStateService);
+
+      expect(() => service.bootstrap(
+        makeJwt({ roles: ['ROLE_STAFF'], allowedTenants: ['tenant-a'] }),
+        'tenant-b',
+      )).toThrow('tenant scope');
+
+      expect(service.getToken()).toBeNull();
+      expect(tenant.tenantCode()).toBeNull();
+      expect(state.status('workforce')).toBe('unauthorized');
+    });
+
+    it('허용 tenant가 여러 개인데 선택값이 없으면 추측하지 않는다', () => {
+      const service = createService();
+      const tenant = TestBed.inject(TenantContextService);
+
+      expect(() => service.bootstrap(
+        makeJwt({ roles: ['ROLE_STAFF'], allowedTenants: ['tenant-a', 'tenant-b'] }),
+      )).toThrow('tenant scope');
+
+      expect(service.getToken()).toBeNull();
+      expect(tenant.tenantCode()).toBeNull();
+    });
+
+    it('명시한 tenant 값이 공백이면 허용 tenant를 대신 선택하지 않는다', () => {
+      const service = createService();
+      const tenant = TestBed.inject(TenantContextService);
+
+      expect(() => service.bootstrap(
+        makeJwt({ roles: ['ROLE_STAFF'], allowedTenants: ['tenant-a'] }),
+        '   ',
+      )).toThrow('tenant scope');
+
+      expect(service.getToken()).toBeNull();
+      expect(tenant.tenantCode()).toBeNull();
+    });
+
+    it('허용 목록에 유효하지 않은 tenant code가 있으면 원자적으로 폐기한다', () => {
+      const service = createService();
+      const tenant = TestBed.inject(TenantContextService);
+      const state = TestBed.inject(SessionStateService);
+
+      expect(() => service.bootstrap(
+        makeJwt({ roles: ['ROLE_STAFF'], allowedTenants: ['tenant with space'] }),
+      )).toThrow('tenant scope');
+
+      expect(service.getToken()).toBeNull();
+      expect(tenant.tenantCode()).toBeNull();
+      expect(state.status('workforce')).toBe('unauthorized');
+    });
   });
 
   describe('JWT 역할 파싱', () => {

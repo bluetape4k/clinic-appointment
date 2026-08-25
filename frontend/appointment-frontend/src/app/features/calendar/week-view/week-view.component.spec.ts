@@ -7,6 +7,7 @@ import { provideLocationMocks } from '@angular/common/testing';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 
 import { WeekViewComponent } from './week-view.component';
+import { TenantContextService } from '../../../core/api/tenant-context.service';
 
 describe('WeekViewComponent', () => {
   let httpMock: HttpTestingController;
@@ -24,6 +25,7 @@ describe('WeekViewComponent', () => {
     });
 
     httpMock = TestBed.inject(HttpTestingController);
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
   });
 
   afterEach(() => {
@@ -38,6 +40,7 @@ describe('WeekViewComponent', () => {
     httpMock.match(() => true).forEach(req => req.flush({ success: true, data: [] }));
     fixture.detectChanges();
     await fixture.whenStable();
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
     return fixture;
   }
 

@@ -9,6 +9,7 @@ import { WritableSignal, signal } from '@angular/core';
 
 import { AppointmentListComponent } from './appointment-list.component';
 import { AuthService } from '../../../core/services/auth.service';
+import { TenantContextService } from '../../../core/api/tenant-context.service';
 
 describe('AppointmentListComponent', () => {
   let httpMock: HttpTestingController;
@@ -42,6 +43,7 @@ describe('AppointmentListComponent', () => {
     });
 
     httpMock = TestBed.inject(HttpTestingController);
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
   });
 
   afterEach(() => {

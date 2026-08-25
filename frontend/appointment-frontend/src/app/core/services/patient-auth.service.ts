@@ -1,11 +1,10 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { HttpErrorResponse } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
 
-import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { TenantContextService } from '../api/tenant-context.service';
+import { TenantApiClient } from '../api/tenant-api-client';
+import { SessionStateService } from './session-state.service';
 import {
   PatientLoginRequest,
   PatientRegisterRequest,
@@ -16,8 +15,9 @@ import {
 /** HttpOnly patient session cookie를 사용하는 환자 인증 API입니다. */
 @Injectable({ providedIn: 'root' })
 export class PatientAuthService {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(TenantApiClient);
   private readonly tenant = inject(TenantContextService);
+  private readonly sessionState = inject(SessionStateService);
 
   private readonly _session = signal<PatientSessionSummary | null>(null);
   private _sessionVersion = 0;
@@ -34,14 +34,15 @@ export class PatientAuthService {
   beginSessionChange(): void {
     this._sessionVersion += 1;
     this._session.set(null);
+    this.sessionState.mark('patient', 'anonymous');
   }
 
   async bootstrapCsrf(tenantCode: string): Promise<void> {
-    await firstValueFrom(
-      this.http.get<ApiResponse<{ ready: boolean }>>(this.url(tenantCode, 'csrf'), {
-        withCredentials: true,
-      }),
-    );
+    this.requireTenant(tenantCode);
+    await this.api.request<ApiResponse<{ ready: boolean }>>('GET', this.path('csrf'), {
+      authScope: 'patient-cookie',
+      withCredentials: true,
+    });
   }
 
   async register(
@@ -51,14 +52,12 @@ export class PatientAuthService {
     this.loading.set(true);
     try {
       await this.bootstrapCsrf(tenantCode);
-      const response = await firstValueFrom(
-        this.http.post<ApiResponse<PatientRegistrationResponse>>(
-          this.url(tenantCode, 'register'),
-          request,
-          { withCredentials: true },
-        ),
-      );
-      return this.requireData(response, '회원가입 응답이 비어 있습니다.');
+      const response = await this.api.request<ApiResponse<PatientRegistrationResponse>>('POST', this.path('register'), {
+        body: request,
+        authScope: 'patient-cookie',
+        withCredentials: true,
+      });
+      return this.requireData(response.body, '회원가입 응답이 비어 있습니다.');
     } finally {
       this.loading.set(false);
     }
@@ -71,14 +70,12 @@ export class PatientAuthService {
     this.loading.set(true);
     try {
       await this.bootstrapCsrf(tenantCode);
-      const response = await firstValueFrom(
-        this.http.post<ApiResponse<PatientSessionSummary>>(
-          this.url(tenantCode, 'login'),
-          request,
-          { withCredentials: true },
-        ),
-      );
-      const session = this.requireData(response, '로그인 응답이 비어 있습니다.');
+      const response = await this.api.request<ApiResponse<PatientSessionSummary>>('POST', this.path('login'), {
+        body: request,
+        authScope: 'patient-cookie',
+        withCredentials: true,
+      });
+      const session = this.requireData(response.body, '로그인 응답이 비어 있습니다.');
       if (
         requestedSessionVersion !== this._sessionVersion ||
         this.tenant.tenantCode() !== requestedTenantCode
@@ -86,6 +83,7 @@ export class PatientAuthService {
         throw new Error('로그인 응답이 현재 session에 속하지 않습니다.');
       }
       this._session.set(session);
+      this.sessionState.mark('patient', 'authenticated');
       return session;
     } finally {
       if (requestedSessionVersion === this._sessionVersion) this.loading.set(false);
@@ -97,15 +95,14 @@ export class PatientAuthService {
     // restore/login result before issuing the request so two concurrent cookie
     // observations cannot apply in completion order.
     this.beginSessionChange();
+    this.requireTenant(tenantCode);
     const requestedSessionVersion = this._sessionVersion;
     const requestedTenantCode = tenantCode;
-    const response = await firstValueFrom(
-      this.http.get<ApiResponse<PatientSessionSummary>>(
-        this.url(tenantCode, 'session'),
-        { withCredentials: true },
-      ),
-    );
-    const session = this.requireData(response, '환자 session 응답이 비어 있습니다.');
+    const response = await this.api.request<ApiResponse<PatientSessionSummary>>('GET', this.path('session'), {
+      authScope: 'patient-cookie',
+      withCredentials: true,
+    });
+    const session = this.requireData(response.body, '환자 session 응답이 비어 있습니다.');
     if (
       requestedSessionVersion !== this._sessionVersion ||
       this.tenant.tenantCode() !== requestedTenantCode
@@ -113,6 +110,7 @@ export class PatientAuthService {
       throw new Error('환자 session 응답이 현재 session에 속하지 않습니다.');
     }
     this._session.set(session);
+    this.sessionState.mark('patient', 'authenticated');
     return session;
   }
 
@@ -122,13 +120,16 @@ export class PatientAuthService {
     this.loading.set(true);
     try {
       await this.bootstrapCsrf(tenantCode);
-      await firstValueFrom(
-        this.http.post<void>(this.url(tenantCode, 'logout'), null, { withCredentials: true }),
-      );
+      await this.api.request<void>('POST', this.path('logout'), {
+        body: null,
+        authScope: 'patient-cookie',
+        withCredentials: true,
+      });
     } finally {
       if (requestedSessionVersion === this._sessionVersion) {
         this._session.set(null);
         this.loading.set(false);
+        this.sessionState.mark('patient', 'anonymous');
       }
     }
   }
@@ -138,6 +139,7 @@ export class PatientAuthService {
     const tenantCode = this.tenant.tenantCode();
     if (!tenantCode) {
       this._session.set(null);
+      this.sessionState.mark('patient', 'tenant-missing');
       return false;
     }
 
@@ -149,9 +151,8 @@ export class PatientAuthService {
       return true;
     } catch (error) {
       this._session.set(null);
-      if (error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403)) {
-        return false;
-      }
+      const status = error instanceof HttpErrorResponse ? error.status : 0;
+      this.sessionState.mark('patient', status === 401 ? 'unauthorized' : status === 403 ? 'forbidden' : 'anonymous');
       return false;
     }
   }
@@ -160,14 +161,19 @@ export class PatientAuthService {
     this.beginSessionChange();
   }
 
-  private url(tenantCode: string, action: string): string {
-    const normalized = tenantCode.trim();
-    if (!normalized) throw new Error('tenant scope가 설정되지 않았습니다.');
-    return `${environment.apiUrl}/${encodeURIComponent(normalized)}/auth/${action}`;
+  private path(action: string): string {
+    return `/auth/${action}`;
   }
 
-  private requireData<T>(response: ApiResponse<T>, message: string): T {
-    if (!response.success || response.data == null) throw new Error(message);
+  private requireTenant(tenantCode: string): void {
+    if (!tenantCode || this.tenant.tenantCode() !== tenantCode) {
+      this.sessionState.mark('patient', 'tenant-missing');
+      throw new Error('tenant scope가 설정되지 않았습니다.');
+    }
+  }
+
+  private requireData<T>(response: ApiResponse<T> | null, message: string): T {
+    if (!response || !response.success || response.data == null) throw new Error(message);
     return response.data;
   }
 }

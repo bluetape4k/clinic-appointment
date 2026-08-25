@@ -4,6 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { ClinicService } from './clinic.service';
+import { TenantContextService } from '../api/tenant-context.service';
 
 describe('ClinicService', () => {
   let service: ClinicService;
@@ -13,6 +14,7 @@ describe('ClinicService', () => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
     service = TestBed.inject(ClinicService);
     httpTesting = TestBed.inject(HttpTestingController);
   });
@@ -42,7 +44,7 @@ describe('ClinicService', () => {
 
       const promise = service.getAll();
 
-      const req = httpTesting.expectOne('/api/clinics');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: { content: mockClinics } });
 
@@ -54,7 +56,7 @@ describe('ClinicService', () => {
     it('빈 응답 시 빈 배열이 설정된다', async () => {
       const promise = service.getAll();
 
-      const req = httpTesting.expectOne('/api/clinics');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics');
       req.flush({ success: true, data: null });
 
       const result = await promise;
@@ -66,7 +68,7 @@ describe('ClinicService', () => {
       const promise = service.getAll();
       expect(service.loading()).toBe(true);
 
-      const req = httpTesting.expectOne('/api/clinics');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics');
       req.flush({ success: true, data: { content: [] } });
 
       await promise;
@@ -80,7 +82,7 @@ describe('ClinicService', () => {
 
       const promise = service.getById(1);
 
-      const req = httpTesting.expectOne('/api/clinics/1');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/1');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: mockClinic });
 
@@ -97,7 +99,7 @@ describe('ClinicService', () => {
 
       const promise = service.getOperatingHours(1);
 
-      const req = httpTesting.expectOne('/api/clinics/1/operating-hours');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/1/operating-hours');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: mockHours });
 
@@ -108,7 +110,7 @@ describe('ClinicService', () => {
     it('빈 응답 시 빈 배열을 반환한다', async () => {
       const promise = service.getOperatingHours(1);
 
-      const req = httpTesting.expectOne('/api/clinics/1/operating-hours');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/1/operating-hours');
       req.flush({ success: true, data: null });
 
       const result = await promise;
@@ -124,7 +126,7 @@ describe('ClinicService', () => {
 
       const promise = service.getBreakTimes(1);
 
-      const req = httpTesting.expectOne('/api/clinics/1/break-times');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/1/break-times');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: mockBreaks });
 
