@@ -162,15 +162,21 @@ class NotificationAutoConfiguration {
         producerReadiness: NotificationProducerSchemaReadiness,
     ): NotificationOutboxReadinessSource =
         NotificationOutboxReadinessSource {
-            val schemaReady = readiness.check().available
-            val producerReady = producerReadiness.check().available
+            val schema = readiness.check()
+            val producer = producerReadiness.check()
+            val schemaReady = schema.available
+            val producerReady = producer.available
             if (schemaReady && producerReady) {
                 NotificationOutboxReadinessSnapshot.up()
             } else {
+                val schemaCode = schema.diagnostics.firstOrNull()?.code ?: "SCHEMA_NOT_READY"
+                val producerCode = producer.diagnostics.firstOrNull()?.code ?: "PRODUCER_NOT_READY"
                 NotificationOutboxReadinessSnapshot(
-                    schema = NotificationComponentState.down(if (schemaReady) "PRODUCER_NOT_READY" else "SCHEMA_NOT_READY"),
+                    schema = NotificationComponentState.down(if (schemaReady) producerCode else schemaCode),
                     claim = NotificationComponentState.down("CLAIM_NOT_READY"),
-                    keyRing = NotificationComponentState.down("KEY_RING_NOT_READY"),
+                    keyRing = NotificationComponentState.down(
+                        if (!schemaReady && schemaCode.startsWith("KEY_RING_")) schemaCode else "KEY_RING_NOT_READY",
+                    ),
                 )
             }
         }
