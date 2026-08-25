@@ -30,6 +30,13 @@ principal에서만 사용한다.
 `tenant`, `clinic`, `assurance`, token evidence를 요청 본문에 넣어도 권한 상승으로
 사용하지 않는다.
 
+정책 write 요청은 Spring이 `JsonNode`를 materialize하기 전에 원문 JSON 경계를 통과해야
+한다. envelope와 nested `payload`의 duplicate key, 하나의 문서 뒤에 붙은 trailing token,
+정해진 envelope 바이트 상한을 지키지 않는 요청은 모두 `POLICY_PAYLOAD_INVALID` safe
+error로 거절한다. 응답과 로그에는 원문 payload나 parser 상세를 남기지 않는다. 이 검사는
+DTO의 kind별 payload 의미 검증을 대신하지 않으며, 정상 요청은 동일한 body를 다음
+materialization 단계에서 다시 읽는다.
+
 `policy:scheduled-activation`은 Gateway를 통과하는 사람 운영자 권한이 아니다.
 내부 activation worker가 `ActorType.SYSTEM`, `ActorRole.SYSTEM`,
 service assurance와 함께 사용하는 전용 capability다. 외부 JWT에 이 scope를
@@ -43,7 +50,7 @@ service assurance와 함께 사용하는 전용 capability다. 외부 JWT에 이
 | 순서 | 속성 | 노출되는 기능 |
 |---:|---|---|
 | 1 | `scheduling.policy.shadow-compile-enabled` | 활성 예약에는 적용하지 않고 컴파일만 검증 |
-| 2 | `scheduling.policy.effective-read-enabled` | tenant/clinic 유효 정책 스냅숏 조회 |
+| 2 | `scheduling.policy.effective-read-enabled` | tenant/clinic 유효 정책 기준 데이터 조회 |
 | 3 | `scheduling.policy.admin-write-enabled` | draft, validate, approve, activate 관리 명령 |
 | 4 | `scheduling.policy.preview-worker-enabled` | durable 영향도 미리보기 작업자 |
 | 5 | `scheduling.policy.scheduled-activation-enabled` | 기한이 된 활성화 명령 작업자 |
@@ -120,7 +127,7 @@ ACTIVE -> RETIRED
 | `POST` | `/{id}/activate` | `200` | 즉시 활성화 실행 |
 | `POST` | `/{id}/retire` | `200` | definition 이력 보존 후 폐기 |
 | `POST` | `/activation-commands/{commandId}/replay` | `200` | `MISSED` command 수동 재생 |
-| `GET` | `/effective?decisionAt=...&serviceAt=...` | `200` | tenant baseline 유효 정책 스냅숏 조회 |
+| `GET` | `/effective?decisionAt=...&serviceAt=...` | `200` | tenant baseline 유효 정책 기준 데이터 조회 |
 | `GET` | `/preview-jobs/{jobId}` | `200` | tenant 미리보기 작업 폴링 |
 
 ## 병원 엔드포인트
@@ -172,7 +179,7 @@ GET /api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/preview-jobs/
 <!-- booking-draft-example:end -->
 
 `termsHashRequired=true`이면 외부 동의 증빙의 `termsHash`는 구매 당시 Plan에 고정한
-상품 `catalogPayloadHash`와 정확히 같아야 한다. 예약서비스는 검증기가 반환한 값을
+상품 `catalogPayloadHash`와 정확히 같아야 한다. 예약 서비스는 검증기가 반환한 값을
 다시 기대값으로 사용하지 않으므로 임의의 64자리 hash나 현재 카탈로그 버전으로 과거
 구매·proposal의 동의 범위를 대신할 수 없다.
 
@@ -366,7 +373,7 @@ HTTP `409`를 반환한다.
 
 effective read는 두 시간 축을 받는다.
 
-tenant effective snapshot은 다음 8개 tenant baseline kind가 모두 `ACTIVE`이고
+tenant 유효 정책 기준 데이터는 다음 8개 tenant baseline kind가 모두 `ACTIVE`이고
 요청한 `decisionAt`/`serviceAt`에 유효할 때만 만들어진다.
 
 - `BOOKING_COMMITMENT`
@@ -389,7 +396,7 @@ GET /api/{tenantCode}/admin/clinics/{clinicId}/scheduling-policies/effective?dec
 
 `decisionAt`과 `serviceAt`은 RFC 3339 offset timestamp여야 하며, `serviceAt`은
 `decisionAt`보다 앞설 수 없다. 서비스는 generation을 읽고 컴파일한 뒤 다시
-generation을 확인한다. 두 번의 권위 read가 달라지면 stale snapshot을 반환하지 않고
+generation을 확인한다. 두 번의 권위 read가 달라지면 오래된 기준 데이터를 반환하지 않고
 `POLICY_EFFECTIVE_READ_CONFLICT`를 반환한다.
 
 ## 오류 계약

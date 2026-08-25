@@ -96,6 +96,62 @@ class WaitlistNotificationOutboxAdapterTest {
         }
     }
 
+    @Test
+    fun `codec는 stable canonical JSON golden을 유지한다`() {
+        val envelope = WaitlistNotificationOutboxEnvelope.from(
+            draft(),
+            idempotencyKey = "idempotency-1",
+        )
+
+        WaitlistNotificationOutboxCodec().encode(envelope) shouldBeEqualTo
+            """{"schemaVersion":1,"eventId":"waitlist-offer-v1:41","idempotencyKey":"idempotency-1","tenantGroupId":7,"clinicId":11,"offerId":41,"holdId":42,"waitlistEntryId":43,"reasonCode":"OFFER_CREATED","correlationId":"corr-170","occurredAt":"2026-08-03T10:00:00Z","availableAt":"2026-08-03T10:00:00Z"}"""
+    }
+
+    @Test
+    fun `codec는 duplicate key를 허용하지 않는다`() {
+        val codec = WaitlistNotificationOutboxCodec()
+        val envelope = WaitlistNotificationOutboxEnvelope.from(draft())
+        val valid = codec.encode(envelope)
+
+        assertFailsWith<WaitlistNotificationOutboxContractException> {
+            codec.decode(valid.replace(
+                "\"eventId\":\"waitlist-offer-v1:41\"",
+                "\"eventId\":\"waitlist-offer-v1:41\",\"eventId\":\"forged\"",
+            ))
+        }
+    }
+
+    @Test
+    fun `codec는 trailing token을 허용하지 않는다`() {
+        val codec = WaitlistNotificationOutboxCodec()
+        val valid = codec.encode(WaitlistNotificationOutboxEnvelope.from(draft()))
+
+        assertFailsWith<WaitlistNotificationOutboxContractException> {
+            codec.decode(valid + " {}")
+        }
+    }
+
+    @Test
+    fun `envelope는 저장 식별자 길이를 bounded contract로 검증한다`() {
+        val draft = draft()
+
+        assertFailsWith<IllegalArgumentException> {
+            WaitlistNotificationOutboxEnvelope.from(draft, idempotencyKey = "x".repeat(129))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            WaitlistNotificationOutboxEnvelope.from(draft).copy(eventId = "x".repeat(161))
+        }
+    }
+
+    @Test
+    fun `codec는 UTF-8 document byte 상한을 초과한 입력을 거부한다`() {
+        val codec = WaitlistNotificationOutboxCodec()
+
+        assertFailsWith<WaitlistNotificationOutboxContractException> {
+            codec.decode("{\"payload\":\"${"가".repeat(40_000)}\"}")
+        }
+    }
+
     private fun draft() = WaitlistOfferNotificationDraft(
         tenantGroupId = 7L,
         clinicId = 11L,

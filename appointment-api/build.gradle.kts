@@ -47,7 +47,6 @@ dependencies {
     implementation(libs.exposed.jdbc)
 
     // Jackson 3
-    implementation(libs.bluetape4k.jackson3)
     implementation(libs.jackson3.module.kotlin)
     implementation(libs.jackson3.module.blackbird)
 

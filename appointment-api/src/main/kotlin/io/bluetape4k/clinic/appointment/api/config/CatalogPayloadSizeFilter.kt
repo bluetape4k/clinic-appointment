@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.clinic.appointment.api.security.CorrelationIdFilter
 import io.bluetape4k.clinic.appointment.service.CatalogDefinitionValidator
+import io.bluetape4k.clinic.appointment.service.SchedulingPolicyPayloadCodec
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.warn
 import jakarta.servlet.FilterChain
@@ -16,6 +17,10 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
+import tools.jackson.core.StreamReadFeature
+import tools.jackson.core.json.JsonFactory
+import tools.jackson.databind.DeserializationFeature
+import tools.jackson.databind.json.JsonMapper
 import java.io.BufferedReader
 import java.io.ByteArrayInputStream
 import java.io.InputStreamReader
@@ -28,6 +33,12 @@ class CatalogPayloadSizeFilter : OncePerRequestFilter() {
 
     companion object : KLogging() {
         private const val POLICY_ENVELOPE_OVERHEAD_BYTES = 16 * 1_024
+        private val strictPolicyMapper: JsonMapper = JsonMapper.builder(
+            JsonFactory.builder().build(),
+        )
+            .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .build()
         private val catalogSyncPath = Regex(
             "^/api/[^/]+/clinics/[^/]+/catalog-sources/[^/]+/catalog-products/[^/]+/versions/[^/]+$"
         )
@@ -61,8 +72,24 @@ class CatalogPayloadSizeFilter : OncePerRequestFilter() {
             return
         }
 
+        if (policyWritePath.matches(request.requestURI) && !body.isStrictJson()) {
+            rejectPayload(request, response, policyJsonViolation = true)
+            return
+        }
+
         filterChain.doFilter(CachedBodyRequest(request, body), response)
     }
+
+    /**
+     * Spring이 `JsonNode`를 materialize하기 전에 정책 원문의 중복 key와 trailing token을
+     * 검사한다. payload 값의 의미 검증은 이후 DTO와 policy codec이 담당한다.
+     */
+    private fun ByteArray.isStrictJson(): Boolean =
+        try {
+            strictPolicyMapper.readTree(this) != null
+        } catch (_: Exception) {
+            false
+        }
 
     /**
      * 정책 draft envelope는 payload 외 CAS/audit 필드를 포함하므로 제한된 overhead를 허용한다.
@@ -72,12 +99,16 @@ class CatalogPayloadSizeFilter : OncePerRequestFilter() {
      */
     private fun HttpServletRequest.maximumBodyBytes(): Int =
         if (policyWritePath.matches(requestURI)) {
-            CatalogDefinitionValidator.MAX_PAYLOAD_BYTES + POLICY_ENVELOPE_OVERHEAD_BYTES
+            SchedulingPolicyPayloadCodec.MAX_PAYLOAD_BYTES + POLICY_ENVELOPE_OVERHEAD_BYTES
         } else {
             CatalogDefinitionValidator.MAX_PAYLOAD_BYTES
         }
 
-    private fun rejectPayload(request: HttpServletRequest, response: HttpServletResponse) {
+    private fun rejectPayload(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        policyJsonViolation: Boolean = false,
+    ) {
         val correlationId = response.getHeader(CorrelationIdFilter.HEADER_NAME)
             ?.takeIf { it.isNotBlank() }
             ?: UUID.randomUUID().toString().also {
@@ -86,7 +117,11 @@ class CatalogPayloadSizeFilter : OncePerRequestFilter() {
         val policyRequest = policyWritePath.matches(request.requestURI)
         log.warn {
             if (policyRequest) {
-                "Scheduling policy request exceeded the bounded HTTP envelope"
+                if (policyJsonViolation) {
+                    "Scheduling policy request failed the strict JSON boundary"
+                } else {
+                    "Scheduling policy request exceeded the bounded HTTP envelope"
+                }
             } else {
                 "Catalog sync payload exceeded ${CatalogDefinitionValidator.MAX_PAYLOAD_BYTES} bytes"
             }

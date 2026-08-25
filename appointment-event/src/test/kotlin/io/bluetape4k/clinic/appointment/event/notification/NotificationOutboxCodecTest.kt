@@ -31,6 +31,12 @@ class NotificationOutboxCodecTest {
     }
 
     @Test
+    fun `codec emits the stable notification envelope golden JSON`() {
+        codec.encode(envelope()) shouldBeEqualTo
+            """{"schemaVersion":2,"eventId":"event-1","idempotencyKey":"tenant-10:clinic-20:appointment-30:member-40:confirmed","tenantGroupId":10,"clinicId":20,"appointmentId":30,"memberId":"member-40","channel":"SMS","eventType":"CONFIRMED","notificationSlot":"CONFIRMED","templateKey":"appointment.confirmed.sms","templateVersion":1,"parameterType":"APPOINTMENT_CONFIRMED","parameters":{"clinicDisplayName":"Blue Clinic","appointmentDate":"2026-08-01","startTime":"10:30"},"occurredAt":"2026-07-31T01:00:00Z","availableAt":"2026-07-31T01:05:00Z"}"""
+    }
+
+    @Test
     fun `codec round trip preserves every appointment template parameter contract`() {
         val cases = listOf(
             envelope(
@@ -405,6 +411,59 @@ class NotificationOutboxCodecTest {
             failure.message?.contains("unexpected").shouldBeFalse()
             failure.message?.contains("value").shouldBeFalse()
         }
+    }
+
+    @Test
+    fun `codec rejects duplicate keys without accepting the last value`() {
+        val valid = codec.encode(envelope())
+        val duplicate = valid.replace(
+            "\"eventId\":\"event-1\"",
+            "\"eventId\":\"event-1\",\"eventId\":\"forged-event\"",
+        )
+
+        val failure = assertFailsWith<NotificationContractException> {
+            codec.decode(duplicate)
+        }
+
+        failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+        failure.message?.contains("forged-event").shouldBeFalse()
+    }
+
+    @Test
+    fun `codec rejects trailing JSON tokens`() {
+        val failure = assertFailsWith<NotificationContractException> {
+            codec.decode(codec.encode(envelope()) + " {}")
+        }
+
+        failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+        failure.cause shouldBeEqualTo null
+    }
+
+    @Test
+    fun `codec rejects a string that exceeds the event document constraint`() {
+        val oversized = codec.encode(envelope()).replace(
+            "\"clinicDisplayName\":\"Blue Clinic\"",
+            "\"clinicDisplayName\":\"${"x".repeat(4_097)}\"",
+        )
+
+        val failure = assertFailsWith<NotificationContractException> {
+            codec.decode(oversized)
+        }
+
+        failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+        failure.cause shouldBeEqualTo null
+    }
+
+    @Test
+    fun `codec rejects an event document that exceeds the byte constraint`() {
+        val oversized = codec.encode(envelope()).removeSuffix("}") + " ".repeat(64 * 1024) + "}"
+
+        val failure = assertFailsWith<NotificationContractException> {
+            codec.decode(oversized)
+        }
+
+        failure.failureCode shouldBeEqualTo NotificationFailureCode.TEMPLATE_PARAMETER_INVALID
+        failure.cause shouldBeEqualTo null
     }
 
     @Test

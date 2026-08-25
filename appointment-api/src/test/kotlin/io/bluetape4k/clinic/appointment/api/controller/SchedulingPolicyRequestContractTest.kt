@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.api.dto.ActivateSchedulingPolicyRequest
@@ -215,5 +216,108 @@ class SchedulingPolicyRequestContractTest {
         (response.status == 400).shouldBeTrue()
         response.contentAsString.contains("POLICY_PAYLOAD_INVALID").shouldBeTrue()
         response.contentAsString.contains("\"retryable\":false").shouldBeTrue()
+    }
+
+    @Test
+    fun `policy raw body rejects duplicate keys before controller deserialization`() {
+        val request = MockHttpServletRequest(
+            "POST",
+            "/api/clinic-a/admin/scheduling-policies/drafts",
+        ).apply {
+            setContent(
+                """
+                {
+                  "kind":"NOTIFICATION_AND_SLA",
+                  "schemaVersion":1,
+                  "effectiveFrom":"2026-07-30T00:00:00Z",
+                  "effectiveUntil":null,
+                  "payload":{"profileReevaluationHeldTargetSeconds":120,"profileReevaluationHeldTargetSeconds":121},
+                  "expectedScopeRevision":0,
+                  "changeReason":"duplicate key probe"
+                }
+                """.trimIndent().toByteArray(),
+            )
+        }
+        val response = MockHttpServletResponse()
+        var invoked = false
+
+        CatalogPayloadSizeFilter().doFilter(
+            request,
+            response,
+            FilterChain { _, _ -> invoked = true },
+        )
+
+        invoked.shouldBeFalse()
+        (response.status == 400).shouldBeTrue()
+        response.contentAsString.contains("POLICY_PAYLOAD_INVALID").shouldBeTrue()
+        response.contentAsString.contains("duplicate key probe").shouldBeFalse()
+    }
+
+    @Test
+    fun `policy raw body rejects top level duplicate keys before controller deserialization`() {
+        val request = MockHttpServletRequest(
+            "POST",
+            "/api/clinic-a/admin/scheduling-policies/drafts",
+        ).apply {
+            setContent("{\"expectedScopeRevision\":0,\"expectedScopeRevision\":1}".toByteArray())
+        }
+        val response = MockHttpServletResponse()
+        var invoked = false
+
+        CatalogPayloadSizeFilter().doFilter(
+            request,
+            response,
+            FilterChain { _, _ -> invoked = true },
+        )
+
+        invoked.shouldBeFalse()
+        (response.status == 400).shouldBeTrue()
+        response.contentAsString.contains("POLICY_PAYLOAD_INVALID").shouldBeTrue()
+    }
+
+    @Test
+    fun `policy raw body rejects trailing JSON tokens before controller deserialization`() {
+        val request = MockHttpServletRequest(
+            "POST",
+            "/api/clinic-a/admin/scheduling-policies/drafts",
+        ).apply {
+            setContent("{} {}".toByteArray())
+        }
+        val response = MockHttpServletResponse()
+        var invoked = false
+
+        CatalogPayloadSizeFilter().doFilter(
+            request,
+            response,
+            FilterChain { _, _ -> invoked = true },
+        )
+
+        invoked.shouldBeFalse()
+        (response.status == 400).shouldBeTrue()
+        response.contentAsString.contains("POLICY_PAYLOAD_INVALID").shouldBeTrue()
+    }
+
+    @Test
+    fun `valid policy raw body reaches the chain unchanged after strict inspection`() {
+        val body = """{"expectedScopeRevision":0,"payload":{}}"""
+        val request = MockHttpServletRequest(
+            "POST",
+            "/api/clinic-a/admin/scheduling-policies/drafts",
+        ).apply {
+            setContent(body.toByteArray())
+        }
+        val response = MockHttpServletResponse()
+        var forwarded: String? = null
+
+        CatalogPayloadSizeFilter().doFilter(
+            request,
+            response,
+            FilterChain { filteredRequest, _ ->
+                forwarded = filteredRequest.inputStream.readAllBytes().toString(Charsets.UTF_8)
+            },
+        )
+
+        response.status shouldBeEqualTo 200
+        forwarded shouldBeEqualTo body
     }
 }
