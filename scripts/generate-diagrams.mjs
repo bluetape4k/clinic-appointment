@@ -45,7 +45,7 @@ function cc(color) {
 const KO_TEXT = new Map([
   ["Clinic Appointment — System Architecture", "Clinic Appointment — 시스템 아키텍처"],
   ["Kotlin 2.3 · Spring Boot 4 · Timefold Solver · Redis", "Kotlin 2.3 · Spring Boot 4 · Timefold Solver · Redis"],
-  ["Angular 18 SPA", "Angular 18 SPA"],
+  ["Angular 22 SPA", "Angular 22 SPA"],
   ["REST Client", "REST 클라이언트"],
   ["HTTP / JWT Bearer", "HTTP / JWT Bearer"],
   ["Swagger UI", "Swagger UI"],
@@ -276,7 +276,7 @@ function genArchitecture() {
   { rank=same; notif; lease; r4j; }
   { rank=same; pg; redis; docker; micrometer; timefold_ai; }
 
-  fe           [label="Angular 18 SPA\\nappointment-frontend"                          ${nc("blue")}]
+  fe           [label="Angular 22 SPA\\nappointment-frontend"                          ${nc("blue")}]
   rest_cli     [label="REST Client\\nHTTP / JWT Bearer"                                ${nc("blue")}]
   swagger      [label="Swagger UI\\nspringdoc-openapi"                                 ${nc("blue")}]
   gatling      [label="Gatling Tests\\nload simulation"                                ${nc("blue")}]
@@ -330,7 +330,7 @@ function genModuleOverview() {
   solver [label="appointment-solver\\nTimefold Solver AI\\n11 hard + 2 soft constraints\\nBulk optimization"             ${nc("amber")}]
   notif  [label="appointment-notification\\nDurable notification outbox\\nPrivacy-safe delivery\\nReminder recovery"       ${nc("pink")}]
   api    [label="appointment-api\\nSpring Boot 4 REST API\\nJWT auth · Flyway · Swagger\\nGatling load tests"            ${nc("green")}]
-  fe     [label="frontend\\nappointment-frontend\\nAngular 18 SPA\\nappointment management UI"                           ${nc("purple")}]
+  fe     [label="frontend\\nappointment-frontend\\nAngular 22 SPA\\nappointment management UI"                           ${nc("purple")}]
 
   evt    -> core   [label="depends on" color="#45A7A1"]
   solver -> core   [color="#45A7A1"]

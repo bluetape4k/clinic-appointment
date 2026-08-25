@@ -26,10 +26,10 @@ Spring Boot API, Angular 화면까지 한 번에 다루는 진료 예약 예제�
 - **내구성 알림** - 예약과 함께 개인정보를 최소화한 알림 outbox를 커밋하고, DB lease와 fencing, 병원 간 공정 처리, 발송 시점 회원 조회, 실행 시간이 제한된 Resilience4j 정책으로 전달
 - **트랜잭션 예약 메시징** - 예약 aggregate와 개인정보를 제거한 Kafka 4 이벤트 intent를 함께 커밋하고, lease fencing과 allow-list를 적용한 at-least-once relay로 전달
 - **테넌트 범위 REST API** - `/api/{tenantCode}/...` 경로, JWT tenant 인가, Flyway 마이그레이션, Swagger UI 제공
-- **예약 플랜 기반** - 구매 상품 BOM을 불변 진료 의무로 스냅숏하고, 카탈로그 동기화와 신뢰된 구매 이벤트를 통해 방문 예약 이전 단계를 관리
+- **예약 플랜 기반** - 구매 상품 BOM을 불변 진료 의무 기준으로 고정하고, 카탈로그 동기화와 신뢰된 구매 이벤트를 통해 방문 예약 이전 단계를 관리
 - **예약 정책 기반** - 가예약, 동의, 오버부킹, 재확인, 운영 장애 복구, 통제된 진료 시간 연장에 대한 테넌트 기준 정책과 병원별 재정의를 버전 관리
 - **예약 신뢰도 경계** - 고객 책임 no-show·지각 취소 임계값을 회원 프로필 복제 없이 평가하고, 기존 확정 약속을 보호하며, 제한된 직원 검토 경로를 제공
-- **Angular 18 웹 UI** - 예약 조회/생성/상태 변경 인터페이스
+- **Angular 22 웹 UI** - 직원 예약 관리와 tenant-aware 환자 포털 인터페이스
 
 카탈로그 동기화 호출자는 [docs/api/catalog-payload-hash.md](docs/api/catalog-payload-hash.md)의
 canonical hash 계약과 fixture로 `payloadHash`를 재현할 수 있습니다.
@@ -38,7 +38,7 @@ canonical hash 계약과 fixture로 `payloadHash`를 재현할 수 있습니다.
 
 `AppointmentPlan`은 한 번의 구매로 병원이 제공해야 할 진료 의무를 기록합니다.
 방문 예약은 그중 어떤 진료를 언제 진행할지 기록합니다. 이번 기반 구현은 카탈로그
-스냅숏, 진료 회차, 의존관계, 구매 inbox 판정, 대기 중인 plan-created outbox 이벤트를
+기준 데이터, 진료 회차, 의존관계, 구매 inbox 판정, 대기 중인 plan-created outbox 이벤트를
 저장합니다.
 
 방문 일정 배정, 자원 선점, 고객 동의, outbox 발행, 시술 완료·환불 처리는 구현하지
@@ -48,7 +48,7 @@ canonical hash 계약과 fixture로 `payloadHash`를 재현할 수 있습니다.
 
 Scheduling policy는 앞으로의 예약 결정이 따라야 할 동작을 정의합니다. 이 기능은
 예약을 직접 생성하지 않습니다. 이번 기반 구현은 불변 테넌트 정책 버전, 병원별 재정의,
-범위별 활성 헤드, 미리보기 작업, 활성화 명령, 유효 정책 스냅숏, 개인정보 안전 메트릭을
+범위별 활성 헤드, 미리보기 작업, 활성화 명령, 유효 정책 기준 데이터, 개인정보 안전 메트릭을
 저장합니다.
 
 모든 롤아웃 플래그는 기본적으로 꺼져 있으며 다음 순서로만 켭니다.
@@ -64,7 +64,7 @@ Scheduling policy는 앞으로의 예약 결정이 따라야 할 동작을 정�
 
 ### 예약 신뢰도 경계
 
-예약 신뢰도 evaluator는 typed 예약 결과, 불변 effective policy snapshot, 제한된 회원 이력으로
+예약 신뢰도 evaluator는 typed 예약 결과, 불변 effective policy 기준 데이터, 제한된 회원 이력으로
 새 예약 자격을 판단합니다. 예약 경계에는 불투명한 `MemberId`만 전달합니다. clinic allowlist와
 `OFF`·`SHADOW`·`ENFORCE` 모드로 단계적으로 전개하며, `PROPOSED`·`HELD`는 검토할 수 있지만
 이미 `CONFIRMED`인 약속은 그대로 둡니다.
@@ -82,7 +82,7 @@ Scheduling policy는 앞으로의 예약 결정이 따라야 할 동작을 정�
 <a id="profile-reevaluation"></a>
 ### 프로필 변경 예약 재평가 경계
 
-CRM이 예약 판단에 영향을 주는 프로필 변경을 알리면 예약서비스는 `PROPOSED`와
+CRM이 예약 판단에 영향을 주는 프로필 변경을 알리면 예약 서비스는 `PROPOSED`와
 `HELD` 예약만 다시 평가합니다. `CONFIRMED` 예약은 그대로 둡니다. 이벤트에는
 프로필 원문, 파생 특징, 점수, 설명 대신 범위가 제한된 fingerprint, revision과
 opaque assessment reference만 담습니다.
@@ -141,7 +141,7 @@ parameter를 제거합니다.
 | `appointment-solver` | Timefold Solver AI 최적화 - 12개 Hard + 6개 Soft 제약으로 대량 예약 최적 배치 | [README](appointment-solver/README.ko.md) |
 | `appointment-notification` | 내구성 outbox 발송, 발송 시점 회원 조회, 리마인더 복구, 개인정보 보존 관리, provider 장애 격리 | [README](appointment-notification/README.ko.md) |
 | `appointment-api` | Spring Boot 4 REST API - 예약 CRUD, 슬롯 조회, 재배정, JWT 인증, Swagger | [README](appointment-api/README.ko.md) |
-| `frontend/appointment-frontend` | Angular 18 웹 UI - 예약 관리 인터페이스 | [README](frontend/appointment-frontend/README.ko.md) |
+| `frontend/appointment-frontend` | Angular 22 웹 UI - 직원 예약 관리와 tenant-aware 환자 포털 | [README](frontend/appointment-frontend/README.ko.md) |
 
 ## 빠른 시작
 
@@ -191,7 +191,15 @@ H2는 unit/wiring 보조 fixture입니다. 이 예제의 범위에는 production
 # Swagger UI: http://localhost:8080/swagger-ui.html
 ```
 
-백엔드 엔드포인트는 테넌트 범위로 동작합니다. 로컬 seed tenant는 `/api/tenant-default/...` 를 사용하며, 프런트엔드 테넌트 라우팅은 후속 단계입니다.
+백엔드 엔드포인트는 모두 `/api/{tenantCode}/...` 테넌트 범위로 동작합니다. 환자 포털은
+`/portal/login`·`/portal/register`에서 tenant code를 받아 `TenantContextService`에
+보관하고, `PatientAuthService`와 `PortalApiClient`가 `/api/{tenantCode}/...` 경로로
+호출합니다. 로컬 seed tenant는 `/api/tenant-default/...`를 사용합니다.
+
+직원·관리자 화면(`/calendar`, `/appointments`, `/management`)은 현재 legacy JWT
+`AuthService`와 `/api/...` 호출을 유지합니다. 따라서 직원 tenant routing/auth 전환은
+아직 완료된 범위가 아니며 [Issue #295](https://github.com/bluetape4k/clinic-appointment/issues/295)
+후속 작업으로 남습니다. 이 문서는 직원 화면까지 tenant-aware라고 주장하지 않습니다.
 
 ## 빌드 & 테스트
 

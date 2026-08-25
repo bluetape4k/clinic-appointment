@@ -5,6 +5,17 @@
 Angular 22 기반 병원 예약 관리 웹 UI입니다. 직원 화면과 환자 포털(`/portal`)을
 같은 standalone workspace에서 route로 분리합니다.
 
+환자 포털의 `/portal/login`·`/portal/register`는 tenant code를 입력받고,
+`TenantContextService`가 같은 탭의 `sessionStorage`에 scope를 보관합니다.
+`PatientAuthService`와 `PortalApiClient`는 이 scope를 `/api/{tenantCode}/...` 경로에
+반영하며, 인증된 포털 내부 route는 `patientAuthGuard`로 보호합니다. 이 범위의
+tenant routing은 구현되어 있습니다.
+
+직원·관리자 화면의 legacy JWT `AuthService`와 일부 서비스는 아직 `/api/...` 경로를
+직접 호출하므로 tenant-aware 직원 routing/auth는 미완료입니다. 이 잔여 범위는
+[Issue #295](https://github.com/bluetape4k/clinic-appointment/issues/295)에서
+추적하며, 이 예제는 두 사용자 영역의 완료 상태를 구분해 설명합니다.
+
 ## 개발 서버 실행
 
 ```bash

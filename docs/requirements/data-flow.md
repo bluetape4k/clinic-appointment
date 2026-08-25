@@ -1,5 +1,11 @@
 # 데이터 흐름 (Data Flow)
 
+> 아래의 직원 예약 관리 흐름은 현재 legacy staff service가 호출하는 `/api/...`
+> 형태를 보존한 의미 스케치입니다. 백엔드의 실제 endpoint 계약은
+> `/api/{tenantCode}/...`이며, tenant code와 cookie session을 사용하는 환자 포털
+> 흐름은 [프런트엔드 설계](frontend.md#tenant-routing-완료-범위)와 frontend README에서
+> 설명합니다. 직원 tenant routing/auth residual은 [Issue #295](https://github.com/bluetape4k/clinic-appointment/issues/295)에서 추적합니다.
+
 ## 1. 예약 생성 흐름
 
 ```mermaid
@@ -224,7 +230,7 @@ flowchart TD
 ```
 
 이 흐름은 예약 생성 경로를 직접 바꾸지 않는다. booking consumer flag는 foundation에
-없으며, 예약 생성 서비스가 effective snapshot을 소비하는 단계는 후속 변경이다.
+없으며, 예약 생성 서비스가 effective policy 기준 데이터를 소비하는 단계는 후속 변경이다.
 
 ## 8. Scheduling Policy Effective Read 흐름
 
