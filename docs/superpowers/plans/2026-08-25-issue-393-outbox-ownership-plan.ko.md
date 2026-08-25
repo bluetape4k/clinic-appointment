@@ -131,7 +131,7 @@ import io.bluetape4k.clinic.appointment.commitment.CancellationReasonCode
 - [x] typealias의 underlying JVM ABI와 public method signature는 유지하되, event package typealias를 직접 import하던 source consumer가 core import 또는 명시적 event dependency로 이동해야 한다는 사실을 KDoc/README에 과장 없이 기록한다.
 - [x] notification의 `api(project(":appointment-event"))`와 root notification expected scope는 이번 Task에서 변경하지 않는다. 이것은 #409로 추적하는 명시적 transitional exception이다.
 - [x] source diff에서 새 abstraction, new module, dependency version, Kafka/Redis 설정, migration SQL 변경이 없는지 확인한다.
-- [x] strict dependency locking이 API scope 변경을 stale lock으로 거부하지 않도록 `--write-locks`로 root와 benchmark module `gradle.lockfile`을 갱신한다. root는 `appointmentMessagingConsumerFixtureClasspath`에서 제거되는 R2DBC 좌표 4개(`r2dbc-spi`, `exposed-r2dbc`, `kotlinx-coroutines-reactive`, `reactive-streams`)의 suffix만 제거하고, benchmark는 `compileClasspath`의 같은 좌표 suffix만 제거하며 버전·다른 configuration은 변경하지 않는다.
+- [x] strict dependency locking이 API scope 변경을 stale lock으로 거부하지 않도록 root와 benchmark module `gradle.lockfile`을 실제 graph에 맞춰 갱신한다. root는 `appointmentMessagingConsumerFixtureClasspath`에서 R2DBC 좌표 4개(`r2dbc-spi`, `exposed-r2dbc`, `kotlinx-coroutines-reactive`, `reactive-streams`)를 제거하고, benchmark는 같은 좌표에서 `compileClasspath`·`testCompileClasspath` suffix를 제거하며 실제 `runtimeClasspath`·`testRuntimeClasspath`만 유지한다. 버전과 다른 configuration은 변경하지 않는다.
 
 **Verification:**
 
@@ -463,7 +463,7 @@ bad_token_1=TO"DO"; bad_token_2=TB"D"
 - [x] ADR-15에 dependency/fixture rollback, readiness/test-fixture rollback, SQL/runtime 무변경으로 schema rollback이 불필요하다는 운영 경로가 기록된다.
 - [x] Korean terminology audit `findings=0`과 `git diff --check` 증거가 있다.
 - [x] event/messaging/notification 모듈 테스트, API Flyway migration, API consumer fixture가 fresh run에서 `BUILD SUCCESSFUL`이다.
-- [x] strict dependency locking readback에서 root와 benchmark module `gradle.lockfile`이 실제 API/compile graph와 일치하고, 변경 범위가 R2DBC 좌표 4개의 해당 configuration suffix 제거로 한정된다.
+- [x] strict dependency locking readback에서 root와 benchmark module `gradle.lockfile`이 실제 API/compile/runtime graph와 일치하고, 변경 범위가 R2DBC 좌표 4개의 consumer fixture 제거와 benchmark compile/testCompile suffix 제거로 한정된다.
 - [x] `:appointment-messaging-benchmark:compileKotlin`과 readiness source-path/performance review가 통과하고 `1 + globalConcurrency` 상한 근거가 review artifact에 기록된다.
 - [x] 구현 review artifact의 module별 7-Tier 표에서 P0/P1이 0이고, P2/P3 disposition과 후속 Issue 링크가 모두 기록된다.
 - [x] Issue #393/#409 live metadata readback이 완료되고 #407의 11개 native child/train 순서는 변하지 않는다.
