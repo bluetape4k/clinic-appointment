@@ -3,7 +3,7 @@
 검토일: 2026-08-25
 검토 branch: `feat/issue-402-kafka4-adapter`
 선행 child base: `848c3a40b210e85672b48a4ecee68feb2f3e7f0a`
-현재 source tip: `65ee2391b78af628bc33d3eedf29a454d7232356`
+구현 source tip: `d91fbe0f0cc05d3e5cd0a53e753b4feceb1a3b75`
 
 ## 검토 범위
 
@@ -32,7 +32,7 @@
 | 안정성/수명주기 | PASS | `SupervisorJob`이 publisher 소유 scope를 만들고 `close()`에서 취소한다. returned stage 취소와 broker future 취소를 단위 테스트로 확인했다. |
 | 보안/데이터 경계 | PASS | topic·key·payload를 변경하지 않고 StringSerializer를 유지한다. type header 부재를 실제 consumer record에서 검증했다. |
 | 운영/관측성 | PASS | KafkaAdmin non-creating readiness, failure code, timeout, outbox relay 경계를 변경하지 않았다. |
-| 개발자/API | PASS | public `CompletionStage<*>`와 기존 constructor 호출을 유지하고 Korean KDoc/README에 helper 선택 이유를 기록했다. |
+| 개발자/API | PASS | public `CompletionStage<*>`, 기존 Kotlin/JVM constructor 호출(`@JvmOverloads`)을 유지하고 Korean KDoc/README에 helper 선택 이유를 기록했다. |
 | 사용자/호출자 | PASS | broker ACK, failure, timeout, caller cancellation, publisher close의 반환 의미를 테스트로 고정했다. |
 | 통합/테스트/빌드 | PASS | publisher 5개, publisher Kafka integration 1개, consumer integration 2개, 전체 messaging 130개가 통과했다. |
 

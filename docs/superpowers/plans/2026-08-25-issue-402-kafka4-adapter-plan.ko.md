@@ -13,7 +13,7 @@
 - Issue: [#402](https://github.com/bluetape4k/clinic-appointment/issues/402)
 - Epic: [#407](https://github.com/bluetape4k/clinic-appointment/issues/407)
 - 선행 child head: `848c3a40b210e85672b48a4ecee68feb2f3e7f0a` (`#393` PR #410)
-- 현재 구현 tip: `65ee2391b78af628bc33d3eedf29a454d7232356`
+- 구현 source tip: `d91fbe0f0cc05d3e5cd0a53e753b4feceb1a3b75`
 - 작업 branch: `feat/issue-402-kafka4-adapter`
 - 대상 모듈: `appointment-messaging`
 - 제외: payload/envelope schema, outbox table·claim·transaction, readiness 진단 재설계,
