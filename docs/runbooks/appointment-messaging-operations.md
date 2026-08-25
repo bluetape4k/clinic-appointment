@@ -22,7 +22,7 @@ allow-list를 확인한 뒤 preflight에서 영향 예약을 `LIMIT 101` probe�
 - 재배정 후보: 최대 `2,000`건
 
 precompute 단계는 동일 scope·의사·진료유형·날짜 key를 cache하고 write lock을 잡지
-않습니다. write 단계는 snapshot의 ID/version/status를 다시 확인한 뒤 예약 상태,
+않습니다. write 단계는 기준 데이터의 ID/version/status를 다시 확인한 뒤 예약 상태,
 state history, 후보와 `STATUS_CHANGED` outbox를 함께 commit합니다. outbox adapter가
 계약 예외를 던지면 API는 `503 APPOINTMENT_MESSAGING_UNAVAILABLE`을 반환하고 네 행을
 모두 rollback합니다.
@@ -65,7 +65,7 @@ read-only 조회로 대조합니다. mutation/outbox가 없고 예약이 여전�
    확인합니다. gauge는 제한된 aggregate 신호이므로 row 단위 조사는 제한된 SQL
    런북 쿼리를 사용하고, tenant·clinic·appointment·partition 값을 metric label에
    넣지 않습니다.
-4. readiness snapshot에서 `enabled`, `configurationValid`, `schemaValid`,
+4. readiness 상태에서 `enabled`, `configurationValid`, `schemaValid`,
    `serializerValid`, `brokerAvailable`, `relayPaused`, `relayHeld`를 확인하고,
    실패했다면 `diagnostics`의 `operation`, `target`, `code`, `errorClass`,
    `retryable`을 함께 확인합니다. `SCHEMA_TABLE_MISSING`,

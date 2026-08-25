@@ -15,7 +15,7 @@
 - 선행 child head: `22feb7d9ae8ecf77e962ca99acf6c706652028f1` (`#402` PR #412)
 - 작업 branch: `fix/issue-399-readiness-cause`
 - 대상 모듈: `appointment-messaging`
-- 포함: readiness snapshot·health detail·startup warning, JDBC metadata 원인 분류,
+- 포함: readiness 상태·health detail·startup warning, JDBC metadata 원인 분류,
   schema missing/permission/timeout/driver 회귀 테스트, 운영 문서와 7-Tier artifact
 - 제외: outbox table/claim/transaction, Kafka wire, notification module 구현(후속 #400),
   raw SQL message·credential·tenant/clinic/appointment 값의 노출
@@ -23,7 +23,7 @@
 ## 재사용 결정
 
 1. 기존 `AppointmentMessagingReadinessProbe`와 `AppointmentMessagingHealthIndicator`
-   경계를 유지하고 `AppointmentReadinessDiagnostic`만 snapshot에 추가한다.
+   경계를 유지하고 `AppointmentReadinessDiagnostic`만 readiness 상태에 추가한다.
 2. JDBC `SQLException` 분류는 JDK 표준 `SQLTimeoutException`, SQLState `28`/`08`와
    `bluetape4k` 로깅·assertions 계약을 재사용한다. 새 의존성이나 ad-hoc logging
    framework는 추가하지 않는다.
@@ -40,16 +40,16 @@
   - live Issue/Epic/PR와 #402 head, validator/probe/health/startup caller, 기존
     테스트·runbook·README를 source에서 확인한다.
   - DoD: Type C 재현 조건과 정확한 base/head가 기록된다.
-- [ ] **Task 2 — RED 테스트를 추가한다.**
+- [x] **Task 2 — RED 테스트를 추가한다.**
   - schema missing, permission denied, timeout, driver failure가 stable code,
     operation/target/errorClass/retryable로 보존되는 테스트를 작성한다.
   - DoD: production 변경 전 신규 테스트가 기대 실패하고 `bluetape4k-assertions`를
     사용한다.
-- [ ] **Task 3 — bounded diagnostic을 구현한다.**
+- [x] **Task 3 — bounded diagnostic을 구현한다.**
   - validator가 원인별 diagnostic을 probe에 기록하고 health detail·startup log가
     동일한 구조를 소비하도록 연결한다.
   - DoD: fail-closed/compatibility fallback/secret·PII 비노출이 유지된다.
-- [ ] **Task 4 — 문서와 운영 계약을 갱신한다.**
+- [x] **Task 4 — 문서와 운영 계약을 갱신한다.**
   - README 두 파일, messaging operations runbook, Korean KDoc와 lesson에
     diagnostic code·재시도 경계를 기록한다.
   - DoD: source·health·runbook 설명이 일치한다.
@@ -81,4 +81,4 @@
 - [x] SPW-02: 파일 경계·순서·RED/GREEN·검증·rollback·DoD를 포함했다.
 - [x] SPW-03: 현재 기술 용어와 API identifier를 보존한 한국어 기술 문체를 사용했다.
 - [x] SPW-04: live GitHub와 #402 source/test/runbook를 대조했다.
-- [x] SPW-05: 최종 Markdown을 read-back했고, 구현 전 항목은 의도적으로 unchecked 상태다.
+- [x] SPW-05: 계획·검토·lesson Markdown을 read-back했고, PR delivery 항목은 전달 완료 뒤 갱신한다.
