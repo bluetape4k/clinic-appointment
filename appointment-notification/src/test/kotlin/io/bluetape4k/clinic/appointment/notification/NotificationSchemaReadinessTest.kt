@@ -80,6 +80,8 @@ internal class NotificationSchemaReadinessTest {
 
         result.available shouldBeEqualTo false
         result.reason shouldBeEqualTo "missing tables: clinic_waitlist_notification_outbox"
+        result.diagnostics.single().code shouldBeEqualTo "SCHEMA_TABLE_MISSING"
+        result.diagnostics.single().target shouldBeEqualTo "clinic_waitlist_notification_outbox"
     }
 
     @Test

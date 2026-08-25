@@ -49,6 +49,31 @@
 - 공용 metric과 alert label에 tenant·clinic·member·appointment·outbox 식별자가
   포함되지 않는다.
 
+### 2.1 schema readiness 진단 code
+
+`NotificationSchemaReadiness`가 `DOWN`을 반환하면 원본 SQL, 예외 메시지, secret,
+식별자를 health detail이나 로그에 남기지 않고 bounded 진단만 보존합니다. 운영자는
+`operation`, `target`, `code`, `errorClass`, `retryable`을 사용해 다음 순서로 대응합니다.
+
+| code | 의미 | `retryable` | 첫 대응 |
+|---|---|---:|---|
+| `SCHEMA_TABLE_MISSING` | 필수 table을 읽을 수 없음 | 아니오 | 대상 DB의 migration history와 table metadata를 대조하고 V21 적용 상태를 확인 |
+| `SCHEMA_COLUMN_MISSING` | event-log tenant column을 읽을 수 없음 | 아니오 | V21 column migration과 실제 column 권한을 확인 |
+| `SCHEMA_FLYWAY_UNAVAILABLE` | Flyway history를 읽을 수 없음 | 아니오 | `flyway_schema_history` 접근 권한과 연결 상태를 확인 |
+| `SCHEMA_VERSION_TOO_OLD` | 요구 버전 V21 미만 | 아니오 | migration을 적용할 maintenance window와 DDL lock을 확인 |
+| `SCHEMA_INDEX_MISSING` | claim/recovery 필수 index가 없음 | 아니오 | dialect별 index 이름·실행 계획을 확인한 뒤 additive migration을 재실행 |
+| `SCHEMA_TENANT_DATA_INCONSISTENT` | tenant null/orphan/mismatch row가 남음 | 아니오 | backfill 결과와 clinic join을 확인하고 임의 tenant를 채우지 않음 |
+| `SCHEMA_PERMISSION_DENIED` | metadata/query 권한 거부 | 아니오 | DB role grants를 확인하고 자격 증명·secret을 로그에 복사하지 않음 |
+| `SCHEMA_METADATA_TIMEOUT` | schema preflight timeout | 예 | DB 부하와 lock wait를 확인하고 안정화 후 bounded retry |
+| `SCHEMA_CONNECTION_FAILURE` | DB 연결 실패 | 예 | connection pool·네트워크·DB 상태를 확인하고 readiness가 회복될 때까지 대기 |
+| `SCHEMA_METADATA_UNAVAILABLE` | 분류할 수 없는 metadata 실패 | 예 | `errorClass`와 operation/target만으로 원인을 분류하고 원문은 DB 로그에서 제한적으로 확인 |
+| `KEY_RING_INVALID` | active key-ring 설정이 유효하지 않음 | 아니오 | 외부 secret reference와 key overlap을 확인하고 새 key를 임의로 생성하지 않음 |
+
+`retryable=true`라도 worker를 강제로 재시작해 반복 폭주시키지 않습니다. readiness
+endpoint가 `DOWN`인 동안 새 worker traffic을 차단하고, 원인 조치 후 다음 poll에서
+같은 code가 사라졌는지 확인합니다. `target`은 table/column 논리 이름만 포함하며
+tenant·clinic·member·appointment ID와 SQL 문장을 포함하지 않아야 합니다.
+
 이번 변경에서 확보한 성능 증거는 로컬 container 환경의 H2/PostgreSQL/MySQL
 통합 테스트와 20,000개 outbox 부하 시뮬레이션입니다. 이는 운영 DB의 DDL lock
 시간이나 실제 provider 처리량을 증명하지 않습니다. 운영 전환 전에 staging에서
