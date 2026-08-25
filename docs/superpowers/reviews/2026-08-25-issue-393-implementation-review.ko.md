@@ -6,8 +6,8 @@
 
 - historical train fence: `28e38915cc153fc01275a2c6acad632d99340b93`
 - live `develop` revalidation base: `8d4a26e2f2c96617b5697214d58183a0dee771aa`
-- 현재 검토 source tip: `7f925845bd2505240f93e13eba682c078818b875`
-- source implementation ancestor: `a618ca90`; latest provenance/traceability fix: `7f925845`
+- 현재 검토 source tip: `4f3acc7ed4dc3d7bef8dd0870898475ca94b0814`
+- source implementation ancestor: `a618ca90`; latest provenance/traceability fix: `7f925845`; latest lock graph correction: `4f3acc7e`
 - 설계 기준: `c59124cf757d3fe95220f61311cbdb5b93e37a4b`
 - 승인 spec 기준: `4858dd28d46b79f8e5e947a552c1c7f6a8aacb89`
 - 대상: `appointment-event`, `appointment-messaging`, `appointment-notification`의 API
@@ -48,7 +48,7 @@ Finding disposition: `P0=0`, `P1=0`, `P2=0`, `P3=0`.
 | 모듈 | 성능 | 안정성 | 보안/데이터 경계 | 운영 | 개발자/API | 사용자/호출자 | 통합/테스트 |
 |---|---|---|---|---|---|---|---|
 | `appointment-event` | CLEAR — 물리 table 정의만 유지: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingOutboxEvents.kt` | CLEAR — write 구현을 event로 이동하지 않음: `appointment-event/README.md:125` | CLEAR — Kafka/provider를 event가 소유하지 않음: `appointment-event/README.md:125` | CLEAR — ADR-15 ownership matrix: `docs/requirements/architecture.md:350` | CLEAR — public event contract의 기존 source/ABI 유지 | CLEAR — messaging caller migration은 README가 명시: `appointment-messaging/README.md:31` | CLEAR — event suite 213개 통합 실행에서 성공 |
-| `appointment-messaging` | CLEAR — writer에 새 loop/provider I/O 없음: `AppointmentOutboxWriter.kt:15-48` | CLEAR — `core api`/`event implementation`: `appointment-messaging/build.gradle.kts:6-8` | CLEAR — typed fixture가 core 타입·nullable reason-code를 고정: `MessagingApiConsumerFixture.kt:135-147` | CLEAR — root와 benchmark lockfile suffix만 갱신, rollback은 ADR-15에 기록 | CLEAR — public writer가 core import와 원래 parameter 순서를 유지: `AppointmentOutboxWriter.kt:16-43` | CLEAR — 직접 event 사용 caller의 `implementation` 선언과 import 이동을 안내: `appointment-messaging/README.md:31-35` | CLEAR — messaging suite 125개, API scope assertion 및 compile fixture fresh run 성공 |
+| `appointment-messaging` | CLEAR — writer에 새 loop/provider I/O 없음: `AppointmentOutboxWriter.kt:15-48` | CLEAR — `core api`/`event implementation`: `appointment-messaging/build.gradle.kts:6-8` | CLEAR — typed fixture가 core 타입·nullable reason-code를 고정: `MessagingApiConsumerFixture.kt:135-147` | CLEAR — root fixture 좌표 제거와 benchmark compile/testCompile suffix 제거를 실제 graph에 맞춰 기록하고 rollback은 ADR-15에 기록 | CLEAR — public writer가 core import와 원래 parameter 순서를 유지: `AppointmentOutboxWriter.kt:16-43` | CLEAR — 직접 event 사용 caller의 `implementation` 선언과 import 이동을 안내: `appointment-messaging/README.md:31-35` | CLEAR — messaging suite 125개, API scope assertion 및 compile fixture fresh run 성공 |
 | `appointment-notification` | CLEAR — pre-claim readiness 1회 + row별 확인, dispatcher concurrency test: `NotificationOutboxDispatcher.kt:86-117` | CLEAR — V19 table과 세 index를 fail-closed 목록에 추가: `NotificationSchemaReadiness.kt:85-142` | CLEAR — waitlist ownership을 event adapter에 두고 readiness만 검사: `NotificationSchemaReadiness.kt:117-125` | CLEAR — missing table/index exact reason과 migration contract를 검증 | CLEAR — 기존 worker/dispatcher API와 transitional event API 유지 | CLEAR — readiness DOWN은 운영자가 조치할 table/index 이름을 반환 | CLEAR — readiness 11/11, notification suite 214개 통합 테스트 성공 |
 
 ## Fresh verification evidence
@@ -63,15 +63,18 @@ Finding disposition: `P0=0`, `P1=0`, `P2=0`, `P3=0`.
 | `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-api:test` + Flyway/PostgreSQL/MySQL/Waitlist contract 4 class | `BUILD SUCCESSFUL`, `25 passing`, `1 pending`(production MySQL endpoint 미설정), 1분 7초 |
 | `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks assertModuleConsumerFixtureApiVariants compileModuleConsumerFixtures` | `BUILD SUCCESSFUL`, 10초 |
 | `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-messaging-benchmark:compileKotlin` | `BUILD SUCCESSFUL`, 8초 |
+| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-messaging-benchmark:verifyDependencyGovernance` | `BUILD SUCCESSFUL`, 4초; R2DBC 좌표는 `runtimeClasspath,testRuntimeClasspath`만 유지 |
 | `git diff --check`와 Korean terminology audit 7개 문서 | `PASS`, `findings=0` |
 | V14/V19/V21/V22 12개 migration SQL `git diff --exit-code` | `PASS`, SQL 변경 없음 |
 
 초기 red gate에서 messaging expected scope mismatch가
 `unexpected=[project::appointment-event], missing=[project::appointment-core]`로
 관찰됐고, scope/import/fixture/lockfile 수정 후 green으로 전환됐다. strict lockfile
-변경은 root `appointmentMessagingConsumerFixtureClasspath`와 benchmark
-`compileClasspath`에서 R2DBC 좌표 4개의 configuration suffix를 제거한 것뿐이며
-버전과 다른 configuration은 변하지 않았다.
+변경은 root `appointmentMessagingConsumerFixtureClasspath`에서 R2DBC 좌표 4개를 제거하고
+benchmark의 같은 좌표에서 `compileClasspath`·`testCompileClasspath` suffix를 제거해
+실제 `runtimeClasspath`·`testRuntimeClasspath`만 유지한 것으로 한정되며 버전과 다른
+configuration은 변하지 않았다. benchmark `verifyDependencyGovernance`도 fresh run에서
+통과했다.
 
 ## 잔여 범위와 결론
 
