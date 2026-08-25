@@ -365,9 +365,9 @@ sed -n '370,386p' appointment-notification/src/main/kotlin/io/bluetape4k/clinic/
 
 ```bash
 base=28e38915cc153fc01275a2c6acad632d99340b93
-git diff --check
-git diff "$base"...HEAD --name-only | sort
-git diff --exit-code "$base"...HEAD -- \
+git diff --check "$base"
+git diff "$base" --name-only | sort
+git diff --exit-code "$base" -- \
   appointment-api/src/main/resources/db/migration/h2/V14__add_notification_outbox.sql \
   appointment-api/src/main/resources/db/migration/h2/V19__add_waitlist_delivery.sql \
   appointment-api/src/main/resources/db/migration/h2/V21__add_tenant_query_isolation.sql \
@@ -380,10 +380,11 @@ git diff --exit-code "$base"...HEAD -- \
   appointment-api/src/main/resources/db/migration/postgresql/V19__add_waitlist_delivery.sql \
   appointment-api/src/main/resources/db/migration/postgresql/V21__add_tenant_query_isolation.sql \
   appointment-api/src/main/resources/db/migration/postgresql/V22__add_appointment_messaging_outbox_lease.sql
+git ls-files --others --exclude-standard
 git status --short
 ```
 
-Range diff의 파일 목록은 다음 19개 implementation/documentation 경로와 계획·review 문서만 허용한다: root `build.gradle.kts`, messaging Gradle·세 public Kotlin source·messaging fixture, notification readiness source/test, event/messaging/notification README 6개, `docs/requirements/architecture.md`, `docs/superpowers/specs/2026-08-25-issue-393-outbox-ownership-design.ko.md`, `docs/superpowers/reviews/2026-08-25-issue-393-spec-review.ko.md`, `docs/superpowers/reviews/2026-08-25-issue-393-implementation-review.ko.md`, `docs/superpowers/plans/2026-08-25-issue-393-outbox-ownership-plan.ko.md`. 허용 목록 밖 파일이 나오면 구현을 멈추고 범위를 줄인다.
+working-tree diff의 파일 목록은 다음 19개 implementation/documentation 경로와 계획·review 문서만 허용한다: root `build.gradle.kts`, messaging Gradle·세 public Kotlin source·messaging fixture, notification readiness source/test, event/messaging/notification README 6개, `docs/requirements/architecture.md`, `docs/superpowers/specs/2026-08-25-issue-393-outbox-ownership-design.ko.md`, `docs/superpowers/reviews/2026-08-25-issue-393-spec-review.ko.md`, `docs/superpowers/reviews/2026-08-25-issue-393-implementation-review.ko.md`, `docs/superpowers/plans/2026-08-25-issue-393-outbox-ownership-plan.ko.md`. `git ls-files --others --exclude-standard`가 비어 있고 허용 목록 밖 파일이 나오지 않아야 한다.
 
 - [ ] 실패 시 원인을 해당 Task로 되돌려 수정하고, 실패한 명령과 재실행 결과를 리뷰 artifact에 기록한다. skip/실패를 성공으로 간주하지 않는다.
 
