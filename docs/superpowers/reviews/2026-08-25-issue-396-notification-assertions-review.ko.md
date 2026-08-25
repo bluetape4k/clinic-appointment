@@ -3,7 +3,7 @@
 검토일: 2026-08-26  
 검토 branch: `fix/issue-396-notification-assertions`  
 선행 base: `fb865435b23ef8f85437af3537379fe4b549171b` (`#400` PR #417)  
-구현 source tip: 구현 commit 생성 후 갱신한다.
+구현 source tip: `3954e9c43a1ba125f370d292ec3e1e0a63755fe9`
 
 ## 검토 범위
 
@@ -57,7 +57,7 @@
 | `./gradlew :appointment-notification:build --rerun-tasks --no-daemon` | `BUILD SUCCESSFUL` |
 | `git diff --check` | `PASS` |
 | generic assertion source scan | 위반 `0` |
-| bluetape-writer Korean terminology audit | 최종 문서 3개, findings `[]`로 갱신한다. |
+| bluetape-writer Korean terminology audit | 3개 문서, findings `[]` |
 
 `detekt`는 이 모듈에 독립 task가 없으므로 `:appointment-notification:check`의
 authoritative static/build gate를 사용한다. 기존 Exposed deprecation warning은
