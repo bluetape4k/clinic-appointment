@@ -18,7 +18,7 @@
 | 관점 | 검토 결과 | 심각도 |
 |---|---|---|
 | 성능 | property registry는 startup immutable lookup만 추가하고 scheduler tick마다 새 scheduler/trigger를 만들지 않는다. 기존 fixed delay와 DB claim 경로를 유지한다. | P0/P1 없음 |
-| 안정성 | plain `@Scheduled` 우회를 막기 위해 factory·enabled policy·selector 조건을 runner 생성 경계에 둔다. contention/backend 오류/cancellation/context close를 기존 integration test로 유지한다. | P0/P1 없음 |
+| 안정성 | plain `@Scheduled` 우회를 막기 위해 factory·enabled policy·selector 조건을 runner 생성 경계에 둔다. `lease-time >= suspendBridgeTimeout` safety bound와 contention/backend 오류/cancellation/context close를 함께 검증한다. | P0/P1 없음 |
 | 보안 | lock name·backend bean·SpEL name은 upstream startup validation을 사용하고, 설정 예시에 secret을 넣지 않는다. wildcard/regex selector를 금지한다. | P0/P1 없음 |
 | 운영 | disabled rollback, profile 예시, immutable timestamp pin, stable release 전환, DB claim/fence 책임 경계를 명시했다. | P0/P1 없음 |
 | 개발/API | upstream `LeaderScheduledPolicyProperties`와 registry를 그대로 재사용하고 clinic 전용 policy model을 만들지 않는다. `@Scheduled` delay와 leader policy의 책임이 분리되어 있다. | P0/P1 없음 |

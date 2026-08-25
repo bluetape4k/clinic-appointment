@@ -116,6 +116,10 @@ wildcard·regex·overload·공백 selector는 사용하지 않는다.
 - **leader backend 장애:** `SKIP` policy로 현재 tick을 건너뛰고 기존 runner의
   cancellation 전파와 일반 예외 흡수 계약을 유지한다. 다음 tick은 Spring
   scheduler가 호출한다.
+- **짧은 leader lease:** reminder policy의 `lease-time`은 명시적으로 설정하고
+  `NotificationProperties.worker.suspendBridgeTimeout` 이상이어야 한다. 이
+  경계보다 짧으면 bounded recovery 호출이 끝나기 전에 leader ownership이
+  만료될 수 있으므로 startup에서 거부한다.
 - **DB claim/fence:** leader lock을 획득해도 DB claim/fence가 실패하면 작업은
   저장된 outbox 상태를 변경하지 않는다. 중복 실행 방지와 최종 상태 정합성의
   책임을 분리한다.
@@ -151,7 +155,8 @@ wildcard·regex·overload·공백 selector는 사용하지 않는다.
 2. default-off/누락 policy와 leader factory 부재에서 leader 보호 없는 reminder
    scheduled 실행이 발생하지 않는다.
 3. 빈 selector, unmatched/중복 selector, 잘못된 duration, min lease 초과,
-   backend bean 누락, stream/auto-extend 오류가 startup에서 거부된다.
+   `lease-time < suspendBridgeTimeout`, backend bean 누락, stream/auto-extend
+   오류가 startup에서 거부된다.
 4. leader contention은 scheduler 본문을 실행하지 않고, backend 오류는
    `SKIP`으로 흡수하며, cancellation은 전파한다.
 5. Spring `ScheduledTaskHolder` fixed delay, AOP proxy, ready bootstrap,
