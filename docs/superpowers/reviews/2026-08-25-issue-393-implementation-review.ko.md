@@ -4,9 +4,10 @@
 
 ## 검토 기준과 범위
 
-- 기준선: `develop` `28e38915cc153fc01275a2c6acad632d99340b93`
-- 현재 검토 기준: branch `HEAD` `8717d740b32dd65d8d2b8cff30e42b8fefddd565`
-- 소스 구현 commit: `2e7b48ad9c79f62b0bbc79d35535b423575b54e8`; 계획 provenance commit: `8717d740b32dd65d8d2b8cff30e42b8fefddd565`
+- historical train fence: `28e38915cc153fc01275a2c6acad632d99340b93`
+- live `develop` revalidation base: `8d4a26e2f2c96617b5697214d58183a0dee771aa`
+- 현재 검토 source tip: `7f925845bd2505240f93e13eba682c078818b875`
+- source implementation ancestor: `a618ca90`; latest provenance/traceability fix: `7f925845`
 - 설계 기준: `c59124cf757d3fe95220f61311cbdb5b93e37a4b`
 - 승인 spec 기준: `4858dd28d46b79f8e5e947a552c1c7f6a8aacb89`
 - 대상: `appointment-event`, `appointment-messaging`, `appointment-notification`의 API
@@ -34,13 +35,21 @@ UUID identity 계약은 변경하지 않는다.
 
 Finding disposition: `P0=0`, `P1=0`, `P2=0`, `P3=0`.
 
+이전 검토에서 확인된 provenance·traceability 지적은 다음과 같이 해소했다.
+
+- live `develop`가 historical fence 이후 `8d4a26e2`로 전진한 사실을 기록하고 branch를
+  live base에 rebase했다. 현재 allowlist·SQL no-diff는 `8d4a26e2...HEAD` 범위를 사용한다.
+- readiness source의 table/migration declaration 순서를 승인 plan snippet과 일치시켰다.
+- ADR-15 rollback 표에 README 6종, ADR-15, review artifact, Issue #393/#409 evidence link와
+  각각의 live readback 절차를 명시했다.
+
 ## 모듈별 7-Tier 판정
 
 | 모듈 | 성능 | 안정성 | 보안/데이터 경계 | 운영 | 개발자/API | 사용자/호출자 | 통합/테스트 |
 |---|---|---|---|---|---|---|---|
 | `appointment-event` | CLEAR — 물리 table 정의만 유지: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingOutboxEvents.kt` | CLEAR — write 구현을 event로 이동하지 않음: `appointment-event/README.md:125` | CLEAR — Kafka/provider를 event가 소유하지 않음: `appointment-event/README.md:125` | CLEAR — ADR-15 ownership matrix: `docs/requirements/architecture.md:350` | CLEAR — public event contract의 기존 source/ABI 유지 | CLEAR — messaging caller migration은 README가 명시: `appointment-messaging/README.md:31` | CLEAR — event suite 213개 통합 실행에서 성공 |
 | `appointment-messaging` | CLEAR — writer에 새 loop/provider I/O 없음: `AppointmentOutboxWriter.kt:15-48` | CLEAR — `core api`/`event implementation`: `appointment-messaging/build.gradle.kts:6-8` | CLEAR — typed fixture가 core 타입·nullable reason-code를 고정: `MessagingApiConsumerFixture.kt:135-147` | CLEAR — root와 benchmark lockfile suffix만 갱신, rollback은 ADR-15에 기록 | CLEAR — public writer가 core import와 원래 parameter 순서를 유지: `AppointmentOutboxWriter.kt:16-43` | CLEAR — 직접 event 사용 caller의 `implementation` 선언과 import 이동을 안내: `appointment-messaging/README.md:31-35` | CLEAR — messaging suite 125개, API scope assertion 및 compile fixture fresh run 성공 |
-| `appointment-notification` | CLEAR — pre-claim readiness 1회 + row별 확인, dispatcher concurrency test: `NotificationOutboxDispatcher.kt:86-117` | CLEAR — V19 table과 세 index를 fail-closed 목록에 추가: `NotificationSchemaReadiness.kt:85-142` | CLEAR — waitlist ownership을 event adapter에 두고 readiness만 검사: `NotificationSchemaReadiness.kt:117-125` | CLEAR — missing table/index exact reason과 migration contract를 검증 | CLEAR — 기존 worker/dispatcher API와 transitional event API 유지 | CLEAR — readiness DOWN은 운영자가 조치할 table/index 이름을 반환 | CLEAR — readiness 11/11, notification suite 210개 통합 테스트 성공 |
+| `appointment-notification` | CLEAR — pre-claim readiness 1회 + row별 확인, dispatcher concurrency test: `NotificationOutboxDispatcher.kt:86-117` | CLEAR — V19 table과 세 index를 fail-closed 목록에 추가: `NotificationSchemaReadiness.kt:85-142` | CLEAR — waitlist ownership을 event adapter에 두고 readiness만 검사: `NotificationSchemaReadiness.kt:117-125` | CLEAR — missing table/index exact reason과 migration contract를 검증 | CLEAR — 기존 worker/dispatcher API와 transitional event API 유지 | CLEAR — readiness DOWN은 운영자가 조치할 table/index 이름을 반환 | CLEAR — readiness 11/11, notification suite 214개 통합 테스트 성공 |
 
 ## Fresh verification evidence
 
@@ -48,12 +57,12 @@ Finding disposition: `P0=0`, `P1=0`, `P2=0`, `P3=0`.
 
 | 검증 | 결과 |
 |---|---|
-| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-event:test :appointment-messaging:test :appointment-notification:test` | `BUILD SUCCESSFUL`, event `213 passing` + messaging `125 passing` + notification `210 passing` = 총 `548 passing`, 1분 2초 |
+| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-event:test :appointment-messaging:test :appointment-notification:test` | `BUILD SUCCESSFUL`, event `213 passing` + messaging `125 passing` + notification `214 passing` = 총 `552 passing`, 1분 3초 |
 | `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-notification:test --tests '*NotificationSchemaReadinessTest*'` | `BUILD SUCCESSFUL`, `11 passing` |
-| `./gradlew --no-daemon --no-configuration-cache --no-parallel :appointment-notification:test --tests '*NotificationOutboxDispatcherTest*'` | `BUILD SUCCESSFUL`, `8 passing` |
-| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-api:test` + Flyway/PostgreSQL/MySQL/Waitlist contract 4 class | `BUILD SUCCESSFUL`, `25 passing`, `1 pending`(production MySQL endpoint 미설정) |
-| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks assertModuleConsumerFixtureApiVariants compileModuleConsumerFixtures` | `BUILD SUCCESSFUL`, `19 tasks executed` |
-| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-messaging-benchmark:compileKotlin` | `BUILD SUCCESSFUL` |
+| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-notification:test --tests '*NotificationOutboxDispatcherTest*'` | `BUILD SUCCESSFUL`, `8 passing` |
+| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-api:test` + Flyway/PostgreSQL/MySQL/Waitlist contract 4 class | `BUILD SUCCESSFUL`, `25 passing`, `1 pending`(production MySQL endpoint 미설정), 1분 7초 |
+| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks assertModuleConsumerFixtureApiVariants compileModuleConsumerFixtures` | `BUILD SUCCESSFUL`, 10초 |
+| `./gradlew --no-daemon --no-configuration-cache --no-parallel --rerun-tasks :appointment-messaging-benchmark:compileKotlin` | `BUILD SUCCESSFUL`, 8초 |
 | `git diff --check`와 Korean terminology audit 7개 문서 | `PASS`, `findings=0` |
 | V14/V19/V21/V22 12개 migration SQL `git diff --exit-code` | `PASS`, SQL 변경 없음 |
 
@@ -68,7 +77,7 @@ Finding disposition: `P0=0`, `P1=0`, `P2=0`, `P3=0`.
 
 - 이번 구현은 #393 child에 한정한다. #409의 notification event API 축소는 별도
   설계·consumer fixture gate 뒤에 수행한다.
-- implementation review artifact를 제외한 현재 range diff는 plan의 허용 경로와
+- implementation review artifact를 제외한 `8d4a26e2...HEAD` range diff는 plan의 허용 경로와
   일치하며, migration SQL과 runtime schema는 변경하지 않았다.
 - 전체 train(#392~#402)이 끝나기 전에는 PR merge나 최종 승인 요청을 하지 않는다.
 

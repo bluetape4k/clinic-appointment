@@ -425,7 +425,7 @@ Review artifact가 staged 상태에서 whitespace 검사를 통과한 뒤 Task 8
 - [x] `gh issue view 407 --json subIssues --jq '{total: (.subIssues.nodes | length), membership: (.subIssues.nodes | map(.number) | sort | join(","))}'` 결과가 `total=11`, membership `392,393,394,395,396,397,398,399,400,401,402`이고 #409가 포함되지 않는지 확인한다. native sub-issue의 정렬 목록과 별개로, `gh issue view 407 --json body --jq '.body'`에서 PR 실행 순서가 `393,402,399,395,400,396,392,394,397,398,401`으로 기록되어 있는지 별도 readback한다.
 - [x] implementation diff와 plan/spec/review 문서를 함께 검토해 #409 범위가 이번 PR에 섞이지 않았는지 확인한다.
 - [x] 계획 승인 후 생성한 plan commit과 spec/review commit을 readback해 다음 provenance를 기록한다: spec `c59124cf757d3fe95220f61311cbdb5b93e37a4b`, review artifact의 해당 spec 기준 SHA, plan commit의 실제 SHA. 계획 파일이 `git status --short`에서 untracked가 아니어야 한다.
-- [x] 다음 Lore 형식의 Korean commit message로 구현을 커밋한다. 구현 commit은 `2e7b48ad9c79f62b0bbc79d35535b423575b54e8`이며 PR은 #410이다.
+- [x] 다음 Lore 형식의 Korean commit message로 구현을 커밋한다. historical 구현 commit `2e7b48ad9c79f62b0bbc79d35535b423575b54e8`는 live `develop` rebase로 source ancestor `a618ca90`으로 재기록되었고, readiness·provenance 보강 commit은 `7f925845bd2505240f93e13eba682c078818b875`이며 PR은 #410이다.
 
 ```text
 messaging event 의존성을 public contract 경계에 맞춘다
