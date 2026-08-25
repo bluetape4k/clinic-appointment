@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
 import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand
@@ -9,6 +10,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCurso
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
+import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import kotlinx.coroutines.runBlocking
@@ -28,8 +30,15 @@ internal class NotificationSchemaReadinessTest {
     fun `old schema 또는 active key 부재는 readiness DOWN으로 worker 시작을 막는다`() {
         val database = connect("readiness_down")
         transaction(database) {
-            SchemaUtils.create(TenantGroups, Clinics, AppointmentEventLogs, NotificationOutboxEvents, NotificationDeliveryAttempts)
-            SchemaUtils.create(FlywaySchemaHistory)
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+            )
+            SchemaUtils.createMissingTablesAndColumns(FlywaySchemaHistory)
             FlywaySchemaHistory.insert {
                 it[installedRank] = 1
                 it[version] = "13"
@@ -46,10 +55,45 @@ internal class NotificationSchemaReadinessTest {
     }
 
     @Test
+    fun `waitlist notification outbox table이 없으면 정확한 missing table 사유로 readiness DOWN이다`() {
+        val database = connect("readiness_missing_waitlist_table")
+        transaction(database) {
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                FlywaySchemaHistory,
+            )
+            FlywaySchemaHistory.insert {
+                it[installedRank] = 1
+                it[version] = "21"
+                it[success] = true
+            }
+        }
+
+        val result = NotificationSchemaReadiness(
+            database = database,
+            cryptoProperties = NotificationCryptoProperties(active = key()),
+        ).check()
+
+        result.available shouldBeEqualTo false
+        result.reason shouldBeEqualTo "missing tables: clinic_waitlist_notification_outbox"
+    }
+
+    @Test
     fun `Flyway 기준 정보나 필수 claim index가 없으면 readiness DOWN이다`() {
         val missingFlyway = connect("readiness_missing_flyway")
         transaction(missingFlyway) {
-            SchemaUtils.create(TenantGroups, Clinics, AppointmentEventLogs, NotificationOutboxEvents, NotificationDeliveryAttempts)
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+            )
         }
         NotificationSchemaReadiness(
             database = missingFlyway,
@@ -58,7 +102,15 @@ internal class NotificationSchemaReadinessTest {
 
         val missingIndex = connect("readiness_missing_index")
         transaction(missingIndex) {
-            SchemaUtils.create(TenantGroups, Clinics, AppointmentEventLogs, NotificationOutboxEvents, NotificationDeliveryAttempts, FlywaySchemaHistory)
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+                FlywaySchemaHistory,
+            )
             FlywaySchemaHistory.insert {
                 it[installedRank] = 1
                 it[version] = "21"
@@ -70,6 +122,101 @@ internal class NotificationSchemaReadinessTest {
             database = missingIndex,
             cryptoProperties = NotificationCryptoProperties(active = key()),
         ).check().available shouldBeEqualTo false
+    }
+
+    @Test
+    fun `waitlist idempotency index가 없으면 정확한 missing index 사유로 readiness DOWN이다`() {
+        val database = connect("readiness_missing_waitlist_idempotency_index")
+        transaction(database) {
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+                FlywaySchemaHistory,
+            )
+            // H2는 Exposed의 uniqueIndex를 constraint로 생성하므로 migration과 같은 이름으로 정규화한다.
+            exec("ALTER TABLE clinic_waitlist_notification_outbox DROP CONSTRAINT uk_waitlist_notification_outbox_idempotency")
+            exec(
+                "CREATE UNIQUE INDEX uk_waitlist_notification_outbox_idempotency ON clinic_waitlist_notification_outbox (tenant_group_id, clinic_id, idempotency_key)",
+            )
+            FlywaySchemaHistory.insert {
+                it[installedRank] = 1
+                it[version] = "21"
+                it[success] = true
+            }
+            exec("DROP INDEX uk_waitlist_notification_outbox_idempotency")
+        }
+
+        val result = NotificationSchemaReadiness(
+            database = database,
+            cryptoProperties = NotificationCryptoProperties(active = key()),
+        ).check()
+
+        result.available shouldBeEqualTo false
+        result.reason shouldBeEqualTo "missing indexes: uk_waitlist_notification_outbox_idempotency"
+    }
+
+    @Test
+    fun `waitlist ready index가 없으면 정확한 missing index 사유로 readiness DOWN이다`() {
+        val database = connect("readiness_missing_waitlist_ready_index")
+        transaction(database) {
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+                FlywaySchemaHistory,
+            )
+            FlywaySchemaHistory.insert {
+                it[installedRank] = 1
+                it[version] = "21"
+                it[success] = true
+            }
+            exec("DROP INDEX idx_waitlist_notification_outbox_ready")
+        }
+
+        val result = NotificationSchemaReadiness(
+            database = database,
+            cryptoProperties = NotificationCryptoProperties(active = key()),
+        ).check()
+
+        result.available shouldBeEqualTo false
+        result.reason shouldBeEqualTo "missing indexes: idx_waitlist_notification_outbox_ready"
+    }
+
+    @Test
+    fun `waitlist lease index가 없으면 정확한 missing index 사유로 readiness DOWN이다`() {
+        val database = connect("readiness_missing_waitlist_lease_index")
+        transaction(database) {
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+                FlywaySchemaHistory,
+            )
+            FlywaySchemaHistory.insert {
+                it[installedRank] = 1
+                it[version] = "21"
+                it[success] = true
+            }
+            exec("DROP INDEX idx_waitlist_notification_outbox_lease")
+        }
+
+        val result = NotificationSchemaReadiness(
+            database = database,
+            cryptoProperties = NotificationCryptoProperties(active = key()),
+        ).check()
+
+        result.available shouldBeEqualTo false
+        result.reason shouldBeEqualTo "missing indexes: idx_waitlist_notification_outbox_lease"
     }
 
     @Test
@@ -89,7 +236,12 @@ internal class NotificationSchemaReadinessTest {
                 )
                 """.trimIndent(),
             )
-            SchemaUtils.create(NotificationOutboxEvents, NotificationDeliveryAttempts, FlywaySchemaHistory)
+            SchemaUtils.createMissingTablesAndColumns(
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+                FlywaySchemaHistory,
+            )
             FlywaySchemaHistory.insert {
                 it[installedRank] = 1
                 it[version] = "21"
@@ -107,7 +259,15 @@ internal class NotificationSchemaReadinessTest {
     fun `tenant backfill orphan가 남아 있으면 readiness DOWN이다`() {
         val database = connect("readiness_orphan_event_tenant")
         transaction(database) {
-            SchemaUtils.create(TenantGroups, Clinics, AppointmentEventLogs, NotificationOutboxEvents, NotificationDeliveryAttempts, FlywaySchemaHistory)
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+                FlywaySchemaHistory,
+            )
             FlywaySchemaHistory.insert {
                 it[installedRank] = 1
                 it[version] = "21"
@@ -133,7 +293,15 @@ internal class NotificationSchemaReadinessTest {
     fun `event-log tenant와 clinic owner가 다르면 readiness DOWN이다`() {
         val database = connect("readiness_tenant_clinic_mismatch")
         transaction(database) {
-            SchemaUtils.create(TenantGroups, Clinics, AppointmentEventLogs, NotificationOutboxEvents, NotificationDeliveryAttempts, FlywaySchemaHistory)
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+                FlywaySchemaHistory,
+            )
             TenantGroups.insert {
                 it[id] = EntityID(1L, TenantGroups)
                 it[tenantCode] = "tenant-one"
@@ -173,8 +341,15 @@ internal class NotificationSchemaReadinessTest {
     fun `outbox attempt table index와 active key가 준비되면 readiness UP이다`() {
         val database = connect("readiness_up")
         transaction(database) {
-            SchemaUtils.create(TenantGroups, Clinics, AppointmentEventLogs, NotificationOutboxEvents, NotificationDeliveryAttempts)
-            SchemaUtils.create(FlywaySchemaHistory)
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+            )
+            SchemaUtils.createMissingTablesAndColumns(FlywaySchemaHistory)
             FlywaySchemaHistory.insert {
                 it[installedRank] = 1
                 it[version] = "21"
@@ -194,7 +369,15 @@ internal class NotificationSchemaReadinessTest {
     fun `terminal retention index가 없으면 readiness DOWN이고 retention을 실행하지 않는다`() {
         val database = connect("readiness_missing_retention_index")
         transaction(database) {
-            SchemaUtils.create(TenantGroups, Clinics, AppointmentEventLogs, NotificationOutboxEvents, NotificationDeliveryAttempts, FlywaySchemaHistory)
+            SchemaUtils.createMissingTablesAndColumns(
+                TenantGroups,
+                Clinics,
+                AppointmentEventLogs,
+                NotificationOutboxEvents,
+                NotificationDeliveryAttempts,
+                WaitlistNotificationOutboxEvents,
+                FlywaySchemaHistory,
+            )
             FlywaySchemaHistory.insert {
                 it[installedRank] = 1
                 it[version] = "21"
@@ -220,7 +403,7 @@ internal class NotificationSchemaReadinessTest {
 
     private fun connect(name: String): Database =
         Database.connect(
-            "jdbc:h2:mem:${name}_${System.nanoTime()};MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
+            "jdbc:h2:mem:${name}_${System.nanoTime()}_${Base58.randomString(8)};MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
             driver = "org.h2.Driver",
         )
 

@@ -222,7 +222,7 @@ private val apiConsumerFixtureExpectedScopes = mapOf(
             "org.apache.kafka:kafka-clients",
             "org.jetbrains.exposed:exposed-jdbc",
             "org.springframework.kafka:spring-kafka",
-            "project::appointment-event",
+            "project::appointment-core",
         ),
         compileOnlyApi = setOf(
             "org.springframework.boot:spring-boot-autoconfigure",
@@ -271,6 +271,7 @@ private val apiConsumerFixtureInventory = mapOf(
         "AppointmentMessagingAutoConfiguration", "AppointmentMessagingHealthIndicator", "AppointmentOutboxRelayLifecycle",
         "AppointmentMessagingStartupValidator", "AppointmentMessagingReadinessValidator", "MicrometerAppointmentConsumerMetrics",
         "MicrometerAppointmentOutboxMetrics", "AppointmentConsumerInboxTable", "AppointmentConsumerQuarantineTable",
+        "AppointmentOutboxWriter", "AppointmentMessagingContext", "AppointmentRecord", "TenantClinicScope", "CancellationReasonCode",
         "ConsumerRecord", "Acknowledgment", "Consumer", "ConsumerFactory", "ConcurrentKafkaListenerContainerFactory",
         "KafkaTemplate", "KafkaAdmin", "ProducerFactory", "Database", "Table", "LongIdTable", "MeterRegistry",
         "ObjectProvider", "DataSource", "HealthIndicator", "SmartLifecycle", "SmartInitializingSingleton",

@@ -2,7 +2,7 @@ package io.bluetape4k.clinic.appointment.messaging
 
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxStatus
-import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
+import io.bluetape4k.clinic.appointment.commitment.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository

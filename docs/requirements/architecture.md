@@ -130,14 +130,14 @@ if (bluetape4kProjectsDir.exists()) {
 
 ### ADR-10: Scheduling Policy Foundation — V9/V10 분리 배포
 
-**결정**: V9는 scheduling policy definition, scope head, effective snapshot,
+**결정**: V9는 scheduling policy definition, scope head, 유효 정책 기준 데이터,
 activation command, preview job, generic outbox 호환 컬럼을 먼저 추가한다. V10은
 legacy 예약/플랜 outbox column 제거 또는 aggregate-only 소비 전환을 별도 배포로
 다룬다.
 
 **이유**: 예약 정책은 향후 예약 생성, 운영 장애 복구, 재확인, overbooking, 고객
 신뢰도 signal에 영향을 준다. 한 번의 migration에서 writer, reader, worker, consumer를
-동시에 바꾸면 aggregate-null, dual-write 불일치, stale snapshot을 운영 중에 되돌리기
+동시에 바꾸면 aggregate-null, dual-write 불일치, 오래된 정책 기준 데이터를 운영 중에 되돌리기
 어렵다.
 
 **결과**:
@@ -171,11 +171,11 @@ scope head revision이 동시에 맞아야 한다. HTTP 계층에서 부분 판�
 
 ### ADR-12: Effective Read Double-Read and Fail-Closed
 
-**결정**: effective snapshot은 compile 전후로 권위 generation을 다시 읽는다. 두 generation이
-다르면 snapshot을 반환하지 않고 retryable conflict로 실패한다.
+**결정**: 유효 정책 기준 데이터는 compile 전후로 권위 generation을 다시 읽는다. 두 generation이
+다르면 기준 데이터를 반환하지 않고 retryable conflict로 실패한다.
 
 **이유**: 정책이 activation되는 순간에 오래된 tenant baseline과 새 clinic override를 섞어
-예약 결정을 내리면, 호출자는 재현 가능한 snapshot hash를 신뢰할 수 없다.
+예약 결정을 내리면, 호출자는 재현 가능한 기준 데이터 hash를 신뢰할 수 없다.
 
 **결과**: `GET .../effective`는 generation conflict를
 `POLICY_EFFECTIVE_READ_CONFLICT`, 권위 저장소 장애를
@@ -336,3 +336,44 @@ business key가 다른 tenant에서 재사용될 때 충돌·오염·cross-tenan
 **근거**: [멀티테넌시 상세 설계](../superpowers/specs/2026-05-19-multitenancy-design.md),
 [아키텍처 blueprint](../superpowers/research/2026-05-19-multitenancy-architecture-blueprint.md),
 [2026-08-04 완료 상태 감사](../reviews/2026-08-04-multitenancy-audit.md)를 따른다.
+
+---
+
+### ADR-15: Outbox 물리 소유권과 모듈 재사용 경계
+
+**상태**: 채택. Issue #393의 dependency/API 경계와 readiness 보강을 기준으로,
+기존 migration SQL과 runtime 동작을 바꾸지 않고 각 outbox의 물리 정의·write·claim·readiness
+소유자를 고정한다.
+
+#### 소유권 매트릭스
+
+| 영역 | 테이블·계약 정의 | write 소유자 | claim·relay·readiness 소유자 | migration 기준 |
+|---|---|---|---|---|
+| 예약 scheduling outbox | `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingOutboxEvents.kt` | `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxWriter.kt`, `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingEventRepository.kt`, `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/policy/SchedulingPolicyEventRepository.kt` | `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxStore.kt`, `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxRelay.kt`, `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentMessagingReadinessValidator.kt` | V22 |
+| durable notification outbox | `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxEvents.kt`, `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxRepository.kt` | `appointment-event`의 notification repository와 공개 event 계약 | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxWorkStore.kt`, `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxWorker.kt`, `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationSchemaReadiness.kt` | V14, V21 |
+| waitlist notification outbox | `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxAdapter.kt`의 table·adapter·repository | `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxAdapter.kt` | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/WaitlistOfferNotificationStore.kt`, `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationSchemaReadiness.kt` | V19 |
+
+`appointment-core`의 scope·record·state 계약은 `api`로 재사용하고, 물리 테이블을 정의한
+event 모듈은 messaging의 public surface에 불필요하게 누출하지 않는다. notification의
+event `api`는 public event listener/DTO 소비자를 정리하는 Issue #409까지 transitional
+exception으로 유지한다. 모든 Exposed 접근은 caller-owned `transaction {}` 경계 안에서
+수행한다.
+
+#### 검증 범위와 한계
+
+ADR와 source-path review는 물리 소유권과 문서의 경계를 증명한다. Gradle consumer fixture는
+`api` scope와 의존성 leakage만 증명하며 runtime broker 동작, 실제 Flyway 적용, database
+동시성 또는 provider 호출 성공을 증명하지 않는다. readiness 회귀 테스트는 V19 waitlist
+table과 세 필수 index의 단일 누락 사유를 H2에서 검증하고, 실제 세 dialect migration 검증은
+`appointment-api` migration test가 담당한다.
+
+#### 롤백 경로
+
+| 변경 표면 | 롤백 조치 | 스키마 롤백 |
+|---|---|---|
+| dependency/API 경계와 lockfile | `build.gradle.kts`, `gradle.lockfile`, 공개 import/fixture를 직전 commit으로 되돌리고 consumer fixture를 재실행 | 불필요 |
+| readiness 구현·회귀 fixture | `NotificationSchemaReadiness`의 waitlist 검사와 H2 단일 누락 테스트를 되돌리고 모듈 테스트를 재실행 | 불필요 |
+| README·ADR·review artifact | 문서 commit만 되돌리고 terminology audit을 재실행 | 불필요 |
+| migration SQL·runtime schema | 이번 변경에는 해당 파일과 runtime schema 변경이 없음 | 별도 migration rollback을 실행하지 않음 |
+
+**근거**: Issue #393의 설계·구현 review와 V19/V21/V22 migration contract test를 따른다.

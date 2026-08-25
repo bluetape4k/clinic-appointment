@@ -23,7 +23,7 @@ Resilience4j 정책을 적용합니다.
 |---|---|
 | `NotificationOutboxDispatcher` | 발송 대상을 공정하게 선점하고 전체 및 병원별 동시성을 제한합니다. |
 | `NotificationOutboxSchedulingRunner` | 애플리케이션 준비 직후와 worker 주기마다 dispatcher를 실행합니다. |
-| `NotificationObservationSchedulingRunner` | worker와 분리된 낮은 빈도로 상한 있는 관측 집계를 갱신합니다. |
+| `NotificationObservationSchedulingRunner` | worker와 분리된 낮은 빈도로 상한 있는 관측 기준 데이터를 갱신합니다. |
 | `NotificationOutboxWorker` | fencing된 완료·재시도·소진 처리와 만료 lease 복구를 수행합니다. |
 | `NotificationOutboxWorkStore` | outbox 작업의 트랜잭션 기반 데이터베이스 경계를 정의합니다. |
 | `NotificationDeliveryRouteGate` | `SHADOW`, `CANARY`, `ACTIVE`, `PAUSED`를 병원별 단일 provider 경로로 변환합니다. |
@@ -256,8 +256,15 @@ bean이 없거나 정책이 잘못되면 startup을 거부하며, 긴급 중지�
 
 ## 의존성
 
-- **내부**: `appointment-core`, `appointment-event`
+- **내부**: `appointment-core`, `appointment-event`, `appointment-messaging`
 - **외부**: Exposed JDBC, Resilience4j, Lettuce, `bluetape4k-leader`
+
+`appointment-event`의 `api` 의존성은 현재 public event listener와 DTO를 소비하는
+전환기 계약 때문에 유지합니다. notification worker는 event의 테이블 정의와
+`appointment-messaging`의 공개 writer/consumer 계약을 재사용하지만, 예약 aggregate를
+직접 변경하거나 provider payload를 event 모듈에 저장하지 않습니다. 이 API 예외를
+`implementation`으로 좁히는 작업은 Issue #409에서 event listener/DTO 소비자를 먼저
+정리한 뒤 진행합니다.
 
 ## 테스트 실행
 
