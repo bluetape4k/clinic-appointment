@@ -81,5 +81,6 @@ internal class NotificationSchemaReadinessDiagnosticTest {
 
         snapshot.schema.code shouldBeEqualTo "SCHEMA_PERMISSION_DENIED"
         snapshot.keyRing.code shouldBeEqualTo "KEY_RING_NOT_READY"
+        snapshot.diagnostics.single().code shouldBeEqualTo "SCHEMA_PERMISSION_DENIED"
     }
 }

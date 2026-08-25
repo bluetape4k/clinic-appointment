@@ -177,6 +177,7 @@ class NotificationAutoConfiguration {
                     keyRing = NotificationComponentState.down(
                         if (!schemaReady && schemaCode.startsWith("KEY_RING_")) schemaCode else "KEY_RING_NOT_READY",
                     ),
+                    diagnostics = (schema.diagnostics + producer.diagnostics).distinct().take(8),
                 )
             }
         }

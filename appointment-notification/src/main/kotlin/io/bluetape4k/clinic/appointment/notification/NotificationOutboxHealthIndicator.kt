@@ -22,7 +22,9 @@ class NotificationOutboxHealthIndicator(
             "keyRing" to snapshot.keyRing,
         )
         val failed = components.values.count { !it.available }
-        val details = components.mapValues { (_, state) -> state.code } + ("failedComponents" to failed)
+        val details = components.mapValues { (_, state) -> state.code } +
+            ("failedComponents" to failed) +
+            ("diagnostics" to snapshot.diagnostics.map(NotificationReadinessDiagnostic::toHealthDetail))
         return NotificationOutboxHealth(
             status = if (failed == 0) NotificationOutboxHealthStatus.UP else NotificationOutboxHealthStatus.DOWN,
             details = details,
@@ -69,6 +71,7 @@ data class NotificationOutboxReadinessSnapshot(
     val schema: NotificationComponentState,
     val claim: NotificationComponentState,
     val keyRing: NotificationComponentState,
+    val diagnostics: List<NotificationReadinessDiagnostic> = emptyList(),
 ) : Serializable {
     companion object {
         private const val serialVersionUID = 1L
