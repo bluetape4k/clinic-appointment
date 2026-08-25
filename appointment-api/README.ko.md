@@ -325,7 +325,7 @@ Flyway — `src/main/resources/db/migration/V*.sql`
 
 ## 의존성
 
-- **내부**: `appointment-core`, `appointment-event`, `appointment-solver`
+- **내부**: `appointment-core`, `appointment-event`, `appointment-notification`, `appointment-messaging`
 - **외부**: Spring Boot 4 Web/Security, `jjwt`, Flyway, springdoc-openapi, `exposed-jdbc`
 
 ## 실행
@@ -413,7 +413,7 @@ hold recovery는 계속 실행됩니다. [waitlist 전달 API·운영 계약](..
 ## Tenant 범위 스케줄링 endpoint
 
 API는 `tenantCode`와 path의 `clinicId`를 먼저 검증한 뒤 `TenantClinicScope`를
-만듭니다. slot, reschedule, solver, notification 호출은 이 불변 범위를 전달받으며
+만듭니다. slot, reschedule, notification 호출은 이 불변 범위를 전달받으며
 병원 ID만 사용하는 query는 거부합니다. batch reschedule SSE는 emitter timeout을
 제한하고 완료·timeout·오류 시 virtual-thread worker를 interrupt합니다.
 
