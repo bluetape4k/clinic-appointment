@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.messaging
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeTrue
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.deleteAll
@@ -174,7 +175,7 @@ class AppointmentReplayServiceTest {
         val service = AppointmentReplayService(database) { _, _ ->
             calls.incrementAndGet()
             entered.countDown()
-            check(release.await(5, TimeUnit.SECONDS)) { "replay source did not release" }
+            release.await(5, TimeUnit.SECONDS).shouldBeTrue()
             1
         }
         val executor = Executors.newFixedThreadPool(2)
@@ -182,7 +183,7 @@ class AppointmentReplayServiceTest {
             val first = executor.submit<AppointmentReplayResult> {
                 service.replay("replay-concurrent-1", request(), actor())
             }
-            check(entered.await(5, TimeUnit.SECONDS)) { "first replay did not start" }
+            entered.await(5, TimeUnit.SECONDS).shouldBeTrue()
             val second = executor.submit<AppointmentReplayResult> {
                 service.replay("replay-concurrent-1", request(), actor())
             }.get(5, TimeUnit.SECONDS)
@@ -213,11 +214,11 @@ class AppointmentReplayServiceTest {
             }
             val results = listOf(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS))
             calls.get() shouldBeEqualTo 1
-            check(results.any { it.status == AppointmentReplayAuditStatus.EXECUTED })
-            check(results.all {
+            results.any { it.status == AppointmentReplayAuditStatus.EXECUTED }.shouldBeTrue()
+            results.all {
                 it.status == AppointmentReplayAuditStatus.EXECUTED ||
                     it.status == AppointmentReplayAuditStatus.REQUESTED
-            })
+            }.shouldBeTrue()
         } finally {
             executor.shutdownNow()
         }

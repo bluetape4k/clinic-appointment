@@ -60,6 +60,10 @@ internal object AppointmentOutboxPerformanceTestSupport {
         val contentionSamplesNanos: List<Long>,
     )
 
+    /**
+     * 성능 benchmark는 매 실행마다 동일한 빈 PostgreSQL schema를 만들어 migration 비용과
+     * claim 계획을 격리하므로 일반 fixture의 incremental schema 계약에서 예외로 둔다.
+     */
     fun connectAndCreateSchema(label: String) {
         require(label.isNotBlank()) { "label must not be blank" }
         val database = Database.connect(

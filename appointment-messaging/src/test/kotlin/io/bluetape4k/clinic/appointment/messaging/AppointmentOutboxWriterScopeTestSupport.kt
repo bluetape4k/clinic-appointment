@@ -17,6 +17,7 @@ import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -44,7 +45,7 @@ internal object AppointmentOutboxWriterScopeTestSupport {
             driver = "org.h2.Driver",
         )
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 TenantGroups,
                 Clinics,
                 Doctors,
@@ -56,6 +57,16 @@ internal object AppointmentOutboxWriterScopeTestSupport {
                 AppointmentPlans,
                 SchedulingOutboxEvents,
             )
+            SchedulingOutboxEvents.deleteAll()
+            AppointmentPlans.deleteAll()
+            ProductCatalogProjections.deleteAll()
+            Appointments.deleteAll()
+            ConsultationTopics.deleteAll()
+            Equipments.deleteAll()
+            TreatmentTypes.deleteAll()
+            Doctors.deleteAll()
+            Clinics.deleteAll()
+            TenantGroups.deleteAll()
             insertTenant(TENANT_ONE, "tenant-one")
             insertTenant(TENANT_TWO, "tenant-two")
             insertClinic(CLINIC_ONE, TENANT_ONE, "Clinic One")

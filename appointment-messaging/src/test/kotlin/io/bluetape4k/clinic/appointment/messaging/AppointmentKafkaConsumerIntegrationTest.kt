@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.messaging
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.codec.Base58
 import io.bluetape4k.testcontainers.mq.KafkaServer
 import io.bluetape4k.testcontainers.mq.Spring
@@ -10,6 +11,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.ConsumerRecords
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
@@ -64,11 +66,14 @@ class AppointmentKafkaConsumerIntegrationTest {
                 driver = "org.h2.Driver",
             )
             transaction(database) {
-                SchemaUtils.create(
+                SchemaUtils.createMissingTablesAndColumns(
                     AppointmentConsumerInboxTable,
                     AppointmentConsumerQuarantineTable,
                     AppointmentConsumerRejectedRecordTable,
                 )
+                AppointmentConsumerQuarantineTable.deleteAll()
+                AppointmentConsumerRejectedRecordTable.deleteAll()
+                AppointmentConsumerInboxTable.deleteAll()
             }
             val runtime = AppointmentConsumerRuntime(
                 codec = AppointmentEventEnvelopeCodec(),
@@ -127,11 +132,14 @@ class AppointmentKafkaConsumerIntegrationTest {
             driver = "org.h2.Driver",
         )
         transaction(database) {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 AppointmentConsumerInboxTable,
                 AppointmentConsumerQuarantineTable,
                 AppointmentConsumerRejectedRecordTable,
             )
+            AppointmentConsumerQuarantineTable.deleteAll()
+            AppointmentConsumerRejectedRecordTable.deleteAll()
+            AppointmentConsumerInboxTable.deleteAll()
         }
         val runtime = AppointmentConsumerRuntime(
             codec = AppointmentEventEnvelopeCodec(),
@@ -176,15 +184,13 @@ class AppointmentKafkaConsumerIntegrationTest {
             kafkaAdmin.createOrModifyTopics(NewTopic(topicName, 1, 1.toShort()))
             template.send(topicName, key, value).get(10, TimeUnit.SECONDS)
             firstContainer.start()
-            check(firstCrashed.await(20, TimeUnit.SECONDS)) { "first container did not reach crash handler" }
+            firstCrashed.await(20, TimeUnit.SECONDS).shouldBeTrue()
 // error-handler retry 전에 실패한 member를 중지한다. commit되지 않은 offset은
 // 같은 group의 두 번째 member에 재할당되어야 한다.
             firstContainer.stop()
             secondContainer.start()
-            check(recovered.await(30, TimeUnit.SECONDS)) { "second member did not recover record" }
-            check(recoveredRuntimeReturned.await(30, TimeUnit.SECONDS)) {
-                "recovered runtime did not return after processing"
-            }
+            recovered.await(30, TimeUnit.SECONDS).shouldBeTrue()
+            recoveredRuntimeReturned.await(30, TimeUnit.SECONDS).shouldBeTrue()
 
             transaction(database) {
                 AppointmentConsumerInboxTable

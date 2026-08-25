@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.messaging
 
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxStatus
 import org.jetbrains.exposed.v1.core.statements.StatementType
@@ -10,8 +12,6 @@ import org.junit.jupiter.api.Test
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Duration
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /** PostgreSQL Testcontainers에서 V22 ready-index와 fenced lease predicate를 검증하는 증거. */
 class AppointmentOutboxQueryPlanTest {
@@ -22,11 +22,11 @@ class AppointmentOutboxQueryPlanTest {
         previousDefaultDatabase = TransactionManager.defaultDatabase
         AppointmentOutboxPerformanceTestSupport.connectAndCreateSchema("query_plan")
         val summary = AppointmentOutboxPerformanceTestSupport.seedBacklog()
-        assertEquals(AppointmentOutboxPerformanceTestSupport.SEED, summary.seed)
-        assertEquals(AppointmentOutboxPerformanceTestSupport.ROW_COUNT, summary.totalRows)
-        assertTrue(summary.appointmentRows > 0)
-        assertTrue(summary.legacyRows > 0)
-        assertTrue(summary.pendingAppointmentRows > 0)
+        summary.seed shouldBeEqualTo AppointmentOutboxPerformanceTestSupport.SEED
+        summary.totalRows shouldBeEqualTo AppointmentOutboxPerformanceTestSupport.ROW_COUNT
+        (summary.appointmentRows > 0).shouldBeTrue()
+        (summary.legacyRows > 0).shouldBeTrue()
+        (summary.pendingAppointmentRows > 0).shouldBeTrue()
         transaction {
             ensureDeterministicCandidates()
             TransactionManager.current().exec("ANALYZE scheduling_outbox_events")
@@ -42,38 +42,35 @@ class AppointmentOutboxQueryPlanTest {
     fun `ready claim uses the V22 appointment index and bounded page`() {
         transaction {
             val indexColumns = indexColumns(READY_INDEX)
-            assertEquals(
-                listOf(
-                    "STATUS",
-                    "AGGREGATE_TYPE",
-                    "EVENT_TYPE",
-                    "NEXT_ATTEMPT_AT",
-                    "LEASE_UNTIL",
-                    "CREATED_AT",
-                    "ID",
-                ),
-                indexColumns,
+            indexColumns shouldBeEqualTo listOf(
+                "STATUS",
+                "AGGREGATE_TYPE",
+                "EVENT_TYPE",
+                "NEXT_ATTEMPT_AT",
+                "LEASE_UNTIL",
+                "CREATED_AT",
+                "ID",
             )
 
             val plan = explain(READY_CLAIM_SQL)
             // PostgreSQL 비용 기반 planner는 동일한 V22 스키마에서도 기존 운영 인덱스를 선택할 수 있다.
             // V22 인덱스의 컬럼 계약은 위에서 확인하되, 계획은 알려진 후보 인덱스만 허용한다.
-            assertTrue(usesKnownOutboxIndex(plan), plan)
+            usesKnownOutboxIndex(plan).shouldBeTrue()
 
             val count = TransactionManager.current().exec(READY_CLAIM_SQL) { rows ->
                 var result = 0
                 while (rows.next()) result++
                 result
             } ?: 0
-            assertTrue(count <= AppointmentOutboxPerformanceTestSupport.PAGE_SIZE)
+            (count <= AppointmentOutboxPerformanceTestSupport.PAGE_SIZE).shouldBeTrue()
         }
 
         val claim = JdbcAppointmentOutboxStore(maxClinicBatch = 4)
             .claim("query-plan-relay", 1, Duration.ofSeconds(30))
             .single()
-        assertEquals(1, claim.attemptNumber)
-        assertEquals(AppointmentTopic(DefaultAppointmentOutboxWriter.DEFAULT_TOPIC), claim.topic)
-        assertTrue(claim.partitionKey.value.startsWith("tenant-1:CLINIC:clinic-31:APPOINTMENT:apt-"))
+        claim.attemptNumber shouldBeEqualTo 1
+        claim.topic shouldBeEqualTo AppointmentTopic(DefaultAppointmentOutboxWriter.DEFAULT_TOPIC)
+        claim.partitionKey.value.startsWith("tenant-1:CLINIC:clinic-31:APPOINTMENT:apt-").shouldBeTrue()
     }
 
     @Test
@@ -81,19 +78,16 @@ class AppointmentOutboxQueryPlanTest {
         val invalidIds = transaction { installInvalidReadyRows() }
         val store = JdbcAppointmentOutboxStore(maxClinicBatch = 4)
 
-        assertTrue(store.claim("invalid-metadata-relay", 1, Duration.ofSeconds(30)).isEmpty())
+        store.claim("invalid-metadata-relay", 1, Duration.ofSeconds(30)).isEmpty().shouldBeTrue()
         transaction {
             invalidIds.forEach { id ->
-                assertEquals(SchedulingOutboxStatus.FAILED.name, readString(id, "status"))
-                assertEquals(
-                    AppointmentOutboxRelay.FAILURE_INVALID_METADATA,
-                    readString(id, "last_failure_code"),
-                )
+                readString(id, "status") shouldBeEqualTo SchedulingOutboxStatus.FAILED.name
+                readString(id, "last_failure_code") shouldBeEqualTo AppointmentOutboxRelay.FAILURE_INVALID_METADATA
             }
         }
 
         val successor = store.claim("invalid-metadata-relay", 1, Duration.ofSeconds(30)).single()
-        assertEquals(1, successor.attemptNumber)
+        successor.attemptNumber shouldBeEqualTo 1
     }
 
     @Test
@@ -120,12 +114,12 @@ class AppointmentOutboxQueryPlanTest {
                 firstId = readyId,
                 secondId = futureId,
             )
-            assertEquals(1, updated)
-            assertEquals("query-plan-relay", readString(readyId, "lease_owner"))
-            assertEquals("query-plan-token", readString(readyId, "lease_token"))
-            assertEquals(1, readInt(readyId, "attempt_count"))
-            assertEquals(null, readString(futureId, "lease_owner"))
-            assertEquals(0, readInt(futureId, "attempt_count"))
+            updated shouldBeEqualTo 1
+            readString(readyId, "lease_owner") shouldBeEqualTo "query-plan-relay"
+            readString(readyId, "lease_token") shouldBeEqualTo "query-plan-token"
+            readInt(readyId, "attempt_count") shouldBeEqualTo 1
+            readString(futureId, "lease_owner") shouldBeEqualTo null
+            readInt(futureId, "attempt_count") shouldBeEqualTo 0
 
             // 오래된 candidate version은 fenced lease를 덮어쓸 수 없다.
             val staleUpdate = conditionalLeaseUpdate(
@@ -135,7 +129,7 @@ class AppointmentOutboxQueryPlanTest {
                 firstId = readyId,
                 secondId = readyId,
             )
-            assertEquals(0, staleUpdate)
+            staleUpdate shouldBeEqualTo 0
         }
     }
 
@@ -144,17 +138,17 @@ class AppointmentOutboxQueryPlanTest {
         val benchmark = AppointmentOutboxPerformanceTestSupport.benchmarkClaim(
             store = JdbcAppointmentOutboxStore(maxClinicBatch = 4),
         )
-        assertEquals(AppointmentOutboxPerformanceTestSupport.SEED, benchmark.seed)
-        assertEquals(AppointmentOutboxPerformanceTestSupport.ROW_COUNT, benchmark.totalRows)
-        assertEquals(3, benchmark.warmupRounds)
-        assertEquals(15, benchmark.measurementRounds)
-        assertTrue(benchmark.samplesNanos.all { it > 0L })
-        assertTrue(benchmark.p50Nanos > 0L)
-        assertTrue(benchmark.p95Nanos >= benchmark.p50Nanos)
-        assertTrue(benchmark.p99Nanos >= benchmark.p95Nanos)
-        assertTrue(benchmark.maxClaimed <= AppointmentOutboxPerformanceTestSupport.PAGE_SIZE / 4)
-        assertEquals(benchmark.contentionClaims, benchmark.contentionDistinctIds)
-        assertTrue(benchmark.contentionSamplesNanos.all { it > 0L })
+        benchmark.seed shouldBeEqualTo AppointmentOutboxPerformanceTestSupport.SEED
+        benchmark.totalRows shouldBeEqualTo AppointmentOutboxPerformanceTestSupport.ROW_COUNT
+        benchmark.warmupRounds shouldBeEqualTo 3
+        benchmark.measurementRounds shouldBeEqualTo 15
+        benchmark.samplesNanos.all { it > 0L }.shouldBeTrue()
+        (benchmark.p50Nanos > 0L).shouldBeTrue()
+        (benchmark.p95Nanos >= benchmark.p50Nanos).shouldBeTrue()
+        (benchmark.p99Nanos >= benchmark.p95Nanos).shouldBeTrue()
+        (benchmark.maxClaimed <= AppointmentOutboxPerformanceTestSupport.PAGE_SIZE / 4).shouldBeTrue()
+        benchmark.contentionDistinctIds shouldBeEqualTo benchmark.contentionClaims
+        benchmark.contentionSamplesNanos.all { it > 0L }.shouldBeTrue()
         AppointmentOutboxPerformanceTestSupport.writeBenchmarkReport(benchmark)
     }
 
@@ -170,7 +164,7 @@ class AppointmentOutboxQueryPlanTest {
                 while (rows.next()) add(rows.getLong(1))
             }
         } ?: emptyList()
-        assertEquals(3, ids.size)
+        ids.size shouldBeEqualTo 3
         val invalidRows = listOf(
             Triple(ids[0], "AppointmentUnknown", DefaultAppointmentOutboxWriter.DEFAULT_TOPIC),
             Triple(ids[1], AppointmentEventType.CREATED.wireName, null),
@@ -214,10 +208,10 @@ class AppointmentOutboxQueryPlanTest {
               )
             """.trimIndent(),
         ) { rows ->
-            check(rows.next()) { "invalid fixture query returned no row" }
+            rows.next().shouldBeTrue()
             rows.getInt(1)
         } ?: 0
-        assertEquals(ids.size, invalidReadyRows, "invalid fixture must satisfy the production invalid-row predicate")
+        invalidReadyRows shouldBeEqualTo ids.size
         return ids
     }
 
@@ -229,7 +223,7 @@ class AppointmentOutboxQueryPlanTest {
                 while (rows.next()) add(rows.getLong(1))
             }
         } ?: emptyList()
-        assertTrue(ids.size == 2, "fixture must contain two appointment rows")
+        (ids.size == 2).shouldBeTrue()
         TransactionManager.current().exec(
             """
             UPDATE scheduling_outbox_events
@@ -283,7 +277,7 @@ class AppointmentOutboxQueryPlanTest {
 
     private fun selectId(sql: String): Long =
         TransactionManager.current().exec(sql) { rows ->
-            assertTrue(rows.next(), "fixture did not contain a matching appointment row")
+            rows.next().shouldBeTrue()
             rows.getLong(1)
         } ?: error("query returned no result set")
 
@@ -291,7 +285,7 @@ class AppointmentOutboxQueryPlanTest {
         TransactionManager.current().exec(
             "SELECT $column FROM scheduling_outbox_events WHERE id = $id",
         ) { rows ->
-            assertTrue(rows.next())
+            rows.next().shouldBeTrue()
             rows.getString(1)
         }
 
@@ -299,7 +293,7 @@ class AppointmentOutboxQueryPlanTest {
         TransactionManager.current().exec(
             "SELECT $column FROM scheduling_outbox_events WHERE id = $id",
         ) { rows ->
-            assertTrue(rows.next())
+            rows.next().shouldBeTrue()
             rows.getInt(1)
         } ?: error("query returned no result set")
 
@@ -333,7 +327,7 @@ class AppointmentOutboxQueryPlanTest {
               AND lease_token = ${sqlString(token)}
             """.trimIndent(),
         ) { rows ->
-            check(rows.next()) { "lease update count query returned no row" }
+            rows.next().shouldBeTrue()
             rows.getInt(1)
         } ?: 0
     }
