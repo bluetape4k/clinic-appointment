@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.event.waitlist
 
+import io.bluetape4k.clinic.appointment.event.AppointmentEventJson
 import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistOfferNotificationDraft
 import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistOfferNotificationPort
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -51,7 +52,9 @@ data class WaitlistNotificationOutboxEnvelope(
     init {
         require(schemaVersion == CURRENT_SCHEMA_VERSION) { "schemaVersion must be $CURRENT_SCHEMA_VERSION" }
         require(eventId.isNotBlank()) { "eventId must not be blank" }
+        require(eventId.length <= 160) { "eventId must not exceed 160 characters" }
         require(idempotencyKey.isNotBlank()) { "idempotencyKey must not be blank" }
+        require(idempotencyKey.length <= 128) { "idempotencyKey must not exceed 128 characters" }
         require(tenantGroupId > 0L) { "tenantGroupId must be positive" }
         require(clinicId > 0L) { "clinicId must be positive" }
         require(offerId > 0L) { "offerId must be positive" }
@@ -92,23 +95,14 @@ data class WaitlistNotificationOutboxEnvelope(
 
 /** waitlist notification payload를 위한 strict canonical codec. */
 class WaitlistNotificationOutboxCodec {
-    private val mapper = tools.jackson.module.kotlin.jsonMapper {
-        addModule(
-            tools.jackson.module.kotlin.kotlinModule {
-                enable(tools.jackson.module.kotlin.KotlinFeature.StrictNullChecks)
-            },
-        )
-        enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-        enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-        enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
-        enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_NULL_CREATOR_PROPERTIES)
-    }
+    private val mapper = AppointmentEventJson.mapper
 
     fun encode(envelope: WaitlistNotificationOutboxEnvelope): String =
-        mapper.writeValueAsString(envelope.toJson())
+        AppointmentEventJson.writeCanonical(envelope.toJson())
 
     fun decode(json: String): WaitlistNotificationOutboxEnvelope =
         try {
+            AppointmentEventJson.requireDocumentSize(json)
             mapper.readValue<WaitlistNotificationOutboxEnvelopeJson>(json).toEnvelope()
         } catch (failure: WaitlistNotificationOutboxContractException) {
             throw failure

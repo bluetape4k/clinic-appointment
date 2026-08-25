@@ -1,10 +1,7 @@
 package io.bluetape4k.clinic.appointment.event.notification
 
+import io.bluetape4k.clinic.appointment.event.AppointmentEventJson
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
-import tools.jackson.databind.DeserializationFeature
-import tools.jackson.module.kotlin.KotlinFeature
-import tools.jackson.module.kotlin.jsonMapper
-import tools.jackson.module.kotlin.kotlinModule
 import tools.jackson.module.kotlin.readValue
 import java.io.Serializable
 import java.time.Instant
@@ -19,20 +16,11 @@ import java.time.LocalTime
  */
 class NotificationOutboxCodec {
 
-    private val mapper = jsonMapper {
-        addModule(
-            kotlinModule {
-                enable(KotlinFeature.StrictNullChecks)
-            },
-        )
-        enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-        enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-        enable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
-    }
+    private val mapper = AppointmentEventJson.mapper
 
     fun encode(envelope: NotificationOutboxEnvelope): String {
         NotificationOutboxContractRegistry.validate(envelope)
-        return mapper.writeValueAsString(envelope.toJson())
+        return AppointmentEventJson.writeCanonical(envelope.toJson())
     }
 
     fun decode(json: String): NotificationOutboxEnvelope =
@@ -45,6 +33,7 @@ class NotificationOutboxCodec {
         }
 
     private fun decodeStrict(json: String): NotificationOutboxEnvelope {
+        AppointmentEventJson.requireDocumentSize(json)
         val encoded = mapper.readValue<NotificationOutboxEnvelopeJson>(json)
         if (encoded.schemaVersion !in NotificationOutboxEnvelope.SUPPORTED_SCHEMA_VERSIONS) {
             throw invalidPayload()
@@ -150,7 +139,7 @@ class NotificationOutboxCodec {
         }
 
     private inline fun <reified T : Any> Any.decodeAs(): T =
-        mapper.readValue(mapper.writeValueAsString(this))
+        mapper.readValue(AppointmentEventJson.writeCanonical(this))
 
     private fun invalidPayload(): NotificationContractException =
         NotificationContractException(
