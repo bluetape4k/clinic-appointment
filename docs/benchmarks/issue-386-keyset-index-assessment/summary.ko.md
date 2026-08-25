@@ -7,18 +7,24 @@ PostgreSQL 18.6 singleton에서 `scheduling_doctors`,
 채우고, 16개 clinic에 2,000행씩 분산해 keyset 조회를 반복했다. 세 테이블 모두
 `(clinic_id, id)` 후보 인덱스를 만든 뒤에도 측정한 21개 계획이 기존
 `*_pkey`를 선택했다. 후보 인덱스는 읽기 계획의 `Rows Removed by Filter`를 줄이지
-못했고, 테이블마다 1,073,152 bytes를 추가했다.
+못했고, 테이블마다 1,073,152 bytes를 추가했다. 각 후보 인덱스는 측정 직후
+제거되었고 `candidateIndexAbsentAfterCleanup=true`가 report에 기록됐다.
 
 따라서 이번 범위에서는 Flyway migration과 API SQL 변경을 추가하지 않고 현재
 스키마를 유지한다. 후보 인덱스를 생성한 뒤 제거하는 롤백도 확인했다.
+
+산출물의 `revision=HEAD`는 benchmark 실행 시 `git rev-parse HEAD`로 해석된다.
+chart·data·summary와 실행 source path가 같은 checkout에 존재하는지는
+`ClinicKeysetIndexAssessmentTest`의 provenance validator가 확인한다. planner가
+선택한 index 이름과 후보 index cleanup 결과도 원문 report에 남긴다.
 
 ## 반복 측정 결과
 
 | 테이블 | 현재 읽기 p95 (ms) | 후보 읽기 p95 (ms) | 현재 쓰기 p95 (ms) | 후보 쓰기 p95 (ms) | 후보 계획이 사용한 인덱스 | `Rows Removed by Filter` |
 |---|---:|---:|---:|---:|---|---:|
-| `scheduling_doctors` | 0.689 | 0.660 | 4.022 | 4.057 | `scheduling_doctors_pkey` | 16,767 |
-| `scheduling_equipments` | 0.664 | 0.674 | 3.676 | 4.021 | `scheduling_equipments_pkey` | 16,767 |
-| `scheduling_treatment_types` | 0.678 | 0.654 | 4.216 | 5.162 | `scheduling_treatment_types_pkey` | 16,767 |
+| `scheduling_doctors` | 0.786 | 0.787 | 4.342 | 4.094 | `scheduling_doctors_pkey` | 16,767 |
+| `scheduling_equipments` | 0.719 | 0.737 | 3.589 | 4.027 | `scheduling_equipments_pkey` | 16,767 |
+| `scheduling_treatment_types` | 0.672 | 0.867 | 4.039 | 4.324 | `scheduling_treatment_types_pkey` | 16,767 |
 
 읽기는 각 상태에서 warm-up 2회 뒤 `EXPLAIN (ANALYZE, BUFFERS)`를 7회
 실행했다. 쓰기는 500행 `INSERT`를 트랜잭션에서 실행하고 `ROLLBACK`하는 샘플을

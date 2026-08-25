@@ -2,7 +2,8 @@
   "kind": "chart",
   "source": {
     "question": "후보 (clinic_id, id) 인덱스가 keyset 읽기와 쓰기 p95에 어떤 차이를 만드는가?",
-    "revision": "92b0b8a2344126cbf28f7b0a75eafc4b9e1ef659",
+    "revision": "HEAD",
+    "revisionPolicy": "git-rev-parse HEAD",
     "paths": [
       "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/integration/ClinicKeysetIndexAssessmentTest.kt",
       "docs/benchmarks/issue-386-keyset-index-assessment/chart.data.json",

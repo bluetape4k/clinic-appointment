@@ -1,7 +1,11 @@
 package io.bluetape4k.clinic.appointment.api.integration
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeIn
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldContain
+import io.bluetape4k.assertions.shouldContainAny
+import io.bluetape4k.assertions.shouldNotBeEmpty
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import org.flywaydb.core.Flyway
@@ -11,6 +15,7 @@ import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.jdbc.datasource.SimpleDriverDataSource
+import tools.jackson.module.kotlin.jacksonObjectMapper
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
@@ -25,6 +30,35 @@ import kotlin.math.round
 class ClinicKeysetIndexAssessmentTest {
 
     @Test
+    fun `benchmark chart provenance resolves to current HEAD and existing source paths`() {
+        val root = repositoryRoot()
+        val chart = jacksonObjectMapper().readTree(
+            Files.readString(root.resolve(CHART_SEMANTIC_PATH)),
+        )
+        val chartData = jacksonObjectMapper().readTree(
+            Files.readString(root.resolve(CHART_DATA_PATH)),
+        )
+        val source = chart.path("source")
+        val revision = source.path("revision").asText()
+        val currentHead = gitHead(root)
+        val resolvedRevision = if (revision == "HEAD") currentHead else revision
+        val sourcePaths = source.path("paths").toList().map { it.asText() }
+        val dataPaths = chartData.path("sourcePaths").toList().map { it.asText() }
+
+        resolvedRevision shouldBeEqualTo currentHead
+        chartData.path("sourceRevision").asText() shouldBeEqualTo revision
+        dataPaths shouldBeEqualTo sourcePaths
+        Files.readString(root.resolve(CHART_SUMMARY_PATH)).contains("revision=HEAD").shouldBeTrue()
+        sourcePaths.shouldNotBeEmpty()
+        sourcePaths.forEach { sourcePath ->
+            sourcePath shouldBeIn CHART_SOURCE_PATHS
+            val resolvedPath = root.resolve(sourcePath).normalize()
+            resolvedPath.startsWith(root).shouldBeTrue()
+            Files.isRegularFile(resolvedPath).shouldBeTrue()
+        }
+    }
+
+    @Test
     fun `clinic id와 id 복합 인덱스의 반복 계획과 쓰기 비용을 비교하고 롤백한다`() {
         val postgres = Containers.Postgres
         val dataSource = SimpleDriverDataSource(
@@ -35,34 +69,49 @@ class ClinicKeysetIndexAssessmentTest {
         )
         migrate(dataSource)
         dataSource.connection.use { connection ->
-            seed(connection)
-            analyze(connection)
-
-            val environment = readEnvironment(connection)
-            val existingIndexes = TABLES.associate { it.table to readIndexes(connection, it.table) }
-            val tableEvidence = TABLES.map { spec ->
-                dropCandidateIndex(connection, spec)
+            try {
+                seed(connection)
                 analyze(connection)
-                val baseline = measureState(connection, spec, IndexState.BASELINE)
 
-                createCandidateIndex(connection, spec)
-                analyze(connection)
-                val candidate = measureState(connection, spec, IndexState.COMPOSITE)
+                val environment = readEnvironment(connection)
+                val existingIndexes = TABLES.associate { it.table to readIndexes(connection, it.table) }
+                val tableEvidence = TABLES.map { spec -> measureTable(connection, spec) }
 
-                dropCandidateIndex(connection, spec)
-                analyze(connection)
-                candidate.indexPresentAfterRollback = !candidateIndexExists(connection, spec)
-                TableEvidence(spec, baseline, candidate)
+                tableEvidence.forEach { evidence ->
+                    assertRowsAndShape(evidence.baseline)
+                    assertRowsAndShape(evidence.candidate)
+                    assertPlannerDecision(evidence)
+                    evidence.candidateIndexAbsentAfterCleanup.shouldBeTrue()
+                }
+                writeReport(environment, existingIndexes, tableEvidence)
+                printSummary(tableEvidence)
+            } finally {
+                cleanupFixture(connection)
             }
-
-            tableEvidence.forEach { evidence ->
-                assertRowsAndShape(evidence.baseline)
-                assertRowsAndShape(evidence.candidate)
-                evidence.candidate.indexPresentAfterRollback.shouldBeTrue()
-            }
-            writeReport(environment, existingIndexes, tableEvidence)
-            printSummary(tableEvidence)
         }
+    }
+
+    private fun measureTable(connection: Connection, spec: TableSpec): TableEvidence {
+        lateinit var baseline: StateEvidence
+        lateinit var candidate: StateEvidence
+        try {
+            dropCandidateIndex(connection, spec)
+            analyze(connection)
+            baseline = measureState(connection, spec, IndexState.BASELINE)
+
+            createCandidateIndex(connection, spec)
+            analyze(connection)
+            candidate = measureState(connection, spec, IndexState.COMPOSITE)
+        } finally {
+            dropCandidateIndex(connection, spec)
+            analyze(connection)
+        }
+        return TableEvidence(
+            spec = spec,
+            baseline = baseline,
+            candidate = candidate,
+            candidateIndexAbsentAfterCleanup = !candidateIndexExists(connection, spec),
+        )
     }
 
     private fun migrate(dataSource: DataSource) {
@@ -133,6 +182,32 @@ class ClinicKeysetIndexAssessmentTest {
         }
     }
 
+    private fun cleanupFixture(connection: Connection) {
+        val autoCommit = connection.autoCommit
+        connection.autoCommit = false
+        try {
+            TABLES.asReversed().forEach { spec ->
+                connection.createStatement().use { statement ->
+                    statement.executeUpdate(
+                        "DELETE FROM ${spec.table} WHERE id >= $ID_BASE AND id < ${ID_BASE + FIXTURE_ROWS}",
+                    )
+                }
+            }
+            connection.createStatement().use { statement ->
+                statement.executeUpdate(
+                    "DELETE FROM scheduling_clinics WHERE id >= $CLINIC_ID_BASE AND id < ${CLINIC_ID_BASE + CLINIC_COUNT}",
+                )
+                statement.executeUpdate("DELETE FROM scheduling_tenant_groups WHERE id = $TENANT_ID")
+            }
+            connection.commit()
+        } catch (failure: Throwable) {
+            connection.rollback()
+            throw failure
+        } finally {
+            connection.autoCommit = autoCommit
+        }
+    }
+
     private fun measureState(
         connection: Connection,
         spec: TableSpec,
@@ -152,7 +227,6 @@ class ClinicKeysetIndexAssessmentTest {
             plans = plans,
             writeSamplesMillis = writeSamples,
             indexSizeBytes = readIndexSize(connection, spec),
-            indexPresentAfterRollback = false,
         )
     }
 
@@ -324,6 +398,21 @@ class ClinicKeysetIndexAssessmentTest {
         check(evidence.writeSamplesMillis.all { it >= 0.0 })
     }
 
+    private fun assertPlannerDecision(evidence: TableEvidence) {
+        val primaryIndex = "${evidence.spec.table}_pkey"
+        val allowedIndexes = setOf(primaryIndex, evidence.spec.indexName, "scheduling_clinics_pkey")
+        evidence.baseline.plans.forEach { plan ->
+            plan.indexNames.shouldNotBeEmpty()
+            plan.indexNames.shouldContain(primaryIndex)
+            plan.indexNames.all { it in allowedIndexes }.shouldBeTrue()
+        }
+        evidence.candidate.plans.forEach { plan ->
+            plan.indexNames.shouldNotBeEmpty()
+            plan.indexNames.shouldContainAny(allowedIndexes)
+            plan.indexNames.all { it in allowedIndexes }.shouldBeTrue()
+        }
+    }
+
     private fun writeReport(
         environment: EnvironmentEvidence,
         existingIndexes: Map<String, List<String>>,
@@ -350,13 +439,15 @@ class ClinicKeysetIndexAssessmentTest {
                 appendLine("measuredSamples=$MEASURED_SAMPLES")
                 appendLine("writeRowsPerSample=$WRITE_ROWS")
                 appendLine("writeSamples=$WRITE_SAMPLES")
+                appendLine("sourceRevision=HEAD")
+                appendLine("sourcePaths=${CHART_SOURCE_PATHS.joinToString(",")}")
                 tableEvidence.forEach { evidence ->
                     appendLine()
                     appendLine("## ${evidence.spec.table}")
                     appendLine("existingIndexes=${existingIndexes[evidence.spec.table].orEmpty().joinToString(",")}")
                     appendStateReport(this, evidence.baseline)
                     appendStateReport(this, evidence.candidate)
-                    appendLine("candidateIndexPresentAfterRollback=${evidence.candidate.indexPresentAfterRollback}")
+                    appendLine("candidateIndexAbsentAfterCleanup=${evidence.candidateIndexAbsentAfterCleanup}")
                 }
             },
         )
@@ -450,13 +541,13 @@ class ClinicKeysetIndexAssessmentTest {
         val plans: List<PlanEvidence>,
         val writeSamplesMillis: List<Double>,
         val indexSizeBytes: Long?,
-        var indexPresentAfterRollback: Boolean,
     )
 
     private data class TableEvidence(
         val spec: TableSpec,
         val baseline: StateEvidence,
         val candidate: StateEvidence,
+        val candidateIndexAbsentAfterCleanup: Boolean,
     )
 
     private data class EnvironmentEvidence(
@@ -484,6 +575,14 @@ class ClinicKeysetIndexAssessmentTest {
         const val WRITE_SAMPLES = 5
         const val WRITE_ROWS = 500
         const val NANOS_PER_MILLISECOND = 1_000_000.0
+        const val CHART_SEMANTIC_PATH = "docs/benchmarks/issue-386-keyset-index-assessment/chart.semantic.json"
+        const val CHART_DATA_PATH = "docs/benchmarks/issue-386-keyset-index-assessment/chart.data.json"
+        const val CHART_SUMMARY_PATH = "docs/benchmarks/issue-386-keyset-index-assessment/summary.ko.md"
+        val CHART_SOURCE_PATHS = listOf(
+            "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/integration/ClinicKeysetIndexAssessmentTest.kt",
+            "docs/benchmarks/issue-386-keyset-index-assessment/chart.data.json",
+            "docs/benchmarks/issue-386-keyset-index-assessment/summary.ko.md",
+        )
 
         val TABLES = listOf(
             TableSpec(
@@ -505,5 +604,21 @@ class ClinicKeysetIndexAssessmentTest {
                 bindRemaining = {},
             ),
         )
+
+        private fun repositoryRoot(): Path {
+            val workingDirectory = Path.of("").toAbsolutePath().normalize()
+            return generateSequence(workingDirectory) { it.parent }
+                .first { Files.isRegularFile(it.resolve("settings.gradle.kts")) }
+        }
+
+        private fun gitHead(root: Path): String {
+            val process = ProcessBuilder("git", "-C", root.toString(), "rev-parse", "HEAD")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().use { it.readText().trim() }
+            process.waitFor().shouldBeEqualTo(0)
+            output.shouldNotBeEmpty()
+            return output
+        }
     }
 }
