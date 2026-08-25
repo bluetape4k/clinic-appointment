@@ -23,7 +23,7 @@ Resilience4j 정책을 적용합니다.
 |---|---|
 | `NotificationOutboxDispatcher` | 발송 대상을 공정하게 선점하고 전체 및 병원별 동시성을 제한합니다. |
 | `NotificationOutboxSchedulingRunner` | 애플리케이션 준비 직후와 worker 주기마다 dispatcher를 실행합니다. |
-| `NotificationObservationSchedulingRunner` | worker와 분리된 낮은 빈도로 상한 있는 관측 snapshot을 갱신합니다. |
+| `NotificationObservationSchedulingRunner` | worker와 분리된 낮은 빈도로 상한 있는 관측 집계를 갱신합니다. |
 | `NotificationOutboxWorker` | fencing된 완료·재시도·소진 처리와 만료 lease 복구를 수행합니다. |
 | `NotificationOutboxWorkStore` | outbox 작업의 트랜잭션 기반 데이터베이스 경계를 정의합니다. |
 | `NotificationDeliveryRouteGate` | `SHADOW`, `CANARY`, `ACTIVE`, `PAUSED`를 병원별 단일 provider 경로로 변환합니다. |
@@ -219,6 +219,41 @@ adapter 자체의 connect/read/request timeout도 이 값 이하로 설정해야
 key reference가 없거나 유효하지 않으면 알림 readiness가 DOWN이 되고 worker 처리를
 차단합니다. `secret-reference`에는 key material이 아니라 외부 secret 위치만 둡니다.
 
+## Reminder leader scheduled 정책
+
+리마인더 복구의 scheduler 주기와 leader lease는 서로 다른 경계입니다. 주기는
+`clinic.notification.worker.reminder-recovery-interval`의 `@Scheduled`가 결정하고,
+leader lock·대기·lease·backend·실패 모드는 upstream
+`bluetape4k.leader.scheduling` 정책으로 설정합니다.
+
+```yaml
+bluetape4k:
+  leader:
+    scheduling:
+      enabled: true
+      policies:
+        - selector: "notificationReminderSchedulingRunner#poll"
+          name: "appointment-reminder-recovery"
+          wait-time: 0s
+          lease-time: 60s
+          min-lease-time: 5s
+          bean: "lettuceLeaderElectionFactory"
+          auto-extend: false
+          stream-bounded: false
+          failure-mode: SKIP
+```
+
+`selector`는 정확한 `beanName#methodName`이어야 하며 wildcard·regex·overload·공백
+표현식과 runtime reload를 지원하지 않습니다. 정책은 startup 시 한 번 검증되고,
+정책을 끄면 leader 보호 없는 reminder runner도 만들지 않습니다. `lease-time`은
+bounded suspend bridge timeout 이상이어야 합니다.
+
+leader lock은 같은 tick의 중복 실행을 줄이는 실행 경계일 뿐입니다. 최종 상태 변경은
+기존 데이터베이스 claim/fence와 provider idempotency key가 결정합니다. Redis backend
+bean이 없거나 정책이 잘못되면 startup을 거부하며, 긴급 중지는
+`bluetape4k.leader.scheduling.enabled=false`로 수행합니다. upstream stable 1.0.x가
+배포되면 현재 timestamp pin을 stable BOM으로 되돌리는 후속 변경을 별도로 검증합니다.
+
 ## 의존성
 
 - **내부**: `appointment-core`, `appointment-event`
@@ -234,6 +269,9 @@ key reference가 없거나 유효하지 않으면 알림 readiness가 DOWN이 �
 
 - [내구성 알림 outbox 설계](../docs/superpowers/specs/2026-07-31-issue-172-notification-outbox-design.md)
 - [구현 계획](../docs/superpowers/plans/2026-07-31-issue-172-notification-outbox-plan.md)
+- [#317 leader scheduled 정책 설계](../docs/superpowers/specs/2026-08-25-issue-317-leader-scheduled-policy-design.md)
+- [#317 leader scheduled 정책 계획](../docs/superpowers/plans/2026-08-25-issue-317-leader-scheduled-policy-plan.md)
+- [#317 lesson](../docs/lessons/2026-08-25-issue-317-leader-scheduled-policy.md)
 - [운영 런북](../docs/runbooks/notification-outbox-operations.md)
 - [알림 데이터 흐름](../docs/requirements/data-flow.md#5-알림-outbox-발송-흐름)
 

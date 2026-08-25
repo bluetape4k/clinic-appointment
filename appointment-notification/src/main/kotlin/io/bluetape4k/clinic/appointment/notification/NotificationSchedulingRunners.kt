@@ -1,7 +1,5 @@
 package io.bluetape4k.clinic.appointment.notification
 
-import io.bluetape4k.leader.annotation.LeaderAspectFailureMode
-import io.bluetape4k.leader.spring.scheduling.LeaderScheduled
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info
 import io.bluetape4k.logging.warn
@@ -89,11 +87,7 @@ open class NotificationReminderSchedulingRunner(
 ) {
     companion object : KLogging()
 
-    @LeaderScheduled(
-        name = REMINDER_RECOVERY_LOCK_NAME,
-        fixedDelayString = "\${clinic.notification.worker.reminder-recovery-interval:PT1H}",
-        failureMode = LeaderAspectFailureMode.SKIP,
-    )
+    @Scheduled(fixedDelayString = "\${clinic.notification.worker.reminder-recovery-interval:PT1H}")
     open fun poll() {
         try {
             val result = runSynchronously(suspendBridgeTimeout) { scheduler.triggerOnce() } ?: return

@@ -25,7 +25,7 @@ MockK, bluetape4k assertions, Gradle dependency locking/verification.
 
 | 파일 | 책임 |
 |---|---|
-| `build.gradle.kts` | Java/Kotlin toolchain을 Java 25 snapshot consumer 경계와 정렬하고 기존 Gatling 21 release 예외는 유지 |
+| `build.gradle.kts` | Java/Kotlin toolchain과 API consumer fixture를 Java 25 timestamp consumer 경계와 정렬 |
 | `gradle/libs.versions.toml` | upstream leader scheduled policy timestamp를 임시 catalog override로 고정 |
 | `gradle.lockfile`, `appointment-notification/gradle.lockfile`, `gradle/verification-metadata.xml` | 새 artifact와 transitive dependency의 생성된 lock/hash |
 | `appointment-notification/src/main/kotlin/.../NotificationSchedulingRunners.kt` | reminder 실행 주기를 plain `@Scheduled`로 유지하고 leader annotation 제거 |
@@ -47,12 +47,13 @@ MockK, bluetape4k assertions, Gradle dependency locking/verification.
 
 - [x] **Step 1: Java 25 consumer toolchain을 먼저 고정한다.**
 
-  snapshot의 `apiElements`/`runtimeElements`가 Java 25 variant만 제공하므로
+  timestamp artifact의 `apiElements`/`runtimeElements`가 Java 25 variant만 제공하므로
   root `java.toolchain`과 Kotlin `jvmToolchain`을 25로 맞춘다. `appointment-api`
-  의 Gatling compile task가 유지하는 `options.release=21`과 `JvmTarget.JVM_21`
-  예외는 그대로 둔다. 이 단계의 RED 증거는 Java 21 toolchain에서 snapshot을
-  resolution할 때 발생한 `only compatible with JVM runtime version 25 or newer`
-  오류다.
+  의 Gatling compile task와 API consumer fixture도 Java 25로 맞춘다. Java 21
+  consumer가 Java 25 project dependency를 읽을 수 없어 governance resolution이
+  실패하므로, 저장소의 Java 25 계약과 timestamp variant를 같은 경계로 고정한다.
+  이 단계의 RED 증거는 Java 21 toolchain에서 timestamp artifact를 resolution할 때 발생한
+  `only compatible with JVM runtime version 25 or newer` 오류다.
 
 - [x] **Step 2: catalog에 timestamp version을 추가한다.**
 
@@ -100,7 +101,7 @@ bluetape4k-leader-spring-boot = { module = "io.github.bluetape4k.leader:bluetape
   후 lock diff를 읽어 BOM 전체 drift가 없음을 확인한다. Java 25 toolchain
   변경으로 생성되는 unrelated variant drift가 있으면 원인을 분리해 기록하고
   필요 최소 범위만 유지한다. Gradle 9.7.1 writer가 timestamp와 normalized
-  snapshot component를 중복 키로 처리해 자동 verification write가 실패했으므로,
+  timestamp component를 중복 키로 처리해 자동 verification write가 실패했으므로,
   Central Snapshots에서 다시 계산한 네 artifact·module SHA-256만
   `gradle/verification-metadata.xml`에 수동으로 추가하고 compile verification으로
   read-back한다.
@@ -110,7 +111,7 @@ bluetape4k-leader-spring-boot = { module = "io.github.bluetape4k.leader:bluetape
 **Files:** `NotificationSchedulingRunnersTest.kt`,
 `NotificationLeaderScheduledIntegrationTest.kt`, `NotificationAutoConfigurationTest.kt`.
 
-- [ ] **Step 1: reflection assertion을 plain `@Scheduled` 계약으로 바꾼다.**
+- [x] **Step 1: reflection assertion을 plain `@Scheduled` 계약으로 바꾼다.**
 
 ```kotlin
 @Test
@@ -126,7 +127,7 @@ fun `reminder poll은 fixed delay Scheduled만 선언하고 leader policy는 외
   `LeaderScheduled` import와 기존 `LeaderAspectFailureMode` assertion을 제거하고
   Spring annotation import를 추가한다. 이 테스트는 구현 전 RED가 되어야 한다.
 
-- [ ] **Step 2: integration context에 upstream policy auto-configuration과 exact YAML을 넣는다.**
+- [x] **Step 2: integration context에 upstream policy auto-configuration과 exact YAML을 넣는다.**
 
   `NotificationLeaderScheduledIntegrationTest.context()`의
   `AutoConfigurations`에 `LeaderScheduledPolicyAutoConfiguration`을 추가하고
@@ -147,7 +148,7 @@ fun `reminder poll은 fixed delay Scheduled만 선언하고 leader policy는 외
   가지므로 property registry가 runner를 대체하지 않거나, 새 dependency가
   없으면 compile failure가 난다.
 
-- [ ] **Step 3: auto-configuration negative cases를 추가한다.**
+- [x] **Step 3: auto-configuration negative cases를 추가한다.**
 
   `NotificationAutoConfigurationTest`에 다음 세 테스트를 추가한다.
 
@@ -169,7 +170,7 @@ fun `reminder poll은 fixed delay Scheduled만 선언하고 leader policy는 외
 
 **Files:** `NotificationSchedulingRunners.kt`, `NotificationAutoConfiguration.kt`.
 
-- [ ] **Step 1: runner에서 explicit leader annotation만 제거한다.**
+- [x] **Step 1: runner에서 explicit leader annotation만 제거한다.**
 
 ```kotlin
 import org.springframework.scheduling.annotation.Scheduled
@@ -181,7 +182,7 @@ open fun poll() { /* 기존 bounded recovery 본문을 그대로 유지 */ }
   `CancellationException` 재전파, 일반 예외 warning, metrics와
   `NotificationReminderSchedulingBootstrap`은 변경하지 않는다.
 
-- [ ] **Step 2: auto-configuration에 upstream policy 조건을 추가한다.**
+- [x] **Step 2: auto-configuration에 upstream policy 조건을 추가한다.**
 
   다음 import를 사용한다.
 
@@ -198,7 +199,7 @@ import io.bluetape4k.leader.spring.scheduling.LeaderScheduledPolicyRegistry
   를 추가한다. 이 조건은 property disabled/factory 부재에서 unguarded
   `@Scheduled` bean이 생기는 경로를 차단한다.
 
-- [ ] **Step 3: exact selector 누락을 bean creation에서 fail-fast한다.**
+- [x] **Step 3: exact selector 누락을 bean creation에서 fail-fast한다.**
 
   runner factory에 `LeaderScheduledPolicyProperties`를 주입하고 아래 guard를
   적용한다.
@@ -233,7 +234,13 @@ private fun requireReminderRecoveryPolicy(
   중복/unmatched/overload/duration/backend/stream 조합을 계속 검증하도록
   policy properties를 그대로 전달한다.
 
-- [ ] **Step 4: RED 테스트가 GREEN으로 바뀌는지 확인한다.**
+- [x] **Step 4: RED 테스트가 GREEN으로 바뀌는지 확인한다.**
+
+  RED 이후 production 변경을 적용했고, targeted 3개 test class 46개가 모두
+  통과했다. factory 부재 테스트는 upstream AOP auto-configuration의 기본
+  `localLeaderElectionFactory`를 끄는 property를 명시해 실제 부재 조건을
+  재현한다. 모든 context가 `ReusableLeaderElectorFactory` 하나를 공유해
+  `mockk<LeaderElectorFactory>()`를 반복 생성하지 않는다.
 
 ```bash
 ./gradlew :appointment-notification:test \
@@ -253,7 +260,7 @@ private fun requireReminderRecoveryPolicy(
 `appointment-api/src/test/resources/application-test.yml`,
 `appointment-notification/README.md`, `README.ko.md`.
 
-- [ ] **Step 1: 운영 기본 profile에 exact policy를 추가한다.**
+- [x] **Step 1: 운영 기본 profile에 exact policy를 추가한다.**
 
 ```yaml
 bluetape4k:
@@ -275,7 +282,7 @@ bluetape4k:
   `clinic.notification.worker.reminder-recovery-interval`는 scheduler 주기이며
   leader policy의 lease와 혼동하지 않는다는 주석을 둔다.
 
-- [ ] **Step 2: Redis 없는 API test profile을 명시적으로 끈다.**
+- [x] **Step 2: Redis 없는 API test profile을 명시적으로 끈다.**
 
 ```yaml
 bluetape4k:
@@ -287,7 +294,7 @@ bluetape4k:
   test profile에서는 runner가 생성되지 않는 것이 의도된 안전 상태임을 문서에
   남긴다. production profile에 설정을 덧붙이지 않고 test에서만 덮어쓴다.
 
-- [ ] **Step 3: 두 README의 설정 section을 동일하게 갱신한다.**
+- [x] **Step 3: 두 README의 설정 section을 동일하게 갱신한다.**
 
   기존 `clinic.notification.worker` 예시 뒤에 `bluetape4k.leader.scheduling`
   block, 필드별 기본값/범위와 보안·cardinality 주의사항, exact selector 규칙,
@@ -303,7 +310,7 @@ bluetape4k:
 
 **Files:** 변경된 모든 Kotlin/YAML/README/catalog 파일.
 
-- [ ] **Step 1: affected module test를 순서대로 실행한다.**
+- [x] **Step 1: affected module test를 순서대로 실행한다.**
 
 ```bash
 ./gradlew :appointment-notification:test --no-build-cache
@@ -314,7 +321,11 @@ bluetape4k:
   실패 시 retry로 덮지 말고 raw stack trace에서 lifecycle·backend·timing 원인을
   분리한 뒤 구현 단계로 돌아간다.
 
-- [ ] **Step 2: 정책 startup negative matrix를 확인한다.**
+  targeted 46개와 전체 `appointment-notification:test` 210개가 통과했다. 모듈에는
+  `detekt` task가 등록되어 있지 않아 해당 명령은 task 부재로 실행할 수 없음을
+  확인했다.
+
+- [x] **Step 2: 정책 startup negative matrix를 확인한다.**
 
   targeted integration context를 순서대로 실행해 다음이 모두 fail-fast인지
   확인한다: 빈 selector, unmatched selector, 중복 selector, `lease-time=0s`,
@@ -322,7 +333,11 @@ bluetape4k:
   않는 backend bean, invalid name expression. upstream policy test가 직접 증명하는 항목은 dependency artifact
   source/test evidence로 기록하고 clinic integration은 적용 경계만 검증한다.
 
-- [ ] **Step 3: Kotlin/Spring checklist와 diff를 통과시킨다.**
+  clinic context는 default-off, factory 부재, selector 누락, 짧은 lease를 검증했고,
+  upstream registry가 나머지 selector/duration/backend 조합을 검증하는 경계를
+  유지했다.
+
+- [x] **Step 3: Kotlin/Spring checklist와 diff를 통과시킨다.**
 
 ```bash
 git diff --check
@@ -339,7 +354,11 @@ node /Users/debop/.codex/skills/bluetape-writer/scripts/audit-korean-terms.mjs \
   issue scope에 맞춰 plain scheduled policy 용어로만 갱신한다. Kotlin final
   checklist KT-FIN-01~11과 Spring/testing checklist를 evidence table에 기록한다.
 
-- [ ] **Step 4: dependency governance와 module build를 확인한다.**
+  현재 source에는 `LeaderScheduled` annotation이 없고, negative assertion과
+  unrelated Redis lease test의 문맥만 남는다. `git diff --check`와 Korean
+  terminology audit는 통과했으며, 반복 `mockk<LeaderElectorFactory>()`는 0건이다.
+
+- [x] **Step 4: dependency governance와 module build를 확인한다.**
 
 ```bash
 ./gradlew :appointment-notification:build
@@ -350,12 +369,16 @@ node /Users/debop/.codex/skills/bluetape-writer/scripts/audit-korean-terms.mjs \
   `appointment-notification`의 API consumer fixture와 root governance가
   통과한다.
 
+  Java 25 consumer/Gatling 경계와 notification API scope에 leader core를 반영한
+  뒤 consumer fixtures, `:appointment-notification:build`,
+  `verifyDependencyGovernance`가 모두 통과했다.
+
 ### Task 6: 최종 inline review와 durable lesson을 커밋
 
 **Files:** `docs/review/2026-08-25-issue-317-leader-scheduled-policy-code-review.md`,
 `docs/lessons/2026-08-25-issue-317-leader-scheduled-policy.md`.
 
-- [ ] **Step 1: current diff를 여섯 관점으로 inline review한다.**
+- [x] **Step 1: current diff를 여섯 관점으로 inline review한다.**
 
   성능(매 tick reflection/scheduler 생성 없음), 안정성(cancellation·backend·close),
   보안(backend/SpEL/secret/cardinality), 운영(rollback/health/release),
@@ -363,18 +386,27 @@ node /Users/debop/.codex/skills/bluetape-writer/scripts/audit-korean-terms.mjs \
   파일/라인 evidence로 기록한다. P0/P1은 수정 후 affected test와 관점만
   재실행하며, P2/P3은 수정하거나 후속 Issue로 연결한다.
 
-- [ ] **Step 2: lesson을 Korean으로 작성한다.**
+  `docs/review/2026-08-25-issue-317-leader-scheduled-policy-code-review.md`에
+  여섯 관점과 fresh evidence를 기록했고 P0=0/P1=0으로 수렴했다.
+
+- [x] **Step 2: lesson을 Korean으로 작성한다.**
 
   timestamp dependency를 임시로 고정해야 했던 이유, explicit annotation을
   유지했을 때 property가 무시되는 upstream precedence, policy disabled에서
   unguarded scheduled 실행을 막은 조건, 테스트/rollback 결과와 향후 stable
   release 전환 guard를 기록한다.
 
-- [ ] **Step 3: writer gate와 final commit을 확인한다.**
+  `docs/lessons/2026-08-25-issue-317-leader-scheduled-policy.md`에 timestamp
+  artifact, Java 25 경계, reusable factory fixture, rollback과 검증 결과를 기록했다.
+
+- [x] **Step 3: writer gate와 final commit을 확인한다.**
 
   설계·계획·review·lesson 각각에 SPW-01~05를 적용하고 Korean terminology
   audit를 재실행한다. P0=0/P1=0, `git diff --check`, targeted/full test,
   dependency governance가 모두 PASS일 때만 다음 Lore commit을 만든다.
+
+  terminology audit, diff check, targeted/full test, consumer fixtures, build,
+  governance가 통과했고, detekt task 부재는 review/DoD에 명시했다.
 
 ```bash
 git add gradle/libs.versions.toml gradle.lockfile gradle/verification-metadata.xml \

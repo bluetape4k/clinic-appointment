@@ -29,8 +29,8 @@ Issue #317은 기존 `@Scheduled` 작업을 YAML 정책으로 감싸는
 - 현재 clinic lockfile의 leader 의존성은 `0.5.0`이며 Issue #603 기능은 해당
   release 이후 merge되었다. 2026-08-25에 Central Snapshots에서 네 leader
   모듈의 동일한 immutable timestamp `1.0.0-20260824.195548-7`을 확인했다.
-- 해당 immutable snapshot의 Gradle module variant는 `org.gradle.jvm.version=25`만
-  제공한다. 현재 clinic Gradle toolchain이 21로 고정돼 있어 snapshot을
+- 해당 immutable timestamp artifact의 Gradle module variant는 `org.gradle.jvm.version=25`만
+  제공한다. 현재 clinic Gradle toolchain이 21로 고정돼 있어 timestamp artifact를
   resolution하면 JVM 25 호환성 오류가 발생하며, CI도 이미 `JAVA_VERSION=25`를
   사용한다. 따라서 이 기능의 consumer compile/runtime 경계를 Java 25로
   정렬해야 한다.
@@ -140,9 +140,11 @@ wildcard·regex·overload·공백 selector는 사용하지 않는다.
   lockfile/verification metadata를 함께 갱신한다. upstream stable 1.0.x가
   릴리스되면 이 예외를 제거하고 BOM 기준으로 되돌리는 follow-up을 Issue
   #317에 남긴다.
-- snapshot variant를 읽을 수 있도록 Gradle Java/Kotlin toolchain을 Java 25로
-  정렬한다. `appointment-api`의 Gatling 소스가 유지하는 Java 21 release
-  예외는 그대로 둬 해당 런타임 계약을 불필요하게 넓히지 않는다.
+- timestamp variant를 읽을 수 있도록 Gradle Java/Kotlin toolchain과
+  `appointment-api` Gatling/consumer fixture compile 경계를 Java 25로
+  정렬한다. Java 21 variant를 고정하면 Java 25 project dependency를 읽을 수
+  없어 governance resolution이 실패하므로, 저장소의 명시된 Java 25 계약을
+  유지한다.
 - 긴급 rollback은 `bluetape4k.leader.scheduling.enabled=false`로 policy와
   reminder runner를 중지하거나, timestamp pin을 기존 `0.5.0`으로 되돌리는
   것이다. `@LeaderScheduled`를 되살려 설정과 코드를 동시에 두 권위로

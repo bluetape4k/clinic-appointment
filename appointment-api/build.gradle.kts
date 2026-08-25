@@ -120,17 +120,17 @@ tasks.withType<Test>().configureEach {
     }
 }
 
-// Gatling 런타임은 Java 21 기반이므로 Gatling 소스는 Java 21 타겟으로 컴파일
+// upstream leader timestamp 사전 릴리스의 Java 25 variant를 소비하므로 Gatling source도 Java 25로 컴파일
 tasks.withType<JavaCompile>().configureEach {
     if (name.startsWith("compileGatling")) {
-        options.release.set(21)
+        options.release.set(25)
     }
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     if (name.startsWith("compileGatling")) {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
         }
     }
 }

@@ -35,7 +35,8 @@
 - **의존성 위험:** stable 1.0.x가 아직 없고 snapshot이 Java 25 variant만
   제공하므로 timestamp artifact와 Java 25 consumer toolchain을 함께 고정한다.
   lockfile/verification metadata, PR body, rollback 문서에 동일 값을 반복해
-  drift를 방지한다. Gatling의 Java 21 release 예외는 그대로 유지한다.
+  drift를 방지한다. Java 21 Gatling release 예외는 Java 25 project dependency를
+  읽을 수 없어 제거하고, consumer/Gatling compile 경계를 Java 25로 통일한다.
 - **범위 누수:** 다른 `@Scheduled` 작업, 동적 reload, DB claim/fence 의미론은
   수정하지 않는다.
 

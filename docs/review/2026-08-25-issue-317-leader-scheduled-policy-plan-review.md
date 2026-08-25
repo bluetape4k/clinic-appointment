@@ -45,8 +45,9 @@ bound만 추가하는 최소 보완이다. 수정 후 여섯 관점과 통합 �
 
 추가로 Task 1 실행 중 snapshot Gradle metadata가 Java 25 variant만 제공하는
 사실을 확인했다. Java 21 toolchain에서는 dependency resolution 자체가
-실패하므로, root Java/Kotlin toolchain 정렬과 Gatling 21 release 예외 보존을
-설계·계획에 반영했다. 이는 새 runtime feature가 아니라 upstream consumer
+실패하고, Java 21 Gatling/consumer fixture가 Java 25 project dependency를
+읽지 못한다. 따라서 root Java/Kotlin·consumer fixture·Gatling compile 경계를
+모두 Java 25로 정렬했다. 이는 새 runtime feature가 아니라 upstream consumer
 호환성 선행 조건이다.
 
 ## 결과

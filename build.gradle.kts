@@ -62,7 +62,7 @@ private fun Configuration.configureApiConsumerFixtureClasspath() {
         attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_API))
         attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
         attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements.JAR))
-        attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 21)
+        attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 25)
     }
 }
 
@@ -92,13 +92,13 @@ fun registerApiConsumerFixtureCompile(
     val sourceSetName = name.removePrefix("compile").replaceFirstChar(Char::lowercase)
     val sourceSet: SourceSet = sourceSets.create(sourceSetName)
     tasks.named<JavaCompile>(sourceSet.compileJavaTaskName) {
-        options.release.set(21)
+        options.release.set(25)
     }
     val kotlinCompile = tasks.named<KotlinJvmCompile>(sourceSet.getCompileTaskName("kotlin")) {
         source(fileTree(sourceDirectory) { include("**/*.kt") })
         libraries.setFrom(classpath)
         destinationDirectory.set(layout.buildDirectory.dir(outputPath))
-        compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
+        compilerOptions.jvmTarget.set(JvmTarget.JVM_25)
         compilerOptions.freeCompilerArgs.add("-jvm-default=enable")
         dependsOn(moduleJarTask)
     }
@@ -233,6 +233,7 @@ private val apiConsumerFixtureExpectedScopes = mapOf(
     ),
     "notification" to ApiConsumerFixtureScope(
         api = setOf(
+            "io.github.bluetape4k.leader:bluetape4k-leader-core",
             "io.github.bluetape4k.leader:bluetape4k-leader-spring-boot",
             "io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce",
             "io.github.resilience4j:resilience4j-bulkhead",

@@ -14,6 +14,22 @@ spring:
         redis:
             url: redis://localhost:6379
 
+# reminder recovery의 tick 주기와 leader lease는 서로 다른 경계입니다.
+bluetape4k:
+    leader:
+        scheduling:
+            enabled: true
+            policies:
+                - selector: "notificationReminderSchedulingRunner#poll"
+                  name: "appointment-reminder-recovery"
+                  wait-time: 0s
+                  lease-time: 60s
+                  min-lease-time: 5s
+                  bean: "lettuceLeaderElectionFactory"
+                  auto-extend: false
+                  stream-bounded: false
+                  failure-mode: SKIP
+
 server:
     port: 8080
 
