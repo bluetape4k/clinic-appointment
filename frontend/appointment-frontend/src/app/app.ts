@@ -10,6 +10,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatButtonModule } from '@angular/material/button';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs/operators';
+import { WorkforceAuthBootstrapService } from './core/services/workforce-auth-bootstrap.service';
 
 export interface NavItem {
   label: string;
@@ -36,6 +37,7 @@ export interface NavItem {
 export class App {
   private readonly breakpointObserver = inject(BreakpointObserver);
   private readonly router = inject(Router);
+  private readonly workforceAuthBootstrap = inject(WorkforceAuthBootstrapService);
 
   readonly isPatientPortal = signal(this.router.url.startsWith('/portal'));
 
@@ -53,6 +55,8 @@ export class App {
   );
 
   constructor() {
+    this.workforceAuthBootstrap.restore();
+
     this.router.events
       .pipe(
         filter((event): event is NavigationEnd => event instanceof NavigationEnd),
