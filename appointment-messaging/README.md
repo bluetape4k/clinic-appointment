@@ -100,7 +100,13 @@ Spring Boot Actuator가 있으면 `appointmentMessagingHealthIndicator` health c
 표시하고 애플리케이션 liveness와 분리하며, 잘못된 configuration/schema/serializer는
 `DOWN`으로 표시합니다. Actuator readiness group에 이 component를 포함하도록
 예를 들어 `management.endpoint.health.group.readiness.include=readinessState,appointmentMessagingHealthIndicator`
-를 설정해야 합니다. health detail에는 제한된 readiness boolean만 포함됩니다.
+를 설정해야 합니다. health detail에는 제한된 readiness boolean과 함께
+`diagnostics`를 포함합니다. 진단 항목은 `operation`, bounded `target`, stable `code`,
+sanitized `errorClass`, `retryable`로 구성됩니다. schema missing은 재시도하지 않는
+계약 오류로, permission denied도 operator 설정 수정이 필요한 비재시도 오류로,
+timeout/driver failure는 bounded 재시도 후보로 구분합니다. JDBC URL, exception
+message, credential, payload, tenant·clinic·appointment 식별자는 응답과 startup log에
+포함하지 않습니다.
 
 Micrometer 연동은 `appointment_outbox_pending`, `appointment_outbox_oldest_age_seconds`,
 `appointment_outbox_partition_skew` gauge와 publish/retry/failure counter를 제공합니다.

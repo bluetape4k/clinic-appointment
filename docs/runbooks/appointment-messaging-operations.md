@@ -66,7 +66,13 @@ read-only 조회로 대조합니다. mutation/outbox가 없고 예약이 여전�
    런북 쿼리를 사용하고, tenant·clinic·appointment·partition 값을 metric label에
    넣지 않습니다.
 4. readiness snapshot에서 `enabled`, `configurationValid`, `schemaValid`,
-   `serializerValid`, `brokerAvailable`, `relayPaused`, `relayHeld`를 확인합니다.
+   `serializerValid`, `brokerAvailable`, `relayPaused`, `relayHeld`를 확인하고,
+   실패했다면 `diagnostics`의 `operation`, `target`, `code`, `errorClass`,
+   `retryable`을 함께 확인합니다. `SCHEMA_TABLE_MISSING`,
+   `SCHEMA_COLUMNS_MISSING`, `SCHEMA_INDEXES_MISSING`,
+   `SCHEMA_PERMISSION_DENIED`는 schema 또는 권한을 수정한 뒤 다시 검사합니다.
+   `SCHEMA_METADATA_TIMEOUT`과 `SCHEMA_METADATA_DRIVER_ERROR`는 bounded 재시도
+   후보지만, 진단에는 JDBC URL·exception message·credential을 기록하지 않습니다.
    Spring Kafka publisher는 claim 전에 allow-list된 모든 topic의 metadata를 probe하며
    `producer-metadata-timeout`이 probe 시간을 제한합니다. 따라서 topic 없음,
    ACL 거부, TLS/SASL 실패가 lease churn을 만들지 않고 row를 그대로 둡니다.

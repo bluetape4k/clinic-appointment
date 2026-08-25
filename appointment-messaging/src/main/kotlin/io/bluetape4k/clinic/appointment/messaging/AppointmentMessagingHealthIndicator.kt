@@ -9,6 +9,7 @@ import org.springframework.boot.health.contributor.HealthIndicator
  * broker outage는 애플리케이션 liveness를 끊지 않지만 relay readiness를 `OUT_OF_SERVICE`로
  * 표시한다. schema/serializer/configuration 오류는 durable intent 경로도 안전하지 않으므로
  * `DOWN`으로 표시한다. 상세 값에는 tenant, clinic, appointment, topic, credential을 넣지 않는다.
+ * 실패 원인은 bounded operation/target/code/errorClass/retryable 진단으로만 노출한다.
  */
 class AppointmentMessagingHealthIndicator(
     private val readiness: AppointmentMessagingReadinessProbe,
@@ -30,6 +31,7 @@ class AppointmentMessagingHealthIndicator(
             .withDetail("schemaValid", state.schemaValid)
             .withDetail("registryValid", state.registryValid)
             .withDetail("serializerValid", state.serializerValid)
+            .withDetail("diagnostics", state.diagnostics.map(AppointmentReadinessDiagnostic::toHealthDetail))
             .build()
     }
 }
