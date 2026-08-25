@@ -1,23 +1,38 @@
 package io.bluetape4k.clinic.appointment.messaging
 
-import org.springframework.kafka.core.KafkaTemplate
-import org.springframework.kafka.core.KafkaAdmin
+import io.bluetape4k.kafka.spring.suspendSend
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.future.asCompletableFuture
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.AuthenticationException
 import org.apache.kafka.common.errors.AuthorizationException
+import org.springframework.kafka.core.KafkaAdmin
+import org.springframework.kafka.core.KafkaTemplate
 import java.time.Duration
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Future
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
-/** Spring Kafka 4의 broker send를 relay의 최소 publisher 계약으로 감싼다. */
+/**
+ * Spring Kafka 4의 broker send를 bluetape4k-kafka4 `suspendSend`로 감싸
+ * relay의 `CompletionStage` 계약으로 변환한다.
+ *
+ * 현재 envelope는 Spring Kafka `StringSerializer`의 wire 계약을 유지한다.
+ * `KafkaCodecs.String`은 기본 설정에서 타입 헤더를 추가하므로 이 파일럿에서
+ * producer serializer를 교체하면 기존 소비자와의 header 계약이 바뀌어 사용하지 않는다.
+ */
 class SpringKafkaAppointmentPublisher(
     private val kafkaTemplate: KafkaTemplate<String, String>,
     private val kafkaAdmin: KafkaAdmin,
@@ -31,7 +46,10 @@ class SpringKafkaAppointmentPublisher(
         { runnable -> Thread(runnable, "appointment-kafka-readiness").apply { isDaemon = true } },
         ThreadPoolExecutor.AbortPolicy(),
     ),
+    private val publishDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AppointmentKafkaPublisher, AppointmentKafkaReadiness, AutoCloseable {
+    private val publishScope = CoroutineScope(SupervisorJob() + publishDispatcher)
+
     @Volatile
     private var lastProbeFailureCode: String? = null
 
@@ -47,7 +65,9 @@ class SpringKafkaAppointmentPublisher(
         topic: AppointmentTopic,
         key: AppointmentPartitionKey,
         value: String,
-    ): CompletionStage<*> = kafkaTemplate.send(topic.value, key.value, value)
+    ): CompletionStage<*> = publishScope.async {
+        kafkaTemplate.suspendSend(topic.value, key.value, value)
+    }.asCompletableFuture()
 
     override fun probe(topic: AppointmentTopic): Boolean {
         val probe: Future<Boolean> = try {
@@ -87,6 +107,7 @@ class SpringKafkaAppointmentPublisher(
     override fun failureCode(): String? = lastProbeFailureCode
 
     override fun close() {
+        publishScope.cancel()
         probeExecutor.shutdownNow()
     }
 

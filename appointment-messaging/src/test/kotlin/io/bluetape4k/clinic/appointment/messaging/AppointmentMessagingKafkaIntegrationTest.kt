@@ -1,19 +1,23 @@
 package io.bluetape4k.clinic.appointment.messaging
 
 import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.codec.Base58
+import io.bluetape4k.kafka.codec.AbstractKafkaCodec
 import io.bluetape4k.testcontainers.mq.KafkaServer
 import io.bluetape4k.testcontainers.mq.Spring
 import org.apache.kafka.clients.admin.AdminClient
 import org.apache.kafka.clients.admin.NewTopic
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.springframework.kafka.core.KafkaAdmin
 import org.springframework.kafka.core.KafkaTemplate
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import java.time.Duration
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /** Kafka4 broker에서 non-creating readiness와 실제 ACK 경계를 검증한다. */
@@ -26,7 +30,7 @@ class AppointmentMessagingKafkaIntegrationTest {
     @Test
     fun `admin readiness does not create a topic and publisher receives broker ack`() {
         val kafka = AppointmentMessagingKafkaServerLauncher.kafka
-        val topicName = "clinic.appointment.integration.${UUID.randomUUID()}"
+        val topicName = "clinic.appointment.integration.${Base58.randomString(8)}"
         val topic = AppointmentTopic(topicName)
         val adminProperties = KafkaServer.Launcher.getProducerProperties(kafka)
             .mapNotNull { (key, value) -> value?.let { key to it } }
@@ -59,13 +63,15 @@ class AppointmentMessagingKafkaIntegrationTest {
 
             KafkaServer.Launcher.createStringConsumer(kafka).use { consumer ->
                 consumer.subscribe(listOf(topicName))
-                var received: String? = null
+                var received: ConsumerRecord<String, String>? = null
                 repeat(20) {
                     if (received == null) {
-                        received = consumer.poll(Duration.ofMillis(500)).firstOrNull()?.value()
+                        received = consumer.poll(Duration.ofMillis(500)).firstOrNull()
                     }
                 }
-                received.shouldNotBeNull()
+                val record = received.shouldNotBeNull()
+                record.value().shouldBeEqualTo("{\"eventId\":\"integration-event\"}")
+                record.headers().lastHeader(AbstractKafkaCodec.VALUE_TYPE_KEY).shouldBeNull()
             }
         } finally {
             publisher.close()
