@@ -424,7 +424,7 @@ Review artifact가 staged 상태에서 whitespace 검사를 통과한 뒤 Task 8
 - [x] `gh issue view 407 --json subIssues --jq '{total: (.subIssues.nodes | length), membership: (.subIssues.nodes | map(.number) | sort | join(","))}'` 결과가 `total=11`, membership `392,393,394,395,396,397,398,399,400,401,402`이고 #409가 포함되지 않는지 확인한다. native sub-issue의 정렬 목록과 별개로, `gh issue view 407 --json body --jq '.body'`에서 PR 실행 순서가 `393,402,399,395,400,396,392,394,397,398,401`으로 기록되어 있는지 별도 readback한다.
 - [x] implementation diff와 plan/spec/review 문서를 함께 검토해 #409 범위가 이번 PR에 섞이지 않았는지 확인한다.
 - [x] 계획 승인 후 생성한 plan commit과 spec/review commit을 readback해 다음 provenance를 기록한다: spec `c59124cf757d3fe95220f61311cbdb5b93e37a4b`, review artifact의 해당 spec 기준 SHA, plan commit의 실제 SHA. 계획 파일이 `git status --short`에서 untracked가 아니어야 한다.
-- [ ] 다음 Lore 형식의 Korean commit message로 구현을 커밋한다.
+- [x] 다음 Lore 형식의 Korean commit message로 구현을 커밋한다. 구현 commit은 `2e7b48ad9c79f62b0bbc79d35535b423575b54e8`이며 PR은 #410이다.
 
 ```text
 messaging event 의존성을 public contract 경계에 맞춘다
@@ -456,14 +456,14 @@ bad_token_1=TO"DO"; bad_token_2=TB"D"
 
 ## 최종 DoD
 
-- [ ] #393의 messaging event persistence API leakage가 compile fixture와 Gradle expected scope에서 제거된다.
-- [ ] V19 waitlist table/index readiness가 missing/UP 상태를 정확히 판정하고 관련 테스트가 통과한다.
-- [ ] event/messaging/notification 6개 README와 ADR-15가 실제 source/Gradle ownership을 설명한다.
-- [ ] ADR-15에 dependency/fixture rollback, readiness/test-fixture rollback, SQL/runtime 무변경으로 schema rollback이 불필요하다는 운영 경로가 기록된다.
-- [ ] Korean terminology audit `findings=0`과 `git diff --check` 증거가 있다.
-- [ ] event/messaging/notification 모듈 테스트, API Flyway migration, API consumer fixture가 fresh run에서 `BUILD SUCCESSFUL`이다.
-- [ ] strict dependency locking readback에서 root와 benchmark module `gradle.lockfile`이 실제 API/compile graph와 일치하고, 변경 범위가 R2DBC 좌표 4개의 해당 configuration suffix 제거로 한정된다.
-- [ ] `:appointment-messaging-benchmark:compileKotlin`과 readiness source-path/performance review가 통과하고 `1 + globalConcurrency` 상한 근거가 review artifact에 기록된다.
-- [ ] 구현 review artifact의 module별 7-Tier 표에서 P0/P1이 0이고, P2/P3 disposition과 후속 Issue 링크가 모두 기록된다.
-- [ ] Issue #393/#409 live metadata readback이 완료되고 #407의 11개 native child/train 순서는 변하지 않는다.
-- [ ] 이 계획의 구현·검증은 #393 child에만 적용한다. PR 생성은 train 순서가 실제 branch/base에 정렬된 뒤 수행할 수 있지만, merge와 최종 승인 요청은 #392~#402 전체 child 완료 후 한 번만 수행한다.
+- [x] #393의 messaging event persistence API leakage가 compile fixture와 Gradle expected scope에서 제거된다.
+- [x] V19 waitlist table/index readiness가 missing/UP 상태를 정확히 판정하고 관련 테스트가 통과한다.
+- [x] event/messaging/notification 6개 README와 ADR-15가 실제 source/Gradle ownership을 설명한다.
+- [x] ADR-15에 dependency/fixture rollback, readiness/test-fixture rollback, SQL/runtime 무변경으로 schema rollback이 불필요하다는 운영 경로가 기록된다.
+- [x] Korean terminology audit `findings=0`과 `git diff --check` 증거가 있다.
+- [x] event/messaging/notification 모듈 테스트, API Flyway migration, API consumer fixture가 fresh run에서 `BUILD SUCCESSFUL`이다.
+- [x] strict dependency locking readback에서 root와 benchmark module `gradle.lockfile`이 실제 API/compile graph와 일치하고, 변경 범위가 R2DBC 좌표 4개의 해당 configuration suffix 제거로 한정된다.
+- [x] `:appointment-messaging-benchmark:compileKotlin`과 readiness source-path/performance review가 통과하고 `1 + globalConcurrency` 상한 근거가 review artifact에 기록된다.
+- [x] 구현 review artifact의 module별 7-Tier 표에서 P0/P1이 0이고, P2/P3 disposition과 후속 Issue 링크가 모두 기록된다.
+- [x] Issue #393/#409 live metadata readback이 완료되고 #407의 11개 native child/train 순서는 변하지 않는다.
+- [x] 이 계획의 구현·검증은 #393 child에만 적용한다. PR 생성은 train 순서가 실제 branch/base에 정렬된 뒤 수행할 수 있지만, merge와 최종 승인 요청은 #392~#402 전체 child 완료 후 한 번만 수행한다.
