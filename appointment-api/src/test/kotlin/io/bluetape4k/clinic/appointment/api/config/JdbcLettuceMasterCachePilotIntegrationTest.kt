@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.api.config
 
+import io.bluetape4k.assertions.assertNotFails
 import io.bluetape4k.assertions.shouldBeEmpty
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeNull
@@ -49,7 +50,6 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertDoesNotThrow
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.cache.CacheManager
 import java.time.Duration
@@ -302,7 +302,7 @@ class JdbcLettuceMasterCachePilotIntegrationTest @Autowired constructor(
         result.shouldNotBeEmpty()
 
         val closeProbe = DoctorJdbcLettuceProbe(redisClient, pilotConfig("$DOCTOR_PILOT_PREFIX:close"))
-        assertDoesNotThrow {
+        assertNotFails {
             closeProbe.close()
             closeProbe.close()
         }
