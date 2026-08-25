@@ -53,7 +53,7 @@
   - README 두 파일, messaging operations runbook, Korean KDoc와 lesson에
     diagnostic code·재시도 경계를 기록한다.
   - DoD: source·health·runbook 설명이 일치한다.
-- [ ] **Task 5 — 7-Tier 검토와 PR 전달을 완료한다.**
+- [x] **Task 5 — 7-Tier 검토와 PR 전달을 완료한다.**
   - Kotlin checklist, terminology audit, sequential module verification, Lore
     commit, exact stacked PR metadata/CI/readback을 수행한다.
   - DoD: P0/P1=0, exact base/head, PR은 open 상태이며 train merge는 수행하지 않는다.
@@ -81,4 +81,4 @@
 - [x] SPW-02: 파일 경계·순서·RED/GREEN·검증·rollback·DoD를 포함했다.
 - [x] SPW-03: 현재 기술 용어와 API identifier를 보존한 한국어 기술 문체를 사용했다.
 - [x] SPW-04: live GitHub와 #402 source/test/runbook를 대조했다.
-- [x] SPW-05: 계획·검토·lesson Markdown을 read-back했고, PR delivery 항목은 전달 완료 뒤 갱신한다.
+- [x] SPW-05: 계획·검토·lesson Markdown을 read-back했고, PR #415 전달·exact-head CI·live readback 완료를 반영했다.
