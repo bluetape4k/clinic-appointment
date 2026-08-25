@@ -3,7 +3,7 @@
 ## 검토 범위
 
 - 대상 명세: `docs/superpowers/specs/2026-08-25-issue-393-outbox-ownership-design.ko.md`
-- 검토 기준 commit: `05c18d4191fbf47062a4171e136ea802444703f6`
+- 검토 기준 commit: `c59124cf757d3fe95220f61311cbdb5b93e37a4b`
 - 기준 develop: `28e38915cc153fc01275a2c6acad632d99340b93`
 - 대상 이슈: [#393](https://github.com/bluetape4k/clinic-appointment/issues/393)
 - 대상 Epic: [#407](https://github.com/bluetape4k/clinic-appointment/issues/407)
