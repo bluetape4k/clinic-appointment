@@ -27,7 +27,32 @@ internal class NotificationOutboxHealthIndicatorTest {
             "claim" to "UP",
             "keyRing" to "HMAC_KEY_UNAVAILABLE",
             "failedComponents" to 2,
+            "diagnostics" to emptyList<NotificationReadinessDiagnostic>(),
         )
+    }
+
+    @Test
+    fun `readiness diagnostic은 operation target code error class retryable로 health에 전달된다`() {
+        val diagnostic = NotificationReadinessDiagnostic(
+            operation = "schema.table",
+            target = "scheduling_notification_outbox",
+            code = "SCHEMA_PERMISSION_DENIED",
+            errorClass = "SQLInvalidAuthorizationSpecException",
+            retryable = false,
+        )
+        val indicator = NotificationOutboxHealthIndicator(
+            readinessSource = FixedReadinessSource(
+                NotificationOutboxReadinessSnapshot(
+                    schema = NotificationComponentState.down(diagnostic.code),
+                    claim = NotificationComponentState.up(),
+                    keyRing = NotificationComponentState.up(),
+                    diagnostics = listOf(diagnostic),
+                ),
+            ),
+            livenessSource = FixedLivenessSource(),
+        )
+
+        indicator.readiness().details["diagnostics"] shouldBeEqualTo listOf(diagnostic.toHealthDetail())
     }
 
     @Test

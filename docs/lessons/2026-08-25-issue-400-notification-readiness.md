@@ -12,7 +12,7 @@ detail로 새어 나갈 위험이 있다.
 으로 operation, 논리 target, stable code, 안전한 error class, retryable만 보존한다.
 JDBC SQLState와 예외 유형을 우선 분류하고 미분류 오류는
 `SCHEMA_METADATA_UNAVAILABLE`로 fail closed한다. Auto-Configuration은 이 code를
-outbox readiness health 상태에 전달해 운영자가 원인을 확인할 수 있게 했다.
+outbox readiness health 상태와 bounded diagnostics detail에 전달해 운영자가 원인을 확인할 수 있게 했다.
 
 ## 검증
 

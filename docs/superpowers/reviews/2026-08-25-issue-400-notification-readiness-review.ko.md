@@ -12,7 +12,7 @@ train 전체 완료 전 merge는 **HOLD**다.
 | Tier | 검토 내용 | 결과 |
 |---|---|---|
 | 1. 계약·범위 | #400 목표, Type C 분류, #395 exact head 기반, 신규 의존성 없음 | PASS |
-| 2. API·상태 | `NotificationReadiness.diagnostics`는 optional이고 기존 `reason` 호환; health에는 stable code만 전달 | PASS |
+| 2. API·상태 | `NotificationReadiness.diagnostics`는 optional이고 기존 `reason` 호환; health에는 bounded 진단 map을 전달 | PASS |
 | 3. 안전성 | operation/target/code/errorClass 길이·문자 제한; SQL·메시지·secret·PII 미보존 | PASS |
 | 4. Kotlin 패턴 | nullable/immutable data class, `buildMap`, early return, bounded helper, `KLogging` 사용 | PASS |
 | 5. 테스트 | bluetape4k assertions로 table/permission/timeout/connection 분류와 health wiring 검증 | PASS |
@@ -25,7 +25,7 @@ Finding count: `P0=0 / P1=0 / P2=0 / P3=0`.
 
 - `NotificationSchemaReadiness.kt`: table/column/Flyway/tenant/index/key-ring 단계별
   `NotificationReadinessDiagnostic` 생성, 외부 예외 원문 제거
-- `NotificationAutoConfiguration.kt`: schema diagnostic code를 outbox readiness health 상태로 전달
+- `NotificationAutoConfiguration.kt`: schema diagnostic code와 bounded 진단을 readiness health 상태로 전달
 - `NotificationSchemaReadinessTest.kt`: 실제 H2 missing table에서
   `SCHEMA_TABLE_MISSING`과 target 보존
 - `NotificationSchemaReadinessDiagnosticTest.kt`: SQLState/예외 유형 분류, redaction,
