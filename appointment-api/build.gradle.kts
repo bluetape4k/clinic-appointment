@@ -76,6 +76,8 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation(libs.bluetape4k.junit5)
+    // Java 25에서는 StructuredTaskScope API가 변경되므로 jdk25 provider를 사용한다.
+    testRuntimeOnly(libs.bluetape4k.virtualthread.jdk25)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.jetbrains.exposed.migration.jdbc)
 
@@ -104,6 +106,9 @@ dependencies {
 // Spring Boot BOM이 test runtime에 1.10.2를 강제하면 cancel$default 링크가 깨지므로,
 // 이 모듈의 모든 구성에서 프로젝트가 선언한 Coroutines BOM 버전을 유지한다.
 configurations.configureEach {
+    // bluetape4k-junit5의 기본 jdk21 provider는 Java 25에서 로드할 수 없다.
+    exclude(group = "io.github.bluetape4k", module = "bluetape4k-virtualthread-jdk21")
+
     resolutionStrategy.eachDependency {
         if (requested.group == "org.jetbrains.kotlinx" && requested.name.startsWith("kotlinx-coroutines-")) {
             useVersion(libs.versions.kotlinx.coroutines.get())

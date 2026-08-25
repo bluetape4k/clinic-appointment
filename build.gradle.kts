@@ -742,6 +742,13 @@ dependencyManagement {
         mavenBom(rootLibs.kotlin.bom.get().toString())
         mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())
     }
+    dependencies {
+        val leaderScheduledPolicyVersion = rootLibs.bluetape4k.leader.core.get().versionConstraint.requiredVersion
+        dependency("io.github.bluetape4k.leader:bluetape4k-leader-core:$leaderScheduledPolicyVersion")
+        dependency("io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce:$leaderScheduledPolicyVersion")
+        dependency("io.github.bluetape4k.leader:bluetape4k-leader-micrometer:$leaderScheduledPolicyVersion")
+        dependency("io.github.bluetape4k.leader:bluetape4k-leader-spring-boot:$leaderScheduledPolicyVersion")
+    }
 }
 
 subprojects {
@@ -903,6 +910,13 @@ subprojects {
             // Override Spring Boot's lower Kotlin/Coroutines versions
             mavenBom(rootLibs.kotlin.bom.get().toString())
             mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())
+        }
+        dependencies {
+            val leaderScheduledPolicyVersion = rootLibs.bluetape4k.leader.core.get().versionConstraint.requiredVersion
+            dependency("io.github.bluetape4k.leader:bluetape4k-leader-core:$leaderScheduledPolicyVersion")
+            dependency("io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce:$leaderScheduledPolicyVersion")
+            dependency("io.github.bluetape4k.leader:bluetape4k-leader-micrometer:$leaderScheduledPolicyVersion")
+            dependency("io.github.bluetape4k.leader:bluetape4k-leader-spring-boot:$leaderScheduledPolicyVersion")
         }
     }
 

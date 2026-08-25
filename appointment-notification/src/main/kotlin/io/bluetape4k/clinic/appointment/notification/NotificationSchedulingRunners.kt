@@ -10,7 +10,7 @@ import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 
 /** 애플리케이션 준비 직후와 고정 간격마다 outbox 한 tick을 bounded 처리합니다. */
-class NotificationOutboxSchedulingRunner(
+open class NotificationOutboxSchedulingRunner(
     private val dispatcher: NotificationOutboxDispatcher? = null,
     private val suspendBridgeTimeout: Duration = Duration.ofSeconds(30),
 ) {
@@ -22,7 +22,7 @@ class NotificationOutboxSchedulingRunner(
     }
 
     @Scheduled(fixedDelayString = "\${clinic.notification.worker.poll-interval:PT1S}")
-    fun poll() {
+    open fun poll() {
         try {
             runSynchronously(suspendBridgeTimeout) { dispatcher?.dispatchOnce() }
         } catch (e: CancellationException) {
@@ -34,7 +34,7 @@ class NotificationOutboxSchedulingRunner(
 }
 
 /** ready backlog snapshot을 worker poll과 분리된 저빈도 주기로 갱신합니다. */
-class NotificationObservationSchedulingRunner(
+open class NotificationObservationSchedulingRunner(
     private val metrics: NotificationOutboxMetrics,
     private val suspendBridgeTimeout: Duration = Duration.ofSeconds(30),
 ) {
@@ -46,7 +46,7 @@ class NotificationObservationSchedulingRunner(
     }
 
     @Scheduled(fixedDelayString = "\${clinic.notification.observation.poll-interval:PT10S}")
-    fun poll() {
+    open fun poll() {
         try {
             runSynchronously(suspendBridgeTimeout) { metrics.refreshSnapshot() }
         } catch (e: CancellationException) {
@@ -58,7 +58,7 @@ class NotificationObservationSchedulingRunner(
 }
 
 /** 종료 outbox와 attempt를 설정된 주기마다 bounded page로 정리합니다. */
-class NotificationRetentionSchedulingRunner(
+open class NotificationRetentionSchedulingRunner(
     private val runner: NotificationRetentionRunner,
     private val healthSignals: NotificationRuntimeHealthSignals? = null,
     private val suspendBridgeTimeout: Duration = Duration.ofSeconds(30),
@@ -66,7 +66,7 @@ class NotificationRetentionSchedulingRunner(
     companion object : KLogging()
 
     @Scheduled(fixedDelayString = "\${clinic.notification.retention.poll-interval:PT1H}")
-    fun poll() {
+    open fun poll() {
         try {
             runSynchronously(suspendBridgeTimeout) { runner.runOnce() }
             healthSignals?.recordRetentionSuccess()

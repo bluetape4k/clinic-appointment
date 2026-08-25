@@ -17,7 +17,7 @@
 | 안정성 | `NotificationAutoConfiguration.kt`의 reminder runner는 `AppointmentReminderScheduler`, `LeaderElectorFactory`, `LeaderScheduledPolicyRegistry`, enabled property가 모두 있을 때만 생성된다. selector 누락과 `lease-time < suspendBridgeTimeout`은 bean 생성 단계에서 거부한다. contention/backend/cancellation/context-close는 `NotificationLeaderScheduledIntegrationTest`가 검증한다. | P0/P1 없음 |
 | 보안 | selector는 upstream exact `beanName#methodName` registry에 맡기고 wildcard/regex/runtime reload를 문서에서 금지한다. YAML에는 secret material을 넣지 않으며 backend bean 이름만 참조한다. | P0/P1 없음 |
 | 운영 | `appointment-api/src/main/resources/application.yml`은 운영 policy를 명시하고, test profile은 policy를 끈다. 긴급 rollback은 `bluetape4k.leader.scheduling.enabled=false`이며 timestamp dependency는 stable 1.0.x 전환 후 별도 검증한다. | P0/P1 없음 |
-| 개발/API | clinic 전용 policy model을 만들지 않고 upstream properties/registry/BPP를 재사용한다. 테스트의 `ReusableLeaderElectorFactory`는 클래스 companion에서 한 번만 만들고 각 context에는 elector만 교체해 반복적인 `mockk<LeaderElectorFactory>()` 생성을 없앴다. | P0/P1 없음 |
+| 개발/API | clinic 전용 policy model을 만들지 않고 upstream properties/registry/BPP를 재사용한다. 테스트의 `ReusableLeaderElectorFactory`는 클래스 companion에서 한 번만 만들고 각 context에는 elector만 교체해 반복적인 `mockk<LeaderElectorFactory>()` 생성을 없앴다. API 테스트는 Java 25 toolchain에 맞춰 upstream `bluetape4k-virtualthread-jdk25` provider를 선택하고 jdk21 preview provider를 제외한다. | P0/P1 없음 |
 | Kotlin 패턴 | production diff에 `!!`, suspend `runCatching`, 취소 삼킴, blocking monitor가 없다. 새 context 검증은 `bluetape4k-assertions`를 사용하고, runner의 plain `@Scheduled`/외부 policy 경계를 테스트 이름과 메시지에 반영했다. | P0/P1 없음 |
 | 사용자/호출자 | 두 notification README와 profile YAML이 같은 selector/name/lease/backend 예시를 제공한다. leader lock은 중복 tick을 줄이는 경계이고 DB claim/fence와 provider idempotency가 최종 상태 권위임을 명시했다. | P0/P1 없음 |
 
@@ -31,7 +31,8 @@
 | configured lock name wiring | PASS: custom policy name이 health monitor state 조회와 AOP/Observation filter에 전달됨 |
 | dependency/build governance | PASS: consumer fixtures, `:appointment-notification:build`, `verifyDependencyGovernance` |
 | dependency compile | PASS: `:appointment-notification:compileKotlin` with Java 25 timestamp 사전 릴리스 |
-| writer/static checks | PASS: Korean terminology audit, `git diff --check`, repeated factory mock search 0건; detekt task는 미등록 |
+| Java 25 virtual-thread provider | PASS: `:appointment-api:test` 869 tests, 0 failures, 0 errors, 3 skipped; `TenantContextTest` provider 로딩 포함 |
+| compile/static | PASS: root compile-only build, root `detekt` (`NO-SOURCE`), dependency lock/contract, strict verification |
 | P0/P1 | 0 / 0 |
 
 ## 후속 위험

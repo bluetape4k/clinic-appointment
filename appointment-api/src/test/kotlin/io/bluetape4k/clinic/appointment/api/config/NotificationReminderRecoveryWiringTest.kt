@@ -14,8 +14,16 @@ import io.bluetape4k.clinic.appointment.notification.NotificationAutoConfigurati
 import io.bluetape4k.clinic.appointment.notification.NotificationReminderSchedulingRunner
 import io.bluetape4k.clinic.appointment.notification.ReminderRecoveryMaterializer
 import io.bluetape4k.clinic.appointment.notification.ReminderRecoverySource
+import io.bluetape4k.leader.LeaderElector
+import io.bluetape4k.leader.LeaderElectorFactory
+import io.bluetape4k.leader.LeaderElectionOptions
+import io.bluetape4k.leader.spring.aop.autoconfigure.LeaderAopAutoConfiguration
+import io.bluetape4k.leader.spring.aop.autoconfigure.LeaderAopFactoryAutoConfiguration
+import io.bluetape4k.leader.spring.metrics.LeaderMicrometerAutoConfiguration
+import io.bluetape4k.leader.spring.scheduling.LeaderScheduledPolicyAutoConfiguration
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -34,15 +42,46 @@ import java.util.function.Supplier
 @ResourceLock(value = API_INTEGRATION_RESOURCE, mode = ResourceAccessMode.READ_WRITE)
 internal class NotificationReminderRecoveryWiringTest {
 
+    private companion object {
+        /** 모든 context가 공유하는 leader factory fixture입니다. */
+        val leaderFactory = object : LeaderElectorFactory {
+            private val elector: LeaderElector = mockk(relaxed = true)
+
+            override fun create(options: LeaderElectionOptions): LeaderElector = elector
+        }
+    }
+
     private var lastDataSource: HikariDataSource? = null
     private var lastDatabase: Database? = null
 
     private val contextRunner = ApplicationContextRunner()
-        .withConfiguration(AutoConfigurations.of(NotificationAutoConfiguration::class.java))
+        .withConfiguration(
+            AutoConfigurations.of(
+                LeaderAopFactoryAutoConfiguration::class.java,
+                LeaderMicrometerAutoConfiguration::class.java,
+                LeaderAopAutoConfiguration::class.java,
+                LeaderScheduledPolicyAutoConfiguration::class.java,
+                NotificationAutoConfiguration::class.java,
+            )
+        )
         .withUserConfiguration(
             ServiceConfig::class.java,
             AppointmentMessagingTestConfiguration::class.java,
             NotificationDatabaseTestConfiguration::class.java,
+        )
+        .withPropertyValues(
+            "bluetape4k.leader.scheduling.enabled=true",
+            "bluetape4k.leader.scheduling.policies[0].selector=notificationReminderSchedulingRunner#poll",
+            "bluetape4k.leader.scheduling.policies[0].name=appointment-reminder-recovery",
+            "bluetape4k.leader.scheduling.policies[0].wait-time=0s",
+            "bluetape4k.leader.scheduling.policies[0].lease-time=60s",
+            "bluetape4k.leader.scheduling.policies[0].min-lease-time=5s",
+            "bluetape4k.leader.scheduling.policies[0].bean=localLeaderElectionFactory",
+        )
+        .withBean(
+            "localLeaderElectionFactory",
+            LeaderElectorFactory::class.java,
+            Supplier { leaderFactory },
         )
         .withBean("meterRegistry", MeterRegistry::class.java, Supplier { SimpleMeterRegistry() })
         .withBean("dataSource", DataSource::class.java, Supplier {

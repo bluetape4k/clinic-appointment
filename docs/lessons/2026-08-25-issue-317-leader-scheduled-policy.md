@@ -27,6 +27,13 @@ normalized SNAPSHOT duplicate key를 처리하지 못해 Central에서 받은 �
 `ReusableLeaderElectorFactory`를 테스트 클래스 companion에서 한 번 생성하고 각
 context에 필요한 `LeaderElector`만 교체한다. 이는 factory identity를 재사용하면서
 테스트 간 elector 상태를 명시적으로 주입하는 경계다.
+Java 25 테스트 runtime에서는 `bluetape4k-junit5:1.12.1`의 기본 jdk21 preview
+provider를 그대로 사용할 수 없다. Java 21과 Java 25의 `StructuredTaskScope` preview
+API와 class-file target이 다르므로 ServiceLoader가 jdk21 provider를 읽는 순간
+탐색을 중단하고 provider 부재 오류를 낸다. API 모듈은 BOM이 관리하는
+`bluetape4k-virtualthread-jdk25:1.12.1`을 test runtime에 추가하고 jdk21 provider를
+제외했으며, 두 provider를 동시에 두지 않도록 lockfile과 verification metadata를
+함께 갱신했다.
 새 context 검증은 `bluetape4k-assertions`를 사용하고, plain `@Scheduled`와 외부
 leader policy의 책임을 테스트 이름·실패 메시지에도 일치시킨다.
 
@@ -34,8 +41,11 @@ leader policy의 책임을 테스트 이름·실패 메시지에도 일치시킨
 
 - targeted notification tests: 46개 통과
 - 전체 `appointment-notification:test`: 210개 통과
+- 전체 `appointment-api:test`: 869개 통과, 실패 0개, 오류 0개, skip 3개
 - custom policy name이 health monitor state 조회와 AOP/Observation filter에 전달됨
 - compile: `:appointment-notification:compileKotlin` 통과
+- root compile-only build와 `detekt` (`NO-SOURCE`) 통과
+- dependency contract/lock와 strict verification 통과
 - consumer fixtures, `:appointment-notification:build`, `verifyDependencyGovernance` 통과
 - negative context: default-off, factory 부재, selector 누락, 짧은 lease 확인
 - rollback: `bluetape4k.leader.scheduling.enabled=false`로 reminder runner를 중지
