@@ -32,8 +32,10 @@ import java.util.concurrent.TimeoutException
  * 현재 envelope는 Spring Kafka `StringSerializer`의 wire 계약을 유지한다.
  * `KafkaCodecs.String`은 기본 설정에서 타입 헤더를 추가하므로 이 파일럿에서
  * producer serializer를 교체하면 기존 소비자와의 header 계약이 바뀌어 사용하지 않는다.
+ *
+ * @param publishDispatcher broker 발송 coroutine이 사용할 dispatcher
  */
-class SpringKafkaAppointmentPublisher(
+class SpringKafkaAppointmentPublisher @JvmOverloads constructor(
     private val kafkaTemplate: KafkaTemplate<String, String>,
     private val kafkaAdmin: KafkaAdmin,
     private val metadataTimeout: Duration = Duration.ofSeconds(5),
