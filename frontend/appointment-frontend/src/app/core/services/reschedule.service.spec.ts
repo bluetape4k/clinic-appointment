@@ -6,12 +6,15 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 
 import { RescheduleService } from './reschedule.service';
 import { AuthService } from './auth.service';
+import { SessionStateService } from './session-state.service';
+import { TenantContextService } from '../api/tenant-context.service';
 
 const mockAuthService = { getToken: () => 'test-token', removeToken: vi.fn() };
 
 describe('RescheduleService', () => {
   let service: RescheduleService;
   let httpTesting: HttpTestingController;
+  let sessionState: SessionStateService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -21,8 +24,10 @@ describe('RescheduleService', () => {
         { provide: AuthService, useValue: mockAuthService },
       ],
     });
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
     service = TestBed.inject(RescheduleService);
     httpTesting = TestBed.inject(HttpTestingController);
+    sessionState = TestBed.inject(SessionStateService);
   });
 
   afterEach(() => {
@@ -43,7 +48,7 @@ describe('RescheduleService', () => {
       const promise = service.getClosureCandidates(10, 1, '2026-04-22', 7);
 
       const req = httpTesting.expectOne(
-        r => r.url === '/api/appointments/10/reschedule/closure'
+        r => r.url === '/api/tenant-a/appointments/10/reschedule/closure'
           && r.params.get('clinicId') === '1'
           && r.params.get('closureDate') === '2026-04-22'
           && r.params.get('searchDays') === '7'
@@ -60,7 +65,7 @@ describe('RescheduleService', () => {
     it('빈 응답 시 빈 Map을 반환한다', async () => {
       const promise = service.getClosureCandidates(99, 1, '2026-04-22', 7);
 
-      const req = httpTesting.expectOne(r => r.url === '/api/appointments/99/reschedule/closure');
+      const req = httpTesting.expectOne(r => r.url === '/api/tenant-a/appointments/99/reschedule/closure');
       req.flush({ success: true, data: null });
 
       const result = await promise;
@@ -77,7 +82,7 @@ describe('RescheduleService', () => {
 
       const promise = service.getCandidates(10);
 
-      const req = httpTesting.expectOne('/api/appointments/10/reschedule/candidates');
+      const req = httpTesting.expectOne('/api/tenant-a/appointments/10/reschedule/candidates');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: mockCandidates });
 
@@ -88,7 +93,7 @@ describe('RescheduleService', () => {
     it('빈 응답 시 빈 배열을 반환한다', async () => {
       const promise = service.getCandidates(999);
 
-      const req = httpTesting.expectOne('/api/appointments/999/reschedule/candidates');
+      const req = httpTesting.expectOne('/api/tenant-a/appointments/999/reschedule/candidates');
       req.flush({ success: true, data: null });
 
       const result = await promise;
@@ -100,7 +105,7 @@ describe('RescheduleService', () => {
     it('선택한 후보로 재배정을 확정하고 새 appointmentId를 반환한다', async () => {
       const promise = service.confirm(10, 1);
 
-      const req = httpTesting.expectOne('/api/appointments/10/reschedule/confirm/1');
+      const req = httpTesting.expectOne('/api/tenant-a/appointments/10/reschedule/confirm/1');
       expect(req.request.method).toBe('POST');
       req.flush({ success: true, data: 42 });
 
@@ -113,7 +118,7 @@ describe('RescheduleService', () => {
     it('최적 후보로 자동 재배정하고 새 appointmentId를 반환한다', async () => {
       const promise = service.autoReschedule(10);
 
-      const req = httpTesting.expectOne('/api/appointments/10/reschedule/auto');
+      const req = httpTesting.expectOne('/api/tenant-a/appointments/10/reschedule/auto');
       expect(req.request.method).toBe('POST');
       req.flush({ success: true, data: 55 });
 
@@ -124,7 +129,7 @@ describe('RescheduleService', () => {
     it('자동 배정 불가 시 null을 반환한다', async () => {
       const promise = service.autoReschedule(10);
 
-      const req = httpTesting.expectOne('/api/appointments/10/reschedule/auto');
+      const req = httpTesting.expectOne('/api/tenant-a/appointments/10/reschedule/auto');
       req.flush({ success: true, data: null });
 
       const result = await promise;
@@ -153,6 +158,10 @@ describe('RescheduleService', () => {
       const params = { clinicId: 1, closureDate: '2026-05-19', searchDays: 7 };
       const events = await firstValueFrom(service.streamBatchReschedule(params).pipe(toArray()));
 
+      const [streamUrl, streamOptions] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+      expect(streamUrl).toContain('/api/tenant-a/reschedule/batch/stream?');
+      expect(streamUrl).toContain('clinicId=1');
+      expect(streamOptions.headers).toMatchObject({ Authorization: 'Bearer test-token' });
       expect(events).toHaveLength(2);
       expect(events[0]).toEqual({ appointmentId: 1, candidateCount: 3, totalProcessed: 1, done: false });
       expect(events[1]).toEqual({ appointmentId: -1, candidateCount: 0, totalProcessed: 1, done: true });
@@ -163,6 +172,7 @@ describe('RescheduleService', () => {
 
       const params = { clinicId: 1, closureDate: '2026-05-19', searchDays: 7 };
       await expect(firstValueFrom(service.streamBatchReschedule(params))).rejects.toThrow('SSE failed: 403');
+      expect(sessionState.status('workforce')).toBe('forbidden');
     });
 
     it('401 응답에서 현재 세션을 제거한다', async () => {
@@ -172,6 +182,7 @@ describe('RescheduleService', () => {
       await expect(firstValueFrom(service.streamBatchReschedule(params))).rejects.toThrow('SSE: 인증이 필요합니다.');
 
       expect(mockAuthService.removeToken).toHaveBeenCalledOnce();
+      expect(sessionState.status('workforce')).toBe('unauthorized');
     });
 
     it('구독 취소 시 fetch를 abort한다', () => {

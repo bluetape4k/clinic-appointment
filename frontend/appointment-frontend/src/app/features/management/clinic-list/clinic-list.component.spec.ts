@@ -5,6 +5,7 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 
 import { ClinicListComponent } from './clinic-list.component';
+import { TenantContextService } from '../../../core/api/tenant-context.service';
 
 const MOCK_CLINICS = [
   { id: 1, name: '서울 메인 클리닉', slotDurationMinutes: 30, timezone: 'Asia/Seoul', locale: 'ko-KR', maxConcurrentPatients: 5, openOnHolidays: false },
@@ -25,6 +26,7 @@ describe('ClinicListComponent', () => {
     });
 
     httpMock = TestBed.inject(HttpTestingController);
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
   });
 
   afterEach(() => {
@@ -39,6 +41,8 @@ describe('ClinicListComponent', () => {
     httpMock.match(() => true).forEach(req =>
       req.flush({ success: true, data: { content: mockClinics } })
     );
+    await fixture.whenStable();
+    fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
     return fixture;

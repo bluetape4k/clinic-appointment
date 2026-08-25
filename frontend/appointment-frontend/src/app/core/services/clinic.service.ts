@@ -1,13 +1,11 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
 import { ApiResponse, Clinic, ClinicBreakTime, OperatingHours, PagedData } from '../models';
-import { environment } from '../../../environments/environment';
+import { TenantApiClient } from '../api/tenant-api-client';
 
 @Injectable({ providedIn: 'root' })
 export class ClinicService {
-  private readonly http = inject(HttpClient);
-  private readonly baseUrl = `${environment.apiUrl}/clinics`;
+  private readonly api = inject(TenantApiClient);
+  private readonly basePath = '/clinics';
 
   private readonly _clinics = signal<Clinic[]>([]);
   readonly clinics = this._clinics.asReadonly();
@@ -17,10 +15,10 @@ export class ClinicService {
   async getAll(): Promise<Clinic[]> {
     this.loading.set(true);
     try {
-      const res = await firstValueFrom(
-        this.http.get<ApiResponse<PagedData<Clinic>>>(this.baseUrl)
-      );
-      const data = res.data?.content ?? [];
+      const res = await this.api.request<ApiResponse<PagedData<Clinic>>>('GET', this.basePath, {
+        authScope: 'workforce-bearer',
+      });
+      const data = res.body?.data?.content ?? [];
       this._clinics.set(data);
       return data;
     } finally {
@@ -29,27 +27,23 @@ export class ClinicService {
   }
 
   async getById(clinicId: number): Promise<Clinic> {
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<Clinic>>(`${this.baseUrl}/${clinicId}`)
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<Clinic>>('GET', `${this.basePath}/${clinicId}`, {
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as Clinic;
   }
 
   async getOperatingHours(clinicId: number): Promise<OperatingHours[]> {
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<OperatingHours[]>>(
-        `${this.baseUrl}/${clinicId}/operating-hours`
-      )
-    );
-    return res.data ?? [];
+    const res = await this.api.request<ApiResponse<OperatingHours[]>>('GET', `${this.basePath}/${clinicId}/operating-hours`, {
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data ?? [];
   }
 
   async getBreakTimes(clinicId: number): Promise<ClinicBreakTime[]> {
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<ClinicBreakTime[]>>(
-        `${this.baseUrl}/${clinicId}/break-times`
-      )
-    );
-    return res.data ?? [];
+    const res = await this.api.request<ApiResponse<ClinicBreakTime[]>>('GET', `${this.basePath}/${clinicId}/break-times`, {
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data ?? [];
   }
 }

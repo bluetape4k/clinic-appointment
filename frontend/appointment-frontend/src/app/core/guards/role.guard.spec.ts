@@ -7,6 +7,8 @@ describe('roleGuard', () => {
   let authService: {
     roles: ReturnType<typeof vi.fn>;
     isAuthenticated: ReturnType<typeof vi.fn>;
+    markUnauthorized: ReturnType<typeof vi.fn>;
+    markForbidden: ReturnType<typeof vi.fn>;
   };
   let router: { createUrlTree: ReturnType<typeof vi.fn> };
 
@@ -21,7 +23,12 @@ describe('roleGuard', () => {
   };
 
   beforeEach(() => {
-    authService = { roles: vi.fn(), isAuthenticated: vi.fn().mockReturnValue(true) };
+    authService = {
+      roles: vi.fn(),
+      isAuthenticated: vi.fn().mockReturnValue(true),
+      markUnauthorized: vi.fn(),
+      markForbidden: vi.fn(),
+    };
     router = { createUrlTree: vi.fn().mockReturnValue({ toString: () => '/calendar' }) };
     TestBed.configureTestingModule({
       providers: [
@@ -41,6 +48,7 @@ describe('roleGuard', () => {
     authService.roles.mockReturnValue(['ROLE_PATIENT']);
     runGuard(['ROLE_ADMIN']);
     expect(router.createUrlTree).toHaveBeenCalledWith(['/calendar']);
+    expect(authService.markForbidden).toHaveBeenCalledTimes(1);
   });
 
   it('requiredRoles가 비어 있을 때 true를 반환한다', () => {

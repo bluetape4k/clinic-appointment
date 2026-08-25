@@ -7,6 +7,7 @@ export const roleGuard: CanActivateFn = (route) => {
   const router = inject(Router);
 
   if (!authService.isAuthenticated()) {
+    authService.markUnauthorized();
     return router.createUrlTree(['/calendar']);
   }
 
@@ -18,5 +19,7 @@ export const roleGuard: CanActivateFn = (route) => {
 
   const hasRole = requiredRoles.some((role) => authService.roles().includes(role));
 
-  return hasRole ? true : router.createUrlTree(['/calendar']);
+  if (hasRole) return true;
+  authService.markForbidden();
+  return router.createUrlTree(['/calendar']);
 };

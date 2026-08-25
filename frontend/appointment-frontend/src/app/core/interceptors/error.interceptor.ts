@@ -4,7 +4,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { catchError, throwError } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { ApiResponse } from '../models/api-response.model';
+import { API_AUTH_SCOPE } from '../api/api-auth-context';
 import { AuthService } from '../services/auth.service';
+import { SessionStateService } from '../services/session-state.service';
 
 const STATUS_MESSAGES: Record<number, string> = {
   0: '서버에 연결할 수 없습니다',
@@ -21,6 +23,8 @@ const STATUS_MESSAGES: Record<number, string> = {
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const snackBar = inject(MatSnackBar);
   const authService = inject(AuthService);
+  const sessionState = inject(SessionStateService);
+  const authScope = req.context.get(API_AUTH_SCOPE);
 
   const show = (message: string) =>
     snackBar.open(message, '닫기', { duration: 3000 });
@@ -38,7 +42,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
     }),
     catchError((error: HttpErrorResponse) => {
       if (error.status === 401) {
-        authService.removeToken();
+        if (authScope === 'workforce-bearer') {
+          authService.removeToken();
+        }
+        sessionState.mark(authScope === 'patient-cookie' ? 'patient' : 'workforce', 'unauthorized');
+      } else if (error.status === 403) {
+        if (authScope === 'workforce-bearer') authService.markForbidden();
+        sessionState.mark(authScope === 'patient-cookie' ? 'patient' : 'workforce', 'forbidden');
       }
 
       // status 200 + JSON parse error: 백엔드 미실행 시 SPA fallback 응답

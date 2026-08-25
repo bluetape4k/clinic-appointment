@@ -1,12 +1,10 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
 import { ApiResponse, PagedData, TreatmentType } from '../models';
-import { environment } from '../../../environments/environment';
+import { TenantApiClient } from '../api/tenant-api-client';
 
 @Injectable({ providedIn: 'root' })
 export class TreatmentTypeService {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(TenantApiClient);
 
   private readonly _treatmentTypes = signal<TreatmentType[]>([]);
   readonly treatmentTypes = this._treatmentTypes.asReadonly();
@@ -16,12 +14,10 @@ export class TreatmentTypeService {
   async loadByClinic(clinicId: number): Promise<TreatmentType[]> {
     this.loading.set(true);
     try {
-      const res = await firstValueFrom(
-        this.http.get<ApiResponse<PagedData<TreatmentType>>>(
-          `${environment.apiUrl}/clinics/${clinicId}/treatment-types`
-        )
-      );
-      const data = res.data?.content ?? [];
+      const res = await this.api.request<ApiResponse<PagedData<TreatmentType>>>('GET', `/clinics/${clinicId}/treatment-types`, {
+        authScope: 'workforce-bearer',
+      });
+      const data = res.body?.data?.content ?? [];
       this._treatmentTypes.set(data);
       return data;
     } finally {
@@ -30,11 +26,9 @@ export class TreatmentTypeService {
   }
 
   async getById(treatmentTypeId: number): Promise<TreatmentType> {
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<TreatmentType>>(
-        `${environment.apiUrl}/treatment-types/${treatmentTypeId}`
-      )
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<TreatmentType>>('GET', `/treatment-types/${treatmentTypeId}`, {
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as TreatmentType;
   }
 }

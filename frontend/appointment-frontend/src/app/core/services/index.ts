@@ -1,4 +1,5 @@
 export * from './auth.service';
+export * from './session-state.service';
 export * from './appointment.service';
 export * from './slot.service';
 export * from './clinic.service';

@@ -4,6 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { EquipmentService } from './equipment.service';
+import { TenantContextService } from '../api/tenant-context.service';
 
 describe('EquipmentService', () => {
   let service: EquipmentService;
@@ -13,6 +14,7 @@ describe('EquipmentService', () => {
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
     service = TestBed.inject(EquipmentService);
     httpTesting = TestBed.inject(HttpTestingController);
   });
@@ -42,7 +44,7 @@ describe('EquipmentService', () => {
 
       const promise = service.loadByClinic(1);
 
-      const req = httpTesting.expectOne('/api/clinics/1/equipments');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/1/equipments');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: { content: mockEquipments } });
 
@@ -54,7 +56,7 @@ describe('EquipmentService', () => {
     it('빈 응답 시 빈 배열이 설정된다', async () => {
       const promise = service.loadByClinic(99);
 
-      const req = httpTesting.expectOne('/api/clinics/99/equipments');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/99/equipments');
       req.flush({ success: true, data: null });
 
       const result = await promise;
@@ -66,7 +68,7 @@ describe('EquipmentService', () => {
       const promise = service.loadByClinic(1);
       expect(service.loading()).toBe(true);
 
-      const req = httpTesting.expectOne('/api/clinics/1/equipments');
+      const req = httpTesting.expectOne('/api/tenant-a/clinics/1/equipments');
       req.flush({ success: true, data: { content: [] } });
 
       await promise;
@@ -80,7 +82,7 @@ describe('EquipmentService', () => {
 
       const promise = service.getById(1);
 
-      const req = httpTesting.expectOne('/api/equipments/1');
+      const req = httpTesting.expectOne('/api/tenant-a/equipments/1');
       expect(req.request.method).toBe('GET');
       req.flush({ success: true, data: mockEquipment });
 

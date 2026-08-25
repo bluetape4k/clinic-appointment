@@ -1,15 +1,17 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { firstValueFrom, Observable } from 'rxjs';
+import { HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import { ApiResponse, RescheduleCandidate, BatchRescheduleStreamParams, RescheduleProgressEvent } from '../models';
-import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
+import { SessionStateService } from './session-state.service';
+import { TenantApiClient } from '../api/tenant-api-client';
 
 @Injectable({ providedIn: 'root' })
 export class RescheduleService {
-  private readonly http = inject(HttpClient);
-  private readonly baseUrl = `${environment.apiUrl}/appointments`;
+  private readonly api = inject(TenantApiClient);
+  private readonly basePath = '/appointments';
   private readonly authService = inject(AuthService);
+  private readonly sessionState = inject(SessionStateService);
 
   /**
    * 진료실 휴진 일괄 재배정 후보 조회 (R1)
@@ -24,52 +26,44 @@ export class RescheduleService {
       .set('clinicId', clinicId)
       .set('closureDate', closureDate)
       .set('searchDays', searchDays);
-    const res = await firstValueFrom(
-      this.http.post<ApiResponse<Record<number, RescheduleCandidate[]>>>(
-        `${this.baseUrl}/${appointmentId}/reschedule/closure`,
-        null,
-        { params },
-      )
-    );
-    return new Map(Object.entries(res.data ?? {}).map(([k, v]) => [Number(k), v]));
+    const res = await this.api.request<ApiResponse<Record<number, RescheduleCandidate[]>>>('POST', `${this.basePath}/${appointmentId}/reschedule/closure`, {
+      body: null,
+      params,
+      authScope: 'workforce-bearer',
+    });
+    return new Map(Object.entries(res.body?.data ?? {}).map(([k, v]) => [Number(k), v]));
   }
 
   /**
    * 개별 예약 재배정 후보 목록 조회 (R2)
    */
   async getCandidates(appointmentId: number): Promise<RescheduleCandidate[]> {
-    const res = await firstValueFrom(
-      this.http.get<ApiResponse<RescheduleCandidate[]>>(
-        `${this.baseUrl}/${appointmentId}/reschedule/candidates`,
-      )
-    );
-    return res.data ?? [];
+    const res = await this.api.request<ApiResponse<RescheduleCandidate[]>>('GET', `${this.basePath}/${appointmentId}/reschedule/candidates`, {
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data ?? [];
   }
 
   /**
    * 선택한 후보로 재배정 확정 (R3)
    */
   async confirm(appointmentId: number, candidateId: number): Promise<number> {
-    const res = await firstValueFrom(
-      this.http.post<ApiResponse<number>>(
-        `${this.baseUrl}/${appointmentId}/reschedule/confirm/${candidateId}`,
-        null,
-      )
-    );
-    return res.data!;
+    const res = await this.api.request<ApiResponse<number>>('POST', `${this.basePath}/${appointmentId}/reschedule/confirm/${candidateId}`, {
+      body: null,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data as number;
   }
 
   /**
    * 최적 후보로 자동 재배정 (R4)
    */
   async autoReschedule(appointmentId: number): Promise<number | null> {
-    const res = await firstValueFrom(
-      this.http.post<ApiResponse<number | null>>(
-        `${this.baseUrl}/${appointmentId}/reschedule/auto`,
-        null,
-      )
-    );
-    return res.data ?? null;
+    const res = await this.api.request<ApiResponse<number | null>>('POST', `${this.basePath}/${appointmentId}/reschedule/auto`, {
+      body: null,
+      authScope: 'workforce-bearer',
+    });
+    return res.body?.data ?? null;
   }
 
   /**
@@ -90,7 +84,13 @@ export class RescheduleService {
         closureDate: params.closureDate,
         searchDays: String(params.searchDays),
       });
-      const url = `${environment.apiUrl}/reschedule/batch/stream?${qs}`;
+      let url: string;
+      try {
+        url = this.api.url(`/reschedule/batch/stream?${qs}`);
+      } catch (error) {
+        observer.error(error);
+        return () => undefined;
+      }
       const controller = new AbortController();
 
       fetch(url, {
@@ -103,10 +103,12 @@ export class RescheduleService {
         .then(async response => {
           if (response.status === 401) {
             this.authService.removeToken();
+            this.sessionState.mark('workforce', 'unauthorized');
             observer.error(new Error('SSE: 인증이 필요합니다.'));
             return;
           }
           if (!response.ok) {
+            if (response.status === 403) this.sessionState.mark('workforce', 'forbidden');
             observer.error(new Error(`SSE failed: ${response.status}`));
             return;
           }

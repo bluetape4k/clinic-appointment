@@ -11,6 +11,7 @@ import { ActivatedRoute } from '@angular/router';
 import { AppointmentFormComponent } from './appointment-form.component';
 import { AppointmentService } from '../../../core/services/appointment.service';
 import { SlotService } from '../../../core/services/slot.service';
+import { TenantContextService } from '../../../core/api/tenant-context.service';
 
 describe('AppointmentFormComponent', () => {
   const mockAppointmentService = {
@@ -49,6 +50,7 @@ describe('AppointmentFormComponent', () => {
         },
       ],
     });
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
   });
 
   it('컴포넌트가 생성된다', async () => {

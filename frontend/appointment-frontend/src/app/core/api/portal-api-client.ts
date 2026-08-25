@@ -1,8 +1,6 @@
-import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
+import { HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
 
-import { environment } from '../../../environments/environment';
 import {
   ApiEnvelope,
   AppointmentCommitmentResponse,
@@ -22,10 +20,11 @@ import { mapPortalApiError, PortalApiException } from './portal-api-error';
 import type { PortalNotification } from './portal-event-stream.adapter';
 import { TenantContextService } from './tenant-context.service';
 import { PatientAuthService } from '../services/patient-auth.service';
+import { TenantApiClient } from './tenant-api-client';
 
 @Injectable({ providedIn: 'root' })
 export class PortalApiClient {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(TenantApiClient);
   private readonly tenant = inject(TenantContextService);
   private readonly auth = inject(PatientAuthService);
 
@@ -226,12 +225,13 @@ export class PortalApiClient {
     try {
       const tenantCode = this.tenant.requireTenant();
       const headers = new HttpHeaders({ Accept: 'application/json', ...extraHeaders });
-      const response = await firstValueFrom(this.http.request<T>(method, `${environment.apiUrl}/${encodeURIComponent(tenantCode)}${path}`, {
+      const response = await this.api.request<T>(method, path, {
         body,
         headers,
         params,
-        observe: 'response',
-      }));
+        authScope: 'patient-cookie',
+        withCredentials: true,
+      });
       if (response.status === 304 && historyNotModified) {
         throw new PortalApiNotModified(response.headers.get('X-Tenant-Identity-Generation'));
       }

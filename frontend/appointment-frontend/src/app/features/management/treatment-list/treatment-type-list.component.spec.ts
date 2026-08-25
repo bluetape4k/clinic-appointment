@@ -7,6 +7,7 @@ import { provideLocationMocks } from '@angular/common/testing';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 
 import { TreatmentTypeListComponent } from './treatment-type-list.component';
+import { TenantContextService } from '../../../core/api/tenant-context.service';
 
 describe('TreatmentTypeListComponent', () => {
   let httpMock: HttpTestingController;
@@ -24,6 +25,7 @@ describe('TreatmentTypeListComponent', () => {
     });
 
     httpMock = TestBed.inject(HttpTestingController);
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
   });
 
   afterEach(() => {

@@ -12,6 +12,7 @@ import { AppointmentDetailComponent } from './appointment-detail.component';
 import { AppointmentService } from '../../../core/services/appointment.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { Appointment, AppointmentStatus } from '../../../core/models';
+import { TenantContextService } from '../../../core/api/tenant-context.service';
 
 const mockAppointment = (status: AppointmentStatus): Appointment => ({
   id: 1,
@@ -68,6 +69,7 @@ describe('AppointmentDetailComponent', () => {
         },
       ],
     });
+    TestBed.inject(TenantContextService).setTenant('tenant-a');
   });
 
   it('컴포넌트가 생성된다', async () => {
