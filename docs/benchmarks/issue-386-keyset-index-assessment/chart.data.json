@@ -1,6 +1,12 @@
 {
   "issue": 386,
   "source": "appointment-api/build/reports/performance/issue-386-keyset-index-assessment.txt",
+  "sourceRevision": "HEAD",
+  "sourcePaths": [
+    "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/integration/ClinicKeysetIndexAssessmentTest.kt",
+    "docs/benchmarks/issue-386-keyset-index-assessment/chart.data.json",
+    "docs/benchmarks/issue-386-keyset-index-assessment/summary.ko.md"
+  ],
   "metrics": {
     "readP95Ms": {
       "unit": "ms",
@@ -14,20 +20,21 @@
   "candidateIndex": {
     "measuredPlans": 21,
     "selectedPlans": 0,
-    "sizeBytes": 1073152
+    "sizeBytes": 1073152,
+    "absentAfterCleanup": true
   },
   "tables": [
     {
       "name": "scheduling_doctors",
       "baseline": {
-        "readP95Ms": 0.689,
-        "writeP95Ms": 4.022,
+        "readP95Ms": 0.786,
+        "writeP95Ms": 4.342,
         "rowsRemovedByFilter": 16767,
         "index": "scheduling_doctors_pkey"
       },
       "composite": {
-        "readP95Ms": 0.660,
-        "writeP95Ms": 4.057,
+        "readP95Ms": 0.787,
+        "writeP95Ms": 4.094,
         "rowsRemovedByFilter": 16767,
         "index": "scheduling_doctors_pkey"
       }
@@ -35,14 +42,14 @@
     {
       "name": "scheduling_equipments",
       "baseline": {
-        "readP95Ms": 0.664,
-        "writeP95Ms": 3.676,
+        "readP95Ms": 0.719,
+        "writeP95Ms": 3.589,
         "rowsRemovedByFilter": 16767,
         "index": "scheduling_equipments_pkey"
       },
       "composite": {
-        "readP95Ms": 0.674,
-        "writeP95Ms": 4.021,
+        "readP95Ms": 0.737,
+        "writeP95Ms": 4.027,
         "rowsRemovedByFilter": 16767,
         "index": "scheduling_equipments_pkey"
       }
@@ -50,14 +57,14 @@
     {
       "name": "scheduling_treatment_types",
       "baseline": {
-        "readP95Ms": 0.678,
-        "writeP95Ms": 4.216,
+        "readP95Ms": 0.672,
+        "writeP95Ms": 4.039,
         "rowsRemovedByFilter": 16767,
         "index": "scheduling_treatment_types_pkey"
       },
       "composite": {
-        "readP95Ms": 0.654,
-        "writeP95Ms": 5.162,
+        "readP95Ms": 0.867,
+        "writeP95Ms": 4.324,
         "rowsRemovedByFilter": 16767,
         "index": "scheduling_treatment_types_pkey"
       }
