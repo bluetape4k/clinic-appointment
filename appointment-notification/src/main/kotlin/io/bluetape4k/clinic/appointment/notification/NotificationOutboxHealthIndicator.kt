@@ -4,7 +4,8 @@ import java.io.Serializable
 import java.time.Duration
 
 /**
- * notification outbox readiness/liveness를 개인정보 없는 code와 count로만 노출합니다.
+ * notification outbox readiness/liveness를 개인정보 없는 code, count와 bounded 진단으로
+ * 노출합니다.
  *
  * readiness는 enqueue/worker를 막아야 하는 schema, claim, key-ring 실패만 DOWN으로 본다.
  * provider/member circuit, backlog age, retention 실패는 liveness를 내리지 않고 degraded detail로
@@ -66,7 +67,7 @@ fun interface NotificationOutboxLivenessSource {
     fun snapshot(): NotificationOutboxLivenessSnapshot
 }
 
-/** schema, claim, key ring의 readiness 상태입니다. */
+/** schema, claim, key ring 상태와 bounded readiness 진단입니다. */
 data class NotificationOutboxReadinessSnapshot(
     val schema: NotificationComponentState,
     val claim: NotificationComponentState,
