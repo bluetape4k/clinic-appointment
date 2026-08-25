@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
 import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
@@ -23,7 +24,6 @@ import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.time.Instant
 
@@ -164,7 +164,7 @@ internal class NotificationOutboxLifecycleTest {
                 deliveryAction = NotificationDeliveryAction { throw CancellationException("cancelled") },
             )
 
-            assertThrows<CancellationException> {
+            assertFailsWith<CancellationException> {
                 runBlocking { worker.process(claimed(attemptNumber = 1)) }
             }
             store.completed.size shouldBeEqualTo 0
@@ -182,7 +182,7 @@ internal class NotificationOutboxLifecycleTest {
                 deliveryAction = NotificationDeliveryAction { NotificationDeliveryResult.sent() },
             )
 
-            assertThrows<CancellationException> {
+            assertFailsWith<CancellationException> {
                 runBlocking { worker.process(claimed(attemptNumber = 1)) }
             }
             store.retried.size shouldBeEqualTo 0

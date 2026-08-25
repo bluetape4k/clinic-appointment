@@ -1,13 +1,13 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 
 internal class NotificationProviderContractTest {
 
@@ -27,14 +27,14 @@ internal class NotificationProviderContractTest {
     fun `provider idempotency key는 HMAC digest가 아닌 outbox key를 거절한다`() {
         val factory = NotificationProviderIdempotencyKeyFactory("s".repeat(32).toByteArray())
 
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             factory.create(NotificationIdempotencyKey("raw-appointment-1"))
         }
     }
 
     @Test
     fun `provider idempotency secret은 최소 32 bytes를 요구한다`() {
-        val failure = assertThrows<IllegalArgumentException> {
+        val failure = assertFailsWith<IllegalArgumentException> {
             NotificationProviderIdempotencyKeyFactory("short".toByteArray())
         }
 
