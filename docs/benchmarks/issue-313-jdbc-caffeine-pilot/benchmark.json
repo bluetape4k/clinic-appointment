@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "benchmarkFamily": "io.bluetape4k.clinic.appointment.api.config.JdbcCaffeineEffectivePolicyPilotBenchmark",
+  "sourceCommit": "311befc378aa467b6331b2a78f962101d115b11b",
+  "warmupRounds": 5,
+  "measurementRounds": 20,
+  "environment": {"java": "21.0.12.1", "os": "Mac OS X", "db": "h2"},
+  "productionSloEvidence": false,
+  "rawPayloadIncluded": false,
+  "profiles": [
+    {
+      "name": "hot-hit",
+      "implementation": "baseline",
+      "operation": "in-memory-effective-policy-cache-get",
+      "latencyNanos": {"samples": [5083, 667, 416, 375, 416, 417, 375, 416, 375, 375, 417, 375, 417, 750, 375, 417, 375, 417, 417, 375], "p50": 416, "p95": 5083, "p99": 5083},
+      "allocationBytes": {"samples": [48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48], "p50": 48, "p95": 48, "p99": 48}
+    },
+    {
+      "name": "hot-hit",
+      "implementation": "candidate",
+      "operation": "jdbc-caffeine-lookup",
+      "latencyNanos": {"samples": [3750, 3791, 3625, 3459, 6042, 3625, 3667, 3583, 14458, 4541, 3458, 14750, 4292, 3792, 3875, 3667, 2959, 3000, 2958, 2917], "p50": 3667, "p95": 14750, "p99": 14750},
+      "allocationBytes": {"samples": [104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104], "p50": 104, "p95": 104, "p99": 104}
+    },
+    {
+      "name": "cold-fill",
+      "implementation": "baseline",
+      "operation": "in-memory-effective-policy-cache-put",
+      "latencyNanos": {"samples": [2042, 1666, 1584, 1709, 1666, 1459, 1458, 2250, 1583, 4750, 1917, 2083, 2041, 1833, 1500, 1625, 1500, 2083, 1542, 1958], "p50": 1709, "p95": 4750, "p99": 4750},
+      "allocationBytes": {"samples": [112, 112, 112, 112, 112, 112, 112, 256, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 384], "p50": 112, "p95": 384, "p99": 384}
+    },
+    {
+      "name": "cold-fill",
+      "implementation": "candidate",
+      "operation": "jdbc-transaction-stage-and-commit",
+      "latencyNanos": {"samples": [137875, 135459, 134334, 188291, 136458, 129375, 132708, 120542, 118708, 119250, 130750, 213916, 134750, 117500, 131542, 125500, 180125, 131125, 119583, 164958], "p50": 132708, "p95": 213916, "p99": 213916},
+      "allocationBytes": {"samples": [8424, 8424, 8424, 8384, 8424, 8424, 8568, 8424, 8384, 8424, 8424, 8424, 8424, 8384, 8424, 8424, 8424, 8424, 9120, 8424], "p50": 8424, "p95": 9120, "p99": 9120}
+    },
+    {
+      "name": "invalidation",
+      "implementation": "baseline",
+      "operation": "in-memory-effective-policy-cache-clinic-invalidate",
+      "latencyNanos": {"samples": [12042, 77167, 17084, 46167, 14750, 12208, 13792, 11000, 9417, 8291, 8167, 7917, 7750, 8250, 7958, 9083, 8166, 9875, 8375, 43458], "p50": 9875, "p95": 77167, "p99": 77167},
+      "allocationBytes": {"samples": [2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208, 2208], "p50": 2208, "p95": 2208, "p99": 2208}
+    },
+    {
+      "name": "invalidation",
+      "implementation": "candidate",
+      "operation": "jdbc-transaction-stage-invalidation-and-commit",
+      "latencyNanos": {"samples": [87708, 121292, 77875, 82333, 100667, 82875, 128167, 157541, 100958, 75500, 75166, 65917, 72625, 258792, 172666, 139542, 83667, 100792, 73208, 75333], "p50": 87708, "p95": 258792, "p99": 258792},
+      "allocationBytes": {"samples": [7416, 7376, 7416, 7416, 7416, 7416, 7376, 7416, 7416, 7416, 7416, 7376, 7416, 7416, 7416, 7416, 7376, 7416, 7416, 7416], "p50": 7416, "p95": 7416, "p99": 7416}
+    },
+    {
+      "name": "cold-start",
+      "implementation": "baseline",
+      "operation": "in-memory-effective-policy-cache-construction-and-put",
+      "latencyNanos": {"samples": [2000, 1708, 1541, 1625, 1250, 1250, 1708, 4666, 1791, 1625, 1584, 1583, 1334, 1250, 1167, 1250, 1250, 1250, 1208, 1250], "p50": 1541, "p95": 4666, "p99": 4666},
+      "allocationBytes": {"samples": [616, 616, 616, 616, 616, 616, 616, 616, 616, 616, 616, 616, 616, 616, 616, 616, 616, 616, 616, 616], "p50": 616, "p95": 616, "p99": 616}
+    },
+    {
+      "name": "cold-start",
+      "implementation": "candidate",
+      "operation": "h2-database-and-jdbc-caffeine-construction-and-first-commit",
+      "latencyNanos": {"samples": [166792, 151833, 247625, 282250, 323583, 315500, 223042, 329834, 205667, 266125, 206875, 201625, 301542, 260042, 257208, 327958, 185292, 211750, 138916, 182750], "p50": 247625, "p95": 329834, "p99": 329834},
+      "allocationBytes": {"samples": [25592, 25592, 25592, 25552, 25592, 25592, 25592, 25592, 25552, 25592, 25592, 25592, 25592, 25552, 25592, 26632, 25592, 25592, 25552, 25592], "p50": 25592, "p95": 26632, "p99": 26632}
+    }
+  ]
+}

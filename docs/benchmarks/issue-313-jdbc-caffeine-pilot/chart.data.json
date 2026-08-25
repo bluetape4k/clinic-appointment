@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "issue": 313,
+  "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json",
+  "sourceCommit": "311befc378aa467b6331b2a78f962101d115b11b",
+  "metric": {
+    "latencyP50Nanos": {
+      "unit": "ns/op",
+      "lowerIsBetter": true
+    },
+    "latencyP95Nanos": {
+      "unit": "ns/op",
+      "lowerIsBetter": true
+    },
+    "allocationP50Bytes": {
+      "unit": "bytes/op",
+      "lowerIsBetter": true
+    }
+  },
+  "warmupRounds": 5,
+  "measurementRounds": 20,
+  "productionSloEvidence": false,
+  "profiles": [
+    {
+      "name": "hot-hit",
+      "label": "hot-hit 조회",
+      "implementation": "baseline",
+      "operation": "in-memory-effective-policy-cache-get",
+      "latencyP50Nanos": 416,
+      "latencyP95Nanos": 5083,
+      "allocationP50Bytes": 48,
+      "sampleCount": 20
+    },
+    {
+      "name": "hot-hit",
+      "label": "hot-hit 조회",
+      "implementation": "candidate",
+      "operation": "jdbc-caffeine-lookup",
+      "latencyP50Nanos": 3667,
+      "latencyP95Nanos": 14750,
+      "allocationP50Bytes": 104,
+      "sampleCount": 20
+    },
+    {
+      "name": "cold-fill",
+      "label": "cold-fill 채우기",
+      "implementation": "baseline",
+      "operation": "in-memory-effective-policy-cache-put",
+      "latencyP50Nanos": 1709,
+      "latencyP95Nanos": 4750,
+      "allocationP50Bytes": 112,
+      "sampleCount": 20
+    },
+    {
+      "name": "cold-fill",
+      "label": "cold-fill 채우기",
+      "implementation": "candidate",
+      "operation": "jdbc-transaction-stage-and-commit",
+      "latencyP50Nanos": 132708,
+      "latencyP95Nanos": 213916,
+      "allocationP50Bytes": 8424,
+      "sampleCount": 20
+    },
+    {
+      "name": "invalidation",
+      "label": "clinic 무효화",
+      "implementation": "baseline",
+      "operation": "in-memory-effective-policy-cache-clinic-invalidate",
+      "latencyP50Nanos": 9875,
+      "latencyP95Nanos": 77167,
+      "allocationP50Bytes": 2208,
+      "sampleCount": 20
+    },
+    {
+      "name": "invalidation",
+      "label": "clinic 무효화",
+      "implementation": "candidate",
+      "operation": "jdbc-transaction-stage-invalidation-and-commit",
+      "latencyP50Nanos": 87708,
+      "latencyP95Nanos": 258792,
+      "allocationP50Bytes": 7416,
+      "sampleCount": 20
+    },
+    {
+      "name": "cold-start",
+      "label": "cold-start 생성",
+      "implementation": "baseline",
+      "operation": "in-memory-effective-policy-cache-construction-and-put",
+      "latencyP50Nanos": 1541,
+      "latencyP95Nanos": 4666,
+      "allocationP50Bytes": 616,
+      "sampleCount": 20
+    },
+    {
+      "name": "cold-start",
+      "label": "cold-start 생성",
+      "implementation": "candidate",
+      "operation": "h2-database-and-jdbc-caffeine-construction-and-first-commit",
+      "latencyP50Nanos": 247625,
+      "latencyP95Nanos": 329834,
+      "allocationP50Bytes": 25592,
+      "sampleCount": 20
+    }
+  ]
+}

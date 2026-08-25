@@ -105,6 +105,7 @@ io.github.bluetape4k.exposed:bluetape4k-exposed-bom:1.12.1=compileClasspath
 io.github.bluetape4k.exposed:bluetape4k-exposed-cache:1.12.1=testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k.exposed:bluetape4k-exposed-core:1.12.1=compileClasspath,gatling,gatlingCompileClasspath,gatlingRuntimeClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k.exposed:bluetape4k-exposed-dao:1.12.1=compileClasspath,gatling,gatlingCompileClasspath,gatlingRuntimeClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc-caffeine:1.12.1=testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc-lettuce:1.12.1=testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc:1.12.1=compileClasspath,gatling,gatlingCompileClasspath,gatlingRuntimeClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k.exposed:bluetape4k-exposed-spring-boot-jdbc:1.12.1=testCompileClasspath,testRuntimeClasspath

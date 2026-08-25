@@ -1,0 +1,98 @@
+{
+  "kind": "chart",
+  "source": {
+    "question": "JDBC Caffeine 후보의 latency·allocation·cold-start 비용이 기존 캐시 대비 adoption을 정당화하는가?",
+    "revision": "311befc378aa467b6331b2a78f962101d115b11b",
+    "paths": [
+      "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json",
+      "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/JdbcCaffeineEffectivePolicyPilotBenchmark.kt"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "baseline-hot-hit",
+      "label": "baseline / hot-hit",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    },
+    {
+      "id": "candidate-hot-hit",
+      "label": "candidate / hot-hit",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    },
+    {
+      "id": "baseline-cold-fill",
+      "label": "baseline / cold-fill",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    },
+    {
+      "id": "candidate-cold-fill",
+      "label": "candidate / cold-fill",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    },
+    {
+      "id": "baseline-invalidation",
+      "label": "baseline / invalidation",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    },
+    {
+      "id": "candidate-invalidation",
+      "label": "candidate / invalidation",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    },
+    {
+      "id": "baseline-cold-start",
+      "label": "baseline / cold-start",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    },
+    {
+      "id": "candidate-cold-start",
+      "label": "candidate / cold-start",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    }
+  ],
+  "edges": [
+    {
+      "id": "hot-hit-comparison",
+      "from": "baseline-hot-hit",
+      "to": "candidate-hot-hit",
+      "kind": "comparison",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    },
+    {
+      "id": "cold-fill-comparison",
+      "from": "baseline-cold-fill",
+      "to": "candidate-cold-fill",
+      "kind": "comparison",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    },
+    {
+      "id": "invalidation-comparison",
+      "from": "baseline-invalidation",
+      "to": "candidate-invalidation",
+      "kind": "comparison",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    },
+    {
+      "id": "cold-start-comparison",
+      "from": "baseline-cold-start",
+      "to": "candidate-cold-start",
+      "kind": "comparison",
+      "source": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json"
+    }
+  ],
+  "behavior": {
+    "branches": 0,
+    "loops": 0
+  },
+  "repairs": [],
+  "chart": {
+    "pipeline": "svg-to-png",
+    "scale": "logarithmic",
+    "units": [
+      "ns/op",
+      "bytes/op"
+    ],
+    "lowerIsBetter": true,
+    "productionSloEvidence": false
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "issue": 313,
+  "sourceCommit": "311befc378aa467b6331b2a78f962101d115b11b",
+  "benchmarkReport": "appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json",
+  "persistedReport": "docs/benchmarks/issue-313-jdbc-caffeine-pilot/benchmark.json",
+  "generator": "scripts/generate-issue313-jdbc-caffeine-chart.mjs",
+  "warmupRounds": 5,
+  "measurementRounds": 20,
+  "environment": {
+    "db": "h2",
+    "java": "21.0.12.1",
+    "os": "Mac OS X"
+  },
+  "commands": [
+    "./gradlew :appointment-api:jdbcCaffeineEffectivePolicyPilotBenchmark --no-daemon",
+    "node scripts/generate-issue313-jdbc-caffeine-chart.mjs --input appointment-api/build/reports/issue-313/jdbc-caffeine-pilot.json --output docs/benchmarks/issue-313-jdbc-caffeine-pilot/chart.svg --semantic-output docs/benchmarks/issue-313-jdbc-caffeine-pilot/chart.semantic.json --data-output docs/benchmarks/issue-313-jdbc-caffeine-pilot/chart.data.json",
+    "xmllint --noout docs/benchmarks/issue-313-jdbc-caffeine-pilot/chart.svg",
+    "cairosvg docs/benchmarks/issue-313-jdbc-caffeine-pilot/chart.svg -o docs/benchmarks/issue-313-jdbc-caffeine-pilot/chart.png -s 2",
+    "python3 diagram-semantic-audit.py --repo-root . --json docs/benchmarks/issue-313-jdbc-caffeine-pilot/chart.semantic.json",
+    "python3 diagram-svg-text-normalize.py docs/benchmarks/issue-313-jdbc-caffeine-pilot/chart.svg",
+    "python3 diagram-visual-audit.py --require-opaque docs/benchmarks/issue-313-jdbc-caffeine-pilot/chart.png"
+  ],
+  "render": {
+    "pipeline": "svg-to-png",
+    "renderer": "cairosvg",
+    "scale": 2,
+    "png": {
+      "width": 3200,
+      "height": 2440,
+      "opaque": true
+    }
+  },
+  "audits": {
+    "semantic": {
+      "nodes": 8,
+      "edges": 4,
+      "branches": 0,
+      "loops": 0,
+      "budgetStatus": "PASS"
+    },
+    "svgText": {
+      "textHazards": 0,
+      "codeWithoutHighlight": 0
+    },
+    "visual": {
+      "bboxOccupancy": 0.87,
+      "inkOccupancy": 0.203,
+      "marginImbalance": 0.033,
+      "failures": 0
+    },
+    "chartFallback": {
+      "barRectsWithDataSource": 16,
+      "profileRows": 8,
+      "legendSeries": 2
+    }
+  },
+  "decision": "HOLD",
+  "productionSloEvidence": false,
+  "rawPayloadIncluded": false,
+  "knownGap": "H2 단일 JVM characterization이므로 운영 PostgreSQL, 멀티노드 경합과 deployment SLO는 미검증이다."
+}
