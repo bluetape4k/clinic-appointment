@@ -6,6 +6,9 @@ import io.bluetape4k.leader.LeaderElector
 import io.bluetape4k.leader.LeaderElectorFactory
 import io.bluetape4k.leader.LeaderElectionOptions
 import io.bluetape4k.leader.spring.aop.autoconfigure.LeaderAopFactoryAutoConfiguration
+import io.bluetape4k.leader.spring.scheduling.LeaderScheduledPolicyAutoConfiguration
+import io.bluetape4k.leader.spring.scheduling.LeaderScheduledPolicyProperties
+import io.bluetape4k.leader.spring.scheduling.LeaderScheduledPolicyRegistry
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRuntime
@@ -25,6 +28,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import java.time.Duration
 
 /**
  * 알림 모듈 Auto-Configuration.
@@ -36,7 +40,12 @@ import org.springframework.context.annotation.Bean
  * 스케줄러는 호스트 애플리케이션이 [org.springframework.scheduling.annotation.EnableScheduling]을
  * 명시적으로 선택한 경우에만 동작합니다.
  */
-@AutoConfiguration(after = [LeaderAopFactoryAutoConfiguration::class])
+@AutoConfiguration(
+    after = [
+        LeaderAopFactoryAutoConfiguration::class,
+        LeaderScheduledPolicyAutoConfiguration::class,
+    ],
+)
 @ConditionalOnProperty(
     prefix = "clinic.notification",
     name = ["enabled"],
@@ -529,19 +538,34 @@ class NotificationAutoConfiguration {
         )
 
     @Bean
-    @ConditionalOnBean(AppointmentReminderScheduler::class)
+    @ConditionalOnBean(
+        value = [
+            AppointmentReminderScheduler::class,
+            LeaderElectorFactory::class,
+            LeaderScheduledPolicyRegistry::class,
+        ],
+    )
+    @ConditionalOnProperty(
+        prefix = "bluetape4k.leader.scheduling",
+        name = ["enabled"],
+        havingValue = "true",
+    )
     @ConditionalOnProperty(prefix = "clinic.notification.worker", name = ["enabled"], havingValue = "true", matchIfMissing = true)
     @ConditionalOnMissingBean(NotificationReminderSchedulingRunner::class)
     fun notificationReminderSchedulingRunner(
         scheduler: AppointmentReminderScheduler,
         metricsProvider: ObjectProvider<NotificationOutboxMetrics>,
         properties: NotificationProperties,
-    ): NotificationReminderSchedulingRunner =
-        NotificationReminderSchedulingRunner(
+        leaderPolicyProperties: LeaderScheduledPolicyProperties,
+    ): NotificationReminderSchedulingRunner {
+        val worker = properties.worker.validate()
+        requireReminderRecoveryPolicy(leaderPolicyProperties, worker.suspendBridgeTimeout)
+        return NotificationReminderSchedulingRunner(
             scheduler = scheduler,
             metrics = metricsProvider.ifAvailable,
-            suspendBridgeTimeout = properties.worker.validate().suspendBridgeTimeout,
+            suspendBridgeTimeout = worker.suspendBridgeTimeout,
         )
+    }
 
     @Bean
     @ConditionalOnBean(NotificationOutboxWorkStore::class)
@@ -636,10 +660,12 @@ class NotificationAutoConfiguration {
     fun notificationLeaderHealthMonitor(
         leaderElector: LeaderElector,
         properties: NotificationProperties,
+        leaderPolicyProperties: ObjectProvider<LeaderScheduledPolicyProperties>,
     ): NotificationLeaderHealthMonitor {
         val healthProperties = properties.leaderHealth.validate()
         return NotificationLeaderHealthMonitor(
             elector = leaderElector,
+            lockName = reminderRecoveryPolicyName(leaderPolicyProperties.ifAvailable),
             failureWindow = healthProperties.failureWindow,
             leaseRiskWindow = healthProperties.leaseRiskWindow,
         )
@@ -651,7 +677,12 @@ class NotificationAutoConfiguration {
     @ConditionalOnMissingBean(NotificationLeaderAopMetricsRecorder::class)
     fun notificationLeaderAopMetricsRecorder(
         monitor: NotificationLeaderHealthMonitor,
-    ): NotificationLeaderAopMetricsRecorder = NotificationLeaderAopMetricsRecorder(monitor)
+        leaderPolicyProperties: ObjectProvider<LeaderScheduledPolicyProperties>,
+    ): NotificationLeaderAopMetricsRecorder =
+        NotificationLeaderAopMetricsRecorder(
+            monitor = monitor,
+            lockName = reminderRecoveryPolicyName(leaderPolicyProperties.ifAvailable),
+        )
 
     /** ObservationRegistry가 있을 때 지원되는 reminder leader lifecycle만 관측합니다. */
     @Bean
@@ -659,8 +690,42 @@ class NotificationAutoConfiguration {
     @ConditionalOnMissingBean(NotificationLeaderObservationBridge::class)
     internal fun notificationLeaderObservationBridge(
         observationRegistry: ObservationRegistry,
-    ): NotificationLeaderObservationBridge = NotificationLeaderObservationBridge(observationRegistry)
+        leaderPolicyProperties: ObjectProvider<LeaderScheduledPolicyProperties>,
+    ): NotificationLeaderObservationBridge =
+        NotificationLeaderObservationBridge(
+            registry = observationRegistry,
+            lockName = reminderRecoveryPolicyName(leaderPolicyProperties.ifAvailable),
+        )
 
 }
 
 private const val RUNTIME_CONFIGURATION_DEPENDENCY_COUNT = 3
+
+private const val REMINDER_RECOVERY_POLICY_SELECTOR = "notificationReminderSchedulingRunner#poll"
+
+private fun reminderRecoveryPolicyName(
+    properties: LeaderScheduledPolicyProperties?,
+): String =
+    properties
+        ?.policies
+        ?.firstOrNull { it.selector == REMINDER_RECOVERY_POLICY_SELECTOR }
+        ?.name
+        ?.takeIf { it.isNotBlank() }
+        ?: REMINDER_RECOVERY_LOCK_NAME
+
+private fun requireReminderRecoveryPolicy(
+    properties: LeaderScheduledPolicyProperties,
+    suspendBridgeTimeout: Duration,
+) {
+    val policy = properties.policies.firstOrNull { it.selector == REMINDER_RECOVERY_POLICY_SELECTOR }
+    check(policy != null) {
+        "Missing scheduled leader policy: $REMINDER_RECOVERY_POLICY_SELECTOR"
+    }
+    val leaseTime = checkNotNull(policy.leaseTime) {
+        "Scheduled leader policy '$REMINDER_RECOVERY_POLICY_SELECTOR' must set lease-time"
+    }
+    check(leaseTime >= suspendBridgeTimeout) {
+        "Scheduled leader policy '$REMINDER_RECOVERY_POLICY_SELECTOR' lease-time must be >= " +
+            "worker.suspendBridgeTimeout"
+    }
+}

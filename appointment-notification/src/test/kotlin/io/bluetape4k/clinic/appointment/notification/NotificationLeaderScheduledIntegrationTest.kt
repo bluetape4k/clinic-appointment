@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.leader.LeaderElector
@@ -9,6 +10,7 @@ import io.bluetape4k.leader.LeaderElectorFactory
 import io.bluetape4k.leader.LeaderRunResult
 import io.bluetape4k.leader.spring.aop.autoconfigure.LeaderAopAutoConfiguration
 import io.bluetape4k.leader.spring.aop.autoconfigure.LeaderAopFactoryAutoConfiguration
+import io.bluetape4k.leader.spring.scheduling.LeaderScheduledPolicyAutoConfiguration
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -36,6 +38,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 internal class NotificationLeaderScheduledIntegrationTest {
 
+    private companion object {
+        val leaderFactory = ReusableLeaderElectorFactory()
+    }
+
     @Test
     fun `Spring AOP proxy와 ScheduledTaskHolder가 reminder fixed delay를 등록하고 bootstrap은 proxy를 호출한다`() {
         val scheduler = mockk<AppointmentReminderScheduler>()
@@ -47,7 +53,7 @@ internal class NotificationLeaderScheduledIntegrationTest {
             applicationContext.startupFailure shouldBeEqualTo null
             val runner = applicationContext.getBean(NotificationReminderSchedulingRunner::class.java)
             val target = AopTestUtils.getTargetObject<NotificationReminderSchedulingRunner>(runner)
-            check(runner !== target) { "@LeaderScheduled runner must be Spring AOP proxied" }
+            (runner === target).shouldBeFalse()
             AopProxyUtils.ultimateTargetClass(runner) shouldBeEqualTo NotificationReminderSchedulingRunner::class.java
 
             val scheduledTasks = applicationContext.getBean(ScheduledTaskHolder::class.java).scheduledTasks
@@ -142,11 +148,11 @@ internal class NotificationLeaderScheduledIntegrationTest {
                 .getBean(ScheduledTaskHolder::class.java)
                 .scheduledTasks
                 .single()
-            checkNotNull(scheduledTask).nextExecution().shouldNotBeNull()
+            scheduledTask.shouldNotBeNull().nextExecution().shouldNotBeNull()
         }
 
         cancelled.get().shouldBeTrue()
-        checkNotNull(scheduledTask).nextExecution() shouldBeEqualTo null
+        scheduledTask.shouldNotBeNull().nextExecution() shouldBeEqualTo null
     }
 
     private fun electedElector(): LeaderElector {
@@ -165,14 +171,14 @@ internal class NotificationLeaderScheduledIntegrationTest {
         elector: LeaderElector,
         taskScheduler: TaskScheduler = mockk(relaxed = true),
     ): ApplicationContextRunner {
-        val factory = mockk<LeaderElectorFactory>()
-        every { factory.create(any()) } returns elector
+        leaderFactory.elector = elector
         return ApplicationContextRunner()
             .withConfiguration(
                 AutoConfigurations.of(
                     AopAutoConfiguration::class.java,
                     LeaderAopFactoryAutoConfiguration::class.java,
                     LeaderAopAutoConfiguration::class.java,
+                    LeaderScheduledPolicyAutoConfiguration::class.java,
                 ),
             )
             .withUserConfiguration(ReminderSchedulingConfiguration::class.java, SchedulingConfiguration::class.java)
@@ -180,8 +186,16 @@ internal class NotificationLeaderScheduledIntegrationTest {
                 "spring.aop.auto=true",
                 "spring.aop.proxy-target-class=true",
                 "bluetape4k.leader.aop.strict=false",
+                "bluetape4k.leader.scheduling.enabled=true",
+                "bluetape4k.leader.scheduling.policies[0].selector=notificationReminderSchedulingRunner#poll",
+                "bluetape4k.leader.scheduling.policies[0].name=appointment-reminder-recovery",
+                "bluetape4k.leader.scheduling.policies[0].wait-time=0s",
+                "bluetape4k.leader.scheduling.policies[0].lease-time=60s",
+                "bluetape4k.leader.scheduling.policies[0].min-lease-time=5s",
+                "bluetape4k.leader.scheduling.policies[0].bean=localLeaderElectionFactory",
+                "bluetape4k.leader.scheduling.policies[0].failure-mode=SKIP",
             )
-            .withBean("localLeaderElectionFactory", LeaderElectorFactory::class.java, { factory })
+            .withBean("localLeaderElectionFactory", LeaderElectorFactory::class.java, { leaderFactory })
             .withBean("appointmentReminderScheduler", AppointmentReminderScheduler::class.java, { scheduler })
             .withBean("taskScheduler", TaskScheduler::class.java, { taskScheduler })
     }

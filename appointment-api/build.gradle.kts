@@ -75,6 +75,8 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation(libs.bluetape4k.junit5)
+    // Java 25에서는 StructuredTaskScope API가 변경되므로 jdk25 provider를 사용한다.
+    testRuntimeOnly(libs.bluetape4k.virtualthread.jdk25)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.jetbrains.exposed.migration.jdbc)
 
@@ -103,6 +105,9 @@ dependencies {
 // Spring Boot BOM이 test runtime에 1.10.2를 강제하면 cancel$default 링크가 깨지므로,
 // 이 모듈의 모든 구성에서 프로젝트가 선언한 Coroutines BOM 버전을 유지한다.
 configurations.configureEach {
+    // bluetape4k-junit5의 기본 jdk21 provider는 Java 25에서 로드할 수 없다.
+    exclude(group = "io.github.bluetape4k", module = "bluetape4k-virtualthread-jdk21")
+
     resolutionStrategy.eachDependency {
         if (requested.group == "org.jetbrains.kotlinx" && requested.name.startsWith("kotlinx-coroutines-")) {
             useVersion(libs.versions.kotlinx.coroutines.get())
@@ -119,17 +124,17 @@ tasks.withType<Test>().configureEach {
     }
 }
 
-// Gatling 런타임은 Java 21 기반이므로 Gatling 소스는 Java 21 타겟으로 컴파일
+// upstream leader timestamp 사전 릴리스의 Java 25 variant를 소비하므로 Gatling source도 Java 25로 컴파일
 tasks.withType<JavaCompile>().configureEach {
     if (name.startsWith("compileGatling")) {
-        options.release.set(21)
+        options.release.set(25)
     }
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     if (name.startsWith("compileGatling")) {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
         }
     }
 }

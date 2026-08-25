@@ -28,6 +28,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
 
     // Reminder recovery trigger leader election (delivery correctness uses DB lease/fencing)
+    api(libs.bluetape4k.leader.core)
     api(libs.bluetape4k.leader)
     api(libs.bluetape4k.leader.spring.boot)
     implementation(libs.bluetape4k.leader.micrometer)

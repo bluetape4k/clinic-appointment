@@ -2,7 +2,7 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
-import io.bluetape4k.leader.annotation.LeaderAspectFailureMode
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.leader.spring.scheduling.LeaderScheduled
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -12,6 +12,7 @@ import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import org.springframework.core.annotation.AnnotatedElementUtils
 import org.junit.jupiter.api.Test
+import org.springframework.scheduling.annotation.Scheduled
 import java.time.Duration
 
 internal class NotificationSchedulingRunnersTest {
@@ -107,13 +108,12 @@ internal class NotificationSchedulingRunnersTest {
     }
 
     @Test
-    fun `reminder poll은 LeaderScheduled 단일 실행 경계를 선언한다`() {
+    fun `reminder poll은 fixed delay Scheduled만 선언하고 leader policy는 외부 설정으로 위임한다`() {
         val method = NotificationReminderSchedulingRunner::class.java.getDeclaredMethod("poll")
-        val annotation = requireNotNull(AnnotatedElementUtils.findMergedAnnotation(method, LeaderScheduled::class.java))
+        val scheduled = AnnotatedElementUtils.findMergedAnnotation(method, Scheduled::class.java).shouldNotBeNull()
 
-        annotation.name shouldBeEqualTo REMINDER_RECOVERY_LOCK_NAME
-        annotation.fixedDelayString shouldBeEqualTo "\${clinic.notification.worker.reminder-recovery-interval:PT1H}"
-        annotation.failureMode shouldBeEqualTo LeaderAspectFailureMode.SKIP
+        scheduled.fixedDelayString shouldBeEqualTo "\${clinic.notification.worker.reminder-recovery-interval:PT1H}"
+        AnnotatedElementUtils.findMergedAnnotation(method, LeaderScheduled::class.java) shouldBeEqualTo null
     }
 
     @Test
@@ -126,7 +126,7 @@ internal class NotificationSchedulingRunnersTest {
     }
 
     @Test
-    fun `reminder poll 본문은 leader AOP 경계 안에서 scheduler를 실행한다`() {
+    fun `reminder poll 본문은 scheduler를 실행한다`() {
         val scheduler = mockk<AppointmentReminderScheduler>()
         val metrics = mockk<NotificationOutboxMetrics>(relaxed = true)
         val result = ReminderRecoveryScanResult(

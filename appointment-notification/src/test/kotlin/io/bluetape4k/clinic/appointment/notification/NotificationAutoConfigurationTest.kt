@@ -2,6 +2,8 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
@@ -13,11 +15,13 @@ import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.leader.LeaderElector
+import io.bluetape4k.leader.LeaderElectorFactory
 import io.bluetape4k.leader.lettuce.LettuceLeaderElector
 import io.bluetape4k.leader.micrometer.MicrometerLeaderAopMetricsRecorder
 import io.bluetape4k.leader.spring.aop.autoconfigure.LeaderAopAutoConfiguration
 import io.bluetape4k.leader.spring.aop.autoconfigure.LeaderAopFactoryAutoConfiguration
 import io.bluetape4k.leader.spring.metrics.LeaderMicrometerAutoConfiguration
+import io.bluetape4k.leader.spring.scheduling.LeaderScheduledPolicyAutoConfiguration
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
@@ -37,6 +41,10 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import kotlin.system.measureTimeMillis
 
 internal class NotificationAutoConfigurationTest {
+
+    private companion object {
+        val leaderFactory = ReusableLeaderElectorFactory()
+    }
 
     @Test
     fun `resilient channel bean은 실제 channel 유형의 provider timeout override를 적용한다`() {
@@ -438,6 +446,8 @@ internal class NotificationAutoConfigurationTest {
     fun `recovery port가 모두 준비되면 DB 시각을 사용하는 scheduler를 구성한다`() {
         val database = database("auto_reminder_recovery", version = "21")
         context(database, withKey = true)
+            .withPropertyValues(*reminderPolicyProperties())
+            .withBean("localLeaderElectionFactory", LeaderElectorFactory::class.java, { leaderFactory })
             .withBean(
                 "reminderRecoverySource",
                 ReminderRecoverySource::class.java,
@@ -470,6 +480,97 @@ internal class NotificationAutoConfigurationTest {
                     applicationContext.getBean(AppointmentReminderScheduler::class.java).triggerOnce()
                 } shouldBeEqualTo ReminderRecoveryScanResult(0, 0, 0)
         }
+    }
+
+    @Test
+    fun `leader scheduling policy가 기본 비활성화면 reminder runner를 만들지 않는다`() {
+        val database = database("auto_reminder_policy_disabled", version = "21")
+        context(database, withKey = true)
+            .withBean(
+                "reminderRecoverySource",
+                ReminderRecoverySource::class.java,
+                { ReminderRecoverySource { _, _ -> emptyList() } },
+            )
+            .withBean(
+                "reminderRecoveryMaterializer",
+                ReminderRecoveryMaterializer::class.java,
+                { reminderRecoveryMaterializer() },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(NotificationReminderSchedulingRunner::class.java).size shouldBeEqualTo 0
+                applicationContext.getBeansOfType(NotificationReminderSchedulingBootstrap::class.java).size shouldBeEqualTo 0
+            }
+    }
+
+    @Test
+    fun `leader scheduling policy가 켜져도 factory가 없으면 reminder runner를 만들지 않는다`() {
+        val database = database("auto_reminder_policy_without_factory", version = "21")
+        context(database, withKey = true)
+            .withPropertyValues(
+                *reminderPolicyProperties(),
+                "bluetape4k.leader.aop.enabled=false",
+            )
+            .withBean(
+                "reminderRecoverySource",
+                ReminderRecoverySource::class.java,
+                { ReminderRecoverySource { _, _ -> emptyList() } },
+            )
+            .withBean(
+                "reminderRecoveryMaterializer",
+                ReminderRecoveryMaterializer::class.java,
+                { reminderRecoveryMaterializer() },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure shouldBeEqualTo null
+                applicationContext.getBeansOfType(NotificationReminderSchedulingRunner::class.java).size shouldBeEqualTo 0
+            }
+    }
+
+    @Test
+    fun `leader scheduling policy에 reminder selector가 없으면 startup에서 거절한다`() {
+        val database = database("auto_reminder_policy_missing_selector", version = "21")
+        context(database, withKey = true)
+            .withPropertyValues("bluetape4k.leader.scheduling.enabled=true")
+            .withBean("localLeaderElectionFactory", LeaderElectorFactory::class.java, { leaderFactory })
+            .withBean(
+                "reminderRecoverySource",
+                ReminderRecoverySource::class.java,
+                { ReminderRecoverySource { _, _ -> emptyList() } },
+            )
+            .withBean(
+                "reminderRecoveryMaterializer",
+                ReminderRecoveryMaterializer::class.java,
+                { reminderRecoveryMaterializer() },
+            )
+            .run { applicationContext ->
+                applicationContext.startupFailure.shouldNotBeNull()
+            }
+    }
+
+    @Test
+    fun `leader lease가 suspend bridge timeout보다 짧으면 startup에서 거절한다`() {
+        val database = database("auto_reminder_policy_short_lease", version = "21")
+        context(database, withKey = true)
+            .withPropertyValues(
+                *reminderPolicyProperties(leaseTime = "10s"),
+                "clinic.notification.worker.suspend-bridge-timeout=30s",
+            )
+            .withBean("localLeaderElectionFactory", LeaderElectorFactory::class.java, { leaderFactory })
+            .withBean(
+                "reminderRecoverySource",
+                ReminderRecoverySource::class.java,
+                { ReminderRecoverySource { _, _ -> emptyList() } },
+            )
+            .withBean(
+                "reminderRecoveryMaterializer",
+                ReminderRecoveryMaterializer::class.java,
+                { reminderRecoveryMaterializer() },
+            )
+            .run { applicationContext ->
+                val failure = applicationContext.startupFailure.shouldNotBeNull()
+                failureMessages(failure).contains("suspendBridgeTimeout").shouldBeTrue()
+            }
     }
 
     @Test
@@ -635,14 +736,32 @@ internal class NotificationAutoConfigurationTest {
             }
 
         val enabledDatabase = database("auto_leader_health_enabled", version = "21")
+        val hostElector = mockk<LeaderElector>(relaxed = true)
         context(enabledDatabase, withKey = true)
-            .withPropertyValues("clinic.notification.leader-health.enabled=true")
-            .withBean("leaderElector", LeaderElector::class.java, { mockk(relaxed = true) })
+            .withPropertyValues(
+                "clinic.notification.leader-health.enabled=true",
+                *reminderPolicyProperties(),
+                "bluetape4k.leader.scheduling.policies[0].name=custom-reminder-recovery",
+            )
+            .withBean("localLeaderElectionFactory", LeaderElectorFactory::class.java, { leaderFactory })
+            .withBean("leaderElector", LeaderElector::class.java, { hostElector })
+            .withBean(
+                "reminderRecoverySource",
+                ReminderRecoverySource::class.java,
+                { ReminderRecoverySource { _, _ -> emptyList() } },
+            )
+            .withBean(
+                "reminderRecoveryMaterializer",
+                ReminderRecoveryMaterializer::class.java,
+                { reminderRecoveryMaterializer() },
+            )
             .run { applicationContext ->
                 applicationContext.startupFailure shouldBeEqualTo null
                 applicationContext.getBeansOfType(NotificationLeaderHealthMonitor::class.java).size shouldBeEqualTo 1
                 applicationContext.getBeansOfType(NotificationLeaderHealthSource::class.java).size shouldBeEqualTo 1
                 applicationContext.getBeansOfType(NotificationLeaderAopMetricsRecorder::class.java).size shouldBeEqualTo 1
+                applicationContext.getBean(NotificationLeaderHealthMonitor::class.java).snapshot()
+                verify(exactly = 1) { hostElector.state("custom-reminder-recovery") }
             }
     }
 
@@ -656,6 +775,7 @@ internal class NotificationAutoConfigurationTest {
                     LeaderAopFactoryAutoConfiguration::class.java,
                     LeaderMicrometerAutoConfiguration::class.java,
                     LeaderAopAutoConfiguration::class.java,
+                    LeaderScheduledPolicyAutoConfiguration::class.java,
                     NotificationAutoConfiguration::class.java,
                 ),
             )
@@ -711,4 +831,30 @@ internal class NotificationAutoConfigurationTest {
                 htmlBody = null,
             ),
         )
+
+    private fun reminderPolicyProperties(leaseTime: String = "60s"): Array<String> =
+        arrayOf(
+            "bluetape4k.leader.scheduling.enabled=true",
+            "bluetape4k.leader.scheduling.policies[0].selector=notificationReminderSchedulingRunner#poll",
+            "bluetape4k.leader.scheduling.policies[0].name=appointment-reminder-recovery",
+            "bluetape4k.leader.scheduling.policies[0].wait-time=0s",
+            "bluetape4k.leader.scheduling.policies[0].lease-time=$leaseTime",
+            "bluetape4k.leader.scheduling.policies[0].min-lease-time=5s",
+            "bluetape4k.leader.scheduling.policies[0].bean=localLeaderElectionFactory",
+            "bluetape4k.leader.scheduling.policies[0].failure-mode=SKIP",
+        )
+
+    private fun reminderRecoveryMaterializer(): ReminderRecoveryMaterializer =
+        object : ReminderRecoveryMaterializer {
+            override suspend fun enqueue(candidate: ReminderRecoveryCandidate) =
+                ReminderRecoveryMaterializationResult.ENQUEUED
+
+            override suspend fun suppressMissed(candidate: ReminderRecoveryCandidate) =
+                ReminderRecoveryMaterializationResult.SUPPRESSED
+        }
+
+    private fun failureMessages(failure: Throwable): String =
+        generateSequence(failure) { it.cause }
+            .mapNotNull { it.message }
+            .joinToString(" | ")
 }

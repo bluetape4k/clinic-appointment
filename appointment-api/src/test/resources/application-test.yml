@@ -6,3 +6,9 @@ spring:
         driver-class-name: org.h2.Driver
     flyway:
         enabled: false
+
+# Redis 없는 test profile에서는 leader 보호 없는 reminder runner를 만들지 않습니다.
+bluetape4k:
+    leader:
+        scheduling:
+            enabled: false
