@@ -40,8 +40,9 @@ readiness가 누락한 waitlist outbox table/index preflight를 notification cap
 현재 `appointment-messaging/build.gradle.kts`는
 `api(project(":appointment-event"))`를 선언한다. messaging source는 event package의
 `CancellationReasonCode` typealias와 `SchedulingOutboxEvents`를 사용하지만, public
-reason/context/record contract의 실제 타입은 `appointment-core`에 있다. 따라서 선택한
-구현은 public source import를 core의 `commitment.CancellationReasonCode`로 정렬하고
+reason-code·record 타입은 `appointment-core`에 있고 `AppointmentMessagingContext`는
+messaging module이 정의한다. 따라서 선택한 구현은 public source import를 core의
+`commitment.CancellationReasonCode`로 정렬하고
 `api(project(":appointment-core"))`를 직접 선언한 뒤 event dependency를
 `implementation`으로 낮춘다. 이를 통해 event table은 내부 implementation classpath에만
 남고 messaging consumer API에는 전파되지 않는다. 반대로 notification의
@@ -70,8 +71,9 @@ persistence contract를 완전히 분리하는 후속 작업은 물리 이동 �
    - `appointment-messaging`에 `api(project(":appointment-core"))`를 명시하고,
      `AppointmentMessagingContracts.kt`, `AppointmentEventEnvelopeCodec.kt`,
      `AppointmentOutboxWriter.kt`의 public reason-code import를 core source로
-     정렬한다. 이 변경은 typealias의 underlying JVM 타입과 public method signature를
-     바꾸지 않는다.
+     정렬한다. 이 변경은 typealias의 underlying JVM ABI와 public method signature를
+     바꾸지 않지만, event package typealias를 직접 import하던 source consumer는 core
+     import 또는 명시적인 event dependency로 마이그레이션해야 한다.
    - messaging consumer fixture의 승인 API 좌표에서 `project::appointment-event`를
      제거하고 `project::appointment-core`를 직접 검증한다. fixture는
      `AppointmentOutboxWriter`, `AppointmentMessagingContext`, `AppointmentRecord`,
