@@ -65,6 +65,28 @@ class WaitlistDeliveryMetrics(
 
     fun recordLeaseLost() = counter(LEASE_RECLAIMS, "reason", "leader_lost").increment()
 
+    fun recordLeaseAcquire(outcome: WaitlistLeaseMetricOutcome, duration: Duration) {
+        require(!duration.isNegative) { "duration must be non-negative" }
+        counter(LEASE_ACQUIRE_TOTAL, "outcome", outcome.metricValue).increment()
+        Timer.builder(LEASE_ACQUIRE_SECONDS)
+            .tag("outcome", outcome.metricValue)
+            .publishPercentileHistogram()
+            .register(registry)
+            .record(duration)
+    }
+
+    fun recordSchedulerTick(mode: DeliveryMode, duration: Duration) {
+        require(!duration.isNegative) { "duration must be non-negative" }
+        Timer.builder(SCHEDULER_TICK)
+            .tag("mode", mode.metricValue)
+            .publishPercentileHistogram()
+            .register(registry)
+            .record(duration)
+    }
+
+    fun recordOwnershipLoss(source: WaitlistOwnershipLossSource) =
+        counter(OWNERSHIP_LOSS_TOTAL, "source", source.metricValue).increment()
+
     fun recordLockWait(duration: Duration) {
         require(!duration.isNegative) { "duration must be non-negative" }
         Timer.builder(LOCK_WAIT).publishPercentileHistogram().register(registry).record(duration)
@@ -87,6 +109,10 @@ class WaitlistDeliveryMetrics(
         const val PROVIDER_LATENCY = "appointment_waitlist_provider_latency"
         const val LEASE_RECLAIMS = "appointment_waitlist_lease_reclaims_total"
         const val LOCK_WAIT = "appointment_waitlist_lock_wait_seconds"
+        const val LEASE_ACQUIRE_TOTAL = "appointment_waitlist_lease_acquire_total"
+        const val LEASE_ACQUIRE_SECONDS = "appointment_waitlist_lease_acquire_seconds"
+        const val SCHEDULER_TICK = "appointment_waitlist_scheduler_tick_seconds"
+        const val OWNERSHIP_LOSS_TOTAL = "appointment_waitlist_ownership_loss_total"
     }
 }
 
@@ -96,6 +122,19 @@ enum class WaitlistProviderOutcome(val metricValue: String) {
     SUPPRESSED("suppressed"),
     UNKNOWN("unknown"),
     LEASE_LOST("lease_lost"),
+}
+
+enum class WaitlistLeaseMetricOutcome(val metricValue: String) {
+    ACQUIRED("acquired"),
+    CONTENDED("contended"),
+    TIMEOUT("timeout"),
+    AMBIGUOUS("ambiguous"),
+    FAILED("failed"),
+}
+
+enum class WaitlistOwnershipLossSource(val metricValue: String) {
+    REDIS("redis"),
+    DB("db"),
 }
 
 private val DeliveryMode.metricValue: String
