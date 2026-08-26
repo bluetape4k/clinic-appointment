@@ -2,7 +2,9 @@ package io.bluetape4k.clinic.appointment.api.migration
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldContainAll
 import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.configuration.FluentConfiguration
 import java.sql.Connection
 import java.sql.SQLException
 import java.sql.Timestamp
@@ -107,6 +109,41 @@ internal object WaitlistDeliveryMigrationTestSupport {
         }
     }
 
+    /** V31 fence tuple의 additive column과 database default를 dialect별로 검증합니다. */
+    fun verifyV31Migration(
+        dataSource: DataSource,
+        location: String,
+        dialect: Dialect,
+    ) {
+        val result = flyway(dataSource, location)
+            .cleanDisabled(false)
+            .load()
+            .let { flyway ->
+                flyway.clean()
+                flyway.migrate()
+            }
+
+        result.success.shouldBeTrue()
+        dataSource.connection.use { connection ->
+            val fenceColumns = columnNames(connection, "scheduling_waitlist_vacancy_jobs")
+            fenceColumns shouldContainAll setOf("fence_epoch", "fence_sequence")
+            val defaults = fenceDefaults(connection)
+            defaults["fence_epoch"]?.normalizeDefault() shouldBeEqualTo "0"
+            defaults["fence_sequence"]?.normalizeDefault() shouldBeEqualTo "0"
+        }
+        check(dialect in Dialect.entries) { "Unsupported waitlist fencing dialect: $dialect" }
+    }
+
+    private fun flyway(dataSource: DataSource, location: String): FluentConfiguration =
+        Flyway.configure()
+            .dataSource(dataSource)
+            .locations(location)
+            .apply {
+                if (location.endsWith("/postgresql")) {
+                    configuration(mapOf("flyway.postgresql.transactional.lock" to "false"))
+                }
+            }
+
     private fun verifyUpgradeMigration(
         dataSource: DataSource,
         location: String,
@@ -175,6 +212,32 @@ internal object WaitlistDeliveryMigrationTestSupport {
             columnNames(connection, table) shouldBeEqualTo expected
         }
     }
+
+    private fun fenceDefaults(connection: Connection): Map<String, String?> {
+        val defaults = mutableMapOf<String, String?>()
+        connection.metaData.getColumns(null, null, "scheduling_waitlist_vacancy_jobs", null).use { rows ->
+            while (rows.next()) {
+                val name = rows.getString("COLUMN_NAME").lowercase()
+                if (name == "fence_epoch" || name == "fence_sequence") {
+                    defaults[name] = rows.getString("COLUMN_DEF")
+                }
+            }
+        }
+        if (defaults.size < 2) {
+            connection.metaData.getColumns(null, null, "SCHEDULING_WAITLIST_VACANCY_JOBS", null).use { rows ->
+                while (rows.next()) {
+                    val name = rows.getString("COLUMN_NAME").lowercase()
+                    if (name == "fence_epoch" || name == "fence_sequence") {
+                        defaults[name] = rows.getString("COLUMN_DEF")
+                    }
+                }
+            }
+        }
+        return defaults
+    }
+
+    private fun String.normalizeDefault(): String =
+        trim().trim('(', ')', '\'', '"').substringBefore("::").trim().lowercase()
 
     private fun verifyForeignKeys(connection: Connection) {
         expectedTables.forEach { table ->
