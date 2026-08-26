@@ -1,6 +1,8 @@
 package io.bluetape4k.clinic.appointment.api.config
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Path
@@ -43,6 +45,20 @@ class ApiDependencyBoundaryContractTest {
                 .firstOrNull { it.startsWith("- **내부**:") }
                 ?.contains("appointment-solver") == true
         }.shouldBeEqualTo(listOf(false, false))
+    }
+
+    @Test
+    fun `api notification consumers depend on the event writer port`() {
+        val serviceConfig = read("appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ServiceConfig.kt")
+        val appointmentWriter = read("appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/notification/AppointmentNotificationWriter.kt")
+        val recoveryStore = read("appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/notification/JdbcAppointmentReminderRecoveryStore.kt")
+
+        serviceConfig.contains("JdbcNotificationOutboxRepository").shouldBeFalse()
+        serviceConfig.contains("NotificationOutboxCodec").shouldBeFalse()
+        appointmentWriter.contains("NotificationOutboxWriter").shouldBeTrue()
+        appointmentWriter.contains("JdbcNotificationOutboxRepository").shouldBeFalse()
+        recoveryStore.contains("NotificationOutboxWriter").shouldBeTrue()
+        recoveryStore.contains("JdbcNotificationOutboxRepository").shouldBeFalse()
     }
 
     private fun read(relativePath: String): String =

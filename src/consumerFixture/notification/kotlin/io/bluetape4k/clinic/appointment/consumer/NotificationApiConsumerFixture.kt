@@ -19,6 +19,7 @@ import io.bluetape4k.clinic.appointment.notification.ResilientNotificationChanne
 import io.bluetape4k.clinic.appointment.notification.NotificationDirectDeliveryPort
 import io.bluetape4k.clinic.appointment.notification.NotificationRetentionRunner
 import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxWriter
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxObservationStore
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxWorkStore
 import io.bluetape4k.clinic.appointment.notification.AppointmentReminderScheduler
@@ -57,6 +58,9 @@ private fun workStoreType(database: Database, repository: JdbcNotificationOutbox
     JdbcNotificationOutboxWorkStore(database, repository)
 private fun observationStoreType(database: Database, repository: JdbcNotificationOutboxRepository): JdbcNotificationOutboxObservationStore =
     JdbcNotificationOutboxObservationStore(database, repository)
+
+// appointment-event/.../NotificationOutboxWriter.kt: notification auto-configuration publishes the event write port.
+private fun writerType(writer: NotificationOutboxWriter): NotificationOutboxWriter = writer
 
 // appointment-notification/.../NotificationOutboxMetrics.kt: public MeterRegistry constructor.
 private fun metricsType(
@@ -109,5 +113,6 @@ private fun leaderType(
     ResilientNotificationChannel::class,
     NotificationDirectDeliveryPort::class,
     JdbcNotificationOutboxRepository::class,
+    NotificationOutboxWriter::class,
     eventConsumerType,
 )

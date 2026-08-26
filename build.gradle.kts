@@ -27,6 +27,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Instant
+import java.util.zip.ZipFile
 
 plugins {
     base
@@ -174,6 +175,97 @@ val compileModuleConsumerFixtures = tasks.register("compileModuleConsumerFixture
     )
 }
 
+private val appointmentEventNotificationContractSourceRoots = listOf(
+    "appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification",
+    "appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/waitlist",
+)
+
+private val appointmentEventNotificationContractRequiredEntries = setOf(
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxWriter.class",
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxWriteReceipt.class",
+    "io/bluetape4k/clinic/appointment/event/notification/SendableNotificationDraft.class",
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxEnvelope.class",
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxCodec.class",
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxHasher.class",
+)
+
+private val appointmentEventNotificationContractForbiddenEntries = listOf(
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxEvents",
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationDeliveryAttempts",
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxRepository",
+    "io/bluetape4k/clinic/appointment/event/notification/JdbcNotificationOutboxRepository",
+    "io/bluetape4k/clinic/appointment/event/notification/ClaimedNotification",
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxRowKind",
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxStatus",
+    "io/bluetape4k/clinic/appointment/event/notification/NotificationDeliveryAttemptOutcome",
+    "io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxEvents",
+    "io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxRepository",
+    "io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxAdapter",
+    "io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxStatus",
+    "io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxRecord",
+    "io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxSink",
+)
+
+private val appointmentEventNotificationContractForbiddenSourceAnchors = listOf(
+    "NotificationOutboxEvents",
+    "NotificationDeliveryAttempts",
+    "NotificationOutboxRepository",
+    "JdbcNotificationOutboxRepository",
+    "NotificationOutboxRowKind",
+    "NotificationOutboxStatus",
+    "NotificationDeliveryAttemptOutcome",
+    "ClaimedNotification",
+    "WaitlistNotificationOutboxEvents",
+    "WaitlistNotificationOutboxRepository",
+    "WaitlistNotificationOutboxAdapter",
+    "WaitlistNotificationOutboxStatus",
+    "WaitlistNotificationOutboxRecord",
+    "WaitlistNotificationOutboxSink",
+    "org.jetbrains.exposed",
+    "JdbcTransaction",
+)
+
+val assertAppointmentEventNotificationBoundary = tasks.register("assertAppointmentEventNotificationBoundary") {
+    description = "Asserts that appointment-event publishes notification contracts without persistence implementation details."
+    group = "verification"
+    notCompatibleWithConfigurationCache("Inspects the event source tree and compiled jar entries at task execution time.")
+    dependsOn(":appointment-event:jar")
+    inputs.files(appointmentEventNotificationContractSourceRoots)
+    inputs.file(project(":appointment-event").layout.buildDirectory.file("libs/appointment-event.jar"))
+    doLast {
+        val sourceViolations = appointmentEventNotificationContractSourceRoots
+            .flatMap { sourceRoot ->
+                fileTree(sourceRoot).matching { include("**/*.kt") }.files
+            }
+            .sortedBy(File::getPath)
+            .flatMap { sourceFile ->
+                val source = sourceFile.readText()
+                appointmentEventNotificationContractForbiddenSourceAnchors
+                    .filter(source::contains)
+                    .map { anchor -> "${sourceFile.path}: $anchor" }
+            }
+        require(sourceViolations.isEmpty()) {
+            "appointment-event notification contract source leaks persistence anchors: $sourceViolations"
+        }
+
+        val eventJar = project(":appointment-event").layout.buildDirectory.file("libs/appointment-event.jar").get().asFile
+        require(eventJar.isFile) { "appointment-event jar is missing: ${eventJar.path}" }
+        ZipFile(eventJar).use { zipFile ->
+            val entries = zipFile.entries().asSequence().map { it.name }.toSet()
+            val missingEntries = appointmentEventNotificationContractRequiredEntries - entries
+            require(missingEntries.isEmpty()) {
+                "appointment-event jar is missing pure notification contract entries: $missingEntries"
+            }
+            val leakedEntries = entries.filter { entry ->
+                appointmentEventNotificationContractForbiddenEntries.any(entry::startsWith)
+            }
+            require(leakedEntries.isEmpty()) {
+                "appointment-event jar leaks notification persistence entries: $leakedEntries"
+            }
+        }
+    }
+}
+
 private data class ApiConsumerFixtureTarget(
     val module: String,
     val configuration: Configuration,
@@ -312,7 +404,8 @@ private val apiConsumerFixtureInventory = mapOf(
     "notification" to listOf(
         "NotificationAppointmentEventConsumer", "NotificationAppointmentEventKafkaListener", "NotificationSchemaReadiness",
         "JdbcNotificationOutboxWorkStore", "JdbcNotificationOutboxObservationStore", "NotificationOutboxWorkStore",
-        "NotificationOutboxObservationStore", "NotificationOutboxRepository", "NotificationOutboxMetrics",
+        "NotificationOutboxObservationStore", "JdbcNotificationOutboxRepository", "NotificationOutboxWriter",
+        "NotificationOutboxMetrics",
         "NotificationOutboxSchedulingRunner", "NotificationObservationSchedulingRunner", "NotificationRetentionSchedulingRunner",
         "NotificationReminderSchedulingRunner", "NotificationRetentionRunner", "AppointmentReminderScheduler",
         "ResilientNotificationChannel", "NotificationAutoConfiguration", "NotificationRuntimeHealthSignals",
@@ -737,7 +830,7 @@ apiConsumerFixtureTargets.forEach { target ->
 }
 
 tasks.named("check") {
-    dependsOn(compileModuleConsumerFixtures)
+    dependsOn(compileModuleConsumerFixtures, assertAppointmentEventNotificationBoundary)
 }
 
 tasks.named("clean") {
