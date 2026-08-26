@@ -94,13 +94,15 @@
   - **Evidence:** Step 3-R의 plan traceability/rollback/schema/artifact ordering 수리와
     8-file terminology audit, final Gradle verification.
   - **Failure:** 최종 상태를 `BLOCKED`로 남긴다.
-- [ ] **CL-07 — irreversible hold refresh**
+- [x] **CL-07 — irreversible hold refresh**
   - **Action:** PR 생성 및 merge 직전에 authority·target·exact head를 다시 읽는다.
-  - **Evidence:** current issue/PR metadata, CI, review, head SHA, fresh approval.
+  - **Evidence:** PR #427의 base `develop`, head branch, assignee/labels, mergeability와
+    remote exact head를 live read-back했다. merge는 fresh approval 전까지 보류한다.
   - **Failure:** stale hold에서는 side effect를 실행하지 않는다.
-- [ ] **CL-08 — 완료 count 산출**
+- [x] **CL-08 — 완료 count 산출**
   - **Action:** `Required checks: X/Y; N/A: N; Blocked: N`과 unchecked IDs를 계산한다.
-  - **Evidence:** final DoD와 live PR body.
+  - **Evidence:** live PR body와 원격 CI 완료 결과를 기준으로 `36/37; N/A: 5; Blocked: 0`,
+    unchecked `A-12`를 계산했다.
   - **Failure:** count가 맞지 않으면 완료를 주장하지 않는다.
 
 ## Type-A A-01..A-12
@@ -148,15 +150,18 @@
 - [x] **A-09 — lesson commit**
   - **Action:** Korean lesson을 writer gate와 Lore commit으로 남긴다.
   - **Evidence:** Korean lesson artifact와 `SPW-01..05`를 implementation documentation commit에
-    포함할 예정이다. 현재 worktree에서 내용을 read-back했다.
+    포함했고, 현재 worktree에서 내용을 read-back했다.
   - **Failure:** untracked/evidence-only lesson은 인정하지 않는다.
-- [ ] **A-10 — PR delivery와 CI/review**
+- [x] **A-10 — PR delivery와 CI/review**
   - **Action:** CG-11..14를 exact head에 대해 수행한다.
-  - **Evidence:** remote head, live PR metadata/body, review/thread, required CI.
+  - **Evidence:** PR #427 exact head, Korean metadata/body, independent local 7-Tier review,
+    최신 PR workflow의 required checks 전부 PASS를 live read-back했다. 1인 개발자 lane의
+    human reviewer는 N/A다.
   - **Failure:** stale/missing evidence면 delivery를 PENDING/FAIL로 둔다.
-- [ ] **A-11 — knowledge capture·merge-ready**
+- [x] **A-11 — knowledge capture·merge-ready**
   - **Action:** durable lesson/index와 CG-15 merge-ready report를 작성한다.
-  - **Evidence:** PR/head, CI/review, risks, counts, unchecked CG-16..18.
+  - **Evidence:** Korean lesson과 review artifacts를 커밋했고, PR/head·CI·review·risk·count와
+    merge hold를 PR body/Issue #425 comment와 최종 DoD에 기록했다. unchecked는 `A-12`다.
   - **Failure:** fresh merge approval 없이 DONE을 선언하지 않는다.
 - [ ] **A-12 — fresh approval 후 merge closeout**
   - **Action:** CG-16..18, merge SHA, integration sync, worktree cleanup을 수행한다.
@@ -223,8 +228,8 @@
 - `N/A` — Step 4-S cleanup: implementation diff와 별도 cleanup trigger를 검토한 뒤 판단한다.
 - `N/A` — external human reviewer: repository가 1인 개발자 lane이면 exact CI와 independent local review를
   수행하고 human-review subgate만 구체적 근거와 함께 N/A로 기록한다.
-- `PENDING` — PR 생성 전이므로 CL-07/CL-08, A-10/A-11/A-12와 CG-11..CG-18은
-  exact remote head, CI/review, fresh approval 뒤에 갱신한다.
+- `PENDING` — A-12와 CG-16..CG-18은 exact live head에 대한 fresh approval과 merge
+  closeout 뒤에만 갱신한다.
 
 ## Fresh evidence ledger
 
@@ -240,10 +245,10 @@
 | 2026-08-26 | migration fingerprint/source/jar/ABI scans | SQL fingerprint no-diff, source/jar/reflection guard PASS |
 | 2026-08-26 | Korean terminology audit | 8 files, findings=0; `git diff --check` PASS |
 | 2026-08-26 | Step 3-R plan review | 초기 P2=4/P3=2를 plan 수리 후 P0/P1/P2/P3=0으로 재검증 |
-| PR 이후 | `gh` issue/PR/CI read-back | A-10/A-11 및 CG-11..CG-18에서 exact remote head 기준 기록 |
+| PR 이후 | `gh` issue/PR/CI read-back | PR #427 exact head와 metadata/body를 재확인하고 최신 PR workflow의 required checks 전부 PASS를 확인 |
 
 ## Current DoD
 
-`Required checks: 32/37; N/A: 5; Blocked: 0`.
-현재 unchecked IDs: `CL-07`, `CL-08`, `A-10`, `A-11`, `A-12`.
-PR 생성·원격 CI/review·fresh merge approval 후 X/Y를 다시 계산한다.
+`Required checks: 36/37; N/A: 5; Blocked: 0`.
+현재 unchecked IDs: `A-12`.
+원격 CI와 local review는 PASS이며, exact live head에 대한 fresh `승인` 전 merge closeout만 대기한다.
