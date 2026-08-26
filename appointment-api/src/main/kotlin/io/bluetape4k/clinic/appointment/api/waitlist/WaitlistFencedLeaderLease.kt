@@ -124,7 +124,7 @@ internal class FencedWaitlistLeaderLease(
     private val leasePolicy: LeasePolicy.Fixed
     private var bootstrapResult: FencedBootstrapResult? = null
     private var pendingRequest: PendingRequest? = null
-    private val handleStates = mutableMapOf<WaitlistLeaseHandle, HandleState>()
+    private val activeHandleCounts = mutableMapOf<WaitlistLeaseHandle, Int>()
     private var closed = false
 
     init {
@@ -252,8 +252,12 @@ internal class FencedWaitlistLeaderLease(
     @Synchronized
     fun release(handle: WaitlistLeaseHandle): WaitlistLeaseRelease {
         if (closed) return WaitlistLeaseRelease.CLOSED
-        if (handleStates[handle] != HandleState.ACTIVE) return WaitlistLeaseRelease.ALREADY_RELEASED
-        handleStates[handle] = HandleState.TERMINAL
+        val activeCount = activeHandleCounts[handle] ?: return WaitlistLeaseRelease.ALREADY_RELEASED
+        if (activeCount == 1) {
+            activeHandleCounts.remove(handle)
+        } else {
+            activeHandleCounts[handle] = activeCount - 1
+        }
 
         val result = runCatching { operations.release(handle.nativeHandle) }
             .getOrElse { return WaitlistLeaseRelease.UNKNOWN }
@@ -301,7 +305,7 @@ internal class FencedWaitlistLeaderLease(
             leaseUntil = now.plus(properties.jobLease),
             nativeHandle = nativeHandle,
         )
-        handleStates[handle] = HandleState.ACTIVE
+        activeHandleCounts.merge(handle, 1, Int::plus)
         return handle
     }
 
@@ -325,11 +329,6 @@ internal class FencedWaitlistLeaderLease(
         val owner: LockOwnerId,
         val request: LockRequestId,
     )
-
-    private enum class HandleState {
-        ACTIVE,
-        TERMINAL,
-    }
 
     companion object {
         private val MAX_LEASE: Duration = Duration.ofMinutes(5)
