@@ -112,8 +112,12 @@ generation, holds, terminal, fence-counter key다. 이 key는 logical namespace�
 버전 계약이며 resource 문자열에 콜론을 직접 넣지 않는다.
 
 acquire는 `LeasePolicy.Fixed(jobLease)`로 제한하고 `jobLease`는 5분을 넘을 수 없다.
+`fence-epoch`는 Redis library가 요구하는 양수 값이며, `tick-budget`는 양수이고
+`jobLease`보다 짧아야 한다. 각 bounded 작업 전 monotonic elapsed를 확인해 budget을
+초과하면 다음 mutation을 시작하지 않는다.
 traffic 전에 `bootstrapFencing()`을 한 번 실행하며, `Base58.randomString(8)`으로 만든
-opaque owner와 매 acquire의 native request를 adapter 내부에만 보관한다. 명확한
+opaque owner와 매 acquire의 native request를 adapter 내부에만 보관한다. handle과 token의
+문자열 표현도 완전히 redaction하며, 명확한
 `Acquired` 또는 `Reentered` handle을 얻은 경우에만 expiry → suppression → hold
 reconcile → dispatch 순서를 시작한다. `Contended`, `TimedOut`, `Failed`는 해당 tick을
 종료한다. `Ambiguous`는 동일 owner/request pair로 한 번 reconcile하고 recovered
@@ -126,13 +130,14 @@ DB claim은 Redis lease의 보조 권위를 신뢰하지 않고 `(epoch, sequenc
 따라서 lease expiry 뒤 재개한 stale worker의 write는 affected row 0으로 거부된다.
 Redis는 scheduler 실행 중복을 줄이는 권위이고, DB는 business state의 최종 권위다.
 
-`close()`는 새 tick과 local lock task를 중지하고 shared `RedisClient`의 소유권을
+release가 `UNKNOWN`이면 native handle을 pending으로 보존하고 같은 handle에 대해 한 번만
+bounded retry한 뒤 terminal 결과를 확인한다. `close()`는 새 tick과 local lock task를 중지하고 shared `RedisClient`의 소유권을
 가져오거나 자동 unlock하지 않는다. readiness probe가 V31 column을 확인하지 못하면
 `WaitlistFencingReadinessException`으로 startup을 실패시킨다. rollback은
 `appointment.waitlist.delivery.enabled=false`로 dispatch를 내리고 Redis counter와
 DB fence column은 되돌리지 않는 방식으로 수행한다.
 
-운영 metric은 다음 이름과 닫힌 enum tag만 사용한다.
+fenced scheduler 경계에서 추가하는 운영 metric은 다음 이름과 닫힌 enum tag만 사용한다.
 
 - `appointment_waitlist_lease_acquire_total{outcome=acquired|contended|timeout|ambiguous|failed}`
 - `appointment_waitlist_lease_acquire_seconds{outcome=...}`

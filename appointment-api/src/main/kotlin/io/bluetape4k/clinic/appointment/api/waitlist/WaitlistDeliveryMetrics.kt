@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import java.time.Duration
+import java.util.EnumMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -18,6 +19,19 @@ class WaitlistDeliveryMetrics(
     private val activeHolds = AtomicLong()
     private val expiredBacklog = AtomicLong()
     private val oldestVacancySeconds = AtomicLong()
+    private val tickCounters = EnumMap<DeliveryMode, Counter>(DeliveryMode::class.java)
+    private val dispatchedCounters = EnumMap<DeliveryMode, Counter>(DeliveryMode::class.java)
+    private val expiredCounters = EnumMap<DeliveryMode, Counter>(DeliveryMode::class.java)
+    private val suppressedCounters = EnumMap<DeliveryMode, Counter>(DeliveryMode::class.java)
+    private val holdReconciledCounters = EnumMap<DeliveryMode, Counter>(DeliveryMode::class.java)
+    private val providerAttemptCounters = EnumMap<WaitlistProviderOutcome, Counter>(WaitlistProviderOutcome::class.java)
+    private val providerLatencyTimers = EnumMap<WaitlistProviderOutcome, Timer>(WaitlistProviderOutcome::class.java)
+    private val leaseAcquireCounters = EnumMap<WaitlistLeaseMetricOutcome, Counter>(WaitlistLeaseMetricOutcome::class.java)
+    private val leaseAcquireTimers = EnumMap<WaitlistLeaseMetricOutcome, Timer>(WaitlistLeaseMetricOutcome::class.java)
+    private val schedulerTickTimers = EnumMap<DeliveryMode, Timer>(DeliveryMode::class.java)
+    private val ownershipLossCounters = EnumMap<WaitlistOwnershipLossSource, Counter>(WaitlistOwnershipLossSource::class.java)
+    private val leaseReclaimsCounter: Counter = counter(LEASE_RECLAIMS, "reason", "leader_lost")
+    private val lockWaitTimer: Timer = timer(LOCK_WAIT)
 
     init {
         Gauge.builder(ACTIVE_OFFERS, activeOffers) { it.get().toDouble() }.register(registry)
@@ -25,6 +39,25 @@ class WaitlistDeliveryMetrics(
         Gauge.builder(EXPIRED_BACKLOG, expiredBacklog) { it.get().toDouble() }.register(registry)
         Gauge.builder(OLDEST_VACANCY_SECONDS, oldestVacancySeconds) { it.get().toDouble() }
             .register(registry)
+        DeliveryMode.entries.forEach { mode ->
+            tickCounters[mode] = counter(TICKS, "mode", mode.metricValue)
+            dispatchedCounters[mode] = counter(DISPATCHED, "mode", mode.metricValue)
+            expiredCounters[mode] = counter(EXPIRED, "mode", mode.metricValue)
+            suppressedCounters[mode] = counter(SUPPRESSED, "mode", mode.metricValue)
+            holdReconciledCounters[mode] = counter(HOLD_RECONCILED, "mode", mode.metricValue)
+            schedulerTickTimers[mode] = timer(SCHEDULER_TICK, "mode", mode.metricValue)
+        }
+        WaitlistProviderOutcome.entries.forEach { outcome ->
+            providerAttemptCounters[outcome] = counter(PROVIDER_ATTEMPTS, "outcome", outcome.metricValue)
+            providerLatencyTimers[outcome] = timer(PROVIDER_LATENCY, "outcome", outcome.metricValue)
+        }
+        WaitlistLeaseMetricOutcome.entries.forEach { outcome ->
+            leaseAcquireCounters[outcome] = counter(LEASE_ACQUIRE_TOTAL, "outcome", outcome.metricValue)
+            leaseAcquireTimers[outcome] = timer(LEASE_ACQUIRE_SECONDS, "outcome", outcome.metricValue)
+        }
+        WaitlistOwnershipLossSource.entries.forEach { source ->
+            ownershipLossCounters[source] = counter(OWNERSHIP_LOSS_TOTAL, "source", source.metricValue)
+        }
     }
 
     fun setBacklog(activeOffers: Long, activeHolds: Long, expiredBacklog: Long, oldestVacancy: Duration) {
@@ -45,55 +78,48 @@ class WaitlistDeliveryMetrics(
         suppressionCount: Int,
         holdReconcileCount: Int,
     ) {
-        counter(TICKS, "mode", mode.metricValue).increment()
-        counter(DISPATCHED, "mode", mode.metricValue).increment(dispatchCount.toDouble())
-        counter(EXPIRED, "mode", mode.metricValue).increment(expiryCount.toDouble())
-        counter(SUPPRESSED, "mode", mode.metricValue).increment(suppressionCount.toDouble())
-        counter(HOLD_RECONCILED, "mode", mode.metricValue).increment(holdReconcileCount.toDouble())
+        tickCounters.getValue(mode).increment()
+        dispatchedCounters.getValue(mode).increment(dispatchCount.toDouble())
+        expiredCounters.getValue(mode).increment(expiryCount.toDouble())
+        suppressedCounters.getValue(mode).increment(suppressionCount.toDouble())
+        holdReconciledCounters.getValue(mode).increment(holdReconcileCount.toDouble())
     }
 
     fun recordProviderAttempt(outcome: WaitlistProviderOutcome, duration: Duration = Duration.ZERO) {
-        counter(PROVIDER_ATTEMPTS, "outcome", outcome.metricValue).increment()
+        providerAttemptCounters.getValue(outcome).increment()
         if (!duration.isNegative && !duration.isZero) {
-            Timer.builder(PROVIDER_LATENCY)
-                .tag("outcome", outcome.metricValue)
-                .publishPercentileHistogram()
-                .register(registry)
-                .record(duration)
+            providerLatencyTimers.getValue(outcome).record(duration)
         }
     }
 
-    fun recordLeaseLost() = counter(LEASE_RECLAIMS, "reason", "leader_lost").increment()
+    fun recordLeaseLost() = leaseReclaimsCounter.increment()
 
     fun recordLeaseAcquire(outcome: WaitlistLeaseMetricOutcome, duration: Duration) {
         require(!duration.isNegative) { "duration must be non-negative" }
-        counter(LEASE_ACQUIRE_TOTAL, "outcome", outcome.metricValue).increment()
-        Timer.builder(LEASE_ACQUIRE_SECONDS)
-            .tag("outcome", outcome.metricValue)
-            .publishPercentileHistogram()
-            .register(registry)
-            .record(duration)
+        leaseAcquireCounters.getValue(outcome).increment()
+        leaseAcquireTimers.getValue(outcome).record(duration)
     }
 
     fun recordSchedulerTick(mode: DeliveryMode, duration: Duration) {
         require(!duration.isNegative) { "duration must be non-negative" }
-        Timer.builder(SCHEDULER_TICK)
-            .tag("mode", mode.metricValue)
-            .publishPercentileHistogram()
-            .register(registry)
-            .record(duration)
+        schedulerTickTimers.getValue(mode).record(duration)
     }
 
     fun recordOwnershipLoss(source: WaitlistOwnershipLossSource) =
-        counter(OWNERSHIP_LOSS_TOTAL, "source", source.metricValue).increment()
+        ownershipLossCounters.getValue(source).increment()
 
     fun recordLockWait(duration: Duration) {
         require(!duration.isNegative) { "duration must be non-negative" }
-        Timer.builder(LOCK_WAIT).publishPercentileHistogram().register(registry).record(duration)
+        lockWaitTimer.record(duration)
     }
 
     private fun counter(name: String, key: String, value: String): Counter =
         Counter.builder(name).tag(key, value).register(registry)
+
+    private fun timer(name: String, key: String? = null, value: String? = null): Timer =
+        Timer.builder(name).apply {
+            if (key != null && value != null) tag(key, value)
+        }.publishPercentileHistogram().register(registry)
 
     companion object {
         const val ACTIVE_OFFERS = "appointment_waitlist_active_offers"

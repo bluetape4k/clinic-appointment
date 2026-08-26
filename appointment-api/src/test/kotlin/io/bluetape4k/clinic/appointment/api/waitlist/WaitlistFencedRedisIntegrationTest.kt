@@ -42,6 +42,7 @@ class WaitlistFencedRedisIntegrationTest {
             val properties = WaitlistDeliveryProperties(
                 jobLease = Duration.ofMillis(400),
                 fenceEpoch = 1,
+                tickBudget = Duration.ofMillis(300),
             )
             val firstLease = FencedWaitlistLeaderLease(
                 operations = LettuceWaitlistFencedLockOperations(first),
@@ -74,6 +75,7 @@ class WaitlistFencedRedisIntegrationTest {
             val properties = WaitlistDeliveryProperties(
                 jobLease = Duration.ofSeconds(2),
                 fenceEpoch = 1,
+                tickBudget = Duration.ofSeconds(1),
             )
             val operations = AmbiguousAfterAcquireOperations(LettuceWaitlistFencedLockOperations(lock))
             val lease = FencedWaitlistLeaderLease(

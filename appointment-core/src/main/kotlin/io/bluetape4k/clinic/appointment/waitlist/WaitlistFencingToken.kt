@@ -13,9 +13,14 @@ data class WaitlistFencingToken(
         require(sequence >= 0L) { "sequence must be zero or positive" }
     }
 
+    /** Redis fenced lock에서 발급된 token인지 확인합니다. DB의 초기 sentinel은 (0, 0)입니다. */
+    fun isRedisIssued(): Boolean = epoch > 0L && sequence > 0L
+
     /** 이전 token보다 epoch가 크거나 같은 epoch에서 sequence가 큰지 확인합니다. */
     fun isStrictlyGreaterThan(previous: WaitlistFencingToken): Boolean =
         epoch > previous.epoch || epoch == previous.epoch && sequence > previous.sequence
+
+    override fun toString(): String = "WaitlistFencingToken(redacted)"
 
     private companion object {
         private const val serialVersionUID: Long = 1L

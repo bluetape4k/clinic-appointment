@@ -3,6 +3,8 @@ package io.bluetape4k.clinic.appointment.waitlist
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldContainAll
+import io.bluetape4k.assertions.shouldBeFalse
+import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.model.tables.BookingBenefitGrants
 import io.bluetape4k.clinic.appointment.model.tables.BookingRestrictions
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
@@ -106,6 +108,9 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
         assertFailsWith<IllegalArgumentException> {
             WaitlistFencingToken(epoch = -1L, sequence = 0L)
         }
+        WaitlistFencingToken(epoch = 0L, sequence = 0L).isRedisIssued().shouldBeFalse()
+        WaitlistFencingToken(epoch = 4L, sequence = 9L).isRedisIssued().shouldBeTrue()
+        WaitlistFencingToken(epoch = 4L, sequence = 9L).toString().contains("4").shouldBeFalse()
     }
 
     @Test

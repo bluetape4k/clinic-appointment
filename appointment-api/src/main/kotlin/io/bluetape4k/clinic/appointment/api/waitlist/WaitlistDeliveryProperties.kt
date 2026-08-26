@@ -15,7 +15,8 @@ data class WaitlistDeliveryProperties(
     val clinicAllowlist: Set<Long> = emptySet(),
     val batchSize: Int = 25,
     val jobLease: Duration = Duration.ofSeconds(30),
-    val fenceEpoch: Long = 0L,
+    val fenceEpoch: Long = 1L,
+    val tickBudget: Duration = Duration.ofSeconds(25),
     val maxAttempts: Int = 5,
     val pollInterval: Duration = Duration.ofSeconds(1),
     val retentionBatchSize: Int = 100,
@@ -24,7 +25,9 @@ data class WaitlistDeliveryProperties(
         require(clinicAllowlist.all { it > 0 }) { "clinicAllowlist must contain positive ids" }
         require(batchSize in 1..100) { "batchSize must be between 1 and 100" }
         require(jobLease.isPositive) { "jobLease must be positive" }
-        require(fenceEpoch >= 0L) { "fenceEpoch must be zero or positive" }
+        require(fenceEpoch > 0L) { "fenceEpoch must be positive" }
+        require(tickBudget.isPositive) { "tickBudget must be positive" }
+        require(tickBudget < jobLease) { "tickBudget must be shorter than jobLease" }
         require(maxAttempts in 1..50) { "maxAttempts must be between 1 and 50" }
         require(pollInterval.isPositive) { "pollInterval must be positive" }
         require(retentionBatchSize in 1..100) {

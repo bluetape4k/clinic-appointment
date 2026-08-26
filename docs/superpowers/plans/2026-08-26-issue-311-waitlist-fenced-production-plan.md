@@ -264,7 +264,8 @@ data class WaitlistLeaseHandle internal constructor(
 
 `owner` is the server-generated `Base58.randomString(8)` DB reference. `LockOwnerId`,
 `LockRequestId`, and the native handle are never serialized, logged, or added to metric tags;
-the adapter retains them for exact reconcile/release only.
+the adapter retains them for exact reconcile/release only. The public handle and
+`WaitlistFencingToken` string forms are fully redacted.
 
 Assert `Acquired`/`Reentered` produce a handle, `Contended`/`TimedOut`/backend failure produce no business handle, `Ambiguous` reconciles with the identical owner/request, ownership loss does not release another handle, duplicate release is idempotent, and close prevents new acquire. Use `Base58.randomString(8)` in the adapter's opaque DB owner reference; do not introduce UUID.
 
@@ -280,15 +281,19 @@ Construct the final `LettuceFencedLock` through its factory with `FencedLockConf
 
 ```text
 ACQUIRED -> RELEASED | UNKNOWN | LOST
-UNKNOWN  -> RELEASED | LOST
+UNKNOWN  -> RELEASED | UNKNOWN | LOST (one bounded retry)
 RELEASED/LOST -> terminal (no second release)
 ```
 
-Use `LeasePolicy.Fixed(properties.jobLease)` by default. Bound lease duration, reject non-positive/overlong values with `require`, and map library outcomes to a closed `WaitlistLeaseAttempt`/`WaitlistLeaseFailure` enum.
+Use `LeasePolicy.Fixed(properties.jobLease)` by default. Bound lease duration, require a
+positive `fenceEpoch`, require `tickBudget < jobLease`, reject non-positive/overlong values
+with `require`, and map library outcomes to a closed `WaitlistLeaseAttempt`/`WaitlistLeaseFailure`
+enum. The runner checks monotonic elapsed time before every mutating port and stops the next
+port when `tickBudget` is exhausted.
 
 - [ ] **Step 4: Run tests to GREEN and commit.**
 
-Expected: all fake outcomes and lifecycle transitions pass with no raw identity in captured observations.
+Expected: all fake outcomes and lifecycle transitions pass with no raw identity in captured observations; an unknown release remains retryable exactly once.
 
 ```bash
 git add appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/waitlist/WaitlistFencedLeaderLease.kt appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/waitlist/WaitlistFencedLeaderLeaseTest.kt
@@ -342,7 +347,7 @@ scheduler_tick_seconds{mode=active|clinic_disabled|global_off}
 ownership_loss_total{source=redis|db}
 ```
 
-Record `OwnershipLost` from the adapter or a zero-row fenced DB terminal write as `source=redis|db`; do not attach identifiers. Validate `limit`, `pollInterval`, `jobLease`, and `fenceEpoch` with bluetape4k precondition helpers or Kotlin `require` consistent with the local pattern.
+Record `OwnershipLost` from the adapter or a zero-row fenced DB terminal write as `source=redis|db`; do not attach identifiers. Validate `limit`, `pollInterval`, `jobLease`, positive `fenceEpoch`, and `tickBudget < jobLease` with bluetape4k precondition helpers or Kotlin `require` consistent with the local pattern.
 
 - [ ] **Step 4: Run tests and commit.**
 

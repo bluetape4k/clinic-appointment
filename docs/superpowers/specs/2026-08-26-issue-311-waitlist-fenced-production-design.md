@@ -90,10 +90,16 @@ data class WaitlistFencingToken(
         require(sequence >= 0L) { "sequence must be zero or positive" }
     }
 
+    fun isRedisIssued(): Boolean = epoch > 0L && sequence > 0L
+
     fun isStrictlyGreaterThan(previous: WaitlistFencingToken): Boolean =
         epoch > previous.epoch || (epoch == previous.epoch && sequence > previous.sequence)
 }
 ```
+
+DB의 초기 sentinel `(0, 0)`은 저장 표현으로만 허용한다. `claimFenced` 입력은
+`isRedisIssued()`를 통과한 양의 epoch/sequence만 수락하고, Redis library가 발급하지 않은
+값은 즉시 거부한다. token의 문자열 표현은 fence 값도 redaction한다.
 
 `VacancyClaim`에는 `fencingToken: WaitlistFencingToken?`를 추가한다. null은 기존
 DB-only 내부 호출의 하위 호환 경로이고 production scheduler가 만드는 claim은 null을
@@ -156,11 +162,14 @@ fenced mode로 생성된다. legacy Boolean runner에는 token propagation을 �
   기존 counter를 보존한다. resource 구성요소에 콜론을 넣지 않는다.
 - `LeasePolicy.Fixed(properties.jobLease)`를 기본으로 사용한다. bounded watchdog가
   필요한 경우에도 TTL, renewal interval, max lifetime을 설정으로 고정하고 p95/p99
-  tick 예산을 초과하지 않도록 검증한다.
+  tick 예산을 초과하지 않도록 `tickBudget < jobLease`를 설정 검증한다. 각 bounded
+  작업 전 monotonic elapsed를 확인하고 예산을 넘으면 다음 mutation을 시작하지 않는다.
 - `close()`는 local lock task와 신규 작업만 중지한다. Redis connection은
   `RedisClient` bean이 소유하고, close가 자동 unlock을 의미한다고 가정하지 않는다.
 - acquire/release 중 cancellation과 timeout은 `UNKNOWN`으로 기록하고 새 acquire를
-  즉시 반복하지 않는다. reconcile 또는 lease expiry 확인 뒤에만 다음 작업을 시작한다.
+  즉시 반복하지 않는다. release handle은 같은 native handle에 대해 한 번만 bounded
+  retry할 수 있도록 pending으로 보존하고, reconcile 또는 lease expiry 확인 뒤에만
+  다음 작업을 시작한다.
 
 ## DB strict-greater 계약
 
@@ -205,7 +214,7 @@ adapter로 주입되는 예제에서도 미완성 wiring이 scheduler를 조용�
 
 dispatcher는 다음 호출 순서를 단일 transaction으로 구현한다.
 
-1. `WaitlistDeliveryRepository.claim(jobId, owner, now, leaseUntil, token)`
+1. `WaitlistDeliveryRepository.claimFenced(jobId, owner, now, leaseUntil, token)`
 2. 반환된 claim을 `WaitlistDeliveryService.process(claim, ...)`에 전달
 3. offer/hold/outbox와 terminal update를 같은 Exposed transaction에서 완료
 4. contention은 `withContentionRetry` 바깥에서 fresh transaction으로 재시도

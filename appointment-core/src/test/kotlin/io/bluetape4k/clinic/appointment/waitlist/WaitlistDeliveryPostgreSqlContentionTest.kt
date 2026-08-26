@@ -12,6 +12,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.VacancyJobState
 import io.bluetape4k.clinic.appointment.waitlist.WaitlistFencingToken
 import io.bluetape4k.clinic.appointment.repository.waitlist.ContentionRetryPolicy
 import io.bluetape4k.clinic.appointment.repository.waitlist.NewVacancyJob
+import io.bluetape4k.clinic.appointment.repository.waitlist.VacancyClaim
 import io.bluetape4k.clinic.appointment.repository.waitlist.VacancyClaimStrategies
 import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistDeliveryRepository
 import io.bluetape4k.clinic.appointment.test.TestDB
@@ -38,6 +39,85 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** 실제 PostgreSQL lock timeout이 aborted transaction을 재사용하지 않는지 검증합니다. */
 class WaitlistDeliveryPostgreSqlContentionTest {
+
+    @Test
+    fun `concurrent PostgreSQL fenced claims allow only one winner`() {
+        withTables(TestDB.POSTGRESQL, Clinics, WaitlistVacancyJobs) {
+            val database = TestDB.POSTGRESQL.db ?: error("PostgreSQL database is not connected")
+            Clinics.insert {
+                it[id] = EntityID(CLINIC_ID, Clinics)
+                it[tenantGroupId] = EntityID(TENANT_GROUP_ID, TenantGroups)
+                it[name] = "PostgreSQL concurrent fenced clinic"
+                it[slotDurationMinutes] = 30
+                it[maxConcurrentPatients] = 1
+            }
+            val repository = WaitlistDeliveryRepository(
+                claimStrategy = VacancyClaimStrategies.forDialectName("PostgreSQL"),
+            )
+            val job = insertFixture(
+                repository = repository,
+                vacancyKey = "postgres-concurrent-fenced",
+                sourceAppointmentId = 104L,
+            )
+            commit()
+
+            val ready = CountDownLatch(2)
+            val start = CountDownLatch(1)
+            val executor = Executors.newFixedThreadPool(2)
+            val futures = listOf(
+                executor.submit<VacancyClaim?> {
+                    ready.countDown()
+                    check(start.await(10, TimeUnit.SECONDS))
+                    repository.withContentionRetry {
+                        inTopLevelTransaction(db = database) {
+                            maxAttempts = 1
+                            repository.claimFenced(
+                                jobId = job.id,
+                                owner = "worker-a",
+                                now = NOW,
+                                leaseUntil = NOW.plusSeconds(30),
+                                token = WaitlistFencingToken(epoch = 7L, sequence = 1L),
+                            )
+                        }
+                    }
+                },
+                executor.submit<VacancyClaim?> {
+                    ready.countDown()
+                    check(start.await(10, TimeUnit.SECONDS))
+                    repository.withContentionRetry {
+                        inTopLevelTransaction(db = database) {
+                            maxAttempts = 1
+                            repository.claimFenced(
+                                jobId = job.id,
+                                owner = "worker-b",
+                                now = NOW,
+                                leaseUntil = NOW.plusSeconds(30),
+                                token = WaitlistFencingToken(epoch = 7L, sequence = 2L),
+                            )
+                        }
+                    }
+                },
+            )
+
+            try {
+                ready.await(10, TimeUnit.SECONDS).shouldBeTrue()
+                start.countDown()
+                val claims = futures.map { it.get(15, TimeUnit.SECONDS) }
+                claims.count { it != null } shouldBeEqualTo 1
+                val winner = claims.filterNotNull().single()
+                winner.fencingToken?.isRedisIssued().shouldBeTrue()
+
+                val persisted = repository.findVacancy(job.id).shouldNotBeNull()
+                persisted.status shouldBeEqualTo VacancyJobState.PROCESSING
+                persisted.fenceEpoch shouldBeEqualTo 7L
+                persisted.fenceSequence shouldBeEqualTo winner.fencingToken?.sequence
+            } finally {
+                start.countDown()
+                executor.shutdownNow()
+                executor.awaitTermination(10, TimeUnit.SECONDS).shouldBeTrue()
+            }
+        }
+    }
 
     @Test
     fun `expired PostgreSQL worker cannot terminalize after a higher fenced takeover`() {

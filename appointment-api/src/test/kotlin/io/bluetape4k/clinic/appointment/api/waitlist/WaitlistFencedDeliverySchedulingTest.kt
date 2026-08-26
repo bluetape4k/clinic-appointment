@@ -25,6 +25,9 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class WaitlistFencedDeliverySchedulingTest {
 
@@ -136,7 +139,7 @@ class WaitlistFencedDeliverySchedulingTest {
     }
 
     @Test
-    fun `close and concurrent tick gate prevent a second execution`() {
+    fun `close prevents a new execution`() {
         val operations = FakeLockOperations(acquireResults = ArrayDeque(listOf(LockAcquireResult.Acquired(nativeHandle()))))
         val lease = FencedWaitlistLeaderLease(operations, properties, clock)
         val runner = WaitlistFencedDeliverySchedulingRunner(
@@ -159,9 +162,75 @@ class WaitlistFencedDeliverySchedulingTest {
     }
 
     @Test
-    fun `fence epoch must not be negative`() {
+    fun `concurrent tick gate allows only one in-flight execution`() {
+        val operations = FakeLockOperations(acquireResults = ArrayDeque(listOf(LockAcquireResult.Acquired(nativeHandle()))))
+        val lease = FencedWaitlistLeaderLease(operations, properties, clock)
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val runner = WaitlistFencedDeliverySchedulingRunner(
+            lease = lease,
+            dispatcher = WaitlistFencedVacancyDispatcher { _, _, _ ->
+                entered.countDown()
+                release.await(5, TimeUnit.SECONDS)
+                1
+            },
+            expiry = WaitlistOfferExpiryRunner { _, _ -> 1 },
+            suppression = WaitlistNotificationSuppressionRunner { _, _ -> 1 },
+            holdReconciler = WaitlistHoldReconciler { _, _ -> 1 },
+            properties = properties,
+            metrics = WaitlistDeliveryMetrics(SimpleMeterRegistry()),
+            clock = clock,
+        )
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            val first = executor.submit<WaitlistFencedDeliveryTickResult> { runner.tick() }
+            entered.await(5, TimeUnit.SECONDS).shouldBeTrue()
+            val second = executor.submit<WaitlistFencedDeliveryTickResult> { runner.tick() }.get(5, TimeUnit.SECONDS)
+
+            second.leaseOutcome shouldBeEqualTo WaitlistFencedLeaseOutcome.FAILED
+            release.countDown()
+            first.get(5, TimeUnit.SECONDS).leaseOutcome shouldBeEqualTo WaitlistFencedLeaseOutcome.ACQUIRED
+            operations.acquireCalls shouldBeEqualTo 1
+        } finally {
+            release.countDown()
+            executor.shutdownNow()
+            executor.awaitTermination(5, TimeUnit.SECONDS).shouldBeTrue()
+        }
+    }
+
+    @Test
+    fun `tick budget stops the next mutating port after an over-budget operation`() {
+        val operations = FakeLockOperations(acquireResults = ArrayDeque(listOf(LockAcquireResult.Acquired(nativeHandle()))))
+        val lease = FencedWaitlistLeaderLease(operations, properties.copy(tickBudget = Duration.ofMillis(5)), clock)
+        var suppressionCalls = 0
+        val runner = WaitlistFencedDeliverySchedulingRunner(
+            lease = lease,
+            dispatcher = WaitlistFencedVacancyDispatcher { _, _, _ -> 1 },
+            expiry = WaitlistOfferExpiryRunner { _, _ ->
+                TimeUnit.MILLISECONDS.sleep(20)
+                1
+            },
+            suppression = WaitlistNotificationSuppressionRunner { _, _ -> suppressionCalls++; 1 },
+            holdReconciler = WaitlistHoldReconciler { _, _ -> 1 },
+            properties = properties.copy(tickBudget = Duration.ofMillis(5)),
+            metrics = WaitlistDeliveryMetrics(SimpleMeterRegistry()),
+            clock = clock,
+        )
+
+        val result = runner.tick()
+
+        result.budgetExceeded.shouldBeTrue()
+        result.expiryCount shouldBeEqualTo 1
+        suppressionCalls shouldBeEqualTo 0
+    }
+
+    @Test
+    fun `fence epoch and tick budget must be positive and ordered`() {
         assertFailsWith<IllegalArgumentException> {
-            WaitlistDeliveryProperties(fenceEpoch = -1)
+            WaitlistDeliveryProperties(fenceEpoch = 0)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            WaitlistDeliveryProperties(jobLease = Duration.ofSeconds(2), tickBudget = Duration.ofSeconds(2))
         }
     }
 
