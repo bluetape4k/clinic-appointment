@@ -75,7 +75,7 @@
   - **Failure:** blocker가 남으면 PR 생성을 보류한다.
 - [x] **A-09 — Commit durable learning**
   - **Action:** Korean Lore lesson을 writer gate 후 PR 전에 추적 commit으로 남긴다.
-  - **Evidence:** `docs/lessons/2026-08-26-issue-311-waitlist-fenced-production.md`에 context·decision·outcome·proof·miss·future guard와 2026-08-27 최종 검증 보강을 기록하고 Korean terminology audit 및 `git diff --check`를 통과했다. 추적 commit은 `194ca323` 이후 최종 검증 commit에 포함한다.
+  - **Evidence:** `docs/lessons/2026-08-26-issue-311-waitlist-fenced-production.md`에 context·decision·outcome·proof·miss·future guard와 2026-08-27 최종 검증 보강을 기록하고 Korean terminology audit 및 `git diff --check`를 통과했다. 추적 commit은 `d8b959c4`이다.
   - **Failure:** untracked 또는 근거 없는 lesson은 통과하지 못한다.
 - [ ] **A-10 — Complete authorized PR delivery through live CI and review**
   - **Action:** CG-11..CG-14에 따라 PR 권한·head·metadata·본문·review·CI를 최신 상태로 검증한다.
