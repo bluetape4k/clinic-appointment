@@ -43,6 +43,7 @@ boundary → fixture/build guard → behavior regression → docs → 7-Tier/per
 | capability contract | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/persistence/NotificationOutboxPersistenceCapabilities.kt` | work/observation interface와 KDoc 생성 |
 | JDBC implementation | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/persistence/JdbcNotificationOutboxRepository.kt` | 두 interface 구현 및 `override` 추가 |
 | worker/metric wrapper | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxWorkStore.kt` | constructor/delegate capability 변경, transaction 보존 |
+| Spring wiring/API caller | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfiguration.kt`, `appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationAutoConfigurationTest.kt`, `appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/NotificationOutboxCanarySimulationIntegrationTest.kt` | 내부 concrete 조립과 `persistence` named-argument migration 검증 |
 | waitlist adapter | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/persistence/WaitlistNotificationOutboxPersistence.kt` | concrete overload 제거 |
 | consumer fixture/Gradle | `src/consumerFixture/notification/.../NotificationApiConsumerFixture.kt`, `build.gradle.kts` | repository 유입 제거, capability inventory/guard 추가 |
 | boundary regression | `appointment-notification/src/test/.../NotificationPersistenceCapabilityContractTest.kt` | reflection/source/API guard 생성 |
@@ -347,8 +348,12 @@ Not-tested: README와 lesson
 - [ ] **Step 5.1: ecosystem source scan**
 
 ```bash
-rg -n 'org\.junit\.jupiter\.api\.Assertions|kotlin\.test\.assert|assertThrows|!!' appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/persistence
-rg -n 'Base58\.randomString\(8\)|SchemaUtils\.createMissingTablesAndColumns|transaction\(' appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/persistence
+if rg -n 'org\.junit\.jupiter\.api\.Assertions|kotlin\.test\.assert|assertThrows|!!' appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/persistence; then
+  echo '금지된 raw assertion 또는 강제 unwrap 발견' >&2
+  exit 1
+fi
+rg -q 'Base58\.randomString\(8\)' appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/persistence
+rg -q 'SchemaUtils\.createMissingTablesAndColumns|transaction\(' appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/persistence
 ```
 
 Expected: bluetape assertions, Base58 test suffix, migration-safe schema setup, caller transaction.
@@ -372,7 +377,9 @@ Expected: XML failures/errors `0`, `BUILD SUCCESSFUL`; DB/container checks are s
 ./gradlew :appointment-api:compileKotlin :appointment-api:compileTestKotlin \
   :appointment-api:test --tests 'io.bluetape4k.clinic.appointment.api.config.NotificationOutboxCanarySimulationIntegrationTest' \
   --no-daemon --no-build-cache --rerun-tasks --max-workers=1 --console=plain
-git diff --name-only -- 'appointment-api/src/main/resources/db/migration/**'
+git diff --exit-code origin/develop...HEAD -- 'appointment-api/src/main/resources/db/migration/**'
+git diff --exit-code --cached -- 'appointment-api/src/main/resources/db/migration/**'
+git diff --exit-code -- 'appointment-api/src/main/resources/db/migration/**'
 ```
 
 Expected: API compile/simulation PASS, migration diff empty and Task 0 checksum unchanged.
@@ -390,10 +397,11 @@ Expected: API compile/simulation PASS, migration diff empty and Task 0 checksum 
 JDBC 조립 위치, intentional JVM ABI migration, schema 불변을 설명한다. source path와
 constructor 예시는 current source와 일치해야 한다.
 
-- [ ] **Step 6.2: spec/plan/review/lesson writer gate**
+- [ ] **Step 6.2: spec/plan/review/lesson 생성과 writer gate**
 
-각 artifact에 SPW-01..05와 Korean naturalness KO-01..07을 기록한다. exact SHA, type,
-명령·결과, P0/P1 disposition을 source와 대조한다.
+구현 검증 결과를 반영해 implementation-review와 lesson을 먼저 생성하고, spec/plan/review/
+lesson 각 artifact에 SPW-01..05와 Korean naturalness KO-01..07을 기록한다. exact SHA,
+type, 명령·결과, P0/P1 disposition을 source와 대조한 뒤에 Step 6.3 audit를 실행한다.
 
 - [ ] **Step 6.3: terminology audit/diff**
 
@@ -424,14 +432,19 @@ Expected: unexplained terminology finding `0`, diff check PASS.
 ./gradlew :appointment-notification:check :appointment-api:compileTestKotlin \
   compileModuleConsumerFixtures assertModuleConsumerFixtureApiVariants \
   --no-daemon --no-build-cache --rerun-tasks --max-workers=1 --console=plain
+git status --short
+git diff --check origin/develop...HEAD
 git diff --check
+git diff --check --cached
 git diff --stat origin/develop...HEAD
 ```
 
 Expected: checks PASS, spec/plan acceptance mapping complete, P0=0/P1=0.
 
-- [ ] **Step 7.5: lesson/Lore commit** — lesson은 context/decision/outcome/verification/
-  surprise/future guard와 SPW-01..05를 포함하고, final review artifact와 함께 Korean Lore commit으로 수렴한다.
+- [ ] **Step 7.5: final review/Lore commit read-back** — Step 6.2에서 생성한 lesson과
+  implementation review가 context/decision/outcome/verification/surprise/future guard와
+  SPW-01..05를 포함하는지 확인하고, final review artifact와 함께 Korean Lore commit으로
+  수렴한다.
 
 ## Task 8: PR delivery와 merge-ready stop
 
@@ -453,7 +466,9 @@ body 마지막 section은 `## DoD Status`이며 Issue assignee/labels/milestone 
 
 ## Rollback / rerun
 
-- interface/wrapper compile failure: Task 2/3 diff를 revert하고 repository baseline test를 rerun한다.
+- interface/wrapper compile failure: checkpoint `800aa0f9a6f526aeff759e71848a8cbf3d6967fe`와
+  `git status --short`를 먼저 기록하고, 승인된 파일만
+  `git diff --binary 5399ff63649f1cc78ae73f00d121c37195817fb8 800aa0f9a6f526aeff759e71848a8cbf3d6967fe -- appointment-notification/src/main appointment-notification/src/test | git apply --check -R`로 충돌을 확인한 뒤 같은 diff를 `git apply -R`로 되돌린다. 이후 root dirty path를 건드리지 않고 baseline test를 rerun하고, `git status --short`와 해당 module test를 다시 확인한다.
 - behavior regression: raw failure를 진단하고 해당 RED/GREEN과 targeted regression을 처음부터 rerun한다.
 - fixture/API variant failure: source inventory·scope·task graph를 고친 뒤 producer jar→fixture→variant 순서로 rerun한다.
 - docs/source drift: current SHA에 맞춰 spec/plan/review/lesson/README를 read-back하고 writer gate를 rerun한다.
@@ -464,3 +479,7 @@ body 마지막 section은 `## DoD Status`이며 Issue assignee/labels/milestone 
 - spec의 acceptance 1–3은 Task 2/3, 4는 Task 4, 5–7은 Task 5, 8은 Task 6/7에 매핑된다.
 - 미확정 placeholder 항목 없이 실제 파일·타입·명령·예상 결과를 적었다.
 - RED가 interface 구현보다 앞서고, fixture/docs는 GREEN 이후이며, PR/merge는 모든 검증과 fresh approval 뒤다.
+- migration gate는 committed/staged/worktree 세 상태에서 `git diff --exit-code`로 빈 결과를
+  강제한다. 문서 audit는 implementation review와 lesson 생성 후에 실행한다.
+- final evidence는 `git status --short`, committed-range/staged/worktree `diff --check`와
+  tracked artifact read-back을 함께 기록해 untracked 문서를 PASS로 오인하지 않는다.
