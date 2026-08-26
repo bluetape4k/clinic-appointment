@@ -63,9 +63,10 @@ Redis lock을 획득했다는 사실만으로 business write를 허용하지 않
 
 - lock 구현은 새 Redis 스크립트가 아니라 이미 `appointment-api`가 의존하는
   `io.github.bluetape4k:bluetape4k-lettuce:1.12.1`의 `LettuceFencedLock`을 사용한다.
-- owner/request는 `LockOwnerId.random()`과 `LockRequestId.random()`을 사용한다. 두
-  타입은 내부적으로 bluetape4k `Base58.randomString(8)`을 사용하므로
-  `UUID.randomUUID()`를 추가하지 않는다.
+- native lock 호출에는 `LockOwnerId.from(...)`와 `LockRequestId.random()`을 사용한다.
+  DB에 남기는 opaque owner reference는 bluetape4k `Base58.randomString(8)`으로
+  생성하므로 `UUID.randomUUID()`를 추가하지 않는다. native identity의 raw value는
+  adapter 밖으로 내보내지 않는다.
 - Exposed query와 transaction 경계는 기존 `WaitlistDeliveryRepository`를 재사용하고,
   모든 public repository 호출은 caller-owned `transaction {}` 안에서 실행한다.
 - metric과 logging은 기존 `WaitlistDeliveryMetrics`와 `KLogging`을 확장하고,
@@ -113,22 +114,27 @@ DB-only 내부 호출의 하위 호환 경로이고 production scheduler가 만�
 `appointment-api`의 기존 Boolean port는 다음 의미를 보존하면서 typed 결과를 추가한다.
 
 ```kotlin
-data class WaitlistLeaseHandle(
-    val owner: LockOwnerId,
-    val request: LockRequestId,
+data class WaitlistLeaseHandle internal constructor(
+    val owner: String,
     val token: WaitlistFencingToken,
     val leaseUntil: Instant,
+    internal val nativeHandle: FencedLockHandle,
 )
 
 sealed interface WaitlistLeaseAttempt {
     data class Acquired(val handle: WaitlistLeaseHandle) : WaitlistLeaseAttempt
     data class Reentered(val handle: WaitlistLeaseHandle, val holdCount: Int) : WaitlistLeaseAttempt
     data class Contended(val remainingTtlMillis: Long) : WaitlistLeaseAttempt
-    data class TimedOut(val owner: LockOwnerId, val request: LockRequestId) : WaitlistLeaseAttempt
-    data class Ambiguous(val owner: LockOwnerId, val request: LockRequestId) : WaitlistLeaseAttempt
+    data class TimedOut(val category: WaitlistLeaseFailure) : WaitlistLeaseAttempt
+    data class Ambiguous(val category: WaitlistLeaseFailure) : WaitlistLeaseAttempt
     data class Failed(val category: WaitlistLeaseFailure) : WaitlistLeaseAttempt
 }
 ```
+
+`owner`는 서버가 `Base58.randomString(8)`으로 생성한 DB opaque reference다. native
+`LockOwnerId`, `LockRequestId`, `FencedLockHandle`은 adapter 내부에만 보관하며 log, metric,
+직렬화 경계로 내보내지 않는다. `TimedOut`/`Ambiguous`의 실제 owner/request pair는
+adapter의 pending state에만 남고, reconcile은 같은 pair로 수행한다.
 
 production runner는 `Acquired`와 `Reentered`에서만 작업을 시작한다. `Ambiguous`는
 같은 owner/request로 `reconcile`한 뒤 recovered handle이 명확히 확인될 때만 한 번
@@ -300,4 +306,3 @@ DB transaction이다.
 - SPW-03: `korean-naturalness-checklist.md` KO-01~KO-07 검토를 완료했다.
 - SPW-04: 현재 소스, Issue #311, `bluetape4k-lettuce:1.12.1` 계약과 문장별 대조했다.
 - SPW-05: Markdown read-back과 링크·식별자·명령 검토를 완료했다.
-
