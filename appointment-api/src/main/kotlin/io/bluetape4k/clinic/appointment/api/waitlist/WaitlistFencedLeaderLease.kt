@@ -2,13 +2,15 @@ package io.bluetape4k.clinic.appointment.api.waitlist
 
 import io.bluetape4k.clinic.appointment.waitlist.WaitlistFencingToken
 import io.bluetape4k.codec.Base58
+import io.bluetape4k.logging.KLogging
+import io.bluetape4k.logging.debug
+import io.bluetape4k.logging.warn
 import io.bluetape4k.redis.lettuce.lock.FencedBootstrapResult
 import io.bluetape4k.redis.lettuce.lock.FencedLockHandle
 import io.bluetape4k.redis.lettuce.lock.LeasePolicy
 import io.bluetape4k.redis.lettuce.lock.LettuceFencedLock
 import io.bluetape4k.redis.lettuce.lock.LockAcquireResult
 import io.bluetape4k.redis.lettuce.lock.LockBackendFailure
-import io.bluetape4k.redis.lettuce.lock.LockIntegrityFailure
 import io.bluetape4k.redis.lettuce.lock.LockMutationResult
 import io.bluetape4k.redis.lettuce.lock.LockOwnerId
 import io.bluetape4k.redis.lettuce.lock.LockRequestId
@@ -17,6 +19,8 @@ import io.bluetape4k.redis.lettuce.lock.LockRecoveryAction
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /** Lettuce fenced lock의 세부 결과를 scheduler가 안전하게 해석하는 닫힌 실패 분류입니다. */
 enum class WaitlistLeaseFailure {
@@ -125,6 +129,7 @@ internal class FencedWaitlistLeaderLease(
     private var bootstrapResult: FencedBootstrapResult? = null
     private var pendingRequest: PendingRequest? = null
     private val activeHandleCounts = mutableMapOf<WaitlistLeaseHandle, Int>()
+    private val stateLock = ReentrantLock()
     private var closed = false
 
     init {
@@ -140,15 +145,20 @@ internal class FencedWaitlistLeaderLease(
     }
 
     /** bootstrap은 한 번만 실행되며, 첫 traffic 전에 호출되지 않았다면 acquire가 지연 호출합니다. */
-    @Synchronized
     fun bootstrap(): FencedBootstrapResult =
-        bootstrapResult ?: runCatching { operations.bootstrap() }
-            .getOrElse { FencedBootstrapResult.BackendFailure(fallbackBackendFailure()) }
-            .also { bootstrapResult = it }
+        stateLock.withLock {
+            bootstrapResult ?: runCatching { operations.bootstrap() }
+                .getOrElse { failure ->
+                    log.warn {
+                        "Waitlist fenced lease bootstrap failed: exception=${failure::class.simpleName}"
+                    }
+                    FencedBootstrapResult.BackendFailure(fallbackBackendFailure())
+                }
+                .also { bootstrapResult = it }
+        }
 
     /** 이번 tick에서 사용할 fenced lease를 요청합니다. */
-    @Synchronized
-    fun tryAcquire(now: Instant = clock.instant()): WaitlistLeaseAttempt {
+    fun tryAcquire(now: Instant = clock.instant()): WaitlistLeaseAttempt = stateLock.withLock {
         if (closed) return WaitlistLeaseAttempt.Failed(WaitlistLeaseFailure.CLOSED)
         bootstrap().failureOrNull()?.let { return WaitlistLeaseAttempt.Failed(it) }
         if (pendingRequest != null) {
@@ -206,8 +216,7 @@ internal class FencedWaitlistLeaderLease(
     }
 
     /** ambiguous acquire를 같은 owner/request pair로 단 한 번 확인합니다. */
-    @Synchronized
-    fun reconcile(now: Instant = clock.instant()): WaitlistLeaseAttempt {
+    fun reconcile(now: Instant = clock.instant()): WaitlistLeaseAttempt = stateLock.withLock {
         if (closed) return WaitlistLeaseAttempt.Failed(WaitlistLeaseFailure.CLOSED)
         bootstrap().failureOrNull()?.let { return WaitlistLeaseAttempt.Failed(it) }
         val pending = pendingRequest ?: return WaitlistLeaseAttempt.Failed(WaitlistLeaseFailure.RECONCILE_NOT_FOUND)
@@ -249,8 +258,7 @@ internal class FencedWaitlistLeaderLease(
     }
 
     /** handle당 native release를 최대 한 번만 수행하고 stale ownership을 terminal 처리합니다. */
-    @Synchronized
-    fun release(handle: WaitlistLeaseHandle): WaitlistLeaseRelease {
+    fun release(handle: WaitlistLeaseHandle): WaitlistLeaseRelease = stateLock.withLock {
         if (closed) return WaitlistLeaseRelease.CLOSED
         val activeCount = activeHandleCounts[handle] ?: return WaitlistLeaseRelease.ALREADY_RELEASED
         if (activeCount == 1) {
@@ -277,10 +285,10 @@ internal class FencedWaitlistLeaderLease(
         }
     }
 
-    @Synchronized
-    override fun close() {
+    override fun close() = stateLock.withLock {
         if (closed) return
         closed = true
+        log.debug { "Waitlist fenced lease closed" }
         operations.close()
     }
 
@@ -330,7 +338,7 @@ internal class FencedWaitlistLeaderLease(
         val request: LockRequestId,
     )
 
-    companion object {
+    companion object : KLogging() {
         private val MAX_LEASE: Duration = Duration.ofMinutes(5)
         private val OPAQ_OWNER_PATTERN = Regex("[1-9A-HJ-NP-Za-km-z]{8}")
     }

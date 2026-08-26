@@ -6,6 +6,9 @@ import io.bluetape4k.redis.lettuce.lock.FencedBootstrapResult
 import io.bluetape4k.redis.lettuce.lock.FencedLockConfig
 import io.bluetape4k.redis.lettuce.lock.LettuceFencedLock
 import io.bluetape4k.redis.lettuce.lock.LockConfig
+import io.bluetape4k.logging.KLogging
+import io.bluetape4k.logging.debug
+import io.bluetape4k.logging.warn
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -98,7 +101,9 @@ internal class WaitlistFencedDeliverySchedulingRunner(
             val outcome = attempt.outcome()
             metrics.recordLeaseAcquire(outcome.metricOutcome, elapsedSince(started))
             val handle = attempt.handleOrNull()
-                ?: return terminalResult(mode, outcome, elapsedSince(started))
+                ?: return terminalResult(mode, outcome, elapsedSince(started)).also {
+                    log.debug { "Waitlist fenced tick skipped: lease_outcome=${outcome.name.lowercase()}" }
+                }
 
             return try {
                 val expiryCount = expiry.expire(properties.batchSize, started)
@@ -124,10 +129,13 @@ internal class WaitlistFencedDeliverySchedulingRunner(
                     duration = elapsedSince(started),
                 )
             } finally {
-                when (lease.release(handle)) {
+                when (val release = lease.release(handle)) {
                     WaitlistLeaseRelease.OWNERSHIP_LOST ->
                         metrics.recordOwnershipLoss(WaitlistOwnershipLossSource.REDIS)
-                    else -> Unit
+                    WaitlistLeaseRelease.RELEASED,
+                    WaitlistLeaseRelease.ALREADY_RELEASED,
+                    -> Unit
+                    else -> log.warn { "Waitlist fenced lease release incomplete: outcome=${release.name.lowercase()}" }
                 }
             }
         } finally {
@@ -136,7 +144,6 @@ internal class WaitlistFencedDeliverySchedulingRunner(
         }
     }
 
-    @Synchronized
     override fun close() {
         if (closed.compareAndSet(false, true)) {
             lease.close()
@@ -145,10 +152,20 @@ internal class WaitlistFencedDeliverySchedulingRunner(
 
     private fun acquireOrReconcile(now: Instant): WaitlistLeaseAttempt {
         val acquired = runCatching { lease.tryAcquire(now) }
-            .getOrElse { return WaitlistLeaseAttempt.Failed(WaitlistLeaseFailure.BACKEND_FAILURE) }
+            .getOrElse { failure ->
+                log.warn {
+                    "Waitlist fenced lease acquire failed: exception=${failure::class.simpleName}"
+                }
+                return WaitlistLeaseAttempt.Failed(WaitlistLeaseFailure.BACKEND_FAILURE)
+            }
         return if (acquired is WaitlistLeaseAttempt.Ambiguous) {
             runCatching { lease.reconcile(now) }
-                .getOrElse { WaitlistLeaseAttempt.Failed(WaitlistLeaseFailure.RECONCILE_FAILED) }
+                .getOrElse { failure ->
+                    log.warn {
+                        "Waitlist fenced lease reconcile failed: exception=${failure::class.simpleName}"
+                    }
+                    WaitlistLeaseAttempt.Failed(WaitlistLeaseFailure.RECONCILE_FAILED)
+                }
         } else {
             acquired
         }
@@ -220,6 +237,8 @@ internal class WaitlistFencedDeliverySchedulingRunner(
             WaitlistFencedLeaseOutcome.CLOSED,
             -> WaitlistLeaseMetricOutcome.FAILED
         }
+
+    private companion object : KLogging()
 }
 
 /** V31 fence column이 실제 DB에 존재하는지 zero-row query로 확인하는 readiness probe입니다. */
@@ -236,9 +255,14 @@ internal class WaitlistFencingReadiness(
                 }
             }
         } catch (cause: Exception) {
+            log.warn {
+                "Waitlist V31 fencing readiness failed: exception=${cause::class.simpleName}"
+            }
             throw WaitlistFencingReadinessException(cause)
         }
     }
+
+    private companion object : KLogging()
 }
 
 /** V31 readiness를 통과하지 못한 fenced scheduler의 조용한 기동을 막습니다. */
@@ -306,6 +330,7 @@ internal class WaitlistFencedSchedulingConfiguration {
             -> Unit
             else -> {
                 lock.close()
+                log.warn { "Waitlist fenced lock bootstrap failed: result=${bootstrap::class.simpleName}" }
                 throw WaitlistFencedLockBootstrapException(bootstrap)
             }
         }
@@ -355,7 +380,7 @@ internal class WaitlistFencedSchedulingConfiguration {
         runner: WaitlistFencedDeliverySchedulingRunner,
     ): WaitlistFencedScheduler = WaitlistFencedScheduler(runner)
 
-    companion object {
+    companion object : KLogging() {
         const val WAITLIST_LOCK_NAMESPACE = "bt4k:coord:v1"
         // LettuceFencedLock가 resource 구성요소를 검증하므로 구분자는 namespace에 둡니다.
         const val WAITLIST_LOCK_RESOURCE = "waitlist-delivery"
