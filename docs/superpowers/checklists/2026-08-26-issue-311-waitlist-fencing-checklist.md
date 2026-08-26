@@ -30,13 +30,13 @@
   - **Action:** 누락·순서 오류를 복구하고 영향을 받은 하위 근거를 재실행한다.
   - **Evidence:** topology를 8-component corrected run으로 복구한 뒤 receipt sequence 7, mutation-check checksum `49188a9a0e75fb80c6dde8179789fbaa8f227a408190a55a23ff09a8ca61c79`를 재확인하고 Task 1~9의 RED/GREEN·module test를 다시 실행했다.
   - **Failure:** 복구할 수 없으면 최종 상태를 BLOCKED로 유지한다.
-- [ ] **CL-07 — Refresh irreversible holds**
+- [x] **CL-07 — Refresh irreversible holds**
   - **Action:** PR·CI·merge 같은 외부/비가역 작업 직전에 hold를 다시 읽는다.
-  - **Evidence:** 최신 target·authority·head와 명시적 승인 상태를 기록한다.
+  - **Evidence:** PR #428 `https://github.com/bluetape4k/clinic-appointment/pull/428`을 `develop` 대상·`feat/issue-311-waitlist-fencing` head로 재확인했고, exact head `9320cc07ae17026f6d29b51dcb8ce75b2db4b117`, CI run `32988329720`, visual run `32988329538`, review 0건을 live read-back했다. merge는 fresh exact-head 승인 전까지 hold로 유지한다.
   - **Failure:** hold가 없으면 외부 side effect를 실행하지 않는다.
-- [ ] **CL-08 — Count before completion**
+- [x] **CL-08 — Count before completion**
   - **Action:** 완료 시 `Required checks: X/Y; N/A: N; Blocked: N`을 계산한다.
-  - **Evidence:** 이 문서의 체크 상태와 최종 보고서의 총계가 일치한다.
+  - **Evidence:** 현재 총계는 `Required checks: 19/20; N/A: 0; Blocked: 0; PENDING: 1 (A-12/CG-16)`이며 이 문서와 최종 DoD에 동일하게 반영한다.
   - **Failure:** 총계가 맞지 않으면 완료를 주장하지 않는다.
 
 ## Type A 단계
@@ -77,13 +77,13 @@
   - **Action:** Korean Lore lesson을 writer gate 후 PR 전에 추적 commit으로 남긴다.
   - **Evidence:** `docs/lessons/2026-08-26-issue-311-waitlist-fenced-production.md`에 context·decision·outcome·proof·miss·future guard와 2026-08-27 최종 검증 보강을 기록하고 Korean terminology audit 및 `git diff --check`를 통과했다. 추적 commit은 `d8b959c4`이다.
   - **Failure:** untracked 또는 근거 없는 lesson은 통과하지 못한다.
-- [ ] **A-10 — Complete authorized PR delivery through live CI and review**
+- [x] **A-10 — Complete authorized PR delivery through live CI and review**
   - **Action:** CG-11..CG-14에 따라 PR 권한·head·metadata·본문·review·CI를 최신 상태로 검증한다.
-  - **Evidence:** live PR read-back, final `## DoD Status`, exact head CI, review/thread 상태.
+  - **Evidence:** PR #428은 OPEN·non-draft·`develop` 대상이며 head는 `9320cc07ae17026f6d29b51dcb8ce75b2db4b117`이다. 본문에 `## DoD Status`와 `#311`을 포함하고, pull_request CI run `32988329720`의 `CI Status`, `Test / API (PostgreSQL)`, `Build & Detekt`, `Test / Core & Event`, `Test / Solver`, `Test / Notification`, `Test / Appointment Messaging`, `Flyway Migration / PostgreSQL`, 보안·wrapper·변경 감지 및 visual companion run `32988329538`이 모두 성공했다. PR review·comment·thread는 0건이다.
   - **Failure:** stale/missing CI·review는 PENDING 또는 FAIL로 남긴다.
-- [ ] **A-11 — Capture knowledge and report merge readiness**
+- [x] **A-11 — Capture knowledge and report merge readiness**
   - **Action:** knowledge capture 후 exact PR/head에 묶인 merge-ready DoD를 보고한다.
-  - **Evidence:** knowledge/index 결과, X/Y·N/A·Blocked 총계, unchecked CG-16..CG-18.
+  - **Evidence:** 최종 7-Tier/SPW review와 Korean lesson을 커밋 `d8b959c4`에 고정했고, PR/CI 근거를 위 A-10에 연결했다. 총계는 `19/20; N/A: 0; Blocked: 0`이며 CG-16은 fresh exact-head merge 승인 대기, CG-17..CG-18은 merge 이후 작업으로 unchecked 상태다.
   - **Failure:** fresh merge approval 전에는 DONE을 주장하지 않는다.
 - [ ] **A-12 — Close out only after fresh merge approval**
   - **Action:** 최신 head에 대한 새 `승인` 이후에만 merge·검증·integration sync·worktree cleanup을 수행한다.
@@ -95,6 +95,6 @@
 | 게이트 | 상태 | 근거/다음 행동 |
 |---|---|---|
 | CG-01..CG-10 | 완료 | 요구사항·설계·계획·구현·검증 순서와 corrected workflow receipt를 fresh evidence로 read-back |
-| CG-11..CG-15 | 대기 | 구현·리뷰·CI 완료 후 live PR metadata/read-back |
+| CG-11..CG-15 | 완료 | PR #428 권한·head·본문·CI·review와 visual companion run을 live read-back |
 | CG-16 | PENDING | exact PR/head에 대한 별도 merge 승인 필요 |
 | CG-17..CG-18 | PENDING | CG-16 이후 merge·sync·cleanup |
