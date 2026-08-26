@@ -149,8 +149,11 @@ fenced mode로 생성된다. legacy Boolean runner에는 token propagation을 �
 ### Redis lifecycle
 
 - bean 초기화 시 `bootstrapFencing()`을 한 번 호출하고 결과를 확인한다.
-- lock key는 `bt4k:coord:v1:waitlist:delivery`로 고정한다. key version을 바꾸면 새
-  protocol로 별도 rollout하며 기존 counter를 보존한다.
+- lock identity는 `LockConfig(namespace = "bt4k:coord:v1")`와 library-safe resource
+  `waitlist-delivery`로 고정한다. bluetape4k가 생성하는 파생 key는
+  `bt4k:coord:v1:{waitlist-delivery}:lock:waitlist-delivery`와 state·generation·holds·
+  terminal·fence-counter key이며, key version을 바꾸면 새 protocol로 별도 rollout하고
+  기존 counter를 보존한다. resource 구성요소에 콜론을 넣지 않는다.
 - `LeasePolicy.Fixed(properties.jobLease)`를 기본으로 사용한다. bounded watchdog가
   필요한 경우에도 TTL, renewal interval, max lifetime을 설정으로 고정하고 p95/p99
   tick 예산을 초과하지 않도록 검증한다.
