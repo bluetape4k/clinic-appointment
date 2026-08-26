@@ -22,13 +22,13 @@
   - **Action:** 항목을 체크하는 순간 명령·파일·URL·결과를 기록한다.
   - **Evidence:** A-01/A-02 근거와 spec/review 경로를 체크 시점에 기록했고, mutation 전 `mutation-check`를 fresh 실행했다.
   - **Failure:** 근거 없는 항목은 unchecked로 되돌린다.
-- [ ] **CL-05 — Fail closed**
+- [x] **CL-05 — Fail closed**
   - **Action:** PENDING·FAIL 항목은 종속 단계를 차단한다.
-  - **Evidence:** 대기·실패 사유와 중단 또는 복구 상태를 기록한다.
+  - **Evidence:** 첫 workflow 시도 `20260826T131447Z-0bcb125d`는 12-component topology limit에서 코드 mutation 전에 취소했고, 구현은 corrected run `20260826T131830Z-ad3bb476`에서만 재개했다. 잘못된 시도의 산출물은 `.bluetape/cancel-topology-evidence.json`에 남겼다.
   - **Failure:** 종속 작업을 실행하지 않고 repair 또는 사용자 승인 게이트로 남긴다.
-- [ ] **CL-06 — Repair skipped or reordered work**
+- [x] **CL-06 — Repair skipped or reordered work**
   - **Action:** 누락·순서 오류를 복구하고 영향을 받은 하위 근거를 재실행한다.
-  - **Evidence:** 복구 결과와 갱신된 검증 명령을 기록한다.
+  - **Evidence:** topology를 8-component corrected run으로 복구한 뒤 receipt sequence 7, mutation-check checksum `49188a9a0e75fb80c6dde8179789fbaa8f227a408190a55a23ff09a8ca61c79`를 재확인하고 Task 1~9의 RED/GREEN·module test를 다시 실행했다.
   - **Failure:** 복구할 수 없으면 최종 상태를 BLOCKED로 유지한다.
 - [ ] **CL-07 — Refresh irreversible holds**
   - **Action:** PR·CI·merge 같은 외부/비가역 작업 직전에 hold를 다시 읽는다.
@@ -65,17 +65,17 @@
   - **Action:** 테스트 RED→최소 구현→GREEN 순서로 typed fenced adapter, production wiring, DB fence를 구현한다.
   - **Evidence:** Task 1 RED를 먼저 실행해 `:appointment-core:compileTestKotlin`에서 `fenceEpoch`, `fenceSequence`, `WaitlistFencingToken` unresolved reference를 확인했다. 최소 구현 후 같은 명령이 `BUILD SUCCESSFUL`, `SUCCESS: Executed 12 tests in 7s`로 통과했다. Task 2에서는 `claimFenced` 부재 RED 후 strict-greater/exact terminal 구현과 PostgreSQL expiry takeover 회귀를 추가했고, `./gradlew :appointment-core:test --tests 'io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryRepositoryTest' --tests 'io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryPostgreSqlContentionTest' --no-build-cache --no-daemon --console=plain`이 `BUILD SUCCESSFUL`, `SUCCESS: Executed 17 tests in 6.6s`로 통과했다. Task 3에서는 V31 contract RED에서 세 dialect의 `fence_epoch`/`fence_sequence` 누락을 확인한 뒤 H2·PostgreSQL·MySQL migration script와 PostgreSQL transactional lock 설정을 추가했고, `./gradlew :appointment-api:test --tests 'io.bluetape4k.clinic.appointment.api.migration.WaitlistFencingMigrationContractTest' --no-daemon`이 `BUILD SUCCESSFUL`, `SUCCESS: Executed 1 tests in 15.2s`로 통과했다. Task 4에서는 `FencedWaitlistLeaderLease`·`WaitlistFencedLockOperations` 부재 RED 후 Base58 opaque owner, typed outcome, 동일 owner/request reconcile, release idempotency, close gate를 구현했고, `./gradlew :appointment-api:test --tests 'io.bluetape4k.clinic.appointment.api.waitlist.WaitlistFencedLeaderLeaseTest' --no-build-cache --no-daemon --console=plain`이 `BUILD SUCCESSFUL`, `SUCCESS: Executed 6 tests in 1.6s`로 통과했다. Task 5에서는 typed dispatcher/runner와 `fenceEpoch` 부재 RED 후 acquire·reconcile·close gate, safety 작업 순서, token 전달, allowlisted metrics를 구현했고, `./gradlew :appointment-api:test --tests 'io.bluetape4k.clinic.appointment.api.waitlist.WaitlistFencedDeliverySchedulingTest' --no-build-cache --no-daemon --console=plain`이 `BUILD SUCCESSFUL`, `SUCCESS: Executed 5 tests in 1.7s`로 통과했다. Task 6에서는 missing V31 column이 `WaitlistFencingReadinessException` cause chain을 포함하고, complete ports가 readiness 선행·자동 metrics bean·scheduler를 조립하는 `WaitlistFencedSchedulingConfigurationTest` 4개가 `BUILD SUCCESSFUL`로 통과했다. Task 7에서는 Redis 8.8 singleton에서 fixed lease expiry takeover, strict-greater token, stale release, 실제 handle ambiguous reconcile, metric redaction을 검증하는 `WaitlistFencedRedisIntegrationTest` 3개가 `BUILD SUCCESSFUL`로 통과했다.
   - **Failure:** 실패 동작으로 되돌아가고 부분 구현을 진행하지 않는다.
-- [ ] **A-07 — Verify tests, spec, plan, and repository hazards**
+- [x] **A-07 — Verify tests, spec, plan, and repository hazards**
   - **Action:** targeted·proportional broader 검증과 spec/plan·hazard 대조를 수행한다.
-  - **Evidence:** Gradle 명령 결과, verifier verdict, acceptance mapping, 문서·workflow·catalog 확인.
+  - **Evidence:** `:appointment-core:test` 579 tests와 `:appointment-api:test` 900 tests(3 skipped)가 모두 `BUILD SUCCESSFUL`이고, `:appointment-core:build :appointment-api:build`도 `BUILD SUCCESSFUL`이다. targeted Redis 8.8, PostgreSQL concurrent claim, V31 3-dialect migration, readiness, redaction 회귀와 spec/plan/risk/Issue AC-01..AC-08를 대조했으며 `git diff --check`와 Korean terminology audit도 통과했다.
   - **Failure:** verifier gap은 구현 또는 승인 산출물로 되돌린다.
-- [ ] **A-08 — Converge the final pre-PR review**
+- [x] **A-08 — Converge the final pre-PR review**
   - **Action:** 최종 checklist와 여섯 code-review 관점·통합 리뷰를 수행하고 P0/P1을 제거한다.
-  - **Evidence:** final diff, SPW-01..SPW-05 리뷰 근거, `git diff --check`, P0=0/P1=0.
+  - **Evidence:** `docs/superpowers/reviews/2026-08-27-issue-311-waitlist-fenced-final-review.md`에 7-Tier(신뢰성·성능·보안·운영·개발자/API·사용자/호출자·유지보수/아키텍처) 결과와 SPW-01..SPW-05를 기록했다. 독립 성능·보안 검토의 P1/P2를 모두 반영했고 최종 open finding은 P0=0, P1=0, P2=0, P3=0이다.
   - **Failure:** blocker가 남으면 PR 생성을 보류한다.
-- [ ] **A-09 — Commit durable learning**
+- [x] **A-09 — Commit durable learning**
   - **Action:** Korean Lore lesson을 writer gate 후 PR 전에 추적 commit으로 남긴다.
-  - **Evidence:** lesson 경로, SPW-01..SPW-05, context·decision·outcome·proof·miss·future guard.
+  - **Evidence:** `docs/lessons/2026-08-26-issue-311-waitlist-fenced-production.md`에 context·decision·outcome·proof·miss·future guard와 2026-08-27 최종 검증 보강을 기록하고 Korean terminology audit 및 `git diff --check`를 통과했다. 추적 commit은 `194ca323` 이후 최종 검증 commit에 포함한다.
   - **Failure:** untracked 또는 근거 없는 lesson은 통과하지 못한다.
 - [ ] **A-10 — Complete authorized PR delivery through live CI and review**
   - **Action:** CG-11..CG-14에 따라 PR 권한·head·metadata·본문·review·CI를 최신 상태로 검증한다.
@@ -94,7 +94,7 @@
 
 | 게이트 | 상태 | 근거/다음 행동 |
 |---|---|---|
-| CG-01..CG-10 | 진행 중 | 요구사항·설계·계획·구현·검증 순서에서 fresh evidence 수집 |
+| CG-01..CG-10 | 완료 | 요구사항·설계·계획·구현·검증 순서와 corrected workflow receipt를 fresh evidence로 read-back |
 | CG-11..CG-15 | 대기 | 구현·리뷰·CI 완료 후 live PR metadata/read-back |
 | CG-16 | PENDING | exact PR/head에 대한 별도 merge 승인 필요 |
 | CG-17..CG-18 | PENDING | CG-16 이후 merge·sync·cleanup |
