@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentConfirmedParameters
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
 import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
@@ -33,7 +34,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -141,7 +141,7 @@ internal class NotificationOutboxEndToEndTest {
             throw CancellationException("provider cancelled")
         }
 
-        assertThrows<CancellationException> {
+            assertFailsWith<CancellationException> {
             runBlocking { worker(store, provider).process(claimed()) }
         }
 
@@ -205,7 +205,7 @@ internal class NotificationOutboxEndToEndTest {
 
     @Test
     fun `runtime delivery dependency는 일부만 주입할 수 없다`() {
-        assertThrows<IllegalArgumentException> {
+        assertFailsWith<IllegalArgumentException> {
             NotificationOutboxWorker(
                 workStore = E2EWorkStore(),
                 leaseOwner = "worker-a",
