@@ -54,6 +54,21 @@ dispatcher를 만들지 않고 fail-closed한다. `WaitlistDeliveryMetrics`는
 모든 위 명령은 각 구현 단계에서 `BUILD SUCCESSFUL`로 확인했다. 최종 멀티모듈
 회귀와 PR CI 결과는 Task 9 이후에만 이 lesson에 추가한다.
 
+## 최종 검증 보강 (2026-08-27)
+
+- `./gradlew :appointment-core:test --no-build-cache --no-daemon --console=plain`은
+  `SUCCESS: Executed 579 tests in 34.7s`, `BUILD SUCCESSFUL in 37s`로 통과했다.
+- `./gradlew :appointment-api:test --no-build-cache --no-daemon --console=plain`은
+  `SUCCESS: Executed 900 tests in 3m 18s (3 skipped)`, `BUILD SUCCESSFUL in 3m 26s`로
+  통과했다. skip은 기존 테스트의 명시적 조건이며 Issue #311 Redis 회귀는 통과했다.
+- `./gradlew :appointment-core:build :appointment-api:build --no-build-cache --no-daemon
+  --console=plain`은 `BUILD SUCCESSFUL in 5s`로 통과했으며 Kover check/verify도 포함했다.
+- 최종 7-Tier review는 P0=0, P1=0, P2=0, P3=0이며 성능·보안 검토에서 발견된
+  lease budget, monotonic elapsed, concurrent gate/claim, bounded release retry와
+  redaction 보정은 모두 회귀 테스트로 고정했다.
+- 원격 PR CI와 merge는 이 lesson 작성 시점에 아직 실행하지 않았으므로, exact PR/head
+  read-back 및 fresh merge approval을 별도 게이트로 유지한다.
+
 ## 놓친 점
 
 초기 설계 문서에는 resource 문자열에 콜론이 포함된 logical key를 그대로 적었다.
