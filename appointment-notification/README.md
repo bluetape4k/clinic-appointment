@@ -38,6 +38,24 @@ Resilience4j 정책을 적용합니다.
 
 ## 발송 흐름
 
+## Persistence capability 경계 (Issue #425)
+
+worker와 관측 wrapper는 `JdbcNotificationOutboxRepository`를 public 생성자에 직접 노출하지
+않습니다. `NotificationOutboxWorkPersistence`와
+`NotificationOutboxObservationPersistence`가 caller transaction 안에서 필요한 query·claim·
+lifecycle·관측 capability를 정의하고, JDBC repository가 두 port를 구현합니다.
+`WaitlistNotificationOutboxAdapter`도 `WaitlistNotificationOutboxSink`만 받습니다.
+
+Spring `NotificationAutoConfiguration`은 notification module 내부에서 concrete JDBC
+repository를 조립합니다. 사용자 정의 fake bean을 `@Primary`·`@Qualifier`로 교체하는
+계약은 제공하지 않으며, 테스트 대체는 wrapper public 생성자에 fake capability를 직접
+주입합니다. 이 경계는 새 table·column·Flyway migration 없이 유지됩니다.
+
+이번 변경은 wrapper JVM constructor descriptor를 capability 타입으로 바꾸는 의도적인 ABI
+migration입니다. positional Kotlin caller는 재컴파일하면 되지만 named-argument caller는
+`repository =`를 `persistence =`로 바꿔야 하며, 기존 binary consumer는 재컴파일해야 합니다.
+
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../docs/requirements/assets/data-flow-05-notification-events-ko-dark.png">
   <img src="../docs/requirements/assets/data-flow-05-notification-events-ko.png" alt="내구성 알림 outbox 발송 경로와 개인정보 경계">

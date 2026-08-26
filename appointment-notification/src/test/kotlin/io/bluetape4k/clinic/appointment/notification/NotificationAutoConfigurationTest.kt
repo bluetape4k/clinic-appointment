@@ -120,6 +120,35 @@ internal class NotificationAutoConfigurationTest {
     }
 
     @Test
+    fun `기본 persistence wiring은 concrete repository를 capability wrapper에 연결한다`() {
+        val database = database("auto_capability_wiring", version = "21")
+        context(database, withKey = true).run { applicationContext ->
+            applicationContext.startupFailure shouldBeEqualTo null
+
+            val repository = applicationContext.getBean(
+                io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository::class.java,
+            )
+            val workStore = applicationContext.getBean(NotificationOutboxWorkStore::class.java)
+            val observationStore = applicationContext.getBean(NotificationOutboxObservationStore::class.java)
+
+            workStore shouldBeEqualTo applicationContext.getBean(JdbcNotificationOutboxWorkStore::class.java)
+            observationStore shouldBeEqualTo applicationContext.getBean(JdbcNotificationOutboxObservationStore::class.java)
+            (
+                JdbcNotificationOutboxWorkStore::class.java
+                    .getDeclaredField("persistence")
+                    .apply { isAccessible = true }
+                    .get(workStore) === repository
+            ).shouldBeTrue()
+            (
+                JdbcNotificationOutboxObservationStore::class.java
+                    .getDeclaredField("persistence")
+                    .apply { isAccessible = true }
+                    .get(observationStore) === repository
+            ).shouldBeTrue()
+        }
+    }
+
+    @Test
     fun `v2 producer는 schema와 cancellation template readiness가 없으면 v1로 fail closed 한다`() {
         val database = database("auto_v2_gate", version = "21")
         context(database, withKey = true)

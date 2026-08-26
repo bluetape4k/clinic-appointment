@@ -24,7 +24,7 @@ class WaitlistNotificationOutboxAdapterTest {
         "jdbc:h2:mem:waitlist_notification_outbox_${Base58.randomString(8)};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
         driver = "org.h2.Driver",
     )
-    private val repository = WaitlistNotificationOutboxRepository()
+    private val repository: WaitlistNotificationOutboxSink = WaitlistNotificationOutboxRepository()
     private val adapter = WaitlistNotificationOutboxAdapter(repository)
 
     @BeforeEach

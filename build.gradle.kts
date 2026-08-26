@@ -404,7 +404,8 @@ private val apiConsumerFixtureInventory = mapOf(
     "notification" to listOf(
         "NotificationAppointmentEventConsumer", "NotificationAppointmentEventKafkaListener", "NotificationSchemaReadiness",
         "JdbcNotificationOutboxWorkStore", "JdbcNotificationOutboxObservationStore", "NotificationOutboxWorkStore",
-        "NotificationOutboxObservationStore", "JdbcNotificationOutboxRepository", "NotificationOutboxWriter",
+        "NotificationOutboxObservationStore", "NotificationOutboxWorkPersistence", "NotificationOutboxObservationPersistence",
+        "NotificationOutboxWriter",
         "NotificationOutboxMetrics",
         "NotificationOutboxSchedulingRunner", "NotificationObservationSchedulingRunner", "NotificationRetentionSchedulingRunner",
         "NotificationReminderSchedulingRunner", "NotificationRetentionRunner", "AppointmentReminderScheduler",
@@ -506,6 +507,29 @@ private fun assertFixtureInventory(rootDirectory: File, target: ApiConsumerFixtu
     require(missing.isEmpty()) {
         "${target.module} fixture inventory is missing symbols: ${missing.joinToString(", ")}"
     }
+}
+
+val assertAppointmentNotificationConsumerFixtureSourceBoundary = tasks.register("assertAppointmentNotificationConsumerFixtureSourceBoundary") {
+    description = "Prevents the notification consumer fixture from importing concrete JDBC persistence."
+    group = "verification"
+    notCompatibleWithConfigurationCache("Reads repository-relative fixture sources during verification.")
+    val fixtureRoot = layout.projectDirectory.dir("src/consumerFixture/notification/kotlin")
+    inputs.dir(fixtureRoot)
+    doLast {
+        val sourceDirectory = repositoryTree(project.rootDir, "src/consumerFixture/notification/kotlin")
+        val violations = sourceDirectory.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .filter { it.readText().contains("JdbcNotificationOutboxRepository") }
+            .map { it.relativeTo(project.rootDir).path }
+            .toList()
+        require(violations.isEmpty()) {
+            "notification consumer fixture must depend on persistence capability types, not concrete repository: ${violations.joinToString(", ")}"
+        }
+    }
+}
+
+compileAppointmentNotificationConsumerFixture.configure {
+    dependsOn(assertAppointmentNotificationConsumerFixtureSourceBoundary)
 }
 
 private fun resolvedComponentCoordinates(target: ApiConsumerFixtureTarget): List<String> {

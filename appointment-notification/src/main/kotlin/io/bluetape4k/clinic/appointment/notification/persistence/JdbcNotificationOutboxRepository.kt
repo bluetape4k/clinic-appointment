@@ -60,13 +60,15 @@ import java.time.Instant
 class JdbcNotificationOutboxRepository(
     private val codec: NotificationOutboxCodec,
     private val leaseDuration: Duration,
-) : NotificationOutboxWriter {
+) : NotificationOutboxWriter,
+    NotificationOutboxWorkPersistence,
+    NotificationOutboxObservationPersistence {
     /**
      * 현재 transaction이 연결된 DB의 현재 시각을 반환한다.
      *
      * 외부 I/O가 끝난 뒤 elapsed retry 상한을 판단할 때 애플리케이션 clock 대신 사용한다.
      */
-    fun currentDatabaseTime(): Instant = dbCurrentTimestamp()
+    override fun currentDatabaseTime(): Instant = dbCurrentTimestamp()
 
 
     init {
@@ -151,10 +153,10 @@ class JdbcNotificationOutboxRepository(
         }
     }
 
-    fun findReadyClinicKeys(
+    override fun findReadyClinicKeys(
         cursor: NotificationFairCursor?,
         limit: Int,
-        eligibleScopes: Set<TenantClinicScope>? = null,
+        eligibleScopes: Set<TenantClinicScope>?,
     ): List<NotificationClinicKey> {
         require(limit > 0) { "limit must be positive" }
         eligibleScopes?.let { scopes ->
@@ -198,7 +200,13 @@ class JdbcNotificationOutboxRepository(
             }
     }
 
-    fun findReadyCandidates(
+    /** 기존 concrete repository 호출자의 기본 allowlist 동작을 유지합니다. */
+    fun findReadyClinicKeys(
+        cursor: NotificationFairCursor?,
+        limit: Int,
+    ): List<NotificationClinicKey> = findReadyClinicKeys(cursor, limit, null)
+
+    override fun findReadyCandidates(
         key: NotificationClinicKey,
         cursorId: Long?,
         limit: Int,
@@ -222,7 +230,7 @@ class JdbcNotificationOutboxRepository(
     }
 
     /** metric refresh가 읽는 상한 있는 ready backlog snapshot입니다. */
-    fun observeReady(limit: Int): NotificationOutboxObservation {
+    override fun observeReady(limit: Int): NotificationOutboxObservation {
         require(limit > 0) { "limit must be positive" }
         val dbNow = dbCurrentTimestamp()
         val rows = NotificationOutboxEvents
@@ -248,9 +256,9 @@ class JdbcNotificationOutboxRepository(
      * 이 조회는 행 상태를 바꾸지 않는다. caller는 같은 짧은 transaction에서 각 식별자를
      * [recoverExpired]로 조건부 복구해야 한다.
      */
-    fun findExpiredProcessingIds(
+    override fun findExpiredProcessingIds(
         limit: Int,
-        eligibleScopes: Set<TenantClinicScope>? = null,
+        eligibleScopes: Set<TenantClinicScope>?,
     ): List<Long> {
         require(limit > 0) { "limit must be positive" }
         eligibleScopes?.let { scopes ->
@@ -280,7 +288,10 @@ class JdbcNotificationOutboxRepository(
             .map { it[NotificationOutboxEvents.id].value }
     }
 
-    fun claim(candidateId: Long, owner: String, token: String): ClaimedNotification? {
+    /** 기존 concrete repository 호출자의 전체 scope 기본 동작을 유지합니다. */
+    fun findExpiredProcessingIds(limit: Int): List<Long> = findExpiredProcessingIds(limit, null)
+
+    override fun claim(candidateId: Long, owner: String, token: String): ClaimedNotification? {
         require(candidateId > 0) { "candidateId must be positive" }
         val validOwner = owner.validFence("owner")
         val validToken = token.validFence("token")
@@ -315,7 +326,7 @@ class JdbcNotificationOutboxRepository(
      * caller는 짧은 transaction 안에서 호출해야 합니다. background worker와 동시에
      * 실행돼도 [claim]의 상태·attempt 조건을 통과한 한 호출자만 행을 획득합니다.
      */
-    fun claimReadyForDirect(
+    override fun claimReadyForDirect(
         scope: TenantClinicScope,
         appointmentId: AppointmentId,
         eventType: NotificationEventType,
@@ -345,7 +356,7 @@ class JdbcNotificationOutboxRepository(
         return claim(candidateId, owner, token)
     }
 
-    fun recoverExpired(candidateId: Long, owner: String, token: String): ClaimedNotification? {
+    override fun recoverExpired(candidateId: Long, owner: String, token: String): ClaimedNotification? {
         require(candidateId > 0) { "candidateId must be positive" }
         val validOwner = owner.validFence("owner")
         val validToken = token.validFence("token")
@@ -388,7 +399,7 @@ class JdbcNotificationOutboxRepository(
         return snapshot.toClaimed(nextAttempt, validOwner, validToken, leaseUntil, firstAttemptAt, dbNow)
     }
 
-    fun complete(command: CompleteNotificationCommand): Boolean {
+    override fun complete(command: CompleteNotificationCommand): Boolean {
         command.validate()
         val dbNow = dbCurrentTimestamp()
         val updated = NotificationOutboxEvents.update({ fencedProcessingPredicate(command, dbNow) }) {
@@ -430,7 +441,7 @@ class JdbcNotificationOutboxRepository(
         return true
     }
 
-    fun scheduleRetry(command: RetryNotificationCommand): Boolean {
+    override fun scheduleRetry(command: RetryNotificationCommand): Boolean {
         command.validate()
         val dbNow = dbCurrentTimestamp()
         val updated = NotificationOutboxEvents.update({ fencedProcessingPredicate(command, dbNow) }) {
@@ -469,7 +480,7 @@ class JdbcNotificationOutboxRepository(
      * attempt 외래 키가 outbox 삭제를 제한하므로 같은 caller transaction에서 attempt를
      * 먼저 삭제한다. cutoff는 애플리케이션 시각이 아니라 DB 현재 시각으로 계산한다.
      */
-    fun deleteTerminalBatch(
+    override fun deleteTerminalBatch(
         status: NotificationOutboxStatus,
         retention: Duration,
         limit: Int,

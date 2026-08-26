@@ -142,7 +142,7 @@ class NotificationAutoConfiguration {
     ): NotificationOutboxObservationStore =
         JdbcNotificationOutboxObservationStore(
             database = database,
-            repository = repository,
+            persistence = repository,
             observationLimit = properties.observation.validate().limit,
         )
 
