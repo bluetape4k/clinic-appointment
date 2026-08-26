@@ -72,6 +72,9 @@ val appointmentCoreConsumerFixtureClasspath = configurations.create("appointment
 val appointmentMessagingConsumerFixtureClasspath = configurations.create("appointmentMessagingConsumerFixtureClasspath") {
     configureApiConsumerFixtureClasspath()
 }
+val appointmentEventConsumerFixtureClasspath = configurations.create("appointmentEventConsumerFixtureClasspath") {
+    configureApiConsumerFixtureClasspath()
+}
 val appointmentNotificationConsumerFixtureClasspath = configurations.create("appointmentNotificationConsumerFixtureClasspath") {
     configureApiConsumerFixtureClasspath()
 }
@@ -79,6 +82,7 @@ val appointmentNotificationConsumerFixtureClasspath = configurations.create("app
 dependencies {
     add(appointmentCoreConsumerFixtureClasspath.name, project(":appointment-core"))
     add(appointmentMessagingConsumerFixtureClasspath.name, project(":appointment-messaging"))
+    add(appointmentEventConsumerFixtureClasspath.name, project(":appointment-event"))
     add(appointmentNotificationConsumerFixtureClasspath.name, project(":appointment-notification"))
 }
 
@@ -144,6 +148,13 @@ val compileAppointmentMessagingConsumerFixture = registerApiConsumerFixtureCompi
     outputPath = "consumer-fixtures/messaging/classes",
     moduleJarTask = ":appointment-messaging:jar",
 )
+val compileAppointmentEventConsumerFixture = registerApiConsumerFixtureCompile(
+    name = "compileAppointmentEventConsumerFixture",
+    sourceDirectory = "src/consumerFixture/event/kotlin",
+    classpath = appointmentEventConsumerFixtureClasspath,
+    outputPath = "consumer-fixtures/event/classes",
+    moduleJarTask = ":appointment-event:jar",
+)
 val compileAppointmentNotificationConsumerFixture = registerApiConsumerFixtureCompile(
     name = "compileAppointmentNotificationConsumerFixture",
     sourceDirectory = "src/consumerFixture/notification/kotlin",
@@ -158,6 +169,7 @@ val compileModuleConsumerFixtures = tasks.register("compileModuleConsumerFixture
     dependsOn(
         compileAppointmentCoreConsumerFixture,
         compileAppointmentMessagingConsumerFixture,
+        compileAppointmentEventConsumerFixture,
         compileAppointmentNotificationConsumerFixture,
     )
 }
@@ -184,6 +196,13 @@ private val apiConsumerFixtureTargets = listOf(
         modulePath = ":appointment-messaging",
         moduleJarTask = ":appointment-messaging:jar",
         compileTask = compileAppointmentMessagingConsumerFixture,
+    ),
+    ApiConsumerFixtureTarget(
+        module = "event",
+        configuration = appointmentEventConsumerFixtureClasspath,
+        modulePath = ":appointment-event",
+        moduleJarTask = ":appointment-event:jar",
+        compileTask = compileAppointmentEventConsumerFixture,
     ),
     ApiConsumerFixtureTarget(
         module = "notification",
@@ -231,6 +250,16 @@ private val apiConsumerFixtureExpectedScopes = mapOf(
             "org.springframework:spring-context",
         ),
     ),
+    "event" to ApiConsumerFixtureScope(
+        api = setOf(
+            "org.jetbrains.exposed:exposed-core",
+            "org.jetbrains.exposed:exposed-java-time",
+            "org.jetbrains.exposed:exposed-jdbc",
+            "org.jetbrains.exposed:exposed-r2dbc",
+            "project::appointment-core",
+        ),
+        compileOnlyApi = emptySet(),
+    ),
     "notification" to ApiConsumerFixtureScope(
         api = setOf(
             "io.github.bluetape4k.leader:bluetape4k-leader-core",
@@ -275,6 +304,10 @@ private val apiConsumerFixtureInventory = mapOf(
         "ConsumerRecord", "Acknowledgment", "Consumer", "ConsumerFactory", "ConcurrentKafkaListenerContainerFactory",
         "KafkaTemplate", "KafkaAdmin", "ProducerFactory", "Database", "Table", "LongIdTable", "MeterRegistry",
         "ObjectProvider", "DataSource", "HealthIndicator", "SmartLifecycle", "SmartInitializingSingleton",
+    ),
+    "event" to listOf(
+        "NotificationOutboxWriter", "NotificationOutboxWriteReceipt", "SendableNotificationDraft",
+        "NotificationOutboxEnvelope", "NotificationOutboxCodec", "NotificationOutboxHasher",
     ),
     "notification" to listOf(
         "NotificationAppointmentEventConsumer", "NotificationAppointmentEventKafkaListener", "NotificationSchemaReadiness",
