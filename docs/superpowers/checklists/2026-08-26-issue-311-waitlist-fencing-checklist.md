@@ -53,13 +53,13 @@
   - **Action:** `using-superpowers`·`brainstorming`·`bluetape-writer`로 설계를 확정하고 여섯 관점과 통합 리뷰를 수행한다.
   - **Evidence:** 승인된 설계 대화와 `docs/superpowers/specs/2026-08-26-issue-311-waitlist-fenced-production-design.md`, `docs/superpowers/reviews/2026-08-26-issue-311-waitlist-fenced-design-review.md`; 두 문서의 SPW-01..SPW-05 PASS, 여섯 관점+통합 review, 최신 P0=0/P1=0.
   - **Failure:** P0/P1 또는 승인되지 않은 설계 변경은 spec을 되돌려 재승인한다.
-- [ ] **A-04 — Approve and review the implementation plan**
+- [x] **A-04 — Approve and review the implementation plan**
   - **Action:** `writing-plans`·`bluetape-writer`로 acceptance traceability·파일·테스트·rollback을 계획하고 리뷰한다.
-  - **Evidence:** 승인된 plan 경로, spec/plan commit, SPW-01..SPW-05, 여섯 관점 리뷰와 P0=0/P1=0.
+  - **Evidence:** `docs/superpowers/plans/2026-08-26-issue-311-waitlist-fenced-production-plan.md`, `docs/superpowers/reviews/2026-08-26-issue-311-waitlist-fenced-plan-review.md`, commit `e3d5112e`; SPW-01..SPW-05 audit PASS, 여섯 관점 통합 review P0=0/P1=0, AC-01..AC-08 traceability와 exact file/test/rollback 단계 read-back.
   - **Failure:** 누락된 의존성·hazard·검증을 보완한 뒤에만 코드를 시작한다.
-- [ ] **A-05 — Predict triggered risks**
+- [x] **A-05 — Predict triggered risks**
   - **Action:** Redis lease expiry/failover, cancellation, ambiguous completion, DB strict-greater, metrics redaction 위험을 기록한다.
-  - **Evidence:** 위험·신호·완화·rollback/rerun 지점을 `docs/superpowers/risk/`와 plan에 연결한다.
+  - **Evidence:** `docs/superpowers/risk/2026-08-26-issue-311-waitlist-fenced-risk.md`에 R-01..R-10 위험, 완화 신호, rollback/rerun 지점과 Task/checklist traceability를 기록했으며 plan Task 4/6/7/9와 연결했다.
   - **Failure:** 위험 항목이 없으면 구현을 시작하지 않는다.
 - [ ] **A-06 — Implement with test-first proof**
   - **Action:** 테스트 RED→최소 구현→GREEN 순서로 typed fenced adapter, production wiring, DB fence를 구현한다.
