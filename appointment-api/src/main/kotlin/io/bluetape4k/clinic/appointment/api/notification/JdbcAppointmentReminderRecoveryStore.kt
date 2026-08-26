@@ -12,9 +12,9 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempoten
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
-import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
-import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxWriter
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
+import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
 import io.bluetape4k.clinic.appointment.event.notification.SendableNotificationDraft
@@ -48,13 +48,20 @@ import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.upsert
+import java.sql.Timestamp
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.util.ArrayDeque
 import java.util.UUID
 import kotlin.math.max
@@ -68,7 +75,7 @@ import kotlin.math.max
  */
 class JdbcAppointmentReminderRecoveryStore(
     private val database: Database,
-    private val repository: JdbcNotificationOutboxRepository,
+    private val writer: NotificationOutboxWriter,
     private val hasher: NotificationOutboxHasher,
     private val sameDayReminderLeadTime: Duration,
     private val dayBeforeEnabled: Boolean,
@@ -149,16 +156,16 @@ class JdbcAppointmentReminderRecoveryStore(
                 val payload = requireNotNull(candidate.payload) { "recovery candidate payload is required" }
                 val draft = payload.sendableDraft
                 val result = if (draft == null) {
-                    val existed = repository.containsIdempotency(payload.suppressionDraft.idempotencyDigest)
-                    repository.suppressLegacy(payload.suppressionDraft)
+                    val existed = writer.containsIdempotency(payload.suppressionDraft.idempotencyDigest)
+                    writer.suppressLegacy(payload.suppressionDraft)
                     if (existed) {
                         ReminderRecoveryMaterializationResult.ALREADY_EXISTS
                     } else {
                         ReminderRecoveryMaterializationResult.SUPPRESSED
                     }
                 } else {
-                    val existed = repository.containsIdempotency(draft.idempotencyDigest)
-                    repository.enqueue(draft)
+                    val existed = writer.containsIdempotency(draft.idempotencyDigest)
+                    writer.enqueue(draft)
                     if (existed) {
                         ReminderRecoveryMaterializationResult.ALREADY_EXISTS
                     } else {
@@ -178,8 +185,8 @@ class JdbcAppointmentReminderRecoveryStore(
                 val missed = payload.suppressionDraft.copy(
                     suppressionReason = NotificationSuppressionReasonCode.REMINDER_WINDOW_MISSED,
                 )
-                val existed = repository.containsIdempotency(missed.idempotencyDigest)
-                repository.suppressLegacy(missed)
+                val existed = writer.containsIdempotency(missed.idempotencyDigest)
+                writer.suppressLegacy(missed)
                 val result = if (existed) {
                     ReminderRecoveryMaterializationResult.ALREADY_EXISTS
                 } else {
@@ -216,7 +223,7 @@ class JdbcAppointmentReminderRecoveryStore(
                 it[runId] = nextRunId
                 it[lastAppointmentId] = 0L
                 it[active] = true
-                it[updatedAt] = repository.currentDatabaseTime()
+                it[updatedAt] = currentDatabaseTime()
             }
             row = ReminderRecoveryCheckpoints
                 .selectAll()
@@ -248,7 +255,7 @@ class JdbcAppointmentReminderRecoveryStore(
         }) {
             it[lastAppointmentId] = progress.appointmentId
             it[active] = !progress.completesRun
-            it[updatedAt] = repository.currentDatabaseTime()
+            it[updatedAt] = currentDatabaseTime()
         }
     }
 
@@ -258,9 +265,12 @@ class JdbcAppointmentReminderRecoveryStore(
                 (ReminderRecoveryCheckpoints.runId eq runId)
         }) {
             it[active] = false
-            it[updatedAt] = repository.currentDatabaseTime()
+            it[updatedAt] = currentDatabaseTime()
         }
     }
+
+    /** persistence 구현을 노출하지 않고 checkpoint의 authoritative DB clock을 읽습니다. */
+    private fun currentDatabaseTime(): Instant = TransactionManager.current().dbCurrentTimestamp()
 
     private fun loadCommitmentSchedules(rows: List<ResultRow>): Map<Long, CommitmentSchedule> {
         val appointmentIds = rows
@@ -464,3 +474,19 @@ class JdbcAppointmentReminderRecoveryStore(
         private val UTC: ZoneId = ZoneId.of("UTC")
     }
 }
+
+private fun JdbcTransaction.dbCurrentTimestamp(): Instant =
+    exec("SELECT CURRENT_TIMESTAMP") { resultSet ->
+        if (!resultSet.next()) error("SELECT CURRENT_TIMESTAMP returned no rows")
+        resultSet.getObject(1).toAppointmentDatabaseInstant()
+    } ?: error("SELECT CURRENT_TIMESTAMP returned no result set")
+
+private fun Any?.toAppointmentDatabaseInstant(): Instant =
+    when (this) {
+        is Instant -> this
+        is Timestamp -> toInstant()
+        is OffsetDateTime -> toInstant()
+        is ZonedDateTime -> toInstant()
+        is LocalDateTime -> toInstant(ZoneOffset.UTC)
+        else -> error("Unsupported CURRENT_TIMESTAMP value: ${this?.javaClass?.name ?: "null"}")
+    }

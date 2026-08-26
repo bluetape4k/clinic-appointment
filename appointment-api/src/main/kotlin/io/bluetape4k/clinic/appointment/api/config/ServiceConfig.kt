@@ -81,10 +81,9 @@ import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
 import io.bluetape4k.clinic.appointment.api.tenant.TenantContext
 import io.bluetape4k.clinic.appointment.api.tenant.TenantClinicAccessChecker
 import io.bluetape4k.clinic.appointment.event.policy.SchedulingPolicyEventRepository
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
-import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxWriter
 import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingContext
 import io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriter
 import io.bluetape4k.clinic.appointment.notification.NotificationProperties
@@ -359,18 +358,6 @@ class ServiceConfig {
     @Bean
     fun appointmentPlanRepository(): AppointmentPlanRepository = AppointmentPlanRepository()
 
-    @Bean
-    fun notificationOutboxCodec(): NotificationOutboxCodec = NotificationOutboxCodec()
-
-    @Bean
-    fun notificationOutboxRepository(
-        notificationOutboxCodec: NotificationOutboxCodec,
-    ): JdbcNotificationOutboxRepository =
-        JdbcNotificationOutboxRepository(
-            codec = notificationOutboxCodec,
-            leaseDuration = Duration.ofMinutes(5),
-        )
-
     /**
      * 외부 secret-backed key ring이 준비된 환경에서만 실제 enqueue writer를 구성한다.
      *
@@ -379,17 +366,19 @@ class ServiceConfig {
      */
     @Bean
     fun appointmentNotificationWriter(
-        notificationOutboxRepository: JdbcNotificationOutboxRepository,
+        notificationOutboxWriterProvider: ObjectProvider<NotificationOutboxWriter>,
         notificationOutboxHasherProvider: ObjectProvider<NotificationOutboxHasher>,
         clinicRepository: ClinicRepository,
         notificationProperties: NotificationProperties,
         producerReadinessProvider: ObjectProvider<NotificationProducerSchemaReadiness>,
     ): AppointmentNotificationWriter {
+        val writer = notificationOutboxWriterProvider.getIfAvailable()
+            ?: return UnavailableAppointmentNotificationWriter
         val hasher = notificationOutboxHasherProvider.getIfAvailable()
             ?: return UnavailableAppointmentNotificationWriter
         val v2Ready = notificationProperties.v2Producer && producerReadinessProvider.ifAvailable?.allowsV2() == true
         return DefaultAppointmentNotificationWriter(
-            repository = notificationOutboxRepository,
+            writer = writer,
             hasher = hasher,
             clinicRepository = clinicRepository,
             clock = Clock.systemUTC(),
@@ -404,18 +393,18 @@ class ServiceConfig {
     }
 
     @Bean
-    @ConditionalOnBean(NotificationOutboxHasher::class)
+    @ConditionalOnBean(value = [NotificationOutboxWriter::class, Database::class, NotificationOutboxHasher::class])
     @ConditionalOnMissingBean(JdbcAppointmentReminderRecoveryStore::class)
     fun appointmentReminderRecoveryStore(
         database: Database,
-        notificationOutboxRepository: JdbcNotificationOutboxRepository,
+        notificationOutboxWriter: NotificationOutboxWriter,
         notificationOutboxHasher: NotificationOutboxHasher,
         notificationProperties: NotificationProperties,
     ): JdbcAppointmentReminderRecoveryStore {
         val reminder = notificationProperties.reminder
         return JdbcAppointmentReminderRecoveryStore(
             database = database,
-            repository = notificationOutboxRepository,
+            writer = notificationOutboxWriter,
             hasher = notificationOutboxHasher,
             sameDayReminderLeadTime = Duration.ofHours(reminder.sameDayHoursBefore.toLong()),
             dayBeforeEnabled = reminder.enabled && reminder.dayBefore,

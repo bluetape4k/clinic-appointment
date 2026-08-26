@@ -80,7 +80,7 @@ internal class AppointmentNotificationAtomicityTest {
         leaseDuration = Duration.ofMinutes(5),
     )
     private val actualWriter = DefaultAppointmentNotificationWriter(
-        repository = outboxRepository,
+        writer = outboxRepository,
         hasher = DefaultNotificationOutboxHasher(
             StaticNotificationOutboxKeyRing(
                 active = NotificationHmacKey("atomicity-test", ByteArray(32) { 9 }),
