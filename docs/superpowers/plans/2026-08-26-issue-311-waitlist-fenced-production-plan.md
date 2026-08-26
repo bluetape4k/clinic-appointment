@@ -421,7 +421,13 @@ The final output must include the Redis image/launcher evidence, expiry takeover
 
 - [ ] **Step 1: Update Korean docs from the final API.**
 
-Document V31 additive rollout, key `bt4k:coord:v1:waitlist:delivery`, fixed lease and bounded watchdog boundary, typed dispatcher signature, strict-greater/exact-match semantics, ambiguous reconcile, close ownership, fail-closed readiness, metric allowlist, `enabled=false` rollback, and the fact that Redis is scheduler authority while DB remains business authority. Keep identifiers/commands/API names exact and prose Korean.
+Document V31 additive rollout, `LockConfig(namespace = "bt4k:coord:v1")` with the
+library-safe resource `waitlist-delivery` and derived key
+`bt4k:coord:v1:{waitlist-delivery}:lock:waitlist-delivery`, fixed lease and bounded
+watchdog boundary, typed dispatcher signature, strict-greater/exact-match semantics,
+ambiguous reconcile, close ownership, fail-closed readiness, metric allowlist,
+`enabled=false` rollback, and the fact that Redis is scheduler authority while DB
+remains business authority. Keep identifiers/commands/API names exact and prose Korean.
 
 - [ ] **Step 2: Write the lesson only from evidence.**
 

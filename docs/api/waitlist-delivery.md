@@ -94,45 +94,52 @@ suppression, stuck-hold reconciliation은 계속 수행한다. terminal write를
 
 ## Scheduler fencing 경계
 
-waitlist scheduler의 Redis lease는 실행 중복을 줄이는 advisory gate일 뿐 business
-state authority가 아니다. 현재 production 경로는 Redis fencing token을
-`scheduling_waitlist_vacancy_jobs`의 terminal mutation까지 전달하지 않으므로,
-`LettuceFencedLock`을 Boolean lease 포트 뒤에 형식적으로 추가하지 않는다.
+Issue #311의 fenced scheduler 경로는 기존 Boolean scheduler와 분리된 typed
+application port다. `appointment.waitlist.delivery.enabled=true`이고
+`RedisClient`, `DataSource`, `WaitlistFencedVacancyDispatcher`, expiry·suppression·
+hold-reconcile port와 `MeterRegistry`가 모두 존재할 때만
+`WaitlistFencedSchedulingConfiguration`이 bean을 조립한다. dispatcher가 제공되지
+않는 기본 예제 실행에서는 scheduler를 만들지 않으며 no-op dispatcher도 등록하지
+않는다.
 
-DB terminal write는 `leaseOwner`, `version`, `leaseVersion`, `leaseExpiresAt`를
-함께 확인하는 claim fence를 사용한다. stale owner가 만료 뒤 재개하거나 새 worker가
-claim을 takeover한 경우, 이 predicate를 통과하지 못한 write는 성공으로 취급하지
-않는다. Redis lease 획득 성공만으로 이 DB 조건을 생략하거나 완화하지 않는다.
+V31 migration은 `scheduling_waitlist_vacancy_jobs`에
+`fence_epoch BIGINT NOT NULL DEFAULT 0`, `fence_sequence BIGINT NOT NULL DEFAULT 0`를
+추가한다. Redis lock은 bluetape4k `LettuceFencedLock`과
+`LockConfig(namespace = "bt4k:coord:v1")`를 재사용하고, resource 구성요소 검증을
+통과하는 `waitlist-delivery` 이름을 사용한다. 라이브러리가 생성하는 파생 key는
+`bt4k:coord:v1:{waitlist-delivery}:lock:waitlist-delivery`와 관련 state,
+generation, holds, terminal, fence-counter key다. 이 key는 logical namespace의
+버전 계약이며 resource 문자열에 콜론을 직접 넣지 않는다.
 
-향후 `LettuceFencedLock`을 활성화하려면 logical owner/request identity, fixed
-lease 또는 bounded watchdog, `bootstrapFencing`, ambiguous reconcile, close와
-cancellation semantics를 먼저 정하고 Redis token을 모든 보호 대상 terminal
-mutation에 전달해야 한다. 각 write는 이전 `(epoch, sequence)`보다 strictly
-greater한 token만 반영해야 하며, 일부 caller만 전환하는 부분 migration은 허용하지
-않는다. 이 조건이 검증될 때까지는 도입을 보류한다.
+acquire는 `LeasePolicy.Fixed(jobLease)`로 제한하고 `jobLease`는 5분을 넘을 수 없다.
+traffic 전에 `bootstrapFencing()`을 한 번 실행하며, `Base58.randomString(8)`으로 만든
+opaque owner와 매 acquire의 native request를 adapter 내부에만 보관한다. 명확한
+`Acquired` 또는 `Reentered` handle을 얻은 경우에만 expiry → suppression → hold
+reconcile → dispatch 순서를 시작한다. `Contended`, `TimedOut`, `Failed`는 해당 tick을
+종료한다. `Ambiguous`는 동일 owner/request pair로 한 번 reconcile하고 recovered
+handle이 확인될 때만 business work와 release를 수행한다.
 
-운영 metric과 log에는 raw·truncated owner, request id, fencing token, lock key 또는
-비키드 해시를 기록하지 않는다. bounded outcome, latency, 결과 category와 bounded
-count만 기록한다. 현재 Boolean lease 포트는 tick 시작 시 획득 실패만 관측하며,
-획득 뒤 Redis lease expiry/ownership loss를 감지하거나 차단하지 않는다. 획득 뒤
-ownership loss가 발생해도 terminal write의 최종 판단은 Redis 상태가 아니라 DB
-claim fence가 내린다.
+DB claim은 Redis lease의 보조 권위를 신뢰하지 않고 `(epoch, sequence)`가 현재 저장
+값보다 strictly greater한 경우만 수락한다. `completeOffer`, `completeNoCandidate`,
+`markExpired`, `markFailed` 같은 terminal update는 claim의 동일 token과 기존
+`leaseOwner`, `version`, `leaseVersion`, `leaseExpiresAt`를 exact-match로 확인한다.
+따라서 lease expiry 뒤 재개한 stale worker의 write는 affected row 0으로 거부된다.
+Redis는 scheduler 실행 중복을 줄이는 권위이고, DB는 business state의 최종 권위다.
 
-`Ambiguous` 또는 unknown 결과는 같은 owner/request reconcile이나 명확한 lease
-expiry로 `NOT_HELD`가 확인될 때까지 quarantine한다. 그 전에는 새 acquire,
-dispatch, requeue 또는 business mutation을 시작하지 않는다.
+`close()`는 새 tick과 local lock task를 중지하고 shared `RedisClient`의 소유권을
+가져오거나 자동 unlock하지 않는다. readiness probe가 V31 column을 확인하지 못하면
+`WaitlistFencingReadinessException`으로 startup을 실패시킨다. rollback은
+`appointment.waitlist.delivery.enabled=false`로 dispatch를 내리고 Redis counter와
+DB fence column은 되돌리지 않는 방식으로 수행한다.
 
-현재 기본 `jobLease`는 30초이고 `pollInterval`은 1초이며, Boolean port에는
-renewal과 scheduler tick duration 계측이 없다. 따라서 lease가 전체 tick 예산보다
-짧지 않다는 보장은 아직 없다. fenced path를 재개할 때는 expiry·reclaim·dispatch를
-포함한 tick p95/p99와 안전 여유를 측정하고 `jobLease >= worst-case tick + safety
-margin` invariant를 검증해야 한다. Redis backend error와 ambiguous 결과에는
-contention과 구분되는 bounded exponential backoff+jitter 또는 circuit breaker,
-retry budget이 필요하다.
+운영 metric은 다음 이름과 닫힌 enum tag만 사용한다.
 
-향후 metric은 `scheduler_tick_duration`, `lease_acquire_duration`,
-`lease_outcome`, `ownership_loss_total`처럼 고정된 이름과 enum category만 사용해야
-한다. 현재 facade에는 scheduler/acquire latency와 실행 중 ownership-loss 계측이
-없으므로, 이 관측 계약이 추가·검증되기 전에는 fenced path를 활성화하지 않는다.
+- `appointment_waitlist_lease_acquire_total{outcome=acquired|contended|timeout|ambiguous|failed}`
+- `appointment_waitlist_lease_acquire_seconds{outcome=...}`
+- `appointment_waitlist_scheduler_tick_seconds{mode=active|clinic_disabled|global_off}`
+- `appointment_waitlist_ownership_loss_total{source=redis|db}`
+
+owner, request, token, key, tenant/member/entry/offer ID와 비키드·truncated hash는
+log와 metric에 기록하지 않는다. metric에는 outcome·latency·bounded count만 남긴다.
 
 운영 명령과 증거는 [대기 목록 전달 런북](../runbooks/waitlist-delivery.md)에서 확인한다.
