@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.api.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentReminderParameters
 import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
@@ -58,7 +59,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
-import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.logging.Logger
@@ -499,7 +499,7 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
             jdbcExecutionTracker = JdbcExecutionTracker()
             val dataSource = SimpleDriverDataSource(
                 Class.forName("org.h2.Driver").getDeclaredConstructor().newInstance() as Driver,
-                "jdbc:h2:mem:reminder-recovery-${UUID.randomUUID()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+                "jdbc:h2:mem:reminder-recovery-${Base58.randomString(8)};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
                 "sa",
                 "",
             )

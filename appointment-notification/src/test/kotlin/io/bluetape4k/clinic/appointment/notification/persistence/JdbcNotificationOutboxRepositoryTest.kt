@@ -5,6 +5,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.event.notification.*
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
@@ -50,7 +51,7 @@ import java.time.ZoneOffset
 class JdbcNotificationOutboxRepositoryTest {
 
     private val database = Database.connect(
-        "jdbc:h2:mem:notification_outbox_repository_${System.nanoTime()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+        "jdbc:h2:mem:notification_outbox_repository_${Base58.randomString(8)};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
         driver = "org.h2.Driver",
     )
     private val codec = NotificationOutboxCodec()

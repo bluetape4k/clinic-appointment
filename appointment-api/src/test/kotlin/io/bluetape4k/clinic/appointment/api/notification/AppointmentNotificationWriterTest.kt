@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.notification
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentCancelledParameters
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentConfirmedParameters
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentRescheduledParameters
@@ -39,7 +40,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
-import java.util.UUID
 
 internal class AppointmentNotificationWriterTest {
 
@@ -472,7 +472,7 @@ internal class AppointmentNotificationWriterTest {
         @BeforeAll
         fun connectDatabase() {
             Database.connect(
-                url = "jdbc:h2:mem:notification-writer-${UUID.randomUUID()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+                url = "jdbc:h2:mem:notification-writer-${Base58.randomString(8)};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
                 driver = "org.h2.Driver",
             )
             transaction {

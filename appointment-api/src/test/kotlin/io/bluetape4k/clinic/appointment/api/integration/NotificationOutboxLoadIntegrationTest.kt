@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.api.integration
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
@@ -26,7 +27,7 @@ class NotificationOutboxLoadIntegrationTest {
     fun `대규모 활성 종료 backlog도 bounded page와 direct single claim을 유지한다`() {
         val dataSource = SimpleDriverDataSource(
             Class.forName("org.h2.Driver").getDeclaredConstructor().newInstance() as java.sql.Driver,
-            "jdbc:h2:mem:notification_load_${System.nanoTime()};DB_CLOSE_DELAY=-1",
+            "jdbc:h2:mem:notification_load_${Base58.randomString(8)};DB_CLOSE_DELAY=-1",
         )
         NotificationOutboxPerformanceTestSupport.migrate(dataSource, "classpath:db/migration/h2")
         dataSource.connection.use(NotificationOutboxPerformanceTestSupport::seedBacklog)

@@ -1,6 +1,7 @@
 package io.bluetape4k.clinic.appointment.notification.persistence
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.event.notification.*
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
@@ -27,7 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class JdbcNotificationOutboxConcurrencyTest {
 
     private val database = Database.connect(
-        "jdbc:h2:mem:notification_outbox_concurrency;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;LOCK_TIMEOUT=10000",
+        "jdbc:h2:mem:notification_outbox_concurrency_${Base58.randomString(8)};DB_CLOSE_DELAY=-1;MODE=PostgreSQL;LOCK_TIMEOUT=10000",
         driver = "org.h2.Driver",
     )
     private val repository = JdbcNotificationOutboxRepository(

@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.notification.persistence
 
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
 import io.bluetape4k.clinic.appointment.event.notification.*
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
@@ -44,7 +45,7 @@ class NotificationCodecBacklogBenchmarkTest {
     fun `mixed notification codec backlog drains from the real outbox table`() {
         val configuration = CodecBenchmarkConfiguration.fromSystemProperties()
         val database = Database.connect(
-            "jdbc:h2:mem:notification_codec_backlog_${System.nanoTime()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+            "jdbc:h2:mem:notification_codec_backlog_${Base58.randomString(8)};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
             driver = "org.h2.Driver",
         )
         val codec = NotificationOutboxCodec()
