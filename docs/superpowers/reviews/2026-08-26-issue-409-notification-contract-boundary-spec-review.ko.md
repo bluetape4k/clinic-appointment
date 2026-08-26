@@ -124,4 +124,3 @@ event에 facade로 남기는 선택은 닫혔다. 구현 계획에서 추가로 
 P0/P1 차단 결함 없이 구현 가능한 수준이다. 다음 단계는 `$writing-plans`를 사용해
 파일별 TDD 순서, source/ABI guard, migration scanner 확인, 테스트와 rollback 증적을
 작성하는 것이다. 구현은 계획 승인 후에 시작한다.
-
