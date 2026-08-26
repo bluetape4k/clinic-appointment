@@ -92,6 +92,14 @@ allowlist가 확인된 뒤 신규 `PROPOSED`·`HELD` 경로를 제한합니다. 
 서비스 주체, 별도의 MFA 병원 담당자 승인이 모두 필요합니다. 자세한 절차는
 [알림 outbox 운영 런북](../docs/runbooks/notification-outbox-operations.md)에 있습니다.
 
+API의 알림 writer와 리마인더 복구 저장소는 `appointment-event`의
+`NotificationOutboxWriter` port만 참조합니다. `JdbcNotificationOutboxRepository`와
+`NotificationOutboxCodec`를 API 설정에서 직접 만들지 않고,
+`appointment-notification` auto-configuration이 caller-owned `transaction {}` 경계에
+맞는 concrete persistence를 조립해 port로 노출합니다. 따라서 API consumer가 event
+contract를 재사용해도 lease·retry·attempt·table 세부사항이 API public surface로
+누출되지 않습니다.
+
 <a id="profile-reevaluation"></a>
 ### 프로필 변경 예약 재평가
 

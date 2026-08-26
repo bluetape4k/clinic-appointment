@@ -7,7 +7,7 @@ plugins {
 
 exposed {
     migrations {
-        tablesPackage = "io.bluetape4k.clinic.appointment.notification"
+        tablesPackage = "io.bluetape4k.clinic.appointment.notification.persistence"
         databaseUrl = "jdbc:h2:mem:appointment-notification-migrations;DB_CLOSE_DELAY=-1;MODE=PostgreSQL"
         databaseUser = "sa"
         databasePassword = ""
