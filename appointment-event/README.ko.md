@@ -120,6 +120,21 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 - **내부**: `appointment-core`
 - **외부**: Spring Context
 
+## 알림 contract 재사용
+
+`appointment-event`는 `NotificationOutboxWriter`와 타입이 지정된 envelope/draft를
+순수 event contract로 제공한다. 이 contract에는 Exposed table, lease, retry, delivery
+attempt 같은 persistence 세부사항이 없다. 예약 mutation과 API는 같은 caller-owned
+`transaction {}` 안에서 이 port를 호출하고, 반환되는 `NotificationOutboxWriteReceipt`의
+불투명 ID만 사용한다.
+
+알림 table·write·claim·retry·readiness는 `appointment-notification`이 소유한다.
+`JdbcNotificationOutboxRepository`는 event port의 구현체이며
+`appointment-notification/.../notification/persistence/` 아래에서
+`NotificationOutboxEvents`, `NotificationDeliveryAttempts`, waitlist table을 함께 관리한다.
+따라서 event 모듈을 재사용하는 consumer는 contract만 의존하고 JDBC persistence 구현을
+끌어오지 않는다.
+
 ## 모듈 재사용과 데이터 소유권
 
 이 모듈은 `appointment-core`의 도메인 이벤트·scope·Exposed 모델을 직접 재사용하고,
@@ -141,9 +156,10 @@ fun on(event: AppointmentDomainEvent.Created) { ... }
 `SlotAvailable`은 commit 이후 발행되는 opaque fast signal이며 vacancy job, tenant/clinic
 범위, correlation token, 발생 시각만 담습니다. event publisher는 member, appointment, 의사,
 진료유형 세부정보를 전달하지 않습니다. event가 지연되거나 유실되어도
-`appointment-core`의 durable vacancy job이 권위입니다. `WaitlistNotificationOutboxAdapter`는
-core notification draft port를 구현해 canonical outbox payload를 기록하며 provider SDK에
-의존하지 않습니다.
+`appointment-core`의 durable vacancy job이 권위입니다. `WaitlistNotificationOutboxContracts`는
+waitlist offer의 canonical payload와 codec을 제공합니다. 실제 durable row 변환과 adapter는
+`appointment-notification/.../notification/persistence/WaitlistNotificationOutboxPersistence.kt`가
+담당하며 provider SDK에는 의존하지 않습니다.
 
 [waitlist 전달 API·운영 계약](../docs/api/waitlist-delivery.md)을 참고하세요.
 

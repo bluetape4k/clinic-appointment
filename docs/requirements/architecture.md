@@ -350,14 +350,15 @@ business key가 다른 tenant에서 재사용될 때 충돌·오염·cross-tenan
 | 영역 | 테이블·계약 정의 | write 소유자 | claim·relay·readiness 소유자 | migration 기준 |
 |---|---|---|---|---|
 | 예약 scheduling outbox | `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingOutboxEvents.kt` | `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxWriter.kt`, `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/integration/SchedulingEventRepository.kt`, `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/policy/SchedulingPolicyEventRepository.kt` | `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxStore.kt`, `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentOutboxRelay.kt`, `appointment-messaging/src/main/kotlin/io/bluetape4k/clinic/appointment/messaging/AppointmentMessagingReadinessValidator.kt` | V22 |
-| durable notification outbox | `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxEvents.kt`, `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxRepository.kt` | `appointment-event`의 notification repository와 공개 event 계약 | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxWorkStore.kt`, `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxWorker.kt`, `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationSchemaReadiness.kt` | V14, V21 |
-| waitlist notification outbox | `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxAdapter.kt`의 table·adapter·repository | `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxAdapter.kt` | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/WaitlistOfferNotificationStore.kt`, `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationSchemaReadiness.kt` | V19 |
+| durable notification outbox | event의 순수 write contract: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxWriter.kt`와 envelope/draft | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/persistence/JdbcNotificationOutboxRepository.kt`가 `NotificationOutboxWriter`를 구현하고 `NotificationOutboxEvents.kt`, `NotificationDeliveryAttempts.kt`를 소유 | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/NotificationOutboxWorkStore.kt`, `NotificationOutboxWorker.kt`, `NotificationSchemaReadiness.kt`와 persistence repository | V14, V21 |
+| waitlist notification outbox | event의 순수 payload contract: `appointment-event/src/main/kotlin/io/bluetape4k/clinic/appointment/event/waitlist/WaitlistNotificationOutboxContracts.kt` | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/persistence/WaitlistNotificationOutboxPersistence.kt`가 table·adapter·repository를 소유 | `appointment-notification/src/main/kotlin/io/bluetape4k/clinic/appointment/notification/WaitlistOfferNotificationStore.kt`, `WaitlistOfferNotificationWorker.kt`, `NotificationSchemaReadiness.kt` | V19 |
 
-`appointment-core`의 scope·record·state 계약은 `api`로 재사용하고, 물리 테이블을 정의한
-event 모듈은 messaging의 public surface에 불필요하게 누출하지 않는다. notification의
-event `api`는 public event listener/DTO 소비자를 정리하는 Issue #409까지 transitional
-exception으로 유지한다. 모든 Exposed 접근은 caller-owned `transaction {}` 경계 안에서
-수행한다.
+`appointment-core`의 scope·record·state 계약은 `api`로 재사용하고, event 모듈의
+notification `api`에는 `NotificationOutboxWriter`와 불투명 draft/envelope만 둔다. API와
+event producer는 이 port를 호출하며 `JdbcNotificationOutboxRepository`나 Exposed table을
+직접 참조하지 않는다. notification auto-configuration이 concrete persistence를 만들고
+같은 bean을 `NotificationOutboxWriter`로 노출한다. 모든 Exposed 접근은
+caller-owned `transaction {}` 경계 안에서 수행한다.
 
 #### 검증 범위와 한계
 
