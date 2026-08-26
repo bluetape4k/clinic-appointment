@@ -5,6 +5,8 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldContain
+import io.bluetape4k.assertions.shouldBeNull
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.model.commitment.ResourceType
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
@@ -12,6 +14,7 @@ import io.bluetape4k.clinic.appointment.model.tables.WaitlistVacancyJobs
 import io.bluetape4k.clinic.appointment.model.waitlist.VacancyGenerationConflict
 import io.bluetape4k.clinic.appointment.model.waitlist.VacancyJobState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistContention
+import io.bluetape4k.clinic.appointment.waitlist.WaitlistFencingToken
 import io.bluetape4k.clinic.appointment.repository.waitlist.ContentionRetryPolicy
 import io.bluetape4k.clinic.appointment.repository.waitlist.NewVacancyJob
 import io.bluetape4k.clinic.appointment.repository.waitlist.VacancyClaimMode
@@ -39,6 +42,50 @@ class WaitlistDeliveryRepositoryTest {
             val claim = requireNotNull(repository.claim(job.id, owner = "worker-a", now = NOW, leaseUntil = NOW.plusSeconds(30)))
             repository.completeOffer(claim, now = NOW.plusSeconds(31), offerId = 10L).shouldBeFalse()
             repository.findVacancy(job.id)?.status shouldBeEqualTo VacancyJobState.PROCESSING
+        }
+    }
+
+    @Test
+    fun `fenced claim requires a strictly greater token and exact terminal token`() {
+        withDeliveryTables {
+            val job = repository.insertVacancy(vacancy(vacancyGeneration = 6L, activeVacancyKey = "vacancy-key-6", sourceTransitionId = "transition-6"))
+            val first = repository.claimFenced(
+                jobId = job.id,
+                owner = "worker-a",
+                now = NOW,
+                leaseUntil = NOW.plusSeconds(30),
+                token = WaitlistFencingToken(epoch = 1L, sequence = 1L),
+            ).shouldNotBeNull()
+
+            WaitlistVacancyJobs.update({ WaitlistVacancyJobs.id eq job.id }) {
+                it[leaseExpiresAt] = NOW.minusSeconds(1)
+            }
+
+            repository.claimFenced(
+                jobId = job.id,
+                owner = "worker-b",
+                now = NOW,
+                leaseUntil = NOW.plusSeconds(30),
+                token = WaitlistFencingToken(epoch = 1L, sequence = 1L),
+            ).shouldBeNull()
+            repository.claimFenced(
+                jobId = job.id,
+                owner = "worker-b",
+                now = NOW,
+                leaseUntil = NOW.plusSeconds(30),
+                token = WaitlistFencingToken(epoch = 0L, sequence = 9L),
+            ).shouldBeNull()
+            val second = repository.claimFenced(
+                jobId = job.id,
+                owner = "worker-b",
+                now = NOW,
+                leaseUntil = NOW.plusSeconds(30),
+                token = WaitlistFencingToken(epoch = 1L, sequence = 2L),
+            ).shouldNotBeNull()
+
+            repository.completeOffer(first, now = NOW.plusSeconds(1), offerId = 10L).shouldBeFalse()
+            repository.completeOffer(second, now = NOW.plusSeconds(1), offerId = 11L).shouldBeTrue()
+            repository.completeOffer(second, now = NOW.plusSeconds(1), offerId = 12L).shouldBeFalse()
         }
     }
 

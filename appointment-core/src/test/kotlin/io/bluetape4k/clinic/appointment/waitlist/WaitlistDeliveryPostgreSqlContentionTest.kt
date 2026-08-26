@@ -1,12 +1,15 @@
 package io.bluetape4k.clinic.appointment.waitlist
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.clinic.appointment.model.commitment.ResourceType
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.model.tables.TenantGroups
 import io.bluetape4k.clinic.appointment.model.tables.WaitlistVacancyJobs
 import io.bluetape4k.clinic.appointment.model.waitlist.VacancyJobState
+import io.bluetape4k.clinic.appointment.waitlist.WaitlistFencingToken
 import io.bluetape4k.clinic.appointment.repository.waitlist.ContentionRetryPolicy
 import io.bluetape4k.clinic.appointment.repository.waitlist.NewVacancyJob
 import io.bluetape4k.clinic.appointment.repository.waitlist.VacancyClaimStrategies
@@ -35,6 +38,48 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** 실제 PostgreSQL lock timeout이 aborted transaction을 재사용하지 않는지 검증합니다. */
 class WaitlistDeliveryPostgreSqlContentionTest {
+
+    @Test
+    fun `expired PostgreSQL worker cannot terminalize after a higher fenced takeover`() {
+        withTables(TestDB.POSTGRESQL, Clinics, WaitlistVacancyJobs) {
+            Clinics.insert {
+                it[id] = EntityID(CLINIC_ID, Clinics)
+                it[tenantGroupId] = EntityID(TENANT_GROUP_ID, TenantGroups)
+                it[name] = "PostgreSQL fenced takeover clinic"
+                it[slotDurationMinutes] = 30
+                it[maxConcurrentPatients] = 1
+            }
+            val repository = WaitlistDeliveryRepository(
+                claimStrategy = VacancyClaimStrategies.forDialectName("PostgreSQL"),
+            )
+            val job = insertFixture(repository, vacancyKey = "postgres-fenced-takeover", sourceAppointmentId = 103L)
+            val first = repository.claimFenced(
+                jobId = job.id,
+                owner = "worker-a",
+                now = NOW,
+                leaseUntil = NOW.plusSeconds(5),
+                token = WaitlistFencingToken(epoch = 7L, sequence = 1L),
+            ).shouldNotBeNull()
+            WaitlistVacancyJobs.update({ WaitlistVacancyJobs.id eq job.id }) {
+                it[WaitlistVacancyJobs.leaseExpiresAt] = NOW.minusSeconds(1)
+            }
+
+            val second = repository.claimFenced(
+                jobId = job.id,
+                owner = "worker-b",
+                now = NOW,
+                leaseUntil = NOW.plusSeconds(30),
+                token = WaitlistFencingToken(epoch = 7L, sequence = 2L),
+            ).shouldNotBeNull()
+
+            repository.completeOffer(first, now = NOW.plusSeconds(1), offerId = 10L).shouldBeFalse()
+            repository.completeOffer(second, now = NOW.plusSeconds(1), offerId = 11L).shouldBeTrue()
+            val persisted = repository.findVacancy(job.id).shouldNotBeNull()
+            persisted.fenceEpoch shouldBeEqualTo 7L
+            persisted.fenceSequence shouldBeEqualTo 2L
+            persisted.status shouldBeEqualTo VacancyJobState.OFFERED
+        }
+    }
 
     @Test
     fun `PostgreSQL lock timeout aborts one attempt then retries in a fresh transaction`() {

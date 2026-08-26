@@ -63,7 +63,7 @@
   - **Failure:** 위험 항목이 없으면 구현을 시작하지 않는다.
 - [ ] **A-06 — Implement with test-first proof**
   - **Action:** 테스트 RED→최소 구현→GREEN 순서로 typed fenced adapter, production wiring, DB fence를 구현한다.
-  - **Evidence:** Task 1 RED를 먼저 실행해 `:appointment-core:compileTestKotlin`에서 `fenceEpoch`, `fenceSequence`, `WaitlistFencingToken` unresolved reference를 확인했다. 최소 구현 후 같은 명령(`./gradlew :appointment-core:test --tests 'io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryTableSchemaTest' --tests 'io.bluetape4k.clinic.appointment.model.tables.TableSchemaTest' --no-build-cache --no-daemon --console=plain`)이 `BUILD SUCCESSFUL`, `SUCCESS: Executed 12 tests in 7s`로 통과했다.
+  - **Evidence:** Task 1 RED를 먼저 실행해 `:appointment-core:compileTestKotlin`에서 `fenceEpoch`, `fenceSequence`, `WaitlistFencingToken` unresolved reference를 확인했다. 최소 구현 후 같은 명령이 `BUILD SUCCESSFUL`, `SUCCESS: Executed 12 tests in 7s`로 통과했다. Task 2에서는 `claimFenced` 부재 RED 후 strict-greater/exact terminal 구현과 PostgreSQL expiry takeover 회귀를 추가했고, `./gradlew :appointment-core:test --tests 'io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryRepositoryTest' --tests 'io.bluetape4k.clinic.appointment.waitlist.WaitlistDeliveryPostgreSqlContentionTest' --no-build-cache --no-daemon --console=plain`이 `BUILD SUCCESSFUL`, `SUCCESS: Executed 17 tests in 6.6s`로 통과했다.
   - **Failure:** 실패 동작으로 되돌아가고 부분 구현을 진행하지 않는다.
 - [ ] **A-07 — Verify tests, spec, plan, and repository hazards**
   - **Action:** targeted·proportional broader 검증과 spec/plan·hazard 대조를 수행한다.

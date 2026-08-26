@@ -10,6 +10,7 @@ import io.bluetape4k.clinic.appointment.model.waitlist.VacancyLeaseFenced
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCommandKey
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCommandState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistContention
+import io.bluetape4k.clinic.appointment.waitlist.WaitlistFencingToken
 import io.bluetape4k.support.requireNotBlank
 import io.bluetape4k.support.requirePositiveNumber
 import org.jetbrains.exposed.v1.core.Op
@@ -19,6 +20,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
@@ -61,6 +63,8 @@ class WaitlistDeliveryRepository(
             it[doctorId] = vacancy.doctorId
             it[policyVersion] = vacancy.policyVersion
             it[status] = VacancyJobState.READY
+            it[fenceEpoch] = 0L
+            it[fenceSequence] = 0L
             it[nextAttemptAt] = vacancy.nextAttemptAt
             it[vacancyStartsAt] = vacancy.vacancyStartsAt
             it[vacancyEndsAt] = vacancy.vacancyEndsAt
@@ -179,6 +183,50 @@ class WaitlistDeliveryRepository(
         }
         require(leaseUntil > now) { "leaseUntil must be later than now" }
 
+        return claimInternal(
+            jobId = validJobId,
+            owner = validOwner,
+            now = now,
+            leaseUntil = leaseUntil,
+            fencingToken = null,
+        )
+    }
+
+    /**
+     * Redis fencing token을 DB claim에 전달하는 production 전용 경로입니다.
+     *
+     * token은 저장된 tuple보다 엄격히 큰 경우에만 claim을 만들며, legacy [claim] 경로와
+     * 섞이지 않도록 non-null 인자로 고정합니다.
+     */
+    fun claimFenced(
+        jobId: Long,
+        owner: String,
+        now: Instant,
+        leaseUntil: Instant,
+        token: WaitlistFencingToken,
+    ): VacancyClaim? {
+        val validJobId = jobId.requirePositiveNumber("jobId")
+        val validOwner = owner.requireNotBlank("owner")
+        require(validOwner.length <= MAX_OWNER_LENGTH) {
+            "owner must contain 1..$MAX_OWNER_LENGTH characters"
+        }
+        require(leaseUntil > now) { "leaseUntil must be later than now" }
+        return claimInternal(
+            jobId = validJobId,
+            owner = validOwner,
+            now = now,
+            leaseUntil = leaseUntil,
+            fencingToken = token,
+        )
+    }
+
+    private fun claimInternal(
+        jobId: Long,
+        owner: String,
+        now: Instant,
+        leaseUntil: Instant,
+        fencingToken: WaitlistFencingToken?,
+    ): VacancyClaim? {
         val strategy = resolvedClaimStrategy()
         val lockTimeoutPlan = strategy.lockTimeoutPlan
         var appliedLockTimeoutStatements = 0
@@ -189,10 +237,11 @@ class WaitlistDeliveryRepository(
             }
             return claimWithStrategy(
                 strategy = strategy,
-                jobId = validJobId,
-                owner = validOwner,
+                jobId = jobId,
+                owner = owner,
                 now = now,
                 leaseUntil = leaseUntil,
+                fencingToken = fencingToken,
             )
         } finally {
             if (appliedLockTimeoutStatements > 0) {
@@ -532,14 +581,17 @@ class WaitlistDeliveryRepository(
         owner: String,
         now: Instant,
         leaseUntil: Instant,
+        fencingToken: WaitlistFencingToken?,
     ): VacancyClaim? {
         val current =
             when (strategy.mode) {
-                VacancyClaimMode.LOCKED_SELECTION -> findClaimCandidate(jobId, now, forUpdate = true)
+                VacancyClaimMode.LOCKED_SELECTION -> findClaimCandidate(jobId, now, fencingToken, forUpdate = true)
             } ?: return null
         val eligible = current.status == VacancyJobState.READY ||
             (current.status == VacancyJobState.PROCESSING && current.leaseExpiresAt != null && current.leaseExpiresAt <= now)
         if (!eligible) return null
+        val currentToken = WaitlistFencingToken(current.fenceEpoch, current.fenceSequence)
+        if (fencingToken != null && !fencingToken.isStrictlyGreaterThan(currentToken)) return null
 
         val nextVersion = current.version + 1L
         val nextLeaseVersion = current.leaseVersion + 1L
@@ -559,6 +611,10 @@ class WaitlistDeliveryRepository(
             it[leaseOwner] = owner
             it[leaseVersion] = nextLeaseVersion
             it[leaseExpiresAt] = leaseUntil
+            if (fencingToken != null) {
+                it[fenceEpoch] = fencingToken.epoch
+                it[fenceSequence] = fencingToken.sequence
+            }
             it[version] = nextVersion
             it[updatedAt] = now
         }
@@ -569,6 +625,7 @@ class WaitlistDeliveryRepository(
                 version = nextVersion,
                 leaseVersion = nextLeaseVersion,
                 expiresAt = leaseUntil,
+                fencingToken = fencingToken,
             )
         } else {
             null
@@ -578,8 +635,14 @@ class WaitlistDeliveryRepository(
     private fun findClaimCandidate(
         jobId: Long,
         now: Instant,
+        fencingToken: WaitlistFencingToken?,
         forUpdate: Boolean,
     ): VacancyJobRecord? {
+        val tokenPredicate = fencingToken?.let { token ->
+            (WaitlistVacancyJobs.fenceEpoch less token.epoch) or
+                ((WaitlistVacancyJobs.fenceEpoch eq token.epoch) and
+                    (WaitlistVacancyJobs.fenceSequence less token.sequence))
+        } ?: Op.TRUE
         val query =
             WaitlistVacancyJobs
                 .selectAll()
@@ -589,10 +652,10 @@ class WaitlistDeliveryRepository(
                             (WaitlistVacancyJobs.status eq VacancyJobState.READY) or
                                 (
                                     (WaitlistVacancyJobs.status eq VacancyJobState.PROCESSING) and
-                                        (WaitlistVacancyJobs.leaseExpiresAt lessEq now)
+                                    (WaitlistVacancyJobs.leaseExpiresAt lessEq now)
                                     )
-                            )
-                }
+                            ) and tokenPredicate
+                    }
                 .limit(1)
         return (if (forUpdate) query.forUpdate() else query)
             .singleOrNull()
@@ -605,14 +668,19 @@ class WaitlistDeliveryRepository(
         status: VacancyJobState,
         resultOfferId: Long?,
         errorCode: String?,
-    ): Boolean =
-        WaitlistVacancyJobs.update({
+    ): Boolean {
+        val tokenPredicate = claim.fencingToken?.let { token ->
+            (WaitlistVacancyJobs.fenceEpoch eq token.epoch) and
+                (WaitlistVacancyJobs.fenceSequence eq token.sequence)
+        } ?: Op.TRUE
+        return WaitlistVacancyJobs.update({
             (WaitlistVacancyJobs.id eq claim.jobId) and
                 (WaitlistVacancyJobs.status eq VacancyJobState.PROCESSING) and
                 (WaitlistVacancyJobs.leaseOwner eq claim.owner) and
                 (WaitlistVacancyJobs.version eq claim.version) and
                 (WaitlistVacancyJobs.leaseVersion eq claim.leaseVersion) and
-                (WaitlistVacancyJobs.leaseExpiresAt greater now)
+                (WaitlistVacancyJobs.leaseExpiresAt greater now) and
+                tokenPredicate
         }) {
             it[WaitlistVacancyJobs.status] = status
             it[offeredWaitlistEntryId] = resultOfferId
@@ -623,6 +691,7 @@ class WaitlistDeliveryRepository(
             it[version] = claim.version + 1L
             it[updatedAt] = now
         } == 1
+    }
 
     private fun findCommandRecord(key: WaitlistCommandKey): CommandRecord? =
         WaitlistCommandRecords
@@ -688,6 +757,8 @@ private fun VacancyJobRecord.matchesFence(claim: VacancyClaim, now: Instant): Bo
         leaseOwner == claim.owner &&
         version == claim.version &&
         leaseVersion == claim.leaseVersion &&
+        (claim.fencingToken == null ||
+            (fenceEpoch == claim.fencingToken.epoch && fenceSequence == claim.fencingToken.sequence)) &&
         leaseExpiresAt != null &&
         leaseExpiresAt.isAfter(now) &&
         claim.expiresAt.isAfter(now)
@@ -891,6 +962,8 @@ data class VacancyJobRecord(
     val leaseOwner: String?,
     val leaseVersion: Long,
     val leaseExpiresAt: Instant?,
+    val fenceEpoch: Long,
+    val fenceSequence: Long,
     val nextAttemptAt: Instant,
     val vacancyStartsAt: Instant,
     val vacancyEndsAt: Instant,
@@ -912,6 +985,7 @@ data class VacancyClaim(
     val version: Long,
     val leaseVersion: Long,
     val expiresAt: Instant,
+    val fencingToken: WaitlistFencingToken? = null,
 ) : Serializable {
     init {
         jobId.requirePositiveNumber("jobId")
@@ -986,6 +1060,8 @@ private fun ResultRow.toVacancyJobRecord(): VacancyJobRecord =
         leaseOwner = this[WaitlistVacancyJobs.leaseOwner],
         leaseVersion = this[WaitlistVacancyJobs.leaseVersion],
         leaseExpiresAt = this[WaitlistVacancyJobs.leaseExpiresAt],
+        fenceEpoch = this[WaitlistVacancyJobs.fenceEpoch],
+        fenceSequence = this[WaitlistVacancyJobs.fenceSequence],
         nextAttemptAt = this[WaitlistVacancyJobs.nextAttemptAt],
         vacancyStartsAt = this[WaitlistVacancyJobs.vacancyStartsAt],
         vacancyEndsAt = this[WaitlistVacancyJobs.vacancyEndsAt],
