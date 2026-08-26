@@ -211,6 +211,7 @@ class WaitlistDeliveryRepository(
             "owner must contain 1..$MAX_OWNER_LENGTH characters"
         }
         require(leaseUntil > now) { "leaseUntil must be later than now" }
+        require(token.isRedisIssued()) { "fencing token must be issued by Redis" }
         return claimInternal(
             jobId = validJobId,
             owner = validOwner,

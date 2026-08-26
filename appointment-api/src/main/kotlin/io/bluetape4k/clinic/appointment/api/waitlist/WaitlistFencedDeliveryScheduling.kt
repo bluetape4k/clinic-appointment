@@ -50,6 +50,7 @@ data class WaitlistFencedDeliveryTickResult(
     val holdReconcileCount: Int,
     val leaderAcquired: Boolean,
     val duration: Duration,
+    val budgetExceeded: Boolean = false,
 ) {
     init {
         require(dispatchCount >= 0) { "dispatchCount must be non-negative" }
@@ -80,45 +81,64 @@ internal class WaitlistFencedDeliverySchedulingRunner(
     private val properties: WaitlistDeliveryProperties,
     private val metrics: WaitlistDeliveryMetrics,
     private val clock: Clock = Clock.systemUTC(),
+    private val monotonicNanos: () -> Long = System::nanoTime,
 ) : AutoCloseable {
 
     private val closed = AtomicBoolean(false)
     private val tickInFlight = AtomicBoolean(false)
 
     fun tick(clinicId: Long = WaitlistDeliverySchedulingRunner.ALLOW_ALL_CLINICS): WaitlistFencedDeliveryTickResult {
+        val startedAtNanos = monotonicNanos()
         val started = clock.instant()
         val mode = modeFor(clinicId)
         if (closed.get()) {
-            return terminalResult(mode, WaitlistFencedLeaseOutcome.CLOSED, elapsedSince(started))
+            return terminalResult(mode, WaitlistFencedLeaseOutcome.CLOSED, elapsedSince(startedAtNanos))
         }
         if (!tickInFlight.compareAndSet(false, true)) {
-            metrics.recordLeaseAcquire(WaitlistLeaseMetricOutcome.FAILED, elapsedSince(started))
-            return terminalResult(mode, WaitlistFencedLeaseOutcome.FAILED, elapsedSince(started))
+            metrics.recordLeaseAcquire(WaitlistLeaseMetricOutcome.FAILED, elapsedSince(startedAtNanos))
+            return terminalResult(mode, WaitlistFencedLeaseOutcome.FAILED, elapsedSince(startedAtNanos))
         }
 
         try {
             val attempt = acquireOrReconcile(started)
             val outcome = attempt.outcome()
-            metrics.recordLeaseAcquire(outcome.metricOutcome, elapsedSince(started))
+            metrics.recordLeaseAcquire(outcome.metricOutcome, elapsedSince(startedAtNanos))
             val handle = attempt.handleOrNull()
-                ?: return terminalResult(mode, outcome, elapsedSince(started)).also {
+                ?: return terminalResult(mode, outcome, elapsedSince(startedAtNanos)).also {
                     log.debug { "Waitlist fenced tick skipped: lease_outcome=${outcome.name.lowercase()}" }
                 }
 
             return try {
-                val expiryCount = expiry.expire(properties.batchSize, started)
-                val suppressionCount = suppression.suppress(properties.batchSize, started)
-                val holdReconcileCount = holdReconciler.reconcile(properties.batchSize, started)
-                val dispatchCount = if (mode == DeliveryMode.ACTIVE) {
-                    dispatcher.dispatch(properties.batchSize, started, handle)
+                var budgetExceeded = false
+                var expiryCount = 0
+                var suppressionCount = 0
+                var holdReconcileCount = 0
+                var dispatchCount = 0
+                if (withinBudget(startedAtNanos)) {
+                    expiryCount = expiry.expire(properties.batchSize, started)
                 } else {
-                    0
+                    budgetExceeded = true
+                }
+                if (!budgetExceeded && withinBudget(startedAtNanos)) {
+                    suppressionCount = suppression.suppress(properties.batchSize, started)
+                } else {
+                    budgetExceeded = true
+                }
+                if (!budgetExceeded && withinBudget(startedAtNanos)) {
+                    holdReconcileCount = holdReconciler.reconcile(properties.batchSize, started)
+                } else {
+                    budgetExceeded = true
+                }
+                if (!budgetExceeded && mode == DeliveryMode.ACTIVE && withinBudget(startedAtNanos)) {
+                    dispatchCount = dispatcher.dispatch(properties.batchSize, started, handle)
+                } else {
+                    if (mode == DeliveryMode.ACTIVE) budgetExceeded = true
                 }
                 requireNonNegative(expiryCount, "expiry")
                 requireNonNegative(suppressionCount, "suppression")
                 requireNonNegative(holdReconcileCount, "holdReconcile")
                 requireNonNegative(dispatchCount, "dispatch")
-                WaitlistFencedDeliveryTickResult(
+                val tickResult = WaitlistFencedDeliveryTickResult(
                     mode = mode,
                     leaseOutcome = outcome,
                     dispatchCount = dispatchCount,
@@ -126,21 +146,17 @@ internal class WaitlistFencedDeliverySchedulingRunner(
                     suppressionCount = suppressionCount,
                     holdReconcileCount = holdReconcileCount,
                     leaderAcquired = true,
-                    duration = elapsedSince(started),
+                    duration = elapsedSince(startedAtNanos),
+                    budgetExceeded = budgetExceeded,
                 )
+                metrics.recordTick(mode, dispatchCount, expiryCount, suppressionCount, holdReconcileCount)
+                tickResult
             } finally {
-                when (val release = lease.release(handle)) {
-                    WaitlistLeaseRelease.OWNERSHIP_LOST ->
-                        metrics.recordOwnershipLoss(WaitlistOwnershipLossSource.REDIS)
-                    WaitlistLeaseRelease.RELEASED,
-                    WaitlistLeaseRelease.ALREADY_RELEASED,
-                    -> Unit
-                    else -> log.warn { "Waitlist fenced lease release incomplete: outcome=${release.name.lowercase()}" }
-                }
+                releaseHandle(handle)
             }
         } finally {
             tickInFlight.set(false)
-            metrics.recordSchedulerTick(mode, elapsedSince(started))
+            metrics.recordSchedulerTick(mode, elapsedSince(startedAtNanos))
         }
     }
 
@@ -196,8 +212,27 @@ internal class WaitlistFencedDeliverySchedulingRunner(
         duration = duration,
     )
 
-    private fun elapsedSince(started: Instant): Duration =
-        Duration.between(started, clock.instant()).coerceAtLeast(Duration.ZERO)
+    private fun releaseHandle(handle: WaitlistLeaseHandle) {
+        when (val release = lease.release(handle)) {
+            WaitlistLeaseRelease.UNKNOWN -> when (val retry = lease.release(handle)) {
+                WaitlistLeaseRelease.OWNERSHIP_LOST -> metrics.recordOwnershipLoss(WaitlistOwnershipLossSource.REDIS)
+                WaitlistLeaseRelease.RELEASED,
+                WaitlistLeaseRelease.ALREADY_RELEASED,
+                -> Unit
+                else -> log.warn { "Waitlist fenced lease release incomplete: outcome=${retry.name.lowercase()}" }
+            }
+            WaitlistLeaseRelease.OWNERSHIP_LOST -> metrics.recordOwnershipLoss(WaitlistOwnershipLossSource.REDIS)
+            WaitlistLeaseRelease.RELEASED,
+            WaitlistLeaseRelease.ALREADY_RELEASED,
+            -> Unit
+            else -> log.warn { "Waitlist fenced lease release incomplete: outcome=${release.name.lowercase()}" }
+        }
+    }
+
+    private fun elapsedSince(startedAtNanos: Long): Duration =
+        Duration.ofNanos((monotonicNanos() - startedAtNanos).coerceAtLeast(0L))
+
+    private fun withinBudget(startedAtNanos: Long): Boolean = elapsedSince(startedAtNanos) < properties.tickBudget
 
     private fun requireNonNegative(value: Int, name: String) {
         require(value >= 0) { "$name count must be non-negative" }

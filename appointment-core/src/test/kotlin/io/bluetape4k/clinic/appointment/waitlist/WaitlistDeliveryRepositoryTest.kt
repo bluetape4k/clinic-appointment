@@ -54,7 +54,7 @@ class WaitlistDeliveryRepositoryTest {
                 owner = "worker-a",
                 now = NOW,
                 leaseUntil = NOW.plusSeconds(30),
-                token = WaitlistFencingToken(epoch = 1L, sequence = 1L),
+                token = WaitlistFencingToken(epoch = 2L, sequence = 1L),
             ).shouldNotBeNull()
 
             WaitlistVacancyJobs.update({ WaitlistVacancyJobs.id eq job.id }) {
@@ -66,26 +66,43 @@ class WaitlistDeliveryRepositoryTest {
                 owner = "worker-b",
                 now = NOW,
                 leaseUntil = NOW.plusSeconds(30),
-                token = WaitlistFencingToken(epoch = 1L, sequence = 1L),
+                token = WaitlistFencingToken(epoch = 2L, sequence = 1L),
             ).shouldBeNull()
             repository.claimFenced(
                 jobId = job.id,
                 owner = "worker-b",
                 now = NOW,
                 leaseUntil = NOW.plusSeconds(30),
-                token = WaitlistFencingToken(epoch = 0L, sequence = 9L),
+                token = WaitlistFencingToken(epoch = 1L, sequence = 9L),
             ).shouldBeNull()
             val second = repository.claimFenced(
                 jobId = job.id,
                 owner = "worker-b",
                 now = NOW,
                 leaseUntil = NOW.plusSeconds(30),
-                token = WaitlistFencingToken(epoch = 1L, sequence = 2L),
+                token = WaitlistFencingToken(epoch = 2L, sequence = 2L),
             ).shouldNotBeNull()
 
             repository.completeOffer(first, now = NOW.plusSeconds(1), offerId = 10L).shouldBeFalse()
             repository.completeOffer(second, now = NOW.plusSeconds(1), offerId = 11L).shouldBeTrue()
             repository.completeOffer(second, now = NOW.plusSeconds(1), offerId = 12L).shouldBeFalse()
+        }
+    }
+
+    @Test
+    fun `fenced claim rejects a non Redis issued token`() {
+        withDeliveryTables {
+            val job = repository.insertVacancy(vacancy(vacancyGeneration = 7L, activeVacancyKey = "vacancy-key-7", sourceTransitionId = "transition-7"))
+
+            assertFailsWith<IllegalArgumentException> {
+                repository.claimFenced(
+                    jobId = job.id,
+                    owner = "worker-a",
+                    now = NOW,
+                    leaseUntil = NOW.plusSeconds(30),
+                    token = WaitlistFencingToken(epoch = 0L, sequence = 1L),
+                )
+            }
         }
     }
 

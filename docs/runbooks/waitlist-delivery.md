@@ -31,7 +31,8 @@ bean이 준비된 환경에서만 활성화됩니다. 기본값은 `false`이며
    hold-reconcile port, `MeterRegistry`가 같은 application context에 있는지 확인합니다.
 3. `WaitlistFencedSchedulingConfiguration`의 readiness가 성공하고
    `bootstrapFencing()` 결과가 `Initialized` 또는 `AlreadyInitialized`인지 확인합니다.
-4. lock lease가 `LeasePolicy.Fixed(jobLease)`이고 `jobLease <= 5m`인지 확인합니다.
+4. lock lease가 `LeasePolicy.Fixed(jobLease)`이고 `jobLease <= 5m`인지, `fence-epoch`가
+   양수인지, `tick-budget < jobLease`인지 확인합니다.
 5. dispatcher가 받은 `WaitlistLeaseHandle`의 token을 모든 vacancy claim과 terminal
    write에 전달하는지 확인합니다. DB claim은 기존 token보다 strictly greater한
    값만 수락하고 terminal write는 exact-match해야 합니다.
@@ -40,7 +41,8 @@ bean이 준비된 환경에서만 활성화됩니다. 기본값은 `false`이며
    business mutation 없이 tick을 종료해야 합니다.
 7. `Ambiguous` 응답은 동일 owner/request pair로 한 번만 reconcile하며, recovered
    handle이 명확해질 때까지 새 acquire나 dispatch를 시작하지 않는지 확인합니다.
-8. `close()`가 새 tick과 local lock task를 중지하지만 shared `RedisClient`를 닫거나
+8. release가 `UNKNOWN`이면 같은 native handle에 대해 한 번만 bounded retry하고 pending
+   상태를 유지하는지 확인합니다. `close()`가 새 tick과 local lock task를 중지하지만 shared `RedisClient`를 닫거나
    자동 unlock하지 않는지 확인합니다.
 9. Redis singleton 통합 테스트에서 lease expiry takeover, 더 큰 token, stale release,
    ambiguous reconcile, cleanup, metric redaction을 확인합니다.
@@ -50,7 +52,7 @@ Redis lock의 logical resource는 library-safe한 `waitlist-delivery`이며 name
 `bt4k:coord:v1`입니다. 파생 key와 native owner/request/token은 운영 log나 metric에
 기록하지 않습니다.
 
-허용 metric은 다음 네 종류뿐이며 tag 값도 enum으로 제한합니다.
+fenced scheduler 경계에서 허용하는 추가 metric은 다음 네 종류이며 tag 값도 enum으로 제한합니다.
 
 - `appointment_waitlist_lease_acquire_total{outcome=acquired|contended|timeout|ambiguous|failed}`
 - `appointment_waitlist_lease_acquire_seconds{outcome=...}`

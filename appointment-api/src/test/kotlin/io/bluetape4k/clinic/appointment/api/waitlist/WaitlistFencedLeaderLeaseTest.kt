@@ -53,6 +53,8 @@ class WaitlistFencedLeaderLeaseTest {
         acquired.handle.token shouldBeEqualTo WaitlistFencingToken(epoch = 7, sequence = 11)
         acquired.handle.leaseUntil shouldBeEqualTo now.plusSeconds(30)
         acquired.handle.toString().contains("LockOwnerId").shouldBeFalse()
+        acquired.handle.toString().contains(acquired.handle.owner).shouldBeFalse()
+        acquired.handle.toString().contains("7").shouldBeFalse()
 
         val reentered = lease.tryAcquire(now).shouldBeInstanceOf<WaitlistLeaseAttempt.Reentered>()
         reentered.holdCount shouldBeEqualTo 2
@@ -143,6 +145,27 @@ class WaitlistFencedLeaderLeaseTest {
     }
 
     @Test
+    fun `unknown release retains a pending handle for one bounded retry`() {
+        val failure = LockBackendFailure(LockBackendFailureKind.COMMAND, LockRecoveryAction.RECONCILE_REQUEST)
+        val operations = FakeLockOperations(
+            acquireResults = ArrayDeque(listOf(LockAcquireResult.Acquired(nativeHandle()))),
+            releaseResults = ArrayDeque(
+                listOf(
+                    LockMutationResult.BackendFailure(failure),
+                    LockMutationResult.Released(0),
+                ),
+            ),
+        )
+        val lease = FencedWaitlistLeaderLease(operations, properties, clock)
+        val handle = lease.tryAcquire(now).shouldBeInstanceOf<WaitlistLeaseAttempt.Acquired>().handle
+
+        lease.release(handle) shouldBeEqualTo WaitlistLeaseRelease.UNKNOWN
+        lease.release(handle) shouldBeEqualTo WaitlistLeaseRelease.RELEASED
+        lease.release(handle) shouldBeEqualTo WaitlistLeaseRelease.ALREADY_RELEASED
+        operations.releaseCalls shouldBeEqualTo 2
+    }
+
+    @Test
     fun `close prevents new acquisition and closes native operations once`() {
         val operations = FakeLockOperations()
         val lease = FencedWaitlistLeaderLease(operations, properties, clock)
@@ -189,6 +212,7 @@ class WaitlistFencedLeaderLeaseTest {
         private val ambiguousAcquire: Boolean = false,
         private val reconcileResult: LockReconcileResult<FencedLockHandle> = LockReconcileResult.NotFound,
         private val releaseResult: LockMutationResult<FencedLockHandle> = LockMutationResult.AlreadyReleased,
+        private val releaseResults: ArrayDeque<LockMutationResult<FencedLockHandle>> = ArrayDeque(),
     ) : WaitlistFencedLockOperations {
         val ownerRequests = mutableListOf<Pair<LockOwnerId, LockRequestId>>()
         var reconciledOwner: LockOwnerId? = null
@@ -229,7 +253,7 @@ class WaitlistFencedLeaderLeaseTest {
 
         override fun release(handle: FencedLockHandle): LockMutationResult<FencedLockHandle> {
             releaseCalls++
-            return releaseResult
+            return releaseResults.removeFirstOrNull() ?: releaseResult
         }
 
         override fun close() {

@@ -50,7 +50,7 @@ data class WaitlistLeaseHandle internal constructor(
 ) {
     /** native owner/request/key가 로그나 직렬화 경계로 새지 않도록 opaque 값만 표시합니다. */
     override fun toString(): String =
-        "WaitlistLeaseHandle(owner=$owner, token=$token, leaseUntil=$leaseUntil)"
+        "WaitlistLeaseHandle(redacted)"
 }
 
 /** scheduler가 business mutation을 시작할 수 있는 유일한 lease 결과입니다. */
@@ -129,6 +129,7 @@ internal class FencedWaitlistLeaderLease(
     private var bootstrapResult: FencedBootstrapResult? = null
     private var pendingRequest: PendingRequest? = null
     private val activeHandleCounts = mutableMapOf<WaitlistLeaseHandle, Int>()
+    private val releaseAttempts = mutableMapOf<WaitlistLeaseHandle, Int>()
     private val stateLock = ReentrantLock()
     private var closed = false
 
@@ -257,39 +258,48 @@ internal class FencedWaitlistLeaderLease(
         }
     }
 
-    /** handle당 native release를 최대 한 번만 수행하고 stale ownership을 terminal 처리합니다. */
+    /** 불확실한 release를 한 번만 재시도할 수 있도록 handle을 pending 상태로 보존합니다. */
     fun release(handle: WaitlistLeaseHandle): WaitlistLeaseRelease = stateLock.withLock {
         if (closed) return WaitlistLeaseRelease.CLOSED
         val activeCount = activeHandleCounts[handle] ?: return WaitlistLeaseRelease.ALREADY_RELEASED
-        if (activeCount == 1) {
-            activeHandleCounts.remove(handle)
-        } else {
-            activeHandleCounts[handle] = activeCount - 1
+        if (releaseAttempts[handle].orZero() >= MAX_RELEASE_ATTEMPTS) {
+            return WaitlistLeaseRelease.UNKNOWN
         }
 
         val result = runCatching { operations.release(handle.nativeHandle) }
-            .getOrElse { return WaitlistLeaseRelease.UNKNOWN }
+            .getOrElse {
+                releaseAttempts[handle] = releaseAttempts[handle].orZero() + 1
+                return WaitlistLeaseRelease.UNKNOWN
+            }
         return when (result) {
-            is LockMutationResult.Released -> WaitlistLeaseRelease.RELEASED
-            LockMutationResult.AlreadyReleased -> WaitlistLeaseRelease.ALREADY_RELEASED
-            LockMutationResult.Expired -> WaitlistLeaseRelease.EXPIRED
+            is LockMutationResult.Released -> terminalRelease(handle, activeCount, WaitlistLeaseRelease.RELEASED)
+            LockMutationResult.AlreadyReleased -> terminalRelease(handle, activeCount, WaitlistLeaseRelease.ALREADY_RELEASED)
+            LockMutationResult.Expired -> terminalRelease(handle, activeCount, WaitlistLeaseRelease.EXPIRED)
             LockMutationResult.OwnershipLost,
             LockMutationResult.StaleGeneration,
-            -> WaitlistLeaseRelease.OWNERSHIP_LOST
-            LockMutationResult.Closed -> WaitlistLeaseRelease.CLOSED
+            -> terminalRelease(handle, activeCount, WaitlistLeaseRelease.OWNERSHIP_LOST)
+            LockMutationResult.Closed -> terminalRelease(handle, activeCount, WaitlistLeaseRelease.CLOSED)
             is LockMutationResult.Renewed,
             is LockMutationResult.Ambiguous,
             is LockMutationResult.BackendFailure,
             is LockMutationResult.IntegrityFailure,
-            -> WaitlistLeaseRelease.UNKNOWN
+            -> {
+                releaseAttempts[handle] = releaseAttempts[handle].orZero() + 1
+                WaitlistLeaseRelease.UNKNOWN
+            }
         }
     }
 
-    override fun close() = stateLock.withLock {
-        if (closed) return
-        closed = true
-        log.debug { "Waitlist fenced lease closed" }
-        operations.close()
+    override fun close() {
+        stateLock.withLock {
+            if (closed) return@withLock
+            closed = true
+            log.debug { "Waitlist fenced lease closed" }
+            operations.close()
+            activeHandleCounts.clear()
+            releaseAttempts.clear()
+            pendingRequest = null
+        }
     }
 
     private fun acquired(nativeHandle: FencedLockHandle, now: Instant): WaitlistLeaseAttempt.Acquired {
@@ -317,6 +327,22 @@ internal class FencedWaitlistLeaderLease(
         return handle
     }
 
+    private fun terminalRelease(
+        handle: WaitlistLeaseHandle,
+        activeCount: Int,
+        outcome: WaitlistLeaseRelease,
+    ): WaitlistLeaseRelease {
+        if (activeCount == 1) {
+            activeHandleCounts.remove(handle)
+        } else {
+            activeHandleCounts[handle] = activeCount - 1
+        }
+        releaseAttempts.remove(handle)
+        return outcome
+    }
+
+    private fun Int?.orZero(): Int = this ?: 0
+
     private fun FencedBootstrapResult.failureOrNull(): WaitlistLeaseFailure? = when (this) {
         FencedBootstrapResult.Initialized,
         FencedBootstrapResult.AlreadyInitialized,
@@ -340,6 +366,7 @@ internal class FencedWaitlistLeaderLease(
 
     companion object : KLogging() {
         private val MAX_LEASE: Duration = Duration.ofMinutes(5)
+        private const val MAX_RELEASE_ATTEMPTS = 2
         private val OPAQ_OWNER_PATTERN = Regex("[1-9A-HJ-NP-Za-km-z]{8}")
     }
 }
