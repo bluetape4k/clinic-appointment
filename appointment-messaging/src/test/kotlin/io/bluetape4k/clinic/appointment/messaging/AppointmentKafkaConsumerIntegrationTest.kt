@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.messaging
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.testcontainers.mq.KafkaServer
 import io.bluetape4k.testcontainers.mq.Spring
 import org.apache.kafka.clients.admin.NewTopic
@@ -23,7 +24,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.time.Duration
 import java.time.Instant
-import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 /** Kafka 4 singleton에서 실제 record를 받아 manual ack와 inbox dedup을 함께 검증합니다. */
@@ -40,7 +40,7 @@ class AppointmentKafkaConsumerIntegrationTest {
     @Test
     fun `Kafka event is processed once and duplicate redelivery is acknowledged`() {
         val kafka = AppointmentMessagingKafkaServerLauncher.kafka
-        val topicName = "clinic.appointment.consumer.${UUID.randomUUID()}"
+        val topicName = "clinic.appointment.consumer.${Base58.randomString(8)}"
         val topic = AppointmentTopic(topicName)
         val key = AppointmentPartitionKeyFactory.create(7, 31, 42).value
         val value = AppointmentEventEnvelopeCodec().encode(envelope())
@@ -100,7 +100,7 @@ class AppointmentKafkaConsumerIntegrationTest {
     @Test
     fun `container crash before ack is recovered by a second group member after rebalance`() {
         val kafka = AppointmentMessagingKafkaServerLauncher.kafka
-        val topicName = "clinic.appointment.consumer.rebalance.${UUID.randomUUID()}"
+        val topicName = "clinic.appointment.consumer.rebalance.${Base58.randomString(8)}"
         val topic = AppointmentTopic(topicName)
         val key = AppointmentPartitionKeyFactory.create(7, 31, 42).value
         val value = AppointmentEventEnvelopeCodec().encode(envelope())
@@ -113,7 +113,7 @@ class AppointmentKafkaConsumerIntegrationTest {
         }
         val producerFactory = KafkaServer.Launcher.Spring.getStringProducerFactory(kafka)
         val template = KafkaTemplate(producerFactory, true)
-        val groupId = "appointment-consumer-rebalance-${UUID.randomUUID()}"
+        val groupId = "appointment-consumer-rebalance-${Base58.randomString(8)}"
         val firstCrashed = CountDownLatch(1)
         val recovered = CountDownLatch(1)
         val recoveredRuntimeReturned = CountDownLatch(1)

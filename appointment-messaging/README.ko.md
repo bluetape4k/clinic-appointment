@@ -82,6 +82,19 @@ churn으로 바꾸지 않습니다. custom publisher도 readiness 계약을 구�
 않으면 fail-closed되어 row를 claim하지 않습니다.
 readiness에는 `enabled`, `schemaValid`, `serializerValid`도 포함되며, V22 column/index와
 codec self-check가 통과하기 전에는 relay가 ready가 되지 않습니다.
+
+### Kafka4 발송 adapter와 wire 경계
+
+`SpringKafkaAppointmentPublisher`는 `io.bluetape4k.kafka.spring.suspendSend`를 사용해
+Spring Kafka의 broker ACK를 기존 `CompletionStage` relay 계약으로 변환합니다. 반환 stage를
+취소하거나 publisher를 닫으면 발송 coroutine과 underlying Kafka future를 함께 취소하고,
+호출자의 timeout은 broker 결과가 확정되지 않은 상태로 남깁니다.
+
+producer serializer는 기존 `StringSerializer`를 유지합니다. `KafkaCodecs.String`은
+`bluetape4k.kafka.codec.value.type` type header를 추가하므로 이 경계에서 교체하면 기존
+consumer wire 계약이 바뀝니다. Kafka integration test는 payload round-trip과 해당 header
+부재를 검증합니다.
+
 Spring Boot Actuator가 있으면 `appointmentMessagingHealthIndicator` health component를
 등록합니다. broker 장애, operator pause, relay hold는 readiness를 `OUT_OF_SERVICE`로
 표시하고 애플리케이션 liveness와 분리하며, 잘못된 configuration/schema/serializer는
