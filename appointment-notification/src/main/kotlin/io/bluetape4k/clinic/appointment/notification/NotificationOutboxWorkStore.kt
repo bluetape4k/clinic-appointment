@@ -6,11 +6,12 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.notification.persistence.ClaimedNotification
 import io.bluetape4k.clinic.appointment.notification.persistence.CompleteNotificationCommand
-import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.notification.persistence.NotificationCandidate
 import io.bluetape4k.clinic.appointment.notification.persistence.NotificationFairCursor
 import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxObservation
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxObservationPersistence
 import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxWorkPersistence
 import io.bluetape4k.clinic.appointment.notification.persistence.RetryNotificationCommand
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -93,11 +94,11 @@ data class NotificationCandidatePage(
 }
 
 /**
- * [JdbcNotificationOutboxRepository]의 caller-transaction 계약을 coroutine worker 경계에 맞춥니다.
+ * notification persistence capability의 caller-transaction 계약을 coroutine worker 경계에 맞춥니다.
  */
 class JdbcNotificationOutboxWorkStore(
     private val database: Database,
-    private val repository: JdbcNotificationOutboxRepository,
+    private val persistence: NotificationOutboxWorkPersistence,
     private val tokenGenerator: NotificationLeaseTokenGenerator = SecureNotificationLeaseTokenGenerator(),
 ) : NotificationOutboxWorkStore, NotificationDirectOutboxStore {
 
@@ -122,14 +123,14 @@ class JdbcNotificationOutboxWorkStore(
             require(limit > 0) { "limit must be positive" }
             require(perClinicLimit > 0) { "perClinicLimit must be positive" }
             val clinicLimit = (limit + perClinicLimit - 1) / perClinicLimit
-            val clinics = repository.findReadyClinicKeys(
+            val clinics = persistence.findReadyClinicKeys(
                 cursor = cursor,
                 limit = clinicLimit,
                 eligibleScopes = eligibleScopes,
             )
                 .ifEmpty {
                     if (cursor == null) emptyList()
-                    else repository.findReadyClinicKeys(
+                    else persistence.findReadyClinicKeys(
                         cursor = null,
                         limit = clinicLimit,
                         eligibleScopes = eligibleScopes,
@@ -138,7 +139,7 @@ class JdbcNotificationOutboxWorkStore(
             val candidates = clinics
                 .asSequence()
                 .flatMap { clinic ->
-                    repository.findReadyCandidates(clinic, cursorId = null, limit = perClinicLimit).asSequence()
+                    persistence.findReadyCandidates(clinic, cursorId = null, limit = perClinicLimit).asSequence()
                 }
                 .take(limit)
                 .toList()
@@ -155,7 +156,7 @@ class JdbcNotificationOutboxWorkStore(
         owner: String,
     ): ClaimedNotification? =
         ioTransaction {
-            repository.claim(id, owner, tokenGenerator.nextToken())
+            persistence.claim(id, owner, tokenGenerator.nextToken())
         }
 
     override suspend fun claimReady(
@@ -165,7 +166,7 @@ class JdbcNotificationOutboxWorkStore(
         owner: String,
     ): ClaimedNotification? =
         ioTransaction {
-            repository.claimReadyForDirect(
+            persistence.claimReadyForDirect(
                 scope = scope,
                 appointmentId = appointmentId,
                 eventType = eventType,
@@ -186,25 +187,25 @@ class JdbcNotificationOutboxWorkStore(
         eligibleScopes: Set<TenantClinicScope>?,
     ): List<ClaimedNotification> =
         ioTransaction {
-            repository.findExpiredProcessingIds(limit, eligibleScopes)
-                .mapNotNull { id -> repository.recoverExpired(id, owner, tokenGenerator.nextToken()) }
+            persistence.findExpiredProcessingIds(limit, eligibleScopes)
+                .mapNotNull { id -> persistence.recoverExpired(id, owner, tokenGenerator.nextToken()) }
         }
 
     override suspend fun complete(command: CompleteNotificationCommand): Boolean =
-        ioTransaction { repository.complete(command) }
+        ioTransaction { persistence.complete(command) }
 
     override suspend fun retry(command: RetryNotificationCommand): Boolean =
-        ioTransaction { repository.scheduleRetry(command) }
+        ioTransaction { persistence.scheduleRetry(command) }
 
     override suspend fun currentDatabaseTime(): Instant =
-        ioTransaction { repository.currentDatabaseTime() }
+        ioTransaction { persistence.currentDatabaseTime() }
 
     override suspend fun deleteTerminalBatch(
         status: NotificationOutboxStatus,
         retention: Duration,
         limit: Int,
     ): Int =
-        ioTransaction { repository.deleteTerminalBatch(status, retention, limit) }
+        ioTransaction { persistence.deleteTerminalBatch(status, retention, limit) }
 
     private suspend fun <T> ioTransaction(block: () -> T): T =
         withContext(Dispatchers.IO) {
@@ -215,7 +216,7 @@ class JdbcNotificationOutboxWorkStore(
 /** indexed active-row query를 제한된 수만 읽어 Micrometer snapshot으로 변환합니다. */
 class JdbcNotificationOutboxObservationStore(
     private val database: Database,
-    private val repository: JdbcNotificationOutboxRepository,
+    private val persistence: NotificationOutboxObservationPersistence,
     private val observationLimit: Int = 10_001,
 ) : NotificationOutboxObservationStore {
     init {
@@ -225,7 +226,7 @@ class JdbcNotificationOutboxObservationStore(
     override suspend fun loadBoundedSnapshot(): NotificationOutboxObservationSnapshot =
         withContext(Dispatchers.IO) {
             transaction(database) {
-                repository.observeReady(observationLimit).toSnapshot()
+                persistence.observeReady(observationLimit).toSnapshot()
             }
         }
 

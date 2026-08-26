@@ -114,11 +114,6 @@ class WaitlistNotificationOutboxAdapter(
         codec: WaitlistNotificationOutboxCodec = WaitlistNotificationOutboxCodec(),
     ) : this(sink::enqueue, codec)
 
-    constructor(
-        repository: WaitlistNotificationOutboxRepository,
-        codec: WaitlistNotificationOutboxCodec = WaitlistNotificationOutboxCodec(),
-    ) : this(repository::enqueue, codec)
-
     override fun enqueue(draft: WaitlistOfferNotificationDraft) {
         persist(draft)
     }

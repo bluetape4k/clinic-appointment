@@ -381,7 +381,7 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
     ): ObservationEvidence {
         val snapshot = JdbcNotificationOutboxObservationStore(
             database = database,
-            repository = repository,
+            persistence = repository,
         ).loadBoundedSnapshot()
         return ObservationEvidence(
             pendingReady = snapshot.pendingReady,

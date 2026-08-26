@@ -18,8 +18,9 @@ import io.bluetape4k.clinic.appointment.notification.NotificationRuntimeHealthSi
 import io.bluetape4k.clinic.appointment.notification.ResilientNotificationChannel
 import io.bluetape4k.clinic.appointment.notification.NotificationDirectDeliveryPort
 import io.bluetape4k.clinic.appointment.notification.NotificationRetentionRunner
-import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxWriter
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxObservationPersistence
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxWorkPersistence
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxObservationStore
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxWorkStore
 import io.bluetape4k.clinic.appointment.notification.AppointmentReminderScheduler
@@ -54,10 +55,10 @@ private fun schemaReadinessType(database: Database): NotificationSchemaReadiness
     NotificationSchemaReadiness(database, io.bluetape4k.clinic.appointment.notification.NotificationCryptoProperties())
 
 // appointment-notification/.../NotificationOutboxWorkStore.kt: public JDBC store constructors.
-private fun workStoreType(database: Database, repository: JdbcNotificationOutboxRepository): JdbcNotificationOutboxWorkStore =
-    JdbcNotificationOutboxWorkStore(database, repository)
-private fun observationStoreType(database: Database, repository: JdbcNotificationOutboxRepository): JdbcNotificationOutboxObservationStore =
-    JdbcNotificationOutboxObservationStore(database, repository)
+private fun workStoreType(database: Database, persistence: NotificationOutboxWorkPersistence): JdbcNotificationOutboxWorkStore =
+    JdbcNotificationOutboxWorkStore(database, persistence)
+private fun observationStoreType(database: Database, persistence: NotificationOutboxObservationPersistence): JdbcNotificationOutboxObservationStore =
+    JdbcNotificationOutboxObservationStore(database, persistence)
 
 // appointment-event/.../NotificationOutboxWriter.kt: notification auto-configuration publishes the event write port.
 private fun writerType(writer: NotificationOutboxWriter): NotificationOutboxWriter = writer
@@ -106,13 +107,14 @@ private fun leaderType(
     JdbcNotificationOutboxObservationStore::class,
     NotificationOutboxWorkStore::class,
     NotificationOutboxObservationStore::class,
+    NotificationOutboxWorkPersistence::class,
+    NotificationOutboxObservationPersistence::class,
     NotificationOutboxMetrics::class,
     *runnerTypes.toTypedArray(),
     NotificationRetentionRunner::class,
     AppointmentReminderScheduler::class,
     ResilientNotificationChannel::class,
     NotificationDirectDeliveryPort::class,
-    JdbcNotificationOutboxRepository::class,
     NotificationOutboxWriter::class,
     eventConsumerType,
 )
