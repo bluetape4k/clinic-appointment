@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.service
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.api.dto.CreateAppointmentRequest
 import io.bluetape4k.clinic.appointment.api.notification.AppointmentNotificationWriter
 import io.bluetape4k.clinic.appointment.api.notification.CommitmentAppointmentNotification
@@ -65,7 +66,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
-import java.util.UUID
 
 internal class AppointmentNotificationAtomicityTest {
 
@@ -648,7 +648,7 @@ internal class AppointmentNotificationAtomicityTest {
         @BeforeAll
         fun connectDatabase() {
             Database.connect(
-                url = "jdbc:h2:mem:notification-atomicity-${UUID.randomUUID()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+                url = "jdbc:h2:mem:notification-atomicity-${Base58.randomString(8)};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
                 driver = "org.h2.Driver",
             )
             transaction {

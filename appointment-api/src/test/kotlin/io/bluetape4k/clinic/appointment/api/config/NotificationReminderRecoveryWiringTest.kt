@@ -4,6 +4,7 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.notification.JdbcAppointmentReminderRecoveryStore
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
@@ -87,7 +88,7 @@ internal class NotificationReminderRecoveryWiringTest {
         .withBean("dataSource", DataSource::class.java, Supplier {
             HikariDataSource(
                 HikariConfig().apply {
-                    jdbcUrl = "jdbc:h2:mem:reminder_wiring_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"
+                    jdbcUrl = "jdbc:h2:mem:reminder_wiring_${Base58.randomString(8)};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"
                     driverClassName = "org.h2.Driver"
                     username = "sa"
                 },

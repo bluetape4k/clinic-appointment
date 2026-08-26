@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment.notification.persistence
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxCodec
+import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxContractException
 import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxEnvelope
 import io.bluetape4k.clinic.appointment.model.waitlist.CorrelationId
@@ -20,7 +21,7 @@ import java.time.Instant
 class WaitlistNotificationOutboxAdapterTest {
 
     private val database = Database.connect(
-        "jdbc:h2:mem:waitlist_notification_outbox_${System.nanoTime()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+        "jdbc:h2:mem:waitlist_notification_outbox_${Base58.randomString(8)};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
         driver = "org.h2.Driver",
     )
     private val repository = WaitlistNotificationOutboxRepository()
