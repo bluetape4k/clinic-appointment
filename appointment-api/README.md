@@ -75,8 +75,8 @@ correlation ID로 상태·이력·outbox를 제한 조회하고 commit된 mutati
 | 슬롯 계산 | 최대 `3,000`회 |
 | 후보 저장 수 | 최대 `2,000`건 |
 
-슬롯 계산은 write transaction 밖에서 key별로 캐시하고, write 직전에 같은 `LIMIT 101` snapshot을
-재검증합니다. write transaction은 snapshot 재검증과 상태 전이·이력·outbox·후보 저장만 수행합니다.
+슬롯 계산은 write transaction 밖에서 key별로 캐시하고, write 직전에 같은 `LIMIT 101` 기준 데이터 집합을
+재검증합니다. write transaction은 기준 데이터 재검증과 상태 전이·이력·outbox·후보 저장만 수행합니다.
 
 ### 예약 신뢰도
 
@@ -153,7 +153,7 @@ token에서 가져옵니다. 자세한 내용은
 모든 상태 변경 요청은 `Idempotency-Key`가 필요하고, 생성은 `If-None-Match: *`, 기존
 aggregate 변경은 최신 `ETag`를 담은 `If-Match`가 추가로 필요합니다.
 
-제안과 확정 약속 응답은 판단에 고정된 불변 정책 스냅숏 ID, hash, 세대,
+제안과 확정 약속 응답은 판단에 고정된 불변 정책 기준 데이터 ID, hash, 세대,
 원본 version을 제공합니다. 이후 정책이 바뀌어도 기존 제안을 새 정책으로 재해석하지
 않습니다.
 
