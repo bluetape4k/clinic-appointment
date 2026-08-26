@@ -1,9 +1,9 @@
 # Issue #409 알림 event·persistence contract 구현 7-Tier 검토
 
-검토일: 2026-08-26  
-검토 branch: refactor/issue-409-contract-boundary  
-기준 develop: 8d68b1e3bc8c944bc1ba1f9e6e8233417d23cff8  
-구현 범위: appointment-event, appointment-notification, appointment-api, 루트 Gradle consumer fixture와 문서  
+검토일: 2026-08-26
+검토 branch: refactor/issue-409-contract-boundary
+기준 develop: 8d68b1e3bc8c944bc1ba1f9e6e8233417d23cff8
+구현 범위: appointment-event, appointment-notification, appointment-api, 루트 Gradle consumer fixture와 문서
 선행 설계/계획: bda78b01, 7303ed4f, 4294bb6f
 
 ## 검토 기준과 근거
