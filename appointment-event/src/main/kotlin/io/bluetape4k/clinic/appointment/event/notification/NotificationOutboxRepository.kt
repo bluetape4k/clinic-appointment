@@ -828,44 +828,6 @@ class NotificationOutboxRepository(
     }
 }
 
-/**
- * 새로 발송 가능한 알림을 기록하기 위한 draft다.
- *
- * [idempotencyDigest]는 HMAC digest이며 원문 idempotency key를 직렬화하거나 저장하지
- * 않는다.
- */
-data class SendableNotificationDraft(
-    val envelope: NotificationOutboxEnvelope,
-    val idempotencyDigest: NotificationIdempotencyDigest,
-    val auditFingerprint: NotificationAuditFingerprint,
-    val providerKey: String,
-) : Serializable {
-    init {
-        validateDurableOpaqueString(providerKey, "providerKey", 128)
-    }
-
-    companion object {
-        private const val serialVersionUID = 1L
-    }
-}
-
-/**
- * legacy 예약의 회원 ID 누락을 발송하지 않는 terminal row로 기록하는 draft다.
- */
-data class LegacySuppressionDraft(
-    val idempotencyDigest: NotificationIdempotencyDigest,
-    val auditFingerprint: NotificationAuditFingerprint,
-    val tenantGroupId: TenantGroupId,
-    val clinicId: ClinicId,
-    val eventId: NotificationEventId,
-    val suppressionReason: NotificationSuppressionReasonCode,
-    val availableAt: Instant,
-) : Serializable {
-    companion object {
-        private const val serialVersionUID = 1L
-    }
-}
-
 /** clinic별 공정 polling key다. */
 data class NotificationClinicKey(
     val tenantGroupId: TenantGroupId,
