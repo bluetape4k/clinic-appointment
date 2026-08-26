@@ -1,9 +1,25 @@
 package io.bluetape4k.clinic.appointment.api.waitlist
 
+import io.lettuce.core.RedisClient
+import io.lettuce.core.api.StatefulRedisConnection
+import io.bluetape4k.redis.lettuce.lock.FencedBootstrapResult
+import io.bluetape4k.redis.lettuce.lock.FencedLockConfig
+import io.bluetape4k.redis.lettuce.lock.LettuceFencedLock
+import io.bluetape4k.redis.lettuce.lock.LockConfig
+import io.micrometer.core.instrument.MeterRegistry
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.scheduling.annotation.EnableScheduling
+import org.springframework.scheduling.annotation.Scheduled
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.sql.DataSource
 
 /** fencing token을 가진 lease만 vacancy dispatch에 전달하는 application port입니다. */
 fun interface WaitlistFencedVacancyDispatcher {
@@ -204,4 +220,154 @@ internal class WaitlistFencedDeliverySchedulingRunner(
             WaitlistFencedLeaseOutcome.CLOSED,
             -> WaitlistLeaseMetricOutcome.FAILED
         }
+}
+
+/** V31 fence column이 실제 DB에 존재하는지 zero-row query로 확인하는 readiness probe입니다. */
+internal class WaitlistFencingReadiness(
+    private val dataSource: DataSource,
+) {
+    fun verify() {
+        try {
+            dataSource.connection.use { connection ->
+                connection.prepareStatement(
+                    "SELECT fence_epoch, fence_sequence FROM scheduling_waitlist_vacancy_jobs WHERE 1 = 0",
+                ).use { statement ->
+                    statement.executeQuery().use { }
+                }
+            }
+        } catch (cause: Exception) {
+            throw WaitlistFencingReadinessException(cause)
+        }
+    }
+}
+
+/** V31 readiness를 통과하지 못한 fenced scheduler의 조용한 기동을 막습니다. */
+class WaitlistFencingReadinessException(cause: Throwable) :
+    IllegalStateException("Waitlist V31 fencing columns are not ready", cause)
+
+/** Redis lock bootstrap 실패를 startup failure로 노출하는 예외입니다. */
+class WaitlistFencedLockBootstrapException(result: FencedBootstrapResult) :
+    IllegalStateException("Waitlist fenced lock bootstrap failed: ${result::class.simpleName}")
+
+/** 명시적으로 모든 외부 port와 V31 readiness가 준비된 경우에만 fenced scheduler를 조립합니다. */
+@Configuration(proxyBeanMethods = false)
+@EnableScheduling
+@EnableConfigurationProperties(WaitlistDeliveryProperties::class)
+@ConditionalOnProperty(
+    prefix = "appointment.waitlist.delivery",
+    name = ["enabled"],
+    havingValue = "true",
+)
+@ConditionalOnBean(
+    RedisClient::class,
+    DataSource::class,
+    WaitlistFencedVacancyDispatcher::class,
+    WaitlistOfferExpiryRunner::class,
+    WaitlistNotificationSuppressionRunner::class,
+    WaitlistHoldReconciler::class,
+    MeterRegistry::class,
+)
+internal class WaitlistFencedSchedulingConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    internal fun waitlistFencingReadiness(dataSource: DataSource): WaitlistFencingReadiness =
+        WaitlistFencingReadiness(dataSource)
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    internal fun waitlistFencedRedisConnection(
+        redisClient: RedisClient,
+        readiness: WaitlistFencingReadiness,
+    ): StatefulRedisConnection<String, String> {
+        readiness.verify()
+        return redisClient.connect()
+    }
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    internal fun waitlistFencedLock(
+        connection: StatefulRedisConnection<String, String>,
+        properties: WaitlistDeliveryProperties,
+        readiness: WaitlistFencingReadiness,
+    ): LettuceFencedLock {
+        readiness.verify()
+        val lock = LettuceFencedLock.create(
+            connection,
+            WAITLIST_LOCK_RESOURCE,
+            FencedLockConfig(
+                lock = LockConfig(namespace = WAITLIST_LOCK_NAMESPACE),
+                epoch = properties.fenceEpoch,
+            ),
+        )
+        when (val bootstrap = lock.bootstrapFencing()) {
+            FencedBootstrapResult.Initialized,
+            FencedBootstrapResult.AlreadyInitialized,
+            -> Unit
+            else -> {
+                lock.close()
+                throw WaitlistFencedLockBootstrapException(bootstrap)
+            }
+        }
+        return lock
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    internal fun waitlistFencedLockOperations(lock: LettuceFencedLock): WaitlistFencedLockOperations =
+        LettuceWaitlistFencedLockOperations(lock)
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    internal fun fencedWaitlistLeaderLease(
+        operations: WaitlistFencedLockOperations,
+        properties: WaitlistDeliveryProperties,
+    ): FencedWaitlistLeaderLease = FencedWaitlistLeaderLease(operations, properties)
+
+    @Bean
+    @ConditionalOnMissingBean
+    internal fun waitlistDeliveryMetrics(meterRegistry: MeterRegistry): WaitlistDeliveryMetrics =
+        WaitlistDeliveryMetrics(meterRegistry)
+
+    @Bean
+    @ConditionalOnMissingBean
+    internal fun waitlistFencedDeliveryScheduler(
+        lease: FencedWaitlistLeaderLease,
+        dispatcher: WaitlistFencedVacancyDispatcher,
+        expiry: WaitlistOfferExpiryRunner,
+        suppression: WaitlistNotificationSuppressionRunner,
+        holdReconciler: WaitlistHoldReconciler,
+        properties: WaitlistDeliveryProperties,
+        metrics: WaitlistDeliveryMetrics,
+    ): WaitlistFencedDeliverySchedulingRunner = WaitlistFencedDeliverySchedulingRunner(
+        lease = lease,
+        dispatcher = dispatcher,
+        expiry = expiry,
+        suppression = suppression,
+        holdReconciler = holdReconciler,
+        properties = properties,
+        metrics = metrics,
+    )
+
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    internal fun waitlistFencedScheduler(
+        runner: WaitlistFencedDeliverySchedulingRunner,
+    ): WaitlistFencedScheduler = WaitlistFencedScheduler(runner)
+
+    companion object {
+        const val WAITLIST_LOCK_NAMESPACE = "bt4k:coord:v1"
+        // LettuceFencedLock가 resource 구성요소를 검증하므로 구분자는 namespace에 둡니다.
+        const val WAITLIST_LOCK_RESOURCE = "waitlist-delivery"
+    }
+}
+
+/** scheduler thread와 fenced runner lifecycle을 분리하는 Spring adapter입니다. */
+internal class WaitlistFencedScheduler(
+    private val runner: WaitlistFencedDeliverySchedulingRunner,
+) : AutoCloseable {
+    @Scheduled(fixedDelayString = "\${appointment.waitlist.delivery.poll-interval:PT1S}")
+    fun poll(): WaitlistFencedDeliveryTickResult = runner.tick()
+
+    override fun close() = runner.close()
 }
