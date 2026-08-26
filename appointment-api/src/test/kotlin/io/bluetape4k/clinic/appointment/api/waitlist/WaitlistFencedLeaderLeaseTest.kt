@@ -57,8 +57,31 @@ class WaitlistFencedLeaderLeaseTest {
         val reentered = lease.tryAcquire(now).shouldBeInstanceOf<WaitlistLeaseAttempt.Reentered>()
         reentered.holdCount shouldBeEqualTo 2
         operations.ownerRequests.size shouldBeEqualTo 2
-        operations.ownerRequests[0].first shouldBeEqualTo operations.ownerRequests[1].first
+            operations.ownerRequests[0].first shouldBeEqualTo operations.ownerRequests[1].first
         operations.bootstrapCalls shouldBeEqualTo 1
+    }
+
+    @Test
+    fun `reentered acquisitions release one native hold per acquisition`() {
+        val native = nativeHandle()
+        val operations = FakeLockOperations(
+            acquireResults = ArrayDeque(
+                listOf(
+                    LockAcquireResult.Acquired(native),
+                    LockAcquireResult.Reentered(native, 2),
+                ),
+            ),
+            releaseResult = LockMutationResult.Released(0),
+        )
+        val lease = FencedWaitlistLeaderLease(operations, properties, clock)
+
+        val first = lease.tryAcquire(now).shouldBeInstanceOf<WaitlistLeaseAttempt.Acquired>().handle
+        val second = lease.tryAcquire(now).shouldBeInstanceOf<WaitlistLeaseAttempt.Reentered>().handle
+
+        lease.release(first) shouldBeEqualTo WaitlistLeaseRelease.RELEASED
+        lease.release(second) shouldBeEqualTo WaitlistLeaseRelease.RELEASED
+        lease.release(second) shouldBeEqualTo WaitlistLeaseRelease.ALREADY_RELEASED
+        operations.releaseCalls shouldBeEqualTo 2
     }
 
     @Test

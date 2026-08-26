@@ -69,11 +69,11 @@ caller-provided 값, profile-shaped 원문은 금지한다. actor reference는 `
 `hmac:vN:<64 hex>` 형태의 full keyed HMAC만 허용하며, `staff:<suffix>`,
 `recovery:<suffix>`, 임의 suffix, truncated hash, 비키드 hash는 허용하지 않는다.
 
-현재 waitlist 일반 audit 경계에는 caller correlation 보존과 `staff:<sha256...take(24)>`
-형태의 비키드·truncated actor가 남아 있으므로 위 fenced evidence 계약을 아직
-충족하지 않는다. 이 문서 범위에서는 해당 일반 경계를 조용히 변경하지 않으며,
-위 조건이 해결되고 회귀 검증되기 전에는 `LettuceFencedLock` production path를
-활성화하지 않는다.
+현재 일반 waitlist audit 경계의 caller correlation·actor 규칙은 이 scheduler metric 및
+fenced lease 경계와 별도 계약이다. 이 변경은 해당 일반 audit payload를 확장하지 않으며,
+fenced scheduler는 자체 metric·handle 경계에서 서버 생성 opaque owner와
+allowlisted outcome만 사용한다. 일반 audit 경계를 변경할 때는 별도 설계와 회귀 검증을
+추가해야 한다.
 
 | 상태 | 사유 계열 |
 |---:|---|

@@ -6,6 +6,7 @@ import io.bluetape4k.assertions.shouldBeGreaterThan
 import io.bluetape4k.assertions.shouldBeInstanceOf
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeNull
+import io.bluetape4k.assertions.shouldNotContain
 import io.bluetape4k.codec.Base58
 import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
@@ -105,9 +106,9 @@ class WaitlistFencedRedisIntegrationTest {
 
         registry.meters.forEach { meter ->
             meter.id.tags.map { it.value }.forEach { value ->
-                value.assertDoesNotContain("native-owner")
-                value.assertDoesNotContain("native-request")
-                value.assertDoesNotContain("waitlist-delivery")
+                value shouldNotContain "native-owner"
+                value shouldNotContain "native-request"
+                value shouldNotContain "waitlist-delivery"
             }
         }
         registry.get(WaitlistDeliveryMetrics.LEASE_ACQUIRE_TOTAL)
@@ -233,8 +234,4 @@ class WaitlistFencedRedisIntegrationTest {
 
         override fun close() = delegate.close()
     }
-}
-
-private fun String.assertDoesNotContain(fragment: String) {
-    if (contains(fragment)) error("metric tag unexpectedly contained '$fragment'")
 }
