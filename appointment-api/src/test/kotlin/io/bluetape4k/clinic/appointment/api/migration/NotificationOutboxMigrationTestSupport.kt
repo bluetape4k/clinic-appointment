@@ -1,8 +1,8 @@
 package io.bluetape4k.clinic.appointment.api.migration
 
 import io.bluetape4k.assertions.shouldBeEqualTo
-import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationDeliveryAttempts
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxEvents
 import org.flywaydb.core.Flyway
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction

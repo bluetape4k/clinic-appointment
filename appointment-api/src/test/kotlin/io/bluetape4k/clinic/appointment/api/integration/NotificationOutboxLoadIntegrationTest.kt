@@ -7,8 +7,8 @@ import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
@@ -31,7 +31,7 @@ class NotificationOutboxLoadIntegrationTest {
         NotificationOutboxPerformanceTestSupport.migrate(dataSource, "classpath:db/migration/h2")
         dataSource.connection.use(NotificationOutboxPerformanceTestSupport::seedBacklog)
         val database = Database.connect(dataSource)
-        val repository = NotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(1))
+        val repository = JdbcNotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(1))
 
         transaction(database) {
             val durations = buildList {

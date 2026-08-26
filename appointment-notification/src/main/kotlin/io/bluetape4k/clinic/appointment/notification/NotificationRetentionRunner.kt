@@ -1,6 +1,6 @@
 package io.bluetape4k.clinic.appointment.notification
 
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
 import kotlinx.coroutines.delay
 import java.io.Serializable
 import java.time.Duration

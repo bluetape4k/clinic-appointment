@@ -5,28 +5,28 @@ import io.bluetape4k.clinic.appointment.api.test.API_INTEGRATION_RESOURCE
 import io.bluetape4k.clinic.appointment.api.test.Containers
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentConfirmedParameters
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
-import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
+import io.bluetape4k.clinic.appointment.notification.persistence.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
-import io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand
+import io.bluetape4k.clinic.appointment.notification.persistence.CompleteNotificationCommand
 import io.bluetape4k.clinic.appointment.event.notification.NotificationAuditFingerprint
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
-import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttemptOutcome
-import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationDeliveryAttemptOutcome
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
-import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCursor
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationFairCursor
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyDigest
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationParameterType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationProviderMessageReference
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
-import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
+import io.bluetape4k.clinic.appointment.notification.persistence.RetryNotificationCommand
 import io.bluetape4k.clinic.appointment.event.notification.SendableNotificationDraft
 import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
@@ -113,7 +113,7 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
         val dataSource = postgresDataSource(postgres)
         migrate(dataSource)
         val database = Database.connect(dataSource)
-        val repository = NotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(5))
+        val repository = JdbcNotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(5))
         val store = CountingWorkStore(JdbcNotificationOutboxWorkStore(database, repository))
         val provider = DeterministicProvider(retryOnCall = 2)
         val worker = worker(store, provider)
@@ -223,7 +223,7 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
             }
     }
 
-    private fun seed(database: Database, repository: NotificationOutboxRepository) {
+    private fun seed(database: Database, repository: JdbcNotificationOutboxRepository) {
         transaction(database) {
             (1..LOGICAL_NOTIFICATIONS).forEach { index -> repository.enqueue(draft(index)) }
         }
@@ -327,8 +327,8 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
 
     private fun firstCandidate(
         database: Database,
-        repository: NotificationOutboxRepository,
-    ): io.bluetape4k.clinic.appointment.event.notification.NotificationCandidate = transaction(database) {
+        repository: JdbcNotificationOutboxRepository,
+    ): io.bluetape4k.clinic.appointment.notification.persistence.NotificationCandidate = transaction(database) {
         val clinic = repository.findReadyClinicKeys(cursor = null, limit = 1).single()
         repository.findReadyCandidates(clinic, cursorId = null, limit = 1).single()
     }
@@ -377,7 +377,7 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
 
     private suspend fun observation(
         database: Database,
-        repository: NotificationOutboxRepository,
+        repository: JdbcNotificationOutboxRepository,
     ): ObservationEvidence {
         val snapshot = JdbcNotificationOutboxObservationStore(
             database = database,

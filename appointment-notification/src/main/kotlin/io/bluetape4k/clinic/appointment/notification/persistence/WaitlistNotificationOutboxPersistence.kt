@@ -1,5 +1,8 @@
-package io.bluetape4k.clinic.appointment.event.waitlist
+package io.bluetape4k.clinic.appointment.notification.persistence
 
+import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxEnvelope
+import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxContractException
 import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistOfferNotificationDraft
 import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistOfferNotificationPort
 import org.jetbrains.exposed.v1.core.ResultRow

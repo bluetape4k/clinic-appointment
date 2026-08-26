@@ -6,7 +6,7 @@ import io.bluetape4k.clinic.appointment.api.security.AuthenticationAssurance
 import io.bluetape4k.clinic.appointment.api.security.SchedulingRole
 import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
 import io.bluetape4k.logging.KLogging
 import io.bluetape4k.logging.info

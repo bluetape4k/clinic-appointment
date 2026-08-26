@@ -1,14 +1,14 @@
 package io.bluetape4k.clinic.appointment.notification
 
-import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
-import io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand
 import io.bluetape4k.clinic.appointment.event.notification.NotificationContractException
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxContractRegistry
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
-import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttemptOutcome
-import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
+import io.bluetape4k.clinic.appointment.notification.persistence.ClaimedNotification
+import io.bluetape4k.clinic.appointment.notification.persistence.CompleteNotificationCommand
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationDeliveryAttemptOutcome
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.RetryNotificationCommand
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible

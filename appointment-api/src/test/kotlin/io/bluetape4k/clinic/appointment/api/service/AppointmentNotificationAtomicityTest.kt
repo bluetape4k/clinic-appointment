@@ -9,13 +9,13 @@ import io.bluetape4k.clinic.appointment.api.notification.DefaultAppointmentNotif
 import io.bluetape4k.clinic.appointment.api.notification.MemberResolution
 import io.bluetape4k.clinic.appointment.event.notification.CancellationReasonCode
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
-import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRowKind
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxRowKind
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
 import io.bluetape4k.clinic.appointment.event.notification.StaticNotificationOutboxKeyRing
@@ -75,7 +75,7 @@ internal class AppointmentNotificationAtomicityTest {
     private val stateHistoryRepository = AppointmentStateHistoryRepository()
     private val clinicRepository = ClinicRepository()
     private val rescheduleCandidateRepository = RescheduleCandidateRepository()
-    private val outboxRepository = NotificationOutboxRepository(
+    private val outboxRepository = JdbcNotificationOutboxRepository(
         codec = NotificationOutboxCodec(),
         leaseDuration = Duration.ofMinutes(5),
     )

@@ -1,14 +1,14 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
-import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
+import io.bluetape4k.clinic.appointment.notification.persistence.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
-import io.bluetape4k.clinic.appointment.event.notification.NotificationCandidate
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationCandidate
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
-import io.bluetape4k.clinic.appointment.event.notification.NotificationClinicKey
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationClinicKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
-import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCursor
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationFairCursor
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationParameterType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
@@ -359,14 +359,14 @@ internal class NotificationOutboxDispatcherTest {
             return selected
         }
 
-        override suspend fun complete(command: io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand): Boolean = true
+        override suspend fun complete(command: io.bluetape4k.clinic.appointment.notification.persistence.CompleteNotificationCommand): Boolean = true
 
-        override suspend fun retry(command: io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand): Boolean = true
+        override suspend fun retry(command: io.bluetape4k.clinic.appointment.notification.persistence.RetryNotificationCommand): Boolean = true
 
         override suspend fun currentDatabaseTime(): java.time.Instant = java.time.Instant.parse("2026-07-31T00:00:00Z")
 
         override suspend fun deleteTerminalBatch(
-            status: io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus,
+            status: io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus,
             retention: Duration,
             limit: Int,
         ): Int = 0

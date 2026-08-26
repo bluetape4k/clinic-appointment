@@ -1,7 +1,7 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
 import java.io.Serializable
 import java.time.Instant

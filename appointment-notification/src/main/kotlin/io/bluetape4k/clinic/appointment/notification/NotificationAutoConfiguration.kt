@@ -10,7 +10,9 @@ import io.bluetape4k.leader.spring.scheduling.LeaderScheduledPolicyAutoConfigura
 import io.bluetape4k.leader.spring.scheduling.LeaderScheduledPolicyProperties
 import io.bluetape4k.leader.spring.scheduling.LeaderScheduledPolicyRegistry
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxWriter
+import io.bluetape4k.clinic.appointment.notification.persistence.ClaimedNotification
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.messaging.AppointmentConsumerRuntime
 import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingProperties
 import io.bluetape4k.clinic.appointment.repository.waitlist.WaitlistRepository
@@ -86,11 +88,17 @@ class NotificationAutoConfiguration {
     fun notificationOutboxRepository(
         codec: NotificationOutboxCodec,
         properties: NotificationProperties,
-    ): NotificationOutboxRepository =
-        NotificationOutboxRepository(
+    ): JdbcNotificationOutboxRepository =
+        JdbcNotificationOutboxRepository(
             codec = codec,
             leaseDuration = properties.worker.validate().leaseDuration,
         )
+
+    @Bean
+    @ConditionalOnMissingBean(NotificationOutboxWriter::class)
+    fun notificationOutboxWriter(
+        repository: JdbcNotificationOutboxRepository,
+    ): NotificationOutboxWriter = repository
 
     @Bean
     @ConditionalOnBean(Database::class)
@@ -120,7 +128,7 @@ class NotificationAutoConfiguration {
     @ConditionalOnMissingBean(NotificationOutboxWorkStore::class)
     fun notificationOutboxWorkStore(
         database: Database,
-        repository: NotificationOutboxRepository,
+        repository: JdbcNotificationOutboxRepository,
     ): JdbcNotificationOutboxWorkStore =
         JdbcNotificationOutboxWorkStore(database, repository)
 
@@ -129,7 +137,7 @@ class NotificationAutoConfiguration {
     @ConditionalOnMissingBean(NotificationOutboxObservationStore::class)
     fun notificationOutboxObservationStore(
         database: Database,
-        repository: NotificationOutboxRepository,
+        repository: JdbcNotificationOutboxRepository,
         properties: NotificationProperties,
     ): NotificationOutboxObservationStore =
         JdbcNotificationOutboxObservationStore(

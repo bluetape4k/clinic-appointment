@@ -34,7 +34,7 @@ class KotlinProductionPatternComplianceTest {
         "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/NotificationContractExceptionHandlerTest.kt",
         "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/notification/AppointmentNotificationWriterTest.kt",
         "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/service/AppointmentNotificationAtomicityTest.kt",
-        "appointment-event/src/test/kotlin/io/bluetape4k/clinic/appointment/event/notification/NotificationOutboxRepositoryTest.kt",
+        "appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/persistence/JdbcNotificationOutboxRepositoryTest.kt",
         "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/BookingReliabilityContractTest.kt",
         "appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/BookingReliabilityDocumentationTest.kt",
         "appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/repository/BookingReliabilityReevaluationJobRepositoryTest.kt",

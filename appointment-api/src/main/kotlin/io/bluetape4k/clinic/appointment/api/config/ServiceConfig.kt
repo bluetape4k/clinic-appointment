@@ -84,7 +84,7 @@ import io.bluetape4k.clinic.appointment.event.policy.SchedulingPolicyEventReposi
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.messaging.AppointmentMessagingContext
 import io.bluetape4k.clinic.appointment.messaging.AppointmentOutboxWriter
 import io.bluetape4k.clinic.appointment.notification.NotificationProperties
@@ -365,8 +365,8 @@ class ServiceConfig {
     @Bean
     fun notificationOutboxRepository(
         notificationOutboxCodec: NotificationOutboxCodec,
-    ): NotificationOutboxRepository =
-        NotificationOutboxRepository(
+    ): JdbcNotificationOutboxRepository =
+        JdbcNotificationOutboxRepository(
             codec = notificationOutboxCodec,
             leaseDuration = Duration.ofMinutes(5),
         )
@@ -379,7 +379,7 @@ class ServiceConfig {
      */
     @Bean
     fun appointmentNotificationWriter(
-        notificationOutboxRepository: NotificationOutboxRepository,
+        notificationOutboxRepository: JdbcNotificationOutboxRepository,
         notificationOutboxHasherProvider: ObjectProvider<NotificationOutboxHasher>,
         clinicRepository: ClinicRepository,
         notificationProperties: NotificationProperties,
@@ -408,7 +408,7 @@ class ServiceConfig {
     @ConditionalOnMissingBean(JdbcAppointmentReminderRecoveryStore::class)
     fun appointmentReminderRecoveryStore(
         database: Database,
-        notificationOutboxRepository: NotificationOutboxRepository,
+        notificationOutboxRepository: JdbcNotificationOutboxRepository,
         notificationOutboxHasher: NotificationOutboxHasher,
         notificationProperties: NotificationProperties,
     ): JdbcAppointmentReminderRecoveryStore {

@@ -1,5 +1,28 @@
-package io.bluetape4k.clinic.appointment.event.notification
+package io.bluetape4k.clinic.appointment.notification.persistence
 
+import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
+import io.bluetape4k.clinic.appointment.event.notification.ClinicId
+import io.bluetape4k.clinic.appointment.event.notification.LegacySuppressionDraft
+import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationCorrelationId
+import io.bluetape4k.clinic.appointment.event.notification.NotificationDestinationFingerprint
+import io.bluetape4k.clinic.appointment.event.notification.NotificationEventId
+import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
+import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyDigest
+import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxWriteReceipt
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxWriter
+import io.bluetape4k.clinic.appointment.event.notification.NotificationParameterType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationProviderMessageReference
+import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
+import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTraceId
+import io.bluetape4k.clinic.appointment.event.notification.SendableNotificationDraft
+import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import org.jetbrains.exposed.v1.core.Column
@@ -34,10 +57,10 @@ import java.time.Instant
  * enqueue를 같은 Exposed transaction에 넣고, worker는 claim transaction을 닫은 뒤
  * provider I/O를 수행해야 한다.
  */
-class NotificationOutboxRepository(
+class JdbcNotificationOutboxRepository(
     private val codec: NotificationOutboxCodec,
     private val leaseDuration: Duration,
-) {
+) : NotificationOutboxWriter {
     /**
      * 현재 transaction이 연결된 DB의 현재 시각을 반환한다.
      *
@@ -50,17 +73,17 @@ class NotificationOutboxRepository(
         require(!leaseDuration.isNegative && !leaseDuration.isZero) { "leaseDuration must be positive" }
     }
 
-    fun enqueue(draft: SendableNotificationDraft): NotificationOutboxRecord {
+    override fun enqueue(draft: SendableNotificationDraft): NotificationOutboxRecord {
         upsertSendable(draft)
         return findByIdempotency(draft.idempotencyDigest)
             ?: error("notification outbox insert was ignored without an idempotency row")
     }
 
     /** 현재 caller transaction에서 같은 멱등성 digest의 outbox 행이 보이는지 확인합니다. */
-    fun containsIdempotency(digest: NotificationIdempotencyDigest): Boolean =
+    override fun containsIdempotency(digest: NotificationIdempotencyDigest): Boolean =
         findByIdempotency(digest) != null
 
-    fun suppressLegacy(draft: LegacySuppressionDraft): NotificationOutboxRecord {
+    override fun suppressLegacy(draft: LegacySuppressionDraft): NotificationOutboxRecord {
         upsertSuppression(draft)
         return findByIdempotency(draft.idempotencyDigest)
             ?: error("notification outbox suppression insert was ignored without an idempotency row")
@@ -73,7 +96,7 @@ class NotificationOutboxRepository(
      * provider 결과 불명 가능성을 보존한다. 늦게 도착한 worker 완료 update는 fence
      * 검증에 실패한다. 호출자는 예약 변경과 이 작업을 같은 transaction에서 실행해야 한다.
      */
-    fun suppressOutstandingReminders(
+    override fun suppressOutstandingReminders(
         tenantGroupId: TenantGroupId,
         clinicId: ClinicId,
         appointmentId: AppointmentId,
@@ -907,7 +930,7 @@ data class ClaimedNotification(
 
 /** 저장된 outbox row의 privacy-safe projection이다. */
 data class NotificationOutboxRecord(
-    val id: Long,
+    override val id: Long,
     val rowKind: NotificationOutboxRowKind,
     val status: NotificationOutboxStatus,
     val tenantGroupId: TenantGroupId,
@@ -919,7 +942,7 @@ data class NotificationOutboxRecord(
     val parametersJson: String?,
     val providerKey: String?,
     val attemptNumber: Int,
-) : Serializable {
+) : NotificationOutboxWriteReceipt(id), Serializable {
     companion object {
         private const val serialVersionUID = 1L
     }
@@ -1047,6 +1070,17 @@ private val SUPPRESSIBLE_STATUSES = listOf(
 
 private fun String.validFence(fieldName: String): String =
     validateDurableOpaqueString(this, fieldName, 128)
+
+private fun validateDurableOpaqueString(
+    value: String,
+    fieldName: String,
+    maxLength: Int,
+): String {
+    require(value.isNotBlank()) { "$fieldName must not be blank" }
+    require(value.length <= maxLength) { "$fieldName must not exceed $maxLength characters" }
+    require(value.none { it.isISOControl() }) { "$fieldName must not contain control characters" }
+    return value
+}
 
 private fun JdbcTransaction.dbCurrentTimestamp(): Instant =
     exec("SELECT CURRENT_TIMESTAMP") { resultSet ->

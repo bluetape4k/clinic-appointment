@@ -1,12 +1,12 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
-import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
-import io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand
-import io.bluetape4k.clinic.appointment.event.notification.NotificationCandidate
-import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCursor
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
-import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
+import io.bluetape4k.clinic.appointment.notification.persistence.ClaimedNotification
+import io.bluetape4k.clinic.appointment.notification.persistence.CompleteNotificationCommand
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationCandidate
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationFairCursor
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.RetryNotificationCommand
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import java.time.Duration

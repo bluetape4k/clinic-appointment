@@ -1,5 +1,11 @@
-package io.bluetape4k.clinic.appointment.event.notification
+package io.bluetape4k.clinic.appointment.notification.persistence
 
+import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
+import io.bluetape4k.clinic.appointment.event.notification.NotificationParameterType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
+import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.timestamp

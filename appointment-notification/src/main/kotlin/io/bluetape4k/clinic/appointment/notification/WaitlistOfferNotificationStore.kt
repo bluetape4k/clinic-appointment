@@ -2,9 +2,9 @@ package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
-import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxEvents
-import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.notification.persistence.WaitlistNotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.notification.persistence.WaitlistNotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistCapacityHoldState
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistEntryState

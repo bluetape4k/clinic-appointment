@@ -1,11 +1,11 @@
 package io.bluetape4k.clinic.appointment.notification
 
 import io.bluetape4k.assertions.shouldBeEqualTo
-import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttemptOutcome
-import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationDeliveryAttemptOutcome
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentConfirmedParameters
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
-import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
+import io.bluetape4k.clinic.appointment.notification.persistence.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.NotificationAuditFingerprint
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventId
@@ -13,10 +13,10 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyDigest
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationParameterType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
@@ -48,7 +48,7 @@ internal class NotificationOutboxWorkerLeaseTest {
             transaction(database) {
                 SchemaUtils.createMissingTablesAndColumns(NotificationOutboxEvents, NotificationDeliveryAttempts)
             }
-            val repository = NotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(5))
+            val repository = JdbcNotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(5))
             val enqueued = transaction(database) { repository.enqueue(notificationDraft("redis-failure")) }
             val store = JdbcNotificationOutboxWorkStore(database, repository)
             var providerCalls = 0
@@ -113,7 +113,7 @@ internal class NotificationOutboxWorkerLeaseTest {
             transaction(database) {
                 SchemaUtils.createMissingTablesAndColumns(NotificationOutboxEvents, NotificationDeliveryAttempts)
             }
-            val repository = NotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(5))
+            val repository = JdbcNotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(5))
             val enqueued = transaction(database) { repository.enqueue(notificationDraft("lease-recovery")) }
             val firstClaim = JdbcNotificationOutboxWorkStore(database, repository).claim(enqueued.id, "owner-a")
             checkNotNull(firstClaim)
