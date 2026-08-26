@@ -32,11 +32,11 @@
   - **Failure:** 복구할 수 없으면 최종 상태를 BLOCKED로 유지한다.
 - [x] **CL-07 — Refresh irreversible holds**
   - **Action:** PR·CI·merge 같은 외부/비가역 작업 직전에 hold를 다시 읽는다.
-  - **Evidence:** PR #428 `https://github.com/bluetape4k/clinic-appointment/pull/428`을 `develop` 대상·`feat/issue-311-waitlist-fencing` head로 재확인했고, exact head `9320cc07ae17026f6d29b51dcb8ce75b2db4b117`, CI run `32988329720`, visual run `32988329538`, review 0건을 live read-back했다. merge는 fresh exact-head 승인 전까지 hold로 유지한다.
+  - **Evidence:** PR #428 `https://github.com/bluetape4k/clinic-appointment/pull/428`을 `develop` 대상·`feat/issue-311-waitlist-fencing` head로 재확인했고, merge 직전 exact head `8a61b9af76a633d236d8026ec9a642ce354e0ed3`, CI run `32992383605`, visual run `32992383572`, `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`, review 0건을 live read-back했다. fresh exact-head 승인 후 rebase merge commit `d13e6cf7a744eec00d4aa72e20ec10436cc3125c`를 확인했다.
   - **Failure:** hold가 없으면 외부 side effect를 실행하지 않는다.
 - [x] **CL-08 — Count before completion**
   - **Action:** 완료 시 `Required checks: X/Y; N/A: N; Blocked: N`을 계산한다.
-  - **Evidence:** 현재 총계는 `Required checks: 19/20; N/A: 0; Blocked: 0; PENDING: 1 (A-12/CG-16)`이며 이 문서와 최종 DoD에 동일하게 반영한다.
+  - **Evidence:** 병합·동기화·정리까지 완료한 현재 총계는 `Required checks: 20/20; N/A: 0; Blocked: 0; PENDING: 0`이며 이 문서와 최종 DoD에 동일하게 반영한다.
   - **Failure:** 총계가 맞지 않으면 완료를 주장하지 않는다.
 
 ## Type A 단계
@@ -67,7 +67,7 @@
   - **Failure:** 실패 동작으로 되돌아가고 부분 구현을 진행하지 않는다.
 - [x] **A-07 — Verify tests, spec, plan, and repository hazards**
   - **Action:** targeted·proportional broader 검증과 spec/plan·hazard 대조를 수행한다.
-  - **Evidence:** `:appointment-core:test` 579 tests와 `:appointment-api:test` 900 tests(3 skipped)가 모두 `BUILD SUCCESSFUL`이고, `:appointment-core:build :appointment-api:build`도 `BUILD SUCCESSFUL`이다. targeted Redis 8.8, PostgreSQL concurrent claim, V31 3-dialect migration, readiness, redaction 회귀와 spec/plan/risk/Issue AC-01..AC-08를 대조했으며 `git diff --check`와 Korean terminology audit도 통과했다.
+  - **Evidence:** PR 전 `:appointment-core:test` 579 tests와 `:appointment-api:test` 900 tests(3 skipped), `:appointment-core:build :appointment-api:build`가 모두 `BUILD SUCCESSFUL`이었다. 병합 후 root `develop`에서 `:appointment-core:cleanTest :appointment-core:test`를 재실행해 579 tests가 `BUILD SUCCESSFUL`로 통과했고, API도 merged-result rerun에서 900 tests(3 skipped)가 `BUILD SUCCESSFUL`로 통과했다. 첫 merged API 실행의 MySQL `bad_record_mac`은 코드 실패가 아닌 일시적 환경 오류였고, 대상 dialect 3 tests 및 전체 API rerun으로 재현·해소했다. targeted Redis 8.8, PostgreSQL concurrent claim, V31 3-dialect migration, readiness, redaction 회귀와 spec/plan/risk/Issue AC-01..AC-08를 대조했으며 `git diff --check`와 Korean terminology audit도 통과했다.
   - **Failure:** verifier gap은 구현 또는 승인 산출물로 되돌린다.
 - [x] **A-08 — Converge the final pre-PR review**
   - **Action:** 최종 checklist와 여섯 code-review 관점·통합 리뷰를 수행하고 P0/P1을 제거한다.
@@ -79,15 +79,15 @@
   - **Failure:** untracked 또는 근거 없는 lesson은 통과하지 못한다.
 - [x] **A-10 — Complete authorized PR delivery through live CI and review**
   - **Action:** CG-11..CG-14에 따라 PR 권한·head·metadata·본문·review·CI를 최신 상태로 검증한다.
-  - **Evidence:** PR #428은 OPEN·non-draft·`develop` 대상이며 head는 `9320cc07ae17026f6d29b51dcb8ce75b2db4b117`이다. 본문에 `## DoD Status`와 `#311`을 포함하고, pull_request CI run `32988329720`의 `CI Status`, `Test / API (PostgreSQL)`, `Build & Detekt`, `Test / Core & Event`, `Test / Solver`, `Test / Notification`, `Test / Appointment Messaging`, `Flyway Migration / PostgreSQL`, 보안·wrapper·변경 감지 및 visual companion run `32988329538`이 모두 성공했다. PR review·comment·thread는 0건이다.
+  - **Evidence:** PR #428은 merge 전 `OPEN`·non-draft·`develop` 대상이며 exact head는 `8a61b9af76a633d236d8026ec9a642ce354e0ed3`이었다. 본문에 `## DoD Status`와 `#311`을 포함하고, pull_request CI run `32992383605`의 `CI Status`, `Test / API (PostgreSQL)`, `Build & Detekt`, `Test / Core & Event`, `Test / Solver`, `Test / Notification`, `Test / Appointment Messaging`, `Flyway Migration / PostgreSQL`, 보안·wrapper·변경 감지 및 visual companion run `32992383572`가 모두 성공했다. manual exact-head run `32990839116`도 성공했으며, merge 전 review 0건과 evidence comment 1건을 live read-back한 뒤 rebase merge를 완료했다.
   - **Failure:** stale/missing CI·review는 PENDING 또는 FAIL로 남긴다.
 - [x] **A-11 — Capture knowledge and report merge readiness**
   - **Action:** knowledge capture 후 exact PR/head에 묶인 merge-ready DoD를 보고한다.
-  - **Evidence:** 최종 7-Tier/SPW review와 Korean lesson을 커밋 `d8b959c4`에 고정했고, PR/CI 근거를 위 A-10에 연결했다. 총계는 `19/20; N/A: 0; Blocked: 0`이며 CG-16은 fresh exact-head merge 승인 대기, CG-17..CG-18은 merge 이후 작업으로 unchecked 상태다.
+  - **Evidence:** 최종 7-Tier/SPW review와 Korean lesson을 커밋 `d8b959c4`에 고정했고, PR/CI 근거를 위 A-10에 연결했다. fresh exact-head `승인`을 받은 뒤 PR #428을 merge하고, merge SHA `d13e6cf7a744eec00d4aa72e20ec10436cc3125c`와 `develop` parity를 재확인했다. 총계는 `20/20; N/A: 0; Blocked: 0`이다.
   - **Failure:** fresh merge approval 전에는 DONE을 주장하지 않는다.
-- [ ] **A-12 — Close out only after fresh merge approval**
+- [x] **A-12 — Close out only after fresh merge approval**
   - **Action:** 최신 head에 대한 새 `승인` 이후에만 merge·검증·integration sync·worktree cleanup을 수행한다.
-  - **Evidence:** fresh approval, merge SHA, clean synced develop, cleanup 결과.
+  - **Evidence:** merge 직전 exact head `8a61b9af76a633d236d8026ec9a642ce354e0ed3`에 대한 새 `승인`을 확인하고 `gh pr merge 428 --rebase --delete-branch=false`를 실행했다. PR은 `MERGED`, merge SHA는 `d13e6cf7a744eec00d4aa72e20ec10436cc3125c`이며 root `develop`와 `origin/develop`를 fast-forward로 동기화했다. merged `develop`의 core 579 tests와 API 900 tests(3 skipped) rerun, `git diff --check` 및 Korean terminology audit가 통과했고, Issue 전용 worktree를 정리한 뒤 Issue #311을 종료한다.
   - **Failure:** 승인 전에는 CG-16 PENDING으로 유지한다.
 
 ## 공통 외부 게이트 상태
@@ -96,5 +96,6 @@
 |---|---|---|
 | CG-01..CG-10 | 완료 | 요구사항·설계·계획·구현·검증 순서와 corrected workflow receipt를 fresh evidence로 read-back |
 | CG-11..CG-15 | 완료 | PR #428 권한·head·본문·CI·review와 visual companion run을 live read-back |
-| CG-16 | PENDING | exact PR/head에 대한 별도 merge 승인 필요 |
-| CG-17..CG-18 | PENDING | CG-16 이후 merge·sync·cleanup |
+| CG-16 | 완료 | exact head `8a61b9af76a633d236d8026ec9a642ce354e0ed3`에 대한 fresh `승인` 후 PR #428 rebase merge, merge SHA `d13e6cf7a744eec00d4aa72e20ec10436cc3125c` |
+| CG-17 | 완료 | root `develop`를 `origin/develop` merge SHA까지 fast-forward 동기화하고 merged-result 테스트를 재실행 |
+| CG-18 | 완료 | Issue 전용 worktree 정리 및 Issue #311 종료 read-back |
