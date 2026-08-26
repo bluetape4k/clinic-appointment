@@ -1,5 +1,8 @@
-package io.bluetape4k.clinic.appointment.event.notification
+package io.bluetape4k.clinic.appointment.notification.persistence
 
+import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.LongIdTable
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
@@ -71,13 +74,4 @@ object NotificationDeliveryAttempts : LongIdTable("clinic_notification_delivery_
         uniqueIndex("uk_notification_delivery_attempt_number", outboxId, attemptNumber)
         index("idx_notification_delivery_attempt_completed_retention", false, completedAt, id)
     }
-}
-
-/** delivery attempt가 닫힌 결과다. */
-enum class NotificationDeliveryAttemptOutcome {
-    SUCCESS,
-    RETRY_SCHEDULED,
-    SUPPRESSED,
-    EXHAUSTED,
-    LEASE_LOST,
 }

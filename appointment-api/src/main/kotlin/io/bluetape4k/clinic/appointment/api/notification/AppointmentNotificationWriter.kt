@@ -19,7 +19,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempoten
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
@@ -155,7 +155,7 @@ private fun requireDetailSupportedByLegacyWriter(reasonDetail: String?) {
  * 회원 이름, 전화번호와 자유 입력 취소 사유는 durable payload에 넣지 않는다.
  */
 class DefaultAppointmentNotificationWriter(
-    private val repository: NotificationOutboxRepository,
+    private val repository: JdbcNotificationOutboxRepository,
     private val hasher: NotificationOutboxHasher,
     private val clinicRepository: ClinicRepository,
     private val clock: Clock,

@@ -12,7 +12,7 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempoten
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
@@ -68,7 +68,7 @@ import kotlin.math.max
  */
 class JdbcAppointmentReminderRecoveryStore(
     private val database: Database,
-    private val repository: NotificationOutboxRepository,
+    private val repository: JdbcNotificationOutboxRepository,
     private val hasher: NotificationOutboxHasher,
     private val sameDayReminderLeadTime: Duration,
     private val dayBeforeEnabled: Boolean,

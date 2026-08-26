@@ -3,7 +3,7 @@ package io.bluetape4k.clinic.appointment.notification
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
-import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
+import io.bluetape4k.clinic.appointment.notification.persistence.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
 import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventId

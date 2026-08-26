@@ -1,6 +1,18 @@
-package io.bluetape4k.clinic.appointment.event.notification
+package io.bluetape4k.clinic.appointment.notification.persistence
 
 import io.bluetape4k.clinic.appointment.commitment.CancellationReasonRegistry
+import io.bluetape4k.clinic.appointment.event.notification.*
+import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
+import io.bluetape4k.clinic.appointment.event.notification.NotificationParameterType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
+import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
+import io.bluetape4k.clinic.appointment.event.notification.ClinicId
+import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
@@ -36,7 +48,7 @@ class NotificationCodecBacklogBenchmarkTest {
             driver = "org.h2.Driver",
         )
         val codec = NotificationOutboxCodec()
-        val repository = NotificationOutboxRepository(
+        val repository = JdbcNotificationOutboxRepository(
             codec = codec,
             leaseDuration = Duration.ofMinutes(5),
         )

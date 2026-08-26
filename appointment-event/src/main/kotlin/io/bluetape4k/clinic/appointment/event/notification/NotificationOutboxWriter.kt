@@ -36,11 +36,9 @@ interface NotificationOutboxWriter {
  * 않는다. notification 모듈의 persistence record가 필요한 경우 이 타입을 확장한다.
  */
 open class NotificationOutboxWriteReceipt(
-    open val id: Long,
+    id: Long,
 ) : Serializable {
-    init {
-        require(id > 0L) { "id must be positive" }
-    }
+    open val id: Long = id.also { require(it > 0L) { "id must be positive" } }
 
     companion object {
         private const val serialVersionUID = 1L

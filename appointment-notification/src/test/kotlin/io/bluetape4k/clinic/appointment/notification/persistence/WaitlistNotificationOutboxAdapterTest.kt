@@ -1,7 +1,10 @@
-package io.bluetape4k.clinic.appointment.event.waitlist
+package io.bluetape4k.clinic.appointment.notification.persistence
 
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxContractException
+import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxEnvelope
 import io.bluetape4k.clinic.appointment.model.waitlist.CorrelationId
 import io.bluetape4k.clinic.appointment.model.waitlist.WaitlistReasonCode
 import io.bluetape4k.clinic.appointment.service.waitlist.WaitlistOfferNotificationDraft

@@ -3,7 +3,7 @@ package io.bluetape4k.clinic.appointment.notification
 import io.bluetape4k.coroutines.support.awaitSuspending
 import io.lettuce.core.SetArgs
 import io.lettuce.core.api.StatefulRedisConnection
-import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
+import io.bluetape4k.clinic.appointment.notification.persistence.ClaimedNotification
 import io.bluetape4k.redis.lettuce.synchronizer.ExpirablePermitHandle
 import io.bluetape4k.redis.lettuce.synchronizer.ExpirableSemaphoreConfig
 import io.bluetape4k.redis.lettuce.synchronizer.LettuceSuspendPermitExpirableSemaphore

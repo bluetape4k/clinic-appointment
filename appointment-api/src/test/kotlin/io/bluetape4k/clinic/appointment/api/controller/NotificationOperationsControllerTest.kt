@@ -19,7 +19,7 @@ import io.bluetape4k.clinic.appointment.api.security.SchedulingUserPrincipal
 import io.bluetape4k.clinic.appointment.api.security.SchedulingRole
 import io.bluetape4k.clinic.appointment.api.security.TestJwtProvider
 import io.bluetape4k.clinic.appointment.api.test.AbstractApiIntegrationTest
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.clinic.appointment.notification.NotificationRecommendedAction
 import io.bluetape4k.clinic.appointment.notification.NotificationStatusQueryService

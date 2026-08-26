@@ -1,6 +1,11 @@
-package io.bluetape4k.clinic.appointment.event.notification
+package io.bluetape4k.clinic.appointment.notification.persistence
 
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.clinic.appointment.event.notification.*
+import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
+import io.bluetape4k.clinic.appointment.event.notification.ClinicId
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.junit5.concurrency.MultithreadingTester
 import org.jetbrains.exposed.v1.core.eq
@@ -19,13 +24,13 @@ import java.time.LocalTime
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
-class NotificationOutboxConcurrencyTest {
+class JdbcNotificationOutboxConcurrencyTest {
 
     private val database = Database.connect(
         "jdbc:h2:mem:notification_outbox_concurrency;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;LOCK_TIMEOUT=10000",
         driver = "org.h2.Driver",
     )
-    private val repository = NotificationOutboxRepository(
+    private val repository = JdbcNotificationOutboxRepository(
         codec = NotificationOutboxCodec(),
         leaseDuration = Duration.ofMinutes(5),
     )

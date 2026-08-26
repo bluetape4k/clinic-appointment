@@ -1,10 +1,29 @@
-package io.bluetape4k.clinic.appointment.event.notification
+package io.bluetape4k.clinic.appointment.notification.persistence
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldBeFalse
 import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
+import io.bluetape4k.clinic.appointment.event.notification.*
+import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
+import io.bluetape4k.clinic.appointment.event.notification.ClinicId
+import io.bluetape4k.clinic.appointment.event.notification.NotificationChannelType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationCorrelationId
+import io.bluetape4k.clinic.appointment.event.notification.NotificationEventId
+import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode
+import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyDigest
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
+import io.bluetape4k.clinic.appointment.event.notification.NotificationParameterType
+import io.bluetape4k.clinic.appointment.event.notification.NotificationProviderMessageReference
+import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
+import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
+import io.bluetape4k.clinic.appointment.event.notification.NotificationTraceId
+import io.bluetape4k.clinic.appointment.event.notification.TenantGroupId
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -28,14 +47,14 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneOffset
 
-class NotificationOutboxRepositoryTest {
+class JdbcNotificationOutboxRepositoryTest {
 
     private val database = Database.connect(
         "jdbc:h2:mem:notification_outbox_repository_${System.nanoTime()};DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
         driver = "org.h2.Driver",
     )
     private val codec = NotificationOutboxCodec()
-    private val repository = NotificationOutboxRepository(codec = codec, leaseDuration = Duration.ofMinutes(5))
+    private val repository = JdbcNotificationOutboxRepository(codec = codec, leaseDuration = Duration.ofMinutes(5))
 
     @BeforeEach
     fun setup() {

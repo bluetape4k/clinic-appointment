@@ -3,9 +3,9 @@ package io.bluetape4k.clinic.appointment.api.controller
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
-import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationDeliveryAttempts
 import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.StaticNotificationOutboxKeyRing

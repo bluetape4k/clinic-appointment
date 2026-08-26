@@ -18,7 +18,7 @@ import io.bluetape4k.clinic.appointment.notification.NotificationRuntimeHealthSi
 import io.bluetape4k.clinic.appointment.notification.ResilientNotificationChannel
 import io.bluetape4k.clinic.appointment.notification.NotificationDirectDeliveryPort
 import io.bluetape4k.clinic.appointment.notification.NotificationRetentionRunner
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxObservationStore
 import io.bluetape4k.clinic.appointment.notification.NotificationOutboxWorkStore
 import io.bluetape4k.clinic.appointment.notification.AppointmentReminderScheduler
@@ -53,9 +53,9 @@ private fun schemaReadinessType(database: Database): NotificationSchemaReadiness
     NotificationSchemaReadiness(database, io.bluetape4k.clinic.appointment.notification.NotificationCryptoProperties())
 
 // appointment-notification/.../NotificationOutboxWorkStore.kt: public JDBC store constructors.
-private fun workStoreType(database: Database, repository: NotificationOutboxRepository): JdbcNotificationOutboxWorkStore =
+private fun workStoreType(database: Database, repository: JdbcNotificationOutboxRepository): JdbcNotificationOutboxWorkStore =
     JdbcNotificationOutboxWorkStore(database, repository)
-private fun observationStoreType(database: Database, repository: NotificationOutboxRepository): JdbcNotificationOutboxObservationStore =
+private fun observationStoreType(database: Database, repository: JdbcNotificationOutboxRepository): JdbcNotificationOutboxObservationStore =
     JdbcNotificationOutboxObservationStore(database, repository)
 
 // appointment-notification/.../NotificationOutboxMetrics.kt: public MeterRegistry constructor.
@@ -108,6 +108,6 @@ private fun leaderType(
     AppointmentReminderScheduler::class,
     ResilientNotificationChannel::class,
     NotificationDirectDeliveryPort::class,
-    NotificationOutboxRepository::class,
+    JdbcNotificationOutboxRepository::class,
     eventConsumerType,
 )

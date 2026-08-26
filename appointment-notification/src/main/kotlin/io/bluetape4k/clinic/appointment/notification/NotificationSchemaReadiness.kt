@@ -1,8 +1,8 @@
 package io.bluetape4k.clinic.appointment.notification
 
-import io.bluetape4k.clinic.appointment.event.notification.NotificationDeliveryAttempts
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
-import io.bluetape4k.clinic.appointment.event.waitlist.WaitlistNotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationDeliveryAttempts
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.notification.persistence.WaitlistNotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
 import io.bluetape4k.clinic.appointment.model.tables.Clinics
 import io.bluetape4k.logging.KLogging

@@ -12,10 +12,10 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationContractE
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRowKind
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxRowKind
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.StaticNotificationOutboxKeyRing
 import io.bluetape4k.clinic.appointment.model.dto.AppointmentRecord
@@ -44,7 +44,7 @@ import java.util.UUID
 internal class AppointmentNotificationWriterTest {
 
     private val now = Instant.parse("2026-08-01T00:00:00Z")
-    private val repository = NotificationOutboxRepository(
+    private val repository = JdbcNotificationOutboxRepository(
         codec = NotificationOutboxCodec(),
         leaseDuration = Duration.ofMinutes(5),
     )

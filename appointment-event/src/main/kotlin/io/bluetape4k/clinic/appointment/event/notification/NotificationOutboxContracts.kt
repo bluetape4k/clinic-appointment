@@ -2,35 +2,7 @@ package io.bluetape4k.clinic.appointment.event.notification
 
 import io.bluetape4k.clinic.appointment.model.identity.MemberId
 import java.io.Serializable
-import java.sql.Timestamp
 import java.time.Instant
-import java.time.LocalDateTime
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
-import java.time.ZonedDateTime
-
-/**
- * 알림 outbox row의 처리 계열이다.
- *
- * `SENDABLE`은 실제 발송 후보이며, `LEGACY_SUPPRESSION`은 과거 데이터 보정이나
- * 마이그레이션 중 발송하지 않을 억제 기록을 나타낸다.
- */
-enum class NotificationOutboxRowKind {
-    SENDABLE,
-    LEGACY_SUPPRESSION,
-}
-
-/**
- * 알림 outbox row의 발송 생명주기 상태다.
- */
-enum class NotificationOutboxStatus {
-    PENDING,
-    PROCESSING,
-    RETRY_WAIT,
-    SENT,
-    SUPPRESSED,
-    EXHAUSTED,
-}
 
 /**
  * 알림 provider로 전달되는 채널 유형이다.
@@ -122,16 +94,6 @@ internal fun validateDurableOpaqueString(
 /**
  * JDBC driver별 `CURRENT_TIMESTAMP` 반환형을 UTC [Instant] 정책으로 정규화한다.
  */
-internal fun Any?.toNotificationDbInstant(): Instant =
-    when (this) {
-        is Instant -> this
-        is Timestamp -> toInstant()
-        is OffsetDateTime -> toInstant()
-        is ZonedDateTime -> toInstant()
-        is LocalDateTime -> toInstant(ZoneOffset.UTC)
-        else -> error("Unsupported CURRENT_TIMESTAMP type: ${this?.javaClass?.name}")
-    }
-
 private val durableMetadataPattern = Regex("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 private val destinationFingerprintPattern = Regex("^v[1-9][0-9]*:hmac-sha256:[0-9a-f]{64}$")
 private val emailLikePattern = Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}")

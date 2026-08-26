@@ -5,10 +5,10 @@ import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOu
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentReminderParameters
 import io.bluetape4k.clinic.appointment.event.notification.NotificationHmacKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxCodec
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEvents
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxEvents
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
 import io.bluetape4k.clinic.appointment.event.notification.StaticNotificationOutboxKeyRing
@@ -162,7 +162,7 @@ private class RecordingDispatcher : CoroutineDispatcher(), AutoCloseable {
 internal class JdbcAppointmentReminderRecoveryStoreTest {
 
     private val now = Instant.parse("2026-08-01T00:00:00Z")
-    private val repository = NotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(5))
+    private val repository = JdbcNotificationOutboxRepository(NotificationOutboxCodec(), Duration.ofMinutes(5))
     private val hasher = DefaultNotificationOutboxHasher(
         StaticNotificationOutboxKeyRing(
             active = NotificationHmacKey("recovery-test", ByteArray(32) { 7 }),

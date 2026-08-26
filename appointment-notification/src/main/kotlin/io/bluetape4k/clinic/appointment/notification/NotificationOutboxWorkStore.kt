@@ -1,17 +1,17 @@
 package io.bluetape4k.clinic.appointment.notification
 
-import io.bluetape4k.clinic.appointment.event.notification.ClaimedNotification
 import io.bluetape4k.clinic.appointment.event.notification.AppointmentId
 import io.bluetape4k.clinic.appointment.event.notification.ClinicId
-import io.bluetape4k.clinic.appointment.event.notification.CompleteNotificationCommand
-import io.bluetape4k.clinic.appointment.event.notification.NotificationCandidate
-import io.bluetape4k.clinic.appointment.event.notification.NotificationFairCursor
 import io.bluetape4k.clinic.appointment.event.notification.NotificationEventType
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxRepository
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxObservation
-import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxStatus
-import io.bluetape4k.clinic.appointment.event.notification.RetryNotificationCommand
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
+import io.bluetape4k.clinic.appointment.notification.persistence.ClaimedNotification
+import io.bluetape4k.clinic.appointment.notification.persistence.CompleteNotificationCommand
+import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationCandidate
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationFairCursor
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxObservation
+import io.bluetape4k.clinic.appointment.notification.persistence.NotificationOutboxStatus
+import io.bluetape4k.clinic.appointment.notification.persistence.RetryNotificationCommand
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -93,11 +93,11 @@ data class NotificationCandidatePage(
 }
 
 /**
- * [NotificationOutboxRepository]의 caller-transaction 계약을 coroutine worker 경계에 맞춥니다.
+ * [JdbcNotificationOutboxRepository]의 caller-transaction 계약을 coroutine worker 경계에 맞춥니다.
  */
 class JdbcNotificationOutboxWorkStore(
     private val database: Database,
-    private val repository: NotificationOutboxRepository,
+    private val repository: JdbcNotificationOutboxRepository,
     private val tokenGenerator: NotificationLeaseTokenGenerator = SecureNotificationLeaseTokenGenerator(),
 ) : NotificationOutboxWorkStore, NotificationDirectOutboxStore {
 
@@ -215,7 +215,7 @@ class JdbcNotificationOutboxWorkStore(
 /** indexed active-row query를 제한된 수만 읽어 Micrometer snapshot으로 변환합니다. */
 class JdbcNotificationOutboxObservationStore(
     private val database: Database,
-    private val repository: NotificationOutboxRepository,
+    private val repository: JdbcNotificationOutboxRepository,
     private val observationLimit: Int = 10_001,
 ) : NotificationOutboxObservationStore {
     init {
