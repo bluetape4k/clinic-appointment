@@ -40,7 +40,7 @@ class AppointmentOutboxStoreTest {
         previousDefaultDatabase = TransactionManager.defaultDatabase
         TransactionManager.defaultDatabase = POSTGRESQL_DATABASE
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 TenantGroups,
                 Clinics,
                 ProductCatalogProjections,

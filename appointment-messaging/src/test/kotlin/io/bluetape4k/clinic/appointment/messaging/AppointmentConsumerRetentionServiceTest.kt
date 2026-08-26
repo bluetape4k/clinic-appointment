@@ -4,6 +4,7 @@ import io.bluetape4k.assertions.shouldBeEqualTo
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -27,12 +28,16 @@ class AppointmentConsumerRetentionServiceTest {
             driver = "org.h2.Driver",
         )
         transaction(database) {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 AppointmentConsumerInboxTable,
                 AppointmentConsumerRejectedRecordTable,
                 AppointmentConsumerQuarantineTable,
                 AppointmentConsumerReplayAuditTable,
             )
+            AppointmentConsumerReplayAuditTable.deleteAll()
+            AppointmentConsumerQuarantineTable.deleteAll()
+            AppointmentConsumerRejectedRecordTable.deleteAll()
+            AppointmentConsumerInboxTable.deleteAll()
         }
         store = JdbcAppointmentConsumerInboxStore(database)
     }

@@ -6,6 +6,7 @@ import io.bluetape4k.assertions.shouldBeInstanceOf
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
@@ -29,11 +30,14 @@ class AppointmentConsumerRuntimeTest {
             driver = "org.h2.Driver",
         )
         transaction(database) {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 AppointmentConsumerInboxTable,
                 AppointmentConsumerQuarantineTable,
                 AppointmentConsumerRejectedRecordTable,
             )
+            AppointmentConsumerQuarantineTable.deleteAll()
+            AppointmentConsumerRejectedRecordTable.deleteAll()
+            AppointmentConsumerInboxTable.deleteAll()
         }
         runtime = AppointmentConsumerRuntime(
             codec = codec,

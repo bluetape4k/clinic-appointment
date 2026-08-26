@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.messaging
 
+import io.bluetape4k.assertions.assertFailsWith
+import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
 import io.bluetape4k.clinic.appointment.statemachine.AppointmentState
@@ -7,7 +9,6 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 
 /** appointment outbox 행을 쓰기 전에 scope/identity 위조가 실패해야 한다. */
 class AppointmentOutboxWriterScopeTest {
@@ -64,10 +65,10 @@ class AppointmentOutboxWriterScopeTest {
         )
 
         cases.forEach { operation ->
-            assertThrows<IllegalArgumentException>(operation.name) {
+            assertFailsWith<IllegalArgumentException> {
                 transaction { operation.invoke() }
             }
-            support.outboxCount() shouldBeZeroFor operation.name
+            support.outboxCount() shouldBeEqualTo 0L
         }
     }
 
@@ -117,10 +118,10 @@ class AppointmentOutboxWriterScopeTest {
         )
 
         cases.forEach { operation ->
-            assertThrows<IllegalArgumentException>(operation.name) {
+            assertFailsWith<IllegalArgumentException> {
                 transaction { operation.invoke() }
             }
-            support.outboxCount() shouldBeZeroFor operation.name
+            support.outboxCount() shouldBeEqualTo 0L
         }
     }
 
@@ -129,7 +130,4 @@ class AppointmentOutboxWriterScopeTest {
         val invoke: () -> Unit,
     )
 
-    private infix fun Long.shouldBeZeroFor(operation: String) {
-        check(this == 0L) { "$operation wrote $this appointment outbox rows" }
-    }
 }

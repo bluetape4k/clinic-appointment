@@ -27,6 +27,7 @@ import org.jetbrains.exposed.v1.core.statements.StatementInterceptor
 import org.jetbrains.exposed.v1.core.statements.api.PreparedStatementApi
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -48,7 +49,7 @@ class AppointmentOutboxWriterTest {
             driver = "org.h2.Driver",
         )
         transaction {
-            SchemaUtils.create(
+            SchemaUtils.createMissingTablesAndColumns(
                 TenantGroups,
                 Clinics,
                 Doctors,
@@ -61,6 +62,17 @@ class AppointmentOutboxWriterTest {
                 AppointmentStateHistory,
                 SchedulingOutboxEvents,
             )
+            SchedulingOutboxEvents.deleteAll()
+            AppointmentStateHistory.deleteAll()
+            AppointmentPlans.deleteAll()
+            ProductCatalogProjections.deleteAll()
+            Appointments.deleteAll()
+            ConsultationTopics.deleteAll()
+            Equipments.deleteAll()
+            TreatmentTypes.deleteAll()
+            Doctors.deleteAll()
+            Clinics.deleteAll()
+            TenantGroups.deleteAll()
             TenantGroups.insert {
                 it[id] = EntityID(1L, TenantGroups)
                 it[tenantCode] = "tenant-one"

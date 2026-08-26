@@ -10,6 +10,7 @@ import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.deleteAll
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory
@@ -57,7 +58,8 @@ class AppointmentKafkaConsumerConfigurationTest {
             driver = "org.h2.Driver",
         )
         transaction(database) {
-            SchemaUtils.create(AppointmentConsumerRejectedRecordTable)
+            SchemaUtils.createMissingTablesAndColumns(AppointmentConsumerRejectedRecordTable)
+            AppointmentConsumerRejectedRecordTable.deleteAll()
         }
         val properties = AppointmentMessagingProperties(
             consumer = AppointmentConsumerProperties(maxAttempts = 1),
