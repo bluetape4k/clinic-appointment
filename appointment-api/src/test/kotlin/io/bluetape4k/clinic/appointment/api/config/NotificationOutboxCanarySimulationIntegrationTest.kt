@@ -804,7 +804,7 @@ internal class NotificationOutboxCanarySimulationIntegrationTest {
     private companion object {
         const val LOGICAL_NOTIFICATIONS = 1_000
         const val MAX_DRAIN_ROUNDS = 300
-        const val EXPECTED_MIGRATION = "30"
+        const val EXPECTED_MIGRATION = "31"
         const val FIXED_SEED = "issue-204-seed-v1"
         val FIXED_INSTANT: Instant = Instant.parse("2026-08-24T00:00:00Z")
         val OPEN_STATUSES = setOf(

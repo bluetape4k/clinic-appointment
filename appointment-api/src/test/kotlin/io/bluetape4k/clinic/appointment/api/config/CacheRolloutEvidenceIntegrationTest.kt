@@ -865,7 +865,7 @@ class CacheRolloutEvidenceIntegrationTest {
 
     private companion object {
         const val THRESHOLDS_RESOURCE = "cache/issue-263/production-like-thresholds.json"
-        const val EXPECTED_MIGRATION = "30"
+        const val EXPECTED_MIGRATION = "31"
         const val LOCK_HOLD_MS = 50.0
     }
 }

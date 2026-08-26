@@ -15,7 +15,7 @@
   "infrastructure" : {
     "postgres" : {
       "image" : "postgres:18-alpine",
-      "migration" : "30",
+      "migration" : "31",
       "schema" : "clinic_notification_outbox",
       "ddlLockMode" : "flyway.postgresql.transactional.lock=false"
     },
