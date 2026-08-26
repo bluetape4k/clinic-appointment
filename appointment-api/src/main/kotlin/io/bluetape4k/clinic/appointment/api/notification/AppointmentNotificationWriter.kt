@@ -19,9 +19,9 @@ import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempoten
 import io.bluetape4k.clinic.appointment.event.notification.NotificationIdempotencyKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxEnvelope
 import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxHasher
-import io.bluetape4k.clinic.appointment.notification.persistence.JdbcNotificationOutboxRepository
-import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
+import io.bluetape4k.clinic.appointment.event.notification.NotificationOutboxWriter
 import io.bluetape4k.clinic.appointment.event.notification.NotificationSuppressionReasonCode
+import io.bluetape4k.clinic.appointment.event.notification.NotificationSlot
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateParameters
 import io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateVersion
@@ -155,7 +155,7 @@ private fun requireDetailSupportedByLegacyWriter(reasonDetail: String?) {
  * 회원 이름, 전화번호와 자유 입력 취소 사유는 durable payload에 넣지 않는다.
  */
 class DefaultAppointmentNotificationWriter(
-    private val repository: JdbcNotificationOutboxRepository,
+    private val writer: NotificationOutboxWriter,
     private val hasher: NotificationOutboxHasher,
     private val clinicRepository: ClinicRepository,
     private val clock: Clock,
@@ -269,7 +269,7 @@ class DefaultAppointmentNotificationWriter(
         reasonDetail: String?,
     ) {
         requireCancellationDetailSupported(reasonDetail)
-        repository.suppressOutstandingReminders(
+        writer.suppressOutstandingReminders(
             tenantGroupId = TenantGroupId(tenantGroupId),
             clinicId = ClinicId(record.clinicId),
             appointmentId = AppointmentId(record.id.requireNotNull("record.id")),
@@ -315,7 +315,7 @@ class DefaultAppointmentNotificationWriter(
         require(original.memberId == replacement.memberId) {
             "rescheduled appointment must preserve the verified member"
         }
-        repository.suppressOutstandingReminders(
+        writer.suppressOutstandingReminders(
             tenantGroupId = TenantGroupId(tenantGroupId),
             clinicId = ClinicId(original.clinicId),
             appointmentId = AppointmentId(original.id.requireNotNull("original.id")),
@@ -412,7 +412,7 @@ class DefaultAppointmentNotificationWriter(
         reasonDetail: String?,
     ) {
         requireCancellationDetailSupported(reasonDetail)
-        repository.suppressOutstandingReminders(
+        writer.suppressOutstandingReminders(
             tenantGroupId = TenantGroupId(notification.tenantGroupId),
             clinicId = ClinicId(notification.clinicId),
             appointmentId = AppointmentId(notification.appointmentId),
@@ -453,7 +453,7 @@ class DefaultAppointmentNotificationWriter(
         require(previous.memberId == replacement.memberId) {
             "rescheduled commitment must preserve the verified member"
         }
-        repository.suppressOutstandingReminders(
+        writer.suppressOutstandingReminders(
             tenantGroupId = TenantGroupId(previous.tenantGroupId),
             clinicId = ClinicId(previous.clinicId),
             appointmentId = AppointmentId(previous.appointmentId),
@@ -578,7 +578,7 @@ class DefaultAppointmentNotificationWriter(
             notificationSlot = slot,
         )
         val digest = hasher.idempotencyCandidates(input).first()
-        repository.enqueue(
+        writer.enqueue(
             SendableNotificationDraft(
                 envelope = NotificationOutboxEnvelope(
                     schemaVersion = notificationSchemaVersion(parameters),
@@ -628,7 +628,7 @@ class DefaultAppointmentNotificationWriter(
         )
         val digest = hasher.idempotencyCandidates(input).first()
         val audit = auditFingerprint(tenantGroupId, record, eventType)
-        repository.suppressLegacy(
+        writer.suppressLegacy(
             LegacySuppressionDraft(
                 idempotencyDigest = digest,
                 auditFingerprint = audit,
@@ -676,7 +676,7 @@ class DefaultAppointmentNotificationWriter(
     ) {
         val input = idempotencyInput(tenantGroupId, record, version, eventType, slot)
         val digest = hasher.idempotencyCandidates(input).first()
-        repository.enqueue(
+        writer.enqueue(
             SendableNotificationDraft(
                 envelope = NotificationOutboxEnvelope(
                     schemaVersion = notificationSchemaVersion(parameters),

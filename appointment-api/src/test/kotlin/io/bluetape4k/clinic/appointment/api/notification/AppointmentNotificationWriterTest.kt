@@ -49,7 +49,7 @@ internal class AppointmentNotificationWriterTest {
         leaseDuration = Duration.ofMinutes(5),
     )
     private val writer = DefaultAppointmentNotificationWriter(
-        repository = repository,
+        writer = repository,
         hasher = DefaultNotificationOutboxHasher(
             StaticNotificationOutboxKeyRing(
                 active = NotificationHmacKey("active", ByteArray(32) { 1 }),
@@ -253,7 +253,7 @@ internal class AppointmentNotificationWriterTest {
     @Test
     fun `v2 producer는 취소 detail과 template version 2를 함께 기록한다`() {
         val v2Writer = DefaultAppointmentNotificationWriter(
-            repository = repository,
+            writer = repository,
             hasher = DefaultNotificationOutboxHasher(
                 StaticNotificationOutboxKeyRing(
                     active = NotificationHmacKey("active", ByteArray(32) { 1 }),

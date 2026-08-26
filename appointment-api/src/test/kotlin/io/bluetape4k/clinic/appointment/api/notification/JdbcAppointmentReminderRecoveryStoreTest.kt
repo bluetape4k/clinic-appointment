@@ -426,7 +426,7 @@ internal class JdbcAppointmentReminderRecoveryStoreTest {
     ): JdbcAppointmentReminderRecoveryStore =
         JdbcAppointmentReminderRecoveryStore(
             database = database,
-            repository = repository,
+            writer = repository,
             hasher = hasher,
             sameDayReminderLeadTime = Duration.ofHours(2),
             dayBeforeEnabled = dayBeforeEnabled,
