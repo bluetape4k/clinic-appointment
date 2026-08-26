@@ -393,7 +393,7 @@ class ServiceConfig {
     }
 
     @Bean
-    @ConditionalOnBean(value = [NotificationOutboxWriter::class, Database::class, NotificationOutboxHasher::class])
+    @ConditionalOnBean(NotificationOutboxHasher::class)
     @ConditionalOnMissingBean(JdbcAppointmentReminderRecoveryStore::class)
     fun appointmentReminderRecoveryStore(
         database: Database,
