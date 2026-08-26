@@ -1,5 +1,6 @@
 package io.bluetape4k.clinic.appointment.waitlist
 
+import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
 import io.bluetape4k.assertions.shouldContainAll
 import io.bluetape4k.clinic.appointment.model.tables.BookingBenefitGrants
@@ -70,8 +71,12 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
                 "lease_owner",
                 "lease_version",
                 "lease_expires_at",
+                "fence_epoch",
+                "fence_sequence",
                 "version",
             )
+            WaitlistVacancyJobs.fenceEpoch.defaultValueFun?.invoke() shouldBeEqualTo 0L
+            WaitlistVacancyJobs.fenceSequence.defaultValueFun?.invoke() shouldBeEqualTo 0L
             WaitlistVacancyJobs.hasUniqueIndex("uq_waitlist_vacancy_active") shouldBeEqualTo true
             WaitlistVacancyJobs.hasUniqueIndex(
                 "tenant_group_id",
@@ -85,6 +90,21 @@ class WaitlistDeliveryTableSchemaTest : AbstractExposedTest() {
                 "source_appointment_id",
                 "source_transition_id",
             ) shouldBeEqualTo true
+        }
+    }
+
+    @Test
+    fun `fencing token compares epoch before sequence and rejects negative values`() {
+        val previous = WaitlistFencingToken(epoch = 4L, sequence = 9L)
+
+        WaitlistFencingToken(epoch = 4L, sequence = 10L)
+            .isStrictlyGreaterThan(previous) shouldBeEqualTo true
+        WaitlistFencingToken(epoch = 5L, sequence = 0L)
+            .isStrictlyGreaterThan(previous) shouldBeEqualTo true
+        WaitlistFencingToken(epoch = 4L, sequence = 9L)
+            .isStrictlyGreaterThan(previous) shouldBeEqualTo false
+        assertFailsWith<IllegalArgumentException> {
+            WaitlistFencingToken(epoch = -1L, sequence = 0L)
         }
     }
 

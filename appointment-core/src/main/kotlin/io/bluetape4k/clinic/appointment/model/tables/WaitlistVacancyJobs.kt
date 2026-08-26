@@ -34,6 +34,8 @@ object WaitlistVacancyJobs : LongIdTable("scheduling_waitlist_vacancy_jobs") {
     val leaseOwner = varchar("lease_owner", 160).nullable()
     val leaseVersion = long("lease_version").default(0L)
     val leaseExpiresAt = timestamp("lease_expires_at").nullable()
+    val fenceEpoch = long("fence_epoch").default(0L)
+    val fenceSequence = long("fence_sequence").default(0L)
     val nextAttemptAt = timestamp("next_attempt_at")
     val vacancyStartsAt = timestamp("vacancy_starts_at")
     val vacancyEndsAt = timestamp("vacancy_ends_at")
