@@ -110,3 +110,190 @@ jobs:
 
       - name: Browser smoke
         run: npm run test:e2e
+
+  android-webview:
+    if: github.event_name == 'workflow_dispatch'
+    name: Android WebView native smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: frontend/appointment-frontend
+
+    steps:
+      - name: Checkout dispatched ref
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact commit
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.3'
+          cache: 'npm'
+          cache-dependency-path: frontend/appointment-frontend/package-lock.json
+
+      - name: Pin frontend toolchain
+        run: |
+          npm install --global npm@11.12.0
+          node --version
+          npm --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Java
+        uses: actions/setup-java@v5.7.0
+        with:
+          java-version: '25'
+          distribution: temurin
+
+      - name: Sync Capacitor assets
+        run: npm run cap:sync
+
+      - name: Android emulator smoke
+        id: android-smoke
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: Pixel_6
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            cd frontend/appointment-frontend
+            ./android/gradlew --no-daemon --stacktrace assembleDebug
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -W -n io.bluetape4k.clinic.appointment/.MainActivity
+            adb shell am start -W -a android.intent.action.VIEW \
+              -d 'io.bluetape4k.clinic.appointment://open/tenant-default/calendar?view=week&date=2026-08-27' \
+              io.bluetape4k.clinic.appointment
+            adb shell dumpsys activity activities | grep -F 'io.bluetape4k.clinic.appointment'
+
+      - name: Write Android native report
+        if: always()
+        env:
+          NATIVE_PLATFORM: android
+          NATIVE_COMMIT: ${{ github.sha }}
+          NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-latest","java":"25","androidApi":"35","emulator":"Pixel_6"}'
+          NATIVE_COMMANDS_JSON: '["cap:sync","assembleDebug","emulator-install","app-launch","deep-link"]'
+          NATIVE_RESULT: ${{ steps.android-smoke.outcome == 'success' && 'passed' || 'failed' }}
+          NATIVE_REPORT_PATH: artifacts/native-webview-report.json
+        run: |
+          mkdir -p artifacts
+          node scripts/create-native-webview-report.mjs
+
+      - name: Upload Android native artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-android-webview-${{ github.run_id }}
+          path: |
+            frontend/appointment-frontend/artifacts/native-webview-report.json
+            frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce Android smoke result
+        if: steps.android-smoke.outcome != 'success'
+        run: exit 1
+
+  ios-webview:
+    if: github.event_name == 'workflow_dispatch'
+    name: iOS WKWebView native smoke
+    runs-on: macos-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: frontend/appointment-frontend
+
+    steps:
+      - name: Checkout dispatched ref
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact commit
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.22.3'
+          cache: 'npm'
+          cache-dependency-path: frontend/appointment-frontend/package-lock.json
+
+      - name: Pin frontend toolchain
+        run: |
+          npm install --global npm@11.12.0
+          node --version
+          npm --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync Capacitor assets
+        run: npm run cap:sync
+
+      - name: iOS simulator smoke
+        id: ios-smoke
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          derived_data="$RUNNER_TEMP/clinic-appointment-derived"
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$derived_data" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+          device_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')"
+          test -n "$device_id"
+          xcrun simctl boot "$device_id" || true
+          xcrun simctl bootstatus "$device_id" -b
+          app_path="$(find "$derived_data/Build/Products" -name App.app -type d -print -quit)"
+          test -n "$app_path"
+          xcrun simctl install "$device_id" "$app_path"
+          xcrun simctl launch "$device_id" io.bluetape4k.clinic.appointment
+          xcrun simctl openurl "$device_id" 'io.bluetape4k.clinic.appointment://open/tenant-default/calendar?view=week&date=2026-08-27'
+          xcrun simctl get_app_container "$device_id" io.bluetape4k.clinic.appointment app
+
+      - name: Write iOS native report
+        if: always()
+        env:
+          NATIVE_PLATFORM: ios
+          NATIVE_COMMIT: ${{ github.sha }}
+          NATIVE_TOOLCHAIN_JSON: '{"runner":"macos-latest","xcode":"host-default","simulator":"iPhone","configuration":"Debug"}'
+          NATIVE_COMMANDS_JSON: '["cap:sync","xcodebuild","simulator-install","app-launch","openurl"]'
+          NATIVE_RESULT: ${{ steps.ios-smoke.outcome == 'success' && 'passed' || 'failed' }}
+          NATIVE_REPORT_PATH: artifacts/native-webview-report.json
+        run: |
+          mkdir -p artifacts
+          node scripts/create-native-webview-report.mjs
+
+      - name: Upload iOS native artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-ios-webview-${{ github.run_id }}
+          path: frontend/appointment-frontend/artifacts/native-webview-report.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce iOS smoke result
+        if: steps.ios-smoke.outcome != 'success'
+        run: exit 1
