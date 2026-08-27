@@ -259,7 +259,7 @@ compatibility 경로를 실행한다. 이후 standalone workflow에서는
 `gh workflow run native-webview-ci.yml --ref feat/issue-24-native-webview-validation
 -f ref="$HEAD_SHA" -f expected_sha="$HEAD_SHA"`로 exact head를 실행한다. iOS/Android
 job과 report artifact의 commit을 read-back하며, runner가 없거나 실패하면 결과를
-PENDING/FAIL로 기록하고 성공으로 대체하지 않는다. 이번에는 run `33100554608`의
+PENDING/FAIL로 기록하고 성공으로 대체하지 않는다. 이번에는 run `33106032574`의
 두 native report와 job conclusion이 exact head에서 `passed`임을 확인했다.
 
 - [x] **Step 3: final 7-Tier and PR body**

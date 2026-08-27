@@ -24,9 +24,9 @@ hosted runner에서 별도로 실행한다.
 
 - mobile contract 4건, Chromium 전체 E2E 23건, Angular calendar-state 18건 통과
 - native validator/report/workflow contract 통과 및 `actionlint` 통과
-- compatibility dispatch run `33100554608`에서 Angular build/unit/browser와 iOS/Android
+- compatibility dispatch run `33106032574`에서 Angular build/unit/browser와 iOS/Android
   native job이 모두 성공했으며, 두 report의 `commit`이 exact head
-  `000ffe39ce41c0028a8e135e24d188b1c6ba07bf`와 일치한다.
+  `6d7b45fe02b594e34edad97b8ce64f65b604f4cb`와 일치한다.
 - `:appointment-api:build`와 기존 `bluetape4k-assertions` 회귀 경계 통과
 - local probe는 여전히 `targets.ios=false`, `targets.android=false`이며 hosted receipt와
   섞지 않고 로컬 capability 부족으로 기록한다.
@@ -57,5 +57,5 @@ hosted runner에서 별도로 실행한다.
 - report artifact의 `commit`이 job head와 같은지 확인하기 전에는 native PASS나 Epic
   closeout을 선언하지 않는다.
 - hosted runner가 없으면 Issue checkbox를 미완료로 두고, 다음 세션에서 environment
-  probe와 exact workflow receipt부터 재개한다. 이번에는 run 33100554608과 두 report
+  probe와 exact workflow receipt부터 재개한다. 이번에는 run 33106032574와 두 report
   artifact를 read-back해 해당 조건을 충족했다.
