@@ -252,27 +252,28 @@
 - Modify: `.bluetape` via `bluetape-flow.py` only
 - Update: live Issue #25 and PR body/metadata
 
-- [ ] **Step 1: required checks를 순서대로 기록한다**
+- [x] **Step 1: required checks를 순서대로 기록한다**
 
   `spec`, `plan`, `module-build`, `module-unit`, `typescript`, `browser-e2e`, `review`,
   `diff-check`를 exact head로 `check-result`에 기록하고 component/lane evidence를
-  부착한다.
+  부착했다. receipt sequence 18에서 완료 검증을 고정했다.
 
-- [ ] **Step 2: Lore commit으로 저장하고 push한다**
+- [x] **Step 2: Lore commit으로 저장하고 push한다**
 
   변경된 frontend/docs만 stage하고 Korean Lore trailers를 포함한 commit을 만든다.
   root의 unrelated dirty `angular.json`, `appointment-event/README.ko.md`, `.superpowers`,
-  `.workflow-inputs`는 stage하지 않는다.
+  `.workflow-inputs`는 stage하지 않았다.
 
-- [ ] **Step 3: PR을 #26 exact head 위에 생성한다**
+- [x] **Step 3: PR을 #26 exact head 위에 생성한다**
 
   base `feat/issue-26-pwa-offline-cache`의 parent는
   `feat/issue-26-safe-area-keyboard` exact head `bd27c0c6...`이며, PR head는
   `feat/issue-25-pwa-offline-cache`다. title/body/labels/assignee/milestone을 live
-  read-back하고 exact-head CI 두 workflow를 dispatch한다. PR은 merge하지 않는다.
+  read-back하고 exact-head CI 두 workflow를 dispatch했다. PR은 merge하지 않는다.
 
-- [ ] **Step 4: Issue #25/PR handoff를 완료한다**
+- [x] **Step 4: Issue #25/PR handoff를 완료한다**
 
   Issue checklist, PR URL, full head SHA, CI URLs, local metrics, receipt/live report와
   #27/#24 native 후속 unchecked 경계를 업데이트한다. 생성된 PR 번호와 exact-head CI
-  URL은 live 결과로 기록하고 추정하지 않는다. Epic 전체 완료 전에는 any merge를 수행하지 않는다.
+  URL은 live 결과로 기록하고 추정하지 않았다. receipt sequence 19에 immutable live
+  report를 생성했고, Epic 전체 완료 전에는 any merge를 수행하지 않는다.

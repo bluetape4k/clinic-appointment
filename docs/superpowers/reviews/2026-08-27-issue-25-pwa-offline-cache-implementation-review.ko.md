@@ -34,14 +34,14 @@
 
 ## Kotlin·bluetape4k 적용 점검
 
-이번 slice는 주로 TypeScript/SCSS/JSON이지만 cross-origin PWA header를 실제 API가
-허용하도록 Kotlin 설정을 함께 조정했다.
+이번 slice는 TypeScript/SCSS/JSON 중심이며 backend Kotlin 설정이나 API CORS source를
+변경하지 않았다. cross-origin PWA header와 cookie 정책은 #24에서 별도 검증한다.
 
 | 점검                                                | 결과 | 근거                                                                                                                     |
 | --------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------ |
-| `bluetape-kotlin-patterns` null safety·immutability | N/A | 이번 commit은 Kotlin production source를 변경하지 않으며, 기존 API CORS property의 불변 `List`와 `require` 검증을 보존했다. |
+| `bluetape-kotlin-patterns` null safety·immutability | N/A | 이번 commit은 Kotlin production source를 변경하지 않는다. 기존 API/auth 계약과 불변 경계를 보존했다. |
 | Kotlin naming·API boundary                          | N/A | backend CORS source와 HTTP contract는 변경하지 않고 frontend interceptor가 기존 API 요청 경계만 재사용한다.     |
-| Kotlin test pattern                                 | PASS | 기존 JUnit 5 + `io.bluetape4k.assertions.shouldBeEqualTo`/`assertFailsWith` 테스트 구조를 재사용했다.                    |
+| Kotlin test pattern                                 | N/A | Kotlin test source를 변경하지 않았다. 기존 JUnit 5와 `bluetape4k-assertions` 사용 영역은 appointment-api build로 회귀 확인했다.                    |
 | Frontend pattern                                    | PASS | Angular standalone signal·functional interceptor·`takeUntilDestroyed`와 기존 `API_AUTH_SCOPE`/Material shell을 사용했다. |
 | dependency reuse                                    | PASS | 공식 Angular PWA 패키지 외 새 dependency·native plugin·backend public endpoint를 추가하지 않았다.                        |
 
@@ -64,6 +64,7 @@ header·cookie 계약은 backend 변경이 필요한 별도 #24 범위로 남긴
 | TypeScript       | `npx tsc --noEmit -p tsconfig.app.json`                                                                                                      | passed                                                                    |
 | Browser E2E      | `npm run test:e2e`                                                                                                                           | Chromium 20 tests passed                                                  |
 | Module build     | `./gradlew :appointment-api:build --no-daemon --max-workers=1 --console=plain`                                                              | 906 tests, 3 skipped; `BUILD SUCCESSFUL`                                  |
+| Exact-head CI    | `CI run 33066457771`, `Frontend CI run 33066459862`                                                                                         | head `cf13e50b5c0f28b871557ed9a26abae98a5a0f8d` exact match; all applicable jobs passed |
 | Docs contract    | `npm run docs:verify`                                                                                                                        | `ok=true`, `documentsChecked=10`, `sourceChecks=8`, `failures=[]`          |
 | Korean artifact  | `audit-korean-terms.mjs`                                                                                                                     | 6 files, `findings=0`                                                     |
 | Formatting/diff  | `npx prettier --check ...`; `git diff --check`                                                                                                | all changed frontend/docs files formatted; passed                         |
@@ -74,6 +75,7 @@ SDK/device build, production HTTPS, 실제 Service Worker persistence는 이번 
 
 ## 결론
 
-**PASS — PR 생성·exact-head CI 대기 단계로 진행 가능.** Angular 공식 PWA 산출물과
-기존 API/auth/cache 경계를 재사용했고 P0/P1은 없다. PR/CI/live metadata와 workflow
-receipt는 push 후 추가하며, PR은 Epic #13 전체 완료 전에는 병합하지 않는다.
+**PASS — PR 생성·exact-head CI·live read-back 완료, merge-ready.** Angular 공식 PWA
+산출물과 기존 API/auth/cache 경계를 재사용했고 P0/P1은 없다. PR #436은 receipt
+sequence 19의 immutable live report와 함께 기록했으며, Epic #13 전체 완료 전에는
+병합하지 않는다.
