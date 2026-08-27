@@ -2,7 +2,14 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { AppointmentService, AuthService, CalendarStateService, DoctorService } from '../../../core/services';
+import {
+  AppointmentService,
+  AuthService,
+  CalendarStateService,
+  DoctorService,
+  formatCalendarDate,
+  parseCalendarDate,
+} from '../../../core/services';
 import { Appointment } from '../../../core/models';
 import { TimeRangePipe } from '../../../shared/pipes/time-range.pipe';
 const START_HOUR = 8;
@@ -53,7 +60,8 @@ export class DayViewComponent implements OnInit {
     const dateParam = this.route.snapshot.paramMap.get('date');
     if (dateParam) {
       this.calendarState.viewMode.set('day');
-      this.calendarState.currentDate.set(new Date(dateParam + 'T00:00:00'));
+      const parsedDate = parseCalendarDate(dateParam);
+      if (parsedDate) this.calendarState.currentDate.set(parsedDate);
     }
     this.loadAppointments();
   }
@@ -62,8 +70,8 @@ export class DayViewComponent implements OnInit {
     this.loading.set(true);
     try {
       const range = this.calendarState.dateRange();
-      const from = range.start.toISOString().slice(0, 10);
-      const to = range.end.toISOString().slice(0, 10);
+      const from = formatCalendarDate(range.start);
+      const to = formatCalendarDate(range.end);
       await this.appointmentService.getByDateRange(this.authService.clinicId(), from, to);
     } finally {
       this.loading.set(false);
@@ -72,7 +80,7 @@ export class DayViewComponent implements OnInit {
 
   protected getAppointmentsForSlot(doctorId: number, slot: TimeSlot): Appointment[] {
     const slotMin = slot.hour * 60 + slot.minute;
-    return this.appointments().filter(a => {
+    return this.appointments().filter((a) => {
       if (a.doctorId !== doctorId) return false;
       const [h, m] = a.startTime.split(':').map(Number);
       const aptMin = h * 60 + m;

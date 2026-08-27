@@ -5,7 +5,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { CalendarStateService, ViewMode } from '../../../core/services';
+import { CalendarStateService, formatCalendarDate, ViewMode } from '../../../core/services';
 
 @Component({
   selector: 'app-calendar-view',
@@ -44,7 +44,7 @@ export class CalendarViewComponent {
     effect(() => {
       const mode = this.calendarState.viewMode();
       const date = this.calendarState.currentDate();
-      const dateStr = date.toISOString().slice(0, 10);
+      const dateStr = formatCalendarDate(date);
       this.router.navigate(['/calendar', mode, dateStr]);
     });
   }

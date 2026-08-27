@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 
-import { CalendarStateService, ViewMode } from './calendar-state.service';
+import {
+  CalendarStateService,
+  ViewMode,
+  formatCalendarDate,
+  parseCalendarDate,
+} from './calendar-state.service';
 
 /** Helper: create a specific date at midnight */
 function date(y: number, m: number, d: number): Date {
@@ -141,5 +146,24 @@ describe('CalendarStateService', () => {
         expect(range.end.getDate()).toBe(29);
       });
     });
+  });
+});
+
+describe('calendar date serialization', () => {
+  it('현지 날짜를 UTC 변환 없이 ISO 날짜로 포맷한다', () => {
+    const localDate = new Date(2026, 7, 27, 0, 0, 0, 0);
+    expect(formatCalendarDate(localDate)).toBe('2026-08-27');
+  });
+
+  it('ISO 날짜를 현지 자정으로 복원한다', () => {
+    const parsed = parseCalendarDate('2026-08-27');
+    expect(parsed).not.toBeNull();
+    expect(formatCalendarDate(parsed!)).toBe('2026-08-27');
+    expect(parsed!.getHours()).toBe(0);
+  });
+
+  it('존재하지 않는 날짜는 거부한다', () => {
+    expect(parseCalendarDate('2026-02-31')).toBeNull();
+    expect(parseCalendarDate('not-a-date')).toBeNull();
   });
 });

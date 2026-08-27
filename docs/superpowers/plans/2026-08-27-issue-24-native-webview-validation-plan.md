@@ -40,8 +40,9 @@ Android Gradle/SDK, Xcode `xcodebuild`/`simctl`, GitHub Actions.
 - Create: `frontend/appointment-frontend/e2e/mobile-webview-contract.spec.ts` —
   mobile viewport에서 auth/session, tenant API request, lazy route, deep-link
   browser fallback, Safe Area/keyboard/overflow 계약을 검증한다.
-- Create: `.github/workflows/native-webview-ci.yml` — workflow dispatch `ref`를
-  exact commit으로 고정하고 Android/iOS build-smoke 및 report artifact를 수행한다.
+- Create: `.github/workflows/native-webview-ci.yml` — workflow dispatch `ref`와
+  `expected_sha`를 exact commit으로 고정하고 Android/iOS build-smoke 및 report
+  artifact를 수행한다.
 - Modify: `frontend/appointment-frontend/README.md`, `README.ko.md` — native CI
   실행 명령, artifact schema, browser/native 증거 경계를 문서화한다.
 - Create: `docs/superpowers/reviews/2026-08-27-issue-24-native-webview-validation-implementation-review.ko.md`
@@ -99,10 +100,9 @@ Expected: export된 `collectNativeEnvironment`가 없어 실패한다.
 
 - [ ] **Step 3: 최소 probe와 CLI script를 구현한다**
 
-각 command를 `spawnSync(command, ['--version'])`으로 한 번 실행하고 exit status와
-첫 번째 안전한 version line만 저장한다. `xcodebuild`와 `xcrun`은 iOS target,
-`adb`와 `sdkmanager`는 Android target으로 묶는다. `available`이 false여도 process
-자체는 성공하며 `targets`가 false를 반환한다.
+각 command를 한 번 실행하고 exit status와 첫 번째 안전한 metadata line만 저장한다.
+`xcodebuild`와 `xcrun`은 iOS target, `adb`와 `sdkmanager`는 Android target으로
+묶는다. `available`이 false여도 process 자체는 성공하며 `targets`가 false를 반환한다.
 
 - [ ] **Step 4: GREEN과 CLI 출력을 확인한다**
 
@@ -150,10 +150,12 @@ Expected: valid passed/failed report와 금지 필드 rejection이 PASS한다.
 - [ ] **Step 1: mobile contract RED 테스트를 작성한다**
 
 iPhone/Pixel project에서 tenant fixture를 설치하고 `/calendar`, `/appointments`,
-`/portal/login`을 순서대로 확인한다. request URL의 tenant path와 credentials,
-CSRF header를 확인하고, 320/375px viewport에서 `scrollWidth <= clientWidth`, focus
-element bounds와 safe-area CSS 변수를 검증한다. native plugin callback이나 browser
-storage에 인증 자료가 생기지 않는 것도 확인한다.
+appointment detail과 deep-link 대상 route를 확인한다. request URL의 tenant path와
+workforce Bearer scope를 확인하고, 320/375px viewport에서 `scrollWidth <= clientWidth`,
+focus element bounds와 safe-area/keyboard 경계를 검증한다. native plugin callback이나
+browser storage에 인증 자료가 생기지 않는 것도 확인한다. patient cookie/CSRF와
+cross-origin credentials는 기존 `api-origin-contract.spec.ts`의 Chromium contract로
+별도 검증한다.
 
 - [ ] **Step 2: RED를 관찰한다**
 
@@ -164,8 +166,9 @@ Expected: project 또는 spec이 없어 실패한다.
 - [ ] **Step 3: 공식 Playwright device project를 추가하고 기존 fixture를 재사용한다**
 
 `devices['iPhone 13']`와 `devices['Pixel 5']`를 각각 `mobile-ios`/`mobile-android`로
-등록한다. 새 테스트는 기존 API route fixture와 Angular route를 사용하며 native
-plugin을 mock하거나 browser 결과를 native 결과로 명명하지 않는다.
+등록하고 mobile contract spec만 각 project에 연결한다. 새 테스트는 기존 API route
+fixture와 Angular route를 사용하며 native plugin을 mock하거나 browser 결과를 native
+결과로 명명하지 않는다.
 
 - [ ] **Step 4: GREEN과 전체 browser 회귀를 확인한다**
 
@@ -180,9 +183,9 @@ Expected: 두 profile의 contract가 PASS한다. 이어 `npx playwright test --w
 
 - [ ] **Step 1: workflow contract RED static test를 추가한다**
 
-`workflow_dispatch.inputs.ref`, `actions/checkout`의 exact ref, Android/iOS job,
-`native-webview-report.json` upload, `npm run cap:sync`가 없으면 실패하는 Node
-contract test를 추가한다.
+`workflow_dispatch.inputs.ref`/`expected_sha`, `actions/checkout`의 exact ref,
+checkout SHA 검증, Android/iOS job, `native-webview-report.json` upload,
+`npm run cap:sync`가 없으면 실패하는 Node contract test를 추가한다.
 
 - [ ] **Step 2: RED를 관찰한다**
 
@@ -248,10 +251,12 @@ Run: `npm run docs:verify`, `node ../../scripts/audit-korean-terms.mjs` 또는
 
 - [ ] **Step 2: native workflow dispatch**
 
-push 후 `gh workflow run native-webview-ci.yml --ref feat/issue-24-native-webview-validation
---field ref=feat/issue-24-native-webview-validation`로 exact head를 실행하고 iOS/Android
-job과 report artifact의 commit을 read-back한다. runner가 없거나 실패하면 결과를
-PENDING/FAIL로 기록하고 성공으로 대체하지 않는다.
+push 후 `HEAD_SHA=$(git rev-parse HEAD)`를 구하고
+`gh workflow run native-webview-ci.yml --ref feat/issue-24-native-webview-validation
+-f ref="$HEAD_SHA" -f expected_sha="$HEAD_SHA"`로 workflow 파일이 있는 branch에서
+exact head를 실행한다. iOS/Android job과 report
+artifact의 commit을 read-back하며, runner가 없거나 실패하면 결과를 PENDING/FAIL로
+기록하고 성공으로 대체하지 않는다.
 
 - [ ] **Step 3: final 7-Tier and PR body**
 

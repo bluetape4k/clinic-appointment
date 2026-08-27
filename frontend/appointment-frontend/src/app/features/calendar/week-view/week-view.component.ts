@@ -2,7 +2,13 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { AppointmentService, AuthService, CalendarStateService } from '../../../core/services';
+import {
+  AppointmentService,
+  AuthService,
+  CalendarStateService,
+  formatCalendarDate,
+  parseCalendarDate,
+} from '../../../core/services';
 const START_HOUR = 8;
 const END_HOUR = 18;
 const SLOT_MINUTES = 30;
@@ -41,11 +47,11 @@ export class WeekViewComponent implements OnInit {
   protected readonly weekDays = computed<WeekDay[]>(() => {
     const range = this.calendarState.dateRange();
     const days: WeekDay[] = [];
-    const today = new Date().toISOString().slice(0, 10);
+    const today = formatCalendarDate(new Date());
     const current = new Date(range.start);
     for (let i = 0; i < 7; i++) {
       const d = new Date(current);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = formatCalendarDate(d);
       days.push({
         date: d,
         dateStr,
@@ -73,7 +79,8 @@ export class WeekViewComponent implements OnInit {
     const dateParam = this.route.snapshot.paramMap.get('date');
     if (dateParam) {
       this.calendarState.viewMode.set('week');
-      this.calendarState.currentDate.set(new Date(dateParam + 'T00:00:00'));
+      const parsedDate = parseCalendarDate(dateParam);
+      if (parsedDate) this.calendarState.currentDate.set(parsedDate);
     }
     this.loadAppointments();
   }
@@ -82,8 +89,8 @@ export class WeekViewComponent implements OnInit {
     this.loading.set(true);
     try {
       const range = this.calendarState.dateRange();
-      const from = range.start.toISOString().slice(0, 10);
-      const to = range.end.toISOString().slice(0, 10);
+      const from = formatCalendarDate(range.start);
+      const to = formatCalendarDate(range.end);
       await this.appointmentService.getByDateRange(this.authService.clinicId(), from, to);
     } finally {
       this.loading.set(false);
@@ -92,7 +99,7 @@ export class WeekViewComponent implements OnInit {
 
   protected getCount(dateStr: string, slot: TimeSlot): number {
     const slotMin = slot.hour * 60 + slot.minute;
-    return this.appointmentService.appointments().filter(a => {
+    return this.appointmentService.appointments().filter((a) => {
       if (a.appointmentDate !== dateStr) return false;
       const [h, m] = a.startTime.split(':').map(Number);
       const aptMin = h * 60 + m;

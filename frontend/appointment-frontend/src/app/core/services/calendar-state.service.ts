@@ -7,6 +7,23 @@ export interface DateRange {
   end: Date;
 }
 
+/** 라우트와 API에서 사용하는 날짜를 브라우저의 현지 날짜 기준으로 포맷합니다. */
+export function formatCalendarDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** ISO 날짜를 현지 자정으로 파싱하여 WebView의 UTC 날짜 이동을 방지합니다. */
+export function parseCalendarDate(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  if (!match) return null;
+
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return formatCalendarDate(date) === value ? date : null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class CalendarStateService {
   readonly currentDate = signal<Date>(new Date());
@@ -19,11 +36,11 @@ export class CalendarStateService {
   });
 
   navigateNext(): void {
-    this.currentDate.update(d => this._shift(d, this.viewMode(), 1));
+    this.currentDate.update((d) => this._shift(d, this.viewMode(), 1));
   }
 
   navigatePrev(): void {
-    this.currentDate.update(d => this._shift(d, this.viewMode(), -1));
+    this.currentDate.update((d) => this._shift(d, this.viewMode(), -1));
   }
 
   goToToday(): void {

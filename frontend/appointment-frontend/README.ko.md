@@ -181,6 +181,60 @@ npx playwright test e2e/patient-portal.spec.ts e2e/mobile-lazy-routes.spec.ts
 배포·WebView 보안 경계는 [Issue #24](https://github.com/bluetape4k/clinic-appointment/issues/24)에서
 별도로 다룹니다.
 
+## iOS·Android WebView 통합 검증
+
+실제 Capacitor WebView 검증은 브라우저 profile과 분리된
+`.github/workflows/native-webview-ci.yml`에서 수행합니다. workflow는 입력한 `ref`를
+checkout한 뒤 `expected_sha`와 실제 `git rev-parse HEAD`가 같은지 확인하고, Android
+emulator와 iOS simulator에서 `cap:sync`·build·install·launch·custom URL deep link를
+실행합니다. 어느 단계든 실패하면 성공으로 정규화하지 않고 platform report와 함께 job을
+실패시킵니다.
+
+로컬에서는 먼저 호스트 capability를 확인합니다.
+
+```bash
+npm run native:environment
+npm run test:native:environment
+```
+
+브라우저 회귀는 WebKit iPhone과 Chromium Pixel profile에서 별도로 실행합니다.
+
+```bash
+npx playwright install chromium webkit
+npx playwright test e2e/mobile-webview-contract.spec.ts \
+  --project=mobile-ios --project=mobile-android --workers=1
+npm run native:workflow
+```
+
+exact commit을 hosted runner에서 실행하려면 push된 SHA를 두 입력에 함께 전달합니다.
+
+```bash
+HEAD_SHA="$(git rev-parse HEAD)"
+gh workflow run native-webview-ci.yml \
+  --ref feat/issue-24-native-webview-validation \
+  -f ref="$HEAD_SHA" -f expected_sha="$HEAD_SHA"
+```
+
+각 native job은 다음 필드만 포함하는 `native-webview-report.json`을 artifact로
+업로드합니다.
+
+```json
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-27T00:00:00.000Z",
+  "platform": "android|ios",
+  "commit": "<40-character-lowercase-sha1>",
+  "toolchain": { "runner": "..." },
+  "commands": ["cap:sync", "build", "launch", "deep-link"],
+  "result": "passed|failed"
+}
+```
+
+`native:environment`가 `targets.ios` 또는 `targets.android`를 `false`로 반환하면
+로컬 결과는 native PASS가 아니라 PENDING입니다. 같은 이유로 Playwright browser
+profile 성공만으로 Issue #24 또는 Epic #13을 닫지 않습니다. native artifact와 exact
+head가 모두 확인된 뒤에만 해당 완료 조건을 체크합니다.
+
 ## PWA·오프라인 캐시 계약
 
 `@angular/pwa`와 `@angular/service-worker`를 Angular 공식 Service Worker 구성으로

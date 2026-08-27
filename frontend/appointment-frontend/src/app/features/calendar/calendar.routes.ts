@@ -1,10 +1,11 @@
 import { Routes } from '@angular/router';
+import { formatCalendarDate } from '../../core/services/calendar-state.service';
 
 export const CALENDAR_ROUTES: Routes = [
   {
     path: '',
     loadComponent: () =>
-      import('./calendar-view/calendar-view.component').then(m => m.CalendarViewComponent),
+      import('./calendar-view/calendar-view.component').then((m) => m.CalendarViewComponent),
     children: [
       { path: '', redirectTo: 'week', pathMatch: 'full' },
       {
@@ -15,7 +16,7 @@ export const CALENDAR_ROUTES: Routes = [
       {
         path: 'day/:date',
         loadComponent: () =>
-          import('./day-view/day-view.component').then(m => m.DayViewComponent),
+          import('./day-view/day-view.component').then((m) => m.DayViewComponent),
       },
       {
         path: 'week',
@@ -25,7 +26,7 @@ export const CALENDAR_ROUTES: Routes = [
       {
         path: 'week/:date',
         loadComponent: () =>
-          import('./week-view/week-view.component').then(m => m.WeekViewComponent),
+          import('./week-view/week-view.component').then((m) => m.WeekViewComponent),
       },
       {
         path: 'month',
@@ -35,13 +36,12 @@ export const CALENDAR_ROUTES: Routes = [
       {
         path: 'month/:date',
         loadComponent: () =>
-          import('./month-view/month-view.component').then(m => m.MonthViewComponent),
+          import('./month-view/month-view.component').then((m) => m.MonthViewComponent),
       },
     ],
   },
 ];
 
 function formatToday(): string {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
+  return formatCalendarDate(new Date());
 }
