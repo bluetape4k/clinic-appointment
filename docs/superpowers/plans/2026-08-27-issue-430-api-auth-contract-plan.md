@@ -72,11 +72,12 @@
 
 ## Task 0 — receipt, topology, and clean baseline
 
-- [ ] Verify workflow run `20260827T060254Z-9b1e2453`, lane `main-issue-430`, component
+- [x] Verify workflow run `20260827T060254Z-9b1e2453`, lane `main-issue-430`, component
   `issue-430`, and current receipt checksum with `bluetape-flow.py verify`.
-- [ ] Register backend checks (`backend-compile`, `backend-unit`) in the component
-  topology before touching backend code; keep frontend checks unchanged.
-- [ ] Verify feature worktree is clean, base SHA is #23 head, and root dirty files are
+- [x] Register combined `module-build`/`module-unit` checks in the component topology
+  so backend CORS compile/test cannot be omitted; each evidence entry still names the
+  separate frontend and backend commands.
+- [x] Verify feature worktree base SHA is #23 head and root dirty files are
   outside this worktree.
 - [x] Fresh frontend baseline: `npm ci`; `npm test -- --watch=false` — 45 files,
   327 tests, 0 failures.
@@ -87,10 +88,10 @@
 
 - [x] Write this spec and plan from current source, issue #430, #295 anchors, and official
   Angular/Spring references.
-- [ ] Run six perspective review for spec and plan: performance, stability, security,
+- [x] Run six perspective review for spec and plan: performance, stability, security,
   operator, developer/API, user/caller; then main-session integration.
-- [ ] Run `audit-korean-terms.mjs` on spec/plan/review artifacts and `git diff --check`.
-- [ ] Commit spec and plan separately with Lore trailers before implementation.
+- [x] Run `audit-korean-terms.mjs` on spec/plan/review artifacts and `git diff --check`.
+- [x] Commit spec, plan, and review with a Korean Lore message before implementation.
 
 ## Task 2 — RED frontend endpoint and XSRF contracts
 
