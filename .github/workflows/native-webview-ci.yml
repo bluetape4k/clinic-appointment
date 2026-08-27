@@ -110,7 +110,7 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
-          profile: Pixel_6
+          profile: pixel_7_pro
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
           disable-animations: true
           script: |
@@ -129,7 +129,7 @@ jobs:
         env:
           NATIVE_PLATFORM: android
           NATIVE_COMMIT: ${{ env.EXPECTED_SHA }}
-          NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-latest","java":"25","androidApi":"35","emulator":"Pixel_6"}'
+          NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-latest","java":"25","androidApi":"35","emulator":"pixel_7_pro"}'
           NATIVE_COMMANDS_JSON: '["cap:sync","assembleDebug","emulator-install","app-launch","deep-link"]'
           NATIVE_RESULT: ${{ steps.android-smoke.outcome == 'success' && 'passed' || 'failed' }}
           NATIVE_REPORT_PATH: artifacts/native-webview-report.json
