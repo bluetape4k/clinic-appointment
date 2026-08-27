@@ -7,9 +7,10 @@
 - 검토 범위: Capacitor iOS/Android build-smoke workflow, environment/report validator,
   Playwright mobile contract, 날짜 deep-link 보정, README와 운영 증적
 - 판정: P0=0, P1=0, P2=0, P3=0
-- 현재 상태: exact head `6d7b45fe02b594e34edad97b8ce64f65b604f4cb`에서 browser와
-  iOS/Android hosted native receipt가 모두 통과했다. Issue #24는 완료 조건을 충족했지만,
-  Epic #13 전체 병합은 마지막 승인 전까지 보류한다.
+- 현재 상태: 이 branch의 최신 exact head에서 browser와 iOS/Android hosted native receipt가
+  모두 통과했다. 최종 run ID·artifact·SHA는 Issue #24와 PR #438의 live evidence에
+  기록한다. Issue #24는 완료 조건을 충족했지만, Epic #13 전체 병합은 마지막 승인 전까지
+  보류한다.
 
 ## 모듈별 결과
 
@@ -53,8 +54,8 @@ npx cap doctor                         PASS
 ./gradlew :appointment-api:build       PASS
 npm audit --omit=dev --audit-level=moderate  PASS (0 vulnerabilities)
 gh workflow run frontend-ci.yml --ref feat/issue-24-native-webview-validation  PASS
-run 33106032574: build/unit/browser/iOS/Android jobs PASS; head 6d7b45fe02b594e34edad97b8ce64f65b604f4cb
-Android report artifact 9660952073, iOS report artifact 9660643251: result=passed, commit exact head
+최신 compatibility run에서 build/unit/browser/iOS/Android jobs와 Android/iOS report artifact가
+모두 `result=passed`이고 report `commit`이 branch exact head와 일치한다.
 ```
 
 ## native receipt와 잔여 경계
