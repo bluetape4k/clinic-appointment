@@ -21,15 +21,15 @@ bundle(#431), viewport·입력 계약(#26), PWA·오프라인 경계(#25) 위에
 
 ## 현재 근거
 
-| 근거 | 확인 결과 |
-| --- | --- |
-| `frontend/appointment-frontend/src/app/app.ts` | 앱 셸이 `WorkforceAuthBootstrapService.restore()`를 먼저 실행한 뒤 router navigation을 관찰한다. bridge 초기화는 이 순서 뒤에 둔다. |
-| `src/app/core/services/workforce-auth-bootstrap.service.ts` | `__CLINIC_WORKFORCE_AUTH__`를 소비 즉시 삭제하고 JWT를 `AuthService` 메모리에만 전달한다. |
-| `src/app/core/services/auth.service.ts` | `bootstrap(token, tenantCode?)`가 JWT `allowedTenants` membership과 tenant scope를 원자적으로 검증한다. |
-| `src/app/core/api/tenant-context.service.ts` | tenant scope는 기존 `sessionStorage` 계약을 사용하며 code 형식을 검증한다. workforce token 저장소는 아니다. |
-| `src/app/app.routes.ts` | 지원 가능한 workforce top-level route는 `calendar`, `appointments`, `management`이다. `management`는 기존 `roleGuard`를 그대로 통과시킨다. |
-| `capacitor.config.ts`, Android/iOS foundation | app identity는 `io.bluetape4k.clinic.appointment`로 고정되어 있고, native URL scheme 등록은 아직 없다. |
-| Capacitor 공식 [App API](https://capacitorjs.com/docs/apis/app) | `App.addListener('appUrlOpen', ...)`와 `getLaunchUrl()`을 제공하고 listener handle의 `remove()`를 지원한다. |
+| 근거                                                            | 확인 결과                                                                                                                                  |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `frontend/appointment-frontend/src/app/app.ts`                  | 앱 셸이 `WorkforceAuthBootstrapService.restore()`를 먼저 실행한 뒤 router navigation을 관찰한다. bridge 초기화는 이 순서 뒤에 둔다.        |
+| `src/app/core/services/workforce-auth-bootstrap.service.ts`     | `__CLINIC_WORKFORCE_AUTH__`를 소비 즉시 삭제하고 JWT를 `AuthService` 메모리에만 전달한다.                                                  |
+| `src/app/core/services/auth.service.ts`                         | `bootstrap(token, tenantCode?)`가 JWT `allowedTenants` membership과 tenant scope를 원자적으로 검증한다.                                    |
+| `src/app/core/api/tenant-context.service.ts`                    | tenant scope는 기존 `sessionStorage` 계약을 사용하며 code 형식을 검증한다. workforce token 저장소는 아니다.                                |
+| `src/app/app.routes.ts`                                         | 지원 가능한 workforce top-level route는 `calendar`, `appointments`, `management`이다. `management`는 기존 `roleGuard`를 그대로 통과시킨다. |
+| `capacitor.config.ts`, Android/iOS foundation                   | app identity는 `io.bluetape4k.clinic.appointment`로 고정되어 있고, native URL scheme 등록은 아직 없다.                                     |
+| Capacitor 공식 [App API](https://capacitorjs.com/docs/apis/app) | `App.addListener('appUrlOpen', ...)`와 `getLaunchUrl()`을 제공하고 listener handle의 `remove()`를 지원한다.                                |
 
 ## 선택한 접근
 
@@ -96,14 +96,14 @@ listener handle을 표현할 수 없고, raw query가 router에 바로 도달한
 
 ## 실패 모드와 안전 경계
 
-| 실패 모드 | 방지/관측 동작 |
-| --- | --- |
-| scheme·host·path·query가 malformed | parser가 구조화된 `malformed` reason을 반환하고 router를 호출하지 않는다. raw URL이나 query를 event/log에 남기지 않는다. |
-| tenant가 JWT `allowedTenants`에 없음 | tenant를 변경하지 않고 `unauthorized`를 반환한다. 기존 token은 storage로 복사하지 않는다. |
-| workforce 인증이 없음 | route guard를 우회하지 않고 `unauthorized`로 거부한다. patient portal deep link를 자동 로그인으로 해석하지 않는다. |
-| plugin 설치/등록 또는 `getLaunchUrl()` 실패 | 앱 부팅을 실패시키지 않고 `native-unavailable` 상태로 남긴다. browser no-op과 같은 router 기본 동작을 보존한다. |
-| listener가 여러 번 시작되거나 앱이 destroy됨 | idempotent start와 handle `remove()`로 callback 중복·leak를 방지한다. |
-| router navigation이 false/reject | event를 발행하지 않고 tenant scope는 이미 검증된 값만 유지한다. |
+| 실패 모드                                    | 방지/관측 동작                                                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| scheme·host·path·query가 malformed           | parser가 구조화된 `malformed` reason을 반환하고 router를 호출하지 않는다. raw URL이나 query를 event/log에 남기지 않는다. |
+| tenant가 JWT `allowedTenants`에 없음         | tenant를 변경하지 않고 `unauthorized`를 반환한다. 기존 token은 storage로 복사하지 않는다.                                |
+| workforce 인증이 없음                        | route guard를 우회하지 않고 `unauthorized`로 거부한다. patient portal deep link를 자동 로그인으로 해석하지 않는다.       |
+| plugin 설치/등록 또는 `getLaunchUrl()` 실패  | 앱 부팅을 실패시키지 않고 `native-unavailable` 상태로 남긴다. browser no-op과 같은 router 기본 동작을 보존한다.          |
+| listener가 여러 번 시작되거나 앱이 destroy됨 | idempotent start와 handle `remove()`로 callback 중복·leak를 방지한다.                                                    |
+| router navigation이 false/reject             | event를 발행하지 않고 tenant scope는 이미 검증된 값만 유지한다.                                                          |
 
 ## 호환성과 native 등록
 

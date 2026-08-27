@@ -55,32 +55,32 @@ Android Manifest.
 
 ## 계약 traceability
 
-| 수용 기준 | 구현 task | fresh proof |
-| --- | --- | --- |
-| 지원 URL이 tenant·route command와 versioned event로 이동 | 2, 3 | parser/service unit, app integration, E2E |
-| malformed·unknown tenant·unauthorized fail-closed | 2, 3 | parser matrix와 auth/router spy |
-| workforce token 비영속 | 3 | storage spy/source audit와 AuthService contract |
-| native listener/launch lifecycle 및 browser no-op | 3, 4 | fake plugin handle, `stop()`, App test |
-| browser/native 동일 router/session 결과 | 3, 4 | adapter parity contract와 browser E2E |
-| build/unit/TS/E2E/native static/diff | 5, 6, 7 | exact command 결과와 CI |
+| 수용 기준                                                | 구현 task | fresh proof                                     |
+| -------------------------------------------------------- | --------- | ----------------------------------------------- |
+| 지원 URL이 tenant·route command와 versioned event로 이동 | 2, 3      | parser/service unit, app integration, E2E       |
+| malformed·unknown tenant·unauthorized fail-closed        | 2, 3      | parser matrix와 auth/router spy                 |
+| workforce token 비영속                                   | 3         | storage spy/source audit와 AuthService contract |
+| native listener/launch lifecycle 및 browser no-op        | 3, 4      | fake plugin handle, `stop()`, App test          |
+| browser/native 동일 router/session 결과                  | 3, 4      | adapter parity contract와 browser E2E           |
+| build/unit/TS/E2E/native static/diff                     | 5, 6, 7   | exact command 결과와 CI                         |
 
 ## 위험·롤백
 
-| 위험 | 조기 signal | 완화·rollback | 재실행 지점 |
-| --- | --- | --- | --- |
-| `@capacitor/app` peer mismatch | `npm ls` invalid 또는 `cap sync` plugin error | 8.1.1과 core 8.5.0 조합만 유지하고 package/lock을 직전 commit으로 되돌린다 | Task 1 전체 |
-| URL parser가 encoded path/query를 우회 | `%2F`, duplicate key, fragment 테스트 실패 | parser에서 decode 후 delimiter/control/allowlist 검사, navigation 전에 거부 | Task 2 parser suite |
-| 인증 전에 tenant가 바뀜 | unauthorized test에서 `setTenant` 호출 | membership 검사를 먼저 수행하고 실패 시 token/session을 변경하지 않는다 | Task 3 service suite |
-| app bootstrap race | launch URL이 기본 `/calendar`로 덮임 | App constructor에서 restore → start 순서를 고정하고 launch URL service test를 둔다 | Task 3 + App spec |
-| listener leak/duplicate callback | `addListener` 호출 횟수 증가 또는 remove 미호출 | idempotent start promise와 단일 handle, async stop을 사용한다 | Task 3 lifecycle tests |
-| native metadata가 실제 scheme과 drift | XML/plist static assertion 불일치 | parser 상수와 native metadata fixture를 같은 exact token으로 검증한다 | Task 4 static tests |
-| native SDK 미설치 | `xcodebuild`, `adb`, `sdkmanager`, `simctl` missing | browser/adapter proof를 native build로 과장하지 않고 #24 heavy lane으로 넘긴다 | Task 5 native probe |
+| 위험                                   | 조기 signal                                         | 완화·rollback                                                                      | 재실행 지점            |
+| -------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------- |
+| `@capacitor/app` peer mismatch         | `npm ls` invalid 또는 `cap sync` plugin error       | 8.1.1과 core 8.5.0 조합만 유지하고 package/lock을 직전 commit으로 되돌린다         | Task 1 전체            |
+| URL parser가 encoded path/query를 우회 | `%2F`, duplicate key, fragment 테스트 실패          | parser에서 decode 후 delimiter/control/allowlist 검사, navigation 전에 거부        | Task 2 parser suite    |
+| 인증 전에 tenant가 바뀜                | unauthorized test에서 `setTenant` 호출              | membership 검사를 먼저 수행하고 실패 시 token/session을 변경하지 않는다            | Task 3 service suite   |
+| app bootstrap race                     | launch URL이 기본 `/calendar`로 덮임                | App constructor에서 restore → start 순서를 고정하고 launch URL service test를 둔다 | Task 3 + App spec      |
+| listener leak/duplicate callback       | `addListener` 호출 횟수 증가 또는 remove 미호출     | idempotent start promise와 단일 handle, async stop을 사용한다                      | Task 3 lifecycle tests |
+| native metadata가 실제 scheme과 drift  | XML/plist static assertion 불일치                   | parser 상수와 native metadata fixture를 같은 exact token으로 검증한다              | Task 4 static tests    |
+| native SDK 미설치                      | `xcodebuild`, `adb`, `sdkmanager`, `simctl` missing | browser/adapter proof를 native build로 과장하지 않고 #24 heavy lane으로 넘긴다     | Task 5 native probe    |
 
 ## Task 1 — dependency와 baseline을 고정한다
 
 **Files:** `frontend/appointment-frontend/package.json`, `package-lock.json`.
 
-- [ ] **Step 1: 현재 기준과 plugin metadata를 기록한다**
+- [x] **Step 1: 현재 기준과 plugin metadata를 기록한다**
 
 Run:
 
@@ -94,7 +94,7 @@ git status --short
 Expected: 현재 `@capacitor/app`가 없고 `@capacitor/core`는 8.5.0이며, plugin peer가
 `@capacitor/core >=8.0.0`이다. root의 unrelated dirty files는 수정하지 않는다.
 
-- [ ] **Step 2: RED — plugin symbol을 확인한다**
+- [x] **Step 2: RED — plugin symbol을 확인한다**
 
 ```bash
 node -e "import('@capacitor/app').then(({App}) => { if (!App.addListener || !App.getLaunchUrl) process.exit(1) })"
@@ -103,7 +103,7 @@ node -e "import('@capacitor/app').then(({App}) => { if (!App.addListener || !App
 Expected: dependency가 없어서 module resolution이 실패한다. 이것은 구현 전 RED이며
 테스트 실패와 혼동하지 않는다.
 
-- [ ] **Step 3: exact dependency를 추가한다**
+- [x] **Step 3: exact dependency를 추가한다**
 
 ```bash
 npm install --save-exact @capacitor/app@8.1.1
@@ -112,7 +112,7 @@ npm install --save-exact @capacitor/app@8.1.1
 Expected: runtime dependency와 lockfile만 갱신되고 core/CLI/iOS/Android 8.5.0은
 교체되지 않는다.
 
-- [ ] **Step 4: GREEN — dependency와 plugin API를 확인한다**
+- [x] **Step 4: GREEN — dependency와 plugin API를 확인한다**
 
 ```bash
 npm ls @capacitor/core @capacitor/app --depth=0
@@ -125,14 +125,20 @@ Expected: core 8.5.0, app 8.1.1, API 확인 성공.
 
 **Files:** `src/app/core/api/native-deep-link.ts`, `native-deep-link.spec.ts`.
 
-- [ ] **Step 1: parser RED 테스트를 작성한다**
+- [x] **Step 1: parser RED 테스트를 작성한다**
 
 테스트는 다음을 직접 호출한다.
 
 ```ts
-parseNativeDeepLink('io.bluetape4k.clinic.appointment://open/clinic-a/calendar?view=week&date=2026-08-27')
-parseNativeDeepLink('io.bluetape4k.clinic.appointment://open/clinic-a/appointments?id=42')
-parseNativeDeepLink('io.bluetape4k.clinic.appointment://open/clinic-a/management?section=doctors')
+parseNativeDeepLink(
+  "io.bluetape4k.clinic.appointment://open/clinic-a/calendar?view=week&date=2026-08-27",
+);
+parseNativeDeepLink(
+  "io.bluetape4k.clinic.appointment://open/clinic-a/appointments?id=42",
+);
+parseNativeDeepLink(
+  "io.bluetape4k.clinic.appointment://open/clinic-a/management?section=doctors",
+);
 ```
 
 성공 결과는 `route`, `tenantCode`, `query`, `routerCommands`를 확인하고, 다음 입력은
@@ -140,7 +146,7 @@ parseNativeDeepLink('io.bluetape4k.clinic.appointment://open/clinic-a/management
 fragment, uppercase/empty tenant, portal/unknown route, malformed date, duplicate
 query, unknown query, empty value, encoded slash, id `0` 또는 10자리.
 
-- [ ] **Step 2: RED 실행을 관찰한다**
+- [x] **Step 2: RED 실행을 관찰한다**
 
 ```bash
 npm test -- --watch=false --include='src/app/core/api/native-deep-link.spec.ts'
@@ -148,7 +154,7 @@ npm test -- --watch=false --include='src/app/core/api/native-deep-link.spec.ts'
 
 Expected: module/function이 없어 의도한 symbol failure가 발생한다.
 
-- [ ] **Step 3: 최소 parser를 구현한다**
+- [x] **Step 3: 최소 parser를 구현한다**
 
 `URL` 생성과 raw length bound를 사용하고 credentials/port/hash/host를 먼저 검사한다.
 pathname segment를 decode한 뒤 tenant regex와 route allowlist를 적용한다. `URLSearchParams`
@@ -156,7 +162,7 @@ pathname segment를 decode한 뒤 tenant regex와 route allowlist를 적용한�
 범위를 검사한다. 성공 시 query를 `Object.freeze`한 readonly record와 absolute router
 commands를 반환하며 raw URL은 결과에 넣지 않는다.
 
-- [ ] **Step 4: GREEN과 parser matrix를 실행한다**
+- [x] **Step 4: GREEN과 parser matrix를 실행한다**
 
 ```bash
 npm test -- --watch=false --include='src/app/core/api/native-deep-link.spec.ts'
@@ -169,7 +175,7 @@ Expected: supported 3개와 rejection matrix 전체 PASS.
 **Files:** `native-webview-bridge.service.ts`, its spec, `app.ts`, `app.spec.ts`,
 `core/api/index.ts`, `core/services/index.ts`.
 
-- [ ] **Step 1: service RED 테스트를 작성한다**
+- [x] **Step 1: service RED 테스트를 작성한다**
 
 주입 token double로 `platform.isNativePlatform`, plugin `addListener`/`getLaunchUrl`,
 plugin handle `remove`, Router `navigate`, AuthService signals/methods,
@@ -186,7 +192,7 @@ TenantContextService를 구성한다. 다음을 각각 검증한다.
 6. event payload는 `clinic.native.navigation.v1`, `version: 1`, tenant, route, query만
    가지며 token/raw URL/storage key가 없다.
 
-- [ ] **Step 2: RED 실행을 관찰한다**
+- [x] **Step 2: RED 실행을 관찰한다**
 
 ```bash
 npm test -- --watch=false --include='src/app/core/services/native-webview-bridge.service.spec.ts' --include='src/app/app.spec.ts'
@@ -194,7 +200,7 @@ npm test -- --watch=false --include='src/app/core/services/native-webview-bridge
 
 Expected: service/token/module 누락으로 실패한다.
 
-- [ ] **Step 3: 최소 typed adapter/service를 구현한다**
+- [x] **Step 3: 최소 typed adapter/service를 구현한다**
 
 `CAPACITOR_PLATFORM`과 `NATIVE_APP_PLUGIN` injection token을 제공하고 실제 factory는
 Capacitor `Capacitor`/`App`를 반환한다. `start()`는 browser no-op 또는 동일 promise를
@@ -217,7 +223,7 @@ parser → auth membership → tenant set → router navigate → event publish 
 stop cleanup은 `PluginListenerHandle.remove()`를 await하고, cleanup 오류가 앱 destroy를
 실패시키지 않도록 흡수한다. JWT를 읽거나 storage에 쓰는 코드는 추가하지 않는다.
 
-- [ ] **Step 4: GREEN과 App ordering을 확인한다**
+- [x] **Step 4: GREEN과 App ordering을 확인한다**
 
 ```bash
 npm test -- --watch=false --include='src/app/core/services/native-webview-bridge.service.spec.ts' --include='src/app/app.spec.ts'
@@ -225,7 +231,7 @@ npm test -- --watch=false --include='src/app/core/services/native-webview-bridge
 
 Expected: service lifecycle/auth/event와 App의 restore-before-start가 PASS.
 
-- [ ] **Step 5: public export와 browser E2E를 연결한다**
+- [x] **Step 5: public export와 browser E2E를 연결한다**
 
 `core/api/index.ts`, `core/services/index.ts`에 실제 export를 추가하고 새 Playwright
 contract에서 browser app이 plugin callback을 등록하지 않으며 기존 workforce handoff와
@@ -235,14 +241,14 @@ router/session 결과가 변하지 않는지 확인한다.
 
 **Files:** Android Manifest, iOS Info.plist, README 두 개.
 
-- [ ] **Step 1: static metadata RED를 작성한다**
+- [x] **Step 1: static metadata RED를 작성한다**
 
 Node contract test 또는 shell assertion으로 Android manifest의
 `android:scheme="@string/custom_url_scheme"` + host `open` + VIEW/DEFAULT/BROWSABLE,
 iOS plist의 `CFBundleURLSchemes`와 `io.bluetape4k.clinic.appointment`를 확인한다.
 현재 metadata가 없어 RED가 되는 것을 관찰한다.
 
-- [ ] **Step 2: metadata를 최소 수정한다**
+- [x] **Step 2: metadata를 최소 수정한다**
 
 Android activity에 다음 intent filter를 추가한다.
 
@@ -257,14 +263,14 @@ Android activity에 다음 intent filter를 추가한다.
 
 iOS `Info.plist`에는 동일 scheme을 가진 `CFBundleURLTypes` 한 항목을 추가한다.
 
-- [ ] **Step 3: README 계약을 갱신한다**
+- [x] **Step 3: README 계약을 갱신한다**
 
 두 Korean README에 deep-link 예제, host handoff가 인증 이전에 주입되어야 한다는 점,
 token 비영속, browser E2E와 native SDK/device 검증의 차이, #24 링크를 같은 의미로
 추가한다. `@capacitor/app` 설치와 `npm run cap:sync` 명령은 실제 package/script와
 일치시킨다.
 
-- [ ] **Step 4: metadata/doc GREEN을 확인한다**
+- [x] **Step 4: metadata/doc GREEN을 확인한다**
 
 ```bash
 python3 - <<'PY'
@@ -284,7 +290,7 @@ Expected: static assertion과 terminology findings 0.
 
 ## Task 5 — proportional validation과 verifier proof
 
-- [ ] **Step 1: frontend targeted validation을 순서대로 실행한다**
+- [x] **Step 1: frontend targeted validation을 순서대로 실행한다**
 
 ```bash
 cd frontend/appointment-frontend
@@ -299,7 +305,7 @@ npm run test:e2e
 Expected: parser/service/App contract, TypeScript, production bundle, existing PWA/bundle
 contracts와 Chromium E2E가 모두 PASS.
 
-- [ ] **Step 2: Capacitor sync와 native toolchain 경계를 확인한다**
+- [x] **Step 2: Capacitor sync와 native toolchain 경계를 확인한다**
 
 ```bash
 npm run cap:sync
@@ -313,7 +319,7 @@ xcrun simctl list devices available || true
 Expected: plugin이 iOS/Android project에 sync되고 `cap doctor`가 현재 config를 읽는다.
 SDK가 없으면 실제 native build/device 결과는 N/A로 기록하고 #24로 넘긴다.
 
-- [ ] **Step 3: docs/diff/source audit를 실행한다**
+- [x] **Step 3: docs/diff/source audit를 실행한다**
 
 ```bash
 cd ../..
@@ -328,7 +334,7 @@ Expected: runtime audit 취약점 0, diff whitespace 0, token storage 신규 문
 변경 scope가 이 plan의 write scope로 제한된다. 기존 tenant `sessionStorage` 호출은
 service가 직접 만들지 않았음을 코드 근거로 구분한다.
 
-- [ ] **Step 4: spec/plan verifier를 기록한다**
+- [x] **Step 4: spec/plan verifier를 기록한다**
 
 검증 표에서 각 수용 기준에 exact test/output path를 연결하고, N/A native SDK 행에는
 명령 결과와 #24 handoff를 기록한다. 불일치가 있으면 implementation으로 돌아가서
@@ -336,14 +342,14 @@ service가 직접 만들지 않았음을 코드 근거로 구분한다.
 
 ## Task 6 — 7-Tier final review와 lesson
 
-- [ ] **Step 1: final checklist를 작성한다**
+- [x] **Step 1: final checklist를 작성한다**
 
 `bluetape-kotlin-patterns` checklist에서 Kotlin production/test source가 없는 이유를
 N/A로 고정하고, 기존 `AuthService`·tenant·Angular signal/DI·Capacitor lifecycle을
 실제 파일/라인에 연결한다. `bluetape4k-assertions`는 frontend에 억지로 추가하지 않고
 기존 Kotlin module regression build를 required evidence로 기록한다.
 
-- [ ] **Step 2: 7-Tier review artifact를 작성한다**
+- [x] **Step 2: 7-Tier review artifact를 작성한다**
 
 `docs/superpowers/reviews/2026-08-27-issue-27-native-webview-bridge-implementation-review.ko.md`
 에 performance, stability, security, operations, developer/API, user/caller과 main
@@ -351,13 +357,13 @@ integration을 각각 표로 남긴다. parser bounds/encoded input, auth fail-c
 payload redaction, listener cleanup, native metadata, docs parity를 P0/P1/P2/P3로
 정규화하고 P0=0/P1=0을 fresh test와 함께 결론낸다.
 
-- [ ] **Step 3: reusable lesson을 작성한다**
+- [x] **Step 3: reusable lesson을 작성한다**
 
 `docs/lessons/2026-08-27-issue-27-native-webview-bridge.md`에 URL contract를 native에
 중복하지 않고 WebView parser가 소유하는 이유, appUrlOpen/getLaunchUrl ordering,
 token non-persistence, browser/native 검증 차이와 future guard를 기록한다.
 
-- [ ] **Step 4: commit 전 문서 gate를 확인한다**
+- [x] **Step 4: commit 전 문서 gate를 확인한다**
 
 ```bash
 npx prettier --check frontend/appointment-frontend/README.md frontend/appointment-frontend/README.ko.md \
@@ -368,7 +374,7 @@ npx prettier --check frontend/appointment-frontend/README.md frontend/appointmen
 git diff --check
 ```
 
-Expected: SPW-01~05, Kotlin KT-01~05, 7-Tier main integration 모두 PASS/N/A 근거가
+Expected: SPW-01\~05, Kotlin KT-01\~05, 7-Tier main integration 모두 PASS/N/A 근거가
 문서와 workflow receipt에 남는다.
 
 ## Task 7 — Lore commit, stacked PR와 exact-head gate

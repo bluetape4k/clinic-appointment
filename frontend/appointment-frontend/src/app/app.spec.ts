@@ -5,12 +5,15 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { vi } from 'vitest';
 import { App } from './app';
 import { WorkforceAuthBootstrapService } from './core/services/workforce-auth-bootstrap.service';
+import { NativeWebViewBridgeService } from './core/services/native-webview-bridge.service';
 
 describe('App', () => {
   let workforceAuthBootstrap: { restore: ReturnType<typeof vi.fn> };
+  let nativeWebViewBridge: { start: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     workforceAuthBootstrap = { restore: vi.fn() };
+    nativeWebViewBridge = { start: vi.fn().mockResolvedValue(undefined) };
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
@@ -21,6 +24,7 @@ describe('App', () => {
         provideLocationMocks(),
         provideAnimationsAsync(),
         { provide: WorkforceAuthBootstrapService, useValue: workforceAuthBootstrap },
+        { provide: NativeWebViewBridgeService, useValue: nativeWebViewBridge },
       ],
     }).compileComponents();
   });
@@ -42,6 +46,12 @@ describe('App', () => {
     TestBed.createComponent(App);
 
     expect(workforceAuthBootstrap.restore).toHaveBeenCalledOnce();
+  });
+
+  it('앱 셸 생성 시 native WebView bridge를 시작한다', () => {
+    TestBed.createComponent(App);
+
+    expect(nativeWebViewBridge.start).toHaveBeenCalledOnce();
   });
 
   it('환자 포털 route에서는 staff shell 대신 portal outlet만 사용한다', async () => {
