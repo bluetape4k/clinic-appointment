@@ -31,7 +31,7 @@
 - `docs/superpowers/specs/2026-08-27-issue-431-lazy-loading-webview-design.md`
 - `docs/superpowers/plans/2026-08-27-issue-431-lazy-loading-webview-plan.md`
 
-- [ ] **Step 1: source와 baseline을 다시 읽는다**
+- [x] **Step 1: source와 baseline을 다시 읽는다**
 
   실행:
 
@@ -43,11 +43,11 @@
 
   기대: baseline frontend unit 340 tests, production build 성공, `dist/appointment-frontend/browser/index.html`과 hashed lazy JS가 생성된다.
 
-- [ ] **Step 2: spec/plan traceability를 점검한다**
+- [x] **Step 2: spec/plan traceability를 점검한다**
 
   `app.routes.ts`, 네 feature route, `angular.json`, `capacitor.config.ts`, `playwright.config.ts`의 실제 경계와 spec/plan의 파일·명령·제외 범위를 대조한다. 누락된 acceptance 항목은 구현 전에 문서에 반영한다.
 
-- [ ] **Step 3: workflow topology를 갱신한다**
+- [x] **Step 3: workflow topology를 갱신한다**
 
   `spec`, `plan`, `module-build`, `module-unit`, `typescript`, `browser-e2e`, `review`, `diff-check`를 #431 component의 필수 gate로 유지하고 각 artifact를 receipt evidence에 연결한다.
 
@@ -59,40 +59,53 @@
 - 생성: `frontend/appointment-frontend/scripts/validate-mobile-bundle.test.mjs`
 - 수정: `frontend/appointment-frontend/package.json`
 
-- [ ] **Step 1: failing fixture test를 먼저 작성한다**
+- [x] **Step 1: failing fixture test를 먼저 작성한다**
 
   `node:test` fixture는 다음을 검증해야 한다.
 
   ```js
-  test('valid bundle exposes every lazy route and local index asset', async () => {
-    const report = await validateMobileBundle({ root: fixtureRoot })
-    assert.equal(report.ok, true)
-    assert.deepEqual(report.lazyRoutes.sort(), ['appointments', 'calendar', 'management', 'portal'])
-  })
+  test("valid bundle exposes every lazy route and local index asset", async () => {
+    const report = validateMobileBundle({ root: fixtureRoot });
+    assert.equal(report.ok, true);
+    assert.deepEqual(report.lazyRoutes.sort(), [
+      "appointments",
+      "calendar",
+      "management",
+      "portal",
+    ]);
+  });
 
-  test('missing index reference fails closed', async () => {
-    await writeFixture({ missing: 'chunk-calendar.js' })
-    await assert.rejects(() => validateMobileBundle({ root: fixtureRoot }), /missing local asset/)
-  })
+  test("missing index reference fails closed", async () => {
+    await writeFixture({ missing: "chunk-calendar.js" });
+    assert.throws(
+      () => validateMobileBundle({ root: fixtureRoot }),
+      /missing local asset/,
+    );
+  });
 
-  test('route marker and initial budget drift fail closed', async () => {
-    await writeFixture({ withoutMarker: 'MANAGEMENT_ROUTES', initialBytes: 1_100_000 })
-    await assert.rejects(() => validateMobileBundle({ root: fixtureRoot }), /lazy route marker|initial budget/)
-  })
+  test("route marker and initial budget drift fail closed", async () => {
+    await writeFixture({
+      withoutMarker: "MANAGEMENT_ROUTES",
+      initialBytes: 1_100_000,
+    });
+    assert.throws(
+      () => validateMobileBundle({ root: fixtureRoot }),
+      /lazy route marker|initial budget/,
+    );
+  });
   ```
 
   fixture에는 `angular.json`의 `initial=1MB`, `anyComponentStyle=8kB`, 네 source route의 dynamic import, main 외 hashed lazy JS marker, index local references를 실제 문자열로 작성한다.
 
-- [ ] **Step 2: RED를 확인한다**
+- [x] **Step 2: RED를 확인한다**
 
   실행: `npm run test:bundle`
 
   기대: script가 아직 없으므로 import/contract 오류로 실패한다. 이 결과를 `issue-431-evidence-*`에 기록한다.
 
-- [ ] **Step 3: 최소 구현을 작성한다**
+- [x] **Step 3: 최소 구현을 작성한다**
 
   `validateMobileBundle({ root = process.cwd(), distDir, angularConfig })`를 export한다. 구현은 다음 순서를 지킨다.
-
   1. `dist/appointment-frontend/browser/index.html`, `angular.json`, 네 route source를 읽고 존재를 확인한다.
   2. index의 `script[src]`, `link[rel=modulepreload][href]`, stylesheet `link[href]`를 추출해 absolute URL·`..` traversal을 거부하고 local 파일 존재를 확인한다.
   3. 중복을 제거한 초기 local JS/CSS byte 합계를 구해 `initial.maximumError`보다 작거나 같은지 확인한다. `kB`/`MB` 단위를 decimal byte로 파싱한다.
@@ -100,7 +113,7 @@
   5. main을 제외한 `.js` 파일에서 `CALENDAR_ROUTES`, `APPOINTMENT_ROUTES`, `PATIENT_PORTAL_ROUTES`, `MANAGEMENT_ROUTES`를 각각 찾고 route name→chunk file을 report한다.
   6. `{ ok, index, initialBytes, initialBudgetBytes, lazyRoutes, routeChunks, referencedAssets, failures }`를 반환하고 CLI 실행 시 JSON을 출력하며 실패하면 exit code 1을 설정한다.
 
-- [ ] **Step 4: GREEN과 negative cases를 확인한다**
+- [x] **Step 4: GREEN과 negative cases를 확인한다**
 
   실행:
 
@@ -116,35 +129,43 @@
 
 **파일:** `frontend/appointment-frontend/e2e/mobile-lazy-routes.spec.ts`
 
-- [ ] **Step 1: failing E2E를 작성한다**
+- [x] **Step 1: failing E2E를 작성한다**
 
   기존 Playwright `Page`와 `expect`를 사용해 API wildcard mock, viewport loop, route navigation helper를 작성한다. 각 viewport에서 다음을 실행한다.
 
   ```ts
-  await page.setViewportSize({ width, height: 900 })
-  await page.goto('/calendar')
-  await expect(page.getByRole('button', { name: '오늘' })).toBeVisible()
-  await expect(page).toHaveURL(/\/calendar\/week\/\d{4}-\d{2}-\d{2}$/)
-  await page.getByRole('link', { name: '예약 관리' }).click()
-  await expect(page).toHaveURL(/\/appointments$/)
-  await page.goto('/portal/login')
-  await expect(page.getByRole('button', { name: '로그인' })).toBeVisible()
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto("/calendar");
+  await expect(page.getByRole("button", { name: "오늘" })).toBeVisible();
+  await expect(page).toHaveURL(/\/calendar\/week\/\d{4}-\d{2}-\d{2}$/);
+  await page.getByRole("link", { name: "예약 관리" }).click();
+  await expect(page).toHaveURL(/\/appointments$/);
+  await page.goto("/portal/login");
+  await expect(page.getByRole("button", { name: "로그인" })).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true);
   ```
 
   navigation 뒤 `performance.getEntriesByType('resource')`의 local `/chunk-*.js` 수가 증가하거나 lazy route resource가 존재하는지 검사한다. API payload를 새로 정의하지 않고 기존 mock 응답 형태를 재사용한다.
 
-- [ ] **Step 2: RED를 확인한다**
+- [x] **Step 2: RED를 확인한다**
 
   실행: `npm run test:e2e -- e2e/mobile-lazy-routes.spec.ts`
 
   기대: 아직 새 spec이 없으므로 지정 test가 발견되지 않거나 route/overflow assertion이 실패한다.
 
-- [ ] **Step 3: 최소 E2E 구현으로 GREEN을 만든다**
+- [x] **Step 3: 최소 E2E 구현으로 GREEN을 만든다**
 
   API mock은 `**/api/**` GET/POST/PATCH/OPTIONS에 `200` 또는 `204`와 빈 성공 payload를 반환하고, workforce bootstrap은 기존 `__CLINIC_WORKFORCE_AUTH__` fixture를 사용하지 않는 browser shell 범위로 제한한다. `/management`는 role guard가 필요한 기존 workforce 테스트의 책임이므로 이번 E2E에 중복하지 않고 bundle contract에서 검증한다.
 
-- [ ] **Step 4: 네 viewport와 전체 E2E를 확인한다**
+- [x] **Step 4: 네 viewport와 전체 E2E를 확인한다**
 
   실행:
 
@@ -159,11 +180,11 @@
 
 **파일:** `frontend/appointment-frontend/README.md`, `frontend/appointment-frontend/README.ko.md`
 
-- [ ] **Step 1: 검증 명령을 문서화한다**
+- [x] **Step 1: 검증 명령을 문서화한다**
 
   빌드 section에 `npm run bundle:verify`, 테스트 section에 `npm run test:bundle`을 추가하고, 네 lazy root route·Capacitor `webDir`·320px viewport 계약을 한국어로 설명한다.
 
-- [ ] **Step 2: 기존 계약 검증을 실행한다**
+- [x] **Step 2: 기존 계약 검증을 실행한다**
 
   실행: `npm run docs:verify`
 
@@ -176,21 +197,21 @@
 - 생성: `docs/superpowers/reviews/2026-08-27-issue-431-lazy-loading-webview-implementation-review.ko.md`
 - 생성: `docs/lessons/2026-08-27-issue-431-lazy-loading-webview.md`
 
-- [ ] **Step 1: implementation diff를 검토한다**
+- [x] **Step 1: implementation diff를 검토한다**
 
   Performance, Stability, Security, Operator/Ops, Developer/API, User/Caller, Main-session integration 관점으로 file/line 증거를 기록한다. 새 dependency·runtime route 변경·native claim이 없는지 확인하고 P0/P1=0을 보장한다.
 
-- [ ] **Step 2: Kotlin pattern gate를 기록한다**
+- [x] **Step 2: Kotlin pattern gate를 기록한다**
 
   이번 slice는 Kotlin production/test 파일을 변경하지 않으므로 `bluetape-kotlin-patterns` 적용은 N/A로 명시한다. TypeScript/Angular에서는 strict typing, no direct DOM mutation, existing router/API reuse, bounded test fixture를 확인한다.
 
-- [ ] **Step 3: lesson을 작성한다**
+- [x] **Step 3: lesson을 작성한다**
 
   hashed filename을 고정하지 않고 index reference와 semantic route marker를 검사하는 이유, Angular budget과 script 책임 분리, viewport smoke의 한계, native #24 경계를 기록한다.
 
 ## Task 6: 최종 검증·PR-ready evidence
 
-- [ ] **Step 1: module validation을 순서대로 실행한다**
+- [x] **Step 1: module validation을 순서대로 실행한다**
 
   ```bash
   npm run test:bundle
