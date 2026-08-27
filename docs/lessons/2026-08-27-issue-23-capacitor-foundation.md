@@ -52,7 +52,8 @@
 - 전체 `npm audit`는 Capacitor CLI의 `xcode`가 `uuid <11.1.1`을 끌어오는
   moderate 3건을 보고한다. runtime audit은 0건이며, audit이 제안하는
   `--force` downgrade는 고정한 CLI 호환선과 재현성을 훼손하므로 적용하지
-  않았다. CLI upstream 갱신을 별도 dependency follow-up으로 추적한다.
+  않았다. runtime 취약점이 없고 CLI는 개발 전용이므로 이 slice에서는 수용하며,
+  다음 dependency maintenance 때 upstream 갱신 가능성을 다시 평가한다.
 
 ## 재사용 원칙
 
