@@ -35,3 +35,17 @@ test('Android native Gradle toolchain은 Java 21을 사용한다', () => {
     /Java 21/u,
   );
 });
+
+test('Android deep-link는 device shell에서 해석 가능한 단일 호출이다', () => {
+  const content = readFileSync(workflowPath, 'utf8');
+  assert.throws(
+    () =>
+      validateNativeWebViewWorkflow(
+        content.replace(
+          "?view=week&date=2026-08-27'",
+          "?view=week&date=2026-08-27' io.bluetape4k.clinic.appointment",
+        ),
+      ),
+    /device-shell-safe/u,
+  );
+});

@@ -19,6 +19,9 @@ const REQUIRED_MARKERS = Object.freeze([
   'actions/upload-artifact@',
 ]);
 
+const DEEP_LINK_COMMAND_PATTERN =
+  /^\s*adb shell am start -W -a android\.intent\.action\.VIEW -d 'io\.bluetape4k\.clinic\.appointment:\/\/open\/tenant-default\/calendar\?view=week&date=2026-08-27'\s*$/u;
+
 export function validateNativeWebViewWorkflow(content) {
   const missing = REQUIRED_MARKERS.filter((marker) => !content.includes(marker));
   if (missing.length > 0) throw new Error(`missing workflow markers: ${missing.join(', ')}`);
@@ -29,6 +32,12 @@ export function validateNativeWebViewWorkflow(content) {
   }
   if (androidSection.includes('set -euo pipefail')) {
     throw new Error('native workflow script must use POSIX sh options (set -eu)');
+  }
+  const deepLinkCommands = content
+    .split('\n')
+    .filter((line) => line.includes('adb shell am start -W -a android.intent.action.VIEW -d'));
+  if (!deepLinkCommands.every((line) => DEEP_LINK_COMMAND_PATTERN.test(line))) {
+    throw new Error('Android deep-link command must be a single device-shell-safe invocation');
   }
   return { ok: true, missing: [] };
 }
