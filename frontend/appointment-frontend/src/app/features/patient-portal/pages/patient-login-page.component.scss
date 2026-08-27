@@ -1,12 +1,16 @@
 :host { display: block; min-height: 100%; }
 
 .auth-page {
-  min-height: 100vh;
+  min-height: var(--mobile-viewport-height, 100dvh);
   display: grid;
   place-items: center;
-  padding: clamp(20px, 6vw, 72px);
+  padding-top: calc(clamp(20px, 6vw, 72px) + env(safe-area-inset-top));
+  padding-right: clamp(20px, 6vw, 72px);
+  padding-bottom: calc(clamp(20px, 6vw, 72px) + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
+  padding-left: clamp(20px, 6vw, 72px);
   box-sizing: border-box;
   background: var(--portal-surface);
+  scroll-padding-bottom: calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
 }
 
 .auth-card {
@@ -33,7 +37,7 @@ label { display: grid; gap: 7px; color: var(--portal-muted); font-size: .85rem; 
 input, select { width: 100%; box-sizing: border-box; min-height: 46px; padding: 10px 12px; border: 1px solid var(--portal-line); border-radius: 0; background: var(--portal-surface); color: var(--portal-ink); font: inherit; }
 input:focus, select:focus { outline: 3px solid var(--portal-focus); outline-offset: 1px; }
 .identifier-row { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(0, 1.4fr); gap: 12px; }
-button { min-height: 48px; border: 0; border-radius: 0; background: var(--portal-focus); color: white; font: inherit; font-weight: 800; cursor: pointer; }
+button { min-height: 48px; border: 0; border-radius: 0; background: var(--portal-focus); color: white; font: inherit; font-weight: 800; cursor: pointer; touch-action: manipulation; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .auth-error { margin: 0; padding: 12px; border-left: 3px solid #b54747; background: #fff3f1; color: #7d2727; }
 .auth-footer { margin: 28px 0 0; color: var(--portal-muted); text-align: center; }

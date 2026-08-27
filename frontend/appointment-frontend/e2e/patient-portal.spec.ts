@@ -100,6 +100,64 @@ test.describe('환자 포털 브라우저 계약', () => {
     }
   });
 
+  test('모바일 visual viewport와 keyboard inset에서 focus 입력·form action·터치 target을 보존한다', async ({
+    page,
+  }) => {
+    for (const width of [320, 375, 393, 430]) {
+      await page.setViewportSize({ width, height: 900 });
+      await signIn(page);
+
+      const viewportContract = await page.evaluate(() => {
+        const root = document.querySelector('.portal-root');
+        const visualViewport = window.visualViewport;
+        const style = root ? getComputedStyle(root) : null;
+        return {
+          cssHeight: style?.getPropertyValue('--mobile-viewport-height').trim() ?? '',
+          viewportHeight: visualViewport?.height ?? window.innerHeight,
+          keyboardPadding: style ? Number.parseFloat(style.scrollPaddingBottom) : 0,
+        };
+      });
+      expect(
+        Number.parseFloat(viewportContract.cssHeight),
+        `visual viewport at ${width}px`,
+      ).toBeCloseTo(viewportContract.viewportHeight, 0);
+      expect(
+        viewportContract.keyboardPadding,
+        `scroll padding at ${width}px`,
+      ).toBeGreaterThanOrEqual(24);
+
+      await page.getByLabel('예약 계획 ID').focus();
+      const focused = await page.evaluate(() => {
+        const element = document.activeElement as HTMLElement | null;
+        const rect = element?.getBoundingClientRect();
+        const visualViewport = window.visualViewport;
+        return {
+          top: rect?.top ?? -1,
+          bottom: rect?.bottom ?? -1,
+          viewportHeight: visualViewport?.height ?? window.innerHeight,
+        };
+      });
+      expect(focused.top, `focused input top at ${width}px`).toBeGreaterThanOrEqual(0);
+      expect(focused.bottom, `focused input bottom at ${width}px`).toBeLessThanOrEqual(
+        focused.viewportHeight,
+      );
+
+      await page.evaluate(() => {
+        document
+          .querySelector('.portal-root')
+          ?.style.setProperty('--mobile-keyboard-inset', '180px');
+      });
+      const keyboardPadding = await page
+        .locator('.portal-root')
+        .evaluate((element) => Number.parseFloat(getComputedStyle(element).scrollPaddingBottom));
+      expect(keyboardPadding, `keyboard padding at ${width}px`).toBeGreaterThanOrEqual(180);
+      await expect(page.getByRole('button', { name: '예약 요청 보내기' })).toHaveCSS(
+        'min-height',
+        '44px',
+      );
+    }
+  });
+
   test('tenant-scoped 슬롯을 조회하고 상품·회차·장소 선택 요약을 예약 draft에 연결한다', async ({ page }) => {
     await signIn(page);
     await page.route('**/api/tenant-default/clinics/3', route =>

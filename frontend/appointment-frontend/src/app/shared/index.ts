@@ -3,3 +3,4 @@ export * from './pipes/time-range.pipe';
 export * from './components/status-badge/status-badge.component';
 export * from './components/time-slot-picker/time-slot-picker.component';
 export * from './components/confirm-dialog/confirm-dialog.component';
+export * from './directives/mobile-viewport.directive';

@@ -85,4 +85,32 @@ test.describe('모바일 WebView lazy route 계약', () => {
       expect(await hasHorizontalOverflow(page), `portal overflow at ${width}px`).toBe(false);
     });
   }
+  test('짧은 landscape viewport에서 하단 nav touch target과 overflow를 보존한다', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 667, height: 375 });
+    await installMobileFixture(page);
+
+    await page.goto('/calendar');
+    await expect(page.getByRole('button', { name: '오늘' })).toBeVisible();
+    expect(await hasHorizontalOverflow(page), 'landscape overflow').toBe(false);
+
+    const targets = await page
+      .locator('.bottom-nav-item, .mobile-content button')
+      .evaluateAll((elements) =>
+        elements.map((element) => ({
+          height: element.getBoundingClientRect().height,
+          touchAction: getComputedStyle(element).touchAction,
+        })),
+      );
+    expect(targets.length).toBeGreaterThan(0);
+    expect(
+      Math.min(...targets.map((target) => target.height)),
+      'minimum touch target',
+    ).toBeGreaterThanOrEqual(44);
+    expect(
+      targets.every((target) => target.touchAction === 'manipulation'),
+      'touch action contract',
+    ).toBe(true);
+  });
 });
