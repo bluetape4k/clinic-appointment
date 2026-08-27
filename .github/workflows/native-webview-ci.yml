@@ -114,7 +114,7 @@ jobs:
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             cd frontend/appointment-frontend
             ./android/gradlew --no-daemon --stacktrace assembleDebug
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk

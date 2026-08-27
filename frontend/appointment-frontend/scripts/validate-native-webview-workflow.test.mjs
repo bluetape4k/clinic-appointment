@@ -18,3 +18,11 @@ test('required marker가 빠진 workflow는 fail-closed 된다', () => {
     /missing workflow markers/u,
   );
 });
+
+test('Android emulator runner script가 POSIX sh에서 실행 가능한 옵션을 사용한다', () => {
+  const content = readFileSync(workflowPath, 'utf8');
+  assert.throws(
+    () => validateNativeWebViewWorkflow(content.replaceAll('set -eu', 'set -euo pipefail')),
+    /POSIX sh options/u,
+  );
+});

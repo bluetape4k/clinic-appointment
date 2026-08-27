@@ -19,6 +19,10 @@ const REQUIRED_MARKERS = Object.freeze([
 export function validateNativeWebViewWorkflow(content) {
   const missing = REQUIRED_MARKERS.filter((marker) => !content.includes(marker));
   if (missing.length > 0) throw new Error(`missing workflow markers: ${missing.join(', ')}`);
+  const androidSection = content.split('  ios-webview:', 1)[0];
+  if (androidSection.includes('set -euo pipefail')) {
+    throw new Error('native workflow script must use POSIX sh options (set -eu)');
+  }
   return { ok: true, missing: [] };
 }
 
