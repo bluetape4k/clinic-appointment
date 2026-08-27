@@ -174,9 +174,7 @@ jobs:
             (cd frontend/appointment-frontend/android && ./gradlew --no-daemon --stacktrace assembleDebug)
             adb install -r frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -W -n io.bluetape4k.clinic.appointment/.MainActivity
-            adb shell am start -W -a android.intent.action.VIEW \
-              -d 'io.bluetape4k.clinic.appointment://open/tenant-default/calendar?view=week&date=2026-08-27' \
-              io.bluetape4k.clinic.appointment
+            adb shell am start -W -a android.intent.action.VIEW -d 'io.bluetape4k.clinic.appointment://open/tenant-default/calendar?view=week&date=2026-08-27' io.bluetape4k.clinic.appointment
             adb shell dumpsys activity activities | grep -F 'io.bluetape4k.clinic.appointment'
 
       - name: Write Android native report

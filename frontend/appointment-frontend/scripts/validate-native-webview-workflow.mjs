@@ -13,6 +13,7 @@ const REQUIRED_MARKERS = Object.freeze([
   'android-webview',
   'ios-webview',
   'adb shell am start',
+  'adb shell am start -W -a android.intent.action.VIEW -d',
   'xcrun simctl openurl',
   'native-webview-report.json',
   'actions/upload-artifact@',
