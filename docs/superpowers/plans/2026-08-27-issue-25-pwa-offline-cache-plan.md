@@ -10,15 +10,15 @@
 
 ## 설계 traceability
 
-| 수용 기준 | 구현/검증 단계 |
-|---|---|
-| manifest·installability metadata | Task 2, Task 5 manifest/build contract |
-| versioned app shell·update | Task 2–3, Task 5 production artifact/E2E |
-| safe public read-only cache | Task 2 config, Task 3 interceptor/config tests |
-| auth·cookie·JWT·mutation 비캐시 | Task 1 RED, Task 3 GREEN, Task 5 offline E2E |
-| offline/online/update/reset UX | Task 1–4 service/App tests, Task 5 browser contract |
-| 새 dependency 최소화·재사용 | Task 2 package diff, Task 6 review/lesson |
-| native 경계 정직성 | Task 6 README/Issue/PR, #27/#24 handoff |
+| 수용 기준                        | 구현/검증 단계                                      |
+| -------------------------------- | --------------------------------------------------- |
+| manifest·installability metadata | Task 2, Task 5 manifest/build contract              |
+| versioned app shell·update       | Task 2–3, Task 5 production artifact/E2E            |
+| safe public read-only cache      | Task 2 config, Task 3 interceptor/config tests      |
+| auth·cookie·JWT·mutation 비캐시  | Task 1 RED, Task 3 GREEN, Task 5 offline E2E        |
+| offline/online/update/reset UX   | Task 1–4 service/App tests, Task 5 browser contract |
+| 새 dependency 최소화·재사용      | Task 2 package diff, Task 6 review/lesson           |
+| native 경계 정직성               | Task 6 README/Issue/PR, #27/#24 handoff             |
 
 ## Task 1: RED — PWA 상태·network policy 계약 테스트
 
@@ -28,23 +28,23 @@
 - Create: `frontend/appointment-frontend/src/app/core/interceptors/pwa-network.interceptor.spec.ts`
 - Modify: `frontend/appointment-frontend/src/app/app.spec.ts`
 
-- [ ] **Step 1: 상태 service 실패 테스트를 먼저 작성한다**
+- [x] **Step 1: 상태 service 실패 테스트를 먼저 작성한다**
 
   `SwUpdate` optional double과 fake `Window` event를 사용해 online/offline signal,
   `VERSION_READY`, update apply, `ngsw:` cache reset, 외부 cache 보존을 명시한다.
 
-- [ ] **Step 2: network interceptor 실패 테스트를 먼저 작성한다**
+- [x] **Step 2: network interceptor 실패 테스트를 먼저 작성한다**
 
   auth-scoped GET은 `ngsw-bypass`, mutation은 `Cache-Control: no-store`를 요구하고,
   `navigator.onLine=false`인 POST는 next handler를 호출하지 않고 status 0 오류를
   반환하도록 고정한다. `API_AUTH_SCOPE='none'`인 public GET은 bypass하지 않는다.
 
-- [ ] **Step 3: App status region 실패 테스트를 작성한다**
+- [x] **Step 3: App status region 실패 테스트를 작성한다**
 
   offline signal과 update available signal에 따라 `data-pwa-status`, update/reset
   action이 렌더링되는지 확인한다.
 
-- [ ] **Step 4: RED를 확인한다**
+- [x] **Step 4: RED를 확인한다**
 
   Run: `cd frontend/appointment-frontend && npm test -- --watch=false --include='src/app/core/services/pwa-status.service.spec.ts' --include='src/app/core/interceptors/pwa-network.interceptor.spec.ts'`
 
@@ -64,29 +64,29 @@
 - Create: `frontend/appointment-frontend/public/manifest.webmanifest`
 - Create: `frontend/appointment-frontend/public/icons/icon.svg`
 
-- [ ] **Step 1: Angular 22.1 계열 dependency를 추가한다**
+- [x] **Step 1: Angular 22.1 계열 dependency를 추가한다**
 
   `@angular/pwa@22.1.5`는 schematic/tooling dependency로, `@angular/service-worker@22.1.3`는 runtime dependency로 추가한다. Angular core/CLI와 major/minor 경계를 섞지 않는다. lockfile은 `npm install`로 갱신한다.
 
-- [ ] **Step 2: service worker registration을 production에만 연결한다**
+- [x] **Step 2: service worker registration을 production에만 연결한다**
 
   `app.config.ts`에 `provideServiceWorker('ngsw-worker.js', { enabled: environment.production, registrationStrategy: 'registerWhenStable:30000' })`를 추가한다. unit/test와 development에서는 worker를 활성화하지 않는다.
 
-- [ ] **Step 3: build option과 manifest metadata를 연결한다**
+- [x] **Step 3: build option과 manifest metadata를 연결한다**
 
   `angular.json` build options에 `serviceWorker: 'ngsw-config.json'`을 추가하고,
   `index.html`에 `manifest.webmanifest`, `theme-color`, `apple-mobile-web-app-capable`
   metadata를 추가한다. public icon은 텍스트/색상만 담은 안전한 SVG로 두고 binary/icon
   generator dependency는 만들지 않는다.
 
-- [ ] **Step 4: `ngsw-config.json`을 좁은 계약으로 작성한다**
+- [x] **Step 4: `ngsw-config.json`을 좁은 계약으로 작성한다**
 
   app-shell asset group은 index·hashed JS/CSS·favicon·manifest·icons를 prefetch한다.
   data group은 `/api/public/master-data/**` 하나만 `freshness`, bounded `maxSize`와
   짧은 `maxAge`로 선언한다. `/api/**`는 navigation fallback에서 제외하고 auth,
   patient, appointment, admin 경로를 config에 넣지 않는다.
 
-- [ ] **Step 5: manifest/config RED를 확인한다**
+- [x] **Step 5: manifest/config RED를 확인한다**
 
   Run: `cd frontend/appointment-frontend && npm run build`
 
@@ -102,26 +102,26 @@
 - Modify: `frontend/appointment-frontend/src/app/core/interceptors/index.ts` (존재 시)
 - Modify: `frontend/appointment-frontend/src/app/app.config.ts`
 
-- [ ] **Step 1: `PwaStatusService`를 구현한다**
+- [x] **Step 1: `PwaStatusService`를 구현한다**
 
   `DOCUMENT`와 optional `SwUpdate`를 주입하고 online/offline, `VERSION_READY`,
   `activateUpdate`, `resetCache`를 signal 기반으로 제공한다. reset은 `caches.keys()` 중
   `ngsw:` prefix만 지우고 외부 cache를 건드리지 않는다. 실패는 notice signal에 담아
   UI가 사용자에게 표시할 수 있게 한다.
 
-- [ ] **Step 2: `pwaNetworkInterceptor`를 구현한다**
+- [x] **Step 2: `pwaNetworkInterceptor`를 구현한다**
 
   `API_AUTH_SCOPE !== 'none'` 또는 `withCredentials` 요청에는 `ngsw-bypass: true`를
   추가한다. POST/PUT/PATCH/DELETE에는 `Cache-Control: no-store`와 `Pragma: no-cache`를
   추가한다. navigator online이 명시적으로 false이면 mutation을 status 0
   `HttpErrorResponse`로 종료한다. queue·background sync·성공 위조는 구현하지 않는다.
 
-- [ ] **Step 3: interceptor 순서를 고정한다**
+- [x] **Step 3: interceptor 순서를 고정한다**
 
   `withInterceptors`에서 `pwaNetworkInterceptor`를 auth/xsrf/error 앞에 둔다. API
   context와 기존 `TenantApiClient`가 전달하는 cookie/bearer 경계를 재사용한다.
 
-- [ ] **Step 4: GREEN을 확인한다**
+- [x] **Step 4: GREEN을 확인한다**
 
   Run: `cd frontend/appointment-frontend && npm test -- --watch=false --include='src/app/core/services/pwa-status.service.spec.ts' --include='src/app/core/interceptors/pwa-network.interceptor.spec.ts'`
 
@@ -137,22 +137,22 @@
 - Modify: `frontend/appointment-frontend/src/app/app.scss`
 - Modify: `frontend/appointment-frontend/src/app/app.spec.ts`
 
-- [ ] **Step 1: App이 status service를 재사용한다**
+- [x] **Step 1: App이 status service를 재사용한다**
 
   app root에 `PwaStatusService`를 inject하고 offline/update 상태를 template에 노출한다.
   `role=status`, `aria-live=polite`, `data-pwa-status` marker를 유지한다.
 
-- [ ] **Step 2: update/reset action을 연결한다**
+- [x] **Step 2: update/reset action을 연결한다**
 
   update available일 때 `새 버전 적용`, offline/update 상태일 때 `캐시 초기화` action을
   표시한다. action은 service method를 호출하고 disabled/loading 상태를 제공한다.
 
-- [ ] **Step 3: 기존 shell layout을 보존한다**
+- [x] **Step 3: 기존 shell layout을 보존한다**
 
   status region은 toolbar/nav를 밀어내지 않는 작은 block으로 두고 기존
   `appMobileViewport`, Angular Material, Safe Area CSS 변수와 충돌하지 않게 한다.
 
-- [ ] **Step 4: app/service unit을 재실행한다**
+- [x] **Step 4: app/service unit을 재실행한다**
 
   Run: `cd frontend/appointment-frontend && npm test -- --watch=false`
 
@@ -168,27 +168,27 @@
 - Modify: `frontend/appointment-frontend/e2e/patient-portal.spec.ts`
 - Modify: `frontend/appointment-frontend/e2e/mobile-lazy-routes.spec.ts`
 
-- [ ] **Step 1: static contract validator를 RED-GREEN으로 작성한다**
+- [x] **Step 1: static contract validator를 RED-GREEN으로 작성한다**
 
   `dist/appointment-frontend/browser/manifest.webmanifest`, `ngsw.json`, `ngsw-worker.js`
   존재·JSON schema·start/display/theme/icons·assetGroups/dataGroups·`/api/**` navigation
   exclusion을 검사한다. forbidden auth/patient/appointment/admin patterns가 data group에
   없고 public pattern이 하나뿐인지 확인한다.
 
-- [ ] **Step 2: package script를 추가한다**
+- [x] **Step 2: package script를 추가한다**
 
   `npm run pwa:verify`가 build 산출물을 검사하고, `npm run test:pwa`가 validator
   node:test를 실행하도록 한다. existing `bundle:verify`와 겹치는 route logic은 복제하지
   않고 PWA artifact만 검사한다.
 
-- [ ] **Step 3: browser E2E를 추가한다**
+- [x] **Step 3: browser E2E를 추가한다**
 
   production preview에서 manifest link/metadata와 `data-pwa-status` marker를 확인한다.
   context offline 상태에서 mutation submit이 성공 문구나 fake response를 만들지 않고
   status 0 경계를 유지하는 시나리오를 추가한다. service worker update/reset은 API
   mock이 아닌 deterministic `caches`/`SwUpdate` unit contract로 검증한다.
 
-- [ ] **Step 4: targeted GREEN을 확인한다**
+- [x] **Step 4: targeted GREEN을 확인한다**
 
   ```bash
   cd frontend/appointment-frontend
@@ -210,13 +210,13 @@
 - Create: `docs/lessons/2026-08-27-issue-25-pwa-offline-cache.md`
 - Create: `docs/superpowers/reviews/2026-08-27-issue-25-pwa-offline-cache-implementation-review.ko.md`
 
-- [ ] **Step 1: README와 lesson을 갱신한다**
+- [x] **Step 1: README와 lesson을 갱신한다**
 
   HTTPS 운영/localhost 개발 예외, install/update/reset 조작, public master-data cache
   boundary, auth/mutation network-only 정책, native #27/#24 제외 범위를 Korean-only
   규칙에 맞게 기록한다.
 
-- [ ] **Step 2: 7-Tier review를 기록한다**
+- [x] **Step 2: 7-Tier review를 기록한다**
 
   Performance, Stability, Security, Operator/Ops, Developer/API, User/Caller,
   Main-session integration 관점으로 최신 diff를 검토한다. P0=0/P1=0을 필수로 하고
@@ -224,7 +224,7 @@
   `bluetape4k-assertions`는 변경 scope가 TypeScript/JSON/SCSS임을 근거로 N/A 기록하고
   #430의 backend assertion 계약을 유지한다.
 
-- [ ] **Step 3: 로컬 전체 검증을 실행한다**
+- [x] **Step 3: 로컬 전체 검증을 실행한다**
 
   ```bash
   cd frontend/appointment-frontend
@@ -240,7 +240,7 @@
   git diff --check
   ```
 
-- [ ] **Step 4: writer/terminology gate를 통과한다**
+- [x] **Step 4: writer/terminology gate를 통과한다**
 
   `audit-korean-terms.mjs`와 Prettier를 변경 문서/소스에 실행하고 `TBD|TODO`를
   제거한다. SPW-01..05 및 config forbidden-path 결과를 review evidence에 남긴다.

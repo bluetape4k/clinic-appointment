@@ -81,6 +81,9 @@ data class ApiCorsProperties(
             "Idempotency-Key",
             "If-None-Match",
             "If-Match",
+            "ngsw-bypass",
+            "Cache-Control",
+            "Pragma",
         )
         val DEFAULT_EXPOSED_HEADERS: List<String> = listOf(
             "ETag",

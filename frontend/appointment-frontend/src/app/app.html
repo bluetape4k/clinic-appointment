@@ -1,3 +1,26 @@
+@if (!pwaStatus.isOnline() || pwaStatus.updateAvailable() || pwaStatus.notice()) {
+  <aside class="pwa-status" data-pwa-status role="status" aria-live="polite">
+    @if (!pwaStatus.isOnline()) {
+      <span>오프라인 상태입니다. 예약 변경은 온라인 복귀 후 시도해 주세요.</span>
+    }
+    @if (pwaStatus.updateAvailable()) {
+      <span>새 버전을 사용할 수 있습니다.</span>
+      <button type="button" mat-button (click)="pwaStatus.applyUpdate()">새 버전 적용</button>
+    }
+    @if (pwaStatus.notice(); as notice) {
+      <span>{{ notice }}</span>
+    }
+    <button
+      type="button"
+      mat-button
+      [disabled]="pwaStatus.resetting()"
+      (click)="pwaStatus.resetCache()"
+    >
+      {{ pwaStatus.resetting() ? '캐시 초기화 중…' : 'PWA 캐시 초기화' }}
+    </button>
+  </aside>
+}
+
 @if (isPatientPortal()) {
   <div class="portal-root" appMobileViewport>
     <router-outlet />
@@ -8,15 +31,17 @@
   </mat-toolbar>
 
   @if (isDesktop()) {
-  <!-- 데스크톱: 좌측 sidenav -->
+    <!-- 데스크톱: 좌측 sidenav -->
     <mat-sidenav-container class="sidenav-container">
       <mat-sidenav mode="side" opened class="sidenav">
         <mat-nav-list>
           @for (item of navItems; track item.route) {
-            <a mat-list-item
-               [routerLink]="item.route"
-               routerLinkActive="active-link"
-               [routerLinkActiveOptions]="{ exact: false }">
+            <a
+              mat-list-item
+              [routerLink]="item.route"
+              routerLinkActive="active-link"
+              [routerLinkActiveOptions]="{ exact: false }"
+            >
               <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
               <span matListItemTitle>{{ item.label }}</span>
             </a>
@@ -35,10 +60,12 @@
       </div>
       <nav class="bottom-nav">
         @for (item of navItems; track item.route) {
-          <a class="bottom-nav-item"
-             [routerLink]="item.route"
-             routerLinkActive="active-tab"
-             [routerLinkActiveOptions]="{ exact: false }">
+          <a
+            class="bottom-nav-item"
+            [routerLink]="item.route"
+            routerLinkActive="active-tab"
+            [routerLinkActiveOptions]="{ exact: false }"
+          >
             <mat-icon>{{ item.icon }}</mat-icon>
             <span class="bottom-nav-label">{{ item.label }}</span>
           </a>

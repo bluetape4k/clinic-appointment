@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">클리닉 예약</title>
+  <desc id="desc">파란 원 안에 흰색 십자가가 있는 아이콘</desc>
+  <rect width="512" height="512" rx="112" fill="#1d4ed8"/>
+  <path fill="#fff" d="M208 96h96v112h112v96H304v112h-96V304H96v-96h112z"/>
+</svg>

@@ -71,13 +71,13 @@ GET만 캐시하더라도 patient cookie 또는 workforce bearer의 응답이 �
 
 ## 캐시 정책
 
-| 대상 | 정책 | 이유 |
-|---|---|---|
-| `index.html`, hashed JS/CSS, favicon, manifest, icons | app-shell `prefetch`/versioned | 앱 기동과 새 배포 전환 |
-| `/api/public/master-data/**` | `freshness`, 짧은 `maxAge`, query 보존 | 향후 비민감 read-only catalog만 opt-in |
-| `/api/{tenant}/auth/**`, `/appointments/**`, `/patient/**`, `/admin/**` | `ngsw-bypass`, no-store | cookie/JWT/개인·예약 데이터 보호 |
-| POST/PUT/PATCH/DELETE 전체 | network-only, offline 즉시 오류 | mutation queue/background sync 제외 |
-| 외부 font CDN | 기존 index link 유지, 앱 핵심 cache 아님 | 새 외부 dependency와 UI 변경 방지 |
+| 대상                                                                    | 정책                                     | 이유                                   |
+| ----------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------- |
+| `index.html`, hashed JS/CSS, favicon, manifest, icons                   | app-shell `prefetch`/versioned           | 앱 기동과 새 배포 전환                 |
+| `/api/public/master-data/**`                                            | `freshness`, 짧은 `maxAge`, query 보존   | 향후 비민감 read-only catalog만 opt-in |
+| `/api/{tenant}/auth/**`, `/appointments/**`, `/patient/**`, `/admin/**` | `ngsw-bypass`, no-store                  | cookie/JWT/개인·예약 데이터 보호       |
+| POST/PUT/PATCH/DELETE 전체                                              | network-only, offline 즉시 오류          | mutation queue/background sync 제외    |
+| 외부 font CDN                                                           | 기존 index link 유지, 앱 핵심 cache 아님 | 새 외부 dependency와 UI 변경 방지      |
 
 ## 오류·호환성 정책
 
@@ -122,14 +122,14 @@ GET만 캐시하더라도 patient cookie 또는 workforce bearer의 응답이 �
 
 ## 실패 모드와 완화
 
-| 실패 모드 | 완화 및 검증 |
-|---|---|
-| auth GET이 Service Worker data cache에 남음 | auth/credentials request에 `ngsw-bypass`, config path deny-list contract |
-| offline mutation이 성공처럼 보임 | interceptor가 status 0 오류를 먼저 반환하고 E2E에서 handler 미호출 확인 |
-| stale app shell이 새 API와 섞임 | Angular manifest version/update event와 명시적 update apply |
-| cache reset이 다른 앱 데이터를 삭제 | `ngsw:` prefix만 삭제하고 unit에서 외부 cache 보존 확인 |
+| 실패 모드                                       | 완화 및 검증                                                               |
+| ----------------------------------------------- | -------------------------------------------------------------------------- |
+| auth GET이 Service Worker data cache에 남음     | auth/credentials request에 `ngsw-bypass`, config path deny-list contract   |
+| offline mutation이 성공처럼 보임                | interceptor가 status 0 오류를 먼저 반환하고 E2E에서 handler 미호출 확인    |
+| stale app shell이 새 API와 섞임                 | Angular manifest version/update event와 명시적 update apply                |
+| cache reset이 다른 앱 데이터를 삭제             | `ngsw:` prefix만 삭제하고 unit에서 외부 cache 보존 확인                    |
 | localhost 개발에서 worker가 stale 응답을 가로챔 | `environment.production` 조건부 registration과 README HTTPS/localhost 안내 |
-| API 404가 index.html로 대체됨 | `navigationUrls`에서 `/api/**` 제외하고 build contract 검사 |
+| API 404가 index.html로 대체됨                   | `navigationUrls`에서 `/api/**` 제외하고 build contract 검사                |
 
 ## 완료 정의
 

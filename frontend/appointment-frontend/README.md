@@ -56,6 +56,10 @@ API 서버(`http://localhost:8080`)가 먼저 실행되어 있어야 합니다.
   설정은 `/api/**`에만 적용되며, HTTPS가 기본입니다. `http://localhost`와
   `http://127.0.0.1`은 개발 진단에만 허용합니다.
 
+  PWA 요청의 cross-origin preflight는 API CORS 허용 헤더에 `ngsw-bypass`,
+  `Cache-Control`, `Pragma`를 포함해야 합니다. 현재 API 기본 설정과 예제
+  `application.yml`이 이 계약을 함께 선언합니다.
+
 - patient 인증은 HttpOnly cookie와 Angular `HttpXsrfTokenExtractor`를 재사용하고
   unsafe 요청에 `X-XSRF-TOKEN`을 보냅니다. patient JWT를 `localStorage`나
   `sessionStorage`에 저장하지 않으며, workforce Bearer token은 기존 메모리 상태만
@@ -142,11 +146,46 @@ npx playwright test e2e/patient-portal.spec.ts e2e/mobile-lazy-routes.spec.ts
 배포·WebView 보안 경계는 [Issue #24](https://github.com/bluetape4k/clinic-appointment/issues/24)에서
 별도로 다룹니다.
 
+## PWA·오프라인 캐시 계약
+
+`@angular/pwa`와 `@angular/service-worker`를 Angular 공식 Service Worker 구성으로
+사용합니다. production build에서만 `ngsw-worker.js`를 등록하며, HTTPS 운영 환경과
+`localhost` 개발 예외를 전제로 합니다. Service Worker 설정은
+[Angular Service Worker 시작 가이드](https://angular.dev/ecosystem/service-workers/getting-started)와
+[ngsw-config 참조](https://angular.dev/ecosystem/service-workers/config)의
+`assetGroups`·`dataGroups` 계약을 따릅니다.
+
+- 해시가 붙은 JavaScript·CSS, `index.html`, manifest와 아이콘은 versioned app shell로
+  prefetch합니다.
+- 현재 백엔드에는 인증 없는 master-data API가 없으므로 `/api/public/master-data/**`만
+  향후 재사용 가능한 read-only 경계로 등록하고, freshness 1시간·최대 20개로 제한합니다.
+  tenant/auth, patient, appointment, admin 응답은 data group에 추가하지 않습니다.
+- 인증 scope가 있는 GET/HEAD나 `withCredentials` 요청에는 `ngsw-bypass: true`를
+  붙여 cookie·Bearer 응답이 Service Worker에 들어가지 않게 합니다. POST·PUT·PATCH·DELETE는
+  `Cache-Control: no-store`와 `Pragma: no-cache`를 사용하며, offline이면 status `0`의
+  `OFFLINE_MUTATION` 오류를 반환합니다. 예약 mutation queue나 background sync는 제공하지
+  않습니다.
+- 앱 셸의 status region은 offline·online 전환과 update available을 `aria-live="polite"`로
+  알립니다. update 적용과 `ngsw:` cache reset은 사용자가 명시적으로 실행하며 다른
+  application cache는 삭제하지 않습니다.
+
+```bash
+npm run pwa:verify   # production ngsw.json·manifest·인증 캐시 경계 검증
+npm run test:pwa     # PWA validator fixture 계약 테스트
+```
+
+manifest·offline 전환은 Chromium E2E로 확인하지만, 실제 Service Worker lifecycle과
+Capacitor WebView의 native cache 저장소는 이 모듈의 브라우저 검증에 포함하지 않습니다.
+실기기 설치·업데이트·offline 동작은 [Issue #27](https://github.com/bluetape4k/clinic-appointment/issues/27),
+운영 origin·cookie 보안은 [Issue #24](https://github.com/bluetape4k/clinic-appointment/issues/24)에서
+후속 검증합니다.
+
 ## 테스트
 
 ```bash
 npm test -- --watch=false   # Vitest 기반 Angular 단위·계약 테스트
 npm run test:bundle         # WebView bundle fixture 계약 테스트
+npm run test:pwa             # PWA cache/installability fixture 계약 테스트
 npm run test:e2e             # Playwright Chromium 브라우저 시나리오
 ```
 

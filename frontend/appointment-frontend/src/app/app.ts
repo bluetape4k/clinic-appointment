@@ -11,6 +11,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs/operators';
 import { WorkforceAuthBootstrapService } from './core/services/workforce-auth-bootstrap.service';
+import { PwaStatusService } from './core/services/pwa-status.service';
 import { MobileViewportDirective } from './shared';
 
 export interface NavItem {
@@ -41,6 +42,8 @@ export class App {
   private readonly router = inject(Router);
   private readonly workforceAuthBootstrap = inject(WorkforceAuthBootstrapService);
 
+  readonly pwaStatus = inject(PwaStatusService);
+
   readonly isPatientPortal = signal(this.router.url.startsWith('/portal'));
 
   readonly navItems: NavItem[] = [
@@ -52,8 +55,8 @@ export class App {
   readonly isDesktop = toSignal(
     this.breakpointObserver
       .observe([Breakpoints.Medium, Breakpoints.Large, Breakpoints.XLarge])
-      .pipe(map(result => result.matches)),
-    { initialValue: false }
+      .pipe(map((result) => result.matches)),
+    { initialValue: false },
   );
 
   constructor() {
@@ -64,6 +67,8 @@ export class App {
         filter((event): event is NavigationEnd => event instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe(event => this.isPatientPortal.set(event.urlAfterRedirects.startsWith('/portal')));
+      .subscribe((event) =>
+        this.isPatientPortal.set(event.urlAfterRedirects.startsWith('/portal')),
+      );
   }
 }
