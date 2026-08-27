@@ -6,7 +6,7 @@
 - stacked base: #26 exact head `bd27c0c6d02e666ccc6151d1d522ca19681eeb43`
 - 범위: Angular Service Worker wiring, manifest/installability metadata, 제한된
   public master-data cache, 인증·예약 mutation network-only interceptor, offline/update
-  status UX, CORS preflight headers, production artifact validator와 Chromium 계약
+  status UX, production artifact validator와 Chromium 계약
 - 제외: offline mutation queue/background sync, push notification, Capacitor native
   install/update/cache lifecycle와 실제 iOS·Android device 검증(#27/#24)
 - 기준: `bluetape-workflow`, `bluetape-full-feature`, `bluetape-writer`,
@@ -19,9 +19,9 @@
 | --------------------------- | --: | --: | --: | --: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1. Performance              |   0 |   0 |   1 |   0 | app shell은 해시 JS·CSS와 lazy chunk를 Angular `prefetch`로 버전 고정한다. `PwaStatusService`는 online event와 `VERSION_READY`만 구독하고 polling·retry·무제한 buffer를 만들지 않는다. 설치 byte와 native cold-start 측정은 #27 후속이라 P2 경계로 남긴다.                                                                                                                                                         |
 | 2. Stability                |   0 |   0 |   1 |   0 | `ngsw-config.json`은 freshness `maxSize=20`, `maxAge=1h`, `timeout=5s`로 bounded data cache를 사용하고 `/api/**` navigation fallback을 제외한다. `resetCache()`는 `ngsw:`만 삭제하며 update 실패를 notice로 노출한다. 실제 Service Worker lifecycle·부분 배포 복구는 device/운영 검증 범위다.                                                                                                                      |
-| 3. Security                 |   0 |   0 |   1 |   0 | data group은 `/api/public/master-data/**` 하나뿐이며 auth·tenant·patient·appointment·admin pattern을 포함하지 않는다. auth scope/credentials GET은 `ngsw-bypass`, mutation은 `no-store`/`no-cache`, offline mutation은 status `0` `OFFLINE_MUTATION`으로 종료한다. cross-origin preflight가 이 헤더를 허용하도록 `ApiCorsProperties`와 `application.yml`을 정렬했으며, 실제 origin/cookie 정책은 #24에서 검증한다. |
+| 3. Security                 |   0 |   0 |   1 |   0 | data group은 `/api/public/master-data/**` 하나뿐이며 auth·tenant·patient·appointment·admin pattern을 포함하지 않는다. auth scope/credentials GET은 `ngsw-bypass`, mutation은 `no-store`/`no-cache`, offline mutation은 status `0` `OFFLINE_MUTATION`으로 종료한다. cross-origin preflight·origin·cookie 정책은 #24에서 검증하며 이 slice는 backend CORS source를 변경하지 않는다. |
 | 4. Operator/Ops             |   0 |   0 |   1 |   0 | production에서만 `provideServiceWorker`를 활성화하고 `registerWhenStable:30000`으로 등록한다. `pwa:verify`는 `manifest.webmanifest`, `ngsw.json`, `ngsw-worker.js`, asset/data/navigation boundary를 fail-closed로 검사한다. HTTPS certificate, CDN cache header, rollback과 native storage는 이 slice 밖이다.                                                                                                     |
-| 5. Developer/API            |   0 |   0 |   0 |   0 | Angular 공식 `@angular/pwa` schematic dependency와 `@angular/service-worker` runtime만 추가했다. 기존 `API_AUTH_SCOPE`, `TenantApiClient`, Angular XSRF/auth/error interceptor 순서를 재사용하고 별도 cache abstraction이나 endpoint를 만들지 않았다. backend CORS 회귀 테스트는 기존 `bluetape4k-assertions`를 계속 사용한다.                                                                                     |
+| 5. Developer/API            |   0 |   0 |   0 |   0 | Angular 공식 `@angular/pwa` schematic dependency와 `@angular/service-worker` runtime만 추가했다. 기존 `API_AUTH_SCOPE`, `TenantApiClient`, Angular XSRF/auth/error interceptor 순서를 재사용하고 별도 cache abstraction·endpoint·backend CORS source를 만들지 않았다.                                                                                     |
 | 6. User/Caller              |   0 |   0 |   1 |   0 | `aria-live="polite"` status region이 offline·online·update available·cache reset 결과를 설명하고, offline 예약 변경을 성공처럼 표시하지 않는다. browser E2E는 manifest/installability metadata와 전환 UX를 확인하지만 실제 iOS/Android IME·WebView update는 #27/#24의 후속 조건이다.                                                                                                                               |
 | 7. Main-session integration |   0 |   0 |   0 |   0 | #26 exact head 위에서만 변경했고 root의 unrelated dirty 파일을 건드리지 않았다. issue/PR/receipt에는 exact full SHA, local metrics, CI와 다음 #27 handoff를 기록하며 Epic 전체 완료 전 merge하지 않는다.                                                                                                                                                                                                           |
 
@@ -39,15 +39,16 @@
 
 | 점검                                                | 결과 | 근거                                                                                                                     |
 | --------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------ |
-| `bluetape-kotlin-patterns` null safety·immutability | PASS | `ApiCorsProperties.DEFAULT_ALLOWED_HEADERS`의 불변 `List`, 기존 `require` 검증과 단일 configuration 책임을 유지했다.     |
-| Kotlin naming·API boundary                          | PASS | `ngsw-bypass`, `Cache-Control`, `Pragma`는 HTTP contract token으로 보존하고, 설정 property와 CORS source를 분리했다.     |
+| `bluetape-kotlin-patterns` null safety·immutability | N/A | 이번 commit은 Kotlin production source를 변경하지 않으며, 기존 API CORS property의 불변 `List`와 `require` 검증을 보존했다. |
+| Kotlin naming·API boundary                          | N/A | backend CORS source와 HTTP contract는 변경하지 않고 frontend interceptor가 기존 API 요청 경계만 재사용한다.     |
 | Kotlin test pattern                                 | PASS | 기존 JUnit 5 + `io.bluetape4k.assertions.shouldBeEqualTo`/`assertFailsWith` 테스트 구조를 재사용했다.                    |
 | Frontend pattern                                    | PASS | Angular standalone signal·functional interceptor·`takeUntilDestroyed`와 기존 `API_AUTH_SCOPE`/Material shell을 사용했다. |
 | dependency reuse                                    | PASS | 공식 Angular PWA 패키지 외 새 dependency·native plugin·backend public endpoint를 추가하지 않았다.                        |
 
-`bluetape4k-assertions`를 frontend에 억지로 복사하지 않고, Kotlin CORS contract test의
-기존 assertion 경계를 보존했다. PWA cache는 Angular Service Worker가 소유하고 앱은
-status/interceptor로 인증 경계를 명시한다.
+`bluetape4k-assertions`를 frontend에 억지로 복사하지 않고, 이번 slice에서는 Kotlin
+production/test source를 변경하지 않았다. PWA cache는 Angular Service Worker가
+소유하고 앱은 status/interceptor로 인증 경계를 명시한다. cross-origin API의 CORS
+header·cookie 계약은 backend 변경이 필요한 별도 #24 범위로 남긴다.
 
 ## 검증 증거
 
@@ -62,7 +63,6 @@ status/interceptor로 인증 경계를 명시한다.
 | PWA artifact     | `npm run pwa:verify`                                                                                                                         | `ok=true`, `shellAssets=47`, `dataGroups=1`, `failures=[]`                |
 | TypeScript       | `npx tsc --noEmit -p tsconfig.app.json`                                                                                                      | passed                                                                    |
 | Browser E2E      | `npm run test:e2e`                                                                                                                           | Chromium 20 tests passed                                                  |
-| Backend CORS     | `./gradlew :appointment-api:test --tests ...ApiCorsPropertiesTest --tests ...ApiCorsConfigurationTest --no-daemon --offline --max-workers=1` | 6 tests passed, `BUILD SUCCESSFUL`                                        |
 | Module build     | `./gradlew :appointment-api:build --no-daemon --max-workers=1 --console=plain`                                                              | 906 tests, 3 skipped; `BUILD SUCCESSFUL`                                  |
 | Docs contract    | `npm run docs:verify`                                                                                                                        | `ok=true`, `documentsChecked=10`, `sourceChecks=8`, `failures=[]`          |
 | Korean artifact  | `audit-korean-terms.mjs`                                                                                                                     | 6 files, `findings=0`                                                     |

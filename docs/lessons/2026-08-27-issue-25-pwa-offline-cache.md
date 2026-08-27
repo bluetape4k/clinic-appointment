@@ -14,9 +14,10 @@ Service Worker와 기존 API/auth 경계를 연결하는 일이었다.
 - app root의 기존 standalone shell·Material button·#26 `MobileViewportDirective`를
   그대로 사용하고, PWA 상태는 작은 `role="status"` region으로만 추가했다. 페이지마다
   online/cache 상태를 복제하지 않는다.
-- backend CORS는 기존 `ApiCorsProperties`/`ApiCorsConfiguration`을 확장해 PWA가 실제
-  cross-origin preflight를 통과하도록 했다. 새 endpoint나 별도 security filter는 만들지
-  않았고, 테스트는 기존 `bluetape4k-assertions`를 유지했다.
+- backend CORS source는 변경하지 않았다. cross-origin preflight·cookie 계약은 실제
+  origin 정책을 함께 검증해야 하므로 #24에서 별도 backend 변경으로 다룬다. 이번
+  slice의 Kotlin production/test source와 기존 `bluetape4k-assertions` 경계는 그대로
+  보존한다.
 
 ## 고정한 계약
 
@@ -40,17 +41,15 @@ Service Worker와 기존 API/auth 경계를 연결하는 일이었다.
 - production build와 bundle validator가 `initialBytes=633018`와 4개 lazy route를
   확인했고, PWA validator가 shell 47개·data group 1개·forbidden path 0개를 확인했다.
 - TypeScript compile과 Chromium E2E 20건(새 manifest/offline 2건 포함)이 통과했다.
-- `appointment-api` CORS properties/source targeted test 6건은
-  `BUILD SUCCESSFUL`이며 `bluetape4k.assertions` assertion을 사용한다.
+- `appointment-api` 전체 build는 906 tests/3 skipped와 함께 `BUILD SUCCESSFUL`이다.
 
 ## 놓치기 쉬운 경계와 다음 방어선
 
 - Angular dev server는 Service Worker를 production처럼 등록하지 않으므로 browser E2E의
   offline 전환은 status UX와 network interceptor 계약을 검증하는 evidence다. 실제
   install/update/persistence를 PASS라고 부르지 말고 #27 native lane에서 확인한다.
-- `ngsw-bypass`, `Cache-Control`, `Pragma`는 cross-origin preflight에 포함되므로 API
-  allowed headers를 함께 갱신해야 한다. frontend만 변경하면 native/WebView에서 login이나
-  예약 mutation이 preflight 단계에서 실패할 수 있다.
+- `ngsw-bypass`, `Cache-Control`, `Pragma`는 cross-origin preflight 계약이므로 실제
+  API allowed headers와 cookie 정책 반영은 #24의 backend/native 보안 검증으로 남긴다.
 - public master-data endpoint가 생기더라도 먼저 개인정보·tenant scope를 검토하고,
   `ngsw-config.json` data group과 static validator fixture를 같이 갱신한다. 예약 생성·변경·
   취소 응답을 offline cache에 넣거나 queue로 승격하지 않는다.

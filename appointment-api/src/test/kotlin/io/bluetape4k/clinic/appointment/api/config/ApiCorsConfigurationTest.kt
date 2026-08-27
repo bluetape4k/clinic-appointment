@@ -31,9 +31,6 @@ class ApiCorsConfigurationTest {
             "Idempotency-Key",
             "If-None-Match",
             "If-Match",
-            "ngsw-bypass",
-            "Cache-Control",
-            "Pragma",
         )
         configuration.exposedHeaders shouldBeEqualTo listOf(
             "ETag",

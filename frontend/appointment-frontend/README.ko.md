@@ -56,10 +56,6 @@ API 서버(`http://localhost:8080`)가 먼저 실행되어 있어야 합니다.
   설정은 `/api/**`에만 적용되며, HTTPS가 기본입니다. `http://localhost`와
   `http://127.0.0.1`은 개발 진단에만 허용합니다.
 
-  PWA 요청의 cross-origin preflight는 API CORS 허용 헤더에 `ngsw-bypass`,
-  `Cache-Control`, `Pragma`를 포함해야 합니다. 현재 API 기본 설정과 예제
-  `application.yml`이 이 계약을 함께 선언합니다.
-
 - patient 인증은 HttpOnly cookie와 Angular `HttpXsrfTokenExtractor`를 재사용하고
   unsafe 요청에 `X-XSRF-TOKEN`을 보냅니다. patient JWT를 `localStorage`나
   `sessionStorage`에 저장하지 않으며, workforce Bearer token은 기존 메모리 상태만
