@@ -171,7 +171,7 @@ jobs:
           disable-animations: true
           script: |
             set -eu
-            (cd frontend/appointment-frontend && ./android/gradlew --no-daemon --stacktrace assembleDebug)
+            (cd frontend/appointment-frontend/android && ./gradlew --no-daemon --stacktrace assembleDebug)
             adb install -r frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -W -n io.bluetape4k.clinic.appointment/.MainActivity
             adb shell am start -W -a android.intent.action.VIEW \
