@@ -14,7 +14,7 @@
 | 관점 | P0 | P1 | P2 | P3 | 결과와 근거 |
 |---|---:|---:|---:|---:|---|
 | Performance | 0 | 0 | 1 | 0 | origin `URL` 정규화와 XSRF token 조회는 요청 경계의 유한한 작업이다. benchmark는 해당 변경의 수용 기준이 아니므로 N/A다. 반복 측정 주장을 하지 않도록 계획에 명시했다. |
-| Stability | 0 | 0 | 1 | 0 | 새 외부 connection·thread·retry가 없고 CORS source는 조건부 bean이다. native `SameSite=Strict` cookie 실동작은 이 slice에서 포장하지 않고 #24/#27로 경계를 분리했다. |
+| Stability | 0 | 0 | 1 | 0 | 새 외부 connection·thread·retry가 없고 CORS source는 비활성일 때 빈 mapping만 제공한다. native `SameSite=Strict` cookie 실동작은 이 slice에서 포장하지 않고 #24/#27로 경계를 분리했다. |
 | Security | 0 | 0 | 0 | 0 | origin-only/HTTPS/wildcard 거부, patient XSRF scope 제한, Bearer 메모리 보관, patient JWT storage 금지, explicit CORS와 credentials 검증이 모두 계획에 있다. |
 | Operator/Ops | 0 | 0 | 1 | 0 | CORS는 disabled-by-default라 기존 배포를 깨지 않지만, native 운영자는 HTTPS origin과 CORS 목록을 함께 넣어야 한다. `application.yml` 설명과 startup validation 테스트를 계획했다. |
 | Developer/API | 0 | 0 | 0 | 0 | `TenantApiClient`가 tenant path와 auth context의 단일 책임을 유지하고 Angular의 `HttpXsrfTokenExtractor`와 Spring Security CORS 통합을 재사용한다. 새 dependency나 raw client가 없다. |
@@ -31,8 +31,9 @@
 3. `TenantApiClient`, `API_AUTH_SCOPE`, `PatientAuthService`, `AuthService`,
    `SessionStateService`의 기존 경계를 보존하고, 새 interceptor는 token extractor만
    재사용한다.
-4. Spring CORS source는 `enabled=true`일 때만 생성하고 두 security chain에 `.cors {}`를
-   등록하므로 authentication/CSRF 순서를 바꾸지 않는다.
+4. Spring CORS source는 항상 존재하되 `enabled=true`일 때만 `/api/**` mapping을
+   등록하고 두 security chain에 `.cors {}`를 등록하므로 authentication/CSRF 순서를
+   바꾸지 않는다.
 5. public behavior 변경에 맞춰 `README.md`, `README.ko.md`, API `application.yml`,
    Korean KDoc/설정 설명을 plan에 포함했다. CHANGELOG/release note는 이 stacked
    feature가 아직 미출시이므로 N/A다.

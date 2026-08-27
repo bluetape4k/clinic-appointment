@@ -93,10 +93,10 @@ function validateFrontendContract() {
     ['patient portal login/register routes', /path:\s*'(login|register)'/, portalRoutes],
     ['patient portal auth guard', /patientAuthGuard/, portalRoutes],
     ['tenant session storage', /sessionStorage/, tenantContext],
-    ['tenant-scoped portal client URL', /\$\{environment\.apiUrl\}\/\$\{encodeURIComponent\(tenantCode\)\}\$\{path\}/, portalApi],
-    ['tenant-scoped patient auth URL', /\$\{environment\.apiUrl\}\/\$\{encodeURIComponent\(normalized\)\}\/auth\//, patientAuth],
+    ['tenant-scoped portal client transport', /TenantApiClient[\s\S]*authScope:\s*'patient-cookie'/, portalApi],
+    ['tenant-scoped patient auth transport', /TenantApiClient[\s\S]*authScope:\s*'patient-cookie'/, patientAuth],
     ['legacy staff JWT service', /class\s+AuthService/, staffAuth],
-    ['legacy staff unscoped appointment URL', /\$\{environment\.apiUrl\}\/appointments/, staffAppointments],
+    ['tenant-scoped staff transport', /TenantApiClient[\s\S]*authScope:\s*'workforce-bearer'/, staffAppointments],
   ]
   for (const [label, pattern, source] of sourceChecks) {
     if (!pattern.test(source)) failures.push(`source: missing ${label}`)

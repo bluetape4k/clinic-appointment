@@ -26,6 +26,50 @@ npm start   # http://localhost:4200
 
 API 서버(`http://localhost:8080`)가 먼저 실행되어 있어야 합니다.
 
+## API origin·인증 전송 계약
+
+- 브라우저 개발 환경은 `environment.apiOrigin=''`과 `/api` proxy를 사용합니다.
+- 같은 origin으로 배포하는 production browser도 `apiOrigin`을 비워 둡니다. API가
+  다른 호스트라면 `environment.prod.ts`에 `https://` origin을 지정합니다.
+- Capacitor WebView는 비어 있지 않은 HTTPS origin이 필요합니다. 여러 native 환경에서
+  같은 bundle을 재사용해야 하면 앱이 시작되기 전에 제한된 runtime 설정을 주입합니다.
+
+  ```ts
+  globalThis.__CLINIC_API_CONFIG__ = { apiOrigin: 'https://api.example.test' };
+  ```
+
+  runtime 설정도 credentials, path, query, fragment, wildcard를 포함할 수 없으며,
+  `TenantApiClient`가 `/api/{tenantCode}/...` 경로를 구성합니다.
+
+- API를 cross-origin으로 열 때만 다음처럼 명시적인 origin과 credentials를 함께
+  설정합니다. `*` origin은 patient cookie와 함께 사용할 수 없습니다.
+
+  ```yaml
+  scheduling:
+    security:
+      cors:
+        enabled: true
+        allowed-origins: [https://app.example.test]
+        allow-credentials: true
+  ```
+
+  설정은 `/api/**`에만 적용되며, HTTPS가 기본입니다. `http://localhost`와
+  `http://127.0.0.1`은 개발 진단에만 허용합니다.
+
+- patient 인증은 HttpOnly cookie와 Angular `HttpXsrfTokenExtractor`를 재사용하고
+  unsafe 요청에 `X-XSRF-TOKEN`을 보냅니다. patient JWT를 `localStorage`나
+  `sessionStorage`에 저장하지 않으며, workforce Bearer token은 기존 메모리 상태만
+  사용하고 cookie를 보내지 않습니다.
+- cross-origin API를 사용할 때는 CSRF bootstrap이 앱 origin에서 읽을 수 있는
+  `XSRF-TOKEN` cookie를 발급해야 합니다. API host에만 있는 host-only cookie는 앱
+  WebView가 읽을 수 없으므로, same-site/reverse proxy 배포 조건을 먼저 고정하고
+  token을 storage로 복사하지 않습니다.
+- patient cookie가 `SameSite=Strict`인 상태에서 native 앱과 API가 cross-site이면
+  cookie 동작을 이 문서나 browser E2E의 성공으로 간주하지 않습니다. 실제 기기 정책은
+  [Issue #24](https://github.com/bluetape4k/clinic-appointment/issues/24), native
+  bridge가 필요할 때의 경계는 [Issue #27](https://github.com/bluetape4k/clinic-appointment/issues/27)에서
+  검증합니다.
+
 ## 사용자 흐름
 
 ![환자 예약 시나리오 시퀀스](../../docs/requirements/assets/user-scenarios-01-patient-booking-ko.png)

@@ -17,12 +17,15 @@ const managementServices = [
   'dashboard-stats.service.ts',
 ] as const;
 
-const workingDirectory = (globalThis as typeof globalThis & {
-  process?: { cwd(): string };
-}).process?.cwd() ?? '.';
+const workingDirectory =
+  (
+    globalThis as typeof globalThis & {
+      process?: { cwd(): string };
+    }
+  ).process?.cwd() ?? '.';
 
 describe('tenant API source contract', () => {
-  it.each(managementServices)('%s는 공통 tenant transport만 사용한다', fileName => {
+  it.each(managementServices)('%s는 공통 tenant transport만 사용한다', (fileName) => {
     const source = readFileSync(`${workingDirectory}/src/app/core/services/${fileName}`, 'utf8');
 
     expect(source).not.toMatch(/HttpClient/);
@@ -30,5 +33,18 @@ describe('tenant API source contract', () => {
     expect(source).not.toMatch(/['"]\/api\//);
     expect(source).toContain("from '../api/tenant-api-client'");
     expect(source).toContain("authScope: 'workforce-bearer'");
+  });
+
+  it('patient cookie 계층은 JWT storage를 사용하지 않는다', () => {
+    const patientSources = ['patient-auth.service.ts', 'portal-api-client.ts'] as const;
+
+    for (const fileName of patientSources) {
+      const source = readFileSync(
+        `${workingDirectory}/src/app/core/${fileName === 'patient-auth.service.ts' ? 'services' : 'api'}/${fileName}`,
+        'utf8',
+      );
+      expect(source).not.toMatch(/localStorage|sessionStorage/);
+      expect(source).not.toMatch(/auth[_-]?token/i);
+    }
   });
 });

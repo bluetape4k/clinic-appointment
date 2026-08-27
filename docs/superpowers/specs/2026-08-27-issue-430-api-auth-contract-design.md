@@ -50,8 +50,9 @@ credentials 조합은 설정 단계에서 거부한다. patient cookie의 `HttpO
    해석한다.
 2. runtime override는 `globalThis.__CLINIC_API_CONFIG__`의 `apiOrigin`만 읽으며
    storage나 query string을 사용하지 않는다.
-3. production 또는 native에서 origin이 없거나 HTTP이면 즉시 실패하고, origin에
-   credentials·path·query·fragment가 들어오면 거부한다.
+3. native에서 origin이 없으면 즉시 실패하고, production의 비어 있지 않은 origin이
+   HTTP이면 거부한다. 모든 origin에 credentials·path·query·fragment가 들어오면
+   거부한다.
 4. 기존 tenant encoding과 `/api/{tenantCode}/...` path를 유지한다.
 5. `TenantApiClient`가 patient cookie scope의 `withCredentials` 기본값을 `true`로
    정하고 workforce Bearer scope에는 cookie를 보내지 않도록 한다.
@@ -100,17 +101,18 @@ TenantApiClient.url(path)
                 └─ AuthService 메모리 token → Authorization: Bearer ...
 
 Spring Security
-        └─ CORS source (enabled=true일 때만) → finite origins + credentials
+        └─ empty source 또는 enabled `/api/**` mapping → finite origins + credentials
 ```
 
 ### Frontend origin 계약
 
 - `apiOrigin=''`: browser same-origin 또는 development proxy. native에서 사용하면
-  명확한 configuration error를 반환한다.
+  명확한 configuration error를 반환한다. production browser의 same-origin 배포는
+  이 값을 허용한다.
 - `apiOrigin='https://api.example.test'`: trailing slash를 제거한 origin으로
   정규화한다.
-- `http://...`: development browser의 localhost 진단만 허용하고 production/native는
-  거부한다.
+- `http://...`: development browser의 localhost 진단만 허용하고 production의
+  cross-origin/native 요청은 거부한다.
 - `https://api.example.test/api`: path가 포함되어 거부한다. base path는 항상
   `apiBasePath='/api'`로 관리한다.
 - runtime override가 있으면 environment 값보다 우선하지만, 같은 validation을
@@ -122,13 +124,17 @@ Spring Security
 2. `patient-cookie` unsafe request만 `HttpXsrfTokenExtractor.getToken()`을 호출한다.
 3. token이 없거나 caller가 이미 `X-XSRF-TOKEN`을 지정했으면 request를 그대로 전달한다.
 4. `TenantApiClient`가 patient scope의 credentials 기본값을 true로 보장한다.
-5. Angular built-in interceptor와 중복되어도 caller header를 덮어쓰지 않는다.
+5. same-origin request는 Angular built-in interceptor에 위임하고, cross-origin request만
+   이 interceptor가 token을 보강한다.
+6. cross-origin bootstrap은 앱 origin에서 읽을 수 있는 `XSRF-TOKEN` cookie를 제공해야
+   하며 API host-only cookie를 storage로 복사하지 않는다.
 
 ### Backend CORS 계약
 
 - property prefix: `scheduling.security.cors`
 - 기본값: `enabled=false`, `allowed-origins=[]`, `allow-credentials=true`
 - enabled일 때 origin은 하나 이상이어야 하고 `*`를 사용할 수 없다.
+- enabled일 때 `allow-credentials=false`는 patient cookie 계약을 깨므로 거부한다.
 - origin은 `https://`를 기본으로 하며 local 진단용 `http://localhost`와
   `http://127.0.0.1`만 허용한다.
 - `/api/**`에 `GET, POST, PUT, PATCH, DELETE, OPTIONS`와
@@ -137,7 +143,8 @@ Spring Security
 - `ETag`, `Retry-After`, `X-Correlation-Id`, `X-Tenant-Identity-Generation`을 노출하고
   preflight `maxAge`를 설정한다.
 - CORS filter를 Spring Security authentication보다 먼저 실행하고, 기본 security
-  chain과 dev/test no-op chain 모두 같은 source를 사용한다.
+  chain과 dev/test no-op chain 모두 같은 source를 사용한다. `enabled=false`에서는
+  source가 비어 있어 기존 same-origin 요청에 CORS headers를 추가하지 않는다.
 
 ## 실패·호환성 계약
 
@@ -145,8 +152,8 @@ Spring Security
 |---|---|
 | tenant 없음 | 기존 `TenantContextService.requireTenant()` 오류를 network 호출 전에 반환 |
 | malformed/external API path | 기존 내부 path validation을 유지 |
-| production/native API origin 없음 | origin configuration error, request 미전송 |
-| production/native HTTP origin | HTTPS policy error, request 미전송 |
+| native API origin 없음 | origin configuration error, request 미전송 |
+| production의 non-empty/native HTTP origin | HTTPS policy error, request 미전송 |
 | CORS enabled + empty/wildcard origin | Spring configuration startup failure |
 | patient 401/403 | 기존 `errorInterceptor`와 `SessionStateService`의 `unauthorized/forbidden` 유지 |
 | CSRF 실패 | 기존 HTTP error가 patient 상태 모델로 전파되고 Bearer header는 추가하지 않음 |

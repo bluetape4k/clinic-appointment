@@ -2,6 +2,7 @@ package io.bluetape4k.clinic.appointment.api.security
 
 import io.bluetape4k.clinic.appointment.api.config.PlanFoundationError
 import io.bluetape4k.clinic.appointment.api.config.AppointmentCommitmentApiError
+import io.bluetape4k.clinic.appointment.api.config.ApiCorsConfiguration
 import io.bluetape4k.clinic.appointment.api.config.isAppointmentCommitmentRequestPath
 import io.bluetape4k.clinic.appointment.api.config.isPatientCancellationHistoryRequestPath
 import io.bluetape4k.clinic.appointment.api.config.SchedulingPolicyErrorCode
@@ -23,6 +24,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Profile
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
@@ -59,6 +61,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
+@Import(ApiCorsConfiguration::class)
 @Profile("(!dev & !test) | integration-test")
 @EnableConfigurationProperties(JwtSecurityProperties::class)
 class SecurityConfig {
@@ -178,6 +181,8 @@ class SecurityConfig {
         patientProperties: ObjectProvider<PatientAuthenticationProperties>,
     ): SecurityFilterChain =
         http
+            // preflight는 cookie가 없으므로 authentication보다 먼저 explicit origin 정책을 적용한다.
+            .cors { }
             // 환자 JWT는 HttpOnly cookie로 전송되므로 bearer-only API의 예외를 두지 않고
             // Angular가 읽는 XSRF-TOKEN cookie/header 계약을 활성화한다. SPA 전략은
             // authentication/logout 뒤 지워진 token을 다음 GET에서 재발급한다.
@@ -696,6 +701,7 @@ private fun jakarta.servlet.http.HttpServletRequest.isPatientCancellationHistory
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
+@Import(ApiCorsConfiguration::class)
 @Profile("(dev | test) & !integration-test")
 class NoOpSecurityConfig {
 
@@ -716,6 +722,7 @@ class NoOpSecurityConfig {
     ): SecurityFilterChain {
         log.info { "JWT 보안 비활성화 — 모든 요청 허용" }
         return http
+            .cors { }
             .csrf { it.disable() }
             .authorizeHttpRequests { it.anyRequest().permitAll() }
             .addFilterBefore(correlationIdFilter, UsernamePasswordAuthenticationFilter::class.java)

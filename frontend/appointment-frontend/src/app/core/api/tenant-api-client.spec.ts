@@ -51,7 +51,10 @@ describe('TenantApiClient', () => {
     expect(request.request.withCredentials).toBe(false);
     request.flush({ ok: true }, { headers: new HttpHeaders({ ETag: '"1"' }) });
 
-    await expect(promise).resolves.toMatchObject({ body: { ok: true }, headers: expect.anything() });
+    await expect(promise).resolves.toMatchObject({
+      body: { ok: true },
+      headers: expect.anything(),
+    });
   });
 
   it('patient cookie scope는 Bearer를 붙이지 않고 credentials를 활성화한다', async () => {
@@ -68,17 +71,51 @@ describe('TenantApiClient', () => {
     await expect(promise).resolves.toMatchObject({ body: { ok: true } });
   });
 
+  it('patient cookie scope는 credentials를 생략해도 자동으로 활성화한다', async () => {
+    const promise = client.request<{ ok: boolean }>('GET', '/auth/session', {
+      authScope: 'patient-cookie',
+    });
+    const request = httpMock.expectOne('/api/tenant-a/auth/session');
+
+    expect(request.request.withCredentials).toBe(true);
+    request.flush({ ok: true });
+
+    await expect(promise).resolves.toMatchObject({ body: { ok: true } });
+  });
+
+  it('patient cookie scope에서 credentials를 명시적으로 끄면 network 전에 실패한다', async () => {
+    await expect(
+      client.request('POST', '/auth/logout', {
+        authScope: 'patient-cookie',
+        withCredentials: false,
+      }),
+    ).rejects.toThrow('withCredentials');
+    httpMock.expectNone(() => true);
+  });
+
+  it('workforce Bearer scope에서 credentials를 켜면 network 전에 실패한다', async () => {
+    await expect(
+      client.request('GET', '/appointments', {
+        authScope: 'workforce-bearer',
+        withCredentials: true,
+      }),
+    ).rejects.toThrow('workforce-bearer');
+    httpMock.expectNone(() => true);
+  });
+
   it('tenant가 없으면 네트워크 요청 전에 실패한다', async () => {
     tenant.clear();
 
-    await expect(client.request('GET', '/appointments', { authScope: 'workforce-bearer' }))
-      .rejects.toThrow('tenant scope');
+    await expect(
+      client.request('GET', '/appointments', { authScope: 'workforce-bearer' }),
+    ).rejects.toThrow('tenant scope');
     httpMock.expectNone(() => true);
   });
 
   it('내부 path가 아니면 네트워크 요청 전에 실패한다', async () => {
-    await expect(client.request('GET', 'https://attacker.example/api', { authScope: 'workforce-bearer' }))
-      .rejects.toThrow('API path');
+    await expect(
+      client.request('GET', 'https://attacker.example/api', { authScope: 'workforce-bearer' }),
+    ).rejects.toThrow('API path');
     httpMock.expectNone(() => true);
   });
 });
