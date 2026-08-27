@@ -8,6 +8,7 @@ const REQUIRED_MARKERS = Object.freeze([
   'actions/checkout@',
   'git rev-parse HEAD',
   'npm run cap:sync',
+  '(cd frontend/appointment-frontend && ./android/gradlew',
   'android-webview',
   'ios-webview',
   'adb shell am start',
