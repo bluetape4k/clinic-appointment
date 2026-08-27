@@ -42,6 +42,8 @@ iOS·Android Capacitor platform project.
   검증 경계
 - 생성: `docs/superpowers/reviews/2026-08-27-issue-23-capacitor-foundation-plan-review.ko.md` —
   Step 3-R 여섯 관점 통합 검토
+- 생성: `docs/superpowers/reviews/2026-08-27-issue-23-capacitor-foundation-implementation-review.ko.md` —
+  Step 6-R 일곱 관점 구현 검토
 
 ## Task 1: dependency와 명령을 고정한다
 
@@ -231,8 +233,10 @@ git diff --stat origin/develop...HEAD
 git diff --check
 ```
 
-Expected: 변경 파일은 package/lock, Capacitor config/platform, README와 lesson으로
-제한된다. API·인증·PWA·UX·bridge 구현은 포함하지 않는다.
+Expected: 변경 파일은 package/lock, Capacitor config/platform, README, lesson과
+`docs/superpowers/specs/`, `docs/superpowers/plans/`, `docs/superpowers/reviews/`의
+이 slice 전용 workflow 증거로 제한된다. API·인증·PWA·UX·bridge 구현은 포함하지
+않는다.
 
 - [ ] **Step 3: native toolchain 경계를 확인한다**
 
@@ -253,6 +257,7 @@ native build 성공으로 간주하지 않으며, SDK가 없으면 #24의 실행
 
 - Create: `docs/lessons/2026-08-27-issue-23-capacitor-foundation.md`
 - Create: `docs/superpowers/reviews/2026-08-27-issue-23-capacitor-foundation-plan-review.ko.md`
+- Create: `docs/superpowers/reviews/2026-08-27-issue-23-capacitor-foundation-implementation-review.ko.md`
 
 - [ ] **Step 1: lesson에 재현 조건과 경계를 기록한다**
 

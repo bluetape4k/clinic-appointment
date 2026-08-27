@@ -13,6 +13,12 @@
 - Capacitor가 생성한 Android 예시 테스트의 package와 기대 application ID를
   `io.bluetape4k.clinic.appointment`에 맞춰 foundation이 잘못된 template
   계약을 전파하지 않도록 했다.
+- frontend `package.json`에 Capacitor CLI의 Node `>=22.0.0` prerequisite를
+  `engines.node`로 선언하고 두 README에 Node 22 toolchain 기준을 노출했다.
+- Android WebView/auth 데이터가 backup·restore로 복원되지 않도록
+  `allowBackup=false`, legacy/modern backup rule을 추가하고 FileProvider root를
+  앱 전용 `Pictures/` 경로로 축소했다. 선택적 `google-services.json`이 없을 때만
+  plugin을 건너뛰고 malformed 설정 오류는 숨기지 않도록 Gradle 조건을 고정했다.
 
 ## 재현 명령과 결과
 
@@ -31,6 +37,9 @@
 | `npm test -- --watch=false` | 45 files, 327 tests 통과 |
 | `npx tsc --noEmit -p tsconfig.app.json` | 성공 |
 | `npm run test:e2e` | Chromium 10개 통과 |
+| `npm install --package-lock-only --ignore-scripts` | `engines.node`가 lockfile root에 반영됨 |
+| `xmllint --noout` (Android manifest/backup rules/FileProvider XML) | 성공 |
+| `git check-ignore -v` (signing/Google service files) | `.jks`, `.keystore`, `google-services.json` 무시 |
 | `git diff --check` | 성공 |
 | Korean terminology audit | README 2개와 plan/review 모두 findings 0 |
 | `npm audit --omit=dev --audit-level=moderate` | runtime dependency 취약점 0 |
@@ -53,7 +62,8 @@
   moderate 3건을 보고한다. runtime audit은 0건이며, audit이 제안하는
   `--force` downgrade는 고정한 CLI 호환선과 재현성을 훼손하므로 적용하지
   않았다. runtime 취약점이 없고 CLI는 개발 전용이므로 이 slice에서는 수용하며,
-  다음 dependency maintenance 때 upstream 갱신 가능성을 다시 평가한다.
+  다음 dependency maintenance 때 upstream 갱신 가능성을 다시 평가하는 P2 보류
+  항목으로 기록한다.
 
 ## 재사용 원칙
 

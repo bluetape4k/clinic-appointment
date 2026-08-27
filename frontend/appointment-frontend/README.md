@@ -47,6 +47,10 @@ npm run build   # dist/ 생성
 Angular production bundle을 만든 뒤 Capacitor native project에 정적 자산을
 동기화합니다.
 
+Capacitor 8 CLI는 Node.js 22 이상이 필요합니다. 이 저장소의 frontend
+toolchain은 Node.js `22.22.3`과 npm `11.12.0`을 기준으로 하며, `package.json`의
+`engines.node`가 동일한 최소 버전을 선언합니다.
+
 ```bash
 npm run cap:sync
 ```
