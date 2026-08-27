@@ -206,7 +206,18 @@ npx playwright test e2e/mobile-webview-contract.spec.ts \
 npm run native:workflow
 ```
 
-exact commit을 hosted runner에서 실행하려면 push된 SHA를 두 입력에 함께 전달합니다.
+standalone `native-webview-ci.yml`이 기본 브랜치에 아직 등록되지 않은 동안에는
+workflow 파일이 포함된 feature ref의 `frontend-ci.yml` `workflow_dispatch`를
+호환 경로로 실행합니다. 이 경로는 dispatch ref의 `github.sha`를 checkout SHA와
+비교하고 native job을 포함합니다.
+
+```bash
+gh workflow run frontend-ci.yml \
+  --ref feat/issue-24-native-webview-validation
+```
+
+standalone workflow가 기본 브랜치에 올라간 뒤에는 `ref`와 `expected_sha`를 같은
+exact SHA로 고정하는 canonical 경로를 사용합니다.
 
 ```bash
 HEAD_SHA="$(git rev-parse HEAD)"

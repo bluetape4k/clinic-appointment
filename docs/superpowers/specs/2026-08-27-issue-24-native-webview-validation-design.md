@@ -34,12 +34,14 @@ Playwright mobile profile은 빠른 회귀 신호로 사용하되 native 검증�
 
 ### A안 — 플랫폼별 CI build/smoke workflow + 로컬 browser contract (채택)
 
-`.github/workflows/native-webview-ci.yml`을 별도 workflow로 두고 workflow dispatch의
-`ref`를 exact commit으로 고정한다. Android job은 Node/npm으로 `cap sync`한 뒤 hosted
-Ubuntu의 Android SDK와 Gradle wrapper로 debug APK를 만들고 emulator에서 설치·launch·
-custom-scheme intent를 수행한다. iOS job은 hosted macOS에서 `cap sync` 후
-`xcodebuild`로 simulator build/install/launch/openURL smoke를 수행한다. 각 job은
-platform, toolchain, commit, command, 결과를 하나의 artifact manifest로 업로드한다.
+`.github/workflows/native-webview-ci.yml`을 canonical workflow로 두고 workflow dispatch의
+`ref`를 exact commit으로 고정한다. 이 workflow가 기본 브랜치에 등록되기 전에는 동일한
+native job을 포함한 feature ref의 `frontend-ci.yml` `workflow_dispatch`를 compatibility
+경로로 사용한다. Android job은 Node/npm으로 `cap sync`한 뒤 hosted Ubuntu의 Android SDK와
+Gradle wrapper로 debug APK를 만들고 emulator에서 설치·launch·custom-scheme intent를
+수행한다. iOS job은 hosted macOS에서 `cap sync` 후 `xcodebuild`로 simulator
+build/install/launch/openURL smoke를 수행한다. 각 job은 platform, toolchain, commit,
+command, 결과를 하나의 artifact manifest로 업로드한다.
 
 로컬에서는 `native:environment` probe가 toolchain/runner 상태를 구조화해 출력하고,
 Playwright는 iPhone/Pixel device profile로 route, cookie/CSRF 전송, Safe Area, keyboard
@@ -64,7 +66,7 @@ process lifecycle과 다르다. Issue #24의 명시적 native smoke 조건을 �
 2. CI가 `GITHUB_SHA`와 입력 `ref`를 비교하고, platform toolchain 버전과 build 결과를
    `native-webview-manifest.json`에 기록한다.
 3. Android runner는 APK를 emulator에 설치하고 앱 package를 launch한 뒤 custom-scheme
-   VIEW intent를 발행한다. iOS runner는 simulator app을 설치하고 launch한 뒤
+   VIEW intent를 URI 단일 호출로 발행한다. iOS runner는 simulator app을 설치하고 launch한 뒤
    `simctl openurl`을 발행한다.
 4. smoke 명령은 process/package launch, URL dispatch 명령과 exit status를 증명한다.
    backend 인증 성공을 임의로 주장하지 않으며, browser fixture와 API contract는
@@ -88,6 +90,8 @@ process lifecycle과 다르다. Issue #24의 명시적 native smoke 조건을 �
 
 - Capacitor core/CLI/iOS/Android `8.5.0`, `@capacitor/app` `8.1.1`, Angular 22,
   Node 22, Java 25의 현재 catalog를 유지한다. 새 runtime dependency는 추가하지 않는다.
+  Android hosted Gradle smoke만 parser 호환성을 위해 Java 21 toolchain을 사용하고,
+  저장소의 일반 JVM/production 계약은 변경하지 않는다.
 - Android는 기존 `io.bluetape4k.clinic.appointment` package와 `custom_url_scheme`
   manifest를 사용한다. iOS는 기존 `App` scheme과 `CFBundleURLTypes`를 사용한다.
 - backend endpoint, auth model, patient JWT/cookie 저장 정책, route 구조, native UI
@@ -109,14 +113,16 @@ process lifecycle과 다르다. Issue #24의 명시적 native smoke 조건을 �
 5. frontend unit/contract, TypeScript, production build, browser E2E, native static,
    `git diff --check`가 통과한다.
 6. native runtime 증거가 없으면 완료 조건을 체크하지 않고 Issue #24와 Epic #13을
-   PENDING으로 유지한다.
+   PENDING으로 유지한다. 이번 exact head에서는 hosted iOS/Android report가 모두
+   `result=passed`이고 report commit이 checkout SHA와 일치한다.
 
 ## DoD와 후속
 
 - DoD: workflow, environment probe, mobile browser contract, native static/build/smoke
   evidence, Korean README/spec/plan/review/lesson, 7-Tier review, exact-head CI와
   Issue/PR read-back을 모두 기록한다.
-- 후속: hosted runner 또는 전용 macOS/Android host에서 native jobs를 실행해 성공
-  artifact를 수집한다. 그 전에는 merge-ready/epic closeout을 선언하지 않는다.
+- 잔여 운영 경계: standalone workflow를 기본 브랜치에 등록하면 canonical `ref`와
+  `expected_sha` dispatch로 전환한다. Epic #13 merge/closeout은 모든 child 완료 후
+  별도 fresh approval에서만 수행한다.
 - 제외: push notification, offline mutation queue, native auth/cookie storage, 새
   backend endpoint, Ionic 등 framework 교체.
