@@ -114,7 +114,7 @@ jobs:
   android-webview:
     if: github.event_name == 'workflow_dispatch'
     name: Android WebView native smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 35
     defaults:
       run:
@@ -165,8 +165,8 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
-          profile: pixel_7_pro
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          profile: pixel_5
+          emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
             set -euo pipefail
@@ -184,7 +184,7 @@ jobs:
         env:
           NATIVE_PLATFORM: android
           NATIVE_COMMIT: ${{ github.sha }}
-          NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-latest","java":"25","androidApi":"35","emulator":"pixel_7_pro"}'
+          NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-22.04","java":"25","android-api":"35","emulator":"pixel_5"}'
           NATIVE_COMMANDS_JSON: '["cap:sync","assembleDebug","emulator-install","app-launch","deep-link"]'
           NATIVE_RESULT: ${{ steps.android-smoke.outcome == 'success' && 'passed' || 'failed' }}
           NATIVE_REPORT_PATH: artifacts/native-webview-report.json
