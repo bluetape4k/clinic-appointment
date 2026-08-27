@@ -21,7 +21,11 @@ const REQUIRED_MARKERS = Object.freeze([
 export function validateNativeWebViewWorkflow(content) {
   const missing = REQUIRED_MARKERS.filter((marker) => !content.includes(marker));
   if (missing.length > 0) throw new Error(`missing workflow markers: ${missing.join(', ')}`);
-  const androidSection = content.split('  ios-webview:', 1)[0];
+  const androidSection =
+    content.split('  android-webview:', 2)[1]?.split('  ios-webview:', 1)[0] ?? '';
+  if (!/java-version:\s*["']21["']/u.test(androidSection)) {
+    throw new Error('Android native workflow must use Java 21 for the Capacitor Gradle toolchain');
+  }
   if (androidSection.includes('set -euo pipefail')) {
     throw new Error('native workflow script must use POSIX sh options (set -eu)');
   }

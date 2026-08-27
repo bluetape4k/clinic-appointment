@@ -26,3 +26,12 @@ test('Android emulator runner script가 POSIX sh에서 실행 가능한 옵션�
     /POSIX sh options/u,
   );
 });
+
+test('Android native Gradle toolchain은 Java 21을 사용한다', () => {
+  const content = readFileSync(workflowPath, 'utf8');
+  assert.throws(
+    () =>
+      validateNativeWebViewWorkflow(content.replace('java-version: "21"', 'java-version: "25"')),
+    /Java 21/u,
+  );
+});
