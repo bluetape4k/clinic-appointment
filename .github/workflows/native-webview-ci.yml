@@ -111,6 +111,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_5
+          emulator-boot-timeout: 1200
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
