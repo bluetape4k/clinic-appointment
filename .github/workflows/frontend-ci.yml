@@ -162,7 +162,7 @@ jobs:
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: 30
           target: default
           arch: x86_64
           profile: pixel_5
@@ -220,7 +220,7 @@ jobs:
         env:
           NATIVE_PLATFORM: android
           NATIVE_COMMIT: ${{ github.sha }}
-          NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-22.04","java":"21","android-api":"34","emulator":"pixel_5"}'
+          NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-22.04","java":"21","android-api":"30","emulator":"pixel_5"}'
           NATIVE_COMMANDS_JSON: '["cap:sync","connectedDebugAndroidTest","emulator-install","app-launch","deep-link"]'
           NATIVE_RESULT: ${{ steps.android-ui.outcome == 'success' && 'passed' || 'failed' }}
           NATIVE_SCHEMA_VERSION: "2"
