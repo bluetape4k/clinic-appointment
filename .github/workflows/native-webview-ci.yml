@@ -115,12 +115,22 @@ jobs:
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           disable-animations: true
           script: |
-            set -eu
+            set +e
+            mkdir -p artifacts/native-android-ui
             (cd frontend/appointment-frontend/android && ./gradlew --no-daemon --stacktrace connectedDebugAndroidTest)
-            adb install -r frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
-            adb shell am start -W -n io.bluetape4k.clinic.appointment/.MainActivity
-            adb shell am start -W -a android.intent.action.VIEW -d 'io.bluetape4k.clinic.appointment://open/tenant-default/calendar?view=week&date=2026-08-27'
-            adb shell dumpsys activity activities | grep -F 'io.bluetape4k.clinic.appointment'
+            test_status=$?
+            if adb get-state >/dev/null 2>&1; then
+              adb exec-out screencap -p > artifacts/native-android-ui/screenshot.png || true
+              adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+              adb exec-out cat /sdcard/window.xml > artifacts/native-android-ui/window-hierarchy.xml || true
+            fi
+            if test "$test_status" -eq 0; then
+              adb install -r frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
+              adb shell am start -W -n io.bluetape4k.clinic.appointment/.MainActivity
+              adb shell am start -W -a android.intent.action.VIEW -d 'io.bluetape4k.clinic.appointment://open/tenant-default/calendar?view=week&date=2026-08-27'
+              adb shell dumpsys activity activities | grep -F 'io.bluetape4k.clinic.appointment'
+            fi
+            exit "$test_status"
 
       - name: Capture Android native UI artifacts
         if: always()
@@ -148,7 +158,7 @@ jobs:
           NATIVE_SCHEMA_VERSION: "2"
           NATIVE_DEVICE_JSON: '{"profile":"pixel_5","viewport":"1080x1920","orientations":["portrait","landscape"]}'
           NATIVE_INTERACTIONS_JSON: '[{"name":"bottom-tab-route","result":"${{ steps.android-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"},{"name":"focus-keyboard-viewport","result":"${{ steps.android-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"},{"name":"orientation-safe-area","result":"${{ steps.android-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"}]'
-          NATIVE_ARTIFACTS_JSON: '["artifacts/native-android-ui/native-webview-report.json","artifacts/native-android-ui/test-results.xml","artifacts/native-android-ui/screenshot.png"]'
+          NATIVE_ARTIFACTS_JSON: '["artifacts/native-android-ui/native-webview-report.json","artifacts/native-android-ui/test-results.xml","artifacts/native-android-ui/screenshot.png","artifacts/native-android-ui/window-hierarchy.xml"]'
           NATIVE_REPORT_PATH: artifacts/native-android-ui/native-webview-report.json
         run: |
           mkdir -p artifacts
@@ -163,6 +173,7 @@ jobs:
             frontend/appointment-frontend/artifacts/native-android-ui/native-webview-report.json
             frontend/appointment-frontend/artifacts/native-android-ui/test-results.xml
             frontend/appointment-frontend/artifacts/native-android-ui/screenshot.png
+            frontend/appointment-frontend/artifacts/native-android-ui/window-hierarchy.xml
             frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
           retention-days: 14
