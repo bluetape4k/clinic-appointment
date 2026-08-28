@@ -133,7 +133,7 @@
   label만 추가했으며 route/API/auth 동작은 변경하지 않았다. README 두 파일은 schema v2
   artifact와 실패 시 수집 경계를 반영했다.
 - 통과: `npm run test:native:report` (8), `npm run test:native:workflow` (8),
-  `npm test -- --watch=false` (52 files/386 tests), `npm run test:e2e -- --workers=1`
+  `npm test -- --watch=false` (52 files/387 tests), `npm run test:e2e -- --workers=1`
   (27), production build, `cap:sync`, `cap doctor`, `npm run docs:verify`, `actionlint`.
 - 정적 통과: `xcodebuild -list`에서 `App`/`AppUITests` target, `swiftc -parse`.
   로컬 environment probe는 Android SDK/emulator와 active simulator runtime 부재로

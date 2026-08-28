@@ -214,7 +214,7 @@
 | 2026-08-28 | Issue #439/GNO/native #24 read-back | 기존 smoke/browser contract와 #439 native UI gap 확인 |
 | 2026-08-28 | `bluetape-flow.py init/run-start/topology-register/mutation-check` | run `20260828T044953Z-82cd4ad3`, sequence `7`, target scope 확인 |
 | 2026-08-28 | RED/GREEN report/workflow tests | report 8건, workflow 8건 통과; v1 migration과 v2 bounds/redaction을 확인 |
-| 2026-08-28 | Angular/browser 회귀·Capacitor 정적 검증 | unit 386건, E2E 27건, production build, `cap:sync`, `cap doctor`, `docs:verify`, bundle/PWA/bridge contract 통과 |
+| 2026-08-28 | Angular/browser 회귀·Capacitor 정적 검증 | unit 387건, E2E 27건, production build, `cap:sync`, `cap doctor`, `docs:verify`, bundle/PWA/bridge contract 통과 |
 | 2026-08-28 | iOS project/static parse | `xcodebuild -list`에서 `App`·`AppUITests`, `swiftc -parse` 통과 |
 | 2026-08-28 | Korean artifact audit | 7개 문서 대상 `audit-korean-terms.mjs --series clinic-appointment --json` findings 0, `git diff --check` 통과 |
 | pending | Android/iOS native UI CI | exact-head remote evidence와 report/JUnit/XCResult/screenshot read-back 필요 |

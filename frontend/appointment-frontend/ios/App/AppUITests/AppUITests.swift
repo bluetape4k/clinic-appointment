@@ -28,7 +28,9 @@ final class AppUITests: XCTestCase {
         )
         XCTAssertGreaterThanOrEqual(bottomNavigation.frame.height, 44)
 
-        appointmentTab.tap()
+        appointmentTab
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .tap()
 
         let appointmentTitle = app.staticTexts["예약 목록"]
         XCTAssertTrue(
