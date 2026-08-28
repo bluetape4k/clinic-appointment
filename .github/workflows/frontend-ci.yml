@@ -173,6 +173,9 @@ jobs:
             set +e
             mkdir -p frontend/appointment-frontend/artifacts/native-android-ui
             android_serial="${ANDROID_SERIAL:-emulator-5554}"
+            adb -s "$android_serial" shell settings put global device_provisioned 1 || true
+            adb -s "$android_serial" shell settings put secure user_setup_complete 1 || true
+            adb -s "$android_serial" shell settings put global setup_wizard_has_run 1 || true
             adb -s "$android_serial" logcat -c || true
             adb -s "$android_serial" logcat -v threadtime > frontend/appointment-frontend/artifacts/native-android-ui/logcat-live.txt 2>&1 &
             logcat_pid=$!
