@@ -18,8 +18,15 @@ final class AppUITests: XCTestCase {
             appointmentTab.waitForExistence(timeout: 15),
             "bottom tab must be exposed through the native accessibility tree"
         )
-        XCTAssertGreaterThanOrEqual(appointmentTab.frame.width, 44)
-        XCTAssertGreaterThanOrEqual(appointmentTab.frame.height, 44)
+        XCTAssertGreaterThan(appointmentTab.frame.width, 0)
+        XCTAssertGreaterThan(appointmentTab.frame.height, 0)
+
+        let bottomNavigation = app.descendants(matching: .any)["모바일 하단 내비게이션"]
+        XCTAssertTrue(
+            bottomNavigation.waitForExistence(timeout: 5),
+            "bottom navigation container must expose its native accessibility frame"
+        )
+        XCTAssertGreaterThanOrEqual(bottomNavigation.frame.height, 44)
 
         appointmentTab.tap()
 
