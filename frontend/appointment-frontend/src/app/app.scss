@@ -5,13 +5,32 @@
   overflow: hidden;
 }
 
+.pwa-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 16px;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  z-index: 200;
+
+  button {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+}
+
 .portal-root {
   min-height: var(--mobile-viewport-height, 100dvh);
   box-sizing: border-box;
   overflow: auto;
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
-  scroll-padding: 24px 0 calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
+  scroll-padding: 24px 0
+    calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
 }
 
 .app-toolbar {
@@ -55,7 +74,9 @@
   padding: 16px;
   overflow-y: auto;
   height: 100%;
-  scroll-padding-bottom: calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
+  scroll-padding-bottom: calc(
+    24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px)
+  );
 }
 
 // 모바일 레이아웃
@@ -65,7 +86,8 @@
   flex: 1;
   min-height: var(--mobile-viewport-height, 100dvh);
   overflow: hidden;
-  scroll-padding: 24px 0 calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
+  scroll-padding: 24px 0
+    calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
 }
 
 .mobile-content {
@@ -75,7 +97,9 @@
   padding: 16px;
   padding-top: calc(16px + env(safe-area-inset-top));
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
-  scroll-padding-bottom: calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
+  scroll-padding-bottom: calc(
+    24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px)
+  );
 }
 
 .bottom-nav {

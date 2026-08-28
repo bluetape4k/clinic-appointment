@@ -14,7 +14,10 @@ describe('App', () => {
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
-        provideRouter([{ path: 'portal', children: [] }, { path: 'calendar', children: [] }]),
+        provideRouter([
+          { path: 'portal', children: [] },
+          { path: 'calendar', children: [] },
+        ]),
         provideLocationMocks(),
         provideAnimationsAsync(),
         { provide: WorkforceAuthBootstrapService, useValue: workforceAuthBootstrap },
@@ -51,5 +54,18 @@ describe('App', () => {
 
     await router.navigateByUrl('/calendar');
     expect(fixture.componentInstance.isPatientPortal()).toBe(false);
+  });
+
+  it('offline/update 상태를 전역 status region으로 노출한다', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    window.dispatchEvent(new Event('offline'));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-pwa-status]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-pwa-status]')?.textContent).toContain(
+      '오프라인',
+    );
   });
 });
