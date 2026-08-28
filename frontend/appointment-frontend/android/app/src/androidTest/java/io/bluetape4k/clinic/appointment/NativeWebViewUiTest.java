@@ -6,6 +6,7 @@ import static androidx.test.espresso.web.model.Atoms.script;
 import android.content.Context;
 import android.graphics.Rect;
 
+import androidx.lifecycle.Lifecycle;
 import androidx.test.ext.junit.rules.ActivityScenarioRule;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -31,6 +32,7 @@ public final class NativeWebViewUiTest {
     @Test
     public void nativeTapFocusKeyboardViewportAndOrientationRemainUsable() throws Exception {
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+        ensureActivityResumed(device);
 
         UiObject2 appointmentTab = waitForTextOrDescription(device, "예약 관리");
         if (appointmentTab != null) {
@@ -42,6 +44,7 @@ public final class NativeWebViewUiTest {
             assertTrue("native WebView coordinate tap must be dispatched", tapBottomNavigation(device));
         }
 
+        ensureActivityResumed(device);
         onWebView().perform(script(
             "if (!document.body.innerText.includes('예약 목록')) "
                 + "throw new Error('appointment route title is missing');"
@@ -68,6 +71,7 @@ public final class NativeWebViewUiTest {
             device.waitForIdle();
         }
 
+        ensureActivityResumed(device);
         UiObject2 dateInput = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000);
         assertNotNull("date input must be accessible for keyboard/focus evidence", dateInput);
         dateInput.click();
@@ -77,6 +81,11 @@ public final class NativeWebViewUiTest {
                 + "if (!window.visualViewport) throw new Error('visualViewport is unavailable'); "
                 + "if (window.visualViewport.height <= 0) throw new Error('visualViewport height is invalid');"
         ));
+    }
+
+    private void ensureActivityResumed(UiDevice device) {
+        activityRule.getScenario().moveToState(Lifecycle.State.RESUMED);
+        device.waitForIdle();
     }
 
     private static UiObject2 waitForTextOrDescription(UiDevice device, String text) {
