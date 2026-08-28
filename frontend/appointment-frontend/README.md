@@ -81,10 +81,18 @@ API 서버(`http://localhost:8080`)가 먼저 실행되어 있어야 합니다.
 ```bash
 # Angular CLI 직접
 npm run build   # dist/ 생성
+npm run bundle:verify   # Capacitor webDir의 index·lazy chunk·budget 계약 검증
 
 # Gradle 통합 빌드
 ./gradlew :frontend:appointment-frontend:build
 ```
+
+`npm run bundle:verify`는 Angular가 생성한
+`dist/appointment-frontend/browser`를 Capacitor `webDir` 산출물로 간주하고,
+`index.html`의 local script/modulepreload/stylesheet 참조, 초기 bundle byte와
+production `initial`·`anyComponentStyle` budget, `calendar`·`appointments`·
+`portal`·`management` lazy route marker를 확인합니다. 해시 파일명 자체를
+고정하지 않으므로 Angular 재빌드 후에도 재사용할 수 있습니다.
 
 ## Capacitor WebView
 
@@ -116,8 +124,15 @@ API origin·cookie·CSRF 전송 계약은 [Issue #430](https://github.com/blueta
 
 ```bash
 npm test -- --watch=false   # Vitest 기반 Angular 단위·계약 테스트
+npm run test:bundle         # WebView bundle fixture 계약 테스트
 npm run test:e2e             # Playwright Chromium 브라우저 시나리오
 ```
+
+`npm run test:e2e`에는 320·375·393·430px viewport에서 calendar와
+appointments/portal lazy navigation 및 가로 overflow를 확인하는 WebView smoke가
+포함됩니다. 이 검증은 브라우저 산출물 범위이며, Xcode·Android SDK와 실제
+WebView/디바이스 검증은 [Issue #24](https://github.com/bluetape4k/clinic-appointment/issues/24)의
+범위입니다.
 
 환자 포털의 취소 흐름은 등록된 사유 code만 전송합니다. 환자 화면에는
 한국어 label이 표시되고, 요청에는 최신 ETag와 `Idempotency-Key`가 포함됩니다.
