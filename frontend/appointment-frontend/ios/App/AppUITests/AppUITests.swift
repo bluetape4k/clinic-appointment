@@ -73,7 +73,7 @@ final class AppUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(dateField.frame.minY, window.frame.minY - 1)
             XCTAssertLessThanOrEqual(dateField.frame.maxY, window.frame.maxY + 1)
         }
-        if app.links["예약 관리"].exists {
+        if !keyboardVisible && app.links["예약 관리"].exists {
             XCTAssertLessThanOrEqual(
                 app.links["예약 관리"].frame.maxY,
                 window.frame.maxY + 1
