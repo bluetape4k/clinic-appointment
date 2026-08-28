@@ -28,7 +28,7 @@ final class AppUITests: XCTestCase {
         )
         XCTAssertGreaterThanOrEqual(bottomNavigation.frame.height, 44)
 
-        appointmentTab
+        bottomNavigation
             .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .tap()
 
