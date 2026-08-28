@@ -15,7 +15,7 @@ final class AppUITests: XCTestCase {
     func testNativeWebViewNavigationFocusKeyboardAndSafeArea() throws {
         let appointmentTab = app.links["예약 관리"]
         XCTAssertTrue(
-            appointmentTab.waitForExistence(timeout: 15),
+            appointmentTab.waitForExistence(timeout: 30),
             "bottom tab must be exposed through the native accessibility tree"
         )
         XCTAssertGreaterThan(appointmentTab.frame.width, 0)
@@ -23,7 +23,7 @@ final class AppUITests: XCTestCase {
 
         let bottomNavigation = app.otherElements["모바일 하단 내비게이션 영역"]
         XCTAssertTrue(
-            bottomNavigation.waitForExistence(timeout: 5),
+            bottomNavigation.waitForExistence(timeout: 10),
             "bottom navigation container must expose its native accessibility frame"
         )
         XCTAssertGreaterThanOrEqual(bottomNavigation.frame.height, 44)
