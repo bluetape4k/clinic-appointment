@@ -130,3 +130,18 @@ raw output과 credential를 거부한다. report writer는 기존 `flag: 'wx'`�
 Kotlin 파일을 변경하지 않으므로 `$bluetape-kotlin-patterns`의 Kotlin 구현 행과
 `bluetape4k-assertions` 도입은 트리거되지 않는다. 이 판단은 Android 테스트가 Java,
 iOS 테스트가 Swift, report/validator가 Node.js인 실제 변경 scope에 근거한다.
+
+## 구현 read-back
+
+- Android `NativeWebViewUiTest`와 iOS `AppUITests`를 추가하고, Angular shell의 nav·date
+  input에 최소 accessibility label을 부여했다. 실제 route/API/auth production 경계는
+  그대로 둔다.
+- canonical `native-webview-ci.yml`과 mirrored `frontend-ci.yml` 모두
+  `connectedDebugAndroidTest`, `xcodebuild test`, schema v2 report, JUnit/XCResult와
+  screenshot upload, 실패 결과 gate를 갖는다. mirrored marker parity는 Node contract
+  test로 검증한다.
+- report v2는 exact commit, bounded device/viewport/orientation, fixed interaction
+  result와 safe artifact path를 보존한다. 기존 v1 fixture는 계속 허용한다.
+- 로컬 Angular/browser/contract/static project 검증은 통과했지만 이 호스트의
+  Android SDK/emulator와 iOS Simulator runtime이 없어 native 계측은 PENDING이다.
+  이 상태를 hosted exact-head CI 전에는 PASS로 승격하지 않는다.

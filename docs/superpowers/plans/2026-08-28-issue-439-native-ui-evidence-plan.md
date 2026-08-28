@@ -116,3 +116,26 @@
   bluetape assertion으로 바꾸기 위해 Kotlin dependency를 추가하지 않는다.
 - Ecosystem: 기존 Capacitor bundle, Angular routes, report writer, workflow artifact
   경계를 재사용하고 새 production layer를 만들지 않는다.
+
+## 실행 결과 read-back
+
+- report schema v2와 canonical/mirrored workflow contract를 구현했다. 기존 schema v1
+  입력 회귀와 v2의 device·interaction·artifact bounds/redaction을 Node test로
+  고정했다.
+- Android `NativeWebViewUiTest`는 UiAutomator coordinate tap과 Espresso-Web 보조
+  검사를 사용하고, iOS `AppUITests`는 built-in XCTest UI target/scheme으로 같은
+  상호작용 경계를 확인한다. 두 harness 모두 production runtime dependency를 늘리지
+  않는다.
+- Angular template에는 native accessibility tree가 읽을 수 있는 nav/content/date
+  label만 추가했으며 route/API/auth 동작은 변경하지 않았다. README 두 파일은 schema v2
+  artifact와 실패 시 수집 경계를 반영했다.
+- 통과: `npm run test:native:report` (8), `npm run test:native:workflow` (8),
+  `npm test -- --watch=false` (52 files/386 tests), `npm run test:e2e -- --workers=1`
+  (27), production build, `cap:sync`, `cap doctor`, `npm run docs:verify`, `actionlint`.
+- 정적 통과: `xcodebuild -list`에서 `App`/`AppUITests` target, `swiftc -parse`.
+  로컬 environment probe는 Android SDK/emulator와 active simulator runtime 부재로
+  두 native target을 `false`로 반환하므로 실제 계측 결과는 exact-head hosted CI에
+  남긴다.
+- 재사용 판단: `$bluetape-kotlin-patterns`와 `bluetape4k-assertions`는 변경 scope에
+  Kotlin 파일이 없어 N/A다. Java/Swift/Node 테스트에 Kotlin assertion dependency를
+  억지로 추가하지 않았다.

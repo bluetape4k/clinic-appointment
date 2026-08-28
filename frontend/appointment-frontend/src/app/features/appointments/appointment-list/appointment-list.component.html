@@ -15,14 +15,14 @@
       <div class="filters">
         <mat-form-field>
           <mat-label>시작일</mat-label>
-          <input matInput [matDatepicker]="fromPicker" [(ngModel)]="dateFrom" (dateChange)="onDateRangeChange()">
+          <input id="appointment-date-from" matInput aria-label="시작일" [matDatepicker]="fromPicker" [(ngModel)]="dateFrom" (dateChange)="onDateRangeChange()">
           <mat-datepicker-toggle matIconSuffix [for]="fromPicker"></mat-datepicker-toggle>
           <mat-datepicker #fromPicker></mat-datepicker>
         </mat-form-field>
 
         <mat-form-field>
           <mat-label>종료일</mat-label>
-          <input matInput [matDatepicker]="toPicker" [(ngModel)]="dateTo" (dateChange)="onDateRangeChange()">
+          <input id="appointment-date-to" matInput aria-label="종료일" [matDatepicker]="toPicker" [(ngModel)]="dateTo" (dateChange)="onDateRangeChange()">
           <mat-datepicker-toggle matIconSuffix [for]="toPicker"></mat-datepicker-toggle>
           <mat-datepicker #toPicker></mat-datepicker>
         </mat-form-field>

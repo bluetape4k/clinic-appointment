@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { validateNativeWebViewWorkflow } from './validate-native-webview-workflow.mjs';
 
 const workflowPath = new URL('../../../.github/workflows/native-webview-ci.yml', import.meta.url);
+const mirroredWorkflowPath = new URL('../../../.github/workflows/frontend-ci.yml', import.meta.url);
 
 test('native workflow는 exact ref, 양 플랫폼 job, smoke command와 report artifact를 가진다', () => {
   const content = readFileSync(workflowPath, 'utf8');
@@ -48,4 +49,53 @@ test('Android deep-link는 device shell에서 해석 가능한 단일 호출이�
       ),
     /device-shell-safe/u,
   );
+});
+
+test('native UI workflow는 Android instrumentation과 iOS XCTest를 별도 실행한다', () => {
+  const content = readFileSync(workflowPath, 'utf8');
+  assert.throws(
+    () => validateNativeWebViewWorkflow(content.replace(/connectedDebugAndroidTest/g, '')),
+    /Android native UI test|missing workflow markers/u,
+  );
+  assert.throws(
+    () => validateNativeWebViewWorkflow(content.replace('xcodebuild \\\n            test', 'xcodebuild \\\n            build')),
+    /iOS native UI test|missing workflow markers/u,
+  );
+});
+
+test('native UI report는 device·interaction·artifact schema를 CI env로 전달한다', () => {
+  const content = readFileSync(workflowPath, 'utf8');
+  for (const marker of [
+    'NATIVE_SCHEMA_VERSION',
+    'NATIVE_DEVICE_JSON',
+    'NATIVE_INTERACTIONS_JSON',
+    'NATIVE_ARTIFACTS_JSON',
+    'test-results.xml',
+    'screenshot.png',
+    'xcodebuild test',
+  ]) {
+    assert.equal(content.includes(marker), true, `missing native UI marker: ${marker}`);
+  }
+});
+
+test('mirrored frontend workflow도 native UI와 exact dispatch contract를 유지한다', () => {
+  const content = readFileSync(mirroredWorkflowPath, 'utf8');
+  for (const marker of [
+    'if: github.event_name == \'workflow_dispatch\'',
+    'EXPECTED_SHA: ${{ github.sha }}',
+    'connectedDebugAndroidTest',
+    'xcodebuild test',
+    'NATIVE_SCHEMA_VERSION',
+    'NATIVE_DEVICE_JSON',
+    'NATIVE_INTERACTIONS_JSON',
+    'NATIVE_ARTIFACTS_JSON',
+    'actions/upload-artifact@',
+    'if: always()',
+    'Enforce Android native UI result',
+    'Enforce iOS native UI result',
+  ]) {
+    assert.equal(content.includes(marker), true, `missing mirrored native UI marker: ${marker}`);
+  }
+  assert.match(content, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/u);
+  assert.match(content, /xcodebuild\s+\\\s+test/u);
 });

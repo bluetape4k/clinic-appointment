@@ -55,13 +55,14 @@
   } @else {
     <!-- 모바일: 하단 탭 바 -->
     <div class="mobile-layout" appMobileViewport>
-      <div class="mobile-content">
+      <div class="mobile-content" aria-label="모바일 콘텐츠">
         <router-outlet />
       </div>
-      <nav class="bottom-nav">
+      <nav class="bottom-nav" aria-label="모바일 하단 내비게이션">
         @for (item of navItems; track item.route) {
           <a
             class="bottom-nav-item"
+            [attr.aria-label]="item.label"
             [routerLink]="item.route"
             routerLinkActive="active-tab"
             [routerLinkActiveOptions]="{ exact: false }"

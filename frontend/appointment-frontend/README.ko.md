@@ -186,9 +186,10 @@ npx playwright test e2e/patient-portal.spec.ts e2e/mobile-lazy-routes.spec.ts
 실제 Capacitor WebView 검증은 브라우저 profile과 분리된
 `.github/workflows/native-webview-ci.yml`에서 수행합니다. workflow는 입력한 `ref`를
 checkout한 뒤 `expected_sha`와 실제 `git rev-parse HEAD`가 같은지 확인하고, Android
-emulator와 iOS simulator에서 `cap:sync`·build·install·launch·custom URL deep link를
-실행합니다. 어느 단계든 실패하면 성공으로 정규화하지 않고 platform report와 함께 job을
-실패시킵니다.
+emulator와 iOS simulator에서 `cap:sync`·`connectedDebugAndroidTest`·`xcodebuild test`를
+실행합니다. 각 test는 bottom tab을 실제 native input으로 누르고, 날짜 입력 focus와
+keyboard/viewport, portrait·landscape content 경계를 확인합니다. 어느 단계든 실패하면
+성공으로 정규화하지 않고 native UI report와 함께 job을 실패시킵니다.
 
 로컬에서는 먼저 호스트 capability를 확인합니다.
 
@@ -213,7 +214,7 @@ workflow 파일이 포함된 feature ref의 `frontend-ci.yml` `workflow_dispatch
 
 ```bash
 gh workflow run frontend-ci.yml \
-  --ref feat/issue-24-native-webview-validation
+  --ref feat/issue-439-native-ui-evidence
 ```
 
 standalone workflow가 기본 브랜치에 올라간 뒤에는 `ref`와 `expected_sha`를 같은
@@ -222,21 +223,36 @@ exact SHA로 고정하는 canonical 경로를 사용합니다.
 ```bash
 HEAD_SHA="$(git rev-parse HEAD)"
 gh workflow run native-webview-ci.yml \
-  --ref feat/issue-24-native-webview-validation \
+  --ref feat/issue-439-native-ui-evidence \
   -f ref="$HEAD_SHA" -f expected_sha="$HEAD_SHA"
 ```
 
-각 native job은 다음 필드만 포함하는 `native-webview-report.json`을 artifact로
-업로드합니다.
+각 native job은 다음과 같은 schema v2의 `native-webview-report.json`을 artifact로
+업로드합니다. report에는 credential나 DOM/raw output을 넣지 않고, 실제 실행 결과와
+재현 가능한 장치·상호작용·artifact 경계만 남깁니다.
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "generatedAt": "2026-08-27T00:00:00.000Z",
   "platform": "android|ios",
   "commit": "<40-character-lowercase-sha1>",
   "toolchain": { "runner": "..." },
+  "device": {
+    "profile": "pixel_5",
+    "viewport": "1080x1920",
+    "orientations": ["portrait", "landscape"]
+  },
   "commands": ["cap:sync", "build", "launch", "deep-link"],
+  "interactions": [
+    { "name": "bottom-tab-route", "result": "passed" },
+    { "name": "focus-keyboard-viewport", "result": "passed" },
+    { "name": "orientation-safe-area", "result": "passed" }
+  ],
+  "artifacts": [
+    "artifacts/native-android-ui/test-results.xml",
+    "artifacts/native-android-ui/screenshot.png"
+  ],
   "result": "passed|failed"
 }
 ```
@@ -244,7 +260,9 @@ gh workflow run native-webview-ci.yml \
 `native:environment`가 `targets.ios` 또는 `targets.android`를 `false`로 반환하면
 로컬 결과는 native PASS가 아니라 PENDING입니다. 같은 이유로 Playwright browser
 profile 성공만으로 Issue #24 또는 Epic #13을 닫지 않습니다. native artifact와 exact
-head가 모두 확인된 뒤에만 해당 완료 조건을 체크합니다.
+head가 모두 확인된 뒤에만 해당 완료 조건을 체크합니다. native workflow는 실패해도
+`if: always()`로 report·JUnit/XCResult·screenshot을 수집한 뒤 별도 result gate로
+실패를 전파하므로, artifact 유무와 job 결론을 함께 확인해야 합니다.
 
 ## PWA·오프라인 캐시 계약
 

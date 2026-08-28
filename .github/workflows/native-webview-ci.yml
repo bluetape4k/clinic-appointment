@@ -63,7 +63,7 @@ jobs:
         run: npx playwright test e2e/mobile-webview-contract.spec.ts --project=mobile-ios --project=mobile-android --workers=1
 
   android-webview:
-    name: Android WebView native smoke
+    name: Android WebView native UI
     runs-on: ubuntu-22.04
     timeout-minutes: 35
     defaults:
@@ -102,8 +102,8 @@ jobs:
       - name: Sync Capacitor assets
         run: npm run cap:sync
 
-      - name: Android emulator smoke
-        id: android-smoke
+      - name: Android emulator native UI
+        id: android-ui
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -116,11 +116,26 @@ jobs:
           disable-animations: true
           script: |
             set -eu
-            (cd frontend/appointment-frontend/android && ./gradlew --no-daemon --stacktrace assembleDebug)
+            (cd frontend/appointment-frontend/android && ./gradlew --no-daemon --stacktrace connectedDebugAndroidTest)
             adb install -r frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -W -n io.bluetape4k.clinic.appointment/.MainActivity
             adb shell am start -W -a android.intent.action.VIEW -d 'io.bluetape4k.clinic.appointment://open/tenant-default/calendar?view=week&date=2026-08-27'
             adb shell dumpsys activity activities | grep -F 'io.bluetape4k.clinic.appointment'
+
+      - name: Capture Android native UI artifacts
+        if: always()
+        run: |
+          set -eu
+          mkdir -p artifacts/native-android-ui
+          if adb get-state >/dev/null 2>&1; then
+            adb exec-out screencap -p > artifacts/native-android-ui/screenshot.png || true
+          fi
+          result_xml="$(find android/app/build/outputs/androidTest-results -name '*.xml' -type f -print -quit 2>/dev/null || true)"
+          if test -n "$result_xml"; then
+            cp "$result_xml" artifacts/native-android-ui/test-results.xml
+          else
+            printf '%s\n' '<testsuite name="native-ui" tests="0" failures="1" />' > artifacts/native-android-ui/test-results.xml
+          fi
 
       - name: Write Android native report
         if: always()
@@ -128,9 +143,13 @@ jobs:
           NATIVE_PLATFORM: android
           NATIVE_COMMIT: ${{ env.EXPECTED_SHA }}
           NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-22.04","java":"21","android-api":"35","emulator":"pixel_5"}'
-          NATIVE_COMMANDS_JSON: '["cap:sync","assembleDebug","emulator-install","app-launch","deep-link"]'
-          NATIVE_RESULT: ${{ steps.android-smoke.outcome == 'success' && 'passed' || 'failed' }}
-          NATIVE_REPORT_PATH: artifacts/native-webview-report.json
+          NATIVE_COMMANDS_JSON: '["cap:sync","connectedDebugAndroidTest","emulator-install","app-launch","deep-link"]'
+          NATIVE_RESULT: ${{ steps.android-ui.outcome == 'success' && 'passed' || 'failed' }}
+          NATIVE_SCHEMA_VERSION: "2"
+          NATIVE_DEVICE_JSON: '{"profile":"pixel_5","viewport":"1080x1920","orientations":["portrait","landscape"]}'
+          NATIVE_INTERACTIONS_JSON: '[{"name":"bottom-tab-route","result":"${{ steps.android-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"},{"name":"focus-keyboard-viewport","result":"${{ steps.android-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"},{"name":"orientation-safe-area","result":"${{ steps.android-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"}]'
+          NATIVE_ARTIFACTS_JSON: '["artifacts/native-android-ui/native-webview-report.json","artifacts/native-android-ui/test-results.xml","artifacts/native-android-ui/screenshot.png"]'
+          NATIVE_REPORT_PATH: artifacts/native-android-ui/native-webview-report.json
         run: |
           mkdir -p artifacts
           node scripts/create-native-webview-report.mjs
@@ -141,17 +160,19 @@ jobs:
         with:
           name: native-android-webview-${{ github.run_id }}
           path: |
-            frontend/appointment-frontend/artifacts/native-webview-report.json
+            frontend/appointment-frontend/artifacts/native-android-ui/native-webview-report.json
+            frontend/appointment-frontend/artifacts/native-android-ui/test-results.xml
+            frontend/appointment-frontend/artifacts/native-android-ui/screenshot.png
             frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
-      - name: Enforce Android smoke result
-        if: steps.android-smoke.outcome != 'success'
+      - name: Enforce Android native UI result
+        if: steps.android-ui.outcome != 'success'
         run: exit 1
 
   ios-webview:
-    name: iOS WKWebView native smoke
+    name: iOS WKWebView native UI
     runs-on: macos-latest
     timeout-minutes: 35
     defaults:
@@ -184,24 +205,37 @@ jobs:
       - name: Sync Capacitor assets
         run: npm run cap:sync
 
-      - name: iOS simulator smoke
-        id: ios-smoke
+      - name: Select iOS simulator
+        id: ios-device
+        run: |
+          set -euo pipefail
+          device_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')"
+          test -n "$device_id"
+          device_profile="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1; exit}')"
+          test -n "$device_profile"
+          device_profile="${device_profile// /-}"
+          echo "device_id=$device_id" >> "$GITHUB_OUTPUT"
+          echo "device_profile=$device_profile" >> "$GITHUB_OUTPUT"
+
+      - name: iOS simulator native UI
+        id: ios-ui
         continue-on-error: true
         run: |
           set -euo pipefail
           derived_data="$RUNNER_TEMP/clinic-appointment-derived"
+          result_bundle="$RUNNER_TEMP/clinic-appointment.xcresult"
+          device_id="${{ steps.ios-device.outputs.device_id }}"
+          xcrun simctl boot "$device_id" || true
+          xcrun simctl bootstatus "$device_id" -b
           xcodebuild \
+            test \
             -project ios/App/App.xcodeproj \
             -scheme App \
             -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination "platform=iOS Simulator,id=$device_id" \
             -derivedDataPath "$derived_data" \
-            CODE_SIGNING_ALLOWED=NO \
-            build
-          device_id="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/{print $2; exit}')"
-          test -n "$device_id"
-          xcrun simctl boot "$device_id" || true
-          xcrun simctl bootstatus "$device_id" -b
+            -resultBundlePath "$result_bundle" \
+            CODE_SIGNING_ALLOWED=NO
           app_path="$(find "$derived_data/Build/Products" -name App.app -type d -print -quit)"
           test -n "$app_path"
           xcrun simctl install "$device_id" "$app_path"
@@ -209,15 +243,33 @@ jobs:
           xcrun simctl openurl "$device_id" 'io.bluetape4k.clinic.appointment://open/tenant-default/calendar?view=week&date=2026-08-27'
           xcrun simctl get_app_container "$device_id" io.bluetape4k.clinic.appointment app
 
+      - name: Capture iOS native UI artifacts
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/native-ios-ui
+          device_id="${{ steps.ios-device.outputs.device_id }}"
+          if test -n "$device_id"; then
+            xcrun simctl io "$device_id" screenshot artifacts/native-ios-ui/screenshot.png || true
+          fi
+          result_bundle="$RUNNER_TEMP/clinic-appointment.xcresult"
+          if test -d "$result_bundle"; then
+            cp -R "$result_bundle" artifacts/native-ios-ui/clinic-appointment.xcresult
+          fi
+
       - name: Write iOS native report
         if: always()
         env:
           NATIVE_PLATFORM: ios
           NATIVE_COMMIT: ${{ env.EXPECTED_SHA }}
           NATIVE_TOOLCHAIN_JSON: '{"runner":"macos-latest","xcode":"host-default","simulator":"iPhone","configuration":"Debug"}'
-          NATIVE_COMMANDS_JSON: '["cap:sync","xcodebuild","simulator-install","app-launch","openurl"]'
-          NATIVE_RESULT: ${{ steps.ios-smoke.outcome == 'success' && 'passed' || 'failed' }}
-          NATIVE_REPORT_PATH: artifacts/native-webview-report.json
+          NATIVE_COMMANDS_JSON: '["cap:sync","xcodebuild test","simulator-install","app-launch","openurl"]'
+          NATIVE_RESULT: ${{ steps.ios-ui.outcome == 'success' && 'passed' || 'failed' }}
+          NATIVE_SCHEMA_VERSION: "2"
+          NATIVE_DEVICE_JSON: '{"profile":"${{ steps.ios-device.outputs.device_profile || ''iPhone'' }}","viewport":"390x844","orientations":["portrait","landscape"]}'
+          NATIVE_INTERACTIONS_JSON: '[{"name":"bottom-tab-route","result":"${{ steps.ios-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"},{"name":"focus-keyboard-viewport","result":"${{ steps.ios-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"},{"name":"orientation-safe-area","result":"${{ steps.ios-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"}]'
+          NATIVE_ARTIFACTS_JSON: '["artifacts/native-ios-ui/native-webview-report.json","artifacts/native-ios-ui/clinic-appointment.xcresult","artifacts/native-ios-ui/screenshot.png"]'
+          NATIVE_REPORT_PATH: artifacts/native-ios-ui/native-webview-report.json
         run: |
           mkdir -p artifacts
           node scripts/create-native-webview-report.mjs
@@ -227,10 +279,13 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: native-ios-webview-${{ github.run_id }}
-          path: frontend/appointment-frontend/artifacts/native-webview-report.json
-          if-no-files-found: error
+          path: |
+            frontend/appointment-frontend/artifacts/native-ios-ui/native-webview-report.json
+            frontend/appointment-frontend/artifacts/native-ios-ui/clinic-appointment.xcresult
+            frontend/appointment-frontend/artifacts/native-ios-ui/screenshot.png
+          if-no-files-found: warn
           retention-days: 14
 
-      - name: Enforce iOS smoke result
-        if: steps.ios-smoke.outcome != 'success'
+      - name: Enforce iOS native UI result
+        if: steps.ios-ui.outcome != 'success'
         run: exit 1
