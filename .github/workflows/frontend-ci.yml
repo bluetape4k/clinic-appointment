@@ -171,20 +171,20 @@ jobs:
           disable-animations: true
           script: |
             set +e
-            mkdir -p artifacts/native-android-ui
+            mkdir -p frontend/appointment-frontend/artifacts/native-android-ui
             android_serial="${ANDROID_SERIAL:-emulator-5554}"
             adb -s "$android_serial" logcat -c || true
-            adb -s "$android_serial" logcat -v threadtime > artifacts/native-android-ui/logcat-live.txt 2>&1 &
+            adb -s "$android_serial" logcat -v threadtime > frontend/appointment-frontend/artifacts/native-android-ui/logcat-live.txt 2>&1 &
             logcat_pid=$!
             (cd frontend/appointment-frontend/android && ./gradlew --no-daemon --stacktrace connectedDebugAndroidTest)
             test_status=$?
             kill "$logcat_pid" >/dev/null 2>&1 || true
             wait "$logcat_pid" >/dev/null 2>&1 || true
-            adb -s "$android_serial" logcat -d -v threadtime > artifacts/native-android-ui/logcat.txt || true
+            adb -s "$android_serial" logcat -d -v threadtime > frontend/appointment-frontend/artifacts/native-android-ui/logcat.txt || true
             if adb -s "$android_serial" get-state >/dev/null 2>&1; then
-              adb -s "$android_serial" exec-out screencap -p > artifacts/native-android-ui/screenshot.png || true
+              adb -s "$android_serial" exec-out screencap -p > frontend/appointment-frontend/artifacts/native-android-ui/screenshot.png || true
               adb -s "$android_serial" shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
-              adb -s "$android_serial" exec-out cat /sdcard/window.xml > artifacts/native-android-ui/window-hierarchy.xml || true
+              adb -s "$android_serial" exec-out cat /sdcard/window.xml > frontend/appointment-frontend/artifacts/native-android-ui/window-hierarchy.xml || true
             fi
             if test "$test_status" -eq 0; then
               adb -s "$android_serial" install -r frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk

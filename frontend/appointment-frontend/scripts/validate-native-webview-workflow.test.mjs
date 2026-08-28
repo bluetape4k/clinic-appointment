@@ -78,6 +78,19 @@ test('native UI report는 device·interaction·artifact schema를 CI env로 전�
   }
 });
 
+test('Android runner action은 repository root에서 native artifact를 frontend 경로에 기록한다', () => {
+  const content = readFileSync(workflowPath, 'utf8');
+  const androidSection = content.split('  android-webview:', 2)[1]?.split('  ios-webview:', 1)[0] ?? '';
+  assert.match(
+    androidSection,
+    /mkdir -p frontend\/appointment-frontend\/artifacts\/native-android-ui/u,
+  );
+  assert.match(
+    androidSection,
+    /frontend\/appointment-frontend\/artifacts\/native-android-ui\/logcat-live\.txt/u,
+  );
+});
+
 test('mirrored frontend workflow도 native UI와 exact dispatch contract를 유지한다', () => {
   const content = readFileSync(mirroredWorkflowPath, 'utf8');
   for (const marker of [
