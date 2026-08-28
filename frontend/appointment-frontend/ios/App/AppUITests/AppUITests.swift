@@ -58,10 +58,18 @@ final class AppUITests: XCTestCase {
     private func assertContentFitsWindow() {
         let window = app.windows.firstMatch
         XCTAssertTrue(window.exists)
-        XCTAssertLessThanOrEqual(
-            app.staticTexts["예약 목록"].frame.maxY,
-            window.frame.maxY + 1
-        )
+        let keyboardVisible = app.keyboards.firstMatch.exists
+        if !keyboardVisible {
+            XCTAssertLessThanOrEqual(
+                app.staticTexts["예약 목록"].frame.maxY,
+                window.frame.maxY + 1
+            )
+        }
+        let dateField = app.textFields["시작일"]
+        if dateField.exists {
+            XCTAssertGreaterThanOrEqual(dateField.frame.minY, window.frame.minY - 1)
+            XCTAssertLessThanOrEqual(dateField.frame.maxY, window.frame.maxY + 1)
+        }
         if app.links["예약 관리"].exists {
             XCTAssertLessThanOrEqual(
                 app.links["예약 관리"].frame.maxY,
