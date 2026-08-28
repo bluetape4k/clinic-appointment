@@ -97,10 +97,10 @@ public final class NativeWebViewUiTest {
         Rect contentBounds = webView == null
             ? new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight())
             : webView.getVisibleBounds();
-        int contentBottom = contentBounds.bottom;
-        if (webView == null) {
-            contentBottom -= navigationBarHeight(context);
-        }
+        int contentBottom = Math.min(
+            contentBounds.bottom,
+            device.getDisplayHeight() - navigationBarHeight(context)
+        );
         int tapX = contentBounds.left + contentBounds.width() / 2;
         int tapY = contentBottom - Math.round(28 * density);
         tapY = Math.max(contentBounds.top + Math.round(44 * density), tapY);

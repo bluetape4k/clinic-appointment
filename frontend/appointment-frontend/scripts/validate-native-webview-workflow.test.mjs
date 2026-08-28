@@ -5,6 +5,10 @@ import { validateNativeWebViewWorkflow } from './validate-native-webview-workflo
 
 const workflowPath = new URL('../../../.github/workflows/native-webview-ci.yml', import.meta.url);
 const mirroredWorkflowPath = new URL('../../../.github/workflows/frontend-ci.yml', import.meta.url);
+const nativeUiTestPath = new URL(
+  '../android/app/src/androidTest/java/io/bluetape4k/clinic/appointment/NativeWebViewUiTest.java',
+  import.meta.url,
+);
 
 test('native workflow는 exact ref, 양 플랫폼 job, smoke command와 report artifact를 가진다', () => {
   const content = readFileSync(workflowPath, 'utf8');
@@ -106,6 +110,14 @@ test('Android runner action은 AOSP emulator를 이미 프로비저닝된 상태
       `missing emulator provisioning command: ${command}`,
     );
   }
+});
+
+test('Android native coordinate fallback은 system navigation 영역을 제외한다', () => {
+  const content = readFileSync(nativeUiTestPath, 'utf8');
+  assert.match(
+    content,
+    /Math\.min\(\s*contentBounds\.bottom,\s*device\.getDisplayHeight\(\)\s*-\s*navigationBarHeight\(context\)\s*\)/u,
+  );
 });
 
 test('mirrored frontend workflow도 native UI와 exact dispatch contract를 유지한다', () => {
