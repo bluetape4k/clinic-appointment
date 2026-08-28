@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Clinic Appointment</string>
+    <string name="title_activity_main">Clinic Appointment</string>
+    <string name="package_name">io.bluetape4k.clinic.appointment</string>
+    <string name="custom_url_scheme">io.bluetape4k.clinic.appointment</string>
+</resources>
