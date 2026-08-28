@@ -12,6 +12,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs/operators';
 import { WorkforceAuthBootstrapService } from './core/services/workforce-auth-bootstrap.service';
 import { PwaStatusService } from './core/services/pwa-status.service';
+import { NativeWebViewBridgeService } from './core/services/native-webview-bridge.service';
 import { MobileViewportDirective } from './shared';
 
 export interface NavItem {
@@ -41,6 +42,7 @@ export class App {
   private readonly breakpointObserver = inject(BreakpointObserver);
   private readonly router = inject(Router);
   private readonly workforceAuthBootstrap = inject(WorkforceAuthBootstrapService);
+  private readonly nativeWebViewBridge = inject(NativeWebViewBridgeService);
 
   readonly pwaStatus = inject(PwaStatusService);
 
@@ -61,6 +63,7 @@ export class App {
 
   constructor() {
     this.workforceAuthBootstrap.restore();
+    void this.nativeWebViewBridge.start();
 
     this.router.events
       .pipe(

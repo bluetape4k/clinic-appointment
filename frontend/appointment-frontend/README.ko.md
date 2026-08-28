@@ -125,6 +125,40 @@ API origin·cookie·CSRF 전송 계약은 [Issue #430](https://github.com/blueta
 실제 디바이스·에뮬레이터 검증은 [Issue #24](https://github.com/bluetape4k/clinic-appointment/issues/24)에서
 다룹니다. 브라우저 E2E 통과만으로 native build나 실기기 동작을 보장하지 않습니다.
 
+## 네이티브 deep link·WebView bridge
+
+앱 셸은 기존 `WorkforceAuthBootstrapService`가 메모리 JWT handoff를 복원한 뒤
+`NativeWebViewBridgeService`를 시작합니다. 브라우저에서는 `@capacitor/app` listener를
+등록하지 않는 no-op이며, native에서는 cold start의 `getLaunchUrl()`과 실행 중
+`appUrlOpen`을 같은 검증 경계로 처리합니다.
+
+지원 URL 형식은 다음과 같습니다.
+
+```text
+io.bluetape4k.clinic.appointment://open/{tenantCode}/{route}[?query]
+```
+
+- `tenantCode`는 lower-case tenant slug이며 JWT의 `AuthService.allowedTenants`에
+  포함된 경우에만 scope를 변경합니다.
+- `calendar`는 `view=day|week|month`와 `date=YYYY-MM-DD`, `appointments`는
+  양의 예약 `id`, `management`는 등록된 `section`만 허용합니다. portal, unknown
+  query, 중복·빈 값, credentials·port·fragment는 fail-closed합니다.
+- 성공한 navigation만 `clinic.native.navigation.v1`/`version: 1` typed event를
+  발행하며 payload에 raw URL이나 token을 포함하지 않습니다. workforce token은
+  기존 메모리 상태만 재사용하고 storage에 복사하지 않습니다.
+- Android의 `VIEW`·`DEFAULT`·`BROWSABLE` intent filter와 iOS의
+  `CFBundleURLTypes`가 동일한 scheme과 `open` host를 등록합니다. 검증 명령은 다음과
+  같습니다.
+
+  ```bash
+  npm run test:bridge
+  npm run bridge:verify
+  ```
+
+실제 Xcode/Android SDK 빌드, cold-start·background deep link, IME와 cookie 정책은
+[Issue #24](https://github.com/bluetape4k/clinic-appointment/issues/24)에서 실제
+디바이스·에뮬레이터로 검증합니다.
+
 ## 모바일 viewport·입력 계약
 
 기존 Angular standalone shell, Angular Material 컴포넌트, Capacitor `webDir`를

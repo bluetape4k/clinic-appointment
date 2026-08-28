@@ -5,3 +5,4 @@ export * from './tenant-context.service';
 export * from './tenant-api-client';
 export * from './api-auth-context';
 export * from './patient-auth.models';
+export * from './native-deep-link';

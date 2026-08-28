@@ -12,3 +12,4 @@ export * from './equipment-unavailability.service';
 export * from './dashboard-stats.service';
 export * from './workforce-auth-bootstrap.service';
 export * from './pwa-status.service';
+export * from './native-webview-bridge.service';
