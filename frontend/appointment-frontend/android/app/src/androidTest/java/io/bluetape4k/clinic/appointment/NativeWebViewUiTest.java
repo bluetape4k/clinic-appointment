@@ -31,14 +31,14 @@ public final class NativeWebViewUiTest {
     public void nativeTapFocusKeyboardViewportAndOrientationRemainUsable() throws Exception {
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
 
-        UiObject2 appointmentTab = waitForText(device, "예약 관리");
+        UiObject2 appointmentTab = waitForTextOrDescription(device, "예약 관리");
         assertNotNull("bottom tab must be exposed through the native accessibility tree", appointmentTab);
         Rect tabBounds = appointmentTab.getVisibleBounds();
         assertTrue("bottom tab must expose at least a 44px touch target", tabBounds.width() >= 44);
         assertTrue("bottom tab must expose at least a 44px touch target", tabBounds.height() >= 44);
         device.click(tabBounds.centerX(), tabBounds.centerY());
 
-        UiObject2 appointmentTitle = waitForText(device, "예약 목록");
+        UiObject2 appointmentTitle = waitForTextOrDescription(device, "예약 목록");
         assertNotNull("native tap must navigate to the appointment route", appointmentTitle);
         onWebView().perform(script(
             "if (!document.body.innerText.includes('예약 목록')) "
@@ -77,7 +77,11 @@ public final class NativeWebViewUiTest {
         }
     }
 
-    private static UiObject2 waitForText(UiDevice device, String text) {
-        return device.wait(Until.findObject(By.textContains(text)), 15_000);
+    private static UiObject2 waitForTextOrDescription(UiDevice device, String text) {
+        UiObject2 textNode = device.wait(Until.findObject(By.textContains(text)), 7_500);
+        if (textNode != null) {
+            return textNode;
+        }
+        return device.wait(Until.findObject(By.descContains(text)), 7_500);
     }
 }
