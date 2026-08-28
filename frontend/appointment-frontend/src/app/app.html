@@ -58,20 +58,26 @@
       <div class="mobile-content" aria-label="모바일 콘텐츠">
         <router-outlet />
       </div>
-      <nav class="bottom-nav" aria-label="모바일 하단 내비게이션">
-        @for (item of navItems; track item.route) {
-          <a
-            class="bottom-nav-item"
-            [attr.aria-label]="item.label"
-            [routerLink]="item.route"
-            routerLinkActive="active-tab"
-            [routerLinkActiveOptions]="{ exact: false }"
-          >
-            <mat-icon>{{ item.icon }}</mat-icon>
-            <span class="bottom-nav-label">{{ item.label }}</span>
-          </a>
-        }
-      </nav>
+      <div
+        class="bottom-nav-shell"
+        role="group"
+        aria-label="모바일 하단 내비게이션 영역"
+      >
+        <nav class="bottom-nav" aria-label="모바일 하단 내비게이션">
+          @for (item of navItems; track item.route) {
+            <a
+              class="bottom-nav-item"
+              [attr.aria-label]="item.label"
+              [routerLink]="item.route"
+              routerLinkActive="active-tab"
+              [routerLinkActiveOptions]="{ exact: false }"
+            >
+              <mat-icon>{{ item.icon }}</mat-icon>
+              <span class="bottom-nav-label">{{ item.label }}</span>
+            </a>
+          }
+        </nav>
+      </div>
     </div>
   }
 }

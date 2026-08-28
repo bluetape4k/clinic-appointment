@@ -102,14 +102,19 @@
   );
 }
 
+.bottom-nav-shell {
+  display: flex;
+  flex-shrink: 0;
+}
+
 .bottom-nav {
   display: flex;
+  flex: 1;
   justify-content: space-around;
   align-items: center;
   background-color: var(--mat-sys-surface-container);
   border-top: 1px solid var(--mat-sys-outline-variant);
   padding-bottom: env(safe-area-inset-bottom);
-  flex-shrink: 0;
 }
 
 .bottom-nav-item {

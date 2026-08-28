@@ -18,7 +18,7 @@
 
 | 모듈/경계 | 7-Tier 결과 | 근거 | 미확인/후속 |
 |---|---|---|---|
-| `frontend/appointment-frontend` Angular/Node | PASS | report/workflow contract, 52 files·386 tests, production build, 27 browser E2E 통과 | 없음 |
+| `frontend/appointment-frontend` Angular/Node | PASS | report/workflow contract, 52 files·387 tests, production build, 27 browser E2E 통과 | 없음 |
 | Android Capacitor UI | PASS (정적) | `NativeWebViewUiTest`, Espresso-Web·UiAutomator test-only dependency, WebView accessibility hook | Android Emulator 계측 실행은 hosted exact-head CI 대기 |
 | iOS Capacitor UI | PASS (정적) | `AppUITests` target/scheme, `xcodebuild -list`, Swift parse 통과 | Simulator runtime이 없는 호스트이므로 XCTest 실행은 hosted exact-head CI 대기 |
 | native report/workflow | PASS | schema v2 bounds/redaction, canonical validator 8 tests, mirrored workflow parity test, actionlint | hosted artifact read-back 대기 |
@@ -33,7 +33,7 @@
 | 3. Security | credential·token·DOM raw output이 artifact로 유출되지 않는가 | PASS | report forbidden-term/unknown-field 테스트, safe relative path, production auth/API 변경 없음 |
 | 4. Operator/Ops | 실패를 재현하고 결과를 복구할 수 있는가 | PASS | platform별 report·JUnit/XCResult·screenshot upload, device/profile/viewport 기록, actionlint |
 | 5. Developer/API | test-only contract와 public script가 작고 명확한가 | PASS | schema v1 호환·v2 확장, validator fail-closed, README 명령과 artifact 예시 |
-| 6. User/Caller | 실제 mobile 사용 흐름과 접근성 경계가 유지되는가 | PASS (정적) | native coordinate tap, 예약 route title, 날짜 focus/keyboard, 44px bounds, portrait/landscape frame 검사 |
+| 6. User/Caller | 실제 mobile 사용 흐름과 접근성 경계가 유지되는가 | PASS (정적) | native coordinate tap, accessibility group frame, 예약 route title, 날짜 focus/keyboard, CSS 44px target, portrait/landscape frame 검사 |
 | 7. Main-session integration | canonical/mirrored workflow와 issue/document 증거가 수렴하는가 | PASS | 두 workflow parity test, Korean spec/plan/checklist/review/lesson, root dirty state 보존 |
 
 ## 검증 명령과 결과
@@ -45,7 +45,7 @@ npm run native:workflow                            PASS (missing=[])
 npm run test:bundle                                PASS (4 tests)
 npm run test:pwa                                   PASS (3 tests)
 npm run test:bridge                                PASS (3 tests)
-npm test -- --watch=false                          PASS (52 files, 386 tests)
+npm test -- --watch=false                          PASS (52 files, 387 tests)
 npm run test:e2e -- --workers=1                    PASS (27 tests)
 npx ng build --configuration production             PASS
 npm run cap:sync                                   PASS

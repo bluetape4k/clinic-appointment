@@ -13,8 +13,10 @@ scheme 전달만 보장하므로, UI 상호작용은 별도 계측 테스트로 
    title·active input·`visualViewport`를 보조 확인한다. DOM script click만으로 native
    tap을 대체하지 않는다.
 2. iOS는 third-party driver를 추가하지 않고 built-in `XCUIApplication`/XCTest UI
-   target으로 link tap, text field focus, keyboard 존재, portrait·landscape frame을
-   확인한다.
+   target으로 accessibility group frame, link tap, text field focus, keyboard 존재,
+   portrait·landscape frame을 확인한다. WebView landmark가 native tree에 노출되지 않는
+   경우에는 의미를 유지한 `role="group"` wrapper를 두고 link glyph frame과 hit area를
+   혼동하지 않는다.
 3. report schema v2는 `device`, `interactions`, `artifacts`를 bounded 값으로 추가하고
    v1 입력은 migration 경계로 유지한다. report는 safe relative path만 허용하고
    credential, token, password, secret, raw output을 거부한다.
@@ -41,7 +43,7 @@ scheme 전달만 보장하므로, UI 상호작용은 별도 계측 테스트로 
 
 ## 검증 증거
 
-- Angular unit/contract 386건, browser E2E 27건, production build와 Capacitor sync 통과
+- Angular unit/contract 387건, browser E2E 27건, production build와 Capacitor sync 통과
 - native report 8건, workflow 8건, bundle 4건, PWA 3건, bridge 3건 통과
 - canonical/mirrored workflow `actionlint` 통과 및 iOS project target/scheme 정적 parse
 - local `targets.ios=false`, `targets.android=false`; native 계측은 exact-head hosted CI

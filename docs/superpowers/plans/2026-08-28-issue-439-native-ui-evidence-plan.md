@@ -61,9 +61,9 @@
 - `AppUITests` UI testing bundle target, source group, Debug/Release configuration,
   shared scheme을 추가한다.
 - `XCUIApplication`으로 app을 실행하고 `links["예약 관리"]`를 tap한다.
-- `예약 목록`, `시작일` text field, keyboard query와 bottom navigation container frame을
+- `예약 목록`, `시작일` text field, keyboard query와 native accessibility group frame을
   확인한다.
-- portrait/landscape 전환에서 safe-area/content와 bottom navigation frame을 확인하고
+- portrait/landscape 전환에서 safe-area/content와 accessibility group frame을 확인하고
   테스트 종료 때 orientation을 portrait로 복원한다.
 
 ### 5. Artifact/report wiring
@@ -126,9 +126,9 @@
 - Android `NativeWebViewUiTest`는 UiAutomator coordinate tap과 Espresso-Web 보조
   검사를 사용하고, iOS `AppUITests`는 built-in XCTest UI target/scheme으로 같은
   상호작용 경계를 확인한다. 첫 hosted iOS run에서 WebView link accessibility frame이
-  42px로 관찰되어 link glyph frame을 target 판정에서 분리하고 nav container 44px frame과
-  실제 tap을 확인하도록 보정했으며, 두 harness 모두 production runtime dependency를
-  늘리지 않는다.
+  42px로 관찰되어 link glyph frame을 target 판정에서 분리하고 `role="group"` wrapper의
+  44px frame과 실제 tap을 확인하도록 보정했으며, 두 harness 모두 production runtime
+  dependency를 늘리지 않는다.
 - Angular template에는 native accessibility tree가 읽을 수 있는 nav/content/date
   label만 추가했으며 route/API/auth 동작은 변경하지 않았다. README 두 파일은 schema v2
   artifact와 실패 시 수집 경계를 반영했다.

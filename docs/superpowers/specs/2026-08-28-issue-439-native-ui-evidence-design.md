@@ -25,7 +25,7 @@ coordinate, Safe Area, software keyboard와 simulator orientation을 증명하�
 
 1. portrait에서 bottom tab을 실제 native input으로 tap하면 대상 route의 title이 바뀐다.
 2. touch target의 최소 경계를 확인한다. 기존 CSS 계약의 44px 이상을 유지하고,
-   native test에서는 실제 접근 가능한 element bounds를 측정한다.
+   native test에서는 접근성 group frame과 실제 link input을 함께 측정한다.
 3. focus 가능한 날짜 input을 열고 active element와 visual viewport 상태를 기록한다.
 4. landscape 전환 뒤 Safe Area/content와 bottom navigation의 overflow를 검사한다.
 5. exact commit, runner, device profile, viewport/orientation, interaction 결과,
@@ -51,7 +51,7 @@ coordinate, Safe Area, software keyboard와 simulator orientation을 증명하�
 - built-in XCTest UI target `AppUITests`를 `App.xcodeproj`에 추가한다. 외부 UI
   dependency는 사용하지 않는다.
 - `XCUIApplication`으로 app을 launch하고 `links["예약 관리"]`를 tap한다.
-- `예약 목록` title, `시작일` text field focus, keyboard query, bottom navigation container
+- `예약 목록` title, `시작일` text field focus, keyboard query, native accessibility group
   frame과
   portrait/landscape frame을 확인한다. `XCUIDevice.shared.orientation`은 테스트가
   완료된 뒤 portrait로 복원한다.
@@ -136,9 +136,10 @@ iOS 테스트가 Swift, report/validator가 Node.js인 실제 변경 scope에 �
 
 - Android `NativeWebViewUiTest`와 iOS `AppUITests`를 추가하고, Angular shell의 nav·date
   input에 최소 accessibility label을 부여했다. iOS WebView link accessibility frame이
-  42px로 관찰된 후 link glyph frame을 target 판정에 직접 사용하지 않고, nav container의
-  44px frame·실제 tap·CSS target 검사를 조합하도록 보정했다. bottom label에도 44px 최소
-  폭을 유지해 CSS surface를 정렬했다. route/API/auth production 경계는 그대로 둔다.
+  42px로 관찰된 후 link glyph frame을 target 판정에 직접 사용하지 않고, 별도
+  `role="group"` wrapper의 44px frame·실제 tap·CSS target 검사를 조합하도록 보정했다.
+  bottom label에도 44px 최소 폭을 유지해 CSS surface를 정렬했다. route/API/auth
+  production 경계는 그대로 둔다.
 - canonical `native-webview-ci.yml`과 mirrored `frontend-ci.yml` 모두
   `connectedDebugAndroidTest`, `xcodebuild test`, schema v2 report, JUnit/XCResult와
   screenshot upload, 실패 결과 gate를 갖는다. mirrored marker parity는 Node contract

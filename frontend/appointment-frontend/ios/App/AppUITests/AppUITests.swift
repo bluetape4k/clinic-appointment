@@ -21,7 +21,7 @@ final class AppUITests: XCTestCase {
         XCTAssertGreaterThan(appointmentTab.frame.width, 0)
         XCTAssertGreaterThan(appointmentTab.frame.height, 0)
 
-        let bottomNavigation = app.descendants(matching: .any)["모바일 하단 내비게이션"]
+        let bottomNavigation = app.otherElements["모바일 하단 내비게이션 영역"]
         XCTAssertTrue(
             bottomNavigation.waitForExistence(timeout: 5),
             "bottom navigation container must expose its native accessibility frame"
