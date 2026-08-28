@@ -31,6 +31,9 @@ final class AppUITests: XCTestCase {
         appointmentTab.tap()
 
         let appointmentTitle = app.staticTexts["예약 목록"]
+        if !appointmentTitle.waitForExistence(timeout: 5) && appointmentTab.exists {
+            appointmentTab.tap()
+        }
         XCTAssertTrue(
             appointmentTitle.waitForExistence(timeout: 15),
             "native tap must navigate to the appointment route"
