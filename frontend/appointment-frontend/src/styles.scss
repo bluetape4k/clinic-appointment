@@ -7,6 +7,8 @@
 
 html {
   height: 100%;
+  min-height: 100dvh;
+  overscroll-behavior-x: none;
   @include mat.theme(
     (
       color: (
@@ -35,6 +37,24 @@ body {
   // Reset the user agent margin.
   margin: 0;
   height: 100%;
+  min-height: 100dvh;
+  overscroll-behavior-x: none;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+@media (max-width: 959px) {
+  .mobile-content button,
+  .mobile-content [role='button'],
+  .portal-main button,
+  .portal-main [role='button'] {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
 }
 /* You can add global styles to this file, and also import other style files */
 

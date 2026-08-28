@@ -2,6 +2,10 @@
   padding: 24px;
   max-width: 800px;
   margin: 0 auto;
+  min-height: var(--mobile-viewport-height, 100dvh);
+  box-sizing: border-box;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
+  scroll-padding-bottom: calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
 }
 
 mat-card-header {
@@ -45,6 +49,32 @@ mat-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   padding-top: 16px;
   border-top: 1px solid rgba(0, 0, 0, 0.12);
+
+  button {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+}
+
+@media (max-width: 560px) {
+  .appointment-form-container {
+    padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px));
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    align-items: stretch;
+
+    button {
+      flex: 1 1 160px;
+    }
+  }
 }

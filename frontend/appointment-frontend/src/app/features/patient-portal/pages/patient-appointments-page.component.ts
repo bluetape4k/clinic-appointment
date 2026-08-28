@@ -130,21 +130,21 @@ const DEFAULT_CLINIC_TIME_ZONE = 'UTC';
     .portal-eyebrow { margin: 0 0 8px; color: var(--portal-muted); font-size: .75rem; font-weight: 700; letter-spacing: .12em; }
     h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 1.75rem); letter-spacing: -.03em; }
     .portal-page-intro { margin: 8px 0 0; color: var(--portal-muted); }
-    .request-form, .proposal-actions { display: grid; gap: 14px; margin-top: 24px; padding: 20px; border: 1px solid var(--portal-line); background: var(--portal-surface-raised); }
+    .request-form, .proposal-actions { display: grid; gap: 14px; margin-top: 24px; padding: 20px; border: 1px solid var(--portal-line); background: var(--portal-surface-raised); scroll-margin-block: 24px; scroll-padding-block-end: calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px)); }
     .cancel-confirmation, .requested-state, .restore-error { display: grid; gap: 14px; margin-top: 20px; padding: 20px; border: 1px solid var(--portal-line); background: var(--portal-surface-raised); }
     h3 { margin: 0; font-size: 1.1rem; }
     .form-help { margin: -6px 0 2px; color: var(--portal-muted); }
     label { display: grid; gap: 6px; color: var(--portal-muted); font-size: .875rem; }
-    input, select { min-height: 42px; border: 1px solid var(--portal-line); background: var(--portal-surface); color: var(--portal-ink); padding: 8px 10px; font: inherit; }
+    input, select { min-height: 44px; border: 1px solid var(--portal-line); background: var(--portal-surface); color: var(--portal-ink); padding: 8px 10px; font: inherit; }
     input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px solid var(--portal-focus); outline-offset: 2px; }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    button { justify-self: start; min-height: 42px; border: 1px solid var(--portal-ink); background: var(--portal-ink); color: var(--portal-surface-raised); padding: 8px 14px; cursor: pointer; font: inherit; }
+    button { justify-self: start; min-height: 44px; border: 1px solid var(--portal-ink); background: var(--portal-ink); color: var(--portal-surface-raised); padding: 8px 14px; cursor: pointer; font: inherit; touch-action: manipulation; }
     button:disabled { cursor: wait; opacity: .6; }
     .action-row { display: flex; flex-wrap: wrap; gap: 10px; }
     .secondary-button { background: transparent; color: var(--portal-ink); }
     .cancel-button { margin-top: 20px; }
     .portal-notice { margin-top: 16px; padding: 12px 14px; border-left: 3px solid var(--portal-focus); background: var(--portal-surface-raised); }
-    @media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } .action-row { display: grid; grid-template-columns: 1fr; } .action-row button { width: 100%; } }
   `],
 })
 export class PatientAppointmentsPageComponent implements OnInit {

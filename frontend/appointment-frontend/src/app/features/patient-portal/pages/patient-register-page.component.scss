@@ -1,5 +1,5 @@
 :host { display: block; min-height: 100%; }
-.auth-page { min-height: 100vh; display: grid; place-items: center; padding: clamp(20px, 6vw, 72px); box-sizing: border-box; background: var(--portal-surface); }
+.auth-page { min-height: var(--mobile-viewport-height, 100dvh); display: grid; place-items: center; padding-top: calc(clamp(20px, 6vw, 72px) + env(safe-area-inset-top)); padding-right: clamp(20px, 6vw, 72px); padding-bottom: calc(clamp(20px, 6vw, 72px) + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px)); padding-left: clamp(20px, 6vw, 72px); box-sizing: border-box; background: var(--portal-surface); scroll-padding-bottom: calc(24px + env(safe-area-inset-bottom) + var(--mobile-keyboard-inset, 0px)); }
 .auth-card { width: min(100%, 620px); padding: clamp(24px, 5vw, 48px); border: 1px solid var(--portal-line); background: var(--portal-surface-raised); box-shadow: 0 20px 60px rgb(18 35 52 / 10%); }
 .auth-brand, .auth-eyebrow { color: var(--portal-focus); font-size: .72rem; font-weight: 800; letter-spacing: .14em; }
 .auth-brand { margin-bottom: 40px; }
@@ -13,7 +13,7 @@ input, select { width: 100%; box-sizing: border-box; min-height: 46px; padding: 
 input:focus, select:focus { outline: 3px solid var(--portal-focus); outline-offset: 1px; }
 fieldset { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
 .identifier-row { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(0, 1.5fr) auto; gap: 8px; align-items: center; }
-button { min-height: 48px; border: 0; border-radius: 0; background: var(--portal-focus); color: white; font: inherit; font-weight: 800; cursor: pointer; }
+button { min-height: 48px; border: 0; border-radius: 0; background: var(--portal-focus); color: white; font: inherit; font-weight: 800; cursor: pointer; touch-action: manipulation; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .text-button, .add-button { min-height: 42px; padding: 8px 12px; background: transparent; color: var(--portal-focus); border: 1px solid var(--portal-line); }
 .add-button { justify-self: start; margin-top: 4px; }

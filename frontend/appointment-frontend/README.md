@@ -120,6 +120,28 @@ API origin·cookie·CSRF 전송 계약은 [Issue #430](https://github.com/blueta
 실제 디바이스·에뮬레이터 검증은 [Issue #24](https://github.com/bluetape4k/clinic-appointment/issues/24)에서
 다룹니다. 브라우저 E2E 통과만으로 native build나 실기기 동작을 보장하지 않습니다.
 
+## 모바일 viewport·입력 계약
+
+기존 Angular standalone shell, Angular Material 컴포넌트, Capacitor `webDir`를
+그대로 재사용합니다. `appMobileViewport` directive가 `visualViewport` 높이와
+키보드 inset을 `--mobile-viewport-height`·`--mobile-keyboard-inset` CSS 변수로
+공유하고, Safe Area는 `env(safe-area-inset-*)`로 각 scroll 경계에 반영합니다.
+따라서 페이지별 viewport 계산이나 새 keyboard plugin을 추가하지 않습니다.
+
+```bash
+npm test -- --watch=false
+npm run build && npm run bundle:verify
+npx tsc --noEmit -p tsconfig.app.json
+npx playwright test e2e/patient-portal.spec.ts e2e/mobile-lazy-routes.spec.ts
+```
+
+브라우저 계약은 320·375·393·430px portrait와 짧은 landscape에서 lazy route,
+가로 overflow, focus 입력, form action, 44px 이상 touch target을 확인합니다.
+브라우저가 통과해도 iOS/Android IME·orientation·status bar와 native bridge는
+검증된 것으로 보지 않으며, 실기기 계약은 [Issue #27](https://github.com/bluetape4k/clinic-appointment/issues/27),
+배포·WebView 보안 경계는 [Issue #24](https://github.com/bluetape4k/clinic-appointment/issues/24)에서
+별도로 다룹니다.
+
 ## 테스트
 
 ```bash

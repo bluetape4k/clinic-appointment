@@ -11,6 +11,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs/operators';
 import { WorkforceAuthBootstrapService } from './core/services/workforce-auth-bootstrap.service';
+import { MobileViewportDirective } from './shared';
 
 export interface NavItem {
   label: string;
@@ -30,6 +31,7 @@ export interface NavItem {
     MatListModule,
     MatTabsModule,
     MatButtonModule,
+    MobileViewportDirective,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',

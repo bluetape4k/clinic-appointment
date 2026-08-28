@@ -1,5 +1,5 @@
 @if (isPatientPortal()) {
-  <div class="portal-root">
+  <div class="portal-root" appMobileViewport>
     <router-outlet />
   </div>
 } @else {
@@ -29,7 +29,7 @@
     </mat-sidenav-container>
   } @else {
     <!-- 모바일: 하단 탭 바 -->
-    <div class="mobile-layout">
+    <div class="mobile-layout" appMobileViewport>
       <div class="mobile-content">
         <router-outlet />
       </div>
