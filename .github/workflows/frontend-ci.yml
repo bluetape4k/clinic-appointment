@@ -172,18 +172,19 @@ jobs:
           script: |
             set +e
             mkdir -p artifacts/native-android-ui
+            android_serial="${ANDROID_SERIAL:-emulator-5554}"
             (cd frontend/appointment-frontend/android && ./gradlew --no-daemon --stacktrace connectedDebugAndroidTest)
             test_status=$?
-            if adb get-state >/dev/null 2>&1; then
-              adb exec-out screencap -p > artifacts/native-android-ui/screenshot.png || true
-              adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
-              adb exec-out cat /sdcard/window.xml > artifacts/native-android-ui/window-hierarchy.xml || true
+            if adb -s "$android_serial" get-state >/dev/null 2>&1; then
+              adb -s "$android_serial" exec-out screencap -p > artifacts/native-android-ui/screenshot.png || true
+              adb -s "$android_serial" shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+              adb -s "$android_serial" exec-out cat /sdcard/window.xml > artifacts/native-android-ui/window-hierarchy.xml || true
             fi
             if test "$test_status" -eq 0; then
-              adb install -r frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
-              adb shell am start -W -n io.bluetape4k.clinic.appointment/.MainActivity
-              adb shell am start -W -a android.intent.action.VIEW -d 'io.bluetape4k.clinic.appointment://open/tenant-default/calendar?view=week&date=2026-08-27'
-              adb shell dumpsys activity activities | grep -F 'io.bluetape4k.clinic.appointment'
+              adb -s "$android_serial" install -r frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
+              adb -s "$android_serial" shell am start -W -n io.bluetape4k.clinic.appointment/.MainActivity
+              adb -s "$android_serial" shell am start -W -a android.intent.action.VIEW -d 'io.bluetape4k.clinic.appointment://open/tenant-default/calendar?view=week&date=2026-08-27'
+              adb -s "$android_serial" shell dumpsys activity activities | grep -F 'io.bluetape4k.clinic.appointment'
             fi
             exit "$test_status"
 
@@ -192,8 +193,9 @@ jobs:
         run: |
           set -eu
           mkdir -p artifacts/native-android-ui
-          if adb get-state >/dev/null 2>&1; then
-            adb exec-out screencap -p > artifacts/native-android-ui/screenshot.png || true
+          android_serial="${ANDROID_SERIAL:-emulator-5554}"
+          if adb -s "$android_serial" get-state >/dev/null 2>&1; then
+            adb -s "$android_serial" exec-out screencap -p > artifacts/native-android-ui/screenshot.png || true
           fi
           result_xml="$(find android/app/build/outputs/androidTest-results -name '*.xml' -type f -print -quit 2>/dev/null || true)"
           if test -n "$result_xml"; then

@@ -12,8 +12,8 @@ const REQUIRED_MARKERS = Object.freeze([
   'emulator-boot-timeout: 1200',
   'android-webview',
   'ios-webview',
-  'adb shell am start',
-  'adb shell am start -W -a android.intent.action.VIEW -d',
+  'adb -s "$android_serial" shell am start',
+  'adb -s "$android_serial" shell am start -W -a android.intent.action.VIEW -d',
   'connectedDebugAndroidTest',
   'xcodebuild test',
   'xcrun simctl openurl',
@@ -34,7 +34,7 @@ const REQUIRED_MARKERS = Object.freeze([
 ]);
 
 const DEEP_LINK_COMMAND_PATTERN =
-  /^\s*adb shell am start -W -a android\.intent\.action\.VIEW -d 'io\.bluetape4k\.clinic\.appointment:\/\/open\/tenant-default\/calendar\?view=week&date=2026-08-27'\s*$/u;
+  /^\s*adb -s "\$android_serial" shell am start -W -a android\.intent\.action\.VIEW -d 'io\.bluetape4k\.clinic\.appointment:\/\/open\/tenant-default\/calendar\?view=week&date=2026-08-27'\s*$/u;
 
 export function validateNativeWebViewWorkflow(content) {
   const missing = REQUIRED_MARKERS.filter((marker) => !content.includes(marker));
@@ -56,7 +56,7 @@ export function validateNativeWebViewWorkflow(content) {
   }
   const deepLinkCommands = content
     .split('\n')
-    .filter((line) => line.includes('adb shell am start -W -a android.intent.action.VIEW -d'));
+    .filter((line) => line.includes('adb -s "$android_serial" shell am start -W -a android.intent.action.VIEW -d'));
   if (!deepLinkCommands.every((line) => DEEP_LINK_COMMAND_PATTERN.test(line))) {
     throw new Error('Android deep-link command must be a single device-shell-safe invocation');
   }

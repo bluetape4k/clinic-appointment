@@ -53,16 +53,6 @@ public final class NativeWebViewUiTest {
                 + "throw new Error('bottom tab CSS touch target is smaller than 44px');"
         ));
 
-        UiObject2 dateInput = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000);
-        assertNotNull("date input must be accessible for keyboard/focus evidence", dateInput);
-        dateInput.click();
-        onWebView().perform(script(
-            "const input = document.querySelector('input:focus'); "
-                + "if (!input) throw new Error('date input did not receive focus'); "
-                + "if (!window.visualViewport) throw new Error('visualViewport is unavailable'); "
-                + "if (window.visualViewport.height <= 0) throw new Error('visualViewport height is invalid');"
-        ));
-
         try {
             device.setOrientationLeft();
             device.waitForIdle();
@@ -77,6 +67,16 @@ public final class NativeWebViewUiTest {
             device.setOrientationNatural();
             device.waitForIdle();
         }
+
+        UiObject2 dateInput = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000);
+        assertNotNull("date input must be accessible for keyboard/focus evidence", dateInput);
+        dateInput.click();
+        onWebView().perform(script(
+            "const input = document.querySelector('input:focus'); "
+                + "if (!input) throw new Error('date input did not receive focus'); "
+                + "if (!window.visualViewport) throw new Error('visualViewport is unavailable'); "
+                + "if (window.visualViewport.height <= 0) throw new Error('visualViewport height is invalid');"
+        ));
     }
 
     private static UiObject2 waitForTextOrDescription(UiDevice device, String text) {
