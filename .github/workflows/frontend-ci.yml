@@ -162,7 +162,7 @@ jobs:
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: 34
           target: default
           arch: x86_64
           profile: pixel_5
@@ -176,8 +176,16 @@ jobs:
             adb -s "$android_serial" shell settings put global device_provisioned 1 || true
             adb -s "$android_serial" shell settings put secure user_setup_complete 1 || true
             adb -s "$android_serial" shell settings put global setup_wizard_has_run 1 || true
+            adb -s "$android_serial" shell settings put global airplane_mode_on 1 || true
+            adb -s "$android_serial" shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true || true
             adb -s "$android_serial" shell pm disable-user --user 0 com.android.phone || true
+            adb -s "$android_serial" shell pm disable-user --user 0 com.android.ons || true
+            adb -s "$android_serial" shell pm disable-user --user 0 com.android.stk || true
             adb -s "$android_serial" shell pm disable-user --user 0 com.android.bluetooth || true
+            adb -s "$android_serial" shell am force-stop com.android.phone || true
+            adb -s "$android_serial" shell am force-stop com.android.ons || true
+            adb -s "$android_serial" shell am force-stop com.android.stk || true
+            sleep 15
             adb -s "$android_serial" logcat -c || true
             adb -s "$android_serial" logcat -v threadtime > frontend/appointment-frontend/artifacts/native-android-ui/logcat-live.txt 2>&1 &
             logcat_pid=$!
@@ -220,7 +228,7 @@ jobs:
         env:
           NATIVE_PLATFORM: android
           NATIVE_COMMIT: ${{ github.sha }}
-          NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-22.04","java":"21","android-api":"30","emulator":"pixel_5"}'
+          NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-22.04","java":"21","android-api":"34","emulator":"pixel_5"}'
           NATIVE_COMMANDS_JSON: '["cap:sync","connectedDebugAndroidTest","emulator-install","app-launch","deep-link"]'
           NATIVE_RESULT: ${{ steps.android-ui.outcome == 'success' && 'passed' || 'failed' }}
           NATIVE_SCHEMA_VERSION: "2"

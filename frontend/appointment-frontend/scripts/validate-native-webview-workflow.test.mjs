@@ -98,7 +98,7 @@ test('Android runner action은 repository root에서 native artifact를 frontend
 test('Android runner action은 AOSP emulator를 이미 프로비저닝된 상태로 고정한다', () => {
   const content = readFileSync(workflowPath, 'utf8');
   const androidSection = content.split('  android-webview:', 2)[1]?.split('  ios-webview:', 1)[0] ?? '';
-  assert.match(androidSection, /api-level:\s*30/u);
+  assert.match(androidSection, /api-level:\s*34/u);
   assert.match(androidSection, /target:\s*default/u);
   for (const command of [
     'settings put global device_provisioned 1',
@@ -116,11 +116,28 @@ test('Android runner action은 AOSP emulator를 이미 프로비저닝된 상태
 test('Android runner action은 native UI와 무관한 persistent system service를 비활성화한다', () => {
   const content = readFileSync(workflowPath, 'utf8');
   const androidSection = content.split('  android-webview:', 2)[1]?.split('  ios-webview:', 1)[0] ?? '';
-  for (const service of ['com.android.phone', 'com.android.bluetooth']) {
+  for (const command of [
+    'settings put global airplane_mode_on 1',
+    'am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true',
+  ]) {
+    assert.equal(
+      androidSection.includes(`adb -s "$android_serial" shell ${command}`),
+      true,
+      `missing emulator network isolation command: ${command}`,
+    );
+  }
+  for (const service of ['com.android.phone', 'com.android.ons', 'com.android.stk', 'com.android.bluetooth']) {
     assert.equal(
       androidSection.includes(`adb -s "$android_serial" shell pm disable-user --user 0 ${service}`),
       true,
       `missing emulator service isolation command: ${service}`,
+    );
+  }
+  for (const service of ['com.android.phone', 'com.android.ons', 'com.android.stk']) {
+    assert.equal(
+      androidSection.includes(`adb -s "$android_serial" shell am force-stop ${service}`),
+      true,
+      `missing emulator service stop command: ${service}`,
     );
   }
 });
