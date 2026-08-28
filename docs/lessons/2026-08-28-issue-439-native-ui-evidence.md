@@ -26,6 +26,12 @@ scheme 전달만 보장하므로, UI 상호작용은 별도 계측 테스트로 
 5. native SDK가 없는 개발 호스트의 결과는 PASS로 추정하지 않는다. 정적 project parse와
    contract test는 통과로 기록하되, 실제 Emulator/Simulator 증거는 hosted exact-head
    CI에서만 완료한다.
+6. Android `ActivityScenario`는 테스트 시작 시 한 번만 `RESUMED`를 보장한다. native tap
+   뒤나 orientation 복귀 시 lifecycle 전환을 반복하면 instrumentation의 `EmptyActivity`가
+   WebView root focus를 탈취할 수 있다. 중복 호출을 제거한 최신 head에서도 AOSP ATD의
+   persistent `com.android.phone` 재시작과 `system_server` contention으로
+   `RootViewWithoutFocusException`이 재현됐으므로, 실패 artifact를 보존하고 runner 환경
+   복구 전에는 추가 추측 수정을 중단한다.
 
 ## 재발 방지
 
@@ -40,11 +46,15 @@ scheme 전달만 보장하므로, UI 상호작용은 별도 계측 테스트로 
 - 이번 실행에서는 runtime receipt를 checklist보다 먼저 bootstrap한 순서 오류가 있었다.
   영향 범위를 checklist에 기록하고, 이후에는 checklist 생성·승인·run 초기화 순서를
   먼저 지킨다.
+- hosted run `33204869723`은 Browser와 iOS XCTest가 통과했지만 Android API34 AOSP ATD가
+  `MainActivity STOPPED`로 전환되어 Espresso root focus를 잃었다. 네 차례 hosted 재현과
+  `test-results.xml`, `window-hierarchy.xml`, `logcat-live.txt` read-back을 근거로 receipt를
+  `blocked`로 남긴다.
 
 ## 검증 증거
 
 - Angular unit/contract 387건, browser E2E 27건, production build와 Capacitor sync 통과
-- native report 8건, workflow 8건, bundle 4건, PWA 3건, bridge 3건 통과
+- native report 8건, workflow 13건, bundle 4건, PWA 3건, bridge 3건 통과
 - canonical/mirrored workflow `actionlint` 통과 및 iOS project target/scheme 정적 parse
-- local `targets.ios=false`, `targets.android=false`; native 계측은 exact-head hosted CI
-  대기
+- local `targets.ios=false`, `targets.android=false`; hosted run `33204869723`의 iOS는
+  통과하고 Android는 `RootViewWithoutFocusException`으로 실패했으며 관련 artifact를 보존

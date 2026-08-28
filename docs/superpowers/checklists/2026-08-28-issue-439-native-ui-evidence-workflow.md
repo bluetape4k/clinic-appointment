@@ -50,12 +50,12 @@
 - [x] **WF-04A — machine-readable run 초기화**
   - **Action:** `bluetape-flow.py`로 Type-E run·lane·topology를 초기화한다.
   - **Evidence:** run `20260828T044953Z-82cd4ad3`, state root
-    `.bluetape`, topology sequence `7`, main-session lane이 running이다.
+    `.bluetape`, topology sequence `7`, main-session lane 생성과 receipt를 기록했다.
   - **Failure:** receipt 없는 mutation을 허용하지 않는다.
 - [ ] **WF-05 — 의존 순서 게이트 실행**
   - **Action:** 이 checklist의 물리적 순서대로 preflight→RED/GREEN→native/CI→review를 실행한다.
-  - **Evidence:** 최종 receipt, command ledger, artifact와 각 row의 fresh 결과.
-  - **Failure:** 순서 오류 시 영향을 받은 downstream proof를 재실행한다.
+  - **Evidence:** report/workflow/browser 검증과 exact-head hosted run `33204869723`을 실행했다. Browser와 iOS는 통과했고 Android report/JUnit/artifact는 생성됐지만 `RootViewWithoutFocusException`으로 실패하여 receipt가 blocked 상태다.
+  - **Failure:** Android AOSP ATD의 반복적인 시스템 서비스 churn이 외부 환경 변경 없이 재현되어 downstream native acceptance를 중지한다.
 - [x] **WF-06 — 누락·실패 gate 복구**
   - **Action:** 실패·stale·누락 증거를 수리하고 affected proof를 다시 실행한다.
   - **Evidence:** runtime bootstrap/checklist 순서 오류를 repair로 기록하고,
@@ -83,20 +83,20 @@
   - **Failure:** late reconstruction은 repair로 기록한다.
 - [x] **CL-05 — fail closed**
   - **Action:** PENDING/FAIL row의 dependent branch를 차단한다.
-  - **Evidence:** local Xcode/Android SDK 부재는 native CI PENDING으로 유지하고
-    원격 exact-head 결과 전에는 PASS로 바꾸지 않는다.
+  - **Evidence:** local Xcode/Android SDK 부재를 PASS로 추정하지 않았고, 원격 exact-head
+    결과에서 iOS는 PASS, Android는 FAIL로 기록한 뒤 downstream native acceptance를 차단했다.
   - **Failure:** dependent proof를 보류·재실행한다.
 - [x] **CL-06 — skip/reorder 복구**
   - **Action:** 누락·순서 오류를 repair하고 affected downstream을 갱신한다.
   - **Evidence:** CL-01 bootstrap/checklist 순서 복구와 fresh rerun 기록.
   - **Failure:** 최종 상태를 `BLOCKED`로 남긴다.
-- [ ] **CL-07 — irreversible hold refresh**
+- [x] **CL-07 — irreversible hold refresh**
   - **Action:** PR 생성·merge 직전에 authority·target·exact head를 다시 읽는다.
-  - **Evidence:** CG-11/12A/15/16의 live read-back.
+  - **Evidence:** Issue #439와 PR #440의 base `develop`, head `feat/issue-439-native-ui-evidence`, 현재 head `3ced6c0206cd32e62134fc8337fbbd6cdfeb2000`, labels/milestone/assignee를 live read-back했다. merge는 별도 fresh approval hold로 유지한다.
   - **Failure:** stale hold에서는 side effect를 실행하지 않는다.
-- [ ] **CL-08 — 완료 count 산출**
+- [x] **CL-08 — 완료 count 산출**
   - **Action:** `Required checks: X/Y; N/A: N; Blocked: N`과 unchecked IDs를 계산한다.
-  - **Evidence:** 최종 checklist와 PR body의 동일 count.
+  - **Evidence:** 현재 checklist/PR body 기준 `Required checks: 30/36; N/A: 6; Blocked: 1`과 unchecked `WF-05, E-05, E-07, E-08, 7T-04, 7T-05`를 산출했다.
   - **Failure:** count가 맞지 않으면 완료를 주장하지 않는다.
 
 ## Type-E E-01..E-08
@@ -119,16 +119,16 @@
   - **Failure:** live-only success는 인정하지 않는다.
 - [ ] **E-05 — Run maintenance verification**
   - **Action:** diff check, references, Node tests, actionlint, native CI, docs/term audit를 실행한다.
-  - **Evidence:** command output와 artifact paths.
-  - **Failure:** 실패한 check를 repair한다.
+  - **Evidence:** local Node/unit/build/E2E/docs/actionlint와 exact-head run `33204869723`을 실행했다. iOS artifact는 통과했지만 Android `test-results.xml`, `window-hierarchy.xml`, `logcat-live.txt`가 `RootViewWithoutFocusException`을 기록했다.
+  - **Failure:** Android hosted proof가 실패했으므로 maintenance verification을 PASS로 승격하지 않는다.
 - [x] **E-06 — Complete durable pre-PR proof**
   - **Action:** duplicate/metadata/language/capability/pruning과 7-Tier review를 완료한다.
   - **Evidence:** final diff, P0/P1 count, issue/PR parity, lesson.
   - **Failure:** 수렴 전 PR을 만들지 않는다.
 - [ ] **E-07 — Deliver through common PR gates**
   - **Action:** CG-11..15를 exact head에 적용한다.
-  - **Evidence:** PR body/metadata/CI/review live read-back.
-  - **Failure:** common gate 상태를 유지한다.
+  - **Evidence:** PR #440 metadata/head는 live read-back했으나 hosted Android check가 실패했고 PR의 PostgreSQL API check도 진행 중이어서 common gate를 수렴하지 못했다.
+  - **Failure:** common gate 상태를 유지하고 Android 외부 환경 복구 전 merge-ready로 승격하지 않는다.
 - [ ] **E-08 — Close out after fresh merge approval**
   - **Action:** CG-16..18을 fresh approval 후에만 수행한다.
   - **Evidence:** merge SHA, develop parity, cleanup.
@@ -173,12 +173,12 @@
   - **Failure:** P0/P1 repair.
 - [ ] **7T-04 — 운영·CI**
   - **Action:** exact SHA, device profile, viewport/orientation, artifact를 남긴다.
-  - **Evidence:** workflow/report artifact.
-  - **Failure:** report 유실이면 CI를 fail한다.
+  - **Evidence:** run `33204869723`의 Android/iOS report에 exact commit `3ced6c0206cd32e62134fc8337fbbd6cdfeb2000`, device/profile, viewport/orientation, artifact 목록이 남았다. Android result가 failed여서 양 플랫폼 운영 증거는 미완료다.
+  - **Failure:** Android AOSP ATD 시스템 서비스 churn이 안정화될 때까지 운영 acceptance를 blocked로 둔다.
 - [ ] **7T-05 — 테스트**
   - **Action:** RED/GREEN report·workflow contract 및 native UI harness를 검증한다.
-  - **Evidence:** local tests와 exact-head native CI.
-  - **Failure:** flaky/부분 증거는 PASS가 아니다.
+  - **Evidence:** report/workflow contract와 iOS XCTest는 통과했으나 Android native UI는 `RootViewWithoutFocusException`으로 실패했다. partial evidence를 PASS로 승격하지 않는다.
+  - **Failure:** Android native test가 통과할 때까지 native acceptance를 blocked로 둔다.
 - [x] **7T-06 — 문서·사용성**
   - **Action:** 한국어 README/spec/plan/review/lesson과 issue metadata를 갱신한다.
   - **Evidence:** links/terms/read-back.
@@ -203,8 +203,8 @@
 - `N/A (single-developer lane)` — 추가 maintainer reviewer가 없는 개인 저장소 작업으로,
   CG-14의 human-review subgate만 N/A로 기록한다. independent local 7-Tier review와
   exact-head CI는 여전히 필수다.
-- `PENDING` — CG-11..CG-18, E-07..E-08: final exact head push/PR/CI 후 fresh merge
-  approval이 필요하다.
+- `BLOCKED/PENDING` — CG-11..CG-18, E-07..E-08: Android native blocker가 해소되고
+  final exact head CI가 통과한 뒤 fresh merge approval이 필요하다.
 
 ## Evidence ledger
 
@@ -213,16 +213,19 @@
 | 2026-08-28 | `git status`, `git worktree list`, `git rev-parse` | root dirty state 보존, isolated worktree와 `origin/develop@e6937e02` 확인 |
 | 2026-08-28 | Issue #439/GNO/native #24 read-back | 기존 smoke/browser contract와 #439 native UI gap 확인 |
 | 2026-08-28 | `bluetape-flow.py init/run-start/topology-register/mutation-check` | run `20260828T044953Z-82cd4ad3`, sequence `7`, target scope 확인 |
-| 2026-08-28 | RED/GREEN report/workflow tests | report 8건, workflow 8건 통과; v1 migration과 v2 bounds/redaction을 확인 |
+| 2026-08-28 | RED/GREEN report/workflow tests | report 8건, workflow 13건 통과; v1 migration과 v2 bounds/redaction을 확인 |
 | 2026-08-28 | Angular/browser 회귀·Capacitor 정적 검증 | unit 387건, E2E 27건, production build, `cap:sync`, `cap doctor`, `docs:verify`, bundle/PWA/bridge contract 통과 |
 | 2026-08-28 | iOS project/static parse | `xcodebuild -list`에서 `App`·`AppUITests`, `swiftc -parse` 통과 |
 | 2026-08-28 | Korean artifact audit | 7개 문서 대상 `audit-korean-terms.mjs --series clinic-appointment --json` findings 0, `git diff --check` 통과 |
-| pending | Android/iOS native UI CI | exact-head remote evidence와 report/JUnit/XCResult/screenshot read-back 필요 |
+| 2026-08-28 | exact-head Native WebView CI `33204869723` | head `3ced6c0206cd32e62134fc8337fbbd6cdfeb2000`; Browser/iOS PASS, Android report/JUnit/artifact 생성 후 `RootViewWithoutFocusException`·`MainActivity STOPPED` 실패 |
+| 2026-08-28 | workflow receipt refresh | Android check failed와 iOS check passed를 기록하고 `completion-check`에서 `failed_checks=[android-ui:android-instrumentation]`, `missing_components=[android-ui]`를 확인한 뒤 run을 `blocked`로 전환 |
 
 ## Current DoD
 
-`Required checks: 28/36; N/A: 6; Blocked: 2`.
-현재 local contract·browser·정적 project와 7-Tier 문서 row는 증명했다. 미완료 row는
-native Emulator/Simulator 실행 및 그에 종속된 CI/PR/merge hold이며, exact-head hosted
-receipt 전까지 `PENDING`으로 유지한다. 최종 count는 PR/CI와 fresh merge approval 후
-갱신한다.
+`Required checks: 30/36; N/A: 6; Blocked: 1`.
+local contract·browser·정적 project와 iOS hosted evidence는 증명했지만 Android
+exact-head run `33204869723`은 AOSP ATD의 persistent `com.android.phone`/system_server
+churn으로 `RootViewWithoutFocusException`과 `MainActivity STOPPED`가 네 차례 반복됐다.
+실패 artifact는 보존했고 workflow receipt는 `blocked`로 남겼다. 현재 unchecked IDs는
+`WF-05, E-05, E-07, E-08, 7T-04, 7T-05`이며, Android 환경이 복구되어 fresh exact-head
+검증을 통과하기 전에는 `DONE`이나 merge-ready로 승격하지 않는다.

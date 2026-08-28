@@ -8,7 +8,8 @@
 - branch/worktree: `feat/issue-439-native-ui-evidence` /
   `.worktrees/issue-439-native-ui-evidence`
 - stop condition: report/workflow contract, Android/iOS native test, exact-head CI,
-  docs/7-Tier review가 모두 증명되고 P0/P1이 0일 때 PR merge-ready로 멈춘다.
+  docs/7-Tier review가 모두 증명되면 PR merge-ready로 멈춘다. 동일한 외부 native
+  blocker가 반복되어 안전한 수리가 불가능하면 receipt와 문서를 `BLOCKED`로 수렴하고
   merge는 fresh approval 전까지 수행하지 않는다.
 
 ## 구현 순서
@@ -44,7 +45,9 @@
 `android/variables.gradle`, `android/app/src/androidTest/...`.
 
 - test-only `espresso-web`와 `uiautomator` stable dependency를 추가한다.
-- `ActivityScenarioRule<MainActivity>`로 app을 시작한다.
+- `ActivityScenarioRule<MainActivity>`로 app을 시작하고 테스트 초기에만 `RESUMED` 상태를
+  확인한다. native tap·Espresso·orientation 시퀀스에서는 `ActivityScenario`를 다시
+  전환하지 않는다.
 - `UiDevice`로 `예약 관리` accessibility node 중심을 실제 tap하고 route title을
   Espresso-Web으로 확인한다.
 - 날짜 input focus 후 active element와 visual viewport를 확인하고, portrait→landscape
@@ -107,6 +110,10 @@
   바꾸지 않고 결과를 report에 기록한다. UX 변경은 별도 issue다.
 - API origin/auth failure가 UI shell을 깨면 fake token/endpoint를 추가하지 않고
   test-only network fixture 여부를 별도 설계·승인 대상으로 분리한다.
+- AOSP ATD에서 persistent `com.android.phone`가 재시작하며 `system_server` contention과
+  `MainActivity STOPPED`를 유발하면 테스트 lifecycle을 더 재시도하지 않는다. 로그·JUnit·
+  window hierarchy를 보존하고 외부 runner 환경을 복구한 뒤 fresh exact-head run을 다시
+  수행한다.
 
 ## 리뷰 포인트
 
@@ -128,17 +135,21 @@
   상호작용 경계를 확인한다. 첫 hosted iOS run에서 WebView link accessibility frame이
   42px로 관찰되어 link glyph frame을 target 판정에서 분리하고 `role="group"` wrapper의
   44px frame과 실제 tap을 확인하도록 보정했으며, 두 harness 모두 production runtime
-  dependency를 늘리지 않는다.
+  dependency를 늘리지 않는다. Android의 중복 `ActivityScenario` 전환은 제거했지만
+  exact-head run `33204869723`에서도 AOSP 시스템 서비스 churn으로 root focus를 잃어
+  hosted acceptance가 blocked로 남았다.
 - Angular template에는 native accessibility tree가 읽을 수 있는 nav/content/date
   label만 추가했으며 route/API/auth 동작은 변경하지 않았다. README 두 파일은 schema v2
   artifact와 실패 시 수집 경계를 반영했다.
-- 통과: `npm run test:native:report` (8), `npm run test:native:workflow` (8),
+- 통과: `npm run test:native:report` (8), `npm run test:native:workflow` (13),
   `npm test -- --watch=false` (52 files/387 tests), `npm run test:e2e -- --workers=1`
   (27), production build, `cap:sync`, `cap doctor`, `npm run docs:verify`, `actionlint`.
 - 정적 통과: `xcodebuild -list`에서 `App`/`AppUITests` target, `swiftc -parse`.
-  로컬 environment probe는 Android SDK/emulator와 active simulator runtime 부재로
-  두 native target을 `false`로 반환하므로 실제 계측 결과는 exact-head hosted CI에
-  남긴다.
+  exact-head run `33204869723`은 iOS report·XCResult·screenshot과 세 interaction을
+  통과했지만 Android report·JUnit·screenshot·window hierarchy·logcat은
+  `RootViewWithoutFocusException`과 `MainActivity STOPPED`를 기록했다.
+- 따라서 Android native acceptance와 그에 종속된 PR gate는 `BLOCKED`이며, 동일한
+  시스템 서비스 churn이 해소된 runner에서만 fresh exact-head proof를 재개한다.
 - 재사용 판단: `$bluetape-kotlin-patterns`와 `bluetape4k-assertions`는 변경 scope에
   Kotlin 파일이 없어 N/A다. Java/Swift/Node 테스트에 Kotlin assertion dependency를
   억지로 추가하지 않았다.

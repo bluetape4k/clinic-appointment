@@ -11,7 +11,9 @@
   frontend는 Angular/Capacitor, Android는 `MainActivity`의 WebView, iOS는
   `CAPBridgeViewController`를 root로 사용한다.
 - 미확정/외부 의존: 이 호스트에는 full Xcode와 Android SDK/emulator가 없어
-  simulator 실행 결과는 exact-head CI에서 확정한다.
+  simulator 실행 결과는 exact-head CI에서 확정한다. 최신 exact-head run
+  `33204869723`은 iOS는 통과했지만 Android AOSP ATD에서 시스템 서비스 churn으로
+  `RootViewWithoutFocusException`이 발생해 native acceptance가 blocked 상태다.
 
 ## 문제와 목표
 
@@ -42,9 +44,10 @@ coordinate, Safe Area, software keyboard와 simulator orientation을 증명하�
 - Espresso-Web은 DOM title/active input/viewport를 확인하고, UiAutomator의
   `UiDevice`는 WebView accessibility node bounds 중심을 실제 tap한다. DOM script로
   확인한 geometry만으로 성공시키지 않는다.
-- `ActivityScenarioRule<MainActivity>`로 activity lifecycle을 관리하고, API 호출이
-  실패해도 route shell이 유지되는 기존 컴포넌트 경계를 이용한다. 인증 token/fixture를
-  저장하지 않는다.
+- `ActivityScenarioRule<MainActivity>`로 테스트 시작 시 activity lifecycle을 준비하고,
+  이후 native tap·Espresso·orientation 시퀀스에서는 `ActivityScenario`를 다시 전환하지
+  않는다. API 호출이 실패해도 route shell이 유지되는 기존 컴포넌트 경계를 이용하며,
+  인증 token/fixture를 저장하지 않는다.
 
 ### iOS
 
@@ -146,6 +149,8 @@ iOS 테스트가 Swift, report/validator가 Node.js인 실제 변경 scope에 �
   test로 검증한다.
 - report v2는 exact commit, bounded device/viewport/orientation, fixed interaction
   result와 safe artifact path를 보존한다. 기존 v1 fixture는 계속 허용한다.
-- 로컬 Angular/browser/contract/static project 검증은 통과했지만 이 호스트의
-  Android SDK/emulator와 iOS Simulator runtime이 없어 native 계측은 PENDING이다.
-  이 상태를 hosted exact-head CI 전에는 PASS로 승격하지 않는다.
+- 로컬 Angular/browser/contract/static project 검증은 통과했다. exact-head run
+  `33204869723`에서 iOS native interaction과 report artifact는 통과했으나 Android는
+  `MainActivity STOPPED`와 `RootViewWithoutFocusException`으로 실패했다. 실패 report,
+  JUnit, window hierarchy, logcat을 보존하고 Android 환경 변경 전까지 native acceptance를
+  PASS로 승격하지 않는다.
