@@ -2,7 +2,13 @@ import { Component, computed, effect, inject, OnInit, signal } from '@angular/co
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { AppointmentService, AuthService, CalendarStateService } from '../../../core/services';
+import {
+  AppointmentService,
+  AuthService,
+  CalendarStateService,
+  formatCalendarDate,
+  parseCalendarDate,
+} from '../../../core/services';
 
 const WEEKDAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
 
@@ -37,7 +43,7 @@ export class MonthViewComponent implements OnInit {
     const month = current.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = formatCalendarDate(new Date());
 
     // Monday-based: 0=Mon..6=Sun
     let startDow = firstDay.getDay() - 1;
@@ -77,7 +83,8 @@ export class MonthViewComponent implements OnInit {
         const from = cells[0].dateStr;
         const to = cells[cells.length - 1].dateStr;
         this.loading.set(true);
-        this.appointmentService.getByDateRange(this.authService.clinicId(), from, to)
+        this.appointmentService
+          .getByDateRange(this.authService.clinicId(), from, to)
           .finally(() => this.loading.set(false));
       }
     });
@@ -87,13 +94,15 @@ export class MonthViewComponent implements OnInit {
     const dateParam = this.route.snapshot.paramMap.get('date');
     if (dateParam) {
       this.calendarState.viewMode.set('month');
-      this.calendarState.currentDate.set(new Date(dateParam + 'T00:00:00'));
+      const parsedDate = parseCalendarDate(dateParam);
+      if (parsedDate) this.calendarState.currentDate.set(parsedDate);
     }
   }
 
   protected getAppointments(dateStr: string) {
-    return this.appointmentService.appointments()
-      .filter(a => a.appointmentDate === dateStr)
+    return this.appointmentService
+      .appointments()
+      .filter((a) => a.appointmentDate === dateStr)
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
   }
 
@@ -102,7 +111,7 @@ export class MonthViewComponent implements OnInit {
   }
 
   private makeCell(d: Date, isCurrentMonth: boolean, todayStr: string): CalendarCell {
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = formatCalendarDate(d);
     return {
       date: d,
       dateStr,

@@ -17,6 +17,16 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'mobile-ios',
+      testMatch: /mobile-webview-contract\.spec\.ts/,
+      use: { ...devices['iPhone 13'] },
+    },
+    {
+      name: 'mobile-android',
+      testMatch: /mobile-webview-contract\.spec\.ts/,
+      use: { ...devices['Pixel 5'] },
+    },
   ],
   webServer: {
     command: 'npm run start -- --host 127.0.0.1 --port 4200',

@@ -1,106 +1,57 @@
-name: Frontend CI
+name: Native WebView CI
 
 on:
   workflow_dispatch:
-  push:
-    branches: [develop]
-    paths:
-      - "frontend/appointment-frontend/**"
-      - ".github/workflows/frontend-ci.yml"
-  pull_request:
-    branches: [develop]
-    paths:
-      - "frontend/appointment-frontend/**"
-      - ".github/workflows/frontend-ci.yml"
+    inputs:
+      ref:
+        description: "Checkout ref (branch or commit)"
+        required: true
+        type: string
+      expected_sha:
+        description: "Expected 40-character commit SHA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: native-webview-${{ inputs.expected_sha }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: "22.22.3"
+  NPM_VERSION: "11.12.0"
+  EXPECTED_SHA: ${{ inputs.expected_sha }}
+
 jobs:
-  build:
-    name: Angular Build
+  browser-mobile:
+    name: Browser mobile contract
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend/appointment-frontend
-
     steps:
-      - name: Checkout
+      - name: Checkout exact ref
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact commit
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22.22.3"
-          cache: "npm"
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
           cache-dependency-path: frontend/appointment-frontend/package-lock.json
 
-      - name: Pin frontend toolchain
-        run: |
-          npm install --global npm@11.12.0
-          node --version
-          npm --version
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build (production)
-        run: npx ng build --configuration production
-
-  unit:
-    name: Angular Unit and Contract Tests
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: frontend/appointment-frontend
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "22.22.3"
-          cache: "npm"
-          cache-dependency-path: frontend/appointment-frontend/package-lock.json
-
-      - name: Pin frontend toolchain
-        run: |
-          npm install --global npm@11.12.0
-          node --version
-          npm --version
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Unit and contract tests
-        run: npm test -- --watch=false
-
-  browser:
-    name: Patient Portal Browser Smoke
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: frontend/appointment-frontend
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "22.22.3"
-          cache: "npm"
-          cache-dependency-path: frontend/appointment-frontend/package-lock.json
-
-      - name: Pin frontend toolchain
-        run: npm install --global npm@11.12.0
+      - name: Pin npm
+        run: npm install --global npm@${{ env.NPM_VERSION }}
 
       - name: Install dependencies
         run: npm ci
@@ -108,42 +59,36 @@ jobs:
       - name: Install browser profiles
         run: npx playwright install --with-deps chromium webkit
 
-      - name: Browser smoke
-        run: npm run test:e2e
+      - name: Run native WebView contract browser profiles
+        run: npx playwright test e2e/mobile-webview-contract.spec.ts --project=mobile-ios --project=mobile-android --workers=1
 
   android-webview:
-    if: github.event_name == 'workflow_dispatch'
     name: Android WebView native smoke
     runs-on: ubuntu-22.04
     timeout-minutes: 35
     defaults:
       run:
         working-directory: frontend/appointment-frontend
-
     steps:
-      - name: Checkout dispatched ref
+      - name: Checkout exact ref
         uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Verify exact commit
-        env:
-          EXPECTED_SHA: ${{ github.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22.22.3"
-          cache: "npm"
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
           cache-dependency-path: frontend/appointment-frontend/package-lock.json
 
-      - name: Pin frontend toolchain
-        run: |
-          npm install --global npm@11.12.0
-          node --version
-          npm --version
+      - name: Pin npm
+        run: npm install --global npm@${{ env.NPM_VERSION }}
 
       - name: Install dependencies
         run: npm ci
@@ -181,7 +126,7 @@ jobs:
         if: always()
         env:
           NATIVE_PLATFORM: android
-          NATIVE_COMMIT: ${{ github.sha }}
+          NATIVE_COMMIT: ${{ env.EXPECTED_SHA }}
           NATIVE_TOOLCHAIN_JSON: '{"runner":"ubuntu-22.04","java":"21","android-api":"35","emulator":"pixel_5"}'
           NATIVE_COMMANDS_JSON: '["cap:sync","assembleDebug","emulator-install","app-launch","deep-link"]'
           NATIVE_RESULT: ${{ steps.android-smoke.outcome == 'success' && 'passed' || 'failed' }}
@@ -206,38 +151,32 @@ jobs:
         run: exit 1
 
   ios-webview:
-    if: github.event_name == 'workflow_dispatch'
     name: iOS WKWebView native smoke
     runs-on: macos-latest
     timeout-minutes: 35
     defaults:
       run:
         working-directory: frontend/appointment-frontend
-
     steps:
-      - name: Checkout dispatched ref
+      - name: Checkout exact ref
         uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Verify exact commit
-        env:
-          EXPECTED_SHA: ${{ github.sha }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22.22.3"
-          cache: "npm"
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
           cache-dependency-path: frontend/appointment-frontend/package-lock.json
 
-      - name: Pin frontend toolchain
-        run: |
-          npm install --global npm@11.12.0
-          node --version
-          npm --version
+      - name: Pin npm
+        run: npm install --global npm@${{ env.NPM_VERSION }}
 
       - name: Install dependencies
         run: npm ci
@@ -274,7 +213,7 @@ jobs:
         if: always()
         env:
           NATIVE_PLATFORM: ios
-          NATIVE_COMMIT: ${{ github.sha }}
+          NATIVE_COMMIT: ${{ env.EXPECTED_SHA }}
           NATIVE_TOOLCHAIN_JSON: '{"runner":"macos-latest","xcode":"host-default","simulator":"iPhone","configuration":"Debug"}'
           NATIVE_COMMANDS_JSON: '["cap:sync","xcodebuild","simulator-install","app-launch","openurl"]'
           NATIVE_RESULT: ${{ steps.ios-smoke.outcome == 'success' && 'passed' || 'failed' }}
