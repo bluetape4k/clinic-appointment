@@ -44,7 +44,6 @@ public final class NativeWebViewUiTest {
             assertTrue("native WebView coordinate tap must be dispatched", tapBottomNavigation(device));
         }
 
-        ensureActivityResumed(device);
         onWebView().perform(script(
             "if (!document.body.innerText.includes('예약 목록')) "
                 + "throw new Error('appointment route title is missing');"
@@ -71,7 +70,6 @@ public final class NativeWebViewUiTest {
             device.waitForIdle();
         }
 
-        ensureActivityResumed(device);
         UiObject2 dateInput = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000);
         assertNotNull("date input must be accessible for keyboard/focus evidence", dateInput);
         dateInput.click();
