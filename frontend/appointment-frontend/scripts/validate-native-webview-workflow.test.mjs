@@ -91,9 +91,10 @@ test('Android runner action은 repository root에서 native artifact를 frontend
   );
 });
 
-test('Android runner action은 Google API emulator의 초기 설정 화면을 완료 상태로 고정한다', () => {
+test('Android runner action은 AOSP emulator를 이미 프로비저닝된 상태로 고정한다', () => {
   const content = readFileSync(workflowPath, 'utf8');
   const androidSection = content.split('  android-webview:', 2)[1]?.split('  ios-webview:', 1)[0] ?? '';
+  assert.match(androidSection, /target:\s*default/u);
   for (const command of [
     'settings put global device_provisioned 1',
     'settings put secure user_setup_complete 1',
