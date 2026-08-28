@@ -173,8 +173,13 @@ jobs:
             set +e
             mkdir -p artifacts/native-android-ui
             android_serial="${ANDROID_SERIAL:-emulator-5554}"
+            adb -s "$android_serial" logcat -c || true
+            adb -s "$android_serial" logcat -v threadtime > artifacts/native-android-ui/logcat-live.txt 2>&1 &
+            logcat_pid=$!
             (cd frontend/appointment-frontend/android && ./gradlew --no-daemon --stacktrace connectedDebugAndroidTest)
             test_status=$?
+            kill "$logcat_pid" >/dev/null 2>&1 || true
+            wait "$logcat_pid" >/dev/null 2>&1 || true
             adb -s "$android_serial" logcat -d -v threadtime > artifacts/native-android-ui/logcat.txt || true
             if adb -s "$android_serial" get-state >/dev/null 2>&1; then
               adb -s "$android_serial" exec-out screencap -p > artifacts/native-android-ui/screenshot.png || true
@@ -216,7 +221,7 @@ jobs:
           NATIVE_SCHEMA_VERSION: "2"
           NATIVE_DEVICE_JSON: '{"profile":"pixel_5","viewport":"1080x1920","orientations":["portrait","landscape"]}'
           NATIVE_INTERACTIONS_JSON: '[{"name":"bottom-tab-route","result":"${{ steps.android-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"},{"name":"focus-keyboard-viewport","result":"${{ steps.android-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"},{"name":"orientation-safe-area","result":"${{ steps.android-ui.outcome == ''success'' && ''passed'' || ''failed'' }}"}]'
-          NATIVE_ARTIFACTS_JSON: '["artifacts/native-android-ui/native-webview-report.json","artifacts/native-android-ui/test-results.xml","artifacts/native-android-ui/screenshot.png","artifacts/native-android-ui/window-hierarchy.xml","artifacts/native-android-ui/logcat.txt"]'
+          NATIVE_ARTIFACTS_JSON: '["artifacts/native-android-ui/native-webview-report.json","artifacts/native-android-ui/test-results.xml","artifacts/native-android-ui/screenshot.png","artifacts/native-android-ui/window-hierarchy.xml","artifacts/native-android-ui/logcat.txt","artifacts/native-android-ui/logcat-live.txt"]'
           NATIVE_REPORT_PATH: artifacts/native-android-ui/native-webview-report.json
         run: |
           mkdir -p artifacts
@@ -233,6 +238,7 @@ jobs:
             frontend/appointment-frontend/artifacts/native-android-ui/screenshot.png
             frontend/appointment-frontend/artifacts/native-android-ui/window-hierarchy.xml
             frontend/appointment-frontend/artifacts/native-android-ui/logcat.txt
+            frontend/appointment-frontend/artifacts/native-android-ui/logcat-live.txt
             frontend/appointment-frontend/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
           retention-days: 14
