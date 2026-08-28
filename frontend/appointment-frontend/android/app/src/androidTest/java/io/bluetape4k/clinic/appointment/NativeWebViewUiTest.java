@@ -90,9 +90,21 @@ public final class NativeWebViewUiTest {
     private static boolean tapBottomNavigation(UiDevice device) {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         float density = context.getResources().getDisplayMetrics().density;
-        int navigationBarHeight = navigationBarHeight(context);
-        int tapX = device.getDisplayWidth() / 2;
-        int tapY = device.getDisplayHeight() - navigationBarHeight - Math.round(28 * density);
+        UiObject2 webView = device.wait(
+            Until.findObject(By.clazz("android.webkit.WebView")),
+            5_000
+        );
+        Rect contentBounds = webView == null
+            ? new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight())
+            : webView.getVisibleBounds();
+        int contentBottom = contentBounds.bottom;
+        if (webView == null) {
+            contentBottom -= navigationBarHeight(context);
+        }
+        int tapX = contentBounds.left + contentBounds.width() / 2;
+        int tapY = contentBottom - Math.round(28 * density);
+        tapY = Math.max(contentBounds.top + Math.round(44 * density), tapY);
+        tapY = Math.min(contentBottom - 1, tapY);
         return device.click(tapX, tapY);
     }
 
