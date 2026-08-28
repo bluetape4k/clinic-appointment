@@ -154,6 +154,7 @@ test('Android native UI test는 native 대기·Espresso 진입 전에 Activity�
   const content = readFileSync(nativeUiTestPath, 'utf8');
   assert.match(content, /import androidx\.lifecycle\.Lifecycle;/u);
   assert.match(content, /ensureActivityResumed\(device\);/gu);
+  assert.match(content, /getScenario\(\)\.getState\(\)\s*!=\s*Lifecycle\.State\.RESUMED/u);
   assert.match(content, /moveToState\(Lifecycle\.State\.RESUMED\)/u);
 });
 

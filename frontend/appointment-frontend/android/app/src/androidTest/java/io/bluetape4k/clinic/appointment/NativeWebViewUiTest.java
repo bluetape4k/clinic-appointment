@@ -84,7 +84,9 @@ public final class NativeWebViewUiTest {
     }
 
     private void ensureActivityResumed(UiDevice device) {
-        activityRule.getScenario().moveToState(Lifecycle.State.RESUMED);
+        if (activityRule.getScenario().getState() != Lifecycle.State.RESUMED) {
+            activityRule.getScenario().moveToState(Lifecycle.State.RESUMED);
+        }
         device.waitForIdle();
     }
 
