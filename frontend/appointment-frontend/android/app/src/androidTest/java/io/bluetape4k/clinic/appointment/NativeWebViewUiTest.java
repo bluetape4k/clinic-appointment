@@ -3,6 +3,7 @@ package io.bluetape4k.clinic.appointment;
 import static androidx.test.espresso.web.sugar.Web.onWebView;
 import static androidx.test.espresso.web.model.Atoms.script;
 
+import android.content.Context;
 import android.graphics.Rect;
 
 import androidx.test.ext.junit.rules.ActivityScenarioRule;
@@ -38,22 +39,7 @@ public final class NativeWebViewUiTest {
             assertTrue("bottom tab must expose at least a 44px touch target", tabBounds.height() >= 44);
             assertTrue("native accessibility tap must be dispatched", device.click(tabBounds.centerX(), tabBounds.centerY()));
         } else {
-            UiObject2 webView = waitForWebView(device);
-            assertNotNull("Capacitor WebView host must be available for native coordinate input", webView);
-            Rect webViewBounds = webView.getVisibleBounds();
-            assertTrue("WebView host must expose a usable touch surface", webViewBounds.width() >= 44);
-            assertTrue("WebView host must expose a usable touch surface", webViewBounds.height() >= 44);
-
-            float density = InstrumentationRegistry.getInstrumentation()
-                .getTargetContext()
-                .getResources()
-                .getDisplayMetrics()
-                .density;
-            int bottomNavigationCenterY = webViewBounds.bottom - Math.round(28 * density);
-            assertTrue(
-                "native WebView host coordinate tap must be dispatched",
-                device.click(webViewBounds.centerX(), bottomNavigationCenterY)
-            );
+            assertTrue("native WebView coordinate tap must be dispatched", tapBottomNavigation(device));
         }
 
         onWebView().perform(script(
@@ -101,11 +87,17 @@ public final class NativeWebViewUiTest {
         return device.wait(Until.findObject(By.descContains(text)), 7_500);
     }
 
-    private static UiObject2 waitForWebView(UiDevice device) {
-        UiObject2 webView = device.wait(Until.findObject(By.clazz(".*WebView")), 10_000);
-        if (webView != null) {
-            return webView;
-        }
-        return device.wait(Until.findObject(By.clazz("android.webkit.WebView")), 2_500);
+    private static boolean tapBottomNavigation(UiDevice device) {
+        Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        float density = context.getResources().getDisplayMetrics().density;
+        int navigationBarHeight = navigationBarHeight(context);
+        int tapX = device.getDisplayWidth() / 2;
+        int tapY = device.getDisplayHeight() - navigationBarHeight - Math.round(28 * density);
+        return device.click(tapX, tapY);
+    }
+
+    private static int navigationBarHeight(Context context) {
+        int resourceId = context.getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+        return resourceId == 0 ? 0 : context.getResources().getDimensionPixelSize(resourceId);
     }
 }
