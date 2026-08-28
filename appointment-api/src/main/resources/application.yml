@@ -48,6 +48,16 @@ scheduling:
         idempotency:
             ttl: 24h
     security:
+        cors:
+            # same-origin browser 배포에서는 false를 유지합니다. native/cross-origin
+            # 배포에서만 명시적인 HTTPS app origin을 넣고 true로 전환합니다.
+            enabled: false
+            allowed-origins: []
+            allowed-methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+            allowed-headers: [Content-Type, Accept, Authorization, X-XSRF-TOKEN, Idempotency-Key, If-None-Match, If-Match]
+            exposed-headers: [ETag, Retry-After, X-Correlation-Id, X-Tenant-Identity-Generation]
+            allow-credentials: true
+            max-age: 30m
         jwt:
             enabled: true
             secret: ${SCHEDULING_JWT_SECRET:}

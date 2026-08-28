@@ -43,6 +43,31 @@ npm start    # http://localhost:4200
 - 직원·관리자 인증: legacy JWT Bearer token (Authorization 헤더)
 - 개발 환경 프록시: `proxy.conf.json`으로 CORS 우회
 
+### API origin·CORS·cookie/XSRF 계약
+
+- 브라우저 개발과 same-origin production은 `environment.apiOrigin=''`을 사용하고
+  `/api` proxy 또는 reverse proxy가 API를 전달한다.
+- cross-origin production은 `environment.prod.ts` 또는 제한된
+  `globalThis.__CLINIC_API_CONFIG__.apiOrigin`에 HTTPS origin만 지정한다. Capacitor
+  WebView는 명시적인 HTTPS origin을 요구하며, origin에는 credentials·path·query·fragment를
+  넣지 않는다.
+- 모든 요청은 `TenantApiClient`를 통해 `/api/{tenantCode}/...`를 만들고, patient
+  cookie 요청은 `withCredentials=true`와 `X-XSRF-TOKEN`을 사용한다. workforce Bearer는
+  `AuthService`의 메모리 token만 사용하고 cookie를 보내지 않는다. patient JWT는
+  `localStorage`나 `sessionStorage`에 저장하지 않는다.
+- cross-origin API의 CSRF bootstrap은 앱 origin에서 읽을 수 있는 `XSRF-TOKEN` cookie를
+  발급해야 한다. API host에만 있는 host-only cookie는 `HttpXsrfTokenExtractor`가 읽을
+  수 없으므로 same-site/reverse proxy 조건을 먼저 정하고 token을 storage로 복사하지
+  않는다.
+- API cross-origin을 실제로 허용할 때는 `scheduling.security.cors.enabled=true`,
+  유한한 `allowed-origins`, `allow-credentials=true`를 함께 설정한다. wildcard는
+  거부하며 CORS는 `/api/**`에만 적용한다. `http://localhost`와 `http://127.0.0.1`은
+  개발 진단용이고 운영 origin은 HTTPS여야 한다.
+- `SameSite=Strict` patient cookie의 native cross-site 동작과 cookie bridge는
+  [Issue #24](https://github.com/bluetape4k/clinic-appointment/issues/24)와
+  [Issue #27](https://github.com/bluetape4k/clinic-appointment/issues/27)의 실기기
+  검증 경계로 남긴다.
+
 ### Tenant routing 완료 범위
 
 환자 포털의 `/portal/login`과 `/portal/register`는 tenant code를 입력받습니다.
