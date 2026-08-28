@@ -112,6 +112,18 @@ test('Android runner action은 AOSP emulator를 이미 프로비저닝된 상태
   }
 });
 
+test('Android runner action은 native UI와 무관한 persistent system service를 비활성화한다', () => {
+  const content = readFileSync(workflowPath, 'utf8');
+  const androidSection = content.split('  android-webview:', 2)[1]?.split('  ios-webview:', 1)[0] ?? '';
+  for (const service of ['com.android.phone', 'com.android.bluetooth']) {
+    assert.equal(
+      androidSection.includes(`adb -s "$android_serial" shell pm disable-user --user 0 ${service}`),
+      true,
+      `missing emulator service isolation command: ${service}`,
+    );
+  }
+});
+
 test('Android native coordinate fallback은 system navigation 영역을 제외한다', () => {
   const content = readFileSync(nativeUiTestPath, 'utf8');
   assert.match(

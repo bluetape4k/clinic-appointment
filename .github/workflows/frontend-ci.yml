@@ -176,6 +176,8 @@ jobs:
             adb -s "$android_serial" shell settings put global device_provisioned 1 || true
             adb -s "$android_serial" shell settings put secure user_setup_complete 1 || true
             adb -s "$android_serial" shell settings put global setup_wizard_has_run 1 || true
+            adb -s "$android_serial" shell pm disable-user --user 0 com.android.phone || true
+            adb -s "$android_serial" shell pm disable-user --user 0 com.android.bluetooth || true
             adb -s "$android_serial" logcat -c || true
             adb -s "$android_serial" logcat -v threadtime > frontend/appointment-frontend/artifacts/native-android-ui/logcat-live.txt 2>&1 &
             logcat_pid=$!
