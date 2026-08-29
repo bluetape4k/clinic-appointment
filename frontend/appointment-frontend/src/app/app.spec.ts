@@ -54,6 +54,19 @@ describe('App', () => {
     expect(nativeWebViewBridge.start).toHaveBeenCalledOnce();
   });
 
+  it('모바일 하단 내비게이션을 native accessibility group으로 노출한다', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    const navigationGroup = fixture.nativeElement.querySelector(
+      '[role="group"][aria-label="모바일 하단 내비게이션 영역"]',
+    );
+    expect(navigationGroup).toBeTruthy();
+    expect(
+      navigationGroup.querySelector('nav[aria-label="모바일 하단 내비게이션"]'),
+    ).toBeTruthy();
+  });
+
   it('환자 포털 route에서는 staff shell 대신 portal outlet만 사용한다', async () => {
     const fixture = TestBed.createComponent(App);
     const router = TestBed.inject(Router);
