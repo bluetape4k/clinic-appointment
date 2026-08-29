@@ -46,5 +46,7 @@ dist/
 .profileconfig.json
 .omx/
 .bluetape/
+.superpowers/
+.workflow-inputs/
 
 .codegraph/
