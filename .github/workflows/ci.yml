@@ -265,6 +265,7 @@ jobs:
           ./gradlew \
             :appointment-core:koverXmlReport \
             :appointment-event:koverXmlReport \
+            -x test \
             --parallel
         continue-on-error: true
 
@@ -318,7 +319,7 @@ jobs:
 
       - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-solver:koverXmlReport
+        run: ./gradlew :appointment-solver:koverXmlReport -x test
         continue-on-error: true
 
       - name: Upload test results
@@ -380,7 +381,7 @@ jobs:
 
       - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-api:koverXmlReport
+        run: ./gradlew :appointment-api:koverXmlReport -x test
         continue-on-error: true
 
       - name: Upload test results
@@ -441,7 +442,7 @@ jobs:
 
       - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-notification:koverXmlReport
+        run: ./gradlew :appointment-notification:koverXmlReport -x test
         continue-on-error: true
 
       - name: Upload test results
@@ -501,7 +502,7 @@ jobs:
 
       - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-messaging:koverXmlReport
+        run: ./gradlew :appointment-messaging:koverXmlReport -x test
         continue-on-error: true
 
       - name: Upload test results
