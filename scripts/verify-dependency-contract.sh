@@ -129,7 +129,7 @@ assert_selected_version \
     leader-redis-lettuce \
     :appointment-notification \
     io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce \
-    1.0.0-20260824.195548-7 \
+    1.0.0 \
     0.5.0
 assert_selected_version \
     kafka-clients-messaging \
