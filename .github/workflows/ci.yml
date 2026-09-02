@@ -191,8 +191,8 @@ jobs:
           gradle-version: wrapper
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
-      - name: Verify bluetape4k-dependencies 1.4.0 contract
-        run: bash scripts/verify-dependency-1.4.0.sh
+      - name: Verify bluetape4k dependency contract
+        run: bash scripts/verify-dependency-contract.sh
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 

@@ -409,13 +409,15 @@ internal class NotificationSchemaReadinessTest {
             driver = "org.h2.Driver",
         )
 
-    private fun key(): NotificationCryptoProperties.KeyReference =
-        NotificationCryptoProperties.KeyReference(
+    private fun key(): NotificationCryptoProperties.KeyReference {
+        val now = Instant.now()
+        return NotificationCryptoProperties.KeyReference(
             keyId = "active-2026-07",
             secretReference = "vault:/clinic/notification/active",
-            activatedAt = Instant.parse("2026-07-01T00:00:00Z"),
-            expiresAt = Instant.parse("2026-08-31T00:00:00Z"),
+            activatedAt = now.minus(Duration.ofDays(1)),
+            expiresAt = now.plus(Duration.ofDays(1)),
         )
+    }
 
     private class ReadinessRetentionWorkStore : NotificationOutboxWorkStore {
         var deleteCalls: Int = 0

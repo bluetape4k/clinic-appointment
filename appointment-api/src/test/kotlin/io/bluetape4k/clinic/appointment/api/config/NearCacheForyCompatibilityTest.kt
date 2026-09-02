@@ -19,13 +19,13 @@ import java.util.Properties
 class NearCacheForyCompatibilityTest {
 
     @Test
-    fun `현재 resolved Fory provenance가 1_4_0 dependency graph와 일치한다`() {
+    fun `현재 resolved Fory provenance가 2_0_0 dependency graph와 일치한다`() {
         val provenance = loadProperties("/cache/issue-322/fixture-provenance.properties")
 
         provenance.getProperty("source.fixture") shouldBeEqualTo "issue-253/1.3.1"
-        provenance.getProperty("resolved.bluetape4k.dependencies") shouldBeEqualTo "1.4.0"
-        provenance.getProperty("resolved.fory.core") shouldBeEqualTo "1.5.0"
-        provenance.getProperty("resolved.fory.kotlin") shouldBeEqualTo "1.5.0"
+        provenance.getProperty("resolved.bluetape4k.dependencies") shouldBeEqualTo "2.0.0"
+        provenance.getProperty("resolved.fory.core") shouldBeEqualTo "1.6.0"
+        provenance.getProperty("resolved.fory.kotlin") shouldBeEqualTo "1.6.0"
         provenance.getProperty("codec") shouldBeEqualTo
             "io.bluetape4k.redis.lettuce.codec.LettuceBinaryCodecs.default"
         Fory::class.java.`package`.implementationVersion shouldBeEqualTo
