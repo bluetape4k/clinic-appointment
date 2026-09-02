@@ -74,7 +74,7 @@ find . -type f \( -name gradle.lockfile -o -name settings-gradle.lockfile \) \
   -not -path './.gradle/*' -print | sort
 xmllint --noout gradle/verification-metadata.xml
 git diff --check
-./scripts/verify-dependency-1.4.0.sh
+./scripts/verify-dependency-contract.sh
 bash scripts/verify-dependency-locking.sh
 ```
 

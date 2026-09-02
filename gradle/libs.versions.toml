@@ -29,7 +29,7 @@ exposed = "1.4.0"
 
 # ── Override versions (project uses newer than Spring Boot provides) ───────
 kotlinx-coroutines = "1.11.0" # https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
-lettuce-core = "7.6.0.RELEASE" # bluetape4k-lettuce 1.12.1 requires this beyond Spring Boot's managed version
+lettuce-core = "7.6.0.RELEASE" # bluetape4k-lettuce 2.0.0 requires this beyond Spring Boot's managed version
 bluetape4k-leader-scheduled-policy = "1.0.0-20260824.195548-7"
 
 # ── Project-local versions (NOT in any BOM) ───────────────────────────────
