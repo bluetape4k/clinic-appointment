@@ -201,8 +201,12 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
-      - name: Build (compile only, frontend 제외)
-        run: ./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies
+      - name: Build (compile only, frontend 및 benchmark 제외)
+        run: >-
+          ./gradlew build -x test
+          -x :frontend:appointment-frontend:build
+          -x :appointment-messaging-benchmark:build
+          --parallel --refresh-dependencies
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
