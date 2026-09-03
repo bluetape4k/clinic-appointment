@@ -201,8 +201,12 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
-      - name: Build (compile only, frontend 제외)
-        run: ./gradlew build -x test -x :frontend:appointment-frontend:build --parallel --refresh-dependencies
+      - name: Build (compile only, frontend 및 benchmark 제외)
+        run: >-
+          ./gradlew build -x test
+          -x :frontend:appointment-frontend:build
+          -x :appointment-messaging-benchmark:build
+          --parallel --refresh-dependencies
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
@@ -265,6 +269,7 @@ jobs:
           ./gradlew \
             :appointment-core:koverXmlReport \
             :appointment-event:koverXmlReport \
+            -x test \
             --parallel
         continue-on-error: true
 
@@ -318,7 +323,7 @@ jobs:
 
       - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-solver:koverXmlReport
+        run: ./gradlew :appointment-solver:koverXmlReport -x test
         continue-on-error: true
 
       - name: Upload test results
@@ -380,7 +385,7 @@ jobs:
 
       - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-api:koverXmlReport
+        run: ./gradlew :appointment-api:koverXmlReport -x test
         continue-on-error: true
 
       - name: Upload test results
@@ -441,7 +446,7 @@ jobs:
 
       - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-notification:koverXmlReport
+        run: ./gradlew :appointment-notification:koverXmlReport -x test
         continue-on-error: true
 
       - name: Upload test results
@@ -501,7 +506,7 @@ jobs:
 
       - name: Generate Kover report
         if: always()
-        run: ./gradlew :appointment-messaging:koverXmlReport
+        run: ./gradlew :appointment-messaging:koverXmlReport -x test
         continue-on-error: true
 
       - name: Upload test results
