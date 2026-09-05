@@ -19,9 +19,11 @@ import java.util.concurrent.CancellationException
 import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * [NearCacheAdapter] 단위 테스트.
@@ -288,51 +290,71 @@ class NearCacheAdapterTest {
         verify(exactly = 1) { delegate.put(key, loaded) }
     }
 
+    /**
+     * owner와 waiter의 진입 순서를 직접 제어해야 하므로 worker 생명주기만 제공하는
+     * [io.bluetape4k.junit5.concurrency.MultithreadingTester] 대신 bounded executor를 사용한다.
+     */
     @Test
     fun `get valueLoader - 같은 키의 동시 미스는 loader를 한 번만 호출한다`() {
         val key = "same-key"
-        val loaded = listOf("loaded")
-        val lookupCount = AtomicInteger()
+        val loaded = emptyList<String>()
+        val ownerThread = Thread.currentThread()
+        val secondCaller = AtomicReference<Thread?>()
+        val secondFuture = AtomicReference<Future<List<String>>?>()
         val loaderCount = AtomicInteger()
-        val loaderStarted = CountDownLatch(1)
-        val secondLookupDone = CountDownLatch(1)
-        val releaseLoader = CountDownLatch(1)
+        val secondCallerStarted = CountDownLatch(1)
+        val secondLoaderStarted = CountDownLatch(1)
+        val releaseSecondLoader = CountDownLatch(1)
         val executor = Executors.newFixedThreadPool(2)
 
         every { delegate.get(key) } answers {
-            if (lookupCount.incrementAndGet() == 2) secondLookupDone.countDown()
+            if (Thread.currentThread() === ownerThread) {
+                val future = executor.submit<List<String>> {
+                    secondCaller.set(Thread.currentThread())
+                    secondCallerStarted.countDown()
+                    adapter.get(key) {
+                        loaderCount.incrementAndGet()
+                        secondLoaderStarted.countDown()
+                        releaseSecondLoader.await()
+                        loaded
+                    }!!
+                }
+                secondFuture.set(future)
+                secondCallerStarted.await(5, TimeUnit.SECONDS).shouldBeTrue()
+                awaitWaiting(secondCaller).shouldBeTrue()
+
+                if (secondLoaderStarted.count == 0L) {
+                    releaseSecondLoader.countDown()
+                    future.get(5, TimeUnit.SECONDS) shouldBeEqualTo loaded
+                }
+            }
             null
         }
-        justRun { delegate.put(key, loaded) }
 
         try {
-            val first = executor.submit<List<String>> {
-                adapter.get(key) {
-                    loaderCount.incrementAndGet()
-                    loaderStarted.countDown()
-                    releaseLoader.await()
-                    loaded
-                }!!
+            val first = adapter.get(key) {
+                loaderCount.incrementAndGet()
+                loaded
             }
 
-            loaderStarted.await(5, TimeUnit.SECONDS).shouldBeTrue()
-            val second = executor.submit<List<String>> {
-                val forbiddenLoader = Callable<List<String>> {
-                    throw AssertionError("두 번째 loader는 호출되면 안 된다")
-                }
-                adapter.get(key, forbiddenLoader)!!
-            }
-            secondLookupDone.await(5, TimeUnit.SECONDS).shouldBeTrue()
+            releaseSecondLoader.countDown()
+            first shouldBeEqualTo loaded
+            secondFuture.get().shouldNotBeNull().get(5, TimeUnit.SECONDS) shouldBeEqualTo loaded
             loaderCount.get() shouldBeEqualTo 1
-
-            releaseLoader.countDown()
-            first.get(5, TimeUnit.SECONDS) shouldBeEqualTo loaded
-            second.get(5, TimeUnit.SECONDS) shouldBeEqualTo loaded
-            loaderCount.get() shouldBeEqualTo 1
+            verify(exactly = 0) { delegate.put(any(), any()) }
         } finally {
-            releaseLoader.countDown()
+            releaseSecondLoader.countDown()
             executor.shutdownNow()
         }
+    }
+
+    private fun awaitWaiting(thread: AtomicReference<Thread?>): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (System.nanoTime() < deadline) {
+            if (thread.get()?.state == Thread.State.WAITING) return true
+            Thread.yield()
+        }
+        return false
     }
 
     @Test
