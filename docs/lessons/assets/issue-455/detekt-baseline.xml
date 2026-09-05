@@ -1,0 +1,13 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>DestructuringDeclarationWithTooManyEntries:SolverServiceTest.kt:SolverServiceTest$val (clinicId, _, _, _) = insertBaseData()</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:SolverServiceTest.kt:SolverServiceTest$val (clinicId, doctorId, _, treatmentTypeId) = insertBaseData()</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:SolverServiceTest.kt:SolverServiceTest$val (clinicId, doctorId1, _, treatmentTypeId) = insertBaseData()</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:SolverServiceTest.kt:SolverServiceTest$val (clinicId, doctorId1, _, treatmentTypeId) = insertBaseData(maxConcurrentPatients = 1)</ID>
+    <ID>LargeClass:AppointmentControllerTest.kt:AppointmentControllerTest : AbstractApiIntegrationTest</ID>
+    <ID>LongMethod:AppointmentControllerTest.kt:AppointmentControllerTest$@BeforeEach fun setup</ID>
+    <ID>MaxLineLength:BenchmarkTest.kt:BenchmarkTest$val weekdays = listOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)</ID>
+  </CurrentIssues>
+</SmellBaseline>

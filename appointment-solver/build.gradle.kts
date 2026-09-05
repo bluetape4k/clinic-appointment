@@ -21,3 +21,24 @@ dependencies {
     testImplementation(libs.postgresql.driver)
     testImplementation(libs.testcontainers.postgresql)
 }
+
+tasks.test {
+    useJUnitPlatform { excludeTags("version-comparison") }
+}
+
+// #455 비교 실험은 일반 테스트의 실행 시간과 분리한다.
+tasks.register<Test>("timefoldVersionComparison") {
+    description = "동일 fixture, seed, step으로 Timefold 전환 결과를 검증한다."
+    group = "verification"
+    mustRunAfter(tasks.test)
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("version-comparison") }
+    maxParallelForks = 1
+    minHeapSize = "2g"
+    maxHeapSize = "4g"
+    systemProperty("junit.jupiter.execution.parallel.enabled", "false")
+    systemProperty("issue455.timefoldVersion", libs.versions.timefold.solver.get())
+    systemProperty("issue455.output", layout.buildDirectory.file("issue-455/comparison.csv").get().asFile.absolutePath)
+    outputs.upToDateWhen { false }
+}

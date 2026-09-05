@@ -1,6 +1,11 @@
 package io.bluetape4k.clinic.appointment.api.controller
 
 import io.bluetape4k.clinic.appointment.event.AppointmentEventLogs
+import io.bluetape4k.clinic.appointment.api.dto.AppointmentResponse
+import io.bluetape4k.clinic.appointment.api.dto.CreateAppointmentRequest
+import io.bluetape4k.clinic.appointment.api.dto.toResponse
+import io.bluetape4k.clinic.appointment.model.service.TenantClinicScope
+import io.bluetape4k.clinic.appointment.repository.AppointmentRepository
 import io.bluetape4k.clinic.appointment.event.integration.SchedulingOutboxEvents
 import io.bluetape4k.clinic.appointment.event.notification.DefaultNotificationOutboxHasher
 import io.bluetape4k.clinic.appointment.notification.persistence.NotificationDeliveryAttempts
@@ -59,6 +64,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.web.client.RestClient
+import tools.jackson.databind.json.JsonMapper
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -117,6 +123,9 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
     private var clinicId: Long = 0
     private var doctorId: Long = 0
     private var treatmentTypeId: Long = 0
+
+    @Autowired
+    private lateinit var jsonMapper: JsonMapper
 
     @BeforeEach
     fun setup() {
@@ -866,6 +875,66 @@ class AppointmentControllerTest @Autowired constructor() : AbstractApiIntegratio
         response.statusCode shouldBeEqualTo HttpStatus.CREATED
         response.jsonPath<String>("$.data.timezone") shouldBeEqualTo "America/Los_Angeles"
         response.jsonPath<String>("$.data.locale") shouldBeEqualTo "ko-KR"
+    }
+
+    @Test
+    fun `예약 JSON 왕복과 DB 재조회는 날짜 시간 식별자 scope version을 보존한다`() {
+        // 운영 Spring Boot mapper와 실제 HTTP 요청 처리 경계를 사용한다.
+        val request = CreateAppointmentRequest(
+            clinicId = clinicId,
+            doctorId = doctorId,
+            treatmentTypeId = treatmentTypeId,
+            memberId = "member-1",
+            patientName = "왕복 검증 환자",
+            patientPhone = "010-1234-5678",
+            appointmentDate = futureDate,
+            startTime = LocalTime.of(10, 0),
+            endTime = LocalTime.of(10, 30),
+        )
+        val json = jsonMapper.writeValueAsString(request)
+        jsonMapper.readValue(json, CreateAppointmentRequest::class.java) shouldBeEqualTo request
+
+        val created = client.post().uri(BASE_URL)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(json)
+            .execute()
+        created.statusCode shouldBeEqualTo HttpStatus.CREATED
+        val response = jsonMapper.treeToValue(
+            jsonMapper.readTree(created.body).get("data"),
+            AppointmentResponse::class.java,
+        )
+        jsonMapper.readValue(
+            jsonMapper.writeValueAsString(response), AppointmentResponse::class.java,
+        ) shouldBeEqualTo response
+
+        val scope = TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId)
+        val stored = transaction {
+            AppointmentRepository().findByIdAndScope(response.id, scope).shouldNotBeNull()
+        }
+        stored.clinicId shouldBeEqualTo request.clinicId
+        stored.doctorId shouldBeEqualTo request.doctorId
+        stored.treatmentTypeId shouldBeEqualTo request.treatmentTypeId
+        stored.memberId shouldBeEqualTo MemberId("member-1")
+        stored.patientName shouldBeEqualTo request.patientName
+        stored.patientPhone shouldBeEqualTo request.patientPhone
+        stored.appointmentDate shouldBeEqualTo request.appointmentDate
+        stored.startTime shouldBeEqualTo request.startTime
+        stored.endTime shouldBeEqualTo request.endTime
+        stored.status shouldBeEqualTo AppointmentState.REQUESTED
+        stored.version shouldBeEqualTo 0L
+        // POST는 DB 기본 timestamp를 재조회하지 않은 생성 레코드를 반환한다.
+        response shouldBeEqualTo stored.toResponse(timezone = "Asia/Seoul", locale = "ko-KR")
+            .copy(createdAt = null, updatedAt = null)
+
+        // 별도 트랜잭션과 GET 응답으로 저장/조회/JSON 경로를 다시 대조한다.
+        transaction {
+            AppointmentRepository().findByIdAndScope(response.id, scope) shouldBeEqualTo stored
+        }
+        val fetched = client.get().uri("$BASE_URL/{id}", response.id).execute()
+        fetched.statusCode shouldBeEqualTo HttpStatus.OK
+        jsonMapper.treeToValue(
+            jsonMapper.readTree(fetched.body).get("data"), AppointmentResponse::class.java,
+        ) shouldBeEqualTo stored.toResponse(timezone = "Asia/Seoul", locale = "ko-KR")
     }
 
     private fun createTestAppointment(): Long =
