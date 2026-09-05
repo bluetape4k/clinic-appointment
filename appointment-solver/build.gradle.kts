@@ -1,3 +1,10 @@
+dependencyManagement {
+    imports {
+        // 예제의 Timefold 재정의는 jaxb 등 전이 의존성에도 같은 버전을 적용한다.
+        mavenBom(libs.timefold.solver.bom.get().toString())
+    }
+}
+
 dependencies {
     api(project(":appointment-core"))
 

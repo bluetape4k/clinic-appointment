@@ -99,8 +99,21 @@ assert_selected_version \
     timefold-core \
     :appointment-solver \
     ai.timefold.solver:timefold-solver-core \
+    2.6.0 \
     2.4.0 \
     2.2.0
+assert_selected_version \
+    timefold-benchmark \
+    :appointment-solver \
+    ai.timefold.solver:timefold-solver-benchmark \
+    2.6.0 \
+    2.4.0
+assert_selected_version \
+    timefold-jaxb \
+    :appointment-solver \
+    ai.timefold.solver:timefold-solver-jaxb \
+    2.6.0 \
+    2.4.0
 assert_selected_version \
     springdoc-webmvc \
     :appointment-api \

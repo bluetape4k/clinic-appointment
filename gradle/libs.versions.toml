@@ -1,15 +1,16 @@
 # @formatter:off
 # Gradle Version Catalog for clinic-appointment
 #
-# Policy: bluetape4k-dependencies BOM is the single source of truth for shared
-# library versions. This catalog declares only:
-#   1. The BOM version itself
-#   2. Plugin versions (Gradle plugins always need explicit versions)
-#   3. Project-local library versions NOT managed by any BOM
+# 공통 라이브러리는 기본적으로 bluetape4k-dependencies BOM의 버전을 사용한다.
+# 예제 저장소에서 별도로 검증한 버전은 로컬에서 재정의할 수 있다.
+# 이 catalog는 다음 버전을 선언한다.
+#   1. BOM 자체 버전
+#   2. 명시적 버전이 필요한 Gradle 플러그인
+#   3. BOM에서 관리하지 않는 프로젝트 전용 라이브러리
+#   4. 이 예제에서 별도로 검증한 버전 재정의 (예: Timefold #450)
 #
-# Libraries managed by the BOM (bluetape4k-dependencies or spring-boot4-dependencies)
-# declare `module` only (no version). Gradle + spring-dependency-management plugin
-# resolves their versions from the imported BOM platform.
+# 별도 재정의가 없는 BOM 관리 라이브러리는 버전 없이 `module`만 선언한다.
+# Gradle과 spring-dependency-management 플러그인이 가져온 BOM으로 버전을 결정한다.
 
 [versions]
 # ── BOM (source of truth) ──────────────────────────────────────────────────
@@ -30,6 +31,7 @@ exposed = "1.4.0"
 # ── Override versions (project uses newer than Spring Boot provides) ───────
 kotlinx-coroutines = "1.11.0" # https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
 lettuce-core = "7.6.0.RELEASE" # bluetape4k-lettuce 2.0.0 requires this beyond Spring Boot's managed version
+timefold-solver = "2.6.0" # #450: 임시 move undo 후 저장 점수 복원 수정
 
 # ── Project-local versions (NOT in any BOM) ───────────────────────────────
 jjwt = "0.13.0"               # https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api
@@ -160,9 +162,10 @@ resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-ci
 resilience4j-kotlin = { module = "io.github.resilience4j:resilience4j-kotlin", version.ref = "resilience4j" }
 resilience4j-retry = { module = "io.github.resilience4j:resilience4j-retry", version.ref = "resilience4j" }
 
-# ── Timefold (version from bluetape4k-dependencies BOM) ────────────────────
-timefold-solver-core = { module = "ai.timefold.solver:timefold-solver-core" }
-timefold-solver-benchmark = { module = "ai.timefold.solver:timefold-solver-benchmark" }
+# ── Timefold (이 예제에서 독립 검증한 버전) ──────────────────────────────
+timefold-solver-bom = { module = "ai.timefold.solver:timefold-solver-bom", version.ref = "timefold-solver" }
+timefold-solver-core = { module = "ai.timefold.solver:timefold-solver-core", version.ref = "timefold-solver" }
+timefold-solver-benchmark = { module = "ai.timefold.solver:timefold-solver-benchmark", version.ref = "timefold-solver" }
 
 # ── DB (versions from spring-boot4-dependencies BOM) ──────────────────────
 flyway-core = { module = "org.flywaydb:flyway-core" }
