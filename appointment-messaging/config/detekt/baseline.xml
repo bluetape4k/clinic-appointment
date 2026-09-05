@@ -1,0 +1,171 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$!state.enabled || !state.configurationValid || !state.schemaValid || !state.serializerValid || state.relayPaused || state.relayHeld || pausedUntil?.isAfter(now) == true</ID>
+    <ID>ComplexCondition:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$topic == null || parsedPartitionKey == null || parsedAggregateId == null || parsedEventType == null || parsedClinicId == null || parsedAggregateType == null || parsedEventId == null</ID>
+    <ID>CyclomaticComplexMethod:AppointmentConsumerInboxStore.kt:JdbcAppointmentConsumerInboxStore$override fun begin: AppointmentConsumerBeginResult</ID>
+    <ID>CyclomaticComplexMethod:AppointmentConsumerRuntime.kt:AppointmentConsumerRuntime$fun consume: AppointmentConsumerOutcome</ID>
+    <ID>CyclomaticComplexMethod:AppointmentEventEnvelopeCodec.kt:AppointmentEventEnvelopeCodec$private fun Map&lt;String, Any?>.toPayload: AppointmentEventPayload</ID>
+    <ID>CyclomaticComplexMethod:AppointmentOutboxPerformanceTestSupport.kt:AppointmentOutboxPerformanceTestSupport$fun seedBacklog: SeedSummary</ID>
+    <ID>CyclomaticComplexMethod:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$fun tick: AppointmentRelayTickResult</ID>
+    <ID>CyclomaticComplexMethod:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$override fun claim: List&lt;AppointmentOutboxClaim></ID>
+    <ID>CyclomaticComplexMethod:AppointmentReplayService.kt:AppointmentReplayService$fun replay: AppointmentReplayResult</ID>
+    <ID>CyclomaticComplexMethod:KafkaAppointmentReplaySource.kt:KafkaAppointmentReplaySource$override fun replay: Int</ID>
+    <ID>LongMethod:AppointmentConsumerInboxStore.kt:JdbcAppointmentConsumerInboxStore$override fun begin: AppointmentConsumerBeginResult</ID>
+    <ID>LongMethod:AppointmentConsumerRetentionServiceTest.kt:AppointmentConsumerRetentionServiceTest$@Test fun `cleanup deletes terminal metadata in bounded tables but keeps processing rows`</ID>
+    <ID>LongMethod:AppointmentConsumerRuntime.kt:AppointmentConsumerRuntime$fun consume: AppointmentConsumerOutcome</ID>
+    <ID>LongMethod:AppointmentKafkaConsumerIntegrationTest.kt:AppointmentKafkaConsumerIntegrationTest$@Test fun `container crash before ack is recovered by a second group member after rebalance`</ID>
+    <ID>LongMethod:AppointmentMessagingReadinessValidatorTest.kt:AppointmentMessagingReadinessValidatorTest$private fun createConsumerSchema</ID>
+    <ID>LongMethod:AppointmentOutboxPerformanceTestSupport.kt:AppointmentOutboxPerformanceTestSupport$fun seedBacklog: SeedSummary</ID>
+    <ID>LongMethod:AppointmentOutboxQueryPlanTest.kt:AppointmentOutboxQueryPlanTest$private fun installInvalidReadyRows: List&lt;Long></ID>
+    <ID>LongMethod:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$fun tick: AppointmentRelayTickResult</ID>
+    <ID>LongMethod:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$override fun claim: List&lt;AppointmentOutboxClaim></ID>
+    <ID>LongMethod:AppointmentOutboxWriterTest.kt:AppointmentOutboxWriterTest$@BeforeEach fun setup</ID>
+    <ID>LongMethod:AppointmentReplayService.kt:AppointmentReplayService$fun replay: AppointmentReplayResult</ID>
+    <ID>LongMethod:KafkaAppointmentReplaySource.kt:KafkaAppointmentReplaySource$override fun replay: Int</ID>
+    <ID>LoopWithTooManyJumpStatements:AppointmentMessagingReadinessValidator.kt:AppointmentMessagingReadinessValidator$while</ID>
+    <ID>LoopWithTooManyJumpStatements:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$for</ID>
+    <ID>LoopWithTooManyJumpStatements:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$for</ID>
+    <ID>MagicNumber:AppointmentConsumerBindingProperties.kt:AppointmentConsumerBindingProperties$10</ID>
+    <ID>MagicNumber:AppointmentConsumerBindingProperties.kt:AppointmentConsumerBindingProperties$5</ID>
+    <ID>MagicNumber:AppointmentConsumerContracts.kt:AppointmentLogicalConsumerId$128</ID>
+    <ID>MagicNumber:AppointmentConsumerContracts.kt:AppointmentLogicalStreamId$128</ID>
+    <ID>MagicNumber:AppointmentConsumerContracts.kt:AppointmentReplayRequest$128</ID>
+    <ID>MagicNumber:AppointmentConsumerInboxStore.kt:JdbcAppointmentConsumerInboxStore$100</ID>
+    <ID>MagicNumber:AppointmentConsumerInboxStore.kt:JdbcAppointmentConsumerInboxStore$1_000</ID>
+    <ID>MagicNumber:AppointmentConsumerInboxStore.kt:JdbcAppointmentConsumerInboxStore$249</ID>
+    <ID>MagicNumber:AppointmentConsumerInboxStore.kt:JdbcAppointmentConsumerInboxStore$5</ID>
+    <ID>MagicNumber:AppointmentConsumerMetrics.kt:MicrometerAppointmentConsumerMetrics$1_000</ID>
+    <ID>MagicNumber:AppointmentConsumerProperties.kt:AppointmentConsumerProperties$10</ID>
+    <ID>MagicNumber:AppointmentConsumerProperties.kt:AppointmentConsumerProperties$100</ID>
+    <ID>MagicNumber:AppointmentConsumerProperties.kt:AppointmentConsumerProperties$128</ID>
+    <ID>MagicNumber:AppointmentConsumerProperties.kt:AppointmentConsumerProperties$5</ID>
+    <ID>MagicNumber:AppointmentConsumerRetentionProperties.kt:AppointmentConsumerRetentionProperties$1_000</ID>
+    <ID>MagicNumber:AppointmentConsumerRetentionProperties.kt:AppointmentConsumerRetentionProperties$30</ID>
+    <ID>MagicNumber:AppointmentConsumerRetentionProperties.kt:AppointmentConsumerRetentionProperties$365</ID>
+    <ID>MagicNumber:AppointmentConsumerRetentionProperties.kt:AppointmentConsumerRetentionProperties$90</ID>
+    <ID>MagicNumber:AppointmentKafkaConsumerConfiguration.kt:AppointmentKafkaConsumerConfiguration$1_000</ID>
+    <ID>MagicNumber:AppointmentMessagingBindingProperties.kt:AppointmentMessagingBindingProperties$10</ID>
+    <ID>MagicNumber:AppointmentMessagingBindingProperties.kt:AppointmentMessagingBindingProperties$15</ID>
+    <ID>MagicNumber:AppointmentMessagingBindingProperties.kt:AppointmentMessagingBindingProperties$3</ID>
+    <ID>MagicNumber:AppointmentMessagingBindingProperties.kt:AppointmentMessagingBindingProperties$30</ID>
+    <ID>MagicNumber:AppointmentMessagingBindingProperties.kt:AppointmentMessagingBindingProperties$5</ID>
+    <ID>MagicNumber:AppointmentMessagingContracts.kt:AppointmentEventId$128</ID>
+    <ID>MagicNumber:AppointmentMessagingContracts.kt:AppointmentPartitionKey$512</ID>
+    <ID>MagicNumber:AppointmentMessagingProperties.kt:AppointmentMessagingProperties$10</ID>
+    <ID>MagicNumber:AppointmentMessagingProperties.kt:AppointmentMessagingProperties$100</ID>
+    <ID>MagicNumber:AppointmentMessagingProperties.kt:AppointmentMessagingProperties$15</ID>
+    <ID>MagicNumber:AppointmentMessagingProperties.kt:AppointmentMessagingProperties$3</ID>
+    <ID>MagicNumber:AppointmentMessagingProperties.kt:AppointmentMessagingProperties$30</ID>
+    <ID>MagicNumber:AppointmentMessagingProperties.kt:AppointmentMessagingProperties$32</ID>
+    <ID>MagicNumber:AppointmentMessagingProperties.kt:AppointmentMessagingProperties$4</ID>
+    <ID>MagicNumber:AppointmentMessagingProperties.kt:AppointmentMessagingProperties$5</ID>
+    <ID>MagicNumber:AppointmentMessagingProperties.kt:AppointmentReadinessDiagnostic$128</ID>
+    <ID>MagicNumber:AppointmentMessagingProperties.kt:AppointmentReadinessDiagnostic$64</ID>
+    <ID>MagicNumber:AppointmentMessagingReadinessValidator.kt:AppointmentMessagingReadinessValidator$128</ID>
+    <ID>MagicNumber:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$10</ID>
+    <ID>MagicNumber:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$100</ID>
+    <ID>MagicNumber:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$3</ID>
+    <ID>MagicNumber:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$30</ID>
+    <ID>MagicNumber:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$32</ID>
+    <ID>MagicNumber:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$4</ID>
+    <ID>MagicNumber:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$5</ID>
+    <ID>MagicNumber:AppointmentOutboxRelayLifecycle.kt:AppointmentOutboxRelayLifecycle$100</ID>
+    <ID>MagicNumber:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$100</ID>
+    <ID>MagicNumber:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$1000.0</ID>
+    <ID>MagicNumber:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$160</ID>
+    <ID>MagicNumber:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$4</ID>
+    <ID>MagicNumber:AppointmentSchemaRegistry.kt:AppointmentSchemaRegistryBasicCredentials$1024</ID>
+    <ID>MagicNumber:AppointmentSchemaRegistry.kt:AppointmentSchemaRegistryBasicCredentials$256</ID>
+    <ID>MagicNumber:AppointmentSchemaRegistry.kt:StaticAppointmentSchemaRegistry$128</ID>
+    <ID>MagicNumber:KafkaAppointmentReplaySource.kt:KafkaAppointmentReplaySource$100_000</ID>
+    <ID>MagicNumber:KafkaAppointmentReplaySource.kt:KafkaAppointmentReplaySource$5</ID>
+    <ID>MagicNumber:SpringKafkaAppointmentPublisher.kt:SpringKafkaAppointmentPublisher$5</ID>
+    <ID>MaxLineLength:AppointmentConsumerInboxStore.kt:JdbcAppointmentConsumerInboxStore$?.</ID>
+    <ID>MaxLineLength:AppointmentConsumerInboxStore.kt:JdbcAppointmentConsumerInboxStore$if</ID>
+    <ID>MaxLineLength:AppointmentConsumerInboxStore.kt:JdbcAppointmentConsumerInboxStore$private</ID>
+    <ID>MaxLineLength:AppointmentConsumerInboxStoreTest.kt:AppointmentConsumerInboxStoreTest$(duplicate as AppointmentConsumerBeginResult.Duplicate).status shouldBeEqualTo AppointmentConsumerStatus.PROCESSED</ID>
+    <ID>MaxLineLength:AppointmentConsumerInboxStoreTest.kt:AppointmentConsumerInboxStoreTest$row[AppointmentConsumerInboxTable.failureCode] shouldBeEqualTo AppointmentConsumerFailureCode.ATTEMPT_EXHAUSTED.name</ID>
+    <ID>MaxLineLength:AppointmentConsumerRetentionServiceTest.kt:AppointmentConsumerRetentionServiceTest$store.quarantine(identity("quarantine-inbox"), eventId("quarantine-inbox"), AppointmentConsumerFailureCode.HANDLER_FAILED)</ID>
+    <ID>MaxLineLength:AppointmentConsumerRuntime.kt:AppointmentConsumerRuntime$?:</ID>
+    <ID>MaxLineLength:AppointmentConsumerRuntime.kt:AppointmentConsumerRuntime$return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.INVALID_ENVELOPE)</ID>
+    <ID>MaxLineLength:AppointmentConsumerRuntime.kt:AppointmentConsumerRuntime$return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.SCOPE_MISMATCH)</ID>
+    <ID>MaxLineLength:AppointmentConsumerRuntime.kt:AppointmentConsumerRuntime$return rejectBeforeDecode(record, acknowledgment, identity, AppointmentConsumerFailureCode.UNSUPPORTED_SCHEMA)</ID>
+    <ID>MaxLineLength:AppointmentConsumerRuntimeTest.kt:AppointmentConsumerRuntimeTest$runtime.consume(invalid, acknowledgment, identity()) { _, _ -> AppointmentConsumerHandlerResult.ALREADY_APPLIED }</ID>
+    <ID>MaxLineLength:AppointmentConsumerRuntimeTest.kt:AppointmentConsumerRuntimeTest$runtime.consume(record, acknowledgment, identity(), handler) shouldBeEqualTo AppointmentConsumerOutcome.DUPLICATE</ID>
+    <ID>MaxLineLength:AppointmentConsumerRuntimeTest.kt:AppointmentConsumerRuntimeTest$runtime.consume(record, acknowledgment, identity(), handler) shouldBeEqualTo AppointmentConsumerOutcome.PROCESSED</ID>
+    <ID>MaxLineLength:AppointmentEventEnvelopeCodec.kt:AppointmentEventEnvelopeCodec$AppointmentEventType.STATUS_CHANGED -> setOf("appointmentId", "version", "fromState", "toState", "reasonCode")</ID>
+    <ID>MaxLineLength:AppointmentEventEnvelopeCodecTest.kt:AppointmentEventEnvelopeCodecTest$"""{"eventId":"event-41","eventType":"AppointmentCreated","schemaVersion":1,"occurredAt":"2026-08-05T08:30:00Z","tenantGroupId":7,"clinicId":31,"aggregateType":"APPOINTMENT","aggregateId":924,"correlationId":"http-41","causationId":"http-41","payload":{"appointmentId":924,"version":3,"status":"CONFIRMED","patientName":"secret"}}"""</ID>
+    <ID>MaxLineLength:AppointmentEventEnvelopeCodecTest.kt:AppointmentEventEnvelopeCodecTest$"""{"eventId":"event-41","eventType":"Unknown","schemaVersion":1,"occurredAt":"2026-08-05T08:30:00Z","tenantGroupId":7,"clinicId":31,"aggregateType":"APPOINTMENT","aggregateId":924,"correlationId":"http-41","causationId":"http-41","payload":{}}"""</ID>
+    <ID>MaxLineLength:AppointmentEventEnvelopeCodecTest.kt:AppointmentEventEnvelopeCodecTest$assertFailsWith&lt;IllegalArgumentException> { codec.decode(json.replace("\"eventId\":\"event-41\"", "\"eventId\":\"event-41\",\"eventId\":\"event-42\"")) }</ID>
+    <ID>MaxLineLength:AppointmentEventEnvelopeCodecTest.kt:AppointmentEventEnvelopeCodecTest$val json = """{"eventId":"event-41","eventType":"AppointmentCreated","schemaVersion":1,"occurredAt":"2026-08-05T08:30:00Z","tenantGroupId":7,"clinicId":31,"aggregateType":"APPOINTMENT","aggregateId":924,"correlationId":"http-41","causationId":"http-41","payload":{"appointmentId":924,"version":3,"status":"CONFIRMED"}}"""</ID>
+    <ID>MaxLineLength:AppointmentEventEnvelopeCodecTest.kt:AppointmentEventEnvelopeCodecTest$val json = """{"eventId":"event-41","eventType":"AppointmentCreated","schemaVersion":1,"occurredAt":"2026-08-05T08:30:00Z","tenantGroupId":7,"clinicId":31,"aggregateType":"APPOINTMENT","aggregateId":924,"correlationId":"http-41","causationId":"http-41","payload":{"appointmentId":924,"version":3.5,"status":"CONFIRMED"}}"""</ID>
+    <ID>MaxLineLength:AppointmentKafkaConsumerIntegrationTest.kt:AppointmentKafkaConsumerIntegrationTest$runtime.consume(record, acknowledgments, identity, handler) shouldBeEqualTo AppointmentConsumerOutcome.DUPLICATE</ID>
+    <ID>MaxLineLength:AppointmentKafkaConsumerIntegrationTest.kt:AppointmentKafkaConsumerIntegrationTest$runtime.consume(record, acknowledgments, identity, handler) shouldBeEqualTo AppointmentConsumerOutcome.PROCESSED</ID>
+    <ID>MaxLineLength:AppointmentKafkaProducerConfiguration.kt:AppointmentKafkaProducerConfiguration.Companion$ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG to properties.producerDeliveryTimeout.toBoundedMillis("producerDeliveryTimeout")</ID>
+    <ID>MaxLineLength:AppointmentKafkaProducerConfiguration.kt:AppointmentKafkaProducerConfiguration.Companion$ProducerConfig.MAX_BLOCK_MS_CONFIG to properties.producerMetadataTimeout.toBoundedMillis("producerMetadataTimeout")</ID>
+    <ID>MaxLineLength:AppointmentKafkaProducerConfiguration.kt:AppointmentKafkaProducerConfiguration.Companion$ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG to properties.producerRequestTimeout.toBoundedMillis("producerRequestTimeout")</ID>
+    <ID>MaxLineLength:AppointmentMessagingAutoConfigurationTest.kt:AppointmentMessagingAutoConfigurationTest$val</ID>
+    <ID>MaxLineLength:AppointmentMessagingContracts.kt:AppointmentPartitionKey.Companion$private val PARTITION_KEY_PATTERN = Regex("^tenant-[1-9][0-9]*:CLINIC:clinic-[1-9][0-9]*:APPOINTMENT:apt-[1-9][0-9]*$")</ID>
+    <ID>MaxLineLength:AppointmentMessagingHealthIndicator.kt:AppointmentMessagingHealthIndicator$!state.configurationValid || !state.schemaValid || !state.registryValid || !state.serializerValid -> Health.down()</ID>
+    <ID>MaxLineLength:AppointmentMessagingReadinessValidatorTest.kt:AppointmentMessagingReadinessValidatorTest$statement.execute("CREATE INDEX idx_outbox_appointment_lease_recovery ON scheduling_outbox_events(lease_until)")</ID>
+    <ID>MaxLineLength:AppointmentOutboxPerformanceTestSupport.kt:AppointmentOutboxPerformanceTestSupport$SchemaUtils.create(TenantGroups, Clinics, ProductCatalogProjections, AppointmentPlans, SchedulingOutboxEvents)</ID>
+    <ID>MaxLineLength:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$private val allowedTopics: Set&lt;AppointmentTopic> = setOf(AppointmentTopic(DefaultAppointmentOutboxWriter.DEFAULT_TOPIC))</ID>
+    <ID>MaxLineLength:AppointmentOutboxRelayLifecycleTest.kt:AppointmentOutboxRelayLifecycleTest.&lt;no name provided>$override fun claim: List&lt;AppointmentOutboxClaim></ID>
+    <ID>MaxLineLength:AppointmentOutboxRelayLifecycleTest.kt:AppointmentOutboxRelayLifecycleTest.&lt;no name provided>$override fun markRetry: Boolean</ID>
+    <ID>MaxLineLength:AppointmentOutboxRelayTest.kt:AppointmentOutboxRelayTest$publisher = ProbePublisher(availableTopics = setOf(AppointmentTopic(DefaultAppointmentOutboxWriter.DEFAULT_TOPIC)))</ID>
+    <ID>MaxLineLength:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$(predecessor[SchedulingOutboxEvents.id] less SchedulingOutboxEvents.id)</ID>
+    <ID>MaxLineLength:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$(predecessor[SchedulingOutboxEvents.status] eq SchedulingOutboxStatus.PENDING)</ID>
+    <ID>MaxLineLength:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$.</ID>
+    <ID>MaxLineLength:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$it[SchedulingOutboxEvents.status]</ID>
+    <ID>MaxLineLength:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$oldestAgeSeconds = oldest?.let { (now.toEpochMilli() - it.toEpochMilli()).coerceAtLeast(0) / 1000.0 } ?: 0.0</ID>
+    <ID>MaxLineLength:AppointmentOutboxStore.kt:JdbcAppointmentOutboxStore$private val allowedTopics: Set&lt;AppointmentTopic> = setOf(AppointmentTopic(DefaultAppointmentOutboxWriter.DEFAULT_TOPIC))</ID>
+    <ID>MaxLineLength:AppointmentOutboxStoreTest.kt:AppointmentOutboxStoreTest$SchedulingOutboxEvents.selectAll().single()[SchedulingOutboxEvents.status] shouldBeEqualTo SchedulingOutboxStatus.PUBLISHED</ID>
+    <ID>MaxLineLength:AppointmentOutboxStoreTest.kt:AppointmentOutboxStoreTest$payload = AppointmentCreatedPayload(AppointmentAggregateId(appointmentAggregateId), 1, AppointmentState.CONFIRMED)</ID>
+    <ID>MaxLineLength:AppointmentOutboxStoreTest.kt:AppointmentOutboxStoreTest$row[SchedulingOutboxEvents.lastFailureCode] shouldBeEqualTo AppointmentOutboxRelay.FAILURE_BROKER_UNAVAILABLE</ID>
+    <ID>MaxLineLength:AppointmentOutboxWriterTest.kt:AppointmentOutboxWriterTest$row[SchedulingOutboxEvents.payloadJson].orEmpty().contains("\"fromState\":\"CONFIRMED\"").shouldBeEqualTo(true)</ID>
+    <ID>MaxLineLength:AppointmentOutboxWriterTest.kt:AppointmentOutboxWriterTest$row[SchedulingOutboxEvents.payloadJson].orEmpty().contains("\"toState\":\"PENDING_RESCHEDULE\"").shouldBeEqualTo(true)</ID>
+    <ID>MaxLineLength:AppointmentOutboxWriterTest.kt:AppointmentOutboxWriterTest$writer.created(scope, appointment, AppointmentMessagingContext.from(AppointmentCommandContext.root("writer-1")))</ID>
+    <ID>MaxLineLength:AppointmentReplayService.kt:AppointmentReplayService$(AppointmentConsumerReplayAuditTable.status eq AppointmentReplayAuditStatus.REQUESTED)</ID>
+    <ID>MaxLineLength:AppointmentReplayService.kt:AppointmentReplayService$AppointmentConsumerReplayAuditTable</ID>
+    <ID>MaxLineLength:AppointmentSchemaRegistry.kt:AppointmentSchemaRegistryBasicCredentials$override fun toString: String</ID>
+    <ID>MaxLineLength:MicrometerAppointmentConsumerMetricsTest.kt:MicrometerAppointmentConsumerMetricsTest$registry.counter("appointment_consumer_quarantined", "failure_code", "INVALID_ENVELOPE").count() shouldBeEqualTo 1.0</ID>
+    <ID>ReturnCount:AppointmentConsumerRuntime.kt:AppointmentConsumerRuntime$fun consume: AppointmentConsumerOutcome</ID>
+    <ID>ReturnCount:AppointmentKafkaConsumerConfiguration.kt:internal fun appointmentConsumerRecoveryFailureCode: AppointmentConsumerFailureCode</ID>
+    <ID>ReturnCount:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$fun tick: AppointmentRelayTickResult</ID>
+    <ID>ReturnCount:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$private fun ensureBrokerReady: Boolean</ID>
+    <ID>ReturnCount:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$private fun isMetadataConsistent: Boolean</ID>
+    <ID>ReturnCount:SpringKafkaAppointmentPublisher.kt:SpringKafkaAppointmentPublisher$override fun probe: Boolean</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentConsumerContracts.kt:AppointmentConsumerIdentity : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentConsumerContracts.kt:AppointmentConsumerIdentityKey : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentConsumerContracts.kt:AppointmentConsumerProvenance : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentConsumerContracts.kt:AppointmentLogicalConsumerId : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentConsumerContracts.kt:AppointmentLogicalStreamId : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentConsumerContracts.kt:AppointmentReplayRequest : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentConsumerContracts.kt:AppointmentReplayScope : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentConsumerContracts.kt:AppointmentSchemaReadiness : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentMessagingContracts.kt:AppointmentAggregateId : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentMessagingContracts.kt:AppointmentEventEnvelope : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentMessagingContracts.kt:AppointmentEventId : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentMessagingContracts.kt:AppointmentMessagingContext : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentMessagingContracts.kt:AppointmentPartitionKey : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentMessagingContracts.kt:AppointmentTopic : Serializable</ID>
+    <ID>SwallowedException:AppointmentReplayService.kt:AppointmentReplayService$failure: IllegalArgumentException</ID>
+    <ID>ThrowsCount:AppointmentConsumerRuntime.kt:AppointmentConsumerRuntime$fun consume: AppointmentConsumerOutcome</ID>
+    <ID>ThrowsCount:AppointmentSchemaRegistry.kt:JdkSchemaRegistryCompatibilityReader$override fun invoke: String</ID>
+    <ID>ThrowsCount:KafkaAppointmentReplaySource.kt:KafkaAppointmentReplaySource$override fun replay: Int</ID>
+    <ID>TooGenericExceptionCaught:AppointmentConsumerRuntime.kt:AppointmentConsumerRuntime$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppointmentEventEnvelopeCodec.kt:AppointmentEventEnvelopeCodec$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppointmentMessagingReadinessValidator.kt:AppointmentMessagingReadinessValidator$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppointmentOutboxRelay.kt:AppointmentOutboxRelay$ex: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppointmentOutboxRelayLifecycle.kt:AppointmentOutboxRelayLifecycle$ex: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppointmentReplayService.kt:AppointmentReplayService$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppointmentSchemaRegistry.kt:JdkSchemaRegistryCompatibilityReader$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:SpringKafkaAppointmentPublisher.kt:SpringKafkaAppointmentPublisher$ex: Exception</ID>
+    <ID>TooManyFunctions:AppointmentConsumerInboxStore.kt:JdbcAppointmentConsumerInboxStore : AppointmentConsumerInboxStore</ID>
+    <ID>TooManyFunctions:AppointmentMessagingAutoConfiguration.kt:AppointmentMessagingAutoConfiguration</ID>
+    <ID>TooManyFunctions:AppointmentMessagingProperties.kt:AppointmentMessagingReadinessProbe</ID>
+    <ID>TooManyFunctions:AppointmentMessagingReadinessValidator.kt:AppointmentMessagingReadinessValidator</ID>
+  </CurrentIssues>
+</SmellBaseline>

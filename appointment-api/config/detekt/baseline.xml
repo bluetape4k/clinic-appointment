@@ -1,0 +1,747 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$calculatedHash != expectedProposalHash || proposal.revision != draft.revision || proposal.proposedStartAt != draft.startsAt || proposal.proposedEndAt != draft.endsAt || proposal.policySnapshotId != draft.policySnapshotId || proposal.supersedesProposalId != draft.supersedesProposalId</ID>
+    <ID>ComplexCondition:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$commitment.status != AppointmentCommitmentStatus.CONFIRMED || commitment.confirmedProposalId == null || proposal.id == commitment.confirmedProposalId || proposal.supersedesProposalId != commitment.confirmedProposalId</ID>
+    <ID>ComplexCondition:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$consent.evidenceType !in policy.allowedEvidenceTypes || evidenceAge.isNegative || evidenceAge > policy.maximumEvidenceAge || (policy.termsHashRequired &amp;&amp; consent.termsHash != policy.requiredTermsHash)</ID>
+    <ID>ComplexCondition:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentFakeIdempotencyApplication$key.toByteArray().size > config.maxIdempotencyKeyBytes || key.isEmpty() || key.any { character -> character.code !in 0x21..0x7e } || canonicalPayloadOrNull(request.requestBody) == null</ID>
+    <ID>ComplexCondition:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest$trafficDrained &amp;&amp; workerRestarted &amp;&amp; v2Warmup &amp;&amp; v3Preserved</ID>
+    <ID>ComplexCondition:CatalogProductSyncController.kt:CatalogProductSyncController$request.tenantGroupId != tenantGroupId || request.clinicId != clinicId || request.sourceAuthority != sourceAuthority || request.productId != productId || request.catalogVersion != catalogVersion</ID>
+    <ID>ComplexCondition:PatientAuthenticationService.kt:PatientAuthenticationService$principal.actorType != ActorType.PATIENT || principal.roles != setOf(SchedulingRole.PATIENT) || principal.patientSubjectId.isNullOrBlank() || principal.userId != principal.patientSubjectId || tenantCode !in principal.allowedTenants</ID>
+    <ID>ComplexCondition:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$stored.issuedKeyId != requested.issuedKeyId || stored.issuedAtBucket != requested.issuedAtBucket || stored.tenantGroupId != requested.tenantGroupId || stored.patientScopeFingerprint != requested.patientScopeFingerprint || stored.occurredAt != requested.occurredAt || stored.detailId != requested.detailId</ID>
+    <ID>ComplexCondition:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$address.isAnyLocalAddress || address.isLoopbackAddress || address.isLinkLocalAddress || address.isSiteLocalAddress || address.isMulticastAddress</ID>
+    <ID>ComplexCondition:SchedulingPolicyAdministrationService.kt:SchedulingPolicyAdministrationService$job.tenantGroupId != scope.tenantGroupId || job.scope != scope.scope || job.clinicScopeKey != scope.clinicScopeKey || job.definitionId != definition.id || job.draftRevision != definition.revision</ID>
+    <ID>ComplexCondition:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$actor.actorType != ActorType.SYSTEM || ActorRole.SYSTEM !in actor.roles || actor.assurance != AuthenticationAssurance.SERVICE || scheduledCommandId == null || scheduledCommandId &lt;= 0 || POLICY_SCHEDULED_ACTIVATION_SCOPE !in actor.scopes</ID>
+    <ID>ComplexCondition:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$definition == null || definition.tenantGroupId != scope.tenantGroupId || definition.scope != scope.scope || definition.clinicScopeKey != scope.clinicScopeKey</ID>
+    <ID>ComplexCondition:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$evidence.definitionId != existing.definitionId || evidence.draftRevision != existing.expectedDraftRevision || evidence.tenantGeneration != existing.expectedTenantGeneration || evidence.clinicGeneration != existing.expectedClinicGeneration || evidence.evidenceId != existing.previewEvidenceToken</ID>
+    <ID>ComplexCondition:SchedulingPolicyPreviewService.kt:ExposedSchedulingPolicyPreviewStore$definition.tenantGroupId != job.tenantGroupId || definition.scope != job.scope || definition.clinicId != job.clinicId || definition.revision != job.draftRevision</ID>
+    <ID>ComplexCondition:TenantPathValidationFilter.kt:TenantPathValidationFilter$path.contains('%') || path.contains(';') || path.contains('\\') || path.contains("//")</ID>
+    <ID>ComplexCondition:WaitlistDeliveryRecoveryDrillTest.kt:DurableVacancyFixture$status != Status.PROCESSING || owner != nextOwner || version != expectedVersion || now >= leaseUntil</ID>
+    <ID>ComplexCondition:WaitlistPublicIdCodec.kt:WaitlistPublicIdCodec$tenantGroupId != scope.tenantGroupId || clinicId != scope.clinicId || internalId == null || internalId &lt;= 0L</ID>
+    <ID>CyclomaticComplexMethod:BookingEligibilityGate.kt:BookingEligibilityGate$fun requireAllowed: BookingReliabilityDecisionStamp?</ID>
+    <ID>CyclomaticComplexMethod:BookingEligibilityGate.kt:BookingEligibilityGate$fun requireFresh</ID>
+    <ID>CyclomaticComplexMethod:BookingReliabilityReevaluationWorker.kt:BookingReliabilityReevaluationWorker$fun runOnce: BookingReliabilityWorkerResult</ID>
+    <ID>CyclomaticComplexMethod:ClinicProjectionPilotComponents.kt:internal fun &lt;T> withPilotContext: T</ID>
+    <ID>CyclomaticComplexMethod:DashboardStatsService.kt:DashboardStatsService$fun getCancellationStats: CancellationStatsResponse</ID>
+    <ID>CyclomaticComplexMethod:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$private fun requireConsentMatch</ID>
+    <ID>CyclomaticComplexMethod:PatientCancellationHistoryService.kt:PatientCancellationHistoryService$fun read: PatientCancellationHistoryReadResult</ID>
+    <ID>CyclomaticComplexMethod:ProfileReevaluationWorker.kt:ProfileReevaluationWorker$private suspend fun processCandidates: ProfileReevaluationWorkerResult</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$private fun activateInternal: SchedulingPolicyActivationResult</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$private fun resolveActivationCommand: SchedulingPolicyActivationCommandRecord</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyOpenApiTest.kt:SchedulingPolicyOpenApiTest$@Test fun `generated contract publishes exact scoped routes without authority escalation fields`</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyPerformanceIntegrationTest.kt:SchedulingPolicyPerformanceIntegrationTest$private fun explain: RawPlan</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyPreviewService.kt:PersistedPolicyPreviewEvidenceVerifier$override fun verify: Boolean</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyPreviewService.kt:SchedulingPolicyPreviewService$private fun processClaimed: SchedulingPolicyPreviewResult</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyWorker.kt:SchedulingPolicyWorker$private fun processPreview</ID>
+    <ID>CyclomaticComplexMethod:TenantContextFilter.kt:TenantContextFilter$override fun doFilterInternal</ID>
+    <ID>CyclomaticComplexMethod:WaitlistFencedLeaderLease.kt:FencedWaitlistLeaderLease$fun tryAcquire: WaitlistLeaseAttempt</ID>
+    <ID>FunctionOnlyReturningConstant:DashboardStatsService.kt:DashboardStatsService$@Suppress("UNUSED_PARAMETER") private fun projectionRows: List&lt;Triple&lt;LocalDate, AppointmentState, Long>>?</ID>
+    <ID>LargeClass:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService</ID>
+    <ID>LargeClass:AppointmentCommitmentCommandServiceTest.kt:AppointmentCommitmentCommandServiceTest : VisitCommitmentCommandTestSupport</ID>
+    <ID>LargeClass:AppointmentControllerTest.kt:AppointmentControllerTest : AbstractApiIntegrationTest</ID>
+    <ID>LargeClass:AppointmentMessagingMigrationTestSupport.kt:AppointmentMessagingMigrationTestSupport</ID>
+    <ID>LargeClass:AppointmentNotificationWriter.kt:DefaultAppointmentNotificationWriter : AppointmentNotificationWriter</ID>
+    <ID>LargeClass:AppointmentPlanMigrationTestSupport.kt:AppointmentPlanMigrationTestSupport</ID>
+    <ID>LargeClass:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest</ID>
+    <ID>LargeClass:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService : AppointmentCommitmentApplicationService</ID>
+    <ID>LargeClass:DefaultAppointmentCommitmentApplicationServiceTest.kt:DefaultAppointmentCommitmentApplicationServiceTest : VisitCommitmentCommandTestSupport</ID>
+    <ID>LargeClass:GlobalExceptionHandler.kt:GlobalExceptionHandler</ID>
+    <ID>LargeClass:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService</ID>
+    <ID>LargeClass:SchedulingPolicyPerformanceIntegrationTest.kt:SchedulingPolicyPerformanceIntegrationTest : AbstractApiIntegrationTest</ID>
+    <ID>LargeClass:ServiceConfig.kt:ServiceConfig</ID>
+    <ID>LargeClass:WaitlistCoreMigrationTestSupport.kt:WaitlistCoreMigrationTestSupport</ID>
+    <ID>LongMethod:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$fun acceptProposal: AppointmentCommitmentCommandResult</ID>
+    <ID>LongMethod:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$fun approveCustomerProposal: AppointmentCommitmentCommandResult</ID>
+    <ID>LongMethod:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$fun cancelAppointment: AppointmentCommitmentCommandResult</ID>
+    <ID>LongMethod:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$fun expireProposal: AppointmentCommitmentCommandResult</ID>
+    <ID>LongMethod:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$private fun executeCommand: AppointmentCommitmentCommandResult</ID>
+    <ID>LongMethod:AppointmentCommitmentCommandServiceTest.kt:AppointmentCommitmentCommandServiceTest$@Test fun `v2 성공 command는 notification writer를 decision 뒤 idempotency 결과 전에 호출한다`</ID>
+    <ID>LongMethod:AppointmentCommitmentOpenApiTest.kt:AppointmentCommitmentOpenApiTest$@Test fun `publishes exact paths preconditions and bounded error contracts`</ID>
+    <ID>LongMethod:AppointmentCommitmentSecurityIntegrationTest.kt:AppointmentCommitmentSecurityIntegrationTest$@Test fun `OpenAPI publishes provisional consent expiry conflict and ETag mutation contract`</ID>
+    <ID>LongMethod:AppointmentCommitmentSecurityIntegrationTest.kt:AppointmentCommitmentSecurityIntegrationTest$@Test fun `each allowed commitment route reaches its application service`</ID>
+    <ID>LongMethod:AppointmentControllerTest.kt:AppointmentControllerTest$@BeforeEach fun setup</ID>
+    <ID>LongMethod:AppointmentPlanMigrationTestSupport.kt:AppointmentPlanMigrationTestSupport$fun verifyV9Migration</ID>
+    <ID>LongMethod:AppointmentPlanMigrationTestSupport.kt:AppointmentPlanMigrationTestSupport$private fun seedV8PlanOutbox</ID>
+    <ID>LongMethod:AppointmentPlanReadExplainIntegrationTest.kt:AppointmentPlanReadExplainIntegrationTest$@Test fun `PostgreSQL and MySQL plans use appointment foundation read indexes`</ID>
+    <ID>LongMethod:AppointmentProposalServicePerformanceTest.kt:AppointmentProposalServicePerformanceTest$private fun resourceRichRequest: AppointmentProposalRequest</ID>
+    <ID>LongMethod:AppointmentServiceSpringProxyTest.kt:AppointmentServiceSpringProxyTest$@BeforeEach fun setUp</ID>
+    <ID>LongMethod:BookingReliabilityApplicationAdapter.kt:DefaultBookingReliabilityApplicationAdapter$override fun evaluate: BookingReliabilityDecisionRecord</ID>
+    <ID>LongMethod:BookingReliabilityReevaluationWorker.kt:BookingReliabilityReevaluationWorker$fun runOnce: BookingReliabilityWorkerResult</ID>
+    <ID>LongMethod:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest$private fun &lt;T : Any> verifyRollbackPreservesV3AndV2: RollbackEvidence</ID>
+    <ID>LongMethod:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest$private fun measurePostgresLockWait: Double</ID>
+    <ID>LongMethod:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest$private fun report</ID>
+    <ID>LongMethod:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest$private fun verifyBrokerRoundTrip: BrokerEvidence</ID>
+    <ID>LongMethod:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest$private fun verifyCacheNamespaces: CacheEvidence</ID>
+    <ID>LongMethod:ClinicSchedulingPolicyControllerTest.kt:ClinicSchedulingPolicyControllerTest$@Test fun `clinic lifecycle routes preserve owned scope actor CAS evidence and idempotency headers`</ID>
+    <ID>LongMethod:ClinicSpringDataProjectionPilotTest.kt:ClinicSpringDataProjectionPilotTest$@Test fun `H2 benchmark가 cardinality별 대칭 total median p95와 대표 statement 수를 기록한다`</ID>
+    <ID>LongMethod:ClinicSpringDataProjectionPilotTest.kt:ClinicSpringDataProjectionPilotTest$@Test fun `candidate 결과는 기존 tenant clinic role 권한 경계 뒤에서만 허용된다`: Unit</ID>
+    <ID>LongMethod:DatabaseConfig.kt:SchemaInitConfig$@Bean @Order(1) fun schemaInitializer: ApplicationRunner</ID>
+    <ID>LongMethod:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$override fun directConfirm: AppointmentCommitmentResponse</ID>
+    <ID>LongMethod:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$override fun directCreate: AppointmentCommitmentResponse</ID>
+    <ID>LongMethod:DefaultAppointmentCommitmentApplicationServiceTest.kt:DefaultAppointmentCommitmentApplicationServiceTest$@Test fun `change proposal uses the current active plan revision after external facts`</ID>
+    <ID>LongMethod:ExposedSchedulingPolicyPreviewStoreTest.kt:ExposedSchedulingPolicyPreviewStoreTest$private fun completedTenantPreviewFixture: CompletedTenantPreviewFixture</ID>
+    <ID>LongMethod:JdbcAppointmentReminderRecoveryStore.kt:JdbcAppointmentReminderRecoveryStore$private fun recoveryCandidate: ReminderRecoveryCandidate</ID>
+    <ID>LongMethod:JdbcCaffeineEffectivePolicyPilotBenchmark.kt:JdbcCaffeineEffectivePolicyPilotBenchmark$private fun runProfiles: List&lt;ProfileResult></ID>
+    <ID>LongMethod:JdbcLettuceMasterCachePilotIntegrationTest.kt:JdbcLettuceMasterCachePilotIntegrationTest$@BeforeEach fun setUp</ID>
+    <ID>LongMethod:MultitenancyMigrationTest.kt:MultitenancyMigrationTest$@Test fun `tenant migrations apply cleanly and enforce canonical ownership`</ID>
+    <ID>LongMethod:NotificationOutboxCanaryEvidenceValidatorTest.kt:NotificationOutboxCanaryEvidenceValidator$fun validate</ID>
+    <ID>LongMethod:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$@Test fun `1000건 canary는 rollback queue 보존 retry fencing idempotency와 인프라 정리를 증명한다`</ID>
+    <ID>LongMethod:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$private fun report: JsonNode</ID>
+    <ID>LongMethod:NotificationOutboxLoadIntegrationTest.kt:NotificationOutboxLoadIntegrationTest$@Test fun `대규모 활성 종료 backlog도 bounded page와 direct single claim을 유지한다`</ID>
+    <ID>LongMethod:NotificationOutboxQueryPlanTest.kt:NotificationOutboxQueryPlanTest$private fun verify</ID>
+    <ID>LongMethod:NotificationReNotifyService.kt:NotificationReNotifyService$suspend fun reNotify: NotificationReNotifyResult</ID>
+    <ID>LongMethod:PatientCancellationHistoryBackfillRunner.kt:PatientCancellationHistoryBackfillRunner$@Scheduled(fixedDelayString = "\${appointment.patient-history.backfill-interval:5s}") fun runBatch: PatientHistoryBackfillBatchResult</ID>
+    <ID>LongMethod:PatientCancellationHistoryQueryPlanTest.kt:PatientCancellationHistoryQueryPlanTest$private fun seed</ID>
+    <ID>LongMethod:PatientCancellationHistoryService.kt:PatientCancellationHistoryService$fun read: PatientCancellationHistoryReadResult</ID>
+    <ID>LongMethod:ProfileReevaluationConcurrencyIntegrationTest.kt:AbstractProfileReevaluationConcurrencyIntegrationTest$@Test fun `같은 예약에 진입한 두 worker는 outcome과 outbox를 한 번만 기록한다`</ID>
+    <ID>LongMethod:ProfileReevaluationConcurrencyIntegrationTest.kt:AbstractProfileReevaluationConcurrencyIntegrationTest$@Test fun `재평가 계산 중 고객이 확정하면 확정 예약과 기존 점유를 유지한다`</ID>
+    <ID>LongMethod:ProfileReevaluationDecisionService.kt:ProfileReevaluationDecisionService$private fun applyCandidate: ProfileReevaluationDecisionResult</ID>
+    <ID>LongMethod:ProfileReevaluationDecisionService.kt:ProfileReevaluationDecisionService$private fun applyDecision: ProfileReevaluationDecisionResult</ID>
+    <ID>LongMethod:ProfileReevaluationDispatcherTest.kt:ProfileReevaluationDispatcherTest$@RepeatedTest(10) fun `제거와 재확보가 경쟁해도 같은 병원은 설정한 동시 실행 수를 넘지 않는다`</ID>
+    <ID>LongMethod:ProfileReevaluationPrivacyIntegrationTest.kt:ProfileReevaluationPrivacyIntegrationTest$@Test fun `CRM 요청 예외 로그 metric과 health에 원본 값이나 식별자를 노출하지 않는다`</ID>
+    <ID>LongMethod:ProfileReevaluationPrivacyIntegrationTest.kt:ProfileReevaluationPrivacyIntegrationTest$@Test fun `event부터 outbox까지 원본 개인정보와 평가 근거를 영속화하지 않는다`</ID>
+    <ID>LongMethod:ProfileReevaluationQueryPlanTest.kt:ProfileReevaluationQueryPlanTest$private fun verifyQueryPlans</ID>
+    <ID>LongMethod:ProfileReevaluationWiringTest.kt:ProfileReevaluationWiringTest$@Test fun `운영 repository는 실제 예약 상태로 PROPOSED 전용 작업을 분류한다`</ID>
+    <ID>LongMethod:ProfileReevaluationWorker.kt:ProfileReevaluationWorker$private suspend fun processCandidates: ProfileReevaluationWorkerResult</ID>
+    <ID>LongMethod:PurchasePlanPerformanceIntegrationTest.kt:PurchasePlanPerformanceIntegrationTest$private fun executePurchase: PurchaseExecution</ID>
+    <ID>LongMethod:RescheduleBatchStreamController.kt:RescheduleBatchStreamController$@Operation(summary = "Stream batch closure reschedule progress via SSE") @ApiResponses( ApiResponse(responseCode = "200", description = "SSE stream started"), ApiResponse(responseCode = "400", description = "Invalid parameters"), ) @GetMapping("/batch/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE]) fun streamBatchReschedule: SseEmitter</ID>
+    <ID>LongMethod:RescheduleBatchStreamControllerTest.kt:RescheduleBatchStreamControllerTest$@BeforeEach fun setup</ID>
+    <ID>LongMethod:RescheduleControllerPrivacyTest.kt:RescheduleControllerPrivacyTest$@Test fun `reschedule logs redact tenant identity across all paths`</ID>
+    <ID>LongMethod:RescheduleControllerTest.kt:RescheduleControllerTest$@BeforeEach fun setup</ID>
+    <ID>LongMethod:SchedulingPolicyActivationConcurrencyTest.kt:SchedulingPolicyActivationConcurrencyTest$@Test fun `concurrent activations produce one generation one completed command and one event`</ID>
+    <ID>LongMethod:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$fun schedule: SchedulingPolicyActivationCommandRecord</ID>
+    <ID>LongMethod:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$private fun activateInternal: SchedulingPolicyActivationResult</ID>
+    <ID>LongMethod:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$private fun resolveActivationCommand: SchedulingPolicyActivationCommandRecord</ID>
+    <ID>LongMethod:SchedulingPolicyCommandServiceTest.kt:SchedulingPolicyCommandServiceTest$@Test fun `scheduled activation requires durable command evidence for service actor`</ID>
+    <ID>LongMethod:SchedulingPolicyDialectIntegrationTest.kt:SchedulingPolicyDialectIntegrationTest$@Test fun `overlap effective snapshot and preview lease semantics remain dialect neutral`</ID>
+    <ID>LongMethod:SchedulingPolicyOpenApiTest.kt:SchedulingPolicyOpenApiTest$@Test fun `generated contract publishes exact scoped routes without authority escalation fields`</ID>
+    <ID>LongMethod:SchedulingPolicyPerformanceIntegrationTest.kt:SchedulingPolicyPerformanceIntegrationTest$@Test fun `ten thousand row policy hot paths use bounded indexed reads`</ID>
+    <ID>LongMethod:SchedulingPolicyPerformanceIntegrationTest.kt:SchedulingPolicyPerformanceIntegrationTest$private fun seedPlannedTreatments</ID>
+    <ID>LongMethod:SchedulingPolicyPerformanceIntegrationTest.kt:SchedulingPolicyPerformanceIntegrationTest$private fun seedScopes</ID>
+    <ID>LongMethod:SchedulingPolicyPreviewService.kt:SchedulingPolicyPreviewService$private fun processClaimed: SchedulingPolicyPreviewResult</ID>
+    <ID>LongMethod:SchedulingPolicyWorker.kt:SchedulingPolicyWorker$private fun processActivation</ID>
+    <ID>LongMethod:SecurityConfig.kt:SecurityConfig$@Bean fun securityFilterChain: SecurityFilterChain</ID>
+    <ID>LongMethod:SlotControllerTest.kt:SlotControllerTest$@BeforeEach fun setup</ID>
+    <ID>LongMethod:TenantContextFilter.kt:TenantContextFilter$override fun doFilterInternal</ID>
+    <ID>LongMethod:TenantSchedulingPolicyControllerTest.kt:TenantSchedulingPolicyControllerTest$@Test fun `tenant lifecycle routes preserve trusted scope actor CAS evidence and idempotency headers`</ID>
+    <ID>LongMethod:VisitCommitmentCommandTestSupport.kt:VisitCommitmentCommandTestSupport$private fun insertClinic: ClinicFixture</ID>
+    <ID>LongMethod:VisitCommitmentCommandTestSupport.kt:VisitCommitmentCommandTestSupport$protected fun proposalInput: VisitProposalInput</ID>
+    <ID>LongMethod:VisitCommitmentConcurrencyTest.kt:VisitCommitmentConcurrencyTest$@Test fun `같은 변경 proposal 수락과 거부는 하나의 종결 결정만 반영한다`</ID>
+    <ID>LongMethod:VisitCommitmentConcurrencyTest.kt:VisitCommitmentConcurrencyTest$@Test fun `같은 변경 proposal 수락과 만료는 하나의 종결 결정만 반영한다`</ID>
+    <ID>LongMethod:VisitCommitmentConcurrencyTest.kt:VisitCommitmentConcurrencyTest$@Test fun `서로 다른 proposal 동시 수락은 하나만 확정하고 예약 손실을 만들지 않는다`</ID>
+    <ID>LongMethod:VisitCommitmentLoadIntegrationTest.kt:VisitCommitmentLoadIntegrationTest$@Test fun `100 concurrent confirmations keep one allocation zero deadlocks and p95 below two seconds`</ID>
+    <ID>LongMethod:VisitCommitmentMigrationTestSupport.kt:VisitCommitmentMigrationTestSupport$fun verifyVisitCommitmentMigrations</ID>
+    <ID>LongMethod:VisitCommitmentPerformanceIntegrationTest.kt:VisitCommitmentPerformanceIntegrationTest$@Test fun `PostgreSQL uses bounded indexes for commitment and retention queries`</ID>
+    <ID>LongMethod:VisitCommitmentPerformanceIntegrationTest.kt:VisitCommitmentPerformanceIntegrationTest$private fun seed</ID>
+    <ID>LongMethod:VisitCommitmentRetentionRunnerTest.kt:VisitCommitmentRetentionRunnerTest$@Test fun `runs bounded retention for active clinics and records the operational result`</ID>
+    <ID>LongMethod:WaitlistCoreMigrationTestSupport.kt:WaitlistCoreMigrationTestSupport$private fun verifyIndexes</ID>
+    <ID>LongMethod:WaitlistCoreMigrationTestSupport.kt:WaitlistCoreMigrationTestSupport$private fun verifyNullableActiveKeyReuse</ID>
+    <ID>LongMethod:WaitlistDeliveryMigrationTestSupport.kt:WaitlistDeliveryMigrationTestSupport$private fun verifyIndexes</ID>
+    <ID>LongMethod:WaitlistFencedDeliveryScheduling.kt:WaitlistFencedDeliverySchedulingRunner$fun tick: WaitlistFencedDeliveryTickResult</ID>
+    <ID>LoopWithTooManyJumpStatements:AppointmentCancellationMigrationTestSupport.kt:AppointmentCancellationMigrationTestSupport$while</ID>
+    <ID>LoopWithTooManyJumpStatements:AppointmentMessagingMigrationTestSupport.kt:AppointmentMessagingMigrationTestSupport$while</ID>
+    <ID>LoopWithTooManyJumpStatements:NotificationOutboxMigrationTestSupport.kt:NotificationOutboxMigrationTestSupport$while</ID>
+    <ID>LoopWithTooManyJumpStatements:ProfileReevaluationMigrationTestSupport.kt:ProfileReevaluationMigrationTestSupport$while</ID>
+    <ID>LoopWithTooManyJumpStatements:ProfileReevaluationWorker.kt:ProfileReevaluationWorker$while</ID>
+    <ID>LoopWithTooManyJumpStatements:VisitCommitmentMigrationTestSupport.kt:VisitCommitmentMigrationTestSupport$while</ID>
+    <ID>LoopWithTooManyJumpStatements:WaitlistCoreMigrationTestSupport.kt:WaitlistCoreMigrationTestSupport$while</ID>
+    <ID>LoopWithTooManyJumpStatements:WaitlistDeliveryMigrationTestSupport.kt:WaitlistDeliveryMigrationTestSupport$while</ID>
+    <ID>MagicNumber:ApiCorsProperties.kt:ApiCorsProperties$30</ID>
+    <ID>MagicNumber:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$1_000</ID>
+    <ID>MagicNumber:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$3</ID>
+    <ID>MagicNumber:AppointmentCommitmentCommands.kt:ChangeAppointmentProposalCommand$256</ID>
+    <ID>MagicNumber:AppointmentCommitmentCommands.kt:CommitmentCommandContext$128</ID>
+    <ID>MagicNumber:AppointmentCommitmentCommands.kt:ConfirmedAppointmentProjectionTarget$160</ID>
+    <ID>MagicNumber:AppointmentCommitmentCommands.kt:CustomerAppointmentRequestCommand$256</ID>
+    <ID>MagicNumber:AppointmentCommitmentCommands.kt:DirectAppointmentConfirmationCommand$256</ID>
+    <ID>MagicNumber:AppointmentCommitmentCommands.kt:DirectConfirmationPolicyDecision$64</ID>
+    <ID>MagicNumber:AppointmentCommitmentCommands.kt:ProposalConsentEvidence$128</ID>
+    <ID>MagicNumber:AppointmentCommitmentCommands.kt:ProposalConsentEvidence$64</ID>
+    <ID>MagicNumber:AppointmentCommitmentHttpSupport.kt:201</ID>
+    <ID>MagicNumber:AppointmentCommitmentMetrics.kt:AppointmentCommitmentMetrics$64</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentCeilingProperties$100</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentCeilingProperties$10_000</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentCeilingProperties$20</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentCeilingProperties$200</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentCeilingProperties$2_000</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentCeilingProperties$365</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentCeilingProperties$4_000</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentCeilingProperties$500</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentProperties$30</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentRetryProperties$25</ID>
+    <ID>MagicNumber:AppointmentCommitmentProperties.kt:AppointmentCommitmentRetryProperties$3</ID>
+    <ID>MagicNumber:AppointmentCommitmentRequests.kt:ConsentEvidenceRequest$128</ID>
+    <ID>MagicNumber:AppointmentCommitmentRequests.kt:ConsentEvidenceRequest$20</ID>
+    <ID>MagicNumber:AppointmentIdempotencyProperties.kt:AppointmentIdempotencyProperties$24</ID>
+    <ID>MagicNumber:AppointmentNotificationWriter.kt:DefaultAppointmentNotificationWriter$24</ID>
+    <ID>MagicNumber:AppointmentPlanController.kt:AppointmentPlanController$128</ID>
+    <ID>MagicNumber:AppointmentService.kt:255</ID>
+    <ID>MagicNumber:AppointmentStatsProjectionRepository.kt:AppointmentStatsProjectionRepository$128</ID>
+    <ID>MagicNumber:BookingReliabilityCanaryReadiness.kt:BookingReliabilityCanaryReadiness$1_000</ID>
+    <ID>MagicNumber:BookingReliabilityCanaryReadiness.kt:BookingReliabilityCanaryReadiness$24</ID>
+    <ID>MagicNumber:BookingReliabilityHealthIndicator.kt:BookingReliabilityHealthIndicator$30</ID>
+    <ID>MagicNumber:BookingReliabilityProperties.kt:BookingReliabilityProperties$5</ID>
+    <ID>MagicNumber:BookingReliabilityRetentionService.kt:BookingReliabilityRetentionRequest$32</ID>
+    <ID>MagicNumber:BookingReliabilityRetryPolicy.kt:BookingReliabilityRetryPolicy$10</ID>
+    <ID>MagicNumber:BookingReliabilityRetryPolicy.kt:BookingReliabilityRetryPolicy$5</ID>
+    <ID>MagicNumber:CatalogPayloadSizeFilter.kt:CatalogPayloadSizeFilter$20</ID>
+    <ID>MagicNumber:ClinicKeysetCursorCodec.kt:ClinicKeysetCursorCodec$3</ID>
+    <ID>MagicNumber:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$24</ID>
+    <ID>MagicNumber:GlobalExceptionHandler.kt:GlobalExceptionHandler$1_000L</ID>
+    <ID>MagicNumber:GlobalExceptionHandler.kt:GlobalExceptionHandler$999L</ID>
+    <ID>MagicNumber:JwtSecurityProperties.kt:JwtSecurityProperties$30</ID>
+    <ID>MagicNumber:JwtSecurityProperties.kt:JwtSecurityProperties$5</ID>
+    <ID>MagicNumber:PatientAuthenticationController.kt:PatientAuthenticationController$201</ID>
+    <ID>MagicNumber:PatientAuthenticationProperties.kt:PatientAuthenticationProperties$100</ID>
+    <ID>MagicNumber:PatientAuthenticationProperties.kt:PatientAuthenticationProperties$128</ID>
+    <ID>MagicNumber:PatientAuthenticationProperties.kt:PatientAuthenticationProperties$24</ID>
+    <ID>MagicNumber:PatientAuthenticationProperties.kt:PatientAuthenticationProperties$50</ID>
+    <ID>MagicNumber:PatientAuthenticationProperties.kt:PatientAuthenticationProperties$8</ID>
+    <ID>MagicNumber:PatientCancellationHistoryBackfillRunner.kt:PatientCancellationHistoryBackfillRunner$16</ID>
+    <ID>MagicNumber:PatientCancellationHistoryService.kt:PatientCancellationHistoryService$30L</ID>
+    <ID>MagicNumber:PatientCancellationHistoryService.kt:PatientCancellationHistoryService$60L</ID>
+    <ID>MagicNumber:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$0x7f</ID>
+    <ID>MagicNumber:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$30</ID>
+    <ID>MagicNumber:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$3650</ID>
+    <ID>MagicNumber:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$4</ID>
+    <ID>MagicNumber:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$5</ID>
+    <ID>MagicNumber:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$60</ID>
+    <ID>MagicNumber:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$8</ID>
+    <ID>MagicNumber:PatientHistoryEtagCodec.kt:PatientHistoryEtagCodec$128</ID>
+    <ID>MagicNumber:PatientHistoryEtagCodec.kt:PatientHistoryEtagCodec$4</ID>
+    <ID>MagicNumber:PatientHistoryEtagCodec.kt:PatientHistoryEtagCodec$50</ID>
+    <ID>MagicNumber:PatientHistoryEtagCodec.kt:PatientHistoryEtagCodec$65_535</ID>
+    <ID>MagicNumber:PatientHistoryEtagCodec.kt:PatientHistoryEtagCodec$8</ID>
+    <ID>MagicNumber:PatientHistoryProperties.kt:PatientHistoryProperties$500</ID>
+    <ID>MagicNumber:PatientHistoryReferenceCodec.kt:PatientHistoryReferenceCodec$3</ID>
+    <ID>MagicNumber:PatientHistoryReferenceCodec.kt:PatientHistoryReferenceCodec$32</ID>
+    <ID>MagicNumber:PatientHistoryReferenceCodec.kt:PatientHistoryReferenceCodec$4</ID>
+    <ID>MagicNumber:PatientHistoryReferenceCodec.kt:PatientHistoryReferenceCodec$8</ID>
+    <ID>MagicNumber:PatientHistoryTokenRegistry.kt:InMemoryPatientHistoryTokenRegistry$30</ID>
+    <ID>MagicNumber:PlanFoundationProperties.kt:PlanFoundationProperties$15</ID>
+    <ID>MagicNumber:PlanFoundationProperties.kt:PlanFoundationProperties$5</ID>
+    <ID>MagicNumber:ProfileAssessmentClient.kt:FetchProfileAssessment$512</ID>
+    <ID>MagicNumber:ProfileReevaluationAdminService.kt:ProfileReevaluationAdminCommand$500</ID>
+    <ID>MagicNumber:ProfileReevaluationAdminService.kt:ProfileReevaluationAdminService$100</ID>
+    <ID>MagicNumber:ProfileReevaluationAdminService.kt:ProfileReevaluationAdminService$30</ID>
+    <ID>MagicNumber:ProfileReevaluationDecisionService.kt:ProfileReevaluationDecisionCommand$160</ID>
+    <ID>MagicNumber:ProfileReevaluationDecisionService.kt:ProfileReevaluationDecisionCommand$512</ID>
+    <ID>MagicNumber:ProfileReevaluationDispatcher.kt:ProfileReevaluationCatchUpRunner$100</ID>
+    <ID>MagicNumber:ProfileReevaluationDispatcher.kt:ProfileReevaluationDispatcher$160</ID>
+    <ID>MagicNumber:ProfileReevaluationHealthIndicator.kt:ProfileReevaluationHealthIndicator$30</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileAssessmentProperties$1024</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileAssessmentProperties$1_048_576</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileAssessmentProperties$3</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileAssessmentProperties$64</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileReevaluationProperties$10</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileReevaluationProperties$100</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileReevaluationProperties$10_000</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileReevaluationProperties$15</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileReevaluationProperties$20</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileReevaluationProperties$30</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileReevaluationProperties$5</ID>
+    <ID>MagicNumber:ProfileReevaluationProperties.kt:ProfileReevaluationProperties$64</ID>
+    <ID>MagicNumber:ProfileReevaluationRetryPolicy.kt:ProfileReevaluationRedrivePolicy$30</ID>
+    <ID>MagicNumber:ProfileReevaluationRetryPolicy.kt:ProfileReevaluationRetryPolicy$15</ID>
+    <ID>MagicNumber:ProfileReevaluationWorker.kt:ProfileReevaluationWorker$10</ID>
+    <ID>MagicNumber:ProfileReevaluationWorker.kt:ProfileReevaluationWorker$100</ID>
+    <ID>MagicNumber:RescheduleBatchStreamController.kt:RescheduleBatchStreamController$30</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$0xfc</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$0xfe</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$100</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$127</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$16</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$224</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$4</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$443</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$64</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$200</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$256</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$299</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$300</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$399</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$401</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$403</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$408</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$425</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$429</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$500</ID>
+    <ID>MagicNumber:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$599</ID>
+    <ID>MagicNumber:SchedulingPolicyAdministrationService.kt:SchedulingPolicyAdministrationService$1_000</ID>
+    <ID>MagicNumber:SchedulingPolicyApiException.kt:SchedulingPolicyApiException$500</ID>
+    <ID>MagicNumber:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$160</ID>
+    <ID>MagicNumber:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$30</ID>
+    <ID>MagicNumber:SchedulingPolicyProperties.kt:SchedulingPolicyProperties$10</ID>
+    <ID>MagicNumber:SchedulingPolicyProperties.kt:SchedulingPolicyProperties$30</ID>
+    <ID>MagicNumber:SchedulingPolicyProperties.kt:SchedulingPolicyProperties$5</ID>
+    <ID>MagicNumber:SchedulingPolicyProperties.kt:SchedulingPolicyProperties$60</ID>
+    <ID>MagicNumber:SchedulingPolicyWorker.kt:SchedulingPolicyWorker.Companion$33</ID>
+    <ID>MagicNumber:SchedulingPolicyWorker.kt:SchedulingPolicyWorker.Companion$4265267296055464877L</ID>
+    <ID>MagicNumber:SchedulingPolicyWorker.kt:SchedulingPolicyWorker.Companion$49064778989728563L</ID>
+    <ID>MagicNumber:SecurityErrorResponseWriter.kt:SecurityErrorResponseWriter$0x20</ID>
+    <ID>MagicNumber:SecurityErrorResponseWriter.kt:SecurityErrorResponseWriter$16</ID>
+    <ID>MagicNumber:SecurityErrorResponseWriter.kt:SecurityErrorResponseWriter$4</ID>
+    <ID>MagicNumber:ServiceConfig.kt:ServiceConfig$32</ID>
+    <ID>MagicNumber:TenantSchedulingPolicyController.kt:1_000L</ID>
+    <ID>MagicNumber:TenantSchedulingPolicyController.kt:999L</ID>
+    <ID>MagicNumber:TestDataSeeder.kt:TestDataSeederConfig$30</ID>
+    <ID>MagicNumber:VisitCommitmentRetentionRunner.kt:VisitCommitmentRetentionRunner$5_000</ID>
+    <ID>MagicNumber:VisitCommitmentRetentionService.kt:VisitCommitmentRetentionService$5_000</ID>
+    <ID>MagicNumber:WaitlistApplicationService.kt:24</ID>
+    <ID>MagicNumber:WaitlistApplicationService.kt:ConfirmWaitlistOfferCommand$64</ID>
+    <ID>MagicNumber:WaitlistApplicationService.kt:WaitlistOfferConfirmationCommand$64</ID>
+    <ID>MagicNumber:WaitlistController.kt:100</ID>
+    <ID>MagicNumber:WaitlistDeliveryHealthIndicator.kt:WaitlistDeliveryHealthIndicator$5</ID>
+    <ID>MagicNumber:WaitlistDeliveryProperties.kt:WaitlistDeliveryProperties$100</ID>
+    <ID>MagicNumber:WaitlistDeliveryProperties.kt:WaitlistDeliveryProperties$25</ID>
+    <ID>MagicNumber:WaitlistDeliveryProperties.kt:WaitlistDeliveryProperties$30</ID>
+    <ID>MagicNumber:WaitlistDeliveryProperties.kt:WaitlistDeliveryProperties$50</ID>
+    <ID>MagicNumber:WaitlistDeliveryScheduling.kt:WaitlistDeliverySchedulingRunner$160</ID>
+    <ID>MagicNumber:WaitlistFencedLeaderLease.kt:FencedWaitlistLeaderLease$8</ID>
+    <ID>MagicNumber:WaitlistPublicIdCodec.kt:WaitlistPublicIdCodec$4</ID>
+    <ID>MagicNumber:WaitlistRequests.kt:GrantWaitlistRecoveryCreditRequest$100</ID>
+    <ID>MagicNumber:WaitlistRequests.kt:UpsertWaitlistPolicyRequest$100</ID>
+    <ID>MagicNumber:WaitlistRetentionRunner.kt:WaitlistRetentionRequest$100</ID>
+    <ID>MatchingDeclarationName:BookingReliabilityApplicationAdapter.kt:DefaultBookingReliabilityApplicationAdapter : BookingReliabilityApplicationPort</ID>
+    <ID>MatchingDeclarationName:DatabaseConfig.kt:SchemaInitConfig</ID>
+    <ID>MatchingDeclarationName:KeysetPaginationResponse.kt:KeysetPageResponse&lt;T : Serializable> : Serializable</ID>
+    <ID>MatchingDeclarationName:TestDataSeeder.kt:TestDataSeederConfig</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "400", description = "Invalid request", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "401", description = "Missing or invalid Gateway identity", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "403", description = "Administrator or clinic scope rejected", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "403", description = "Administrator, member, or clinic scope rejected", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberScopeMismatch", value = NotificationOpenApiExamples.MEMBER_SCOPE_MISMATCH)])])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "404", description = "Commitment not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "404", description = "Commitment or proposal not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "404", description = "Plan member not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberNotFound", value = NotificationOpenApiExamples.MEMBER_NOT_FOUND)])])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "409", description = "Consent, proposal, or resource conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "409", description = "Policy, idempotency, resource, or ambiguous member reference conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberReferenceAmbiguous", value = NotificationOpenApiExamples.MEMBER_REFERENCE_AMBIGUOUS)])])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "409", description = "Policy, proposal, or resource conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "409", description = "Proposal or idempotency conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "410", description = "Proposal expired", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "410", description = "Proposal or consent expired", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "412", description = "ETag does not match current version", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "422", description = "Consent evidence required or invalid", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "422", description = "No feasible proposal or plan limit exceeded", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "428", description = "Creation precondition missing", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "428", description = "Mutation precondition missing", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "500", description = "Internal scheduling error", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$ApiResponse(responseCode = "503", description = "New appointment intake is disabled or the member directory is unavailable", headers = [Header(name = "Retry-After", description = "Seconds before retrying with the same idempotency key", schema = Schema(type = "integer", example = "5"))], content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberDirectoryUnavailable", value = NotificationOpenApiExamples.MEMBER_DIRECTORY_UNAVAILABLE)])])</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$description = "Patients may cancel with a registered reason code. ADMIN/STAFF may also provide a bounded patient-facing detail."</ID>
+    <ID>MaxLineLength:AdminAppointmentController.kt:AdminAppointmentController$description = "Releases a held initial proposal or preserves the current confirmation for an expired change proposal."</ID>
+    <ID>MaxLineLength:ApiDependencyBoundaryContractTest.kt:ApiDependencyBoundaryContractTest$val appointmentWriter = read("appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/notification/AppointmentNotificationWriter.kt")</ID>
+    <ID>MaxLineLength:ApiDependencyBoundaryContractTest.kt:ApiDependencyBoundaryContractTest$val recoveryStore = read("appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/notification/JdbcAppointmentReminderRecoveryStore.kt")</ID>
+    <ID>MaxLineLength:ApiDependencyBoundaryContractTest.kt:ApiDependencyBoundaryContractTest$val serviceConfig = read("appointment-api/src/main/kotlin/io/bluetape4k/clinic/appointment/api/config/ServiceConfig.kt")</ID>
+    <ID>MaxLineLength:AppointmentCancellationMigrationTestSupport.kt:AppointmentCancellationMigrationTestSupport$check</ID>
+    <ID>MaxLineLength:AppointmentCancellationMigrationTestSupport.kt:AppointmentCancellationMigrationTestSupport$private</ID>
+    <ID>MaxLineLength:AppointmentCommitmentApplicationWiringTest.kt:AppointmentCommitmentApplicationWiringTest$jdbcUrl = "jdbc:h2:mem:commitment_wiring_${System.nanoTime()};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"</ID>
+    <ID>MaxLineLength:AppointmentCommitmentConsentEvidenceVerifier.kt:AppointmentCommitmentConsentEvidenceVerifier$fun</ID>
+    <ID>MaxLineLength:AppointmentCommitmentMetricsTest.kt:AppointmentCommitmentMetricsTest$registry.find("appointment.commitment.allocation.conflict").counter().shouldNotBeNull().count() shouldBeEqualTo 1.0</ID>
+    <ID>MaxLineLength:AppointmentCommitmentMetricsTest.kt:AppointmentCommitmentMetricsTest$registry.find("appointment.commitment.cancellation.latency").timer().shouldNotBeNull().count() shouldBeEqualTo 1L</ID>
+    <ID>MaxLineLength:AppointmentCommitmentMetricsTest.kt:AppointmentCommitmentMetricsTest$registry.find("appointment.commitment.migration.rejected").counter().shouldNotBeNull().count() shouldBeEqualTo 1.0</ID>
+    <ID>MaxLineLength:AppointmentCommitmentPlanningResolvers.kt:FailClosedAppointmentCommitmentPlanningResolver$override</ID>
+    <ID>MaxLineLength:AppointmentCommitmentQueryController.kt:AppointmentCommitmentQueryController$content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]</ID>
+    <ID>MaxLineLength:AppointmentCommitmentSecurityIntegrationTest.kt:AppointmentCommitmentSecurityIntegrationTest$body = "{\"evidence\":{\"evidenceAuthority\":\"tenant-default:consent-service\",\"evidenceId\":\"ev_01J1M6Y6XRK8N0W2M3P4Q5R6S7\"}}"</ID>
+    <ID>MaxLineLength:AppointmentCommitmentSecurityIntegrationTest.kt:AppointmentCommitmentSecurityIntegrationTest$body = "{\"proposalId\":31,\"evidence\":{\"evidenceAuthority\":\"tenant-default:consent-service\",\"evidenceId\":\"ev_01J1M6Y6XRK8N0W2M3P4Q5R6S7\"}}"</ID>
+    <ID>MaxLineLength:AppointmentConsumerMigrationContractTest.kt:AppointmentConsumerMigrationContractTest$setOf("TENANT_GROUP_ID", "CLINIC_ID", "EVENT_DATE", "STATUS", "APPOINTMENT_COUNT", "LAST_EVENT_VERSION")</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$@Parameter(description = "Cancellation reason", required = false) @RequestParam(required = false) reason: String?</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$@Parameter(description = "End date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) endDate: LocalDate</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$@Parameter(description = "Start date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) startDate: LocalDate</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$OApiResponse(responseCode = "200", description = "Cancellation and durable outbox intent committed; Kafka delivery is asynchronous")</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$OApiResponse(responseCode = "200", description = "Existing appointment replayed; the durable outbox intent already committed")</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$OApiResponse(responseCode = "200", description = "Status mutation and durable outbox intent committed; Kafka delivery is asynchronous")</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$OApiResponse(responseCode = "201", description = "Appointment and durable outbox intent committed; Kafka delivery is asynchronous")</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$OApiResponse(responseCode = "403", description = "Member or clinic scope rejected", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberScopeMismatch", value = NotificationOpenApiExamples.MEMBER_SCOPE_MISMATCH)])])</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$OApiResponse(responseCode = "404", description = "Member not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberNotFound", value = NotificationOpenApiExamples.MEMBER_NOT_FOUND)])])</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$OApiResponse(responseCode = "409", description = "Scheduling, idempotency, or ambiguous member reference conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberReferenceAmbiguous", value = NotificationOpenApiExamples.MEMBER_REFERENCE_AMBIGUOUS)])])</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$OApiResponse(responseCode = "422", description = "Verified member identifier required", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "verifiedMemberRequired", value = NotificationOpenApiExamples.MEMBER_ID_REQUIRED)])])</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$OApiResponse(responseCode = "503", description = "Member directory or notification enqueue unavailable; retry the same idempotency key after the indicated delay", headers = [Header(name = "Retry-After", description = "Seconds before retrying with the same idempotency key", schema = Schema(type = "integer", example = "5"))], content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberDirectoryUnavailable", value = NotificationOpenApiExamples.MEMBER_DIRECTORY_UNAVAILABLE)])])</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$OApiResponse(responseCode = "503", description = "Notification enqueue unavailable", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AppointmentController.kt:AppointmentController$description = "Legacy creation requires a verified memberId by default. A missing memberId is accepted only for an expiring clinic-scoped OBSERVE transition exception; patient name and phone never replace it. A successful 2xx response means the appointment mutation and its durable outbox intent committed; Kafka delivery is asynchronous."</ID>
+    <ID>MaxLineLength:AppointmentControllerPrivacyTest.kt:AppointmentControllerPrivacyTest$every { appointmentService.create(any(), any(), any(), any(), any()) } throws IllegalStateException("stop after create log")</ID>
+    <ID>MaxLineLength:AppointmentControllerPrivacyTest.kt:AppointmentControllerPrivacyTest$every { appointmentService.getScope(appointmentId, tenantId) } throws IllegalStateException("stop after mutation log")</ID>
+    <ID>MaxLineLength:AppointmentControllerPrivacyTest.kt:AppointmentControllerPrivacyTest$kotlin.runCatching { runBlocking { controller.updateStatus(tenantCode, appointmentId, UpdateStatusRequest("CONFIRMED"), request) } }</ID>
+    <ID>MaxLineLength:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentFakeIdempotencyApplication$key.any { character -> character.code !in 0x21..0x7e }</ID>
+    <ID>MaxLineLength:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentFakeIdempotencyApplication.Action$Waiter : Action</ID>
+    <ID>MaxLineLength:AppointmentNotificationWriter.kt:DefaultAppointmentNotificationWriter$cancellationReasonDetail = reasonDetail.takeIf { cancellationSchemaVersion == NotificationOutboxEnvelope.CURRENT_SCHEMA_VERSION }</ID>
+    <ID>MaxLineLength:AppointmentNotificationWriterTest.kt:AppointmentNotificationWriterTest$(cancelledEnvelope.parameters as AppointmentCancelledParameters).cancellationReasonCode?.value</ID>
+    <ID>MaxLineLength:AppointmentNotificationWriterTest.kt:AppointmentNotificationWriterTest$val</ID>
+    <ID>MaxLineLength:AppointmentNotificationWriterTest.kt:AppointmentNotificationWriterTest$val envelope = NotificationOutboxCodec().decode(requireNotNull(row[NotificationOutboxEvents.parametersJson]))</ID>
+    <ID>MaxLineLength:AppointmentNotificationWriterTest.kt:AppointmentNotificationWriterTest$val rescheduled = rows.single { it[NotificationOutboxEvents.notificationSlot] == NotificationSlot.RESCHEDULED }</ID>
+    <ID>MaxLineLength:AppointmentPlanController.kt:AppointmentPlanController$OpenApiResponse(responseCode = "200", description = "Plan found", content = [Content(mediaType = "application/json", schema = Schema(implementation = AppointmentPlanApiResponse::class))])</ID>
+    <ID>MaxLineLength:AppointmentPlanController.kt:AppointmentPlanController$OpenApiResponse(responseCode = "400", description = "Invalid path parameter", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AppointmentPlanController.kt:AppointmentPlanController$OpenApiResponse(responseCode = "401", description = "Missing or invalid bearer token", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AppointmentPlanController.kt:AppointmentPlanController$OpenApiResponse(responseCode = "403", description = "Authenticated caller lacks tenant or clinic read authority", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AppointmentPlanController.kt:AppointmentPlanController$OpenApiResponse(responseCode = "404", description = "Plan hidden by scope or feature disabled", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AppointmentPlanController.kt:AppointmentPlanController$OpenApiResponse(responseCode = "500", description = "Internal scheduling error", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:AppointmentPlanControllerTest.kt:AppointmentPlanDisabledControllerTest$"$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{sourcePurchaseAuthority}/{sourcePurchaseId}'].get.responses['$status'].content['application/json'].schema['\$ref']"</ID>
+    <ID>MaxLineLength:AppointmentPlanControllerTest.kt:AppointmentPlanDisabledControllerTest$"$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/by-purchase/{sourcePurchaseAuthority}/{sourcePurchaseId}'].get.responses['200'].content['application/json'].schema['\$ref']"</ID>
+    <ID>MaxLineLength:AppointmentPlanControllerTest.kt:AppointmentPlanDisabledControllerTest$"$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}'].get.responses['$status'].content['application/json'].schema['\$ref']"</ID>
+    <ID>MaxLineLength:AppointmentPlanControllerTest.kt:AppointmentPlanDisabledControllerTest$"$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}'].get.responses['200'].content['application/json'].schema['\$ref']"</ID>
+    <ID>MaxLineLength:AppointmentPlanControllerTest.kt:AppointmentPlanDisabledControllerTest$"$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}'].get.responses['401'].description"</ID>
+    <ID>MaxLineLength:AppointmentPlanControllerTest.kt:AppointmentPlanDisabledControllerTest$"$.paths['/api/{tenantCode}/clinics/{clinicId}/appointment-plans/{planId}'].get.responses['403'].description"</ID>
+    <ID>MaxLineLength:AppointmentService.kt:AppointmentService$internal suspend</ID>
+    <ID>MaxLineLength:AppointmentService.kt:AppointmentService$suspend</ID>
+    <ID>MaxLineLength:AppointmentServiceSpringProxyTest.kt:AppointmentServiceSpringProxyTest.&lt;no name provided>$override</ID>
+    <ID>MaxLineLength:AppointmentServiceSpringProxyTest.kt:AppointmentServiceSpringProxyTest.&lt;no name provided>$override fun cancelled</ID>
+    <ID>MaxLineLength:AppointmentServiceSpringProxyTest.kt:AppointmentServiceSpringProxyTest.&lt;no name provided>$override fun rescheduled</ID>
+    <ID>MaxLineLength:AppointmentServiceSpringProxyTest.kt:AppointmentServiceSpringProxyTest.&lt;no name provided>$override fun statusChanged</ID>
+    <ID>MaxLineLength:AppointmentServiceTransactionContractTest.kt:AppointmentServiceTransactionContractTest$.</ID>
+    <ID>MaxLineLength:AppointmentStatsProjectionConsumer.kt:AppointmentStatsProjectionConsumer$private</ID>
+    <ID>MaxLineLength:AppointmentStatsProjectionConsumerTest.kt:AppointmentStatsProjectionConsumerTest$consumer.handle(envelope("event-other-aggregate", version = 1, tenant = 11, aggregateId = 43), context(tenant = 11))</ID>
+    <ID>MaxLineLength:AppointmentStatsProjectionRepository.kt:AppointmentStatsProjectionRepository$it[AppointmentStatsProjectionTable.appointmentCount] = existing[AppointmentStatsProjectionTable.appointmentCount] + 1L</ID>
+    <ID>MaxLineLength:BookingEligibilityGateTest.kt:BookingEligibilityGateTest.&lt;no name provided>$)</ID>
+    <ID>MaxLineLength:BookingReliabilityApplicationAdapter.kt:DefaultBookingReliabilityApplicationAdapter.&lt;no name provided>$override</ID>
+    <ID>MaxLineLength:BookingReliabilityContractTest.kt:BookingReliabilityContractTest$methods.getValue("decision").getAnnotation(GetMapping::class.java).value.toList() shouldBeEqualTo listOf("/decision")</ID>
+    <ID>MaxLineLength:BookingReliabilityContractTest.kt:BookingReliabilityContractTest$methods.getValue("override").getAnnotation(PostMapping::class.java).value.toList() shouldBeEqualTo listOf("/override")</ID>
+    <ID>MaxLineLength:BookingReliabilityController.kt:BookingReliabilityController$OpenApiResponse(responseCode = "200", content = [Content(schema = Schema(implementation = BookingReliabilityDecisionResponse::class))])</ID>
+    <ID>MaxLineLength:BookingReliabilityMigrationTestSupport.kt:BookingReliabilityMigrationTestSupport$listOf("patient_name", "patient_phone", "signature", "raw_payload", "payload_json", "patient_reference_fingerprint")</ID>
+    <ID>MaxLineLength:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest$put("cleanupOwnership", "test finally blocks exact Redis keys and temporary Kafka topic; singleton launchers own containers")</ID>
+    <ID>MaxLineLength:CatalogPayloadSizeFilter.kt:CatalogPayloadSizeFilter$"""{"success":false,"data":null,"error":"${error.safeMessage}","errorCode":"${error.code}","correlationId":"$correlationId"}"""</ID>
+    <ID>MaxLineLength:CatalogPayloadSizeFilter.kt:CatalogPayloadSizeFilter$"""{"success":false,"data":null,"error":"${error.safeMessage}","errorCode":"${error.name}","correlationId":"$correlationId","retryable":false,"action":"${error.action}"}"""</ID>
+    <ID>MaxLineLength:CatalogPayloadSizeFilter.kt:CatalogPayloadSizeFilter.Companion$"^/api/[^/]+/admin/(?:clinics/[^/]+/)?scheduling-policies/(?:drafts|[^/]+/(?:validate|preview|approve|schedule|activate|retire)|activation-commands/[^/]+/replay)$"</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$OpenApiResponse(responseCode = "200", description = "Identical version already exists", content = [Content(mediaType = "application/json", schema = Schema(implementation = CatalogSyncApiResponse::class))])</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$OpenApiResponse(responseCode = "201", description = "Version created", content = [Content(mediaType = "application/json", schema = Schema(implementation = CatalogSyncApiResponse::class))])</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$OpenApiResponse(responseCode = "202", description = "Older version ignored", content = [Content(mediaType = "application/json", schema = Schema(implementation = CatalogSyncApiResponse::class))])</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$OpenApiResponse(responseCode = "400", description = "Invalid identity, bounds, DAG, timestamp, or canonical hash", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$OpenApiResponse(responseCode = "401", description = "Missing or invalid bearer token", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$OpenApiResponse(responseCode = "403", description = "Authenticated caller lacks tenant or catalog-source write authority", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$OpenApiResponse(responseCode = "404", description = "Clinic hidden by tenant boundary or feature disabled", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$OpenApiResponse(responseCode = "409", description = "The version exists with different canonical content", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$OpenApiResponse(responseCode = "413", description = "Catalog payload exceeds the configured size limit", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$OpenApiResponse(responseCode = "500", description = "Internal scheduling error", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CatalogProductSyncController.kt:CatalogProductSyncController$description = "The payload hash is computed from the documented typed canonical form after bounded DAG validation."</ID>
+    <ID>MaxLineLength:CatalogProductSyncControllerTest.kt:CatalogProductSyncControllerTest$"$.paths['/api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}'].put.externalDocs.url"</ID>
+    <ID>MaxLineLength:CatalogProductSyncControllerTest.kt:CatalogProductSyncControllerTest$"$.paths['/api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}'].put.responses['$status'].content['application/json'].schema['\$ref']"</ID>
+    <ID>MaxLineLength:CatalogProductSyncControllerTest.kt:CatalogProductSyncControllerTest$"$.paths['/api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}'].put.responses['401'].description"</ID>
+    <ID>MaxLineLength:CatalogProductSyncControllerTest.kt:CatalogProductSyncControllerTest$"$.paths['/api/{tenantCode}/clinics/{clinicId}/catalog-sources/{sourceAuthority}/catalog-products/{productId}/versions/{catalogVersion}'].put.responses['403'].description"</ID>
+    <ID>MaxLineLength:CatalogProductSyncControllerTest.kt:CatalogProductSyncDisabledControllerTest$.</ID>
+    <ID>MaxLineLength:CatalogProductSyncSecurityIntegrationTest.kt:CatalogProductSyncSecurityIntegrationTest$.</ID>
+    <ID>MaxLineLength:ClinicKeysetIndexAssessmentTest.kt:ClinicKeysetIndexAssessmentTest$"DELETE FROM scheduling_clinics WHERE id >= $CLINIC_ID_BASE AND id &lt; ${CLINIC_ID_BASE + CLINIC_COUNT}"</ID>
+    <ID>MaxLineLength:ClinicKeysetIndexAssessmentTest.kt:ClinicKeysetIndexAssessmentTest$"SELECT version(), current_setting('server_version'), current_setting('shared_buffers'), current_setting('random_page_cost')"</ID>
+    <ID>MaxLineLength:ClinicKeysetIndexAssessmentTest.kt:ClinicKeysetIndexAssessmentTest$"baselineReadP95Ms=${format(percentile(evidence.baseline.plans.map { it.executionTimeMillis }, 0.95))} "</ID>
+    <ID>MaxLineLength:ClinicKeysetIndexAssessmentTest.kt:ClinicKeysetIndexAssessmentTest$"candidateReadP95Ms=${format(percentile(evidence.candidate.plans.map { it.executionTimeMillis }, 0.95))} "</ID>
+    <ID>MaxLineLength:ClinicKeysetIndexAssessmentTest.kt:ClinicKeysetIndexAssessmentTest$appendLine("postgresqlImage=${io.bluetape4k.testcontainers.database.PostgreSQLServer.IMAGE}:${io.bluetape4k.testcontainers.database.PostgreSQLServer.TAG}")</ID>
+    <ID>MaxLineLength:ClinicKeysetIndexAssessmentTest.kt:ClinicKeysetIndexAssessmentTest.Companion$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/integration/ClinicKeysetIndexAssessmentTest.kt"</ID>
+    <ID>MaxLineLength:ClinicKeysetIndexAssessmentTest.kt:ClinicKeysetIndexAssessmentTest.Companion$insertSql = "INSERT INTO scheduling_doctors(id, clinic_id, name, provider_type) VALUES (?, ?, ?, 'DOCTOR')"</ID>
+    <ID>MaxLineLength:ClinicKeysetIndexAssessmentTest.kt:ClinicKeysetIndexAssessmentTest.Companion$insertSql = "INSERT INTO scheduling_equipments(id, clinic_id, name, usage_duration_minutes, quantity) VALUES (?, ?, ?, 30, 1)"</ID>
+    <ID>MaxLineLength:ClinicKeysetIndexAssessmentTest.kt:ClinicKeysetIndexAssessmentTest.Companion$insertSql = "INSERT INTO scheduling_treatment_types(id, clinic_id, name, category, default_duration_minutes, required_provider_type, requires_equipment) VALUES (?, ?, ?, 'TREATMENT', 30, 'DOCTOR', false)"</ID>
+    <ID>MaxLineLength:ClinicKeysetPaginationQueryPlanTest.kt:ClinicKeysetPaginationQueryPlanTest$appendLine("keysetExecutionTimeMs=${round(comparison.keyset.executionTimeMillis * 1000.0) / 1000.0}")</ID>
+    <ID>MaxLineLength:ClinicKeysetPaginationQueryPlanTest.kt:ClinicKeysetPaginationQueryPlanTest$appendLine("offsetExecutionTimeMs=${round(comparison.offset.executionTimeMillis * 1000.0) / 1000.0}")</ID>
+    <ID>MaxLineLength:ClinicKeysetPaginationQueryPlanTest.kt:ClinicKeysetPaginationQueryPlanTest$val keyset = explain(connection, keysetSql, listOf(CLINIC_ID, TENANT_ID, CLINIC_ID, CLINIC_ID, CURSOR_ID, LIMIT))</ID>
+    <ID>MaxLineLength:ClinicSpringDataProjectionPilotTest.kt:ClinicSpringDataProjectionPilotTest$"candidateMedianNs=${cardinalitySamples.filter { it.path == Path.CANDIDATE }.map { it.elapsedNanos }.median()} "</ID>
+    <ID>MaxLineLength:ClinicSpringDataProjectionPilotTest.kt:ClinicSpringDataProjectionPilotTest$"candidateP95Ns=${cardinalitySamples.filter { it.path == Path.CANDIDATE }.map { it.elapsedNanos }.p95()} "</ID>
+    <ID>MaxLineLength:ClinicSpringDataProjectionPilotTest.kt:ClinicSpringDataProjectionPilotTest$"legacyMedianNs=${cardinalitySamples.filter { it.path == Path.LEGACY }.map { it.elapsedNanos }.median()} "</ID>
+    <ID>MaxLineLength:ClinicSpringDataProjectionPilotTest.kt:ClinicSpringDataProjectionPilotTest$"legacyP95Ns=${cardinalitySamples.filter { it.path == Path.LEGACY }.map { it.elapsedNanos }.p95()} "</ID>
+    <ID>MaxLineLength:CreateAppointmentRequest.kt:CreateAppointmentRequest$description = "Opaque member identifier verified by the member directory. It is required by default; omission is accepted only for an expiring clinic-scoped OBSERVE transition exception. Patient name and phone do not replace it."</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$"The service resolves the member mapping from authenticated identity and the appointment plan; the body never carries a member identifier. "</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "400", description = "Invalid request", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "401", description = "Missing or invalid Gateway identity", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "403", description = "Patient or clinic scope rejected", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "403", description = "Patient, member, or clinic scope rejected", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberScopeMismatch", value = NotificationOpenApiExamples.MEMBER_SCOPE_MISMATCH)])])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "404", description = "Commitment or proposal not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "404", description = "Plan member not found", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberNotFound", value = NotificationOpenApiExamples.MEMBER_NOT_FOUND)])])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "409", description = "Idempotency, resource, or ambiguous member reference conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberReferenceAmbiguous", value = NotificationOpenApiExamples.MEMBER_REFERENCE_AMBIGUOUS)])])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "409", description = "Proposal or resource conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "409", description = "Proposal state conflict", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "410", description = "Proposal expired", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "410", description = "Proposal or consent expired", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "412", description = "ETag does not match current version", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "422", description = "Consent evidence required or invalid", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "422", description = "No feasible proposal or plan limit exceeded", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "428", description = "Creation precondition missing", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "428", description = "Mutation precondition missing", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "500", description = "Internal scheduling error", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$ApiResponse(responseCode = "503", description = "New appointment intake is disabled or the member directory is unavailable", headers = [Header(name = "Retry-After", description = "Seconds before retrying with the same idempotency key", schema = Schema(type = "integer", example = "5"))], content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "memberDirectoryUnavailable", value = NotificationOpenApiExamples.MEMBER_DIRECTORY_UNAVAILABLE)])])</ID>
+    <ID>MaxLineLength:CustomerAppointmentController.kt:CustomerAppointmentController$description</ID>
+    <ID>MaxLineLength:DashboardStatsController.kt:DashboardStatsController$@Parameter(description = "End date (ISO)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate?</ID>
+    <ID>MaxLineLength:DashboardStatsController.kt:DashboardStatsController$@Parameter(description = "Start date (ISO)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate?</ID>
+    <ID>MaxLineLength:DashboardStatsController.kt:DashboardStatsController$log.debug { "GET admin appointment stats tenantCode=$tenantCode, clinicId=$clinicId from=$from to=$to statuses=$statuses" }</ID>
+    <ID>MaxLineLength:DashboardStatsControllerTest.kt:DashboardStatsControllerTest$SchemaUtils.createMissingTablesAndColumns(Clinics, Doctors, Equipments, TreatmentTypes, ConsultationTopics, Appointments)</ID>
+    <ID>MaxLineLength:DashboardStatsService.kt:DashboardStatsService$else</ID>
+    <ID>MaxLineLength:DashboardStatsServiceTest.kt:DashboardStatsServiceTest$SchemaUtils.createMissingTablesAndColumns(TenantGroups, Clinics, Doctors, Equipments, TreatmentTypes, ConsultationTopics, Appointments)</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$context = commandContext(actor, access.tenantGroupId, access.clinicId, idempotencyKey, "accept", appointmentId, proposalId, expectedVersion, request)</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$context = commandContext(actor, access.tenantGroupId, access.clinicId, idempotencyKey, "approve", appointmentId, expectedVersion, request)</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$context = commandContext(actor, access.tenantGroupId, access.clinicId, idempotencyKey, "change", appointmentId, expectedVersion, request)</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$context = commandContext(actor, access.tenantGroupId, access.clinicId, idempotencyKey, "decline", appointmentId, proposalId, expectedVersion, request)</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$context = commandContext(actor, planAccess.tenantGroupId, planAccess.clinicId, idempotencyKey, "direct-create", request)</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$context = commandContext(actor, planAccess.tenantGroupId, planAccess.clinicId, idempotencyKey, "request", request)</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationServiceTest.kt:DefaultAppointmentCommitmentApplicationServiceTest$directCreateService.directCreate(adminActor(), "budget-direct-create-01", true, directCreateRequest("budget-direct-create"))</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationServiceTest.kt:DefaultAppointmentCommitmentApplicationServiceTest$service.directCreate(adminActor(), "direct-expired-consent-01", true, directCreateRequest("expired-consent"))</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationServiceTest.kt:DefaultAppointmentCommitmentApplicationServiceTest$service.requestAppointment(patientActor(), "request-direct-confirm-01", true, createAppointmentRequest("direct-confirm"))</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationServiceTest.kt:DefaultAppointmentCommitmentApplicationServiceTest.FakeConsentEvidenceVerifier$sha256("${request.evidence.evidenceAuthority}|${request.evidence.evidenceId}|${request.proposalHash}")</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationServiceTest.kt:DefaultAppointmentCommitmentApplicationServiceTest.FakePlanningResolver$override</ID>
+    <ID>MaxLineLength:DefaultAppointmentCommitmentApplicationServiceTest.kt:DefaultAppointmentCommitmentApplicationServiceTest.FakePlanningResolver$resourceId = "doctor-${this@DefaultAppointmentCommitmentApplicationServiceTest.clinic.doctorId}"</ID>
+    <ID>MaxLineLength:DoctorController.kt:DoctorController$@Parameter(description = "End date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate</ID>
+    <ID>MaxLineLength:DoctorController.kt:DoctorController$@Parameter(description = "Start date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate</ID>
+    <ID>MaxLineLength:DoctorController.kt:DoctorController$val result = transaction { doctorRepository.findPage(TenantClinicScope(tenant.id, clinicId), pageNumber, pageSize) }</ID>
+    <ID>MaxLineLength:EffectiveSchedulingPolicyServiceTest.kt:ExposedEffectivePolicyStoreTest.Companion$"""{"automaticProposalEnabled":true,"maximumProposalDelaySeconds":3600,"preserveConfirmedAppointment":true}"""</ID>
+    <ID>MaxLineLength:EffectiveSchedulingPolicyServiceTest.kt:ExposedEffectivePolicyStoreTest.Companion$"""{"nominalCapacity":10,"overbookingQuota":2,"absoluteBookingLimit":12,"automaticReductionEnabled":true}"""</ID>
+    <ID>MaxLineLength:EffectiveSchedulingPolicyServiceTest.kt:ExposedEffectivePolicyStoreTest.Companion$"""{"priorityWeights":{"RETURN_VISIT":2},"noShowPenalty":5,"sameDayCancellationPenalty":2,"minimumPriorityScore":0}"""</ID>
+    <ID>MaxLineLength:EquipmentController.kt:EquipmentController$val result = transaction { equipmentRepository.findPage(TenantClinicScope(tenant.id, clinicId), pageNumber, pageSize) }</ID>
+    <ID>MaxLineLength:EquipmentUnavailabilityController.kt:EquipmentUnavailabilityController$@Parameter(description = "End date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate</ID>
+    <ID>MaxLineLength:EquipmentUnavailabilityController.kt:EquipmentUnavailabilityController$@Parameter(description = "Start date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate</ID>
+    <ID>MaxLineLength:EquipmentUnavailabilityController.kt:EquipmentUnavailabilityController$log.debug { "DELETE unavailability tenantCode=$tenantCode, id=$id, clinicId=$clinicId, equipmentId=$equipmentId" }</ID>
+    <ID>MaxLineLength:EquipmentUnavailabilityController.kt:EquipmentUnavailabilityController$log.debug { "GET unavailabilities tenantCode=$tenantCode, clinicId=$clinicId, equipmentId=$equipmentId, from=$from, to=$to" }</ID>
+    <ID>MaxLineLength:JdbcAppointmentReminderRecoveryStore.kt:JdbcAppointmentReminderRecoveryStore$if (sameDayEnabled) add(NotificationSlot.REMINDER_SAME_DAY to schedule.startsAt.minus(sameDayReminderLeadTime))</ID>
+    <ID>MaxLineLength:JdbcCaffeineEffectivePolicyPilotBenchmark.kt:JdbcCaffeineEffectivePolicyPilotBenchmark$appendLine(" \"benchmarkFamily\": \"io.bluetape4k.clinic.appointment.api.config.JdbcCaffeineEffectivePolicyPilotBenchmark\",")</ID>
+    <ID>MaxLineLength:JdbcCaffeineEffectivePolicyPilotBenchmark.kt:JdbcCaffeineEffectivePolicyPilotBenchmark$operationBlock = { index -> baselineInvalidation.invalidateClinic(samples[index].key.tenantGroupId, samples[index].key.clinicId) }</ID>
+    <ID>MaxLineLength:JdbcLettuceMasterCachePilotIntegrationTest.kt:JdbcLettuceMasterCachePilotIntegrationTest$equipmentRepository.findByScope(scopeA) shouldBeEqualTo equipmentProbe.findAll(where = equipmentWhere(scopeA))</ID>
+    <ID>MaxLineLength:JdbcLettuceMasterCachePilotIntegrationTest.kt:JdbcLettuceMasterCachePilotIntegrationTest$val unavailableProbe = DoctorJdbcLettuceProbe(unavailableClient, pilotConfig("$DOCTOR_PILOT_PREFIX:unavailable"))</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"""(?m)^import (org\.junit\.jupiter\.api\.Assertions(?:\.\*)?|org\.junit\.jupiter\.api\.assert[A-Z]\w*|kotlin\.test\.assert[A-Z]\w*)"""</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentCommandServiceTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/commitment/AppointmentCommitmentMetricsTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/config/NotificationContractExceptionHandlerTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/BookingReliabilityContractTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/BookingReliabilityDocumentationTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/ClinicSchedulingPolicyControllerTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/SchedulingPolicyOpenApiTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/SchedulingPolicyPreviewJobControllerTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/SchedulingPolicyRequestContractTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/TenantSchedulingPolicyControllerTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/integration/SchedulingPolicyDialectIntegrationTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/notification/AppointmentNotificationWriterTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/policy/ExposedSchedulingPolicyPreviewStoreTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/policy/SchedulingPolicyActivationConcurrencyTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/policy/SchedulingPolicyAdministrationServiceTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/policy/SchedulingPolicyCommandServiceTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/policy/SchedulingPolicyPreviewServiceTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/profile/ProfileAssessmentResilienceTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/profile/ProfileReevaluationEndpointTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/profile/RestClientProfileAssessmentClientTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/security/ProfileReevaluationPrivacyIntegrationTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/service/AppointmentNotificationAtomicityTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-core/src/test/kotlin/io/bluetape4k/clinic/appointment/repository/BookingReliabilityReevaluationJobRepositoryTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-event/src/test/kotlin/io/bluetape4k/clinic/appointment/event/profile/ProfileReevaluationEventServiceTest.kt"</ID>
+    <ID>MaxLineLength:KotlinProductionPatternComplianceTest.kt:KotlinProductionPatternComplianceTest$"appointment-notification/src/test/kotlin/io/bluetape4k/clinic/appointment/notification/persistence/JdbcNotificationOutboxRepositoryTest.kt"</ID>
+    <ID>MaxLineLength:NotificationOperationsController.kt:NotificationOperationsController$OpenApiResponse(responseCode = "200", description = "Notification status found", content = [Content(mediaType = "application/json", examples = [ExampleObject(name = "exhausted", value = NotificationOpenApiExamples.EXHAUSTED_STATUS)])])</ID>
+    <ID>MaxLineLength:NotificationOperationsController.kt:NotificationOperationsController$OpenApiResponse(responseCode = "200", description = "Re-notification batch evaluated", content = [Content(mediaType = "application/json", examples = [ExampleObject(name = "dryRun", value = NotificationOpenApiExamples.RE_NOTIFY_DRY_RUN_RESPONSE)])])</ID>
+    <ID>MaxLineLength:NotificationOperationsController.kt:NotificationOperationsController$OpenApiResponse(responseCode = "503", description = "Notification operation is unavailable", headers = [Header(name = "Retry-After", description = "Seconds before retrying", schema = Schema(type = "integer", example = "5"))], content = [Content(mediaType = "application/json", schema = Schema(implementation = io.bluetape4k.clinic.appointment.api.dto.SchedulingApiErrorResponse::class), examples = [ExampleObject(name = "operationUnavailable", value = NotificationOpenApiExamples.NOTIFICATION_OPERATION_UNAVAILABLE)])])</ID>
+    <ID>MaxLineLength:NotificationOperationsController.kt:NotificationOperationsController$description = "Requires platform and clinic approval references. Start with dryRun=true; reuse the same generation when executing the approved batch."</ID>
+    <ID>MaxLineLength:NotificationOperationsController.kt:NotificationOperationsController$description = "Returns a bounded status and recommended action without member, destination, outbox, attempt, or provider identifiers."</ID>
+    <ID>MaxLineLength:NotificationOperationsController.kt:NotificationOperationsController$examples = [ExampleObject(name = "dryRun", value = NotificationOpenApiExamples.RE_NOTIFY_DRY_RUN_REQUEST)]</ID>
+    <ID>MaxLineLength:NotificationOperationsControllerTest.kt:NotificationOperationsControllerTest$response.jsonPath&lt;String>("$.data.recommendedAction") shouldBeEqualTo NotificationRecommendedAction.WAIT_FOR_RETRY.name</ID>
+    <ID>MaxLineLength:NotificationOperationsControllerTest.kt:NotificationOperationsControllerTest.NotificationOperationsTestConfig$failureCode = io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode.PROVIDER_UNAVAILABLE</ID>
+    <ID>MaxLineLength:NotificationOperationsSecurityIntegrationTest.kt:NotificationOperationsSecurityIntegrationTest$readRequest(token = staffToken(scopes = setOf("notification:read"), allowedTenants = listOf("other"))).assertForbidden()</ID>
+    <ID>MaxLineLength:NotificationOutboxCanaryEvidenceValidatorTest.kt:NotificationOutboxCanaryEvidenceValidator$private</ID>
+    <ID>MaxLineLength:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$RedisEvidence(Containers.Redis.dockerImageName, keyNamespace = "issue-204:canary", leakedKeys = leakedKeys.toInt())</ID>
+    <ID>MaxLineLength:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$exec("UPDATE clinic_notification_outbox SET lease_until = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE id = $id")</ID>
+    <ID>MaxLineLength:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$leaseLost = attempts.count { it[NotificationDeliveryAttempts.outcome] == NotificationDeliveryAttemptOutcome.LEASE_LOST }</ID>
+    <ID>MaxLineLength:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$private</ID>
+    <ID>MaxLineLength:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$retryScheduled = attempts.count { it[NotificationDeliveryAttempts.outcome] == NotificationDeliveryAttemptOutcome.RETRY_SCHEDULED }</ID>
+    <ID>MaxLineLength:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$templateKey = io.bluetape4k.clinic.appointment.event.notification.NotificationTemplateKey("appointment.confirmed")</ID>
+    <ID>MaxLineLength:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$unknownResults = attempts.count { it[NotificationDeliveryAttempts.failureCode] == NotificationFailureCode.DELIVERY_RESULT_UNKNOWN.name }</ID>
+    <ID>MaxLineLength:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$val health = requireNotNull(NotificationHealthConfiguration().notificationOutboxActuatorHealth(indicator).health())</ID>
+    <ID>MaxLineLength:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest.CountingWorkStore$)</ID>
+    <ID>MaxLineLength:NotificationOutboxMigrationTestSupport.kt:NotificationOutboxMigrationTestSupport$if (actualName != index.lowercase() &amp;&amp; !actualName.startsWith("${index.lowercase()}_index_")) continue</ID>
+    <ID>MaxLineLength:NotificationOutboxMigrationTestSupport.kt:NotificationOutboxMigrationTestSupport$insertOutbox(connection, sendableRow(id = 2L, status = "SENT").copy(appointmentId = null, memberId = null, parametersJson = null))</ID>
+    <ID>MaxLineLength:NotificationOutboxQueryPlanTest.kt:NotificationOutboxQueryPlanTest$"ready clinic cursor" to setOf("idx_notification_outbox_ready_clinic_cursor", "idx_notification_outbox_pending_oldest")</ID>
+    <ID>MaxLineLength:NotificationOutboxQueryPlanTest.kt:NotificationOutboxQueryPlanTest$"ready within clinic" to setOf("idx_notification_outbox_ready_within_clinic", "idx_notification_outbox_ready_clinic_cursor")</ID>
+    <ID>MaxLineLength:NotificationReminderRecoveryWiringTest.kt:NotificationReminderRecoveryWiringTest$jdbcUrl = "jdbc:h2:mem:reminder_wiring_${Base58.randomString(8)};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE"</ID>
+    <ID>MaxLineLength:PatientAuthenticationControllerTest.kt:PatientAuthenticationControllerTest$"""{"displayName":"홍길동","password":"correct horse battery staple","identifiers":[{"key":"EMAIL","value":"patient@example.com"}]}"""</ID>
+    <ID>MaxLineLength:PatientAuthenticationControllerTest.kt:PatientAuthenticationControllerTest$"""{"identifier":{"key":"PHONE","value":"010-1234-5678"},"password":"correct horse battery staple"}"""</ID>
+    <ID>MaxLineLength:PatientAuthenticationMigrationTestSupport.kt:PatientAuthenticationMigrationTestSupport$check</ID>
+    <ID>MaxLineLength:PatientAuthenticationService.kt:PatientAuthenticationService$if</ID>
+    <ID>MaxLineLength:PatientAuthenticationServiceTest.kt:PatientAuthenticationServiceTest$JwtSecurityProperties(secret = testSecret, issuer = "appointment-auth-service", audience = "appointment-api")</ID>
+    <ID>MaxLineLength:PatientAuthenticationServiceTest.kt:PatientAuthenticationServiceTest$registerRequest(listOf(PatientLoginIdentifierRequest(PatientLoginIdentifierKey.EMAIL, "same@example.com")))</ID>
+    <ID>MaxLineLength:PatientHistoryProperties.kt:PatientHistoryProperties$referenceKeySecrets.keys.forEach { require(KEY_ID.matches(it)) { "patient history reference key id is invalid" } }</ID>
+    <ID>MaxLineLength:PatientHistoryReferenceCodec.kt:PatientHistoryReferenceCodec$val digest = hmac(activeKey.secret, canonicalBytes(tenantGroupId, patientScopeFingerprint, appointmentId, detailId))</ID>
+    <ID>MaxLineLength:PatientHistoryReferenceCodec.kt:PatientHistoryReferenceCodec$val supplied = try { Base64.getUrlDecoder().decode(parts[2]) } catch (_: IllegalArgumentException) { return false }</ID>
+    <ID>MaxLineLength:PlanFoundationApiException.kt:PlanFoundationError$VALIDATION_FAILED : PlanFoundationError</ID>
+    <ID>MaxLineLength:ProfileAssessmentResilienceTest.kt:ProfileAssessmentResilienceTest$future.get(5, TimeUnit.SECONDS).code shouldBeEqualTo ProfileAssessmentFailureCode.UPSTREAM_UNAVAILABLE</ID>
+    <ID>MaxLineLength:ProfileAssessmentResilienceTest.kt:ProfileAssessmentResilienceTest$registry.find(ProfileAssessmentClientMetrics.IN_FLIGHT).gauge().shouldNotBeNull().value() shouldBeEqualTo 0.0</ID>
+    <ID>MaxLineLength:ProfileAssessmentResilienceTest.kt:ProfileAssessmentResilienceTest$registry.find(ProfileAssessmentClientMetrics.IN_FLIGHT).gauge().shouldNotBeNull().value() shouldBeEqualTo 2.0</ID>
+    <ID>MaxLineLength:ProfileReevaluationDispatcherTest.kt:ProfileReevaluationDispatcherTest.&lt;no name provided>$override suspend</ID>
+    <ID>MaxLineLength:PurchasePlanPerformanceIntegrationTest.kt:PurchasePlanPerformanceIntegrationTest$println("PURCHASE_PLAN_SQL_DEBUG sample=$sample index=$index sql=${statement.replace(Regex("\\s+"), " ")}")</ID>
+    <ID>MaxLineLength:RescheduleBatchStreamController.kt:RescheduleBatchStreamController$log.debug { "GET reschedule batch stream tenantCode=$tenantCode, clinic=$clinicId, date=$closureDate, searchDays=$searchDays" }</ID>
+    <ID>MaxLineLength:RescheduleController.kt:RescheduleController$@Parameter(description = "Number of days to search for alternative slots") @RequestParam(defaultValue = "7") searchDays: Int</ID>
+    <ID>MaxLineLength:RescheduleControllerPrivacyTest.kt:RescheduleControllerPrivacyTest$every { closureService.confirmReschedule(any(), any(), any(), any()) } throws IllegalStateException("stop after confirm log")</ID>
+    <ID>MaxLineLength:RescheduleControllerPrivacyTest.kt:RescheduleControllerPrivacyTest$every { closureService.processClosureReschedule(any(), any(), any()) } throws IllegalStateException("stop after closure log")</ID>
+    <ID>MaxLineLength:RescheduleControllerTest.kt:RescheduleControllerTest$for</ID>
+    <ID>MaxLineLength:SchedulingPolicyAdministrationService.kt:SchedulingPolicyAdministrationService$"priority-and-reliability drafts must use schemaVersion ${SchedulingPolicyPayloadCodec.CURRENT_SCHEMA_VERSION}"</ID>
+    <ID>MaxLineLength:SchedulingPolicyCommandServiceTest.kt:SchedulingPolicyCommandServiceTest$"scheduled:${draft.definition.id}:${draft.definition.version}:${draft.definition.effectiveFrom.toEpochMilli()}"</ID>
+    <ID>MaxLineLength:SchedulingPolicyCommandServiceTest.kt:SchedulingPolicyCommandServiceTest$requireNotNull(policyRepository.findDefinition(definitionId)).lifecycle shouldBeEqualTo PolicyLifecycle.DRAFT</ID>
+    <ID>MaxLineLength:SecurityConfig.kt:SecurityConfig$AuthorizationDecision(requestedClinicId != null &amp;&amp; requestedClinicId in principal?.allowedClinicIds.orEmpty())</ID>
+    <ID>MaxLineLength:SecurityErrorResponseWriter.kt:SecurityErrorResponseWriter$"""{"success":false,"data":null,"error":"${escapeJson(error.safeMessage)}","errorCode":"${error.name}","correlationId":"${escapeJson(correlationId)}","retryable":${error.retryable},"action":"${escapeJson(error.action)}"}"""</ID>
+    <ID>MaxLineLength:SecurityErrorResponseWriter.kt:SecurityErrorResponseWriter$"""{"success":false,"data":null,"error":"${escapeJson(error.safeMessage)}","errorCode":"${escapeJson(error.code)}","correlationId":"${escapeJson(correlationId)}"}"""</ID>
+    <ID>MaxLineLength:SecurityErrorResponseWriter.kt:SecurityErrorResponseWriter$"""{"success":false,"data":null,"error":"${escapeJson(error.safeMessage)}","errorCode":"PATIENT_HISTORY_${error.name}","correlationId":"${escapeJson(correlationId)}","retryable":${error.retryable}}"""</ID>
+    <ID>MaxLineLength:SecurityErrorResponseWriter.kt:SecurityErrorResponseWriter$"""{"success":false,"data":null,"error":"${escapeJson(error.safeMessage)}","reasonCode":"${error.name}","errorCode":"${error.name}","correlationId":"${escapeJson(correlationId)}","retryable":${error.retryable},"action":"${escapeJson(error.action)}"}"""</ID>
+    <ID>MaxLineLength:ServiceConfig.kt:ServiceConfig$internal</ID>
+    <ID>MaxLineLength:SlotController.kt:SlotController$@Parameter(description = "Requested duration in minutes", required = false) @RequestParam(required = false) requestedDurationMinutes: Int? = null</ID>
+    <ID>MaxLineLength:SlotController.kt:SlotController$@Parameter(description = "Target date (ISO format)") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate</ID>
+    <ID>MaxLineLength:SlotController.kt:SlotController$log.debug { "GET slots tenantCode=$tenantCode, clinic=$clinicId, doctor=$doctorId, treatment=$treatmentTypeId, date=$date" }</ID>
+    <ID>MaxLineLength:SlotControllerTest.kt:SlotControllerTest$.</ID>
+    <ID>MaxLineLength:TenantContextTest.kt:TenantContextTest$fun</ID>
+    <ID>MaxLineLength:TenantQueryIsolationMigrationTestSupport.kt:TenantQueryIsolationMigrationTestSupport$check</ID>
+    <ID>MaxLineLength:TenantQueryIsolationMigrationTestSupport.kt:TenantQueryIsolationMigrationTestSupport$val eventLogIndex = indexColumns(connection, "scheduling_appointment_event_logs", "idx_appointment_event_logs_tenant_scope")</ID>
+    <ID>MaxLineLength:TestDataSeeder.kt:TestDataSeederConfig$if</ID>
+    <ID>MaxLineLength:TreatmentTypeController.kt:TreatmentTypeController$val result = transaction { treatmentTypeRepository.findPage(TenantClinicScope(tenant.id, clinicId), pageNumber, pageSize) }</ID>
+    <ID>MaxLineLength:VisitCommitmentRetentionServiceTest.kt:VisitCommitmentRetentionServiceTest$it[retentionClass] = io.bluetape4k.clinic.appointment.event.integration.QuarantineRetentionClass.STANDARD</ID>
+    <ID>MaxLineLength:VisitCommitmentRetentionServiceTest.kt:VisitCommitmentRetentionServiceTest$val boundaryInbox = insertInbox("processed-boundary", SchedulingInboxStatus.PROCESSED, now.minusSeconds(DAYS_30))</ID>
+    <ID>MaxLineLength:VisitCommitmentRetentionServiceTest.kt:VisitCommitmentRetentionServiceTest$val boundaryOutbox = insertOutbox("published-boundary", SchedulingOutboxStatus.PUBLISHED, now.minusSeconds(DAYS_7))</ID>
+    <ID>MaxLineLength:WaitlistDeliveryMetrics.kt:WaitlistDeliveryMetrics$private val leaseAcquireCounters = EnumMap&lt;WaitlistLeaseMetricOutcome, Counter>(WaitlistLeaseMetricOutcome::class.java)</ID>
+    <ID>MaxLineLength:WaitlistDeliveryMetrics.kt:WaitlistDeliveryMetrics$private val ownershipLossCounters = EnumMap&lt;WaitlistOwnershipLossSource, Counter>(WaitlistOwnershipLossSource::class.java)</ID>
+    <ID>MaxLineLength:WaitlistFencedDeliveryScheduling.kt:WaitlistFencedDeliverySchedulingRunner$private</ID>
+    <ID>MaxLineLength:WaitlistFencedDeliverySchedulingTest.kt:WaitlistFencedDeliverySchedulingTest$val</ID>
+    <ID>MaxLineLength:WaitlistFencedDeliverySchedulingTest.kt:WaitlistFencedDeliverySchedulingTest$val operations = FakeLockOperations(acquireResults = ArrayDeque(listOf(LockAcquireResult.Acquired(nativeHandle()))))</ID>
+    <ID>MaxLineLength:WaitlistFencedLeaderLease.kt:FencedWaitlistLeaderLease$LockMutationResult.AlreadyReleased -> terminalRelease(handle, activeCount, WaitlistLeaseRelease.ALREADY_RELEASED)</ID>
+    <ID>MaxLineLength:WaitlistFencedLeaderLeaseTest.kt:WaitlistFencedLeaderLeaseTest$lease.tryAcquire(now).shouldBeInstanceOf&lt;WaitlistLeaseAttempt.Contended>().remainingTtlMillis shouldBeEqualTo 120</ID>
+    <ID>MaxLineLength:WaitlistFencedSchedulingConfigurationTest.kt:WaitlistFencedSchedulingConfigurationTest$.</ID>
+    <ID>MaxLineLength:WaitlistOperationsController.kt:WaitlistOperationsController$ApiResponse.ok(service.createBenefitGrant(scope, WaitlistIdempotencyKeys.requireValid(idempotencyKey), request))</ID>
+    <ID>MaxLineLength:WaitlistOperationsController.kt:WaitlistOperationsController$ApiResponse.ok(service.createRestriction(scope, WaitlistIdempotencyKeys.requireValid(idempotencyKey), request))</ID>
+    <ID>MaxLineLength:WaitlistOperationsController.kt:WaitlistOperationsController$ApiResponse.ok(service.grantRecoveryCredit(scope, WaitlistIdempotencyKeys.requireValid(idempotencyKey), request))</ID>
+    <ID>MaxLineLength:WaitlistPublicIdCodec.kt:WaitlistPublicIdCodec$if</ID>
+    <ID>MayBeConstant:PatientCancellationHistoryService.kt:PatientCancellationHistoryService.Companion$private val READ_DEADLINE_NANOS = 750_000_000L</ID>
+    <ID>MayBeConstant:TestJwtProvider.kt:TestJwtProvider$val audience: String = TEST_AUDIENCE</ID>
+    <ID>MayBeConstant:TestJwtProvider.kt:TestJwtProvider$val issuer: String = TEST_ISSUER</ID>
+    <ID>MayBeConstant:TestJwtProvider.kt:TestJwtProvider$val secret: String = TEST_SECRET</ID>
+    <ID>NestedBlockDepth:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest$private fun measurePostgresLockWait: Double</ID>
+    <ID>NestedBlockDepth:PatientCancellationHistoryQueryPlanTest.kt:PatientCancellationHistoryQueryPlanTest$private fun seed</ID>
+    <ID>NestedBlockDepth:ProfileReevaluationWorker.kt:ProfileReevaluationWorker$private suspend fun processCandidates: ProfileReevaluationWorkerResult</ID>
+    <ID>NestedBlockDepth:WaitlistFencedRedisIntegrationTest.kt:WaitlistFencedRedisIntegrationTest$private fun withRedisLockPair</ID>
+    <ID>ReturnCount:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$private fun Throwable.isRetryableTransactionFailure: Boolean</ID>
+    <ID>ReturnCount:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentFakeIdempotencyApplication$fun execute: HttpIdempotencyResponse</ID>
+    <ID>ReturnCount:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentFakeIdempotencyApplication$fun sideEffectCount: Int</ID>
+    <ID>ReturnCount:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentFakeIdempotencyApplication$private fun abandonRecord: Abandoned</ID>
+    <ID>ReturnCount:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentFakeIdempotencyApplication$private fun decideExchange: Action</ID>
+    <ID>ReturnCount:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentFakeIdempotencyApplication$private fun replayableOutcomeOrNull: HttpIdempotencyResponse?</ID>
+    <ID>ReturnCount:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentFakeIdempotencyApplication$private fun validateIngress: HttpIdempotencyResponse?</ID>
+    <ID>ReturnCount:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentIdempotencyController$@PostMapping("/api/{tenantCode}/appointments") fun create: ResponseEntity&lt;String></ID>
+    <ID>ReturnCount:AppointmentHttpIdempotencyConformanceTest.kt:BoundedBodyFilter$override fun doFilterInternal</ID>
+    <ID>ReturnCount:AppointmentStatsProjectionRepository.kt:AppointmentStatsProjectionRepository$fun upsert: Boolean</ID>
+    <ID>ReturnCount:BookingEligibilityGate.kt:BookingEligibilityGate$fun requireAllowed: BookingReliabilityDecisionStamp?</ID>
+    <ID>ReturnCount:BookingReliabilityApplicationAdapter.kt:DefaultBookingReliabilityApplicationAdapter$private fun EffectiveSchedulingPolicy.toReliabilitySnapshot: BookingReliabilityPolicySnapshot?</ID>
+    <ID>ReturnCount:CatalogPayloadSizeFilter.kt:CatalogPayloadSizeFilter$override fun doFilterInternal</ID>
+    <ID>ReturnCount:GlobalExceptionHandler.kt:GlobalExceptionHandler$@ExceptionHandler(Exception::class) fun handleGeneral: ResponseEntity&lt;*></ID>
+    <ID>ReturnCount:GlobalExceptionHandler.kt:GlobalExceptionHandler$@ExceptionHandler(HttpMessageNotReadableException::class) fun handleMessageNotReadable: ResponseEntity&lt;*></ID>
+    <ID>ReturnCount:GlobalExceptionHandler.kt:GlobalExceptionHandler$@ExceptionHandler(IllegalArgumentException::class) fun handleIllegalArgument: ResponseEntity&lt;*></ID>
+    <ID>ReturnCount:GlobalExceptionHandler.kt:GlobalExceptionHandler$@ExceptionHandler(IllegalStateException::class) fun handleConflict: ResponseEntity&lt;*></ID>
+    <ID>ReturnCount:GlobalExceptionHandler.kt:GlobalExceptionHandler$@ExceptionHandler(MethodArgumentNotValidException::class) fun handleValidation: ResponseEntity&lt;*></ID>
+    <ID>ReturnCount:GlobalExceptionHandler.kt:GlobalExceptionHandler$@ExceptionHandler(MethodArgumentTypeMismatchException::class) fun handleTypeMismatch: ResponseEntity&lt;*></ID>
+    <ID>ReturnCount:GlobalExceptionHandler.kt:GlobalExceptionHandler$@ExceptionHandler(NoResourceFoundException::class) fun handleNoResource: ResponseEntity&lt;*></ID>
+    <ID>ReturnCount:GlobalExceptionHandler.kt:GlobalExceptionHandler$@ExceptionHandler(NoSuchElementException::class) fun handleNotFound: ResponseEntity&lt;*></ID>
+    <ID>ReturnCount:JdbcAppointmentReminderRecoveryStore.kt:JdbcAppointmentReminderRecoveryStore$private fun ResultRow.toCandidates: List&lt;ReminderRecoveryCandidate></ID>
+    <ID>ReturnCount:JdbcAppointmentReminderRecoveryStore.kt:JdbcAppointmentReminderRecoveryStore$private fun loadCommitmentSchedules: Map&lt;Long, CommitmentSchedule></ID>
+    <ID>ReturnCount:NearCacheAdapter.kt:NearCacheAdapter$override fun &lt;T : Any> get: T?</ID>
+    <ID>ReturnCount:NearCacheAdapter.kt:NearCacheAdapter$override fun putIfAbsent: ValueWrapper?</ID>
+    <ID>ReturnCount:NotificationOutboxCanaryEvidenceValidatorTest.kt:NotificationOutboxCanaryEvidenceValidator$private fun containsForbiddenField: Boolean</ID>
+    <ID>ReturnCount:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest.DeterministicProvider$override fun send: NotificationProviderResult</ID>
+    <ID>ReturnCount:PatientCsrfRequestMatcher.kt:PatientCsrfRequestMatcher$override fun matches: Boolean</ID>
+    <ID>ReturnCount:PatientHistoryReferenceCodec.kt:PatientHistoryReferenceCodec$fun matches: Boolean</ID>
+    <ID>ReturnCount:PatientHistoryTokenRegistry.kt:InMemoryPatientHistoryTokenRegistry$override fun get: PatientHistoryTokenEntry?</ID>
+    <ID>ReturnCount:ProfileReevaluationAdminServiceTest.kt:ProfileReevaluationAdminServiceTest.FakeAdminStore$override suspend fun redrive: ProfileReevaluationJobRecord?</ID>
+    <ID>ReturnCount:ProfileReevaluationDecisionService.kt:ProfileReevaluationDecisionService$fun reevaluate: ProfileReevaluationDecisionResult</ID>
+    <ID>ReturnCount:ProfileReevaluationDispatcher.kt:ProfileReevaluationCatchUpRunner$suspend fun run: ProfileReevaluationCatchUpResult</ID>
+    <ID>ReturnCount:ProfileReevaluationRetryPolicy.kt:ProfileReevaluationRedrivePolicy$fun commandFor: RedriveProfileReevaluationJob?</ID>
+    <ID>ReturnCount:ProfileReevaluationWorker.kt:ProfileReevaluationWorker$override suspend fun process: ProfileReevaluationWorkerResult</ID>
+    <ID>ReturnCount:ProfileReevaluationWorker.kt:ProfileReevaluationWorker$private suspend fun processCandidates: ProfileReevaluationWorkerResult</ID>
+    <ID>ReturnCount:RestClientProfileAssessmentClient.kt:ProfileAssessmentEndpointPolicy$private fun isRejectedAddress: Boolean</ID>
+    <ID>ReturnCount:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService$private fun resolveActivationCommand: SchedulingPolicyActivationCommandRecord</ID>
+    <ID>ReturnCount:SchedulingPolicyPerformanceIntegrationTest.kt:SchedulingPolicyPerformanceIntegrationTest$private fun findPlanNode: JsonNode?</ID>
+    <ID>ReturnCount:SchedulingPolicyPreviewService.kt:SchedulingPolicyPreviewService$fun submit: SchedulingPolicyPreviewResult</ID>
+    <ID>ReturnCount:SchedulingPolicyPreviewService.kt:SchedulingPolicyPreviewService$override fun process: SchedulingPolicyPreviewResult?</ID>
+    <ID>ReturnCount:SchedulingPolicyPreviewService.kt:SchedulingPolicyPreviewService$private fun processClaimed: SchedulingPolicyPreviewResult</ID>
+    <ID>ReturnCount:SchedulingPolicyWorker.kt:SchedulingPolicyWorker$private fun processPreview</ID>
+    <ID>ReturnCount:ServiceConfig.kt:ServiceConfig$@Bean fun appointmentNotificationWriter: AppointmentNotificationWriter</ID>
+    <ID>ReturnCount:TenantAuthorizationManager.kt:TenantAuthorizationManager$override fun authorize: AuthorizationResult</ID>
+    <ID>ReturnCount:TenantContextFilter.kt:TenantContextFilter$override fun doFilterInternal</ID>
+    <ID>ReturnCount:TenantPathValidationFilter.kt:TenantPathValidationFilter$private fun isValidApiRepresentation: Boolean</ID>
+    <ID>ReturnCount:WaitlistFencedDeliveryScheduling.kt:WaitlistFencedDeliverySchedulingRunner$fun tick: WaitlistFencedDeliveryTickResult</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentCommitmentConsentEvidenceVerifier.kt:AppointmentCommitmentConsentEvidenceVerificationRequest : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentCommitmentConsentEvidenceVerifier.kt:VerifiedAppointmentCommitmentConsentEvidence : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:BookingReliabilityApiContract.kt:BookingReliabilityAuditEntry : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:BookingReliabilityApiContract.kt:BookingReliabilityAuditPage : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:BookingReliabilityApiContract.kt:BookingReliabilityDecisionResponse : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:WaitlistRequests.kt:RejectUnknownWaitlistFields : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:WaitlistResponses.kt:WaitlistAdjustmentResponse : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:WaitlistResponses.kt:WaitlistEntryResponse : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:WaitlistResponses.kt:WaitlistOfferDecisionResponse : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:WaitlistResponses.kt:WaitlistOfferResponse : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:WaitlistResponses.kt:WaitlistPolicyResponse : Serializable</ID>
+    <ID>SwallowedException:AppointmentHttpIdempotencyConformanceTest.kt:AppointmentFakeIdempotencyApplication$failure: ExecutionException</ID>
+    <ID>SwallowedException:BookingReliabilityRetentionRunner.kt:BookingReliabilityRetentionRunner$error: RuntimeException</ID>
+    <ID>ThrowingExceptionFromFinally:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest$throw error</ID>
+    <ID>ThrowingExceptionFromFinally:NearCacheWireCompatibilityTest.kt:NearCacheWireCompatibilityTest$throw AssertionError("Redis cache test cleanup failed").also { failure -> cleanupFailures.forEach(failure::addSuppressed) }</ID>
+    <ID>ThrowingExceptionFromFinally:NotificationOutboxCanarySimulationIntegrationTest.kt:NotificationOutboxCanarySimulationIntegrationTest$throw cleanupFailure</ID>
+    <ID>ThrowsCount:ActorContextResolver.kt:ActorContextResolver$fun resolve: ActorContext</ID>
+    <ID>ThrowsCount:AppointmentCommitmentHttpSupport.kt:internal fun ActorContextResolver.resolveAppointmentActor: ActorContext</ID>
+    <ID>ThrowsCount:AppointmentProposalService.kt:AppointmentProposalService$private fun validateRequest</ID>
+    <ID>ThrowsCount:AppointmentService.kt:AppointmentService$suspend fun updateStatus: AppointmentRecord</ID>
+    <ID>ThrowsCount:BookingEligibilityGate.kt:BookingEligibilityGate$fun requireAllowed: BookingReliabilityDecisionStamp?</ID>
+    <ID>ThrowsCount:BookingEligibilityGate.kt:BookingEligibilityGate$fun requireFresh</ID>
+    <ID>ThrowsCount:CacheRolloutEvidenceIntegrationTest.kt:CacheRolloutEvidenceIntegrationTest$private fun &lt;T : Any> verifyMalformedPayloadIsCounted: Int</ID>
+    <ID>ThrowsCount:CatalogProductSyncController.kt:CatalogProductSyncController$@Operation( summary = "Synchronize one immutable catalog product version", description = "The payload hash is computed from the documented typed canonical form after bounded DAG validation.", externalDocs = ExternalDocumentation( description = "Catalog payload canonical hash contract and fixture", url = "https://github.com/bluetape4k/clinic-appointment/blob/main/docs/api/catalog-payload-hash.md", ), ) @ApiResponses( OpenApiResponse(responseCode = "201", description = "Version created", content = [Content(mediaType = "application/json", schema = Schema(implementation = CatalogSyncApiResponse::class))]), OpenApiResponse(responseCode = "200", description = "Identical version already exists", content = [Content(mediaType = "application/json", schema = Schema(implementation = CatalogSyncApiResponse::class))]), OpenApiResponse(responseCode = "202", description = "Older version ignored", content = [Content(mediaType = "application/json", schema = Schema(implementation = CatalogSyncApiResponse::class))]), OpenApiResponse(responseCode = "400", description = "Invalid identity, bounds, DAG, timestamp, or canonical hash", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]), OpenApiResponse(responseCode = "401", description = "Missing or invalid bearer token", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]), OpenApiResponse(responseCode = "403", description = "Authenticated caller lacks tenant or catalog-source write authority", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]), OpenApiResponse(responseCode = "404", description = "Clinic hidden by tenant boundary or feature disabled", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]), OpenApiResponse(responseCode = "409", description = "The version exists with different canonical content", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]), OpenApiResponse(responseCode = "413", description = "Catalog payload exceeds the configured size limit", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]), OpenApiResponse(responseCode = "500", description = "Internal scheduling error", content = [Content(mediaType = "application/json", schema = Schema(implementation = SchedulingApiErrorResponse::class))]), ) @PutMapping("/{productId}/versions/{catalogVersion}") fun synchronize: ResponseEntity&lt;ApiResponse&lt;CatalogSyncResponse>></ID>
+    <ID>ThrowsCount:ClinicKeysetCursorCodec.kt:ClinicKeysetCursorCodec$fun decode: ClinicKeysetCursor</ID>
+    <ID>ThrowsCount:NearCacheAdapter.kt:NearCacheAdapter$private fun rethrowControlFlow</ID>
+    <ID>ThrowsCount:PatientAuthenticationService.kt:PatientAuthenticationService$fun login: PatientLoginResult</ID>
+    <ID>ThrowsCount:PatientAuthenticationService.kt:PatientAuthenticationService$fun register: PatientRegistrationResult</ID>
+    <ID>ThrowsCount:PatientAuthenticationService.kt:PatientAuthenticationService$fun session: PatientSessionSummary</ID>
+    <ID>ThrowsCount:PatientCancellationHistoryController.kt:PatientCancellationHistoryController$@GetMapping fun read: ResponseEntity&lt;PatientCancellationHistoryPageResponse></ID>
+    <ID>ThrowsCount:PatientCancellationHistoryService.kt:PatientCancellationHistoryService$fun read: PatientCancellationHistoryReadResult</ID>
+    <ID>ThrowsCount:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$fun encode: String</ID>
+    <ID>ThrowsCount:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$fun verifyRegistry</ID>
+    <ID>ThrowsCount:ProfileReevaluationEndpoint.kt:ProfileReevaluationAdminActorResolver$fun resolve: String</ID>
+    <ID>ThrowsCount:RedisCacheSecurityPolicy.kt:RedisCacheSecurityPolicy$fun validate: URI</ID>
+    <ID>ThrowsCount:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$override fun fetch: ProfileSchedulingAssessment</ID>
+    <ID>ThrowsCount:RestClientProfileAssessmentClient.kt:RestClientProfileAssessmentClient$private fun decodeResponse: ProfileSchedulingAssessment</ID>
+    <ID>ThrowsCount:TenantClinicAccessChecker.kt:TenantClinicAccessChecker$fun requirePrincipalClinicAccess</ID>
+    <ID>ThrowsCount:WaitlistPublicIdCodec.kt:WaitlistPublicIdCodec$fun decode: Long</ID>
+    <ID>ThrowsCount:WaitlistPublicIdCodec.kt:WaitlistPublicIdCodec$private fun decodeScoped: Long</ID>
+    <ID>TooGenericExceptionCaught:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService$exception: Throwable</ID>
+    <ID>TooGenericExceptionCaught:BookingReliabilityRetentionRunner.kt:BookingReliabilityRetentionRunner$error: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:EffectiveSchedulingPolicyService.kt:EffectiveSchedulingPolicyService$error: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:NearCacheAdapter.kt:NearCacheAdapter$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:NearCacheAdapter.kt:NearCacheAdapter$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:NotificationReNotifyService.kt:NotificationReNotifyService$auditFailure: Exception</ID>
+    <ID>TooGenericExceptionCaught:NotificationReNotifyService.kt:NotificationReNotifyService$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PatientCancellationHistoryController.kt:PatientCancellationHistoryController$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:PatientCancellationHistoryService.kt:PatientCancellationHistoryService$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:ProfileReevaluationWorker.kt:ProfileReevaluationWorker$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:RescheduleBatchStreamController.kt:RescheduleBatchStreamController$ex: Exception</ID>
+    <ID>TooGenericExceptionCaught:SchedulingPolicyAdministrationService.kt:SchedulingPolicyAdministrationService$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:SchedulingPolicyMetrics.kt:SchedulingPolicyMetrics$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:SchedulingPolicyWorker.kt:SchedulingPolicyWorker$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:TenantEffectiveSchedulingPolicyService.kt:TenantEffectiveSchedulingPolicyService$error: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:VisitCommitmentRetentionRunner.kt:VisitCommitmentRetentionRunner$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:WaitlistApplicationService.kt:WaitlistApplicationService$failure: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:WaitlistFencedDeliveryScheduling.kt:WaitlistFencingReadiness$cause: Exception</ID>
+    <ID>TooGenericExceptionThrown:NearCacheAdapterTest.kt:NearCacheAdapterTest$throw RuntimeException("loader 실패")</ID>
+    <ID>TooGenericExceptionThrown:NearCacheAdapterTest.kt:NearCacheAdapterTest$throw RuntimeException("로드 실패")</ID>
+    <ID>TooManyFunctions:AppointmentCommitmentCommandService.kt:AppointmentCommitmentCommandService</ID>
+    <ID>TooManyFunctions:AppointmentCommitmentHttpSupport.kt:io.bluetape4k.clinic.appointment.api.controller.AppointmentCommitmentHttpSupport.kt</ID>
+    <ID>TooManyFunctions:AppointmentCommitmentMetrics.kt:AppointmentCommitmentMetrics : AppointmentCommitmentCommandMetrics</ID>
+    <ID>TooManyFunctions:AppointmentNotificationWriter.kt:DefaultAppointmentNotificationWriter : AppointmentNotificationWriter</ID>
+    <ID>TooManyFunctions:AppointmentProposalService.kt:AppointmentProposalService</ID>
+    <ID>TooManyFunctions:AppointmentService.kt:AppointmentService</ID>
+    <ID>TooManyFunctions:BookingReliabilityApplicationAdapter.kt:DefaultBookingReliabilityApplicationAdapter : BookingReliabilityApplicationPort</ID>
+    <ID>TooManyFunctions:DefaultAppointmentCommitmentApplicationService.kt:DefaultAppointmentCommitmentApplicationService : AppointmentCommitmentApplicationService</ID>
+    <ID>TooManyFunctions:GlobalExceptionHandler.kt:GlobalExceptionHandler</ID>
+    <ID>TooManyFunctions:JdbcAppointmentReminderRecoveryStore.kt:JdbcAppointmentReminderRecoveryStore : ReminderRecoverySourceReminderRecoveryMaterializer</ID>
+    <ID>TooManyFunctions:JwtTokenParser.kt:JwtTokenParser</ID>
+    <ID>TooManyFunctions:PatientHistoryCursorCodec.kt:PatientHistoryCursorCodec</ID>
+    <ID>TooManyFunctions:ProfileReevaluationConfiguration.kt:ProfileReevaluationConfiguration</ID>
+    <ID>TooManyFunctions:ProfileReevaluationWorker.kt:ExposedProfileReevaluationWorkStore : ProfileReevaluationWorkStore</ID>
+    <ID>TooManyFunctions:SchedulingPolicyCommandService.kt:SchedulingPolicyCommandService</ID>
+    <ID>TooManyFunctions:SchedulingPolicyMetrics.kt:SchedulingPolicyMetrics</ID>
+    <ID>TooManyFunctions:SecurityConfig.kt:SecurityConfig</ID>
+    <ID>TooManyFunctions:ServiceConfig.kt:ServiceConfig</ID>
+    <ID>TooManyFunctions:WaitlistFencedLeaderLease.kt:FencedWaitlistLeaderLease : AutoCloseable</ID>
+    <ID>TooManyFunctions:WaitlistStaffApiService.kt:WaitlistStaffApiService</ID>
+    <ID>UnusedParameter:AppointmentHttpIdempotencyConformanceTest.kt:BlockingAppointmentController$@PathVariable tenantCode: String</ID>
+    <ID>UnusedParameter:BookingReliabilityMigrationTestSupport.kt:BookingReliabilityMigrationTestSupport$connection: Connection</ID>
+    <ID>UnusedParameter:ClinicProjectionPilotComponents.kt:PilotTestConfiguration$environment: Environment</ID>
+    <ID>UnusedParameter:GlobalExceptionHandler.kt:GlobalExceptionHandler$ex: EffectivePolicyGenerationConflictException</ID>
+    <ID>UnusedParameter:GlobalExceptionHandler.kt:GlobalExceptionHandler$ex: EffectivePolicyReadUnavailableException</ID>
+    <ID>UnusedParameter:GlobalExceptionHandler.kt:GlobalExceptionHandler$ex: PatientAuthenticationValidationException</ID>
+    <ID>UnusedParameter:GlobalExceptionHandler.kt:GlobalExceptionHandler$ex: PatientDuplicateIdentifierException</ID>
+    <ID>UnusedParameter:GlobalExceptionHandler.kt:GlobalExceptionHandler$ex: PatientInvalidCredentialsException</ID>
+    <ID>UnusedParameter:GlobalExceptionHandler.kt:GlobalExceptionHandler$ex: PatientLoginRateLimitedException</ID>
+    <ID>UnusedParameter:GlobalExceptionHandler.kt:GlobalExceptionHandler$ex: PatientTenantNotFoundException</ID>
+    <ID>UnusedParameter:WaitlistRequests.kt:RejectUnknownWaitlistFields$name: String</ID>
+    <ID>UnusedParameter:WaitlistRequests.kt:RejectUnknownWaitlistFields$value: JsonNode?</ID>
+    <ID>VariableNaming:JwtTokenParser.kt:JwtTokenParser$private val ALLOWED_ROLES = setOf( SchedulingRole.ADMIN, SchedulingRole.STAFF, SchedulingRole.DOCTOR, SchedulingRole.PATIENT, SchedulingRole.SYSTEM, )</ID>
+    <ID>WildcardImport:EffectiveSchedulingPolicyServiceTest.kt:import io.bluetape4k.clinic.appointment.model.policy.*</ID>
+  </CurrentIssues>
+</SmellBaseline>

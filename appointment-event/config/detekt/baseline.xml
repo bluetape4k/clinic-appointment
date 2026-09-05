@@ -1,0 +1,120 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:NotificationOutboxContractRegistry.kt:NotificationOutboxContractRegistry$envelope.channel != channel || envelope.eventType != eventType || envelope.notificationSlot != notificationSlot || envelope.templateKey != templateKey || envelope.templateVersion != templateVersion || envelope.parameterType != parameterType</ID>
+    <ID>CyclomaticComplexMethod:NotificationOutboxContractRegistry.kt:NotificationOutboxContractRegistry$fun validate</ID>
+    <ID>CyclomaticComplexMethod:ProductVersionMigrationHandler.kt:ProductVersionMigrationHandler$internal fun handle: PurchaseHandleResult</ID>
+    <ID>CyclomaticComplexMethod:TreatmentFulfillmentHandler.kt:TreatmentFulfillmentHandler$internal fun handle: PurchaseHandleResult</ID>
+    <ID>LargeClass:ProductVersionMigrationHandler.kt:ProductVersionMigrationHandler</ID>
+    <ID>LongMethod:ExternalFactEventConsumer.kt:ExternalFactEventConsumer$private fun reject: PurchaseHandleResult</ID>
+    <ID>LongMethod:ExternalFactEventConsumerTest.kt:ExternalFactEventConsumerTest$@Test fun `source authority proof 장애는 handler 실행 전에 WAITING_GAP으로 staging하고 reason metric을 남긴다`</ID>
+    <ID>LongMethod:ExternalFactEventConsumerTest.kt:ExternalFactEventConsumerTest$@Test fun `과도한 envelope과 routing header는 bounded evidence로 보호한 뒤 격리한다`</ID>
+    <ID>LongMethod:ExternalFactEventConsumerTest.kt:ExternalFactEventConsumerTest$private fun consumer: ExternalFactEventConsumer</ID>
+    <ID>LongMethod:PackageExecutionEvent.kt:PackageExecutionEventBounds$private fun validatePayload</ID>
+    <ID>LongMethod:ProductVersionMigrationHandler.kt:ProductVersionMigrationHandler$internal fun handle: PurchaseHandleResult</ID>
+    <ID>LongMethod:ProductVersionMigrationHandler.kt:ProductVersionMigrationHandler$internal fun handleRescheduleDeclined: PurchaseHandleResult</ID>
+    <ID>LongMethod:ProfileReevaluationEventService.kt:ProfileReevaluationEventService$fun accept: ProfileReevaluationEventResult</ID>
+    <ID>LongMethod:PurchaseCompletedHandler.kt:PurchaseCompletedHandler$fun preview: PurchaseHandleResult</ID>
+    <ID>LongMethod:PurchaseCompletedHandler.kt:PurchaseCompletedHandler$private fun convergeInTransaction: PurchaseHandleResult</ID>
+    <ID>LongMethod:PurchaseEventRedriveService.kt:PurchaseEventRedriveService$fun redrive: PurchaseRedriveResult</ID>
+    <ID>LongMethod:SchedulingEventRepository.kt:SchedulingEventRepository$fun insertExternalPlanFactOutbox</ID>
+    <ID>LongMethod:SchedulingPolicyEventRepository.kt:SchedulingPolicyEventRepository$fun insertPolicyActivated: String</ID>
+    <ID>LongMethod:TreatmentFulfillmentHandler.kt:TreatmentFulfillmentHandler$internal fun handle: PurchaseHandleResult</ID>
+    <ID>LongMethod:TreatmentFulfillmentHandler.kt:TreatmentFulfillmentHandler$private fun projectFacts: FulfillmentProjection</ID>
+    <ID>LongMethod:VisitPlanningEventHandler.kt:VisitPlanningEventHandler$private fun convergeInTransaction: PurchaseHandleResult</ID>
+    <ID>MagicNumber:BookingReliabilityEventIngress.kt:BookingReliabilityEventIngress$30</ID>
+    <ID>MagicNumber:ExternalFactEventConsumer.kt:AesGcmRawExternalFactEnvelopeProtector$16</ID>
+    <ID>MagicNumber:ExternalFactEventConsumer.kt:AesGcmRawExternalFactEnvelopeProtector$24</ID>
+    <ID>MagicNumber:ExternalFactEventConsumer.kt:AesGcmRawExternalFactEnvelopeProtector$32</ID>
+    <ID>MagicNumber:ExternalFactEventConsumer.kt:ExternalFactEventConsumer$30</ID>
+    <ID>MagicNumber:ExternalFactEventConsumer.kt:ExternalFactEventConsumer$32</ID>
+    <ID>MagicNumber:NotificationOutboxContracts.kt:128</ID>
+    <ID>MagicNumber:NotificationOutboxContracts.kt:8</ID>
+    <ID>MagicNumber:NotificationOutboxContracts.kt:NotificationDestinationFingerprint$128</ID>
+    <ID>MagicNumber:NotificationOutboxWriter.kt:SendableNotificationDraft$128</ID>
+    <ID>MagicNumber:PackageExecutionEvent.kt:PackageExecutionEventBounds$1_024</ID>
+    <ID>MagicNumber:PatientReferenceProtector.kt:AesGcmPatientReferenceProtector$16</ID>
+    <ID>MagicNumber:PatientReferenceProtector.kt:AesGcmPatientReferenceProtector$24</ID>
+    <ID>MagicNumber:PatientReferenceProtector.kt:AesGcmPatientReferenceProtector$32</ID>
+    <ID>MagicNumber:ProductVersionMigrationHandler.kt:ProductVersionMigrationHandler$30</ID>
+    <ID>MagicNumber:PurchaseCompletedHandler.kt:PurchaseCompletedHandler$1_000.0</ID>
+    <ID>MagicNumber:PurchaseCompletedHandler.kt:PurchaseCompletedHandler$30</ID>
+    <ID>MagicNumber:PurchaseCompletedHandler.kt:PurchaseCompletedHandler$5</ID>
+    <ID>MagicNumber:QuarantineEnvelopeProtector.kt:AesGcmQuarantineEnvelopeProtector$16</ID>
+    <ID>MagicNumber:QuarantineEnvelopeProtector.kt:AesGcmQuarantineEnvelopeProtector$24</ID>
+    <ID>MagicNumber:QuarantineEnvelopeProtector.kt:AesGcmQuarantineEnvelopeProtector$32</ID>
+    <ID>MagicNumber:SchedulingEventRepository.kt:SchedulingEventRepository$0x20</ID>
+    <ID>MagicNumber:SchedulingEventRepository.kt:SchedulingEventRepository$16</ID>
+    <ID>MagicNumber:SchedulingEventRepository.kt:SchedulingEventRepository$4</ID>
+    <ID>MagicNumber:SchedulingEventTrustVerifier.kt:ExternalFactEventBounds$64</ID>
+    <ID>MagicNumber:SchedulingEventTrustVerifier.kt:PurchaseEventBounds$1_024</ID>
+    <ID>MagicNumber:SchedulingEventTrustVerifier.kt:PurchaseEventBounds$7</ID>
+    <ID>MagicNumber:SchedulingEventTrustVerifier.kt:SchedulingEventTrustVerifier$30</ID>
+    <ID>MagicNumber:SchedulingPolicyEventRepository.kt:SchedulingPolicyEventRepository$0x20</ID>
+    <ID>MagicNumber:SchedulingPolicyEventRepository.kt:SchedulingPolicyEventRepository$16</ID>
+    <ID>MagicNumber:SchedulingPolicyEventRepository.kt:SchedulingPolicyEventRepository$160</ID>
+    <ID>MagicNumber:SchedulingPolicyEventRepository.kt:SchedulingPolicyEventRepository$4</ID>
+    <ID>MagicNumber:SchedulingQuarantineRepository.kt:SchedulingQuarantineRepository$128</ID>
+    <ID>MagicNumber:SchedulingQuarantineRepository.kt:SchedulingQuarantineRepository$1_000</ID>
+    <ID>MagicNumber:SchedulingQuarantineRepository.kt:SchedulingQuarantineRepository$256</ID>
+    <ID>MagicNumber:SlotAvailable.kt:SlotAvailable$128</ID>
+    <ID>MagicNumber:TreatmentFulfillmentHandler.kt:TreatmentFulfillmentHandler$30</ID>
+    <ID>MagicNumber:VisitPlanningEventHandler.kt:VisitPlanningEventHandler$1_000.0</ID>
+    <ID>MagicNumber:VisitPlanningEventHandler.kt:VisitPlanningEventHandler$30</ID>
+    <ID>MagicNumber:WaitlistNotificationOutboxContracts.kt:WaitlistNotificationOutboxEnvelope$128</ID>
+    <ID>MagicNumber:WaitlistNotificationOutboxContracts.kt:WaitlistNotificationOutboxEnvelope$160</ID>
+    <ID>MaxLineLength:AppointmentEventLogger.kt:AppointmentEventLogger$payloadJson = """{"eventType":"StatusChanged","fromState":"${event.fromState}","toState":"${event.toState}"$reasonPart}"""</ID>
+    <ID>MaxLineLength:BookingReliabilityEventRepository.kt:BookingReliabilityEventRepository$return</ID>
+    <ID>MaxLineLength:BookingReliabilityEventRepository.kt:BookingReliabilityEventRepository$val existing = findScoped(payload.tenantGroupId, payload.clinicId, memberId, payload.eventId, payload.sourceVersion)</ID>
+    <ID>MaxLineLength:ExternalFactEventConsumerTest.kt:ExternalFactEventConsumerTest$fulfillmentProofProvider: TreatmentFulfillmentProofProvider = TreatmentFulfillmentProofProvider { _, _ -> null }</ID>
+    <ID>MaxLineLength:NotificationOutboxCodec.kt:NotificationOutboxCodec$NotificationParameterType.APPOINTMENT_CANCELLED</ID>
+    <ID>MaxLineLength:NotificationOutboxCodec.kt:NotificationOutboxCodec$NotificationParameterType.APPOINTMENT_CONFIRMED</ID>
+    <ID>MaxLineLength:NotificationOutboxCodec.kt:NotificationOutboxCodec$NotificationParameterType.APPOINTMENT_RESCHEDULED</ID>
+    <ID>MaxLineLength:NotificationOutboxCodecTest.kt:NotificationOutboxCodecTest$val topLevelUnknown = valid.replace("\"eventId\":\"event-1\"", "\"unexpected\":\"value\",\"eventId\":\"event-1\"")</ID>
+    <ID>MaxLineLength:NotificationOutboxCodecTest.kt:NotificationOutboxCodecTest$valid.replace("\"cancellationReasonCode\":\"CUSTOMER_REQUEST\"", "\"cancellationReasonCode\":\"customer_request\"")</ID>
+    <ID>MaxLineLength:NotificationOutboxContractRegistry.kt:NotificationOutboxContractRegistry$NotificationEventType.CANCELLED -> setOf("appointment-cancelled", "appointment.cancelled", "appointment.cancelled.sms")</ID>
+    <ID>MaxLineLength:NotificationOutboxContractRegistry.kt:NotificationOutboxContractRegistry$NotificationEventType.CONFIRMED -> setOf("appointment-confirmed", "appointment.confirmed", "appointment.confirmed.sms")</ID>
+    <ID>MaxLineLength:NotificationOutboxContractRegistry.kt:NotificationOutboxContractRegistry$NotificationEventType.REMINDER -> setOf("appointment-reminder-24h", "appointment-reminder-same-day", "appointment.reminder", "appointment.reminder.sms")</ID>
+    <ID>MaxLineLength:NotificationOutboxContractRegistry.kt:NotificationOutboxContractRegistry$NotificationEventType.RESCHEDULED -> setOf("appointment-rescheduled", "appointment.rescheduled", "appointment.rescheduled.sms")</ID>
+    <ID>MaxLineLength:NotificationOutboxContractRegistry.kt:NotificationOutboxContractRegistry$if</ID>
+    <ID>MaxLineLength:NotificationOutboxContractRegistry.kt:NotificationOutboxContractRegistry$val</ID>
+    <ID>MaxLineLength:NotificationOutboxContracts.kt:NotificationDestinationFingerprint$require(!emailLikePattern.containsMatchIn(value)) { "destinationFingerprint must not contain email-like values" }</ID>
+    <ID>MaxLineLength:PurchaseCompletedHandlerTest.kt:PurchaseCompletedHandlerTest$.</ID>
+    <ID>MaxLineLength:PurchaseCompletedHandlerTest.kt:PurchaseCompletedHandlerTest$handler().handle(stale, null, protected(fingerprint = "stale")).status shouldBeEqualTo PurchaseHandleStatus.STALE</ID>
+    <ID>MaxLineLength:PurchaseCompletedHandlerTest.kt:PurchaseCompletedHandlerTest$payload = payload(sourceAggregateId = "purchase-aggregate-2", sourcePurchaseId = "purchase-2", catalogVersion = 99L)</ID>
+    <ID>MaxLineLength:PurchaseCompletedIngressTest.kt:PurchaseCompletedIngressTest$versionProofProvider: SourceAuthorityVersionProofProvider = SourceAuthorityVersionProofProvider { _, _ -> null }</ID>
+    <ID>MaxLineLength:PurchaseEventRedriveService.kt:PurchaseEventRedriveService$.</ID>
+    <ID>MaxLineLength:PurchaseEventRedriveServiceTest.kt:PurchaseEventRedriveServiceTest$versionProofProvider: SourceAuthorityVersionProofProvider = SourceAuthorityVersionProofProvider { _, _ -> null }</ID>
+    <ID>MaxLineLength:SchedulingQuarantineRepository.kt:SchedulingQuarantineRepository$action = if (enabled) QuarantineAuditAction.LEGAL_HOLD_ENABLED else QuarantineAuditAction.LEGAL_HOLD_DISABLED</ID>
+    <ID>MaxLineLength:SchedulingQuarantineRepository.kt:SchedulingQuarantineRepository$appendAudit(quarantineId, action, actor, reason, current.status, nextStatus, approvalReferences = approvalReferences)</ID>
+    <ID>ReturnCount:BookingReliabilityEventIngress.kt:BookingReliabilityEventIngress$fun accept: BookingReliabilityIngressResult</ID>
+    <ID>ReturnCount:ExternalFactEventConsumer.kt:ExternalFactEventConsumer$private fun &lt;T> accept: PurchaseHandleResult</ID>
+    <ID>ReturnCount:NotificationOutboxContracts.kt:private fun String.isPhoneLike: Boolean</ID>
+    <ID>ReturnCount:ProductVersionMigrationHandler.kt:ProductVersionMigrationHandler$private fun findPlanAndLock: AppointmentPlanAggregateRecord?</ID>
+    <ID>ReturnCount:ProfileReevaluationEventService.kt:ProfileReevaluationEventService$fun accept: ProfileReevaluationEventResult</ID>
+    <ID>ReturnCount:PurchaseCompletedHandler.kt:PurchaseCompletedHandler$private fun convergeInTransaction: PurchaseHandleResult</ID>
+    <ID>ReturnCount:PurchaseCompletedIngress.kt:PurchaseCompletedIngress$fun accept: PurchaseHandleResult</ID>
+    <ID>ReturnCount:SourceAggregateVersionVerifier.kt:SourceAggregateVersionVerifier$private fun verify: SourceVersionDecision</ID>
+    <ID>ReturnCount:TreatmentFulfillmentHandler.kt:TreatmentFulfillmentHandler$private fun findPlanAndLock: AppointmentPlanAggregateRecord?</ID>
+    <ID>ReturnCount:VisitPlanningEventHandler.kt:VisitPlanningEventHandler$private fun convergeInTransaction: PurchaseHandleResult</ID>
+    <ID>SwallowedException:NotificationOutboxCodec.kt:NotificationOutboxCodec$e: Exception</ID>
+    <ID>SwallowedException:NotificationOutboxCodec.kt:NotificationOutboxCodec$e: IllegalArgumentException</ID>
+    <ID>ThrowsCount:ExternalFactEventConsumerTest.kt:ExternalFactEventConsumerTest$@Test fun `source authority proof 장애는 handler 실행 전에 WAITING_GAP으로 staging하고 reason metric을 남긴다`</ID>
+    <ID>ThrowsCount:NotificationOutboxContractRegistry.kt:NotificationOutboxContractRegistry$fun validate</ID>
+    <ID>TooGenericExceptionCaught:ExternalFactEventConsumer.kt:ExternalFactEventConsumer$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:NotificationOutboxCodec.kt:NotificationOutboxCodec$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:PurchaseEventRedriveService.kt:PurchaseEventRedriveService$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:WaitlistNotificationOutboxContracts.kt:WaitlistNotificationOutboxCodec$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:WaitlistSlotAvailablePublisher.kt:WaitlistSlotAvailableSpringPublisher$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:WaitlistSlotAvailablePublisher.kt:WaitlistSlotAvailableSpringPublisher$hookFailure: Exception</ID>
+    <ID>TooManyFunctions:ExternalFactEventConsumer.kt:ExternalFactEventConsumer</ID>
+    <ID>TooManyFunctions:ProductVersionMigrationHandler.kt:ProductVersionMigrationHandler</ID>
+    <ID>TooManyFunctions:PurchaseCompletedHandler.kt:PurchaseCompletedHandler</ID>
+    <ID>TooManyFunctions:SchedulingEventRepository.kt:SchedulingEventRepository</ID>
+    <ID>TooManyFunctions:SchedulingQuarantineRepository.kt:SchedulingQuarantineRepository</ID>
+    <ID>TooManyFunctions:VisitPlanningEventHandler.kt:VisitPlanningEventHandler</ID>
+    <ID>UnusedPrivateClass:NotificationOutboxWriterContractTest.kt:NotificationOutboxWriterContractTest$RecordingWriter : NotificationOutboxWriter</ID>
+    <ID>WildcardImport:BookingReliabilityEventIngressTest.kt:import io.bluetape4k.clinic.appointment.event.integration.*</ID>
+  </CurrentIssues>
+</SmellBaseline>

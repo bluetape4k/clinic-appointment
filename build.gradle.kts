@@ -1,5 +1,6 @@
 import dev.detekt.gradle.Detekt
-import dev.detekt.gradle.report.ReportMergeTask
+import dev.detekt.gradle.extensions.DetektExtension
+import dev.detekt.gradle.plugin.getSupportedKotlinVersion
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
@@ -17,6 +18,8 @@ import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.attributes.Usage
 import org.gradle.api.attributes.java.TargetJvmVersion
 import org.gradle.api.tasks.SourceSet
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.TaskProvider
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -29,6 +32,25 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.util.zip.ZipFile
 
+abstract class VerifyDetektModuleCoverageTask : DefaultTask() {
+    @get:Input
+    abstract val kotlinSourceProjects: ListProperty<String>
+
+    @get:Input
+    abstract val detektEnabledProjects: ListProperty<String>
+
+    @TaskAction
+    fun verifyCoverage() {
+        val missingProjects = kotlinSourceProjects.get() - detektEnabledProjects.get().toSet()
+        check(missingProjects.isEmpty()) {
+            "detekt is not applied to Kotlin source projects: ${missingProjects.joinToString()}"
+        }
+    }
+}
+
+private fun Project.hasKotlinSources(): Boolean =
+    file("src/main/kotlin").isDirectory || file("src/test/kotlin").isDirectory
+
 plugins {
     base
     alias(libs.plugins.kotlin.jvm)
@@ -39,7 +61,7 @@ plugins {
     alias(libs.plugins.kotlin.jpa) apply false
     alias(libs.plugins.kotlin.serialization) apply false
 
-    alias(libs.plugins.detekt.dev)
+    alias(libs.plugins.detekt.dev) apply false
 
     alias(libs.plugins.dependency.management)
     alias(libs.plugins.spring.boot) apply false
@@ -904,8 +926,20 @@ subprojects {
         plugin("io.spring.dependency-management")
         plugin("org.jetbrains.dokka")
         plugin("com.adarshr.test-logger")
+        if (hasKotlinSources()) {
+            plugin("dev.detekt")
+        }
         if (project.path != ":appointment-messaging-benchmark") {
             plugin("org.jetbrains.kotlinx.kover")
+        }
+    }
+
+    pluginManager.withPlugin("dev.detekt") {
+        extensions.configure<DetektExtension> {
+            toolVersion.set(rootLibs.versions.detekt.dev)
+            parallel.set(true)
+            basePath.set(rootProject.layout.projectDirectory)
+            baseline.set(layout.projectDirectory.file("config/detekt/baseline.xml"))
         }
     }
 
@@ -1013,16 +1047,8 @@ subprojects {
             showFullStackTraces = true
         }
 
-        val reportMerge by registering(ReportMergeTask::class) {
-            val file = rootProject.layout.buildDirectory.asFile.get().resolve("reports/detekt/merge.xml")
-            output.set(file)
-        }
-        withType<Detekt>().configureEach detekt@{
+        withType<Detekt>().configureEach {
             reports.checkstyle.required.set(true)
-            finalizedBy(reportMerge)
-            reportMerge.configure {
-                input.from(this@detekt.reports.checkstyle.outputLocation)
-            }
         }
 
         dokka {
@@ -1061,6 +1087,15 @@ subprojects {
         }
     }
 
+    configurations.matching { it.name == "detekt" }.configureEach {
+        resolutionStrategy.eachDependency {
+            if (requested.group == "org.jetbrains.kotlin") {
+                useVersion(getSupportedKotlinVersion())
+                because("detekt must run with the Kotlin compiler version it was built against")
+            }
+        }
+    }
+
     dependencies {
         val implementation by configurations
         val testImplementation by configurations
@@ -1094,6 +1129,29 @@ subprojects {
         testImplementation(rootLibs.datafaker)
         testImplementation(rootLibs.random.beans)
     }
+}
+
+val kotlinSourceProjectPaths = subprojects
+    .filter(Project::hasKotlinSources)
+    .map(Project::getPath)
+    .sorted()
+val detektEnabledProjectPaths = subprojects
+    .filter { it.pluginManager.hasPlugin("dev.detekt") }
+    .map(Project::getPath)
+    .sorted()
+
+val verifyDetektModuleCoverage = tasks.register<VerifyDetektModuleCoverageTask>("verifyDetektModuleCoverage") {
+    group = "verification"
+    description = "Verifies that every Kotlin source module participates in detekt analysis."
+    kotlinSourceProjects.set(kotlinSourceProjectPaths)
+    detektEnabledProjects.set(detektEnabledProjectPaths)
+}
+
+tasks.register("detekt") {
+    group = "verification"
+    description = "Runs detekt for every Kotlin source module."
+    dependsOn(verifyDetektModuleCoverage)
+    dependsOn(kotlinSourceProjectPaths.map { project(it).tasks.named("detekt") })
 }
 
 tasks.named("verifyDependencyGovernance") {
