@@ -6,6 +6,7 @@
 # BOM이 관리하는 라이브러리는 module만 선언한다.
 # 라이브러리군을 재정의할 때는 해당 BOM을 중앙 BOM 뒤에 가져와 전이 의존성도
 # 정렬한다. Exposed 플러그인과 로컬 Exposed BOM은 같은 exposed 버전을 사용한다.
+# Timefold는 solver 모듈에서 로컬 BOM으로 재정의한다 (#450).
 
 [versions]
 # ── BOM (source of truth) ──────────────────────────────────────────────────
@@ -26,6 +27,7 @@ exposed = "1.5.0"
 # ── Override versions (project uses newer than Spring Boot provides) ───────
 kotlinx-coroutines = "1.11.0" # https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
 lettuce-core = "7.6.0.RELEASE" # bluetape4k-lettuce 2.0.0 requires this beyond Spring Boot's managed version
+timefold-solver = "2.6.0" # #450: 임시 move undo 후 저장 점수 복원 수정
 
 # ── Project-local versions (NOT in any BOM) ───────────────────────────────
 jjwt = "0.13.0"               # https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api
@@ -157,9 +159,10 @@ resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-ci
 resilience4j-kotlin = { module = "io.github.resilience4j:resilience4j-kotlin", version.ref = "resilience4j" }
 resilience4j-retry = { module = "io.github.resilience4j:resilience4j-retry", version.ref = "resilience4j" }
 
-# ── Timefold (version from bluetape4k-dependencies BOM) ────────────────────
-timefold-solver-core = { module = "ai.timefold.solver:timefold-solver-core" }
-timefold-solver-benchmark = { module = "ai.timefold.solver:timefold-solver-benchmark" }
+# ── Timefold (이 예제에서 독립 검증한 버전) ──────────────────────────────
+timefold-solver-bom = { module = "ai.timefold.solver:timefold-solver-bom", version.ref = "timefold-solver" }
+timefold-solver-core = { module = "ai.timefold.solver:timefold-solver-core", version.ref = "timefold-solver" }
+timefold-solver-benchmark = { module = "ai.timefold.solver:timefold-solver-benchmark", version.ref = "timefold-solver" }
 
 # ── DB (versions from spring-boot4-dependencies BOM) ──────────────────────
 flyway-core = { module = "org.flywaydb:flyway-core" }
