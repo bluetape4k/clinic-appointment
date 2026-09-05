@@ -1,0 +1,297 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:ResourceAllocationRepository.kt:ResourceAllocationRepository$firstAllocation.resourceType == secondAllocation.resourceType &amp;&amp; firstAllocation.resourceId == secondAllocation.resourceId &amp;&amp; firstAllocation.startsAt &lt; secondAllocation.endsAt &amp;&amp; firstAllocation.endsAt > secondAllocation.startsAt</ID>
+    <ID>ComplexCondition:WaitlistDecisionService.kt:WaitlistDecisionService$preview.policyVersion != currentPolicy.policyVersion || preview.policyDigest != currentPolicy.policyDigest || preview.defaultWinner.policyVersion != currentPolicy.policyVersion || preview.defaultWinner.policyDigest != currentPolicy.policyDigest</ID>
+    <ID>ComplexCondition:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$offer.scope != hold.scope || offer.scope != entry.scope || hold.offerId != offer.id || offer.waitlistEntryId != entry.id</ID>
+    <ID>ComplexCondition:WaitlistOfferService.kt:WaitlistOfferService$lockedEntry.status != WaitlistEntryState.WAITING || lockedEntry.version != candidate.entry.version || lockedEntry.treatmentTypeId != vacancy.treatmentTypeId || lockedEntry.doctorId != vacancy.doctorId &amp;&amp; lockedEntry.doctorId != null</ID>
+    <ID>CyclomaticComplexMethod:AppointmentCommandIdempotencyRepository.kt:AppointmentCommandIdempotencyRepository$private fun ResultRow.toCommandResultRecord: AppointmentCommandResultRecord?</ID>
+    <ID>CyclomaticComplexMethod:BookingReliabilityEvaluator.kt:BookingReliabilityEvaluator$private fun evaluateAvailable: BookingReliabilityDecisionRecord</ID>
+    <ID>CyclomaticComplexMethod:ClosureRescheduleService.kt:ClosureRescheduleService$fun processClosureReschedule: Map&lt;Long, List&lt;RescheduleCandidateRecord>></ID>
+    <ID>CyclomaticComplexMethod:ResourceAllocationRepository.kt:ResourceAllocationRepository$private fun validateWaitlistCapacity</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyHasher.kt:SchedulingPolicyHasher$private fun CanonicalDigest.updateCompiled</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyHasher.kt:SchedulingPolicyHasher$private fun CanonicalDigest.updatePayload</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyJobRepository.kt:SchedulingPolicyJobRepository$private fun validatePreview</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyPayloadCodec.kt:SchedulingPolicyPayloadCodec$fun decode: SchedulingPolicyPayload</ID>
+    <ID>CyclomaticComplexMethod:SchedulingPolicyValidator.kt:SchedulingPolicyValidator$fun validatePayload: SchedulingPolicyPayload</ID>
+    <ID>CyclomaticComplexMethod:SlotCalculationService.kt:SlotCalculationService$fun findAvailableSlots: List&lt;AvailableSlot></ID>
+    <ID>CyclomaticComplexMethod:WaitlistDeliveryService.kt:WaitlistDeliveryService$private fun terminalizeOffer: WaitlistGenerationProgression</ID>
+    <ID>CyclomaticComplexMethod:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$fun claim: OfferClaimed</ID>
+    <ID>LargeClass:AppointmentRepository.kt:AppointmentRepository : LongJdbcRepository</ID>
+    <ID>LargeClass:ProfileReevaluationRepository.kt:ProfileReevaluationRepository</ID>
+    <ID>LargeClass:ResourceAllocationRepository.kt:ResourceAllocationRepository</ID>
+    <ID>LargeClass:SchedulingPolicyJobRepository.kt:SchedulingPolicyJobRepository</ID>
+    <ID>LargeClass:WaitlistDeliveryRepository.kt:WaitlistDeliveryRepository</ID>
+    <ID>LargeClass:WaitlistRepository.kt:WaitlistRepository</ID>
+    <ID>LongMethod:AppointmentCancellationHistoryRepository.kt:AppointmentCancellationHistoryRepository$fun findPage: PatientCancellationHistoryPage</ID>
+    <ID>LongMethod:AppointmentCancellationHistoryRepositoryTest.kt:AppointmentCancellationHistoryRepositoryTest$@Test fun `patient scope와 boundary가 다른 취소 detail은 page에서 제외한다`</ID>
+    <ID>LongMethod:AppointmentPlanFactory.kt:AppointmentPlanFactory$fun create: AppointmentPlanAggregateRecord</ID>
+    <ID>LongMethod:AppointmentPlanRepository.kt:AppointmentPlanRepository$fun saveAggregate: AppointmentPlanAggregateRecord</ID>
+    <ID>LongMethod:AppointmentPlanRevisionRepository.kt:AppointmentPlanRevisionRepository$fun append: PersistedAppointmentPlanRevisionAggregateRecord</ID>
+    <ID>LongMethod:AppointmentPlanRevisionRepository.kt:AppointmentPlanRevisionRepository$private fun findAggregateById: PersistedAppointmentPlanRevisionAggregateRecord?</ID>
+    <ID>LongMethod:AppointmentPlanRevisionRepositoryTest.kt:AppointmentPlanRevisionRepositoryTest$private fun aggregate</ID>
+    <ID>LongMethod:BookingReliabilityEvaluator.kt:BookingReliabilityEvaluator$private fun evaluateAvailable: BookingReliabilityDecisionRecord</ID>
+    <ID>LongMethod:BookingReliabilityRepositoryTest.kt:BookingReliabilityRepositoryTest$@ParameterizedTest @MethodSource(ENABLE_DIALECTS_METHOD) fun `사건 결정 override 감사 ledger를 idempotent하게 저장한다`</ID>
+    <ID>LongMethod:CatalogSyncApplicationServiceTest.kt:CatalogSyncApplicationServiceTest$@Test fun `stale version observed absent cannot persist after a higher version commits`</ID>
+    <ID>LongMethod:ClosureRescheduleService.kt:ClosureRescheduleService$fun processClosureReschedule: Map&lt;Long, List&lt;RescheduleCandidateRecord>></ID>
+    <ID>LongMethod:ClosureRescheduleService.kt:ClosureRescheduleService$fun streamClosureReschedule: Int</ID>
+    <ID>LongMethod:ClosureRescheduleServicePerformanceTest.kt:ClosureRescheduleServicePerformanceTest$@Test fun `PostgreSQL write transaction의 row lock은 release 후 제한 시간 안에 수렴한다`</ID>
+    <ID>LongMethod:CommitmentRepositoryTestSupport.kt:internal fun withCommitmentTables</ID>
+    <ID>LongMethod:ConcurrentBookingIntegrationTest.kt:ConcurrentBookingIntegrationTest$@Test fun `동시 예약 - maxConcurrent=3에서 10개 동시 요청`</ID>
+    <ID>LongMethod:DoctorRepositoryBulkTest.kt:DoctorRepositoryBulkTest$private fun org.jetbrains.exposed.v1.jdbc.JdbcTransaction.insertFixture: Fixture</ID>
+    <ID>LongMethod:ProductCatalogRepository.kt:ProductCatalogRepository$fun saveAggregate: ProductCatalogProjectionRecord</ID>
+    <ID>LongMethod:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$private fun fairClaimOrder: List&lt;FairClaimCandidate></ID>
+    <ID>LongMethod:ProfileReevaluationRepositoryTest.kt:ProfileReevaluationRepositoryTest$@Test fun `전역 후보 한도를 넘는 대형 병원 적체에서도 다른 병원을 굶기지 않는다`</ID>
+    <ID>LongMethod:ResourceAllocationRepository.kt:ResourceAllocationRepository$private fun validateWaitlistCapacity</ID>
+    <ID>LongMethod:SchedulingPolicyImpactRepository.kt:SchedulingPolicyImpactRepository$private fun scanAppointments: List&lt;PolicyImpactKey></ID>
+    <ID>LongMethod:SchedulingPolicyImpactRepositoryTest.kt:SchedulingPolicyImpactRepositoryTest$@ParameterizedTest @MethodSource(ENABLE_DIALECTS_METHOD) fun `appointment and active plan treatment partitions resume with an exclusive durable cursor`</ID>
+    <ID>LongMethod:SchedulingPolicyJobRepository.kt:SchedulingPolicyJobRepository$private fun validatePreview</ID>
+    <ID>LongMethod:SchedulingPolicyJobRepositoryTest.kt:SchedulingPolicyJobRepositoryTest$@ParameterizedTest @MethodSource("enablePostgreSQL") fun `completed preview alone exposes immutable result hash and activation evidence`</ID>
+    <ID>LongMethod:SchedulingPolicyJobRepositoryTest.kt:SchedulingPolicyJobRepositoryTest$@ParameterizedTest @MethodSource("enablePostgreSQL") fun `scoped idempotency lookup and manual replay preserve immutable missed evidence`</ID>
+    <ID>LongMethod:SchedulingPolicyRepositoryTest.kt:SchedulingPolicyRepositoryTest$@ParameterizedTest @MethodSource("enablePostgreSQL") fun `published interval lookup and immutable snapshot identity are reproducible`</ID>
+    <ID>LongMethod:SchedulingPolicyValidator.kt:SchedulingPolicyValidator$fun validatePayload: SchedulingPolicyPayload</ID>
+    <ID>LongMethod:SlotCalculationService.kt:SlotCalculationService$fun findAvailableSlots: List&lt;AvailableSlot></ID>
+    <ID>LongMethod:WaitlistContentionLoadTest.kt:WaitlistContentionLoadTest$@Test fun `one hundred concurrent offers produce one winner and bounded conflicts`</ID>
+    <ID>LongMethod:WaitlistDeliveryPostgreSqlContentionTest.kt:WaitlistDeliveryPostgreSqlContentionTest$@Test fun `PostgreSQL lock timeout aborts one attempt then retries in a fresh transaction`</ID>
+    <ID>LongMethod:WaitlistDeliveryPostgreSqlContentionTest.kt:WaitlistDeliveryPostgreSqlContentionTest$@Test fun `PostgreSQL serializable contention retries in a fresh transaction`</ID>
+    <ID>LongMethod:WaitlistDeliveryPostgreSqlContentionTest.kt:WaitlistDeliveryPostgreSqlContentionTest$@Test fun `concurrent PostgreSQL fenced claims allow only one winner`</ID>
+    <ID>LongMethod:WaitlistDeliveryService.kt:WaitlistDeliveryService$private fun terminalizeOffer: WaitlistGenerationProgression</ID>
+    <ID>LongMethod:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$fun claim: OfferClaimed</ID>
+    <ID>LongMethod:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$fun release: OfferWithdrawn</ID>
+    <ID>LongMethod:WaitlistOfferService.kt:WaitlistOfferService$private fun tryCreateOffer: CandidateFound?</ID>
+    <ID>LoopWithTooManyJumpStatements:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$for</ID>
+    <ID>LoopWithTooManyJumpStatements:SlotCalculationService.kt:SlotCalculationService$for</ID>
+    <ID>MagicNumber:AppointmentCommandContext.kt:128</ID>
+    <ID>MagicNumber:AppointmentCommitmentRecords.kt:AppointmentVisitIdentityDraft$128</ID>
+    <ID>MagicNumber:AppointmentCommitmentRepository.kt:AppointmentCommitmentRepository$64</ID>
+    <ID>MagicNumber:AppointmentItemRecords.kt:AppointmentItemAppendScope$128</ID>
+    <ID>MagicNumber:AppointmentRepository.kt:AppointmentRepository$101</ID>
+    <ID>MagicNumber:BookingReliabilityPersistenceRecords.kt:BookingReliabilityOverrideAuditRecord$128</ID>
+    <ID>MagicNumber:BookingReliabilityPersistenceRecords.kt:BookingReliabilityOverrideAuditRecord$160</ID>
+    <ID>MagicNumber:BookingReliabilityPersistenceRecords.kt:BookingReliabilityOverrideAuditRecord$32</ID>
+    <ID>MagicNumber:BookingReliabilityPersistenceRecords.kt:BookingReliabilityReevaluationCursor$160</ID>
+    <ID>MagicNumber:BookingReliabilityPersistenceRecords.kt:BookingReliabilityReevaluationJobRecord$160</ID>
+    <ID>MagicNumber:BookingReliabilityPersistenceRecords.kt:BookingReliabilityReevaluationJobRecord$96</ID>
+    <ID>MagicNumber:BookingReliabilityRecords.kt:BookingReliabilityDecisionRecord$512</ID>
+    <ID>MagicNumber:BookingReliabilityRecords.kt:BookingReliabilityEventRecord$160</ID>
+    <ID>MagicNumber:BookingReliabilityReevaluationJobRepository.kt:BookingReliabilityReevaluationJobRepository$160</ID>
+    <ID>MagicNumber:BookingReliabilityReevaluationJobRepository.kt:BookingReliabilityReevaluationJobRepository$30</ID>
+    <ID>MagicNumber:BookingReliabilityReevaluationJobRepository.kt:BookingReliabilityReevaluationJobRepository$5</ID>
+    <ID>MagicNumber:BookingReliabilityReevaluationJobRepository.kt:BookingReliabilityReevaluationJobRepository$96</ID>
+    <ID>MagicNumber:BookingReliabilityRepository.kt:BookingReliabilityRepository$128</ID>
+    <ID>MagicNumber:BookingReliabilityRepository.kt:BookingReliabilityRepository$160</ID>
+    <ID>MagicNumber:BookingReliabilityRepository.kt:BookingReliabilityRepository$32</ID>
+    <ID>MagicNumber:BookingReliabilityRepository.kt:BookingReliabilityRepository$500</ID>
+    <ID>MagicNumber:CatalogDefinitionValidator.kt:CatalogDefinitionValidator$4L</ID>
+    <ID>MagicNumber:CatalogDefinitionValidator.kt:CatalogDefinitionValidator$5L</ID>
+    <ID>MagicNumber:ConsentDecisionModel.kt:ConsentDecision$64</ID>
+    <ID>MagicNumber:EffectivePolicyCache.kt:EffectivePolicyCacheLimits$1024L</ID>
+    <ID>MagicNumber:EffectivePolicyCache.kt:EffectivePolicyCacheLimits$64L</ID>
+    <ID>MagicNumber:EffectivePolicyCache.kt:EffectivePolicyCacheLimits$8L</ID>
+    <ID>MagicNumber:ProfileReevaluationRecords.kt:ClaimProfileReevaluationJobs$160</ID>
+    <ID>MagicNumber:ProfileReevaluationRecords.kt:ClaimProfileReevaluationJobs$64</ID>
+    <ID>MagicNumber:ProfileReevaluationRecords.kt:UpsertProfileChange$160</ID>
+    <ID>MagicNumber:ProfileReevaluationRecords.kt:UpsertProfileChange$256</ID>
+    <ID>MagicNumber:ProfileReevaluationRecords.kt:UpsertProfileChange$512</ID>
+    <ID>MagicNumber:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$160</ID>
+    <ID>MagicNumber:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$256</ID>
+    <ID>MagicNumber:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$30</ID>
+    <ID>MagicNumber:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$5</ID>
+    <ID>MagicNumber:RecordMappers.kt:3</ID>
+    <ID>MagicNumber:ResourceAllocationRepository.kt:ResourceAllocationRepository$500</ID>
+    <ID>MagicNumber:SchedulingPolicyRepository.kt:SchedulingPolicyRepository$1000</ID>
+    <ID>MagicNumber:SchedulingPolicyRepository.kt:SchedulingPolicyRepository$160</ID>
+    <ID>MagicNumber:SchedulingPolicyRepository.kt:SchedulingPolicyRepository$64</ID>
+    <ID>MagicNumber:SchedulingPolicyValidator.kt:SchedulingPolicyValidator$1_000</ID>
+    <ID>MagicNumber:SchedulingPolicyValidator.kt:SchedulingPolicyValidator$24L</ID>
+    <ID>MagicNumber:SchedulingPolicyValidator.kt:SchedulingPolicyValidator$60L</ID>
+    <ID>MagicNumber:WaitlistCommands.kt:ReconcileWaitlistHoldsCommand$500</ID>
+    <ID>MagicNumber:WaitlistDecisionService.kt:WaitlistDecisionService$6</ID>
+    <ID>MagicNumber:WaitlistPolicyEvaluator.kt:100</ID>
+    <ID>MagicNumber:WaitlistPolicyEvaluator.kt:WaitlistPolicyEvaluator$3</ID>
+    <ID>MagicNumber:WaitlistPolicyEvaluator.kt:WaitlistPolicyEvaluator$4</ID>
+    <ID>MagicNumber:WaitlistPolicyEvaluator.kt:WaitlistPolicyEvaluator$5</ID>
+    <ID>MagicNumber:WaitlistPolicyVersions.kt:WaitlistPolicyVersions$10_000</ID>
+    <ID>MagicNumber:WaitlistRepository.kt:RankedWaitlistCandidateRow$6</ID>
+    <ID>MagicNumber:WaitlistRepository.kt:RankedWaitlistCursor$6</ID>
+    <ID>MagicNumber:WaitlistRepository.kt:WaitlistRepository$3</ID>
+    <ID>MagicNumber:WaitlistRepository.kt:WaitlistRepository$5</ID>
+    <ID>MagicNumber:WaitlistRepository.kt:WaitlistRepository$500</ID>
+    <ID>MatchingDeclarationName:CommitmentRepositoryTestSupport.kt:CommitmentSeed</ID>
+    <ID>MatchingDeclarationName:PolicyOverride.kt:OverrideValue&lt;out T> : Serializable</ID>
+    <ID>MaxLineLength:AppointmentCancellationDetailsSchemaTest.kt:AppointmentCancellationDetailsSchemaTest$"jdbc:h2:mem:appointment-cancellation-details-schema-${System.nanoTime()};MODE=PostgreSQL;DB_CLOSE_DELAY=-1"</ID>
+    <ID>MaxLineLength:Appointments.kt:Appointments$val consultationTopicId = optReference("consultation_topic_id", ConsultationTopics, onDelete = ReferenceOption.SET_NULL)</ID>
+    <ID>MaxLineLength:BookingReliabilityDecisionBatchPortTest.kt:BookingReliabilityDecisionBatchPortTest$port.findLatestDecisionStamps(scope, listOf(MemberId("member-missing")), evaluatedAt) shouldBeEqualTo emptyMap()</ID>
+    <ID>MaxLineLength:BookingReliabilityDecisionBatchPortTest.kt:BookingReliabilityDecisionBatchPortTest$port.findLatestDecisionStamps(scope, listOf(memberOne), evaluatedAt.plusSeconds(2)) shouldBeEqualTo emptyMap()</ID>
+    <ID>MaxLineLength:BookingReliabilityRepository.kt:BookingReliabilityRepository$io.bluetape4k.clinic.appointment.model.reliability.BookingReliabilityReevaluationJobStatus.DEAD_LETTER</ID>
+    <ID>MaxLineLength:ClosureRescheduleService.kt:ClosureRescheduleService$log.warn { "closure_reschedule code=affected_limit_rejected affected=${ids.size} searchDays=$searchDays" }</ID>
+    <ID>MaxLineLength:ClosureRescheduleServiceTest.kt:ClosureRescheduleServiceTest$statusEventWriter</ID>
+    <ID>MaxLineLength:DoctorRepository.kt:DoctorRepository$@Cacheable(cacheNames = ["clinic-doctors"], key = "#scope.cacheKey()", unless = "#result == null || #result.isEmpty()")</ID>
+    <ID>MaxLineLength:EquipmentRepository.kt:EquipmentRepository$@Cacheable(cacheNames = ["clinic-equipments"], key = "#scope.cacheKey()", unless = "#result == null || #result.isEmpty()")</ID>
+    <ID>MaxLineLength:EquipmentUnavailabilityExceptions.kt:EquipmentUnavailabilityExceptions$val unavailabilityId = reference("unavailability_id", EquipmentUnavailabilities, onDelete = ReferenceOption.CASCADE)</ID>
+    <ID>MaxLineLength:EquipmentUnavailabilityServiceTest.kt:EquipmentUnavailabilityServiceTest$periods.any { it.date == LocalDate.of(2026, 4, 9) &amp;&amp; it.startTime == LocalTime.of(16, 0) } shouldBeEqualTo true</ID>
+    <ID>MaxLineLength:ProductCatalogRepository.kt:ProductCatalogRepository$this[ProductCatalogBomDependencies.predecessorSequenceNo] = dependency.predecessorSequenceNo.sequenceToSentinel()</ID>
+    <ID>MaxLineLength:ProductCatalogRepository.kt:ProductCatalogRepository$this[ProductCatalogBomDependencies.successorSequenceNo] = dependency.successorSequenceNo.sequenceToSentinel()</ID>
+    <ID>MaxLineLength:RepositoryTransactionContractTest.kt:RepositoryTransactionContractTest$(failure is IllegalStateException &amp;&amp; failure.message.orEmpty().contains("AppointmentOperationalExceptionRepository"))</ID>
+    <ID>MaxLineLength:RescheduleCandidateRepository.kt:RescheduleCandidateRepository$fun</ID>
+    <ID>MaxLineLength:RescheduleCandidates.kt:RescheduleCandidates$index("idx_reschedule_candidates_appointment_selected_priority", false, originalAppointmentId, selected, priority)</ID>
+    <ID>MaxLineLength:ResourceAllocationRepository.kt:ResourceAllocationRepository$if</ID>
+    <ID>MaxLineLength:ResourceAllocationRepositoryTest.kt:ResourceAllocationRepositoryTest$listOf(allocation("laser-capacity", ResourceAllocationMode.CAPACITY_BUCKET, units = 2, maximum = 3))</ID>
+    <ID>MaxLineLength:SchedulingPolicyJobRepositoryTest.kt:SchedulingPolicyJobRepositoryTest$repository.claimDueActivation(commandId, "worker-b", now.plusSeconds(10), now.plusSeconds(40)).shouldBeFalse()</ID>
+    <ID>MaxLineLength:SchedulingPolicyJobRepositoryTest.kt:SchedulingPolicyJobRepositoryTest$repository.claimDueActivation(commandId, "worker-b", now.plusSeconds(31), now.plusSeconds(61)).shouldBeTrue()</ID>
+    <ID>MaxLineLength:SchedulingPolicyRepositoryTest.kt:SchedulingPolicyRepositoryTest$(repository.clinicGenerationDigest(tenantScope.tenantGroupId) == digestBeforeClinicChange) shouldBeEqualTo false</ID>
+    <ID>MaxLineLength:SchedulingPolicyRepositoryTest.kt:SchedulingPolicyRepositoryTest$repository.lockScopeHeads(tenantScope, clinicScope).map { it.clinicScopeKey } shouldBeEqualTo listOf(0L, 41L)</ID>
+    <ID>MaxLineLength:SlotCalculationServiceTest.kt:SlotCalculationServiceTest$SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), consultantId, treatmentTypeId, MONDAY)</ID>
+    <ID>MaxLineLength:SlotCalculationServiceTest.kt:SlotCalculationServiceTest$SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId), doctorId, treatmentTypeId, MONDAY)</ID>
+    <ID>MaxLineLength:SlotCalculationServiceTest.kt:SlotCalculationServiceTest$SlotQuery(TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId1), consultantId1, phoneConsultationId, MONDAY)</ID>
+    <ID>MaxLineLength:TenantGuardRepositoryTest.kt:TenantGuardRepositoryTest$appointmentRepository.findOverlappingByEquipment(scopeB, tenantRows.tenantB.equipmentId, listOf(overlap.copy(equipmentId = tenantRows.tenantB.equipmentId)))</ID>
+    <ID>MaxLineLength:TreatmentTypeRepository.kt:TreatmentTypeRepository$@Cacheable(cacheNames = ["clinic-treatment-types"], key = "#scope.cacheKey()", unless = "#result == null || #result.isEmpty()")</ID>
+    <ID>MaxLineLength:WaitlistAdjustmentRepositoryTest.kt:WaitlistAdjustmentRepositoryTest$repository.consumeRecoveryCredit(scope(), expiredId, expectedVersion = 0L, "decision:expired", BASE_TIME)</ID>
+    <ID>MaxLineLength:WaitlistAdjustmentRepositoryTest.kt:WaitlistAdjustmentRepositoryTest$repository.releaseRestriction(scope(), releaseId, expectedVersion = 0L, ACTOR, "decision:stale", BASE_TIME)</ID>
+    <ID>MaxLineLength:WaitlistAdjustmentRepositoryTest.kt:WaitlistAdjustmentRepositoryTest$repository.revokeBenefitGrant(scope(), revokedId, expectedVersion = 0L, ACTOR, "decision:stale", BASE_TIME)</ID>
+    <ID>MaxLineLength:WaitlistCandidateMatcherTest.kt:WaitlistCandidateMatcherTest$it[sourceAppointmentId] = marker.hashCode().toLong().let { hash -> if (hash == 0L) 1L else kotlin.math.abs(hash) }</ID>
+    <ID>MaxLineLength:WaitlistCandidateMatcherTest.kt:WaitlistCandidateMatcherTest$val boosted = insertEntry(memberId = "member-duplicate-adjustment", doctorId = DOCTOR_ID, priorityRank = 100)</ID>
+    <ID>MaxLineLength:WaitlistCandidateMatcherTest.kt:WaitlistCandidateMatcherTest$val second = matcher.findCandidates(vacancy(), WaitlistCandidateRequest(cursor = first.nextCursor, pageSize = 10))</ID>
+    <ID>MaxLineLength:WaitlistCandidateMatcherTest.kt:WaitlistCandidateMatcherTest$val skipped = insertEntry(memberId = "member-stale", doctorId = DOCTOR_ID, waitingSince = NOW.minusSeconds(100))</ID>
+    <ID>MaxLineLength:WaitlistCapacityHoldIntegrationTest.kt:WaitlistCapacityHoldIntegrationTest$val scope = WaitlistScope(1L, seed.clinicId, io.bluetape4k.clinic.appointment.model.identity.MemberId("member-1"))</ID>
+    <ID>MaxLineLength:WaitlistCapacityHoldIntegrationTest.kt:WaitlistCapacityHoldIntegrationTest$val scope = WaitlistScope(1L, seed.clinicId, io.bluetape4k.clinic.appointment.model.identity.MemberId("member-2"))</ID>
+    <ID>MaxLineLength:WaitlistCapacityHoldIntegrationTest.kt:WaitlistCapacityHoldIntegrationTest$val scope = WaitlistScope(1L, seed.clinicId, io.bluetape4k.clinic.appointment.model.identity.MemberId("member-3"))</ID>
+    <ID>MaxLineLength:WaitlistCommandReservationTest.kt:WaitlistCommandReservationTest$hasher.hash(scope(), commandType = "CONFIRM_OFFER", rawKey = lowerBound).keyDigest shouldStartWith "hmac-sha256:"</ID>
+    <ID>MaxLineLength:WaitlistCommandReservationTest.kt:WaitlistCommandReservationTest$hasher.hash(scope(), commandType = "CONFIRM_OFFER", rawKey = upperBound).keyDigest shouldStartWith "hmac-sha256:"</ID>
+    <ID>MaxLineLength:WaitlistCommandReservationTest.kt:WaitlistCommandReservationTest$private</ID>
+    <ID>MaxLineLength:WaitlistCommandReservationTest.kt:WaitlistCommandReservationTest$val failedId = (repository.reserve(failedKey, requestDigest = DIGEST_A, now = NOW) as CommandReservation.Acquired).recordId</ID>
+    <ID>MaxLineLength:WaitlistCommandReservationTest.kt:WaitlistCommandReservationTest$val recordId = (repository.reserve(key, requestDigest = DIGEST_A, now = NOW) as CommandReservation.Acquired).recordId</ID>
+    <ID>MaxLineLength:WaitlistContentionLoadTest.kt:WaitlistContentionLoadTest$WaitlistOffers.selectAll().where { WaitlistOffers.status eq WaitlistOfferState.OFFERED }.count() shouldBeEqualTo 1L</ID>
+    <ID>MaxLineLength:WaitlistDecisionServiceTest.kt:WaitlistDecisionServiceTest$canonicalPolicyJson = """{"urgencyWeight":1,"recoveryWeight":0,"benefitWeight":0,"reliabilityWeight":0,"waitingAgeWeight":0,"slotFitWeight":0}"""</ID>
+    <ID>MaxLineLength:WaitlistDecisionServiceTest.kt:WaitlistDecisionServiceTest$service.ensureFreshPreview(preview, currentPolicy = policyRecord(policyVersion = 1L, digest = "b".repeat(64)))</ID>
+    <ID>MaxLineLength:WaitlistDecisionServiceTest.kt:WaitlistDecisionServiceTest$service.ensureFreshPreview(preview, currentPolicy = policyRecord(policyVersion = 2L, digest = "b".repeat(64)))</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepository.kt:WaitlistDeliveryRepository$(current.status == VacancyJobState.PROCESSING &amp;&amp; current.leaseExpiresAt != null &amp;&amp; current.leaseExpiresAt &lt;= now)</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$repository.completeOffer(claim.copy(leaseVersion = claim.leaseVersion + 1), now = NOW.plusSeconds(1), offerId = 10L).shouldBeFalse()</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$repository.completeOffer(claim.copy(owner = "worker-b"), now = NOW.plusSeconds(1), offerId = 10L).shouldBeFalse()</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$repository.completeOffer(claim.copy(version = claim.version + 1), now = NOW.plusSeconds(1), offerId = 10L).shouldBeFalse()</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$repository.completeOffer(ownerClaim.copy(owner = "worker-b"), now = NOW.plusSeconds(1), offerId = 10L).shouldBeFalse()</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$repository.completeOffer(rowVersionClaim.copy(version = rowVersionClaim.version + 1), now = NOW.plusSeconds(1), offerId = 10L)</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$vacancy(vacancyGeneration = 2L, activeVacancyKey = "vacancy-key-2", sourceTransitionId = "transition-2")</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$vacancy(vacancyGeneration = 3L, activeVacancyKey = "vacancy-key-3", sourceTransitionId = "transition-3")</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$vacancy(vacancyGeneration = 4L, activeVacancyKey = "vacancy-key-4", sourceTransitionId = "transition-4")</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$vacancy(vacancyGeneration = 5L, activeVacancyKey = "vacancy-key-5", sourceTransitionId = "transition-5")</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$val claim = requireNotNull(repository.claim(job.id, owner = "worker-a", now = NOW, leaseUntil = NOW.plusSeconds(30)))</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$val job = repository.insertVacancy(vacancy(vacancyGeneration = 6L, activeVacancyKey = "vacancy-key-6", sourceTransitionId = "transition-6"))</ID>
+    <ID>MaxLineLength:WaitlistDeliveryRepositoryTest.kt:WaitlistDeliveryRepositoryTest$val job = repository.insertVacancy(vacancy(vacancyGeneration = 7L, activeVacancyKey = "vacancy-key-7", sourceTransitionId = "transition-7"))</ID>
+    <ID>MaxLineLength:WaitlistExpiryProgressionTest.kt:WaitlistExpiryProgressionTest$waitlistRepository.findHoldForUpdate(scope, ids.holdId)?.status shouldBeEqualTo WaitlistCapacityHoldState.EXPIRED</ID>
+    <ID>MaxLineLength:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$"Waitlist offer claimed: tenantGroupId=${command.scope.tenantGroupId}, clinicId=${command.scope.clinicId}, "</ID>
+    <ID>MaxLineLength:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$"Waitlist offer released: tenantGroupId=${command.scope.tenantGroupId}, clinicId=${command.scope.clinicId}, "</ID>
+    <ID>MaxLineLength:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$if</ID>
+    <ID>MaxLineLength:WaitlistOfferClaimServiceTest.kt:WaitlistOfferClaimServiceTest$repository.casEntry(scope(), entryId, expectedVersion = 0L, WaitlistEntryState.WAITING, WaitlistEntryState.OFFERED)</ID>
+    <ID>MaxLineLength:WaitlistOfferServiceTest.kt:WaitlistOfferServiceTest$WaitlistEntries.selectAll().where { WaitlistEntries.id eq ids.entryId }.single()[WaitlistEntries.status]</ID>
+    <ID>MaxLineLength:WaitlistPolicyDocument.kt:DecodedWaitlistPolicyDocument$require</ID>
+    <ID>MaxLineLength:WaitlistPolicyDocumentTest.kt:WaitlistPolicyDocumentTest$codec.decode("""{"container":{"level1":{"level2":{"level3":{"level4":{"level5":{"level6":{"level7":{"level8":1}}}}}}}}}""")</ID>
+    <ID>MaxLineLength:WaitlistPolicyRepositoryTest.kt:WaitlistPolicyRepositoryTest$events.map { it[WaitlistPolicyEvents.actorRef] } shouldBeEqualTo listOf(ACTOR.value, ACTOR.value, ACTOR.value)</ID>
+    <ID>MaxLineLength:WaitlistPolicyRepositoryTest.kt:WaitlistPolicyRepositoryTest$repository.findById(scope(), overlapping.id).shouldNotBeNull().status shouldBeEqualTo WaitlistPolicyState.DRAFT</ID>
+    <ID>MaxLineLength:WaitlistRecoveryRestartTest.kt:WaitlistRecoveryRestartTest$WaitlistCapacityHolds.selectAll().where { WaitlistCapacityHolds.id eq fixture.holdId }.single()[WaitlistCapacityHolds.status]</ID>
+    <ID>MaxLineLength:WaitlistRecoveryRestartTest.kt:WaitlistRecoveryRestartTest$WaitlistEntries.selectAll().where { WaitlistEntries.id eq fixture.entryId }.single()[WaitlistEntries.status]</ID>
+    <ID>MaxLineLength:WaitlistRecoveryRestartTest.kt:WaitlistRecoveryRestartTest$WaitlistOffers.selectAll().where { WaitlistOffers.id eq fixture.offerId }.single()[WaitlistOffers.status]</ID>
+    <ID>MaxLineLength:WaitlistRecoveryServiceTest.kt:WaitlistRecoveryServiceTest$repository.casEntry(scope(memberId), entryId, expectedVersion = 0L, WaitlistEntryState.WAITING, WaitlistEntryState.OFFERED)</ID>
+    <ID>MaxLineLength:WaitlistRecoveryServiceTest.kt:WaitlistRecoveryServiceTest$repository.findHoldForUpdate(scope("member-offered-started"), offeredPastStart.holdId)?.status</ID>
+    <ID>MaxLineLength:WaitlistRecoveryServiceTest.kt:WaitlistRecoveryServiceTest$repository.findOfferForUpdate(scope("member-offered-started"), offeredPastStart.offerId)?.status</ID>
+    <ID>MaxLineLength:WaitlistRepositoryTest.kt:WaitlistRepositoryTest$offer = newOffer(entryId = entryId, activeEntryKey = "entry-$entryId", activeVacancyKey = "vacancy-1")</ID>
+    <ID>MaxLineLength:WaitlistRepositoryTest.kt:WaitlistRepositoryTest$offer = newOffer(existingEntry.id, activeEntryKey = "entry-existing", activeVacancyKey = "offer-existing")</ID>
+    <ID>MaxLineLength:WaitlistRepositoryTest.kt:WaitlistRepositoryTest$repository.casEntry(scope("member-cas"), entryId, expectedVersion = 0L, WaitlistEntryState.WAITING, WaitlistEntryState.OFFERED)</ID>
+    <ID>MaxLineLength:WaitlistRepositoryTest.kt:WaitlistRepositoryTest$repository.casOffer(scope("member-cas"), ids.offerId, expectedVersion = 0L, WaitlistOfferState.OFFERED, WaitlistOfferState.ACCEPTED)</ID>
+    <ID>MaxLineLength:WaitlistRepositoryTest.kt:WaitlistRepositoryTest$repository.casOffer(scope("member-cas"), ids.offerId, expectedVersion = 0L, WaitlistOfferState.OFFERED, WaitlistOfferState.DECLINED) shouldBeEqualTo false</ID>
+    <ID>MaxLineLength:WaitlistRepositoryTest.kt:WaitlistRepositoryTest$repository.findExpiredHolds(limit = 10, now = BASE_TIME.plusSeconds(31)).map { it.id } shouldBeEqualTo listOf(ids.holdId)</ID>
+    <ID>MaxLineLength:WaitlistRepositoryTest.kt:WaitlistRepositoryTest$val newEntry = repository.findCandidatePage(vacancy(), cursor = null, limit = 10).single { it.id == newEntryId }</ID>
+    <ID>MaxLineLength:WaitlistVacancyJobs.kt:WaitlistVacancyJobs$uniqueIndex("uq_waitlist_vacancy_source_transition", tenantGroupId, clinicId, sourceAppointmentId, sourceTransitionId)</ID>
+    <ID>MaxLineLength:WithTables.kt:logger.error(ex) { "Drop Tables 에서 예외가 발생했습니다. 삭제할 테이블: ${tablesToUse.joinToString { it.tableName }}" }</ID>
+    <ID>ReturnCount:AppointmentCommandIdempotencyRepository.kt:AppointmentCommandIdempotencyRepository$private fun ResultRow.toCommandResultRecord: AppointmentCommandResultRecord?</ID>
+    <ID>ReturnCount:AppointmentCommitmentRepository.kt:private fun ResultRow.toBookingReliabilityStamp: BookingReliabilityDecisionStamp?</ID>
+    <ID>ReturnCount:AppointmentPlanRevisionRepository.kt:AppointmentPlanRevisionRepository$fun activate: Boolean</ID>
+    <ID>ReturnCount:BookingReliabilityEvaluator.kt:BookingReliabilityEvaluator$private fun BookingReliabilityEventRecord.isLateCancellation: Boolean</ID>
+    <ID>ReturnCount:BookingReliabilityEvaluator.kt:BookingReliabilityEvaluator$private fun evaluateAvailable: BookingReliabilityDecisionRecord</ID>
+    <ID>ReturnCount:BookingReliabilityReevaluationJobRepository.kt:BookingReliabilityReevaluationJobRepository$fun checkpoint: Boolean</ID>
+    <ID>ReturnCount:BookingReliabilityReevaluationJobRepository.kt:BookingReliabilityReevaluationJobRepository$fun claimDue: BookingReliabilityReevaluationJobRecord?</ID>
+    <ID>ReturnCount:BookingReliabilityReevaluationJobRepository.kt:BookingReliabilityReevaluationJobRepository$fun scheduleRetry: Boolean</ID>
+    <ID>ReturnCount:BookingReliabilityReevaluationJobRepository.kt:BookingReliabilityReevaluationJobRepository$private fun isMonotonic: Boolean</ID>
+    <ID>ReturnCount:ProductCatalogRepository.kt:ProductCatalogRepository$fun resolveSync: CatalogSyncResult</ID>
+    <ID>ReturnCount:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$fun advanceCursor: Boolean</ID>
+    <ID>ReturnCount:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$fun advanceTargets: ProfileReevaluationJobRecord?</ID>
+    <ID>ReturnCount:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$fun defer: Boolean</ID>
+    <ID>ReturnCount:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$fun lockCurrentRevision: Boolean</ID>
+    <ID>ReturnCount:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$fun markStale: Boolean</ID>
+    <ID>ReturnCount:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$fun redriveFailed: ProfileReevaluationJobRecord?</ID>
+    <ID>ReturnCount:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$fun scheduleRetry: Boolean</ID>
+    <ID>ReturnCount:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$private fun claimCandidate: ProfileReevaluationJobRecord?</ID>
+    <ID>ReturnCount:ProfileReevaluationRepository.kt:ProfileReevaluationRepository$private fun matchesCurrentRevision: Boolean</ID>
+    <ID>ReturnCount:ResourceAllocationRepository.kt:ResourceAllocationRepository$fun releaseWaitlistCapacityHold: Boolean</ID>
+    <ID>ReturnCount:SchedulingPolicyImpactRepository.kt:SchedulingPolicyImpactRepository$private fun scanTenantFutureWork: PolicyImpactPage</ID>
+    <ID>ReturnCount:SchedulingPolicyJobRepository.kt:SchedulingPolicyJobRepository$fun checkpointPreview: Boolean</ID>
+    <ID>ReturnCount:SchedulingPolicyJobRepository.kt:SchedulingPolicyJobRepository$private fun requireCurrentPreviewOwner: SchedulingPolicyPreviewJobRecord?</ID>
+    <ID>ReturnCount:UnavailabilityExpander.kt:UnavailabilityExpander$private fun expandOneTime: List&lt;UnavailablePeriod></ID>
+    <ID>ReturnCount:WaitlistDeliveryRepository.kt:WaitlistDeliveryRepository$fun reconcileCommandSucceeded: Boolean</ID>
+    <ID>ReturnCount:WaitlistDeliveryRepository.kt:WaitlistDeliveryRepository$private fun claimWithStrategy: VacancyClaim?</ID>
+    <ID>ReturnCount:WaitlistDeliveryService.kt:WaitlistDeliveryService$fun process: WaitlistDeliveryResult</ID>
+    <ID>ReturnCount:WaitlistDeliveryService.kt:WaitlistDeliveryService$private fun terminalizeOffer: WaitlistGenerationProgression</ID>
+    <ID>ReturnCount:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$private fun progressVacancyAfterTerminal</ID>
+    <ID>ReturnCount:WaitlistOfferService.kt:WaitlistOfferService$private fun tryCreateOffer: CandidateFound?</ID>
+    <ID>ReturnCount:WaitlistRecoveryService.kt:WaitlistRecoveryService$private fun progressVacancyAfterTerminal</ID>
+    <ID>ReturnCount:WaitlistRepository.kt:WaitlistRepository$private fun keysetCondition: Op&lt;Boolean></ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentCommandContext.kt:AppointmentCausationId : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:AppointmentCommandContext.kt:AppointmentCorrelationId : Serializable</ID>
+    <ID>SerialVersionUIDInSerializableClass:SchedulingPolicyImpactRepository.kt:PolicyImpactCursor.Companion$const val serialVersionUID: Long = 1L</ID>
+    <ID>SwallowedException:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$ex: ResourceAllocationConflictException</ID>
+    <ID>SwallowedException:WaitlistOfferService.kt:WaitlistOfferService$ex: OfferAlreadyExists</ID>
+    <ID>SwallowedException:WaitlistOfferService.kt:WaitlistOfferService$ex: ResourceAllocationConflictException</ID>
+    <ID>ThrowsCount:BookingReliabilityRepository.kt:BookingReliabilityRepository$fun appendOverride: BookingReliabilityOverrideAuditRecord</ID>
+    <ID>ThrowsCount:ClosureRescheduleService.kt:ClosureRescheduleService$private fun confirmRescheduleInTransaction: Long</ID>
+    <ID>ThrowsCount:ResourceAllocationRepository.kt:ResourceAllocationRepository$private fun validateExistingOverlap</ID>
+    <ID>ThrowsCount:ResourceAllocationRepository.kt:ResourceAllocationRepository$private fun validateWaitlistCapacity</ID>
+    <ID>ThrowsCount:WaitlistAdjustmentRepository.kt:WaitlistAdjustmentRepository$fun consumeBenefitGrant: Long</ID>
+    <ID>ThrowsCount:WaitlistDecisionService.kt:WaitlistDecisionService$fun override: WaitlistDecisionOverrideResult</ID>
+    <ID>ThrowsCount:WaitlistDeliveryRepository.kt:WaitlistDeliveryRepository$fun &lt;T> withContentionRetry: T</ID>
+    <ID>ThrowsCount:WaitlistDeliveryRepository.kt:WaitlistDeliveryRepository$fun reserve: CommandReservation</ID>
+    <ID>ThrowsCount:WaitlistDeliveryService.kt:WaitlistDeliveryService$fun process: WaitlistDeliveryResult</ID>
+    <ID>ThrowsCount:WaitlistDeliveryService.kt:WaitlistDeliveryService$private fun terminalizeOffer: WaitlistGenerationProgression</ID>
+    <ID>ThrowsCount:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$fun claim: OfferClaimed</ID>
+    <ID>ThrowsCount:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$fun release: OfferWithdrawn</ID>
+    <ID>ThrowsCount:WaitlistOfferClaimService.kt:WaitlistOfferClaimService$internal fun expireLockedRows</ID>
+    <ID>ThrowsCount:WaitlistOfferService.kt:WaitlistOfferService$fun selectAndOffer: CandidateFound</ID>
+    <ID>ThrowsCount:WaitlistOfferService.kt:WaitlistOfferService$private fun tryCreateOffer: CandidateFound?</ID>
+    <ID>ThrowsCount:WaitlistPolicyDocument.kt:WaitlistPolicyDocumentCodec$fun decode: DecodedWaitlistPolicyDocument</ID>
+    <ID>ThrowsCount:WaitlistPolicyDocument.kt:WaitlistPolicyDocumentCodec$private fun readDocument: WaitlistPolicyDocument</ID>
+    <ID>ThrowsCount:WaitlistPolicyRepository.kt:WaitlistPolicyRepository$fun activate: ClinicWaitlistPolicyRecord</ID>
+    <ID>ThrowsCount:WaitlistRecoveryService.kt:WaitlistRecoveryService$private fun expireLockedRows</ID>
+    <ID>TooGenericExceptionCaught:ClosureRescheduleService.kt:ClosureRescheduleService$failure: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:SchedulingPolicyPayloadCodec.kt:SchedulingPolicyPayloadCodec$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:StrictJsonPayloadDecoder.kt:StrictJsonPayloadDecoder$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:WaitlistDeliveryService.kt:WaitlistDeliveryService$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:WaitlistPolicyDocument.kt:WaitlistPolicyDocumentCodec$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:WaitlistRepository.kt:WaitlistRepository$ex: Exception</ID>
+    <ID>TooManyFunctions:AppointmentCommitmentRepository.kt:AppointmentCommitmentRepository</ID>
+    <ID>TooManyFunctions:AppointmentRepository.kt:AppointmentRepository : LongJdbcRepository</ID>
+    <ID>TooManyFunctions:BookingReliabilityReevaluationJobRepository.kt:BookingReliabilityReevaluationJobRepository</ID>
+    <ID>TooManyFunctions:BookingReliabilityRepository.kt:BookingReliabilityRepository</ID>
+    <ID>TooManyFunctions:CatalogDefinitionValidator.kt:CatalogDefinitionValidator</ID>
+    <ID>TooManyFunctions:DoctorRepository.kt:DoctorRepository : LongJdbcRepository</ID>
+    <ID>TooManyFunctions:EquipmentUnavailabilityRepository.kt:EquipmentUnavailabilityRepository</ID>
+    <ID>TooManyFunctions:EquipmentUnavailabilityService.kt:EquipmentUnavailabilityService</ID>
+    <ID>TooManyFunctions:ProfileReevaluationRepository.kt:ProfileReevaluationRepository</ID>
+    <ID>TooManyFunctions:RecordMappers.kt:io.bluetape4k.clinic.appointment.repository.RecordMappers.kt</ID>
+    <ID>TooManyFunctions:ResourceAllocationRepository.kt:ResourceAllocationRepository</ID>
+    <ID>TooManyFunctions:SchedulingPolicyCompiler.kt:SchedulingPolicyCompiler</ID>
+    <ID>TooManyFunctions:SchedulingPolicyHasher.kt:SchedulingPolicyHasher</ID>
+    <ID>TooManyFunctions:SchedulingPolicyJobRepository.kt:SchedulingPolicyJobRepository</ID>
+    <ID>TooManyFunctions:SchedulingPolicyRepository.kt:SchedulingPolicyRepository</ID>
+    <ID>TooManyFunctions:SchedulingPolicyValidator.kt:SchedulingPolicyValidator</ID>
+    <ID>TooManyFunctions:TreatmentTypeRepository.kt:TreatmentTypeRepository : LongJdbcRepository</ID>
+    <ID>TooManyFunctions:WaitlistAdjustmentRepository.kt:WaitlistAdjustmentRepository</ID>
+    <ID>TooManyFunctions:WaitlistDeliveryRepository.kt:WaitlistDeliveryRepository</ID>
+    <ID>TooManyFunctions:WaitlistPolicyRepository.kt:WaitlistPolicyRepository</ID>
+    <ID>TooManyFunctions:WaitlistRepository.kt:WaitlistRepository</ID>
+    <ID>UnusedParameter:WaitlistPolicyEvaluator.kt:WaitlistPolicyEvaluator$vacancy: WaitlistPolicyVacancy</ID>
+    <ID>WildcardImport:SchedulingPolicyCompiler.kt:import io.bluetape4k.clinic.appointment.model.policy.*</ID>
+    <ID>WildcardImport:SchedulingPolicyCompilerTest.kt:import io.bluetape4k.clinic.appointment.model.policy.*</ID>
+    <ID>WildcardImport:SchedulingPolicyHasher.kt:import io.bluetape4k.clinic.appointment.model.policy.*</ID>
+    <ID>WildcardImport:SchedulingPolicyImpactRepositoryTest.kt:import io.bluetape4k.clinic.appointment.model.tables.*</ID>
+  </CurrentIssues>
+</SmellBaseline>

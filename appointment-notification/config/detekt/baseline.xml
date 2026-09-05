@@ -1,0 +1,244 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:JdbcNotificationOutboxRepository.kt:JdbcNotificationOutboxRepository$updated &amp;&amp; owner != null &amp;&amp; token != null &amp;&amp; attemptNumber > 0</ID>
+    <ID>ComplexCondition:NotificationOutboxWorker.kt:NotificationOutboxWorker$profileResolver != null &amp;&amp; templateRenderer != null &amp;&amp; providerChannel != null &amp;&amp; providerIdempotencyKeyFactory != null</ID>
+    <ID>ComplexCondition:WaitlistOfferNotificationStore.kt:JdbcWaitlistOfferNotificationStore$!payloadMatches || entry == null || hold == null || hold.id != stored.holdId</ID>
+    <ID>CyclomaticComplexMethod:NotificationOutboxWorker.kt:NotificationOutboxWorker$private suspend fun processRuntimeDelivery: NotificationOutboxWorkerResult</ID>
+    <ID>CyclomaticComplexMethod:NotificationReminderRecoveryScanner.kt:NotificationReminderRecoveryScanner$suspend fun scanOnce: ReminderRecoveryScanResult</ID>
+    <ID>CyclomaticComplexMethod:WaitlistOfferNotificationStore.kt:JdbcWaitlistOfferNotificationStore$override suspend fun claim: WaitlistOfferNotificationClaim?</ID>
+    <ID>CyclomaticComplexMethod:WaitlistOfferNotificationWorker.kt:WaitlistOfferNotificationWorker$suspend fun runOnce: WaitlistDeliveryAttempt</ID>
+    <ID>LargeClass:JdbcNotificationOutboxRepository.kt:JdbcNotificationOutboxRepository : NotificationOutboxWriterNotificationOutboxWorkPersistenceNotificationOutboxObservationPersistence</ID>
+    <ID>LargeClass:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest</ID>
+    <ID>LargeClass:NotificationAutoConfiguration.kt:NotificationAutoConfiguration</ID>
+    <ID>LargeClass:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest</ID>
+    <ID>LongMethod:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$@Test fun `ready query contracts and indexes stay aligned`</ID>
+    <ID>LongMethod:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$@Test fun `stale completion은 실패하고 현재 lease만 완료할 수 있다`</ID>
+    <ID>LongMethod:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$@Test fun `예약 변경 억제는 pending과 claimed 리마인더를 종료하고 늦은 fence 완료를 거절한다`</ID>
+    <ID>LongMethod:NotificationCodecBacklogBenchmarkTest.kt:NotificationCodecBacklogBenchmarkTest$@Test fun `mixed notification codec backlog drains from the real outbox table`</ID>
+    <ID>LongMethod:NotificationOutboxMetricsTest.kt:NotificationOutboxMetricsTest$@Test fun `설계 기준의 metric 이름만 등록하고 태그는 낮은 cardinality 값만 사용한다`</ID>
+    <ID>LongMethod:NotificationOutboxRedisConcurrencyIntegrationTest.kt:NotificationOutboxRedisConcurrencyIntegrationTest$@Test fun `Redis 8점 8에서 두 dispatcher coordinator가 global과 clinic 상한을 공유한다`</ID>
+    <ID>LongMethod:NotificationOutboxRedisConcurrencyIntegrationTest.kt:NotificationOutboxRedisConcurrencyIntegrationTest$@Test fun `in-flight action은 Redis connection 단절 후 중단되고 다른 coordinator가 lease 만료 뒤 회복한다`</ID>
+    <ID>LongMethod:NotificationOutboxWorker.kt:NotificationOutboxWorker$private suspend fun processRuntimeDelivery: NotificationOutboxWorkerResult</ID>
+    <ID>LongMethod:NotificationProperties.kt:NotificationProperties.WorkerProperties$fun validate: WorkerProperties</ID>
+    <ID>LongMethod:NotificationSchemaReadiness.kt:NotificationSchemaReadiness$fun check: NotificationReadiness</ID>
+    <ID>LongMethod:RedisNotificationAdmissionBenchmark.kt:RedisNotificationAdmissionBenchmark$@JvmStatic fun main</ID>
+    <ID>LongMethod:RedisNotificationAdmissionBenchmark.kt:RedisNotificationAdmissionBenchmark$private fun buildReport: String</ID>
+    <ID>LongMethod:RedisNotificationAdmissionBenchmark.kt:RedisNotificationAdmissionBenchmark$private suspend fun runScenario: ScenarioResult</ID>
+    <ID>LongMethod:RedisNotificationKeyLifecycleBenchmark.kt:RedisNotificationKeyLifecycleBenchmark$@JvmStatic fun main</ID>
+    <ID>LongMethod:RedisNotificationKeyLifecycleBenchmark.kt:RedisNotificationKeyLifecycleBenchmark$private suspend fun runScenario: ScenarioResult</ID>
+    <ID>LongMethod:WaitlistOfferNotificationStore.kt:JdbcWaitlistOfferNotificationStore$override suspend fun claim: WaitlistOfferNotificationClaim?</ID>
+    <ID>LongMethod:WaitlistOfferNotificationWorker.kt:WaitlistOfferNotificationWorker$suspend fun runOnce: WaitlistDeliveryAttempt</ID>
+    <ID>LoopWithTooManyJumpStatements:NotificationSchemaReadiness.kt:NotificationSchemaReadiness.Companion$while</ID>
+    <ID>MagicNumber:JdbcNotificationOutboxRepository.kt:128</ID>
+    <ID>MagicNumber:JdbcNotificationOutboxRepository.kt:72</ID>
+    <ID>MagicNumber:MemberNotificationProfile.kt:MemberNotificationProfile$120</ID>
+    <ID>MagicNumber:MemberNotificationProfile.kt:MemberNotificationProfile$320</ID>
+    <ID>MagicNumber:MemberNotificationProfileResolver.kt:BoundedMemberNotificationProfileResolver$100</ID>
+    <ID>MagicNumber:NotificationAppointmentEventConsumer.kt:NotificationAppointmentEventConsumer$30</ID>
+    <ID>MagicNumber:NotificationAutoConfiguration.kt:NotificationAutoConfiguration$8</ID>
+    <ID>MagicNumber:NotificationCryptoProperties.kt:NotificationCryptoProperties$35</ID>
+    <ID>MagicNumber:NotificationDirectOutboxDelivery.kt:NotificationDirectOutboxDelivery$128</ID>
+    <ID>MagicNumber:NotificationEventListener.kt:30</ID>
+    <ID>MagicNumber:NotificationEventListener.kt:NotificationDirectDeliveryExecutor$10</ID>
+    <ID>MagicNumber:NotificationEventListener.kt:NotificationDirectDeliveryExecutor$5</ID>
+    <ID>MagicNumber:NotificationLeaderHealth.kt:NotificationLeaderHealthMonitor$30</ID>
+    <ID>MagicNumber:NotificationLeaderHealth.kt:NotificationLeaderHealthMonitor$5</ID>
+    <ID>MagicNumber:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$0.01</ID>
+    <ID>MagicNumber:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$0.05</ID>
+    <ID>MagicNumber:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$0.20</ID>
+    <ID>MagicNumber:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$0.50</ID>
+    <ID>MagicNumber:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$10</ID>
+    <ID>MagicNumber:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$10_000</ID>
+    <ID>MagicNumber:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$15</ID>
+    <ID>MagicNumber:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$30</ID>
+    <ID>MagicNumber:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$5</ID>
+    <ID>MagicNumber:NotificationOutboxConcurrencyCoordinator.kt:RedisNotificationOutboxConcurrencyCoordinator$4</ID>
+    <ID>MagicNumber:NotificationOutboxHealthIndicator.kt:NotificationComponentState$64</ID>
+    <ID>MagicNumber:NotificationOutboxWorker.kt:NotificationOutboxWorker$128</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.ChannelWorkerProperties$100</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.ChannelWorkerProperties$30</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.LeaderHealthProperties$30</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.LeaderHealthProperties$5</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.ObservationProperties$10</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.RetentionProperties$100</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.RetentionProperties$30</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.RetentionProperties$7</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.WorkerProperties$10</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.WorkerProperties$100</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.WorkerProperties$100_000</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.WorkerProperties$12</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.WorkerProperties$24</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.WorkerProperties$30</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.WorkerProperties$5</ID>
+    <ID>MagicNumber:NotificationProperties.kt:NotificationProperties.WorkerProperties$60</ID>
+    <ID>MagicNumber:NotificationProviderContracts.kt:NotificationProviderIdempotencyKeyFactory$128</ID>
+    <ID>MagicNumber:NotificationProviderContracts.kt:NotificationProviderRequest$320</ID>
+    <ID>MagicNumber:NotificationResilienceProperties.kt:NotificationResilienceProperties.CircuitBreakerProperties$30</ID>
+    <ID>MagicNumber:NotificationResilienceProperties.kt:NotificationResilienceProperties.RetryProperties$500</ID>
+    <ID>MagicNumber:NotificationRetentionRunner.kt:NotificationRetentionRunner$100</ID>
+    <ID>MagicNumber:NotificationRetentionRunner.kt:NotificationRetentionRunner$30</ID>
+    <ID>MagicNumber:NotificationRetentionRunner.kt:NotificationRetentionRunner$7</ID>
+    <ID>MagicNumber:NotificationRetryPolicy.kt:NotificationRetryPolicy$10</ID>
+    <ID>MagicNumber:NotificationRetryPolicy.kt:NotificationRetryPolicy$15</ID>
+    <ID>MagicNumber:NotificationRetryPolicy.kt:NotificationRetryPolicy$50</ID>
+    <ID>MagicNumber:NotificationRetryPolicy.kt:NotificationRetryPolicy$72</ID>
+    <ID>MagicNumber:NotificationSchedulingRunners.kt:NotificationObservationSchedulingRunner$30</ID>
+    <ID>MagicNumber:NotificationSchedulingRunners.kt:NotificationOutboxSchedulingRunner$30</ID>
+    <ID>MagicNumber:NotificationSchedulingRunners.kt:NotificationReminderSchedulingRunner$30</ID>
+    <ID>MagicNumber:NotificationSchedulingRunners.kt:NotificationRetentionSchedulingRunner$30</ID>
+    <ID>MagicNumber:NotificationSchemaReadiness.kt:NotificationSchemaReadiness.Companion$128</ID>
+    <ID>MagicNumber:NotificationTemplateCatalog.kt:2_000</ID>
+    <ID>MagicNumber:NotificationTemplateCatalog.kt:NotificationTemplate$64</ID>
+    <ID>MagicNumber:NotificationTemplateCatalog.kt:WaitlistOfferNotificationTemplateRenderer$1_000</ID>
+    <ID>MagicNumber:NotificationTemplateCatalog.kt:WaitlistOfferNotificationTemplateRenderer$4_000</ID>
+    <ID>MagicNumber:NotificationTemplateRenderer.kt:NotificationTemplateRenderer$1_000</ID>
+    <ID>MagicNumber:NotificationTemplateRenderer.kt:NotificationTemplateRenderer$4_000</ID>
+    <ID>MagicNumber:NotificationTemplateRenderer.kt:NotificationTemplateRenderer$64</ID>
+    <ID>MagicNumber:ResilientNotificationChannel.kt:ResilientNotificationChannel$5</ID>
+    <ID>MagicNumber:ResilientNotificationChannel.kt:ResilientNotificationChannel.Companion$30</ID>
+    <ID>MagicNumber:WaitlistOfferNotificationStore.kt:JdbcWaitlistOfferNotificationStore$128</ID>
+    <ID>MagicNumber:WaitlistOfferNotificationStore.kt:JdbcWaitlistOfferNotificationStore$5</ID>
+    <ID>MagicNumber:WaitlistOfferNotificationStore.kt:JdbcWaitlistOfferNotificationStore$60</ID>
+    <ID>MagicNumber:WaitlistOfferNotificationWorker.kt:WaitlistOfferNotificationWorker$128</ID>
+    <ID>MatchingDeclarationName:NotificationLeaderTestFixtures.kt:ReusableLeaderElectorFactory : LeaderElectorFactory</ID>
+    <ID>MaxLineLength:AppointmentReminderScheduler.kt:AppointmentReminderScheduler$private operator</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxConcurrencyTest.kt:JdbcNotificationOutboxConcurrencyTest$"jdbc:h2:mem:notification_outbox_concurrency_${Base58.randomString(8)};DB_CLOSE_DELAY=-1;MODE=PostgreSQL;LOCK_TIMEOUT=10000"</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxConcurrencyTest.kt:JdbcNotificationOutboxConcurrencyTest$val</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepository.kt:JdbcNotificationOutboxRepository$((NotificationOutboxEvents.availableAt eq cursorAvailableAt) and (NotificationOutboxEvents.id greater cursorId))</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepository.kt:JdbcNotificationOutboxRepository$.</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepository.kt:JdbcNotificationOutboxRepository$it[NotificationDeliveryAttempts.durationMillis] = Duration.between(startedAt, completedAt).toMillis().coerceAtLeast(0L)</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepository.kt:JdbcNotificationOutboxRepository$it[channel] = row[NotificationOutboxEvents.channel] ?: error("sendable notification outbox row must have channel")</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepository.kt:JdbcNotificationOutboxRepository$it[eventType] = row[NotificationOutboxEvents.eventType] ?: error("sendable notification outbox row must have eventType")</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$NotificationDestinationFingerprint(TEST_DESTINATION_FINGERPRINT).value shouldBeEqualTo TEST_DESTINATION_FINGERPRINT</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$NotificationOutboxQueryContracts.readyClinicCursor.orderBy shouldBeEqualTo listOf("tenant_group_id", "clinic_id")</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$assertFailsWith&lt;IllegalArgumentException> { NotificationDestinationFingerprint("v1:hmac-sha256:abcdef0123456789") }</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$assertFailsWith&lt;IllegalArgumentException> { NotificationDestinationFingerprint("v1:hmac-sha256:member@example.com") }</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$assertFailsWith&lt;IllegalArgumentException> { NotificationProviderMessageReference("NullPointerException: raw failure") }</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$currentAttempt[NotificationDeliveryAttempts.outcome] shouldBeEqualTo NotificationDeliveryAttemptOutcome.SUCCESS</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$exhaustedRow[NotificationOutboxEvents.failureCode] shouldBeEqualTo NotificationFailureCode.PROVIDER_UNAVAILABLE</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$repository.enqueue(sendableDraft(eventId = "event-broken", digest = "digest-broken", providerKey = "dummy-broken"))</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$sendableDraft(eventId = "expired-foreign", digest = "expired-foreign", tenantGroupId = 2L, clinicId = 3L)</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$staleAttempt[NotificationDeliveryAttempts.failureCode] shouldBeEqualTo NotificationFailureCode.LEASE_LOST.name</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$staleAttempt[NotificationDeliveryAttempts.outcome] shouldBeEqualTo NotificationDeliveryAttemptOutcome.LEASE_LOST</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$val recovered = requireNotNull(repository.recoverExpired(candidate.id, owner = "new-worker", token = "new-token"))</ID>
+    <ID>MaxLineLength:JdbcNotificationOutboxRepositoryTest.kt:JdbcNotificationOutboxRepositoryTest$val suppressed = repository.enqueue(sendableDraft(eventId = "event-suppressed", digest = "digest-suppressed"))</ID>
+    <ID>MaxLineLength:NotificationAppointmentEventConsumer.kt:NotificationAppointmentEventConsumer$private</ID>
+    <ID>MaxLineLength:NotificationAppointmentEventConsumerTest.kt:NotificationAppointmentEventConsumerTest$envelope(AppointmentEventType.CREATED, AppointmentCreatedPayload(AppointmentAggregateId(42), 1, AppointmentState.CONFIRMED))</ID>
+    <ID>MaxLineLength:NotificationAppointmentEventConsumerTest.kt:NotificationAppointmentEventConsumerTest$private</ID>
+    <ID>MaxLineLength:NotificationAutoConfiguration.kt:NotificationAutoConfiguration$"clinic.notification.worker.concurrency-mode=REDIS requires a dedicated notification Redis connection"</ID>
+    <ID>MaxLineLength:NotificationAutoConfiguration.kt:NotificationAutoConfiguration$"member profile resolver, template renderer, and provider idempotency key factory must be configured together"</ID>
+    <ID>MaxLineLength:NotificationAutoConfiguration.kt:NotificationAutoConfiguration$@ConditionalOnProperty(prefix = "clinic.notification.worker", name = ["enabled"], havingValue = "true", matchIfMissing = true)</ID>
+    <ID>MaxLineLength:NotificationAutoConfiguration.kt:NotificationAutoConfiguration$io.bluetape4k.clinic.appointment.event.notification.NotificationFailureCode.DELIVERY_RESULT_UNKNOWN</ID>
+    <ID>MaxLineLength:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest$applicationContext.containsBean("org.springframework.context.annotation.internalScheduledAnnotationProcessor") shouldBeEqualTo false</ID>
+    <ID>MaxLineLength:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest$applicationContext.getBeansOfType(NotificationLeaderAopMetricsRecorder::class.java).size shouldBeEqualTo 0</ID>
+    <ID>MaxLineLength:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest$applicationContext.getBeansOfType(NotificationLeaderAopMetricsRecorder::class.java).size shouldBeEqualTo 1</ID>
+    <ID>MaxLineLength:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest$applicationContext.getBeansOfType(NotificationObservationSchedulingRunner::class.java).size shouldBeEqualTo 1</ID>
+    <ID>MaxLineLength:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest$applicationContext.getBeansOfType(NotificationReminderRecoveryScanner::class.java).size shouldBeEqualTo 0</ID>
+    <ID>MaxLineLength:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest$applicationContext.getBeansOfType(NotificationReminderRecoveryScanner::class.java).size shouldBeEqualTo 1</ID>
+    <ID>MaxLineLength:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest$applicationContext.getBeansOfType(NotificationReminderSchedulingBootstrap::class.java).size shouldBeEqualTo 0</ID>
+    <ID>MaxLineLength:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest$applicationContext.getBeansOfType(NotificationReminderSchedulingBootstrap::class.java).size shouldBeEqualTo 1</ID>
+    <ID>MaxLineLength:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest$applicationContext.getBeansOfType(NotificationReminderSchedulingRunner::class.java).size shouldBeEqualTo 0</ID>
+    <ID>MaxLineLength:NotificationAutoConfigurationTest.kt:NotificationAutoConfigurationTest$observationStore shouldBeEqualTo applicationContext.getBean(JdbcNotificationOutboxObservationStore::class.java)</ID>
+    <ID>MaxLineLength:NotificationCryptoProperties.kt:NotificationCryptoProperties.Companion$Regex("(?:vault|aws-secretsmanager|gcp-secretmanager|azure-keyvault|env|file):\\S+", RegexOption.IGNORE_CASE)</ID>
+    <ID>MaxLineLength:NotificationEventListenerTest.kt:NotificationEventListenerTest$listener.onCancelled(AppointmentDomainEvent.Cancelled(appointmentId = 3L, scope = scope(7L), reason = "private"))</ID>
+    <ID>MaxLineLength:NotificationEventListenerTest.kt:NotificationEventListenerTest$val</ID>
+    <ID>MaxLineLength:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$alert(sample, NotificationOutboxAlertSignal.DELIVERY_RESULT_UNKNOWN, NotificationOutboxAlertSeverity.CRITICAL)</ID>
+    <ID>MaxLineLength:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$alert(sample, NotificationOutboxAlertSignal.DELIVERY_RESULT_UNKNOWN, NotificationOutboxAlertSeverity.WARNING)</ID>
+    <ID>MaxLineLength:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$alert(sample, NotificationOutboxAlertSignal.PROVIDER_FAILURE_RATIO, NotificationOutboxAlertSeverity.CRITICAL)</ID>
+    <ID>MaxLineLength:NotificationOutboxAlertPolicy.kt:NotificationOutboxAlertPolicy$alert(sample, NotificationOutboxAlertSignal.PROVIDER_FAILURE_RATIO, NotificationOutboxAlertSeverity.WARNING)</ID>
+    <ID>MaxLineLength:NotificationOutboxConcurrencyCoordinator.kt:LettuceNotificationPermitSemaphore$is SemaphoreInitializationResult.IntegrityFailure -> NotificationPermitInitialization.IntegrityFailure</ID>
+    <ID>MaxLineLength:NotificationOutboxConcurrencyCoordinator.kt:RedisNotificationOutboxConcurrencyCoordinator$NotificationPermitAcquire.Ambiguous</ID>
+    <ID>MaxLineLength:NotificationOutboxConcurrencyCoordinator.kt:private</ID>
+    <ID>MaxLineLength:NotificationOutboxDispatcherTest.kt:NotificationOutboxDispatcherTest.FairFakeWorkStore$eligibleScopes != null -> TenantClinicScope(it.tenantGroupId.value, it.clinicId.value) in eligibleScopes</ID>
+    <ID>MaxLineLength:NotificationOutboxDispatcherTest.kt:NotificationOutboxDispatcherTest.FairFakeWorkStore$keys.filter { it.tenantGroupId.value &lt;= fairCursor.tenantGroupId.value &amp;&amp; it.clinicId.value &lt;= fairCursor.clinicId.value }</ID>
+    <ID>MaxLineLength:NotificationOutboxDispatcherTest.kt:NotificationOutboxDispatcherTest.FairFakeWorkStore$keys.filter { it.tenantGroupId.value > fairCursor.tenantGroupId.value || it.clinicId.value > fairCursor.clinicId.value }</ID>
+    <ID>MaxLineLength:NotificationOutboxDispatcherTest.kt:NotificationOutboxDispatcherTest.FairFakeWorkStore$override suspend fun complete: Boolean</ID>
+    <ID>MaxLineLength:NotificationOutboxDispatcherTest.kt:NotificationOutboxDispatcherTest.FairFakeWorkStore$override suspend fun retry: Boolean</ID>
+    <ID>MaxLineLength:NotificationOutboxEndToEndTest.kt:NotificationOutboxEndToEndTest$firstProvider.requests.single().idempotencyKey shouldBeEqualTo secondProvider.requests.single().idempotencyKey</ID>
+    <ID>MaxLineLength:NotificationOutboxEndToEndTest.kt:NotificationOutboxEndToEndTest$profileResolver = MemberNotificationProfileResolver { MemberNotificationProfileResult.Resolved(profile()) }</ID>
+    <ID>MaxLineLength:NotificationOutboxEndToEndTest.kt:NotificationOutboxEndToEndTest$val provider = CapturingChannel(NotificationProviderResult.accepted(NotificationProviderMessageReference("provider-1")))</ID>
+    <ID>MaxLineLength:NotificationOutboxEndToEndTest.kt:NotificationOutboxEndToEndTest$val secondProvider = CapturingChannel(NotificationProviderResult.retry(NotificationFailureCode.DELIVERY_RESULT_UNKNOWN))</ID>
+    <ID>MaxLineLength:NotificationOutboxEndToEndTest.kt:NotificationOutboxEndToEndTest$worker(exhaustedStore, CapturingChannel(NotificationProviderResult.retry(NotificationFailureCode.PROVIDER_UNAVAILABLE)))</ID>
+    <ID>MaxLineLength:NotificationOutboxEndToEndTest.kt:NotificationOutboxEndToEndTest$worker(retryStore, CapturingChannel(NotificationProviderResult.retry(NotificationFailureCode.PROVIDER_UNAVAILABLE)))</ID>
+    <ID>MaxLineLength:NotificationOutboxEndToEndTest.kt:NotificationOutboxEndToEndTest.E2EWorkStore$override suspend</ID>
+    <ID>MaxLineLength:NotificationOutboxHealthIndicatorTest.kt:NotificationOutboxHealthIndicatorTest$signals.snapshot(Duration.ofMinutes(7), backlogCapped = true)</ID>
+    <ID>MaxLineLength:NotificationOutboxLifecycleTest.kt:NotificationOutboxLifecycleTest.LifecycleFakeWorkStore$override suspend</ID>
+    <ID>MaxLineLength:NotificationOutboxWorker.kt:NotificationDeliveryResult.Sent$val destinationFingerprint: io.bluetape4k.clinic.appointment.event.notification.NotificationDestinationFingerprint? = null</ID>
+    <ID>MaxLineLength:NotificationOutboxWorker.kt:NotificationDeliveryResult.Sent$val providerMessageReference: io.bluetape4k.clinic.appointment.event.notification.NotificationProviderMessageReference? = null</ID>
+    <ID>MaxLineLength:NotificationOutboxWorker.kt:NotificationOutboxWorker$if</ID>
+    <ID>MaxLineLength:NotificationOutboxWorker.kt:NotificationOutboxWorker$is NotificationProviderResult.RetryableFailure -> handleRetryableFailure(claimed, providerResult.failureCode)</ID>
+    <ID>MaxLineLength:NotificationOutboxWorker.kt:NotificationOutboxWorker$processRuntimeDelivery(claimed, profileResolver, templateRenderer, providerChannel, providerIdempotencyKeyFactory)</ID>
+    <ID>MaxLineLength:NotificationPropertiesTest.kt:NotificationPropertiesTest$channels = mapOf("dummy" to NotificationProperties.ChannelWorkerProperties(providerTimeout = Duration.ofSeconds(10)))</ID>
+    <ID>MaxLineLength:NotificationProviderContractTest.kt:NotificationProviderContractTest$.</ID>
+    <ID>MaxLineLength:NotificationReminderRecoveryScannerTest.kt:NotificationReminderRecoveryScannerTest$materializer.suppressed.single().reason shouldBeEqualTo NotificationSuppressionReasonCode.REMINDER_WINDOW_MISSED</ID>
+    <ID>MaxLineLength:NotificationReminderRecoveryScannerTest.kt:NotificationReminderRecoveryScannerTest.FakeReminderMaterializer$override suspend</ID>
+    <ID>MaxLineLength:NotificationReminderRecoveryScannerTest.kt:NotificationReminderRecoveryScannerTest.FakeReminderMaterializer$suppressed += ReminderRecoverySuppression(candidate, NotificationSuppressionReasonCode.REMINDER_WINDOW_MISSED)</ID>
+    <ID>MaxLineLength:NotificationRetentionRunnerTest.kt:NotificationRetentionRunnerTest.RetentionFakeWorkStore$override suspend</ID>
+    <ID>MaxLineLength:NotificationSchemaReadinessTest.kt:NotificationSchemaReadinessTest$"CREATE UNIQUE INDEX uk_waitlist_notification_outbox_idempotency ON clinic_waitlist_notification_outbox (tenant_group_id, clinic_id, idempotency_key)"</ID>
+    <ID>MaxLineLength:NotificationSchemaReadinessTest.kt:NotificationSchemaReadinessTest$exec("ALTER TABLE clinic_waitlist_notification_outbox DROP CONSTRAINT uk_waitlist_notification_outbox_idempotency")</ID>
+    <ID>MaxLineLength:NotificationTemplateCatalog.kt:BuiltInWaitlistNotificationTemplateCatalog$htmlTemplate = "&lt;p>{{clinicDisplayName}} 예약이 취소되었습니다.&lt;/p>&lt;p>사유: {{cancellationReasonCode}} {{cancellationReasonDetail}}&lt;/p>"</ID>
+    <ID>MaxLineLength:NotificationTemplateCatalog.kt:BuiltInWaitlistNotificationTemplateCatalog$textTemplate = "{{clinicDisplayName}} 예약이 취소되었습니다. 사유: {{cancellationReasonCode}} {{cancellationReasonDetail}}"</ID>
+    <ID>MaxLineLength:NotificationTemplateCatalog.kt:BuiltInWaitlistNotificationTemplateCatalog$textTemplate = "{{profile.displayName}}, a waitlist slot is available ({{waitlist.reasonCode}}) from {{waitlist.startsAt}} to {{waitlist.endsAt}}."</ID>
+    <ID>MaxLineLength:NotificationTemplateRenderer.kt:NotificationTemplateRenderer$?:</ID>
+    <ID>MaxLineLength:NotificationTemplateRenderer.kt:NotificationTemplateRenderer$throw NotificationTemplateException(NotificationFailureCode.TEMPLATE_PARAMETER_INVALID, "deep-link scheme is not allowed")</ID>
+    <ID>MaxLineLength:NotificationTemplateRenderer.kt:NotificationTemplateRenderer$throw NotificationTemplateException(NotificationFailureCode.TEMPLATE_PARAMETER_INVALID, "missing template parameter")</ID>
+    <ID>MaxLineLength:NotificationTemplateRenderer.kt:NotificationTemplateRenderer$throw NotificationTemplateException(NotificationFailureCode.TEMPLATE_PARAMETER_INVALID, "unknown template parameter")</ID>
+    <ID>MaxLineLength:NotificationTemplateRenderer.kt:NotificationTemplateRenderer$throw NotificationTemplateException(NotificationFailureCode.TEMPLATE_PARAMETER_INVALID, "unresolved template parameter")</ID>
+    <ID>MaxLineLength:RedisNotificationAdmissionBenchmark.kt:RedisNotificationAdmissionBenchmark$System.getProperty(name)?.split(',')?.map(String::trim)?.mapNotNull(String::toDoubleOrNull)?.takeIf { it.isNotEmpty() }</ID>
+    <ID>MaxLineLength:RedisNotificationAdmissionBenchmark.kt:RedisNotificationAdmissionBenchmark$System.getProperty(name)?.split(',')?.map(String::trim)?.mapNotNull(String::toIntOrNull)?.takeIf { it.isNotEmpty() }</ID>
+    <ID>MaxLineLength:RedisNotificationAdmissionBenchmark.kt:RedisNotificationAdmissionBenchmark$appendLine(" \"benchmarkFamily\": \"io.bluetape4k.clinic.appointment.notification.RedisNotificationAdmissionBenchmark\",")</ID>
+    <ID>MaxLineLength:RedisNotificationAdmissionBenchmark.kt:RedisNotificationAdmissionBenchmark$appendLine(" \"steadyStateThroughputOpsPerSecond\": ${successfulOperations * 1_000.0 / workloadElapsedMillis.coerceAtLeast(0.001)},")</ID>
+    <ID>MaxLineLength:RedisNotificationAdmissionBenchmark.kt:RedisNotificationAdmissionBenchmark$appendLine(" \"throughputOpsPerSecond\": ${scenarios.sumOf { it.successfulOperations } * 1_000.0 / elapsedMillis.coerceAtLeast(0.001)} ,")</ID>
+    <ID>MaxLineLength:RedisNotificationAdmissionBenchmark.kt:RedisNotificationAdmissionBenchmark$entries.sortedBy { it.key }.joinToString(prefix = "{", postfix = "}") { "\"${it.key.jsonEscape()}\":${it.value}" }</ID>
+    <ID>MaxLineLength:RedisNotificationAdmissionBenchmark.kt:RedisNotificationAdmissionBenchmark$val recovered = second.acquire(SemaphoreOwnerId.random(), SemaphoreRequestId.random(), Duration.ofMillis(500))</ID>
+    <ID>MaxLineLength:RedisNotificationKeyLifecycleBenchmark.kt:RedisNotificationKeyLifecycleBenchmark$System.getProperty(name)?.split(',')?.map(String::trim)?.mapNotNull(String::toDoubleOrNull)?.takeIf { it.isNotEmpty() }</ID>
+    <ID>MaxLineLength:RedisNotificationKeyLifecycleBenchmark.kt:RedisNotificationKeyLifecycleBenchmark$System.getProperty(name)?.split(',')?.map(String::trim)?.mapNotNull(String::toIntOrNull)?.takeIf { it.isNotEmpty() }</ID>
+    <ID>MaxLineLength:RedisNotificationKeyLifecycleBenchmark.kt:RedisNotificationKeyLifecycleBenchmark$appendLine(" \"benchmarkFamily\": \"io.bluetape4k.clinic.appointment.notification.RedisNotificationKeyLifecycleBenchmark\",")</ID>
+    <ID>MaxLineLength:RedisNotificationKeyLifecycleBenchmark.kt:RedisNotificationKeyLifecycleBenchmark$appendLine(" \"persistentKeyCountAfterRetentionMax\": ${scenarios.maxOf { it.lifecycle.afterRetentionWindow.keyCount }}")</ID>
+    <ID>MaxLineLength:RedisNotificationKeyLifecycleBenchmark.kt:RedisNotificationKeyLifecycleBenchmark$appendLine(" \"requiredLifecycleStages\": [\"workload-end\", \"long-run\", \"after-coordinator-close\", \"after-retention-window\"],")</ID>
+    <ID>MaxLineLength:RedisNotificationKeyLifecycleBenchmark.kt:RedisNotificationKeyLifecycleBenchmark$val lifecycleCoverage = scenarios.count { it.lifecycle.hasAllRequiredStages(longRunRounds) } / scenarios.size.toDouble()</ID>
+    <ID>MaxLineLength:RedisNotificationKeyLifecycleBenchmark.kt:RedisNotificationKeyLifecycleBenchmark$val recovered = second.acquire(SemaphoreOwnerId.random(), SemaphoreRequestId.random(), Duration.ofMillis(500))</ID>
+    <ID>MaxLineLength:ResilientNotificationChannelTest.kt:ResilientNotificationChannelTest$every { delegate.send(request) } throws NotificationProviderException(NotificationFailureCode.PROVIDER_UNAVAILABLE)</ID>
+    <ID>MaxLineLength:WaitlistOfferNotificationStore.kt:WaitlistNotificationDeliveryResult.Sent$val providerMessageReference: io.bluetape4k.clinic.appointment.event.notification.NotificationProviderMessageReference? = null</ID>
+    <ID>RethrowCaughtException:MemberNotificationProfileResolver.kt:BoundedMemberNotificationProfileResolver$throw e</ID>
+    <ID>RethrowCaughtException:NotificationOutboxWorker.kt:NotificationOutboxWorker$throw e</ID>
+    <ID>ReturnCount:JdbcNotificationOutboxRepository.kt:JdbcNotificationOutboxRepository$override fun claim: ClaimedNotification?</ID>
+    <ID>ReturnCount:JdbcNotificationOutboxRepository.kt:JdbcNotificationOutboxRepository$override fun recoverExpired: ClaimedNotification?</ID>
+    <ID>ReturnCount:MemberNotificationProfile.kt:MemberNotificationProfileClassifier$private fun classifyResolved: MemberProfileDecision</ID>
+    <ID>ReturnCount:NotificationAutoConfiguration.kt:NotificationAutoConfiguration$@Bean @ConditionalOnProperty( prefix = "clinic.notification.worker", name = ["enabled"], havingValue = "true", matchIfMissing = true, ) @ConditionalOnBean( NotificationOutboxWorkStore::class, NotificationOutboxJobWorker::class, ) @ConditionalOnMissingBean(NotificationOutboxDispatcher::class) fun notificationOutboxDispatcher: NotificationOutboxDispatcher?</ID>
+    <ID>ReturnCount:NotificationOutboxDispatcher.kt:NotificationOutboxDispatcher$private suspend fun claimSingleWork: List&lt;ClaimedNotification></ID>
+    <ID>ReturnCount:NotificationOutboxWorker.kt:NotificationOutboxWorker$override suspend fun process: NotificationOutboxWorkerResult</ID>
+    <ID>ReturnCount:NotificationOutboxWorker.kt:NotificationOutboxWorker$private suspend fun processRuntimeDelivery: NotificationOutboxWorkerResult</ID>
+    <ID>ReturnCount:NotificationProducerSchemaReadiness.kt:NotificationProducerSchemaReadiness$fun check: NotificationReadiness</ID>
+    <ID>ReturnCount:NotificationTemplateCatalog.kt:BuiltInWaitlistNotificationTemplateCatalog$override fun find: NotificationTemplate?</ID>
+    <ID>ReturnCount:WaitlistOfferNotificationWorker.kt:WaitlistOfferNotificationWorker$suspend fun runOnce: WaitlistDeliveryAttempt</ID>
+    <ID>SerialVersionUIDInSerializableClass:NotificationSchemaReadiness.kt:NotificationReadinessDiagnostic : Serializable</ID>
+    <ID>SwallowedException:MemberNotificationProfileResolver.kt:BoundedMemberNotificationProfileResolver$e: CallNotPermittedException</ID>
+    <ID>SwallowedException:MemberNotificationProfileResolver.kt:BoundedMemberNotificationProfileResolver$e: MemberNotificationProfileRateLimitedException</ID>
+    <ID>SwallowedException:MemberNotificationProfileResolver.kt:BoundedMemberNotificationProfileResolver$e: MemberNotificationProfileUnavailableException</ID>
+    <ID>SwallowedException:MemberNotificationProfileResolver.kt:BoundedMemberNotificationProfileResolver$e: RequestNotPermitted</ID>
+    <ID>SwallowedException:MemberNotificationProfileResolver.kt:BoundedMemberNotificationProfileResolver$e: TimeoutCancellationException</ID>
+    <ID>SwallowedException:NotificationEventListener.kt:NotificationEventListener$e: RejectedExecutionException</ID>
+    <ID>SwallowedException:NotificationOutboxWorker.kt:NotificationOutboxWorker$e: IllegalArgumentException</ID>
+    <ID>SwallowedException:NotificationOutboxWorker.kt:NotificationOutboxWorker$e: RuntimeException</ID>
+    <ID>ThrowsCount:NotificationTemplateCatalog.kt:WaitlistOfferNotificationTemplateRenderer$fun render: RenderedNotificationTemplate</ID>
+    <ID>ThrowsCount:ResilientNotificationChannel.kt:ResilientNotificationChannel$private fun sendWithTimeout: NotificationProviderResult</ID>
+    <ID>ThrowsCount:WaitlistOfferNotificationWorker.kt:WaitlistOfferNotificationWorker$suspend fun runOnce: WaitlistDeliveryAttempt</ID>
+    <ID>TooGenericExceptionCaught:NotificationEventListener.kt:NotificationEventListener$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:NotificationOutboxWorker.kt:NotificationOutboxWorker$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:NotificationSchedulingRunners.kt:NotificationObservationSchedulingRunner$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:NotificationSchedulingRunners.kt:NotificationOutboxSchedulingRunner$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:NotificationSchedulingRunners.kt:NotificationReminderSchedulingRunner$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:NotificationSchedulingRunners.kt:NotificationRetentionSchedulingRunner$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:NotificationSchemaReadiness.kt:NotificationSchemaReadiness$failure: Exception</ID>
+    <ID>TooGenericExceptionCaught:ResilientNotificationChannel.kt:ResilientNotificationChannel$e: Exception</ID>
+    <ID>TooManyFunctions:JdbcNotificationOutboxRepository.kt:JdbcNotificationOutboxRepository : NotificationOutboxWriterNotificationOutboxWorkPersistenceNotificationOutboxObservationPersistence</ID>
+    <ID>TooManyFunctions:NotificationAutoConfiguration.kt:NotificationAutoConfiguration</ID>
+    <ID>TooManyFunctions:NotificationOutboxMetrics.kt:NotificationOutboxMetrics : AppointmentEventAuditMetrics</ID>
+    <ID>WildcardImport:JdbcNotificationOutboxConcurrencyTest.kt:import io.bluetape4k.clinic.appointment.event.notification.*</ID>
+    <ID>WildcardImport:JdbcNotificationOutboxRepositoryTest.kt:import io.bluetape4k.clinic.appointment.event.notification.*</ID>
+    <ID>WildcardImport:NotificationCodecBacklogBenchmarkTest.kt:import io.bluetape4k.clinic.appointment.event.notification.*</ID>
+  </CurrentIssues>
+</SmellBaseline>

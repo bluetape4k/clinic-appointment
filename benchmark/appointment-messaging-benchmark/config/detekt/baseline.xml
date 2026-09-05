@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>LongMethod:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$private fun seedSchema</ID>
+    <ID>MagicNumber:PostgreSqlAppointmentOutboxBenchmark.kt:PostgreSqlAppointmentOutboxBenchmark$30</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$10</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$100_000</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$11</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$12</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$3</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$4</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$5</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$6</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$64</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$7</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$8</ID>
+    <ID>MagicNumber:PostgreSqlBenchmarkFixture.kt:PostgreSqlBenchmarkFixture$9</ID>
+  </CurrentIssues>
+</SmellBaseline>

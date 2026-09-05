@@ -1,0 +1,48 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:PlanningFactVersionHasher.kt:PlanningFactVersionHasher$fun hash: String</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:SolverServiceTest.kt:SolverServiceTest$val (clinicId, _, _, _) = insertBaseData()</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:SolverServiceTest.kt:SolverServiceTest$val (clinicId, doctorId, _, treatmentTypeId) = insertBaseData()</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:SolverServiceTest.kt:SolverServiceTest$val (clinicId, doctorId1, _, treatmentTypeId) = insertBaseData()</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:SolverServiceTest.kt:SolverServiceTest$val (clinicId, doctorId1, _, treatmentTypeId) = insertBaseData(maxConcurrentPatients = 1)</ID>
+    <ID>LongMethod:PlanningFactVersionHasher.kt:PlanningFactVersionHasher$fun hash: String</ID>
+    <ID>LongMethod:PlanningFactVersionHasherTest.kt:PlanningFactVersionHasherTest$private fun solution: ScheduleSolution</ID>
+    <ID>MagicNumber:BenchmarkConfig.kt:BenchmarkConfig$30</ID>
+    <ID>MagicNumber:ScheduleSolution.kt:ScheduleSolution$30</ID>
+    <ID>MagicNumber:SoftConstraints.kt:SoftConstraints$10</ID>
+    <ID>MagicNumber:SoftConstraints.kt:SoftConstraints$100</ID>
+    <ID>MagicNumber:SoftConstraints.kt:SoftConstraints$1000</ID>
+    <ID>MagicNumber:SoftConstraints.kt:SoftConstraints$5</ID>
+    <ID>MagicNumber:SoftConstraints.kt:SoftConstraints$500</ID>
+    <ID>MagicNumber:SolverConfig.kt:AppointmentSolverConfig$30</ID>
+    <ID>MagicNumber:SolverConfig.kt:AppointmentSolverConfig$5</ID>
+    <ID>MagicNumber:SolverService.kt:SolverService$30</ID>
+    <ID>MatchingDeclarationName:SolverConfig.kt:AppointmentSolverConfig</ID>
+    <ID>MaxLineLength:AppointmentMoveFilterTest.kt:AppointmentMoveFilterTest$private val clinic = ClinicFact(id = clinicId, slotDurationMinutes = 30, maxConcurrentPatients = 3, openOnHolidays = false)</ID>
+    <ID>MaxLineLength:AppointmentMoveFilterTest.kt:AppointmentMoveFilterTest$private val doctor = DoctorFact(id = doctorId, clinicId = clinicId, providerType = "DOCTOR", maxConcurrentPatients = 1)</ID>
+    <ID>MaxLineLength:AppointmentMoveFilterTest.kt:AppointmentMoveFilterTest$private val operatingHours = OperatingHoursRecord(clinicId = clinicId, dayOfWeek = DayOfWeek.MONDAY, openTime = LocalTime.of(9, 0), closeTime = LocalTime.of(18, 0), isActive = true)</ID>
+    <ID>MaxLineLength:AppointmentMoveFilterTest.kt:AppointmentMoveFilterTest$val closure = ClinicClosureRecord(clinicId = clinicId, closureDate = monday, isFullDay = false, startTime = LocalTime.of(14, 0))</ID>
+    <ID>MaxLineLength:AppointmentMoveFilterTest.kt:AppointmentMoveFilterTest$val nurseDoctor = DoctorFact(id = doctorId, clinicId = clinicId, providerType = "NURSE", maxConcurrentPatients = 1)</ID>
+    <ID>MaxLineLength:AppointmentMoveFilterTest.kt:AppointmentMoveFilterTest$val wrongClinicDoctor = DoctorFact(id = doctorId, clinicId = 999L, providerType = "DOCTOR", maxConcurrentPatients = 1)</ID>
+    <ID>MaxLineLength:BenchmarkTest.kt:BenchmarkTest$val weekdays = listOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY)</ID>
+    <ID>MaxLineLength:HardConstraints.kt:HardConstraints$appt.requiresEquipment &amp;&amp; appt.equipmentId != null &amp;&amp; appt.appointmentDate != null &amp;&amp; appt.startTime != null</ID>
+    <ID>MaxLineLength:PlanningFactVersionHasher.kt:PlanningFactVersionHasher$record("break-time", breakTime.id, breakTime.clinicId, breakTime.dayOfWeek, breakTime.startTime, breakTime.endTime)</ID>
+    <ID>MaxLineLength:PlanningFactVersionHasher.kt:PlanningFactVersionHasher$record("default-break-time", breakTime.id, breakTime.clinicId, breakTime.name, breakTime.startTime, breakTime.endTime)</ID>
+    <ID>MaxLineLength:PlanningFactVersionHasher.kt:PlanningFactVersionHasher$record("doctor-schedule", schedule.id, schedule.doctorId, schedule.dayOfWeek, schedule.startTime, schedule.endTime)</ID>
+    <ID>MaxLineLength:PlanningFactVersionHasher.kt:PlanningFactVersionHasher$record("equipment-unavailability", unavailability.equipmentId, unavailability.date, unavailability.startTime, unavailability.endTime)</ID>
+    <ID>MaxLineLength:PlanningFactVersionHasher.kt:PlanningFactVersionHasher$record("holiday", holiday.id, holiday.tenantGroupId, holiday.holidayDate, holiday.name, holiday.recurring)</ID>
+    <ID>MaxLineLength:PlanningFactVersionHasherTest.kt:PlanningFactVersionHasherTest$doctor.copy(maxConcurrentPatients = if (doctor.id == 1L) doctorMaxConcurrentPatients else doctor.maxConcurrentPatients)</ID>
+    <ID>MaxLineLength:SolverService.kt:SolverService$log.info("Solver 시작: scope=${scope.cacheKey()}, dateRange=$dateRange, entities=$entityCount, pinned=$pinnedCount")</ID>
+    <ID>MaxLineLength:SolverService.kt:SolverService$message = "Use isSourceVersionCurrentAdvisory for an advisory check or applyOptimizedAssignments for atomic application"</ID>
+    <ID>ReturnCount:AppointmentMoveFilter.kt:AppointmentMoveFilter$override fun accept: Boolean</ID>
+    <ID>ReturnCount:AppointmentMoveFilter.kt:AppointmentMoveFilter$private fun isDateAcceptable: Boolean</ID>
+    <ID>ReturnCount:AppointmentMoveFilter.kt:AppointmentMoveFilter$private fun isDoctorAcceptable: Boolean</ID>
+    <ID>ReturnCount:AppointmentPlanningAssignment.kt:internal inline fun &lt;T> AppointmentPlanning.withAssigned: T?</ID>
+    <ID>ReturnCount:SolverService.kt:SolverService$fun isSourceVersionCurrentAdvisory: Boolean</ID>
+    <ID>ThrowsCount:SolverService.kt:SolverService$fun applyOptimizedAssignments: Boolean</ID>
+    <ID>TooGenericExceptionCaught:SolverService.kt:SolverService$failure: Exception</ID>
+    <ID>TooManyFunctions:HardConstraints.kt:HardConstraints</ID>
+  </CurrentIssues>
+</SmellBaseline>
