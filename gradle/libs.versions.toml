@@ -1,15 +1,11 @@
 # @formatter:off
 # Gradle Version Catalog for clinic-appointment
 #
-# Policy: bluetape4k-dependencies BOM is the single source of truth for shared
-# library versions. This catalog declares only:
-#   1. The BOM version itself
-#   2. Plugin versions (Gradle plugins always need explicit versions)
-#   3. Project-local library versions NOT managed by any BOM
-#
-# Libraries managed by the BOM (bluetape4k-dependencies or spring-boot4-dependencies)
-# declare `module` only (no version). Gradle + spring-dependency-management plugin
-# resolves their versions from the imported BOM platform.
+# 중앙 bluetape4k-dependencies BOM을 기본으로 사용하되 예제에서 필요한 버전은
+# 로컬에서 재정의할 수 있다. 플러그인과 로컬 라이브러리는 버전을 명시하고,
+# BOM이 관리하는 라이브러리는 module만 선언한다.
+# 라이브러리군을 재정의할 때는 해당 BOM을 중앙 BOM 뒤에 가져와 전이 의존성도
+# 정렬한다. Exposed 플러그인과 로컬 Exposed BOM은 같은 exposed 버전을 사용한다.
 
 [versions]
 # ── BOM (source of truth) ──────────────────────────────────────────────────
@@ -121,7 +117,8 @@ lz4-java = { module = "org.lz4:lz4-java", version.ref = "lz4-java" }
 fory-core = { module = "org.apache.fory:fory-core" }
 fory-kotlin = { module = "org.apache.fory:fory-kotlin" }
 
-# ── Exposed (versions from bluetape4k-dependencies BOM) ───────────────────
+# ── Exposed (로컬 BOM으로 중앙 기본 버전을 재정의) ───────────────────────
+jetbrains-exposed-bom = { module = "org.jetbrains.exposed:exposed-bom", version.ref = "exposed" }
 jetbrains-exposed-core = { module = "org.jetbrains.exposed:exposed-core" }
 jetbrains-exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc" }
 jetbrains-exposed-r2dbc = { module = "org.jetbrains.exposed:exposed-r2dbc" }

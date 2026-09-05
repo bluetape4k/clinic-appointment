@@ -892,6 +892,8 @@ dependencyManagement {
         mavenBom(rootLibs.spring.boot4.dependencies.get().toString())
         mavenBom(rootLibs.kotlin.bom.get().toString())
         mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())
+        // 예제에서 선택한 Exposed 버전으로 중앙 BOM의 전이 의존성까지 재정의한다.
+        mavenBom(rootLibs.jetbrains.exposed.bom.get().toString())
     }
 }
 
@@ -1054,6 +1056,8 @@ subprojects {
             // Override Spring Boot's lower Kotlin/Coroutines versions
             mavenBom(rootLibs.kotlin.bom.get().toString())
             mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())
+            // 플러그인과 모든 모듈의 Exposed 실행 라이브러리를 같은 버전으로 맞춘다.
+            mavenBom(rootLibs.jetbrains.exposed.bom.get().toString())
         }
     }
 
