@@ -171,10 +171,10 @@ class JdkSchemaRegistryCompatibilityReader(
         } catch (failure: Exception) {
             throw AppointmentSchemaRegistryUnavailableException("schema registry request failed", failure)
         }
-        if (response.statusCode() !in 200..299) {
-            throw AppointmentSchemaRegistryUnavailableException("schema registry request failed")
-        }
         val body = response.body().use { input ->
+            if (response.statusCode() !in 200..299) {
+                throw AppointmentSchemaRegistryUnavailableException("schema registry request failed")
+            }
             val output = ByteArrayOutputStream(MAX_RESPONSE_BYTES)
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
             var total = 0

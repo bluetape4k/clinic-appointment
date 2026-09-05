@@ -117,17 +117,19 @@ assert_selected_version \
     fory-core \
     :appointment-api \
     org.apache.fory:fory-core \
+    1.6.0 \
     1.5.0
 assert_selected_version \
     fory-kotlin \
     :appointment-api \
     org.apache.fory:fory-kotlin \
+    1.6.0 \
     1.5.0
 assert_selected_version \
     leader-redis-lettuce \
     :appointment-notification \
     io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce \
-    1.0.0-20260824.195548-7 \
+    1.0.0 \
     0.5.0
 assert_selected_version \
     kafka-clients-messaging \
@@ -167,4 +169,4 @@ assert_selected_version_for_configuration \
     7.6.0.RELEASE \
     7.5.2.RELEASE
 
-echo "[PASS] bluetape4k-dependencies 1.4.0 dependency contract"
+echo "[PASS] bluetape4k dependency contract"
