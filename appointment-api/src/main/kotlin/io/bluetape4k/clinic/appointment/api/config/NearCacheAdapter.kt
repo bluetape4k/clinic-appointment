@@ -56,12 +56,6 @@ class NearCacheAdapter<V : Any>(
     }
 
     override fun <T : Any> get(key: Any, valueLoader: Callable<T>): T? {
-        val wrapper = get(key)
-        if (wrapper != null) {
-            @Suppress("UNCHECKED_CAST")
-            return wrapper.get() as T?
-        }
-
         val normalizedKey = key.toString()
         val flight = BlockingLoad<Any>()
         val existing = inFlightLoads.putIfAbsent(normalizedKey, flight)
@@ -72,7 +66,10 @@ class NearCacheAdapter<V : Any>(
 
         val generation = loadGeneration.get()
         try {
-            val value = try {
+            val value = get(key)?.let {
+                @Suppress("UNCHECKED_CAST")
+                it.get() as T
+            } ?: try {
                 val loaded = valueLoader.call()
                 if (loadGeneration.get() == generation) {
                     put(key, loaded)
