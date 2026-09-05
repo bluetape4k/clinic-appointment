@@ -1,16 +1,12 @@
 # @formatter:off
 # Gradle Version Catalog for clinic-appointment
 #
-# 공통 라이브러리는 기본적으로 bluetape4k-dependencies BOM의 버전을 사용한다.
-# 예제 저장소에서 별도로 검증한 버전은 로컬에서 재정의할 수 있다.
-# 이 catalog는 다음 버전을 선언한다.
-#   1. BOM 자체 버전
-#   2. 명시적 버전이 필요한 Gradle 플러그인
-#   3. BOM에서 관리하지 않는 프로젝트 전용 라이브러리
-#   4. 이 예제에서 별도로 검증한 버전 재정의 (예: Timefold #450)
-#
-# 별도 재정의가 없는 BOM 관리 라이브러리는 버전 없이 `module`만 선언한다.
-# Gradle과 spring-dependency-management 플러그인이 가져온 BOM으로 버전을 결정한다.
+# 중앙 bluetape4k-dependencies BOM을 기본으로 사용하되 예제에서 필요한 버전은
+# 로컬에서 재정의할 수 있다. 플러그인과 로컬 라이브러리는 버전을 명시하고,
+# BOM이 관리하는 라이브러리는 module만 선언한다.
+# 라이브러리군을 재정의할 때는 해당 BOM을 중앙 BOM 뒤에 가져와 전이 의존성도
+# 정렬한다. Exposed 플러그인과 로컬 Exposed BOM은 같은 exposed 버전을 사용한다.
+# Timefold는 solver 모듈에서 로컬 BOM으로 재정의한다 (#450).
 
 [versions]
 # ── BOM (source of truth) ──────────────────────────────────────────────────
@@ -26,7 +22,7 @@ kover = "0.9.8"
 test-logger = "4.0.0"
 shadow = "9.4.2"
 gatling = "3.15.1"
-exposed = "1.4.0"
+exposed = "1.5.0"
 
 # ── Override versions (project uses newer than Spring Boot provides) ───────
 kotlinx-coroutines = "1.11.0" # https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
@@ -123,7 +119,8 @@ lz4-java = { module = "org.lz4:lz4-java", version.ref = "lz4-java" }
 fory-core = { module = "org.apache.fory:fory-core" }
 fory-kotlin = { module = "org.apache.fory:fory-kotlin" }
 
-# ── Exposed (versions from bluetape4k-dependencies BOM) ───────────────────
+# ── Exposed (로컬 BOM으로 중앙 기본 버전을 재정의) ───────────────────────
+jetbrains-exposed-bom = { module = "org.jetbrains.exposed:exposed-bom", version.ref = "exposed" }
 jetbrains-exposed-core = { module = "org.jetbrains.exposed:exposed-core" }
 jetbrains-exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc" }
 jetbrains-exposed-r2dbc = { module = "org.jetbrains.exposed:exposed-r2dbc" }

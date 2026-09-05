@@ -79,7 +79,7 @@ assert_selected_version_for_configuration() {
 }
 
 assert_catalog_exposed_version() {
-    local expected_line='exposed = "1.4.0"'
+    local expected_line='exposed = "1.5.0"'
     local exposed_line
 
     exposed_line="$(awk '
@@ -94,6 +94,17 @@ assert_catalog_exposed_version() {
 }
 
 assert_catalog_exposed_version
+
+# 중앙 플랫폼의 BOM 메타데이터는 제외하고 모든 모듈의 실행 artifact 잠금을 검사한다.
+while IFS= read -r lock_file; do
+    awk -F '[:=]' '
+        $1 == "org.jetbrains.exposed" && $2 != "exposed-bom" && $3 != "1.5.0" {
+            print FILENAME ": unexpected Exposed artifact: " $0 > "/dev/stderr"
+            failed = 1
+        }
+        END { exit failed }
+    ' "$REPOSITORY_ROOT/$lock_file" || fail "Exposed artifact lock is not 1.5.0"
+done < <(git -C "$REPOSITORY_ROOT" ls-files '*gradle.lockfile')
 
 assert_selected_version \
     timefold-core \
@@ -124,8 +135,21 @@ assert_selected_version \
     exposed-core \
     :appointment-core \
     org.jetbrains.exposed:exposed-core \
-    1.4.0 \
-    1.3.0
+    1.5.0 \
+    1.4.0 1.3.0
+assert_selected_version \
+    exposed-spring-boot4-starter \
+    :appointment-api \
+    org.jetbrains.exposed:exposed-spring-boot4-starter \
+    1.5.0 \
+    1.4.0
+assert_selected_version_for_configuration \
+    testRuntimeClasspath \
+    exposed-migration-jdbc \
+    :appointment-core \
+    org.jetbrains.exposed:exposed-migration-jdbc \
+    1.5.0 \
+    1.4.0
 assert_selected_version \
     fory-core \
     :appointment-api \
