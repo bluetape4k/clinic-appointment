@@ -100,7 +100,7 @@ class BenchmarkTest {
         log.info { "대규모: score=$score, feasible=${score.isFeasible}, time=${elapsed}ms" }
     }
 
-    private fun buildSolution(
+    internal fun buildSolution(
         doctorCount: Int,
         appointmentCount: Int,
         days: Int,

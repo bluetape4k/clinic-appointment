@@ -230,6 +230,10 @@ class SolverServicePostgresConcurrencyTest {
             val current = checkNotNull(
                 AppointmentRepository().findByIdAndScope(appointmentId, scope(base.clinicId)),
             )
+            current.doctorId.shouldBeEqualTo(base.doctorId1)
+            current.appointmentDate.shouldBeEqualTo(MONDAY)
+            current.startTime.shouldBeEqualTo(LocalTime.of(9, 0))
+            current.endTime.shouldBeEqualTo(LocalTime.of(9, 30))
             current.version.shouldBeEqualTo(0L)
             current.status.shouldBeEqualTo(AppointmentState.REQUESTED)
         }
@@ -309,5 +313,24 @@ class SolverServicePostgresConcurrencyTest {
             current.version.shouldBeEqualTo(1L)
             current.status.shouldBeEqualTo(AppointmentState.CONFIRMED)
         }
+    }
+
+    @Test
+    fun `PostgreSQL assignment CAS 하나가 실패하면 선행 assignment도 함께 rollback된다`() {
+        val base = insertBaseData()
+        val firstAppointmentId = insertAppointment(base)
+        val secondAppointmentId = insertAppointment(base)
+        val result = solverService.optimize(scope(base.clinicId), MONDAY..FRIDAY, Duration.ofSeconds(2))
+
+        result.entityCount.shouldBeEqualTo(2)
+        result.appointments.size.shouldBeEqualTo(2)
+        val duplicatedResult = result.copy(
+            appointments = result.appointments + result.appointments.first(),
+        )
+
+        solverService.applyOptimizedAssignments(duplicatedResult).shouldBeFalse()
+
+        assertAppointmentVersionAndStatusUnchanged(base, firstAppointmentId)
+        assertAppointmentVersionAndStatusUnchanged(base, secondAppointmentId)
     }
 }

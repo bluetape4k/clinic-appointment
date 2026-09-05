@@ -54,14 +54,19 @@ import java.time.DayOfWeek
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
+import java.io.Serializable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 @ResourceLock("exposed-default-database")
 @Execution(ExecutionMode.SAME_THREAD)
+// 동일 DB fixture에서 기존 stale 검증과 새 scope/pinned 검증을 함께 유지한다.
+@Suppress("LargeClass")
 class SolverServiceTest {
 
     private fun scope(clinicId: Long) = TenantClinicScope(TenantGroups.DEFAULT_TENANT_GROUP_ID, clinicId)
+
+    private fun scope(base: BaseData) = TenantClinicScope(base.tenantGroupId, base.clinicId)
 
     companion object: KLogging() {
 
@@ -127,19 +132,33 @@ class SolverServiceTest {
     }
 
     /**
-     * 기본 데이터 삽입: 병원 1개, 의사 2명, 영업시간 월~금, 진료유형 1개
-     * 반환: (clinicId, doctorId1, doctorId2, treatmentTypeId)
+     * 기본 데이터 삽입: tenant에 병원 1개, 의사 2명, 영업시간 월~금, 진료유형 1개
+     * 반환: (clinicId, doctorId1, doctorId2, treatmentTypeId, tenantGroupId)
      */
     private data class BaseData(
         val clinicId: Long,
         val doctorId1: Long,
         val doctorId2: Long,
         val treatmentTypeId: Long,
-    )
+        val tenantGroupId: Long,
+    ) : Serializable {
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
 
-    private fun insertBaseData(maxConcurrentPatients: Int = 1): BaseData = transaction {
-        seedDefaultTenant()
+    private fun insertBaseData(
+        maxConcurrentPatients: Int = 1,
+        tenantGroupId: Long = TenantGroups.DEFAULT_TENANT_GROUP_ID,
+        seedTenantGroup: Boolean = true,
+        tenantCode: String = TenantGroups.DEFAULT_TENANT_CODE,
+        tenantName: String = TenantGroups.DEFAULT_TENANT_NAME,
+    ): BaseData = transaction {
+        if (seedTenantGroup) {
+            seedTenant(tenantGroupId, tenantCode, tenantName)
+        }
         val clinicId = Clinics.insertAndGetId {
+            it[Clinics.tenantGroupId] = tenantGroupId
             it[name] = "Test Clinic"
             it[slotDurationMinutes] = 30
             it[Clinics.maxConcurrentPatients] = maxConcurrentPatients
@@ -193,14 +212,18 @@ class SolverServiceTest {
             it[requiredProviderType] = ProviderType.DOCTOR
         }.value
 
-        BaseData(clinicId, doctorId1, doctorId2, treatmentTypeId)
+        BaseData(clinicId, doctorId1, doctorId2, treatmentTypeId, tenantGroupId)
     }
 
-    private fun seedDefaultTenant() {
+    private fun seedTenant(
+        tenantGroupId: Long,
+        tenantCode: String,
+        tenantName: String,
+    ) {
         TenantGroups.insert {
-            it[id] = EntityID(TenantGroups.DEFAULT_TENANT_GROUP_ID, TenantGroups)
-            it[tenantCode] = TenantGroups.DEFAULT_TENANT_CODE
-            it[displayName] = TenantGroups.DEFAULT_TENANT_NAME
+            it[id] = EntityID(tenantGroupId, TenantGroups)
+            it[TenantGroups.tenantCode] = tenantCode
+            it[displayName] = tenantName
             it[active] = true
         }
     }
@@ -225,6 +248,24 @@ class SolverServiceTest {
             )
             current.version.shouldBeEqualTo(0L)
             current.status.shouldBeEqualTo(AppointmentState.REQUESTED)
+        }
+    }
+
+    private fun assertAppointmentAssignmentAndVersionUnchanged(
+        base: BaseData,
+        appointmentId: Long,
+        status: AppointmentState = AppointmentState.REQUESTED,
+    ) {
+        transaction {
+            val current = checkNotNull(
+                AppointmentRepository().findByIdAndScope(appointmentId, scope(base)),
+            )
+            current.doctorId.shouldBeEqualTo(base.doctorId1)
+            current.appointmentDate.shouldBeEqualTo(MONDAY)
+            current.startTime.shouldBeEqualTo(LocalTime.of(9, 0))
+            current.endTime.shouldBeEqualTo(LocalTime.of(9, 30))
+            current.status.shouldBeEqualTo(status)
+            current.version.shouldBeEqualTo(0L)
         }
     }
 
@@ -329,6 +370,109 @@ class SolverServiceTest {
         result.isFeasible.shouldBeTrue()
         val rescheduled = result.appointments
         rescheduled.all { it.appointmentDate >= MONDAY }.shouldBeTrue()
+    }
+
+    @Test
+    fun `실제 solve 뒤 pinned 예약의 의사 날짜 시간은 변하지 않는다`() {
+        val base = insertBaseData()
+        val pinnedAppointmentId = transaction {
+            Appointments.insertAndGetId {
+                it[Appointments.clinicId] = base.clinicId
+                it[Appointments.doctorId] = base.doctorId1
+                it[Appointments.treatmentTypeId] = base.treatmentTypeId
+                it[patientName] = "Pinned Patient"
+                it[appointmentDate] = MONDAY
+                it[startTime] = LocalTime.of(9, 0)
+                it[endTime] = LocalTime.of(9, 30)
+                it[status] = AppointmentState.CONFIRMED
+            }.value
+        }
+
+        val movableAppointmentId = insertAppointment(base)
+        val actualSolver = solverFactory.buildSolver()
+        lateinit var solved: ScheduleSolution
+        val observingSolver = mockk<Solver<ScheduleSolution>>()
+        every { observingSolver.solve(any()) } answers {
+            actualSolver.solve(firstArg()).also { solved = it }
+        }
+        val observingFactory = mockk<SolverFactory<ScheduleSolution>>()
+        every { observingFactory.buildSolver() } returns observingSolver
+        val service = SolverService(solverFactory = observingFactory)
+        // timeLimit을 생략해야 주입한 factory의 실제 Solver를 관찰할 수 있다.
+        val result = service.optimize(scope(base), MONDAY..FRIDAY)
+
+        result.entityCount.shouldBeEqualTo(2)
+        result.pinnedCount.shouldBeEqualTo(1)
+        result.appointments.single().id.shouldBeEqualTo(movableAppointmentId)
+        result.isFeasible.shouldBeTrue()
+        val pinned = solved.appointments.single { it.id == pinnedAppointmentId }
+        pinned.pinned.shouldBeTrue()
+        pinned.doctorId.shouldBeEqualTo(base.doctorId1)
+        pinned.appointmentDate.shouldBeEqualTo(MONDAY)
+        pinned.startTime.shouldBeEqualTo(LocalTime.of(9, 0))
+        pinned.endTime.shouldBeEqualTo(LocalTime.of(9, 30))
+        service.applyOptimizedAssignments(result).shouldBeTrue()
+        assertAppointmentAssignmentAndVersionUnchanged(base, pinnedAppointmentId, AppointmentState.CONFIRMED)
+    }
+
+    @Test
+    fun `같은 tenant의 다른 clinic 예약은 optimize와 apply에서 격리된다`() {
+        val target = insertBaseData()
+        val otherClinic = insertBaseData(seedTenantGroup = false)
+        val targetAppointmentId = insertAppointment(target)
+        val otherAppointmentId = insertAppointment(otherClinic)
+
+        val result = solverService.optimize(scope(target), MONDAY..FRIDAY, Duration.ofSeconds(5))
+
+        result.entityCount.shouldBeEqualTo(1)
+        result.appointments.mapNotNull { it.id }.shouldHaveSize(1)
+        result.appointments.single().id.shouldBeEqualTo(targetAppointmentId)
+
+        val otherAppointment = transaction {
+            checkNotNull(
+                AppointmentRepository().findByIdAndScope(otherAppointmentId, scope(otherClinic)),
+            )
+        }
+        val forgedResult = result.copy(
+            appointments = result.appointments + otherAppointment,
+            sourceVersions = result.sourceVersions + (otherAppointmentId to otherAppointment.version),
+        )
+
+        solverService.applyOptimizedAssignments(forgedResult).shouldBeFalse()
+        assertAppointmentAssignmentAndVersionUnchanged(target, targetAppointmentId)
+        assertAppointmentAssignmentAndVersionUnchanged(otherClinic, otherAppointmentId)
+    }
+
+    @Test
+    fun `다른 tenant의 clinic 예약은 optimize와 apply에서 격리된다`() {
+        val target = insertBaseData()
+        val otherTenant = insertBaseData(
+            tenantGroupId = 2L,
+            tenantCode = "tenant-other",
+            tenantName = "Other Tenant",
+        )
+        val targetAppointmentId = insertAppointment(target)
+        val otherAppointmentId = insertAppointment(otherTenant)
+
+        val result = solverService.optimize(scope(target), MONDAY..FRIDAY, Duration.ofSeconds(5))
+
+        result.entityCount.shouldBeEqualTo(1)
+        result.appointments.mapNotNull { it.id }.shouldHaveSize(1)
+        result.appointments.single().id.shouldBeEqualTo(targetAppointmentId)
+
+        val otherAppointment = transaction {
+            checkNotNull(
+                AppointmentRepository().findByIdAndScope(otherAppointmentId, scope(otherTenant)),
+            )
+        }
+        val forgedResult = result.copy(
+            appointments = result.appointments + otherAppointment,
+            sourceVersions = result.sourceVersions + (otherAppointmentId to otherAppointment.version),
+        )
+
+        solverService.applyOptimizedAssignments(forgedResult).shouldBeFalse()
+        assertAppointmentAssignmentAndVersionUnchanged(target, targetAppointmentId)
+        assertAppointmentAssignmentAndVersionUnchanged(otherTenant, otherAppointmentId)
     }
 
     @Test

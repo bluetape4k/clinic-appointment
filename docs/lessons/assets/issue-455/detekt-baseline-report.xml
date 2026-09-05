@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="4.3">
+<file name="appointment-api/src/test/kotlin/io/bluetape4k/clinic/appointment/api/controller/AppointmentControllerTest.kt">
+	<error line="71" column="7" severity="error" message="Class AppointmentControllerTest is too large. Consider splitting it into smaller pieces." source="detekt.LargeClass" />
+	<error line="122" column="9" severity="error" message="The function setup is too long (74). The maximum length is 60." source="detekt.LongMethod" />
+</file>
+<file name="appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/benchmark/BenchmarkTest.kt">
+	<error line="119" column="1" severity="error" message="Line detected, which is longer than the defined maximum line length in the code style." source="detekt.MaxLineLength" />
+</file>
+<file name="appointment-solver/src/test/kotlin/io/bluetape4k/clinic/appointment/solver/service/SolverServiceTest.kt">
+	<error line="245" column="9" severity="error" message="The destructuring declaration contains 4 but only 3 are allowed." source="detekt.DestructuringDeclarationWithTooManyEntries" />
+	<error line="281" column="9" severity="error" message="The destructuring declaration contains 4 but only 3 are allowed." source="detekt.DestructuringDeclarationWithTooManyEntries" />
+	<error line="307" column="9" severity="error" message="The destructuring declaration contains 4 but only 3 are allowed." source="detekt.DestructuringDeclarationWithTooManyEntries" />
+	<error line="336" column="9" severity="error" message="The destructuring declaration contains 4 but only 3 are allowed." source="detekt.DestructuringDeclarationWithTooManyEntries" />
+	<error line="367" column="9" severity="error" message="The destructuring declaration contains 4 but only 3 are allowed." source="detekt.DestructuringDeclarationWithTooManyEntries" />
+	<error line="527" column="9" severity="error" message="The destructuring declaration contains 4 but only 3 are allowed." source="detekt.DestructuringDeclarationWithTooManyEntries" />
+	<error line="559" column="9" severity="error" message="The destructuring declaration contains 4 but only 3 are allowed." source="detekt.DestructuringDeclarationWithTooManyEntries" />
+	<error line="606" column="9" severity="error" message="The destructuring declaration contains 4 but only 3 are allowed." source="detekt.DestructuringDeclarationWithTooManyEntries" />
+	<error line="636" column="9" severity="error" message="The destructuring declaration contains 4 but only 3 are allowed." source="detekt.DestructuringDeclarationWithTooManyEntries" />
+	<error line="646" column="9" severity="error" message="The destructuring declaration contains 4 but only 3 are allowed." source="detekt.DestructuringDeclarationWithTooManyEntries" />
+</file>
+</checkstyle>

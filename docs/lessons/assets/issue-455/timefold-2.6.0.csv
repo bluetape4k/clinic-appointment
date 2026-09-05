@@ -1,0 +1,15 @@
+version,doctors,appointments,days,seed,steps,phase,iteration,hard,soft,feasible,elapsedNanos
+2.6.0,2,10,5,37,200,warmup,0,0,-100,true,94987792
+2.6.0,2,10,5,37,200,warmup,1,0,-100,true,18258959
+2.6.0,2,10,5,37,200,measurement,2,0,-100,true,14350625
+2.6.0,2,10,5,37,200,measurement,3,0,-100,true,14318125
+2.6.0,2,10,5,37,200,measurement,4,0,-100,true,12508208
+2.6.0,2,10,5,37,200,measurement,5,0,-100,true,13203208
+2.6.0,2,10,5,37,200,measurement,6,0,-100,true,11033208
+2.6.0,5,30,5,37,200,warmup,0,0,-24300,true,20925333
+2.6.0,5,30,5,37,200,warmup,1,0,-24300,true,17325875
+2.6.0,5,30,5,37,200,measurement,2,0,-24300,true,15203250
+2.6.0,5,30,5,37,200,measurement,3,0,-24300,true,14889583
+2.6.0,5,30,5,37,200,measurement,4,0,-24300,true,14731666
+2.6.0,5,30,5,37,200,measurement,5,0,-24300,true,13079959
+2.6.0,5,30,5,37,200,measurement,6,0,-24300,true,13292792
