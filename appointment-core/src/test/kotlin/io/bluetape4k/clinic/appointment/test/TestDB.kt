@@ -1,5 +1,7 @@
 package io.bluetape4k.clinic.appointment.test
 
+import io.bluetape4k.exposed.tests.JdbcTestDbFixture
+import io.bluetape4k.exposed.tests.jdbcTestDbFixture
 import io.bluetape4k.jdbc.JdbcDrivers
 import io.bluetape4k.logging.KLogging
 import org.jetbrains.exposed.v1.core.DatabaseConfig
@@ -60,8 +62,19 @@ enum class TestDB(
         }
     );
 
-    @Volatile
-    var db: Database? = null
+    val fixture: JdbcTestDbFixture<TestDB> by lazy {
+        jdbcTestDbFixture(
+            key = this,
+            createDatabase = { configure ->
+                beforeConnection()
+                connect(configure)
+            },
+            onShutdown = afterTestFinished,
+        )
+    }
+
+    val db: Database?
+        get() = fixture.database
 
     fun connect(configure: DatabaseConfig.Builder.() -> Unit = {}): Database {
         val config = DatabaseConfig {

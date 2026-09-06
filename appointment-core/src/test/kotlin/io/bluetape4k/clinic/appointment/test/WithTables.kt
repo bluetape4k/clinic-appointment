@@ -64,10 +64,9 @@ fun withTables(
                         commit()
                     } catch (ex: Exception) {
                         logger.error(ex) { "Drop Tables 에서 예외가 발생했습니다. 삭제할 테이블: ${tablesToUse.joinToString { it.tableName }}" }
-                        val database = testDB.db ?: return@withDb
                         inTopLevelTransaction(
-                            transactionIsolation = database.transactionManager.defaultIsolationLevel,
-                            db = database
+                            transactionIsolation = db.transactionManager.defaultIsolationLevel,
+                            db = db
                         ) {
                             maxAttempts = 1
                             withReferentialIntegrityDisabled(testDB) {
