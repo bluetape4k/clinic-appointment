@@ -29,6 +29,7 @@ kotlinx-coroutines = "1.11.0" # https://mvnrepository.com/artifact/org.jetbrains
 lettuce-core = "7.6.0.RELEASE" # bluetape4k-lettuce 2.0.0 requires this beyond Spring Boot's managed version
 timefold-solver = "2.6.0" # #450: 임시 move undo 후 저장 점수 복원 수정
 bluetape4k-exposed-test-support = "2.1.0-SNAPSHOT" # #452: provider PR #822 테스트 fixture adapter
+bluetape4k-http = "2.1.0-SNAPSHOT" # #451: 공통 JDK bounded HTTP body API 전환
 
 # ── Project-local versions (NOT in any BOM) ───────────────────────────────
 jjwt = "0.13.0"               # https://mvnrepository.com/artifact/io.jsonwebtoken/jjwt-api
@@ -81,6 +82,8 @@ bluetape4k-resilience4j = { module = "io.github.bluetape4k:bluetape4k-resilience
 bluetape4k-states = { module = "io.github.bluetape4k:bluetape4k-states" }
 bluetape4k-testcontainers = { module = "io.github.bluetape4k:bluetape4k-testcontainers" }
 bluetape4k-kafka4 = { module = "io.github.bluetape4k:bluetape4k-kafka4" }
+bluetape4k-http = { module = "io.github.bluetape4k:bluetape4k-http" }
+bluetape4k-http-bounded = { module = "io.github.bluetape4k:bluetape4k-http", version.ref = "bluetape4k-http" }
 exposed-core = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-core" }
 exposed-jdbc = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc" }
 exposed-jdbc-caffeine = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc-caffeine" }

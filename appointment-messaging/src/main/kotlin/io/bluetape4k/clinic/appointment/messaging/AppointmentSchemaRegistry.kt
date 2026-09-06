@@ -1,13 +1,14 @@
 package io.bluetape4k.clinic.appointment.messaging
 
+import io.bluetape4k.http.jdk.readBodyString
+import io.bluetape4k.io.ByteLimitExceededException
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
-import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
-import java.util.Base64
 import java.time.Duration
+import java.util.Base64
 
 /** Spring configuration에서 registry secret을 직접 보관하지 않도록 하는 resolver port입니다. */
 fun interface AppointmentSchemaRegistryCredentialResolver {
@@ -171,21 +172,15 @@ class JdkSchemaRegistryCompatibilityReader(
         } catch (failure: Exception) {
             throw AppointmentSchemaRegistryUnavailableException("schema registry request failed", failure)
         }
-        val body = response.body().use { input ->
-            if (response.statusCode() !in 200..299) {
+        if (response.statusCode() !in SUCCESS_STATUS_RANGE) {
+            response.body().use {
                 throw AppointmentSchemaRegistryUnavailableException("schema registry request failed")
             }
-            val output = ByteArrayOutputStream(MAX_RESPONSE_BYTES)
-            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-            var total = 0
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                total += read
-                require(total <= MAX_RESPONSE_BYTES) { "schema registry response is too large" }
-                output.write(buffer, 0, read)
-            }
-            output.toString(StandardCharsets.UTF_8)
+        }
+        val body = try {
+            response.readBodyString(MAX_RESPONSE_BYTES, StandardCharsets.UTF_8)
+        } catch (failure: ByteLimitExceededException) {
+            throw IllegalArgumentException("schema registry response is too large", failure)
         }
         val match = COMPATIBILITY_PATTERN.find(body)
             ?: throw AppointmentSchemaRegistryUnavailableException("schema registry compatibility is missing")
@@ -198,6 +193,7 @@ class JdkSchemaRegistryCompatibilityReader(
 
     companion object {
         private const val MAX_RESPONSE_BYTES = 64 * 1024
+        private val SUCCESS_STATUS_RANGE = 200..299
         private val COMPATIBILITY_PATTERN = Regex("\\\"compatibilityLevel\\\"\\s*:\\s*\\\"([A-Za-z_]+)\\\"")
     }
 }
