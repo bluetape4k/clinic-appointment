@@ -8,6 +8,7 @@ dependencies {
     implementation(project(":appointment-event"))
 
     implementation(libs.bluetape4k.kafka4)
+    implementation(libs.bluetape4k.http)
     api(libs.kafka4.clients)
     api(libs.spring.kafka4)
     implementation(libs.jackson3.module.kotlin)
@@ -32,4 +33,14 @@ dependencies {
     testImplementation(libs.postgresql.driver)
     testImplementation(libs.testcontainers.postgresql)
     testImplementation("org.testcontainers:testcontainers-kafka")
+}
+
+dependencyManagement {
+    dependencies {
+        val httpFamilyVersion = libs.versions.bluetape4k.http.get()
+        dependency("io.github.bluetape4k:bluetape4k-io:$httpFamilyVersion")
+        dependency("io.github.bluetape4k:bluetape4k-netty:$httpFamilyVersion")
+        dependency("io.github.bluetape4k:bluetape4k-resilience4j:$httpFamilyVersion")
+        dependency("io.github.bluetape4k:bluetape4k-coroutines:$httpFamilyVersion")
+    }
 }

@@ -2,6 +2,9 @@ package io.bluetape4k.clinic.appointment.messaging
 
 import io.bluetape4k.assertions.assertFailsWith
 import io.bluetape4k.assertions.shouldBeEqualTo
+import io.bluetape4k.assertions.shouldBeInstanceOf
+import io.bluetape4k.assertions.shouldNotContain
+import io.bluetape4k.io.ByteLimitExceededException
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -15,6 +18,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.net.URI
 import java.net.http.HttpClient
+import java.net.http.HttpHeaders
 import java.net.http.HttpResponse
 
 class JdkSchemaRegistryCompatibilityReaderTest {
@@ -74,11 +78,32 @@ class JdkSchemaRegistryCompatibilityReaderTest {
 
     @Test
     fun `바이트 상한 초과는 본문을 노출하지 않고 닫는다`() {
-        val input = TrackingInputStream(ByteArray(65537) { 'x'.code.toByte() })
+        val closeFailure = IOException("close failed")
+        val payload = "registry-secret".padEnd(65537, 'x')
+        val input = TrackingInputStream(payload.toByteArray(), closeFailure = closeFailure)
 
         val failure = assertFailsWith<IllegalArgumentException> { reader(200, input)() }
 
         failure.message shouldBeEqualTo "schema registry response is too large"
+        val cause = failure.cause.shouldBeInstanceOf<ByteLimitExceededException>()
+        cause.maxBytes shouldBeEqualTo 65536
+        cause.suppressed.single() shouldBeEqualTo closeFailure
+        failure.toString().shouldNotContain("registry-secret")
+        input.closeCalls shouldBeEqualTo 1
+    }
+
+    @Test
+    fun `Content-Length 초과는 본문을 읽지 않고 기존 예외 계약으로 닫는다`() {
+        val closeFailure = IOException("close failed")
+        val input = TrackingInputStream(ByteArray(1), closeFailure = closeFailure)
+        val reader = reader(200, input, contentLength = "65537")
+
+        val failure = assertFailsWith<IllegalArgumentException> { reader() }
+
+        failure.message shouldBeEqualTo "schema registry response is too large"
+        failure.cause.shouldBeInstanceOf<ByteLimitExceededException>()
+        failure.cause!!.suppressed.single() shouldBeEqualTo closeFailure
+        input.readCalls shouldBeEqualTo 0
         input.closeCalls shouldBeEqualTo 1
     }
 
@@ -119,10 +144,17 @@ class JdkSchemaRegistryCompatibilityReaderTest {
         input.closeCalls shouldBeEqualTo 1
     }
 
-    private fun reader(status: Int, input: InputStream): JdkSchemaRegistryCompatibilityReader {
+    private fun reader(
+        status: Int,
+        input: InputStream,
+        contentLength: String? = null,
+    ): JdkSchemaRegistryCompatibilityReader {
         every { client.send(any(), any<HttpResponse.BodyHandler<InputStream>>()) } returns response
         every { response.statusCode() } returns status
         every { response.body() } returns input
+        every { response.headers() } returns HttpHeaders.of(
+            contentLength?.let { mapOf("Content-Length" to listOf(it)) } ?: emptyMap(),
+        ) { _, _ -> true }
         return JdkSchemaRegistryCompatibilityReader(
             baseUri = URI("https://registry.example.com"),
             subject = "appointment-events-value",
