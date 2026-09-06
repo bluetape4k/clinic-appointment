@@ -95,6 +95,7 @@ io.github.bluetape4k:bluetape4k-cache-core:2.0.0=compileClasspath,runtimeClasspa
 io.github.bluetape4k:bluetape4k-core:2.0.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k:bluetape4k-coroutines:2.0.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k:bluetape4k-dependencies:2.0.0=compileClasspath
+io.github.bluetape4k:bluetape4k-http:2.0.0=runtimeClasspath,testRuntimeClasspath
 io.github.bluetape4k:bluetape4k-idgenerators:2.0.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k:bluetape4k-io:2.0.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k:bluetape4k-jackson3:2.0.0=runtimeClasspath,testRuntimeClasspath

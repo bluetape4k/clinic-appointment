@@ -149,6 +149,7 @@ io.github.bluetape4k:bluetape4k-cache-lettuce:2.0.0=compileClasspath,productionR
 io.github.bluetape4k:bluetape4k-core:2.0.0=compileClasspath,gatling,gatlingCompileClasspath,gatlingRuntimeClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k:bluetape4k-coroutines:2.0.0=compileClasspath,gatling,gatlingCompileClasspath,gatlingRuntimeClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k:bluetape4k-dependencies:2.0.0=compileClasspath
+io.github.bluetape4k:bluetape4k-http:2.0.0=productionRuntimeClasspath,runtimeClasspath,testRuntimeClasspath
 io.github.bluetape4k:bluetape4k-idgenerators:2.0.0=compileClasspath,gatling,gatlingCompileClasspath,gatlingRuntimeClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k:bluetape4k-io:2.0.0=compileClasspath,gatling,gatlingCompileClasspath,gatlingRuntimeClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.bluetape4k:bluetape4k-jackson3:2.0.0=productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath

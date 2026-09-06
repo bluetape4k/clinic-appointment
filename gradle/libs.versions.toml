@@ -81,7 +81,8 @@ bluetape4k-resilience4j = { module = "io.github.bluetape4k:bluetape4k-resilience
 bluetape4k-states = { module = "io.github.bluetape4k:bluetape4k-states" }
 bluetape4k-testcontainers = { module = "io.github.bluetape4k:bluetape4k-testcontainers" }
 bluetape4k-kafka4 = { module = "io.github.bluetape4k:bluetape4k-kafka4" }
-bluetape4k-http = { module = "io.github.bluetape4k:bluetape4k-http", version.ref = "bluetape4k-http" }
+bluetape4k-http = { module = "io.github.bluetape4k:bluetape4k-http" }
+bluetape4k-http-bounded = { module = "io.github.bluetape4k:bluetape4k-http", version.ref = "bluetape4k-http" }
 exposed-core = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-core" }
 exposed-jdbc = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc" }
 exposed-jdbc-caffeine = { module = "io.github.bluetape4k.exposed:bluetape4k-exposed-jdbc-caffeine" }

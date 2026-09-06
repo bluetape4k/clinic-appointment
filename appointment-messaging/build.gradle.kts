@@ -8,7 +8,7 @@ dependencies {
     implementation(project(":appointment-event"))
 
     implementation(libs.bluetape4k.kafka4)
-    implementation(libs.bluetape4k.http)
+    implementation(libs.bluetape4k.http.bounded)
     api(libs.kafka4.clients)
     api(libs.spring.kafka4)
     implementation(libs.jackson3.module.kotlin)
