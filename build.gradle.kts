@@ -76,6 +76,12 @@ plugins {
 }
 
 val rootLibs = libs
+val boundedHttpConsumerProjects = setOf(
+    ":appointment-messaging",
+    ":appointment-notification",
+    ":appointment-api",
+    ":appointment-messaging-benchmark",
+)
 
 private fun Configuration.configureApiConsumerFixtureClasspath() {
     isCanBeConsumed = false
@@ -920,6 +926,8 @@ dependencyManagement {
 }
 
 subprojects {
+    val usesBoundedHttpApi = path in boundedHttpConsumerProjects
+
     apply {
         plugin<JavaLibraryPlugin>()
         plugin("org.jetbrains.kotlin.jvm")
@@ -1084,6 +1092,17 @@ subprojects {
             mavenBom(rootLibs.kotlinx.coroutines.bom.get().toString())
             // 플러그인과 모든 모듈의 Exposed 실행 라이브러리를 같은 버전으로 맞춘다.
             mavenBom(rootLibs.jetbrains.exposed.bom.get().toString())
+        }
+
+        if (usesBoundedHttpApi) {
+            dependencies {
+                val httpFamilyVersion = rootLibs.versions.bluetape4k.http.get()
+                dependency("io.github.bluetape4k:bluetape4k-http:$httpFamilyVersion")
+                dependency("io.github.bluetape4k:bluetape4k-io:$httpFamilyVersion")
+                dependency("io.github.bluetape4k:bluetape4k-netty:$httpFamilyVersion")
+                dependency("io.github.bluetape4k:bluetape4k-resilience4j:$httpFamilyVersion")
+                dependency("io.github.bluetape4k:bluetape4k-coroutines:$httpFamilyVersion")
+            }
         }
     }
 

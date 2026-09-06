@@ -34,13 +34,3 @@ dependencies {
     testImplementation(libs.testcontainers.postgresql)
     testImplementation("org.testcontainers:testcontainers-kafka")
 }
-
-dependencyManagement {
-    dependencies {
-        val httpFamilyVersion = libs.versions.bluetape4k.http.get()
-        dependency("io.github.bluetape4k:bluetape4k-io:$httpFamilyVersion")
-        dependency("io.github.bluetape4k:bluetape4k-netty:$httpFamilyVersion")
-        dependency("io.github.bluetape4k:bluetape4k-resilience4j:$httpFamilyVersion")
-        dependency("io.github.bluetape4k:bluetape4k-coroutines:$httpFamilyVersion")
-    }
-}
