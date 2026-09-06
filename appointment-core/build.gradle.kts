@@ -36,6 +36,7 @@ dependencies {
     testImplementation(libs.lz4.java)
     testImplementation(libs.fory.kotlin)
     testImplementation(libs.bluetape4k.jdbc)
+    testImplementation(libs.exposed.jdbc.tests)
     testImplementation(libs.jetbrains.exposed.migration.jdbc)
     testImplementation(libs.h2.v2)
     testImplementation(libs.postgresql.driver)
