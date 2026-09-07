@@ -1,8 +1,16 @@
 # 작업 중 - clinic-appointment
 
-스냅숏: 2026-06-02 KST
+기준 시각: 2026-09-07 KST
 범위: `debop`에 할당되고 2026-01-01 이후 생성된 열린 GitHub 이슈
 열린 이슈 수: 19개
+
+## 2026-09-07 2.1.0-SNAPSHOT 예제 소비선
+
+중앙 BOM을 `bluetape4k-dependencies:2.1.0-SNAPSHOT`으로 전환하고 9개
+consumer lockfile을 새 개발선으로 갱신했다. 외부 stable artifact는 SHA-256
+검증을 유지하고, 내용이 게시마다 바뀌는 `io.github.bluetape4k` 계열의 현재
+`1.1.0-SNAPSHOT`·`2.1.0-SNAPSHOT` 개발 버전만 제한적으로 trust한다.
+`scripts/verify-dependency-locking.sh`가 이 경계를 회귀 검증한다.
 
 ## 최근 완료
 
