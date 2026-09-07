@@ -26,6 +26,15 @@ escape_regex() {
     printf '%s' "$1" | sed 's/[][\\.^$*+?(){}|]/\\&/g'
 }
 
+selected_version_header_regex() {
+    local snapshot_suffix=""
+    if [[ "$2" == *-SNAPSHOT ]]; then
+        snapshot_suffix='(:[0-9]{8}[.][0-9]{6}-[0-9]+)?'
+    fi
+    printf '^%s:%s%s( \\(selected by rule\\))?$' \
+        "$(escape_regex "$1")" "$(escape_regex "$2")" "$snapshot_suffix"
+}
+
 assert_selected_version() {
     local label="$1"
     local module="$2"
@@ -33,11 +42,8 @@ assert_selected_version() {
     local target_version="$4"
     shift 4
     local output_file="$TEMP_DIR/$label.txt"
-    local coordinate_pattern
-    local target_pattern
     local selected_header_regex
     local forbidden_version
-    local forbidden_pattern
     local forbidden_header_regex
     local configuration="${DEPENDENCY_INSIGHT_CONFIGURATION:-runtimeClasspath}"
 
@@ -54,17 +60,14 @@ assert_selected_version() {
         fail "$label dependencyInsight failed"
     fi
 
-    coordinate_pattern="$(escape_regex "$coordinate")"
-    target_pattern="$(escape_regex "$target_version")"
-    selected_header_regex="^${coordinate_pattern}:${target_pattern}( \\(selected by rule\\))?$"
+    selected_header_regex="$(selected_version_header_regex "$coordinate" "$target_version")"
     if ! grep -Eq "$selected_header_regex" "$output_file"; then
         cat "$output_file" >&2
         fail "$label did not select $coordinate:$target_version"
     fi
 
     for forbidden_version in "$@"; do
-        forbidden_pattern="$(escape_regex "$forbidden_version")"
-        forbidden_header_regex="^${coordinate_pattern}:${forbidden_pattern}( \\(selected by rule\\))?$"
+        forbidden_header_regex="$(selected_version_header_regex "$coordinate" "$forbidden_version")"
         if grep -Eq "$forbidden_header_regex" "$output_file"; then
             cat "$output_file" >&2
             fail "$label still exposes forbidden selected version $coordinate:$forbidden_version"
@@ -93,6 +96,7 @@ assert_catalog_exposed_version() {
         fail "version catalog Exposed plugin entry is '$exposed_line', expected '$expected_line'"
 }
 
+bash "$SCRIPT_DIR/test-dependency-insight-header.sh"
 assert_catalog_exposed_version
 
 # 중앙 플랫폼의 BOM 메타데이터는 제외하고 모든 모듈의 실행 artifact 잠금을 검사한다.
@@ -154,18 +158,21 @@ assert_selected_version \
     fory-core \
     :appointment-api \
     org.apache.fory:fory-core \
+    1.7.1 \
     1.6.0 \
     1.5.0
 assert_selected_version \
     fory-kotlin \
     :appointment-api \
     org.apache.fory:fory-kotlin \
+    1.7.1 \
     1.6.0 \
     1.5.0
 assert_selected_version \
     leader-redis-lettuce \
     :appointment-notification \
     io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce \
+    1.1.0-SNAPSHOT \
     1.0.0 \
     0.5.0
 assert_selected_version \

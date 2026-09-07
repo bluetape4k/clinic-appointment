@@ -12,6 +12,17 @@ consumer lockfile을 새 개발선으로 갱신했다. 외부 stable artifact는
 `1.1.0-SNAPSHOT`·`2.1.0-SNAPSHOT` 개발 버전만 제한적으로 trust한다.
 `scripts/verify-dependency-locking.sh`가 이 경계를 회귀 검증한다.
 
+PR #463의 hosted CI에서 계약 스크립트가 Fory `1.6.0`을 요구하지만 실제
+lockfile과 resolved graph는 `1.7.1`을 선택하는 누락을 확인했다. Fory 두
+좌표와 Leader 기대값을 각각 `1.7.1`, `1.1.0-SNAPSHOT`으로 정렬하고 이전
+버전은 금지 목록에 남긴다. BOM 전환 검증은 locking guard와
+`scripts/verify-dependency-contract.sh`를 모두 실행해야 한다. 대표 컴파일이나
+locking guard 하나의 성공을 전체 CI 계약 검증으로 간주하지 않는다.
+Gradle의 timestamped SNAPSHOT 출력은 정확한 SNAPSHOT 버전에 한해서만
+허용한다. `scripts/test-dependency-insight-header.sh`의 12개 사례가 일반
+release, timestamp, 다른 버전·좌표 및 requested-version 화살표의 경계를
+검증하며 전체 계약 검사에서 항상 실행된다.
+
 ## 최근 완료
 
 - **#82** bluetape4k artifact ID 표준화 컨벤션 통일 (commit `8133de0`).
