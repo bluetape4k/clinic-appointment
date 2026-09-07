@@ -23,6 +23,12 @@ Gradle의 timestamped SNAPSHOT 출력은 정확한 SNAPSHOT 버전에 한해서�
 release, timestamp, 다른 버전·좌표 및 requested-version 화살표의 경계를
 검증하며 전체 계약 검사에서 항상 실행된다.
 
+새 head CI의 API testCompileClasspath 해석에서 `guava-parent:33.7.1-jre`
+POM checksum 누락도 확인했다. Maven Central의 두 공개 endpoint 원본과
+SHA-256 sidecar가 모두 `4015e615a5674755c88d8112d8bbd763e8afde561be76c6790699edb5d5608f5`
+로 일치함을 확인하고 해당 POM 한 개만 추가했다. stable artifact 검증은
+완화하지 않으며 API test 컴파일까지 전달 검증에 포함한다.
+
 ## 최근 완료
 
 - **#82** bluetape4k artifact ID 표준화 컨벤션 통일 (commit `8133de0`).
