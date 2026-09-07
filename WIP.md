@@ -29,6 +29,12 @@ SHA-256 sidecar가 모두 `4015e615a5674755c88d8112d8bbd763e8afde561be76c6790699
 로 일치함을 확인하고 해당 POM 한 개만 추가했다. stable artifact 검증은
 완화하지 않으며 API test 컴파일까지 전달 검증에 포함한다.
 
+API 전체 테스트의 `NearCacheForyCompatibilityTest`에서도 현재 graph에 대한
+기대값이 Fory `1.6.0`으로 남은 실패를 재현했다. resolved provenance만
+`2.1.0-SNAPSHOT`/Fory `1.7.1`로 정렬하며 source fixture `1.3.1`의
+생성 버전·commit·checksum·wire 데이터는 그대로 보존한다. legacy DTO 복원,
+codegen/동시 round-trip 및 압축 테스트는 기존 검증을 유지한다.
+
 ## 최근 완료
 
 - **#82** bluetape4k artifact ID 표준화 컨벤션 통일 (commit `8133de0`).
