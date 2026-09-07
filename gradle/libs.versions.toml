@@ -10,7 +10,7 @@
 
 [versions]
 # ── BOM (source of truth) ──────────────────────────────────────────────────
-bluetape4k-dependencies = "2.0.0"
+bluetape4k-dependencies = "2.1.0-SNAPSHOT"
 
 # ── Plugin versions (always required) ─────────────────────────────────────
 kotlin = "2.4.0"

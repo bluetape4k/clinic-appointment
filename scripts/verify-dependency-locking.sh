@@ -113,6 +113,27 @@ done
 grep -qx 'org.gradle.dependency.verification=strict' "$REPOSITORY_ROOT/gradle.properties" \
     || fail "gradle.properties must set org.gradle.dependency.verification=strict"
 
+python3 - "$REPOSITORY_ROOT/gradle/verification-metadata.xml" <<'PY' \
+    || fail "moving snapshot trust must be limited to current Bluetape4k development versions"
+import sys
+import xml.etree.ElementTree as ET
+
+namespace = {"gradle": "https://schema.gradle.org/dependency-verification"}
+root = ET.parse(sys.argv[1]).getroot()
+expected = {
+    "group": r"^io[.]github[.]bluetape4k([.].+)?$",
+    "version": r"^(1[.]1[.]0|2[.]1[.]0)-SNAPSHOT$",
+    "regex": "true",
+}
+trusts = root.findall(
+    "./gradle:configuration/gradle:trusted-artifacts/gradle:trust",
+    namespace,
+)
+matches = [trust for trust in trusts if trust.attrib == expected]
+if len(trusts) != 1 or len(matches) != 1:
+    raise SystemExit(1)
+PY
+
 GOVERNANCE_OUTPUT_FILE="$TEMP_DIR/verifyDependencyGovernance.txt"
 if ! (
     cd -- "$REPOSITORY_ROOT"
