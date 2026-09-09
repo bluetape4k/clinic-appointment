@@ -254,6 +254,7 @@ io.suzaku:boopickle_2.13:1.5.0=gatling,gatlingCompileClasspath,gatlingRuntimeCla
 io.swagger.core.v3:swagger-annotations-jakarta:2.2.52=compileClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.swagger.core.v3:swagger-core-jakarta:2.2.52=compileClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.swagger.core.v3:swagger-models-jakarta:2.2.52=compileClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+io.temporal:temporal-bom:1.38.0=compileClasspath
 io.vertx:vertx-dependencies:5.1.7=compileClasspath
 jakarta.activation:jakarta.activation-api:2.1.4=compileClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 jakarta.annotation:jakarta.annotation-api:3.0.0=compileClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath

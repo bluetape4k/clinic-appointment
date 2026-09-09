@@ -45,6 +45,7 @@ io.mockk:mockk:1.14.11=testCompileClasspath,testRuntimeClasspath
 io.netty:netty-bom:4.2.17.Final=compileClasspath
 io.opentelemetry:opentelemetry-bom:1.65.0=compileClasspath
 io.projectreactor:reactor-bom:2025.0.7=compileClasspath,runtimeClasspath,testRuntimeClasspath
+io.temporal:temporal-bom:1.38.0=compileClasspath
 io.vertx:vertx-dependencies:5.1.7=compileClasspath
 net.bytebuddy:byte-buddy-agent:1.18.10=testCompileClasspath,testRuntimeClasspath
 net.bytebuddy:byte-buddy:1.18.10=testCompileClasspath,testRuntimeClasspath
