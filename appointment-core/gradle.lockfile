@@ -2,7 +2,7 @@
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
 # To regenerate this file, run: ./gradlew :appointment-core:dependencies --write-locks
-ai.timefold.solver:timefold-solver-bom:2.4.0=compileClasspath
+ai.timefold.solver:timefold-solver-bom:2.6.0=compileClasspath
 ch.qos.logback:logback-classic:1.5.34=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 ch.qos.logback:logback-core:1.5.34=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.datastax.cassandra:cassandra-driver-core:3.10.0=testCompileClasspath,testRuntimeClasspath

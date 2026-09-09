@@ -2,7 +2,7 @@
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
 # To regenerate this file, run: ./gradlew :appointment-messaging:dependencies --write-locks
-ai.timefold.solver:timefold-solver-bom:2.4.0=compileClasspath
+ai.timefold.solver:timefold-solver-bom:2.6.0=compileClasspath
 at.yawk.lz4:lz4-java:1.11.2=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 biz.aQute.bnd:biz.aQute.bnd.annotation:7.1.0=testCompileClasspath
 ch.qos.logback:logback-classic:1.5.34=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
