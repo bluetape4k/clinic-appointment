@@ -1,10 +1,3 @@
-dependencyManagement {
-    imports {
-        // 예제의 Timefold 재정의는 jaxb 등 전이 의존성에도 같은 버전을 적용한다.
-        mavenBom(libs.timefold.solver.bom.get().toString())
-    }
-}
-
 dependencies {
     api(project(":appointment-core"))
 
@@ -38,7 +31,20 @@ tasks.register<Test>("timefoldVersionComparison") {
     minHeapSize = "2g"
     maxHeapSize = "4g"
     systemProperty("junit.jupiter.execution.parallel.enabled", "false")
-    systemProperty("issue455.timefoldVersion", libs.versions.timefold.solver.get())
     systemProperty("issue455.output", layout.buildDirectory.file("issue-455/comparison.csv").get().asFile.absolutePath)
+    doFirst {
+        val resolvedVersion = configurations.getByName("testRuntimeClasspath")
+            .resolvedConfiguration
+            .resolvedArtifacts
+            .firstOrNull {
+                it.moduleVersion.id.group == "ai.timefold.solver" &&
+                    it.name == "timefold-solver-core"
+            }
+            ?.moduleVersion
+            ?.id
+            ?.version
+            ?: error("central BOM did not resolve ai.timefold.solver:timefold-solver-core")
+        systemProperty("issue455.timefoldVersion", resolvedVersion)
+    }
     outputs.upToDateWhen { false }
 }
