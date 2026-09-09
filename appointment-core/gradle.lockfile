@@ -176,6 +176,7 @@ io.netty:netty-transport:4.2.15.Final=testCompileClasspath,testRuntimeClasspath
 io.opentelemetry:opentelemetry-bom:1.65.0=compileClasspath
 io.projectreactor:reactor-bom:2025.0.7=compileClasspath,runtimeClasspath,testRuntimeClasspath
 io.projectreactor:reactor-core:3.8.6=testCompileClasspath,testRuntimeClasspath
+io.temporal:temporal-bom:1.38.0=compileClasspath
 io.vertx:vertx-dependencies:5.1.7=compileClasspath
 jakarta.inject:jakarta.inject-api:2.0.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 javax.cache:cache-api:1.1.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath

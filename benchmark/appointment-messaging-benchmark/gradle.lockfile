@@ -178,6 +178,7 @@ io.projectreactor.kotlin:reactor-kotlin-extensions:1.3.1=runtimeClasspath,testRu
 io.projectreactor:reactor-bom:2025.0.7=compileClasspath,runtimeClasspath,testRuntimeClasspath
 io.projectreactor:reactor-core:3.8.6=runtimeClasspath,testRuntimeClasspath
 io.r2dbc:r2dbc-spi:1.0.0.RELEASE=runtimeClasspath,testRuntimeClasspath
+io.temporal:temporal-bom:1.38.0=compileClasspath
 io.vertx:vertx-dependencies:5.1.7=compileClasspath
 jakarta.annotation:jakarta.annotation-api:3.0.0=runtimeClasspath,testRuntimeClasspath
 jakarta.inject:jakarta.inject-api:2.0.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath

@@ -146,6 +146,7 @@ io.projectreactor:reactor-core:3.8.6=testCompileClasspath,testRuntimeClasspath
 io.r2dbc:r2dbc-h2:1.1.0.RELEASE=testRuntimeClasspath
 io.r2dbc:r2dbc-pool:1.0.2.RELEASE=testCompileClasspath,testRuntimeClasspath
 io.r2dbc:r2dbc-spi:1.0.0.RELEASE=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+io.temporal:temporal-bom:1.38.0=compileClasspath
 io.vertx:vertx-dependencies:5.1.7=compileClasspath
 jakarta.activation:jakarta.activation-api:2.1.4=testCompileClasspath,testRuntimeClasspath
 jakarta.annotation:jakarta.annotation-api:3.0.0=testCompileClasspath,testRuntimeClasspath
