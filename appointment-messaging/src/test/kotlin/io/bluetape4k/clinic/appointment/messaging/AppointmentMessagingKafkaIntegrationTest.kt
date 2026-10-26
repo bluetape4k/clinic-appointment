@@ -6,7 +6,7 @@ import io.bluetape4k.assertions.shouldBeNull
 import io.bluetape4k.assertions.shouldBeTrue
 import io.bluetape4k.assertions.shouldNotBeNull
 import io.bluetape4k.codec.Base58
-import io.bluetape4k.kafka.codec.AbstractKafkaCodec
+import io.bluetape4k.kafka.codec.KafkaCodec
 import io.bluetape4k.testcontainers.mq.KafkaServer
 import io.bluetape4k.testcontainers.mq.Spring
 import org.apache.kafka.clients.admin.AdminClient
@@ -71,7 +71,7 @@ class AppointmentMessagingKafkaIntegrationTest {
                 }
                 val record = received.shouldNotBeNull()
                 record.value().shouldBeEqualTo("{\"eventId\":\"integration-event\"}")
-                record.headers().lastHeader(AbstractKafkaCodec.VALUE_TYPE_KEY).shouldBeNull()
+                record.headers().lastHeader(KafkaCodec.VALUE_TYPE_KEY).shouldBeNull()
             }
         } finally {
             publisher.close()
