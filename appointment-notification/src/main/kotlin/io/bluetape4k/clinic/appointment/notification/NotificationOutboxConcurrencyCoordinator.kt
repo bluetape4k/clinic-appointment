@@ -712,6 +712,7 @@ private class LettuceNotificationPermitSemaphore(
                 NotificationPermitInitialization.CapacityMismatch
             } else {
                 when (semaphore.trySetPermits(capacity)) {
+                    null -> NotificationPermitInitialization.BackendFailure
                     is SemaphoreInitializationResult.Initialized,
                     SemaphoreInitializationResult.AlreadyInitialized,
                     -> NotificationPermitInitialization.AlreadyInitialized
@@ -744,7 +745,8 @@ private class LettuceNotificationPermitSemaphore(
         owner: SemaphoreOwnerId,
         request: SemaphoreRequestId,
     ): NotificationPermitReconcile = try {
-        semaphore.reconcile(owner, request).toNotificationResult()
+        semaphore.reconcile(owner, request)?.toNotificationResult()
+            ?: NotificationPermitReconcile.BackendFailure
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (_: Exception) {
