@@ -24,8 +24,8 @@ class NearCacheForyCompatibilityTest {
 
         provenance.getProperty("source.fixture") shouldBeEqualTo "issue-253/1.3.1"
         provenance.getProperty("resolved.bluetape4k.dependencies") shouldBeEqualTo "2.1.0-SNAPSHOT"
-        provenance.getProperty("resolved.fory.core") shouldBeEqualTo "1.7.1"
-        provenance.getProperty("resolved.fory.kotlin") shouldBeEqualTo "1.7.1"
+        provenance.getProperty("resolved.fory.core") shouldBeEqualTo "1.7.7"
+        provenance.getProperty("resolved.fory.kotlin") shouldBeEqualTo "1.7.7"
         provenance.getProperty("codec") shouldBeEqualTo
             "io.bluetape4k.redis.lettuce.codec.LettuceBinaryCodecs.default"
         Fory::class.java.`package`.implementationVersion shouldBeEqualTo
