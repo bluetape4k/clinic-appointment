@@ -48,6 +48,14 @@ Redis 7.2/8.8 이미지 매트릭스와 추가 dependency upgrade는 이번 범�
    보존하고 실패 시 원문을 출력하도록 수정했다. lock entry 하나를 임시로 제거한
    회귀 검증에서 `Resolved ... is not part of the dependency lock state`가 CI-visible
    output에 남는 것을 확인한 뒤 원상 복구했다.
+5. 2026-11-23 Clinic #496의 공식 catalog/BOM 업그레이드 CI에서
+   `junit-bom:5.14.4`의 `.module`, `exposed-bom:1.6.1`의 `.pom`,
+   `guava-parent:33.8.0-jre`의 `.pom` verification checksum이 빠져 있음을 발견했다.
+   로컬 캐시에서는 이미 resolve된 metadata라 누락이 드러나지 않았지만, CI에서는
+   `verifyDependencyGovernance`와 관련 dependency resolution이 실패했다. Maven Central에서
+   세 파일의 바이트와 SHA-256을 확인해 metadata를 보완했고, 새 `GRADLE_USER_HOME`에서
+   `scripts/verify-dependency-locking.sh`를 실행해 strict verification을 통과했다.
+   현재 PR head의 hosted CI 재실행은 이 수정의 별도 검증으로 남긴다.
 
 ## 검증 증거
 
@@ -91,7 +99,9 @@ Redis 7.2/8.8 이미지 매트릭스와 추가 dependency upgrade는 이번 범�
 
 ## 미래 guard
 
-새 dependency 또는 plugin을 추가할 때는 선언만 바꾸지 말고 clean `GRADLE_USER_HOME`에서
-lockfile·verification metadata를 함께 생성한 뒤, 실제 configuration의
-`dependencyInsight`, 공급처·checksum, diff, rollback을 리뷰한다. CI에서는 generated
-파일을 쓰지 않으며, lock/metadata 누락과 checksum 불일치를 원문 오류와 함께 실패시킨다.
+새 dependency/plugin을 추가하거나 catalog/BOM이 고르는 dependency graph 버전을 올릴 때는
+선언만 바꾸지 말고 clean `GRADLE_USER_HOME`에서 lockfile·verification metadata 검증을
+실행한다. warm cache가 이미 받은 `.pom` 또는 `.module` 파일의 checksum 누락을 가릴 수
+있기 때문이다. 실제 configuration의 `dependencyInsight`, 공급처·checksum, diff, rollback도
+리뷰한다. CI에서는 generated 파일을 쓰지 않으며, lock/metadata 누락과 checksum 불일치를
+원문 오류와 함께 실패시킨다.
