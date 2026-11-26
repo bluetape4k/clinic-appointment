@@ -158,21 +158,21 @@ assert_selected_version \
     fory-core \
     :appointment-api \
     org.apache.fory:fory-core \
-    1.7.7 \
+    1.7.8 \
     1.6.0 \
     1.5.0
 assert_selected_version \
     fory-kotlin \
     :appointment-api \
     org.apache.fory:fory-kotlin \
-    1.7.7 \
+    1.7.8 \
     1.6.0 \
     1.5.0
 assert_selected_version \
     leader-redis-lettuce \
     :appointment-notification \
     io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce \
-    1.1.0-SNAPSHOT \
+    1.1.0 \
     1.0.0 \
     0.5.0
 assert_selected_version \
