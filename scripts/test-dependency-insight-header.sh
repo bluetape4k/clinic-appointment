@@ -19,11 +19,11 @@ assert_header() {
     fi
 }
 
-assert_header true org.apache.fory:fory-core 1.7.1 'org.apache.fory:fory-core:1.7.1'
-assert_header true org.apache.fory:fory-core 1.7.1 'org.apache.fory:fory-core:1.7.1 (selected by rule)'
-assert_header false org.apache.fory:fory-core 1.7.1 'org.apache.fory:fory-core:1.6.0'
-assert_header false org.apache.fory:fory-core 1.7.1 'org.apache.fory:fory-core:1.7.1:20260907.131326-7'
-assert_header false org.apache.fory:fory-core 1.7.1 'org.apache.fory:fory-core:1x7x1'
+assert_header true org.apache.fory:fory-core 1.7.8 'org.apache.fory:fory-core:1.7.8'
+assert_header true org.apache.fory:fory-core 1.7.8 'org.apache.fory:fory-core:1.7.8 (selected by rule)'
+assert_header false org.apache.fory:fory-core 1.7.8 'org.apache.fory:fory-core:1.6.0'
+assert_header false org.apache.fory:fory-core 1.7.8 'org.apache.fory:fory-core:1.7.8:20260907.131326-7'
+assert_header false org.apache.fory:fory-core 1.7.8 'org.apache.fory:fory-core:1x7x8'
 assert_header true io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce 1.1.0-SNAPSHOT \
     'io.github.bluetape4k.leader:bluetape4k-leader-redis-lettuce:1.1.0-SNAPSHOT:20260907.131326-7'
 assert_header true example:module 1.1.0-SNAPSHOT 'example:module:1.1.0-SNAPSHOT'
